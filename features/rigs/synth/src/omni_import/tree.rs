@@ -606,35 +606,36 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                     .with_param("parallel", if parallel { "1" } else { "0" }),
             );
         }
-        if let Some((level_db, crush, reduce, mix)) = layer.shaper {
-            // The measured level of the patch's curve; its shape is not
-            // modelled, so no saturation (our tanh brightened where the
-            // plugin's common curves darken).
-            osc = osc.add(
-                RigBlock::of_type(BlockType::Waveshaper)
-                    .named("Waveshaper")
-                    .with_param("gain_db", format!("{level_db:.2}"))
-                    // The fold reads the signal's absolute level: the synth
-                    // voice runs SYNTH_LAYER_CAL_DB under a soundsource's
-                    // (its calibration comes after), so a sampled layer
-                    // folds that much less per unit of depth.
-                    .with_param(
-                        "fold",
-                        format!(
-                            "{:.4}",
-                            layer.shaper_fold
-                                * if layer.soundsource.is_empty() {
-                                    1.0
-                                } else {
-                                    10f32.powf(-SYNTH_LAYER_CAL_DB / 20.0)
-                                }
-                        ),
-                    )
-                    .with_param("pre_gain", format!("{:.4}", layer.shaper_pre))
-                    .with_param("crush", format!("{crush:.4}"))
-                    .with_param("reduce", format!("{reduce:.4}"))
-                    .with_param("mix", format!("{mix:.4}")),
-            );
+        let shaper = layer.shaper.map(|(level_db, crush, reduce, mix)| {
+            // The measured level of the patch's curve, and type 0's sine
+            // fold (the other curves are not modelled: no saturation — our
+            // tanh brightened where the plugin's curves darken).
+            RigBlock::of_type(BlockType::Waveshaper)
+                .named("Waveshaper")
+                .with_param("gain_db", format!("{level_db:.2}"))
+                // The fold reads the signal's absolute level: the synth
+                // voice runs SYNTH_LAYER_CAL_DB under a soundsource's
+                // (its calibration comes after), so a sampled layer
+                // folds that much less per unit of depth.
+                .with_param(
+                    "fold",
+                    format!(
+                        "{:.4}",
+                        layer.shaper_fold
+                            * if layer.soundsource.is_empty() {
+                                1.0
+                            } else {
+                                10f32.powf(-SYNTH_LAYER_CAL_DB / 20.0)
+                            }
+                    ),
+                )
+                .with_param("pre_gain", format!("{:.4}", layer.shaper_pre))
+                .with_param("crush", format!("{crush:.4}"))
+                .with_param("reduce", format!("{reduce:.4}"))
+                .with_param("mix", format!("{mix:.4}"))
+        });
+        if let (Some(shaper), false) = (&shaper, layer.shaper_post) {
+            osc = osc.add(shaper.clone());
         }
         let osc = osc.block(BlockType::Granular, "Granular");
 
@@ -726,6 +727,11 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                     Container::module("Filters")
                 };
                 filters.add(f1).add(f2)
+            })
+            // The Waveshaper past the filter (`pos`), ahead of the amp.
+            .add(match (&shaper, layer.shaper_post) {
+                (Some(shaper), true) => Container::module("Post Shaper").add(shaper.clone()),
+                _ => Container::module("Post Shaper"),
             })
             // "Amp Stage": a route onto "Amp" (the patch's amp tremolo) must
             // find the block, not a container of the same name.

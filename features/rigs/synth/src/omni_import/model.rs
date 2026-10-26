@@ -84,6 +84,8 @@ pub struct OmniLayer {
     pub unison_octave: f32,
     pub unison_analog: f32,
     pub unison_drift: f32,
+    /// The Waveshaper sits after the filter (`WAVESHAPER pos` past 0).
+    pub shaper_post: bool,
     /// The Waveshaper's sine fold 0..1 (type 0's depth) and its gain in.
     pub shaper_fold: f32,
     pub shaper_pre: f32,
@@ -1582,6 +1584,10 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
                     layer.shaper = Some((level, crush, reduce, mix));
                     layer.shaper_fold = fold;
                     layer.shaper_pre = pre;
+                    // `pos` (0.02 steps): 0 ahead of the filter, past it
+                    // otherwise (measured: 0.02 and 0.04 sound alike, and
+                    // unlike 0, on a resonant filter).
+                    layer.shaper_post = (ws.num("pos").unwrap_or(0.0) * 50.0).round() >= 1.0;
                 }
             }
         }
