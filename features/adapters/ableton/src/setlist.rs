@@ -12,6 +12,7 @@
 //! `song:<slug>` — so the show can become a setlist of songs that share the
 //! set's media.
 
+use crate::tempo::TempoMap;
 use crate::types::{AbletonLiveSet, AutomationPoint, Locator};
 
 /// One song of a show: where it sits on the set's arrangement.
@@ -124,70 +125,6 @@ pub fn slug(name: &str) -> String {
     out.trim_matches('-').to_owned()
 }
 
-/// Beats → seconds through a tempo map: the set's tempo, or its tempo
-/// automation (linear ramps between breakpoints, as Live plays them).
-struct TempoMap {
-    /// (beat, bpm), sorted, the first at or before beat 0.
-    points: Vec<(f64, f64)>,
-}
-
-impl TempoMap {
-    fn new(tempo: f64, automation: &[AutomationPoint]) -> Self {
-        let mut points: Vec<(f64, f64)> = automation
-            .iter()
-            .filter(|p| p.value > 0.0)
-            .map(|p| (p.time, p.value))
-            .collect();
-        points.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let fallback = if tempo > 0.0 { tempo } else { 120.0 };
-        // Live parks a breakpoint before the arrangement, at a far negative
-        // time; breakpoints ramp linearly, so the tempo at beat 0 is read
-        // off the segment that crosses it.
-        let before = points.iter().rev().find(|p| p.0 <= 0.0).copied();
-        let after = points.iter().find(|p| p.0 > 0.0).copied();
-        let at_zero = match (before, after) {
-            (Some((t0, v0)), Some((t1, v1))) if t1 > t0 => v0 + (v1 - v0) * (0.0 - t0) / (t1 - t0),
-            (Some((_, v0)), _) => v0,
-            (None, _) => fallback,
-        };
-        points.retain(|p| p.0 > 0.0);
-        points.insert(0, (0.0, at_zero));
-        Self { points }
-    }
-
-    fn seconds_at(&self, beat: f64) -> f64 {
-        let mut seconds = 0.0;
-        for (i, &(from, bpm)) in self.points.iter().enumerate() {
-            if beat <= from {
-                break;
-            }
-            let (to, bpm_to) = self
-                .points
-                .get(i + 1)
-                .copied()
-                .unwrap_or((f64::INFINITY, bpm));
-            // Two breakpoints at one beat are a step: no time passes.
-            if to - from <= 1e-12 {
-                continue;
-            }
-            let until = beat.min(to);
-            let span = until - from;
-            if to.is_infinite() || (bpm_to - bpm).abs() < 1e-9 {
-                seconds += 60.0 * span / bpm;
-            } else {
-                // Linear ramp: bpm(b) = bpm + k (b - from); ∫ 60 / bpm(b) db.
-                let k = (bpm_to - bpm) / (to - from);
-                let at_until = bpm + k * span;
-                seconds += 60.0 / k * (at_until / bpm).ln();
-            }
-            if beat <= to {
-                break;
-            }
-        }
-        seconds
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,15 +133,6 @@ mod tests {
         Locator {
             time,
             name: name.to_owned(),
-        }
-    }
-
-    fn tempo(time: f64, bpm: f64) -> AutomationPoint {
-        AutomationPoint {
-            time,
-            value: bpm,
-            curve_control_1: None,
-            curve_control_2: None,
         }
     }
 
@@ -247,42 +175,6 @@ mod tests {
             .map(|s| (s.name.as_str(), s.start_beats, s.end_beats))
             .collect();
         assert_eq!(spans, [("Fire", 0.0, 64.0), ("Know Me", 64.0, 128.0)]);
-    }
-
-    #[test]
-    fn seconds_follow_the_tempo_map_steps_and_ramps() {
-        // 120 bpm parked before the set and held to beat 8; a step to 60
-        // there (two breakpoints at one beat); held to 16; a ramp from 60
-        // to 120 over beats 16..32; then 120.
-        let map = TempoMap::new(
-            100.0,
-            &[
-                tempo(-63_072_000.0, 120.0),
-                tempo(8.0, 120.0),
-                tempo(8.0, 60.0),
-                tempo(16.0, 60.0),
-                tempo(32.0, 120.0),
-            ],
-        );
-        assert!((map.seconds_at(8.0) - 4.0).abs() < 1e-9, "8 beats at 120");
-        assert!((map.seconds_at(16.0) - 12.0).abs() < 1e-9, "+8 beats at 60");
-        // ∫ 60 / (60 + 60 (b-16)/16) db over 16 beats = 16 ln 2.
-        let ramp = 16.0 * std::f64::consts::LN_2;
-        assert!((map.seconds_at(32.0) - (12.0 + ramp)).abs() < 1e-9);
-        assert!(
-            (map.seconds_at(36.0) - (12.0 + ramp + 2.0)).abs() < 1e-9,
-            "then 120"
-        );
-        assert!(map.seconds_at(1e6).is_finite());
-    }
-
-    #[test]
-    fn the_tempo_at_zero_is_read_off_the_ramp_that_crosses_it() {
-        // Parked at 100 bpm far back, ramping to 140 at beat 40: the ramp
-        // is so long that beat 0 is still at (almost) 100.
-        let map = TempoMap::new(120.0, &[tempo(-1000.0, 100.0), tempo(40.0, 140.0)]);
-        let at_zero = map.points[0].1;
-        assert!((at_zero - (100.0 + 40.0 * 1000.0 / 1040.0)).abs() < 1e-9);
     }
 
     #[test]

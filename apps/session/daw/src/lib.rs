@@ -108,6 +108,8 @@ pub mod projects;
 pub mod rig;
 #[cfg(feature = "signal")]
 pub mod rig_actions;
+#[cfg(feature = "show")]
+pub mod show;
 pub mod song_modes;
 pub mod song_stream;
 #[cfg(feature = "native")]

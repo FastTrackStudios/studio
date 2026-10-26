@@ -16,6 +16,7 @@
 pub mod bridge;
 #[cfg(feature = "net")]
 pub mod clock;
+pub mod crop;
 pub mod diff;
 #[cfg(feature = "engine")]
 pub mod direct;
