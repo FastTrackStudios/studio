@@ -429,7 +429,18 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
             if layer.ring_mix > 0.0 {
                 wt = wt
                     .with_param("ring_mix", format!("{:.4}", layer.ring_mix))
-                    .with_param("ring_ratio", format!("{:.4}", layer.ring_ratio.max(0.01)));
+                    .with_param("ring_ratio", format!("{:.4}", layer.ring_ratio.max(0.01)))
+                    // The plugin's ring product sits 7.6 dB over ours at
+                    // full depth (measured on the init saw).
+                    .with_param("ring_level", "2.4")
+                    .with_param("ring_gain", format!("{:.4}", layer.ring_gain));
+            }
+            if let Some(m) = layer.harmonia_main {
+                wt = wt.with_param("harm_main", format!("{m:.4}"));
+                // A voice's own waveform 0 is the layer's table.
+                if layer.harmonia.iter().all(|h| h.3 == 0.0) {
+                    wt = wt.with_param("harm_table", "1");
+                }
             }
             for (i, (level, smi, pan, shape)) in layer.harmonia.iter().take(4).enumerate() {
                 let n = i + 1;
@@ -494,6 +505,9 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
             sb = sb.with_param("transpose_mode", "resample");
             // Harmonia voices play the soundsource itself at their intervals
             // (the engine stacks them per note).
+            if let Some(m) = layer.harmonia_main {
+                sb = sb.with_param("harm_main", format!("{m:.4}"));
+            }
             for (i, (level, smi, pan, _shape)) in layer.harmonia.iter().take(4).enumerate() {
                 let n = i + 1;
                 sb = sb
@@ -568,11 +582,14 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                     .with_param("parallel", if parallel { "1" } else { "0" }),
             );
         }
-        if let Some((drive, crush, reduce, mix)) = layer.shaper {
+        if let Some((level_db, crush, reduce, mix)) = layer.shaper {
+            // The measured level of the patch's curve; its shape is not
+            // modelled, so no saturation (our tanh brightened where the
+            // plugin's common curves darken).
             osc = osc.add(
                 RigBlock::of_type(BlockType::Waveshaper)
                     .named("Waveshaper")
-                    .with_param("drive", format!("{drive:.4}"))
+                    .with_param("gain_db", format!("{level_db:.2}"))
                     .with_param("crush", format!("{crush:.4}"))
                     .with_param("reduce", format!("{reduce:.4}"))
                     .with_param("mix", format!("{mix:.4}")),
@@ -652,6 +669,14 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                 } else if parallel {
                     // Nothing in the second branch: it must not pass dry audio.
                     f2 = f2.with_param("gain_db", "-120.0");
+                }
+                // Key tracking applies to the section (both filters).
+                // Only on an engaged section: a bare Filter block is a
+                // pass-through, and key tracking would set it filtering.
+                if layer.filter_active && layer.filter_key_track != 0.0 {
+                    let kt = format!("{:.3}", layer.filter_key_track);
+                    f1 = f1.with_param("key_track", kt.clone());
+                    f2 = f2.with_param("key_track", kt);
                 }
                 // SERIES chains the filters; PARALLEL sums them.
                 let filters = if parallel {

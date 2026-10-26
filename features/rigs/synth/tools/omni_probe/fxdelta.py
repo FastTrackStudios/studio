@@ -15,6 +15,8 @@ env: NOTE (48), OMNI_REFS (render cache)
 import collections, hashlib, os, re, struct, subprocess, sys
 import numpy as np
 
+os.environ.setdefault("FTS_SAMPLED_ROOT", "/Volumes/dev-drive/AudioHaven/Sampled")  # as fxprobe.py: without it Signal falls back to generated waves
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "../../../../.."))
 OMNI = os.path.join(REPO, "target/release/examples/omni_render")

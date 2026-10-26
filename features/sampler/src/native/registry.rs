@@ -247,6 +247,12 @@ fn wavetable_config(block: &RigBlock) -> SynthConfig {
     if let Some(v) = p("ring_mix") {
         cfg.ring_mix = v.clamp(0.0, 1.0);
     }
+    if let Some(v) = p("ring_level") {
+        cfg.ring_level = v.max(0.0);
+    }
+    if let Some(v) = p("ring_gain") {
+        cfg.ring_gain = v.max(0.0);
+    }
     if let Some(v) = p("ring_ratio") {
         cfg.ring_ratio = v.max(0.01);
     }
@@ -262,13 +268,19 @@ fn wavetable_config(block: &RigBlock) -> SynthConfig {
     if let Some(v) = p("amp_release") {
         cfg.env.release_s = v.max(0.0);
     }
+    if let Some(v) = p("harm_main") {
+        cfg.main_level = v.clamp(0.0, 1.0);
+    }
+    cfg.harm_table = p("harm_table").is_some_and(|v| v > 0.5);
     for i in 0..4 {
         let n = i + 1;
         let level = p(&format!("harm{n}_level")).unwrap_or(0.0);
         if level > 0.0 {
             cfg.harmonia[i] = HarmVoice {
                 on: true,
-                level: level.clamp(0.0, 1.0),
+                // Above 1: Omnisphere's voice at full level sits ~8 dB over
+                // the main voice.
+                level: level.clamp(0.0, 4.0),
                 interval_semi: p(&format!("harm{n}_interval")).unwrap_or(0.0),
                 pan: p(&format!("harm{n}_pan")).unwrap_or(0.0),
                 shape: p(&format!("harm{n}_shape")).unwrap_or(cfg.shape),
@@ -392,6 +404,9 @@ fn build_filter(block: &RigBlock, sample_rate: u32) -> Box<dyn PluginInstance> {
     if let Some(c) = block.param_f32("ladder_comp") {
         f = f.with_ladder_comp(c);
     }
+    if let Some(t) = block.param_f32("key_track") {
+        f = f.with_key_tracking(t);
+    }
     // An emulated cutoff knob: `taper` = "setting:hz;…", set to `knob_setting`.
     if let Some(t) = block.param_str("taper") {
         let points: Vec<(f32, f32)> = t
@@ -490,6 +505,9 @@ fn build_waveshaper(block: &RigBlock, sample_rate: u32) -> Box<dyn PluginInstanc
     }
     if let Some(v) = block.param_f32("mix") {
         w = w.with_mix(v);
+    }
+    if let Some(db) = block.param_f32("gain_db") {
+        w = w.with_gain_db(db);
     }
     Box::new(w)
 }

@@ -973,6 +973,8 @@ pub struct SampleEngine {
     /// Harmonia: extra voices at `(interval semitones, level, pan)` on top of
     /// the played one — an Omnisphere sample layer's (up to four).
     harmonia: Vec<(f32, f32, f32)>,
+    /// The played note's own level under Harmonia's mix (1 = full).
+    harmonia_main: f32,
     /// Transpose zones by playback rate (resampling, as Omnisphere and
     /// Keyscape do) instead of the time-preserving shifter.
     resample_transpose: bool,
@@ -1260,6 +1262,7 @@ impl SampleEngine {
             velocity_sens: None,
             zone_velocity: None,
             harmonia: Vec::new(),
+            harmonia_main: 1.0,
             resample_transpose: false,
             timbre_shift: 0,
             filter_env: None,
@@ -1632,6 +1635,11 @@ impl SampleEngine {
     }
 
     /// Harmonia voices `(interval semitones, level, pan)`, up to four.
+    /// The played note's own level under Harmonia's mix.
+    pub fn set_harmonia_main(&mut self, level: f32) {
+        self.harmonia_main = level.clamp(0.0, 1.0);
+    }
+
     pub fn set_harmonia(&mut self, voices: Vec<(f32, f32, f32)>) {
         self.harmonia = voices.into_iter().take(4).collect();
     }
@@ -1639,6 +1647,7 @@ impl SampleEngine {
     /// The voice stack a note plays: itself, then its Harmonia voices.
     pub(crate) fn harmonia_stack(&self) -> ([(f32, f32, f32); 5], usize) {
         let mut out = [(0.0, 1.0, 0.0); 5];
+        out[0].1 = self.harmonia_main;
         for (slot, v) in out[1..].iter_mut().zip(&self.harmonia) {
             *slot = *v;
         }

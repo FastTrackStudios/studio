@@ -279,6 +279,11 @@ pub struct NativeFilter {
     /// down; 0 = a static filter), how hard the playing drives it (0..1),
     /// and how fast it follows, attack and release (ms).
     env_octaves: f32,
+    /// Key tracking: octaves of cutoff per octave of keyboard about middle
+    /// C (0 off, 1 = the cutoff follows the key), against the latest note.
+    key_track: f32,
+    /// `2^(key_track · (note − 60) / 12)` for the latest note.
+    key_scale: f32,
     env_sens: f32,
     env_attack_ms: f32,
     env_release_ms: f32,
@@ -314,6 +319,8 @@ impl NativeFilter {
             drive: 0.0,
             mix: 1.0,
             env_octaves: 0.0,
+            key_track: 0.0,
+            key_scale: 1.0,
             env_sens: 0.5,
             env_attack_ms: 4.0,
             env_release_ms: 120.0,
@@ -437,6 +444,16 @@ impl NativeFilter {
         Some(last.1)
     }
 
+    /// Key tracking: the cutoff moves `track` octaves per octave of the
+    /// latest note from middle C (60). A layer filter here runs on the
+    /// layer's mix, so a chord tracks its latest note — exact for one note
+    /// at a time, an approximation for chords (the plugin filters per voice).
+    #[must_use]
+    pub fn with_key_tracking(mut self, track: f32) -> Self {
+        self.key_track = track;
+        self
+    }
+
     /// Output gain in dB (a model's passband level).
     #[must_use]
     pub fn with_gain_db(mut self, db: f32) -> Self {
@@ -480,10 +497,13 @@ impl NativeFilter {
     /// the envelope has moved it).
     fn set_corner(&mut self, hz: f32) {
         let q = self.svf_q();
-        let fc = hz.clamp(20.0, self.sample_rate * 0.45)
+        // The resonance shift multiplies the clamped corner, so clamp after
+        // it too: a shifted corner past Nyquist makes the filter unstable.
+        let fc = ((hz * self.key_scale).clamp(20.0, self.sample_rate * 0.45)
             * self
                 .res_shift
-                .powf(self.resonance.powf(self.res_shift_curve));
+                .powf(self.resonance.powf(self.res_shift_curve)))
+        .min(self.sample_rate * 0.45);
         for i in 0..(self.poles / 2) as usize {
             // Resonance on the first section only; the cascade stays flat.
             let q = if i == 0 {
@@ -760,6 +780,17 @@ impl PluginInstance for NativeFilter {
                     dirty = true;
                 }
                 _ => {}
+            }
+        }
+        if self.key_track != 0.0 {
+            for ev in events.midi {
+                if let midi::MidiEvent::NoteOn { key, velocity, .. } = &ev.message {
+                    if velocity.get() > 0 {
+                        let semis = f32::from(key.get()) - 60.0;
+                        self.key_scale = (self.key_track * semis / 12.0).exp2();
+                        dirty = true;
+                    }
+                }
             }
         }
         if dirty {

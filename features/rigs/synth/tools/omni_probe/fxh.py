@@ -14,6 +14,8 @@ env: NOTE (36), SHOW (harmonic list, default a log spread), OURS=0 skips ours
 import os, subprocess, sys
 import numpy as np
 
+os.environ.setdefault("FTS_SAMPLED_ROOT", "/Volumes/dev-drive/AudioHaven/Sampled")  # as fxprobe.py: without it Signal falls back to generated waves
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("NOTE", "36")
 import fxdelta as F  # noqa: E402

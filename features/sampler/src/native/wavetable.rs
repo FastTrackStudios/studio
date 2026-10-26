@@ -115,7 +115,16 @@ pub struct SynthConfig {
     pub ring_mix: f32,
     /// Ring carrier ratio (key-tracked).
     pub ring_ratio: f32,
+    /// The ring product's level against the dry signal (1 = equal).
+    pub ring_level: f32,
+    /// The AM section's output gain, on the whole voice once ring mod is on.
+    pub ring_gain: f32,
     pub harmonia: [HarmVoice; 4],
+    /// The main (unison) voices' level under Harmonia's mix (1 − mix²).
+    pub main_level: f32,
+    /// Harmonia voices play the layer's own table (Omnisphere's default,
+    /// `wfm` 0) rather than their generated shape.
+    pub harm_table: bool,
     /// Per-note amplitude envelope.
     pub env: AdsrParams,
 }
@@ -135,7 +144,11 @@ impl Default for SynthConfig {
             fm_shape: 0.0,
             ring_mix: 0.0,
             ring_ratio: 1.0,
+            ring_level: 1.0,
+            ring_gain: 1.0,
             harmonia: [HarmVoice::default(); 4],
+            main_level: 1.0,
+            harm_table: false,
             env: AdsrParams::default(),
         }
     }
@@ -906,6 +919,7 @@ impl Soundsource for NativeWavetable {
         let fm_index = self.cfg.fm_depth * 4.0; // phase-mod index scale
         let fm_shape = self.cfg.fm_shape;
         let ring_mix = self.cfg.ring_mix;
+        let (ring_level, ring_gain) = (self.cfg.ring_level, self.cfg.ring_gain);
         // Drift: block-rate pitch wander per sub (slow, so block-rate is fine).
         for v in &mut self.voices {
             for s in &mut v.subs {
@@ -980,12 +994,12 @@ impl Soundsource for NativeWavetable {
                     let lvl = if si >= n_unison {
                         s.level * self.harm_mix
                     } else {
-                        s.level
+                        s.level * self.cfg.main_level
                     };
-                    // Harmonia voices play their own waveform (`harm_shape`),
-                    // never the layer's table.
+                    // Harmonia voices play their own waveform (`harm_shape`)
+                    // unless they take the layer's table (`harm_table`).
                     let smp = match &self.waves {
-                        Some([a, b]) if si < n_unison => {
+                        Some([a, b]) if si < n_unison || self.cfg.harm_table => {
                             if s.mip.0.to_bits() != inc.to_bits() {
                                 s.mip = (inc, a.level_for(inc), b.level_for(inc));
                             }
@@ -1018,7 +1032,7 @@ impl Soundsource for NativeWavetable {
                 if ring_mix > 0.0 {
                     let carrier = (core::f32::consts::TAU * v.ring_phase).sin();
                     v.ring_phase = (v.ring_phase + v.ring_inc).fract();
-                    let g = (1.0 - ring_mix) + ring_mix * carrier;
+                    let g = ((1.0 - ring_mix) + ring_mix * ring_level * carrier) * ring_gain;
                     vl *= g;
                     vr *= g;
                 }

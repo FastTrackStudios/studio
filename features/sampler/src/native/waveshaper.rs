@@ -24,6 +24,8 @@ pub struct NativeWaveshaper {
     reduce: f32,
     /// Wet/dry, 1 = fully shaped.
     mix: f32,
+    /// Linear gain on the shaped (wet) signal — a shaper's own output level.
+    gain: f32,
     // Sample-and-hold state.
     hold_l: f32,
     hold_r: f32,
@@ -39,6 +41,7 @@ impl NativeWaveshaper {
             crush: 0.0,
             reduce: 0.0,
             mix: 1.0,
+            gain: 1.0,
             hold_l: 0.0,
             hold_r: 0.0,
             hold_count: 0.0,
@@ -64,6 +67,13 @@ impl NativeWaveshaper {
         self
     }
 
+    /// Output level of the shaped signal, in dB.
+    #[must_use]
+    pub fn with_gain_db(mut self, db: f32) -> Self {
+        self.gain = 10f32.powf(db / 20.0);
+        self
+    }
+
     #[must_use]
     pub fn with_mix(mut self, v: f32) -> Self {
         self.mix = v.clamp(0.0, 1.0);
@@ -80,8 +90,11 @@ impl NativeWaveshaper {
             y = y.clamp(-1.5, 1.5);
         }
         if self.crush > 0.0 {
-            // 16 → 2 bits.
-            let bits = 16.0 - self.crush * 14.0;
+            // 16 → 4 bits on a squared law (measured against the Omnisphere
+            // Waveshaper's Bit Crush: level within 1 dB across its range;
+            // the old 2-bit floor silenced a quiet signal). Mid-tread, so
+            // silence stays silent.
+            let bits = 4.0 + 12.0 * (1.0 - self.crush) * (1.0 - self.crush);
             let steps = 2f32.powf(bits - 1.0);
             y = (y * steps).round() / steps;
         }
@@ -179,8 +192,8 @@ impl PluginInstance for NativeWaveshaper {
                 wl = self.hold_l;
                 wr = self.hold_r;
             }
-            wl = self.shape(wl);
-            wr = self.shape(wr);
+            wl = self.shape(wl) * self.gain;
+            wr = self.shape(wr) * self.gain;
             if self.mix >= 1.0 {
                 out_l[f] = wl;
                 out_r[f] = wr;

@@ -1661,6 +1661,9 @@ pub(crate) fn build_sample_source(
         .collect();
     if !harmonia.is_empty() {
         engine.set_harmonia(harmonia);
+        if let Some(m) = block.param_f32("harm_main") {
+            engine.set_harmonia_main(m);
+        }
     }
     if let Some(k) = block.param_f32("timbre_semis") {
         engine.set_timbre_shift(k.round() as i32);

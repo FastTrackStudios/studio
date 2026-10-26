@@ -131,6 +131,10 @@ pub struct OmniLayer {
     /// `FILTER bal` — in parallel, filter 1 weighs `1 − bal²` and filter 2
     /// `1 − (1 − bal)²` (measured; series ignores it).
     pub filter_balance: f32,
+    /// Key tracking (`FILTER key`) as octaves of cutoff per octave of
+    /// keyboard about middle C — `2·key` (measured: 0.5 tracks 1:1, 1.0
+    /// tracks 2:1; C4 is the pivot at every setting).
+    pub filter_key_track: f32,
     /// The filter section's pre + post gain (`FILTER gnpre` / `gnpst`), in
     /// dB relative to their implicit 0.75 — see [`filter_gain_db`]. Applied
     /// whether or not the filters themselves are on.
@@ -147,13 +151,21 @@ pub struct OmniLayer {
     pub ring_mix: f32,
     /// Ring modulator ratio (`2·AMmodint`).
     pub ring_ratio: f32,
+    /// The AM section's output gain (`OSC ampgn`; a patch without it plays
+    /// at 0.75) as a linear factor: on the whole voice once ring mod is on.
+    pub ring_gain: f32,
     /// Hard-sync ratio from `OSC hrdsnc` (1 = off).
     pub sync_ratio: f32,
     /// `OSC hrdsnc` itself (the knob routes move).
     pub sync_knob: f32,
-    /// Active Harmonia voices: (level, interval semitones, pan −1..1, shape).
+    /// Active Harmonia voices: (level re the main voice, interval
+    /// semitones, pan −1..1, shape).
     pub harmonia: Vec<(f32, f32, f32, f32)>,
-    /// Waveshaper when engaged: (drive, crush, reduce, mix).
+    /// The main voice's level under Harmonia's `mix` (`1 − mix²`); `None`
+    /// when no voice is active.
+    pub harmonia_main: Option<f32>,
+    /// Waveshaper when engaged: (level dB, crush, reduce, mix) — its level
+    /// from [`shaper_level_db`]; the curves' shape is not modelled yet.
     pub shaper: Option<(f32, f32, f32, f32)>,
     /// Dual Frequency Shifter when engaged: (`hz_a`, `mix_a`, `hz_b`, `mix_b`, parallel).
     pub dfs: Option<(f32, f32, f32, f32, bool)>,
@@ -161,6 +173,69 @@ pub struct OmniLayer {
     pub fx: Vec<String>,
     /// Each Layer FX slot's `P0`..`P14`.
     pub fx_params: Vec<[f32; 15]>,
+}
+
+/// Piecewise-linear `points` (x, dB) at `x`, clamped at the ends.
+fn lerp_db(points: &[(f32, f32)], x: f32) -> f32 {
+    let x = x.clamp(points[0].0, points[points.len() - 1].0);
+    points
+        .windows(2)
+        .find(|w| x <= w[1].0)
+        .map_or(points[points.len() - 1].1, |w| {
+            w[0].1 + (x - w[0].0) / (w[1].0 - w[0].0).max(1e-6) * (w[1].1 - w[0].1)
+        })
+}
+
+/// One Harmonia level knob (`lvl<n>` or the section's `hrmLv`) in dB, the
+/// two adding (measured: `40·log10(k) + 3.8` up to 0.75, +8.3 at full).
+#[must_use]
+pub fn harmonia_knob_db(k: f32) -> f32 {
+    let k = k.clamp(1e-4, 1.0);
+    if k <= 0.75 {
+        40.0 * k.log10() + 3.8
+    } else {
+        let at = 40.0 * 0.75f32.log10() + 3.8;
+        at + (k - 0.75) / 0.25 * (8.3 - at)
+    }
+}
+
+/// The Waveshaper's level (dB re no shaper) for curve `kind` (`WAVESHAPER
+/// type`, an index on a 0.02 grid), depth `dpth` and `gain` — measured on a
+/// held saw: every curve's output follows `20·log10(gain)` plus the curve's
+/// own level at that depth (type 0: +9.5 dB, its depth darkening and
+/// quietening; type 0.24 flat; the folding curves silent at depth 0). The
+/// curves' spectral shapes are not modelled.
+#[must_use]
+pub fn shaper_level_db(kind: f32, dpth: f32, gain: f32) -> f32 {
+    const AT: [f32; 6] = [0.0, 0.07, 0.15, 0.3, 0.5, 1.0];
+    // dB at AT for each type index (type × 50); NaN where unmeasured.
+    let table: [f32; 6] = match (kind * 50.0).round() as i32 {
+        0 => [9.5, 9.0, 7.4, 6.0, -2.4, -8.0],
+        1 => [9.2, 9.0, f32::NAN, 2.0, f32::NAN, f32::NAN],
+        2 => [9.6, 9.5, f32::NAN, 8.4, f32::NAN, f32::NAN],
+        3 => [-60.0, 7.6, f32::NAN, 10.1, f32::NAN, f32::NAN],
+        4 => [3.5, 4.5, f32::NAN, 2.8, f32::NAN, f32::NAN],
+        5 => [3.5, 4.4, f32::NAN, 5.0, f32::NAN, f32::NAN],
+        6 => [-60.0, -10.9, f32::NAN, 7.2, f32::NAN, f32::NAN],
+        7 => [-60.0, -12.0, f32::NAN, 6.7, f32::NAN, f32::NAN],
+        8 => [-60.0, -4.1, f32::NAN, 10.9, f32::NAN, f32::NAN],
+        9 => [-60.0, -9.3, f32::NAN, 3.2, f32::NAN, f32::NAN],
+        10 => [-60.0, -12.3, f32::NAN, -0.2, f32::NAN, f32::NAN],
+        11 => [-60.0, -37.8, f32::NAN, -3.8, f32::NAN, f32::NAN],
+        _ => [0.0; 6],
+    };
+    let points: Vec<(f32, f32)> = AT
+        .iter()
+        .zip(table)
+        .filter(|(_, db)| db.is_finite())
+        .map(|(&a, db)| (a, db))
+        .collect();
+    let d = dpth.clamp(0.0, 1.0);
+    let curve = points.windows(2).find(|w| d <= w[1].0).map_or_else(
+        || points.last().map_or(0.0, |p| p.1),
+        |w| w[0].1 + (d - w[0].0) / (w[1].0 - w[0].0) * (w[1].1 - w[0].1),
+    );
+    curve + 20.0 * gain.max(1e-4).log10()
 }
 
 /// The filter section's pre/post gain knob (`gnpre` / `gnpst`) in dB,
@@ -666,6 +741,19 @@ impl FilterModel {
     /// taper × its own scale there (log-interpolated, held past the ends).
     #[must_use]
     pub fn corner_hz(&self, setting: f32) -> f32 {
+        // The offsets were measured against the filter as it plays this
+        // corner — floored at 20 Hz (`NativeFilter`'s clamp) — so they
+        // apply to the floored corner.
+        let offset = low_end_octaves(self.name, setting);
+        let base = self.corner_hz_above_low(setting);
+        if offset == 0.0 {
+            base
+        } else {
+            base.max(20.0) * offset.exp2()
+        }
+    }
+
+    fn corner_hz_above_low(&self, setting: f32) -> f32 {
         const AT: [f32; 5] = [0.15, 0.3, 0.45, 0.6, 0.75];
         let scale = if setting <= AT[0] {
             self.taper[0]
@@ -678,6 +766,61 @@ impl FilterModel {
         };
         omni_cutoff_hz(setting) * scale
     }
+}
+
+/// The octaves a model's corner sits above [`FilterModel::corner_hz`]'s
+/// extrapolation below knob setting 0.15, where the taper was not fitted:
+/// measured per model against the plugin (`tools/omni_probe` tapercal: the
+/// shift that lays our response over the plugin's, settings 0 / 0.05 / 0.1 /
+/// 0.115; zero from 0.15). Most models share one law (+1.35 octaves at the
+/// bottom); a model not listed keeps the extrapolation.
+fn low_end_octaves(name: &str, setting: f32) -> f32 {
+    const AT: [f32; 5] = [0.0, 0.05, 0.1, 0.115, 0.15];
+    const SHARED: [f32; 4] = [1.33, 1.40, 0.46, 0.30];
+    let offsets: [f32; 4] = match name {
+        "LPF UVI 2" => [-0.22, -0.08, -0.06, -0.02],
+        "LPF Power 24db" => [0.0, -0.22, 0.48, 0.34],
+        "HPF UVI" | "LPF UVI 1" => [0.0, 0.0, 0.18, 0.06],
+        "LPF Power 12db" => [-0.06, 0.58, 0.42, 0.28],
+        "Beefy LPF 4-pole" => [0.60, 0.96, 0.74, 0.48],
+        "Classic LPF 1-pole" => [-0.12, -0.28, 0.64, 0.48],
+        "Bandpass Juicy 12db" => [1.28, 1.04, 0.42, 0.26],
+        "State Variable 12dB" => [1.12, 1.28, 0.24, 0.24],
+        "Classic LPF 8-pole" => [0.86, 0.92, 0.50, 0.34],
+        "LPF UVI 3" => [-1.42, 0.02, 0.02, 0.08],
+        "LPF Gentle 6db" => [0.72, 0.56, -0.28, -0.48],
+        "HPF Juicy 12db" => [0.34, 0.34, 0.34, 0.24],
+        "HPF Crisp" => [1.0, 1.0, 0.54, 0.60],
+        "Bandpass" => [1.72, 0.70, 0.14, -0.08],
+        "Beefy BPF 4-pole" => [1.42, 1.78, 0.64, 0.40],
+        "LPF Colorful 24db" => [2.0, 2.0, 0.66, 0.44],
+        "HPF Power 12db" => [0.80, 0.80, 0.80, 0.50],
+        "Beefy LPF 2-pole" => [1.34, 1.72, 0.66, 0.40],
+        "LPF Smooth 24db" => [-1.12, -1.04, -0.66, -0.46],
+        "LPF Edge 24db" => [1.68, 1.74, 0.18, 0.06],
+        "LPF Juicy 12db"
+        | "Classic LPF 4-pole"
+        | "LPF Juicy 24db"
+        | "Classic LPF 2-pole"
+        | "Jupiter LPF 4-pole"
+        | "FATBOY"
+        | "Bandpass Juicy 24db"
+        | "LPF Warm 12db"
+        | "OB LPF 4-pole"
+        | "Classic LPF 6-pole"
+        | "LPF Crisp 12db"
+        | "HPF Juicy 24db"
+        | "Classic LPF 3-pole" => SHARED,
+        _ => return 0.0,
+    };
+    if setting >= AT[4] {
+        return 0.0;
+    }
+    let s = setting.max(0.0);
+    let i = AT.windows(2).position(|w| s <= w[1]).unwrap_or(3);
+    let (a, b) = (AT[i], AT[i + 1]);
+    let (oa, ob) = (offsets[i], if i + 1 < 4 { offsets[i + 1] } else { 0.0 });
+    oa + (s - a) / (b - a) * (ob - oa)
 }
 
 /// The factory library's filter models by exact `type1` bits — the value is
@@ -1114,6 +1257,9 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
             layer.filter_res =
                 omni_filter_setting(res, f.num("res1").unwrap_or(0.5)).clamp(0.0, 1.0);
             layer.filter_balance = f.num("bal").unwrap_or(0.5).clamp(0.0, 1.0);
+            let key = f.num("key").unwrap_or(0.0).clamp(0.0, 1.0);
+            let key_inv = f.num("keyinv").unwrap_or(0.0) != 0.0;
+            layer.filter_key_track = if key_inv { -2.0 * key } else { 2.0 * key };
             layer.filter_gain_db = filter_gain_db(f.num("gnpre").unwrap_or(0.75))
                 + filter_gain_db(f.num("gnpst").unwrap_or(0.75));
             let depth = f.num("envdpth").unwrap_or(0.0).clamp(0.0, 1.0);
@@ -1209,16 +1355,31 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
                 .and_then(|k| k.trim().parse::<u32>().ok())
                 .unwrap_or(0);
             // AM is a ring modulator (measured: carrier suppressed at full):
-            // `am` switches it on, `AMmoddepth` blends dry → ring (as its
-            // square root: half depth already leaves the sidebands 1.5 dB
-            // over the carrier) and
+            // `am` switches it on, `AMmoddepth` blends dry → ring linearly
+            // (with the ring product at its measured level, `ring_level`
+            // 2.4: the voice's level then tracks the plugin within 0.2 dB
+            // at every depth), and
             // `AMmodint` sets the modulator ratio (2·AMmodint).
             layer.ring_mix = if n("am", 0.0) > 0.0 {
-                n("AMmoddepth", 1.0).clamp(0.0, 1.0).sqrt()
+                n("AMmoddepth", 1.0).clamp(0.0, 1.0)
             } else {
                 0.0
             };
             layer.ring_ratio = 2.0 * n("AMmodint", 0.75).clamp(0.0, 1.0);
+            // Measured (init part, saw): silent at 0, unity at 0.75 (the
+            // value a patch without the attribute plays at), +9 dB at 1.
+            layer.ring_gain = 10f32.powf(
+                lerp_db(
+                    &[
+                        (0.0, -120.0),
+                        (0.25, -19.8),
+                        (0.5, -7.9),
+                        (0.75, 0.0),
+                        (1.0, 9.1),
+                    ],
+                    n("ampgn", 0.75),
+                ) / 20.0,
+            );
             // Hard sync (measured on a sine: the formant's harmonic).
             let hs = n("hrdsnc", 0.0).clamp(0.0, 1.0);
             const SYNC: [(f32, f32); 8] = [
@@ -1271,12 +1432,28 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
             }
             // Harmonia: gated by OSC hrmOn, scaled by hrmLv.
             let hrm_on = osc.num("hrmOn").unwrap_or(1.0) > 0.0;
-            let hrm_lv = osc.num("hrmLv").unwrap_or(1.0).clamp(0.0, 1.0);
+            // A patch without `hrmLv` (older) plays at 0.7: measured on
+            // Coronation Pad, where 0.7 sits inside the plugin's own
+            // render-to-render spread and 0.68 / 0.75 do not.
+            let hrm_lv = osc.num("hrmLv").unwrap_or(0.7).clamp(0.0, 1.0);
             if hrm_on {
                 if let Some(h) = osc.find("HARM") {
+                    // Measured against the plugin (one voice at a fifth over
+                    // a sine): `mix` crossfades the main voice (× 1 − mix²)
+                    // against the voices (× 1 − (1 − mix)²), and each voice
+                    // sits `harmonia_knob_db(lvl) + harmonia_knob_db(hrmLv)`
+                    // from the main voice.
+                    let mix = h.num("mix").unwrap_or(0.5).clamp(0.0, 1.0);
+                    let voices_gain = 1.0 - (1.0 - mix) * (1.0 - mix);
                     for i in 1..=4 {
                         let act = h.num(&format!("Act{i}")).unwrap_or(0.0) > 0.0;
-                        let level = h.num(&format!("lvl{i}")).unwrap_or(0.0) * hrm_lv;
+                        let knob = h.num(&format!("lvl{i}")).unwrap_or(0.0);
+                        let level = if knob > 0.0 && hrm_lv > 0.0 {
+                            10f32.powf((harmonia_knob_db(knob) + harmonia_knob_db(hrm_lv)) / 20.0)
+                                * voices_gain
+                        } else {
+                            0.0
+                        };
                         if act && level > 0.0 {
                             // Interval: 0.02 per semitone about 0.48 (unison) —
                             // measured against the plugin (0.62 = +7, 0.64 = +8;
@@ -1292,8 +1469,11 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
                             let shape = h.num(&format!("wfm{i}")).unwrap_or(0.0).clamp(0.0, 1.0);
                             layer
                                 .harmonia
-                                .push((level.clamp(0.0, 1.0), smi, pan, shape));
+                                .push((level.clamp(0.0, 4.0), smi, pan, shape));
                         }
+                    }
+                    if !layer.harmonia.is_empty() {
+                        layer.harmonia_main = Some(1.0 - mix * mix);
                     }
                 }
             }
@@ -1317,12 +1497,17 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
         }
         if let Some(ws) = voice.child("WAVESHAPER") {
             if ws.num("act").unwrap_or(0.0) > 0.0 {
-                let drive = ws.num("dpth").unwrap_or(0.0).clamp(0.0, 1.0);
+                let depth = ws.num("dpth").unwrap_or(0.0).clamp(0.0, 1.0);
                 let crush = ws.num("bc").unwrap_or(0.0).clamp(0.0, 1.0);
                 let reduce = ws.num("srrdc").unwrap_or(0.0).clamp(0.0, 1.0);
                 let mix = ws.num("mix").unwrap_or(1.0).clamp(0.0, 1.0);
-                if drive > 0.0 || crush > 0.0 || reduce > 0.0 {
-                    layer.shaper = Some((drive, crush, reduce, mix));
+                let level = shaper_level_db(
+                    ws.num("type").unwrap_or(0.0),
+                    depth,
+                    ws.num("gain").unwrap_or(0.5),
+                );
+                if mix > 0.0 {
+                    layer.shaper = Some((level, crush, reduce, mix));
                 }
             }
         }
