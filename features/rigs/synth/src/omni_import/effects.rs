@@ -81,6 +81,7 @@ pub fn effect_chain(name: &str, p: &[f32; 15]) -> Option<Container> {
         "Radio Delay" => radio_delay(p),
         "Flame Distortion" => flame_distortion(p),
         "Unstable Drifter" => unstable_drifter(p),
+        "Half Speeder" => half_speeder(p),
         _ => return None,
     })
 }
@@ -289,6 +290,69 @@ fn unstable_drifter(p: &[f32; 15]) -> Container {
         return Container::module("Unstable Drifter").add(wet);
     }
     Container::parallel("Unstable Drifter")
+        .add(with_gain(
+            Container::module("Dry"),
+            10.0 * (1.0 - m).log10(),
+        ))
+        .add(wet)
+}
+
+/// Half Speeder (measured on a held saw): tape at half speed — the input an
+/// octave down, its harmonic shape kept:
+/// - `P0` the dry → wet mix (equal-power);
+/// - `P6` output, the wet +1.7 dB re the dry at 0.795 (the factory's usual),
+///   −8.1 at 0.5, +8.5 at 1, silent at 0;
+/// - `P2` a resonant 12 dB/oct high-pass (off at 0; ~80 Hz / 220 / 1 k /
+///   2.5 kHz at 0.25 / 0.5 / 0.75 / 1, ~+5 dB over its corner).
+///
+/// `P4` (modes, 0.02..0.1) and `P1` / `P3` (small tone moves) are not
+/// modelled.
+fn half_speeder(p: &[f32; 15]) -> Container {
+    let m = p[0].clamp(0.0, 1.0);
+    if m <= 0.0 {
+        return with_gain(Container::module("Half Speeder"), 0.0);
+    }
+    let mut wet = Container::module("Wet").add(
+        RigBlock::of_type(BlockType::Pitch)
+            .with_param("semitones", "-12")
+            .with_param("mix", "1")
+            .with_param("a_level", "1")
+            .with_param("b_level", "0")
+            .with_param("dry", "0"),
+    );
+    if p[2] > 0.05 {
+        let hz = lerp_table_log(
+            &[
+                (0.05, 20.0),
+                (0.25, 80.0),
+                (0.5, 220.0),
+                (0.75, 1000.0),
+                (1.0, 2500.0),
+            ],
+            p[2],
+        );
+        wet = wet.add(
+            eq_band(RigBlock::of_type(BlockType::Eq), 1, 3, hz, 0.0, 2.0)
+                .with_param("b1_slope", "2"),
+        );
+    }
+    let wet = with_gain(
+        wet,
+        1.7 + lerp_table(
+            &[
+                (0.0, -96.0),
+                (0.25, -20.1),
+                (0.5, -8.1),
+                (0.795, 0.0),
+                (1.0, 8.5),
+            ],
+            p[6],
+        ) + 10.0 * m.log10(),
+    );
+    if m >= 1.0 {
+        return Container::module("Half Speeder").add(wet);
+    }
+    Container::parallel("Half Speeder")
         .add(with_gain(
             Container::module("Dry"),
             10.0 * (1.0 - m).log10(),
