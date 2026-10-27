@@ -1192,7 +1192,7 @@ pub const READY_AHEAD: f64 = 4.0;
 pub const LOOK_AHEAD: f64 = 30.0;
 
 /// The transport's playhead and whether it moves, for `project`.
-fn transport_of(project: &str) -> Option<(f64, bool)> {
+pub(crate) fn transport_of(project: &str) -> Option<(f64, bool)> {
     let daw = crate::open::local_engine()?;
     let backend = daw.sync_backend(project)?;
     let snap = daw_transport_sync::TransportBackend::snapshot(&backend)?;

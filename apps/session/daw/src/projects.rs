@@ -246,67 +246,9 @@ pub fn open_next(path: PathBuf) {
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(path);
 }
 
-/// Whether an open was asked for from outside the window (the Action
-/// List's `SESSION_OPEN`): the window goes back out of the song to take it.
+/// Whether the window should go back out of the song to its start screen
+/// (`SESSION_NEW` made a song there; a version picked from inside one).
 static BACK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Open `path` from outside the window: as [`open_next`], and the window
-/// asked to go back out of the song for it ([`take_back`]).
-pub fn open_from_outside(path: PathBuf) {
-    open_next(path);
-    BACK.store(true, std::sync::atomic::Ordering::Release);
-}
-
-/// A setlist of an org's library asked to be opened from outside the window
-/// (the Action List's `SESSION_OPEN_SETLIST`): the start screen streams it in
-/// the way a click on it does.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SetlistOpen {
-    /// The org whose library holds it; the one shown when `None`.
-    pub org: Option<String>,
-    /// Its title, as the library lists it.
-    pub setlist: String,
-    /// One of its songs (slug or title) to open alone; the whole set when
-    /// `None`.
-    pub song: Option<String>,
-}
-
-static NEXT_SET: std::sync::Mutex<Option<SetlistOpen>> = std::sync::Mutex::new(None);
-
-/// Open `request` from outside the window: the window goes back out of
-/// the song, and the start screen takes it ([`take_setlist`]).
-pub fn open_setlist_from_outside(request: SetlistOpen) {
-    *NEXT_SET
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(request);
-    BACK.store(true, std::sync::atomic::Ordering::Release);
-}
-
-/// The setlist asked to be opened, if any — still waiting.
-#[must_use]
-pub fn pending_setlist() -> Option<SetlistOpen> {
-    NEXT_SET
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone()
-}
-
-/// The setlist asked to be opened, once — taken when the library shown is
-/// `org`'s (or the request names none).
-#[must_use]
-pub fn take_setlist(org: &str) -> Option<SetlistOpen> {
-    let mut next = NEXT_SET
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if next
-        .as_ref()
-        .is_some_and(|r| r.org.as_deref().is_none_or(|o| o == org))
-    {
-        next.take()
-    } else {
-        None
-    }
-}
 
 /// Ask the window to go back out of the song, to the start screen — for
 /// what the start screen then opens itself (a new song,
@@ -320,16 +262,16 @@ pub fn take_back() -> bool {
     BACK.swap(false, std::sync::atomic::Ordering::AcqRel)
 }
 
-/// Whether something waits to be opened: a song or file ([`open_next`])
-/// or a library setlist ([`open_setlist_from_outside`]). What Studio's
-/// welcome screen watches for, so an open asked for there (the CLI, a
-/// model) goes into the DAW view without a press.
+/// Whether something waits to be opened: a song or file ([`open_next`]),
+/// or a set the engine is opening (`crate::studio_engine::set`, asked by
+/// the CLI or a model). What Studio's welcome screen watches for, so an
+/// open asked for elsewhere goes into the DAW view without a press.
 #[must_use]
 pub fn pending_open() -> bool {
     NEXT.lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .is_some()
-        || pending_setlist().is_some()
+        || crate::studio_engine::set::is_opening()
 }
 
 /// What was asked to be opened next, once.
@@ -350,92 +292,5 @@ pub fn ago(at: u64) -> String {
         3_600..86_400 => format!("{} h ago", secs / 3_600),
         86_400..172_800 => "yesterday".to_owned(),
         _ => format!("{} days ago", secs / 86_400),
-    }
-}
-
-/// The set the window has open, as it last said: what `SESSION_SONGS`
-/// lists and `SESSION_SONG` picks from.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct OpenSet {
-    /// The songs in order: their titles and engine projects.
-    pub songs: Vec<(String, String)>,
-    /// The current one, an index into `songs`.
-    pub at: usize,
-    /// Songs still on their way, by title, after `songs`.
-    pub arriving: Vec<String>,
-}
-
-/// Which song to go to.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SongPick {
-    /// By its place in the set (0 the first).
-    At(usize),
-    Next,
-    Previous,
-}
-
-impl SongPick {
-    /// The index this lands on in a set of `len` songs at `at`; `None` past
-    /// either end, or when it is the song already current.
-    #[must_use]
-    pub fn index(&self, at: usize, len: usize) -> Option<usize> {
-        let to = match self {
-            Self::At(to) => *to,
-            Self::Next => at.checked_add(1)?,
-            Self::Previous => at.checked_sub(1)?,
-        };
-        (to < len && to != at).then_some(to)
-    }
-}
-
-static OPEN_SET: std::sync::Mutex<Option<OpenSet>> = std::sync::Mutex::new(None);
-static PICKED: std::sync::Mutex<Option<SongPick>> = std::sync::Mutex::new(None);
-
-/// What the window has open now (`None` when no set is) — the window says
-/// so whenever it changes.
-pub fn show_open_set(set: Option<OpenSet>) {
-    *OPEN_SET
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = set;
-}
-
-/// The set the window has open, as it last said.
-#[must_use]
-pub fn open_set() -> Option<OpenSet> {
-    OPEN_SET
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clone()
-}
-
-/// Ask the window to go to a song of its set, as a click on its tab does.
-pub fn pick_song_from_outside(pick: SongPick) {
-    *PICKED
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pick);
-}
-
-/// The song asked for from outside, once.
-#[must_use]
-pub fn take_song_pick() -> Option<SongPick> {
-    PICKED
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .take()
-}
-
-#[cfg(test)]
-mod song_pick_tests {
-    use super::SongPick;
-
-    #[test]
-    fn a_pick_lands_inside_the_set_and_never_on_the_song_already_current() {
-        assert_eq!(SongPick::Next.index(0, 3), Some(1));
-        assert_eq!(SongPick::Next.index(2, 3), None, "past the last");
-        assert_eq!(SongPick::Previous.index(0, 3), None, "before the first");
-        assert_eq!(SongPick::Previous.index(2, 3), Some(1));
-        assert_eq!(SongPick::At(1).index(0, 3), Some(1));
-        assert_eq!(SongPick::At(0).index(0, 3), None, "already there");
-        assert_eq!(SongPick::At(7).index(0, 3), None);
     }
 }

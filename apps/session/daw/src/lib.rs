@@ -116,6 +116,10 @@ pub mod song_stream;
 pub mod stream_in;
 #[cfg(feature = "native")]
 pub mod stream_set;
+// The engine side, behind its own boundary: the set, its actions, the
+// Action List's MCP server, and the engine with no window (`studio engine`).
+#[cfg(feature = "native")]
+pub mod studio_engine;
 pub mod stream_quality;
 pub mod take_colors;
 #[cfg(feature = "native")]
@@ -232,8 +236,6 @@ pub mod hits_midi;
 #[cfg(feature = "native")]
 pub mod item_actions;
 pub mod kit_gate;
-#[cfg(feature = "native")]
-pub mod mcp_server;
 pub mod mix_chains;
 pub mod mix_export;
 pub mod overlay;
