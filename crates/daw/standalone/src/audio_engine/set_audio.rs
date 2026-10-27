@@ -559,6 +559,22 @@ impl SetAudio {
         })
     }
 
+    /// Call off a hand-over from `from` to `to` ([`Self::play_after`])
+    /// that has not landed: both songs' scheduled locates are dropped, so
+    /// `to` does not start by itself and `from` is not stopped at its end.
+    /// A hand-over already landed is not undone.
+    pub fn call_off(&self, from: &str, to: &str) -> Result<(), SetAudioError> {
+        let voices = self.voices.load();
+        for guid in [from, to] {
+            voices
+                .get(guid)
+                .ok_or_else(|| SetAudioError::NoVoice(guid.to_owned()))?
+                .shared
+                .cancel_scheduled_locate();
+        }
+        Ok(())
+    }
+
     /// Install (or replace) the post-render aux hook — the contract of
     /// [`aux_render`](super::aux_render), its clock the current voice's.
     pub fn set_aux_renderer(&self, hook: AuxRenderer) {
