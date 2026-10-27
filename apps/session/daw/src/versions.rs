@@ -200,7 +200,7 @@ pub fn Versions() -> Element {
                             }
                             for song in streams.songs.iter().cloned() {
                                 div {
-                                    key: "{song.title}",
+                                    key: "{song.project}",
                                     style: "display:flex; align-items:center; gap:8px; font-size:12px;",
                                     div { style: "flex:none; width:7px; height:7px; border-radius:4px; background:{song.color()};" }
                                     span {
@@ -310,6 +310,8 @@ pub fn Versions() -> Element {
 #[derive(Clone, PartialEq)]
 struct Streaming {
     title: String,
+    /// Its engine project: what keys its row (two songs can share a title).
+    project: String,
     /// The song open now.
     open: bool,
     state: crate::stream_set::SongShown,
@@ -370,6 +372,7 @@ fn streaming(set: Option<Signal<crate::setlist::Setlist>>) -> Streams {
             let state = shown.songs.get(&song.project)?.clone();
             (state.arrived < 1.0).then(|| Streaming {
                 title: song.title(),
+                project: song.project.clone(),
                 open: i == list.at,
                 state,
             })
