@@ -442,6 +442,8 @@ impl RenderNode {
                 source_paths: mc.source_paths,
                 routes: mc.routes,
                 scales: mc.scales,
+                rates: mc.rates,
+                last: Vec::new(),
                 leaf_paths: mc.leaf_paths,
                 leaf_names,
                 leaf_params,

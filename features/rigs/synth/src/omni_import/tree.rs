@@ -167,6 +167,13 @@ pub fn translate_route(
         let source = translate_source(&route.source)?;
         return Some((0, source, format!("LFO {n}.amp"), route.depth));
     }
+    // A modulator's rate ("LFO1 rate"): the route adds depth·source to the
+    // rate knob (measured: 48·(r + d·source)³ at five base / depth pairs,
+    // an inverted row too).
+    if let (Some(n), "rate") = (layer_letter.strip_prefix("LFO"), param) {
+        let source = translate_source(&route.source)?;
+        return Some((0, source, format!("LFO {n}.rate"), route.depth));
+    }
     let layer_idx = match layer_letter {
         "A" => 0,
         "B" => 1,
@@ -895,6 +902,13 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
             if l.sync {
                 // Tempo-synced: the rate picks a note division (measured).
                 lfo = lfo.with_param("sync_beats", format!("{:.5}", l.sync_beats()));
+            } else {
+                // The rate knob itself, for "LFOn rate" routes (see
+                // `OmniLfo::rate_hz`: 48·knob³).
+                lfo = lfo
+                    .with_param("rate_knob", format!("{:.4}", l.rate))
+                    .with_param("rate_max_hz", "48")
+                    .with_param("rate_exp", "3");
             }
             if l.retrigger {
                 lfo = lfo.with_param("retrigger", "1");

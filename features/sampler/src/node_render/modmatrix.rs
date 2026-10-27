@@ -61,6 +61,19 @@ pub(super) struct SourceScale {
     pub(super) terms: Vec<(usize, f32)>,
 }
 
+/// A modulated LFO rate on an emulated rate knob: `target` runs at
+/// `max_hz · clamp(knob + Σ depth·source, 0, 1)^exp` (Omnisphere's
+/// "LFO1 rate" target: the route adds in knob units). Sources read their
+/// previous block's value — one control block of lag.
+#[derive(Clone, Debug)]
+pub(super) struct SourceRate {
+    pub(super) target: usize,
+    pub(super) knob: f32,
+    pub(super) max_hz: f32,
+    pub(super) exp: f32,
+    pub(super) terms: Vec<(usize, f32)>,
+}
+
 /// The compiled control-rate modulation engine + send-bus state for one tree.
 #[derive(Default)]
 pub struct ModEngine {
@@ -71,6 +84,10 @@ pub struct ModEngine {
     pub(super) routes: Vec<CompiledRoute>,
     /// Modulated modulator depths, applied to the source values each block.
     pub(super) scales: Vec<SourceScale>,
+    /// Modulated LFO rates, set before the sources tick.
+    pub(super) rates: Vec<SourceRate>,
+    /// Every source's value from the last block (what a rate route reads).
+    pub(super) last: Vec<f32>,
     /// Per-leaf lower-cased `(container path, display name, params)` — the
     /// live-edit address book (leaf ids index all three).
     pub(super) leaf_paths: Vec<Vec<String>>,
@@ -139,6 +156,15 @@ impl ModEngine {
     pub(super) fn tick(&mut self, events: &PluginEvents<'_>, frames: usize) {
         // Evaluate each source once, then apply every route additively.
         let tempo = self.tempo_bpm;
+        for r in &self.rates {
+            let knob = r.terms.iter().fold(r.knob, |a, &(src, d)| {
+                a + d * self.last.get(src).copied().unwrap_or(0.0)
+            });
+            let hz = r.max_hz * knob.clamp(0.0, 1.0).powf(r.exp);
+            if let Some(s) = self.sources.get_mut(r.target) {
+                s.set_lfo(hz.max(0.01), None, None);
+            }
+        }
         let mut values: Vec<f32> = self
             .sources
             .iter_mut()
@@ -153,6 +179,9 @@ impl ModEngine {
             }
         }
         accumulate_writes(&self.routes, &values, &self.overlay, &mut self.writes);
+        if !self.rates.is_empty() {
+            self.last = values;
+        }
     }
 
     #[must_use]
@@ -394,6 +423,11 @@ pub(super) struct ModCompiler {
     midi: Vec<(crate::native::MidiMod, usize)>,
     pub(super) routes: Vec<CompiledRoute>,
     pub(super) scales: Vec<SourceScale>,
+    pub(super) rates: Vec<SourceRate>,
+    /// LFO sources with an emulated rate knob: `(source, (knob, max Hz,
+    /// exponent))` from the block's `rate_knob` / `rate_max_hz` /
+    /// `rate_exp`.
+    rate_knobs: Vec<(usize, (f32, f32, f32))>,
     /// Per-leaf (lower-cased display name, params) for target resolution.
     /// Per-leaf `(id, lower-cased display name, params)`. The id is what a
     /// resolved route matches on; the name is the fallback for a route that
@@ -420,6 +454,8 @@ impl ModCompiler {
             midi: Vec::new(),
             routes: Vec::new(),
             scales: Vec::new(),
+            rates: Vec::new(),
+            rate_knobs: Vec::new(),
             leaves: Vec::new(),
             tempo_followers: Vec::new(),
             leaf_paths: Vec::new(),
@@ -545,7 +581,13 @@ impl ModCompiler {
         self.sources.push(src);
         self.source_paths
             .push((self.path.clone(), block.display_name().to_lowercase()));
-        Some(self.sources.len() - 1)
+        let idx = self.sources.len() - 1;
+        if let (BlockType::Lfo, Some(knob)) = (block.block_type, block.param_f32("rate_knob")) {
+            let max_hz = block.param_f32("rate_max_hz").unwrap_or(40.0);
+            let exp = block.param_f32("rate_exp").unwrap_or(1.0);
+            self.rate_knobs.push((idx, (knob, max_hz, exp)));
+        }
+        Some(idx)
     }
 
     /// The control source a route draws from.
@@ -608,6 +650,26 @@ impl ModCompiler {
                         }
                     }
                     continue;
+                }
+            }
+            // A route onto an LFO's emulated rate knob.
+            if pkey == "rate" {
+                if let Some(&(_, target)) = self.scope.iter().rev().find(|(n, _)| *n == bkey) {
+                    if let Some(&(_, (knob, max_hz, exp))) =
+                        self.rate_knobs.iter().find(|(i, _)| *i == target)
+                    {
+                        match self.rates.iter_mut().find(|r| r.target == target) {
+                            Some(r) => r.terms.push((source, route.depth)),
+                            None => self.rates.push(SourceRate {
+                                target,
+                                knob,
+                                max_hz,
+                                exp,
+                                terms: vec![(source, route.depth)],
+                            }),
+                        }
+                        continue;
+                    }
                 }
             }
             let mut hit = false;
