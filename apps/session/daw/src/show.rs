@@ -74,6 +74,12 @@ pub fn split(set: &Path, into: &Path) -> eyre::Result<Vec<Song>> {
         let mut cropped = session::sync::crop::crop(&model, range.start_seconds, range.end_seconds);
         name_song(&mut cropped, &range.name, &titles);
         let dir = into.join(&range.slug);
+        ShowPlace {
+            show: relative_to(&show_dir.join(format!("{stem}.session")), &dir),
+            start: range.start_seconds,
+            end: range.end_seconds,
+        }
+        .write(&mut cropped);
         std::fs::create_dir_all(&dir)?;
         bring_media(&cropped, &show_dir, &dir)?;
         let file = dir.join(format!("{}.session", file_name(&range.name)));
@@ -149,6 +155,57 @@ fn name_song(song: &mut session::sync::SessionModel, name: &str, titles: &[Strin
             name.clone_into(&mut region.name);
         }
     }
+}
+
+/// Where a song cut from a show sits in it: the show's project file
+/// (relative to the song's folder) and the song's span in show seconds.
+/// Kept in the song's ext-state, so the set can be laid out on the show's
+/// timeline again (show timecode) and a song's edits written back into
+/// the combined session.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowPlace {
+    pub show: String,
+    pub start: f64,
+    pub end: f64,
+}
+
+impl ShowPlace {
+    /// The ext-state section it is kept under.
+    const SECTION: &'static str = "FTS_SHOW";
+
+    /// Recorded on `song`.
+    pub fn write(&self, song: &mut session::sync::SessionModel) {
+        let section = song
+            .project
+            .ext
+            .entry(Self::SECTION.to_owned())
+            .or_default();
+        section.insert("show".to_owned(), self.show.clone());
+        section.insert("start".to_owned(), self.start.to_string());
+        section.insert("end".to_owned(), self.end.to_string());
+    }
+
+    /// Where `song` sits in its show, when it was cut from one.
+    #[must_use]
+    pub fn of(song: &session::sync::SessionModel) -> Option<Self> {
+        let section = song.project.ext.get(Self::SECTION)?;
+        Some(Self {
+            show: section.get("show")?.clone(),
+            start: section.get("start")?.parse().ok()?,
+            end: section.get("end")?.parse().ok()?,
+        })
+    }
+}
+
+/// `path` relative to the folder `from` (`../show/Show.session`).
+fn relative_to(path: &Path, from: &Path) -> String {
+    let (path, from): (Vec<_>, Vec<_>) = (path.components().collect(), from.components().collect());
+    let common = path.iter().zip(&from).take_while(|(a, b)| a == b).count();
+    let up = std::iter::repeat_n(std::path::Component::ParentDir, from.len() - common);
+    up.chain(path[common..].iter().copied())
+        .collect::<PathBuf>()
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// `model` with every take's media re-rooted under `show_dir` when it is
@@ -296,7 +353,7 @@ fn file_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{file_name, name_song, rooted_under};
+    use super::{ShowPlace, file_name, name_song, relative_to, rooted_under};
 
     #[test]
     fn media_from_the_machine_a_set_was_made_on_is_found_under_the_show() {
@@ -348,6 +405,22 @@ mod tests {
             .collect();
         names.sort_unstable();
         assert_eq!(names, vec![(Some(0), "Drive To LA"), (Some(1), "Verse 1")]);
+    }
+
+    #[test]
+    fn a_song_remembers_where_it_sits_in_its_show() {
+        let show = std::path::Path::new("/m/session/jt-senior-recital/Show.session");
+        let dir = std::path::Path::new("/m/session/drive-to-la");
+        let place = ShowPlace {
+            show: relative_to(show, dir),
+            start: 90.0,
+            end: 286.5,
+        };
+        assert_eq!(place.show, "../jt-senior-recital/Show.session");
+        let mut song = session::sync::SessionModel::default();
+        assert_eq!(ShowPlace::of(&song), None);
+        place.write(&mut song);
+        assert_eq!(ShowPlace::of(&song), Some(place));
     }
 
     #[test]
