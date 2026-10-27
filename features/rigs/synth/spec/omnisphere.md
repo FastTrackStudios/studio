@@ -60,9 +60,11 @@ Measured 2026-10-27, sample layers: **Timbre Shift** (`tbmd` 0.02, ~92 % of
 active sample layers) is an exact semitone remap — the zone of the note minus
 `sampler::instrument::timbre_shift_semis(t)` (−28 at 0 … 0 at 0.5 … +11 at
 0.82, steeper below centre), repitched to the note; static and routed it
-matches the plugin to its own noise on a chromatic source. Open: past 0.82
-the plugin stops remapping (a noisy, quieter sound, ~8 % of layers that use
-Timbre), and `tbmd` 0 is another process. **Mogrify** starts a fresh note
+matches the plugin to its own noise on a chromatic source. Past 0.82 the
+remap continues (+12 at 0.83 … +24 at 1) under a grain layer the plugin adds
+(sidebands ~18 Hz about each harmonic; on the cello also far quieter from
+0.98) — the remap is modelled, the grains and that drop are not. `tbmd` 0
+is another process (open). **Mogrify** starts a fresh note
 part way into its sample (25 ms at 0.05 … 257 ms at 1, measured on a
 piano), static and routed. A sample soundsource takes `tune` routes.
 **Filter Spread** (`sprd`, 0.5 none) splits the section's cutoff across the

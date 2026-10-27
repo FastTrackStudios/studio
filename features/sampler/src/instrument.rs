@@ -232,12 +232,14 @@ pub fn mogrify_offset_ms(m: f32) -> f32 {
 /// (positive: a lower key, pitched up), repitched to the note. Measured on a
 /// chromatic source (one zone per key, Cello Tender Mutes) against the plugin,
 /// every 0.01 — each value matched one shift to the render's own noise
-/// (0.5 dB). Steeper below centre than above. Past 0.82 the plugin stops
-/// remapping (it plays a noisy, quieter sound no single zone matches); this
-/// holds the last remap there.
+/// (0.5 dB). Steeper below centre than above. Past 0.82 the remap goes on
+/// (+24 at 1, read off the harmonics' levels), but the plugin also grains
+/// the sound — sidebands ~18 Hz either side of every harmonic, a few dB
+/// quieter, on the cello far quieter from 0.98 (the piano not): neither is
+/// modelled.
 #[must_use]
 pub fn timbre_shift_semis(t: f32) -> i32 {
-    const LAW: [i8; 83] = [
+    const LAW: [i8; 101] = [
         -28, -28, -27, -27, -27, -26, -26, -26, -25, -25, // 0.00
         -25, -25, -24, -24, -23, -23, -23, -22, -22, -22, // 0.10
         -21, -21, -20, -20, -19, -19, -19, -18, -18, -17, // 0.20
@@ -246,7 +248,9 @@ pub fn timbre_shift_semis(t: f32) -> i32 {
         0, 0, 1, 1, 1, 1, 2, 2, 2, 3, // 0.50
         3, 3, 3, 4, 4, 4, 5, 5, 5, 6, // 0.60
         6, 7, 7, 7, 8, 8, 9, 9, 9, 10, // 0.70
-        10, 11, 11, // 0.80
+        10, 11, 11, 12, 12, 13, 13, 14, 15, 15, // 0.80
+        16, 17, 17, 18, 19, 19, 20, 21, 22, 23, // 0.90
+        24, // 1.00
     ];
     let i = (t.clamp(0.0, 1.0) * 100.0).round() as usize;
     i32::from(LAW[i.min(LAW.len() - 1)])
