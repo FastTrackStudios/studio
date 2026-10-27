@@ -333,6 +333,9 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
     let mut orgs = use_signal(|| Load::<Vec<String>>::Waiting);
     let mut org = use_signal(|| None::<String>);
     let mut setlists = use_signal(|| Load::<Vec<LibrarySetlist>>::Waiting);
+    // The account's other orgs' setlists, by org: what the home shows beside
+    // the chosen org's, so every set the person has is one click away.
+    let mut elsewhere = use_signal(Vec::<(String, LibrarySetlist)>::new);
     let mut songs = use_signal(|| Load::<Vec<(LibrarySong, bool)>>::Waiting);
     // The list editor, over the page; leaving it reads the lists again.
     let mut editing = use_signal(|| None::<Editing>);
@@ -385,6 +388,32 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
                 Some(Err(e)) => songs.set(Load::Failed(brief(&e))),
                 None => {}
             }
+        });
+    }));
+    // The other orgs' setlists, once the orgs are known.
+    let for_elsewhere = account.clone().zip(org()).map(|(a, o)| {
+        let all = match &*orgs.read() {
+            Load::Ready(list) => list.clone(),
+            _ => Vec::new(),
+        };
+        (a, o, all, reread())
+    });
+    use_effect(use_reactive!(|for_elsewhere| {
+        let Some((account, shown, all, _)) = for_elsewhere else {
+            return;
+        };
+        let others: Vec<String> = all.into_iter().filter(|o| *o != shown).collect();
+        spawn(async move {
+            let mut found = Vec::new();
+            for other in others {
+                let library = account.library(&other);
+                if let Some(Ok(lists)) =
+                    off_thread(move || session_daw::stream_set::setlists(&library)).await
+                {
+                    found.extend(lists.into_iter().map(|l| (other.clone(), l)));
+                }
+            }
+            elsewhere.set(found);
         });
     }));
     // The start card signs in inline; the org switcher opens the sheet.
@@ -461,7 +490,16 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
 
     // Streaming one of the library's lists in, as the member signed in.
     let play = use_callback(move |(account, setlist): (Account, LibrarySetlist)| {
-        let Some(org) = org() else { return };
+        // From the org whose library holds it: another org's, shown on the
+        // home beside this one's, streams from there.
+        let own = elsewhere
+            .peek()
+            .iter()
+            .find(|(_, l)| l.id == setlist.id)
+            .map(|(o, _)| o.clone());
+        let Some(org) = own.or_else(|| org()) else {
+            return;
+        };
         let library = account.library(&org);
         let name = account.name();
         let first = setlist
@@ -891,7 +929,7 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
                         Load::Failed(why) => rsx! { Banner { good: false, text: format!("Could not read the library — {why}") } },
                         Load::Ready(_) => rsx! {
                             Covers {
-                                for list in lists_now.iter().filter(|l| l.kind == ListKind::Set).take(8).cloned() {
+                                for list in lists_now.iter().cloned().chain(elsewhere().into_iter().map(|(_, l)| l)).filter(|l| l.kind == ListKind::Set).take(12) {
                                     Cover {
                                         key: "{list.id}",
                                         title: list.title.clone(),

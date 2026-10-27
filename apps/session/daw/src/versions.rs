@@ -143,6 +143,11 @@ pub fn Versions() -> Element {
     } else {
         ("transparent", DIM)
     };
+    // The set's songs streaming in: a dot on the button while any is, and
+    // each one's state in the panel — not on every tab.
+    crate::shell::use_streams();
+    let streams = streaming(try_use_context::<Signal<crate::setlist::Setlist>>());
+    let dot = streams.dot();
     rsx! {
         div {
             style: "position:relative; flex:none; display:flex; align-items:stretch;",
@@ -159,7 +164,16 @@ pub fn Versions() -> Element {
                         refresh();
                     }
                 },
-                lucide_dioxus::History { size: 18, color: ink }
+                div {
+                    style: "position:relative; display:flex;",
+                    lucide_dioxus::History { size: 18, color: ink }
+                    if let Some(color) = dot {
+                        div {
+                            style: "position:absolute; top:-2px; right:-3px; width:7px; height:7px; \
+                                    border-radius:4px; background:{color}; border:1.5px solid {BAR_BG};",
+                        }
+                    }
+                }
             }
             if open() {
                 div {
@@ -177,6 +191,27 @@ pub fn Versions() -> Element {
                         Some(true) => rsx! { span { style: "color:{NO}; font-size:12px;", "● Unsaved changes" } },
                         Some(false) => rsx! { span { style: "color:{OK}; font-size:12px;", "Saved" } },
                         None => rsx! {},
+                    }
+                    if !streams.songs.is_empty() {
+                        div {
+                            style: "display:flex; flex-direction:column; gap:4px;",
+                            span { style: "color:{DIM}; font-size:11px; font-weight:600; letter-spacing:.04em;",
+                                "STREAMING IN"
+                            }
+                            for song in streams.songs.iter().cloned() {
+                                div {
+                                    key: "{song.title}",
+                                    style: "display:flex; align-items:center; gap:8px; font-size:12px;",
+                                    div { style: "flex:none; width:7px; height:7px; border-radius:4px; background:{song.color()};" }
+                                    span {
+                                        style: "flex:1; min-width:0; overflow:hidden; white-space:nowrap; \
+                                                font-weight:{song.weight()};",
+                                        "{song.title}"
+                                    }
+                                    span { style: "flex:none; color:{song.color()};", "{song.label()}" }
+                                }
+                            }
+                        }
                     }
                     span { style: "color:{DIM}; font-size:12px; line-height:1.4;",
                         "A checkpoint saves the song as it is now, beside it, under a name — and keeps you in the song."
@@ -269,4 +304,77 @@ pub fn Versions() -> Element {
             }
         }
     }
+}
+
+/// One song of the set streaming in, as the Versions panel lists it.
+#[derive(Clone, PartialEq)]
+struct Streaming {
+    title: String,
+    /// The song open now.
+    open: bool,
+    state: crate::stream_set::SongShown,
+}
+
+impl Streaming {
+    /// Amber while it cannot play from where it is; green while it can
+    /// but is still arriving.
+    const fn color(&self) -> &'static str {
+        if self.state.ready { OK } else { NO }
+    }
+
+    const fn weight(&self) -> u16 {
+        if self.open { 700 } else { 400 }
+    }
+
+    fn label(&self) -> String {
+        let percent = (self.state.arrived * 100.0).floor();
+        if self.open && crate::engine::buffering::waiting() && !self.state.ready {
+            format!("play waits · {percent}%")
+        } else if self.state.ready {
+            format!("{percent}%")
+        } else {
+            format!("{percent}% · {} not here", self.state.waiting_on)
+        }
+    }
+}
+
+/// The set's songs that are still streaming in, the open one first.
+struct Streams {
+    songs: Vec<Streaming>,
+}
+
+impl Streams {
+    /// The button's dot: amber while the open song cannot play from where
+    /// it is, green while any song is still arriving, none once every
+    /// recording is here.
+    fn dot(&self) -> Option<&'static str> {
+        match self.songs.iter().find(|s| s.open) {
+            Some(open) if !open.state.ready => Some(NO),
+            _ if self.songs.is_empty() => None,
+            _ => Some(OK),
+        }
+    }
+}
+
+fn streaming(set: Option<Signal<crate::setlist::Setlist>>) -> Streams {
+    let shown = crate::stream_set::shown();
+    let Some(set) = set else {
+        return Streams { songs: Vec::new() };
+    };
+    let list = set.read();
+    let mut songs: Vec<Streaming> = list
+        .songs
+        .iter()
+        .enumerate()
+        .filter_map(|(i, song)| {
+            let state = shown.songs.get(&song.project)?.clone();
+            (state.arrived < 1.0).then(|| Streaming {
+                title: song.title(),
+                open: i == list.at,
+                state,
+            })
+        })
+        .collect();
+    songs.sort_by_key(|s| !s.open);
+    Streams { songs }
 }

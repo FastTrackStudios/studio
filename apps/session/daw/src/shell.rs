@@ -1477,7 +1477,6 @@ pub fn SongTabs(
                                         font-weight:600;",
                                 "{song.title()}"
                             }
-                            {stream_badge(song.project.clone())}
                             {peer_dots(song.project.clone())}
                             // How far through the song: a line along the foot.
                             div {
@@ -1731,12 +1730,10 @@ pub fn option(on: bool) -> String {
     )
 }
 
-/// A streaming song's state on its tab: nothing once every recording it
-/// plays is here; else how much has arrived, amber while it cannot play
-/// from where it is yet ("waiting" when play was pressed and holds), green
-/// once it can. Polled, as the audio badge is: it changes off the window.
-#[component]
-fn StreamBadge(project: String) -> Element {
+/// Re-renders the caller as the streaming songs' state changes — what has
+/// arrived, and whether play is held waiting for it. Polled: it changes off
+/// the window.
+pub fn use_streams() {
     let version = use_signal(|| 0_u64);
     #[cfg(feature = "native")]
     use_future(move || async move {
@@ -1750,46 +1747,4 @@ fn StreamBadge(project: String) -> Element {
         }
     });
     let _ = version();
-    #[cfg(feature = "native")]
-    {
-        let Some(song) = crate::stream_set::shown().songs.get(&project).cloned() else {
-            return rsx! {};
-        };
-        if song.arrived >= 1.0 {
-            return rsx! {};
-        }
-        let percent = (song.arrived * 100.0).floor();
-        let waiting = crate::engine::buffering::waiting() && !song.ready;
-        let (ink, label) = if waiting {
-            ("#f5b54a", format!("waiting · {percent}%"))
-        } else if song.ready {
-            ("#5fd38d", format!("{percent}%"))
-        } else {
-            (
-                "#f5b54a",
-                format!("{percent}% · {} not here", song.waiting_on),
-            )
-        };
-        rsx! {
-            span {
-                style: "flex:none; display:flex; align-items:center; gap:4px; \
-                        font-size:10px; font-weight:600; color:{ink}; white-space:nowrap;",
-                div {
-                    style: "width:7px; height:7px; border-radius:4px; \
-                            border:1.5px solid {ink}; box-sizing:border-box;",
-                }
-                "{label}"
-            }
-        }
-    }
-    #[cfg(not(feature = "native"))]
-    {
-        let _ = project;
-        rsx! {}
-    }
-}
-
-/// [`StreamBadge`] for `project`.
-fn stream_badge(project: String) -> Element {
-    rsx! { StreamBadge { project } }
 }
