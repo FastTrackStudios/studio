@@ -403,6 +403,8 @@ pub enum MidiMod {
     KeyTrack,
     /// Sample-and-hold random, redrawn per note-on, −1..+1.
     Random,
+    /// The same, 0..1 (Omnisphere's "Random Unipolar").
+    RandomUnipolar,
     /// Alternates 0 / 1 on each note-on.
     Alt,
     /// Always 1.0 (route depth = a constant offset).
@@ -600,6 +602,12 @@ impl ControlSource for MidiSource {
                     let bits = (v.to_bits() ^ 0x9E37_79B9).wrapping_mul(0xC2B2_AE35);
                     v = ((bits >> 8) as f32 / (u32::MAX >> 8) as f32) * 2.0 - 1.0;
                 }
+                (MidiMod::RandomUnipolar, MidiEvent::NoteOn { velocity, .. })
+                    if velocity.get() > 0 =>
+                {
+                    let bits = (v.to_bits() ^ 0x9E37_79B9).wrapping_mul(0xC2B2_AE35);
+                    v = (bits >> 8) as f32 / (u32::MAX >> 8) as f32;
+                }
                 (MidiMod::Alt, MidiEvent::NoteOn { velocity, .. }) if velocity.get() > 0 => {
                     v = if v > 0.5 { 0.0 } else { 1.0 };
                 }
@@ -692,7 +700,8 @@ impl ModSource {
             "key" => MidiMod::Key,
             "omni key" => MidiMod::OmniKey,
             "keytrack" | "key track" | "keytracking" => MidiMod::KeyTrack,
-            "random" | "random2" | "random unipolar" => MidiMod::Random,
+            "random" | "random2" => MidiMod::Random,
+            "random unipolar" => MidiMod::RandomUnipolar,
             "alt" => MidiMod::Alt,
             "constant" | "bias" | "bias1" | "bias2" => MidiMod::Constant,
             "mpev" | "mpepressure" | "mpe pressure" => MidiMod::MpePressure,

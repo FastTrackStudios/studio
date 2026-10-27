@@ -173,7 +173,10 @@ fn translate_source(source: &str) -> Option<String> {
         "Key" => "Omni Key".to_string(),
         "Alt" => "Alt".to_string(),
         "Constant" | "Bias1" | "Bias2" => "Constant".to_string(),
-        "Random" | "Random2" | "Random Unipolar" => "Random".to_string(),
+        "Random" | "Random2" => "Random".to_string(),
+        // 0..1, not the bipolar Random (a Timbre row on it never goes
+        // below the knob in the plugin).
+        "Random Unipolar" => "Random Unipolar".to_string(),
         "MPEv" => "MPEPressure".to_string(),
         "MPE3" => "MPETimbre".to_string(),
         s if s.starts_with("LFO") => format!("LFO {}", &s[3..]),
