@@ -913,7 +913,94 @@ pub fn transport(command: Move, seconds: f64) {
             .spawn(crate::record::toggle_through_the_list);
         return;
     }
+    // Play on a song still streaming in waits until every recording it
+    // plays is here a few seconds ahead — it starts then, by itself —
+    // rather than playing what has not arrived as silence. A second press
+    // while it waits calls it off.
+    #[cfg(feature = "native")]
+    if matches!(command, Move::PlayStop) && buffering::hold_play() {
+        return;
+    }
     transport_following(command, seconds);
+}
+
+/// Play held until a streaming song can play (see [`transport`]).
+#[cfg(feature = "native")]
+pub mod buffering {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    /// The wait in progress: 0 none, else its number (a press calls off
+    /// the one before by moving it on).
+    static WAITING: AtomicU64 = AtomicU64::new(0);
+
+    /// Whether a play press is waiting for the song to arrive.
+    #[must_use]
+    pub fn waiting() -> bool {
+        WAITING.load(Ordering::Acquire) != 0
+    }
+
+    /// Whether this play press is held: the current song is stopped and
+    /// streaming and cannot play yet (a wait starts, and plays it when it
+    /// can), or a wait was in progress (this press calls it off).
+    pub(super) fn hold_play() -> bool {
+        if WAITING.swap(0, Ordering::AcqRel) != 0 {
+            tracing::info!(
+                play.outcome = "called-off",
+                "play: the wait for the song is called off"
+            );
+            return true;
+        }
+        let Some(song) = crate::open::current_song() else {
+            return false;
+        };
+        if !crate::stream_set::is_stopped(&song) {
+            return false;
+        }
+        let Some(ready) = crate::stream_set::readiness(&song) else {
+            return false;
+        };
+        if ready.ready {
+            return false;
+        }
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        WAITING.store(id, Ordering::Release);
+        tracing::info!(
+            play.outcome = "waiting",
+            play.waiting_on = ready.waiting_on,
+            play.buffered = ready.buffered,
+            "play: waiting for the song to arrive"
+        );
+        let started = std::thread::Builder::new()
+            .name("session-play-wait".into())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    if WAITING.load(Ordering::Acquire) != id {
+                        return;
+                    }
+                    let now = crate::stream_set::readiness(&song);
+                    if now.as_ref().is_none_or(|r| r.ready) {
+                        if WAITING
+                            .compare_exchange(id, 0, Ordering::AcqRel, Ordering::Acquire)
+                            .is_ok()
+                        {
+                            tracing::info!(
+                                play.outcome = "started",
+                                "play: the song is here — playing"
+                            );
+                            super::transport_following(super::Move::PlayStop, 0.0);
+                        }
+                        return;
+                    }
+                }
+            });
+        if started.is_err() {
+            WAITING.store(0, Ordering::Release);
+            return false;
+        }
+        true
+    }
 }
 
 /// [`transport`], for the shared transport moving this engine: not a press

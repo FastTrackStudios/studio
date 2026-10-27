@@ -345,6 +345,7 @@ pub fn stream(song: StreamedSong, local: &str) {
     let takes = Arc::new(Mutex::new(whole_files(takes)));
     let stop = Arc::new(AtomicBool::new(false));
     song.fetch(Arc::clone(&takes), playhead, Arc::clone(&stop));
+    watch();
     if let Ok(mut streams) = STREAMS.lock() {
         streams.push(Streaming {
             _song: song,
@@ -657,6 +658,8 @@ pub struct SongStreams {
     pub by_reference: bool,
     /// The recordings, the least arrived first.
     pub recordings: Vec<FileStream>,
+    /// Whether it can play from its playhead (filled by the action).
+    pub readiness: Option<Readiness>,
 }
 
 /// Every song streaming in this process, and how far along each is.
@@ -711,7 +714,198 @@ pub fn report() -> Vec<SongStreams> {
                 arrived,
                 by_reference: !s.held.is_empty(),
                 recordings,
+                readiness: None,
             }
         })
         .collect()
+}
+
+/// How far a streamed song can play from where it is, every recording it
+/// plays there.
+#[derive(Clone, Debug, PartialEq, facet::Facet)]
+pub struct Readiness {
+    /// The song (its engine project).
+    pub project: String,
+    /// Where it would play from, seconds.
+    pub playhead: f64,
+    /// Seconds from the playhead every playing recording has (up to
+    /// [`LOOK_AHEAD`]).
+    pub buffered: f64,
+    /// It may play: [`READY_AHEAD`] seconds of everything are here.
+    pub ready: bool,
+    /// Recordings missing something in the next [`READY_AHEAD`] seconds.
+    pub waiting_on: u32,
+}
+
+/// Seconds of every recording a song needs ahead of the playhead to start.
+pub const READY_AHEAD: f64 = 4.0;
+
+/// How far [`readiness`] looks.
+pub const LOOK_AHEAD: f64 = 30.0;
+
+/// The transport's playhead and whether it moves, for `project`.
+fn transport_of(project: &str) -> Option<(f64, bool)> {
+    let daw = crate::open::local_engine()?;
+    let backend = daw.sync_backend(project)?;
+    let snap = daw_transport_sync::TransportBackend::snapshot(&backend)?;
+    Some((snap.playhead_seconds, snap.is_playing))
+}
+
+/// Whether `project` (a song streaming in) can play from its playhead:
+/// `None` when it is not streaming (local songs are always ready).
+#[must_use]
+pub fn readiness(project: &str) -> Option<Readiness> {
+    let (playhead, _) = transport_of(project).unwrap_or((0.0, false));
+    let takes = {
+        let streams = STREAMS.lock().ok()?;
+        let s = streams.iter().find(|s| s.project == project)?;
+        s.takes.lock().ok()?.clone()
+    };
+    let missing = |t: f64, ahead: f64| takes.iter().filter(|k| !k.has_at(t, ahead)).count();
+    let waiting_on = missing(playhead, READY_AHEAD);
+    // Half-second steps out to the look-ahead, while all of it is here.
+    let mut buffered = 0.0;
+    while buffered < LOOK_AHEAD && missing(playhead + buffered, 0.5) == 0 {
+        buffered += 0.5;
+    }
+    Some(Readiness {
+        project: project.to_owned(),
+        playhead,
+        buffered,
+        ready: waiting_on == 0,
+        waiting_on: u32::try_from(waiting_on).unwrap_or(u32::MAX),
+    })
+}
+
+/// Whether `project` is stopped (or not a song here).
+#[must_use]
+pub fn is_stopped(project: &str) -> bool {
+    transport_of(project).is_none_or(|(_, playing)| !playing)
+}
+
+/// What the window shows of each streaming song, refreshed every half
+/// second ([`watch`]): how much of the recording each playing item reads
+/// has arrived (by item guid), and the song's own state. [`version`] moves
+/// when anything shown changes.
+#[derive(Clone, Debug, Default)]
+pub struct Shown {
+    /// Item guid → share of its recording that has arrived (0..1), for the
+    /// items whose recording is not all here.
+    pub items: std::collections::HashMap<String, f32>,
+    /// Song (engine project) → its state.
+    pub songs: std::collections::HashMap<String, SongShown>,
+}
+
+/// A streaming song, as its tab shows it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SongShown {
+    /// Share of everything it plays that has arrived (0..1).
+    pub arrived: f32,
+    /// It can play from its playhead now.
+    pub ready: bool,
+    /// Recordings missing near the playhead.
+    pub waiting_on: u32,
+}
+
+static SHOWN: std::sync::RwLock<Option<Shown>> = std::sync::RwLock::new(None);
+static SHOWN_VERSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// What is shown now ([`Shown`]); empty when nothing streams.
+#[must_use]
+pub fn shown() -> Shown {
+    SHOWN
+        .read()
+        .ok()
+        .and_then(|s| s.clone())
+        .unwrap_or_default()
+}
+
+/// Moves when [`shown`] changes: what a window redraws by.
+#[must_use]
+pub fn version() -> u64 {
+    SHOWN_VERSION.load(std::sync::atomic::Ordering::Acquire)
+}
+
+/// Keep [`shown`] up to date while songs stream: once per process, from the
+/// first song streamed in.
+fn watch() {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        let _ = std::thread::Builder::new()
+            .name("stream-shown".into())
+            .spawn(|| {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    let next = compute_shown();
+                    let changed = SHOWN
+                        .read()
+                        .map(|s| s.as_ref().map(rounded) != Some(rounded(&next)))
+                        .unwrap_or(true);
+                    if changed {
+                        if let Ok(mut s) = SHOWN.write() {
+                            *s = Some(next);
+                        }
+                        SHOWN_VERSION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                    }
+                }
+            });
+    });
+}
+
+/// [`Shown`] at the precision it is drawn at: a change too small to see
+/// does not ask for a frame.
+fn rounded(s: &Shown) -> (Vec<(String, u8)>, Vec<(String, u8, bool, u32)>) {
+    let pct = |f: f32| (f * 50.0).round() as u8;
+    let mut items: Vec<(String, u8)> = s.items.iter().map(|(k, v)| (k.clone(), pct(*v))).collect();
+    items.sort();
+    let mut songs: Vec<(String, u8, bool, u32)> = s
+        .songs
+        .iter()
+        .map(|(k, v)| (k.clone(), pct(v.arrived), v.ready, v.waiting_on))
+        .collect();
+    songs.sort();
+    (items, songs)
+}
+
+fn compute_shown() -> Shown {
+    let Some(daw) = crate::open::local_engine() else {
+        return Shown::default();
+    };
+    let mut shown = Shown::default();
+    for song in report() {
+        // A recording's share arrived, by its file stem (what an item's
+        // original and its proxy share).
+        let by_stem: std::collections::HashMap<String, f32> = song
+            .recordings
+            .iter()
+            .map(|r| {
+                let stem = std::path::Path::new(&r.path)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_lowercase())
+                    .unwrap_or_default();
+                (stem, r.arrived as f32 / r.bytes.max(1) as f32)
+            })
+            .collect();
+        for m in playing_media(&daw, &song.project) {
+            let stem = std::path::Path::new(&m.path)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            if let Some(&part) = by_stem.get(&stem)
+                && part < 1.0
+            {
+                shown.items.insert(m.item_guid, part);
+            }
+        }
+        let ready = readiness(&song.project);
+        shown.songs.insert(
+            song.project.clone(),
+            SongShown {
+                arrived: song.arrived as f32 / song.bytes.max(1) as f32,
+                ready: ready.as_ref().is_none_or(|r| r.ready),
+                waiting_on: ready.map_or(0, |r| r.waiting_on),
+            },
+        );
+    }
+    shown
 }

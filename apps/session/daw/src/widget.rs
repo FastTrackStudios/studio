@@ -579,6 +579,8 @@ pub struct ArrangementWidget {
     detection_seen: Cell<u64>,
     /// The fine waveforms' generation last drawn ([`crate::wave_detail`]).
     detail_seen: Cell<u64>,
+    /// The streaming state drawn last (`stream_set::version`).
+    streams_seen: Cell<u64>,
     /// The tracks' markers and regions as last laid out
     /// ([`crate::marks_strip::version`]).
     marks_seen: Cell<u64>,
@@ -825,6 +827,7 @@ impl ArrangementWidget {
             magnets: Vec::new(),
             detection_seen: Cell::new(0),
             detail_seen: Cell::new(0),
+            streams_seen: Cell::new(0),
             marks_seen: Cell::new(0),
             poi_seen: Cell::new(0),
             view_drawn: Cell::new((0.0, 0.0, 0.0, 0.0)),
@@ -4329,6 +4332,7 @@ impl Widget for ArrangementWidget {
             // top of a frame, and this one is owed.
             || !self.edits.borrow().is_empty()
             || crate::wave_detail::generation() != self.detail_seen.get()
+            || streams_changed(&self.streams_seen)
             || self.view_drawn.get() != Self::framing(&self.view.borrow())
             || self.stage_ready()
             || crate::studio::resync_pending()
@@ -5603,6 +5607,19 @@ impl ArrangementWidget {
         // from, every cut drawn — is Record mode's, where takes are comped;
         // editing, it is clutter over the hit markers.
         let comping = self.recording.get();
+        // Items whose recording is still on its way: veiled, a bar filling.
+        #[cfg(feature = "native")]
+        {
+            self.streams_seen.set(crate::stream_set::version());
+            crate::arrangement::stream_overlay(
+                &mut out,
+                &self.palette,
+                &self.scene,
+                view,
+                lanes_at,
+                &crate::stream_set::shown().items,
+            );
+        }
         if crate::options::OUTLINED.get() && comping {
             crate::arrangement::outlines_overlay(
                 &mut out,
@@ -6139,4 +6156,16 @@ fn record_frame(began: web_time::Instant, spent: Passes, drawn: Drawn, rebuilds:
 /// Microseconds as milliseconds, for the readout's lines.
 fn ms(micros: u128) -> f64 {
     u32::try_from(micros).map_or(f64::from(u32::MAX), f64::from) / 1000.0
+}
+
+/// Whether what is streaming in changed since it was drawn (`seen`).
+#[cfg(feature = "native")]
+fn streams_changed(seen: &Cell<u64>) -> bool {
+    crate::stream_set::version() != seen.get()
+}
+
+/// Nothing streams through `stream_set` in a browser.
+#[cfg(not(feature = "native"))]
+const fn streams_changed(_seen: &Cell<u64>) -> bool {
+    false
 }

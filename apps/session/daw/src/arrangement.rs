@@ -3381,6 +3381,77 @@ fn body_alpha() -> f32 {
 /// `quiet` (the kit's hit markers shown over it): a cut is a faint
 /// neutral line, so the markers — what is being worked on — read over a
 /// kit of a thousand slices.
+/// Items whose recording has not all arrived yet (a song streaming in):
+/// a veil over the body, so what will not sound reads at a glance, and a
+/// bar along its foot filling as the recording arrives. `arrived` is each
+/// such item's share, by guid (`stream_set::shown`).
+pub fn stream_overlay(
+    painter: &mut impl PaintScene,
+    palette: &Palette,
+    scene: &Arrangement,
+    view: Viewport,
+    origin: (f64, f64),
+    arrived: &std::collections::HashMap<String, f32>,
+) {
+    if arrived.is_empty() {
+        return;
+    }
+    let (ox, oy) = origin;
+    let pps = view.pps.max(f64::EPSILON);
+    let (from, to) = ((view.panel_w - ox) / pps, (view.width - ox) / pps);
+    let rows = scene.visible_rows(view);
+    let top_of_lanes = crate::ruler::ruler_h();
+    let veil = Color::from_rgba8(0, 0, 0, 0x70);
+    let track = Color::from_rgba8(0xff, 0xff, 0xff, 0x22);
+    for item in scene
+        .items
+        .iter()
+        .filter(|i| rows.contains(&i.row) && i.x1 >= from && i.x0 <= to)
+    {
+        let Some(&part) = arrived.get(&item.guid) else {
+            continue;
+        };
+        let Some((top, height)) = scene.item_box(item) else {
+            continue;
+        };
+        let y0 = top.mul_add(view.zoom_y, oy).max(top_of_lanes);
+        let y1 = (top + height).mul_add(view.zoom_y, oy).min(view.height);
+        let x0 = item.x0.mul_add(pps, ox).max(view.panel_w);
+        let x1 = item.x1.mul_add(pps, ox).min(view.width);
+        if y1 - y0 < 2.0 || x1 - x0 < 1.0 {
+            continue;
+        }
+        PaintScene::fill(
+            painter,
+            Fill::NonZero,
+            Affine::IDENTITY,
+            veil,
+            None,
+            &Rect::new(x0, y0, x1, y1),
+        );
+        // The bar: as wide as the item, filled by the share arrived.
+        let bar = 3.0_f64.min((y1 - y0) / 4.0);
+        let by = y1 - bar;
+        PaintScene::fill(
+            painter,
+            Fill::NonZero,
+            Affine::IDENTITY,
+            track,
+            None,
+            &Rect::new(x0, by, x1, y1),
+        );
+        let filled = x0 + (x1 - x0) * f64::from(part.clamp(0.0, 1.0));
+        PaintScene::fill(
+            painter,
+            Fill::NonZero,
+            Affine::IDENTITY,
+            palette.accent,
+            None,
+            &Rect::new(x0, by, filled, y1),
+        );
+    }
+}
+
 pub fn outlines_overlay(
     painter: &mut impl PaintScene,
     palette: &Palette,

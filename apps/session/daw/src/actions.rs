@@ -675,6 +675,14 @@ fn register_window(list: &ActionList) -> Result<(), architect::action::ActionErr
     ] {
         list.register(meta, Effect::Mutating, move |(): ()| {
             crate::engine::transport(command, 0.0);
+            if crate::engine::buffering::waiting() {
+                let waiting = crate::open::current_song()
+                    .and_then(|s| crate::stream_set::readiness(&s))
+                    .map_or(0, |r| r.waiting_on);
+                return Ok(format!(
+                    "waiting: {waiting} recordings are not here yet — it plays by itself once they are (press again to call it off)"
+                ));
+            }
             Ok(format!("{}: done", meta.display_name))
         })?;
     }
@@ -2460,6 +2468,9 @@ fn register_save(list: &ActionList) -> Result<(), architect::action::ActionError
     })?;
     list.register(&STREAMS, Effect::ReadOnly, |a: StreamsArg| {
         let mut songs = crate::stream_set::report();
+        for s in &mut songs {
+            s.readiness = crate::stream_set::readiness(&s.project);
+        }
         if let Some(song) = &a.song {
             songs.retain(|s| &s.project == song);
         }
