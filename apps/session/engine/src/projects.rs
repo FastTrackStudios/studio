@@ -272,6 +272,10 @@ pub fn pending_open() -> bool {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .is_some()
         || crate::studio_engine::set::is_opening()
+        // A window driving an engine in another process: the set that
+        // engine opened (the CLI's `studio open`) is shown here as it is.
+        || (crate::studio_engine::link::linked().is_some()
+            && crate::studio_engine::set::lineup().is_some())
 }
 
 /// What was asked to be opened next, once.

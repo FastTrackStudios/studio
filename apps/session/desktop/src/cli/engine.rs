@@ -26,6 +26,7 @@
 use std::path::{Path, PathBuf};
 
 use clap::Args as ClapArgs;
+use session_ui::studio_engine::link::{Found, publish};
 use session_ui::studio_engine::{headless, set};
 
 /// What `studio engine` was asked to do.
@@ -175,33 +176,6 @@ fn mcp_url() -> String {
         .and_then(|p| p.parse::<u16>().ok())
         .unwrap_or(session_ui::studio_engine::mcp::DEFAULT_PORT);
     format!("http://127.0.0.1:{port}/mcp")
-}
-
-/// Where a running engine is, for a GUI or a CLI to find it.
-#[derive(serde::Serialize)]
-struct Found {
-    pid: u32,
-    socket: PathBuf,
-    mcp: String,
-    ws: Option<String>,
-}
-
-/// `found`, written where engines are looked for; the file, or `None` when
-/// it could not be written (said in the log — the engine serves anyway).
-fn publish(found: &Found) -> Option<PathBuf> {
-    let dir = dirs::config_dir()?.join("fts").join("engines");
-    let file = dir.join(format!("studio-{}.json", found.pid));
-    let written = std::fs::create_dir_all(&dir)
-        .map_err(eyre::Report::from)
-        .and_then(|()| Ok(serde_json::to_vec_pretty(found)?))
-        .and_then(|bytes| Ok(std::fs::write(&file, bytes)?));
-    match written {
-        Ok(()) => Some(file),
-        Err(e) => {
-            tracing::warn!(error = %e, "engine: where it is could not be written");
-            None
-        }
-    }
 }
 
 /// Open `what` as the engine's set: a path that exists, else a library

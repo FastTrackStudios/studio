@@ -379,6 +379,15 @@ fn arrive(epoch: u64, arrival: Arrival) -> bool {
 /// gone to, or `None` when `to` is out of range or current already.
 pub fn pick(to: usize, left_at: f64) -> Option<String> {
     let project = mark_current(to, left_at)?;
+    // A window driving an engine in another process: the engine picks (its
+    // set, its audio); this window shows it already.
+    if super::link::linked().is_some() {
+        let to = format!(r#"{{"to":"{}"}}"#, to.saturating_add(1));
+        if let Err(e) = super::link::run("SESSION_SONG", to.as_bytes()) {
+            tracing::warn!(error = %e, "set: the engine refused the pick");
+        }
+        return Some(project);
+    }
     crate::open::switch_song(&project);
     Some(project)
 }
@@ -574,6 +583,14 @@ pub struct LibraryOpen {
 ///
 /// Another open is under way.
 pub fn open_library(request: LibraryOpen) -> Result<(), Busy> {
+    if super::link::linked().is_some() {
+        let args = serde_json::json!({
+            "setlist": request.setlist,
+            "org": request.org,
+            "song": request.song,
+        });
+        return forward("SESSION_OPEN_SETLIST", &args);
+    }
     open_with(
         Progress::Joining { retry: None },
         Box::new(move |progress| open_library_now(&request, progress)),
@@ -637,6 +654,10 @@ fn position_named(titles: &[&str], want: &str) -> Option<usize> {
 ///
 /// Another open is under way.
 pub fn open_path(path: PathBuf) -> Result<(), Busy> {
+    if super::link::linked().is_some() {
+        let args = serde_json::json!({ "path": path.display().to_string() });
+        return forward("SESSION_OPEN", &args);
+    }
     let title = path.file_stem().map_or_else(
         || path.display().to_string(),
         |n| n.to_string_lossy().into_owned(),
@@ -673,3 +694,14 @@ pub fn songs_at(target: &Path) -> Option<Vec<PathBuf>> {
 
 #[cfg(test)]
 mod tests;
+
+/// An open asked of the engine this window drives in another process; it
+/// opens there, and the window follows its set (`super::link::follow`).
+fn forward(id: &str, args: &serde_json::Value) -> Result<(), Busy> {
+    super::link::run(id, args.to_string().as_bytes())
+        .map(|_| ())
+        .map_err(|why| {
+            tracing::warn!(error = %why, action.id = id, "set: the engine refused the open");
+            Busy(Progress::Opening { title: why })
+        })
+}

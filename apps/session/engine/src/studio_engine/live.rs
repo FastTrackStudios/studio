@@ -50,6 +50,20 @@ pub enum Pending {
     Scheduled { to: usize, end: f64 },
     /// It could not be scheduled: song `to` is picked at the end instead.
     AtTheEnd { to: usize },
+    /// The song was past its end already when it became current (picked
+    /// while a voice left playing ran on past it): nothing rolls on from it.
+    Past,
+}
+
+/// What is pending for a song the moment it becomes current: [`Pending::Past`]
+/// when its playhead is already past its end, else nothing. A song rolls on
+/// only when it reaches its end while it is the current one.
+#[must_use]
+pub fn first_sight(now: Now) -> Pending {
+    match now.end {
+        Some(end) if now.at >= end => Pending::Past,
+        _ => Pending::Nothing,
+    }
 }
 
 /// What to do now.
@@ -94,7 +108,7 @@ pub fn step(now: Now, pending: Pending) -> Step {
         Pending::Scheduled { to, .. } if !now.playing => Step::CallOff { to },
         Pending::Scheduled { .. } => Step::Wait,
         Pending::AtTheEnd { to } if ended && now.playing => Step::PickAndPlay { to, end },
-        Pending::AtTheEnd { .. } => Step::Wait,
+        Pending::AtTheEnd { .. } | Pending::Past => Step::Wait,
         Pending::Nothing if !now.playing => Step::Wait,
         Pending::Nothing if ended => Step::PickAndPlay { to: next, end },
         Pending::Nothing if end - now.at <= LEAD => Step::Schedule { to: next, end },
@@ -108,6 +122,15 @@ static LIVE: AtomicBool = AtomicBool::new(false);
 /// Put the set in Live (`true`) or take it out: the roll-on runs only in
 /// Live, so working on a song in another mode never jumps away from it.
 pub fn set_live(on: bool) {
+    // A window driving an engine in another process: the roll-on is that
+    // engine's.
+    if super::link::linked().is_some() {
+        let args = format!(r#"{{"on":{on}}}"#);
+        if let Err(e) = super::link::run("SESSION_LIVE", args.as_bytes()) {
+            tracing::warn!(error = %e, "live: the engine did not take Live");
+        }
+        return;
+    }
     let was = LIVE.swap(on, Ordering::AcqRel);
     if on && !was {
         start();
@@ -173,9 +196,6 @@ fn tick(pending: &mut (String, Pending)) {
     }) else {
         return;
     };
-    if pending.0 != project {
-        *pending = (project.clone(), Pending::Nothing);
-    }
     let Some((at, playing)) = crate::stream_set::transport_of(&project) else {
         return;
     };
@@ -185,6 +205,9 @@ fn tick(pending: &mut (String, Pending)) {
         end,
         next,
     };
+    if pending.0 != project {
+        *pending = (project.clone(), first_sight(now));
+    }
     match step(now, pending.1) {
         Step::Wait => {}
         Step::Schedule { to, end } => {
@@ -296,6 +319,16 @@ mod tests {
             step(now(180.2, true), Pending::Nothing),
             Step::PickAndPlay { to: 3, end: 180.0 }
         );
+    }
+
+    #[test]
+    fn a_song_picked_past_its_end_does_not_roll_on() {
+        // A song left playing runs on past its end; picked again, it is
+        // not taken for one that just ended.
+        let picked = now(240.0, true);
+        assert_eq!(first_sight(picked), Pending::Past);
+        assert_eq!(step(picked, Pending::Past), Step::Wait);
+        assert_eq!(first_sight(now(12.0, true)), Pending::Nothing);
     }
 
     #[test]

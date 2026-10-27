@@ -1042,6 +1042,7 @@ pub fn attach(target: &RemoteTarget) -> eyre::Result<Attached> {
     let attached = match target {
         RemoteTarget::Reaper { socket } => attach_to_reaper(socket.clone()),
         RemoteTarget::Session { address } => attach_to_engine(address),
+        RemoteTarget::Engine { socket } => attach_to_local_engine(socket),
     }?;
     // Idle unless Cue is asked for; then the click and guide play here,
     // locked to what this window drives.
@@ -1109,6 +1110,60 @@ pub fn attach_to_engine(address: &str) -> eyre::Result<Attached> {
             address: address.to_owned(),
         },
     )
+}
+
+/// Attach to a Studio engine on this machine (`studio engine`, found or
+/// spawned by `crate::studio_engine::link`) over its Unix socket — the
+/// lanes REAPER's bridge serves, so the facade is the same one. The engine
+/// owns the set and plays it; this window drives it. Unlike REAPER it may
+/// have nothing open yet: then there is no project to read back, and the
+/// window shows its start screen until the engine opens a set.
+///
+/// # Errors
+///
+/// When this window already owns a project, or the socket does not answer.
+pub fn attach_to_local_engine(socket: &Path) -> eyre::Result<Attached> {
+    if BUNDLE.get().is_some() {
+        eyre::bail!("this window already owns a project; it cannot also drive a Studio engine");
+    }
+    let rt = engine_runtime()?;
+    let connection = rt
+        .block_on(studio::cli::connect(Some(socket.to_path_buf())))
+        .map_err(|e| {
+            eyre::eyre!(
+                "could not reach the Studio engine at {}: {e}",
+                socket.display()
+            )
+        })?;
+    let block_on_rt = Arc::new(
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?,
+    );
+    daw::init_from_parts(connection.daw.clone(), block_on_rt);
+    if let Ok(mut slot) = CONNECTION.write() {
+        *slot = Some(connection);
+    }
+    let target = RemoteTarget::Engine {
+        socket: socket.to_path_buf(),
+    };
+    if mode().owns_project() {
+        set_mode(ModeState::remote(target.clone(), false));
+    }
+    match read_back(rt, target) {
+        Ok(attached) => Ok(attached),
+        // Nothing open in the engine yet: attached all the same.
+        Err(e) => {
+            tracing::info!(engine.socket = %socket.display(), why = %e, "attached to a Studio engine with no song open");
+            watch_remote_current(rt);
+            Ok(Attached {
+                name: String::new(),
+                project_guid: String::new(),
+                track_count: 0,
+                path: None,
+            })
+        }
+    }
 }
 
 /// After an attach: read the project back (never report what was hoped

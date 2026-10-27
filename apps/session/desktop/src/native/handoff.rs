@@ -246,6 +246,17 @@ pub fn stop() {
     session_ui::engine::transport(session_ui::engine::Move::Stop, 0.0);
 }
 
+/// Stop the transport before the DAW view takes what was handed to it —
+/// unless this window drives an engine in another process
+/// (`session_ui::studio_engine::link`): that engine owns the set and its
+/// transport, and a window coming up over it (a relaunch after a crash, a
+/// second window) shows what it plays without stopping it.
+pub fn stop_for_entry() {
+    if session_ui::studio_engine::link::linked().is_none() {
+        stop();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};

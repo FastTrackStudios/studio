@@ -25,7 +25,6 @@ use crate::window_queue::{Action, queue, take_window};
 /// straight through, to be logged as it always was.
 #[must_use]
 pub fn through_list(actions: Vec<Action>) -> Vec<Action> {
-    let list = crate::actions::list();
     for action in actions {
         match id_and_args(&action) {
             Some((id, args)) if behind_the_window(id) => crate::actions::off_the_window(id, args),
@@ -36,7 +35,7 @@ pub fn through_list(actions: Vec<Action>) -> Vec<Action> {
                 if [crate::actions::PLAY_STOP.id, crate::actions::PLAY_PAUSE.id].contains(&id)
                     && crate::keys::window_has_transport() => {}
             Some((id, args)) => {
-                if let Err(e) = list.run_json(id, args.as_bytes()) {
+                if let Err(e) = crate::actions::run(id, args.as_bytes()) {
                     tracing::warn!(action.id = id, error = %e, "key action refused");
                 }
             }
@@ -813,6 +812,7 @@ pub fn attach() -> crate::window_queue::Attached {
             window.actions = ids.len(),
             "window: its actions joined the engine's list"
         );
+        crate::window_queue::window_actions(ids.clone());
         ids
     });
     crate::changes::listen(heard);

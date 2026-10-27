@@ -109,6 +109,11 @@ pub enum RemoteTarget {
     /// ticket). Named so the mode can carry it; attaching to one is not
     /// wired yet, and asking for it says so rather than falling back.
     Session { address: String },
+    /// A Studio engine on this machine (`studio engine`), over its Unix
+    /// socket: the engine this window spawned or found
+    /// (`crate::studio_engine::link`). It owns the set; this window is a
+    /// view of it.
+    Engine { socket: PathBuf },
 }
 
 impl RemoteTarget {
@@ -118,6 +123,7 @@ impl RemoteTarget {
         match self {
             Self::Reaper { .. } => "REAPER",
             Self::Session { .. } => "Session",
+            Self::Engine { .. } => "Engine",
         }
     }
 
@@ -128,6 +134,7 @@ impl RemoteTarget {
             Self::Reaper { socket: None } => "REAPER (discovered socket)".to_owned(),
             Self::Reaper { socket: Some(path) } => format!("REAPER at {}", path.display()),
             Self::Session { address } => format!("Session engine at {address}"),
+            Self::Engine { socket } => format!("Studio engine at {}", socket.display()),
         }
     }
 }

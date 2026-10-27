@@ -234,6 +234,23 @@ pub fn queue(action: Action) -> bool {
 
 // ── The windows attached ─────────────────────────────────────────────
 
+/// The ids of the window's own actions, once a window registered them.
+static WINDOW_IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
+/// The window's own actions are `ids` (what it registered on the list).
+pub fn window_actions(ids: Vec<String>) {
+    let _ = WINDOW_IDS.set(ids);
+}
+
+/// Whether `id` is one of the window's own actions — what runs in the
+/// window's process even when the engine is in another.
+#[must_use]
+pub fn is_window_action(id: &str) -> bool {
+    WINDOW_IDS
+        .get()
+        .is_some_and(|ids| ids.iter().any(|i| i == id))
+}
+
 /// How many windows are attached to this engine.
 static WINDOWS: AtomicUsize = AtomicUsize::new(0);
 

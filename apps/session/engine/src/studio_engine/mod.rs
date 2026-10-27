@@ -21,6 +21,8 @@
 //!   127.0.0.1:47811.
 //! - [`headless`]: standing the engine up with no window — what `studio
 //!   engine` runs.
+//! - [`link`]: a window driving an engine in another process — finding
+//!   one, spawning one, running the Action List on it, following its set.
 //! - [`live`]: Live mode's roll-on — the next song on the frame the current
 //!   one ends.
 //!
@@ -29,6 +31,7 @@
 //! [`set`]'s operations; it never holds the set itself.
 
 pub mod headless;
+pub mod link;
 pub mod live;
 pub mod mcp;
 pub mod set;

@@ -262,7 +262,7 @@ pub fn Studio() -> Element {
     #[cfg(feature = "session-app")]
     let mut into_daw = move || {
         use session_desktop::native::handoff;
-        handoff::stop();
+        handoff::stop_for_entry();
         handoff::entering();
         daw_generation += 1;
         view.set(View::Daw);

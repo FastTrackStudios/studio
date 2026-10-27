@@ -4748,6 +4748,22 @@ fn register_peaks(list: &ActionList) -> Result<(), architect::action::ActionErro
     Ok(())
 }
 
+/// Run `id` with `args` (JSON) where the engine is: this process's list,
+/// or — a window driving an engine in another process — that engine's
+/// (`crate::studio_engine::link`). A window's own actions always run here.
+///
+/// # Errors
+///
+/// The action refused, or the engine did not answer.
+#[cfg(feature = "native")]
+pub fn run(id: &str, args: &[u8]) -> Result<Vec<u8>, String> {
+    if crate::studio_engine::link::linked().is_some() && !crate::window_queue::is_window_action(id)
+    {
+        return crate::studio_engine::link::run(id, args).map(String::into_bytes);
+    }
+    list().run_json(id, args).map_err(|e| e.to_string())
+}
+
 /// Run a key's action on the one thread that runs them behind the window,
 /// in the order they were pressed; the window redraws when each is done,
 /// as it does for a model's.
@@ -4761,7 +4777,7 @@ pub fn off_the_window(id: &'static str, args: String) {
             .name("key-actions".into())
             .spawn(move || {
                 for (id, args) in rx {
-                    if let Err(e) = list().run_json(id, args.as_bytes()) {
+                    if let Err(e) = run(id, args.as_bytes()) {
                         tracing::warn!(action.id = id, error = %e, "key action refused");
                     }
                 }

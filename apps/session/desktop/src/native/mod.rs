@@ -210,6 +210,11 @@ pub fn prepare() -> Option<Prepared> {
             Ok((daw, Box::new(engine) as session_ui::open::EngineConnection))
         })
     });
+    // The engine in another process (`FTS_ENGINE=spawn|attach`): this
+    // window drives it — the engine serves the Action List and owns the set.
+    if let Some(prepared) = linked() {
+        return Some(prepared);
+    }
     // The Action List served to a model and the CLI from the start, so
     // either can open the first song (`SESSION_OPEN`, `SESSION_OPEN_SETLIST`).
     session_ui::open::serve_actions();
@@ -234,6 +239,33 @@ pub fn prepare() -> Option<Prepared> {
         },
         None => Some(engine()),
     }
+}
+
+/// The window as a view of a Studio engine in another process, when
+/// `FTS_ENGINE` asks for one (`session_ui::studio_engine::link`): a running
+/// engine attached to, or one spawned in a process group of its own (the
+/// audio outlives the window). The window shows the engine's set, and
+/// follows it as the CLI, a model or another window changes it. `None`:
+/// the engine runs in this process, as it always did.
+fn linked() -> Option<Prepared> {
+    use session_ui::studio_engine::link;
+    let found = link::choose(link::Mode::from_env())?;
+    let target = session_ui::open::RemoteTarget::Engine {
+        socket: found.socket.clone(),
+    };
+    session_ui::open::set_mode(session_ui::open::ModeState::remote(target.clone(), false));
+    if let Err(e) = session_ui::open::attach(&target) {
+        tracing::warn!(engine.pid = found.pid, error = %e, "engine: not attached; in this process instead");
+        session_ui::open::set_mode(session_ui::open::ModeState::engine());
+        return None;
+    }
+    tracing::info!(engine.pid = found.pid, engine.socket = %found.socket.display(), "engine: this window drives it");
+    link::set_linked(found);
+    link::follow(session_ui::setlist::Setlist::from_engine);
+    Some(Prepared {
+        setlist: None,
+        open: None,
+    })
 }
 
 impl Prepared {

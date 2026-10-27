@@ -118,6 +118,23 @@ struct LiveArg {
     on: Option<bool>,
 }
 
+static TRANSPORT: ActionMeta = meta(
+    "SESSION_TRANSPORT",
+    "transport",
+    "Where it plays",
+    "The current song's transport as the engine has it: `song` (its project), `playing`, `position` (seconds). Read-only — what a script or a window checks that the engine plays, with no window or with one.",
+    "Set",
+    "",
+);
+
+/// The transport, as said.
+#[derive(Facet)]
+struct TransportRow {
+    song: Option<String>,
+    playing: bool,
+    position: Option<f64>,
+}
+
 static EDIT_STATE: ActionMeta = meta(
     "SESSION_EDIT_STATE",
     "edit_state",
@@ -178,6 +195,15 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             "live: off"
         }
         .to_owned())
+    })?;
+    list.register(&TRANSPORT, Effect::ReadOnly, |(): ()| {
+        let song = crate::open::current_song();
+        let at = song.as_deref().and_then(crate::stream_set::transport_of);
+        Ok(TransportRow {
+            song,
+            playing: at.is_some_and(|(_, playing)| playing),
+            position: at.map(|(position, _)| position),
+        })
     })?;
     list.register(&EDIT_STATE, Effect::ReadOnly, |(): ()| {
         let edit = crate::edit_state::current();
