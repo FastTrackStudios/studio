@@ -141,12 +141,9 @@ pub struct Editor {
     pastes: u32,
     /// The edit cursor and the time selection.
     pub cursor: cursor::Edit,
-    /// A time selection being dragged out, from this time.
-    time_drag: Option<f64>,
-    /// Whether the time selection being swept snaps, and where its end
-    /// was last snapped to.
-    time_snap: bool,
-    time_to: Option<f64>,
+    /// A press on the timeline (empty lane, or the ruler's bars): a click
+    /// that put the cursor down, until it is dragged into a time selection.
+    time_sweep: Option<TimeSweep>,
     item_press: Option<ItemPress>,
     fade_drag: Option<FadeDrag>,
     /// A press on the ruler, until it becomes a drag or a click.
@@ -283,6 +280,77 @@ struct RulerPress {
     at: f64,
     /// A bar's length there, through the tempo map: a clicked region's.
     bar: f64,
+}
+
+/// A press on the timeline, deciding between a click and a time selection.
+///
+/// The press has already put the edit cursor down at `from` (snapped if
+/// the gesture snaps). It stays a click until the pointer has travelled
+/// more than [`crate::gesture::SLOP`] pixels from where it went down;
+/// from then on it is a selection from `from` to the drag point, snapped
+/// the same way. The release never reads the raw pointer: a click whose
+/// press snapped and whose release did not would otherwise select the
+/// sliver between the grid line and the mouse.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct TimeSweep {
+    /// Where the pointer went down, unsnapped: what the slop is measured
+    /// from.
+    pressed: f64,
+    /// Where the press landed, snapped if it snaps: the cursor, and the
+    /// selection's fixed end.
+    from: f64,
+    /// Whether the drag end lands on the grid — resolved at the press.
+    snap: bool,
+    /// The selection's other end, snapped, once the press is a drag.
+    to: Option<f64>,
+}
+
+/// What a [`TimeSweep`] was, once the pointer came up.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SweepEnd {
+    /// Never dragged: the cursor at the press, snapped, and nothing else.
+    Click(f64),
+    /// Dragged: a time selection between these two (snapped) times.
+    Select(f64, f64),
+}
+
+impl TimeSweep {
+    fn new(pressed: f64, snap: bool, grid: &Snap<'_>) -> Self {
+        Self {
+            pressed,
+            from: if snap { grid.at(pressed) } else { pressed },
+            snap,
+            to: None,
+        }
+    }
+
+    /// The pointer is at `at`. The span to show, once this is a drag.
+    fn moved(&mut self, at: f64, pps: f64, grid: &Snap<'_>) -> Option<(f64, f64)> {
+        if self.to.is_none() && ((at - self.pressed) * pps).abs() <= crate::gesture::SLOP {
+            return None;
+        }
+        let to = if self.snap { grid.at(at) } else { at };
+        self.to = Some(to);
+        Some((self.from, to))
+    }
+
+    /// The pointer came up: a click, or the selection the drag made.
+    const fn released(self) -> SweepEnd {
+        match self.to {
+            None => SweepEnd::Click(self.from),
+            Some(to) => SweepEnd::Select(self.from, to),
+        }
+    }
+
+    /// Land the release on the edit cursor.
+    fn finish(self, cursor: &mut cursor::Edit) {
+        match self.released() {
+            SweepEnd::Click(at) => cursor.click(at),
+            // `drag` still falls back to a click when the two snapped
+            // ends are the same line.
+            SweepEnd::Select(from, to) => cursor.drag(from, to),
+        }
+    }
 }
 
 impl Editor {
@@ -457,9 +525,7 @@ impl Editor {
                 // making or moving something, and moving the cursor as
                 // well would seek every time you reached for a band.
                 if matches!(on, On::Bars) {
-                    self.time_drag = Some(landed);
-                    self.time_snap = snaps;
-                    self.time_to = None;
+                    self.time_sweep = Some(TimeSweep::new(seconds, snaps, grid));
                     self.cursor.click(landed);
                     effects.push(Effect::Transport(Move::Seek, landed));
                 }
@@ -493,14 +559,9 @@ impl Editor {
                 // edit cursor and the play position are one thing until
                 // a time selection separates them. On the grid, as every
                 // gesture is (the toggle; Shift flips it).
-                let landed = if click.snap {
-                    grid.at(seconds)
-                } else {
-                    seconds
-                };
-                self.time_drag = Some(landed);
-                self.time_snap = click.snap;
-                self.time_to = None;
+                let sweep = TimeSweep::new(seconds, click.snap, grid);
+                let landed = sweep.from;
+                self.time_sweep = Some(sweep);
                 self.cursor.click(landed);
                 effects.push(Effect::Transport(Move::Seek, landed));
                 true
@@ -785,14 +846,13 @@ impl Editor {
         }
         // The ruler's bars sweep a time selection — the Editor's ruler
         // too. Live, so it is drawn as it is dragged.
-        if let (Some(from), Some(true)) = (
-            self.time_drag,
+        if let (Some(sweep), Some(true)) = (
+            self.time_sweep.as_mut(),
             self.ruler_press
                 .as_ref()
                 .map(|p| matches!(p.on, crate::ruler::On::Bars)),
-        ) {
-            let to = if self.time_snap { grid.at(at) } else { at };
-            self.time_to = Some(to);
+        ) && let Some((from, to)) = sweep.moved(at, pps, grid)
+        {
             self.cursor.drag(from, to);
         }
         if let Some(press) = self.ruler_press.as_mut() {
@@ -838,19 +898,25 @@ impl Editor {
             }
             return true;
         }
-        if let Some(from) = self.time_drag {
-            let to = if self.time_snap { grid.at(at) } else { at };
-            self.time_to = Some(to);
+        if let Some(sweep) = self.time_sweep.as_mut() {
+            // Within the slop it is still a click: nothing to redraw.
+            let Some((from, to)) = sweep.moved(at, pps, grid) else {
+                return false;
+            };
             self.cursor.drag(from, to);
             return true;
         }
         false
     }
 
-    /// The pointer came up at the time `at`.
+    /// The pointer came up at the time `_at`.
+    ///
+    /// Nothing here reads it: every gesture decides from where its last
+    /// move landed (snapped), so a release a few pixels off a snapped
+    /// press cannot turn a click into a selection.
     pub fn release(
         &mut self,
-        at: Option<f64>,
+        _at: Option<f64>,
         keys: Mods,
         project: &mut Project,
         effects: &mut Vec<Effect>,
@@ -880,11 +946,10 @@ impl Editor {
         if let Some(press) = self.ruler_press.take() {
             // A drag across the bars is a time selection; a click is just
             // the cursor, which the press already placed.
-            if let Some(from) = self.time_drag.take()
+            if let Some(sweep) = self.time_sweep.take()
                 && matches!(press.on, crate::ruler::On::Bars)
-                && let Some(to) = self.time_to.take().or(at)
             {
-                self.cursor.drag(from, to);
+                sweep.finish(&mut self.cursor);
             }
             use crate::ruler::{MARKS_ROW, On, Zone, lane_of};
             match (press.on, press.ghost) {
@@ -1095,13 +1160,12 @@ impl Editor {
             effects.push(Effect::ReRecord);
             return true;
         }
-        if let Some(from) = self.time_drag.take() {
+        if let Some(sweep) = self.time_sweep.take() {
             // A drag across the timeline is a time selection; a click
-            // is just the cursor. `Edit::drag` decides which, so a
-            // twitch does not leave a four-millisecond selection.
-            if let Some(to) = at {
-                self.cursor.drag(from, to);
-            }
+            // is just the cursor, where the press snapped it. Decided by
+            // the sweep, never by the raw release point — see
+            // [`TimeSweep`].
+            sweep.finish(&mut self.cursor);
             return true;
         }
         false
@@ -1112,7 +1176,7 @@ impl Editor {
     pub fn dragging(&self) -> bool {
         self.item_press.as_ref().is_some_and(|p| p.ghost.is_some())
             || self.fade_drag.is_some()
-            || self.time_drag.is_some()
+            || self.time_sweep.is_some_and(|s| s.to.is_some())
     }
 
     /// The ghost of an item being moved or trimmed: its index and span.
@@ -3306,4 +3370,61 @@ pub(crate) fn on_quarters<R>(bpm: f64, f: impl FnOnce(&Snap<'_>) -> R) -> R {
         magnets: &[],
         reach: 0.0,
     })
+}
+
+#[cfg(test)]
+mod time_sweep_tests {
+    use super::*;
+
+    /// 100 px a second: the slop (3 px) is 30 ms.
+    const PPS: f64 = 100.0;
+
+    /// The user's report: a press snapped the cursor to the grid, and the
+    /// release selected from that line to wherever the mouse really was.
+    /// A click — still, or with a pixel or two of jitter — only moves the
+    /// cursor, snapped.
+    #[test]
+    fn a_click_off_the_grid_only_moves_the_cursor() {
+        on_quarters(120.0, |grid| {
+            let mut sweep = TimeSweep::new(1.07, true, grid);
+            assert!((sweep.from - 1.0).abs() < 1e-9, "the press snaps");
+            // Two pixels of jitter: still a click.
+            assert_eq!(sweep.moved(1.09, PPS, grid), None);
+            assert_eq!(sweep.released(), SweepEnd::Click(1.0));
+
+            let mut edit = cursor::Edit::default();
+            sweep.finish(&mut edit);
+            assert_eq!(edit.selection, None);
+            assert!((edit.at - 1.0).abs() < 1e-9);
+        });
+    }
+
+    /// Past the slop it is a selection, from the snapped press to the
+    /// snapped drag point — never to the raw pointer.
+    #[test]
+    fn a_drag_selects_between_snapped_ends() {
+        on_quarters(120.0, |grid| {
+            let mut sweep = TimeSweep::new(1.07, true, grid);
+            assert_eq!(sweep.moved(2.38, PPS, grid), Some((1.0, 2.5)));
+            // Back inside the slop: it has become a drag, and stays one.
+            assert_eq!(sweep.moved(1.08, PPS, grid), Some((1.0, 1.0)));
+            assert_eq!(sweep.moved(2.6, PPS, grid), Some((1.0, 2.5)));
+            assert_eq!(sweep.released(), SweepEnd::Select(1.0, 2.5));
+
+            let mut edit = cursor::Edit::default();
+            sweep.finish(&mut edit);
+            assert_eq!(edit.selection, Some(cursor::Span::between(1.0, 2.5)));
+            assert!((edit.at - 1.0).abs() < 1e-9);
+        });
+    }
+
+    /// Snapping off, a click lands exactly where it was pressed.
+    #[test]
+    fn an_unsnapped_click_lands_where_pressed() {
+        on_quarters(120.0, |grid| {
+            let mut sweep = TimeSweep::new(1.07, false, grid);
+            assert_eq!(sweep.moved(1.05, PPS, grid), None);
+            assert_eq!(sweep.released(), SweepEnd::Click(1.07));
+        });
+    }
 }
