@@ -11,6 +11,7 @@
 //! nothing.
 
 mod album;
+mod command;
 mod home;
 mod kit;
 mod lists;
@@ -213,12 +214,18 @@ pub fn LibraryApp() -> Element {
         space: Signal::new(None),
         query: Signal::new(String::new()),
     });
+    let keys = use_context_provider(command::Keys::new);
     let nav = use_nav();
+    let lib = use_library();
     let route = (nav.route)();
     rsx! {
         div {
+            // The library takes the keys (command.rs): ⌘K, ⌘O, ?, ⌘1–6,
+            // ⌘[, and what an open overlay is typed into.
+            tabindex: "0",
             style: "position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; \
-                    background: {DESK}; color: {INK}; font-family: {FONT}; font-variant-numeric: tabular-nums;",
+                    background: {DESK}; color: {INK}; font-family: {FONT}; font-variant-numeric: tabular-nums; outline: none;",
+            onkeydown: move |e| command::on_key(&e, &lib.read(), nav, keys),
             document::Style { {SHEET_CSS} }
             AppBar {}
             div {
@@ -242,6 +249,7 @@ pub fn LibraryApp() -> Element {
                     }
                 }
             }
+            command::Overlays {}
         }
     }
 }
@@ -283,6 +291,7 @@ fn AppBar() -> Element {
                 span { style: "font-size: 20px; font-weight: 780; letter-spacing: -0.02em; padding: 0 6px;", "studio" }
             }
             SearchField { wide }
+            CommandButton {}
             span {
                 style: "display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 16px; \
                         border: 1px solid {RULE_STRONG}; {META} white-space: nowrap;",
@@ -295,6 +304,23 @@ fn AppBar() -> Element {
                 }
             }
             Avatar { name: me, size: 32 }
+        }
+    }
+}
+
+/// ⌘K for a finger: the command palette, from a button.
+#[component]
+fn CommandButton() -> Element {
+    let keys = use_context::<command::Keys>();
+    rsx! {
+        button {
+            class: "lp",
+            "aria-label": "Commands",
+            style: "height: 36px; padding: 0 8px; border-radius: 10px; border: 1px solid {RULE_STRONG}; background: transparent; \
+                    display: flex; align-items: center; gap: 4px;",
+            onclick: move |_| keys.show(command::Overlay::Palette),
+            command::Kbd { text: "⌘" }
+            command::Kbd { text: "K" }
         }
     }
 }
@@ -328,6 +354,11 @@ fn SearchField(wide: bool) -> Element {
                     onkeydown: move |e| {
                         if e.key() == Key::Escape {
                             nav.query.set(String::new());
+                        }
+                        // A plain key is the field's; ⌘ ones go on to the
+                        // library's shortcuts.
+                        if !command::command_held(&e) {
+                            e.stop_propagation();
                         }
                     },
                 }

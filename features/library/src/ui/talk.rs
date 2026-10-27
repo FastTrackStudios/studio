@@ -83,6 +83,11 @@ pub(crate) fn Conversation(about: Anchor, #[props(default)] exact: bool) -> Elem
                             if e.key() == Key::Enter {
                                 send_key();
                             }
+                            // A plain key is the field's (a `?` in a comment
+                            // is a question mark); ⌘ ones go to the library.
+                            if !super::command::command_held(&e) {
+                                e.stop_propagation();
+                            }
                         },
                     }
                 }

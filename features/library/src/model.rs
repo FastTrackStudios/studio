@@ -921,6 +921,44 @@ pub enum Found {
     Session(SessionId),
 }
 
+/// How well `query` matches `text`, fuzzily: every character of the
+/// query in order (case-blind), scored higher for matches at word starts
+/// and in runs, lower for gaps. `None` when it does not match at all.
+/// What the open finder and the command palette rank by.
+#[must_use]
+pub fn fuzzy(query: &str, text: &str) -> Option<i32> {
+    let q: Vec<char> = query
+        .trim()
+        .to_lowercase()
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    if q.is_empty() {
+        return Some(0);
+    }
+    let t: Vec<char> = text.to_lowercase().chars().collect();
+    let mut score = 0;
+    let mut qi = 0;
+    let mut last: Option<usize> = None;
+    for (ti, c) in t.iter().enumerate() {
+        if qi < q.len() && *c == q[qi] {
+            let word_start = ti == 0 || !t[ti - 1].is_alphanumeric();
+            score += 10;
+            if word_start {
+                score += 8;
+            }
+            match last {
+                Some(l) if l + 1 == ti => score += 6,
+                Some(l) => score -= ((ti - l - 1) as i32).min(5),
+                None => score -= (ti as i32).min(5),
+            }
+            last = Some(ti);
+            qi += 1;
+        }
+    }
+    (qi == q.len()).then_some(score)
+}
+
 /// `3:48`, `1:02:10`: seconds said as a clock.
 #[must_use]
 pub fn clock(seconds: f32) -> String {
@@ -1223,5 +1261,19 @@ mod tests {
         assert!(found.iter().any(|f| matches!(f, Found::Session(_))));
         assert!(found.iter().any(|f| matches!(f, Found::Project(_))));
         assert!(lib.search("  ").is_empty());
+    }
+    #[test]
+    fn fuzzy_matches_in_order_and_prefers_word_starts_and_runs() {
+        assert!(fuzzy("snw", "Sunday Night Worship").is_some());
+        assert!(
+            fuzzy("wns", "Sunday Night Worship").is_none(),
+            "order matters"
+        );
+        assert!(fuzzy("", "anything") == Some(0));
+        // A run at a word start beats letters scattered through a word.
+        let tight = fuzzy("pap", "Paper Boats").unwrap();
+        let loose = fuzzy("pap", "Pineapple Party").unwrap();
+        assert!(tight > loose, "{tight} vs {loose}");
+        assert!(fuzzy("PAPER", "paper boats").is_some(), "case-blind");
     }
 }
