@@ -450,10 +450,14 @@ impl Setlist {
             &opened.name,
             &rpp_text,
             chart_text.as_deref(),
-            true,
+            false,
         ))?;
         session.chart_file = prepare.chart.clone();
         crate::collab::song_opened(&guid);
+        // Its waveforms behind it: the song is in the set now, its
+        // pictures drawn as they are read.
+        let (waves, project) = (session.clone(), guid.clone());
+        crate::open::engine_runtime()?.spawn(async move { waves.fill_waves(&project).await });
         Ok(Song::opened(&path, title, guid, session))
     }
 

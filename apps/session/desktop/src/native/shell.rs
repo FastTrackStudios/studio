@@ -119,8 +119,10 @@ pub fn Shell() -> Element {
     // A streamed set's songs after the first, as each opens behind it.
     use_future(move || async move {
         let Some(mut arrivals) = session_daw::stream_set::take_arrivals() else {
+            tracing::debug!("shell: no arrivals to take (another window holds them, or none)");
             return;
         };
+        tracing::info!(set.songs = setlist.peek().songs.len(), "shell: taking the set's arrivals");
         while let Some(arrival) = arrivals.recv().await {
             setlist.write().arrive(arrival);
         }

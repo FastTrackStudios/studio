@@ -249,6 +249,31 @@ impl StudioSession {
     }
 }
 
+impl StudioSession {
+    /// Read the waveforms of `project`'s audio items into its previews —
+    /// after the song has joined its set, not before: read first, every
+    /// song of a set waited seconds on its pictures before it could be
+    /// picked. The window draws each as it lands (`Previews` counts them).
+    pub async fn fill_waves(&self, project: &str) {
+        let Some(facade) = daw_control::Daw::try_get() else {
+            return;
+        };
+        let Ok(handle) = facade.project(project.to_owned()).await else {
+            return;
+        };
+        let audio: Vec<String> = self
+            .project
+            .0
+            .items
+            .values()
+            .flatten()
+            .filter(|item| !self.project.0.is_midi(&item.guid))
+            .map(|item| item.guid.clone())
+            .collect();
+        self.previews.fill_waves_in(&handle, audio).await;
+    }
+}
+
 #[cfg(feature = "native")]
 impl StudioSession {
     /// Open `path` on the process's engine with audio, run `prepare` on it

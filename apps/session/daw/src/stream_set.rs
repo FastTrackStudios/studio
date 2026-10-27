@@ -283,9 +283,32 @@ async fn bring_in(source: &Source, cache: &std::path::Path) -> eyre::Result<Stre
 static ARRIVALS: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Arrival>>> = Mutex::new(None);
 
 /// The songs arriving behind the first (see [`open`]), for the window to
-/// add to its set; `None` once taken, or when nothing is arriving.
-pub fn take_arrivals() -> Option<tokio::sync::mpsc::UnboundedReceiver<Arrival>> {
-    ARRIVALS.lock().ok()?.take()
+/// add to its set; `None` while another holds them, or when nothing is
+/// arriving. Given back when the holder drops them: a window mounted again
+/// (the welcome screen handing the set over) picks up where the last one
+/// stopped — taken for good, the songs after it never arrived.
+pub fn take_arrivals() -> Option<Arrivals> {
+    ARRIVALS.lock().ok()?.take().map(|rx| Arrivals(Some(rx)))
+}
+
+/// The arrivals, held — given back on drop ([`take_arrivals`]).
+pub struct Arrivals(Option<tokio::sync::mpsc::UnboundedReceiver<Arrival>>);
+
+impl Arrivals {
+    /// The next song to arrive; `None` once every one has.
+    pub async fn recv(&mut self) -> Option<Arrival> {
+        self.0.as_mut()?.recv().await
+    }
+}
+
+impl Drop for Arrivals {
+    fn drop(&mut self) {
+        if let (Some(rx), Ok(mut slot)) = (self.0.take(), ARRIVALS.lock())
+            && slot.is_none()
+        {
+            *slot = Some(rx);
+        }
+    }
 }
 
 /// Where streamed songs' small files are kept: the same bytes at the same
