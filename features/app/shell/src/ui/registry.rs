@@ -14,7 +14,7 @@
 use dioxus::prelude::Element;
 pub use dock::registry::PanelConstraints;
 
-use super::layout::Region;
+use super::layout::{Region, ShellLayout};
 
 /// A panel's body: a props-less component function.
 ///
@@ -116,26 +116,39 @@ impl PanelRegistry {
         self.panels.iter().find(|p| p.id == id)
     }
 
-    /// The panels that live in a region, in tab order.
-    pub fn in_region(&self, region: Region) -> impl Iterator<Item = &Panel> {
-        self.panels.iter().filter(move |p| p.region == region)
+    /// The panels in a region under `layout` (a panel moved there by the
+    /// person is in it; one moved away is not), in tab order.
+    pub fn in_region<'a>(
+        &'a self,
+        region: Region,
+        layout: &'a ShellLayout,
+    ) -> impl Iterator<Item = &'a Panel> {
+        self.panels
+            .iter()
+            .filter(move |p| layout.placed(p.id, p.region) == region)
     }
 
-    /// Whether anything lives in a region (an empty region is not drawn).
+    /// Whether anything is in a region under `layout` (an empty region is
+    /// not drawn).
     #[must_use]
-    pub fn has(&self, region: Region) -> bool {
-        self.in_region(region).next().is_some()
+    pub fn has(&self, region: Region, layout: &ShellLayout) -> bool {
+        self.in_region(region, layout).next().is_some()
     }
 
     /// The panel a region shows: the remembered one if it still lives
     /// there, else the region's first. An id a newer or older build saved
     /// that this build doesn't have falls back quietly (spec §2.3).
     #[must_use]
-    pub fn showing(&self, region: Region, remembered: Option<&str>) -> Option<&Panel> {
+    pub fn showing<'a>(
+        &'a self,
+        region: Region,
+        remembered: Option<&str>,
+        layout: &'a ShellLayout,
+    ) -> Option<&'a Panel> {
         remembered
             .and_then(|id| self.get(id))
-            .filter(|p| p.region == region)
-            .or_else(|| self.in_region(region).next())
+            .filter(|p| layout.placed(p.id, p.region) == region)
+            .or_else(|| self.in_region(region, layout).next())
     }
 
     /// How many panels are registered.

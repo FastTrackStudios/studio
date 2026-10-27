@@ -135,6 +135,13 @@ mod ios_orientation;
 #[allow(dead_code)]
 #[cfg(all(feature = "signal-keys-rig", not(target_arch = "wasm32")))]
 mod keys_view;
+/// The library as the front screen's home: the window's size and what a
+/// press that leaves it opens, handed to `library::ui`.
+#[cfg(any(
+    target_os = "ios",
+    all(not(target_arch = "wasm32"), not(feature = "webview"))
+))]
+mod library_home;
 #[cfg(all(feature = "signal-guitar", target_os = "ios"))]
 mod mobile_view;
 /// The rig engine embedded IN-PROCESS. iOS has no choice (it cannot spawn a

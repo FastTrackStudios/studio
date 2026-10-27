@@ -565,6 +565,7 @@ dependencies = [
  "dock",
  "facet",
  "facet-json",
+ "facet-styx",
  "objc2 0.6.4",
  "objc2-foundation 0.3.2",
  "objc2-ui-kit 0.3.2",
@@ -10090,6 +10091,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
+name = "library"
+version = "26.10.3"
+dependencies = [
+ "anyrender 0.11.1",
+ "anyrender_vello 0.12.0",
+ "app-shell",
+ "blitz-dom",
+ "blitz-paint",
+ "blitz-traits",
+ "dioxus",
+ "dioxus-native-dom",
+ "futures-timer",
+ "image",
+ "lucide-dioxus",
+ "uuid",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18299,6 +18318,7 @@ dependencies = [
  "keys",
  "launcher",
  "libc",
+ "library",
  "midi",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
