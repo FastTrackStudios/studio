@@ -2060,6 +2060,107 @@ struct OpenSetlistArg {
 }
 
 #[cfg(feature = "native")]
+static SONGS: ActionMeta = meta(
+    "SESSION_SONGS",
+    "session_songs",
+    "The set's songs",
+    "The songs of the set open in the window, in order: each one's `number` (1 the first), `title`, engine `project`, whether it is `current`, and `state` — open, or arriving (still on its way). Empty when no set is open. Read-only.",
+    "Session",
+    "",
+);
+
+/// One song of the open set.
+#[cfg(feature = "native")]
+#[derive(Facet)]
+struct OpenSong {
+    number: u32,
+    title: String,
+    project: String,
+    current: bool,
+    state: String,
+}
+
+#[cfg(feature = "native")]
+static SONG: ActionMeta = meta(
+    "SESSION_SONG",
+    "session_song",
+    "Go to a song",
+    "Go to a song of the open set, as a click on its tab does: `to` its number (1 the first, as SESSION_SONGS lists them), its title, or `next` / `previous`. Says which song; the window switches on its next frame. Refused past either end of the set, or for a song still arriving.",
+    "Session",
+    "",
+);
+
+/// Which song to go to.
+#[cfg(feature = "native")]
+#[derive(Facet)]
+struct SongArg {
+    to: String,
+}
+
+#[cfg(feature = "native")]
+static SONG_NEXT: ActionMeta = meta(
+    "SESSION_SONG_NEXT",
+    "session_song_next",
+    "Next song",
+    "Go to the next song of the open set (SESSION_SONG `next`).",
+    "Session",
+    "",
+);
+
+#[cfg(feature = "native")]
+static SONG_PREV: ActionMeta = meta(
+    "SESSION_SONG_PREV",
+    "session_song_prev",
+    "Previous song",
+    "Go to the song before in the open set (SESSION_SONG `previous`).",
+    "Session",
+    "",
+);
+
+/// Ask the window for the song `to` names ([`SongArg`]); what it goes to.
+#[cfg(feature = "native")]
+fn pick_song(to: &str) -> Result<String, String> {
+    use crate::projects::SongPick;
+    let set = crate::projects::open_set().ok_or("no set is open")?;
+    let to = to.trim();
+    let pick = match to.to_lowercase().as_str() {
+        "next" => SongPick::Next,
+        "previous" | "prev" => SongPick::Previous,
+        _ => match to.parse::<usize>() {
+            Ok(number) if number >= 1 => SongPick::At(number - 1),
+            _ => {
+                if let Some(at) = set
+                    .songs
+                    .iter()
+                    .position(|(title, _)| title.eq_ignore_ascii_case(to))
+                {
+                    SongPick::At(at)
+                } else if set.arriving.iter().any(|t| t.eq_ignore_ascii_case(to)) {
+                    return Err(format!("{to:?} is still arriving"));
+                } else {
+                    return Err(format!("no song {to:?} in the set"));
+                }
+            }
+        },
+    };
+    let Some(index) = pick.index(set.at, set.songs.len()) else {
+        let current = set.songs.get(set.at).map_or("", |(t, _)| t.as_str());
+        return Err(match pick {
+            SongPick::Next if set.at + 1 >= set.songs.len() && !set.arriving.is_empty() => {
+                format!("{current} is the last song here yet; the rest are arriving")
+            }
+            SongPick::Next => format!("{current} is the last song"),
+            SongPick::Previous => format!("{current} is the first song"),
+            SongPick::At(at) if at == set.at => format!("already on {current}"),
+            SongPick::At(_) => format!("the set has {} songs", set.songs.len()),
+        });
+    };
+    let title = set.songs[index].0.clone();
+    crate::projects::pick_song_from_outside(SongPick::At(index));
+    Ok(format!("going to {title} (song {})", index + 1))
+}
+
+#[cfg(feature = "native")]
 static STREAMS: ActionMeta = meta(
     "SESSION_STREAMS",
     "session_streams",
@@ -2507,6 +2608,33 @@ fn register_save(list: &ActionList) -> Result<(), architect::action::ActionError
         });
         Ok(said)
     })?;
+    list.register(&SONGS, Effect::ReadOnly, |(): ()| {
+        let Some(set) = crate::projects::open_set() else {
+            return Ok(Vec::new());
+        };
+        let open = set
+            .songs
+            .iter()
+            .enumerate()
+            .map(|(i, (title, project))| OpenSong {
+                number: u32::try_from(i + 1).unwrap_or(u32::MAX),
+                title: title.clone(),
+                project: project.clone(),
+                current: i == set.at,
+                state: "open".to_owned(),
+            });
+        let arriving = set.arriving.iter().enumerate().map(|(i, title)| OpenSong {
+            number: u32::try_from(set.songs.len() + i + 1).unwrap_or(u32::MAX),
+            title: title.clone(),
+            project: String::new(),
+            current: false,
+            state: "arriving".to_owned(),
+        });
+        Ok(open.chain(arriving).collect::<Vec<_>>())
+    })?;
+    list.register(&SONG, Effect::Mutating, |a: SongArg| pick_song(&a.to))?;
+    list.register(&SONG_NEXT, Effect::Mutating, |(): ()| pick_song("next"))?;
+    list.register(&SONG_PREV, Effect::Mutating, |(): ()| pick_song("previous"))?;
     list.register(&ALTERNATIVES, Effect::ReadOnly, |(): ()| {
         let (daw, project) = song()?;
         let ProjectContext::Project(guid) = &project else {

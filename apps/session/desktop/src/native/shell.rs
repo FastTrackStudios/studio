@@ -287,6 +287,38 @@ pub fn Shell() -> Element {
     };
     // The record view's song menu picks the same way.
     use_context_provider(|| session_daw::record_view::PickSong(Callback::new(pick)));
+    // The set as the Action List sees it (`SESSION_SONGS`), kept to what is
+    // shown; and a song asked for there (`SESSION_SONG`) picked as a click
+    // on its tab picks it.
+    use_effect(move || {
+        let list = setlist.read();
+        session_daw::projects::show_open_set(Some(session_daw::projects::OpenSet {
+            songs: list
+                .songs
+                .iter()
+                .map(|song| (song.title(), song.project.clone()))
+                .collect(),
+            at: list.at,
+            arriving: list.pending.clone(),
+        }));
+    });
+    use_drop(|| session_daw::projects::show_open_set(None));
+    use_future(move || async move {
+        let mut pick = pick;
+        loop {
+            futures_timer::Delay::new(std::time::Duration::from_millis(150)).await;
+            let Some(asked) = session_daw::projects::take_song_pick() else {
+                continue;
+            };
+            let (at, len) = {
+                let list = setlist.peek();
+                (list.at, list.songs.len())
+            };
+            if let Some(index) = asked.index(at, len) {
+                pick(index);
+            }
+        }
+    });
     // On iOS: the device's audio session, for Settings → This device.
     #[cfg(target_os = "ios")]
     use_context_provider(|| session_daw::device_audio::DeviceAudio {

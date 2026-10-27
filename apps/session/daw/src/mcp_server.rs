@@ -51,6 +51,49 @@ not the truth: a live drummer plays other fills.";
 /// off or could not be served (said in the log).
 pub fn start() -> Option<architect_mcp::http::Serving> {
     let runtime = crate::open::runtime()?;
+    let serving = match serve(runtime) {
+        Ok(Some(serving)) => serving,
+        Ok(None) => return None,
+        // A relaunch (`dx serve`, an update) starts before the process it
+        // replaces lets go of the port: tried again behind, for a while.
+        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
+            std::thread::spawn(move || {
+                for _ in 0..PORT_TRIES {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    match serve(runtime) {
+                        Ok(Some(serving)) => {
+                            announce(&serving);
+                            return;
+                        }
+                        Ok(None) => return,
+                        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {}
+                        Err(e) => {
+                            tracing::warn!(error = %e, "mcp: not served");
+                            return;
+                        }
+                    }
+                }
+                tracing::warn!(error = %error, "mcp: not served, the port stayed taken");
+            });
+            return None;
+        }
+        Err(error) => {
+            tracing::warn!(error = %error, "mcp: not served");
+            return None;
+        }
+    };
+    announce(&serving);
+    Some(serving)
+}
+
+/// Tries at the port while another process still holds it, half a second
+/// apart.
+const PORT_TRIES: u32 = 30;
+
+/// The Action List served on `runtime`, once.
+fn serve(
+    runtime: &'static tokio::runtime::Runtime,
+) -> std::io::Result<Option<architect_mcp::http::Serving>> {
     let server = architect_mcp::Server::new(
         "FastTrackStudio Session",
         env!("CARGO_PKG_VERSION"),
@@ -59,7 +102,7 @@ pub fn start() -> Option<architect_mcp::http::Serving> {
     .with_instructions(INSTRUCTIONS);
     // On a thread of its own: a caller on a runtime worker can't block on
     // the runtime.
-    let served = std::thread::scope(|scope| {
+    std::thread::scope(|scope| {
         scope
             .spawn(move || {
                 runtime.block_on(server.serve_loopback_or(
@@ -69,19 +112,12 @@ pub fn start() -> Option<architect_mcp::http::Serving> {
                 ))
             })
             .join()
-    });
-    let serving = match served {
-        Ok(Ok(Some(serving))) => serving,
-        Ok(Ok(None)) => return None,
-        Err(_) => {
-            tracing::warn!("mcp: not served, starting it panicked");
-            return None;
-        }
-        Ok(Err(error)) => {
-            tracing::warn!(error = %error, "mcp: not served");
-            return None;
-        }
-    };
+    })
+    .unwrap_or_else(|_| Err(std::io::Error::other("starting it panicked")))
+}
+
+/// Say where the Action List is served: in the discovery file and the log.
+fn announce(serving: &architect_mcp::http::Serving) {
     if let Err(error) = serving.publish(DISCOVERY_NAME) {
         tracing::warn!(error = %error, "mcp: could not write where it is served");
     }
@@ -91,5 +127,4 @@ pub fn start() -> Option<architect_mcp::http::Serving> {
         mcp.actions = crate::actions::list().len(),
         "mcp: serving the Action List"
     );
-    Some(serving)
 }

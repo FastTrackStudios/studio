@@ -340,3 +340,90 @@ pub fn ago(at: u64) -> String {
         _ => format!("{} days ago", secs / 86_400),
     }
 }
+
+/// The set the window has open, as it last said: what `SESSION_SONGS`
+/// lists and `SESSION_SONG` picks from.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OpenSet {
+    /// The songs in order: their titles and engine projects.
+    pub songs: Vec<(String, String)>,
+    /// The current one, an index into `songs`.
+    pub at: usize,
+    /// Songs still on their way, by title, after `songs`.
+    pub arriving: Vec<String>,
+}
+
+/// Which song to go to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SongPick {
+    /// By its place in the set (0 the first).
+    At(usize),
+    Next,
+    Previous,
+}
+
+impl SongPick {
+    /// The index this lands on in a set of `len` songs at `at`; `None` past
+    /// either end, or when it is the song already current.
+    #[must_use]
+    pub fn index(&self, at: usize, len: usize) -> Option<usize> {
+        let to = match self {
+            Self::At(to) => *to,
+            Self::Next => at.checked_add(1)?,
+            Self::Previous => at.checked_sub(1)?,
+        };
+        (to < len && to != at).then_some(to)
+    }
+}
+
+static OPEN_SET: std::sync::Mutex<Option<OpenSet>> = std::sync::Mutex::new(None);
+static PICKED: std::sync::Mutex<Option<SongPick>> = std::sync::Mutex::new(None);
+
+/// What the window has open now (`None` when no set is) — the window says
+/// so whenever it changes.
+pub fn show_open_set(set: Option<OpenSet>) {
+    *OPEN_SET
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = set;
+}
+
+/// The set the window has open, as it last said.
+#[must_use]
+pub fn open_set() -> Option<OpenSet> {
+    OPEN_SET
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+}
+
+/// Ask the window to go to a song of its set, as a click on its tab does.
+pub fn pick_song_from_outside(pick: SongPick) {
+    *PICKED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pick);
+}
+
+/// The song asked for from outside, once.
+#[must_use]
+pub fn take_song_pick() -> Option<SongPick> {
+    PICKED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take()
+}
+
+#[cfg(test)]
+mod song_pick_tests {
+    use super::SongPick;
+
+    #[test]
+    fn a_pick_lands_inside_the_set_and_never_on_the_song_already_current() {
+        assert_eq!(SongPick::Next.index(0, 3), Some(1));
+        assert_eq!(SongPick::Next.index(2, 3), None, "past the last");
+        assert_eq!(SongPick::Previous.index(0, 3), None, "before the first");
+        assert_eq!(SongPick::Previous.index(2, 3), Some(1));
+        assert_eq!(SongPick::At(1).index(0, 3), Some(1));
+        assert_eq!(SongPick::At(0).index(0, 3), None, "already there");
+        assert_eq!(SongPick::At(7).index(0, 3), None);
+    }
+}
