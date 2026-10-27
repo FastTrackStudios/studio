@@ -407,6 +407,10 @@ pub enum MidiMod {
     RandomUnipolar,
     /// Alternates 0 / 1 on each note-on.
     Alt,
+    /// Omnisphere's Alt: bipolar, −1 on the first note (measured — a plain
+    /// Alt → pan row puts the first note hard left), then ±1 alternating
+    /// (assumed; a second note-on was not isolated).
+    AltBipolar,
     /// Always 1.0 (route depth = a constant offset).
     Constant,
     /// MPE per-note pressure (latest across voices), 0..1.
@@ -611,6 +615,9 @@ impl ControlSource for MidiSource {
                 (MidiMod::Alt, MidiEvent::NoteOn { velocity, .. }) if velocity.get() > 0 => {
                     v = if v > 0.5 { 0.0 } else { 1.0 };
                 }
+                (MidiMod::AltBipolar, MidiEvent::NoteOn { velocity, .. }) if velocity.get() > 0 => {
+                    v = if v < 0.0 { 1.0 } else { -1.0 };
+                }
                 _ => {}
             }
         }
@@ -703,6 +710,7 @@ impl ModSource {
             "random" | "random2" => MidiMod::Random,
             "random unipolar" => MidiMod::RandomUnipolar,
             "alt" => MidiMod::Alt,
+            "alt bipolar" => MidiMod::AltBipolar,
             "constant" | "bias" | "bias1" | "bias2" => MidiMod::Constant,
             "mpev" | "mpepressure" | "mpe pressure" => MidiMod::MpePressure,
             "mpe3" | "mpetimbre" | "mpe timbre" => MidiMod::MpeTimbre,

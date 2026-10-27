@@ -171,7 +171,8 @@ fn translate_source(source: &str) -> Option<String> {
         "Bender" => "Bender".to_string(),
         // Omnisphere's key source is bipolar about E4 (measured).
         "Key" => "Omni Key".to_string(),
-        "Alt" => "Alt".to_string(),
+        // Bipolar, −1 first (measured).
+        "Alt" => "Alt Bipolar".to_string(),
         "Constant" | "Bias1" | "Bias2" => "Constant".to_string(),
         "Random" | "Random2" => "Random".to_string(),
         // 0..1, not the bipolar Random (a Timbre row on it never goes
@@ -272,7 +273,10 @@ pub fn translate_route(
         // Harmonia mix.
         "Harmmix" => ("Soundsource", "harm_mix", 1.0),
         // Pan: the Amp's balance, in the same knob units.
-        "pan" => ("Amp", "pan", 1.0),
+        // Pan: measured, a layer's pan row pans the whole part (layer A's
+        // row moved layer B too, every layer's row on a part whose layers
+        // all play) — the part's pan stage, after the layer mix.
+        "pan" => ("Part Pan", "pan", 1.0),
         // The filter envelope's depth: a modulated depth on the envelope
         // itself (the section route then runs at unit depth; see below).
         "envdpth" => ("Filter Env", "amp", 1.0),
@@ -367,13 +371,20 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
         .collect();
     // Live routes bucketed per layer; the rest stay inspectable params.
     let mut layer_routes: Vec<Vec<(String, String, f32)>> = vec![Vec::new(); 4];
+    // Routes onto the part's own stages (after the layer mix).
+    let mut part_routes: Vec<(String, String, f32)> = Vec::new();
     for route in &patch.mod_routes {
         if let Some((idx, source, target, depth)) = translate_route(route, &filter_labels) {
-            layer_routes[idx].push((source, target.clone(), depth));
+            let bucket = if target.starts_with("Part Pan.") {
+                &mut part_routes
+            } else {
+                &mut layer_routes[idx]
+            };
+            bucket.push((source, target.clone(), depth));
             // `lo` shifts the target whatever the source does (same units).
             if route.offset != 0.0 && route.depth != 0.0 {
                 let offset = route.offset * depth / route.depth;
-                layer_routes[idx].push(("Constant".to_string(), target, offset));
+                bucket.push(("Constant".to_string(), target, offset));
             }
         }
     }
@@ -908,6 +919,15 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
     };
     let mut preset = Container::preset(title)
         .add(quadzone)
+        // The part's pan (centred; pan rows move it), ahead of its FX.
+        .add(
+            Container::module("Part Pan Stage").add(
+                RigBlock::of_type(BlockType::Amp)
+                    .named("Part Pan")
+                    .with_param("pan", "0.5000")
+                    .with_param("tremolo", "0.5000"),
+            ),
+        )
         .add(fx_rack_from(
             "Common FX",
             &patch.common_fx,
@@ -934,6 +954,9 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                 ),
         )
         .modulator(BlockType::ModMatrix, "Mod Matrix");
+    for (source, target, depth) in part_routes {
+        preset = preset.route(source, target, depth);
+    }
     for n in 1..=9usize {
         let mut lfo = RigBlock::of_type(BlockType::Lfo).named(format!("LFO {n}"));
         if let Some(l) = patch.lfos.get(n - 1) {

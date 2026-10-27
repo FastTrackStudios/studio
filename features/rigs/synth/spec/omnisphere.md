@@ -78,7 +78,13 @@ timing**: Speed (`AENVPARAMS spd`) is a time factor on every segment
 (`sampler::native::breakpoints::env_speed_time`: ×2.49 … ×1 at 0.5 …
 ×0.1 at 1); Key / Velocity rows onto `AmpEnv Speed` add to the knob, a
 Velocity row onto `AmpEnvAtk` takes `1 − depth·velocity²` of the attack —
-played per note, within a few % of the plugin.
+played per note, within a few % of the plugin. **Pan rows** (`X pan`,
+6 203 rows) pan the whole part, after the layer mix (layer A's row moved
+layer B too); **Alt** is bipolar, −1 on the first note (the toggle on
+later notes is assumed — the harness holds its earlier note into the
+next); **Random Unipolar** draws 0..1. Open: a `B pan` row on the init
+part (layer B switched on by its amp envelope only) does nothing in the
+plugin, while on a factory patch every layer's row pans the part.
 
 ## Status (2026-10-25)
 
