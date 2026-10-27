@@ -489,6 +489,20 @@ fn launch_app() {
             // app's own bars (the home's, the rig's, Session's).
             .with_unified_titlebar(true),
     ));
+    // The app id a desktop knows the window by (`studio`): what a window
+    // rule matches to put it on its workspace. Without one it had none.
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    let window = if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        window.with_platform_attributes(Box::new(
+            dioxus_native::winit::platform::wayland::WindowAttributesWayland::default()
+                .with_name("studio", "studio"),
+        ))
+    } else {
+        window.with_platform_attributes(Box::new(
+            dioxus_native::winit::platform::x11::WindowAttributesX11::default()
+                .with_name("studio", "studio"),
+        ))
+    };
     launch_cfg(
         front::Studio,
         vec![],
