@@ -1784,7 +1784,12 @@ pub(crate) fn build_sample_source(
         );
     }
     // A first-class Sample Soundsource.
-    Ok((crate::SamplerInstrument::new(engine), name))
+    let inst = crate::SamplerInstrument::new(engine);
+    let inst = match block.param_f32("mogrify") {
+        Some(m) => inst.with_mogrify(m),
+        None => inst,
+    };
+    Ok((inst, name))
 }
 
 /// A resident chain: its pre-built + prepared boxes (one per chain slot, in

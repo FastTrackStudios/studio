@@ -998,6 +998,9 @@ pub struct SampleEngine {
     /// cutoff offset (octaves), written per block by the mod engine.
     pitch_mod_st: f32,
     cutoff_mod_oct: f32,
+    /// How far into its sample a fresh note starts (ms; Omnisphere's
+    /// Mogrify — see [`Self::set_note_start_offset_ms`]). 0: the true start.
+    note_start_offset_ms: f32,
     /// Unison playback: `(voices, detune cents, stereo width)`. Every zone
     /// trigger spawns `voices` copies spread symmetrically across ±detune/2
     /// cents and panned by `width`, level-compensated 1/√n. `(1, _, _)` = off.
@@ -1278,6 +1281,7 @@ impl SampleEngine {
             tune_ratio: 1.0,
             pitch_mod_st: 0.0,
             cutoff_mod_oct: 0.0,
+            note_start_offset_ms: 0.0,
             unison: (1, 0.0, 0.0),
             zone_rr_counter: 0,
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,
@@ -1754,6 +1758,13 @@ impl SampleEngine {
             self.pitch_mod_st = semitones;
             self.apply_bend();
         }
+    }
+
+    /// Start every fresh note `ms` into its sample (read at note-on, so a
+    /// per-note source sets it note by note); the mid-sample start rises in
+    /// over 2 ms. Release voices keep their own start.
+    pub fn set_note_start_offset_ms(&mut self, ms: f32) {
+        self.note_start_offset_ms = ms.max(0.0);
     }
 
     /// A modulation offset in octaves on the voices' own filter cutoff.

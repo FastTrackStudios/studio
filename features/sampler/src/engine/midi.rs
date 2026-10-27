@@ -2717,6 +2717,21 @@ impl SampleEngine {
                 self.artic_class_for(&z.articulation)
             };
             let line = self.cur_line as u8;
+            // Mogrify: a fresh note starts part-way into its sample (file
+            // frames) and rises in over 2 ms, as Omnisphere's does; a
+            // release sample keeps its own start.
+            let (start, attack) =
+                if self.note_start_offset_ms > 0.0 && !matches!(voice_kind, VoiceKind::Release) {
+                    let skip = (f64::from(self.note_start_offset_ms) * f64::from(data.sample_rate)
+                        / 1000.0) as usize;
+                    (
+                        z.sample_start as usize + skip,
+                        self.attack_frames
+                            .max(crate::engine::ms_to_frames(2, self.sample_rate)),
+                    )
+                } else {
+                    (z.sample_start as usize, self.attack_frames)
+                };
             // Unison: spawn N detuned/panned copies (copies == 1 = normal).
             let (copies, det_cents, width) = self.unison;
             let copies = copies.max(1);
@@ -2756,16 +2771,13 @@ impl SampleEngine {
                     .with_artic_class(artic_class)
                     .with_choke_group(choke_group)
                     .with_pan(u_pan)
-                    .with_attack(self.attack_frames)
+                    .with_attack(attack)
                     .with_decay(self.decay_frames, self.sustain_level)
                     .with_amp_points(self.amp_points.clone(), self.sample_rate)
                     .with_filter_env(self.new_voice_filter(note))
                     .with_vibrato(self.vibrato)
                     .with_pitch_cents(transpose_cents + h_shift)
-                    .with_sample_window(
-                        z.sample_start as usize,
-                        (z.sample_end > 0).then_some(z.sample_end as usize),
-                    );
+                    .with_sample_window(start, (z.sample_end > 0).then_some(z.sample_end as usize));
                     if z.playback_mode.eq_ignore_ascii_case("reverse") {
                         voice = voice.reversed();
                     } else if zone_is_alternating_loop(z) {

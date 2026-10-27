@@ -43,6 +43,11 @@ pub struct SamplerInstrument {
     /// Hole detection carries across blocks: a dropout does not politely
     /// begin and end inside one callback.
     holes: crate::engine::HoleDetector,
+    /// The two pitch inputs, summed onto the engine's pitch offset:
+    /// `pitch_mod` (±12 st) and `tune` (±24 st, the synth oscillator's scale).
+    pitch_st: (f32, f32),
+    /// The patch's own Mogrify (0..1): the base a `mogrify` route adds onto.
+    mogrify: f32,
 }
 
 impl SamplerInstrument {
@@ -56,7 +61,20 @@ impl SamplerInstrument {
             scratch: Vec::new(),
             prev: (0.0, 0.0),
             holes: crate::engine::HoleDetector::default(),
+            pitch_st: (0.0, 0.0),
+            mogrify: 0.0,
         }
+    }
+
+    /// The patch's static Mogrify (0..1): fresh notes start
+    /// [`mogrify_offset_ms`] into their sample, and a `mogrify` route
+    /// modulates from here.
+    #[must_use]
+    pub fn with_mogrify(mut self, m: f32) -> Self {
+        self.mogrify = m.clamp(0.0, 1.0);
+        self.engine
+            .set_note_start_offset_ms(mogrify_offset_ms(self.mogrify));
+        self
     }
 
     /// Look at what we just produced, and count the artefacts a deadline
@@ -169,6 +187,26 @@ impl SamplerInstrument {
     }
 }
 
+/// Omnisphere's Mogrify as a start offset (ms into the sample), measured on
+/// a sampled piano at its root key (the plain note matched shifted by this
+/// much): 0.05 → 25, 0.1 → 34, 0.25 → 51, 0.5 → 84, 0.75 → 136, 1 → 257.
+#[must_use]
+pub fn mogrify_offset_ms(m: f32) -> f32 {
+    const LAW: [(f32, f32); 7] = [
+        (0.0, 0.0),
+        (0.05, 25.0),
+        (0.1, 34.0),
+        (0.25, 51.0),
+        (0.5, 84.0),
+        (0.75, 136.0),
+        (1.0, 257.0),
+    ];
+    let m = m.clamp(0.0, 1.0);
+    LAW.windows(2).find(|w| m <= w[1].0).map_or(257.0, |w| {
+        w[0].1 + (w[1].1 - w[0].1) * (m - w[0].0) / (w[1].0 - w[0].0)
+    })
+}
+
 // r[impl signal.soundsource.sample]
 impl Soundsource for SamplerInstrument {
     fn kind(&self) -> SoundsourceKind {
@@ -201,7 +239,9 @@ impl Soundsource for SamplerInstrument {
 
     /// Modulation inputs a route can drive (0.5 = none): `pitch_mod`
     /// ±12 semitones on every voice, `cutoff_mod` ±4 octaves on the voices'
-    /// own filter.
+    /// own filter, `tune` ±24 semitones (the synth oscillator's scale, so a
+    /// pitch route lands the same on either), and `mogrify` 0..1 — how far
+    /// into its sample a fresh note starts ([`mogrify_offset_ms`]).
     fn params(&self) -> Vec<PluginParamInfo> {
         let mk = |id, name: &str| PluginParamInfo {
             id,
@@ -210,14 +250,34 @@ impl Soundsource for SamplerInstrument {
             max: 1.0,
             default: 0.5,
         };
-        vec![mk(0, "pitch_mod"), mk(1, "cutoff_mod")]
+        vec![
+            mk(0, "pitch_mod"),
+            mk(1, "cutoff_mod"),
+            mk(2, "tune"),
+            PluginParamInfo {
+                id: 3,
+                name: "mogrify".into(),
+                min: 0.0,
+                max: 1.0,
+                default: f64::from(self.mogrify),
+            },
+        ]
     }
 
     fn set_param(&mut self, id: u32, value: f64) {
-        let v = (value as f32).clamp(0.0, 1.0) - 0.5;
+        let raw = (value as f32).clamp(0.0, 1.0);
+        let v = raw - 0.5;
         match id {
-            0 => self.engine.set_pitch_mod(v * 24.0),
+            0 => {
+                self.pitch_st.0 = v * 24.0;
+                self.engine.set_pitch_mod(self.pitch_st.0 + self.pitch_st.1);
+            }
             1 => self.engine.set_cutoff_mod(v * 8.0),
+            2 => {
+                self.pitch_st.1 = v * 48.0;
+                self.engine.set_pitch_mod(self.pitch_st.0 + self.pitch_st.1);
+            }
+            3 => self.engine.set_note_start_offset_ms(mogrify_offset_ms(raw)),
             _ => {}
         }
     }

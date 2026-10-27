@@ -38,6 +38,10 @@ def preset(target, lfo, route):
         xml = S.edit(xml, "FILTER", {"act": S.hexf(1.0), "type1": S.hexf(0.22),
                                      "freq": S.hexf(float(os.environ.get("CUTOFF", "0.35"))),
                                      "envdpth": "0", "res": "0", "key": "0"})
+    elif os.environ.get("BASE"):
+        # Any part (e.g. a sample layer), drift off: LFO1 drives its layer A.
+        xml = open(os.environ["BASE"], encoding="latin-1").read()
+        xml = S.edit(xml, "OSC", {"sana": "0", "odrft": "0"})
     else:
         xml = S.base_xml()
     a = xml.index("<LFO_SET")
@@ -50,7 +54,8 @@ def preset(target, lfo, route):
     mm = re.search(r"<MOD_MATRIX\b[^>]*>", xml)
     t = mm.group(0)
     src = os.environ.get("SOURCE", "LFO1")
-    t = t.replace('source0="off"', f'source0="{src}"', 1).replace('target0="off"', f'target0="{TARGET[target]}"', 1)
+    t = re.sub(r'(\ssource0=)"[^"]*"', rf'\1"{src}"', t, count=1)
+    t = re.sub(r'(\starget0=)"[^"]*"', rf'\1"{TARGET[target]}"', t, count=1)
     t = re.sub(r'(\slo0=)"[^"]*"', r'\1"%s"' % S.hexf(route.get("lo", 0.0)), t)
     t = re.sub(r'(\shi0=)"[^"]*"', r'\1"%s"' % S.hexf(route.get("hi", 0.5)), t)
     if "defV" in route:

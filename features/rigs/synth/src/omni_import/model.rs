@@ -84,6 +84,10 @@ pub struct OmniLayer {
     pub unison_octave: f32,
     pub unison_analog: f32,
     pub unison_drift: f32,
+    /// Mogrify (`MULTISAMPLE` / older `OSC mogrify`, 0..1): measured, a
+    /// sample layer's fresh notes start this far into their sample (a synth
+    /// layer ignores it).
+    pub mogrify: f32,
     /// The Waveshaper sits after the filter (`WAVESHAPER pos` past 0).
     pub shaper_post: bool,
     /// The Waveshaper's sine fold 0..1 (type 0's depth) and its gain in.
@@ -1333,6 +1337,10 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
         layer.release_vol = ss_attrs
             .and_then(|m| m.num("relVol"))
             .map(|t| t.clamp(0.0, 1.0));
+        layer.mogrify = ss_attrs
+            .and_then(|m| m.num("mogrify"))
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0);
         if let Some(f) = voice.child("FILTER") {
             layer.filter_name = f.attr("NameStr").unwrap_or("").to_string();
             layer.filter_parallel = f.num("para").unwrap_or(0.0) != 0.0;

@@ -219,7 +219,11 @@ pub fn translate_route(
         // The filter envelope's depth: a modulated depth on the envelope
         // itself (the section route then runs at unit depth; see below).
         "envdpth" => ("Filter Env", "amp", 1.0),
-        _ => return None, // hrdsnc/mogrify/timbre/LFO-param/E1P0/… — later
+        // Mogrify: a sample layer's start offset for each fresh note
+        // (measured; see `sampler::instrument::mogrify_offset_ms`) — a
+        // Random row varies it note by note.
+        "mogrify" => ("Soundsource", "mogrify", 1.0),
+        _ => return None, // timbre/LFO-param/E1P0/… — later
     };
     let source = translate_source(&route.source)?;
     Some((
@@ -562,6 +566,9 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
             );
             // Timbre Shift takes the zones of a lower key (positive); the
             // layer's Octave / Semi take the zones of the shifted note.
+            if layer.mogrify > 0.0 {
+                sb = sb.with_param("mogrify", format!("{:.4}", layer.mogrify));
+            }
             let timbre = layer.timbre_semis() - layer.key_shift as i32;
             if timbre != 0 {
                 sb = sb.with_param("timbre_semis", timbre.to_string());
