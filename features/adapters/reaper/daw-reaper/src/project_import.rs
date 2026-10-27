@@ -272,16 +272,18 @@ fn emit_rpp_to_context(
 fn import_ableton(path: &str) -> Result<String, Box<dyn std::error::Error>> {
     let set = ableton::read_live_set(path)?;
 
-    let mut builder = ReaperProjectBuilder::new();
-    builder = builder.tempo_with_time_sig(
-        set.tempo,
-        set.time_signature.numerator as i32,
-        set.time_signature.denominator as i32,
-    );
-
     // Live keeps every position in beats; REAPER keeps seconds. Everything
     // placed on the timeline goes through the set's tempo map.
     let map = ableton::tempo::TempoMap::of(&set);
+
+    // The tempo it starts at: its automation's, when it has any (the
+    // set's own `Manual` tempo is then only where the knob was left).
+    let mut builder = ReaperProjectBuilder::new();
+    builder = builder.tempo_with_time_sig(
+        map.bpm_at(0.0),
+        set.time_signature.numerator as i32,
+        set.time_signature.denominator as i32,
+    );
 
     // Tempo automation. Live parks a breakpoint far before the
     // arrangement; what it says at 0 is the map's first point.

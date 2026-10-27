@@ -79,8 +79,11 @@ pub fn parse_tempo_automation(master_node: Node<'_, '_>) -> Vec<AutomationPoint>
         }
     }
 
-    // Filter out the sentinel event at -63072000 beats (Ableton internal)
-    points.retain(|p| p.time > -60_000_000.0);
+    // Live parks the envelope's first breakpoint far before the arrangement
+    // (-63072000 beats): it is the tempo the set starts at — a set whose
+    // tempo lives in its automation says nothing else about it (`Manual` is
+    // then whatever the knob was left at). Kept: `TempoMap` reads the tempo
+    // at beat 0 off it, and a set written back needs it.
     points.sort_by(|a, b| {
         a.time
             .partial_cmp(&b.time)
@@ -184,5 +187,41 @@ fn decode_time_signature(encoded: u32) -> TimeSignature {
     TimeSignature {
         numerator: numerator.min(255) as u8,
         denominator: denominator.min(255) as u8,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_tempo_automation;
+    use crate::tempo::TempoMap;
+
+    /// JT's recital: the knob says 120, the automation starts at 160 and
+    /// drops to 116 at beat 768.
+    const MASTER: &str = r#"<MainTrack>
+        <AutomationEnvelopes><Envelopes>
+          <AutomationEnvelope Id="1">
+            <EnvelopeTarget><PointeeId Value="8" /></EnvelopeTarget>
+            <Automation><Events>
+              <FloatEvent Id="1" Time="-63072000" Value="160" />
+              <FloatEvent Id="2" Time="768" Value="160" />
+              <FloatEvent Id="3" Time="768" Value="116" />
+            </Events></Automation>
+          </AutomationEnvelope>
+        </Envelopes></AutomationEnvelopes>
+        <DeviceChain><Mixer><Tempo>
+          <Manual Value="120" />
+          <AutomationTarget Id="8" />
+        </Tempo></Mixer></DeviceChain>
+      </MainTrack>"#;
+
+    #[test]
+    fn a_tempo_kept_in_automation_starts_where_the_automation_does() {
+        let doc = roxmltree::Document::parse(MASTER).expect("xml");
+        let points = parse_tempo_automation(doc.root_element());
+        let map = TempoMap::new(120.0, &points);
+        assert!((map.bpm_at(0.0) - 160.0).abs() < 1e-9, "not the knob's 120");
+        // 768 beats at 160 bpm, then 116.
+        assert!((map.seconds_at(768.0) - 288.0).abs() < 1e-9);
+        assert!((map.bpm_at(800.0) - 116.0).abs() < 1e-9);
     }
 }
