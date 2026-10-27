@@ -690,7 +690,25 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                     None => "0.5000".to_string(),
                 },
             );
-            osc.add(sb)
+            let osc = osc.add(sb);
+            // Timbre's other mode (`tbmd` 0) filters instead of remapping.
+            match layer
+                .timbre
+                .filter(|_| !layer.timbre_remap)
+                .and_then(super::model::timbre_filter_hz)
+            {
+                Some(hz) => osc.add(
+                    RigBlock::of_type(BlockType::Filter)
+                        .named("Timbre Filter")
+                        .with_param("mode", "highpass")
+                        .with_param("poles", "4")
+                        .with_param(
+                            "cutoff",
+                            format!("{:.4}", sampler::native::NativeFilter::norm_from_cutoff(hz)),
+                        ),
+                ),
+                None => osc,
+            }
         } else {
             // An empty index is a structure-only import (the lane knobs'
             // seeding reads LFO depths from one) — nothing is missing then,

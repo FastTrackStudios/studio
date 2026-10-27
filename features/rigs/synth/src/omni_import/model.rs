@@ -988,6 +988,38 @@ const FILTER_MODELS: &[(u32, FilterModel)] = &[
     (0x3f7d70d4, FilterModel { name: "State Variable OB", mode: "notch", poles: 2, ladder: false, taper: [0.2973, 0.3746, 0.5000, 0.3746, 0.7492], res: (0.707, 0.707, 1.000), res_shift: 1.000, res_shift_curve: 1.000, gain_db: -1.9, comp: 0.00 }),
 ];
 
+/// Timbre's other mode (`tbmd` 0) as the plugin plays it above 0.65: a
+/// steep high-pass (24 dB/oct) whose corner rises with the knob — measured
+/// on a piano and a cello (their corners within ~20 %; the mean here), each
+/// fit to the harmonics below 1.2 kHz, where the two agree. Up to 0.65 it
+/// does nothing (0.35–0.65 measured flat); below 0.35 the two sources part
+/// ways (a piano low-passes near 0, a cello brightens) — not modelled. Its
+/// broadband level and the cello's lifted highs above 0.7 are not either.
+#[must_use]
+pub fn timbre_filter_hz(t: f32) -> Option<f32> {
+    const LAW: [(f32, f32); 9] = [
+        (0.66, 105.0),
+        (0.68, 280.0),
+        (0.70, 375.0),
+        (0.72, 510.0),
+        (0.74, 695.0),
+        (0.76, 900.0),
+        (0.80, 1150.0),
+        (0.90, 1600.0),
+        (1.00, 1800.0),
+    ];
+    if t <= 0.65 {
+        return None;
+    }
+    if t <= LAW[0].0 {
+        return Some(LAW[0].1);
+    }
+    LAW.windows(2).find(|w| t <= w[1].0).map(|w| {
+        let x = (t - w[0].0) / (w[1].0 - w[0].0);
+        (w[0].1.ln() + x * (w[1].1.ln() - w[0].1.ln())).exp()
+    })
+}
+
 /// A model's resonance knob → Q, measured where the fitted `res` curve
 /// cannot follow it — and these play the SVF's raw band output (peak gain
 /// = Q, so resonance raises the level; `gain_db` then stays 0).
