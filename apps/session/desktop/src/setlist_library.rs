@@ -1,8 +1,8 @@
 //! Home page data layer: the two on-disk track libraries + the setlist
 //! notes saved under them.
 //!
-//! Reuses `session-vault-sync` (built for the `session-vault-sync` /
-//! `session-player` CLIs) rather than re-implementing scanning or note
+//! Reuses `session::vault_sync` (built for the `studio vault-sync` /
+//! `studio player` commands) rather than re-implementing scanning or note
 //! writing here — this module is just "aggregate multiple roots" +
 //! "list/read/write setlist notes" glue on top of it.
 

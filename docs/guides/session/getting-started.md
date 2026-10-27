@@ -6,9 +6,9 @@ rigs), other Session instances, and Ignition (lighting). This is the first
 slice: turning a raw folder of stems into a real, portable Song Library,
 and setlists that are just markdown with `[[wikilinks]]`.
 
-## `session-vault-sync`
+## `studio vault-sync`
 
-`session::vault_sync` (the session app's `session-vault-sync` tool) scans a Tracks folder — by
+`session::vault_sync` (the `studio vault-sync` command) scans a Tracks folder — by
 default `/home/cody/Task/days-to-praise/Assets/Tracks`, one folder per
 song named `"{Title} - {Artist}"` (no key — that's tag data, not a
 filename) — and writes a `type: song` note **directly into that song's
@@ -52,11 +52,11 @@ siblings) — that file happened to already have accurate transcriptions
 for exactly these six songs.
 
 ```bash
-cargo run -p session-desktop --features cli --bin session-vault-sync -- list-songs         # preview, writes nothing
-cargo run -p session-desktop --features cli --bin session-vault-sync -- sync-library        # writes a .md into each song's own folder
-cargo run -p session-desktop --features cli --bin session-vault-sync -- create-setlist "Sunday, August 30 2026" \
+cargo run -p studio-desktop --features cli --bin studio -- vault-sync list-songs         # preview, writes nothing
+cargo run -p studio-desktop --features cli --bin studio -- vault-sync sync-library        # writes a .md into each song's own folder
+cargo run -p studio-desktop --features cli --bin studio -- vault-sync create-setlist "Sunday, August 30 2026" \
     "Thank God I'm Free" "Washed" "Holy Forever"       # writes Assets/Setlists/…
-cargo run -p session-desktop --features cli --bin session-vault-sync -- build-projects      # writes a real .RPP per song (see below)
+cargo run -p studio-desktop --features cli --bin studio -- vault-sync build-projects      # writes a real .RPP per song (see below)
 ```
 
 A generated song note (`Tracks/Holy Forever - Bethel Music/Holy Forever - Bethel Music.md`):
@@ -135,8 +135,8 @@ kind of artifact (36 tracks: 23 stems + 13 buses) for `Praise` from
 nothing but its stem folder.
 
 ```bash
-cargo run -p session-desktop --features cli --bin session-vault-sync -- build-project "Holy Forever"  # one song
-cargo run -p session-desktop --features cli --bin session-vault-sync -- build-projects                # every song in the library
+cargo run -p studio-desktop --features cli --bin studio -- vault-sync build-project "Holy Forever"  # one song
+cargo run -p studio-desktop --features cli --bin studio -- vault-sync build-projects                # every song in the library
 ```
 
 Written as `"{Title} - {Artist}.RPP"` into the song's own folder, source
@@ -149,7 +149,7 @@ probing OGG duration needs a real decoder and a WAV header doesn't.
 Tempo/time-signature come from the song's `chart/*.kf` first line when
 present (`72bpm 4/4 #Bb` et al.), defaulting to 120bpm 4/4 otherwise.
 
-This is a generation step, not a live player — see the `session-player` tool (apps/session/desktop/src/bin/session-player.rs)
+This is a generation step, not a live player — see the `studio player` command (apps/session/desktop/src/cli/player.rs)
 below for that.
 
 ### The live scheme: `--live` / the Master Setlist Template
@@ -198,8 +198,8 @@ BUSES (one flat folder, fed by sends from the content tracks above):
 ```
 
 ```bash
-cargo run -p session-desktop --features cli --bin session-vault-sync -- build-project "Holy Forever" --live   # → "Holy Forever - Bethel Music (Live).RPP"
-cargo run -p session-desktop --features cli --bin session-vault-sync -- build-projects --live                 # every song, same scheme
+cargo run -p studio-desktop --features cli --bin studio -- vault-sync build-project "Holy Forever" --live   # → "Holy Forever - Bethel Music (Live).RPP"
+cargo run -p studio-desktop --features cli --bin studio -- vault-sync build-projects --live                 # every song, same scheme
 ```
 
 `classify(label: &str) -> LiveBus` (`live_bus.rs`) now runs
@@ -318,7 +318,7 @@ Washed reaches `ORCH` via Saxophone; Holy Forever has neither, and the
 file still closes cleanly).
 
 Not decided yet: whether `--live` should be the default for
-`build-projects` once it's proven out, and whether `session-player`
+`build-projects` once it's proven out, and whether `studio player`
 should switch from its current flat per-stem seeding to this same
 content/bus split (so the live player and the live `.RPP` agree on
 grouping) — today they're independent.
@@ -331,9 +331,9 @@ exists so a human — or a future importer — can find the real audio;
 exactly where it is since the note lives inside that same folder.
 `key:`/`artist:` are real fields Task's `SongFront` reader already knows.
 
-## The live player: the `session-player` tool (apps/session/desktop/src/bin/session-player.rs)
+## The live player: the `studio player` command (apps/session/desktop/src/cli/player.rs)
 
-`session-player` (crate `session-player`) plays a setlist for real —
+`studio player` plays a setlist for real —
 natively, no REAPER, no browser. It's driven by `daw-standalone` directly
 (the same engine `apps/session/desktop/src/session_engine.rs` uses for
 its in-process setlist player), not the RPC/vox facade that crate builds
@@ -341,9 +341,9 @@ for remote UIs — this is a local CLI, so it calls `Standalone`'s sync
 `Transport`/`Tracks` trait methods directly.
 
 ```bash
-cargo run -p session-desktop --features cli --bin session-player -- --setlist "Assets/Setlists/Testing/Sunday, August 30 2026.md"
+cargo run -p studio-desktop --features cli --bin studio -- player --setlist "Assets/Setlists/Testing/Sunday, August 30 2026.md"
 # or, for a quick test without a setlist note:
-cargo run -p session-desktop --features cli --bin session-player -- "Thank God I'm Free" "Washed" "Holy Forever"
+cargo run -p studio-desktop --features cli --bin studio -- player "Thank God I'm Free" "Washed" "Holy Forever"
 ```
 
 What it does: reads the setlist note's `[[Title - Artist]]` links (same
@@ -414,7 +414,7 @@ guide is a record of), so the gaps are known rather than accidental:
   is built: either a new `ShareTarget` with its own guest lane, or a
   dedicated unauthenticated HTTP path patterned on
   `share_rendition_handler`/`share_download_handler`.
-- **No web/GUI player yet** — the `session-player` tool (apps/session/desktop/src/bin/session-player.rs) (above) is a
+- **No web/GUI player yet** — the `studio player` command (apps/session/desktop/src/cli/player.rs) (above) is a
   terminal REPL, which is enough to prove the whole chain end-to-end
   (setlist → resolved songs → seeded projects → real synced audio →
   mute/solo) but not what a musician wants open during rehearsal. Decided

@@ -1,4 +1,4 @@
-//! `session import` — a folder of multitracks becomes a session on the
+//! `studio import` — a folder of multitracks becomes a session on the
 //! grid.
 //!
 //! Commercial multitracks arrive as a pile of stems, all starting at the

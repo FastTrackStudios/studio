@@ -23,28 +23,14 @@ authors = ["FastTrackStudio"]
 # Fast-iteration build:
 #   cargo run -p session-desktop --no-default-features --features charts
 
-[[bin]]
-name = "session"
-path = "src/bin/session/main.rs"
-required-features = ["cli"]
-
-[[bin]]
-name = "session-player"
-path = "src/bin/session-player.rs"
-required-features = ["cli"]
-
-[[bin]]
-name = "session-vault-sync"
-path = "src/bin/session-vault-sync.rs"
-required-features = ["cli"]
-
 [features]
 # Two axes here -- Session and Charts. (The monorepo had a third, Signal;
 # it ships from the signal repo now.)
 default = ["session", "charts", "native"]
-# The command-line tools (src/bin/): `session` (drive a real REAPER's
-# setlist), `session-player` (the live multitrack setlist player) and
-# `session-vault-sync` (Task vault notes from the Song Library).
+# Session's command line (src/cli/, `session_desktop::cli`): the commands
+# the `studio` binary (apps/studio/desktop) puts at its top level — drive
+# the running window, the REAPER setlist, the live multitrack player,
+# Task vault notes. There is no `session` binary of its own.
 cli = [
     "studio?/reaper",
     "dawfile-reaper?/peaks-ogg",

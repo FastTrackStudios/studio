@@ -67,6 +67,10 @@ mod session_remote_view;
 mod collection_browser;
 // The browser chart pane: the active song's keyflow chart (CPU engraver →
 // SVG) with a playhead highlight driven by the transport streams.
+/// The command line (`--features cli`): Session's commands, which the
+/// `studio` binary (apps/studio/desktop) puts at its top level.
+#[cfg(all(feature = "cli", not(target_arch = "wasm32")))]
+pub mod cli;
 /// The app on Blitz — see `docs/app-on-blitz.md`. The desktop's, and the
 /// iPhone's: the same renderer and the same panels, laid out for the screen.
 #[cfg(all(feature = "native", not(target_arch = "wasm32")))]

@@ -1,4 +1,4 @@
-//! `session-vault-sync` — turns Task's `Assets/Tracks` folder into a real,
+//! `studio vault-sync` — turns Task's `Assets/Tracks` folder into a real,
 //! portable Song Library (one `.md` note per song, written INTO that
 //! song's own folder alongside its audio/lyrics/chart), and writes
 //! setlist notes in Task's own `[[wikilink]]` format under
@@ -7,17 +7,14 @@
 
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::Subcommand;
 use session::vault_sync::library::{self, LibrarySong};
 use session::vault_sync::setlist::resolve_song;
 use session::vault_sync::{live_bus, rpp, vault};
 
-#[derive(Parser)]
-#[command(
-    name = "session-vault-sync",
-    about = "Sync Task's Tracks folder into vault notes"
-)]
-struct Cli {
+/// `studio vault-sync`'s options.
+#[derive(clap::Args)]
+pub struct Args {
     /// Root of the Tracks folder to scan.
     #[arg(
         long,
@@ -44,7 +41,7 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
-enum Command {
+pub enum Command {
     /// Scan the Tracks folder and (re)write a `type: song` note for every
     /// song found, INSIDE that song's own folder — see `vault::write_song_notes`.
     SyncLibrary,
@@ -90,9 +87,9 @@ enum Command {
     },
 }
 
-fn main() -> std::process::ExitCode {
-    let cli = Cli::parse();
-
+/// Run one `studio vault-sync` command.
+#[must_use]
+pub fn run(cli: Args) -> std::process::ExitCode {
     match cli.command {
         Command::SyncLibrary => {
             let songs = library::scan(&cli.tracks_dir);

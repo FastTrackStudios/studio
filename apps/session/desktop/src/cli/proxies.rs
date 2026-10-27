@@ -1,4 +1,4 @@
-//! `session proxies` — Ogg Vorbis proxies of a session's media, written
+//! `studio proxies` — Ogg Vorbis proxies of a session's media, written
 //! beside it: `Media/Bass.wav` → `Media/Proxies/Bass.ogg`.
 //!
 //! A proxy is an ordinary file in the session folder, so it is versioned

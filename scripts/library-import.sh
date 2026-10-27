@@ -17,7 +17,7 @@
 # Safe to run again: a song already in the setlist is not added twice,
 # and its session files are re-put (unchanged ones are skipped). Env:
 #   TASK      the task binary            (default: ../task/target/debug/task)
-#   SESSION   the session binary         (default: target/release-fast/session)
+#   STUDIO    the studio binary          (default: target/release-fast/studio)
 #   REFERENCE the reference bouncer      (default: target/release-fast/reference)
 #   KIND      the collection kind        (default: songlist — keyflow's)
 #
@@ -57,7 +57,7 @@ run_task() {
 setlist="${1:?usage: library-import.sh <file.setlist> [--originals]}"
 originals="${2:-}"
 TASK="${TASK:-../task/target/debug/task}"
-SESSION="${SESSION:-target/release-fast/session}"
+STUDIO="${STUDIO:-target/release-fast/studio}"
 REFERENCE="${REFERENCE:-target/release-fast/reference}"
 KIND="${KIND:-songlist}"
 base="$(cd "$(dirname "$setlist")" && pwd)"
@@ -87,7 +87,7 @@ while IFS= read -r line; do
     echo "== $title${artist:+ — $artist} (${key:-no key})"
 
     if [[ ! -d "$folder/Media/Proxies" ]]; then
-        "$SESSION" proxies "$rpp" 2>&1 | grep -v SWELL | tail -1
+        "$STUDIO" proxies "$rpp" 2>&1 | grep -v SWELL | tail -1
     fi
     if [[ ! -f "$folder/Media/Proxies/Reference.ogg" ]]; then
         "$REFERENCE" "$folder" 2>&1 | grep -v SWELL | tail -1
@@ -119,7 +119,7 @@ while IFS= read -r line; do
     [[ -d "$folder/$name.session" ]] && run_task files put "$root" "$folder/$name.session" --to "$name.session"
     run_task files put "$root" "$folder/Media/Proxies" --to Media/Proxies
     # The waveform caches, so a song pulled with only its proxies still
-    # draws its waveforms (`session peaks` writes them, keyed by the
+    # draws its waveforms (`studio peaks` writes them, keyed by the
     # original's name).
     [[ -d "$folder/Media/Peaks" ]] && run_task files put "$root" "$folder/Media/Peaks" --to Media/Peaks
     if [[ "$originals" == "--originals" ]]; then

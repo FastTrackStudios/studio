@@ -53,9 +53,9 @@ web-dev: tailwind-web
 
 # ── CLI ──────────────────────────────────────────────────────────────────
 
-# Run the session CLI
+# Run the studio CLI (Session's commands are its top level)
 cli *ARGS:
-    cargo run -p session-desktop --features cli --bin session -- {{ARGS}}
+    cargo run -p studio-desktop --features cli --bin studio -- {{ARGS}}
 
 # ── Aliases ──────────────────────────────────────────────────────────────
 

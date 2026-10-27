@@ -30,12 +30,14 @@ authors = ["FastTrackStudio"]
 name = "studio-desktop"
 path = "src/main.rs"
 
-# The command lines (`--features cli`): `signal`, the rig and its tone
-# library without a GUI, and `fts-convert`, which swaps third-party plugin
-# instances in a REAPER project for FTS equivalents.
+# The command lines (`--features cli`): `studio`, FastTrackStudio's one
+# command line, every command at its top level — the running app, files,
+# the library and REAPER from session-desktop's `cli` module; the rig's
+# library and TONE3000 from src/bin/studio/ — and `fts-convert`, which swaps third-party plugin instances in a REAPER
+# project for FTS equivalents.
 [[bin]]
-name = "signal"
-path = "src/bin/signal/main.rs"
+name = "studio"
+path = "src/bin/studio/main.rs"
 required-features = ["cli"]
 
 [[bin]]
@@ -53,8 +55,10 @@ workspace = true
 # skips the heavy `signal` rig (nam C++, lucide icons, webkit engine deps),
 # and `--no-default-features --features signal` leaves Session out.
 default = ["signal", "session-app", "tts", "doc-sync"]
-# The command-line tools (src/bin/): native only.
+# The command-line tools (src/bin/): native only. `studio` takes Session's
+# commands from session-desktop's `cli` feature.
 cli = [
+    "session-desktop/cli",
     "dep:builtin",
     "dep:clap",
     "dep:guitar",

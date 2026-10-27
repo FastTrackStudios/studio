@@ -1,4 +1,4 @@
-//! `signal tone3000 …` — the catalog, and the way captures reach the library.
+//! `studio tone3000 …` — the catalog, and the way captures reach the library.
 //!
 //! Every verb here drives [`signal_tone3000::client::Tone3000Backend`] directly. The
 //! backend is the engine's own, so the session, the image cache and the NAM
@@ -144,7 +144,7 @@ async fn status(backend: &Tone3000Backend, library: &std::path::Path, redirect: 
         println!("signed in   {} (via {})", status.username, status.via);
     } else if status.error.is_empty() {
         // Never having signed in is not a failure, and must not read as one.
-        println!("signed in   no — run `signal tone3000 login`");
+        println!("signed in   no — run `studio tone3000 login`");
     } else {
         println!("signed in   no ({})", status.error);
     }
@@ -260,8 +260,8 @@ async fn login(backend: &Tone3000Backend, redirect: &str) -> ExitCode {
             // The engine serves this same path, so this is the one place the
             // CLI and a running engine genuinely contend.
             eprintln!(
-                "cannot listen on port {port} ({e}) — a signal engine is probably\n\
-                 already running and serving this redirect. Stop it and retry, or\n\
+                "cannot listen on port {port} ({e}) — the rig engine (`studio-desktop --engine`) is\n\
+                 probably running and serving this redirect. Stop it and retry, or\n\
                  sign in from the app instead."
             );
             return ExitCode::FAILURE;

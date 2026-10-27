@@ -1,17 +1,17 @@
-//! `session app` — drive the Session window that is running, through its
-//! Action List over MCP (`session_daw::mcp_server`).
+//! Drive the Session window that is running (Studio's, or Session's own),
+//! through its Action List over MCP (`session_daw::mcp_server`).
 //!
 //! The window says where it listens in `$XDG_CONFIG_HOME/fts/session-mcp.json`
-//! (`~/.config/fts/…`); `FTS_MCP_URL` names another. `session app actions`
-//! lists what the window can do, `session app run <ACTION> [json]` runs
-//! one, and `open` / `open-setlist` are the two a test run starts with.
+//! (`~/.config/fts/…`); `FTS_MCP_URL` names another. `studio actions`
+//! lists what the window can do, `studio run <ACTION> [json]` runs one,
+//! and `studio open` is what a test run starts with.
 
 use std::time::Duration;
 
 use serde_json::{Value, json};
 
-/// Where the running window listens.
-fn url() -> eyre::Result<String> {
+/// Where the running window listens (`FTS_MCP_URL`, or what it published).
+pub fn window() -> eyre::Result<String> {
     if let Ok(url) = std::env::var("FTS_MCP_URL")
         && !url.is_empty()
     {
@@ -36,13 +36,16 @@ fn url() -> eyre::Result<String> {
         .ok_or_else(|| eyre::eyre!("{}: no url", file.display()))
 }
 
-/// One JSON-RPC call to the window; its `result`.
-fn call(url: &str, method: &str, params: Value) -> eyre::Result<Value> {
+/// How long one call to the window may take.
+pub const CALL_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// One JSON-RPC call to the window, waiting at most `timeout`; its `result`.
+fn call(url: &str, method: &str, params: Value, timeout: Duration) -> eyre::Result<Value> {
     let token = std::env::var("FTS_MCP_TOKEN")
         .ok()
         .filter(|t| !t.is_empty());
     let mut request = ureq::post(url)
-        .timeout(Duration::from_secs(60))
+        .timeout(timeout)
         .set("content-type", "application/json")
         .set("accept", "application/json, text/event-stream");
     if let Some(token) = token {
@@ -93,7 +96,11 @@ fn action_ids(action: &str) -> Vec<String> {
 /// Run `action` with `args` in the running window (its Action List's
 /// `run` tool); what it said.
 pub fn run(action: &str, args: Value) -> eyre::Result<String> {
-    let url = url()?;
+    run_within(&window()?, action, args, CALL_TIMEOUT)
+}
+
+/// [`run`] against the window at `url`, each call waiting at most `timeout`.
+pub fn run_within(url: &str, action: &str, args: Value, timeout: Duration) -> eyre::Result<String> {
     let mut last = None;
     for id in action_ids(action) {
         let mut params = json!({"id": id});
@@ -101,9 +108,10 @@ pub fn run(action: &str, args: Value) -> eyre::Result<String> {
             params["args"] = args.clone();
         }
         let result = call(
-            &url,
+            url,
             "tools/call",
             json!({"name": "run", "arguments": params}),
+            timeout,
         )?;
         match said(&id, &result) {
             Ok(text) => return Ok(text),
@@ -117,19 +125,19 @@ pub fn run(action: &str, args: Value) -> eyre::Result<String> {
             Err(e) => return Err(e),
         }
     }
-    Err(last
-        .unwrap_or_else(|| eyre::eyre!("no action {action:?} — `session app actions` lists them")))
+    Err(last.unwrap_or_else(|| eyre::eyre!("no action {action:?} — `studio actions` lists them")))
 }
 
 /// The running window's actions (its Action List's `actions` tool),
 /// filtered by `filter` when given.
 pub fn list(filter: Option<&str>) -> eyre::Result<()> {
-    let url = url()?;
+    let url = window()?;
     let args = filter.map_or_else(|| json!({}), |f| json!({"filter": f}));
     let result = call(
         &url,
         "tools/call",
         json!({"name": "actions", "arguments": args}),
+        CALL_TIMEOUT,
     )?;
     println!("{}", said("actions", &result)?);
     Ok(())

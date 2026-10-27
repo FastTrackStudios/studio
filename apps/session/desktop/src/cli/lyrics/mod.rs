@@ -1,4 +1,4 @@
-//! `session lyrics fetch` — line-synced lyrics for a song, written as
+//! `studio lyrics fetch` — line-synced lyrics for a song, written as
 //! `<Song>.lrc` beside its `.RPP`.
 //!
 //! What to look for comes from the song's chart (`<Song>.kf` beside the
@@ -9,11 +9,11 @@
 //! closest to ours is the one our arrangement was built on.
 //!
 //! ```text
-//! session lyrics fetch Praise/Praise.RPP             # search, pick by length, write Praise.lrc
-//! session lyrics fetch */*.RPP                       # a whole setlist
-//! session lyrics fetch Praise.RPP --pick 2           # take the second listed candidate instead
-//! session lyrics fetch Praise.RPP --lrclib-id 123    # this exact LRCLIB record
-//! session lyrics fetch X.RPP --title T --artist A    # when the chart is missing or wrong
+//! studio lyrics fetch Praise/Praise.RPP             # search, pick by length, write Praise.lrc
+//! studio lyrics fetch */*.RPP                       # a whole setlist
+//! studio lyrics fetch Praise.RPP --pick 2           # take the second listed candidate instead
+//! studio lyrics fetch Praise.RPP --lrclib-id 123    # this exact LRCLIB record
+//! studio lyrics fetch X.RPP --title T --artist A    # when the chart is missing or wrong
 //! ```
 
 mod lrclib;
@@ -30,7 +30,7 @@ use provider::{Candidate, LyricsProvider, Query};
 /// purpose of preferring the studio cut over a live one.
 const TIE_SECONDS: f64 = 3.0;
 
-/// `session lyrics fetch`'s options.
+/// `studio lyrics fetch`'s options.
 pub struct FetchArgs {
     pub paths: Vec<PathBuf>,
     pub title: Option<String>,
@@ -121,7 +121,7 @@ fn run_one(
     args: &FetchArgs,
     span: &tracing::Span,
 ) -> eyre::Result<&'static str> {
-    let rpp = crate::proxies::project_file(path)?;
+    let rpp = crate::cli::proxies::project_file(path)?;
     println!("{}", rpp.display());
     let out = rpp.with_extension("lrc");
     if out.exists() && !args.force {

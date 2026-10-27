@@ -73,8 +73,8 @@ clients ── vox / Action List (MCP) ── the engine
    becomes a view of engine state; picks, opens and arrivals go through
    the actions; the window subscribes.
 4. **Loading**: songs open on workers with the first one prioritised; a
-   frame-time check fails when a load stalls a client frame; `session app
-   open-setlist --bench` times request → first song playable → all local
+   frame-time check fails when a load stalls a client frame; `studio open
+   <setlist> --bench` times request → first song playable → all local
    (target: JT's Senior Recital under one second from local disk).
 5. **Show offsets and timecode**: `show.rs` writes each song's show offset;
    a show transport plays the set on the show timeline; edits written back

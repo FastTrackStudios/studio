@@ -1,4 +1,4 @@
-//! `signal rig …` — the guitar rig's library, without the app.
+//! `studio rig …` — the guitar rig's library, without the app.
 
 use std::process::ExitCode;
 
@@ -449,7 +449,7 @@ pub fn run(command: Command) -> ExitCode {
             };
             if s.frozen_nam.is_empty() {
                 eprintln!(
-                    "{preset} · {snapshot} has not been frozen — `signal rig freeze` it first"
+                    "{preset} · {snapshot} has not been frozen — `studio rig freeze` it first"
                 );
                 return ExitCode::FAILURE;
             }
@@ -650,7 +650,7 @@ pub fn run(command: Command) -> ExitCode {
     }
 }
 
-/// `signal rig reload`: drop a request into the rig directory, wait for the
+/// `studio rig reload`: drop a request into the rig directory, wait for the
 /// running rig to answer it (it deletes the request), and print its report
 /// lines from the reload log.
 fn reload(timeout: u64) -> ExitCode {

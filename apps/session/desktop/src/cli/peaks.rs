@@ -1,7 +1,7 @@
-//! `session peaks` — the waveform cache for a session's media, written
+//! `studio peaks` — the waveform cache for a session's media, written
 //! beside it: `Media/Bass.wav` → `Media/Peaks/Bass.wav.sessionpeaks`.
 //!
-//! The same shape as [`crate::proxies`], for the same reason: a cache
+//! The same shape as [`super::proxies`], for the same reason: a cache
 //! that lives in the session folder is versioned with the session,
 //! synced with it, and *served* with it. A share link hands out any
 //! non-media file whole, so the browser fetches
@@ -27,7 +27,7 @@ use std::time::Instant;
 use dawfile_reaper::reapeaks::ReaPeaks;
 use dawfile_reaper::sessionpeaks;
 
-use crate::proxies::{project_file, proxy_of, sources};
+use super::proxies::{project_file, proxy_of, sources};
 
 /// What happened to one media file.
 enum Outcome {

@@ -1,10 +1,10 @@
-//! `session-player` — plays a setlist's multitracks, natively.
+//! `studio player` — plays a setlist's multitracks, natively.
 //!
 //! Loads songs (from a `type: setlist` note's `[[wikilink]]`s, or bare
 //! titles for a quick test), builds each song's real Master Setlist
 //! Template project in-process
 //! (`session::vault_sync::live_bus::build_live_rpp` — the exact generator
-//! `session-vault-sync build-project --live` writes to disk, just not
+//! `studio vault-sync build-project --live` writes to disk, just not
 //! written here) and loads it via
 //! `daw_standalone::project_loader::load_rpp_via_bay` — a real RPP
 //! parse + audio materialize, the same pipeline that would load any
@@ -17,7 +17,6 @@
 use std::io::Write as _;
 use std::path::PathBuf;
 
-use clap::Parser;
 // `Transport` names both the RPC trait and a plain data struct in
 // `daw_proto`, at the same top-level path — the struct's named
 // re-export shadows the trait's glob one there. `transport::service`
@@ -34,12 +33,9 @@ use session::vault_sync::library::{self, LibrarySong};
 use session::vault_sync::live_bus;
 use session::vault_sync::setlist::{parse_setlist_links, resolve_song};
 
-#[derive(Parser)]
-#[command(
-    name = "session-player",
-    about = "Play a setlist's multitracks, natively"
-)]
-struct Cli {
+/// `studio player`'s options.
+#[derive(clap::Args)]
+pub struct Args {
     /// Root of the Tracks folder to scan.
     #[arg(long, default_value = "/home/cody/Task/Assets/days-to-praise/Tracks")]
     tracks_dir: PathBuf,
@@ -149,15 +145,15 @@ fn find_track(daw: &Standalone, guid: &str, name: &str) -> Option<Track> {
         .find(|t| t.name.to_lowercase().contains(&needle))
 }
 
-// `daw-standalone`'s loading/seeding/audio-engine calls spawn background
-// tasks via `architect::platform::spawn` internally even though the
-// surface API is plain sync — they panic ("no reactor running") without
-// an ambient Tokio runtime, so this needs one even though nothing here
-// ever `.await`s.
-#[tokio::main]
-async fn main() -> std::process::ExitCode {
-    let cli = Cli::parse();
-
+/// Load the songs and play them, driven from stdin until `quit` or EOF.
+///
+/// `daw-standalone`'s loading/seeding/audio-engine calls spawn background
+/// tasks via `architect::platform::spawn` internally even though the
+/// surface API is plain sync — they panic ("no reactor running") without
+/// an ambient Tokio runtime, so this must run inside one (`studio` calls it
+/// from its `block_on`) even though nothing here ever `.await`s.
+#[must_use]
+pub fn run(cli: Args) -> std::process::ExitCode {
     let known = library::scan(&cli.tracks_dir);
     if known.is_empty() {
         eprintln!("no songs found under {}", cli.tracks_dir.display());
@@ -175,7 +171,7 @@ async fn main() -> std::process::ExitCode {
         None => cli.songs.clone(),
     };
     if wanted.is_empty() {
-        eprintln!("usage: session-player --setlist <note.md>  |  session-player <song> [song...]");
+        eprintln!("usage: studio player --setlist <note.md>  |  studio player <song> [song...]");
         return std::process::ExitCode::FAILURE;
     }
 
