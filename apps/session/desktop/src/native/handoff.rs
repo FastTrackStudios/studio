@@ -5,11 +5,11 @@
 //! welcome screen's command palette ([`actions`], [`run_action`]).
 //!
 //! Studio shows its library first; Session's own start screen is never a
-//! page there. Session's start screen still does the opening (its loading
-//! screen, the streaming of a library setlist, joining a live set), so an
-//! [`Entry`] is handed to it the same way the Action List hands it an open
-//! (`session_daw::projects`), and a hosted start screen draws only its
-//! loading screen (`super::start`).
+//! page there. A library setlist is opened by the engine
+//! (`session_daw::studio_engine::set::open_library`, as the Action List's
+//! `SESSION_OPEN_SETLIST` opens one); a song, a live link or a new song is
+//! handed to Session's start screen, which opens it in the engine too. A
+//! hosted start screen draws only its loading screen (`super::start`).
 
 use std::path::{Path, PathBuf};
 
@@ -106,11 +106,14 @@ pub fn request(entry: Entry) {
     match entry {
         Entry::Path(path) => open_next(path),
         Entry::Setlist { org, title } => {
-            session_daw::projects::open_setlist_from_outside(session_daw::projects::SetlistOpen {
+            let request = session_daw::studio_engine::set::LibraryOpen {
                 org,
                 setlist: title,
                 song: None,
-            });
+            };
+            if let Err(busy) = session_daw::studio_engine::set::open_library(request) {
+                tracing::warn!(error = %busy, "open: the setlist waits for the open under way");
+            }
         }
         Entry::Join(link) => join_on_start(link),
         Entry::New => NEW.store(true, std::sync::atomic::Ordering::Release),

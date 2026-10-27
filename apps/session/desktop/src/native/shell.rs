@@ -116,15 +116,21 @@ pub fn Shell() -> Element {
     session_daw::song_modes::use_song_modes(setlist, mode);
     // In Mix mode, the guide folder muted.
     session_daw::mix_guide::use_mix_guide(setlist, mode);
-    // A streamed set's songs after the first, as each opens behind it.
-    use_future(move || async move {
-        let Some(mut arrivals) = session_daw::stream_set::take_arrivals() else {
-            tracing::debug!("shell: no arrivals to take (another window holds them, or none)");
+    // The set is the engine's (`studio_engine::set`): the songs arriving
+    // behind the first, a pick from the CLI or a model, a reorder — each
+    // changes it there, and the window follows. A new set remounts the
+    // shell (`super::start::App`), so only this set's changes come here.
+    let engine = super::start::use_engine_set();
+    let epoch = use_hook(|| engine.peek().epoch);
+    let mut applied = use_signal(|| engine.peek().revision);
+    use_effect(move || {
+        let now = engine.read();
+        if now.epoch != epoch || now.revision == *applied.peek() {
             return;
-        };
-        tracing::info!(set.songs = setlist.peek().songs.len(), "shell: taking the set's arrivals");
-        while let Some(arrival) = arrivals.recv().await {
-            setlist.write().arrive(arrival);
+        }
+        applied.set(now.revision);
+        if let Some(changed) = now.setlist.clone() {
+            setlist.set(changed);
         }
     });
     use_live_advance(setlist, mode);
@@ -169,13 +175,7 @@ pub fn Shell() -> Element {
             .ok()
             .and_then(|n| n.parse::<usize>().ok());
         if let Some(index) = index.and_then(|n| n.checked_sub(1)) {
-            let picked = setlist
-                .write()
-                .pick(index, 0.0)
-                .map(|song| song.project.clone());
-            if let Some(project) = picked {
-                session_daw::open::switch_song(&project);
-            }
+            session_daw::studio_engine::set::pick(index, 0.0);
         }
     });
     // Space plays and stops whatever has the focus.
@@ -277,50 +277,13 @@ pub fn Shell() -> Element {
     // kept on its tab.
     let pick = move |index: usize| {
         let at = session_daw::engine::Transport::shared().map_or(0.0, |t| t.read().0);
-        let picked = setlist
-            .write()
-            .pick(index, at)
-            .map(|song| song.project.clone());
-        if let Some(project) = picked {
-            session_daw::open::switch_song(&project);
+        if session_daw::studio_engine::set::pick(index, at).is_some() {
             // Playing together, everyone goes with it.
             session_daw::collab::transport_pressed();
         }
     };
     // The record view's song menu picks the same way.
     use_context_provider(|| session_daw::record_view::PickSong(Callback::new(pick)));
-    // The set as the Action List sees it (`SESSION_SONGS`), kept to what is
-    // shown; and a song asked for there (`SESSION_SONG`) picked as a click
-    // on its tab picks it.
-    use_effect(move || {
-        let list = setlist.read();
-        session_daw::projects::show_open_set(Some(session_daw::projects::OpenSet {
-            songs: list
-                .songs
-                .iter()
-                .map(|song| (song.title(), song.project.clone()))
-                .collect(),
-            at: list.at,
-            arriving: list.pending.clone(),
-        }));
-    });
-    use_drop(|| session_daw::projects::show_open_set(None));
-    use_future(move || async move {
-        let mut pick = pick;
-        loop {
-            futures_timer::Delay::new(std::time::Duration::from_millis(150)).await;
-            let Some(asked) = session_daw::projects::take_song_pick() else {
-                continue;
-            };
-            let (at, len) = {
-                let list = setlist.peek();
-                (list.at, list.songs.len())
-            };
-            if let Some(index) = asked.index(at, len) {
-                pick(index);
-            }
-        }
-    });
     // On iOS: the device's audio session, for Settings → This device.
     #[cfg(target_os = "ios")]
     use_context_provider(|| session_daw::device_audio::DeviceAudio {
@@ -430,7 +393,7 @@ pub fn Shell() -> Element {
                 // it. Where the one it replaces had got to is kept on its tab.
                 on_pick: pick,
                 on_color: move |(index, color): (usize, Option<String>)| {
-                    setlist.write().recolor(index, color);
+                    session_daw::studio_engine::set::recolor(index, color);
                 },
             }
 
@@ -599,7 +562,7 @@ const FX_DOCK_H: f64 = session_daw::fx_view::LANE_H;
 /// one is picked and plays from its count-in. Checked each frame — the
 /// window redraws while the transport moves — and only in Live, so working
 /// on a song in the other modes never jumps away from it.
-fn use_live_advance(mut setlist: Signal<session_daw::setlist::Setlist>, mode: Signal<Mode>) {
+fn use_live_advance(setlist: Signal<session_daw::setlist::Setlist>, mode: Signal<Mode>) {
     dioxus_native::use_window_event(move |event, _| {
         if !matches!(event, winit::event::WindowEvent::RedrawRequested) || mode() != Mode::Live {
             return;
@@ -620,16 +583,11 @@ fn use_live_advance(mut setlist: Signal<session_daw::setlist::Setlist>, mode: Si
             }
         };
         let Some(next) = next else { return };
-        let picked = setlist
-            .write()
-            .pick(next, at)
-            .map(|song| song.project.clone());
-        if let Some(project) = picked {
+        if session_daw::studio_engine::set::pick(next, at).is_some() {
             tracing::info!(
                 setlist.next = next,
                 "live: the song ended; the next one plays"
             );
-            session_daw::open::switch_song(&project);
             session_daw::engine::transport(session_daw::engine::Move::PlayFrom, 0.0);
         }
     });

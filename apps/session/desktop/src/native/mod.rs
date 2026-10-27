@@ -61,20 +61,7 @@ fn choose() -> Option<PathBuf> {
 /// or a song's folder); or a setlist's (a folder of song folders, or a
 /// `.setlist` file — see `session_daw::setlist::read_setlist`).
 fn songs_of(target: &Path) -> Option<Vec<PathBuf>> {
-    use session_daw::setlist::{read_setlist, song_in};
-    if target.is_dir() && !session_daw::open::is_session(target) {
-        if let Some(song) = song_in(target) {
-            return Some(vec![song]);
-        }
-    } else if !target
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("setlist"))
-    {
-        return Some(vec![target.to_path_buf()]);
-    }
-    read_setlist(target)
-        .inspect_err(|e| tracing::error!(error = %e, "the setlist could not be read"))
-        .ok()
+    session_daw::studio_engine::set::songs_at(target)
 }
 
 /// The Open dialog: a REAPER project.

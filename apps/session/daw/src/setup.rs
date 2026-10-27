@@ -497,6 +497,30 @@ fn cell(i: usize, align: &str) -> String {
 /// The set, in order, as a table: which is up, what each song is — its
 /// key, tempo, length and the mode it is worked in — and moving or taking
 /// one out.
+/// Move song `song` to `to`, in the engine's set: the window follows it.
+#[cfg(feature = "native")]
+fn reorder(_shown: Signal<Setlist>, song: usize, to: usize) {
+    crate::studio_engine::set::reorder(song, to);
+}
+
+/// Move song `song` to `to` — a web page holds its own set.
+#[cfg(not(feature = "native"))]
+fn reorder(mut shown: Signal<Setlist>, song: usize, to: usize) {
+    shown.write().reorder(song, to);
+}
+
+/// Take song `song` out of the engine's set.
+#[cfg(feature = "native")]
+fn remove(_shown: Signal<Setlist>, song: usize) {
+    crate::studio_engine::set::remove(song);
+}
+
+/// Take song `song` out of a web page's own set.
+#[cfg(not(feature = "native"))]
+fn remove(mut shown: Signal<Setlist>, song: usize) {
+    shown.write().remove(song);
+}
+
 #[component]
 fn SongTable(setlist: Signal<Setlist>, on_pick: Option<EventHandler<usize>>) -> Element {
     let list = setlist();
@@ -592,11 +616,11 @@ fn SongTable(setlist: Signal<Setlist>, on_pick: Option<EventHandler<usize>>) -> 
                             div {
                                                                 style: "{cell(6, \"flex-end\")} align-items:stretch; width:{3 * row_w}px;",
                                 {row_button("Earlier in the set", earlier, RowIcon::Up,
-                                    EventHandler::new(move |()| setlist.write().reorder(index, index - 1)))}
+                                    EventHandler::new(move |()| reorder(setlist, index, index - 1)))}
                                 {row_button("Later in the set", later, RowIcon::Down,
-                                    EventHandler::new(move |()| setlist.write().reorder(index, index + 1)))}
+                                    EventHandler::new(move |()| reorder(setlist, index, index + 1)))}
                                 {row_button("Take it out of the set", true, RowIcon::Remove,
-                                    EventHandler::new(move |()| setlist.write().remove(index)))}
+                                    EventHandler::new(move |()| remove(setlist, index)))}
                             }
                             }
                         }

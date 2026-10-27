@@ -13,8 +13,11 @@
 //!   (on a phone, what the Files app shows under Session), or, on a
 //!   desktop, from the Open dialog.
 //!
-//! Opening runs on a thread of its own (it takes seconds), and the set it
-//! opened becomes the window's ([`App`]).
+//! Opening runs in the engine, on a thread of its own (it takes seconds):
+//! the set is the engine's (`session_daw::studio_engine::set`), and the
+//! window shows whatever set the engine has, or its start screen when it
+//! has none ([`App`]). An open asked for by the CLI or a model shows here
+//! the same way as one asked for by a click.
 
 use std::path::PathBuf;
 
@@ -79,8 +82,15 @@ pub fn App() -> Element {
             // gesture would cancel the touches it is made of.
         });
     }
+    // A set the launch attached to (Remote: the projects the driven system
+    // has open) is the engine's set from the start.
     let initial: Option<Setlist> = use_context();
-    let mut opened = use_signal(|| initial);
+    use_hook(move || {
+        if let Some(setlist) = initial {
+            session_daw::studio_engine::set::install(setlist);
+        }
+    });
+    let engine = use_engine_set();
     let host = try_use_context::<super::handoff::Host>();
     // Back to the start screen: the set stops, and the page is the one
     // that picks another (its library, a link, a file). Inside Studio
@@ -93,18 +103,29 @@ pub fn App() -> Element {
             session_daw::engine::transport(session_daw::engine::Move::Stop, 0.0);
             #[cfg(target_os = "ios")]
             super::ios_audio::clear();
+            session_daw::studio_engine::set::close();
             match host {
                 Some(host) if !super::handoff::pending() => host.on_leave.call(()),
-                _ => opened.set(None),
+                _ => {}
             }
         }))
     });
-    let page = match opened() {
-        Some(setlist) => rsx! {
-            WithSetlist { setlist, super::shell::Shell {} }
-        },
-        None => rsx! { Start { opened } },
+    // The engine's set, while no other is opening; the start screen (and,
+    // while a set opens, its loading screen) otherwise. A new set is a new
+    // shell: its views are made again for it.
+    let shown = engine.read();
+    let page = match (&shown.opening, shown.setlist.clone()) {
+        (session_daw::studio_engine::set::Opening::Busy(_), _) | (_, None) => {
+            rsx! { Start {} }
+        }
+        (_, Some(setlist)) => {
+            let epoch = shown.epoch;
+            rsx! {
+                WithSetlist { key: "{epoch}", setlist, super::shell::Shell {} }
+            }
+        }
     };
+    drop(shown);
     rsx! {
         document::Style { {ROOT_CSS} }
         {page}
@@ -144,6 +165,25 @@ fn WithSetlist(setlist: Setlist, children: Element) -> Element {
     children
 }
 
+/// The engine's set, as it changes: every window shows the one set the
+/// engine has (`session_daw::studio_engine::set`), whoever changed it.
+pub(super) fn use_engine_set() -> Signal<session_daw::studio_engine::set::SetView> {
+    let mut shown = use_signal(session_daw::studio_engine::set::view);
+    use_future(move || async move {
+        let mut changes = session_daw::studio_engine::set::subscribe();
+        loop {
+            let now = changes.borrow_and_update().clone();
+            if now.revision != shown.peek().revision {
+                shown.set(now);
+            }
+            if changes.changed().await.is_err() {
+                return;
+            }
+        }
+    });
+    shown
+}
+
 /// Where opening has got to.
 #[derive(Clone, PartialEq)]
 enum Opening {
@@ -172,9 +212,9 @@ pub(super) async fn off_thread<T: Send + 'static>(
     answer.await.ok()
 }
 
-/// A way of opening a set, run on a thread of its own: it says each step
-/// to its `progress` — the loading screen's.
-type OpenWork = Box<dyn FnOnce(&dyn Fn(Progress)) -> eyre::Result<Setlist> + Send>;
+/// A way of opening a set, run in the engine on a thread of its own: it
+/// says each step to its `progress` — the loading screen's.
+use session_daw::studio_engine::set::OpenWork;
 
 /// An error for a person: the whole chain, in a few words.
 pub(super) fn brief(e: &eyre::Report) -> String {
@@ -250,7 +290,7 @@ fn use_width() -> Signal<f64> {
 }
 
 #[component]
-fn Start(opened: Signal<Option<Setlist>>) -> Element {
+fn Start() -> Element {
     let mut opening = use_signal(|| Opening::Idle);
     let mut local = use_signal(documents);
     // The songs opened lately, each with its alternatives — read again
@@ -259,29 +299,33 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
     let mut section = use_signal(|| Section::Home);
     let width = use_width();
 
-    // Open a set on a thread of its own; it becomes the window's when it
-    // is ready. Meanwhile the loading screen says where it has got to.
+    // An open is the engine's (`studio_engine::set`), whoever asked for it:
+    // its loading screen here says where it has got to, and how it failed
+    // if it did — a failure from before this screen was shown is not news.
+    let engine = use_engine_set();
+    let shown_from = use_hook(|| engine.peek().revision);
+    use_effect(move || {
+        use session_daw::studio_engine::set::Opening as Engine;
+        let now = engine.read();
+        match &now.opening {
+            Engine::Busy(step) => opening.set(Opening::Busy(step.clone())),
+            Engine::Failed(why) if now.revision > shown_from => {
+                opening.set(Opening::Failed(why.clone()));
+            }
+            Engine::Idle if matches!(*opening.peek(), Opening::Busy(_)) => {
+                opening.set(Opening::Idle);
+            }
+            Engine::Failed(_) | Engine::Idle => {}
+        }
+    });
+
+    // Open a set in the engine, on a thread of its own; the window shows it
+    // when it is ready, and meanwhile the loading screen.
     let mut open_set = move |first: Progress, work: OpenWork| {
-        opening.set(Opening::Busy(first));
-        let (tell, mut heard) = tokio::sync::mpsc::unbounded_channel::<Progress>();
-        spawn(async move {
-            while let Some(step) = heard.recv().await {
-                if matches!(*opening.peek(), Opening::Busy(_)) {
-                    opening.set(Opening::Busy(step));
-                }
-            }
-        });
-        spawn(async move {
-            let outcome = off_thread(move || work(&|step| drop(tell.send(step)))).await;
-            match outcome {
-                Some(Ok(setlist)) => opened.set(Some(setlist)),
-                Some(Err(e)) => {
-                    tracing::warn!(error = %e, "start: the set did not open");
-                    opening.set(Opening::Failed(brief(&e)));
-                }
-                None => opening.set(Opening::Failed("opening stopped".to_owned())),
-            }
-        });
+        opening.set(Opening::Busy(first.clone()));
+        if let Err(busy) = session_daw::studio_engine::set::open_with(first, work) {
+            opening.set(Opening::Failed(busy.to_string()));
+        }
     };
     let mut open_path = move |path: PathBuf| {
         let title = path.file_stem().map_or_else(
@@ -541,72 +585,6 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
         );
     });
 
-    // A setlist asked for from outside the window (the Action List's
-    // `SESSION_OPEN_SETLIST`): the org it names shown, then — once that
-    // org's lists are in — streamed in exactly as a click on it would.
-    // Polled, because the ask arrives on another thread.
-    let mut asked = use_signal(|| 0_u32);
-    use_hook(move || {
-        spawn(async move {
-            loop {
-                futures_timer::Delay::new(std::time::Duration::from_millis(300)).await;
-                if session_daw::projects::pending_setlist().is_some() {
-                    asked += 1;
-                }
-            }
-        })
-    });
-    let for_asked = account.clone();
-    use_effect(move || {
-        let _ = asked();
-        let Some(request) = session_daw::projects::pending_setlist() else {
-            return;
-        };
-        if let Some(want) = request.org.clone()
-            && org.peek().as_deref() != Some(want.as_str())
-        {
-            match &*orgs.peek() {
-                Load::Ready(list) if list.contains(&want) => org.set(Some(want)),
-                Load::Ready(_) => {
-                    let _ = session_daw::projects::take_setlist(&want);
-                    tracing::warn!(open.org = %want, "open setlist: not an org of this account");
-                }
-                _ => {}
-            }
-            return;
-        }
-        let (Some(account), Some(shown)) = (for_asked.clone(), org.peek().clone()) else {
-            return;
-        };
-        let Load::Ready(lists) = &*setlists.read() else {
-            return;
-        };
-        let Some(request) = session_daw::projects::take_setlist(&shown) else {
-            return;
-        };
-        // Taken here, on the start screen: the "back out of the song" the
-        // ask raised is spent, or the song it opens would leave at once.
-        let _ = session_daw::projects::take_back();
-        let Some(mut list) = lists
-            .iter()
-            .find(|l| l.title.eq_ignore_ascii_case(request.setlist.trim()))
-            .cloned()
-        else {
-            tracing::warn!(open.setlist = %request.setlist, open.org = %shown, "open setlist: no such setlist");
-            return;
-        };
-        if let Some(song) = &request.song {
-            list.songs.retain(|s| {
-                s.slug.eq_ignore_ascii_case(song) || s.title.eq_ignore_ascii_case(song)
-            });
-            if list.songs.is_empty() {
-                tracing::warn!(open.setlist = %request.setlist, open.song = %song, "open setlist: no such song in it");
-                return;
-            }
-        }
-        play((account, list));
-    });
-
     // Downloading a list (or a song) onto this device, to open with no
     // connection: one at a time, its progress along the foot.
     let mut downloading = use_signal(|| None::<Downloading>);
@@ -709,38 +687,19 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
         return rsx! { Loading { progress } };
     }
     // Inside Studio the welcome screen is the start page: this one only
-    // opens what was handed to it, so until that is under way (a library
-    // setlist waits for the account's orgs and lists) it says so, and if it
-    // fails, why, with the way back.
+    // shows what was handed to it opening (in the engine), and if it fails,
+    // why, with the way back.
     if let Some(host) = try_consume_context::<super::handoff::Host>() {
         let (headline, detail, failed) = match opening() {
             Opening::Failed(why) => ("Could not open it".to_owned(), why, true),
-            _ => match session_daw::projects::pending_setlist() {
-                Some(asked) if account.is_none() => (
-                    format!("Opening {}", asked.setlist),
-                    "Sign in on the welcome screen to open your library's setlists.".to_owned(),
-                    true,
-                ),
-                Some(asked) => (
-                    format!("Opening {}", asked.setlist),
-                    "Finding it in your library…".to_owned(),
-                    false,
-                ),
-                None => ("Opening".to_owned(), String::new(), false),
-            },
+            _ => ("Opening".to_owned(), String::new(), false),
         };
         return rsx! {
             session_daw::loading::LoadingFrame { headline, detail, failed,
                 button {
                     style: "margin-top:14px; height:44px; padding:0 20px; border:1px solid {RULE}; border-radius:10px; \
                             background:transparent; color:{TEXT}; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer;",
-                    onclick: move |_| {
-                        // What was asked and never opened is dropped.
-                        if let Some(asked) = session_daw::projects::pending_setlist() {
-                            let _ = session_daw::projects::take_setlist(asked.org.as_deref().unwrap_or_default());
-                        }
-                        host.on_leave.call(());
-                    },
+                    onclick: move |_| host.on_leave.call(()),
                     "Back to the library"
                 }
             }

@@ -646,7 +646,7 @@ pub fn use_follow_song(mut setlist: Signal<crate::setlist::Setlist>) {
                 };
                 if let Some(index) = index {
                     let at = crate::engine::Transport::shared().map_or(0.0, |t| t.read().0);
-                    setlist.write().pick(index, at);
+                    follow(&mut setlist, index, at);
                 }
             }
             let Some(project) = crate::collab::take_song_request() else {
@@ -658,11 +658,35 @@ pub fn use_follow_song(mut setlist: Signal<crate::setlist::Setlist>) {
                 .iter()
                 .position(|s| s.project == project);
             let at = crate::engine::Transport::shared().map_or(0.0, |t| t.read().0);
-            if let Some(index) = index
-                && setlist.write().pick(index, at).is_some()
-            {
-                crate::open::switch_song(&project);
+            if let Some(index) = index {
+                go_to(&mut setlist, index, at);
             }
         }
     });
+}
+
+/// The set follows a song already current on the system driven: in the
+/// engine's set, which the window follows (a web page holds its own).
+#[cfg(feature = "native")]
+fn follow(_shown: &mut Signal<crate::setlist::Setlist>, index: usize, at: f64) {
+    crate::studio_engine::set::mark_current(index, at);
+}
+
+#[cfg(not(feature = "native"))]
+fn follow(shown: &mut Signal<crate::setlist::Setlist>, index: usize, at: f64) {
+    shown.write().pick(index, at);
+}
+
+/// Go to song `index`, a collaborator asked: the engine's current song.
+#[cfg(feature = "native")]
+fn go_to(_shown: &mut Signal<crate::setlist::Setlist>, index: usize, at: f64) {
+    crate::studio_engine::set::pick(index, at);
+}
+
+#[cfg(not(feature = "native"))]
+fn go_to(shown: &mut Signal<crate::setlist::Setlist>, index: usize, at: f64) {
+    let picked = shown.write().pick(index, at).map(|song| song.project.clone());
+    if let Some(project) = picked {
+        crate::open::switch_song(&project);
+    }
 }
