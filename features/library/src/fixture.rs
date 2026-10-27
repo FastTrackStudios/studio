@@ -254,7 +254,7 @@ fn mixes(id: u128, stage: Stage) -> Vec<MixVersion> {
             note: notes[k].into(),
             when: whens[k].into(),
             by: if k % 3 == 2 { ME.into() } else { "Sam".into() },
-            seconds: 291.0,
+            seconds: 214.0 + (id % 9) as f32 * 13.0,
             peaks: peaks(id * 31 + k as u128, 160),
         })
         .collect()

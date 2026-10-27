@@ -19,8 +19,9 @@ use lucide_dioxus::{
 
 use super::home::Page;
 use super::kit::*;
+use super::player::{Player, use_player};
 use super::{Open, edit, open, use_library, use_wide};
-use crate::model::{Edit, MixVersion, Note, Session, SessionId, Todo, clock};
+use crate::model::{Edit, Listen, MixVersion, Note, Session, SessionId, Todo, clock};
 
 /// Which of the session's two pages is up.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -34,15 +35,71 @@ pub enum Tab {
 #[derive(Clone, Copy)]
 pub struct SessionStart(pub Tab);
 
-/// The session the page and its panel are about, and its player.
+/// The session the page and its panel are about, and the version under
+/// review. It plays through the library's one [`Player`]: what the page
+/// shows of it is the player's, while the player has it.
 #[derive(Clone, Copy)]
 struct Here {
     id: SessionId,
     /// The mix version under review.
     version: Signal<u32>,
-    /// Where the playhead is, in seconds.
-    at: Signal<f32>,
-    playing: Signal<bool>,
+    /// What the session is called, for "Playing from".
+    title: Signal<String>,
+}
+
+impl Here {
+    fn listen(self) -> Listen {
+        Listen {
+            session: self.id,
+            version: (self.version)(),
+        }
+    }
+
+    /// Whether the player has this version.
+    fn has(self, player: Player) -> bool {
+        player.current() == Some(self.listen())
+    }
+
+    /// Where the playhead is on this version: the player's while it has
+    /// it, else its start.
+    fn now(self, player: Player) -> f32 {
+        if self.has(player) { (player.at)() } else { 0.0 }
+    }
+
+    fn playing(self, player: Player) -> bool {
+        self.has(player) && (player.playing)()
+    }
+
+    /// Hear this version from `at` (the player keeps playing if it was).
+    fn seek(self, player: Player, at: f32) {
+        let listen = Listen {
+            session: self.id,
+            version: *self.version.peek(),
+        };
+        let was_empty = player.current().is_none();
+        player.cue(listen, at, *player.playing.peek());
+        if was_empty {
+            let mut from = player.from;
+            from.set(self.title.peek().clone());
+        }
+    }
+
+    fn play_pause(self, player: Player) {
+        let listen = Listen {
+            session: self.id,
+            version: *self.version.peek(),
+        };
+        if player.current() == Some(listen) {
+            player.toggle();
+        } else {
+            let was_empty = player.current().is_none();
+            player.cue(listen, 0.0, true);
+            if was_empty {
+                let mut from = player.from;
+                from.set(self.title.peek().clone());
+            }
+        }
+    }
 }
 
 #[component]
@@ -50,38 +107,31 @@ pub(crate) fn SessionPage(id: SessionId) -> Element {
     let lib = use_library();
     let wide = use_wide();
     // Hooks first: the session may not have arrived yet.
+    let player = use_player();
     let latest = lib
         .read()
         .session(id)
         .and_then(|s| s.mixes.last().map(|m| m.n))
         .unwrap_or(0);
-    let here = use_context_provider(|| Here {
+    // The version the player has, when it has this session: the page
+    // opens on what is being heard.
+    let heard = player
+        .current()
+        .filter(|l| l.session == id)
+        .map(|l| l.version);
+    let title = lib
+        .read()
+        .session(id)
+        .map(|s| s.title.clone())
+        .unwrap_or_default();
+    use_context_provider(|| Here {
         id,
-        version: Signal::new(latest),
-        at: Signal::new(0.0),
-        playing: Signal::new(false),
+        version: Signal::new(heard.unwrap_or(latest)),
+        title: Signal::new(title),
     });
     let start = try_consume_context::<SessionStart>().map(|s| s.0);
     let mut tab =
         use_signal(|| start.unwrap_or(if latest > 0 { Tab::Review } else { Tab::Status }));
-    // The player's clock: a quarter-second tick while playing.
-    let mut at = here.at;
-    let mut playing = here.playing;
-    use_future(move || async move {
-        loop {
-            futures_timer::Delay::new(std::time::Duration::from_millis(250)).await;
-            if *playing.peek() {
-                let length = 291.0;
-                let next = *at.peek() + 0.25;
-                if next >= length {
-                    at.set(length);
-                    playing.set(false);
-                } else {
-                    at.set(next);
-                }
-            }
-        }
-    });
     let l = lib.read();
     let Some(session) = l.session(id).cloned() else {
         return rsx! { Page { p { style: "{BODY} color: {INK_2}; padding-top: 40px;", "This session was deleted or has not arrived yet." } } };
@@ -212,8 +262,7 @@ fn ReviewFrame(upright: bool, session: Session) -> Element {
 #[component]
 fn ReviewMain(session: Session) -> Element {
     let here = use_context::<Here>();
-    let mut at = here.at;
-    let mut playing = here.playing;
+    let player = use_player();
     let mut version = here.version;
     let picked = version();
     let Some(mix) = session.mixes.iter().find(|m| m.n == picked).cloned() else {
@@ -232,7 +281,8 @@ fn ReviewMain(session: Session) -> Element {
             }
         };
     };
-    let now = at();
+    let now = here.now(player);
+    let playing = here.playing(player);
     let length = mix.seconds;
     let first = session.mixes.first().map_or(0, |m| m.n);
     let last = session.mixes.last().map_or(0, |m| m.n);
@@ -255,9 +305,21 @@ fn ReviewMain(session: Session) -> Element {
         })
         .collect();
     let counts = |n: u32| session.notes.iter().filter(|x| x.version == n).count();
+    // Another version: at the same moment, if this session is playing
+    // (an A/B), else from its start.
     let mut go = move |n: u32| {
+        let had = here.has(player);
         version.set(n);
-        at.set(0.0);
+        if had {
+            player.cue(
+                Listen {
+                    session: here.id,
+                    version: n,
+                },
+                *player.at.peek(),
+                *player.playing.peek(),
+            );
+        }
     };
     let (prev_ink, next_ink) = (
         if mix.n > first { INK } else { DIM },
@@ -297,7 +359,7 @@ fn ReviewMain(session: Session) -> Element {
                                 let seek = i as f32 / bins as f32 * length;
                                 rsx! {
                                     span { key: "{i}", style: "flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: center; cursor: pointer;",
-                                        onclick: move |_| at.set(seek),
+                                        onclick: move |_| here.seek(player, seek),
                                         span { style: "width: 100%; height: {h}%; border-radius: 2px; background: {c};" }
                                     }
                                 }
@@ -321,11 +383,11 @@ fn ReviewMain(session: Session) -> Element {
                     div { style: "display: flex; align-items: center; gap: 16px;",
                         button {
                             class: "lp lp-solid",
-                            "aria-label": if playing() { "Pause" } else { "Play" },
+                            "aria-label": if playing { "Pause" } else { "Play" },
                             style: "width: 56px; height: 56px; border-radius: 28px; border: none; background: {PRIMARY}; \
                                     display: flex; align-items: center; justify-content: center;",
-                            onclick: move |_| playing.toggle(),
-                            if playing() { Pause { size: 24, color: "#fff", fill: "#fff" } } else { Play { size: 24, color: "#fff", fill: "#fff" } }
+                            onclick: move |_| here.play_pause(player),
+                            if playing { Pause { size: 24, color: "#fff", fill: "#fff" } } else { Play { size: 24, color: "#fff", fill: "#fff" } }
                         }
                         span { style: "font-size: 20px; font-weight: 700;", "{clock(now)}" }
                         span { style: "{META} color: {INK_3};", "/ {clock(length)}" }
@@ -382,7 +444,7 @@ fn VersionRow(mix: MixVersion, on: bool, comments: usize, on_press: EventHandler
 fn CommentsPanel() -> Element {
     let lib = use_library();
     let here = use_context::<Here>();
-    let mut at = here.at;
+    let player = use_player();
     let mut version = here.version;
     let mut all = use_signal(|| false);
     let mut draft = use_signal(String::new);
@@ -411,7 +473,7 @@ fn CommentsPanel() -> Element {
             edit(Edit::MixNote {
                 session: id,
                 version: *version.peek(),
-                at: *at.peek(),
+                at: here.now(player),
                 author: me.clone(),
                 text,
             });
@@ -422,7 +484,7 @@ fn CommentsPanel() -> Element {
     let empty = draft().trim().is_empty();
     let post_bg = if empty { SHEET_2 } else { PRIMARY };
     let post_ink = if empty { INK_3 } else { "#fff" };
-    let now = at();
+    let now = here.now(player);
     let near = notes
         .iter()
         .map(|(i, n)| (*i, (n.at - now).abs()))
@@ -463,7 +525,7 @@ fn CommentsPanel() -> Element {
                                 button { class: "lp",
                                     style: "flex-shrink: 0; height: 28px; padding: 0 8px; border-radius: 8px; border: 1px solid {RULE_STRONG}; background: {DESK}; \
                                             color: {PICK}; font-family: {FONT}; font-size: 12px; font-weight: 700;",
-                                    onclick: move |_| { version.set(v); at.set(t); },
+                                    onclick: move |_| { version.set(v); here.seek(player, t); },
                                     "{clock(t)}"
                                 }
                                 div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;",

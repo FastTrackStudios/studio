@@ -2,11 +2,11 @@
 //! changed and who changed it, and the conversations still open.
 
 use dioxus::prelude::*;
-use lucide_dioxus::{FolderOpen, ListMusic, MessageSquare, Music, Play};
+use lucide_dioxus::{FolderOpen, ListMusic, MessageSquare, Music, Pause, Play};
 
 use super::kit::*;
 use super::{Open, Route, open, use_library, use_nav, use_wide};
-use crate::model::{Anchor, Library, Piece, Ready, Setlist, minutes};
+use crate::model::{Anchor, Library, Listen, Piece, Ready, Setlist, minutes};
 
 /// What a list row needs to say about a doc and where it goes.
 pub(crate) struct Labelled {
@@ -189,6 +189,7 @@ pub(crate) fn Home() -> Element {
             if let Some(set) = tonight {
                 Tonight { set }
             }
+            NewMixes {}
             div {
                 style: "display: grid; {columns}",
                 div {
@@ -442,6 +443,84 @@ fn ThreadRow(
             span { style: "display: flex; align-items: center; gap: 5px; {META} color: {INK_3};",
                 MessageSquare { size: 15, color: INK_3 }
                 "{count}"
+            }
+        }
+    }
+}
+
+/// The newest mixes, as a music app's shelf: the artwork plays it (and
+/// queues the rest after it), the words open its Review.
+#[component]
+fn NewMixes() -> Element {
+    let lib = use_library();
+    let nav = use_nav();
+    let player = super::player::use_player();
+    let wide = use_wide();
+    let l = lib.read();
+    let queue = l.new_mixes();
+    if queue.is_empty() {
+        return rsx! {};
+    }
+    let now = player.current();
+    let playing = (player.playing)();
+    let cards: Vec<(usize, Listen, String, String, &'static str, String)> = queue
+        .iter()
+        .enumerate()
+        .filter_map(|(i, listen)| {
+            let (session, mix) = l.mix(*listen)?;
+            let (title, artist, colour) = l.listen_label(*listen)?;
+            let _ = artist;
+            Some((
+                i,
+                *listen,
+                title,
+                format!("Mix v{} · {}", mix.n, session.edited.when),
+                colour,
+                mix.note.clone(),
+            ))
+        })
+        .collect();
+    let columns = if wide { 4 } else { 2 };
+    rsx! {
+        Heading { text: "New mixes".to_owned(),
+            trailing: rsx! { TextButton { label: "Play all".to_owned(), on_press: {
+                let queue = queue.clone();
+                move |()| player.play(queue.clone(), 0, "New mixes")
+            } } } }
+        div { style: "display: grid; grid-template-columns: repeat({columns}, minmax(0, 1fr)); gap: 20px;",
+            for (i, listen, title, line, colour, note) in cards {
+                {
+                    let queue = queue.clone();
+                    let here = now == Some(listen);
+                    let (icon_play, label) = if here && playing { (false, "Pause") } else { (true, "Play") };
+                    rsx! {
+                        div { key: "{i}", style: "min-width: 0; display: flex; flex-direction: column; gap: 10px;",
+                            div { style: "position: relative; width: 100%; padding-top: 100%; border-radius: 12px; overflow: hidden; \
+                                          background: linear-gradient(145deg, {colour} 0%, {colour}99 45%, #18181b 100%);",
+                                button { class: "lp", "aria-label": "{label} {title}",
+                                    style: "position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; background: transparent; padding: 0;",
+                                    onclick: move |_| if here { player.toggle() } else { player.play(queue.clone(), i, "New mixes") },
+                                    span { style: "position: absolute; left: 14px; right: 14px; bottom: 14px; text-align: left; font-family: {FONT}; \
+                                                   font-size: 20px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; color: rgba(255,255,255,0.92);",
+                                        "{title}"
+                                    }
+                                    span { style: "position: absolute; right: 12px; top: 12px; width: 44px; height: 44px; border-radius: 22px; \
+                                                   background: rgba(12,12,15,0.55); display: flex; align-items: center; justify-content: center;",
+                                        if icon_play { Play { size: 20, color: "#fff", fill: "#fff" } } else { Pause { size: 20, color: "#fff", fill: "#fff" } }
+                                    }
+                                }
+                            }
+                            button { class: "lp",
+                                style: "border: none; background: transparent; padding: 2px 0; margin: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; \
+                                        color: {INK}; font-family: {FONT}; text-align: left; border-radius: 6px; min-width: 0;",
+                                onclick: move |_| nav.go(Route::Session(listen.session)),
+                                span { style: "{BODY} {ONE_LINE}", "{title}" }
+                                span { style: "{META} color: {INK_3}; {ONE_LINE}", "{line}" }
+                                span { style: "{META} color: {INK_3}; {ONE_LINE}", "{note}" }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

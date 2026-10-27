@@ -4,7 +4,8 @@
 
 use dioxus::prelude::*;
 use lucide_dioxus::{
-    ChevronDown, ChevronUp, Guitar, MessageSquare, Mic, Piano, Play, Plus, Share2, Trash2,
+    ChevronDown, ChevronUp, Guitar, Headphones, MessageSquare, Mic, Piano, Play, Plus, Share2,
+    Trash2,
 };
 use uuid::Uuid;
 
@@ -106,7 +107,9 @@ pub(crate) fn SetlistPage(id: SetlistId, entry: Option<EntryId>) -> Element {
     // the same hooks.
     let mut chosen = use_signal(|| None::<PartId>);
     let mut editing = use_signal(|| false);
+    let player = super::player::use_player();
     let l = lib.read();
+    let listen = l.setlist_queue(id);
     let Some(set) = l.setlist(id).cloned() else {
         return rsx! { Page { p { style: "{BODY} color: {INK_2}; padding-top: 40px;", "This setlist was deleted or has not arrived yet." } } };
     };
@@ -157,6 +160,11 @@ pub(crate) fn SetlistPage(id: SetlistId, entry: Option<EntryId>) -> Element {
                         Button { label: format!("Play {kind}"), weight: Weight::Primary,
                             icon: rsx! { Play { size: 16, color: "#fff", fill: "#fff" } },
                             on_press: move |()| open(Open::Part(part)) }
+                    }
+                    if !listen.is_empty() {
+                        Button { label: "Listen".to_owned(), weight: Weight::Secondary,
+                            icon: rsx! { Headphones { size: 16, color: INK } },
+                            on_press: { let t = set.title.clone(); move |()| player.play(listen.clone(), 0, &t) } }
                     }
                     Button { label: "Rehearse".to_owned(), weight: Weight::Secondary, on_press: move |()| open(Open::Rehearse(id)) }
                     Button { label: "Share".to_owned(), weight: Weight::Secondary, icon: rsx! { Share2 { size: 16, color: INK } }, on_press: move |()| {} }

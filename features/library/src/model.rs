@@ -1181,6 +1181,97 @@ pub fn minutes(seconds: f32) -> String {
     }
 }
 
+/// One thing the player plays: a version of a session's mix. A song is
+/// heard through the session that produces it, an album through its
+/// tracks' sessions, a setlist through its songs'.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Listen {
+    pub session: SessionId,
+    pub version: u32,
+}
+
+impl Library {
+    /// The session's newest mix.
+    #[must_use]
+    pub fn latest_mix(&self, session: SessionId) -> Option<Listen> {
+        let s = self.session(session)?;
+        s.mixes.last().map(|m| Listen {
+            session,
+            version: m.n,
+        })
+    }
+
+    /// The session and mix a listen is of.
+    #[must_use]
+    pub fn mix(&self, listen: Listen) -> Option<(&Session, &MixVersion)> {
+        let s = self.session(listen.session)?;
+        Some((s, s.mixes.iter().find(|m| m.n == listen.version)?))
+    }
+
+    /// A song's newest mix: of the session furthest along that produces it.
+    #[must_use]
+    pub fn song_mix(&self, song: SongId) -> Option<Listen> {
+        self.sessions
+            .iter()
+            .filter(|s| s.song == Some(song) && !s.mixes.is_empty())
+            .max_by_key(|s| s.mixes.len())
+            .and_then(|s| self.latest_mix(s.id))
+    }
+
+    /// An album's tracks that can be heard, in order.
+    #[must_use]
+    pub fn album_queue(&self, album: AlbumId) -> Vec<Listen> {
+        self.album(album).map_or_else(Vec::new, |a| {
+            a.tracks
+                .iter()
+                .filter_map(|t| t.session.and_then(|s| self.latest_mix(s)))
+                .collect()
+        })
+    }
+
+    /// A setlist's songs that can be heard, in the show's order.
+    #[must_use]
+    pub fn setlist_queue(&self, setlist: SetlistId) -> Vec<Listen> {
+        self.setlist(setlist).map_or_else(Vec::new, |s| {
+            s.entries
+                .iter()
+                .filter_map(|e| match e.piece {
+                    Piece::Song { song, .. } => self.song_mix(song),
+                    Piece::Other { .. } => None,
+                })
+                .collect()
+        })
+    }
+
+    /// The newest mixes across the library, newest first: what the home
+    /// offers to play.
+    #[must_use]
+    pub fn new_mixes(&self) -> Vec<Listen> {
+        let mut heard: Vec<&Session> = self
+            .sessions
+            .iter()
+            .filter(|s| !s.mixes.is_empty())
+            .collect();
+        heard.sort_by_key(|s| s.edited.age);
+        heard
+            .into_iter()
+            .filter_map(|s| self.latest_mix(s.id))
+            .collect()
+    }
+
+    /// What a listen is called and by whom: the song's title and artist
+    /// (the session's title when it has no song), and its colour.
+    #[must_use]
+    pub fn listen_label(&self, listen: Listen) -> Option<(String, String, &'static str)> {
+        let s = self.session(listen.session)?;
+        let song = s.song.and_then(|id| self.song(id));
+        Some(match song {
+            Some(song) => (s.title.clone(), song.artist.clone(), song.colour),
+            None => (s.title.clone(), String::new(), "#52525b"),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1536,5 +1627,33 @@ mod tests {
             }),
             Err(EditError::NoSuchThing)
         );
+    }
+
+    #[test]
+    fn the_player_hears_albums_setlists_and_songs_through_their_sessions() {
+        let lib = crate::fixture::library();
+        let album = lib.albums[0].id;
+        let queue = lib.album_queue(album);
+        assert_eq!(queue.len(), 4, "the four tracks with mixes");
+        for listen in &queue {
+            let (session, mix) = lib.mix(*listen).expect("a real mix");
+            assert_eq!(mix.n, session.mixes.last().unwrap().n, "the newest version");
+        }
+        let newest = lib.new_mixes();
+        assert_eq!(newest.len(), 4);
+        let ages: Vec<u32> = newest
+            .iter()
+            .map(|l| lib.session(l.session).unwrap().edited.age)
+            .collect();
+        assert!(ages.windows(2).all(|w| w[0] <= w[1]), "newest first");
+        // Paper Boats has two sessions; the one with mixes is the one heard.
+        let boats = lib
+            .songs
+            .iter()
+            .find(|s| s.title == "Paper Boats")
+            .unwrap()
+            .id;
+        let heard = lib.song_mix(boats).unwrap();
+        assert_eq!(lib.session(heard.session).unwrap().title, "Paper Boats");
     }
 }

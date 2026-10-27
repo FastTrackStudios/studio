@@ -18,7 +18,8 @@ use blitz_traits::shell::{ColorScheme, Viewport as Screen};
 use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
 use library::ui::{
-    InitialRoute, LibraryApp, LibraryData, Route, SessionStart, SessionTab, Viewport,
+    InitialRoute, LibraryApp, LibraryData, Player, PlayerSheet, Route, SessionStart, SessionTab,
+    Viewport,
 };
 
 /// Pixels per point, as on an iPad.
@@ -59,7 +60,7 @@ fn route(page: &str) -> Route {
         "projects" => Route::Projects,
         "project" => Route::Project(lib.projects[1].id),
         "live" => Route::Project(lib.projects[0].id),
-        "session" | "status" => Route::Session(lib.sessions[0].id),
+        "session" | "status" | "mini-session" => Route::Session(lib.sessions[0].id),
         _ => Route::Home,
     }
 }
@@ -73,12 +74,21 @@ fn main() {
 
     let first = route(&page);
     let status = page == "status";
+    // The player's state for a page of it: 0 none, 1 the mini player,
+    // 2 Now Playing, 3 its queue.
+    let sheet = match page.as_str() {
+        "mini" | "mini-session" => 1,
+        "playing" => 2,
+        "queue" => 3,
+        _ => 0,
+    };
     let vdom = VirtualDom::new_with_props(
         Shot,
         ShotProps {
             size: (w, h),
             first,
             status,
+            sheet,
         },
     );
     let (pw, ph) = ((w * SCALE) as u32, (h * SCALE) as u32);
@@ -110,8 +120,23 @@ fn main() {
 }
 
 #[component]
-fn Shot(size: (f32, f32), first: Route, status: bool) -> Element {
-    use_context_provider(|| LibraryData(Signal::new(library::fixture::library())));
+fn Shot(size: (f32, f32), first: Route, status: bool, sheet: u8) -> Element {
+    let lib = use_context_provider(|| LibraryData(Signal::new(library::fixture::library())));
+    if sheet > 0 {
+        use_context_provider(|| {
+            let mut p = Player::new();
+            p.queue.set(lib.0.peek().new_mixes());
+            p.at.set(71.0);
+            p.playing.set(true);
+            p.from.set("New mixes".to_owned());
+            p.sheet.set(match sheet {
+                2 => PlayerSheet::Playing,
+                3 => PlayerSheet::Queue,
+                _ => PlayerSheet::Mini,
+            });
+            p
+        });
+    }
     use_context_provider(|| Viewport(Signal::new(size)));
     use_context_provider(|| InitialRoute(first));
     if status {

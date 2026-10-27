@@ -15,6 +15,7 @@ mod command;
 mod home;
 mod kit;
 mod lists;
+mod player;
 mod project;
 mod session;
 mod setlist;
@@ -32,6 +33,7 @@ use crate::model::{
 };
 pub use kit::SHEET_CSS;
 use kit::*;
+pub use player::{Player, Sheet as PlayerSheet};
 pub use session::{SessionStart, Tab as SessionTab};
 
 /// The library a screen reads. Provided by the app (the synced docs);
@@ -178,6 +180,12 @@ pub(crate) fn use_wide() -> bool {
     size().0 >= 1000.0
 }
 
+/// Whether the window is a phone's: no sidebar, a tab bar at the foot.
+pub(crate) fn use_phone() -> bool {
+    let Viewport(size) = use_context::<Viewport>();
+    size().0 < 700.0
+}
+
 /// Whether the sidebar shows its labels and spaces, or folds to a rail.
 /// A list has the room beside it on an iPad sideways; a setlist or a song
 /// needs its table and its side panel, so there it folds below a desk's
@@ -217,8 +225,16 @@ pub fn LibraryApp() -> Element {
         query: Signal::new(String::new()),
     });
     let keys = use_context_provider(command::Keys::new);
+    // The app's player when it provides one (a screenshot of it playing),
+    // else the library's own.
+    let player = use_hook(|| {
+        try_consume_context::<player::Player>()
+            .unwrap_or_else(|| provide_context(player::Player::new()))
+    });
+    player::use_clock(player);
     let nav = use_nav();
     let lib = use_library();
+    let phone = use_phone();
     let route = (nav.route)();
     rsx! {
         div {
@@ -227,12 +243,22 @@ pub fn LibraryApp() -> Element {
             tabindex: "0",
             style: "position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; \
                     background: {DESK}; color: {INK}; font-family: {FONT}; font-variant-numeric: tabular-nums; outline: none;",
-            onkeydown: move |e| command::on_key(&e, &lib.read(), nav, keys),
+            onkeydown: move |e| {
+                // Space plays and pauses, when no overlay is taking keys.
+                if e.key() == Key::Character(" ".into())
+                    && *keys.overlay.peek() == command::Overlay::None
+                {
+                    player.toggle();
+                    e.prevent_default();
+                    return;
+                }
+                command::on_key(&e, &lib.read(), nav, keys);
+            },
             document::Style { {SHEET_CSS} }
             AppBar {}
             div {
                 style: "flex: 1; min-height: 0; display: flex;",
-                Sidebar {}
+                if !phone { Sidebar {} }
                 div {
                     style: "flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;",
                     match route {
@@ -251,6 +277,9 @@ pub fn LibraryApp() -> Element {
                     }
                 }
             }
+            player::MiniPlayer {}
+            if phone { TabBar {} }
+            player::NowPlaying {}
             command::Overlays {}
         }
     }
@@ -264,6 +293,7 @@ fn AppBar() -> Element {
     let lib = use_library();
     let me = lib.read().me.clone();
     let wide = use_wide();
+    let phone = use_phone();
     let inset = try_use_context::<BarInset>().map_or(16, |b| b.0);
     let pending = {
         let l = lib.read();
@@ -293,16 +323,16 @@ fn AppBar() -> Element {
                 span { style: "font-size: 20px; font-weight: 780; letter-spacing: -0.02em; padding: 0 6px;", "studio" }
             }
             SearchField { wide }
-            CommandButton {}
+            if !phone { CommandButton {} }
             span {
                 style: "display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 16px; \
                         border: 1px solid {RULE_STRONG}; {META} white-space: nowrap;",
                 if pending == 0 {
                     span { style: "width: 7px; height: 7px; border-radius: 4px; background: {LIVE};" }
-                    span { style: "color: {INK_2};", "Up to date" }
+                    if !phone { span { style: "color: {INK_2};", "Up to date" } }
                 } else {
                     span { style: "width: 7px; height: 7px; border-radius: 4px; background: {WARN};" }
-                    span { style: "color: {INK_2};", "Syncing {pending}" }
+                    if !phone { span { style: "color: {INK_2};", "Syncing {pending}" } }
                 }
             }
             Avatar { name: me, size: 32 }
@@ -416,6 +446,37 @@ fn Sidebar() -> Element {
                     SpaceItem { key: "{s.id.0}", id: Some(s.id), label: s.name.clone(), band: s.band, members: s.members.len(), on: space == Some(s.id) }
                 }
             }
+        }
+    }
+}
+
+/// A phone's foot: four places, as a music app keeps them.
+#[component]
+fn TabBar() -> Element {
+    let nav = use_nav();
+    let here = (nav.route)().section();
+    let tab = |to: Route| if here == to { INK } else { INK_3 };
+    rsx! {
+        div { style: "flex-shrink: 0; height: 64px; display: flex; align-items: stretch; padding: 0 8px 8px; \
+                      background: {SHEET}; border-top: 1px solid {RULE_STRONG};",
+            TabItem { to: Route::Home, label: "Home", colour: tab(Route::Home), icon: rsx! { House { size: 22, color: tab(Route::Home) } } }
+            TabItem { to: Route::Projects, label: "Projects", colour: tab(Route::Projects), icon: rsx! { FolderKanban { size: 22, color: tab(Route::Projects) } } }
+            TabItem { to: Route::Setlists, label: "Setlists", colour: tab(Route::Setlists), icon: rsx! { ListMusic { size: 22, color: tab(Route::Setlists) } } }
+            TabItem { to: Route::Songs, label: "Songs", colour: tab(Route::Songs), icon: rsx! { Music { size: 22, color: tab(Route::Songs) } } }
+        }
+    }
+}
+
+#[component]
+fn TabItem(to: Route, label: &'static str, colour: &'static str, icon: Element) -> Element {
+    let nav = use_nav();
+    rsx! {
+        button { class: "lp", "aria-label": label,
+            style: "flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; \
+                    border: none; border-radius: 10px; background: transparent; color: {colour}; font-family: {FONT}; font-size: 11px; font-weight: 650;",
+            onclick: move |_| nav.jump(to),
+            {icon}
+            span { "{label}" }
         }
     }
 }

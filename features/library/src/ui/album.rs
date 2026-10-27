@@ -2,16 +2,19 @@
 //! produces it, and how far each has come.
 
 use dioxus::prelude::*;
+use lucide_dioxus::{Play, Shuffle};
 
 use super::home::Page;
 use super::kit::*;
 use super::lists::StageBar;
+use super::player::use_player;
 use super::{Route, use_library, use_nav, use_wide};
 use crate::model::{AlbumId, Stage, clock};
 
 #[component]
 pub(crate) fn AlbumPage(id: AlbumId) -> Element {
     let lib = use_library();
+    let player = use_player();
     let nav = use_nav();
     let wide = use_wide();
     let l = lib.read();
@@ -32,6 +35,7 @@ pub(crate) fn AlbumPage(id: AlbumId) -> Element {
         })
         .sum();
     let in_project = l.project_of_album(id).map(|p| p.id);
+    let queue = l.album_queue(id);
     let without = stages.iter().filter(|s| s.is_none()).count();
     let columns = if wide {
         "36px minmax(0, 3fr) 64px minmax(0, 2fr) 110px"
@@ -54,6 +58,16 @@ pub(crate) fn AlbumPage(id: AlbumId) -> Element {
                     span { style: "{META} color: {INK_3};", "{album.artist} · {album.year} · {album.tracks.len()} tracks · {clock(total)}" }
                     div { style: "max-width: 420px; margin-top: 6px;", StageBar { stages: stages.clone() } }
                     if without > 0 { span { style: "{META} color: {WARN};", "{without} tracks have no session yet" } }
+                    if !queue.is_empty() {
+                        div { style: "display: flex; gap: 10px; margin-top: 8px;",
+                            Button { label: "Play".to_owned(), weight: Weight::Primary,
+                                icon: rsx! { Play { size: 16, color: "#fff", fill: "#fff" } },
+                                on_press: { let q = queue.clone(); let t = album.title.clone(); move |()| player.play(q.clone(), 0, &t) } }
+                            Button { label: "Shuffle".to_owned(), weight: Weight::Secondary,
+                                icon: rsx! { Shuffle { size: 16, color: INK } },
+                                on_press: { let q = queue.clone(); let t = album.title.clone(); move |()| { player.play(q.clone(), 0, &t); player.toggle_shuffle(); } } }
+                        }
+                    }
                 }
             }
             div { style: "display: grid; grid-template-columns: {columns}; column-gap: 16px; align-items: center; \

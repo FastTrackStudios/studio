@@ -4,7 +4,7 @@
 //! conversation.
 
 use dioxus::prelude::*;
-use lucide_dioxus::{AudioWaveform, Disc3, FileMusic, FolderOpen, ListMusic, Plus, Share2};
+use lucide_dioxus::{AudioWaveform, Disc3, FileMusic, FolderOpen, ListMusic, Play, Plus, Share2};
 
 use super::home::Page;
 use super::kit::*;
@@ -32,7 +32,9 @@ pub(crate) fn SongPage(id: SongId, arrangement: Option<ArrangementId>) -> Elemen
     let lib = use_library();
     let mut nav = use_nav();
     let wide = use_wide();
+    let player = super::player::use_player();
     let l = lib.read();
+    let heard = l.song_mix(id);
     let Some(song) = l.song(id).cloned() else {
         return rsx! { Page { p { style: "{BODY} color: {INK_2}; padding-top: 40px;", "This song was deleted or has not arrived yet." } } };
     };
@@ -74,6 +76,11 @@ pub(crate) fn SongPage(id: SongId, arrangement: Option<ArrangementId>) -> Elemen
                     }
                 }
                 div { style: "display: flex; gap: 10px;",
+                    if let Some(listen) = heard {
+                        Button { label: format!("Play mix v{}", listen.version), weight: Weight::Primary,
+                            icon: rsx! { Play { size: 16, color: "#fff", fill: "#fff" } },
+                            on_press: { let t = song.title.clone(); move |()| player.play(vec![listen], 0, &t) } }
+                    }
                     if let Some(p) = session {
                         Button { label: "Open session".to_owned(), weight: Weight::Secondary,
                             icon: rsx! { FolderOpen { size: 16, color: INK } }, on_press: move |()| open(Open::Session(p)) }
