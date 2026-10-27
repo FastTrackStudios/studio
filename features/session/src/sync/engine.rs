@@ -102,6 +102,29 @@ impl IdMap {
         self.doc_to_engine.insert(id.to_owned(), guid.to_owned());
         self.engine_to_doc.insert(guid.to_owned(), id.to_owned());
     }
+
+    /// What the doc called `from` it now calls `to`: the same engine
+    /// guid, under the new id only.
+    pub fn rename(&mut self, from: &str, to: &str) {
+        let guid = self
+            .doc_to_engine
+            .remove(from)
+            .unwrap_or_else(|| from.to_owned());
+        self.bind(to, &guid);
+    }
+}
+
+impl EngineIds {
+    /// Every pair in `renames` ([`crate::sync::align::renames`]) moved
+    /// to its new id.
+    pub fn rename(&mut self, renames: &crate::sync::align::Renames) {
+        for (from, to) in &renames.fx {
+            self.fx.rename(from, to);
+        }
+        for (from, to) in &renames.items {
+            self.items.rename(from, to);
+        }
+    }
 }
 
 /// Where the session's media lives on this machine.

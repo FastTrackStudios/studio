@@ -402,6 +402,223 @@ fn a_small_song_staged_is_the_song_built_in_place() {
     runtime().block_on(opens_alike(&song));
 }
 
+/// How many things project `guid`'s engine has made since it opened —
+/// items, FX and takes, each counted as the engine mints its guid — and
+/// every item and FX guid it holds now: a song built again shows both
+/// moving.
+fn made(daw: &Standalone, guid: &str) -> (u64, u64, u64, Vec<String>) {
+    daw.read_project(guid, |p| {
+        let mut guids: Vec<String> = p.items.keys().cloned().collect();
+        for entries in p.fx_chains.values() {
+            guids.extend(entries.iter().map(|e| e.fx.guid.clone()));
+        }
+        guids.sort();
+        (
+            p.next_item_counter,
+            p.next_fx_counter,
+            p.next_take_counter,
+            guids,
+        )
+    })
+    .expect("the project")
+}
+
+/// `doc` joined on the song already built into `daw` as `guid`, the way
+/// a song joins a live set (a fresh bridge, as collab makes one).
+async fn join_built(daw: &Standalone, guid: &str, song: &Song, doc: SessionDoc) -> Bridge {
+    let facade = daw_standalone::bootstrap::build_in_process_daw(daw.clone())
+        .await
+        .expect("a facade");
+    let project = facade.daw.project(guid.to_owned()).await.expect("the song");
+    Bridge::join(
+        project,
+        song.media.clone(),
+        doc,
+        song.blobs.clone(),
+        direct(daw),
+    )
+    .await
+    .expect("joined the live doc")
+}
+
+/// What a peer that built `song` itself seeds a live set's doc with: its
+/// engine read afresh (so its FX and MIDI items under that engine's own
+/// guids, not the file's ids), as `collab` hosts a song.
+async fn seeded_elsewhere(song: &Song) -> SessionDoc {
+    let daw = Standalone::new();
+    let _built = in_place(&daw, "host", song).await;
+    let facade = daw_standalone::bootstrap::build_in_process_daw(daw.clone())
+        .await
+        .expect("a facade");
+    let project = facade
+        .daw
+        .project("host".to_owned())
+        .await
+        .expect("the song");
+    let seed = SessionDoc::new();
+    let host = Bridge::host(
+        project,
+        song.media.clone(),
+        seed,
+        song.doc.read().chart,
+        song.blobs.clone(),
+        direct(&daw),
+    )
+    .await
+    .expect("seeded");
+    host.doc().fork()
+}
+
+/// The engine parts a build makes, with its counters and the order its
+/// items were made in on each track left out (neither is the doc's: a
+/// song built twice counts twice, and is the same song).
+fn built_parts(daw: &Standalone, guid: &str, ids: &EngineIds) -> BTreeMap<&'static str, String> {
+    let mut view = engine_view(daw, guid, ids);
+    view.remove("counters");
+    // Which track each item is on is in `items`; the lists only add the
+    // order they were made in.
+    view.remove("items_by_track");
+    if let Some(items) = view.get_mut("items") {
+        *items = without_item_order(items);
+    }
+    view
+}
+
+/// `text` with every item's `index: <n>, ` taken out.
+fn without_item_order(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("index: ") {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + "index: ".len()..];
+        let digits = after.len() - after.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+        rest = after[digits..]
+            .strip_prefix(", ")
+            .unwrap_or(&after[digits..]);
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A song built from its file and then joined to a live set whose doc
+/// holds the same song is built once: the join makes nothing in the
+/// engine (no item, FX or take minted, the same guids held), the engine
+/// is what a build straight from the live doc makes, and the bridge
+/// shows what the doc holds — whether the doc is the file's own history
+/// or one another peer seeded from its own build (its FX and MIDI items
+/// under other guids).
+async fn joins_without_building(song: &Song) {
+    let seeded = seeded_elsewhere(song).await;
+    for (case, live) in [
+        ("the file's doc", song.doc.fork()),
+        ("a peer's seed", seeded),
+    ] {
+        let daw = Standalone::new();
+        let built = in_place(&daw, "joined-song", song).await;
+        let before = made(&daw, "joined-song");
+        let joined = join_built(&daw, "joined-song", song, live.fork()).await;
+        assert_eq!(
+            made(&daw, "joined-song"),
+            before,
+            "{case}: the join built again"
+        );
+
+        let fresh = Song {
+            doc: live.fork(),
+            media: song.media.clone(),
+            blobs: song.blobs.clone(),
+        };
+        let straight = in_place(&daw, "straight-song", &fresh).await;
+        let have = built_parts(&daw, "joined-song", &joined.ids);
+        let want = built_parts(&daw, "straight-song", &straight.ids);
+        for (part, text) in &want {
+            let have = have[part].replace("joined-song", "<song>");
+            let want = text.replace("straight-song", "<song>");
+            let differ = have
+                .lines()
+                .zip(want.lines())
+                .find(|(a, b)| a != b)
+                .map(|(a, b)| format!("joined    {a}\nstraight  {b}"));
+            assert_eq!(differ, None, "{case}: {part} differ");
+            assert_eq!(have.len(), want.len(), "{case}: {part} differ in length");
+        }
+        let mut doc = live.read();
+        doc.chart.clone_from(&joined.shown().chart);
+        assert_eq!(joined.shown(), &doc, "{case}: the bridge shows the doc");
+        drop(built);
+    }
+}
+
+/// The bridge that built a song, re-pointed at a live doc of the same
+/// song ([`Bridge::rejoin`]), makes nothing in the engine either, and
+/// shows what the doc holds.
+async fn rejoins_without_building(song: &Song) {
+    let seeded = seeded_elsewhere(song).await;
+    for (case, live) in [
+        ("the file's doc", song.doc.fork()),
+        ("a peer's seed", seeded),
+    ] {
+        let daw = Standalone::new();
+        let built = in_place(&daw, "rejoined-song", song).await;
+        let before = made(&daw, "rejoined-song");
+        let joined = built.rejoin(live.fork()).await.expect("rejoined");
+        assert_eq!(
+            made(&daw, "rejoined-song"),
+            before,
+            "{case}: the rejoin built again"
+        );
+        let mut doc = live.read();
+        doc.chart.clone_from(&joined.shown().chart);
+        assert_eq!(joined.shown(), &doc, "{case}: the bridge shows the doc");
+    }
+}
+
+#[test]
+fn a_small_song_rejoined_to_its_live_doc_is_built_once() {
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let written = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(async {
+        let song = Song {
+            doc: seeded_elsewhere(&written).await,
+            ..written
+        };
+        rejoins_without_building(&song).await;
+    });
+}
+
+#[test]
+fn a_small_song_joined_to_its_live_doc_is_built_once() {
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let written = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(async {
+        // Its file as a host saves one: what its engine read back.
+        let song = Song {
+            doc: seeded_elsewhere(&written).await,
+            ..written
+        };
+        joins_without_building(&song).await;
+    });
+}
+
+#[test]
+fn a_real_song_joined_to_its_live_doc_is_built_once() {
+    let scratch = tempfile::tempdir().expect("a temp dir");
+    let Some(song) = real_song(scratch.path()) else {
+        return;
+    };
+    runtime().block_on(joins_without_building(&song));
+}
+
 /// A real song (`FTS_OPEN_SONG`), opened from a copy of its file.
 fn real_song(scratch: &Path) -> Option<Song> {
     let original = PathBuf::from(std::env::var_os("FTS_OPEN_SONG")?);

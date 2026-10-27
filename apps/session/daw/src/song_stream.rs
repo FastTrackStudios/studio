@@ -393,6 +393,23 @@ fn rendition_of(proxy: &str) -> Option<String> {
     })
 }
 
+/// A song folder's listing, sorted, its project first — what [`mirror`]
+/// opens: the top-level project file (`Song.session`), else the top-level
+/// `.RPP`. Sorted by path alone, a song named after `Media/` listed its
+/// peaks first and opened them as the song.
+fn project_first(entries: &mut Vec<(String, u64)>) {
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    let top_level = |ext: &str| {
+        entries
+            .iter()
+            .position(|(p, _)| !p.contains('/') && p.to_lowercase().ends_with(ext))
+    };
+    if let Some(at) = top_level(".session").or_else(|| top_level(".rpp")) {
+        let project = entries.remove(at);
+        entries.insert(0, project);
+    }
+}
+
 impl SongSource for ShareSource {
     fn label(&self) -> String {
         format!("share-{}", self.token())
@@ -414,15 +431,7 @@ impl SongSource for ShareSource {
                     ))
                 })
                 .collect();
-            // The project first: the top-level `.RPP`, as every source.
-            entries.sort_by(|a, b| a.0.cmp(&b.0));
-            if let Some(at) = entries
-                .iter()
-                .position(|(p, _)| !p.contains('/') && p.to_lowercase().ends_with(".rpp"))
-            {
-                let project = entries.remove(at);
-                entries.insert(0, project);
-            }
+            project_first(&mut entries);
             Ok(Listing {
                 entries,
                 version: listed["commit"].as_str().map(str::to_owned),
@@ -708,7 +717,38 @@ fn is_mapped_original(lower: &str) -> bool {
 
 #[cfg(test)]
 mod media_tests {
-    use super::{is_mapped_original, is_media};
+    use super::{is_mapped_original, is_media, project_first};
+
+    fn listed(paths: &[&str]) -> Vec<String> {
+        let mut entries = paths.iter().map(|p| ((*p).to_owned(), 1)).collect();
+        project_first(&mut entries);
+        entries.into_iter().map(|(p, _)| p).collect()
+    }
+
+    #[test]
+    fn the_project_file_is_listed_first_whatever_its_name() {
+        assert_eq!(
+            listed(&[
+                "Media/Peaks/Reference.wav.sessionpeaks",
+                "She's American.session-wal",
+                "She's American.session",
+                "Bounces/Extras/Outro.wav",
+            ])[0],
+            "She's American.session"
+        );
+        // A prepared song keeps its `.RPP` beside its project file: the
+        // project file is what opens.
+        assert_eq!(
+            listed(&["Zed.RPP", "Zed.session", "Media/a.wav"])[0],
+            "Zed.session"
+        );
+        assert_eq!(listed(&["Media/a.wav", "Song.RPP"])[0], "Song.RPP");
+        // Only a top-level one: a song's bounces are not the song.
+        assert_eq!(
+            listed(&["Archive/Old.session", "Media/a.wav"]),
+            ["Archive/Old.session", "Media/a.wav"]
+        );
+    }
 
     #[test]
     fn only_a_wav_beside_its_proxies_is_an_original_to_fetch() {
@@ -1695,7 +1735,7 @@ impl StreamedSong {
 
 /// What a song is heard by: its reference's preview, its reference, or
 /// its stems.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Heard {
     Preview,
     Reference,

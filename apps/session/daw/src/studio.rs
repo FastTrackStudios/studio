@@ -207,6 +207,12 @@ impl StudioSession {
                 } else {
                     from_text
                 };
+                #[cfg(all(feature = "web", not(feature = "native")))]
+                let from_text = if from_text.is_empty() {
+                    crate::web_engine::kinds_of(project).unwrap_or(from_text)
+                } else {
+                    from_text
+                };
                 from_text
             }),
         };

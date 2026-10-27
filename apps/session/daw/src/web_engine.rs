@@ -185,6 +185,9 @@ struct Web {
     order: Vec<String>,
     /// Stops the cache warming started for the song last shown.
     warming: Arc<AtomicBool>,
+    /// What has been brought in whole, by song: a warming started again
+    /// (another song arrived, another was picked) skips it.
+    warmed: Rc<std::cell::RefCell<std::collections::HashSet<(String, crate::song_stream::Heard)>>>,
 }
 
 thread_local! {
@@ -196,6 +199,24 @@ thread_local! {
     static MULTITRACKS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static NOTICES: std::cell::RefCell<Option<tokio::sync::mpsc::UnboundedSender<Notice>>> =
         const { std::cell::RefCell::new(None) };
+}
+
+thread_local! {
+    /// The page's engine, from the moment it is made — before the first
+    /// song is read back, which [`kinds_of`] serves.
+    static ENGINE: std::cell::RefCell<Option<daw_standalone::sync::Standalone>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The kinds the page's engine holds for `project`'s tracks — a song
+/// opened from its `.session`, which has no text to read them from
+/// (`StudioSession::read_project`). `None` before the engine is up.
+#[must_use]
+pub fn kinds_of(project: &str) -> Option<crate::plan::Kinds> {
+    ENGINE.with(|engine| {
+        let engine = engine.borrow();
+        Some(crate::plan::Kinds::from_engine(engine.as_ref()?, project))
+    })
 }
 
 /// What the page is told from here on ([`Notice`]) — once, for the view
@@ -308,6 +329,100 @@ const NEXT_SONGS_AFTER_MS: u32 = 1_500;
 /// The set's songs whose files are fetched at once behind the first.
 const OPEN_AT_ONCE: usize = 4;
 
+/// How long opening a song runs before the page gets its turn
+/// ([`in_slices`]), at least: under a long task (50 ms), and long enough
+/// that the frames painted between slices do not double the time a song
+/// takes.
+const SLICE: std::time::Duration = std::time::Duration::from_millis(40);
+/// And at most, however long the page's turns take (a canvas drawn
+/// without a GPU took 400 ms a frame, and a song got a sliver between).
+const SLICE_MOST: std::time::Duration = std::time::Duration::from_millis(250);
+/// A break this long in opening a song was a wait the page had its turn
+/// in ([`crate::slices::Slices`]).
+const SLICE_GAP: std::time::Duration = std::time::Duration::from_millis(50);
+
+/// The page's turns, shared by everything run [`in_slices`]: one budget,
+/// so two songs being worked on at once (one opening, the one before it
+/// joining the live set) give way together — and the page's turn is
+/// measured with nothing of theirs in it. Each measuring its own, they
+/// took each other's slices for the page's and lengthened them in turn.
+struct Turns {
+    origin: web_time::Instant,
+    slices: crate::slices::Slices,
+    /// The page's turn while it has it: the timer all sliced work waits on.
+    turn: Option<futures_util::future::Shared<gloo_timers::future::TimeoutFuture>>,
+}
+
+thread_local! {
+    static TURNS: std::cell::RefCell<Turns> = std::cell::RefCell::new(Turns {
+        origin: web_time::Instant::now(),
+        slices: crate::slices::Slices::new(SLICE, SLICE_MOST, SLICE_GAP),
+        turn: None,
+    });
+}
+
+/// Run `work` in slices ([`SLICE`] to [`SLICE_MOST`]), the page given its
+/// turn between them: work that awaits only the in-process facade (a song
+/// built through it, each call answered as a microtask) never ends the
+/// task it runs in, and one song froze the page for most of a second.
+/// Giving way is a zero timer, which ends the task; every sliced work
+/// waits on it ([`Turns`]).
+pub(crate) async fn in_slices<T>(work: impl std::future::Future<Output = T>) -> T {
+    use futures_util::FutureExt as _;
+    use std::future::Future as _;
+    use std::task::Poll;
+    let mut work = std::pin::pin!(work);
+    let mut waiting: Option<futures_util::future::Shared<gloo_timers::future::TimeoutFuture>> =
+        None;
+    std::future::poll_fn(move |cx| {
+        // The page's turn, if another's slice ended in it: wait it out.
+        if waiting.is_none() {
+            waiting = TURNS.with(|t| t.borrow().turn.clone());
+        }
+        if let Some(timer) = waiting.as_mut() {
+            if std::pin::Pin::new(timer).poll(cx).is_pending() {
+                return Poll::Pending;
+            }
+            waiting = None;
+            TURNS.with(|t| {
+                let mut t = t.borrow_mut();
+                if t.turn.as_ref().is_some_and(|turn| turn.peek().is_some()) {
+                    t.turn = None;
+                }
+            });
+        }
+        let turn = TURNS.with(|t| {
+            let mut t = t.borrow_mut();
+            let now = t.origin.elapsed();
+            t.slices.give_way(now).then(|| {
+                let timer = gloo_timers::future::TimeoutFuture::new(0).shared();
+                t.turn = Some(timer.clone());
+                timer
+            })
+        });
+        if let Some(mut timer) = turn {
+            // Polled once, so it wakes this task when it fires.
+            let _ = std::pin::Pin::new(&mut timer).poll(cx);
+            waiting = Some(timer);
+            return Poll::Pending;
+        }
+        let polled = work.as_mut().poll(cx);
+        TURNS.with(|t| {
+            let mut t = t.borrow_mut();
+            let now = t.origin.elapsed();
+            t.slices.stepped(now);
+        });
+        polled
+    })
+    .await
+}
+
+thread_local! {
+    /// Whether the page opens a live set: each song's build hands its
+    /// bridge to the session it joins (`collab::song_built`).
+    static IN_LIVE_SET: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// Open the page the one way songs open (`open_core::open_song_in`, from
 /// a memory folder), first song first: a live set is joined (and joined
 /// again until Task answers — it may be restarting), its first song
@@ -327,11 +442,15 @@ pub async fn open(
     guide: Option<&str>,
     progress: impl Fn(Progress),
 ) -> eyre::Result<(EngineRef, crate::setlist::Setlist)> {
+    // How long each step took, for the events that say the set is up.
+    let began = web_time::Instant::now();
+    let ms = move || u64::try_from(began.elapsed().as_millis()).unwrap_or(u64::MAX);
     // What to open: a live set's songs (joined first, for their files
     // links), or the one song a link or the page names.
     let mut live: Option<crate::collab::TaskSet> = None;
     let mut wanted: Vec<Wanted> = match source {
         WebSource::Live { link, .. } => {
+            IN_LIVE_SET.with(|l| l.set(true));
             let set = crate::collab::TaskSet::parse(&format!("share:{link}"));
             progress(Progress::Joining { retry: None });
             let joined = crate::task_set::until_ok(
@@ -408,6 +527,7 @@ pub async fn open(
     };
     let (fetched, library) = futures_util::future::join(song, samples).await;
     let fetched = fetched?;
+    let fetched_ms = ms();
     progress(Progress::Opening {
         title: first_title.clone(),
     });
@@ -419,6 +539,7 @@ pub async fn open(
         );
     }
     let standalone = daw_standalone::sync::Standalone::new();
+    ENGINE.with(|engine| *engine.borrow_mut() = Some(standalone.clone()));
     // The guide instrument, before the guide tracks it plays on are made.
     crate::guide_instrument::install(
         &standalone,
@@ -427,14 +548,17 @@ pub async fn open(
             ext: "ogg",
         },
     );
-    let loaded = open_fetched(&standalone, first.title, fetched)?;
+    // The facade first: a song's project file is built into the engine
+    // through it ([`open_project_file`]).
     let bundle = daw_standalone::bootstrap::build_in_process_daw(standalone.clone())
         .await
         .map_err(|e| eyre::eyre!("build_in_process_daw: {e:?}"))?;
     daw::init_from_parts(bundle.daw.clone());
     // The facade and the engine live as long as the page.
     std::mem::forget(bundle);
-    let (song, kept) = read_back(loaded).await?;
+    let loaded = in_slices(open_fetched(&standalone, first.title, fetched)).await?;
+    let opened_ms = ms();
+    let (song, kept) = in_slices(read_back(loaded)).await?;
     let project = song.project.clone();
     WEB.with(|web| {
         *web.borrow_mut() = Some(Web {
@@ -442,10 +566,19 @@ pub async fn open(
             songs: HashMap::from([(project.clone(), kept)]),
             order: vec![project.clone()],
             warming: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            warmed: Rc::default(),
         });
     });
     crate::web_audio::install(standalone.clone(), &project);
     switch_song(&project);
+    tracing::info!(
+        song.title = %first_title,
+        set.songs = rest.len() + 1,
+        web.fetched_ms = fetched_ms,
+        web.opened_ms = opened_ms,
+        web.up_ms = ms(),
+        "web: the first song is up"
+    );
 
     // In the live set with everyone else (the facade is up: the session's
     // bridges read and drive the engine through it). The songs that open
@@ -477,19 +610,34 @@ pub async fn open(
         // in set order as soon as it and the ones before it are in: the
         // songs are a round trip each, and one after another a set of
         // eleven waited on all of them in turn.
-        use futures_util::StreamExt as _;
-        let mut fetching = futures_util::stream::iter(rest)
-            .map(|want| async move {
-                let fetched =
-                    crate::task_set::until_ok(Some(6), || fetch_song(&want), |_| {}).await;
-                (want, fetched)
-            })
-            .buffered(OPEN_AT_ONCE);
-        while let Some((want, fetched)) = fetching.next().await {
+        //
+        // The fetching is its own task: polled only between opens, the
+        // songs behind waited on the one being built instead of coming in
+        // while it was.
+        let (fetched_tx, mut fetched_rx) = tokio::sync::mpsc::channel(OPEN_AT_ONCE);
+        wasm_bindgen_futures::spawn_local(async move {
+            use futures_util::StreamExt as _;
+            let mut fetching = futures_util::stream::iter(rest)
+                .map(|want| async move {
+                    let fetched =
+                        crate::task_set::until_ok(Some(6), || fetch_song(&want), |_| {}).await;
+                    (want, fetched)
+                })
+                .buffered(OPEN_AT_ONCE);
+            while let Some(song) = fetching.next().await {
+                if fetched_tx.send(song).await.is_err() {
+                    return;
+                }
+            }
+        });
+        let (mut songs_opened, mut songs_failed) = (1usize, 0usize);
+        while let Some((want, fetched)) = fetched_rx.recv().await {
             let title = want.title.clone().unwrap_or_default();
-            let opened =
-                async { read_back(open_fetched(&standalone, want.title.clone(), fetched?)?).await }
-                    .await;
+            let opened = in_slices(async {
+                let loaded = open_fetched(&standalone, want.title.clone(), fetched?).await?;
+                read_back(loaded).await
+            })
+            .await;
             let arrival = match opened {
                 Ok((song, kept)) => {
                     let project = song.project.clone();
@@ -505,10 +653,12 @@ pub async fn open(
                         }
                     });
                     crate::collab::song_opened(&project);
+                    songs_opened += 1;
                     Arrival::Song(song)
                 }
                 Err(e) => {
                     tracing::warn!(song.title = %title, error = %e, "web: a song did not open; the set goes on without it");
+                    songs_failed += 1;
                     Arrival::Failed(title)
                 }
             };
@@ -516,6 +666,12 @@ pub async fn open(
                 break;
             }
         }
+        tracing::info!(
+            set.songs_opened = songs_opened,
+            set.songs_failed = songs_failed,
+            web.all_ms = ms(),
+            "web: the set is open"
+        );
     });
 
     let engine = EngineRef {
@@ -569,38 +725,151 @@ async fn fetch_song(want: &Wanted) -> eyre::Result<Fetched> {
     }
 }
 
-/// Open a fetched song into `standalone`: prepared (its `.session` when it
-/// carries one, else organized, built from its chart, given its guide) —
-/// it does not become current.
-fn open_fetched(
+/// Open a fetched song into `standalone`: its project file (`.session`,
+/// prepared already) built from its doc, or an `.RPP` prepared (organized,
+/// built from its chart, given its guide) — it does not become current.
+async fn open_fetched(
     standalone: &daw_standalone::sync::Standalone,
     title: Option<String>,
     song: Fetched,
 ) -> eyre::Result<Loaded> {
     let prepare = crate::prepare::Prepare::for_song_in(song.folder.as_ref(), &song.path);
-    let (opened, plan) = crate::open_core::open_song_in(
-        song.folder.as_ref(),
-        standalone,
-        &song.path,
-        &prepare,
-        crate::open_core::Media::Deferred,
-    )?;
-    let rpp_text = crate::open_core::project_text_in(song.folder.as_ref(), &plan.open)?.text;
+    // A `.session` has no text: its track kinds are read from the engine
+    // it opened into ([`kinds_of`]), as natively.
+    let (project_guid, name, rpp_text, opened_from) = if crate::open_core::is_session(&song.path) {
+        let (guid, name) = open_project_file(standalone, song.folder.as_ref(), &song.path).await?;
+        (guid, name, String::new(), song.path.clone())
+    } else {
+        let (opened, plan) = crate::open_core::open_song_in(
+            song.folder.as_ref(),
+            standalone,
+            &song.path,
+            &prepare,
+            crate::open_core::Media::Deferred,
+        )?;
+        let text = crate::open_core::project_text_in(song.folder.as_ref(), &plan.open)?.text;
+        (opened.project_guid, opened.name, text, plan.open)
+    };
     let chart_text = prepare
         .chart
         .as_ref()
         .and_then(|p| song.folder.read_to_string(p).ok());
     // The chart a live set's doc for this song is seeded with.
     if let Some(chart) = &chart_text {
-        crate::collab::remember_chart(&plan.open, chart);
+        crate::collab::remember_chart(&opened_from, chart);
     }
     Ok(Loaded {
-        title: title.unwrap_or_else(|| opened.name.clone()),
-        project: opened.project_guid.clone(),
+        title: title.unwrap_or(name),
+        project: project_guid,
         rpp_text,
         chart_text,
         streamed: song.streamed,
     })
+}
+
+/// A project file (`Song.session`) in `folder`, opened into `standalone`
+/// the way the desktop opens one (`project_file::load`): its `main`
+/// branch's doc read from the file's bytes, a project made for it, and the
+/// doc built into that project by the session's bridge, over the page's
+/// facade. Its media is anchored to the file's folder and left to stream.
+/// Says the project's guid and name.
+///
+/// # Errors
+///
+/// The file is not there or not a project file, or the build failed.
+async fn open_project_file(
+    standalone: &daw_standalone::sync::Standalone,
+    folder: &dyn crate::folder::Folder,
+    path: &std::path::Path,
+) -> eyre::Result<(String, String)> {
+    use session_format::read::{MAIN, ProjectFile};
+    let bytes = folder
+        .read(path)
+        .map_err(|e| eyre::eyre!("could not read {}: {e}", path.display()))?;
+    let file = ProjectFile::read(&bytes)
+        .map_err(|e| eyre::eyre!("{} did not read: {e}", path.display()))?;
+    let doc = session::sync::SessionDoc::from_loro(
+        file.doc(MAIN)
+            .map_err(|e| eyre::eyre!("{} did not load: {e}", path.display()))?,
+    );
+    let media_dir = path
+        .parent()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_default();
+    standalone.media_bay().set_file_resolver(Box::new(
+        daw::standalone::media_bay::ProjectRelativeResolver::new(media_dir.clone()),
+    ));
+    let name = path
+        .file_stem()
+        .map_or_else(|| "Song".to_owned(), |s| s.to_string_lossy().into_owned());
+    let guid = standalone.seed_project(daw_proto::ProjectInfo {
+        guid: uuid::Uuid::new_v4().to_string(),
+        name: name.clone(),
+        path: path.to_string_lossy().into_owned(),
+    });
+    let facade =
+        daw_control::Daw::try_get().ok_or_else(|| eyre::eyre!("the daw facade is not up"))?;
+    let project = facade
+        .project(guid.clone())
+        .await
+        .map_err(|e| eyre::eyre!("{name} is not in the engine: {e}"))?;
+    // Built, the bridge has done its work here: a page keeps no project
+    // file to save into. In a live set the session joins the song through
+    // it (`collab::song_built`), so the song is not read back again.
+    let built = session::sync::Bridge::join(
+        project,
+        session::sync::engine::MediaRoot(media_dir.clone()),
+        doc,
+        Arc::new(FileBlobs::new(file)),
+        // Through the facade: on a page the engine is not `Send` (the
+        // web's collab bridges go the same way).
+        None,
+    )
+    .await
+    .map_err(|e| eyre::eyre!("{name} did not build: {e}"))?;
+    if IN_LIVE_SET.with(std::cell::Cell::get) {
+        crate::collab::song_built(&guid, built);
+    }
+    daw::standalone::project_loader::anchor_media(standalone, &guid, &media_dir);
+    Ok((guid, name))
+}
+
+/// A project file's blobs (plugin states, MIDI), read from the file as
+/// they are asked for; any the bridge writes kept beside them.
+struct FileBlobs {
+    file: session_format::read::ProjectFile,
+    made: session::sync::engine::MemoryBlobs,
+}
+
+impl FileBlobs {
+    fn new(file: session_format::read::ProjectFile) -> Self {
+        Self {
+            file,
+            made: session::sync::engine::MemoryBlobs::default(),
+        }
+    }
+}
+
+impl session::sync::engine::Blobs for FileBlobs {
+    fn put(&self, bytes: &[u8]) -> String {
+        session::sync::engine::Blobs::put(&self.made, bytes)
+    }
+
+    fn get(&self, name: &str) -> Option<Vec<u8>> {
+        use session_format::read::ReadError;
+        session::sync::engine::Blobs::get(&self.made, name).or_else(|| {
+            match self.file.blob(name) {
+                Ok(bytes) => Some(bytes),
+                // Not kept (an FX with no state): none, as the desktop's
+                // store answers.
+                Err(ReadError::Missing(_)) => None,
+                Err(e) => {
+                    tracing::warn!(blob = name, error = %e, "web: a blob of the project file did not read");
+                    None
+                }
+            }
+        })
+    }
 }
 
 /// A song the page opened, read back as the studio lays it out — by its
@@ -698,6 +967,7 @@ fn warm_around(web: &mut Web, project: &str) {
         .collect();
     let by_reference: Vec<bool> = songs.iter().map(|(_, s)| s.has_reference()).collect();
     let steps = crate::song_stream::warm_order(&by_reference);
+    let warmed = Rc::clone(&web.warmed);
     wasm_bindgen_futures::spawn_local(async move {
         for step in steps {
             if stop.load(Ordering::Relaxed) {
@@ -705,8 +975,16 @@ fn warm_around(web: &mut Web, project: &str) {
             }
             match step {
                 WarmStep::Warm { song, heard } => {
-                    if let Some((_, streamed)) = songs.get(song) {
+                    if let Some((project, streamed)) = songs.get(song) {
+                        let key = (project.clone(), heard);
+                        if warmed.borrow().contains(&key) {
+                            continue;
+                        }
                         streamed.warm(heard, None, Arc::clone(&stop)).await;
+                        // Whole only if it was not stopped part way.
+                        if !stop.load(Ordering::Relaxed) {
+                            warmed.borrow_mut().insert(key);
+                        }
                     }
                 }
                 WarmStep::HearStems { song } => {

@@ -13,6 +13,7 @@
 
 use daw_control::Project;
 
+use crate::sync::align;
 use crate::sync::diff::{Change, diff};
 use crate::sync::doc::{ORIGIN_LOCAL, SessionDoc, Touched, Watch};
 use crate::sync::engine::{self, Blobs, Direct, EngineIds, MediaRoot};
@@ -115,6 +116,11 @@ impl Bridge {
     /// before calling this), and the engine is made to match it —
     /// whatever it had open is replaced, never written into the doc.
     ///
+    /// What the engine already holds as the doc does is kept, not made
+    /// again: its FX and MIDI items under the engine's own guids are
+    /// taken for the doc's ([`Self::adopt`]), so a song built from its
+    /// file and joined to a live set holding the same song is built once.
+    ///
     /// # Errors
     /// When the engine cannot be read or an engine call fails.
     pub async fn join(
@@ -142,8 +148,50 @@ impl Bridge {
             watch,
             quiet: Vec::new(),
         };
-        bridge.remote_changed().await?;
+        // The whole doc, whatever the watch has seen so far.
+        bridge.take_touched();
+        let touched = Touched::everything();
+        let target = bridge.doc.read_touched(&bridge.shown, &touched);
+        bridge.adopt(&target);
+        bridge.make_match(target, &touched).await?;
         Ok(bridge)
+    }
+
+    /// This bridge's song, kept in step with `doc` from now on — a song
+    /// built from its file and then joined to a live set's doc of it. What
+    /// the bridge knows of the engine (what it showed, which engine FX and
+    /// item each entry is) holds, so the engine is not read again; it is
+    /// made to match `doc` as [`Self::join`] makes it, and what it already
+    /// holds as the doc does is kept, not made again. Undo starts here.
+    ///
+    /// # Errors
+    /// When an engine call fails.
+    pub async fn rejoin(self, doc: SessionDoc) -> eyre::Result<Self> {
+        let (undo, naming) = undo_manager(&doc);
+        let watch = doc.watch();
+        let mut bridge = Self {
+            doc,
+            undo,
+            naming,
+            watch,
+            quiet: Vec::new(),
+            ..self
+        };
+        bridge.take_touched();
+        let touched = Touched::everything();
+        let target = bridge.doc.read_touched(&bridge.shown, &touched);
+        bridge.adopt(&target);
+        bridge.make_match(target, &touched).await?;
+        Ok(bridge)
+    }
+
+    /// Take what the engine shows as `target`'s where the two differ only
+    /// in what each calls an FX or an item ([`align::renames`]): the
+    /// engine's guids bound to the doc's ids, and what it showed renamed.
+    fn adopt(&mut self, target: &SessionModel) {
+        let renames = align::renames(&self.shown, target);
+        self.ids.rename(&renames);
+        renames.apply(&mut self.shown);
     }
 
     /// This bridge, kept on `project` from now on: the same song moved
@@ -187,7 +235,8 @@ impl Bridge {
         let (undo, naming) = undo_manager(&doc);
         // Starts as "everything touched": the merge reads the doc whole.
         let watch = doc.watch();
-        Ok(Self {
+        let target = doc.read();
+        let mut bridge = Self {
             doc,
             project,
             media,
@@ -199,7 +248,10 @@ impl Bridge {
             naming,
             watch,
             quiet: Vec::new(),
-        })
+        };
+        // What it holds as the doc does is not an edit made here.
+        bridge.adopt(&target);
+        Ok(bridge)
     }
 
     /// The device was unlocked: merge what the lock held. This engine's
@@ -380,6 +432,15 @@ impl Bridge {
             return Ok(Vec::new());
         }
         let target = self.doc.read_touched(&self.shown, &touched);
+        self.make_match(target, &touched).await
+    }
+
+    /// Make the engine match `target`, the doc as read for `touched`.
+    async fn make_match(
+        &mut self,
+        target: SessionModel,
+        touched: &Touched,
+    ) -> eyre::Result<Vec<Change>> {
         let changes = diff(&self.shown, &target);
         if changes.is_empty() {
             return Ok(changes);

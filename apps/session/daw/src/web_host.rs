@@ -408,6 +408,15 @@ pub fn WidgetCanvas(
     }
 }
 
+/// A frame as drawn on a canvas: its scene, the backing store's size and
+/// the device pixel ratio it was drawn at.
+#[derive(PartialEq)]
+struct Drawn {
+    scene: anyrender::Scene,
+    size: (u32, u32),
+    dpr: f64,
+}
+
 /// The animation-frame loop for one canvas: size the backing store to the
 /// canvas's CSS size times `devicePixelRatio`, run `frame`, paint.
 fn start_painting(
@@ -418,6 +427,8 @@ fn start_painting(
     hidden: Rc<Cell<bool>>,
 ) {
     let painted = Cell::new(false);
+    // What the canvas shows now: a frame painting the same is not drawn.
+    let mut shown: Option<Drawn> = None;
     let runtime = dioxus::dioxus_core::Runtime::current();
     let scope = dioxus::dioxus_core::current_scope_id();
     let gpu = Rc::new(RefCell::new(None::<Gpu>));
@@ -461,6 +472,20 @@ fn start_painting(
             reason = "a canvas size"
         )]
         let scene = widget.0.borrow_mut().paint(css_w as u32, css_h as u32, 1.0);
+        let next = Drawn {
+            scene,
+            size: (px_w, px_h),
+            dpr,
+        };
+        // Nothing changed: the canvas keeps what it shows (a WebGL canvas
+        // is cleared only when drawn to or resized), and the scene is not
+        // encoded and rasterized again — most frames of a page at rest.
+        if shown.as_ref() == Some(&next) {
+            if let Some(again) = again.borrow().as_ref() {
+                let _ = window.request_animation_frame(again.as_ref().unchecked_ref());
+            }
+            return;
+        }
         let mut gpu = gpu.borrow_mut();
         if gpu.is_none() {
             match Gpu::new(&canvas, px_w, px_h) {
@@ -480,7 +505,8 @@ fn start_painting(
             return;
         };
         gpu.resize(px_w, px_h);
-        gpu.draw(scene, dpr);
+        gpu.draw(next.scene.clone(), dpr);
+        shown = Some(next);
         if let Some(next) = again.borrow().as_ref() {
             let _ = window.request_animation_frame(next.as_ref().unchecked_ref());
         }
@@ -567,6 +593,7 @@ pub fn WebDemo(
                 progress.set(step);
             })
             .await
+            .inspect_err(|e| tracing::warn!(error = %e, "web: the session did not open"))
             .map_err(|e| e.to_string())
         }
     });

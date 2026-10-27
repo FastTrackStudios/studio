@@ -137,17 +137,41 @@ const LOCAL_ME: &str = "local";
 
 /// Join a song's doc that already holds the session: the engine made to
 /// match it — or, locked ([`sync_locked`]), left as it is until the lock
-/// lifts.
+/// lifts. A song whose build left its bridge ([`song_built`]) is joined
+/// through it ([`Bridge::rejoin`]): the engine is not read again.
 async fn join_bridge(
     project: daw_control::Project,
     media: MediaRoot,
     doc: SessionDoc,
 ) -> eyre::Result<Bridge> {
+    let built = take_built(project.guid());
     if sync_locked() {
         Bridge::join_held(project, media, doc, blobs(), local()).await
+    } else if let Some(built) = built {
+        built.rejoin(doc).await
     } else {
         Bridge::join(project, media, doc, blobs(), local()).await
     }
+}
+
+thread_local! {
+    /// Bridges songs were built by, by project, until the session takes
+    /// them ([`song_built`]). The page's: it builds and joins on its one
+    /// thread, and its bridges are not `Send` (the facade's handles).
+    static BUILT: std::cell::RefCell<HashMap<String, Bridge>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+/// `project` was just built from its file by `bridge`, and is about to
+/// join a set Task keeps: the session joins it through that bridge, which
+/// knows the engine as built, instead of reading the song back again.
+pub fn song_built(project: &str, bridge: Bridge) {
+    BUILT.with(|built| built.borrow_mut().insert(project.to_owned(), bridge));
+}
+
+/// The bridge `project` was built by, if it left one ([`song_built`]).
+fn take_built(project: &str) -> Option<Bridge> {
+    BUILT.with(|built| built.borrow_mut().remove(project))
 }
 
 /// Whether an environment switch is on: set, and not to nothing.
@@ -867,6 +891,13 @@ pub struct TaskSet {
 pub const TASK_SET_ENV: &str = "FTS_COLLAB_TASK";
 
 impl TaskSet {
+    /// Joined through a live share link (`…/share/<token>/vox`): a guest,
+    /// who plays the set but never seeds it ([`may_seed`]).
+    #[must_use]
+    pub fn is_guest(&self) -> bool {
+        self.url.contains("/share/")
+    }
+
     /// The set `FTS_COLLAB_TASK` names, if it names one.
     #[must_use]
     pub fn from_env() -> Option<Self> {
@@ -1061,12 +1092,19 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
         .ok()
         .map(|mut l| stop(l.take()))
         .unwrap_or_default();
+    let seeds = may_seed(&set, joined.read_only);
     let mut bridges = Vec::new();
+    let mut waiting = Vec::new();
     let mut seeded = 0usize;
     for (doc, song) in replicas {
-        let (song, bridge, was_seeded) = bridge_song(doc, song, &mut docs).await?;
-        seeded += usize::from(was_seeded);
-        bridges.push((song, bridge));
+        match meeting(doc, seeds) {
+            Meeting::Wait(doc) => waiting.push((doc, song)),
+            meet => {
+                let (song, bridge, was_seeded) = sliced(bridge_song(meet, song, &mut docs)).await?;
+                seeded += usize::from(was_seeded);
+                bridges.push((song, bridge));
+            }
+        }
     }
     crate::studio::request_resync();
     let me = format!("peer-{}", &Uuid::new_v4().simple().to_string()[..8]);
@@ -1075,6 +1113,8 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
         collab.epoch = joined.epoch,
         collab.songs = bridges.len(),
         collab.seeded = seeded,
+        collab.waiting = waiting.len(),
+        collab.guest = set.is_guest(),
         "collab: joined a set Task keeps"
     );
     // Songs opened after this (a page opens its first song, then the
@@ -1084,7 +1124,11 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
     let mut bridged: std::collections::HashSet<String> = bridges
         .iter()
         .map(|(song, _)| song.project.clone())
+        .chain(waiting.iter().map(|(_, song)| song.0.guid().to_owned()))
         .collect();
+    for (doc, song) in waiting {
+        bridge_when_seeded(doc, song, adds_tx.clone());
+    }
     architect::platform::spawn(async move {
         while let Some(project) = opened_rx.recv().await {
             if !bridged.insert(project.clone()) {
@@ -1098,7 +1142,14 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
             };
             let doc = replicate(&ids, &sync, &song.2);
             settle(doc.iter()).await;
-            match bridge_song(doc, song, &mut HashMap::new()).await {
+            let meet = match meeting(doc, seeds) {
+                Meeting::Wait(doc) => {
+                    bridge_when_seeded(doc, song, adds_tx.clone());
+                    continue;
+                }
+                meet => meet,
+            };
+            match sliced(bridge_song(meet, song, &mut HashMap::new())).await {
                 Ok((song, bridge, _)) => {
                     if adds_tx.send((song, bridge)).is_err() {
                         break;
@@ -1236,26 +1287,89 @@ async fn settle<'a>(docs: impl Iterator<Item = &'a SessionDoc> + Clone) {
     }
 }
 
-/// Bridge one song to its replica: joining the set's session of it, or
-/// seeding it from this song when the set has none yet (or, with no
-/// replica, keeping this machine's own record from `docs`). Says whether
-/// it seeded.
+/// Whether this peer may seed a song's doc the set has not got yet: a
+/// member who can write may; a guest (a live share link) or an observer
+/// (`read_only`) never — a guest's song waits for the host's seed.
+#[must_use]
+pub fn may_seed(set: &TaskSet, read_only: bool) -> bool {
+    !set.is_guest() && !read_only
+}
+
+/// How one open song meets the set's replica of it.
+enum Meeting {
+    /// The set holds it: take the doc's state.
+    Join(SessionDoc),
+    /// The set has none yet and this peer seeds it from its song.
+    Seed(SessionDoc),
+    /// The set has none yet and this peer may not seed it: joined once
+    /// the doc holds the session ([`bridge_when_seeded`]).
+    Wait(SessionDoc),
+    /// The set does not have this song: it stays this machine's own.
+    Own,
+}
+
+/// How a song with replica `doc` meets the set, for a peer that may or
+/// may not seed ([`may_seed`]).
+fn meeting(doc: Option<SessionDoc>, may_seed: bool) -> Meeting {
+    match doc {
+        Some(doc) if doc.has_session() => Meeting::Join(doc),
+        Some(doc) if may_seed => Meeting::Seed(doc),
+        Some(doc) => Meeting::Wait(doc),
+        None => Meeting::Own,
+    }
+}
+
+/// How often a song waiting for the host's seed looks again.
+const SEED_POLL: Duration = Duration::from_millis(250);
+
+/// Join `song` to its replica once the doc holds the session (another
+/// peer seeded it), and hand it to the running session through `adds`.
+/// Until then the song is this machine's alone and nothing is written.
+fn bridge_when_seeded(
+    doc: SessionDoc,
+    song: OpenSong,
+    adds: tokio::sync::mpsc::UnboundedSender<(Song, Bridge)>,
+) {
+    architect::platform::spawn(async move {
+        while !doc.has_session() {
+            if adds.is_closed() {
+                return;
+            }
+            architect::platform::sleep(SEED_POLL).await;
+        }
+        match sliced(bridge_song(Meeting::Join(doc), song, &mut HashMap::new())).await {
+            Ok((song, bridge, _)) => {
+                let _ = adds.send((song, bridge));
+            }
+            Err(e) => {
+                tracing::warn!(collab.error = %e, "collab: a song seeded by the host could not join the session");
+            }
+        }
+    });
+}
+
+/// Bridge one song to its replica as `meet` says: joining the set's
+/// session of it, seeding it from this song, or (no replica) keeping this
+/// machine's own record from `docs`. Says whether it seeded.
 async fn bridge_song(
-    doc: Option<SessionDoc>,
+    meet: Meeting,
     (project, media, key, path): OpenSong,
     docs: &mut HashMap<String, SessionDoc>,
 ) -> eyre::Result<(Song, Bridge, bool)> {
     let guid = project.guid().to_owned();
-    let (bridge, seeded) = match doc {
-        Some(doc) if doc.has_session() => (join_bridge(project, media, doc).await?, false),
-        Some(doc) => {
+    let (bridge, seeded) = match meet {
+        Meeting::Join(doc) => (join_bridge(project, media, doc).await?, false),
+        Meeting::Seed(doc) => {
             let chart = chart_for(&path, &doc);
             (
                 Bridge::host(project, media, doc, chart, blobs(), local()).await?,
                 true,
             )
         }
-        None => {
+        Meeting::Wait(_) => eyre::bail!("{key}: the set's doc is not seeded yet"),
+        Meeting::Own => {
+            // Not in the set: nothing joins through its build's bridge.
+            drop(take_built(&guid));
             let own = docs.remove(&key).unwrap_or_default();
             let chart = chart_for(&path, &own);
             (
@@ -1270,6 +1384,17 @@ async fn bridge_song(
         doc: bridge.doc().clone(),
     };
     Ok((song, bridge, seeded))
+}
+
+/// `work`, on a page cut into slices (`web_engine::in_slices`): a song's
+/// bridge reads and rebuilds the whole song through the facade, and in
+/// one piece froze the page for most of a second per song.
+async fn sliced<T>(work: impl std::future::Future<Output = T>) -> T {
+    #[cfg(all(feature = "web", not(feature = "native")))]
+    let done = crate::web_engine::in_slices(work).await;
+    #[cfg(not(all(feature = "web", not(feature = "native"))))]
+    let done = work.await;
+    done
 }
 
 /// Songs handed to a running session ([`start`]), each with its bridge.
@@ -2004,3 +2129,6 @@ impl Outbox {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

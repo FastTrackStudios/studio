@@ -110,6 +110,7 @@ pub mod rig;
 pub mod rig_actions;
 #[cfg(feature = "show")]
 pub mod show;
+pub mod slices;
 pub mod song_modes;
 pub mod song_stream;
 #[cfg(feature = "native")]
