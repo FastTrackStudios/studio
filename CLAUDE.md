@@ -389,4 +389,6 @@ first). The rules are not optional:
 - Project skills live in `.claude/skills/` (build-performance,
   logging-best-practices, blitz-design, rust-testing, reaper-testing, architect-actions,
   signalpack, reaper-theme-*, …) — load the matching one before the work
-  it covers.
+  it covers. The `ui-design-*` skills (colour, type and spacing, layout,
+  components, motion, copy, process) are copied from the fleet's Paperclip
+  skill library; load the matching one with `blitz-design` before UI work.
