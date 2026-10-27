@@ -151,13 +151,16 @@ pub mod device_audio;
 pub use session_engine::drum_edit;
 #[cfg(feature = "native")]
 pub use session_engine::drum_lanes;
+#[cfg(feature = "native")]
 pub use session_engine::drum_level;
+#[cfg(feature = "native")]
 pub use session_engine::drum_reference;
 #[cfg(feature = "signal")]
 pub use session_engine::drum_samples;
 pub use session_engine::drum_settings;
 #[cfg(feature = "native")]
 pub use session_engine::edit_actions;
+#[cfg(feature = "native")]
 pub use session_engine::fundamental;
 pub use session_engine::gain_stage;
 pub mod grid_in_force;
@@ -180,7 +183,9 @@ pub use session_engine::hits_midi;
 #[cfg(feature = "native")]
 pub use session_engine::item_actions;
 pub use session_engine::kit_gate;
+#[cfg(feature = "native")]
 pub use session_engine::mix_chains;
+#[cfg(feature = "native")]
 pub use session_engine::mix_export;
 pub mod overlay;
 pub mod panel;

@@ -192,12 +192,13 @@ static REMOVE: ActionMeta = crate::actions::meta(
     "Session",
     "",
 );
-/// Step to the next or the one before (`}` / `{`).
-#[cfg(feature = "native")]
 /// The window's bar step (`crate::bar_step::STEP_ACTION`), by id: the
 /// engine does not reach into the window's modules.
+#[cfg(feature = "native")]
 const BAR_STEP: &str = "SESSION_STEP";
 
+/// Step to the next or the one before (`}` / `{`).
+#[cfg(feature = "native")]
 pub static STEP: ActionMeta = crate::actions::meta(
     "POI_STEP",
     "poi_step",
