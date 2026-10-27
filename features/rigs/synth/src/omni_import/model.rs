@@ -156,6 +156,10 @@ pub struct OmniLayer {
     /// keyboard about middle C — `2·key` (measured: 0.5 tracks 1:1, 1.0
     /// tracks 2:1; C4 is the pivot at every setting).
     pub filter_key_track: f32,
+    /// Filter Spread (`FILTER sprd`, 0..1, 0.5 = none): measured, the left
+    /// channel's cutoff setting is `s·(1.5 − sprd)`, the right's
+    /// `s·(0.5 + sprd)` — a stereo split of the section.
+    pub filter_spread: f32,
     /// The filter section's pre + post gain (`FILTER gnpre` / `gnpst`), in
     /// dB relative to their implicit 0.75 — see [`filter_gain_db`]. Applied
     /// whether or not the filters themselves are on.
@@ -1360,6 +1364,7 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
             let key = f.num("key").unwrap_or(0.0).clamp(0.0, 1.0);
             let key_inv = f.num("keyinv").unwrap_or(0.0) != 0.0;
             layer.filter_key_track = if key_inv { -2.0 * key } else { 2.0 * key };
+            layer.filter_spread = f.num("sprd").unwrap_or(0.5).clamp(0.0, 1.0);
             // An older-layout sample layer (no MULTISAMPLE) plays 2.7 dB
             // under `gnpre` 0.75 — the factory's own conversions of those
             // patches carry 0.653, and read at 0.75 they ran 2.8 dB hot

@@ -226,6 +226,9 @@ pub fn translate_route(
         // Timbre Shift: a sample layer's zone remap, re-chosen at each
         // note-on (measured; see `sampler::instrument::timbre_shift_semis`).
         "timbre" => ("Soundsource", "timbre", 1.0),
+        // Filter Spread, in its own knob units (measured: a stereo split of
+        // the cutoff setting; see `OmniLayer::filter_spread`).
+        "sprd" => ("Filter 1", "sprd", 1.0),
         _ => return None, // LFO-param/E1P0/… — later
     };
     let source = translate_source(&route.source)?;
@@ -743,6 +746,13 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                     let kt = format!("{:.3}", layer.filter_key_track);
                     f1 = f1.with_param("key_track", kt.clone());
                     f2 = f2.with_param("key_track", kt);
+                }
+                // Spread splits the section's cutoff across the channels;
+                // carried even when centred, as a `sprd` route's base.
+                if layer.filter_active {
+                    let sp = format!("{:.4}", layer.filter_spread);
+                    f1 = f1.with_param("sprd", sp.clone());
+                    f2 = f2.with_param("sprd", sp);
                 }
                 // SERIES chains the filters; PARALLEL sums them.
                 let filters = if parallel {

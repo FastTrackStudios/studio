@@ -292,6 +292,12 @@ pub struct NativeFilter {
     key_track: f32,
     /// `2^(key_track · (note − 60) / 12)` for the latest note.
     key_scale: f32,
+    /// Stereo spread (an emulated knob's, see `taper`): the left channel's
+    /// knob setting is `s·(1 + spread)`, the right's `s·(1 − spread)` — and
+    /// the resulting corners as multiples of the centre's, kept in step
+    /// with the knob. 0 = both channels at the knob.
+    spread: f32,
+    spread_ratio: (f32, f32),
     env_sens: f32,
     env_attack_ms: f32,
     env_release_ms: f32,
@@ -329,6 +335,8 @@ impl NativeFilter {
             env_octaves: 0.0,
             key_track: 0.0,
             key_scale: 1.0,
+            spread: 0.0,
+            spread_ratio: (1.0, 1.0),
             env_sens: 0.5,
             env_attack_ms: 4.0,
             env_release_ms: 120.0,
@@ -433,8 +441,25 @@ impl NativeFilter {
         let s = Self::KNOB_MIN + Self::KNOB_SPAN * self.knob;
         if let Some(hz) = Self::taper_hz(&self.taper, s) {
             self.cutoff_hz = hz;
+            self.spread_ratio = if self.spread == 0.0 {
+                (1.0, 1.0)
+            } else {
+                let side = |k: f32| Self::taper_hz(&self.taper, s * k).map_or(1.0, |h| h / hz);
+                (side(1.0 + self.spread), side(1.0 - self.spread))
+            };
             self.update_coeffs();
         }
+    }
+
+    /// Stereo spread of an emulated knob (see `taper`; Omnisphere's filter
+    /// `sprd`, measured): the left channel's setting is `s·(1 + spread)`,
+    /// the right's `s·(1 − spread)` (`spread` = 0.5 − `sprd`, so 0.5 is
+    /// both at the knob). Call after [`with_taper`](Self::with_taper).
+    #[must_use]
+    pub fn with_spread(mut self, spread: f32) -> Self {
+        self.spread = spread.clamp(-1.0, 1.0);
+        self.set_knob(self.knob);
+        self
     }
 
     fn taper_hz(points: &[(f32, f32)], s: f32) -> Option<f32> {
@@ -507,11 +532,12 @@ impl NativeFilter {
         let q = self.svf_q();
         // The resonance shift multiplies the clamped corner, so clamp after
         // it too: a shifted corner past Nyquist makes the filter unstable.
-        let fc = ((hz * self.key_scale).clamp(20.0, self.sample_rate * 0.45)
-            * self
-                .res_shift
-                .powf(self.resonance.powf(self.res_shift_curve)))
-        .min(self.sample_rate * 0.45);
+        let shift = self
+            .res_shift
+            .powf(self.resonance.powf(self.res_shift_curve));
+        let nyq = self.sample_rate * 0.45;
+        let corner = |ratio: f32| ((hz * ratio * self.key_scale).clamp(20.0, nyq) * shift).min(nyq);
+        let (fc_l, fc_r) = (corner(self.spread_ratio.0), corner(self.spread_ratio.1));
         for i in 0..(self.poles / 2) as usize {
             // Resonance on the first section only; the cascade stays flat.
             let q = if i == 0 {
@@ -519,17 +545,17 @@ impl NativeFilter {
             } else {
                 core::f32::consts::FRAC_1_SQRT_2
             };
-            self.left[i].set(fc, q, self.sample_rate);
-            self.right[i].set(fc, q, self.sample_rate);
+            self.left[i].set(fc_l, q, self.sample_rate);
+            self.right[i].set(fc_r, q, self.sample_rate);
         }
-        self.odd_l.set(fc, self.sample_rate);
-        self.odd_r.set(fc, self.sample_rate);
+        self.odd_l.set(fc_l, self.sample_rate);
+        self.odd_r.set(fc_r, self.sample_rate);
         let (k, hp, stages) = (
             self.ladder_k(),
             self.mode == FilterMode::Highpass,
             self.poles as usize,
         );
-        for ladder in [&mut self.ladder_l, &mut self.ladder_r] {
+        for (ladder, fc) in [(&mut self.ladder_l, fc_l), (&mut self.ladder_r, fc_r)] {
             let comp = ladder.comp;
             ladder.configure(stages, hp, comp);
             ladder.set_feedback(fc, k, self.sample_rate);
@@ -706,6 +732,15 @@ impl PluginInstance for NativeFilter {
                 max: 3.0,
                 default: 0.0,
             },
+            // Stereo spread in Omnisphere's units (`sprd`, 0.5 = none; see
+            // `with_spread`), inert without a taper.
+            PluginParamInfo {
+                id: 10,
+                name: "sprd".into(),
+                min: 0.0,
+                max: 1.0,
+                default: f64::from(0.5 - self.spread),
+            },
         ]
     }
     fn param_value(&mut self, id: u32) -> Option<f64> {
@@ -720,6 +755,7 @@ impl PluginInstance for NativeFilter {
             7 => Some(self.env_attack_ms as f64),
             8 => Some(self.env_release_ms as f64),
             9 => Some(f64::from(self.mode.index())),
+            10 => Some(f64::from(0.5 - self.spread)),
             _ => None,
         }
     }
@@ -786,6 +822,11 @@ impl PluginInstance for NativeFilter {
                 9 => {
                     self.mode = FilterMode::from_index(value.round() as u32);
                     dirty = true;
+                }
+                // `set_knob` re-derives both channels' corners.
+                10 => {
+                    self.spread = 0.5 - (value as f32).clamp(0.0, 1.0);
+                    self.set_knob(self.knob);
                 }
                 _ => {}
             }

@@ -65,6 +65,9 @@ the plugin stops remapping (a noisy, quieter sound, ~8 % of layers that use
 Timbre), and `tbmd` 0 is another process. **Mogrify** starts a fresh note
 part way into its sample (25 ms at 0.05 … 257 ms at 1, measured on a
 piano), static and routed. A sample soundsource takes `tune` routes.
+**Filter Spread** (`sprd`, 0.5 none) splits the section's cutoff across the
+channels: left at setting `s·(1.5 − sprd)`, right at `s·(0.5 + sprd)` —
+static and routed within 1 dB per channel.
 
 ## Status (2026-10-25)
 
@@ -95,7 +98,7 @@ Harmonia (mix / level laws, voices on the layer table, off in older patches),
 the AM section's gain, Valve Radio, Swiss Army Delay, Radio Delay, Studio
 EQ's low cut. Open, by measured impact: the Waveshaper's fold curves (per
 type, a shaping table), resonant filters, LFO / mod-env routes to the 29 %
-of targets not yet translated (filter spread, LFO rate,
+of targets not yet translated (LFO rate,
 envelope times, FX parameters), the reverbs' build-up, and the 31
 pass-through FX units (`tools/omni_probe/fxgap.py` ranks them).
 

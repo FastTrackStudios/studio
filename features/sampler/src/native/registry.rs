@@ -428,6 +428,9 @@ fn build_filter(block: &RigBlock, sample_rate: u32) -> Box<dyn PluginInstance> {
         if points.len() >= 2 {
             let setting = block.param_f32("knob_setting").unwrap_or(0.5);
             f = f.with_taper(points, setting);
+            if let Some(sprd) = block.param_f32("sprd") {
+                f = f.with_spread(0.5 - sprd);
+            }
         }
     }
     if let Some(m) = block
