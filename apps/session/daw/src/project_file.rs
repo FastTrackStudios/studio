@@ -679,6 +679,11 @@ async fn step_back(open: &mut Open, pending: &str, back: bool) -> Result<Undone,
 /// its doc rebuilt in the engine. Its media resolves against the file's
 /// folder. Returns the engine's project guid.
 ///
+/// The song is built on a stage ([`Standalone::stage`]) — off the engine's
+/// lock, on a thread of its own ([`build_on`]) — and landed whole, so a
+/// song opening never stalls a reader of another, and songs opening at
+/// once build side by side.
+///
 /// # Errors
 ///
 /// The file would not open or load, or the engine refused to rebuild it.
@@ -694,31 +699,35 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
     {
         *at = Some(web_time::Instant::now());
     }
+    // A shared project opens as its synced doc: what this device missed
+    // is merged in as the driver catches up.
+    let (loaded, synced) = run(song_doc(path, &store, branch, loaded))?;
+    let doc = SessionDoc::from_loro(loaded);
+    let saved = doc.version();
+    stages.mark("load.doc_ms");
     let guid = uuid::Uuid::new_v4().to_string();
-    daw.seed_project(daw_proto::ProjectInfo {
+    let stage = daw.stage();
+    stage.engine().seed_project(daw_proto::ProjectInfo {
         guid: guid.clone(),
         name: name.to_owned(),
         path: path.to_string_lossy().into_owned(),
     });
+    let built = build_on(
+        &stage,
+        &guid,
+        media_of(path),
+        doc,
+        StoreBlobs::new(store.clone()),
+    )?;
+    stages.mark("load.build_ms");
     let daw = daw.clone();
     let path = path.to_path_buf();
     let branch = branch.to_owned();
     let made = guid.clone();
     run(async move {
-        // A shared project opens as its synced doc: what this device
-        // missed is merged in as the driver catches up.
-        let (loaded, synced) = song_doc(&path, &store, &branch, loaded).await;
-        let doc = SessionDoc::from_loro(loaded);
-        let saved = doc.version();
-        let bridge = Bridge::join(
-            project(&daw, &made).await?,
-            media_of(&path),
-            doc,
-            StoreBlobs::new(store.clone()),
-            Some(direct(&daw)),
-        )
-        .await
-        .map_err(|e| e.to_string())?;
+        // On the project file's runtime: the song's transport lives on it.
+        stage.land(&made).map_err(|e| e.to_string())?;
+        let bridge = built.moved_to(project(&daw, &made).await?, Some(direct(&daw)));
         let remote = watch_remote(&made, synced.as_ref());
         open_songs().lock().await.insert(
             made,
@@ -735,8 +744,49 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
         );
         Ok::<(), String>(())
     })??;
-    stages.mark("load.rebuild_ms");
+    stages.mark("load.land_ms");
     Ok(guid)
+}
+
+/// The song `guid` rebuilt from `doc` on `stage`, and the bridge that
+/// keeps it — on a thread and a runtime of its own, the stage's facade
+/// served on that same thread: nothing a build does waits on another's,
+/// or on the project file's two workers.
+fn build_on(
+    stage: &daw::standalone::Stage,
+    guid: &str,
+    media: MediaRoot,
+    doc: SessionDoc,
+    blobs: Arc<StoreBlobs>,
+) -> Result<Bridge, String> {
+    let engine = stage.engine();
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .name("song-build".to_owned())
+            .stack_size(16 * 1024 * 1024)
+            .spawn_scoped(scope, || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| format!("no runtime to build the song on: {e}"))?;
+                runtime.block_on(async {
+                    let facade = daw::standalone::bootstrap::build_in_process_daw(engine.clone())
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    let project = facade
+                        .daw
+                        .project(guid.to_owned())
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    Bridge::join(project, media, doc, blobs, Some(direct(engine)))
+                        .await
+                        .map_err(|e| e.to_string())
+                })
+            })
+            .map_err(|e| format!("no thread to build the song on: {e}"))?
+            .join()
+            .map_err(|_| "building the song panicked".to_owned())?
+    })
 }
 
 /// Fork `name` from the song open as `project_guid`, as it is now.

@@ -397,6 +397,7 @@ async fn read_tracks(
     ids: &EngineIds,
 ) -> daw_control::Result<Vec<TrackState>> {
     let all = project.tracks().all().await?;
+    let mut handles = TrackHandles::new(project);
     let parents: HashMap<String, Option<String>> = all
         .iter()
         .map(|t| (t.guid.clone(), t.parent_guid.clone()))
@@ -434,7 +435,7 @@ async fn read_tracks(
             guid: t.guid,
             ..TrackState::default()
         };
-        if let Some(handle) = project.tracks().by_guid(&state.guid).await? {
+        if let Some(handle) = handles.get(&state.guid).await? {
             state.ext = handle
                 .ext_state()
                 .await?
@@ -627,6 +628,62 @@ pub(crate) const fn note_state(n: &daw_proto::MidiNote) -> NoteState {
 }
 
 /// The project a facade handle is on, as the engine's services name it.
+/// A song's track handles by guid, each found once.
+///
+/// The facade finds a track by its guid by listing every track, so asking
+/// it once for each track of a song — for its fields, its FX, its sends,
+/// its envelopes — is quadratic in the song's tracks: a sixth of opening a
+/// 160-track song. Here the tracks are listed once, the first time one is
+/// asked for, a handle each; one added since is kept as it is made.
+struct TrackHandles<'p> {
+    project: &'p Project,
+    known: Option<HashMap<String, daw_control::TrackHandle>>,
+}
+
+impl<'p> TrackHandles<'p> {
+    fn new(project: &'p Project) -> Self {
+        Self {
+            project,
+            known: None,
+        }
+    }
+
+    /// Track `guid`'s handle, if the project has it.
+    async fn get(&mut self, guid: &str) -> daw_control::Result<Option<daw_control::TrackHandle>> {
+        let known = match &mut self.known {
+            Some(known) => known,
+            None => self.known.insert(self.list().await?),
+        };
+        Ok(known.get(guid).cloned())
+    }
+
+    /// Every track's handle, one call a track.
+    async fn list(&self) -> daw_control::Result<HashMap<String, daw_control::TrackHandle>> {
+        let tracks = self.project.tracks();
+        let mut known = HashMap::new();
+        for index in 0..tracks.count().await? {
+            if let Some(handle) = tracks.by_index(index).await? {
+                known.insert(handle.guid().to_owned(), handle);
+            }
+        }
+        Ok(known)
+    }
+
+    /// A track just made.
+    fn added(&mut self, handle: daw_control::TrackHandle) {
+        if let Some(known) = &mut self.known {
+            known.insert(handle.guid().to_owned(), handle);
+        }
+    }
+
+    /// A track just removed.
+    fn removed(&mut self, guid: &str) {
+        if let Some(known) = &mut self.known {
+            known.remove(guid);
+        }
+    }
+}
+
 fn context_of(project: &Project) -> daw_proto::ProjectContext {
     daw_proto::ProjectContext::Project(project.guid().to_owned())
 }
@@ -688,6 +745,7 @@ pub async fn apply(
     direct: Option<&dyn Direct>,
 ) -> daw_control::Result<()> {
     let ctx = context_of(project);
+    let mut handles = TrackHandles::new(project);
     let mut structure = false;
     // A track's FX, sends and envelopes wait until every track is there
     // and in place: a send names its destination, an FX's automation its
@@ -699,16 +757,17 @@ pub async fn apply(
                 structure = true;
                 let index = target.tracks.iter().position(|t| t.guid == track.guid);
                 let at = index.and_then(|i| u32::try_from(i).ok());
-                project
+                let added = project
                     .tracks()
                     .add_with_guid(&track.guid, &track.name, at)
                     .await?;
-                set_track_fields(project, track, ALL_TRACK_FIELDS).await?;
+                handles.added(added);
+                set_track_fields(&mut handles, track, ALL_TRACK_FIELDS).await?;
                 parts.push((track, ALL_TRACK_FIELDS.to_vec()));
             }
             Change::TrackMoved { .. } => structure = true,
             Change::TrackChanged { track, fields } => {
-                set_track_fields(project, track, fields).await?;
+                set_track_fields(&mut handles, track, fields).await?;
                 parts.push((track, fields.clone()));
             }
             Change::TrackRemoved { guid } => {
@@ -716,6 +775,7 @@ pub async fn apply(
                     .tracks()
                     .remove(TrackRef::Guid(guid.clone()))
                     .await?;
+                handles.removed(guid);
             }
             Change::ItemAdded { guid, item } => match direct {
                 Some(d) => {
@@ -773,9 +833,9 @@ pub async fn apply(
         }
     }
     if structure {
-        apply_structure(project, &target.tracks).await?;
+        apply_structure(&mut handles, &target.tracks).await?;
     }
-    apply_parts(project, &parts, blobs, ids).await?;
+    apply_parts(&mut handles, &parts, blobs, ids).await?;
     // What the facade cannot set, set in daw-standalone's own state —
     // last, over what the calls above made, so the engine holds exactly
     // the doc's.
@@ -791,28 +851,28 @@ pub async fn apply(
 /// A track's FX chains, sends, hardware outputs and envelopes, once
 /// every track is in place.
 async fn apply_parts(
-    project: &Project,
+    handles: &mut TrackHandles<'_>,
     parts: &[(&TrackState, Vec<TrackField>)],
     blobs: &dyn Blobs,
     ids: &mut EngineIds,
 ) -> daw_control::Result<()> {
     for (track, fields) in parts {
         if fields.contains(&TrackField::Fx) {
-            apply_fx(project, track, false, blobs, ids).await?;
+            apply_fx(handles, track, false, blobs, ids).await?;
         }
         if fields.contains(&TrackField::InputFx) {
-            apply_fx(project, track, true, blobs, ids).await?;
+            apply_fx(handles, track, true, blobs, ids).await?;
         }
     }
     for (track, fields) in parts {
         if fields.contains(&TrackField::Sends) {
-            apply_sends(project, track).await?;
+            apply_sends(handles, track).await?;
         }
         if fields.contains(&TrackField::HwOutputs) {
-            apply_hw_outputs(project, track).await?;
+            apply_hw_outputs(handles, track).await?;
         }
         if fields.contains(&TrackField::Envelopes) {
-            apply_envelopes(project, track, ids).await?;
+            apply_envelopes(handles, track, ids).await?;
         }
     }
     Ok(())
@@ -846,8 +906,11 @@ async fn apply_project(
 
 /// Make the engine's hardware outputs from `track` the doc's: every one
 /// removed and the doc's added in order.
-async fn apply_hw_outputs(project: &Project, track: &TrackState) -> daw_control::Result<()> {
-    let Some(handle) = project.tracks().by_guid(&track.guid).await? else {
+async fn apply_hw_outputs(
+    handles: &mut TrackHandles<'_>,
+    track: &TrackState,
+) -> daw_control::Result<()> {
+    let Some(handle) = handles.get(&track.guid).await? else {
         return Ok(());
     };
     let outputs = handle.hardware_outputs();
@@ -973,7 +1036,11 @@ fn new_item_fields(item: &ItemState) -> Vec<ItemField> {
 /// depths that make the tree: a track's depth is how far the NEXT track's
 /// nesting level differs from its own (REAPER's convention — 1 opens a
 /// folder, -n closes n of them).
-async fn apply_structure(project: &Project, tracks: &[TrackState]) -> daw_control::Result<()> {
+async fn apply_structure(
+    handles: &mut TrackHandles<'_>,
+    tracks: &[TrackState],
+) -> daw_control::Result<()> {
+    let project = handles.project;
     for (index, track) in tracks.iter().enumerate() {
         let Ok(index) = u32::try_from(index) else {
             break;
@@ -984,7 +1051,7 @@ async fn apply_structure(project: &Project, tracks: &[TrackState]) -> daw_contro
             .await?;
     }
     for (track, depth) in tracks.iter().zip(folder_depths(tracks)) {
-        if let Some(handle) = project.tracks().by_guid(&track.guid).await? {
+        if let Some(handle) = handles.get(&track.guid).await? {
             handle.set_folder_depth(depth).await?;
         }
     }
@@ -1048,11 +1115,11 @@ const ALL_TRACK_FIELDS: &[TrackField] = &[
 ];
 
 async fn set_track_fields(
-    project: &Project,
+    handles: &mut TrackHandles<'_>,
     track: &TrackState,
     fields: &[TrackField],
 ) -> daw_control::Result<()> {
-    let Some(h) = project.tracks().by_guid(&track.guid).await? else {
+    let Some(h) = handles.get(&track.guid).await? else {
         return Ok(());
     };
     for field in fields {
@@ -1881,13 +1948,13 @@ pub(crate) fn comp_areas(c: &CompingState) -> Vec<daw_proto::CompArea> {
 
 /// Make the engine's chain on `track` the doc's (see [`apply_chain`]).
 async fn apply_fx(
-    project: &Project,
+    handles: &mut TrackHandles<'_>,
     track: &TrackState,
     input: bool,
     blobs: &dyn Blobs,
     ids: &mut EngineIds,
 ) -> daw_control::Result<()> {
-    let Some(handle) = project.tracks().by_guid(&track.guid).await? else {
+    let Some(handle) = handles.get(&track.guid).await? else {
         return Ok(());
     };
     if input {
@@ -1961,8 +2028,11 @@ async fn apply_chain(
 
 /// Make the engine's sends from `track` the doc's: every one removed and
 /// the doc's added in order (sends have no identity of their own).
-async fn apply_sends(project: &Project, track: &TrackState) -> daw_control::Result<()> {
-    let Some(handle) = project.tracks().by_guid(&track.guid).await? else {
+async fn apply_sends(
+    handles: &mut TrackHandles<'_>,
+    track: &TrackState,
+) -> daw_control::Result<()> {
+    let Some(handle) = handles.get(&track.guid).await? else {
         return Ok(());
     };
     let sends = handle.sends();
@@ -1982,11 +2052,11 @@ async fn apply_sends(project: &Project, track: &TrackState) -> daw_control::Resu
 /// replaced, its mode and switches set; one the doc no longer has
 /// cleared.
 async fn apply_envelopes(
-    project: &Project,
+    handles: &mut TrackHandles<'_>,
     track: &TrackState,
     ids: &EngineIds,
 ) -> daw_control::Result<()> {
-    let Some(handle) = project.tracks().by_guid(&track.guid).await? else {
+    let Some(handle) = handles.get(&track.guid).await? else {
         return Ok(());
     };
     let envelopes = handle.envelopes();

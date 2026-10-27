@@ -1188,7 +1188,7 @@ impl Standalone {
     /// bank only grows (cells are by track index; a removed track's cell
     /// reads silence next block). Swapped whole; the renderer picks the new
     /// bank up on its next block.
-    fn meters_follow_tracks(&self, track_count: usize) {
+    pub(crate) fn meters_follow_tracks(&self, track_count: usize) {
         if !self
             .meters_installed
             .load(std::sync::atomic::Ordering::Relaxed)

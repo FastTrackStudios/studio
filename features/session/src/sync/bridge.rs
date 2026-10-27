@@ -146,6 +146,22 @@ impl Bridge {
         Ok(bridge)
     }
 
+    /// This bridge, kept on `project` from now on: the same song moved
+    /// whole into another engine (a song built on a
+    /// [`daw_standalone::sync::Stage`] and landed), under the same guids —
+    /// so what the bridge knows of it (what the engine showed, which
+    /// engine FX and item each doc entry is, its undo steps and what the
+    /// doc has touched) holds there as it did here, and nothing is
+    /// applied or read again.
+    #[must_use]
+    pub fn moved_to(self, project: Project, direct: Option<std::sync::Arc<dyn Direct>>) -> Self {
+        Self {
+            project,
+            direct,
+            ..self
+        }
+    }
+
     /// Join a session while this device is locked ([`crate::sync::Hold`]):
     /// as [`Self::join`], except the engine is left as it is — the doc's
     /// state waits for [`Self::merge_held`]. Until then the engine is what
@@ -404,3 +420,6 @@ impl Bridge {
             .map_or_else(|_| Touched::everything(), |mut t| std::mem::take(&mut *t))
     }
 }
+
+#[cfg(test)]
+mod tests;
