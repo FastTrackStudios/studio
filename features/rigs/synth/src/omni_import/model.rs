@@ -974,6 +974,32 @@ const FILTER_MODELS: &[(u32, FilterModel)] = &[
     (0x3f7d70d4, FilterModel { name: "State Variable OB", mode: "notch", poles: 2, ladder: false, taper: [0.2973, 0.3746, 0.5000, 0.3746, 0.7492], res: (0.707, 0.707, 1.000), res_shift: 1.000, res_shift_curve: 1.000, gain_db: -1.9, comp: 0.00 }),
 ];
 
+/// A model's resonance knob → Q, measured where the fitted `res` curve
+/// cannot follow it — and these play the SVF's raw band output (peak gain
+/// = Q, so resonance raises the level; `gain_db` then stays 0).
+/// Bandpass Juicy 12db: a saw through it at a fixed corner, every 0.1,
+/// each point a band-pass fit within 0.3 dB and its peak 20·log10(Q).
+#[must_use]
+pub fn resonance_table(name: &str) -> Option<&'static [(f32, f32)]> {
+    match name {
+        "Bandpass Juicy 12db" => Some(&[
+            (0.0, 0.72),
+            (0.1, 1.08),
+            (0.2, 1.45),
+            (0.3, 1.83),
+            (0.4, 2.18),
+            (0.5, 2.59),
+            (0.6, 3.27),
+            (0.7, 4.13),
+            (0.8, 5.53),
+            (0.9, 7.41),
+            (0.95, 9.35),
+            (1.0, 11.8),
+        ]),
+        _ => None,
+    }
+}
+
 /// The model for a `type1` value: exact, else the nearest measured one in
 /// the same family (a few ULPs off), else a generic model from the coarse
 /// slot table. `None` for the gain/colour types that don't filter.

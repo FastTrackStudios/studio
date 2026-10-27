@@ -257,6 +257,12 @@ pub struct NativeFilter {
     /// Q 0.5..12 / feedback 0..3.8 curves).
     resonance: f32,
     res_map: Option<ResonanceMap>,
+    /// A measured resonance knob → Q table (`(knob, Q)`, log-interpolated),
+    /// over `res_map` when set.
+    res_table: Vec<(f32, f32)>,
+    /// The band-pass as the SVF's raw band output (peak gain = Q, so
+    /// resonance raises the level) instead of the unity-peak `k·bp`.
+    raw_bandpass: bool,
     /// Corner multiplier at full resonance (geometric in the knob): some
     /// modelled filters' corners sink as resonance rises.
     res_shift: f32,
@@ -317,6 +323,8 @@ impl NativeFilter {
             cutoff_hz: 20_000.0,
             resonance: Self::norm_from_q(core::f32::consts::FRAC_1_SQRT_2),
             res_map: None,
+            res_table: Vec::new(),
+            raw_bandpass: false,
             res_shift: 1.0,
             res_shift_curve: 1.0,
             poles: 2,
@@ -403,6 +411,21 @@ impl NativeFilter {
     pub fn with_resonance_map(mut self, map: ResonanceMap) -> Self {
         self.res_map = Some(map);
         self.update_coeffs();
+        self
+    }
+
+    /// A measured resonance → Q table (`(knob, Q)` points, rising knob).
+    #[must_use]
+    pub fn with_resonance_table(mut self, points: Vec<(f32, f32)>) -> Self {
+        self.res_table = points;
+        self.update_coeffs();
+        self
+    }
+
+    /// Band-pass from the SVF's raw band output: its peak gain is Q.
+    #[must_use]
+    pub fn with_raw_bandpass(mut self, raw: bool) -> Self {
+        self.raw_bandpass = raw;
         self
     }
 
@@ -502,6 +525,19 @@ impl NativeFilter {
     /// The first SVF section's Q.
     fn svf_q(&self) -> f32 {
         let r = self.resonance;
+        if let (Some(first), Some(last)) = (self.res_table.first(), self.res_table.last()) {
+            if r <= first.0 {
+                return first.1;
+            }
+            return self
+                .res_table
+                .windows(2)
+                .find(|w| r <= w[1].0)
+                .map_or(last.1, |w| {
+                    let t = (r - w[0].0) / (w[1].0 - w[0].0).max(1e-6);
+                    (w[0].1.ln() + t * (w[1].1.ln() - w[0].1.ln())).exp()
+                });
+        }
         self.res_map.map_or_else(
             || Self::q_from_norm(r),
             |m| m.lo * (m.hi / m.lo.max(1e-3)).powf(r.powf(m.curve)),
@@ -569,6 +605,7 @@ impl NativeFilter {
         odd: &mut OnePole,
         poles: u32,
         mode: FilterMode,
+        raw_bp: bool,
         x: f32,
     ) -> f32 {
         let mut y = x;
@@ -576,7 +613,7 @@ impl NativeFilter {
             let (lp, bp, hp) = svf.tick(y);
             // The SVF's band output peaks at Q; `k·bp` (k = 1/Q) is the
             // unity-peak bandpass.
-            y = Self::pick(mode, lp, svf.k * bp, hp);
+            y = Self::pick(mode, lp, if raw_bp { bp } else { svf.k * bp }, hp);
         }
         if poles % 2 == 1 {
             let (lp, hp) = odd.tick(y);
@@ -633,10 +670,10 @@ impl NativeFilter {
         if self.is_ladder() {
             (self.ladder_l.tick(xl), self.ladder_r.tick(xr))
         } else {
-            let (mode, poles) = (self.mode, self.poles);
+            let (mode, poles, raw) = (self.mode, self.poles, self.raw_bandpass);
             (
-                Self::tick_chain(&mut self.left, &mut self.odd_l, poles, mode, xl),
-                Self::tick_chain(&mut self.right, &mut self.odd_r, poles, mode, xr),
+                Self::tick_chain(&mut self.left, &mut self.odd_l, poles, mode, raw, xl),
+                Self::tick_chain(&mut self.right, &mut self.odd_r, poles, mode, raw, xr),
             )
         }
     }

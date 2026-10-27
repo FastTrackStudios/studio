@@ -57,7 +57,7 @@ fn modelled_filter(
         })
         .collect::<Vec<_>>()
         .join(";");
-    block
+    let block = block
         .with_param("taper", taper)
         .with_param("knob_setting", format!("{setting:.4}"))
         .with_param(
@@ -75,9 +75,31 @@ fn modelled_filter(
         .with_param("res_shift_curve", format!("{:.3}", model.res_shift_curve))
         .with_param(
             "gain_db",
-            format!("{:.1}", model.gain_db + 20.0 * weight.max(1e-6).log10()),
+            format!(
+                "{:.1}",
+                if super::model::resonance_table(model.name).is_some() {
+                    0.0
+                } else {
+                    model.gain_db
+                } + 20.0 * weight.max(1e-6).log10()
+            ),
         )
-        .with_param("ladder_comp", format!("{:.2}", model.comp))
+        .with_param("ladder_comp", format!("{:.2}", model.comp));
+    // A measured resonance table plays the raw band output, whose level the
+    // table's Q sets (the fitted `gain_db` stood in for Q at res 0).
+    match super::model::resonance_table(model.name) {
+        Some(table) => block
+            .with_param(
+                "res_table",
+                table
+                    .iter()
+                    .map(|(r, q)| format!("{r}:{q}"))
+                    .collect::<Vec<_>>()
+                    .join(";"),
+            )
+            .with_param("raw_bandpass", "1"),
+        None => block,
+    }
 }
 
 /// Breakpoints as the block param "time:level:curve:step;…".

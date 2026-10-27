@@ -404,6 +404,22 @@ fn build_filter(block: &RigBlock, sample_rate: u32) -> Box<dyn PluginInstance> {
         let curve = block.param_f32("res_curve").unwrap_or(1.0);
         f = f.with_resonance_map(super::ResonanceMap { lo, hi, curve });
     }
+    // A measured knob → Q table, "knob:q;…".
+    if let Some(t) = block.param_str("res_table") {
+        let points: Vec<(f32, f32)> = t
+            .split(';')
+            .filter_map(|p| {
+                let (r, q) = p.split_once(':')?;
+                Some((r.trim().parse().ok()?, q.trim().parse().ok()?))
+            })
+            .collect();
+        if points.len() >= 2 {
+            f = f.with_resonance_table(points);
+        }
+    }
+    if block.param_f32("raw_bandpass").unwrap_or(0.0) > 0.5 {
+        f = f.with_raw_bandpass(true);
+    }
     if let Some(v) = block.param_f32("resonance") {
         f = f.with_resonance(v);
     }
