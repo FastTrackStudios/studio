@@ -609,25 +609,25 @@ pub fn runtime() -> Option<&'static tokio::runtime::Runtime> {
 /// process's life — dropping it stops the stream. Failure is not fatal:
 /// the soft clock still moves the playhead, silently, which is enough to
 /// read a session by.
-/// The audio engine, playing whichever song is current. Replaced — the old
-/// one dropped, which closes its stream — when the current song changes.
-/// With the song it plays.
-static AUDIO: std::sync::Mutex<Option<(String, daw::standalone::audio_engine::AudioEngine)>> =
+/// The set's one audio engine ([`daw::standalone::audio_engine::SetAudio`]):
+/// every song opened is a voice in it, each on its own transport, mixed in
+/// one callback — a song left (another tab picked) plays on, and songs
+/// hand over on the frame. Opened once, by the first song made audible;
+/// `current` is the song on screen (its meters, its keys, the reference
+/// hook), not what sounds.
+static AUDIO: std::sync::Mutex<Option<daw::standalone::audio_engine::SetAudio>> =
     std::sync::Mutex::new(None);
 
-/// Bumped by every [`attach_audio`]: the one that ends up playing is the
-/// last one asked for, whichever thread gets there first.
+/// Bumped by every [`attach_audio`]: the song made current is the last one
+/// asked for, whichever thread gets there first.
 static AUDIO_ASKED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// Put `project_guid` on the audio device — on a thread of its own.
-///
-/// Opening the device is the sound server's time, not the window's: on a
-/// busy machine finding PipeWire and opening its input took the better
-/// part of a minute and a half, and the song sat behind its loading
-/// screen for all of it with nothing to wait for. The song opens and
-/// draws now; the transport plays once the device is there (and runs
-/// silent if it never is, as before). Songs switched faster than the
-/// device opens leave only the last one attached.
+/// Make `project_guid` the current song of the set's engine — on a thread
+/// of its own: opening the device the first time is the sound server's
+/// time, not the window's (on a busy machine finding PipeWire took the
+/// better part of a minute and a half). The song opens and draws now; the
+/// transport plays once the device is there, and runs silent if it never
+/// is.
 fn attach_audio(daw: &Standalone, project_guid: &str) {
     let asked = AUDIO_ASKED.fetch_add(1, std::sync::atomic::Ordering::AcqRel) + 1;
     let (daw, project_guid) = (daw.clone(), project_guid.to_owned());
@@ -639,21 +639,86 @@ fn attach_audio(daw: &Standalone, project_guid: &str) {
     }
 }
 
-/// The song playing, put on the audio device again: how a change to how
-/// the engine renders (the render ahead) is taken up. Nothing playing,
-/// nothing to do.
+/// `project_guid` as a voice of the set's engine, when the window plays:
+/// its renderer made and its snapshot built now, as it opens — so a song
+/// opened behind the first can sound the moment it is picked, or before.
+/// Nothing when nothing plays yet: the first [`attach_audio`] adds it.
+pub fn sound(project_guid: &str) {
+    if !AUDIBLE.load(std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    let slot = AUDIO
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(audio) = slot.as_ref()
+        && let Err(e) = audio.add_voice(project_guid)
+    {
+        tracing::warn!(song.project = project_guid, error = %e, "the song could not join the set's engine");
+    }
+}
+
+/// The set's engine opened again: how a change to how it renders (the
+/// render ahead) is taken up. Every song stays a voice; the current one
+/// stays current. Nothing open, nothing to do.
 pub fn restart_audio() {
     let playing = AUDIO
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .take();
-    let Some((project_guid, engine)) = playing else {
+    let Some(audio) = playing else {
         return;
     };
-    drop(engine);
-    if let Some(daw) = local_engine() {
-        attach_audio(daw, &project_guid);
+    let (voices, current) = (audio.voices(), audio.current());
+    drop(audio);
+    let Some(daw) = local_engine() else {
+        return;
+    };
+    let mut slot = AUDIO
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(audio) = open_set_audio(daw) else {
+        return;
+    };
+    for guid in &voices {
+        if let Err(e) = audio.add_voice(guid) {
+            tracing::warn!(song.project = %guid, error = %e, "the song did not rejoin the set's engine");
+        }
     }
+    if let Some(guid) = current {
+        make_current(&audio, &guid);
+    }
+    *slot = Some(audio);
+}
+
+/// The set's engine on the device, its health watched.
+fn open_set_audio(daw: &Standalone) -> Option<daw::standalone::audio_engine::SetAudio> {
+    let began = web_time::Instant::now();
+    let prefs = crate::render_ahead::current().io_prefs();
+    match daw.attach_set_audio_with_prefs(&prefs) {
+        Ok(audio) => {
+            tracing::info!(
+                audio.attach_ms = began.elapsed().as_millis(),
+                "audio device attached: the set's engine"
+            );
+            crate::audio_health::watch(audio.stats(), audio.sample_rate());
+            Some(audio)
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "no audio engine; the transport will run silent");
+            None
+        }
+    }
+}
+
+/// `project_guid` current in `audio`: its meters and keys, and — a song
+/// streamed in and heard by its reference — the reference mixed in after
+/// its tracks.
+fn make_current(audio: &daw::standalone::audio_engine::SetAudio, project_guid: &str) {
+    if let Err(e) = audio.set_current(Some(project_guid)) {
+        tracing::warn!(song.project = project_guid, error = %e, "the song could not be made current");
+        return;
+    }
+    audio.set_aux_renderer(crate::reference_play::renderer(project_guid.to_owned()));
 }
 
 fn attach_audio_now(daw: &Standalone, project_guid: &str, asked: u64) {
@@ -664,41 +729,32 @@ fn attach_audio_now(daw: &Standalone, project_guid: &str, asked: u64) {
     let mut slot = AUDIO
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    // Another song asked since: it is the one to play.
+    // Another song asked since: it is the one to make current.
     if AUDIO_ASKED.load(std::sync::atomic::Ordering::Acquire) != asked {
         return;
     }
-    // Playing this song already: nothing to move. Opening the device again
-    // for the same song (a song opened, then picked) closed a stream and
-    // opened another within a few milliseconds — on iOS, a suspect in an
-    // output that stayed silent until the app was sent away and brought
-    // back.
-    if slot
-        .as_ref()
-        .is_some_and(|(playing, _)| playing == project_guid)
-    {
+    if slot.is_none() {
+        *slot = open_set_audio(daw);
+        // Every song already open joins it: a set's songs open while the
+        // device is still being found.
+        if let Some(audio) = slot.as_ref() {
+            for song in daw::service::Projects::list(daw) {
+                if let Err(e) = audio.add_voice(&song.guid) {
+                    tracing::warn!(song.project = %song.guid, error = %e, "the song could not join the set's engine");
+                }
+            }
+        }
+    }
+    let Some(audio) = slot.as_ref() else {
+        return;
+    };
+    if let Err(e) = audio.add_voice(project_guid) {
+        tracing::warn!(song.project = project_guid, error = %e, "the song could not join the set's engine");
         return;
     }
-    // Close the old stream before opening the device again.
-    drop(slot.take());
-    let began = web_time::Instant::now();
-    let prefs = crate::render_ahead::current().io_prefs();
-    match daw.attach_audio_engine_with_prefs(project_guid, &prefs) {
-        Ok(engine) => {
-            tracing::info!(
-                audio.attach_ms = began.elapsed().as_millis(),
-                song.project = project_guid,
-                "audio device attached"
-            );
-            if let Some(stats) = engine.stats() {
-                crate::audio_health::watch(stats, engine.sample_rate());
-            }
-            // A streamed song heard by its reference: the reference, mixed
-            // in after the song's own tracks (the guide, live over it).
-            engine.set_aux_renderer(crate::reference_play::renderer(project_guid.to_owned()));
-            *slot = Some((project_guid.to_owned(), engine));
-        }
-        Err(e) => tracing::warn!(error = %e, "no audio engine; the transport will run silent"),
+    if audio.current().as_deref() != Some(project_guid) {
+        make_current(audio, project_guid);
+        tracing::info!(song.project = project_guid, "audio: the song is current");
     }
 }
 

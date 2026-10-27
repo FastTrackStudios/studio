@@ -402,6 +402,9 @@ impl Setlist {
         let prepare = crate::prepare::Prepare::for_song(&path);
         let (opened, plan) = crate::open::open_song_into_with(engine, &path, &prepare, media)?;
         let guid = opened.project_guid.clone();
+        // A voice of the set's engine now: it can sound the moment it is
+        // picked, or while another is on screen.
+        crate::open::sound(&guid);
         if let Some(streamed) = streamed {
             crate::stream_set::stream(streamed, &guid);
         } else if let Some(folder) = path.parent() {
