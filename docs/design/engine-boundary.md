@@ -15,10 +15,24 @@ Steps 1–3 of the research's migration path (§7) are under way:
 
 | step | state |
 |---|---|
-| 1. The boundary inside one process | done: 100 engine modules use no window module (`apps/session/daw/engine-modules.txt`, `just engine-boundary`) |
+| 1. The boundary inside one process | done, and cut: `session-engine` (`apps/session/engine`, 100 modules) and `session-ui` (`apps/session/ui`, the window); the compiler holds the line |
 | 2. The Action List and set state to the engine | done: the list is the engine's; a window registers its own actions when it attaches; the edit cursor and time selection are engine state; Live's roll-on is the engine's |
 | 3. `studio engine` | runs: the engine, the set, SetAudio, MCP on 47811, the daw facade on a Unix socket (`--listen` adds WS) |
 | 4–6 | planned below |
+
+### Phase B: two crates
+
+`session-daw` is gone: **`session-engine`** (`apps/session/engine`) is
+the engine — the set, the Action List, MCP, opening, streaming, collab,
+the project file, every edit of a song, `studio_engine::headless`, the
+engine-only tools (`hits`, `prepare`, `reference`, `session-media`,
+`show-split`, `chain-probe`); native and wasm (`native`, `web`).
+**`session-ui`** (`apps/session/ui`) is the window, a view of it: it
+re-exports every engine module at its root, so its code (and its
+dependents, `session_ui::open`, `session_ui::studio_engine`) reads as
+before. The engine still depends on a few window-kind crates (dioxus
+signals, daw-ui's project types, vello's colour) for the read-back model
+(`song_model`) a window draws from — step 5 moves that to the GUI.
 
 ### Phase A: the engine side stands alone
 
@@ -52,7 +66,7 @@ Steps 1–3 of the research's migration path (§7) are under way:
 
 ### What moved (this change)
 
-- **`apps/session/daw/src/studio_engine/`** — the engine side's module,
+- **`apps/session/engine/src/studio_engine/` (was `apps/session/daw/src/…`)** — the engine side's module,
   the seam the `studio-engine` crate will be cut along:
   - `set.rs`: the set the engine has open (`SetView`: revision, epoch,
     `Setlist`, `Opening`), published on a `tokio::sync::watch`. The one

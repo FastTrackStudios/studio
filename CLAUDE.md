@@ -18,9 +18,14 @@ apps/       studio/desktop                     Studio, THE app (desktop + iOS, o
                                                the rig view; the rig app
                                                crate (`studio-desktop`, and its
                                                headless `--engine`)
-            session/{desktop,daw,web,daw-web}  Session: its app as a library Studio
-                                               mounts (+ its own binary and CLIs), the
-                                               DAW view, the site, the DAW in a browser
+            session/{desktop,engine,ui,web,daw-web}
+                                               Session: its app as a library Studio
+                                               mounts (+ its own binary and CLIs), its
+                                               engine (`session-engine`: the set, the
+                                               Action List, `studio engine`; draws
+                                               nothing), its window (`session-ui`: the
+                                               DAW view, a view of the engine), the
+                                               site, the DAW in a browser
             signal/{mobile,web}                Signal: Android, the site
             patchbay/                          fts-patchbay: app, agent CLI, browser remote
             plugins/*                          the CLAP/VST3 plugins (`<name>-plugin`),
