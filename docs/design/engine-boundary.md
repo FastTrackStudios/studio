@@ -18,7 +18,45 @@ Steps 1–3 of the research's migration path (§7) are under way:
 | 1. The boundary inside one process | done, and cut: `session-engine` (`apps/session/engine`, 100 modules) and `session-ui` (`apps/session/ui`, the window); the compiler holds the line |
 | 2. The Action List and set state to the engine | done: the list is the engine's; a window registers its own actions when it attaches; the edit cursor and time selection are engine state; Live's roll-on is the engine's |
 | 3. `studio engine` | runs: the engine, the set, SetAudio, MCP on 47811, the daw facade on a Unix socket (`--listen` adds WS) |
-| 4–6 | planned below |
+| 4. The app attaches or spawns | done behind `FTS_ENGINE=spawn\|attach` (default `inprocess`): see Phase C |
+| 5–6 | planned below |
+
+### Phase C: the window on an engine in another process
+
+`FTS_ENGINE=spawn|attach|inprocess` (`session_engine::studio_engine::link`):
+
+- **Discovery**: an engine writes `$XDG_CONFIG_HOME/fts/engines/studio-<pid>.json`
+  (`link::Found`: pid, socket, MCP URL, WS); a window reads them newest
+  first and attaches to the first that answers on its socket.
+- **Spawn**: none answering, `studio engine` (`FTS_STUDIO_BIN`, else a
+  `studio` beside the app, else on `PATH`) in a process group of its own,
+  logging to `$XDG_CACHE_HOME/fts/studio-engine.log`; the window waits up
+  to 30 s for it to say where it is. It outlives the window: a crash, a
+  kill or a relaunch of the GUI leaves it playing. Stop it by its pid.
+- **Attach**: the window is Remote on `RemoteTarget::Engine { socket }` —
+  the daw facade over the engine's socket (`open::attach_to_local_engine`,
+  which also takes an engine with nothing open). It serves no MCP (the
+  engine does, on 47811). Its keys and menus run window actions here and
+  every other action on the engine (`actions::run` → MCP); its picks
+  (`set::pick` → `SESSION_SONG`), opens (`set::open_library`/`open_path`)
+  and Live (`live::set_live` → `SESSION_LIVE`) go to the engine.
+- **The set, followed** (`link::follow`): every 400 ms `SESSION_SONGS`; a
+  new set is read back song by song through the facade without selecting
+  any (`Setlist::from_engine`, songs already shown kept), another current
+  song is marked current. Several windows can follow one engine.
+- Verified by hand (2026-10-27): the dx app spawned the engine;
+  `studio open "JT's Senior Recital"`, `studio song next`, `SESSION_PLAY_PAUSE`
+  drove it and the window followed (waveforms drawn); the GUI killed, the
+  engine played on; relaunched, it attached to the same engine without
+  stopping it; a second window followed the same set; Live handed song 1
+  to song 2 on the frame (`SESSION_TRANSPORT` read the new song at 3.2 s).
+- **Not yet** (why the default stays `inprocess`): step 5's replica. A
+  linked window is a Remote window: what it draws per frame from the
+  in-process engine (hit overlays, wave detail, take volume curves, the
+  meters) is what Remote mode draws, not what Engine mode does; actions
+  that queue for the window from the engine (`window_queue`) do not cross
+  processes; an engine that dies is not restarted. Flip `link::Mode::from_env`
+  once those are measured.
 
 ### Phase B: two crates
 

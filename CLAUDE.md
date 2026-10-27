@@ -82,7 +82,10 @@ working there.
   tracks in that project (`signal_rig_host::engine::{Engine, Rig}`), not an
   engine of its own. Signal and Session both just run the DAW: Signal is
   the isolated live rig, Session the full DAW, and rigs live in Session
-  as tracks. In Studio the window opens on the welcome screen (the
+  as tracks. A desktop window can also drive the engine in a process of
+  its own (`FTS_ENGINE=spawn|attach`: `studio engine`, found or spawned,
+  outliving the window — `session_engine::studio_engine::link`). In
+  Studio the window opens on the welcome screen (the
   library, `apps/studio/desktop/src/front.rs`) and goes into the DAW view
   or the rig view of what is opened; Session's Action List is served from
   launch. More engines means more processes of the same engine. Read
