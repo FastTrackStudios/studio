@@ -87,7 +87,8 @@ pub fn open_first_with(path: &Path, audio: bool, media: Media) -> eyre::Result<O
     Ok(opened)
 }
 
-/// The window's Action List served to a model (`crate::mcp_server`): from
+/// The Action List served to a model and the CLI
+/// (`crate::studio_engine::mcp`): from
 /// the window's start (`session_desktop::native::prepare`), so a model or
 /// the CLI can open the first song too, and once a song is open in a window
 /// that plays — never for a renderer or a test, which open silent. Once per
@@ -103,7 +104,7 @@ pub fn serve_actions() {
                 tracing::warn!(%error, "mcp: no runtime to serve on");
                 return;
             }
-            let _ = crate::mcp_server::start();
+            let _ = crate::studio_engine::mcp::start();
         });
     }
 }
@@ -202,6 +203,20 @@ fn engine() -> &'static Standalone {
         equip(&daw);
         daw
     })
+}
+
+/// Stand the process's engine up with no song open: the engine, its
+/// runtime and the daw facade over it, playing — its device opens with the
+/// first song (`crate::studio_engine::headless`, `studio engine`).
+///
+/// # Errors
+///
+/// The runtime or the facade could not be started.
+pub fn start_engine() -> eyre::Result<Standalone> {
+    let daw = engine();
+    bootstrap(daw)?;
+    AUDIBLE.store(true, std::sync::atomic::Ordering::Relaxed);
+    Ok(daw.clone())
 }
 
 /// Make an engine a Session engine: what every engine a song opens into

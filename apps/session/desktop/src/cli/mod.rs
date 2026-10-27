@@ -15,7 +15,12 @@
 //! studio song next                             # go to a song (SESSION_SONG)
 //! studio actions --filter drums                # what the window can do
 //! studio run SESSION_PLAY                      # run one action, args as JSON
+//! studio engine                                # the whole engine, no window
 //! ```
+//!
+//! `studio engine` ([`engine`]) runs Session's engine with no window and
+//! serves the same Action List, so every command above drives it the same
+//! way it drives a window.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -25,6 +30,8 @@ use clap::Subcommand;
 
 pub mod app;
 pub mod bench;
+#[cfg(feature = "native")]
+pub mod engine;
 mod lyrics;
 mod multitracks;
 mod peaks;
@@ -62,6 +69,12 @@ pub enum Command {
     /// Go to a song of the open set (SESSION_SONG): its number (1 the
     /// first), its title, `next` or `previous`.
     Song { to: String },
+    /// Run Session's whole engine here, with no window: the set, the audio,
+    /// the Action List on MCP (what `open`, `songs`, `song` and `run` talk
+    /// to) and the daw facade on a Unix socket (`--listen` adds a
+    /// WebSocket). Until Ctrl-C.
+    #[cfg(feature = "native")]
+    Engine(engine::Args),
     /// The running app's actions, by id (`--filter` narrows them).
     Actions {
         #[arg(long)]
@@ -299,6 +312,8 @@ pub async fn run(command: Command) -> eyre::Result<ExitCode> {
             );
             Ok(())
         }
+        #[cfg(feature = "native")]
+        Command::Engine(args) => run_engine(args),
         Command::Actions { filter } => app::list(filter.as_deref()),
         Command::Run { action, args } => {
             let args = match args {
@@ -354,6 +369,28 @@ pub async fn run(command: Command) -> eyre::Result<ExitCode> {
         Command::Reaper(command) => reaper::run(command).await,
     }
     .map(|()| ExitCode::SUCCESS)
+}
+
+/// The log filter `command` wants when `RUST_LOG` is unset, if not the
+/// command line's own: the engine says what it does (it is a server).
+#[must_use]
+pub fn log_filter(command: &Command) -> Option<&'static str> {
+    match command {
+        #[cfg(feature = "native")]
+        Command::Engine(_) => Some("info,wgpu=warn,naga=warn,symphonia=warn,iroh=warn,vox=warn"),
+        _ => None,
+    }
+}
+
+/// `studio engine`, on a thread of its own: the engine runs its own
+/// runtime and blocks on it, which it may not do on this one's.
+#[cfg(feature = "native")]
+fn run_engine(args: engine::Args) -> eyre::Result<()> {
+    std::thread::Builder::new()
+        .name("studio-engine".into())
+        .spawn(move || engine::run(&args))?
+        .join()
+        .map_err(|_| eyre::eyre!("the engine stopped with a panic"))?
 }
 
 /// `studio open`: a path that exists is opened (`SESSION_OPEN`), anything

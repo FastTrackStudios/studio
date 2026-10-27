@@ -13,6 +13,7 @@
 //! studio songs
 //! studio song next
 //! studio run SESSION_PLAY
+//! studio engine                       # Session's engine with no window
 //! studio tone3000 search "vox ac30"
 //! studio rig level Metal --dry-run
 //! ```
@@ -60,7 +61,11 @@ enum Command {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    session_desktop::cli::init_tracing("warn,signal_tone3000=info");
+    let filter = match &cli.command {
+        Command::Session(command) => session_desktop::cli::log_filter(command),
+        _ => None,
+    };
+    session_desktop::cli::init_tracing(filter.unwrap_or("warn,signal_tone3000=info"));
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
