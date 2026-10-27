@@ -641,7 +641,7 @@ fn StatusSheet(session: Session) -> Element {
                                                     "aria-label": "{verb} {name}",
                                                     style: "width: 100%; min-height: 32px; padding: 6px 8px; border-radius: 8px; border: 1px solid {border}; background: {bg}; \
                                                             color: {ink}; font-family: {FONT}; font-size: 12px; font-weight: 600; line-height: 1.25; \
-                                                            display: flex; align-items: center; justify-content: flex-start; gap: 6px; text-align: left; overflow: hidden; overflow-wrap: anywhere;",
+                                                            display: flex; align-items: center; justify-content: flex-start; gap: 6px; text-align: left; overflow: hidden; overflow-wrap: break-word;",
                                                     onclick: move |_| edit(Edit::ToggleStep { session: id, step, sub: Some(sub) }),
                                                     if done { Check { size: 13, color: LIVE, stroke_width: 3 } }
                                                     span { style: "min-width: 0;", "{verb}" }

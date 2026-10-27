@@ -35,6 +35,7 @@ pub const BAR: u32 = 56;
 /// Blitz wants). `.lp` on anything pressable.
 pub const SHEET_CSS: &str = "\
 html, body { margin: 0; padding: 0; background: #0c0c0f; }\
+*, *::before, *::after { box-sizing: border-box; }\
 .lp { cursor: pointer; transition: background-color 120ms ease-out, transform 120ms ease-out; }\
 .lp:hover { background-color: rgba(255,255,255,0.035); }\
 .lp:active { background-color: rgba(255,255,255,0.07); transform: scale(0.995); }\
