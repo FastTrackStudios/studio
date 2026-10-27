@@ -65,18 +65,17 @@ pub fn split(set: &Path, into: &Path) -> eyre::Result<Vec<Song>> {
     // A set made on another machine names its media where it was there
     // (`/Users/jt/Music/Ableton/…/Samples/…`): re-rooted under the show.
     let model = relocate(model, &show_dir);
-    let media_dirs = media_dirs(&model);
 
     // 2–3. Each song, cropped, beside links to the show's media.
     std::fs::create_dir_all(into)?;
     let mut songs = Vec::with_capacity(ranges.len());
+    let titles: Vec<String> = ranges.iter().map(|r| r.name.clone()).collect();
     for range in ranges {
-        let cropped = session::sync::crop::crop(&model, range.start_seconds, range.end_seconds);
+        let mut cropped = session::sync::crop::crop(&model, range.start_seconds, range.end_seconds);
+        name_song(&mut cropped, &range.name, &titles);
         let dir = into.join(&range.slug);
         std::fs::create_dir_all(&dir)?;
-        for media in &media_dirs {
-            link_media(&show_dir.join(media), &dir.join(media))?;
-        }
+        bring_media(&cropped, &show_dir, &dir)?;
         let file = dir.join(format!("{}.session", file_name(&range.name)));
         write_fresh(&file, &cropped)?;
         tracing::info!(
@@ -131,6 +130,27 @@ fn show_model(rpp: &Path, session: &Path) -> eyre::Result<session::sync::Session
     Ok(SessionDoc::from_loro(doc).read())
 }
 
+/// The song's own region (on the SONG lane — what its tab and the setlist
+/// call it) named `name`: cut from the show, it still carried the show's
+/// (`Sr. Recital Showcase - Session` on every tab). And no section named
+/// for a song of the show (`titles`): the show's song locators became
+/// sections when it was prepared, so `Cinematic Intro` ran on over Drive
+/// To LA.
+fn name_song(song: &mut session::sync::SessionModel, name: &str, titles: &[String]) {
+    let lane = session::ruler_lanes::CoreLane::Song.lane_index();
+    song.regions.retain(|_, region| {
+        region.lane == Some(lane)
+            || !titles
+                .iter()
+                .any(|t| t.trim().eq_ignore_ascii_case(region.name.trim()))
+    });
+    for region in song.regions.values_mut() {
+        if region.lane == Some(lane) {
+            name.clone_into(&mut region.name);
+        }
+    }
+}
+
 /// `model` with every take's media re-rooted under `show_dir` when it is
 /// not where the set says: the shortest tail of its path that is there
 /// (`Samples/Imported/Drums.wav`) — a set carried from the machine it was
@@ -179,37 +199,62 @@ fn rooted_under(path: &Path, dir: &Path) -> Option<String> {
     })
 }
 
-/// The top-level folders the model's media sits in, relative to the show
-/// (`Samples`): what each song links to.
-fn media_dirs(model: &session::sync::SessionModel) -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = model
+/// The files `song` plays, put in its folder `dir` at the paths it names
+/// them by (relative to the show): hard links to the show's own files, so a
+/// song's folder holds real files a library serves and a device copies —
+/// and costs no space, sharing the show's bytes on disk. Each file's proxy
+/// (`Proxies/<stem>.ogg` and its page index) comes too when the show has
+/// one. A link that cannot be made (another filesystem) is a copy.
+fn bring_media(
+    song: &session::sync::SessionModel,
+    show_dir: &Path,
+    dir: &Path,
+) -> eyre::Result<()> {
+    let mut files: Vec<PathBuf> = song
         .items
         .values()
         .flat_map(|i| i.takes())
         .filter_map(|t| t.source.as_deref())
-        .filter_map(|s| {
-            let p = Path::new(s);
-            if p.is_absolute() {
-                return None;
-            }
-            p.components().next().map(|c| PathBuf::from(c.as_os_str()))
-        })
-        .filter(|first| first.extension().is_none())
+        .map(PathBuf::from)
+        .filter(|p| p.is_relative())
         .collect();
-    dirs.sort();
-    dirs.dedup();
-    dirs
+    files.sort();
+    files.dedup();
+    for rel in files {
+        let from = show_dir.join(&rel);
+        if !from.is_file() {
+            continue;
+        }
+        link_file(&from, &dir.join(&rel))?;
+        if let (Some(parent), Some(stem)) = (rel.parent(), rel.file_stem()) {
+            let proxy = parent
+                .join("Proxies")
+                .join(format!("{}.ogg", stem.to_string_lossy()));
+            for each in [
+                proxy.clone(),
+                PathBuf::from(format!("{}.idx", proxy.display())),
+            ] {
+                let from = show_dir.join(&each);
+                if from.is_file() {
+                    link_file(&from, &dir.join(&each))?;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
-/// `link` → `target`, made (or left, when it already is one).
-fn link_media(target: &Path, link: &Path) -> eyre::Result<()> {
-    if link.symlink_metadata().is_ok() {
+/// `to` as a hard link to `from` (made, or left when it already is one).
+fn link_file(from: &Path, to: &Path) -> eyre::Result<()> {
+    if to.symlink_metadata().is_ok() {
         return Ok(());
     }
-    #[cfg(unix)]
-    std::os::unix::fs::symlink(target, link)?;
-    #[cfg(not(unix))]
-    eyre::bail!("linking {} needs symlinks", link.display());
+    if let Some(parent) = to.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    if std::fs::hard_link(from, to).is_err() {
+        std::fs::copy(from, to)?;
+    }
     Ok(())
 }
 
@@ -251,7 +296,7 @@ fn file_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{file_name, rooted_under};
+    use super::{file_name, name_song, rooted_under};
 
     #[test]
     fn media_from_the_machine_a_set_was_made_on_is_found_under_the_show() {
@@ -276,6 +321,33 @@ mod tests {
             rooted_under(std::path::Path::new("/nowhere/Gone.wav"), show.path()),
             None
         );
+    }
+
+    #[test]
+    fn a_song_cut_from_a_show_is_named_for_itself_with_no_other_song_as_a_section() {
+        use session::sync::{RegionState, SessionModel};
+        let region = |name: &str, lane: u32| RegionState {
+            start: 0.0,
+            end: 196.5,
+            name: name.to_owned(),
+            color: None,
+            lane: Some(lane),
+        };
+        let mut song = SessionModel::default();
+        song.regions
+            .insert("song".into(), region("Sr. Recital Showcase - Session", 0));
+        song.regions
+            .insert("ran-on".into(), region("Cinematic Intro", 1));
+        song.regions.insert("verse".into(), region("Verse 1", 1));
+        let titles = ["Cinematic Intro".to_owned(), "Drive To LA".to_owned()];
+        name_song(&mut song, "Drive To LA", &titles);
+        let mut names: Vec<_> = song
+            .regions
+            .values()
+            .map(|r| (r.lane, r.name.as_str()))
+            .collect();
+        names.sort_unstable();
+        assert_eq!(names, vec![(Some(0), "Drive To LA"), (Some(1), "Verse 1")]);
     }
 
     #[test]
