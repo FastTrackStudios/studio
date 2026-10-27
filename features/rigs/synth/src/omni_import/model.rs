@@ -789,6 +789,7 @@ impl FilterModel {
         // The offsets were measured against the filter as it plays this
         // corner — floored at 20 Hz (`NativeFilter`'s clamp) — so they
         // apply to the floored corner.
+        let setting = top_setting(self.name).map_or(setting, |top| setting.min(top));
         let offset = low_end_octaves(self.name, setting);
         let base = self.corner_hz_above_low(setting);
         if offset == 0.0 {
@@ -813,6 +814,16 @@ impl FilterModel {
     }
 }
 
+/// The knob setting past which a model's corner stops rising (measured:
+/// Bandpass Juicy 12db's centroid plateaus at ~7.1 kHz from about 0.82 —
+/// 7 122 Hz at 0.9, 7 064 at 1 — where the generic taper went on to 9 kHz).
+fn top_setting(name: &str) -> Option<f32> {
+    match name {
+        "Bandpass Juicy 12db" => Some(0.82),
+        _ => None,
+    }
+}
+
 /// The octaves a model's corner sits above [`FilterModel::corner_hz`]'s
 /// extrapolation below knob setting 0.15, where the taper was not fitted:
 /// measured per model against the plugin (`tools/omni_probe` tapercal: the
@@ -829,7 +840,10 @@ fn low_end_octaves(name: &str, setting: f32) -> f32 {
         "LPF Power 12db" => [-0.06, 0.58, 0.42, 0.28],
         "Beefy LPF 4-pole" => [0.60, 0.96, 0.74, 0.48],
         "Classic LPF 1-pole" => [-0.12, -0.28, 0.64, 0.48],
-        "Bandpass Juicy 12db" => [1.28, 1.04, 0.42, 0.26],
+        // Re-fit 2026-10-27 at a C0 note (harmonics below the corner):
+        // 50.5 / 52.2 Hz at settings 0 / 0.05, where 1.28 / 1.04 sat at
+        // 48.9 / 41.4.
+        "Bandpass Juicy 12db" => [1.33, 1.37, 0.42, 0.26],
         "State Variable 12dB" => [1.12, 1.28, 0.24, 0.24],
         "Classic LPF 8-pole" => [0.86, 0.92, 0.50, 0.34],
         "LPF UVI 3" => [-1.42, 0.02, 0.02, 0.08],
@@ -988,14 +1002,26 @@ const FILTER_MODELS: &[(u32, FilterModel)] = &[
 pub fn resonance_table(name: &str) -> Option<&'static [(f32, &'static [(f32, f32)])]> {
     match name {
         "Bandpass Juicy 12db" => Some(&[
+            // 0 and 0.05: fitted at a C0 note (harmonics below the ~50 Hz
+            // corner); full resonance saturates there.
+            (
+                0.0,
+                &[
+                    (0.0, 0.72),
+                    (0.25, 1.37),
+                    (0.525, 1.83),
+                    (0.75, 1.94),
+                    (1.0, 1.94),
+                ],
+            ),
             (
                 0.05,
                 &[
                     (0.0, 0.72),
-                    (0.25, 1.45),
-                    (0.525, 1.94),
-                    (0.75, 2.31),
-                    (1.0, 2.59),
+                    (0.25, 1.37),
+                    (0.525, 1.72),
+                    (0.75, 1.83),
+                    (1.0, 1.83),
                 ],
             ),
             (
@@ -1415,6 +1441,20 @@ pub fn part_gain_db(g: f32) -> f32 {
 
 /// An envelope's breakpoints as `(seconds or beats, level, curve k, step)`
 /// (measured: one `t` unit is 100; `k = 42·(0.5 − c)`; `s` bit 0 = step).
+/// A breakpoint segment's bend (`SegPoint::curve`) from its point's `s`
+/// type and `c` curve — measured on the plugin, the same for amp, filter
+/// and mod envelopes: type 0 runs straight whatever `c` says; type 0x18
+/// bends as exponent `1 + 31.5·|c − 0.5|`; 0x14 (and the rest) half as hard,
+/// `1 + 18·|c − 0.5|`.
+fn segment_curve(s_bits: u32, c: f32) -> f32 {
+    let c = c.clamp(0.0, 1.0);
+    match s_bits {
+        0 => 0.0,
+        0x18 => 73.5 * (0.5 - c),
+        _ => 42.0 * (0.5 - c),
+    }
+}
+
 fn env_points(env: &XmlNode) -> Vec<(f32, f32, f32, bool)> {
     env.children_tagged("p")
         .map(|p| {
@@ -1425,7 +1465,7 @@ fn env_points(env: &XmlNode) -> Vec<(f32, f32, f32, bool)> {
             (
                 p.num("t").unwrap_or(0.0).max(0.0) * 100.0,
                 p.num("l").unwrap_or(0.0).clamp(0.0, 1.0),
-                42.0 * (0.5 - p.num("c").unwrap_or(0.5).clamp(0.0, 1.0)),
+                segment_curve(bits, p.num("c").unwrap_or(0.5)),
                 bits & 1 != 0,
             )
         })
@@ -1999,9 +2039,7 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
                 (
                     p.num("t").unwrap_or(0.0).max(0.0) * 100.0,
                     p.num("l").unwrap_or(0.0).clamp(0.0, 1.0),
-                    // Measured: a mod envelope bends harder than the amp
-                    // envelope's `42·(0.5 − c)` — exponent 1 + 31.5·|c − 0.5|.
-                    73.5 * (0.5 - p.num("c").unwrap_or(0.5).clamp(0.0, 1.0)),
+                    segment_curve(bits, p.num("c").unwrap_or(0.5)),
                     bits & 1 != 0,
                 )
             })
