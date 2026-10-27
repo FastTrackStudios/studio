@@ -16,6 +16,7 @@ mod home;
 mod kit;
 mod lists;
 mod project;
+mod session;
 mod setlist;
 mod song;
 mod talk;
@@ -245,7 +246,7 @@ pub fn LibraryApp() -> Element {
                         Route::Song(id, arrangement) => rsx! { song::SongPage { id, arrangement } },
                         Route::Project(id) => rsx! { project::ProjectPage { id } },
                         Route::Album(id) => rsx! { album::AlbumPage { id } },
-                        Route::Session(id) => rsx! { album::SessionPage { id } },
+                        Route::Session(id) => rsx! { session::SessionPage { id } },
                     }
                 }
             }

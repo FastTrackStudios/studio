@@ -1,16 +1,13 @@
-//! An album (its tracks, each an arrangement and the session that
-//! produces it, and how far each has come) and a session (a `.session`:
-//! its song, its stage, and the way into Session).
+//! An album: its tracks, each an arrangement and the session that
+//! produces it, and how far each has come.
 
 use dioxus::prelude::*;
-use lucide_dioxus::FolderOpen;
 
 use super::home::Page;
 use super::kit::*;
 use super::lists::StageBar;
-use super::song::Panel;
-use super::{Open, Route, open, use_library, use_nav, use_wide};
-use crate::model::{AlbumId, Anchor, SessionId, Stage, clock};
+use super::{Route, use_library, use_nav, use_wide};
+use crate::model::{AlbumId, Stage, clock};
 
 #[component]
 pub(crate) fn AlbumPage(id: AlbumId) -> Element {
@@ -101,90 +98,6 @@ pub(crate) fn AlbumPage(id: AlbumId) -> Element {
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-#[component]
-pub(crate) fn SessionPage(id: SessionId) -> Element {
-    let lib = use_library();
-    let nav = use_nav();
-    let wide = use_wide();
-    let l = lib.read();
-    let Some(session) = l.session(id).cloned() else {
-        return rsx! { Page { p { style: "{BODY} color: {INK_2}; padding-top: 40px;", "This session was deleted or has not arrived yet." } } };
-    };
-    let song = session.song.and_then(|s| l.song(s)).cloned();
-    let stages = [
-        Stage::Writing,
-        Stage::Tracking,
-        Stage::Editing,
-        Stage::Mixing,
-        Stage::Mastering,
-        Stage::Released,
-    ];
-    let at = stages.iter().position(|s| *s == session.stage).unwrap_or(0);
-    let in_project = l.project_of_session(id).map(|p| p.id);
-    let direction = if wide { "row" } else { "column" };
-    rsx! {
-        Page {
-            div { style: "display: flex; align-items: flex-end; gap: 16px; padding: 24px 0 20px; flex-wrap: wrap;",
-                div { style: "flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 8px;",
-                    super::project::InProject { id: in_project }
-                    span { style: "{TITLE}", "{session.title}" }
-                    span { style: "{META} color: {INK_3};",
-                        "{session.tracks} tracks · last changed by {session.edited.by} on {session.edited.device}, {session.edited.when}"
-                    }
-                }
-                Button { label: "Open in Session".to_owned(), weight: Weight::Primary,
-                    icon: rsx! { FolderOpen { size: 16, color: "#fff" } }, on_press: move |()| open(Open::Session(id)) }
-            }
-            // Where it is: every stage, the current one picked.
-            div { style: "display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px;",
-                for (i, s) in stages.iter().enumerate() {
-                    {
-                        let (bg, ink, border) = if i == at { (PICK_BG, INK, PICK) } else if i < at { (SHEET_2, INK_2, RULE) } else { ("transparent", INK_3, RULE) };
-                        rsx! {
-                            div { key: "{i}", style: "height: 48px; border-radius: 10px; border: 1px solid {border}; background: {bg}; \
-                                                     display: flex; align-items: center; justify-content: center; color: {ink}; \
-                                                     {META} font-weight: 650;",
-                                "{s.label()}"
-                            }
-                        }
-                    }
-                }
-            }
-            div { style: "display: flex; flex-direction: {direction}; gap: 18px; margin-top: 22px; align-items: flex-start;",
-                div { style: "flex: 1 1 0; min-width: 0; width: 100%;",
-                    Panel { title: "Song",
-                        match &song {
-                            Some(s) => {
-                                let sid = s.id;
-                                rsx! {
-                                    button { class: "lp",
-                                        style: "min-height: 56px; display: flex; align-items: center; gap: 12px; border: none; border-top: 1px solid {RULE}; \
-                                                background: transparent; color: {INK}; font-family: {FONT}; text-align: left; padding: 0;",
-                                        onclick: move |_| nav.go(Route::Song(sid, None)),
-                                        Swatch { colour: s.colour.to_owned(), height: 32 }
-                                        div { style: "flex: 1; display: flex; flex-direction: column; gap: 2px;",
-                                            span { style: "{BODY}", "{s.title}" }
-                                            span { style: "{META} color: {INK_3};", "{s.arrangements.len()} arrangements · {s.artist}" }
-                                        }
-                                    }
-                                }
-                            }
-                            None => rsx! {
-                                span { style: "{META} color: {INK_3}; line-height: 1.5; padding: 12px 0; border-top: 1px solid {RULE};",
-                                    "Not a song yet. Make it one to give it arrangements, charts and a place on setlists."
-                                }
-                            },
-                        }
-                    }
-                }
-                div { style: if wide { "flex: 0 0 380px; min-width: 0;" } else { "width: 100%;" },
-                    Panel { title: "Conversation", super::talk::Conversation { about: Anchor::Session(id) } }
                 }
             }
         }

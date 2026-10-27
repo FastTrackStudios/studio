@@ -194,6 +194,165 @@ fn other(id: u128, kind: PieceKind, title: &str, seconds: f32) -> Entry {
     }
 }
 
+/// A waveform's outline that looks like a song: quiet intro, verses,
+/// louder choruses, a drop for the bridge. Stable per seed.
+fn peaks(seed: u128, bins: usize) -> Vec<f32> {
+    let mut x = (seed as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
+    (0..bins)
+        .map(|i| {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            let jitter = (x % 1000) as f32 / 1000.0;
+            let t = i as f32 / bins as f32;
+            let section = match t {
+                t if t < 0.08 => 0.3,
+                t if t < 0.3 => 0.55,
+                t if t < 0.45 => 0.85,
+                t if t < 0.6 => 0.6,
+                t if t < 0.68 => 0.35,
+                t if t < 0.92 => 0.9,
+                _ => 0.4,
+            };
+            (section * (0.75 + 0.25 * jitter)).min(1.0)
+        })
+        .collect()
+}
+
+/// A session's mixes by where it is: none before the mix, a history once
+/// mixing.
+fn mixes(id: u128, stage: Stage) -> Vec<MixVersion> {
+    let count = match stage {
+        Stage::Mixing => 6,
+        Stage::Mastering | Stage::Released => 8,
+        Stage::Editing => 1,
+        _ => 0,
+    };
+    let notes = [
+        "Rough mix",
+        "Drums tightened, bass up",
+        "New reverb on the lead",
+        "Client notes, round 1",
+        "Vocals up 1 dB, de-essed",
+        "Kick and bass carved at 60 Hz",
+        "Print for mastering",
+        "Master, final",
+    ];
+    let whens = [
+        "Oct 2",
+        "Oct 6",
+        "Oct 11",
+        "Oct 15",
+        "Oct 19",
+        "2h",
+        "Yesterday",
+        "1h",
+    ];
+    (0..count)
+        .map(|k| MixVersion {
+            n: k as u32 + 1,
+            note: notes[k].into(),
+            when: whens[k].into(),
+            by: if k % 3 == 2 { ME.into() } else { "Sam".into() },
+            seconds: 291.0,
+            peaks: peaks(id * 31 + k as u128, 160),
+        })
+        .collect()
+}
+
+/// What the band and the client said about a session's mixes.
+fn notes(id: u128, stage: Stage) -> Vec<Note> {
+    if !matches!(stage, Stage::Mixing | Stage::Mastering) || id != 9001 {
+        return Vec::new();
+    }
+    let note = |at: f32,
+                version: u32,
+                author: &str,
+                when: &str,
+                text: &str,
+                resolved: bool,
+                client: bool| Note {
+        at,
+        version,
+        author: author.into(),
+        when: when.into(),
+        text: text.into(),
+        resolved,
+        client,
+    };
+    vec![
+        note(
+            12.0,
+            4,
+            "Dana (label)",
+            "Oct 16",
+            "Intro feels long. Can the vocal come in at the second bar?",
+            true,
+            true,
+        ),
+        note(
+            48.5,
+            6,
+            "Jess",
+            "1h",
+            "Love the new low end. The kick finally has room.",
+            false,
+            false,
+        ),
+        note(
+            83.0,
+            6,
+            "Dana (label)",
+            "40m",
+            "Chorus vocal is buried behind the guitars here.",
+            false,
+            true,
+        ),
+        note(
+            131.0,
+            5,
+            ME,
+            "Yesterday",
+            "Breath before the bridge: keep it, it's the moment.",
+            false,
+            false,
+        ),
+        note(
+            204.5,
+            6,
+            "Sam",
+            "20m",
+            "Will automate the strings down 2 dB under the last chorus.",
+            false,
+            false,
+        ),
+    ]
+}
+
+/// The production steps, ticked up to where a session is.
+fn steps_at(stage: Stage) -> Vec<Todo> {
+    let mut steps = production_steps(&["Drums", "Bass", "Guitars", "Vocals"]);
+    let reached = match stage {
+        Stage::Writing => 0,
+        Stage::Tracking => 2,
+        Stage::Editing => 3,
+        Stage::Mixing => 5,
+        Stage::Mastering => 6,
+        Stage::Released => 7,
+    };
+    for s in steps.iter_mut().take(reached) {
+        s.set_done(true);
+    }
+    // The step in progress, partly done.
+    if let Some(now) = steps.get_mut(reached) {
+        let half = now.children.len() / 2;
+        for c in now.children.iter_mut().take(half.max(1)) {
+            c.set_done(true);
+        }
+    }
+    steps
+}
+
 /// The library.
 #[must_use]
 #[allow(clippy::too_many_lines)] // one literal dataset, read top to bottom
@@ -537,6 +696,9 @@ pub fn library() -> Library {
         tracks,
         edited: edited(when, by, "Studio Mac"),
         sync,
+        mixes: mixes(id, stage),
+        notes: notes(id, stage),
+        steps: steps_at(stage),
     };
     let sessions = vec![
         session(
@@ -598,6 +760,9 @@ pub fn library() -> Library {
             tracks: 3,
             edited: edited("Oct 24", ME, "iPhone"),
             sync: Sync::Synced,
+            mixes: Vec::new(),
+            notes: Vec::new(),
+            steps: steps_at(Stage::Writing),
         },
     ];
 
@@ -633,6 +798,7 @@ pub fn library() -> Library {
         done,
         who: who.map(Into::into),
         due: due.map(Into::into),
+        children: Vec::new(),
     };
     let band = || {
         vec![

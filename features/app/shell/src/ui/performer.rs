@@ -151,6 +151,7 @@ pub fn preset() -> ShellLayout {
         },
         top: at(NOW_BAND, ids::NOW),
         bottom: at(DOCK, ids::DOCK),
+        moved: Vec::new(),
     }
 }
 

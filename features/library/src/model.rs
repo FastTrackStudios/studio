@@ -438,6 +438,12 @@ pub struct Session {
     pub tracks: u32,
     pub edited: Edited,
     pub sync: Sync,
+    /// Its mixes, oldest first: the Review page.
+    pub mixes: Vec<MixVersion>,
+    /// What was said at moments of them.
+    pub notes: Vec<Note>,
+    /// Its production steps and their subtasks: the Status page.
+    pub steps: Vec<Todo>,
 }
 
 /// One track of an album.
@@ -512,6 +518,128 @@ pub struct Todo {
     pub who: Option<String>,
     /// "Thu", "Nov 12": already said the way a list shows it.
     pub due: Option<String>,
+    /// Its subtasks (Task's `workflow.parent`): Edit Drums, Comp Vocals
+    /// under Edit.
+    pub children: Vec<Todo>,
+}
+
+impl Todo {
+    /// Done: ticked, or (with subtasks) every subtask done, as Task
+    /// cascades it.
+    #[must_use]
+    pub fn is_done(&self) -> bool {
+        if self.children.is_empty() {
+            self.done
+        } else {
+            self.children.iter().all(Todo::is_done)
+        }
+    }
+
+    /// (done, total) over the leaves: what a progress bar counts.
+    #[must_use]
+    pub fn progress(&self) -> (usize, usize) {
+        if self.children.is_empty() {
+            return (usize::from(self.done), 1);
+        }
+        self.children
+            .iter()
+            .map(Todo::progress)
+            .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1))
+    }
+
+    /// Tick or untick it, and every subtask with it.
+    pub fn set_done(&mut self, done: bool) {
+        self.done = done;
+        for c in &mut self.children {
+            c.set_done(done);
+        }
+    }
+}
+
+/// The production steps of a song, in order, each with its subtasks per
+/// part: Record Drums, Edit Vocals, Comp Vocals. What the Status page
+/// shows; Task keeps them as tasks with subtasks.
+#[must_use]
+pub fn production_steps(parts: &[&str]) -> Vec<Todo> {
+    let leaf = |title: String| Todo {
+        title,
+        done: false,
+        who: None,
+        due: None,
+        children: Vec::new(),
+    };
+    let per_part = |verb: &str| {
+        parts
+            .iter()
+            .map(|p| leaf(format!("{verb} {p}")))
+            .collect::<Vec<_>>()
+    };
+    let step = |title: &str, children: Vec<Todo>| Todo {
+        title: title.into(),
+        done: false,
+        who: None,
+        due: None,
+        children,
+    };
+    let mut edit = per_part("Edit");
+    if parts.contains(&"Vocals") {
+        edit.push(leaf("Comp Vocals".into()));
+    }
+    vec![
+        step("Write", vec![leaf("Lyrics".into()), leaf("Chart".into())]),
+        step(
+            "Produce",
+            vec![leaf("Arrangement".into()), leaf("Demo".into())],
+        ),
+        step("Record", per_part("Record")),
+        step("Edit", edit),
+        step(
+            "Organize",
+            vec![
+                leaf("Name and colour tracks".into()),
+                leaf("Route to buses".into()),
+            ],
+        ),
+        step(
+            "Mix",
+            vec![
+                leaf("Rough mix".into()),
+                leaf("Mix notes in".into()),
+                leaf("Final mix".into()),
+            ],
+        ),
+        step(
+            "Master",
+            vec![leaf("Master".into()), leaf("Deliverables".into())],
+        ),
+    ]
+}
+
+/// One rendered version of a session's mix.
+#[derive(Clone, PartialEq, Debug)]
+pub struct MixVersion {
+    pub n: u32,
+    /// What changed: "vocals up 1 dB".
+    pub note: String,
+    pub when: String,
+    pub by: String,
+    pub seconds: f32,
+    /// The waveform's outline, 0..=1 per bin.
+    pub peaks: Vec<f32>,
+}
+
+/// A comment at a moment of a mix, on the version it was heard on (Task's
+/// timecoded review comment).
+#[derive(Clone, PartialEq, Debug)]
+pub struct Note {
+    pub at: f32,
+    pub version: u32,
+    pub author: String,
+    pub when: String,
+    pub text: String,
+    pub resolved: bool,
+    /// Left by a client, through a review link.
+    pub client: bool,
 }
 
 /// A project: Task's container for one undertaking (a run of services, a
@@ -736,6 +864,23 @@ pub enum Edit {
     },
     /// Take an entry out of a setlist.
     RemoveEntry { setlist: SetlistId, entry: EntryId },
+    /// Tick a session's production step, or one of its subtasks (`sub`),
+    /// or untick it. A step ticked ticks its subtasks.
+    ToggleStep {
+        session: SessionId,
+        step: usize,
+        sub: Option<usize>,
+    },
+    /// Say something at a moment of a mix version.
+    MixNote {
+        session: SessionId,
+        version: u32,
+        at: f32,
+        author: String,
+        text: String,
+    },
+    /// Mark a mix note dealt with, or not.
+    ResolveNote { session: SessionId, index: usize },
     /// Add an arrangement of a song to the end of a setlist.
     AddSong {
         setlist: SetlistId,
@@ -843,6 +988,60 @@ impl Library {
                 for p in self.parts.iter_mut().filter(|p| p.setlist == setlist) {
                     p.sounds.retain(|(id, _)| *id != entry);
                 }
+            }
+            Edit::ToggleStep { session, step, sub } => {
+                let s = self
+                    .sessions
+                    .iter_mut()
+                    .find(|s| s.id == session)
+                    .ok_or(EditError::NoSuchThing)?;
+                let step = s.steps.get_mut(step).ok_or(EditError::NoSuchThing)?;
+                match sub {
+                    Some(i) => {
+                        let t = step.children.get_mut(i).ok_or(EditError::NoSuchThing)?;
+                        let done = !t.is_done();
+                        t.set_done(done);
+                    }
+                    None => {
+                        let done = !step.is_done();
+                        step.set_done(done);
+                    }
+                }
+            }
+            Edit::MixNote {
+                session,
+                version,
+                at,
+                author,
+                text,
+            } => {
+                let s = self
+                    .sessions
+                    .iter_mut()
+                    .find(|s| s.id == session)
+                    .ok_or(EditError::NoSuchThing)?;
+                if !s.mixes.iter().any(|m| m.n == version) {
+                    return Err(EditError::NoSuchThing);
+                }
+                s.notes.push(Note {
+                    at,
+                    version,
+                    author,
+                    when: "now".into(),
+                    text,
+                    resolved: false,
+                    client: false,
+                });
+                s.notes.sort_by(|a, b| a.at.total_cmp(&b.at));
+            }
+            Edit::ResolveNote { session, index } => {
+                let s = self
+                    .sessions
+                    .iter_mut()
+                    .find(|s| s.id == session)
+                    .ok_or(EditError::NoSuchThing)?;
+                let n = s.notes.get_mut(index).ok_or(EditError::NoSuchThing)?;
+                n.resolved = !n.resolved;
             }
             Edit::AddSong {
                 setlist,
@@ -1275,5 +1474,67 @@ mod tests {
         let loose = fuzzy("pap", "Pineapple Party").unwrap();
         assert!(tight > loose, "{tight} vs {loose}");
         assert!(fuzzy("PAPER", "paper boats").is_some(), "case-blind");
+    }
+    #[test]
+    fn a_step_is_done_when_its_subtasks_are_and_ticking_it_ticks_them() {
+        let mut lib = crate::fixture::library();
+        let id = lib.sessions[0].id;
+        let edit = lib.sessions[0]
+            .steps
+            .iter()
+            .position(|s| s.title == "Edit")
+            .unwrap();
+        let subs = lib.sessions[0].steps[edit].children.len();
+        for i in 0..subs {
+            if !lib.sessions[0].steps[edit].children[i].is_done() {
+                lib.apply(Edit::ToggleStep {
+                    session: id,
+                    step: edit,
+                    sub: Some(i),
+                })
+                .unwrap();
+            }
+        }
+        assert!(
+            lib.sessions[0].steps[edit].is_done(),
+            "the last subtask done finishes the step"
+        );
+        lib.apply(Edit::ToggleStep {
+            session: id,
+            step: edit,
+            sub: None,
+        })
+        .unwrap();
+        assert_eq!(
+            lib.sessions[0].steps[edit].progress().0,
+            0,
+            "unticking the step unticks its subtasks"
+        );
+    }
+
+    #[test]
+    fn a_mix_note_lands_in_time_order_on_a_version_that_exists() {
+        let mut lib = crate::fixture::library();
+        let id = lib.sessions[0].id;
+        let v = lib.sessions[0].mixes.last().unwrap().n;
+        lib.apply(Edit::MixNote {
+            session: id,
+            version: v,
+            at: 1.0,
+            author: "Cody".into(),
+            text: "early".into(),
+        })
+        .unwrap();
+        assert_eq!(lib.sessions[0].notes[0].text, "early");
+        assert_eq!(
+            lib.apply(Edit::MixNote {
+                session: id,
+                version: 999,
+                at: 1.0,
+                author: "Cody".into(),
+                text: "x".into()
+            }),
+            Err(EditError::NoSuchThing)
+        );
     }
 }

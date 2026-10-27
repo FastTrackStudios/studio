@@ -63,6 +63,8 @@ dioxus-test.workspace = true
 axum = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
+# ui::layout's tests: the saved layout's round trip through the prefs format.
+facet-styx = { workspace = true }
 
 [[test]]
 name = "performer_mounts"
