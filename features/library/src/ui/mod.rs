@@ -32,6 +32,7 @@ use crate::model::{
 };
 pub use kit::SHEET_CSS;
 use kit::*;
+pub use session::{SessionStart, Tab as SessionTab};
 
 /// The library a screen reads. Provided by the app (the synced docs);
 /// the fixture when it is not.

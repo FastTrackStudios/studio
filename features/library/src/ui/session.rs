@@ -1,22 +1,26 @@
-//! A session: **Review** (its mixes, version by version, played with the
-//! comments pinned to the moments they are about: the page a client
-//! gets) and **Status** (its production steps, Write to Master, each with
-//! its subtasks per part).
+//! A session: **Review** (its mixes, played with the comments pinned to
+//! the moments they are about: the page a client gets) and **Status**
+//! (its production steps as a track sheet: the parts down the side, the
+//! stages across, each cell the part's work at that stage).
 //!
-//! The page is a shell frame (`app_shell::ui`), so its panels (the
-//! comments, the versions, what is next) sit at an edge and move to
-//! another one (each panel's ⇄), and the layout is remembered.
+//! One purpose per screen, and nothing that does not earn its place:
+//! Review is the player at full width with the version history under it,
+//! and the comments as the one panel (on the right when the iPad is
+//! sideways, in the bottom drawer upright, and movable: `app_shell::ui`).
+//! Status has no panels; the sheet is the page.
 
 use app_shell::ui::{
     Panel, PanelRegistry, Region, ShellFrame, use_panel_registry, use_shell_state,
 };
 use dioxus::prelude::*;
-use lucide_dioxus::{Check, FolderOpen, Link, Pause, Play};
+use lucide_dioxus::{
+    Check, ChevronLeft, ChevronRight, FolderOpen, Link, MessageSquare, Pause, Play,
+};
 
 use super::home::Page;
 use super::kit::*;
 use super::{Open, edit, open, use_library, use_wide};
-use crate::model::{Edit, Note, SessionId, clock};
+use crate::model::{Edit, MixVersion, Note, Session, SessionId, Todo, clock};
 
 /// Which of the session's two pages is up.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -25,7 +29,12 @@ pub enum Tab {
     Status,
 }
 
-/// The session the panels are about, and its player.
+/// The page a session opens on, when not the one it would pick (a deep
+/// link, a screenshot of one page).
+#[derive(Clone, Copy)]
+pub struct SessionStart(pub Tab);
+
+/// The session the page and its panel are about, and its player.
 #[derive(Clone, Copy)]
 struct Here {
     id: SessionId,
@@ -52,29 +61,9 @@ pub(crate) fn SessionPage(id: SessionId) -> Element {
         at: Signal::new(0.0),
         playing: Signal::new(false),
     });
-    let mut tab = use_signal(|| if latest > 0 { Tab::Review } else { Tab::Status });
-    use_shell_state("library.session");
-    use_panel_registry(|| {
-        PanelRegistry::new()
-            .with(Panel::new(
-                "session.comments",
-                "Comments",
-                Region::Right,
-                CommentsPanel,
-            ))
-            .with(Panel::new(
-                "session.versions",
-                "Versions",
-                Region::Left,
-                VersionsPanel,
-            ))
-            .with(Panel::new(
-                "session.next",
-                "Next up",
-                Region::Bottom,
-                NextPanel,
-            ))
-    });
+    let start = try_consume_context::<SessionStart>().map(|s| s.0);
+    let mut tab =
+        use_signal(|| start.unwrap_or(if latest > 0 { Tab::Review } else { Tab::Status }));
     // The player's clock: a quarter-second tick while playing.
     let mut at = here.at;
     let mut playing = here.playing;
@@ -98,128 +87,213 @@ pub(crate) fn SessionPage(id: SessionId) -> Element {
         return rsx! { Page { p { style: "{BODY} color: {INK_2}; padding-top: 40px;", "This session was deleted or has not arrived yet." } } };
     };
     let in_project = l.project_of_session(id).map(|p| p.id);
-    let pad = if wide { 32 } else { 20 };
-    let stage = session.stage;
     let open_notes = session.notes.iter().filter(|n| !n.resolved).count();
+    let (done, total) = session
+        .steps
+        .iter()
+        .map(Todo::progress)
+        .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
+    let pad = if wide { 24 } else { 20 };
     rsx! {
         div { style: "flex: 1; min-height: 0; display: flex; flex-direction: column;",
-            div { style: "flex-shrink: 0; padding: 18px {pad}px 0; border-bottom: 1px solid {RULE_STRONG}; background: {DESK};",
-                div { style: "display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;",
-                    div { style: "flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 6px;",
-                        super::project::InProject { id: in_project }
-                        span { style: "{TITLE}", "{session.title}" }
-                        span { style: "{META} color: {INK_3};",
-                            "{stage.label()} · {session.tracks} tracks · {session.mixes.len()} mixes · last changed by {session.edited.by}, {session.edited.when}"
+            // One compact header: where it is, what it is, the two pages,
+            // the two ways out.
+            div { style: "flex-shrink: 0; padding: 12px {pad}px 12px; border-bottom: 1px solid {RULE_STRONG}; \
+                          display: flex; flex-direction: column; gap: 4px;",
+                super::project::InProject { id: in_project }
+                div { style: "display: flex; align-items: center; gap: 12px; flex-wrap: wrap;",
+                    span { style: "font-size: 24px; font-weight: 750; letter-spacing: -0.02em;", "{session.title}" }
+                    Chip { text: session.stage.label().to_owned() }
+                    span { style: "flex: 1;" }
+                    if wide {
+                        Segmented {
+                            left: format!("Review · {open_notes}"),
+                            right: format!("Status · {done}/{total}"),
+                            on_left: tab() == Tab::Review,
+                            on_press: move |left: bool| tab.set(if left { Tab::Review } else { Tab::Status }),
+                            fill: false,
                         }
-                    }
-                    div { style: "display: flex; gap: 10px;",
                         Button { label: "Review link".to_owned(), weight: Weight::Secondary,
                             icon: rsx! { Link { size: 16, color: INK } }, on_press: move |()| {} }
-                        Button { label: "Open in Session".to_owned(), weight: Weight::Primary,
-                            icon: rsx! { FolderOpen { size: 16, color: "#fff" } }, on_press: move |()| open(Open::Session(id)) }
+                    } else {
+                        // Upright the link is its icon (named for touch and
+                        // screen readers), so the title keeps its line.
+                        button { class: "lp", "aria-label": "Review link", title: "Review link",
+                            style: "width: 44px; height: 44px; border-radius: 10px; border: 1px solid {RULE_STRONG}; background: transparent; \
+                                    display: flex; align-items: center; justify-content: center;",
+                            Link { size: 18, color: INK } }
+                    }
+                    Button { label: "Open in Session".to_owned(), weight: Weight::Primary,
+                        icon: rsx! { FolderOpen { size: 16, color: "#fff" } }, on_press: move |()| open(Open::Session(id)) }
+                }
+                if !wide {
+                    div { style: "margin-top: 8px;",
+                        Segmented {
+                            left: format!("Review · {open_notes}"),
+                            right: format!("Status · {done}/{total}"),
+                            on_left: tab() == Tab::Review,
+                            on_press: move |left: bool| tab.set(if left { Tab::Review } else { Tab::Status }),
+                            fill: true,
+                        }
                     }
                 }
-                div { style: "display: flex; gap: 4px; margin-top: 14px;",
-                    TabButton { label: "Review", badge: (open_notes > 0).then(|| open_notes.to_string()), on: tab() == Tab::Review, on_press: move |()| tab.set(Tab::Review) }
-                    TabButton { label: "Status", badge: Some(stage.label().to_owned()), on: tab() == Tab::Status, on_press: move |()| tab.set(Tab::Status) }
-                }
             }
-            ShellFrame {
-                main: match tab() {
-                    Tab::Review => rsx! { Review { session: session.clone() } },
-                    Tab::Status => rsx! { Status { session: session.clone() } },
-                },
+            match tab() {
+                // Keyed by orientation: a rotation remounts the frame with
+                // the comments where that orientation keeps them.
+                Tab::Review => rsx! { ReviewFrame { key: "{wide}", upright: !wide, session: session.clone() } },
+                Tab::Status => rsx! { StatusSheet { session: session.clone() } },
             }
         }
     }
 }
 
+/// Two choices side by side; the picked one filled.
 #[component]
-fn TabButton(
-    label: &'static str,
-    badge: Option<String>,
-    on: bool,
-    on_press: EventHandler<()>,
+fn Segmented(
+    left: String,
+    right: String,
+    on_left: bool,
+    on_press: EventHandler<bool>,
+    fill: bool,
 ) -> Element {
-    let (ink, edge, weight) = if on {
-        (INK, PICK, 700)
-    } else {
-        (INK_2, "transparent", 560)
+    let grow = if fill { "flex: 1 1 0;" } else { "" };
+    let seg = |on: bool| {
+        let (bg, ink, weight) = if on {
+            (SHEET_2, INK, 700)
+        } else {
+            ("transparent", INK_2, 560)
+        };
+        format!(
+            "{grow} height: 36px; padding: 0 14px; border: none; border-radius: 8px; background: {bg}; color: {ink}; \
+             font-family: {FONT}; font-size: 14px; font-weight: {weight}; white-space: nowrap;"
+        )
     };
     rsx! {
-        button {
-            class: "lp",
-            style: "height: 46px; padding: 0 14px; border: none; border-bottom: 2px solid {edge}; border-radius: 0; \
-                    background: transparent; color: {ink}; font-family: {FONT}; font-size: 15px; font-weight: {weight}; \
-                    display: flex; align-items: center; gap: 8px;",
-            onclick: move |_| on_press.call(()),
-            "{label}"
-            if let Some(b) = badge {
-                span { style: "height: 20px; padding: 0 7px; border-radius: 10px; background: {SHEET_2}; border: 1px solid {RULE}; \
-                               {META} font-size: 12px; color: {INK_2}; display: flex; align-items: center;", "{b}" }
-            }
+        div { style: "display: flex; gap: 4px; padding: 4px; border-radius: 12px; border: 1px solid {RULE_STRONG}; background: {DESK};",
+            button { class: "lp", style: "{seg(on_left)}", onclick: move |_| on_press.call(true), "{left}" }
+            button { class: "lp", style: "{seg(!on_left)}", onclick: move |_| on_press.call(false), "{right}" }
         }
     }
 }
 
 // ── Review ──────────────────────────────────────────────────────────────────
 
-/// The mix under review: its waveform with the playhead and the comments'
-/// marks, the transport, and what changed in this version.
+/// Review in a shell frame: the player and the history in main, the
+/// comments as a panel (right when sideways, bottom drawer upright).
 #[component]
-fn Review(session: crate::model::Session) -> Element {
+fn ReviewFrame(upright: bool, session: Session) -> Element {
+    use_shell_state(if upright {
+        "library.review.upright"
+    } else {
+        "library.review"
+    });
+    use_panel_registry(|| {
+        let home = if upright {
+            Region::Bottom
+        } else {
+            Region::Right
+        };
+        PanelRegistry::new().with(Panel::new(
+            "review.comments",
+            "Comments",
+            home,
+            CommentsPanel,
+        ))
+    });
+    rsx! {
+        ShellFrame { main: rsx! { ReviewMain { session } } }
+    }
+}
+
+/// The mix under review at full width (the version's facts, the waveform
+/// with the comments' marks and the playhead, the transport) and, under
+/// it, every version: what changed, who printed it, what was said.
+#[component]
+fn ReviewMain(session: Session) -> Element {
     let here = use_context::<Here>();
     let mut at = here.at;
     let mut playing = here.playing;
-    let version = (here.version)();
-    let Some(mix) = session.mixes.iter().find(|m| m.n == version).cloned() else {
+    let mut version = here.version;
+    let picked = version();
+    let Some(mix) = session.mixes.iter().find(|m| m.n == picked).cloned() else {
         return rsx! {
             div { style: "flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px;",
-                div { style: "max-width: 420px; text-align: center; display: flex; flex-direction: column; gap: 8px;",
+                div { style: "max-width: 440px; display: flex; flex-direction: column; gap: 8px;",
                     span { style: "{HEADING}", "No mixes yet" }
-                    span { style: "{META} color: {INK_3}; line-height: 1.5;",
-                        "When the first mix is printed it shows up here, and everyone on the project, clients included, can listen and comment at the moment they mean."
+                    span { style: "{BODY} color: {INK_2}; line-height: 1.5;",
+                        "Print a mix in Session and it lands here as v1. Everyone on the project, and anyone with the review link, can play it and comment at the moment they mean."
+                    }
+                    div { style: "margin-top: 8px;",
+                        Button { label: "Open in Session".to_owned(), weight: Weight::Primary,
+                            icon: rsx! { FolderOpen { size: 16, color: "#fff" } }, on_press: move |()| open(Open::Session(session.id)) }
                     }
                 }
             }
         };
     };
     let now = at();
-    let latest = session.mixes.last().map(|m| m.n) == Some(mix.n);
+    let length = mix.seconds;
+    let first = session.mixes.first().map_or(0, |m| m.n);
+    let last = session.mixes.last().map_or(0, |m| m.n);
+    let latest = mix.n == last;
+    let bins = mix.peaks.len().max(1);
+    let played = ((now / length) * bins as f32) as usize;
+    // The comments' marks: this version's at full strength, the other
+    // versions' open ones faint (still worth hearing for).
     let marks: Vec<(f32, String, bool, bool)> = session
         .notes
         .iter()
         .filter(|n| n.version == mix.n || !n.resolved)
         .map(|n| {
             (
-                n.at / mix.seconds,
+                n.at / length,
                 n.author.clone(),
                 n.client,
                 n.version == mix.n,
             )
         })
         .collect();
-    let bins = mix.peaks.len().max(1);
-    let played = ((now / mix.seconds) * bins as f32) as usize;
-    let length = mix.seconds;
+    let counts = |n: u32| session.notes.iter().filter(|x| x.version == n).count();
+    let mut go = move |n: u32| {
+        version.set(n);
+        at.set(0.0);
+    };
+    let (prev_ink, next_ink) = (
+        if mix.n > first { INK } else { DIM },
+        if mix.n < last { INK } else { DIM },
+    );
     rsx! {
         div { style: "flex: 1; min-width: 0; min-height: 0; overflow-y: scroll;",
-            div { style: "max-width: 1100px; margin: 0 auto; padding: 22px 24px 40px; display: flex; flex-direction: column; gap: 18px;",
-                div { style: "display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;",
-                    span { style: "{HEADING} font-size: 20px;", "Mix v{mix.n}" }
-                    if latest { Chip { text: "Latest".to_owned(), strong: true } }
-                    span { style: "{META} color: {INK_3};", "{mix.note} · {mix.by}, {mix.when}" }
-                }
-                // The waveform: a press seeks there.
-                div {
-                    style: "position: relative; height: 150px; border-radius: 14px; background: {SHEET}; border: 1px solid {RULE_STRONG}; \
-                            padding: 18px 14px; box-sizing: border-box;",
-                    div { style: "position: relative; width: 100%; height: 100%; display: flex; align-items: center; gap: 2px;",
+            div { style: "max-width: 1100px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 32px;",
+                // The player: the screen's one surface.
+                div { style: "border-radius: 16px; background: {SHEET}; border: 1px solid {RULE}; padding: 20px; \
+                              display: flex; flex-direction: column; gap: 20px;",
+                    div { style: "display: flex; align-items: center; gap: 12px;",
+                        button { class: "lp", "aria-label": "Older mix", disabled: mix.n <= first,
+                            style: "width: 40px; height: 40px; border-radius: 10px; border: 1px solid {RULE_STRONG}; background: transparent; \
+                                    display: flex; align-items: center; justify-content: center;",
+                            onclick: move |_| go(mix.n.saturating_sub(1).max(first)),
+                            ChevronLeft { size: 18, color: prev_ink } }
+                        div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;",
+                            div { style: "display: flex; align-items: center; gap: 8px;",
+                                span { style: "font-size: 20px; font-weight: 750;", "Mix v{mix.n}" }
+                                if latest { Chip { text: "Latest".to_owned(), strong: true } }
+                            }
+                            span { style: "{META} color: {INK_2}; {ONE_LINE}", "{mix.note} · {mix.by}, {mix.when}" }
+                        }
+                        button { class: "lp", "aria-label": "Newer mix", disabled: mix.n >= last,
+                            style: "width: 40px; height: 40px; border-radius: 10px; border: 1px solid {RULE_STRONG}; background: transparent; \
+                                    display: flex; align-items: center; justify-content: center;",
+                            onclick: move |_| go((mix.n + 1).min(last)),
+                            ChevronRight { size: 18, color: next_ink } }
+                    }
+                    // The waveform: a press on a bar seeks there.
+                    div { style: "position: relative; height: 168px; display: flex; align-items: center; gap: 2px; margin-top: 12px;",
                         for (i, p) in mix.peaks.iter().enumerate() {
                             {
                                 let h = (p * 100.0).max(4.0);
                                 let c = if i < played { PICK } else { "#3f3f46" };
-                                // A press on a bar seeks to it.
                                 let seek = i as f32 / bins as f32 * length;
                                 rsx! {
                                     span { key: "{i}", style: "flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: center; cursor: pointer;",
@@ -229,156 +303,107 @@ fn Review(session: crate::model::Session) -> Element {
                                 }
                             }
                         }
-                        // The comments' marks, along the top edge.
                         for (i, (x, who, client, this)) in marks.iter().cloned().enumerate() {
                             {
                                 let left = x * 100.0;
                                 let ring = if client { WARN } else { PICK };
-                                let alpha = if this { "1" } else { "0.45" };
+                                let alpha = if this { "1" } else { "0.4" };
                                 rsx! {
-                                    span { key: "m{i}", style: "position: absolute; top: -14px; left: {left}%; margin-left: -9px; opacity: {alpha}; \
+                                    span { key: "m{i}", style: "position: absolute; top: -14px; left: {left}%; margin-left: -10px; opacity: {alpha}; \
                                                                 border: 2px solid {ring}; border-radius: 12px; display: flex;",
                                         Avatar { name: who, size: 16 }
                                     }
                                 }
                             }
                         }
-                        span { style: "position: absolute; top: -6px; bottom: -6px; left: {now / length * 100.0}%; width: 2px; background: {INK};" }
+                        span { style: "position: absolute; top: -4px; bottom: -4px; left: {now / length * 100.0}%; width: 2px; background: {INK};" }
+                    }
+                    div { style: "display: flex; align-items: center; gap: 16px;",
+                        button {
+                            class: "lp lp-solid",
+                            "aria-label": if playing() { "Pause" } else { "Play" },
+                            style: "width: 56px; height: 56px; border-radius: 28px; border: none; background: {PRIMARY}; \
+                                    display: flex; align-items: center; justify-content: center;",
+                            onclick: move |_| playing.toggle(),
+                            if playing() { Pause { size: 24, color: "#fff", fill: "#fff" } } else { Play { size: 24, color: "#fff", fill: "#fff" } }
+                        }
+                        span { style: "font-size: 20px; font-weight: 700;", "{clock(now)}" }
+                        span { style: "{META} color: {INK_3};", "/ {clock(length)}" }
+                        span { style: "flex: 1;" }
+                        span { style: "display: flex; align-items: center; gap: 8px; {META} color: {INK_3};",
+                            span { style: "width: 12px; height: 12px; border-radius: 6px; border: 2px solid {PICK};" } "Band"
+                            span { style: "width: 12px; height: 12px; border-radius: 6px; border: 2px solid {WARN}; margin-left: 8px;" } "Client"
+                        }
                     }
                 }
-                div { style: "display: flex; align-items: center; gap: 16px;",
-                    button {
-                        class: "lp lp-solid",
-                        "aria-label": if playing() { "Pause" } else { "Play" },
-                        style: "width: 64px; height: 64px; border-radius: 32px; border: none; background: {PRIMARY}; \
-                                display: flex; align-items: center; justify-content: center;",
-                        onclick: move |_| playing.toggle(),
-                        if playing() { Pause { size: 26, color: "#fff", fill: "#fff" } } else { Play { size: 26, color: "#fff", fill: "#fff" } }
+                // Every version, newest first: a press plays it.
+                div { style: "display: flex; flex-direction: column;",
+                    div { style: "display: flex; align-items: baseline; gap: 8px; padding-bottom: 8px;",
+                        span { style: "{HEADING}", "Versions" }
+                        span { style: "{META} color: {INK_3};", "{session.mixes.len()}" }
                     }
-                    div { style: "display: flex; flex-direction: column; gap: 2px;",
-                        span { style: "font-size: 22px; font-weight: 700;", "{clock(now)}" }
-                        span { style: "{META} color: {INK_3};", "of {clock(length)}" }
+                    for m in session.mixes.iter().rev() {
+                        VersionRow { key: "{m.n}", mix: m.clone(), on: m.n == mix.n, comments: counts(m.n), on_press: move |n: u32| go(n) }
                     }
-                    span { style: "flex: 1;" }
-                    span { style: "display: flex; align-items: center; gap: 8px; {META} color: {INK_3};",
-                        span { style: "width: 10px; height: 10px; border-radius: 5px; border: 2px solid {PICK};" } "band"
-                        span { style: "width: 10px; height: 10px; border-radius: 5px; border: 2px solid {WARN}; margin-left: 8px;" } "client"
-                    }
-                }
-                p { style: "{META} color: {INK_3}; line-height: 1.5; max-width: 640px;",
-                    "Anyone with the review link (a client, the label) hears these mixes and comments at a moment; they see this page and its comments, nothing else."
                 }
             }
         }
     }
 }
 
-// ── Status ──────────────────────────────────────────────────────────────────
-
-/// The production steps, Write to Master: where the session is, and each
-/// step's subtasks to tick.
 #[component]
-fn Status(session: crate::model::Session) -> Element {
-    let id = session.id;
-    let current = session.steps.iter().position(|s| !s.is_done());
+fn VersionRow(mix: MixVersion, on: bool, comments: usize, on_press: EventHandler<u32>) -> Element {
+    let n = mix.n;
+    let (bg, edge, weight) = if on {
+        (PICK_BG, PICK, 700)
+    } else {
+        ("transparent", "transparent", 600)
+    };
     rsx! {
-        div { style: "flex: 1; min-width: 0; min-height: 0; overflow-y: scroll;",
-            div { style: "max-width: 1100px; margin: 0 auto; padding: 22px 24px 40px; display: flex; flex-direction: column; gap: 18px;",
-                // The stepper.
-                // Wraps onto a second line when the panels leave it narrow.
-                div { style: "display: flex; flex-wrap: wrap; gap: 6px;",
-                    for (i, s) in session.steps.iter().enumerate() {
-                        {
-                            let (done, total) = s.progress();
-                            let finished = s.is_done();
-                            let now = current == Some(i);
-                            let (bg, border, ink) = if finished {
-                                ("rgba(34,197,94,0.12)", "rgba(34,197,94,0.45)", INK)
-                            } else if now {
-                                (PICK_BG, PICK, INK)
-                            } else {
-                                ("transparent", RULE, INK_3)
-                            };
-                            rsx! {
-                                div { key: "{i}", style: "flex: 1 1 104px; min-width: 104px; min-height: 64px; border-radius: 12px; border: 1px solid {border}; background: {bg}; \
-                                                         padding: 10px 12px; display: flex; flex-direction: column; justify-content: center; gap: 4px;",
-                                    span { style: "font-size: 14px; font-weight: 700; color: {ink}; display: flex; align-items: center; gap: 6px;",
-                                        if finished { Check { size: 14, color: LIVE, stroke_width: 3 } }
-                                        "{s.title}"
-                                    }
-                                    span { style: "{META} font-size: 12px; color: {INK_3};", "{done}/{total}" }
-                                }
-                            }
-                        }
-                    }
-                }
-                for (i, s) in session.steps.iter().enumerate() {
-                    {
-                        let (done, total) = s.progress();
-                        let pct = if total == 0 { 0 } else { done * 100 / total };
-                        let finished = s.is_done();
-                        let title_ink = if finished { INK_3 } else { INK };
-                        let (box_edge, box_bg) = if finished { (LIVE, LIVE) } else { (DIM, "transparent") };
-                        rsx! {
-                            div { key: "{i}", style: "border-top: 1px solid {RULE}; padding-top: 14px; display: flex; flex-direction: column; gap: 10px;",
-                                div { style: "display: flex; align-items: center; gap: 12px;",
-                                    button { class: "lp",
-                                        "aria-label": if finished { "Reopen {s.title}" } else { "Finish {s.title}" },
-                                        style: "width: 26px; height: 26px; border-radius: 7px; border: 1.5px solid {box_edge}; \
-                                                background: {box_bg}; display: flex; align-items: center; justify-content: center;",
-                                        onclick: move |_| edit(Edit::ToggleStep { session: id, step: i, sub: None }),
-                                        if finished { Check { size: 16, color: "#04210f", stroke_width: 3 } }
-                                    }
-                                    span { style: "{HEADING} color: {title_ink};", "{s.title}" }
-                                    div { style: "flex: 0 0 160px; height: 6px; border-radius: 3px; background: {SHEET_2}; border: 1px solid {RULE}; overflow: hidden;",
-                                        div { style: "width: {pct}%; height: 100%; background: {LIVE};" }
-                                    }
-                                    span { style: "{META} color: {INK_3};", "{done} of {total}" }
-                                }
-                                div { style: "display: flex; flex-wrap: wrap; gap: 8px; padding-left: 38px;",
-                                    for (j, c) in s.children.iter().enumerate() {
-                                        {
-                                            let on = c.is_done();
-                                            let (bg, border, ink) = if on { ("rgba(34,197,94,0.10)", "rgba(34,197,94,0.4)", INK_2) } else { ("transparent", RULE_STRONG, INK) };
-                                            rsx! {
-                                                button { key: "{j}", class: "lp",
-                                                    style: "height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid {border}; background: {bg}; \
-                                                            color: {ink}; font-family: {FONT}; font-size: 14px; font-weight: 560; display: flex; align-items: center; gap: 8px;",
-                                                    onclick: move |_| edit(Edit::ToggleStep { session: id, step: i, sub: Some(j) }),
-                                                    if on { Check { size: 15, color: LIVE, stroke_width: 3 } }
-                                                    "{c.title}"
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        button { class: "lp",
+            style: "width: 100%; min-height: 56px; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto 64px; column-gap: 16px; \
+                    align-items: center; padding: 8px 12px; border: none; border-top: 1px solid {RULE}; border-radius: 0; \
+                    background: {bg}; box-shadow: inset 2px 0 0 {edge}; color: {INK}; font-family: {FONT}; text-align: left;",
+            onclick: move |_| on_press.call(n),
+            span { style: "font-size: 15px; font-weight: {weight};", "v{n}" }
+            span { style: "{BODY} font-size: 14px; {ONE_LINE}", "{mix.note}" }
+            span { style: "{META} color: {INK_3}; white-space: nowrap;", "{mix.by}, {mix.when}" }
+            span { style: "display: flex; align-items: center; justify-content: flex-end; gap: 4px; {META} color: {INK_2};",
+                if comments > 0 { MessageSquare { size: 14, color: INK_3 } "{comments}" }
             }
         }
     }
 }
 
-// ── Panels ──────────────────────────────────────────────────────────────────
-
-/// Comments, pinned to moments: oldest moment first, each with the version
-/// it was heard on; a press on the time seeks there. The box comments at
-/// the playhead, on the version playing.
+/// The comments, pinned to moments: this version's, or every version's.
+/// The one nearest the playhead is lit; a press on a time seeks there; the
+/// box comments at the playhead on the version playing.
 #[component]
 fn CommentsPanel() -> Element {
     let lib = use_library();
     let here = use_context::<Here>();
     let mut at = here.at;
     let mut version = here.version;
+    let mut all = use_signal(|| false);
+    let mut draft = use_signal(String::new);
     let l = lib.read();
     let me = l.me.clone();
+    let current = version();
     let notes: Vec<(usize, Note)> = l
         .session(here.id)
-        .map(|s| s.notes.iter().cloned().enumerate().collect())
+        .map(|s| {
+            s.notes
+                .iter()
+                .cloned()
+                .enumerate()
+                .filter(|(_, n)| all() || n.version == current)
+                .collect()
+        })
         .unwrap_or_default();
-    let mut draft = use_signal(String::new);
+    let here_count = l.session(here.id).map_or(0, |s| {
+        s.notes.iter().filter(|n| n.version == current).count()
+    });
+    let total = l.session(here.id).map_or(0, |s| s.notes.len());
     let id = here.id;
     let mut send = move || {
         let text = draft.peek().trim().to_owned();
@@ -395,56 +420,81 @@ fn CommentsPanel() -> Element {
     };
     let mut send_key = send.clone();
     let empty = draft().trim().is_empty();
-    let post_bg = if empty { SHEET } else { PRIMARY };
-    let now = clock(at());
+    let post_bg = if empty { SHEET_2 } else { PRIMARY };
+    let post_ink = if empty { INK_3 } else { "#fff" };
+    let now = at();
+    let near = notes
+        .iter()
+        .map(|(i, n)| (*i, (n.at - now).abs()))
+        .filter(|(_, d)| *d <= 4.0)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(i, _)| i);
+    let filter = |on: bool| {
+        let (bg, ink) = if on {
+            (SHEET_2, INK)
+        } else {
+            ("transparent", INK_3)
+        };
+        format!(
+            "height: 32px; padding: 0 12px; border: none; border-radius: 8px; background: {bg}; color: {ink}; font-family: {FONT}; font-size: 13px; font-weight: 650;"
+        )
+    };
     rsx! {
         div { style: "flex: 1; min-height: 0; display: flex; flex-direction: column; background: {SHEET}; color: {INK}; font-family: {FONT};",
-            div { style: "flex: 1; min-height: 0; overflow-y: scroll; padding: 4px 14px;",
+            div { style: "flex-shrink: 0; display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid {RULE};",
+                button { class: "lp", style: "{filter(!all())}", onclick: move |_| all.set(false), "v{current} · {here_count}" }
+                button { class: "lp", style: "{filter(all())}", onclick: move |_| all.set(true), "All versions · {total}" }
+            }
+            div { style: "flex: 1; min-height: 0; overflow-y: scroll; padding: 4px 12px;",
                 if notes.is_empty() {
-                    p { style: "{META} color: {INK_3}; padding: 14px 0;", "No comments yet. Play the mix and say something at the moment you mean." }
+                    p { style: "{META} color: {INK_3}; line-height: 1.5; padding: 16px 4px;",
+                        if all() { "No comments on any version yet." } else { "Nothing said about v{current} yet. Play it and comment at the moment you mean." }
+                    }
                 }
                 for (i, n) in notes {
                     {
                         let t = n.at;
                         let v = n.version;
-                        let strike = if n.resolved { "opacity: 0.55;" } else { "" };
+                        let lit = near == Some(i);
+                        let bg = if lit { PICK_BG } else { "transparent" };
+                        let fade = if n.resolved { "opacity: 0.5;" } else { "" };
                         rsx! {
-                            div { key: "{i}", style: "display: flex; gap: 10px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid {RULE}; {strike}",
+                            div { key: "{i}", style: "display: flex; gap: 12px; align-items: flex-start; padding: 12px 8px; border-radius: 10px; background: {bg}; {fade}",
                                 button { class: "lp",
-                                    style: "flex-shrink: 0; height: 26px; padding: 0 8px; border-radius: 7px; border: 1px solid {RULE_STRONG}; background: {SHEET_2}; \
+                                    style: "flex-shrink: 0; height: 28px; padding: 0 8px; border-radius: 8px; border: 1px solid {RULE_STRONG}; background: {DESK}; \
                                             color: {PICK}; font-family: {FONT}; font-size: 12px; font-weight: 700;",
                                     onclick: move |_| { version.set(v); at.set(t); },
                                     "{clock(t)}"
                                 }
-                                div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;",
+                                div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;",
                                     span { style: "{META} color: {INK_2}; font-weight: 650; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;",
                                         "{n.author}"
-                                        if n.client { span { style: "font-size: 11px; color: {WARN}; border: 1px solid {WARN}; border-radius: 5px; padding: 0 5px;", "client" } }
+                                        if n.client { span { style: "font-size: 11px; color: {WARN}; border: 1px solid {WARN}; border-radius: 6px; padding: 0 6px;", "Client" } }
                                         span { style: "color: {INK_3}; font-weight: 500;", "v{n.version} · {n.when}" }
                                     }
                                     span { style: "font-size: 14px; line-height: 1.45;", "{n.text}" }
                                 }
                                 button { class: "lp",
                                     "aria-label": if n.resolved { "Reopen" } else { "Resolve" },
-                                    style: "flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; border: 1px solid {RULE_STRONG}; background: transparent; \
+                                    style: "flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px; border: 1px solid {RULE_STRONG}; background: transparent; \
                                             display: flex; align-items: center; justify-content: center;",
                                     onclick: move |_| edit(Edit::ResolveNote { session: id, index: i }),
-                                    Check { size: 15, color: if n.resolved { LIVE } else { INK_3 }, stroke_width: 2 }
+                                    Check { size: 16, color: if n.resolved { LIVE } else { INK_3 }, stroke_width: 2 }
                                 }
                             }
                         }
                     }
                 }
             }
-            div { style: "flex-shrink: 0; padding: 10px 12px; border-top: 1px solid {RULE};",
-                div { style: "display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 6px 0 10px; border-radius: 10px; \
-                              border: 1px solid {RULE_STRONG}; background: {SHEET_2};",
-                    span { style: "height: 24px; padding: 0 7px; border-radius: 6px; background: {PICK_BG}; color: {PICK}; font-size: 12px; font-weight: 700; \
-                                   display: flex; align-items: center;", "{now}" }
-                    div { style: "position: relative; flex: 1; min-width: 0; height: 40px; display: flex; align-items: center;",
-                        if empty { span { style: "position: absolute; left: 0; top: 11px; {META} color: {INK_3}; pointer-events: none;", "Comment at this moment…" } }
+            div { style: "flex-shrink: 0; padding: 12px; border-top: 1px solid {RULE};",
+                div { style: "display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 8px 0 12px; border-radius: 12px; \
+                              border: 1px solid {RULE_STRONG}; background: {DESK};",
+                    span { style: "height: 24px; padding: 0 8px; border-radius: 6px; background: {PICK_BG}; color: {PICK}; font-size: 12px; font-weight: 700; \
+                                   display: flex; align-items: center;", "{clock(now)}" }
+                    div { style: "position: relative; flex: 1; min-width: 0; height: 44px; display: flex; align-items: center;",
+                        if empty { span { style: "position: absolute; left: 0; top: 13px; {META} color: {INK_3}; pointer-events: none;", "Comment at this moment…" } }
                         input { r#type: "text", value: "{draft}", "aria-label": "Comment at the playhead",
-                            style: "position: relative; width: 100%; height: 40px; border: none; outline: none; padding: 0; background: transparent; \
+                            style: "position: relative; width: 100%; height: 44px; border: none; outline: none; padding: 0; background: transparent; \
                                     color: {INK}; font-family: {FONT}; font-size: 14px;",
                             oninput: move |e| draft.set(e.value()),
                             onkeydown: move |e| {
@@ -453,8 +503,8 @@ fn CommentsPanel() -> Element {
                             },
                         }
                     }
-                    button { class: "lp", style: "height: 32px; padding: 0 12px; border-radius: 8px; border: none; background: {post_bg}; \
-                                                  color: #fff; font-family: {FONT}; font-size: 13px; font-weight: 650;",
+                    button { class: "lp", style: "height: 36px; padding: 0 14px; border-radius: 8px; border: none; background: {post_bg}; \
+                                                  color: {post_ink}; font-family: {FONT}; font-size: 13px; font-weight: 650;",
                         disabled: empty, onclick: move |_| send(), "Post" }
                 }
             }
@@ -462,36 +512,145 @@ fn CommentsPanel() -> Element {
     }
 }
 
-/// The mix versions, newest first: a press puts one under review.
+// ── Status ──────────────────────────────────────────────────────────────────
+
+/// One cell of the sheet: the subtasks of one stage that belong to one
+/// part (or to the song as a whole), each as (step, subtask, verb, done).
+type Cell = Vec<(usize, usize, String, bool)>;
+
+/// The parts the steps are per (Drums, Bass, …): a word that ends
+/// subtask titles in two stages or more.
+fn parts_of(steps: &[Todo]) -> Vec<String> {
+    let mut seen: Vec<(String, Vec<usize>)> = Vec::new();
+    for (i, s) in steps.iter().enumerate() {
+        for c in &s.children {
+            let Some(last) = c.title.split_whitespace().last() else {
+                continue;
+            };
+            match seen.iter_mut().find(|(w, _)| w == last) {
+                Some((_, at)) if !at.contains(&i) => at.push(i),
+                Some(_) => {}
+                None => seen.push((last.to_owned(), vec![i])),
+            }
+        }
+    }
+    seen.into_iter()
+        .filter(|(_, at)| at.len() >= 2)
+        .map(|(w, _)| w)
+        .collect()
+}
+
+/// The sheet's rows: the song's own work first, then one per part; each a
+/// cell per stage.
+fn sheet(steps: &[Todo]) -> (Vec<String>, Vec<Vec<Cell>>) {
+    let parts = parts_of(steps);
+    let mut rows: Vec<String> = vec!["Song".to_owned()];
+    rows.extend(parts.iter().cloned());
+    let mut cells: Vec<Vec<Cell>> = vec![vec![Vec::new(); steps.len()]; rows.len()];
+    for (i, s) in steps.iter().enumerate() {
+        for (j, c) in s.children.iter().enumerate() {
+            let last = c.title.split_whitespace().last().unwrap_or("");
+            let (row, verb) = match parts.iter().position(|p| p == last) {
+                Some(p) => (p + 1, c.title.trim_end_matches(last).trim().to_owned()),
+                None => (0, c.title.clone()),
+            };
+            cells[row][i].push((i, j, verb, c.is_done()));
+        }
+    }
+    (rows, cells)
+}
+
+/// Status: what is next, then the track sheet.
 #[component]
-fn VersionsPanel() -> Element {
-    let lib = use_library();
-    let here = use_context::<Here>();
-    let mut version = here.version;
-    let mut at = here.at;
-    let mixes = lib
-        .read()
-        .session(here.id)
-        .map(|s| s.mixes.clone())
+fn StatusSheet(session: Session) -> Element {
+    let id = session.id;
+    let current = session.steps.iter().position(|s| !s.is_done());
+    let (rows, cells) = sheet(&session.steps);
+    let columns = format!("104px repeat({}, minmax(0, 1fr))", session.steps.len());
+    let next: Vec<(usize, usize, String)> = current
+        .map(|i| {
+            session.steps[i]
+                .children
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| !c.is_done())
+                .map(|(j, c)| (i, j, c.title.clone()))
+                .collect()
+        })
         .unwrap_or_default();
-    let picked = version();
+    let next_title = current.map_or(String::new(), |i| session.steps[i].title.clone());
     rsx! {
-        div { style: "flex: 1; min-height: 0; overflow-y: scroll; background: {SHEET}; color: {INK}; font-family: {FONT}; padding: 6px;",
-            if mixes.is_empty() { p { style: "{META} color: {INK_3}; padding: 10px;", "No mixes yet." } }
-            for m in mixes.iter().rev() {
-                {
-                    let n = m.n;
-                    let on = n == picked;
-                    let bg = if on { PICK_BG } else { "transparent" };
-                    let edge = if on { PICK } else { "transparent" };
-                    rsx! {
-                        button { key: "{n}", class: "lp",
-                            style: "width: 100%; min-height: 56px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 3px; padding: 8px 10px; \
-                                    border: none; border-radius: 10px; background: {bg}; box-shadow: inset 2px 0 0 {edge}; color: {INK}; font-family: {FONT}; text-align: left;",
-                            onclick: move |_| { version.set(n); at.set(0.0); },
-                            span { style: "font-size: 14px; font-weight: 700;", "v{n}" }
-                            span { style: "{META} font-size: 12px; color: {INK_3}; {ONE_LINE}", "{m.note}" }
-                            span { style: "{META} font-size: 11px; color: {INK_3};", "{m.by} · {m.when}" }
+        div { style: "flex: 1; min-width: 0; min-height: 0; overflow-y: scroll;",
+            div { style: "max-width: 1180px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 32px;",
+                // What is next: the open work of the stage the session is on.
+                if !next.is_empty() {
+                    div { style: "display: flex; flex-direction: column; gap: 12px;",
+                        div { style: "display: flex; align-items: baseline; gap: 8px;",
+                            span { style: "{HEADING}", "Next up" }
+                            span { style: "{META} color: {INK_3};", "{next_title}" }
+                        }
+                        div { style: "display: flex; flex-wrap: wrap; gap: 8px;",
+                            for (i, j, title) in next {
+                                button { key: "{i}-{j}", class: "lp",
+                                    style: "height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid {PICK}; background: {PICK_BG}; \
+                                            color: {INK}; font-family: {FONT}; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px;",
+                                    onclick: move |_| edit(Edit::ToggleStep { session: id, step: i, sub: Some(j) }),
+                                    span { style: "width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid {PICK};" }
+                                    "{title}"
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    span { style: "{HEADING} color: {LIVE};", "Every stage is done." }
+                }
+                // The track sheet.
+                div { style: "display: flex; flex-direction: column;",
+                    div { style: "display: grid; grid-template-columns: {columns}; column-gap: 8px; align-items: end; padding-bottom: 8px;",
+                        span {}
+                        for (i, s) in session.steps.iter().enumerate() {
+                            {
+                                let (d, t) = s.progress();
+                                let finished = s.is_done();
+                                let now = current == Some(i);
+                                let (bar, ink) = if finished { (LIVE, INK_2) } else if now { (PICK, INK) } else { (RULE_STRONG, INK_3) };
+                                rsx! {
+                                    div { key: "{i}", style: "display: flex; flex-direction: column; gap: 4px; min-width: 0;",
+                                        span { style: "height: 4px; border-radius: 2px; background: {bar};" }
+                                        span { style: "font-size: 13px; font-weight: 700; color: {ink}; {ONE_LINE}", "{s.title}" }
+                                        span { style: "font-size: 12px; color: {INK_3};", "{d}/{t}" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    for (r, name) in rows.iter().enumerate() {
+                        div { key: "{name}", style: "display: grid; grid-template-columns: {columns}; column-gap: 8px; align-items: stretch; \
+                                                     min-height: 56px; border-top: 1px solid {RULE};",
+                            span { style: "display: flex; align-items: center; {BODY} font-size: 14px;", "{name}" }
+                            for (i, cell) in cells[r].iter().cloned().enumerate() {
+                                div { key: "{i}", style: "display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 8px 0; min-width: 0;",
+                                    if cell.is_empty() {
+                                        span { style: "height: 2px; width: 12px; border-radius: 1px; background: {RULE_STRONG};" }
+                                    }
+                                    for (step, sub, verb, done) in cell {
+                                        {
+                                            let (bg, border, ink) = if done { ("rgba(34,197,94,0.10)", "rgba(34,197,94,0.35)", INK_2) } else { ("transparent", RULE_STRONG, INK) };
+                                            rsx! {
+                                                button { key: "{sub}", class: "lp",
+                                                    "aria-label": "{verb} {name}",
+                                                    style: "width: 100%; min-height: 32px; padding: 6px 8px; border-radius: 8px; border: 1px solid {border}; background: {bg}; \
+                                                            color: {ink}; font-family: {FONT}; font-size: 12px; font-weight: 600; line-height: 1.25; \
+                                                            display: flex; align-items: center; justify-content: flex-start; gap: 6px; text-align: left; overflow: hidden; overflow-wrap: anywhere;",
+                                                    onclick: move |_| edit(Edit::ToggleStep { session: id, step, sub: Some(sub) }),
+                                                    if done { Check { size: 13, color: LIVE, stroke_width: 3 } }
+                                                    span { style: "min-width: 0;", "{verb}" }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -500,40 +659,27 @@ fn VersionsPanel() -> Element {
     }
 }
 
-/// What is next: the open subtasks of the step the session is on.
-#[component]
-fn NextPanel() -> Element {
-    let lib = use_library();
-    let here = use_context::<Here>();
-    let id = here.id;
-    let l = lib.read();
-    let Some(s) = l.session(id) else {
-        return rsx! {};
-    };
-    let Some(step) = s.steps.iter().position(|t| !t.is_done()) else {
-        return rsx! { p { style: "{META} color: {INK_3}; padding: 12px 16px; background: {SHEET};", "Every step is done." } };
-    };
-    let title = s.steps[step].title.clone();
-    let open: Vec<(usize, String)> = s.steps[step]
-        .children
-        .iter()
-        .enumerate()
-        .filter(|(_, c)| !c.is_done())
-        .map(|(j, c)| (j, c.title.clone()))
-        .collect();
-    let stage = s.stage;
-    rsx! {
-        div { style: "display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; background: {SHEET}; color: {INK}; font-family: {FONT};",
-            span { style: "{META} color: {INK_3}; font-weight: 650;", "{title} ({stage.label()}):" }
-            for (j, t) in open {
-                button { key: "{j}", class: "lp",
-                    style: "height: 36px; padding: 0 12px; border-radius: 9px; border: 1px solid {RULE_STRONG}; background: transparent; color: {INK}; \
-                            font-family: {FONT}; font-size: 13px; font-weight: 560; display: flex; align-items: center; gap: 8px;",
-                    onclick: move |_| edit(Edit::ToggleStep { session: id, step, sub: Some(j) }),
-                    span { style: "width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid {DIM};" }
-                    "{t}"
-                }
-            }
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_sheet_puts_each_subtask_under_its_part_and_stage() {
+        let steps = crate::model::production_steps(&["Drums", "Bass", "Vocals"]);
+        let (rows, cells) = sheet(&steps);
+        assert_eq!(rows, ["Song", "Drums", "Bass", "Vocals"]);
+        let edit = steps.iter().position(|s| s.title == "Edit").unwrap();
+        let vocals_edit: Vec<&str> = cells[3][edit].iter().map(|c| c.2.as_str()).collect();
+        assert_eq!(
+            vocals_edit,
+            ["Edit", "Comp"],
+            "Comp Vocals sits beside Edit Vocals"
+        );
+        let write = steps.iter().position(|s| s.title == "Write").unwrap();
+        assert_eq!(
+            cells[0][write].len(),
+            2,
+            "Lyrics and Chart are the song's own"
+        );
     }
 }

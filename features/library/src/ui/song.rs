@@ -9,7 +9,7 @@ use lucide_dioxus::{AudioWaveform, Disc3, FileMusic, FolderOpen, ListMusic, Plus
 use super::home::Page;
 use super::kit::*;
 use super::{Open, Route, open, use_library, use_nav, use_wide};
-use crate::model::{Anchor, ArrangementId, AssetKind, Library, Piece, Song, SongId, Step, clock};
+use crate::model::{Anchor, ArrangementId, AssetKind, Library, Piece, Song, SongId, clock};
 
 /// A section's colour by what it is, so a form reads at a glance.
 fn section_colour(name: &str) -> &'static str {
@@ -119,11 +119,14 @@ pub(crate) fn SongPage(id: SongId, arrangement: Option<ArrangementId>) -> Elemen
                         Fact { label: "Length", value: length.clone() }
                         Fact { label: "Bars", value: bars.to_string() }
                     }
-                    Heading { text: "Form".to_owned() }
-                    FormStrip { song: song.clone(), form: current.form.clone() }
-                    Heading { text: "Chart".to_owned(),
-                        trailing: rsx! { ReadyMark { what: "Keyflow chart", ready: current.chart } } }
-                    ChartOutline { song: song.clone(), form: current.form.clone(), home_key: current.key.0.clone() }
+                    Heading { text: "Form".to_owned(),
+                        trailing: rsx! {
+                            div { style: "display: flex; align-items: center; gap: 12px;",
+                                ReadyMark { what: "Keyflow chart", ready: current.chart }
+                                Button { label: "Open chart".to_owned(), weight: Weight::Secondary, on_press: move |()| {} }
+                            }
+                        } }
+                    FormTable { song: song.clone(), arrangement: current.clone() }
                 }
                 div { style: if wide { "flex: 0 0 340px; min-width: 0;" } else { "width: 100%;" },
                     SongAside { song: song.clone(), arrangement: current.id }
@@ -143,74 +146,57 @@ fn Fact(label: &'static str, value: String) -> Element {
     }
 }
 
-/// The form as one bar: each step a block as wide as the bars it plays.
+/// The form, one row per step: the section (in its colour), the bars it
+/// covers, how often it plays, when it starts and how long it lasts, and a
+/// bar as long as its share of the song. Ends with the arrangement's totals.
 #[component]
-fn FormStrip(song: Song, form: Vec<Step>) -> Element {
-    let blocks: Vec<(String, u32, u8, &'static str)> = form
-        .iter()
-        .filter_map(|step| {
-            let s = song.section(step.section)?;
-            (s.bars > 0).then(|| {
-                (
-                    s.name.clone(),
-                    s.bars * u32::from(step.times),
-                    step.times,
-                    section_colour(&s.name),
-                )
-            })
-        })
-        .collect();
-    rsx! {
-        div { style: "display: flex; gap: 3px; height: 56px;",
-            for (i, (name, bars, times, colour)) in blocks.into_iter().enumerate() {
-                div {
-                    key: "{i}",
-                    style: "flex: {bars} 1 0; min-width: 0; border-radius: 8px; background: {SHEET_2}; \
-                            border: 1px solid {RULE}; border-top: 3px solid {colour}; padding: 6px 8px; \
-                            display: flex; flex-direction: column; justify-content: center; gap: 2px; overflow: hidden;",
-                    span { style: "font-size: 12px; font-weight: 700; {ONE_LINE}", "{name}" }
-                    span { style: "font-size: 11px; color: {INK_3}; {ONE_LINE}",
-                        if times > 1 { "×{times} · {bars}" } else { "{bars}" }
-                    }
-                }
-            }
+fn FormTable(song: Song, arrangement: crate::model::Arrangement) -> Element {
+    let time = arrangement.time;
+    let total = song.bars(&arrangement).max(1);
+    let mut bar = 1u32;
+    let mut at = 0.0f32;
+    let mut rows = Vec::new();
+    for step in &arrangement.form {
+        let Some(sec) = song.section(step.section) else {
+            continue;
+        };
+        if sec.bars == 0 {
+            continue;
         }
+        let bars = sec.bars * u32::from(step.times);
+        let seconds = time.seconds(bars);
+        rows.push((
+            sec.name.clone(),
+            section_colour(&sec.name),
+            bar,
+            bar + bars - 1,
+            step.times,
+            clock(at),
+            clock(seconds),
+            bars * 100 / total,
+        ));
+        bar += bars;
+        at += seconds;
     }
-}
-
-/// The chart's shape for this arrangement: each section in order, its bars
-/// as cells, four to a line, the way the band reads it. (The engraved
-/// Keyflow chart opens from here once the chart panel mounts in the
-/// library.)
-#[component]
-fn ChartOutline(song: Song, form: Vec<Step>, home_key: String) -> Element {
-    let rows: Vec<(String, &'static str, u32, u8)> = form
-        .iter()
-        .filter_map(|step| {
-            let s = song.section(step.section)?;
-            (s.bars > 0).then(|| (s.name.clone(), section_colour(&s.name), s.bars, step.times))
-        })
-        .collect();
+    let columns = "minmax(0, 2fr) 88px 48px 64px 64px minmax(0, 2fr)";
     rsx! {
-        div { style: "border-radius: 14px; background: #f4f4f1; color: #18181b; padding: 22px 26px; \
-                      display: flex; flex-direction: column; gap: 14px;",
-            div { style: "display: flex; align-items: baseline; gap: 12px;",
-                span { style: "font-size: 20px; font-weight: 750; font-family: Georgia, 'Times New Roman', serif;", "{song.title}" }
-                span { style: "flex: 1;" }
-                span { style: "font-size: 13px; font-weight: 600; color: #52525b;", "Key of {home_key}" }
-            }
-            for (i, (name, colour, bars, times)) in rows.into_iter().enumerate() {
-                div { key: "{i}", style: "display: flex; flex-direction: column; gap: 6px;",
-                    span { style: "font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #3f3f46; \
-                                   display: flex; align-items: center; gap: 8px;",
-                        span { style: "width: 10px; height: 10px; border-radius: 2px; background: {colour};" }
-                        if times > 1 { "{name} ×{times}" } else { "{name}" }
-                    }
-                    div { style: "display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); border-left: 2px solid #18181b;",
-                        for b in 0..bars.min(16) {
-                            span { key: "{b}", style: "height: 30px; border-right: 1px solid #a1a1aa; border-bottom: 1px solid #e4e4e7;" }
-                        }
-                    }
+        div { style: "display: grid; grid-template-columns: {columns}; column-gap: 16px; align-items: center; \
+                      height: 32px; padding: 0 12px; border-bottom: 1px solid {RULE_STRONG}; {COLUMN} color: {INK_3};",
+            span { "Section" } span { "Bars" } span { "Plays" } span { "Starts" } span { "Length" } span {}
+        }
+        for (i, (name, colour, from, to, times, starts, length, share)) in rows.into_iter().enumerate() {
+            div { key: "{i}", style: "display: grid; grid-template-columns: {columns}; column-gap: 16px; align-items: center; \
+                                     min-height: 48px; padding: 0 12px; border-bottom: 1px solid {RULE};",
+                span { style: "display: flex; align-items: center; gap: 10px; {BODY} font-size: 14px; {ONE_LINE}",
+                    span { style: "width: 10px; height: 10px; border-radius: 3px; background: {colour}; flex-shrink: 0;" }
+                    "{name}"
+                }
+                span { style: "{META} color: {INK_2};", "{from}–{to}" }
+                span { style: "{META} color: {INK_2};", if times > 1 { "×{times}" } else { "" } }
+                span { style: "{META} color: {INK_2};", "{starts}" }
+                span { style: "{META} color: {INK_2};", "{length}" }
+                div { style: "height: 6px; border-radius: 3px; background: {SHEET_2}; overflow: hidden;",
+                    div { style: "width: {share}%; height: 100%; border-radius: 3px; background: {colour}; opacity: 0.8;" }
                 }
             }
         }

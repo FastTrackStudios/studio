@@ -507,6 +507,94 @@ fn SoundCell(patch: String, from: From) -> Element {
     }
 }
 
+/// With no piece picked, the set at a glance: what is missing before it
+/// can be played (charts, audio), what this show changes (keys, tempos),
+/// and who plays what. Each line says the thing, not a placeholder.
+#[component]
+fn SetReadiness(id: SetlistId) -> Element {
+    let lib = use_library();
+    let l = lib.read();
+    let Some(set) = l.setlist(id) else {
+        return rsx! {};
+    };
+    let songs: Vec<(String, Ready, Ready)> = set
+        .entries
+        .iter()
+        .filter_map(|e| match e.piece {
+            Piece::Song { song, arrangement } => {
+                let s = l.song(song)?;
+                let a = s.arrangement(arrangement)?;
+                Some((s.title.clone(), a.chart, a.audio))
+            }
+            Piece::Other { .. } => None,
+        })
+        .collect();
+    let total = songs.len();
+    let no_chart: Vec<String> = songs
+        .iter()
+        .filter(|s| s.1 != Ready::Here)
+        .map(|s| s.0.clone())
+        .collect();
+    let no_audio: Vec<String> = songs
+        .iter()
+        .filter(|s| s.2 != Ready::Here)
+        .map(|s| s.0.clone())
+        .collect();
+    let keys = set.entries.iter().filter(|e| e.key.is_some()).count();
+    let tempos = set.entries.iter().filter(|e| e.bpm.is_some()).count();
+    let rigs: Vec<(String, String)> = l
+        .parts_of(id)
+        .iter()
+        .filter_map(|p| Some((p.player.clone(), l.rig(p.rig)?.kind.label().to_owned())))
+        .collect();
+    let line = |ok: bool| if ok { INK_2 } else { WARN };
+    let chart_line = if no_chart.is_empty() {
+        format!("All {total} charts")
+    } else {
+        format!("No chart: {}", no_chart.join(", "))
+    };
+    let audio_line = if no_audio.is_empty() {
+        "All audio on this iPad".to_owned()
+    } else {
+        format!("Not on this iPad: {}", no_audio.join(", "))
+    };
+    let changes = match (keys, tempos) {
+        (0, 0) => "Played as arranged".to_owned(),
+        (k, 0) => format!("{k} in another key"),
+        (0, t) => format!("{t} at another tempo"),
+        (k, t) => format!("{k} in another key, {t} at another tempo"),
+    };
+    rsx! {
+        span { style: "{HEADING}", "Before the show" }
+        div { style: "display: flex; flex-direction: column;",
+            ReadyLine { label: "Charts", text: chart_line, ink: line(no_chart.is_empty()) }
+            ReadyLine { label: "Audio", text: audio_line, ink: line(no_audio.is_empty()) }
+            ReadyLine { label: "Changes", text: changes, ink: INK_2 }
+        }
+        if !rigs.is_empty() {
+            div { style: "display: flex; flex-wrap: wrap; gap: 8px;",
+                for (i, (who, rig)) in rigs.into_iter().enumerate() {
+                    span { key: "{i}", style: "height: 32px; padding: 0 10px 0 4px; border-radius: 16px; border: 1px solid {RULE_STRONG}; \
+                                             display: flex; align-items: center; gap: 8px; {META} color: {INK_2};",
+                        Avatar { name: who.clone(), size: 24 }
+                        "{who} · {rig}"
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn ReadyLine(label: &'static str, text: String, ink: &'static str) -> Element {
+    rsx! {
+        div { style: "min-height: 40px; display: flex; align-items: center; gap: 12px; border-top: 1px solid {RULE}; padding: 8px 0;",
+            span { style: "{META} color: {INK_3}; width: 64px; flex-shrink: 0;", "{label}" }
+            span { style: "font-size: 14px; line-height: 1.4; color: {ink};", "{text}" }
+        }
+    }
+}
+
 /// Beside the table: the picked entry (its sounds on every rig, its
 /// notes, the way to its song) and the conversation about it; with
 /// nothing picked, the set's own.
@@ -564,10 +652,7 @@ fn Aside(id: SetlistId, line: Option<Line>) -> Element {
                         Button { label: "Open song".to_owned(), weight: Weight::Secondary, on_press: move |()| nav.go(Route::Song(s, Some(a))) }
                     }
                 },
-                None => rsx! {
-                    span { style: "{HEADING}", "About this set" }
-                    span { style: "{META} color: {INK_3}; line-height: 1.5;", "Pick a piece to see what every rig plays for it, or talk about the set here." }
-                },
+                None => rsx! { SetReadiness { id } },
             }
             super::talk::Conversation { about: anchor.clone(), exact: true }
         }

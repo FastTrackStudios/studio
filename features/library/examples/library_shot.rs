@@ -17,7 +17,9 @@ use blitz_dom::{Document as _, DocumentConfig};
 use blitz_traits::shell::{ColorScheme, Viewport as Screen};
 use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
-use library::ui::{InitialRoute, LibraryApp, LibraryData, Route, Viewport};
+use library::ui::{
+    InitialRoute, LibraryApp, LibraryData, Route, SessionStart, SessionTab, Viewport,
+};
 
 /// Pixels per point, as on an iPad.
 const SCALE: f32 = 2.0;
@@ -29,6 +31,14 @@ fn route(page: &str) -> Route {
         "songs" => Route::Songs,
         "sessions" => Route::Sessions,
         "rigs" => Route::Rigs,
+        "set" => Route::Setlist(
+            lib.setlists
+                .iter()
+                .find(|s| s.tonight)
+                .expect("tonight's set")
+                .id,
+            None,
+        ),
         "setlist" => {
             let set = lib
                 .setlists
@@ -49,7 +59,7 @@ fn route(page: &str) -> Route {
         "projects" => Route::Projects,
         "project" => Route::Project(lib.projects[1].id),
         "live" => Route::Project(lib.projects[0].id),
-        "session" => Route::Session(lib.sessions[0].id),
+        "session" | "status" => Route::Session(lib.sessions[0].id),
         _ => Route::Home,
     }
 }
@@ -62,11 +72,13 @@ fn main() {
     let page = args.next().unwrap_or_else(|| "home".into());
 
     let first = route(&page);
+    let status = page == "status";
     let vdom = VirtualDom::new_with_props(
         Shot,
         ShotProps {
             size: (w, h),
             first,
+            status,
         },
     );
     let (pw, ph) = ((w * SCALE) as u32, (h * SCALE) as u32);
@@ -98,10 +110,13 @@ fn main() {
 }
 
 #[component]
-fn Shot(size: (f32, f32), first: Route) -> Element {
+fn Shot(size: (f32, f32), first: Route, status: bool) -> Element {
     use_context_provider(|| LibraryData(Signal::new(library::fixture::library())));
     use_context_provider(|| Viewport(Signal::new(size)));
     use_context_provider(|| InitialRoute(first));
+    if status {
+        use_context_provider(|| SessionStart(SessionTab::Status));
+    }
     rsx! {
         // A real `<style>` node: a headless document has no head for
         // `document::Style` to land in.
