@@ -1269,6 +1269,18 @@ impl Standalone {
         crate::audio_engine::AudioEngine::attached_to_prefs(self, guid, prefs)
     }
 
+    /// Open the set engine's one audio stream (`docs/design/set-engine.md`)
+    /// on the device `prefs` choose: every song given a voice
+    /// ([`SetAudio::add_voice`](crate::audio_engine::SetAudio::add_voice))
+    /// sounds from it, each on its own transport. Drop it to stop audio.
+    #[cfg(all(feature = "audio", not(target_arch = "wasm32")))]
+    pub fn attach_set_audio_with_prefs(
+        &self,
+        prefs: &audio::io::AudioIoPrefs,
+    ) -> Result<crate::audio_engine::SetAudio, String> {
+        crate::audio_engine::SetAudio::open(self, prefs)
+    }
+
     /// Whether a loaded plugin instance is backing the given FX
     /// guid. `false` for synthetic / failed-to-load entries.
     pub fn has_plugin_instance(&self, fx_guid: &str) -> bool {
