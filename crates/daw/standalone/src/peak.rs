@@ -160,7 +160,7 @@ fn peak_cache_key(
     use daw_proto::Takes;
     let guid = match project {
         ProjectContext::Project(g) => g.clone(),
-        ProjectContext::Current => daw.state.lock().ok()?.current_project_guid.clone()?,
+        ProjectContext::Current => daw.current_project_guid()?,
     };
     let takes = daw.get_takes(project.clone(), item.clone());
     let index = match take {

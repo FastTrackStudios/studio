@@ -292,10 +292,6 @@ impl TakeReader {
 fn project_guid(daw: &Standalone, ctx: &ProjectContext) -> Option<String> {
     match ctx {
         ProjectContext::Project(g) => Some(g.clone()),
-        ProjectContext::Current => daw
-            .state
-            .lock()
-            .ok()
-            .and_then(|s| s.current_project_guid.clone()),
+        ProjectContext::Current => daw.current_project_guid(),
     }
 }

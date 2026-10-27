@@ -941,15 +941,7 @@ impl ProjectRenderer {
             }
         }
         // Has the project moved on? Read without waiting.
-        let revision = match self.daw.state.try_lock() {
-            Ok(s) => s.projects.get(&self.project_guid).map(|p| p.revision),
-            Err(std::sync::TryLockError::Poisoned(p)) => p
-                .into_inner()
-                .projects
-                .get(&self.project_guid)
-                .map(|p| p.revision),
-            Err(std::sync::TryLockError::WouldBlock) => None,
-        };
+        let revision = self.daw.try_project_revision(&self.project_guid);
         match (&*current, revision) {
             (Some((rev, _)), Some(now)) if *rev != now => {
                 if b.wanted.swap(now, Ordering::AcqRel) != now {

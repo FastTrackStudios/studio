@@ -1,14 +1,14 @@
-//! Building a project off the engine's lock: a [`Stage`].
+//! Building a project out of its engine's sight: a [`Stage`].
 //!
-//! Every project of an engine sits behind its one state lock, so a song
-//! rebuilt in place — a call per track, item, FX and envelope, each taking
-//! that lock — stalls every reader of every other song for as long as it
-//! takes, and two songs opening at once take turns. A stage is a private
-//! engine to build the song in instead: its own state and lock, sharing
-//! with its home engine what a built project refers to (the plugin
-//! instances its FX are, the FX factory and media resolver they are made
-//! with, the event hubs its edits are announced on). When the song is
-//! built, [`Stage::land`] moves it home in one short critical section.
+//! Each project of an engine sits behind its own lock, so a song rebuilt
+//! in place no longer stalls the other songs — but it is visible half-built,
+//! and its own readers (the window, the renderer) wait out a call per track,
+//! item, FX and envelope. A stage is a private engine to build the song in
+//! instead: its own projects, sharing with its home engine what a built
+//! project refers to (the plugin instances its FX are, the FX factory and
+//! media resolver they are made with, the event hubs its edits are
+//! announced on). When the song is built, [`Stage::land`] moves its cell
+//! home in one short critical section on the home engine's project map.
 
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -24,7 +24,7 @@ pub struct Stage {
 }
 
 impl Standalone {
-    /// A stage to build a project in without holding this engine's lock:
+    /// A stage to build a project in, unseen by this engine until it lands:
     /// an engine of its own, whose FX instances, FX factory, media
     /// resolver and event hubs are this one's.
     #[must_use]
@@ -58,7 +58,7 @@ impl Stage {
 
     /// Move project `guid`, as built, into the home engine — its state, its
     /// undo history and its transport's settings — in one critical section
-    /// on the home engine's lock, its revision moved on once.
+    /// on the home engine's project map, its revision moved on once.
     ///
     /// Call it inside the async runtime the home engine's transports run
     /// on: a transport made for the project here lives on it.
@@ -66,38 +66,29 @@ impl Stage {
     /// # Errors
     /// The stage holds no project `guid`, or the home engine already does.
     pub fn land(self, guid: &str) -> DawResult<()> {
-        let (mut project, undo, redo, pending) = {
-            let mut staged = lock(&self.engine.state);
-            let project = staged
-                .projects
-                .remove(guid)
-                .ok_or_else(|| DawError::not_found("Project", guid))?;
-            (
-                project,
-                staged.undo.remove(guid),
-                staged.redo.remove(guid),
-                staged.pending_undo.remove(guid),
-            )
-        };
-        let tracks = project.tracks.len();
-        project.revision = project.revision.wrapping_add(1);
+        // The project's cell moves whole — its state and undo history
+        // together — so landing copies nothing.
+        let cell = self
+            .engine
+            .project_map_mut()
+            .remove(guid)
+            .ok_or_else(|| DawError::not_found("Project", guid))?;
+        let tracks = cell
+            .write(|slot| {
+                let project = &mut slot.project;
+                project.revision = project.revision.wrapping_add(1);
+                project.tracks.len()
+            })
+            .ok_or_else(|| DawError::internal("staged project poisoned"))?;
         {
-            let mut home = lock(&self.home.state);
-            if home.projects.contains_key(guid) {
+            let mut home = self.home.project_map_mut();
+            if home.contains_key(guid) {
                 return Err(DawError::already_exists("Project", guid));
             }
-            home.projects.insert(guid.to_owned(), project);
-            if let Some(undo) = undo {
-                home.undo.insert(guid.to_owned(), undo);
-            }
-            if let Some(redo) = redo {
-                home.redo.insert(guid.to_owned(), redo);
-            }
-            if let Some(pending) = pending {
-                home.pending_undo.insert(guid.to_owned(), pending);
-            }
-            if home.current_project_guid.is_none() {
-                home.current_project_guid = Some(guid.to_owned());
+            home.insert(guid.to_owned(), cell);
+            let mut engine = self.home.engine_state();
+            if engine.current_project_guid.is_none() {
+                engine.current_project_guid = Some(guid.to_owned());
             }
         }
         self.home.meters_follow_tracks(tracks);

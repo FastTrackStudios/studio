@@ -69,11 +69,7 @@ fn a_landed_project_is_the_one_built_and_leaves_the_stage() {
         "gone from the stage"
     );
     assert_eq!(
-        home.state
-            .lock()
-            .expect("state")
-            .current_project_guid
-            .as_deref(),
+        home.current_project_guid().as_deref(),
         Some("song"),
         "the first project an engine has is its current one"
     );
