@@ -4676,6 +4676,10 @@ impl ArrangementWidget {
         self.settle_stage();
         self.dirty.set(false);
         self.hide_rejected();
+        // Waveforms read before their recording had all streamed in, read
+        // again once it has (drawn plain until then, not as slivers).
+        #[cfg(feature = "native")]
+        self.previews.retry_partial();
         let generation = self.previews.generation();
         if generation != self.previews_seen && self.recut_due() {
             self.previews_seen = generation;

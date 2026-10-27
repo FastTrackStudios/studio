@@ -422,6 +422,16 @@ pub struct Previews {
     /// before they did (a browser's waveforms come after the song opens)
     /// knows to record itself again.
     generation: Arc<std::sync::atomic::AtomicU64>,
+    /// Audio items read before their recording could be read whole — a
+    /// proxy still streaming in with no cache of its original's, or not
+    /// attached yet — by guid: the song they are of (`None`: the current
+    /// one) and the streaming state ([`crate::stream_set::version`]) they
+    /// were read at. What such a read gives is at most the stretch decoded
+    /// near the playhead — a lane of slivers, and a shut folder's row of
+    /// them — so it is not kept: the item is drawn plain and read again
+    /// once the streaming state has moved and its recording is no longer
+    /// arriving ([`Self::retry_partial`]).
+    partial: Arc<Mutex<HashMap<String, (Option<String>, u64)>>>,
 }
 
 impl Previews {
@@ -466,6 +476,83 @@ impl Previews {
     #[must_use]
     pub fn wave(&self, guid: &str) -> Option<Arc<Wave>> {
         self.waves.lock().ok()?.get(guid).cloned()
+    }
+
+    /// Keep what a read of `guid`'s peaks gave: its waveform, or — read
+    /// before its recording could be read whole — nothing but a note to
+    /// read it again ([`Self::retry_partial`]). A waveform it had already
+    /// is kept rather than replaced by a partial read.
+    fn keep_read(&self, guid: String, read: Read, song: Option<String>) {
+        let wave = match read {
+            Read::Whole(wave) => wave,
+            Read::Partial { at } => {
+                if let Ok(mut pending) = self.partial.lock() {
+                    pending.insert(guid, (song, at));
+                }
+                return;
+            }
+        };
+        if let Ok(mut pending) = self.partial.lock() {
+            pending.remove(&guid);
+        }
+        if let Ok(mut waves) = self.waves.lock() {
+            waves.insert(guid, Arc::new(wave));
+        }
+    }
+
+    /// The items read partially, waiting to be read whole.
+    #[must_use]
+    pub fn partial(&self) -> Vec<String> {
+        self.partial
+            .lock()
+            .map(|p| p.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// The partial reads due again, taken out of the list (a read that is
+    /// still partial puts its item back), by song: each read at another
+    /// streaming state than `version` — something has arrived or attached
+    /// since — whose recording is not among those `arriving`. One that has
+    /// arrived and still reads partial waits for the state to move again,
+    /// so nothing is read over and over.
+    fn take_due(
+        &self,
+        version: u64,
+        arriving: &std::collections::HashMap<String, f32>,
+    ) -> HashMap<Option<String>, Vec<String>> {
+        let Ok(mut pending) = self.partial.lock() else {
+            return HashMap::new();
+        };
+        let due: Vec<String> = pending
+            .iter()
+            .filter(|(guid, (_, at))| *at != version && !arriving.contains_key(*guid))
+            .map(|(guid, _)| guid.clone())
+            .collect();
+        let mut by_song: HashMap<Option<String>, Vec<String>> = HashMap::new();
+        for guid in due {
+            if let Some((song, _)) = pending.remove(&guid) {
+                by_song.entry(song).or_default().push(guid);
+            }
+        }
+        by_song
+    }
+
+    /// Read again, behind the window, the items read before their
+    /// recording had all arrived — once the streaming state has moved and
+    /// theirs is no longer arriving. Cheap to call every frame.
+    #[cfg(feature = "native")]
+    pub fn retry_partial(&self) {
+        if self.partial.lock().map_or(true, |p| p.is_empty()) {
+            return;
+        }
+        let due = self.take_due(
+            crate::stream_set::version(),
+            &crate::stream_set::shown().items,
+        );
+        for (song, guids) in due {
+            let previews = self.clone();
+            crate::wave_pool::spawn(move || previews.fill_waves_blocking_in(song, guids));
+        }
     }
 
     /// Read the peaks of every audio item named, now, on this thread —
@@ -562,6 +649,8 @@ impl Previews {
             return;
         }
         let job = crate::jobs::start("Waveforms", guids.len());
+        // Before the reads: what arrives during them moves it again.
+        let at = stream_version();
         let read = crate::wave_pool::map(guids, |guid| {
             job.advance(1);
             let peaks = daw.take_peaks(
@@ -570,6 +659,9 @@ impl Previews {
                 TakeRef::Active,
                 WAVE_BLOCK,
             );
+            if streaming_partial(daw, project, guid) {
+                return Some((guid.clone(), Read::Partial { at }, None));
+            }
             let raw = Wave::from_peaks(&peaks)?;
             // Kept by its recording, before its volume curve, for every
             // item cut from it after (an unstretched one: its points are
@@ -580,20 +672,22 @@ impl Previews {
             let curve = take_volume(daw, project, guid);
             Some((
                 guid.clone(),
-                raw.clone().through(&curve),
+                Read::Whole(raw.clone().through(&curve)),
                 cut.map(|c| (c, raw)),
             ))
         });
-        if let (Ok(mut waves), Ok(mut sources)) = (self.waves.lock(), self.sources.lock()) {
-            for (guid, wave, source) in read.into_iter().flatten() {
-                waves.insert(guid, Arc::new(wave));
-                if let Some((cut, raw)) = source {
-                    sources.entry(cut.path).or_default().push(SourceWave {
-                        from: cut.offset,
-                        to: cut.offset + cut.length,
-                        wave: Arc::new(raw),
-                    });
-                }
+        let song = match project {
+            daw::service::ProjectContext::Project(song) => Some(song.clone()),
+            daw::service::ProjectContext::Current => None,
+        };
+        for (guid, read, source) in read.into_iter().flatten() {
+            self.keep_read(guid, read, song.clone());
+            if let (Some((cut, raw)), Ok(mut sources)) = (source, self.sources.lock()) {
+                sources.entry(cut.path).or_default().push(SourceWave {
+                    from: cut.offset,
+                    to: cut.offset + cut.length,
+                    wave: Arc::new(raw),
+                });
             }
         }
         self.arrived();
@@ -680,13 +774,17 @@ impl Previews {
         let mut reads = futures_util::stream::iter(guids)
             .map(|guid| async move { (read_wave(project, &guid).await, guid) })
             .buffer_unordered(WAVE_READS);
+        let song = project.guid().to_owned();
+        let at = stream_version();
         while let Some((wave, guid)) = reads.next().await {
-            let Some(wave) = wave else {
+            let read = if partial_here(&song, &guid) {
+                Read::Partial { at }
+            } else if let Some(wave) = wave {
+                Read::Whole(wave)
+            } else {
                 continue;
             };
-            if let Ok(mut waves) = self.waves.lock() {
-                waves.insert(guid, Arc::new(wave));
-            }
+            self.keep_read(guid, read, Some(song.clone()));
         }
         self.arrived();
     }
@@ -729,6 +827,69 @@ impl Previews {
     }
 }
 
+/// What a read of an item's peaks gave.
+enum Read {
+    /// Its waveform, all of it.
+    Whole(Wave),
+    /// Only part of it, or none yet ([`streaming_partial`]), read at the
+    /// streaming state `at` ([`crate::stream_set::version`]).
+    Partial { at: u64 },
+}
+
+/// The streaming state now ([`crate::stream_set::version`]); nothing
+/// streams through it in a page.
+fn stream_version() -> u64 {
+    #[cfg(feature = "native")]
+    return crate::stream_set::version();
+    #[cfg(not(feature = "native"))]
+    0
+}
+
+/// Whether `guid`'s peaks, as the engine reads them now, are not all of its
+/// recording: a take streaming from a proxy that has not all arrived, with
+/// no cache of its original's to draw from (the stretch decoded near the
+/// playhead, silent everywhere else), or one with no audio attached yet (a
+/// streamed song's takes before their streams are).
+#[cfg(feature = "native")]
+fn streaming_partial(
+    daw: &daw::standalone::Standalone,
+    project: &daw::service::ProjectContext,
+    guid: &str,
+) -> bool {
+    use daw::service::{ItemRef, Takes as _};
+    use daw::standalone::audio_engine::AudioSource;
+    let song = match project {
+        daw::service::ProjectContext::Project(song) => song.clone(),
+        daw::service::ProjectContext::Current => match crate::open::current_song() {
+            Some(song) => song,
+            None => return false,
+        },
+    };
+    let Some(take) = daw.get_active_take(project.clone(), ItemRef::Guid(guid.to_owned())) else {
+        return false;
+    };
+    match daw.audio_source(&song, &take.guid).as_deref() {
+        None => true,
+        Some(AudioSource::Streamed(streamed)) => !streamed.has_peaks(),
+        Some(_) => false,
+    }
+}
+
+/// [`streaming_partial`] for `guid` of `song`, on the engine in this
+/// process — `false` with none here (a page: its waveforms are handed in).
+fn partial_here(song: &str, guid: &str) -> bool {
+    #[cfg(feature = "native")]
+    if let Some(daw) = crate::open::local_engine() {
+        return streaming_partial(
+            daw,
+            &daw::service::ProjectContext::Project(song.to_owned()),
+            guid,
+        );
+    }
+    let _ = (song, guid);
+    false
+}
+
 /// Read one audio item's waveform from its active take's peaks. `None`
 /// for an item the engine has no audio for — drawn plain, not faked.
 async fn read_wave(project: &daw_control::Project, guid: &str) -> Option<Wave> {
@@ -767,4 +928,73 @@ async fn read(project: &daw_control::Project, guid: &str, length: f64) -> Vec<No
             velocity: note.velocity,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod partial_tests {
+    use super::{Previews, Read, Wave};
+    use std::collections::HashMap;
+
+    fn wave(level: f32) -> Read {
+        Read::Whole(Wave {
+            step: 0.01,
+            points: vec![(level, -level); 100],
+        })
+    }
+
+    /// A waveform read before its recording could be read whole is not
+    /// drawn — only what was decoded near the playhead had audio: a lane,
+    /// and the shut folder's row over it, of slivers — but kept to read
+    /// again, by song, once the streaming state has moved on from the one
+    /// it was read at and its recording is no longer arriving.
+    #[test]
+    fn a_partial_read_is_not_drawn_and_is_read_again_once_its_recording_arrives() {
+        let previews = Previews::default();
+        let song = Some("song".to_owned());
+        previews.keep_read("bass".into(), Read::Partial { at: 1 }, song.clone());
+        assert!(
+            previews.wave("bass").is_none(),
+            "a partial read is not drawn"
+        );
+        assert_eq!(previews.partial(), ["bass"]);
+
+        // Nothing has moved since it was read: not due.
+        assert!(previews.take_due(1, &HashMap::new()).is_empty());
+        // Moved, but its recording is still arriving: not due.
+        let arriving = HashMap::from([("bass".to_owned(), 0.4_f32)]);
+        assert!(previews.take_due(2, &arriving).is_empty());
+        // Moved, and arrived: due, by its song, and out of the list.
+        let due = previews.take_due(3, &HashMap::new());
+        assert_eq!(
+            due.get(&song).map(Vec::as_slice),
+            Some(&["bass".to_owned()][..])
+        );
+        assert!(previews.partial().is_empty());
+
+        // Read whole: drawn.
+        previews.keep_read("bass".into(), wave(0.8), song);
+        assert_eq!(previews.wave("bass").map(|w| w.points[50].0), Some(0.8));
+        assert!(previews.partial().is_empty());
+    }
+
+    /// Read again and still partial (the proxy arrived but did not
+    /// decode): it waits for the state to move again, not read every frame.
+    #[test]
+    fn a_read_still_partial_waits_for_the_next_change() {
+        let previews = Previews::default();
+        previews.keep_read("vox".into(), Read::Partial { at: 4 }, None);
+        assert!(previews.take_due(4, &HashMap::new()).is_empty());
+        assert_eq!(previews.take_due(5, &HashMap::new()).len(), 1);
+        previews.keep_read("vox".into(), Read::Partial { at: 5 }, None);
+        assert!(previews.take_due(5, &HashMap::new()).is_empty());
+    }
+
+    /// A waveform already drawn is not replaced by a partial read of it.
+    #[test]
+    fn a_partial_read_never_replaces_a_whole_one() {
+        let previews = Previews::default();
+        previews.keep_read("kick".into(), wave(0.9), None);
+        previews.keep_read("kick".into(), Read::Partial { at: 0 }, None);
+        assert_eq!(previews.wave("kick").map(|w| w.points[0].0), Some(0.9));
+    }
 }

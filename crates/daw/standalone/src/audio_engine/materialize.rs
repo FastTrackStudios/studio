@@ -273,7 +273,10 @@ where
     {
         let stream = fts_sample::ogg_stream::OggStream::open_file(&disk_path)
             .map_err(|e| format!("ogg stream for {path}: {e}"))?;
-        stream_ogg(daw, project_guid, take_guid, stream);
+        let key = disk_path.display().to_string();
+        stream_ogg(daw, project_guid, take_guid, stream, key, move || {
+            fts_sample::ogg_stream::OggStream::open_file(&disk_path).ok()
+        });
         return Ok(());
     }
     // Streaming fast path: mmap uncompressed PCM straight from disk.
@@ -303,9 +306,12 @@ where
     #[cfg(all(feature = "stream-ogg", not(target_arch = "wasm32")))]
     if ext == "ogg" {
         let bytes: Arc<[u8]> = bytes.into();
-        let stream = fts_sample::ogg_stream::OggStream::open(bytes)
+        let stream = fts_sample::ogg_stream::OggStream::open(Arc::clone(&bytes))
             .map_err(|e| format!("ogg stream for {path}: {e}"))?;
-        stream_ogg(daw, project_guid, take_guid, stream);
+        let key = format!("{path}#{}", bytes.len());
+        stream_ogg(daw, project_guid, take_guid, stream, key, move || {
+            fts_sample::ogg_stream::OggStream::open(Arc::clone(&bytes)).ok()
+        });
         return Ok(());
     }
     // Resident decode: the whole file lands in RAM, charged against the
@@ -383,16 +389,26 @@ pub fn detach_audio_source(daw: &Standalone, project_guid: &str, take_guid: &str
 ///
 /// Returns `Err` if no bay resolver is installed.
 /// Attach an Ogg stream to a take as a [`super::streamed::Streamed`]
-/// source, fed around the playhead by the native butler.
+/// source, fed around the playhead by the native butler — its waveform
+/// decoded whole from a stream `reopen` opens at its start, once per
+/// proxy (`key`), when the waveform is first asked for.
 #[cfg(all(feature = "stream-ogg", not(target_arch = "wasm32")))]
 fn stream_ogg(
     daw: &Standalone,
     project_guid: &str,
     take_guid: &str,
     stream: fts_sample::ogg_stream::OggStream,
+    key: String,
+    reopen: impl Fn() -> Option<fts_sample::ogg_stream::OggStream> + Send + Sync + 'static,
 ) {
     use super::streamed::{StreamFeeder, Streamed};
     let streamed = Streamed::new(stream.channels(), stream.sample_rate(), stream.frames());
+    #[cfg(feature = "reapeaks")]
+    streamed.set_whole(Box::new(move || {
+        super::streamed::named_peaks(&key, || super::streamed::peaks_of_ogg(reopen()?))
+    }));
+    #[cfg(not(feature = "reapeaks"))]
+    let _ = (key, reopen);
     let _ = daw.with_project_mut(project_guid, |p| {
         p.audio_sources.insert(
             take_guid.to_owned(),

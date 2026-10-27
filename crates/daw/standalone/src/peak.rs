@@ -109,7 +109,11 @@ impl Peaks for Standalone {
             peaks,
             samples_per_peak: block,
         };
-        if let Some((key, revision)) = cache_key
+        // A streamed take read without its waveform is only the chunks
+        // resident near the playhead: not kept, so a read once the proxy
+        // has all arrived builds the whole one.
+        let partial = reader.is_partial();
+        if let Some((key, revision)) = cache_key.filter(|_| !partial)
             && let Ok(mut c) = cache().lock()
         {
             c.insert(key, (revision, std::sync::Arc::new(data.clone())));

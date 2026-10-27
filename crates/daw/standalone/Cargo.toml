@@ -103,8 +103,9 @@ js-sys = { workspace = true, optional = true }
 # crate's test targets are built as a set, it took every other test in
 # daw-standalone down with it.
 # `audio` for the audio engine's own tests (the render ahead, the set
-# engine's block loop), which run without a device.
-daw-standalone = { path = ".", features = ["rpp-project", "bootstrap", "audio"] }
+# engine's block loop), which run without a device; `stream-ogg` and
+# `reapeaks` for a streamed take's waveform built from its whole proxy.
+daw-standalone = { path = ".", features = ["rpp-project", "bootstrap", "audio", "stream-ogg", "reapeaks"] }
 daw-proto = { workspace = true }
 daw-control = { workspace = true }
 eyre = { workspace = true }
