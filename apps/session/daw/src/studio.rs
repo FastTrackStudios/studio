@@ -192,7 +192,20 @@ impl StudioSession {
         let planner = Planner {
             raw: Arc::new(raw),
             scene: Some(SCENE),
-            kinds: Arc::new(crate::plan::Kinds::from_text(rpp_text)),
+            kinds: Arc::new({
+                // A project file has no text to read them from: the engine
+                // holds them, as it does for the song on screen.
+                let from_text = crate::plan::Kinds::from_text(rpp_text);
+                #[cfg(feature = "native")]
+                let from_text = if from_text.is_empty() {
+                    crate::open::local_engine()
+                        .map(|daw| crate::plan::Kinds::from_engine(daw, project))
+                        .unwrap_or(from_text)
+                } else {
+                    from_text
+                };
+                from_text
+            }),
         };
         let (studio, rows) = planner.plan(&planner.raw);
         let previews = crate::midi::Previews::default();

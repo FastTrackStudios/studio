@@ -213,7 +213,8 @@ impl SongSource for TaskSource {
             .filter(|(rel, _)| rel.contains('/') || !rel.to_lowercase().ends_with(".kf"))
             .cloned()
             .collect();
-        Box::pin(async move { Ok(entries.into()) })
+        let version = self.song.version.clone();
+        Box::pin(async move { Ok(Listing { entries, version }) })
     }
 
     fn read(&self, path: String, range: std::ops::Range<u64>) -> Pending<Result<Vec<u8>, String>> {
@@ -553,6 +554,52 @@ impl Keep {
             Self::Disk(root) => root.join(safe_name(label)),
             Self::Memory(_) => Path::new("/").join(safe_name(label)),
         }
+    }
+
+    /// Whether what is kept under `base` was mirrored at `version`. A file
+    /// kept at the right size is only the same file at the same version: a
+    /// `.session` is SQLite, whole pages, and a new one is often the old
+    /// one's size (JT's songs, re-split, kept their old names). A source
+    /// that names no version, and memory (fresh each run), are trusted.
+    fn at_version(&self, base: &Path, version: Option<&str>) -> bool {
+        match (self, version) {
+            #[cfg(not(target_arch = "wasm32"))]
+            (Self::Disk(_), Some(version)) => {
+                std::fs::read_to_string(base.join(VERSION_STAMP)).is_ok_and(|v| v == version)
+            }
+            _ => true,
+        }
+    }
+
+    /// Note that what is kept under `base` is now at `version`.
+    fn mirrored_at(&self, base: &Path, version: Option<&str>) -> eyre::Result<()> {
+        match (self, version) {
+            #[cfg(not(target_arch = "wasm32"))]
+            (Self::Disk(_), Some(version)) => self.write(&base.join(VERSION_STAMP), version.into()),
+            _ => Ok(()),
+        }
+    }
+
+    /// A project file about to be replaced: the log it was opened with
+    /// here (`-wal`, `-shm`, `-tshm`) goes first. Left, the new file opened
+    /// with the old one's log replayed over it — JT's songs, re-split,
+    /// still showed the show's name. What was edited here has synced
+    /// through the song's doc already; the file is only its copy.
+    fn forget_log(&self, path: &Path) -> eyre::Result<()> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Self::Disk(_) = self
+            && path.extension().is_some_and(|e| e == "session")
+        {
+            for sidecar in ["session-wal", "session-shm", "session-tshm"] {
+                let log = path.with_extension(sidecar);
+                if log.exists() {
+                    std::fs::remove_file(&log)?;
+                }
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = path;
+        Ok(())
     }
 
     /// Whether `path` is already here at `size` bytes.
@@ -942,6 +989,9 @@ async fn fetch_proxy(
     }
 }
 
+/// Beside a mirrored song's files: the version of its source they are.
+const VERSION_STAMP: &str = ".mirrored-version";
+
 /// Mirror a song from `source` into `keep`: every small file fetched whole
 /// (skipped when already there at its size), the media left to stream; the
 /// source's own chart, if it keeps one, written in.
@@ -967,6 +1017,9 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
     let label = source.label();
     let base = keep.base(&label);
     let project = base.join(&first.0);
+    // Kept files are only taken for the listed ones when they were kept at
+    // this version; else each small file comes again.
+    let current = keep.at_version(&base, version.as_deref());
     let mut proxies = HashMap::new();
     let mut peaks: HashMap<String, (String, u64)> = HashMap::new();
     let mut wanted = Vec::new();
@@ -980,7 +1033,10 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
                 peaks.insert(original.to_owned(), (path.clone(), *size));
             }
         }
-        if lower.starts_with("media/proxies/") && lower.ends_with(".ogg") {
+        // A prepared song keeps its proxies in `Media/Proxies/`; a song cut
+        // from a Live set beside its recordings (`Samples/Imported/Proxies/`).
+        if (lower.starts_with("proxies/") || lower.contains("/proxies/")) && lower.ends_with(".ogg")
+        {
             let stem = Path::new(path)
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_lowercase())
@@ -988,11 +1044,17 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
             proxies.insert(stem, (path.clone(), *size));
             continue;
         }
-        if is_media(&lower) || *size == 0 || !keep.wants(&lower) {
+        // A project file's log (`-wal`, `-shm`, `-tshm`) is the state of
+        // whoever had it open, not part of the song: fetched, it came down
+        // half-written (Cinematic Intro would not come in at all).
+        let is_log = ["session-wal", "session-shm", "session-tshm"]
+            .iter()
+            .any(|log| lower.ends_with(log));
+        if is_log || is_media(&lower) || *size == 0 || !keep.wants(&lower) {
             continue;
         }
         let local = base.join(path);
-        if keep.has(&local, *size) {
+        if current && keep.has(&local, *size) {
             continue;
         }
         wanted.push((path.clone(), *size, local));
@@ -1052,11 +1114,13 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
         .await?;
     arrived.extend(one_by_one);
     for (local, bytes) in arrived {
+        keep.forget_log(&local)?;
         keep.write(&local, bytes)?;
     }
     if let Some(chart) = source.chart().await? {
         write_chart(&keep, &project, &label, &chart)?;
     }
+    keep.mirrored_at(&base, version.as_deref())?;
     tracing::info!(
         stream.source = %label,
         stream.files = list.len(),

@@ -82,6 +82,8 @@ where
 ///
 /// The set could not be joined, or none of its songs opened.
 pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist> {
+    // Until this open says otherwise, what it opens is not a library set.
+    crate::live_host::opened_from_library(false);
     use crate::task_set::until_ok;
     let runtime = crate::open::engine_runtime()?;
     // What opens a song spawns tasks (`architect::platform::spawn`): on
@@ -113,6 +115,9 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
             setlist,
             name,
         } => {
+            // A set of the library: it is there already — auto-hosting
+            // leaves it be rather than make another of the songs' names.
+            crate::live_host::opened_from_library(true);
             // Each song is looked up in the library when its turn comes —
             // not all of them before the first can open.
             let sources: Vec<(String, Source)> = setlist

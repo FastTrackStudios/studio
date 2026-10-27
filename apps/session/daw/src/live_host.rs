@@ -55,6 +55,19 @@ const POLL: Duration = Duration::from_secs(3);
 /// The longest wait after a failure before trying again.
 const MOST_BACKOFF: Duration = Duration::from_secs(120);
 
+/// What is open came from a set of the library (`stream_set::open`, a
+/// library's set or one song of it) — until something else is opened.
+static FROM_LIBRARY: AtomicBool = AtomicBool::new(false);
+
+/// Say whether what is open now was streamed in from a library set.
+pub fn opened_from_library(yes: bool) {
+    FROM_LIBRARY.store(yes, Ordering::Release);
+}
+
+fn from_library() -> bool {
+    FROM_LIBRARY.load(Ordering::Acquire)
+}
+
 /// The set this device is hosting in Task.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hosted {
@@ -111,6 +124,9 @@ pub struct Seen<'a> {
     pub open: &'a [String],
     /// Its person left the hosted set, with these songs open.
     pub left_with: Option<&'a [String]>,
+    /// What is open was streamed in from a set of the library: that set is
+    /// already there, and is not hosted again under another name.
+    pub from_library: bool,
 }
 
 /// What automatic hosting does next (see the module docs).
@@ -123,7 +139,7 @@ pub fn next(seen: &Seen<'_>) -> Next {
             Next::Wait
         };
     }
-    if seen.joining || seen.open.is_empty() {
+    if seen.joining || seen.open.is_empty() || seen.from_library {
         return Next::Wait;
     }
     // Left by hand: left, until what is open changes.
@@ -329,6 +345,7 @@ fn run(fallback_name: &str) {
             hosted: hosted.as_ref().map(|h| h.keys.as_slice()),
             open: &open,
             left_with: left_with.as_deref(),
+            from_library: from_library(),
         };
         match next(&seen) {
             Next::Wait => {}
@@ -435,6 +452,18 @@ mod tests {
             ..Seen::default()
         };
         assert_eq!(next(&seen), Next::Host);
+    }
+
+    #[test]
+    fn a_set_streamed_in_from_the_library_is_not_hosted_again() {
+        let open = keys(&["Unbreakable"]);
+        let seen = Seen {
+            signed_in: true,
+            open: &open,
+            from_library: true,
+            ..Seen::default()
+        };
+        assert_eq!(next(&seen), Next::Wait);
     }
 
     #[test]

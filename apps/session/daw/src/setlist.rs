@@ -383,7 +383,13 @@ impl Setlist {
             // A song downloaded by its reference plays it from disk.
             crate::reference_play::hear_local(&guid, folder);
         }
-        let rpp_text = crate::open::project_text(&plan.open)?.text;
+        // A project file (`Song.session`) opens through its doc: it has no
+        // text, and its track kinds are read from the engine instead.
+        let rpp_text = if crate::project_file::is_project_file(&plan.open) {
+            String::new()
+        } else {
+            crate::open::project_text(&plan.open)?.text
+        };
         let chart_text = prepare
             .chart
             .as_ref()

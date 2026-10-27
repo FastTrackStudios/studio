@@ -619,12 +619,31 @@ impl Library {
             let project = entries.remove(at);
             entries.insert(0, project);
         }
+        // The project file as checkpointed — what reads are served at.
+        let version = match entries.first() {
+            Some((project, _)) => match (
+                self.client::<files_proto::service::version::VersionServiceClient>()
+                    .await,
+                RootPath::parse(project),
+            ) {
+                (Ok(versions), Ok(path)) => versions
+                    .chain(id, path)
+                    .await
+                    .ok()
+                    .and_then(|chain| chain.into_iter().next())
+                    .map(|newest| newest.file_id),
+                _ => None,
+            },
+            None => None,
+        };
         Ok(TaskSong {
             slug: song.to_owned(),
             library: self.clone(),
             files: std::sync::Arc::new(tokio::sync::Mutex::new((0, files))),
+            used: std::sync::Arc::default(),
             root: id,
             entries,
+            version,
         })
     }
 
@@ -733,10 +752,24 @@ pub struct TaskSong {
     /// replaced — so a dead one is redialled once, not by every read that
     /// found it dead.
     files: std::sync::Arc<tokio::sync::Mutex<(u64, FilesClient)>>,
+    /// Reads started on that connection ([`READS_PER_CONNECTION`]).
+    used: std::sync::Arc<std::sync::atomic::AtomicU32>,
     root: files_proto::id::RootId,
     /// Every file of the session root, with its size — the project first.
     pub entries: Vec<(String, u64)>,
+    /// Which version of the song this is: its project file's content id,
+    /// when the server gives one. What a mirror keeps is only taken as
+    /// current while this is the same.
+    pub version: Option<String>,
 }
+
+/// Reads one connection carries before it is replaced. The server keeps a
+/// request slot for each finished range read until the client cancels it,
+/// and the client never does (vox sends no Cancel for a dropped call): at
+/// the 65th the server closes the connection for exceeding 64 in flight —
+/// which lost JT's set every song after its second. Remove once vox cancels
+/// dropped calls (Task's `finished_byte_streams_give_back_their_request_slots`).
+const READS_PER_CONNECTION: u32 = 56;
 
 /// How long one range read may take before its connection is taken for
 /// dead — a stalled read would otherwise hold a fetch slot forever: a few
@@ -767,7 +800,13 @@ impl TaskSong {
         }
         let mut errors = Vec::new();
         for tried in 0..TRIES {
-            let (generation, files) = self.files.lock().await.clone();
+            let (generation, files) = match self.connection().await {
+                Ok(held) => held,
+                Err(e) => {
+                    errors.push(format!("redialling: {e}"));
+                    continue;
+                }
+            };
             match self.read_on(&files, path, &range).await {
                 Ok(bytes) => return Ok(bytes),
                 Err(e) => errors.push(e.to_string()),
@@ -780,7 +819,10 @@ impl TaskSong {
             let mut held = self.files.lock().await;
             if held.0 == generation {
                 match self.library.files().await {
-                    Ok(fresh) => *held = (generation + 1, fresh),
+                    Ok(fresh) => {
+                        *held = (generation + 1, fresh);
+                        self.used.store(0, std::sync::atomic::Ordering::Relaxed);
+                    }
                     Err(e) => errors.push(format!("redialling: {e}")),
                 }
             }
@@ -791,6 +833,19 @@ impl TaskSong {
             .await;
         }
         eyre::bail!("{}", errors.join(" (then) "))
+    }
+
+    /// The connection a read goes out on: this one, or a fresh one once
+    /// this has carried [`READS_PER_CONNECTION`].
+    async fn connection(&self) -> eyre::Result<(u64, FilesClient)> {
+        use std::sync::atomic::Ordering::Relaxed;
+        let mut held = self.files.lock().await;
+        if self.used.fetch_add(1, Relaxed) >= READS_PER_CONNECTION {
+            let fresh = self.library.files().await?;
+            *held = (held.0 + 1, fresh);
+            self.used.store(1, Relaxed);
+        }
+        Ok(held.clone())
     }
 
     /// Where many of the song's documents are read in one request (the
