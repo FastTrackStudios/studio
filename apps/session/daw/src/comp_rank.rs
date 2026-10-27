@@ -655,7 +655,7 @@ fn comp_in(
     let edited = edited?.is_some_and(|n| n > 0);
     // Only the mics' items changed (their comp and edit lanes): the window
     // reads back those, as the engine's journal names them.
-    crate::studio::request_resync_items();
+    crate::song_model::request_resync_items();
     crate::hit_overlay::refresh();
     Ok(edited)
 }

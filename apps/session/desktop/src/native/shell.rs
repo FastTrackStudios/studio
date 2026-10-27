@@ -133,7 +133,7 @@ pub fn Shell() -> Element {
             setlist.set(changed);
         }
     });
-    use_live_advance(setlist, mode);
+    use_live_advance(mode);
     // The window draws a frame only when something asks: an event, a
     // change here, or a panel whose picture moves (the arrangement, the
     // mixer, the chart — each asks while the transport moves). While it
@@ -154,8 +154,8 @@ pub fn Shell() -> Element {
                     // will come to carry it out, nor to send what it
                     // edited on to the engine, so frames are asked for.
                     if moving
-                        || session_daw::actions::window_pending()
-                        || session_daw::actions::frame_owed()
+                        || session_daw::window_queue::window_pending()
+                        || session_daw::window_queue::frame_owed()
                         || session_daw::studio::resync_pending()
                     {
                         window.request_redraw();
@@ -559,37 +559,14 @@ const EDITOR_DOCK_SHARE: f64 = 45.0;
 const FX_DOCK_H: f64 = session_daw::fx_view::LANE_H;
 
 /// Live mode runs the set: when the song playing reaches its end, the next
-/// one is picked and plays from its count-in. Checked each frame — the
-/// window redraws while the transport moves — and only in Live, so working
-/// on a song in the other modes never jumps away from it.
-fn use_live_advance(setlist: Signal<session_daw::setlist::Setlist>, mode: Signal<Mode>) {
-    dioxus_native::use_window_event(move |event, _| {
-        if !matches!(event, winit::event::WindowEvent::RedrawRequested) || mode() != Mode::Live {
-            return;
-        }
-        // Playing together, only the leader rolls on; this window follows
-        // it into the next song.
-        if session_daw::collab::following() {
-            return;
-        }
-        let Some((at, playing)) = session_daw::engine::Transport::shared().map(|t| t.read()) else {
-            return;
-        };
-        let next = {
-            let list = setlist.peek();
-            match (playing, list.current(), list.next()) {
-                (true, Some(song), Some(next)) if song.ended(at) => Some(next),
-                _ => None,
-            }
-        };
-        let Some(next) = next else { return };
-        if session_daw::studio_engine::set::pick(next, at).is_some() {
-            tracing::info!(
-                setlist.next = next,
-                "live: the song ended; the next one plays"
-            );
-            session_daw::engine::transport(session_daw::engine::Move::PlayFrom, 0.0);
-        }
+/// one plays. The roll-on is the engine's
+/// (`session_daw::studio_engine::live`: the next song starts on the frame
+/// the current one ends, window or none); the window only tells it whether
+/// the set is in Live — so working on a song in the other modes never
+/// jumps away from it.
+fn use_live_advance(mode: Signal<Mode>) {
+    use_effect(move || {
+        session_daw::studio_engine::live::set_live(mode() == Mode::Live);
     });
 }
 
@@ -611,7 +588,7 @@ fn Arrangement(#[props(default)] docked: bool) -> Element {
                 style: "position:relative; flex:1; min-height:0; display:flex;",
                 // Organize's instruments down the left: Drums, Bass, Guitar.
                 if mode() == Mode::Organize {
-                    session_daw::instrument_tracks::InstrumentRail {}
+                    session_daw::instrument_rail::InstrumentRail {}
                 }
                 div {
                     style: "position:relative; flex:1; min-width:0;",

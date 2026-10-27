@@ -565,7 +565,7 @@ fn undoable<T>(daw: &Daw, project: &ProjectContext, label: &str, f: impl FnOnce(
     daw::service::Projects::begin_undo_block(daw, project.clone(), label);
     let out = f();
     daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
-    crate::studio::request_resync();
+    crate::song_model::request_resync();
     out
 }
 
@@ -1090,8 +1090,8 @@ pub(crate) fn register(
         let track = track_of(daw, &project, &a.track)?;
         if a.envelope.trim().eq_ignore_ascii_case("item volume") {
             let shown = a.shown.unwrap_or(true);
-            crate::automation_menu::show_takes(daw, &project, &track.guid, shown);
-            crate::studio::request_resync();
+            crate::automation::show_takes(daw, &project, &track.guid, shown);
+            crate::song_model::request_resync();
             return Ok(format!(
                 "Item volume curves on {}: {}",
                 track.name,
@@ -1105,7 +1105,7 @@ pub(crate) fn register(
         {
             let shown = a.shown.unwrap_or(true);
             crate::vocal_level::show_lane(daw, &project, &track.guid, shown);
-            crate::studio::request_resync();
+            crate::song_model::request_resync();
             return Ok(format!(
                 "{} on {}: {}",
                 crate::automation::LEVELER,

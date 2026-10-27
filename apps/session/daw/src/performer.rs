@@ -34,7 +34,7 @@ use app_shell::ui::{
 
 use crate::engine::{Move, Reading, Transport, transport};
 use crate::progress::{Song, Step, back_to, forward_to, step_song};
-use crate::studio::StudioSession;
+use crate::song_model::StudioSession;
 
 /// The performer view's fill round the screen and under the system's
 /// insets: the desk (`#0c0c0f`), not the bars' `#17181b`.

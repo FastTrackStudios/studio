@@ -200,7 +200,7 @@ pub fn set_up(
             .map_err(|e| format!("the bass rig would not load: {e}"))?;
     }
     if !dry {
-        crate::studio::request_resync();
+        crate::song_model::request_resync();
         crate::actions::list().changed("bass.rig", "the bass rig was set up");
     }
     Ok(said)

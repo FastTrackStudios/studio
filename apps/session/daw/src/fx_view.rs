@@ -103,7 +103,7 @@ pub fn FxPanel(#[props(default = 1)] lanes: usize) -> Element {
     // with no song yet) shows an empty row rather than failing.
     let (Some(closeups), Some(session)) = (
         try_use_context::<crate::closeup::Closeups>(),
-        try_use_context::<crate::studio::StudioSession>(),
+        try_use_context::<crate::song_model::StudioSession>(),
     ) else {
         return rsx! {};
     };
@@ -699,7 +699,7 @@ impl DeviceRow {
             return false;
         }
         let fraction = crate::gesture::drag_fraction(y - from_y, *travel);
-        let edit = crate::engine::drag(*control, &was.guid, was, fraction);
+        let edit = crate::mcp::drag(*control, &was.guid, was, fraction);
         if let Some(edit) = edit {
             self.commit(edit);
         }
@@ -723,7 +723,7 @@ impl DeviceRow {
             return true;
         }
         let edit = match control {
-            Some(control) => crate::engine::click(control, &guid, &track, add),
+            Some(control) => crate::mcp::click(control, &guid, &track, add),
             None if add => Some(crate::engine::Edit::AddToSelection(guid)),
             None => Some(crate::engine::Edit::Select(guid)),
         };

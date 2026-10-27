@@ -8,9 +8,9 @@
 //!   generated again, so the click follows (below the guide's threshold
 //!   its eighths come in by themselves).
 //! - `TIME_SELECTION_SET` sets the time selection, in the engine and in
-//!   the arrangement (`crate::cursor::ask`), or clears it.
+//!   the arrangement (`crate::edit_state::ask`), or clears it.
 //! - `SECTION_INSERT` and `MARKER_INSERT` are the toolbar's buttons
-//!   (`crate::organize::insert`, one path for both): a section fills the
+//!   (`crate::organize_edit::insert`, one path for both): a section fills the
 //!   time selection, or its default length from the edit cursor, and the
 //!   guide is generated again with its cue.
 //!
@@ -23,8 +23,8 @@ use daw::service::{ItemRef, ProjectContext, TakeRef, Takes as _, TempoMap as _};
 use facet::Facet;
 use session::section_kinds::{MarkerKind, SectionKind};
 
-use crate::cursor::{Edit, Span};
-use crate::organize::Button;
+use crate::edit_state::{Edit, Span};
+use crate::organize_edit::Button;
 
 static TEMPO: ActionMeta = crate::actions::meta(
     "TEMPO_SET",
@@ -208,7 +208,7 @@ fn span(
 /// Where the edit cursor and selection are: the arrangement's, as last
 /// drawn or asked for; the engine's when there is no arrangement.
 fn edit_now(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Edit {
-    crate::cursor::current().unwrap_or_else(|| crate::organize::engine_edit(daw, project))
+    crate::edit_state::current().unwrap_or_else(|| crate::organize_edit::engine_edit(daw, project))
 }
 
 /// The click, count and cues generated again over the song as it is now.
@@ -408,7 +408,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         // the tempo map or the ruler.
         set_tempo(daw, &project, a.bpm, at, follow)?;
         regenerate_guide(daw);
-        crate::studio::request_resync();
+        crate::song_model::request_resync();
         crate::actions::list().changed("tempo", &format!("{} bpm", a.bpm));
         Ok(format!(
             "{} bpm from {at:.3} s{}; the guide follows",
@@ -426,7 +426,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             daw.clear_time_selection(project.clone())
                 .map_err(|e| e.to_string())?;
             let at = edit_now(daw, &project).at;
-            crate::cursor::ask(Edit {
+            crate::edit_state::ask(Edit {
                 at,
                 selection: None,
             });
@@ -435,7 +435,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         daw.set_time_selection(project.clone(), chosen.start, chosen.end)
             .and_then(|()| daw.set_position(project.clone(), chosen.start))
             .map_err(|e| e.to_string())?;
-        crate::cursor::ask(Edit {
+        crate::edit_state::ask(Edit {
             at: chosen.start,
             selection: Some(chosen),
         });
@@ -454,11 +454,11 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                 selection: Some(over),
             },
         );
-        crate::organize::insert(daw, Button::Section(kind), false, Some(edit));
-        crate::studio::request_resync();
+        crate::organize_edit::insert(daw, Button::Section(kind), false, Some(edit));
+        crate::song_model::request_resync();
         crate::actions::list().changed("markers", &a.kind);
         // The section ends where the insert left the cursor.
-        let end = crate::organize::engine_edit(daw, &project).at;
+        let end = crate::organize_edit::engine_edit(daw, &project).at;
         crate::actions::sections(daw, &project)
             .into_iter()
             .find(|s| (s.end - end).abs() < SAME_POINT)
@@ -471,8 +471,8 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         if let Some(at) = a.at.as_deref() {
             edit.at = moment(daw, &project, at)?;
         }
-        crate::organize::insert(daw, Button::Marker(kind), false, Some(edit));
-        crate::studio::request_resync();
+        crate::organize_edit::insert(daw, Button::Marker(kind), false, Some(edit));
+        crate::song_model::request_resync();
         crate::actions::list().changed("markers", written);
         Ok(format!("{written} at {:.3} s", edit.at))
     })?;
@@ -576,6 +576,6 @@ fn set_tempo(
         daw.set_time_selection(project.clone(), span.start, span.end)
             .map_err(|e| e.to_string())?;
     }
-    crate::cursor::ask(edit);
+    crate::edit_state::ask(edit);
     Ok(())
 }

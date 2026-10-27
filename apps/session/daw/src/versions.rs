@@ -10,20 +10,11 @@ use dioxus::prelude::*;
 
 use crate::shell::{BAR_BG, BAR_H, DIM, RAISED, RULE, TEXT};
 
+pub use crate::projects::Version;
+
 /// Good, or not.
 const OK: &str = "#4ac26b";
 const NO: &str = "#e5a442";
-
-/// One of the song's versions: the song's own, or a checkpoint.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Version {
-    pub name: String,
-    /// When it was saved ("5 min ago"); empty for the song's own.
-    pub when: String,
-    pub path: std::path::PathBuf,
-    /// Whether it is the one open now.
-    pub open: bool,
-}
 
 /// `work` on a thread of its own, its answer awaited: what the panel asks
 /// of the song's file never holds the window still.

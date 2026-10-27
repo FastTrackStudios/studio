@@ -34,7 +34,7 @@ use futures_util::StreamExt as _;
 use session::lyrics::{Layer, LyricSection, Lyrics, SLIDE_LINES, SectionSpan, Slide};
 
 use crate::shell::{ACCENT, DIM, RULE, TEXT};
-use crate::studio::StudioSession;
+use crate::song_model::StudioSession;
 
 /// How much sooner than the song a section or a slide comes up: words
 /// on a screen have to be there before they are sung, so the change is

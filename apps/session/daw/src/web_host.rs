@@ -852,7 +852,7 @@ fn use_viewport_form(size: Signal<(f64, f64)>) -> Signal<crate::compact::Form> {
 /// same panels as the wide layout's, over one song.
 #[component]
 fn PhoneViews(
-    session: crate::studio::StudioSession,
+    session: crate::song_model::StudioSession,
     engine: crate::web_engine::EngineRef,
     view: Signal<crate::compact::PhoneView>,
 ) -> Element {
@@ -967,7 +967,7 @@ fn LoadMultitracks(listening: crate::web_engine::Listening, asking: Signal<bool>
 
 /// Whatever it holds, over one song: that song's session, as context.
 #[component]
-fn WithSong(session: crate::studio::StudioSession, children: Element) -> Element {
+fn WithSong(session: crate::song_model::StudioSession, children: Element) -> Element {
     use_context_provider(|| session);
     children
 }
@@ -975,7 +975,7 @@ fn WithSong(session: crate::studio::StudioSession, children: Element) -> Element
 /// The views, over one song: its session is what every panel below reads.
 #[component]
 fn SongViews(
-    session: crate::studio::StudioSession,
+    session: crate::song_model::StudioSession,
     engine: crate::web_engine::EngineRef,
     view: Signal<crate::shell::View>,
 ) -> Element {

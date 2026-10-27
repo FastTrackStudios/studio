@@ -27,7 +27,7 @@ pub(crate) const GRAIN: f64 = 1e-4;
 
 /// The comp lane of `track`: the engine's comping lane (REAPER's
 /// `LANEREC`), else the one the window comps onto
-/// ([`crate::arrange_edit::comp_lane`] — `C1`, `COMP`, else what plays).
+/// ([`crate::stretch::comp_lane`] — `C1`, `COMP`, else what plays).
 #[must_use]
 pub fn comp_lane_of(
     daw: &daw::standalone::Standalone,
@@ -38,7 +38,7 @@ pub fn comp_lane_of(
         .ok()
         .and_then(|c| c.comp_lane)
         .filter(|&lane| lane < track.lane_count)
-        .or_else(|| crate::arrange_edit::comp_lane(track))
+        .or_else(|| crate::stretch::comp_lane(track))
 }
 
 /// Comp a lane over a range onto the comp lane, as one undo step.
@@ -511,7 +511,7 @@ pub(crate) fn register(
             .map(|t| crate::actions::resolve(daw, &project, t))
             .collect::<Result<Vec<String>, String>>()?;
         let tracks = swipe(daw, &project, &guids, &a.lane, (a.start, a.end))?;
-        crate::studio::request_resync();
+        crate::song_model::request_resync();
         crate::actions::list().changed("lanes", "a lane was comped onto the comp");
         Ok(SwipeOut { tracks })
     })?;

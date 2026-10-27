@@ -672,6 +672,39 @@ pub fn sound(project_guid: &str) {
     }
 }
 
+/// Hand the set's audio from song `from` to song `to` on one frame: `to`
+/// starts from its beginning at the moment `from` reaches `from_end`
+/// seconds, and `from` stops there (`SetAudio::play_after`). The moment,
+/// sync clock µs.
+///
+/// # Errors
+///
+/// No audio engine is open, either song is not a voice of it, or `from`
+/// is not playing or already past `from_end`.
+pub fn play_after(from: &str, to: &str, from_end: f64) -> Result<f64, String> {
+    let slot = AUDIO
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let audio = slot.as_ref().ok_or("no audio engine is open")?;
+    audio
+        .play_after(from, to, from_end)
+        .map_err(|e| e.to_string())
+}
+
+/// Call off a hand-over [`play_after`] scheduled that has not landed (a
+/// stop before the moment): `to` does not start by itself.
+///
+/// # Errors
+///
+/// No audio engine is open, or either song is not a voice of it.
+pub fn call_off_handoff(from: &str, to: &str) -> Result<(), String> {
+    let slot = AUDIO
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let audio = slot.as_ref().ok_or("no audio engine is open")?;
+    audio.call_off(from, to).map_err(|e| e.to_string())
+}
+
 /// The set's engine opened again: how a change to how it renders (the
 /// render ahead) is taken up. Every song stays a voice; the current one
 /// stays current. Nothing open, nothing to do.

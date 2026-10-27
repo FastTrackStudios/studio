@@ -1792,3 +1792,86 @@ pub const fn f64_to_f32(value: f64) -> f32 {
 fn fill(scene: &mut Scene, color: Color, rect: Rect) {
     scene.fill(Fill::NonZero, Affine::IDENTITY, color, None, &rect);
 }
+
+/// What a gesture on a control means for the engine.
+///
+/// Returns `None` where the control has no engine-side effect yet — the
+/// FX pill opens a chain nothing hosts, and routing opens a matrix that
+/// does not exist. They are hit-testable and will mean something; they
+/// do not mean anything now, and inventing an edit for them would be
+/// worse than doing nothing.
+#[must_use]
+pub fn click(
+    control: Control,
+    guid: &str,
+    from: &daw_proto::Track,
+    add: bool,
+) -> Option<crate::engine::Edit> {
+    let guid = guid.to_owned();
+    match control {
+        Control::Mute => Some(crate::engine::Edit::ToggleMute(guid)),
+        Control::Solo => Some(crate::engine::Edit::ToggleSolo(guid)),
+        Control::RecArm => Some(crate::engine::Edit::ToggleArm(guid)),
+        // Clicking the name selects the track; DOUBLE-clicking renames
+        // it, which is a different gesture and a different edit.
+        Control::Name => Some(if add {
+            crate::engine::Edit::AddToSelection(guid)
+        } else {
+            crate::engine::Edit::Select(guid)
+        }),
+        // The routing widget opens the panel, which is the window's
+        // and not an edit at all — see `crate::routing`. The parent
+        // send it used to toggle is the panel's first row, where it
+        // sits beside the sends it shares a button with.
+        Control::Routing => None,
+        // The FX button opens a chain window, and there is no chain and
+        // no window — see `tone::placeholder` and `bin/chain-probe`.
+        // Binding it to something else would be a button that does the
+        // wrong thing rather than one that waits.
+        Control::Volume | Control::Pan | Control::Fx => None,
+        // Clearing a clip changes nothing about the track — it is the
+        // window forgetting something, not the engine being told
+        // something. Handled where the latch lives.
+        Control::Clip => None,
+        // Folding is the window's: it changes which strips exist, not
+        // what any track is — see the window's fold.
+        Control::Folder => None,
+        // The lamp is only drawn on an armed track, and what is not
+        // drawn is not clicked.
+        Control::Monitor => from
+            .armed
+            .then(|| crate::engine::Edit::SetInputMonitor(guid, crate::engine::next_monitor(from.input_monitor))),
+    }
+}
+
+/// What a drag on a control means, given how far it moved.
+///
+/// `fraction` is the drag as a share of the control's travel, already
+/// signed so that up is more — see `gesture::drag_fraction`.
+#[must_use]
+pub fn drag(
+    control: Control,
+    guid: &str,
+    from: &daw_proto::Track,
+    fraction: f64,
+) -> Option<crate::engine::Edit> {
+    match control {
+        Control::Volume => {
+            // Through the fader's own taper, so dragging a third of the
+            // way up moves it a third of the way up the SCALE rather
+            // than a third of the way up the gain — which at the top of
+            // a fader is most of its range and at the bottom is none.
+            let at = daw_ui::art::paint::tcp::gain_norm(from.volume);
+            let to = (at + fraction).clamp(0.0, 1.0);
+            let db = daw_ui::art::paint::tcp::fader_db(to);
+            Some(crate::engine::Edit::SetVolume(guid.to_owned(), crate::engine::db_to_gain(db)))
+        }
+        Control::Pan => {
+            // Pan is linear and two-sided, so the same drag is worth
+            // twice as much of its range as it is of a fader's.
+            let to = (from.pan + fraction * 2.0).clamp(-1.0, 1.0);
+            Some(crate::engine::Edit::SetPan(guid.to_owned(), to))
+        }
+        _ => None,
+    }
+}

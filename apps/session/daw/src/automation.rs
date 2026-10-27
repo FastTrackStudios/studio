@@ -984,3 +984,20 @@ pub fn without_point(points: &[EnvelopePoint], index: usize) -> Vec<EnvelopePoin
         })
         .collect()
 }
+
+/// Show or hide `track`'s items' volume curves on them.
+#[cfg(feature = "native")]
+pub fn show_takes(
+    daw: &daw::standalone::Standalone,
+    project: &daw::service::ProjectContext,
+    track: &str,
+    shown: bool,
+) {
+    let _ = daw::service::Tracks::set_ext_state(
+        daw,
+        project.clone(),
+        daw::service::TrackRef::Guid(track.to_owned()),
+        crate::automation::TAKE_LINES_KEY,
+        if shown { "1" } else { "" },
+    );
+}

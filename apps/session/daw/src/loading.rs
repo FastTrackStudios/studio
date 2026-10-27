@@ -5,20 +5,7 @@
 
 use dioxus::prelude::*;
 
-/// Where opening a set has got to: what its loading screen says.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Progress {
-    /// Reaching Task and joining the set — `retry` says why the last try
-    /// failed, while it keeps trying.
-    Joining { retry: Option<String> },
-    /// Bringing the first song's files in.
-    Fetching {
-        title: String,
-        retry: Option<String>,
-    },
-    /// Opening it into the engine.
-    Opening { title: String },
-}
+pub use crate::open_progress::Progress;
 
 /// Session's mark (the site's favicon), as an image source that needs no
 /// server: a page and a window draw it the same.

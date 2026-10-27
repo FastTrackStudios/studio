@@ -159,7 +159,7 @@ pub fn keyed(bindings: Vec<(Vec<KeyChord>, Action)>) -> HashMap<&'static str, Sh
     let mut shortest: HashMap<&'static str, Shortcut> = HashMap::new();
     for (id, shortcut) in bindings.into_iter().filter_map(|(chords, action)| {
         Some((
-            crate::actions::plain_id(&action)?,
+            crate::window::plain_id(&action)?,
             Shortcut::of_chords(&chords)?,
         ))
     }) {

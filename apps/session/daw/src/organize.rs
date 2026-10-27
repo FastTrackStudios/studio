@@ -16,7 +16,7 @@
 //!
 //! The actions read the ENGINE's cursor and selection, and the arrangement
 //! keeps its own, so each press hands the arrangement's over first
-//! ([`crate::cursor::current`]). Then the guide is regenerated — its cues
+//! ([`crate::edit_state::current`]). Then the guide is regenerated — its cues
 //! follow the sections — and the arrangement reads the session back.
 //!
 //! In Remote and Cue (`crate::audio_mode`) the same press goes through
@@ -27,17 +27,10 @@
 //! the guide by `FTS_SESSION_GUIDE_GENERATE_GUIDE_TRACKS`.
 
 use dioxus::prelude::*;
-use session::section_kinds::{KeyflowAction, MarkerKind, SectionKind};
+use session::section_kinds::{MarkerKind, SectionKind};
 
+pub use crate::organize_edit::{Button, engine_edit, insert};
 use crate::shell::{DIM, RULE, TEXT};
-
-/// One button of the toolbar — what [`insert`] puts on the timeline.
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum Button {
-    Marker(MarkerKind),
-    Section(SectionKind),
-    TimeSig(i32, i32),
-}
 
 /// The structure buttons, as the REAPER toolbar has them.
 const STRUCTURE: [(Button, &str); 12] = [
@@ -54,28 +47,6 @@ const STRUCTURE: [(Button, &str); 12] = [
     (Button::Marker(MarkerKind::SongEnd), "SONGEND"),
     (Button::Marker(MarkerKind::End), "=END"),
 ];
-
-impl Button {
-    fn color(self) -> String {
-        match self {
-            Self::Marker(kind) => kind.css_color(),
-            Self::Section(kind) => kind.css_color(),
-            Self::TimeSig(..) => DIM.to_owned(),
-        }
-    }
-
-    fn title(self) -> String {
-        match self {
-            Self::Marker(kind) => format!("Insert a {kind:?} marker at the edit cursor"),
-            Self::Section(kind) => format!(
-                "Insert a {kind:?} region over the time selection — or, with none, its default length from the edit cursor"
-            ),
-            Self::TimeSig(num, den) => format!(
-                "Insert {num}/{den} at the measure under the edit cursor — Shift: for that one measure only"
-            ),
-        }
-    }
-}
 
 /// The toolbar: the structure, a gap, the time signatures.
 #[component]
@@ -101,10 +72,10 @@ pub fn OrganizeToolbar() -> Element {
 
 #[component]
 fn ToolButton(button: Button, label: String) -> Element {
-    let color = button.color();
+    let color = color(button);
     rsx! {
         button {
-            title: button.title(),
+            title: title(button),
             style: "flex:none; height:24px; padding:0 9px; border-radius:5px; border:1px solid {RULE}; \
                     border-left:3px solid {color}; background:#1c1e22; color:{TEXT}; \
                     font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap;",
@@ -118,131 +89,11 @@ fn ToolButton(button: Button, label: String) -> Element {
 /// and selection, then bring the guide and the arrangement up to date.
 fn press(button: Button, shift: bool) {
     if let Some(daw) = crate::open::local_engine() {
-        insert(daw, button, shift, crate::cursor::current());
+        insert(daw, button, shift, crate::edit_state::current());
     } else if let Err(e) = press_remote(button, shift) {
         tracing::warn!(error = %e, ?button, "organize: the remote refused the insert");
     }
-    crate::studio::request_resync();
-}
-
-/// Insert `button`'s marker, section or time signature, then bring the
-/// guide up to date.
-///
-/// On the engine's current song at `edit` (the edit cursor and time selection, handed to
-/// the engine first; the engine's own when `None`), then bring the guide
-/// up to date — the toolbar's press, and `SECTION_INSERT` /
-/// `MARKER_INSERT` on the Action List, one path.
-///
-/// A section past the song's end moves SONGEND out to it, so the guide
-/// runs over it. The engine's cursor and selection afterwards (a section
-/// moves the cursor to its end and uses up the selection) go back to the
-/// arrangement.
-pub fn insert(
-    daw: &daw::standalone::Standalone,
-    button: Button,
-    shift: bool,
-    edit: Option<crate::cursor::Edit>,
-) {
-    use daw::service::ProjectContext;
-    use daw::service::transport::service::Transport as _;
-    let project = ProjectContext::Current;
-    if let Some(edit) = edit {
-        let handed = match edit.selection {
-            Some(span) => daw.set_time_selection(project.clone(), span.start, span.end),
-            None => daw.clear_time_selection(project.clone()),
-        };
-        if let Err(e) = handed.and_then(|()| daw.set_position(project.clone(), edit.at)) {
-            tracing::warn!(error = %e, "organize: the edit cursor could not be handed to the engine");
-        }
-    }
-    match button {
-        Button::Marker(kind) => {
-            session::keyflow::actions::dispatch(daw, KeyflowAction::InsertMarker(kind));
-        }
-        Button::Section(kind) => {
-            session::keyflow::actions::dispatch(daw, KeyflowAction::InsertSection(kind));
-            reach_song_end(daw, &project);
-        }
-        Button::TimeSig(num, den) => {
-            if let Err(e) =
-                session::keyflow::time_signature::insert_time_signature(daw, num, den, shift)
-            {
-                tracing::warn!(error = %e, num, den, "organize: the time signature was refused");
-            }
-        }
-    }
-    crate::cursor::ask(engine_edit(daw, &project));
-    // The cues follow the sections; the click follows the meter.
-    if let Err(e) = session::guide::Guide::new(daw.clone())
-        .with_instrument(crate::prepare::GUIDE_INSTRUMENT)
-        .generate(session::guide::GuideScope::All)
-    {
-        tracing::debug!(error = %e, "organize: no guide to regenerate yet");
-    }
-}
-
-/// The engine's edit cursor and time selection on `project`, as the
-/// arrangement keeps them.
-#[must_use]
-pub fn engine_edit(
-    daw: &daw::standalone::Standalone,
-    project: &daw::service::ProjectContext,
-) -> crate::cursor::Edit {
-    use daw::service::transport::service::Transport as _;
-    let at = daw
-        .get_state(project.clone())
-        .edit_position
-        .time
-        .map_or_else(
-            || daw.get_position(project.clone()),
-            |position| position.as_seconds(),
-        );
-    let selection = daw
-        .get_time_selection(project.clone())
-        .map(|span| crate::cursor::Span::between(span.start_seconds, span.end_seconds))
-        .filter(|span| span.is_meaningful());
-    crate::cursor::Edit { at, selection }
-}
-
-/// The song's end moved out to its last section's, when a section now
-/// runs past it: SONGEND, the `=END` after it and the SONG region. The
-/// guide is laid over the song to SONGEND, so a section inserted after it
-/// would otherwise have no click.
-fn reach_song_end(daw: &daw::standalone::Standalone, project: &daw::service::ProjectContext) {
-    use daw::service::{Markers, Regions};
-    let song_lane = session::ruler_lanes::CoreLane::Song.lane_index();
-    let last = crate::actions::sections(daw, project)
-        .iter()
-        .map(|s| s.end)
-        .fold(0.0_f64, f64::max);
-    let short = |at: f64| at < last - 1e-6;
-    for marker in Markers::all(daw, project.clone()) {
-        let (Some(id), Some(at)) = (marker.id, marker.position.seconds()) else {
-            continue;
-        };
-        let name = marker.name.trim();
-        if (name.eq_ignore_ascii_case("SONGEND") || name == "=END")
-            && short(at)
-            && let Err(e) = Markers::set_position(daw, project.clone(), id, last)
-        {
-            tracing::warn!(error = %e, marker = name, "organize: the song's end did not move");
-        }
-    }
-    for region in Regions::all(daw, project.clone()) {
-        let (Some(id), Some(lane)) = (region.id, region.lane) else {
-            continue;
-        };
-        let (start, end) = (
-            region.time_range.start_seconds(),
-            region.time_range.end_seconds(),
-        );
-        if lane == song_lane
-            && short(end)
-            && let Err(e) = Regions::set_bounds(daw, project.clone(), id, start, last)
-        {
-            tracing::warn!(error = %e, "organize: the SONG region did not grow");
-        }
-    }
+    crate::song_model::request_resync();
 }
 
 /// The session's guide action as REAPER knows it
@@ -288,7 +139,7 @@ fn command_id(button: Button) -> Option<&'static str> {
 /// The press, through the facade, on the system this window drives.
 fn press_remote(button: Button, shift: bool) -> eyre::Result<()> {
     let daw = daw::rpc::Daw::try_get().ok_or_else(|| eyre::eyre!("the daw facade is not up"))?;
-    let edit = crate::cursor::current();
+    let edit = crate::edit_state::current();
     crate::open::block_on_engine(async move {
         let project = daw.current_project().await?;
         let transport = project.transport();
@@ -382,4 +233,25 @@ async fn upsert_signature_remote(
     };
     tempo.set_time_signature_at(index, num, den).await?;
     Ok(())
+}
+
+/// The button's colour on the toolbar.
+fn color(button: Button) -> String {
+    match button {
+        Button::Marker(kind) => kind.css_color(),
+        Button::Section(kind) => kind.css_color(),
+        Button::TimeSig(..) => DIM.to_owned(),
+    }
+}
+
+fn title(button: Button) -> String {
+    match button {
+        Button::Marker(kind) => format!("Insert a {kind:?} marker at the edit cursor"),
+        Button::Section(kind) => format!(
+            "Insert a {kind:?} region over the time selection — or, with none, its default length from the edit cursor"
+        ),
+        Button::TimeSig(num, den) => format!(
+            "Insert {num}/{den} at the measure under the edit cursor — Shift: for that one measure only"
+        ),
+    }
 }

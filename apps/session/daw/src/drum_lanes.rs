@@ -108,7 +108,7 @@ pub fn set_up(
             .map_err(fail)?;
     }
     if !dry && !said.is_empty() {
-        crate::studio::request_resync();
+        crate::song_model::request_resync();
         crate::actions::list().changed("drums.lanes", "the kit's lanes were set up");
     }
     Ok(said)
@@ -220,7 +220,7 @@ pub fn reset_edit(
             None,
         );
         if !said.is_empty() {
-            crate::studio::request_resync();
+            crate::song_model::request_resync();
             crate::actions::list().changed("drums.lanes", "the kit's edit was started over");
         }
     }
@@ -354,7 +354,7 @@ pub fn play(
             "no drum track has a lane named {name} — DRUMS_EDIT_LANES makes {COMP} and {EDIT}"
         ));
     }
-    crate::studio::request_resync();
+    crate::song_model::request_resync();
     crate::actions::list().changed("drums.lanes", "the kit plays another lane");
     Ok(played)
 }

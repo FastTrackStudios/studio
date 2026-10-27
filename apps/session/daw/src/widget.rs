@@ -418,6 +418,10 @@ pub struct Drawn {
 
 /// The arrangement, as a widget.
 pub struct ArrangementWidget {
+    /// This arrangement attached to the engine as a window, for as long as
+    /// it is up: the window actions run and the engine's changes reach it
+    /// (`crate::window::attach`).
+    _attached: crate::window_queue::Attached,
     /// The tool the panel holds and the pointer's shape — see
     /// [`crate::tool`].
     pointing: crate::tool::Shared,
@@ -456,7 +460,7 @@ pub struct ArrangementWidget {
     /// (with the visibility this window has changed since): what a track
     /// shown or hidden re-plans from. `None` in a widget built without
     /// one, which then cannot show or hide anything.
-    replan: Option<(crate::studio::Planner, Left)>,
+    replan: Option<(crate::song_model::Planner, Left)>,
     /// A page's session read back from the engine, waiting to be drawn
     /// ([`Self::resync`]).
     #[cfg(not(feature = "native"))]
@@ -780,6 +784,7 @@ impl ArrangementWidget {
         let at_rest = view.borrow().zoom_y;
         let map = crate::plan::Rows::of(&rows, &tracks);
         Self {
+            _attached: crate::window::attach(),
             pointing: crate::tool::Pointing::shared(None),
             which: crate::which_key::Shared::default(),
             zooms: crate::zoom::Requests::default(),
@@ -1613,7 +1618,7 @@ impl ArrangementWidget {
     #[must_use]
     pub fn with_planner(
         mut self,
-        planner: crate::studio::Planner,
+        planner: crate::song_model::Planner,
         content_h: Rc<std::cell::Cell<f64>>,
     ) -> Self {
         let raw = song_as_left(&planner);
@@ -2611,8 +2616,8 @@ impl ArrangementWidget {
     /// items read again in place, the rest of the song kept as the window
     /// holds it — else the whole song ([`Self::resync`]).
     #[cfg(feature = "native")]
-    fn resync_as(&mut self, scope: crate::studio::Resync) {
-        if matches!(scope, crate::studio::Resync::All) {
+    fn resync_as(&mut self, scope: crate::song_model::Resync) {
+        if matches!(scope, crate::song_model::Resync::All) {
             self.resync();
             return;
         }
@@ -2623,7 +2628,7 @@ impl ArrangementWidget {
         let patched = self
             .replan
             .as_ref()
-            .and_then(|(_, raw)| crate::studio::patch_items(&mut raw.borrow_mut()));
+            .and_then(|(_, raw)| crate::song_model::patch_items(&mut raw.borrow_mut()));
         let Some(now) = patched else {
             drop(_entered);
             self.resync();
@@ -2676,7 +2681,7 @@ impl ArrangementWidget {
 
     /// [`Self::resync_as`] in a page: the whole song, always.
     #[cfg(not(feature = "native"))]
-    fn resync_as(&mut self, _scope: crate::studio::Resync) {
+    fn resync_as(&mut self, _scope: crate::song_model::Resync) {
         self.resync();
     }
 
@@ -2691,7 +2696,7 @@ impl ArrangementWidget {
         let span = tracing::info_span!("window.resync");
         let _entered = span.enter();
         let mut stages = crate::stages::Stages::start();
-        let Some(fresh) = crate::studio::fetch() else {
+        let Some(fresh) = crate::song_model::fetch() else {
             tracing::warn!("the session could not be read back from the engine");
             return;
         };
@@ -2808,7 +2813,7 @@ impl ArrangementWidget {
     }
 
     /// The mixer's strips, with the generation bumped: the scene's own
-    /// for the mixer ([`crate::studio::Planner::plan_strips`]) — not this
+    /// for the mixer ([`crate::song_model::Planner::plan_strips`]) — not this
     /// panel's rows, since a scene hides and folds per surface — each a
     /// track as this panel has it where it shows one. With no planner,
     /// this panel's rows.
@@ -3629,7 +3634,7 @@ impl ArrangementWidget {
         // runs there, and comes back here to be done — the path a model's
         // action takes too.
         #[cfg(feature = "native")]
-        let actions = crate::actions::through_list(actions);
+        let actions = crate::window::through_list(actions);
         self.apply_actions(actions)
     }
 
@@ -4055,7 +4060,7 @@ impl ArrangementWidget {
         let dy = y - turn.from;
         let dy = if fine { dy * crate::gesture::FINE } else { dy };
         let fraction = crate::gesture::drag_fraction(dy, KNOB_TRAVEL);
-        let Some(edit) = crate::engine::drag(control, &turn.was.guid, &turn.was, fraction) else {
+        let Some(edit) = crate::mcp::drag(control, &turn.was.guid, &turn.was, fraction) else {
             return;
         };
         self.assume(&edit);
@@ -4172,7 +4177,7 @@ thread_local! {
 /// Mix mode muting the guide. `f` says what changed (`Some`), and an
 /// arrangement showing the song plans its rows again; `None`, nothing did.
 pub(crate) fn edit_song<R>(
-    planner: &crate::studio::Planner,
+    planner: &crate::song_model::Planner,
     f: impl FnOnce(&mut daw_ui::studio::project::Project) -> Option<R>,
 ) -> Option<R> {
     let raw = song_as_left(planner);
@@ -4184,7 +4189,7 @@ pub(crate) fn edit_song<R>(
 }
 
 /// `planner`'s song as its arrangement left it, kept from now on.
-fn song_as_left(planner: &crate::studio::Planner) -> Left {
+fn song_as_left(planner: &crate::song_model::Planner) -> Left {
     LEFT.with(|all| {
         let mut all = all.borrow_mut();
         all.retain(|(song, _)| song.strong_count() > 0);
@@ -4208,7 +4213,7 @@ fn song_as_left(planner: &crate::studio::Planner) -> Left {
 /// are those.
 #[must_use]
 pub fn rows_as_left(
-    planner: &crate::studio::Planner,
+    planner: &crate::song_model::Planner,
 ) -> Option<(daw_ui::studio::ProjectRef, daw_ui::studio::RowsRef)> {
     let raw = LEFT.with(|all| {
         all.borrow()
@@ -4308,7 +4313,7 @@ fn unread_audio(
 /// Whether the window has actions waiting from the Action List.
 #[cfg(feature = "native")]
 fn window_queued() -> bool {
-    crate::actions::window_pending()
+    crate::window_queue::window_pending()
 }
 
 /// No Action List without the engine: nothing ever waits.
@@ -4340,7 +4345,7 @@ impl Widget for ArrangementWidget {
             || streams_changed(&self.streams_seen)
             || self.view_drawn.get() != Self::framing(&self.view.borrow())
             || self.stage_ready()
-            || crate::studio::resync_pending()
+            || crate::song_model::resync_pending()
             || self
                 .notice
                 .as_ref()
@@ -4662,14 +4667,14 @@ impl ArrangementWidget {
         // What was run on the Action List for the window, from elsewhere
         // than a key (a model, a menu): done before the picture is.
         #[cfg(feature = "native")]
-        if crate::actions::window_pending() {
+        if crate::window_queue::window_pending() {
             // What the engine changed first (a lane set up from the Action
             // List): an action carried out on the session as it was would
             // edit takes that are no longer there.
-            if let Some(scope) = crate::studio::take_resync_scope() {
+            if let Some(scope) = crate::song_model::take_resync_scope() {
                 self.resync_as(scope);
             }
-            let _ = self.apply_actions(crate::actions::take_window());
+            let _ = self.apply_actions(crate::window_queue::take_window());
         }
         self.marks_seen.set(crate::marks_strip::version());
         self.poi_seen.set(crate::poi::version());
@@ -5450,7 +5455,7 @@ impl ArrangementWidget {
         crate::ghosts::local_shown(&self.rows, &self.scene);
         // The engine changed the session under us (a toolbar insert, an
         // edited chart): read it back before drawing it.
-        if let Some(scope) = crate::studio::take_resync_scope() {
+        if let Some(scope) = crate::song_model::take_resync_scope() {
             self.resync_as(scope);
         }
         // A page's read-back, once it has arrived.
@@ -5789,7 +5794,7 @@ impl ArrangementWidget {
             None => crate::marks_strip::refresh(),
         }
         // The places marked to check, over the lane.
-        crate::poi::paint(&mut out, (&self.palette, &self.font), view, (0.0, 0.0));
+        crate::poi_paint::paint(&mut out, (&self.palette, &self.font), view, (0.0, 0.0));
         ruler::chord_lane(
             &mut out,
             &self.palette,

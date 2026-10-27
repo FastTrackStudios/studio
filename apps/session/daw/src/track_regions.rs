@@ -209,7 +209,7 @@ pub fn write(
     )
     .map_err(|e| e.to_string())?;
     changed();
-    crate::marks_strip::refresh();
+    crate::changes::announce(crate::changes::Change::Marks);
     #[cfg(feature = "native")]
     crate::actions::list().changed("tracks.marks", track);
     Ok(())

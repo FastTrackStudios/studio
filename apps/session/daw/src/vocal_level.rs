@@ -902,7 +902,7 @@ fn dial(a: &DialArg) -> Result<Vec<LevelerState>, String> {
             show_lane(daw, &project, &track.guid, shown);
         }
     }
-    crate::studio::request_resync();
+    crate::song_model::request_resync();
     Ok(tracks.iter().map(|t| state_of(daw, &project, t)).collect())
 }
 
@@ -975,7 +975,7 @@ pub(crate) fn register(
                 .collect();
             if !dry {
                 daw::service::Projects::end_undo_block(daw, project, label, None);
-                crate::studio::request_resync();
+                crate::song_model::request_resync();
             }
             Ok(out)
         },

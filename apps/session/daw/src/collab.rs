@@ -576,7 +576,7 @@ pub fn set_shared_transport(shared: bool) {
     };
     let local = local_transport(&l.songs);
     let Ok(mut sync) = l.sync.lock() else { return };
-    let entry = sync.set_mode(mode, &local, crate::ghosts::now_ms());
+    let entry = sync.set_mode(mode, &local, crate::presence::now_ms());
     l.status.shared_transport = shared;
     l.presence.set(transport::KEY, entry.encode());
 }
@@ -589,7 +589,7 @@ pub fn transport_pressed() {
     if let Some(l) = live.as_ref()
         && let Ok(mut sync) = l.sync.lock()
     {
-        sync.pressed(crate::ghosts::now_ms());
+        sync.pressed(crate::presence::now_ms());
     }
 }
 
@@ -640,8 +640,8 @@ pub fn leave() {
             HashMap::new()
         }
     });
-    crate::ghosts::publish(None, 0.0, false);
-    crate::ghosts::publish_everyone(Vec::new());
+    crate::presence::publish(None, 0.0, false);
+    crate::presence::publish_everyone(Vec::new());
     #[cfg(feature = "native")]
     if let Some(docs) = docs
         && !docs.is_empty()
@@ -833,7 +833,7 @@ fn join_inner(ticket: &str, name: String) -> eyre::Result<()> {
                 bridge,
             ));
         }
-        crate::studio::request_resync();
+        crate::song_model::request_resync();
         let me = format!("peer-{}", &endpoint.id().to_string()[..8]);
         let started = start(
             bridges,
@@ -1106,7 +1106,7 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
             }
         }
     }
-    crate::studio::request_resync();
+    crate::song_model::request_resync();
     let me = format!("peer-{}", &Uuid::new_v4().simple().to_string()[..8]);
     tracing::info!(
         collab.setlist = %joined.setlist,
@@ -1602,7 +1602,7 @@ fn start(
                             Ok(changes) => {
                                 note_remote_chart(&changes, song, &remote_chart);
                                 if !changes.is_empty() && showing.as_deref() == Some(song.project.as_str()) {
-                                    crate::studio::request_resync();
+                                    crate::song_model::request_resync();
                                 }
                             }
                             Err(e) => tracing::warn!(collab.error = %e, "collab: what the lock held did not merge"),
@@ -1637,7 +1637,7 @@ fn start(
                     }
                     songs.push(song);
                     bridges.push(bridge);
-                    crate::studio::request_resync();
+                    crate::song_model::request_resync();
                 }
                 Some(first) = local_rx.recv() => {
                     // Let a burst (a drag, a rebuild) settle into one read
@@ -1676,7 +1676,7 @@ fn start(
                             Ok(changes) if !changes.is_empty() => {
                                 note_remote_chart(&changes, song, &remote_chart);
                                 if showing.as_deref() == Some(song.project.as_str()) {
-                                    crate::studio::request_resync();
+                                    crate::song_model::request_resync();
                                 }
                             }
                             Ok(_) => {}
@@ -1687,7 +1687,7 @@ fn start(
                 }
                 () = architect::platform::sleep(next_tick.saturating_duration_since(architect::platform::now())) => {
                     next_tick = architect::platform::now() + TICK;
-                    let now = crate::ghosts::now_ms();
+                    let now = crate::presence::now_ms();
                     let here = key_of(&songs, crate::open::current_song());
                     out.publish(presence.as_ref(), now, here.clone());
                     // Everyone else, into the roster.
@@ -1705,14 +1705,14 @@ fn start(
                     // on the song it shows.
                     // (By this machine's project for the song: the tabs
                     // know their songs by it.)
-                    crate::ghosts::publish_everyone(
+                    crate::presence::publish_everyone(
                         roster
                             .peers
                             .values()
                             .filter_map(|p| p.state.as_ref())
                             .filter_map(|s| {
                                 let song = songs.iter().find(|x| s.song.as_ref() == Some(&x.key))?;
-                                Some(crate::ghosts::Person {
+                                Some(crate::presence::Person {
                                     project: song.project.clone(),
                                     song: song.key.clone(),
                                     name: s.name.clone(),
@@ -1751,7 +1751,7 @@ fn start(
                         }
                         obey(command, &songs);
                     }
-                    crate::ghosts::publish(Some(on_this_song), 0.0, current == TransportMode::Independent);
+                    crate::presence::publish(Some(on_this_song), 0.0, current == TransportMode::Independent);
                     if let Ok(mut live) = LIVE.lock()
                         && let Some(l) = live.as_mut()
                     {
@@ -1951,8 +1951,8 @@ impl Outbox {
             self.puppet(sink, now, song);
             return;
         }
-        let local = crate::ghosts::local();
-        let edit = crate::cursor::current();
+        let local = crate::presence::local();
+        let edit = crate::edit_state::current();
         let state = PeerState {
             name: self.name.clone(),
             color: self.color,
@@ -1963,7 +1963,7 @@ impl Outbox {
             selected_tracks: local.selected_tracks,
             selected_items: local.selected_items,
             #[cfg(feature = "native")]
-            chart_caret: crate::chart_editor::local_caret(),
+            chart_caret: crate::presence::local_caret(),
             #[cfg(not(feature = "native"))]
             chart_caret: None,
         };
@@ -2020,7 +2020,7 @@ impl Outbox {
     fn puppet(&mut self, sink: &dyn PresenceSink, now: f64, song: Option<String>) {
         let t = (now / 1000.0) % 8.0;
         let at = 4.0 + t * 7.0;
-        let tracks: Vec<String> = crate::ghosts::local_rows();
+        let tracks: Vec<String> = crate::presence::local_rows();
         let track = tracks.get((t as usize / 2) % tracks.len().max(1)).cloned();
         if self.state.is_none() {
             let state = PeerState {
@@ -2031,7 +2031,7 @@ impl Outbox {
                 edit_cursor: Some(24.0),
                 time_selection: Some((32.0, 48.0)),
                 selected_tracks: tracks.iter().take(1).cloned().collect(),
-                selected_items: crate::ghosts::local_item_guids()
+                selected_items: crate::presence::local_item_guids()
                     .into_iter()
                     .take(2)
                     .collect(),
@@ -2090,7 +2090,7 @@ impl Outbox {
                 }
             }
             if let Some(guid) = tracks.iter().find(|g| {
-                crate::ghosts::local_track_name(g).is_some_and(|n| n.starts_with("Drums"))
+                crate::presence::local_track_name(g).is_some_and(|n| n.starts_with("Drums"))
             }) {
                 let guid = guid.clone();
                 architect::platform::spawn(async move {

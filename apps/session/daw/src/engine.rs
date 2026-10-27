@@ -626,57 +626,6 @@ impl Queue {
     }
 }
 
-/// What a gesture on a control means for the engine.
-///
-/// Returns `None` where the control has no engine-side effect yet — the
-/// FX pill opens a chain nothing hosts, and routing opens a matrix that
-/// does not exist. They are hit-testable and will mean something; they
-/// do not mean anything now, and inventing an edit for them would be
-/// worse than doing nothing.
-#[must_use]
-pub fn click(
-    control: crate::mcp::Control,
-    guid: &str,
-    from: &daw_proto::Track,
-    add: bool,
-) -> Option<Edit> {
-    let guid = guid.to_owned();
-    match control {
-        crate::mcp::Control::Mute => Some(Edit::ToggleMute(guid)),
-        crate::mcp::Control::Solo => Some(Edit::ToggleSolo(guid)),
-        crate::mcp::Control::RecArm => Some(Edit::ToggleArm(guid)),
-        // Clicking the name selects the track; DOUBLE-clicking renames
-        // it, which is a different gesture and a different edit.
-        crate::mcp::Control::Name => Some(if add {
-            Edit::AddToSelection(guid)
-        } else {
-            Edit::Select(guid)
-        }),
-        // The routing widget opens the panel, which is the window's
-        // and not an edit at all — see `crate::routing`. The parent
-        // send it used to toggle is the panel's first row, where it
-        // sits beside the sends it shares a button with.
-        crate::mcp::Control::Routing => None,
-        // The FX button opens a chain window, and there is no chain and
-        // no window — see `tone::placeholder` and `bin/chain-probe`.
-        // Binding it to something else would be a button that does the
-        // wrong thing rather than one that waits.
-        crate::mcp::Control::Volume | crate::mcp::Control::Pan | crate::mcp::Control::Fx => None,
-        // Clearing a clip changes nothing about the track — it is the
-        // window forgetting something, not the engine being told
-        // something. Handled where the latch lives.
-        crate::mcp::Control::Clip => None,
-        // Folding is the window's: it changes which strips exist, not
-        // what any track is — see the window's fold.
-        crate::mcp::Control::Folder => None,
-        // The lamp is only drawn on an armed track, and what is not
-        // drawn is not clicked.
-        crate::mcp::Control::Monitor => from
-            .armed
-            .then(|| Edit::SetInputMonitor(guid, next_monitor(from.input_monitor))),
-    }
-}
-
 /// The monitoring mode a click moves to.
 ///
 /// Off → on → on-except-while-playing → off. REAPER's own order, and
@@ -690,38 +639,6 @@ pub const fn next_monitor(
         M::Off => M::Normal,
         M::Normal => M::NotWhenPlaying,
         M::NotWhenPlaying => M::Off,
-    }
-}
-
-/// What a drag on a control means, given how far it moved.
-///
-/// `fraction` is the drag as a share of the control's travel, already
-/// signed so that up is more — see `gesture::drag_fraction`.
-#[must_use]
-pub fn drag(
-    control: crate::mcp::Control,
-    guid: &str,
-    from: &daw_proto::Track,
-    fraction: f64,
-) -> Option<Edit> {
-    match control {
-        crate::mcp::Control::Volume => {
-            // Through the fader's own taper, so dragging a third of the
-            // way up moves it a third of the way up the SCALE rather
-            // than a third of the way up the gain — which at the top of
-            // a fader is most of its range and at the bottom is none.
-            let at = daw_ui::art::paint::tcp::gain_norm(from.volume);
-            let to = (at + fraction).clamp(0.0, 1.0);
-            let db = daw_ui::art::paint::tcp::fader_db(to);
-            Some(Edit::SetVolume(guid.to_owned(), db_to_gain(db)))
-        }
-        crate::mcp::Control::Pan => {
-            // Pan is linear and two-sided, so the same drag is worth
-            // twice as much of its range as it is of a fader's.
-            let to = (from.pan + fraction * 2.0).clamp(-1.0, 1.0);
-            Some(Edit::SetPan(guid.to_owned(), to))
-        }
-        _ => None,
     }
 }
 
@@ -1475,7 +1392,7 @@ async fn apply_automation(project: &daw_control::Project, edit: &Edit) {
             };
             // The window drew a stand-in: the engine's own, read back.
             #[cfg(feature = "native")]
-            crate::studio::request_resync();
+            crate::song_model::request_resync();
             outcome
         }
         Edit::SetAutomationItemBounds(_, target, index, (at, length, offset)) => {
@@ -1497,7 +1414,7 @@ async fn apply_automation(project: &daw_control::Project, edit: &Edit) {
                 .await;
             // The items after it are numbered again.
             #[cfg(feature = "native")]
-            crate::studio::request_resync();
+            crate::song_model::request_resync();
             outcome
         }
         Edit::ShowEnvelope(_, target, shown) => {
@@ -1566,7 +1483,7 @@ fn take_volume_locally(
         );
     }
     crate::midi::mark_stale([item.to_owned()]);
-    crate::studio::request_resync();
+    crate::song_model::request_resync();
 }
 
 /// The latest ticket handed out ([`ticket`]).

@@ -222,7 +222,7 @@ pub(crate) fn register(
         let (daw, project) = crate::actions::song()?;
         let guid = crate::actions::resolve(daw, &project, &a.track)?;
         let out = load(daw, &project, &guid, &a)?;
-        crate::studio::request_resync();
+        crate::song_model::request_resync();
         crate::actions::list().changed("signal.rig", "a signal rig was loaded");
         Ok(out)
     })?;

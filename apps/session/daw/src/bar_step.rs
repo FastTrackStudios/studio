@@ -257,7 +257,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         } else if let (Some(first), true, false) = (step.first, by != 0, a.bars.is_some()) {
             add_bars(page_of(first, step.bars), by.saturating_mul(step.bars))
         } else {
-            let at = crate::cursor::current()
+            let at = crate::edit_state::current()
                 .unwrap_or_else(|| crate::organize::engine_edit(daw, &project))
                 .at;
             let here = page_of(crate::song_bars::musical(daw, &project, at).0, step.bars);
@@ -280,7 +280,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         if !playing {
             daw::service::transport::service::Transport::set_position(daw, project, from)
                 .map_err(|e| e.to_string())?;
-            crate::cursor::ask(crate::cursor::Edit {
+            crate::edit_state::ask(crate::edit_state::Edit {
                 at: from,
                 selection: None,
             });
@@ -294,7 +294,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         }
         TURNING.store(false, std::sync::atomic::Ordering::Release);
         let us = |s: f64| num_traits::ToPrimitive::to_i64(&(s * 1_000_000.0).round()).unwrap_or(0);
-        crate::actions::queue(crate::keys::Action::Frame {
+        crate::window_queue::queue(crate::window_queue::Action::Frame {
             time: Some((us(shown.0), us(shown.1))),
             tracks,
         });

@@ -253,7 +253,7 @@ pub fn level(
     }
     if !dry {
         daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
-        crate::studio::request_resync();
+        crate::song_model::request_resync();
     }
     Ok(out)
 }

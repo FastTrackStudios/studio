@@ -7,7 +7,7 @@
 //! take on a fixed lane — the lowest take lane free over the recorded
 //! range, else a new one named with the next number; the newest take plays
 //! unless a comp lane holds something. The window reads the lanes back
-//! from the engine like any other edit (`crate::studio::request_resync`).
+//! from the engine like any other edit (`crate::song_model::request_resync`).
 //!
 //! The record button, the record key (`SESSION_TOGGLE_RECORD`, carried out
 //! by the window) and a model all come here: one path.
@@ -111,7 +111,7 @@ fn arm(a: &ArmArg) -> Result<ArmOut, String> {
     }
     Tracks::set_armed(daw, project.clone(), at(), on).map_err(failed)?;
     let now = Tracks::get(daw, project, at()).ok_or("the track went")?;
-    crate::studio::request_resync();
+    crate::song_model::request_resync();
     crate::actions::list().changed("tracks", &guid);
     Ok(ArmOut {
         track: now.name,
@@ -159,7 +159,7 @@ fn run(on: Option<bool>) -> Result<RecordOut, String> {
                 length: t.length,
             })
             .collect();
-        crate::studio::request_resync();
+        crate::song_model::request_resync();
         crate::actions::list().changed("lanes", "a recording pass placed its takes");
         return Ok(RecordOut {
             recording: false,

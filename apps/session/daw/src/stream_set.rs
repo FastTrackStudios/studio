@@ -22,7 +22,7 @@ use daw::standalone::audio_engine::materialize::playing_media;
 use daw::standalone::audio_engine::media_fetch::StreamedTake;
 
 use crate::collab::TaskSet;
-use crate::loading::Progress;
+use crate::open_progress::Progress;
 use crate::setlist::{Arrival, Opening, Setlist};
 use crate::song_stream::{FetchGuard, Keep, ShareSource, SongSource, StreamedSong, TaskSource};
 

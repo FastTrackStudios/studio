@@ -451,7 +451,7 @@ fn render_ops(
                 shape.position = daw_proto::PositionInSeconds::from_seconds(a + piece.shift);
                 shape.length = daw_proto::Duration::from_seconds(length);
                 shape.start_offset = daw_proto::Duration::from_seconds(offset);
-                if let Some(drawn) = crate::arrange_edit::draw_out_markers(&mut shape, reach) {
+                if let Some(drawn) = crate::stretch::draw_out_markers(&mut shape, reach) {
                     length = shape.length.as_seconds();
                     markers = drawn
                         .into_iter()

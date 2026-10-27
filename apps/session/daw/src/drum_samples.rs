@@ -130,7 +130,7 @@ pub fn set_up(
     if !dry {
         let measured = measure(daw, project, preset);
         report.tracks.extend(set_polarity(daw, project, &measured)?);
-        crate::studio::request_resync();
+        crate::song_model::request_resync();
         crate::actions::list().changed("drums.samples", "the kit's samples were set up");
     }
     Ok(report)

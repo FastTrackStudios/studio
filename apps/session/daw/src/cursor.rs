@@ -362,43 +362,7 @@ pub fn paint(
     }
 }
 
-/// The arrangement's edit cursor and time selection, as last drawn — for
-/// what acts on them from outside the arrangement (the Organize toolbar's
-/// inserts, which go through the engine and read ITS cursor and
-/// selection, so they are handed these first).
-static CURRENT: std::sync::Mutex<Option<Edit>> = std::sync::Mutex::new(None);
-
-/// Publish the arrangement's edit state (every frame it draws).
-pub fn publish(edit: Edit) {
-    if let Ok(mut slot) = CURRENT.lock() {
-        *slot = Some(edit);
-    }
-}
-
-/// The arrangement's edit state as last drawn, if it has drawn.
-#[must_use]
-pub fn current() -> Option<Edit> {
-    CURRENT.lock().ok().and_then(|slot| *slot)
-}
-
-/// An edit state asked for from outside the arrangement, until it takes
-/// it ([`take_asked`]).
-static ASKED: std::sync::Mutex<Option<Edit>> = std::sync::Mutex::new(None);
-
-/// Put the arrangement's edit cursor and time selection at `edit`.
-///
-/// What an action that sets them (`TIME_SELECTION_SET`, an insert that moves
-/// the cursor on) asks. It is [`current`] at once, and the arrangement
-/// takes it on its next frame.
-pub fn ask(edit: Edit) {
-    publish(edit);
-    if let Ok(mut slot) = ASKED.lock() {
-        *slot = Some(edit);
-    }
-}
-
-/// The edit state asked for since the arrangement last looked, once.
-#[must_use]
-pub fn take_asked() -> Option<Edit> {
-    ASKED.lock().ok().and_then(|mut slot| slot.take())
-}
+/// The edit cursor and time selection are engine state
+/// (`crate::edit_state`): the arrangement shows its own there as it draws
+/// ([`publish`]) and takes up what an action asked for ([`take_asked`]).
+pub use crate::edit_state::{ask, current, show as publish, take_asked};

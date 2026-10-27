@@ -110,7 +110,7 @@ pub fn create(audio: Option<bool>) -> Result<String, String> {
         .generate(session::guide::GuideScope::All)
         .map_err(|e| format!("the guide: {e}"))?;
     crate::actions::request_mode(session::modes::Mode::Organize);
-    crate::studio::request_resync();
+    crate::song_model::request_resync();
     crate::actions::list().changed("project", UNTITLED);
     tracing::info!(
         song.project = %opened.project_guid,
@@ -139,7 +139,7 @@ fn stamp(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Result<
     }
     daw.set_position(project.clone(), start)
         .map_err(|e| format!("the cursor would not move to SONGSTART: {e}"))?;
-    crate::cursor::ask(crate::cursor::Edit {
+    crate::edit_state::ask(crate::edit_state::Edit {
         at: start,
         selection: None,
     });
@@ -191,7 +191,7 @@ pub fn setlist(audio: Option<bool>) -> eyre::Result<crate::setlist::Setlist> {
 ///
 /// It could not be read back.
 pub fn setlist_of(guid: String) -> eyre::Result<crate::setlist::Setlist> {
-    let session = crate::studio::StudioSession::read_current(None, None)?;
+    let session = crate::song_model::StudioSession::read_current(None, None)?;
     Ok(crate::setlist::Setlist::of(vec![crate::setlist::Song::of(
         UNTITLED.to_owned(),
         guid,

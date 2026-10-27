@@ -11,13 +11,10 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use anyrender::PaintScene;
 #[cfg(feature = "native")]
 use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::ProjectContext;
 use facet::Facet;
-use vello::kurbo::{Affine, Rect};
-use vello::peniko::{Color, Fill};
 
 /// Where the list is kept: the song's ext state.
 const SECTION: &str = "fts";
@@ -95,7 +92,7 @@ pub fn version() -> u64 {
 }
 
 /// The list, once read; read off the window's thread the first time.
-fn shown() -> Option<Arc<Vec<Poi>>> {
+pub(crate) fn shown() -> Option<Arc<Vec<Poi>>> {
     let shown = SHOWN.lock().ok().and_then(|s| s.clone());
     if shown.is_none() && !ASKED.swap(true, Ordering::AcqRel) {
         refresh();
@@ -115,7 +112,7 @@ pub fn refresh() {
     }
 }
 
-fn current() -> Option<String> {
+pub(crate) fn current() -> Option<String> {
     CURRENT.lock().ok().and_then(|c| c.clone())
 }
 
@@ -137,8 +134,8 @@ fn at_of(
 ) -> Result<f64, String> {
     at.map_or_else(
         || {
-            Ok(crate::cursor::current()
-                .unwrap_or_else(|| crate::organize::engine_edit(daw, project))
+            Ok(crate::edit_state::current()
+                .unwrap_or_else(|| crate::organize_edit::engine_edit(daw, project))
                 .at)
         },
         |text| crate::track_regions::moment(daw, project, text),
@@ -197,6 +194,10 @@ static REMOVE: ActionMeta = crate::actions::meta(
 );
 /// Step to the next or the one before (`}` / `{`).
 #[cfg(feature = "native")]
+/// The window's bar step (`crate::bar_step::STEP_ACTION`), by id: the
+/// engine does not reach into the window's modules.
+const BAR_STEP: &str = "SESSION_STEP";
+
 pub static STEP: ActionMeta = crate::actions::meta(
     "POI_STEP",
     "poi_step",
@@ -358,12 +359,13 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         let point = step_from(&points, here, a.by.unwrap_or(1), a.open.unwrap_or(false))
             .ok_or("no point of interest that way")?
             .clone();
-        crate::actions::list()
-            .run_json(
-                crate::bar_step::STEP_ACTION.id,
-                format!(r#"{{"at":{}}}"#, point.at).as_bytes(),
-            )
-            .map_err(|e| e.to_string())?;
+        // The window pages its view to it, when one is attached (its bar
+        // step, `crate::bar_step`); headless there is no view to page.
+        if crate::window_queue::attached() {
+            crate::actions::list()
+                .run_json(BAR_STEP, format!(r#"{{"at":{}}}"#, point.at).as_bytes())
+                .map_err(|e| e.to_string())?;
+        }
         let playing = crate::engine::Transport::shared().is_some_and(|t| t.reading().playing);
         if !playing {
             daw::service::transport::service::Transport::set_position(
@@ -372,7 +374,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                 point.at,
             )
             .map_err(|e| e.to_string())?;
-            crate::cursor::ask(crate::cursor::Edit {
+            crate::edit_state::ask(crate::edit_state::Edit {
                 at: point.at,
                 selection: None,
             });
@@ -391,55 +393,4 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         Ok(out(daw, &project, &changed))
     })?;
     Ok(())
-}
-
-/// The points of interest in the ruler's MARKS lane: a flag at each, its
-/// note beside it — amber open, green done, ringed when stepped to.
-pub fn paint(
-    painter: &mut impl PaintScene,
-    (palette, font): (&crate::arrangement::Palette, &crate::text::Font),
-    view: crate::arrangement::Viewport,
-    origin: (f64, f64),
-) {
-    /// The notes' size, as the ruler's lanes write theirs.
-    const SIZE: f32 = 8.0;
-    const OPEN: Color = Color::from_rgba8(0xf5, 0x9e, 0x0b, 0xff);
-    const DONE: Color = Color::from_rgba8(0x34, 0xd3, 0x99, 0xff);
-    let Some(points) = shown() else {
-        return;
-    };
-    let row = crate::ruler::MARKS_ROW;
-    if !crate::ruler::lane_shown(row) {
-        return;
-    }
-    let (ox, oy) = origin;
-    let left = ox + view.panel_w;
-    let right = ox + view.width;
-    let y0 = oy + crate::ruler::row_top(row) + 1.0;
-    let y1 = y0 + crate::ruler::LANE_H - 2.0;
-    let current = current();
-    for p in points.iter() {
-        let x = p.at.mul_add(view.pps, left - view.scroll_x);
-        if x < left - 2.0 || x > right {
-            continue;
-        }
-        let color = if p.done { DONE } else { OPEN };
-        if current.as_deref() == Some(p.id.as_str()) {
-            painter.fill(
-                Fill::NonZero,
-                Affine::IDENTITY,
-                palette.text,
-                None,
-                &Rect::new(x - 3.5, y0 - 1.0, x + 3.5, y1 + 1.0),
-            );
-        }
-        painter.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            color,
-            None,
-            &Rect::new(x - 2.0, y0, x + 2.0, y1),
-        );
-        crate::tcp::glyphs(painter, font, color, &p.note, x + 5.0, y1 - 2.0, SIZE);
-    }
 }

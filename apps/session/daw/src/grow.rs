@@ -857,7 +857,7 @@ fn target(
 
 /// The window reads the tree back, and a watcher hears it changed.
 fn grew(said: &str) {
-    crate::studio::request_resync();
+    crate::song_model::request_resync();
     crate::actions::list().changed("tracks", said);
 }
 

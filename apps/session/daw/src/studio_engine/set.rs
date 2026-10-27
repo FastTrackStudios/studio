@@ -16,7 +16,7 @@
 //! drained into it as they arrive ([`install`]).
 //!
 //! Songs still carry the window's read-back of each project
-//! (`crate::studio::StudioSession`), made as they open: the window's model
+//! (`crate::song_model::StudioSession`), made as they open: the window's model
 //! cache moves to the window when it reads projects over the facade
 //! (`docs/design/engine-boundary.md`, step 5).
 
@@ -25,7 +25,7 @@ use std::sync::OnceLock;
 
 use tokio::sync::watch;
 
-use crate::loading::Progress;
+use crate::open_progress::Progress;
 use crate::setlist::{Arrival, Setlist};
 
 /// Where opening a set has got to.
@@ -272,6 +272,13 @@ pub fn subscribe() -> watch::Receiver<SetView> {
 #[must_use]
 pub fn view() -> SetView {
     cell().borrow().clone()
+}
+
+/// `f` with the set as it is now, without copying it — for a reader that
+/// looks often (Live mode's roll-on, [`super::live`]). Holds the set's lock
+/// while `f` runs: keep it short, and never change the set from it.
+pub fn peek<R>(f: impl FnOnce(&SetView) -> R) -> R {
+    f(&cell().borrow())
 }
 
 /// The set's lineup, when one is open.

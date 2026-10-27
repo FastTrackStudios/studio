@@ -277,7 +277,7 @@ fn picked_since(seen: u64) -> Option<(u64, String)> {
 /// The Editor view, on the session's selected track.
 #[component]
 pub fn EditorPanel() -> Element {
-    let Some(session) = try_use_context::<crate::studio::StudioSession>() else {
+    let Some(session) = try_use_context::<crate::song_model::StudioSession>() else {
         return rsx! { crate::shell::EditorComing {} };
     };
     let song = Song::of(&session.project.0);

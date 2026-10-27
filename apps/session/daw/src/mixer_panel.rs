@@ -6,7 +6,7 @@
 //! [`crate::mcp::Mixer`] records the
 //! strips' chrome, [`crate::overlay::controls`] draws the values over it
 //! every frame (so a fader moves without re-recording anything), and
-//! [`crate::engine::click`] / [`crate::engine::drag`] turn a gesture into
+//! [`crate::mcp::click`] / [`crate::mcp::drag`] turn a gesture into
 //! an edit. What is new is only the widget holding them, and the
 //! [`Links`] it shares with the arrangement:
 //!
@@ -36,7 +36,7 @@ use vello::kurbo::Affine;
 use crate::engine::Edit;
 use crate::mcp::Control;
 use crate::pointer::{Pointer, Spot};
-use crate::studio::StudioSession;
+use crate::song_model::StudioSession;
 
 /// How tall the docked mixer is: the strip height the mixer was designed
 /// at.
@@ -94,7 +94,7 @@ pub struct Links {
     pub rows: Rc<RefCell<(u64, Rows)>>,
     /// How the song's rows are planned, for a mixer with no arrangement to
     /// plan them: a folder opened or shut plans them again here.
-    pub planner: Option<crate::studio::Planner>,
+    pub planner: Option<crate::song_model::Planner>,
     /// Edits the mixer made, for the engine and the arrangement.
     pub from_mixer: Queue,
     /// Edits the arrangement made, for the mixer to apply too.
@@ -1925,7 +1925,7 @@ impl MixerWidget {
                 let fraction = crate::gesture::drag_fraction((y - turn.from_y) / zoom, turn.travel);
                 let spot = turn.spot;
                 if let Some(edit) =
-                    crate::engine::drag(spot.control, &turn.was.guid, &turn.was, fraction)
+                    crate::mcp::drag(spot.control, &turn.was.guid, &turn.was, fraction)
                 {
                     // Shown now, sent once a frame: a drag moves the
                     // pointer many times a frame, and every edit sent is
@@ -2010,7 +2010,7 @@ impl MixerWidget {
                     };
                     let edit = control.and_then(|c| {
                         let target = self.acts_on(c, &track);
-                        crate::engine::click(c, &target.guid, &target, false)
+                        crate::mcp::click(c, &target.guid, &target, false)
                     });
                     if let Some(edit) = edit {
                         self.commit(edit);

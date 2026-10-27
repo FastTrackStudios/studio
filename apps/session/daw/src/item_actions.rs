@@ -205,7 +205,7 @@ fn step<T>(
     daw::service::Projects::begin_undo_block(daw, project.clone(), label);
     let out = work();
     daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
-    crate::studio::request_resync_items();
+    crate::song_model::request_resync_items();
     crate::hit_overlay::refresh();
     out
 }

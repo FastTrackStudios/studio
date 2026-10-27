@@ -8,7 +8,7 @@
 //! ([`crate::prepare::apply_chart`]) — then the chart is saved to its `.kf`
 //! and the song to its `.session`, the chart panel shows the new chart
 //! ([`crate::chart_panel::publish_live`]) and the arrangement reads the
-//! song back ([`crate::studio::request_resync`]).
+//! song back ([`crate::song_model::request_resync`]).
 //!
 //! Text that does not parse changes nothing in the song: half-typed is the
 //! normal state of a chart being edited, and the diagnostics say what is
@@ -23,7 +23,7 @@ use dioxus::prelude::*;
 use futures_util::StreamExt as _;
 
 use crate::shell::{DIM, RULE, TEXT};
-use crate::studio::StudioSession;
+use crate::song_model::StudioSession;
 
 /// How long typing has to pause before the chart is laid over the song.
 const PAUSE: Duration = Duration::from_millis(350);
@@ -189,25 +189,11 @@ pub fn EditorToggle(open: Signal<bool>) -> Element {
     }
 }
 
-/// This peer's caret, as char offsets (anchor, head).
-static CARET: std::sync::Mutex<Option<(usize, usize)>> = std::sync::Mutex::new(None);
-
 fn publish_caret(state: &editor_state::EditorState) {
     let primary = state.selection.primary();
     let rope = state.doc.rope();
     let char_at = |byte: usize| rope.byte_to_char(byte.min(rope.len_bytes()));
-    if let Ok(mut slot) = CARET.lock() {
-        *slot = Some((char_at(primary.anchor), char_at(primary.head)));
-    }
-}
-
-/// This peer's caret as stable positions in the shared chart, for
-/// presence — `None` outside a session or before the editor opened.
-#[must_use]
-pub fn local_caret() -> Option<(Vec<u8>, Vec<u8>)> {
-    let (anchor, head) = (*CARET.lock().ok()?)?;
-    let (doc, _, _) = crate::collab::chart_context()?;
-    Some((doc.chart_cursor(anchor)?, doc.chart_cursor(head)?))
+    crate::presence::set_chart_caret(Some((char_at(primary.anchor), char_at(primary.head))));
 }
 
 /// A number that changes when anyone's caret does.
@@ -394,7 +380,7 @@ fn apply(project: &str, file: Option<&std::path::Path>, text: &str) -> Outcome {
                 std::sync::Arc::new(chart),
                 Some(rebuilt.built.song_start_seconds),
             );
-            crate::studio::request_resync();
+            crate::song_model::request_resync();
             Outcome::Applied {
                 sections: rebuilt.built.sections,
                 bpm: rebuilt.built.tempo_bpm,

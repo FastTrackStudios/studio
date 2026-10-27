@@ -466,7 +466,7 @@ fn relevel(track: &str, item: &str) {
         };
         if let Ok((daw, project)) = crate::actions::song() {
             crate::vocal_level::relevel(daw, &project, track, &leveled);
-            crate::studio::request_resync();
+            crate::song_model::request_resync();
         }
     }
     #[cfg(not(feature = "native"))]
@@ -488,7 +488,7 @@ fn dials_done(track: &str) {
         (crate::leveler::stages_of(track), crate::actions::song())
     {
         let _rewritten = crate::vocal_level::set_stages(daw, &project, track, &stages);
-        crate::studio::request_resync();
+        crate::song_model::request_resync();
     }
     #[cfg(not(feature = "native"))]
     let _ = track;

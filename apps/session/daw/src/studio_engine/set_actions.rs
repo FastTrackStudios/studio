@@ -8,7 +8,7 @@ use facet::Facet;
 
 use super::set::{self, Opening};
 use crate::actions::meta;
-use crate::loading::Progress;
+use crate::open_progress::Progress;
 
 static OPEN: ActionMeta = meta(
     "SESSION_OPEN",
@@ -103,6 +103,39 @@ static SONG_PREV: ActionMeta = meta(
     "",
 );
 
+static LIVE: ActionMeta = meta(
+    "SESSION_LIVE",
+    "live",
+    "Live roll-on",
+    "Whether the set rolls on: in Live, when the song playing reaches its end the next one plays from the same frame. `on` turns it on or off (a window in Live mode turns it on); without it, says whether it is on.",
+    "Set",
+    "",
+);
+
+/// On or off; left out, only asked.
+#[derive(Facet)]
+struct LiveArg {
+    on: Option<bool>,
+}
+
+static EDIT_STATE: ActionMeta = meta(
+    "SESSION_EDIT_STATE",
+    "edit_state",
+    "Edit cursor and selection",
+    "Where the current song's edit cursor is and its time selection (seconds), as the engine has them — what an edit acts on when it is not told where. Read-only; TIME_SELECTION_SET and the cursor actions move them.",
+    "Set",
+    "",
+);
+
+/// The edit state, as said.
+#[derive(Facet)]
+struct EditStateRow {
+    song: Option<String>,
+    cursor: Option<f64>,
+    selection_start: Option<f64>,
+    selection_end: Option<f64>,
+}
+
 /// The set's actions, into `list`.
 ///
 /// # Errors
@@ -134,6 +167,22 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
     })?;
     list.register(&SONG_PREV, Effect::Mutating, |(): ()| {
         set::pick_by("previous").map_err(|e| e.to_string())
+    })?;
+    list.register(&LIVE, Effect::Mutating, |a: LiveArg| {
+        if let Some(on) = a.on {
+            super::live::set_live(on);
+        }
+        Ok(if super::live::is_live() { "live: on" } else { "live: off" }.to_owned())
+    })?;
+    list.register(&EDIT_STATE, Effect::ReadOnly, |(): ()| {
+        let edit = crate::edit_state::current();
+        let selection = edit.and_then(|e| e.selection);
+        Ok(EditStateRow {
+            song: crate::open::current_song(),
+            cursor: edit.map(|e| e.at),
+            selection_start: selection.map(|s| s.start),
+            selection_end: selection.map(|s| s.end),
+        })
     })?;
     Ok(())
 }

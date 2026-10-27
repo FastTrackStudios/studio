@@ -160,7 +160,7 @@ pub fn comp_best(song: &Song, phrases: &[(f64, f64)], dry: bool) -> Result<Compe
     song.undo_step("Comp the best takes", |song| edit.apply(song))?;
     stages.mark("comp.apply_ms");
     crate::comp_rank::forget();
-    crate::studio::request_resync_items();
+    crate::song_model::request_resync_items();
     crate::hit_overlay::refresh();
     Ok(Comped {
         phrases: phrases.len(),

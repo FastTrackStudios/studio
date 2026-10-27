@@ -405,7 +405,7 @@ pub fn QuantizePanel() -> Element {
         let Ok(found) = run("SESSION_SECTIONS", "{}".into()).await else {
             return;
         };
-        let at = crate::cursor::current();
+        let at = crate::edit_state::current();
         let all: Vec<(String, f64, f64)> = found
             .as_array()
             .into_iter()

@@ -1731,7 +1731,7 @@ fn region(id: &str, event: &Event<MountedData>) {
 /// Whatever it holds, over one song: that song's session, as context — what
 /// every panel below it reads.
 #[component]
-pub fn WithSong(session: crate::studio::StudioSession, children: Element) -> Element {
+pub fn WithSong(session: crate::song_model::StudioSession, children: Element) -> Element {
     use_context_provider(|| session);
     children
 }

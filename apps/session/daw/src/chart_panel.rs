@@ -48,7 +48,7 @@ use dioxus::prelude::*;
 
 use keyflow::engraver::renderer::{ChartView, points_to_px};
 
-use crate::studio::StudioSession;
+use crate::song_model::StudioSession;
 
 /// How far one wheel notch zooms, as a factor.
 const ZOOM_STEP: f64 = 1.12;

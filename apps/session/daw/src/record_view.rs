@@ -20,7 +20,7 @@ use session::ui::components::{MeasureIndicator, SectionProgressBar};
 use crate::compact::{Form, use_form};
 use crate::engine::{Move, transport};
 use crate::progress::{ProgressBar, Song, TransportButtons, use_reading};
-use crate::studio::StudioSession;
+use crate::song_model::StudioSession;
 use crate::take_rating::{Scope, Stars, miss, star};
 
 const BG: &str = "#0f1012";

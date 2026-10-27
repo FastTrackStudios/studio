@@ -21,12 +21,15 @@
 //!   127.0.0.1:47811.
 //! - [`headless`]: standing the engine up with no window — what `studio
 //!   engine` runs.
+//! - [`live`]: Live mode's roll-on — the next song on the frame the current
+//!   one ends.
 //!
 //! The rule for code here: nothing in it draws, and nothing in it waits for
 //! a window to do something. A window reads [`set::subscribe`] and asks
 //! [`set`]'s operations; it never holds the set itself.
 
 pub mod headless;
+pub mod live;
 pub mod mcp;
 pub mod set;
 pub mod set_actions;

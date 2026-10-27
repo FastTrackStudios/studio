@@ -10,7 +10,7 @@
 use dioxus::prelude::*;
 
 use crate::engine::{Move, Transport, transport};
-use crate::studio::StudioSession;
+use crate::song_model::StudioSession;
 
 const RULE: &str = "#2a2c31";
 const BG: &str = "#17181b";

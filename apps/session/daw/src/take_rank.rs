@@ -452,7 +452,7 @@ pub fn settle(daw: &daw::standalone::Standalone, project: &ProjectContext) {
         daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
     }
     crate::comp_rank::forget();
-    crate::studio::request_resync_items();
+    crate::song_model::request_resync_items();
 }
 
 static NOTE: ActionMeta = crate::actions::meta(
@@ -565,7 +565,7 @@ pub(crate) fn register(list: &ActionList) -> Result<(), architect::action::Actio
 /// The ranks changed: the ranking forgotten, the window told.
 fn changed() {
     crate::comp_rank::forget();
-    crate::studio::request_resync_items();
+    crate::song_model::request_resync_items();
     crate::hit_overlay::refresh();
 }
 

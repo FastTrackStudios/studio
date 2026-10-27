@@ -310,7 +310,7 @@ pub(crate) fn register_main(list: &ActionList) -> Result<(), architect::action::
             daw::service::Projects::end_undo_block(daw, project.clone(), label, None);
             done?;
             crate::comp_rank::forget();
-            crate::studio::request_resync_items();
+            crate::song_model::request_resync_items();
             crate::hit_overlay::refresh();
         }
         Ok(MainOut {

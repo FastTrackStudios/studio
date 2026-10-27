@@ -11,7 +11,7 @@
 use dioxus::prelude::*;
 
 use crate::engine::{Move, Reading, Transport, transport};
-use crate::studio::StudioSession;
+use crate::song_model::StudioSession;
 use session::ui::components::progress::{ProgressSection, SongProgressBar};
 use session::ui::components::transport_controls::TransportControlBar;
 

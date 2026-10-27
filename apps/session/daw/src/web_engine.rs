@@ -9,7 +9,7 @@
 //! mirrored from a share link by [`crate::song_stream`]) and awaits
 //! everything instead of blocking: `build_in_process_daw`,
 //! `daw::init_from_parts`, then the same read-back and row plan
-//! ([`crate::studio::Planner`]). The engine clients
+//! ([`crate::song_model::Planner`]). The engine clients
 //! ([`crate::engine::Applier`], [`crate::engine::Transport`]) have web
 //! implementations that find the facade this installs.
 //!
@@ -34,7 +34,7 @@ use std::sync::atomic::AtomicBool;
 
 use daw_standalone::audio_engine::media_fetch::StreamedTake;
 
-use crate::studio::StudioSession;
+use crate::song_model::StudioSession;
 
 /// The engine, as the page's panels reach it.
 #[derive(Clone)]
@@ -88,7 +88,7 @@ pub enum WebSource {
     Live { link: String, name: String },
 }
 
-pub use crate::loading::Progress;
+pub use crate::open_progress::Progress;
 
 pub use crate::setlist::Arrival;
 

@@ -104,22 +104,6 @@ pub fn takes_shown(
         .any(|e| e.key == crate::automation::TAKE_LINES_KEY && e.value == "1")
 }
 
-/// Show or hide `track`'s items' volume curves on them.
-pub fn show_takes(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    track: &str,
-    shown: bool,
-) {
-    let _ = daw::service::Tracks::set_ext_state(
-        daw,
-        project.clone(),
-        TrackRef::Guid(track.to_owned()),
-        crate::automation::TAKE_LINES_KEY,
-        if shown { "1" } else { "" },
-    );
-}
-
 /// The first list: the track's own envelopes, then its plugins.
 #[must_use]
 pub fn top(track: &str) -> Vec<Choice<Pick>> {
@@ -267,21 +251,21 @@ pub fn act(pick: &Pick) -> Option<Vec<Choice<Pick>>> {
                         );
                     }
                 }
-                crate::studio::request_resync();
+                crate::song_model::request_resync();
             }
             None
         }
         Pick::TakeLines { track, show } => {
             if let Ok((daw, project)) = crate::actions::song() {
-                show_takes(daw, &project, track, *show);
-                crate::studio::request_resync();
+                crate::automation::show_takes(daw, &project, track, *show);
+                crate::song_model::request_resync();
             }
             None
         }
         Pick::Leveler { track, show } => {
             if let Ok((daw, project)) = crate::actions::song() {
                 crate::vocal_level::show_lane(daw, &project, track, *show);
-                crate::studio::request_resync();
+                crate::song_model::request_resync();
             }
             None
         }
@@ -305,7 +289,7 @@ pub fn act(pick: &Pick) -> Option<Vec<Choice<Pick>>> {
                             false,
                         );
                     }
-                    crate::studio::request_resync();
+                    crate::song_model::request_resync();
                 }
                 Err(error) => tracing::warn!(error = %error, "automation menu: no such envelope"),
             }

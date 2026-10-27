@@ -21,7 +21,7 @@
 //! one it is everything the project holds. The span is what a progress
 //! reads against, and what tells Live mode a song has ended.
 
-use crate::studio::StudioSession;
+use crate::song_model::StudioSession;
 
 /// The colours offered when a song's colour is set by hand — distinct at a
 /// glance in a row of tabs rather than a smooth ramp: the question a

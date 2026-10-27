@@ -29,6 +29,7 @@ pub mod bar_step;
 pub mod beats;
 #[cfg(feature = "native")]
 pub mod chart_editor;
+pub mod changes;
 pub mod chart_panel;
 pub mod closeup;
 #[cfg(any(feature = "native", feature = "web"))]
@@ -45,6 +46,7 @@ pub mod compact;
 pub mod cursor;
 #[cfg(feature = "native")]
 pub mod drum_group;
+pub mod edit_state;
 pub mod editor_view;
 pub mod engine;
 pub mod expression;
@@ -66,6 +68,8 @@ pub mod guide_instrument;
 pub mod headless;
 pub mod hit;
 pub mod icons;
+#[cfg(feature = "native")]
+pub mod instrument_rail;
 #[cfg(feature = "native")]
 pub mod instrument_tracks;
 pub mod jobs;
@@ -93,9 +97,12 @@ pub mod num;
 #[cfg(feature = "native")]
 pub mod open;
 pub mod open_core;
+pub mod open_progress;
 pub mod options;
 #[cfg(feature = "native")]
 pub mod organize;
+#[cfg(feature = "native")]
+pub mod organize_edit;
 pub mod play_return;
 pub mod plugin_faces;
 pub mod popup;
@@ -105,6 +112,7 @@ pub mod project_file;
 pub mod project_new;
 #[cfg(feature = "native")]
 pub mod projects;
+pub mod presence;
 pub mod rig;
 #[cfg(feature = "signal")]
 pub mod rig_actions;
@@ -248,6 +256,7 @@ pub mod perf;
 pub mod performer;
 pub mod plan;
 pub mod poi;
+pub mod poi_paint;
 pub mod pointer;
 pub mod prepare;
 pub mod profile;
@@ -284,7 +293,9 @@ pub mod skin;
 pub mod song;
 pub mod song_bars;
 pub mod song_chart;
+pub mod song_model;
 pub mod stages;
+pub mod stretch;
 pub mod strip;
 pub mod studio;
 pub mod swipe;
@@ -313,6 +324,8 @@ pub mod web_engine;
 #[cfg(feature = "web")]
 pub mod web_host;
 pub mod which_key;
+pub mod window;
+pub mod window_queue;
 pub mod widget;
 pub mod window_cursor;
 pub use editing::written;
