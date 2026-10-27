@@ -158,6 +158,18 @@ pub fn translate_route(
     route: &OmniModRoute,
     filter_labels: &[String],
 ) -> Option<(usize, String, String, f32)> {
+    // A Mod Env's depth ("Mod Env 1 Depth"): a cut on everything the
+    // envelope drives — measured, `clamp(1 + depth·source, 0, 1)`, so a plain
+    // row does nothing and an inverted one (−hi) cuts, as the LFO swing's
+    // scale does. Part-level, on Layer A like the LFOs.
+    if let Some(n) = route
+        .target
+        .strip_prefix("Mod Env ")
+        .and_then(|r| r.strip_suffix(" Depth"))
+    {
+        let source = translate_source(&route.source)?;
+        return Some((0, source, format!("Mod Env {n}.amp"), route.depth));
+    }
     // Targets: "<L> freq" / "<L> res" where <L> is A..D → the layer's Filter 1.
     let (layer_letter, param) = route.target.split_once(' ')?;
     // A modulator's own depth ("LFO1 swing"): the swing adds depth·source

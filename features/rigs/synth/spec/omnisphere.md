@@ -71,6 +71,9 @@ static and routed within 1 dB per channel. **LFO rate** routes
 (`LFOn rate`) add depth·source to the rate knob, through the same
 48·knob³ law as the static rate — exact for a velocity row, and an LFO
 sweeping another's rate tracks the plugin's pitch trace (r 0.98).
+**Mod Env depth** rows (`Mod Env n Depth`) are a cut, as the LFO swing's:
+`clamp(1 + depth·source, 0, 1)` — a plain row does nothing, an inverted
+one scales the envelope down (exact on a held envelope).
 
 ## Status (2026-10-25)
 
