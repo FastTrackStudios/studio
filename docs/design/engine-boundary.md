@@ -15,10 +15,40 @@ Steps 1–3 of the research's migration path (§7) are under way:
 
 | step | state |
 |---|---|
-| 1. The boundary inside one process | inventoried below; the engine side has a module of its own, `session_daw::studio_engine` |
-| 2. The Action List and set state to the engine | the **set** (songs, current, arriving, opening) is engine state with its own actions; the MCP server moved; the rest of the Action List not yet |
+| 1. The boundary inside one process | done: 100 engine modules use no window module (`apps/session/daw/engine-modules.txt`, `just engine-boundary`) |
+| 2. The Action List and set state to the engine | done: the list is the engine's; a window registers its own actions when it attaches; the edit cursor and time selection are engine state; Live's roll-on is the engine's |
 | 3. `studio engine` | runs: the engine, the set, SetAudio, MCP on 47811, the daw facade on a Unix socket (`--listen` adds WS) |
 | 4–6 | planned below |
+
+### Phase A: the engine side stands alone
+
+- **The Action List is the engine's** (`actions.rs`): transport, the set,
+  the song's data — complete with no window. The window's actions
+  (`window.rs`: zoom, panels, `SESSION_VIEW`, the edits its arrangement
+  makes under its own selection, `SESSION_FRAMES`, `SESSION_STEP`) are
+  registered on it by `window::attach()` when an arrangement comes up,
+  enabled while one is attached and listed `enabled: false` ("no window
+  attached") after. architect's `ActionList` has no unregister; that is
+  the one gap between "listed disabled" and "gone".
+- **The queue to the window** (`window_queue.rs`): the key `Action` type,
+  the queue a window takes each frame, and whether a window is attached
+  (`attach()` → a guard). With none attached nothing is queued.
+- **Edit cursor and time selection** (`edit_state.rs`): engine state per
+  song. A window `show`s its own as it draws; an action `ask`s and every
+  window takes it up (`asked_since`). `SESSION_EDIT_STATE` reads it.
+  Item and track selection were the project's already.
+- **Live's roll-on** (`studio_engine/live.rs`): with the set in Live
+  (`SESSION_LIVE`, set by a window in Live mode) the engine schedules the
+  hand-over 0.5 s before the song's end (`SetAudio::play_after`): the next
+  song starts on the frame the current one ends; then the set follows. A
+  stop before the moment calls it off (`SetAudio::call_off`, new); a song
+  that cannot be handed over is picked at its end, as before.
+- **Cycles broken**: `song_model.rs` (StudioSession, the read-back flags),
+  `stretch.rs`, `presence.rs` (out of `ghosts`), `organize_edit.rs`,
+  `open_progress.rs`, `changes.rs` (the engine announces, a window
+  listens — the marks strip), `poi_paint.rs`, `instrument_rail.rs`, the
+  strip gestures (`mcp::click`/`drag`) out of `engine.rs`. Each view
+  module that lost code re-exports it, so view code reads as before.
 
 ### What moved (this change)
 
