@@ -1936,6 +1936,31 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
         }
     }
 
+    // Under `share`, layer A's filter section is every layer's: its rows
+    // drive all of them (measured — an A freq row moved layer B alone by
+    // ~1.2 kHz of centroid), and the other layers' own rows onto it have no
+    // effect the plugin's render noise could show.
+    if engine.attr("share").map(str::trim) == Some("1") {
+        const SHARED: [&str; 6] = ["freq", "res", "freq1", "freq2", "envdpth", "sprd"];
+        let n = patch.layers.len().min(4);
+        let mut routes = Vec::with_capacity(patch.mod_routes.len());
+        for r in std::mem::take(&mut patch.mod_routes) {
+            let target = r.target.clone();
+            match target.split_once(' ').filter(|(_, p)| SHARED.contains(p)) {
+                Some(("A", param)) => {
+                    for letter in ["A", "B", "C", "D"].into_iter().take(n.max(1)) {
+                        let mut c = r.clone();
+                        c.target = format!("{letter} {param}");
+                        routes.push(c);
+                    }
+                }
+                Some(("B" | "C" | "D", _)) => {}
+                _ => routes.push(r),
+            }
+        }
+        patch.mod_routes = routes;
+    }
+
     patch.aux_send = engine.num("irsendaux").unwrap_or(0.0).clamp(0.0, 1.0);
     // An integer flag, not a float: "1" is the headroom on; "0" or absent
     // (older patches) plays the part +6 dB.
