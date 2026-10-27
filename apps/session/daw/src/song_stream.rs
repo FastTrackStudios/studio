@@ -681,9 +681,37 @@ fn safe_name(text: &str) -> String {
 /// Whether a song-folder path is audio the fetcher streams (a proxy) or
 /// leaves alone (an original): everything else is small, and mirrored.
 fn is_media(lower: &str) -> bool {
-    lower.starts_with("media/")
-        && !lower.starts_with("media/peaks/")
-        && !lower.ends_with(".ogg.idx")
+    /// A recording, wherever the session keeps it: REAPER's `Media/`,
+    /// Live's `Samples/Imported/`, a folder of its own. Kept by name, a
+    /// split Live set's recordings were fetched whole as "small files" —
+    /// 7.9 GB for a set that streams 308 MB of proxies.
+    const RECORDINGS: &[&str] = &[
+        ".wav", ".wave", ".aif", ".aiff", ".aifc", ".flac", ".mp3", ".m4a", ".aac", ".ogg",
+        ".opus", ".caf", ".w64", ".wv", ".mp4", ".mov",
+    ];
+    if lower.starts_with("media/peaks/") || lower.ends_with(".ogg.idx") {
+        return false;
+    }
+    lower.starts_with("media/") || RECORDINGS.iter().any(|ext| lower.ends_with(ext))
+}
+
+#[cfg(test)]
+mod media_tests {
+    use super::is_media;
+
+    #[test]
+    fn a_recording_streams_wherever_the_session_keeps_it() {
+        assert!(is_media("media/bass.wav"));
+        assert!(is_media("samples/imported/drums_live kit.wav"));
+        assert!(is_media("audio/vox.aiff"));
+        assert!(
+            !is_media("samples/imported/proxies/vox.ogg.idx"),
+            "a page index is small, fetched"
+        );
+        assert!(!is_media("media/peaks/bass.wav.sessionpeaks"));
+        assert!(!is_media("fire.session"));
+        assert!(!is_media("chart.kf"));
+    }
 }
 
 /// What a download brings onto the device.
