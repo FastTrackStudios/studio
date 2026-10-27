@@ -16593,6 +16593,7 @@ dependencies = [
  "rayon",
  "realfft",
  "reqwest 0.12.28",
+ "serde",
  "serde_json",
  "session",
  "session-format",
