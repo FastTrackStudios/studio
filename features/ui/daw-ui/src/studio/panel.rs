@@ -2,7 +2,7 @@
 //! shares with it.
 //!
 //! What is left of the component panel: the panel is painted by
-//! `session_daw::widget::ArrangementWidget`, and folders fold (see
+//! `session_ui::widget::ArrangementWidget`, and folders fold (see
 //! [`super::folded`]) against where its row tint ends.
 
 /// Where the row's tint ends and REAPER's meter gutter begins.

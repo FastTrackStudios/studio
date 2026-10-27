@@ -50,7 +50,8 @@ members = [
     "features/adapters/reaper/tests/daw-reaper-dioxus-ext-test",
     "apps/session/desktop",
     "apps/session/daw-web",
-    "apps/session/daw",
+    "apps/session/engine",
+    "apps/session/ui",
     "apps/session/web",
     "features/adapters/reaper/dynamic-template-extension",
     "features/patch-list",
@@ -914,6 +915,10 @@ signal-web = { path = "apps/signal/web" }
 # Session's app as a library: Studio (apps/studio/desktop) mounts it behind
 # its front screen. No default features: Studio picks the iOS-clean set.
 session-desktop = { path = "apps/session/desktop", default-features = false }
+# Session's engine, and its window (a view of it): features chosen by each
+# dependent (`native` on a desktop, `web` in a page).
+session-engine = { path = "apps/session/engine", default-features = false }
+session-ui = { path = "apps/session/ui", default-features = false }
 signal-daw-bridge = { path = "features/signal/daw-bridge" }
 signal-rig-host = { path = "features/rigs/host" }
 signal-rigs-proto = { path = "features/rigs/proto" }

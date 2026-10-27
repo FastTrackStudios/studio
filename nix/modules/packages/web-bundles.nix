@@ -109,7 +109,7 @@
       # The Session app in a browser (`just web-daw`): what /demo and every
       # live link open, served under the site's /app/. A plain cargo +
       # wasm-bindgen build (no dx: the page is a library host, see
-      # session-daw's web_host).
+      # session-ui's web_host).
       # SIMD: vello's painting (fearless_simd) picks its level at compile
       # time and runs its scalar fallback without `+simd128`. The same
       # RUSTFLAGS on the deps, or their fingerprints miss (`just web-daw`

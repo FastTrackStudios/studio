@@ -1,7 +1,7 @@
 //! The Session app on Blitz (dioxus-native) — see `docs/app-on-blitz.md`.
 //!
 //! The desktop build launches this instead of the WRY app when the `native`
-//! feature is on. It is the app as panels (`session_daw::studio::Arrangement`,
+//! feature is on. It is the app as panels (`session_ui::studio::Arrangement`,
 //! the progress bar, …) composed into views under one top bar, with the
 //! window's own title bar made transparent so the traffic lights sit in ours.
 //!
@@ -12,9 +12,9 @@
 //!
 //! That is Engine mode. In Remote and Cue (`--audio remote|cue`,
 //! `--reaper [socket]`, `FTS_AUDIO_MODE`, or the top bar's audio menu last
-//! time — see `session_daw::open::launch_mode`) nothing is opened here: the
+//! time — see `session_ui::open::launch_mode`) nothing is opened here: the
 //! window attaches to the system it drives and its open projects are the
-//! set (`session_daw::setlist::Setlist::attach`).
+//! set (`session_ui::setlist::Setlist::attach`).
 
 #[cfg(target_os = "ios")]
 mod ios_audio;
@@ -59,9 +59,9 @@ fn choose() -> Option<PathBuf> {
 
 /// The songs `target` names: the one song it is (a project, a `.session`,
 /// or a song's folder); or a setlist's (a folder of song folders, or a
-/// `.setlist` file — see `session_daw::setlist::read_setlist`).
+/// `.setlist` file — see `session_ui::setlist::read_setlist`).
 fn songs_of(target: &Path) -> Option<Vec<PathBuf>> {
-    session_daw::studio_engine::set::songs_at(target)
+    session_ui::studio_engine::set::songs_at(target)
 }
 
 /// The Open dialog: a REAPER project.
@@ -157,7 +157,7 @@ fn remembered() -> Option<PathBuf> {
 
 fn remember(project: &Path) {
     // The start screen's Recent, too.
-    session_daw::projects::opened(project);
+    session_ui::projects::opened(project);
     let Some(file) = memory() else { return };
     let written = file
         .parent()
@@ -187,7 +187,7 @@ pub fn launch() {
 /// or (Engine mode) what to open as it comes up ([`choose`]).
 #[derive(Clone)]
 pub struct Prepared {
-    setlist: Option<session_daw::setlist::Setlist>,
+    setlist: Option<session_ui::setlist::Setlist>,
     open: Option<PathBuf>,
 }
 
@@ -198,23 +198,23 @@ pub fn prepare() -> Option<Prepared> {
     // The global app menu (File, Edit, View, …) for the desktop shell's
     // top bar, on the session bus — on a thread of its own.
     #[cfg(target_os = "linux")]
-    session_daw::app_menu::start();
+    session_ui::app_menu::start();
     // How this app dials a Session engine (Remote on another Session): the
     // connector lives with the app's iroh identity (`crate::remote`).
     #[cfg(feature = "session-domain")]
-    session_daw::open::set_engine_dialer(|address| {
+    session_ui::open::set_engine_dialer(|address| {
         Box::pin(async move {
             let addr = crate::remote::EngineAddr::parse(&address).map_err(|e| eyre::eyre!(e))?;
             let engine = crate::remote::connect_engine_daw(&addr).await?;
             let daw = engine.daw.clone();
-            Ok((daw, Box::new(engine) as session_daw::open::EngineConnection))
+            Ok((daw, Box::new(engine) as session_ui::open::EngineConnection))
         })
     });
     // The Action List served to a model and the CLI from the start, so
     // either can open the first song (`SESSION_OPEN`, `SESSION_OPEN_SETLIST`).
-    session_daw::open::serve_actions();
-    let mode = session_daw::open::launch_mode();
-    session_daw::open::set_mode(mode.clone());
+    session_ui::open::serve_actions();
+    let mode = session_ui::open::launch_mode();
+    session_ui::open::set_mode(mode.clone());
     let remote = if mode.owns_project() {
         None
     } else {
@@ -291,7 +291,7 @@ pub fn Embedded() -> Element {
 /// What attaching came to: the set the other system has open, or Engine
 /// mode after all (it was not there, and this window plays the set).
 enum Attached {
-    Set(session_daw::setlist::Setlist),
+    Set(session_ui::setlist::Setlist),
     Engine,
 }
 
@@ -299,9 +299,9 @@ enum Attached {
 /// there, say so and offer to try again, to open a session here in Engine
 /// mode instead, or to quit — never quietly play the set here while
 /// someone thinks REAPER is.
-fn attach(target: &session_daw::open::RemoteTarget) -> Option<Attached> {
+fn attach(target: &session_ui::open::RemoteTarget) -> Option<Attached> {
     loop {
-        match session_daw::setlist::Setlist::attach(target) {
+        match session_ui::setlist::Setlist::attach(target) {
             Ok(setlist) => return Some(Attached::Set(setlist)),
             Err(e) => {
                 tracing::error!(error = %e, audio.target = target.kind(), "could not attach to the system this window drives");
@@ -313,7 +313,7 @@ fn attach(target: &session_daw::open::RemoteTarget) -> Option<Attached> {
                 match answer.as_deref() {
                     Some("Try Again") => {}
                     Some("Open in Engine Mode") => {
-                        session_daw::open::set_mode(session_daw::open::ModeState::engine());
+                        session_ui::open::set_mode(session_ui::open::ModeState::engine());
                         return Some(Attached::Engine);
                     }
                     _ => return None,
@@ -326,7 +326,7 @@ fn attach(target: &session_daw::open::RemoteTarget) -> Option<Attached> {
 /// The window: over `setlist` when it is open already (Remote, Cue);
 /// otherwise the start screen, opening `open` — the window is up at once,
 /// and the song comes in behind its loading note (`start`).
-fn run(setlist: Option<session_daw::setlist::Setlist>, open: Option<PathBuf>) {
+fn run(setlist: Option<session_ui::setlist::Setlist>, open: Option<PathBuf>) {
     // iOS 27 stops an app that has not adopted scenes: ours is registered
     // before UIKit starts, for Info.plist to name.
     #[cfg(target_os = "ios")]
@@ -378,7 +378,7 @@ fn window_attributes() -> winit::window::WindowAttributes {
         .with_maximized(pos.is_none() && size.is_none())
         .with_surface_size(winit::dpi::LogicalSize::new(w, h))
         // Small enough to be phone-sized: below ~700 wide (or ~500 tall)
-        // the app takes its small-screen layout (`session_daw::compact`).
+        // the app takes its small-screen layout (`session_ui::compact`).
         .with_min_surface_size(winit::dpi::LogicalSize::new(320.0, 300.0));
     if let Some((x, y)) = pos {
         attributes = attributes.with_position(winit::dpi::LogicalPosition::new(x, y));

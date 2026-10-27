@@ -4,14 +4,14 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-description = "The Session DAW view in a browser — the web demo's bundle (see session-daw's web_host)"
+description = "The Session DAW view in a browser — the web demo's bundle (see session-ui's web_host)"
 publish = false
 
 # Only the browser build takes the page's dependencies: on native (a
-# workspace-wide build) session-daw's `web` feature would unify into the
+# workspace-wide build) session-ui's `web` feature would unify into the
 # desktop's and compile the browser-only host there.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-session-daw = { path = "../daw", default-features = false, features = ["web"] }
+session-ui = { workspace = true, features = ["web"] }
 # What the address opens, and the "open a set" page when it names nothing
 # (`session::open_link`).
 session = { workspace = true, features = ["ui"] }

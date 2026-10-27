@@ -894,7 +894,7 @@ impl<D: Tracks + Routing + Items> DawTarget<D> {
     /// it or in its `Sum` (`Trig`, `T1 Trig`, or a `Trig` folder of them
     /// on a kit the toms could not be split on) gets a pre-FX send from it
     /// onto the piece's channels 3/4, which keys the gate on the piece
-    /// (`session_daw::mix_chains`).
+    /// (`session_ui::mix_chains`).
     ///
     /// The trigger is then unmuted — a muted track's sends are muted, in
     /// REAPER as here — and taken off its parent instead: alive to key,

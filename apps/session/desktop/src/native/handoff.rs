@@ -6,7 +6,7 @@
 //!
 //! Studio shows its library first; Session's own start screen is never a
 //! page there. A library setlist is opened by the engine
-//! (`session_daw::studio_engine::set::open_library`, as the Action List's
+//! (`session_ui::studio_engine::set::open_library`, as the Action List's
 //! `SESSION_OPEN_SETLIST` opens one); a song, a live link or a new song is
 //! handed to Session's start screen, which opens it in the engine too. A
 //! hosted start screen draws only its loading screen (`super::start`).
@@ -18,8 +18,8 @@ pub use super::start::{
     WelcomeAccount, WelcomeAccountMenu, WelcomeAccountSheet, WelcomeLists, use_welcome_account,
     welcome_org,
 };
-pub use session_daw::stream_set::{LibrarySetlist, LibrarySong, ListKind};
-pub use session_daw::projects::{Recent, ago, open_next, recent};
+pub use session_ui::stream_set::{LibrarySetlist, LibrarySong, ListKind};
+pub use session_ui::projects::{Recent, ago, open_next, recent};
 
 static JOIN: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
@@ -106,12 +106,12 @@ pub fn request(entry: Entry) {
     match entry {
         Entry::Path(path) => open_next(path),
         Entry::Setlist { org, title } => {
-            let request = session_daw::studio_engine::set::LibraryOpen {
+            let request = session_ui::studio_engine::set::LibraryOpen {
                 org,
                 setlist: title,
                 song: None,
             };
-            if let Err(busy) = session_daw::studio_engine::set::open_library(request) {
+            if let Err(busy) = session_ui::studio_engine::set::open_library(request) {
                 tracing::warn!(error = %busy, "open: the setlist waits for the open under way");
             }
         }
@@ -125,8 +125,8 @@ pub fn request(entry: Entry) {
 /// — from the CLI or a model while the welcome screen is up.
 #[must_use]
 pub fn pending() -> bool {
-    session_daw::projects::pending_open()
-        || session_daw::project_new::made_pending()
+    session_ui::projects::pending_open()
+        || session_ui::project_new::made_pending()
         || NEW.load(std::sync::atomic::Ordering::Acquire)
         || JOIN
             .lock()
@@ -137,12 +137,12 @@ pub fn pending() -> bool {
 /// Going into Session for what is [`pending`]: the "out of the song" an
 /// open from outside raised is spent, since there is no song to leave.
 pub fn entering() {
-    let _ = session_daw::projects::take_back();
+    let _ = session_ui::projects::take_back();
 }
 
 /// Ask Session, a song open, to leave it for what was just [`request`]ed.
 pub fn leave_song_for_request() {
-    session_daw::projects::go_back();
+    session_ui::projects::go_back();
 }
 
 /// The file of a session named `title` on this device: one opened lately,
@@ -191,7 +191,7 @@ pub struct ActionRow {
 /// nothing and run at once.
 #[must_use]
 pub fn actions() -> Vec<ActionRow> {
-    let list = session_daw::actions::list();
+    let list = session_ui::actions::list();
     list.infos()
         .into_iter()
         .filter(|a| a.params_schema.is_none() && !list.is_async(&a.id))
@@ -220,7 +220,7 @@ pub fn actions() -> Vec<ActionRow> {
 ///
 /// No such action, it cannot run now, or it failed.
 pub fn run_action(id: &str) -> Result<(), String> {
-    session_daw::actions::list()
+    session_ui::actions::list()
         .run(id)
         .map_err(|e| e.to_string())
 }
@@ -228,19 +228,19 @@ pub fn run_action(id: &str) -> Result<(), String> {
 /// An overlay over the window takes the keyboard (`true`) or gives it
 /// back: Session's keys stand aside while it has it.
 pub fn keys_taken(on: bool) {
-    session_daw::keys::set_overlay(on);
+    session_ui::keys::set_overlay(on);
 }
 
 /// Whether a text field of Session's has the keyboard (a rename, the chart
 /// editor): a plain `?` is its, not the shortcuts sheet's.
 #[must_use]
 pub fn typing() -> bool {
-    session_daw::keys::typing()
+    session_ui::keys::typing()
 }
 
 /// Stop the transport: Session is being left (or replaced) from outside.
 pub fn stop() {
-    session_daw::engine::transport(session_daw::engine::Move::Stop, 0.0);
+    session_ui::engine::transport(session_ui::engine::Move::Stop, 0.0);
 }
 
 #[cfg(test)]

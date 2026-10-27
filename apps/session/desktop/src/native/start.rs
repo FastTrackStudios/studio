@@ -6,15 +6,15 @@
 //!
 //! - **Join a set** — one Task keeps, by its live link: the public demo, or
 //!   one someone shared. Its songs stream in and play here, with everyone
-//!   else in the set (`session_daw::stream_set`).
-//! - **Task** — sign in from another device (`session_daw::task_account`)
+//!   else in the set (`session_ui::stream_set`).
+//! - **Task** — sign in from another device (`session_ui::task_account`)
 //!   and pick a setlist from an org's library; it streams in the same way.
 //! - **On this device** — a song or setlist in the app's documents folder
 //!   (on a phone, what the Files app shows under Session), or, on a
 //!   desktop, from the Open dialog.
 //!
 //! Opening runs in the engine, on a thread of its own (it takes seconds):
-//! the set is the engine's (`session_daw::studio_engine::set`), and the
+//! the set is the engine's (`session_ui::studio_engine::set`), and the
 //! window shows whatever set the engine has, or its start screen when it
 //! has none ([`App`]). An open asked for by the CLI or a model shows here
 //! the same way as one asked for by a click.
@@ -28,13 +28,13 @@ use lucide_dioxus::{
     HardDriveDownload, House, Library, LibraryBig, Link, ListMusic, LogOut, Music, Pencil, Play,
     Plus, Radio, Search, Trash2, X,
 };
-use session_daw::loading::{Loading, Progress, mark_src};
-use session_daw::setlist::Setlist;
-use session_daw::song_stream::Offline;
-use session_daw::stream_set::{
+use session_ui::loading::{Loading, Progress, mark_src};
+use session_ui::setlist::Setlist;
+use session_ui::song_stream::Offline;
+use session_ui::stream_set::{
     Downloading, LibrarySetlist, LibrarySong, ListKind, Remote, with_library,
 };
-use session_daw::task_account::{self, Account, AccountLibrary as _};
+use session_ui::task_account::{self, Account, AccountLibrary as _};
 
 pub(super) const BG: &str = "#0f1012";
 pub(super) const BAR: &str = "#17181b";
@@ -87,7 +87,7 @@ pub fn App() -> Element {
     let initial: Option<Setlist> = use_context();
     use_hook(move || {
         if let Some(setlist) = initial {
-            session_daw::studio_engine::set::install(setlist);
+            session_ui::studio_engine::set::install(setlist);
         }
     });
     let engine = use_engine_set();
@@ -99,11 +99,11 @@ pub fn App() -> Element {
     // from the palette) still comes back out through the start screen,
     // which opens it behind its loading screen.
     use_context_provider(|| {
-        session_daw::shell::Back(Callback::new(move |()| {
-            session_daw::engine::transport(session_daw::engine::Move::Stop, 0.0);
+        session_ui::shell::Back(Callback::new(move |()| {
+            session_ui::engine::transport(session_ui::engine::Move::Stop, 0.0);
             #[cfg(target_os = "ios")]
             super::ios_audio::clear();
-            session_daw::studio_engine::set::close();
+            session_ui::studio_engine::set::close();
             match host {
                 Some(host) if !super::handoff::pending() => host.on_leave.call(()),
                 _ => {}
@@ -115,7 +115,7 @@ pub fn App() -> Element {
     // shell: its views are made again for it.
     let shown = engine.read();
     let page = match (&shown.opening, shown.setlist.clone()) {
-        (session_daw::studio_engine::set::Opening::Busy(_), _) | (_, None) => {
+        (session_ui::studio_engine::set::Opening::Busy(_), _) | (_, None) => {
             rsx! { Start {} }
         }
         (_, Some(setlist)) => {
@@ -137,7 +137,7 @@ pub fn App() -> Element {
 /// parent — the body — so without this every view sat 8px right and down
 /// and ran off the right edge. And the canvas takes the page's background,
 /// which is what fills a phone's status bar and home indicator: the bars'
-/// colour (`session_daw::shell::BAR_BG`), so the top bar runs up under the
+/// colour (`session_ui::shell::BAR_BG`), so the top bar runs up under the
 /// status bar and the bottom bar down under the home indicator, into the
 /// screen's rounded corners, rather than stopping short of a darker strip.
 const ROOT_CSS: &str = "html, body { margin: 0; padding: 0; background: #17181b; }";
@@ -159,18 +159,18 @@ fn WithSetlist(setlist: Setlist, children: Element) -> Element {
     // measuring a session while it plays without a hand on the mouse.
     use_hook(|| {
         if std::env::var("FTS_SESSION_AUTOPLAY").is_ok_and(|v| v != "0") {
-            session_daw::engine::transport(session_daw::engine::Move::PlayStop, 0.0);
+            session_ui::engine::transport(session_ui::engine::Move::PlayStop, 0.0);
         }
     });
     children
 }
 
 /// The engine's set, as it changes: every window shows the one set the
-/// engine has (`session_daw::studio_engine::set`), whoever changed it.
-pub(super) fn use_engine_set() -> Signal<session_daw::studio_engine::set::SetView> {
-    let mut shown = use_signal(session_daw::studio_engine::set::view);
+/// engine has (`session_ui::studio_engine::set`), whoever changed it.
+pub(super) fn use_engine_set() -> Signal<session_ui::studio_engine::set::SetView> {
+    let mut shown = use_signal(session_ui::studio_engine::set::view);
     use_future(move || async move {
-        let mut changes = session_daw::studio_engine::set::subscribe();
+        let mut changes = session_ui::studio_engine::set::subscribe();
         loop {
             let now = changes.borrow_and_update().clone();
             if now.revision != shown.peek().revision {
@@ -214,11 +214,11 @@ pub(super) async fn off_thread<T: Send + 'static>(
 
 /// A way of opening a set, run in the engine on a thread of its own: it
 /// says each step to its `progress` — the loading screen's.
-use session_daw::studio_engine::set::OpenWork;
+use session_ui::studio_engine::set::OpenWork;
 
 /// An error for a person: the whole chain, in a few words.
 pub(super) fn brief(e: &eyre::Report) -> String {
-    session_daw::task_set::brief(&format!("{e:#}"))
+    session_ui::task_set::brief(&format!("{e:#}"))
 }
 
 /// Where the start screen is: its sections, down a sidebar (a tab bar
@@ -295,7 +295,7 @@ fn Start() -> Element {
     let mut local = use_signal(documents);
     // The songs opened lately, each with its alternatives — read again
     // each time the start screen is shown.
-    let recent = use_hook(session_daw::projects::recent);
+    let recent = use_hook(session_ui::projects::recent);
     let mut section = use_signal(|| Section::Home);
     let width = use_width();
 
@@ -305,7 +305,7 @@ fn Start() -> Element {
     let engine = use_engine_set();
     let shown_from = use_hook(|| engine.peek().revision);
     use_effect(move || {
-        use session_daw::studio_engine::set::Opening as Engine;
+        use session_ui::studio_engine::set::Opening as Engine;
         let now = engine.read();
         match &now.opening {
             Engine::Busy(step) => opening.set(Opening::Busy(step.clone())),
@@ -323,7 +323,7 @@ fn Start() -> Element {
     // when it is ready, and meanwhile the loading screen.
     let mut open_set = move |first: Progress, work: OpenWork| {
         opening.set(Opening::Busy(first.clone()));
-        if let Err(busy) = session_daw::studio_engine::set::open_with(first, work) {
+        if let Err(busy) = session_ui::studio_engine::set::open_with(first, work) {
             opening.set(Opening::Failed(busy.to_string()));
         }
     };
@@ -348,9 +348,9 @@ fn Start() -> Element {
     let mut new_project = move || {
         open_set(
             Progress::Opening {
-                title: session_daw::project_new::UNTITLED.to_owned(),
+                title: session_ui::project_new::UNTITLED.to_owned(),
             },
-            Box::new(|_| session_daw::project_new::setlist(Some(true))),
+            Box::new(|_| session_ui::project_new::setlist(Some(true))),
         );
     };
 
@@ -358,22 +358,22 @@ fn Start() -> Element {
     let OpenFirst(first) = use_context();
     use_hook(move || {
         // A version picked from inside a song, which came back out here to
-        // open it (`session_daw::versions`, `SESSION_OPEN`) — or, the
+        // open it (`session_ui::versions`, `SESSION_OPEN`) — or, the
         // first time only, what the launch chose. Every time, that was
         // reopened whenever the start screen came back: Back from a song
         // the app was launched with went straight back into it.
         let launch =
             first.filter(|_| !LAUNCH_OPENED.swap(true, std::sync::atomic::Ordering::AcqRel));
-        if let Some(guid) = session_daw::project_new::take_made() {
+        if let Some(guid) = session_ui::project_new::take_made() {
             // A new song made from inside another (`SESSION_NEW`), which
             // came back out here to open it: it is in the engine already.
             open_set(
                 Progress::Opening {
-                    title: session_daw::project_new::UNTITLED.to_owned(),
+                    title: session_ui::project_new::UNTITLED.to_owned(),
                 },
-                Box::new(move |_| session_daw::project_new::setlist_of(guid)),
+                Box::new(move |_| session_ui::project_new::setlist_of(guid)),
             );
-        } else if let Some(path) = session_daw::projects::take_next().or(launch) {
+        } else if let Some(path) = session_ui::projects::take_next().or(launch) {
             open_path(path);
         } else if super::handoff::take_new() {
             // Studio's welcome screen asked for a new song.
@@ -434,7 +434,7 @@ fn Start() -> Element {
         let library = account.library(&org);
         let for_songs = library.clone();
         spawn(async move {
-            match off_thread(move || session_daw::stream_set::setlists(&library)).await {
+            match off_thread(move || session_ui::stream_set::setlists(&library)).await {
                 Some(Ok(list)) => setlists.set(Load::Ready(list)),
                 Some(Err(e)) => setlists.set(Load::Failed(brief(&e))),
                 None => {}
@@ -468,7 +468,7 @@ fn Start() -> Element {
             for other in others {
                 let library = account.library(&other);
                 if let Some(Ok(lists)) =
-                    off_thread(move || session_daw::stream_set::setlists(&library)).await
+                    off_thread(move || session_ui::stream_set::setlists(&library)).await
                 {
                     found.extend(lists.into_iter().map(|l| (other.clone(), l)));
                 }
@@ -489,10 +489,10 @@ fn Start() -> Element {
         open_set(
             Progress::Joining { retry: None },
             Box::new(move |_| {
-                use session_daw::open::{ModeState, RemoteTarget};
+                use session_ui::open::{ModeState, RemoteTarget};
                 let target = RemoteTarget::Session { address };
-                session_daw::open::set_mode(ModeState {
-                    requested: session_daw::open::AudioMode::Remote,
+                session_ui::open::set_mode(ModeState {
+                    requested: session_ui::open::AudioMode::Remote,
                     target: Some(target.clone()),
                     ..ModeState::engine()
                 });
@@ -521,7 +521,7 @@ fn Start() -> Element {
             open_set(
                 Progress::Joining { retry: None },
                 Box::new(move |progress| {
-                    session_daw::stream_set::open(Remote::Live { link: live, name }, progress)
+                    session_ui::stream_set::open(Remote::Live { link: live, name }, progress)
                 }),
             );
         }
@@ -573,7 +573,7 @@ fn Start() -> Element {
                 retry: None,
             },
             Box::new(move |progress| {
-                session_daw::stream_set::open(
+                session_ui::stream_set::open(
                     Remote::Library {
                         library,
                         setlist,
@@ -622,7 +622,7 @@ fn Start() -> Element {
             spawn(async move {
                 let named = title.clone();
                 let outcome = off_thread(move || {
-                    session_daw::stream_set::download(
+                    session_ui::stream_set::download(
                         &library,
                         &named,
                         &list,
@@ -673,7 +673,7 @@ fn Start() -> Element {
     );
     let remove = use_callback(move |path: PathBuf| {
         let Some(into) = documents_dir() else { return };
-        match session_daw::stream_set::remove_download(&into, &path) {
+        match session_ui::stream_set::remove_download(&into, &path) {
             Ok(()) => local.set(documents()),
             Err(e) => note.set(Some((
                 false,
@@ -695,7 +695,7 @@ fn Start() -> Element {
             _ => ("Opening".to_owned(), String::new(), false),
         };
         return rsx! {
-            session_daw::loading::LoadingFrame { headline, detail, failed,
+            session_ui::loading::LoadingFrame { headline, detail, failed,
                 button {
                     style: "margin-top:14px; height:44px; padding:0 20px; border:1px solid {RULE}; border-radius:10px; \
                             background:transparent; color:{TEXT}; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer;",
@@ -836,7 +836,7 @@ fn Start() -> Element {
     let into = documents_dir();
     let downloaded = move |title: &str| {
         into.as_ref()
-            .is_some_and(|dir| session_daw::stream_set::download_file(dir, title).exists())
+            .is_some_and(|dir| session_ui::stream_set::download_file(dir, title).exists())
     };
 
     // What the section shows.
@@ -1587,7 +1587,7 @@ fn OrgSwitcher(
             style: "position:relative; flex:none;",
             if open() {
                 div {
-                    style: "{session_daw::shell::SCRIM} z-index:20;",
+                    style: "{session_ui::shell::SCRIM} z-index:20;",
                     onclick: move |_| open.set(false),
                 }
                 div {
@@ -1820,7 +1820,7 @@ fn DownloadChoice(downloaded: bool, busy: bool, on_pick: EventHandler<Offline>) 
             }
             if open() {
                 div {
-                    style: "{session_daw::shell::SCRIM} z-index:20;",
+                    style: "{session_ui::shell::SCRIM} z-index:20;",
                     onclick: move |_| open.set(false),
                 }
                 div {
@@ -1991,19 +1991,19 @@ fn LocalRow(
 
 /// A song opened lately: its name, which version was open and when, and
 /// a pill for each version to open — the song itself and every
-/// checkpoint saved beside it (`session_daw::projects`).
+/// checkpoint saved beside it (`session_ui::projects`).
 #[component]
-fn RecentRow(song: session_daw::projects::Recent, on_open: EventHandler<PathBuf>) -> Element {
+fn RecentRow(song: session_ui::projects::Recent, on_open: EventHandler<PathBuf>) -> Element {
     let name = song.name();
-    let alternatives = session_daw::projects::alternatives(&song.base);
-    let main = session_daw::projects::main_of(&song.base);
+    let alternatives = session_ui::projects::alternatives(&song.base);
+    let main = session_ui::projects::main_of(&song.base);
     let detail = match (song.is_song(), song.opened_alternative()) {
-        (_, Some(alt)) => format!("{alt} · {}", session_daw::projects::ago(song.at)),
-        (true, None) => format!("Song · {}", session_daw::projects::ago(song.at)),
+        (_, Some(alt)) => format!("{alt} · {}", session_ui::projects::ago(song.at)),
+        (true, None) => format!("Song · {}", session_ui::projects::ago(song.at)),
         (false, None) => format!(
             "{} · {}",
             kind_of(&song.opened),
-            session_daw::projects::ago(song.at)
+            session_ui::projects::ago(song.at)
         ),
     };
     let last = song.opened.clone();
@@ -2258,7 +2258,7 @@ pub(super) fn documents() -> Vec<PathBuf> {
             // downloaded is listed by its `.setlist` instead.
             !p.file_name().is_some_and(|n| {
                 n.to_string_lossy().starts_with('.')
-                    || n == session_daw::stream_set::DOWNLOADED_SONGS
+                    || n == session_ui::stream_set::DOWNLOADED_SONGS
             })
         })
         .map(|p| {
@@ -2289,8 +2289,8 @@ fn documents_dir() -> Option<PathBuf> {
 pub(super) fn title_of(path: &std::path::Path) -> String {
     // A checkpoint is its song's: "Unbreakable · Organized".
     if let (Some(alt), Some(base)) = (
-        session_daw::projects::alternative_name(path),
-        session_daw::projects::base_of(path),
+        session_ui::projects::alternative_name(path),
+        session_ui::projects::base_of(path),
     ) {
         let song = base
             .file_name()
@@ -2321,7 +2321,7 @@ fn kind_of(path: &std::path::Path) -> String {
         "setlist" => "Setlist".to_owned(),
         "rpp" => "REAPER project".to_owned(),
         "session" => "Song".to_owned(),
-        _ if session_daw::setlist::song_in(path).is_some() => "Song".to_owned(),
+        _ if session_ui::setlist::song_in(path).is_some() => "Song".to_owned(),
         _ => "Setlist".to_owned(),
     }
 }
@@ -2543,7 +2543,7 @@ pub fn use_welcome_account() -> WelcomeAccount {
                 let mut failed = None;
                 for slug in all {
                     let library = account.library(&slug);
-                    match session_daw::stream_set::setlists(&library) {
+                    match session_ui::stream_set::setlists(&library) {
                         Ok(got) => found.push((slug, got)),
                         Err(e) => {
                             tracing::warn!(task.org = %slug, error = %e, "welcome: an org's library could not be read");

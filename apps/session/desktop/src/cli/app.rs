@@ -1,5 +1,5 @@
 //! Drive the Session window that is running (Studio's, or Session's own),
-//! through its Action List over MCP (`session_daw::studio_engine::mcp`) — or
+//! through its Action List over MCP (`session_ui::studio_engine::mcp`) — or
 //! `studio engine`, the same Action List with no window.
 //!
 //! The window says where it listens in `$XDG_CONFIG_HOME/fts/session-mcp.json`

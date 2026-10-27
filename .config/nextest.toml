@@ -2,7 +2,7 @@
 # A test is reported slow at 60 s and killed at 120 s. It was killed at
 # 30 s, which only held on an idle box: one CI run on a loaded VM
 # (2026-10-23) timed out 16 tests that pass everywhere else — the eq
-# screenshots, the guitar rig RPCs, the session-daw engine tests, the
+# screenshots, the guitar rig RPCs, the session-engine tests, the
 # reverb metrics — each a few seconds idle. Overriding them one at a time
 # (below) chased load, not code. Two minutes still catches a hang, and a
 # test that is merely slow shows up as SLOW in every run, not as red.

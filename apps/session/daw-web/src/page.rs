@@ -10,7 +10,7 @@
 //! box for the link Task gave, and the way to the demo. It does not guess
 //! at a song: the static server answers a missing file with the site's
 //! `index.html`, so a guessed one opened as a page of HTML. See
-//! `session_daw::web_engine`.
+//! `session_ui::web_engine`.
 
 use dioxus::prelude::*;
 
@@ -53,9 +53,9 @@ fn guest_name() -> String {
 /// (`?live=<link>&name=<who>`), or the song a share link shares
 /// (`?share=<link>`) — and the guide library's link (`&guide=<link>`).
 /// `None` when the address names neither: the page asks for a link.
-fn source() -> (Option<session_daw::web_engine::WebSource>, Option<String>) {
+fn source() -> (Option<session_ui::web_engine::WebSource>, Option<String>) {
     use session::open_link::{AppOpen, app_open};
-    use session_daw::web_engine::WebSource;
+    use session_ui::web_engine::WebSource;
     let query = web_sys::window()
         .and_then(|w| w.location().search().ok())
         .and_then(|q| web_sys::UrlSearchParams::new_with_str(&q).ok());
@@ -85,7 +85,7 @@ fn App() -> Element {
     rsx! {
         style { {TAILWIND} }
         if let Some(source) = source {
-            session_daw::web_host::WebDemo { source, guide }
+            session_ui::web_host::WebDemo { source, guide }
         } else {
             session::open_link::OpenSet { task_url: app_shell::web_config::current().task_url }
         }

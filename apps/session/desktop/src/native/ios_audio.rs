@@ -27,7 +27,7 @@ use objc2_media_player::{
     MPNowPlayingInfoPropertyPlaybackRate, MPRemoteCommand, MPRemoteCommandCenter,
     MPRemoteCommandEvent, MPRemoteCommandHandlerStatus,
 };
-use session_daw::device_audio::{Change, Report};
+use session_ui::device_audio::{Change, Report};
 
 /// Where the microphone choice is kept (Settings → This device): it applies
 /// as the session is set up, at launch.

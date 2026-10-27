@@ -181,7 +181,7 @@ fn setlist() -> Element {
 fn chart() -> Element {
     stand_in("perform.chart · Chart { paged }")
 }
-/// Session's dock, as `session_daw::performer` builds it: the rig half
+/// Session's dock, as `session_ui::performer` builds it: the rig half
 /// when one is paired, the transport (TransportButtons over the nudge row).
 fn dock() -> Element {
     rsx! {

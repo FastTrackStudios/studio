@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 use dioxus::prelude::*;
 use lucide_dioxus::{ArrowDown, ArrowUp, ChevronLeft, ListMusic, Play, Plus, Search, X};
-use session_daw::stream_set::{Library, LibrarySetlist, LibrarySong, ListKind, with_library};
+use session_ui::stream_set::{Library, LibrarySetlist, LibrarySong, ListKind, with_library};
 
 use super::start::{
     ACCENT, BAR, BG, Chip, DIM, Heading, Load, Pill, RULE, TEXT, TOP, WARN, brief, off_thread,

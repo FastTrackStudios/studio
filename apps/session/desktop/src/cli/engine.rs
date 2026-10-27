@@ -1,6 +1,6 @@
 //! `studio engine`: Session's whole engine, headless, in this process.
 //!
-//! The engine a window runs (`session_daw::studio_engine::headless`): one
+//! The engine a window runs (`session_ui::studio_engine::headless`): one
 //! `Standalone`, the set's one audio engine, the set itself, and the Action
 //! List on MCP (127.0.0.1:47811, `FTS_MCP_PORT`) — so `studio open`,
 //! `studio songs`, `studio song next` and `studio run …` drive it exactly
@@ -26,7 +26,7 @@
 use std::path::{Path, PathBuf};
 
 use clap::Args as ClapArgs;
-use session_daw::studio_engine::{headless, set};
+use session_ui::studio_engine::{headless, set};
 
 /// What `studio engine` was asked to do.
 #[derive(ClapArgs, Debug)]
@@ -163,13 +163,13 @@ async fn serve_client(stream: tokio::net::UnixStream, router: daw::LayerRouter) 
     }
 }
 
-/// Where the Action List is served, as `session_daw::studio_engine::mcp`
+/// Where the Action List is served, as `session_ui::studio_engine::mcp`
 /// serves it.
 fn mcp_url() -> String {
     let port = std::env::var("FTS_MCP_PORT")
         .ok()
         .and_then(|p| p.parse::<u16>().ok())
-        .unwrap_or(session_daw::studio_engine::mcp::DEFAULT_PORT);
+        .unwrap_or(session_ui::studio_engine::mcp::DEFAULT_PORT);
     format!("http://127.0.0.1:{port}/mcp")
 }
 

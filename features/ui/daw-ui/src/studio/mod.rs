@@ -6,7 +6,7 @@
 //!
 //! The studio window this module was — a DOM arrangement, rails, ruler,
 //! transport and track panel for a WRY WebView — is retired. The
-//! arrangement is painted by ONE thing, `session_daw::widget::
+//! arrangement is painted by ONE thing, `session_ui::widget::
 //! ArrangementWidget`, which the Session app mounts; see that crate.
 //!
 //! # Nothing is copied that could be shared

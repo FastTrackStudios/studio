@@ -64,10 +64,10 @@ cli = [
 # The app on Blitz (dioxus-native): the panels-and-views shell with our own
 # title bar — see docs/app-on-blitz.md. Desktop only for now (iOS follows);
 # without it the desktop build launches the WRY app as before.
-native = ["session-domain", "dep:dioxus-native", "dep:session-daw", "dep:winit", "dep:rfd", "dep:dirs", "dep:lucide-dioxus"]
+native = ["session-domain", "dep:dioxus-native", "dep:session-ui", "dep:winit", "dep:rfd", "dep:dirs", "dep:lucide-dioxus"]
 # signal's rigs in the session engine: the bass rig, the kit's sampled
-# voices (session-daw's `signal`; NAM's C++ and the sampler build with it).
-signal = ["native", "session-daw/signal"]
+# voices (session-ui's `signal`; NAM's C++ and the sampler build with it).
+signal = ["native", "session-ui/signal"]
 # Session on the web build is a REMOTE: the wasm target compiles only the
 # wire surface (session-proto's SetlistService clients + session-ui) and
 # talks to the network engine's SetlistService over the shared `/vox` link
@@ -187,7 +187,7 @@ tracing-subscriber.workspace = true
 # The Blitz shell (feature `native`): the renderer, the studio panels, and
 # winit for the window's title bar.
 dioxus-native = { workspace = true, optional = true }
-session-daw = { path = "../daw", optional = true }
+session-ui = { workspace = true, optional = true, features = ["native"] }
 # The shared FastTrackStudio account and its sign-in UI (STA-361).
 fts-account = { workspace = true, features = ["ui"] }
 winit = { version = "0.31.0-beta.2", optional = true }
