@@ -204,6 +204,7 @@ fn song_name(daw: &daw_standalone::sync::Standalone, project: &ProjectContext) -
         .and_then(std::path::Path::parent)
         .and_then(std::path::Path::file_name)
         .and_then(std::ffi::OsStr::to_str)
+        .filter(|folder| names_an_artist(folder))
         .map(|folder| title_case(&strip_date(folder)))
         .filter(|artist| !artist.is_empty());
     Some(match artist {
@@ -243,6 +244,26 @@ fn strip_working_suffix(name: &str) -> &str {
         .find_map(|suffix| name.strip_suffix(suffix))
         .unwrap_or(name)
         .trim()
+}
+
+/// Whether a song's grandparent folder can name its artist: not one the
+/// app files songs under — a stream's cache (`streamed/share-…/Washed.RPP`,
+/// `task-…`, `peer-…`) or a plain `Session(s)`/`Projects` folder — which
+/// would make every song of a set "… - Streamed".
+fn names_an_artist(folder: &str) -> bool {
+    let lower = folder.trim().to_lowercase();
+    let filing = [
+        "streamed",
+        "session",
+        "sessions",
+        "songs",
+        "projects",
+        "reaper media",
+    ];
+    !filing.contains(&lower.as_str())
+        && !["share-", "task-", "peer-"]
+            .iter()
+            .any(|prefix| lower.starts_with(prefix))
 }
 
 /// `crescendum-2026-10-08` → `crescendum`: a trailing `-YYYY-MM-DD`.
@@ -731,4 +752,24 @@ pub fn steps(
         target.hide_in_tcp("MIX BUS")?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::names_an_artist;
+
+    #[test]
+    fn filing_folders_do_not_name_an_artist() {
+        assert!(names_an_artist("crescendum-2026-10-08"));
+        assert!(names_an_artist("Elevation Rhythm"));
+        for folder in [
+            "streamed",
+            "Session",
+            "Sessions",
+            "share-677ef0a3",
+            "task-washed",
+        ] {
+            assert!(!names_an_artist(folder), "{folder}");
+        }
+    }
 }

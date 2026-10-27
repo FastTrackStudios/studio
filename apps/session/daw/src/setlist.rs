@@ -134,9 +134,11 @@ impl Song {
     }
 
     /// What the song is shown as: its SONG region's name ("Unbreakable -
-    /// Crescendum", the one prepare gives it), else its [`Self::name`] —
-    /// the file's, which stays what the song is KNOWN by (collaboration
-    /// and the modes it was worked in are kept under it).
+    /// Crescendum", the one prepare gives it) when that names this song,
+    /// else its [`Self::name`] — the file's, or the set's title for it,
+    /// which stays what the song is KNOWN by (collaboration and the modes
+    /// it was worked in are kept under it). A region naming something else
+    /// (a set's name stamped into every song of it) is not the song's.
     #[must_use]
     pub fn title(&self) -> String {
         self.session
@@ -145,7 +147,7 @@ impl Song {
             .iter()
             .find(|s| s.lane == 0)
             .map(|s| s.name.trim().to_string())
-            .filter(|t| !t.is_empty())
+            .filter(|t| names_song(t, &self.name))
             .unwrap_or_else(|| self.name.clone())
     }
 
@@ -166,6 +168,29 @@ impl Song {
     pub fn ended(&self, at: f64) -> bool {
         self.span.1 > self.span.0 && at >= self.span.1
     }
+}
+
+/// Whether `region` ("Washed - Elevation Rhythm") names the song known
+/// as `name` (`Washed`, `washed.current`, `Washed - Elevation Rhythm`):
+/// their titles — before the ` - ` an artist follows — are the same
+/// letters and digits, case, spacing and punctuation aside.
+fn names_song(region: &str, name: &str) -> bool {
+    let title = |text: &str| -> String {
+        let text = [".current", ".organized", ".raw"]
+            .iter()
+            .find_map(|suffix| text.trim().strip_suffix(suffix))
+            .unwrap_or(text);
+        let text = text.split('[').next().unwrap_or(text);
+        text.split(" - ")
+            .next()
+            .unwrap_or(text)
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    };
+    let region = title(region);
+    !region.is_empty() && region == title(name)
 }
 
 /// The songs, in order, and which one is up.
@@ -682,5 +707,35 @@ impl ReadOnlySet {
     #[must_use]
     pub fn here() -> bool {
         dioxus::prelude::try_consume_context::<Self>().is_some_and(|r| r.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::names_song;
+
+    #[test]
+    fn a_song_region_names_its_own_song() {
+        assert!(names_song("Washed - Elevation Rhythm", "Washed"));
+        assert!(names_song(
+            "Unbreakable - Crescendum",
+            "unbreakable.current"
+        ));
+        assert!(names_song("Always On Time - Pat Barrett", "Always_on_Time"));
+        assert!(names_song(
+            "Belief - John Mayer",
+            "Belief - John Mayer [Battle SP26]"
+        ));
+        assert!(names_song("God, I'm Just Grateful", "God Im Just Grateful"));
+    }
+
+    #[test]
+    fn a_set_name_stamped_into_a_song_is_not_its_title() {
+        assert!(!names_song("Sr. Recital Showcase - Session", "Washed"));
+        assert!(!names_song(
+            "Sr. Recital Showcase - Session",
+            "Holy Forever - Bethel"
+        ));
+        assert!(!names_song("", "Washed"));
     }
 }
