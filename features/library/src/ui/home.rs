@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use lucide_dioxus::{FolderOpen, ListMusic, MessageSquare, Music, Pause, Play};
 
 use super::kit::*;
-use super::{Open, Route, open, use_library, use_nav, use_wide};
+use super::{Open, Route, Viewport, open, use_library, use_nav, use_wide};
 use crate::model::{Anchor, Library, Listen, Piece, Ready, Setlist, minutes};
 
 /// What a list row needs to say about a doc and where it goes.
@@ -456,6 +456,7 @@ fn NewMixes() -> Element {
     let nav = use_nav();
     let player = super::player::use_player();
     let wide = use_wide();
+    let Viewport(size) = use_context::<Viewport>();
     let l = lib.read();
     let queue = l.new_mixes();
     if queue.is_empty() {
@@ -480,7 +481,13 @@ fn NewMixes() -> Element {
             ))
         })
         .collect();
-    let columns = if wide { 4 } else { 2 };
+    let columns = if wide {
+        4
+    } else if size().0 >= 700.0 {
+        3
+    } else {
+        2
+    };
     rsx! {
         Heading { text: "New mixes".to_owned(),
             trailing: rsx! { TextButton { label: "Play all".to_owned(), on_press: {

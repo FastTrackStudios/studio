@@ -101,7 +101,8 @@ impl Player {
 
     /// Hear `listen` from `at`: the current mix sought, the same session's
     /// other version swapped in at the same moment (A/B), anything else put
-    /// in front of what was up next.
+    /// in front of what was up next. `play` starts it; without it the
+    /// player stays as it was (playing or paused).
     pub fn cue(mut self, listen: Listen, at: f32, play: bool) {
         match self.current_peek() {
             Some(now) if now == listen => {}
@@ -530,6 +531,9 @@ pub(crate) fn NowPlaying() -> Element {
     let lib = use_library();
     let nav = use_nav();
     let Viewport(size) = use_context::<Viewport>();
+    // Room for the app's own controls at the top left (a Mac's window
+    // buttons).
+    let inset = try_use_context::<super::BarInset>().map_or(16, |b| b.0);
     let sheet = (player.sheet)();
     if sheet == Sheet::Mini {
         return rsx! {};
@@ -550,7 +554,7 @@ pub(crate) fn NowPlaying() -> Element {
                       background: linear-gradient(180deg, {colour}66 0%, #111114 55%, #0c0c0f 100%); background-color: {DESK}; color: {INK}; font-family: {FONT};",
             // Where it plays from, and the two ways on: down to the page, out
             // to the full session.
-            div { style: "flex-shrink: 0; height: 64px; display: flex; align-items: center; gap: 12px; padding: 8px 16px 0;",
+            div { style: "flex-shrink: 0; height: 64px; display: flex; align-items: center; gap: 12px; padding: 8px 16px 0 {inset}px;",
                 Round { label: "Close", size: 44, on_press: move |()| player.collapse(),
                     ChevronDown { size: 26, color: INK }
                 }
@@ -626,37 +630,38 @@ fn Deck(s: Shown, art: u32, nav_to_review: EventHandler<()>) -> Element {
                 Round { label: "Versions", size: 44, on: versions(), on_press: move |()| versions.toggle(),
                     Layers { size: 22, color: INK }
                 }
-                if versions() {
-                    div { style: "position: absolute; top: 56px; right: 0; width: 320px; max-height: 320px; overflow-y: scroll; z-index: 5; \
-                                  border-radius: 14px; background: #1c1c21; border: 1px solid {RULE_STRONG}; padding: 6px; \
-                                  box-shadow: 0 16px 40px rgba(0,0,0,0.5);",
-                        span { style: "display: block; {COLUMN} color: {INK_3}; padding: 8px 10px 6px;", "Versions" }
-                        for (n, note, by) in s.versions.clone() {
-                            {
-                                let on = n == listen.version;
-                                let bg = if on { "rgba(167,139,250,0.18)" } else { "transparent" };
-                                rsx! {
-                                    button { key: "{n}", class: "lp",
-                                        style: "width: 100%; min-height: 52px; display: flex; align-items: center; justify-content: flex-start; gap: 12px; padding: 6px 10px; border: none; \
-                                                border-radius: 10px; background: {bg}; color: {INK}; font-family: {FONT}; text-align: left;",
-                                        onclick: move |_| {
-                                            // The same moment of the other version: A/B.
-                                            let t = *player.at.peek();
-                                            player.cue(crate::model::Listen { session: listen.session, version: n }, t, *player.playing.peek());
-                                            versions.set(false);
-                                        },
-                                        span { style: "width: 32px; font-size: 15px; font-weight: 750;", "v{n}" }
-                                        div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;",
-                                            span { style: "font-size: 14px; font-weight: 600; {ONE_LINE}", "{note}" }
-                                            span { style: "font-size: 12px; color: {INK_3}; {ONE_LINE}", "{by}" }
-                                        }
+            }
+            if versions() {
+                // Every version, in place of the transport (a list over the
+                // waveform would hand its presses to the bars under it).
+                div { style: "display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: scroll; \
+                              border-radius: 14px; background: rgba(0,0,0,0.25); border: 1px solid {RULE_STRONG}; padding: 6px;",
+                    span { style: "display: block; {COLUMN} color: {INK_3}; padding: 8px 10px 6px;", "Versions · same moment" }
+                    for (n, note, by) in s.versions.clone() {
+                        {
+                            let on = n == listen.version;
+                            let bg = if on { "rgba(167,139,250,0.18)" } else { "transparent" };
+                            rsx! {
+                                button { key: "{n}", class: "lp",
+                                    style: "width: 100%; min-height: 52px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-start; gap: 12px; padding: 6px 10px; border: none; \
+                                            border-radius: 10px; background: {bg}; color: {INK}; font-family: {FONT}; text-align: left;",
+                                    onclick: move |_| {
+                                        // The same moment of the other version: A/B.
+                                        let t = *player.at.peek();
+                                        player.cue(crate::model::Listen { session: listen.session, version: n }, t, false);
+                                        versions.set(false);
+                                    },
+                                    span { style: "width: 32px; font-size: 15px; font-weight: 750;", "v{n}" }
+                                    div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;",
+                                        span { style: "font-size: 14px; font-weight: 600; {ONE_LINE}", "{note}" }
+                                        span { style: "font-size: 12px; color: {INK_3}; {ONE_LINE}", "{by}" }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
+            } else {
             div { style: "display: flex; flex-direction: column; gap: 6px;",
                 Scrubber { peaks: s.peaks.clone(), seconds: s.seconds, at, marks: s.marks.clone(), height: 56 }
                 div { style: "display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.6);",
@@ -686,7 +691,7 @@ fn Deck(s: Shown, art: u32, nav_to_review: EventHandler<()>) -> Element {
                     SkipForward { size: 30, color: INK, fill: INK }
                 }
                 Round { label: "Queue", size: 52, on: sheet == Sheet::Queue,
-                    on_press: move |()| { let mut s = player.sheet; s.set(if *s.peek() == Sheet::Queue { Sheet::Playing } else { Sheet::Queue }); },
+                    on_press: move |()| { let mut s = player.sheet; let now = *s.peek(); s.set(if now == Sheet::Queue { Sheet::Playing } else { Sheet::Queue }); },
                     ListMusic { size: 26, color: INK }
                 }
             }
@@ -705,6 +710,7 @@ fn Deck(s: Shown, art: u32, nav_to_review: EventHandler<()>) -> Element {
                 Round { label: "Share", size: 48, on_press: move |()| {},
                     Share { size: 22, color: "rgba(255,255,255,0.75)" }
                 }
+            }
             }
         }
     }

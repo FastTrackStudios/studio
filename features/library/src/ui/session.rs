@@ -77,7 +77,7 @@ impl Here {
             version: *self.version.peek(),
         };
         let was_empty = player.current().is_none();
-        player.cue(listen, at, *player.playing.peek());
+        player.cue(listen, at, false);
         if was_empty {
             let mut from = player.from;
             from.set(self.title.peek().clone());
@@ -311,13 +311,14 @@ fn ReviewMain(session: Session) -> Element {
         let had = here.has(player);
         version.set(n);
         if had {
+            let at = *player.at.peek();
             player.cue(
                 Listen {
                     session: here.id,
                     version: n,
                 },
-                *player.at.peek(),
-                *player.playing.peek(),
+                at,
+                false,
             );
         }
     };
