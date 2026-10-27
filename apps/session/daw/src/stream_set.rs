@@ -84,6 +84,7 @@ where
 pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist> {
     // Until this open says otherwise, what it opens is not a library set.
     crate::live_host::opened_from_library(false);
+    crate::setlist::forget_pictures();
     use crate::task_set::until_ok;
     let runtime = crate::open::engine_runtime()?;
     // What opens a song spawns tasks (`architect::platform::spawn`): on

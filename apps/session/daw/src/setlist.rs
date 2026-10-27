@@ -342,6 +342,90 @@ impl Setlist {
     }
 }
 
+/// Songs opening behind the one on screen, right now: the pictures wait
+/// for none to be ([`pictures_later`]).
+#[cfg(feature = "native")]
+static OPENING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+#[cfg(feature = "native")]
+impl Opening {
+    /// One more song opening, until the guard drops.
+    fn counted() -> OpeningGuard {
+        OPENING.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        OpeningGuard
+    }
+}
+
+/// A song opening ([`OPENING`]), counted while it lives.
+#[cfg(feature = "native")]
+struct OpeningGuard;
+
+#[cfg(feature = "native")]
+impl Drop for OpeningGuard {
+    fn drop(&mut self) {
+        OPENING.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+    }
+}
+
+/// The songs whose pictures are still to read, oldest first.
+#[cfg(feature = "native")]
+static PICTURES: std::sync::Mutex<std::collections::VecDeque<(StudioSession, String)>> =
+    std::sync::Mutex::new(std::collections::VecDeque::new());
+
+/// Forget the pictures still to read: a new set is opening, and the songs
+/// it replaces are not worth reading.
+#[cfg(feature = "native")]
+pub fn forget_pictures() {
+    if let Ok(mut queue) = PICTURES.lock() {
+        queue.clear();
+    }
+}
+
+/// Read `session`'s pictures (notes, waveforms) later: one song at a time,
+/// on a thread of their own, and only while no song is opening — they go
+/// through the engine the opens need, and read beside them they made every
+/// song after the first wait seconds.
+#[cfg(feature = "native")]
+fn pictures_later(session: StudioSession, project: String) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static RUNNING: AtomicBool = AtomicBool::new(false);
+    if let Ok(mut queue) = PICTURES.lock() {
+        queue.push_back((session, project));
+    }
+    if RUNNING.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let spawned = std::thread::Builder::new()
+        .name("set-pictures".into())
+        .spawn(|| {
+            let Ok(runtime) = crate::open::engine_runtime() else {
+                RUNNING.store(false, Ordering::Release);
+                return;
+            };
+            loop {
+                while OPENING.load(Ordering::Acquire) > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                let next = PICTURES.lock().ok().and_then(|mut q| q.pop_front());
+                let Some((session, project)) = next else {
+                    RUNNING.store(false, Ordering::Release);
+                    // One queued as this let go: take it up again.
+                    if PICTURES.lock().is_ok_and(|q| !q.is_empty())
+                        && !RUNNING.swap(true, Ordering::AcqRel)
+                    {
+                        continue;
+                    }
+                    return;
+                };
+                runtime.block_on(session.fill_previews(&project));
+            }
+        });
+    if spawned.is_err() {
+        RUNNING.store(false, Ordering::Release);
+        tracing::warn!("set: no thread to read the songs' pictures on");
+    }
+}
+
 /// Where a song named `name` goes among the songs `here` (in set order),
 /// by the set's `order`: after every song that comes before it, and any
 /// the order does not name. At the end when the order does not name it.
@@ -410,6 +494,7 @@ impl Setlist {
     ///
     /// The song did not open, or could not be read back.
     pub fn open_behind(opening: Opening) -> eyre::Result<Song> {
+        let _opening = Opening::counted();
         let Opening {
             path,
             title,
@@ -456,8 +541,7 @@ impl Setlist {
         crate::collab::song_opened(&guid);
         // Its waveforms behind it: the song is in the set now, its
         // pictures drawn as they are read.
-        let (waves, project) = (session.clone(), guid.clone());
-        crate::open::engine_runtime()?.spawn(async move { waves.fill_waves(&project).await });
+        pictures_later(session.clone(), guid.clone());
         Ok(Song::opened(&path, title, guid, session))
     }
 

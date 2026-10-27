@@ -165,6 +165,7 @@ impl StudioSession {
         chart_text: Option<&str>,
         waves: bool,
     ) -> eyre::Result<Self> {
+        let mut stages = crate::stages::Stages::start();
         const SCENE: &str = "drum-mixing";
         // Say which step fails: `fetch_of` answers only yes or no.
         let facade =
@@ -176,6 +177,7 @@ impl StudioSession {
         let raw = daw_ui::studio::project::fetch_of(handle.clone())
             .await
             .ok_or_else(|| eyre::eyre!("could not read {name} back"))?;
+        let fetch_ms = stages.mark("read.fetch_ms");
         // Its automation lanes: from this process's engine, or through
         // the facade from wherever the engine is.
         #[cfg(feature = "native")]
@@ -189,6 +191,7 @@ impl StudioSession {
             let (lanes, takes) = crate::automation::read_remote(&raw.tracks).await;
             crate::automation::adopt_remote(lanes, takes);
         }
+        let automation_ms = stages.mark("read.automation_ms");
         let planner = Planner {
             raw: Arc::new(raw),
             scene: Some(SCENE),
@@ -207,18 +210,24 @@ impl StudioSession {
                 from_text
             }),
         };
+        let kinds_ms = stages.mark("read.kinds_ms");
         let (studio, rows) = planner.plan(&planner.raw);
+        let plan_ms = stages.mark("read.plan_ms");
         let previews = crate::midi::Previews::default();
         let items = || studio.0.items.values().flatten();
-        previews
-            .fill_in(
-                &handle,
-                items()
-                    .filter(|item| studio.0.is_midi(&item.guid))
-                    .map(|item| (item.guid.clone(), item.length.as_seconds()))
-                    .collect(),
-            )
-            .await;
+        // A song opened behind the one on screen joins its set first; its
+        // pictures are read after ([`Self::fill_previews`]).
+        if waves {
+            previews
+                .fill_in(
+                    &handle,
+                    items()
+                        .filter(|item| studio.0.is_midi(&item.guid))
+                        .map(|item| (item.guid.clone(), item.length.as_seconds()))
+                        .collect(),
+                )
+                .await;
+        }
         if waves {
             previews
                 .fill_waves_in(
@@ -230,6 +239,16 @@ impl StudioSession {
                 )
                 .await;
         }
+        let previews_ms = stages.mark("read.previews_ms");
+        tracing::info!(
+            song.name = name,
+            read.fetch_ms = fetch_ms,
+            read.automation_ms = automation_ms,
+            read.kinds_ms = kinds_ms,
+            read.plan_ms = plan_ms,
+            read.previews_ms = previews_ms,
+            "song read back"
+        );
         let chart = chart_text
             .and_then(|text| {
                 keyflow::parse(text)
@@ -250,23 +269,25 @@ impl StudioSession {
 }
 
 impl StudioSession {
-    /// Read the waveforms of `project`'s audio items into its previews —
-    /// after the song has joined its set, not before: read first, every
-    /// song of a set waited seconds on its pictures before it could be
-    /// picked. The window draws each as it lands (`Previews` counts them).
-    pub async fn fill_waves(&self, project: &str) {
+    /// Read `project`'s pictures — its MIDI items' notes, its audio items'
+    /// waveforms — into its previews, after the song has joined its set:
+    /// read first, every song of a set waited seconds on them before it
+    /// could be picked, and the reads held up the songs opening beside it.
+    /// The window draws each as it lands (`Previews` counts them).
+    pub async fn fill_previews(&self, project: &str) {
         let Some(facade) = daw_control::Daw::try_get() else {
             return;
         };
         let Ok(handle) = facade.project(project.to_owned()).await else {
             return;
         };
-        let audio: Vec<String> = self
-            .project
-            .0
-            .items
-            .values()
-            .flatten()
+        let items = || self.project.0.items.values().flatten();
+        let midi = items()
+            .filter(|item| self.project.0.is_midi(&item.guid))
+            .map(|item| (item.guid.clone(), item.length.as_seconds()))
+            .collect();
+        self.previews.fill_in(&handle, midi).await;
+        let audio = items()
             .filter(|item| !self.project.0.is_midi(&item.guid))
             .map(|item| item.guid.clone())
             .collect();
