@@ -58,6 +58,11 @@ pub struct OmniLayer {
     /// extreme aliased — the "bit crushed" choir), below a higher one
     /// pitched down. `None`: neutral. See [`OmniLayer::timbre_semis`].
     pub timbre: Option<f32>,
+    /// Timbre Shift's mode (`MULTISAMPLE tbmd`, a selector): index 1 (0.02,
+    /// ~92 % of active sample layers) remaps zones as
+    /// [`sampler::instrument::timbre_shift_semis`]; index 0 is another
+    /// process (no single zone matches it), not modelled — neutral.
+    pub timbre_remap: bool,
     /// Soundsource Release Volume (`MULTISAMPLE relVol`), 0..1 (0.75 the
     /// default): the level of the soundsource's key-up release samples, 0 =
     /// none. See [`OmniLayer::release_db`].
@@ -291,17 +296,7 @@ pub fn filter_gain_db(g: f32) -> f32 {
     9.5
 }
 
-/// Timbre Shift's reach each side of centre, in semitones, when realized as
-/// a key remap — **off** (0): measured against the plugin, Omnisphere's
-/// Timbre Shift is not a remap (away from centre no shift fits it within
-/// 12 dB, and at 0 it drops the level ~26 dB), so remapping would only move
-/// the sound somewhere else wrong. `FTS_TIMBRE_RANGE` turns it on for
-/// experiments; the probe is `tools/omni_probe` + `timbre_fit.py` notes in
-/// the memory file.
-pub const TIMBRE_RANGE_SEMIS: f32 = 0.0;
-
 impl OmniLayer {
-    /// The Timbre Shift in whole semitones: the key the sample is taken from
     /// The release samples' level (dB, relative to `relVol` = 1), `None`
     /// when they are off. Measured against the plugin (Double Felt Grand, key
     /// 60, the release isolated as the difference from `relVol` = 0): not a
@@ -332,15 +327,21 @@ impl OmniLayer {
         Some(y0 + (y1 - y0) * (v - x0) / (x1 - x0).max(1e-6))
     }
 
-    /// is the note minus this (positive: a lower key pitched up).
+    /// The Timbre Shift in whole semitones: the key the sample is taken from
+    /// is the note minus this (positive: a lower key pitched up); 0 when the
+    /// layer's Timbre is not a remap.
     #[must_use]
     pub fn timbre_semis(&self) -> i32 {
-        let range = std::env::var("FTS_TIMBRE_RANGE")
+        // `FTS_TIMBRE_RANGE=s`: a straight ±s reach instead (a probe sets
+        // timbre 1 and sweeps s to find the plugin's shift for a value).
+        let probe: Option<f32> = std::env::var("FTS_TIMBRE_RANGE")
             .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(TIMBRE_RANGE_SEMIS);
-        self.timbre
-            .map_or(0, |t| (2.0 * (t - 0.5) * range).round() as i32)
+            .and_then(|v| v.parse().ok());
+        match (self.timbre, probe) {
+            (Some(t), Some(range)) => (2.0 * (t - 0.5) * range).round() as i32,
+            (Some(t), None) if self.timbre_remap => sampler::instrument::timbre_shift_semis(t),
+            _ => 0,
+        }
     }
 }
 
@@ -1334,6 +1335,8 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
         layer.timbre = ss_attrs
             .and_then(|m| m.num("timbre"))
             .map(|t| t.clamp(0.0, 1.0));
+        layer.timbre_remap =
+            (ss_attrs.and_then(|m| m.num("tbmd")).unwrap_or(0.02) * 50.0).round() as i32 == 1;
         layer.release_vol = ss_attrs
             .and_then(|m| m.num("relVol"))
             .map(|t| t.clamp(0.0, 1.0));

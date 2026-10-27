@@ -54,8 +54,17 @@ Batch (71 gap-free patches): median held-spectrum gap 6.5 dB with FX,
 5.5 dB voice only. Open: the arpeggiator's timing, resonance in the less
 used ladders (their `r^0.3` laws over-resonate near 0), Waveshaper types
 other than 0 and 0.24 (not memoryless), the noise-free half of `uoct`
-(octave down), Timbre / mogrify routes, multi-element soundsources
-(`OSC Layer0..3Act`).
+(octave down), multi-element soundsources (`OSC Layer0..3Act`).
+
+Measured 2026-10-27, sample layers: **Timbre Shift** (`tbmd` 0.02, ~92 % of
+active sample layers) is an exact semitone remap — the zone of the note minus
+`sampler::instrument::timbre_shift_semis(t)` (−28 at 0 … 0 at 0.5 … +11 at
+0.82, steeper below centre), repitched to the note; static and routed it
+matches the plugin to its own noise on a chromatic source. Open: past 0.82
+the plugin stops remapping (a noisy, quieter sound, ~8 % of layers that use
+Timbre), and `tbmd` 0 is another process. **Mogrify** starts a fresh note
+part way into its sample (25 ms at 0.05 … 257 ms at 1, measured on a
+piano), static and routed. A sample soundsource takes `tune` routes.
 
 ## Status (2026-10-25)
 
@@ -86,7 +95,7 @@ Harmonia (mix / level laws, voices on the layer table, off in older patches),
 the AM section's gain, Valve Radio, Swiss Army Delay, Radio Delay, Studio
 EQ's low cut. Open, by measured impact: the Waveshaper's fold curves (per
 type, a shaping table), resonant filters, LFO / mod-env routes to the 29 %
-of targets not yet translated (Timbre Shift, filter spread, LFO rate,
+of targets not yet translated (filter spread, LFO rate,
 envelope times, FX parameters), the reverbs' build-up, and the 31
 pass-through FX units (`tools/omni_probe/fxgap.py` ranks them).
 

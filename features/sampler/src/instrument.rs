@@ -48,6 +48,11 @@ pub struct SamplerInstrument {
     pitch_st: (f32, f32),
     /// The patch's own Mogrify (0..1): the base a `mogrify` route adds onto.
     mogrify: f32,
+    /// Timbre Shift: the patch's knob (0..1, 0.5 neutral) a `timbre` route
+    /// modulates from, and the layer's own key shift (Octave / Semi) the
+    /// remap sits on. `None`: the layer's Timbre is not a remap (Omnisphere's
+    /// other Timbre mode), so a route leaves the zones alone.
+    timbre: Option<(f32, i32)>,
 }
 
 impl SamplerInstrument {
@@ -63,6 +68,7 @@ impl SamplerInstrument {
             holes: crate::engine::HoleDetector::default(),
             pitch_st: (0.0, 0.0),
             mogrify: 0.0,
+            timbre: Some((0.5, 0)),
         }
     }
 
@@ -74,6 +80,20 @@ impl SamplerInstrument {
         self.mogrify = m.clamp(0.0, 1.0);
         self.engine
             .set_note_start_offset_ms(mogrify_offset_ms(self.mogrify));
+        self
+    }
+
+    /// The patch's Timbre Shift knob (`None`: not a remap) on top of the
+    /// layer's own key shift in semitones (`key_semis`, positive: the zones
+    /// of a lower key): the zones of `note − key_semis −`
+    /// [`timbre_shift_semis`]`(t)`, and a `timbre` route modulates `t`.
+    #[must_use]
+    pub fn with_timbre(mut self, t: Option<f32>, key_semis: i32) -> Self {
+        self.timbre = t.map(|t| (t.clamp(0.0, 1.0), key_semis));
+        let shift = self
+            .timbre
+            .map_or(key_semis, |(t, k)| k + timbre_shift_semis(t));
+        self.engine.set_timbre_shift(shift);
         self
     }
 
@@ -207,6 +227,31 @@ pub fn mogrify_offset_ms(m: f32) -> f32 {
     })
 }
 
+/// Omnisphere's Timbre Shift (`MULTISAMPLE timbre`, its remap mode `tbmd`
+/// 0.02) in semitones: the soundsource plays the zone of the note minus this
+/// (positive: a lower key, pitched up), repitched to the note. Measured on a
+/// chromatic source (one zone per key, Cello Tender Mutes) against the plugin,
+/// every 0.01 — each value matched one shift to the render's own noise
+/// (0.5 dB). Steeper below centre than above. Past 0.82 the plugin stops
+/// remapping (it plays a noisy, quieter sound no single zone matches); this
+/// holds the last remap there.
+#[must_use]
+pub fn timbre_shift_semis(t: f32) -> i32 {
+    const LAW: [i8; 83] = [
+        -28, -28, -27, -27, -27, -26, -26, -26, -25, -25, // 0.00
+        -25, -25, -24, -24, -23, -23, -23, -22, -22, -22, // 0.10
+        -21, -21, -20, -20, -19, -19, -19, -18, -18, -17, // 0.20
+        -17, -16, -15, -15, -14, -14, -13, -12, -12, -11, // 0.30
+        -10, -9, -9, -8, -7, -6, -5, -4, -3, -1, // 0.40
+        0, 0, 1, 1, 1, 1, 2, 2, 2, 3, // 0.50
+        3, 3, 3, 4, 4, 4, 5, 5, 5, 6, // 0.60
+        6, 7, 7, 7, 8, 8, 9, 9, 9, 10, // 0.70
+        10, 11, 11, // 0.80
+    ];
+    let i = (t.clamp(0.0, 1.0) * 100.0).round() as usize;
+    i32::from(LAW[i.min(LAW.len() - 1)])
+}
+
 // r[impl signal.soundsource.sample]
 impl Soundsource for SamplerInstrument {
     fn kind(&self) -> SoundsourceKind {
@@ -240,8 +285,10 @@ impl Soundsource for SamplerInstrument {
     /// Modulation inputs a route can drive (0.5 = none): `pitch_mod`
     /// ±12 semitones on every voice, `cutoff_mod` ±4 octaves on the voices'
     /// own filter, `tune` ±24 semitones (the synth oscillator's scale, so a
-    /// pitch route lands the same on either), and `mogrify` 0..1 — how far
-    /// into its sample a fresh note starts ([`mogrify_offset_ms`]).
+    /// pitch route lands the same on either), `mogrify` 0..1 — how far
+    /// into its sample a fresh note starts ([`mogrify_offset_ms`]) — and
+    /// `timbre` 0..1, Omnisphere's Timbre Shift knob ([`timbre_shift_semis`],
+    /// read at note-on like mogrify).
     fn params(&self) -> Vec<PluginParamInfo> {
         let mk = |id, name: &str| PluginParamInfo {
             id,
@@ -261,6 +308,13 @@ impl Soundsource for SamplerInstrument {
                 max: 1.0,
                 default: f64::from(self.mogrify),
             },
+            PluginParamInfo {
+                id: 4,
+                name: "timbre".into(),
+                min: 0.0,
+                max: 1.0,
+                default: f64::from(self.timbre.map_or(0.5, |(t, _)| t)),
+            },
         ]
     }
 
@@ -278,6 +332,11 @@ impl Soundsource for SamplerInstrument {
                 self.engine.set_pitch_mod(self.pitch_st.0 + self.pitch_st.1);
             }
             3 => self.engine.set_note_start_offset_ms(mogrify_offset_ms(raw)),
+            4 => {
+                if let Some((_, key)) = self.timbre {
+                    self.engine.set_timbre_shift(key + timbre_shift_semis(raw));
+                }
+            }
             _ => {}
         }
     }

@@ -1789,6 +1789,17 @@ pub(crate) fn build_sample_source(
         Some(m) => inst.with_mogrify(m),
         None => inst,
     };
+    // Timbre Shift: the knob (`off`: not a remap) over the layer's own key
+    // shift — without the knob, `timbre_semis` is all there is.
+    let key = block.param_f32("timbre_key").unwrap_or(0.0).round() as i32;
+    let inst = match block.param_str("timbre").as_deref() {
+        Some("off") => inst.with_timbre(None, key),
+        Some(_) => inst.with_timbre(block.param_f32("timbre"), key),
+        None => {
+            let semis = block.param_f32("timbre_semis").unwrap_or(0.0).round() as i32;
+            inst.with_timbre(Some(0.5), semis)
+        }
+    };
     Ok((inst, name))
 }
 

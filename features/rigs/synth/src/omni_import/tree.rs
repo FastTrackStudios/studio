@@ -223,7 +223,10 @@ pub fn translate_route(
         // (measured; see `sampler::instrument::mogrify_offset_ms`) — a
         // Random row varies it note by note.
         "mogrify" => ("Soundsource", "mogrify", 1.0),
-        _ => return None, // timbre/LFO-param/E1P0/… — later
+        // Timbre Shift: a sample layer's zone remap, re-chosen at each
+        // note-on (measured; see `sampler::instrument::timbre_shift_semis`).
+        "timbre" => ("Soundsource", "timbre", 1.0),
+        _ => return None, // LFO-param/E1P0/… — later
     };
     let source = translate_source(&route.source)?;
     Some((
@@ -564,15 +567,29 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                     .release_db()
                     .map_or_else(|| "off".to_string(), |db| format!("{db:.2}")),
             );
-            // Timbre Shift takes the zones of a lower key (positive); the
-            // layer's Octave / Semi take the zones of the shifted note.
             if layer.mogrify > 0.0 {
                 sb = sb.with_param("mogrify", format!("{:.4}", layer.mogrify));
             }
-            let timbre = layer.timbre_semis() - layer.key_shift as i32;
+            // Timbre Shift takes the zones of a lower key (positive); the
+            // layer's Octave / Semi take the zones of the shifted note. The
+            // knob rides along so a `timbre` route can move it (`off`: the
+            // other Timbre mode, which does not remap).
+            let key = -(layer.key_shift as i32);
+            let timbre = layer.timbre_semis() + key;
             if timbre != 0 {
                 sb = sb.with_param("timbre_semis", timbre.to_string());
             }
+            if key != 0 {
+                sb = sb.with_param("timbre_key", key.to_string());
+            }
+            sb = sb.with_param(
+                "timbre",
+                match layer.timbre {
+                    _ if !layer.timbre_remap => "off".to_string(),
+                    Some(t) => format!("{t:.4}"),
+                    None => "0.5000".to_string(),
+                },
+            );
             osc.add(sb)
         } else {
             // An empty index is a structure-only import (the lane knobs'
