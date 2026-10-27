@@ -231,6 +231,12 @@ impl VoiceEnv {
             Self::Points { player, .. } => player.note_on(),
         }
     }
+    /// A note's amp-envelope time scale (breakpoint envelopes only).
+    fn set_time_scale(&mut self, scale: Option<(f32, f32)>) {
+        if let (Self::Points { player, .. }, Some((speed, attack))) = (self, scale) {
+            player.set_time_scale(speed, attack);
+        }
+    }
     fn note_off(&mut self) {
         match self {
             Self::Adsr(a) => a.note_off(),
@@ -444,6 +450,8 @@ pub struct NativeWavetable {
     last_note: Option<u8>,
     /// An imported breakpoint amp envelope (replaces the ADSR).
     amp_points: Option<std::sync::Arc<super::breakpoints::Breakpoints>>,
+    /// The amp envelope's per-note timing (see `EnvTiming`).
+    amp_timing: Option<super::breakpoints::EnvTiming>,
     /// Hard-sync ratio (1 = off).
     sync_ratio: f32,
     /// Velocity sensitivity of the amplitude, `None` = linear in velocity
@@ -490,6 +498,7 @@ impl NativeWavetable {
             glide_s: 0.0,
             last_note: None,
             amp_points: None,
+            amp_timing: None,
             vel_sens: None,
             sync_ratio: 1.0,
             vib_rate: 5.0,
@@ -513,6 +522,14 @@ impl NativeWavetable {
                 super::breakpoints::Breakpoints::with_penultimate_sustain(points),
             ));
         }
+        self
+    }
+
+    /// The amp envelope's per-note timing (Omnisphere's Speed knob and its
+    /// Key / Velocity rows, the Velocity row onto the attack).
+    #[must_use]
+    pub fn with_amp_timing(mut self, t: Option<super::breakpoints::EnvTiming>) -> Self {
+        self.amp_timing = t;
         self
     }
 
@@ -699,6 +716,8 @@ impl NativeWavetable {
         if let Some(v) = self.voices.iter_mut().find(|v| v.note == note) {
             v.amp = amp;
             v.env.note_on();
+            v.env
+                .set_time_scale(self.amp_timing.map(|t| t.scale(note, velocity)));
             v.glide_semis = glide_semis;
             v.glide_pos = 0.0;
         } else {
@@ -719,6 +738,7 @@ impl NativeWavetable {
                 None => VoiceEnv::Adsr(Adsr::new(self.sample_rate, self.cfg.env)),
             };
             env.note_on();
+            env.set_time_scale(self.amp_timing.map(|t| t.scale(note, velocity)));
             let noise = self.noise.as_ref().map(|c| {
                 NoiseVoice::new(
                     self.sample_rate,

@@ -1015,6 +1015,18 @@ impl Voice {
         self
     }
 
+    /// Play the amp envelope's segments `speed` times as long and its attack
+    /// `speed · attack` times (a note's
+    /// [`EnvTiming::scale`](crate::native::breakpoints::EnvTiming::scale));
+    /// `None`: as written.
+    #[must_use]
+    pub fn with_amp_time_scale(mut self, scale: Option<(f32, f32)>) -> Self {
+        if let (Some((_, player, _)), Some((speed, attack))) = (&mut self.amp_bp, scale) {
+            player.set_time_scale(speed, attack);
+        }
+        self
+    }
+
     /// Give the voice its own filter envelope (see [`VoiceFilter`]).
     #[must_use]
     pub fn with_filter_env(mut self, filter: Option<VoiceFilter>) -> Self {

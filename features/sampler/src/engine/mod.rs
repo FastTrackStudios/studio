@@ -964,6 +964,9 @@ pub struct SampleEngine {
     /// Zone voices' breakpoint amplitude envelope (an Omnisphere layer's
     /// AENV) — see `Voice::with_amp_points`. `None`: the ADSR above.
     amp_points: Option<std::sync::Arc<crate::native::breakpoints::Breakpoints>>,
+    /// The amp envelope's per-note timing (Omnisphere's Speed knob and its
+    /// Key / Velocity rows) — `None`: as written.
+    amp_timing: Option<crate::native::breakpoints::EnvTiming>,
     /// Omnisphere's amp velocity law on zone voices, `1 − s + s·v²` with
     /// `v = vel/127`; `None` leaves velocity to pick the layer only.
     velocity_sens: Option<f32>,
@@ -1262,6 +1265,7 @@ impl SampleEngine {
             decay_frames: 0,
             sustain_level: 1.0,
             amp_points: None,
+            amp_timing: None,
             velocity_sens: None,
             zone_velocity: None,
             harmonia: Vec::new(),
@@ -1622,6 +1626,16 @@ impl SampleEngine {
 
     /// A breakpoint amplitude envelope for zone voices (notes started
     /// after), in place of the attack/decay/sustain/release; `None` clears.
+    /// The amp envelope's per-note timing (see `EnvTiming`).
+    pub fn set_amp_timing(&mut self, t: Option<crate::native::breakpoints::EnvTiming>) {
+        self.amp_timing = t;
+    }
+
+    /// The amp envelope's time scale for a note at the latest velocity.
+    pub(crate) fn amp_scale(&self, note: u8) -> Option<(f32, f32)> {
+        self.amp_timing.map(|t| t.scale(note, self.last_velocity))
+    }
+
     pub fn set_amp_points(&mut self, bp: Option<crate::native::breakpoints::Breakpoints>) {
         self.amp_points = bp.map(std::sync::Arc::new);
     }

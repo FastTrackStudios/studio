@@ -168,7 +168,9 @@ impl SampleEngine {
         } else {
             // A patch layer's breakpoint amp envelope and velocity law (an
             // Omnisphere patch naming a Keyscape source).
-            let voice = voice.with_amp_points(self.amp_points.clone(), self.sample_rate);
+            let voice = voice
+                .with_amp_points(self.amp_points.clone(), self.sample_rate)
+                .with_amp_time_scale(self.amp_scale(note));
             match self.velocity_sens {
                 Some(s) => {
                     let v = f32::from(self.last_velocity) / 127.0;

@@ -382,6 +382,17 @@ impl RigBlock {
         self
     }
 
+    /// Set several build-time parameters (see [`with_param`](Self::with_param)).
+    #[must_use]
+    pub fn with_params<N: Into<String>, V: Into<String>>(
+        self,
+        params: impl IntoIterator<Item = (N, V)>,
+    ) -> Self {
+        params
+            .into_iter()
+            .fold(self, |b, (name, value)| b.with_param(name, value))
+    }
+
     /// A build-time parameter's raw string value, if present.
     #[must_use]
     pub fn param_str(&self, name: &str) -> Option<String> {
@@ -1598,6 +1609,9 @@ pub(crate) fn build_sample_source(
                 crate::native::breakpoints::Breakpoints::with_penultimate_sustain(points)
                     .with_synced(block.param_f32("amp_sync").unwrap_or(0.0) > 0.5),
             ));
+            engine.set_amp_timing(crate::native::breakpoints::EnvTiming::from_params(|k| {
+                block.param_f32(k)
+            }));
         }
     }
     // An NI piano layer played with a gig's snapshot of its controls.

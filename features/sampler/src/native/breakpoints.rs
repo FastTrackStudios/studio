@@ -154,6 +154,93 @@ impl Breakpoints {
     }
 }
 
+/// Omnisphere's amp-envelope Speed knob (`AENVPARAMS spd`, 0.5 = as
+/// written) as a time factor on every segment — measured on the plugin
+/// (attack and release alike): below centre `1 / (1 − 1.79·(0.5 − s))`,
+/// capped at ~2.49 (reached by 0.15); above, a table.
+#[must_use]
+pub fn env_speed_time(s: f32) -> f32 {
+    const UP: [(f32, f32); 10] = [
+        (0.5, 1.0),
+        (0.52, 0.735),
+        (0.55, 0.519),
+        (0.6, 0.354),
+        (0.65, 0.265),
+        (0.7, 0.215),
+        (0.75, 0.177),
+        (0.8, 0.160),
+        (0.9, 0.122),
+        (1.0, 0.099),
+    ];
+    let s = s.clamp(0.0, 1.0);
+    if s <= 0.5 {
+        return (1.0 / (1.0 - 1.79 * (0.5 - s))).min(2.486);
+    }
+    UP.windows(2).find(|w| s <= w[1].0).map_or(0.099, |w| {
+        let x = (s - w[0].0) / (w[1].0 - w[0].0);
+        (w[0].1.ln() + x * (w[1].1.ln() - w[0].1.ln())).exp()
+    })
+}
+
+/// An Omnisphere amp envelope's per-note timing: the Speed knob, the
+/// matrix rows onto it (Key / Velocity, in knob units — measured) and a
+/// Velocity row onto the attack (`AmpEnvAtk`: the attack takes
+/// `clamp(1 − depth·velocity², 0, 1)` of its time; an inverted row, which
+/// would lengthen it, does nothing — measured).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EnvTiming {
+    pub speed: f32,
+    pub speed_key: f32,
+    pub speed_vel: f32,
+    pub attack_vel: f32,
+}
+
+impl Default for EnvTiming {
+    fn default() -> Self {
+        Self {
+            speed: 0.5,
+            speed_key: 0.0,
+            speed_vel: 0.0,
+            attack_vel: 0.0,
+        }
+    }
+}
+
+impl EnvTiming {
+    /// `(every segment, the attack on top)` time factors for a note — the
+    /// key as Omnisphere's bipolar Key source (`(key − 64) / 42.5`), the
+    /// velocity squared.
+    #[must_use]
+    pub fn scale(&self, note: u8, velocity: u8) -> (f32, f32) {
+        let key = (f32::from(note) - 64.0) / 42.5;
+        let vel = (f32::from(velocity) / 127.0).powi(2);
+        let s = self.speed + self.speed_key * key + self.speed_vel * vel;
+        (
+            env_speed_time(s),
+            (1.0 - self.attack_vel * vel).clamp(0.0, 1.0),
+        )
+    }
+
+    /// Anything to do (the default plays the envelope as written).
+    #[must_use]
+    pub fn is_active(&self) -> bool {
+        *self != Self::default()
+    }
+
+    /// From a block's `amp_speed` / `amp_speed_key` / `amp_speed_vel` /
+    /// `amp_attack_vel` params, `None` when they leave it as written.
+    #[must_use]
+    pub fn from_params(get: impl Fn(&str) -> Option<f32>) -> Option<Self> {
+        let t = Self {
+            speed: get("amp_speed").unwrap_or(0.5),
+            speed_key: get("amp_speed_key").unwrap_or(0.0),
+            speed_vel: get("amp_speed_vel").unwrap_or(0.0),
+            attack_vel: get("amp_attack_vel").unwrap_or(0.0),
+        };
+        t.is_active().then_some(t)
+    }
+}
+
 /// One playing instance of a [`Breakpoints`] envelope.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct EnvPlayer {
@@ -164,9 +251,19 @@ pub struct EnvPlayer {
     level: f32,
     /// The last curve and its denominator (see [`shape_memo`]).
     memo: (f32, f32),
+    /// This run's time scale: every segment takes `.0` times as long, the
+    /// first (the attack) `.0 · .1` (see [`EnvTiming`]). `None`: as written.
+    scale: Option<(f32, f32)>,
 }
 
 impl EnvPlayer {
+    /// Play this run's segments `speed` times as long, its attack (the first
+    /// segment) `speed · attack` times — a note's [`EnvTiming::scale`].
+    pub fn set_time_scale(&mut self, speed: f32, attack: f32) {
+        self.scale = ((speed - 1.0).abs() > 1e-4 || (attack - 1.0).abs() > 1e-4)
+            .then_some((speed.max(1e-3), attack.max(1e-3)));
+    }
+
     pub fn note_on(&mut self) {
         self.t = Some(0.0);
         self.released = None;
@@ -199,7 +296,14 @@ impl EnvPlayer {
             return 0.0;
         };
         // A synced run advances in beats.
-        let dt = dt / bp.unit_s();
+        let mut dt = dt / bp.unit_s();
+        if let Some((speed, attack)) = self.scale {
+            dt /= speed;
+            let in_attack = self.released.is_none() && bp.points.get(1).is_some_and(|p| t < p.time);
+            if in_attack {
+                dt /= attack;
+            }
+        }
         let v = match (self.released, bp.sustain) {
             (Some((rt, from)), Some(s)) => {
                 let last = bp.points.len() - 1;

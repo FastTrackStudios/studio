@@ -52,6 +52,10 @@ pub struct OmniLayer {
     /// Amp velocity sensitivity (`AENVPARAMS velsens`): measured, the level
     /// is `1 − s + s·(vel/127)²`.
     pub amp_velsens: f32,
+    /// Amp envelope Speed (`AENVPARAMS spd`; `None` = 0.5, as written): a
+    /// time factor on every segment, measured — see
+    /// `sampler::native::breakpoints::env_speed_time`.
+    pub amp_speed: Option<f32>,
     /// Timbre Shift (`MULTISAMPLE timbre`), 0..1 with 0.5 neutral: the
     /// soundsource plays the sample recorded at a shifted key, repitched to
     /// the note — above 0.5 a lower key pitched up (brighter, and at the
@@ -1389,6 +1393,10 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
             .child("AENV")
             .and_then(parse_env_breakpoints)
             .or_else(|| voice.child("AENVPARAMS").and_then(parse_env));
+        layer.amp_speed = voice
+            .child("AENVPARAMS")
+            .and_then(|p| p.num("spd"))
+            .map(|v| v.clamp(0.0, 1.0));
         layer.amp_velsens = voice
             .child("AENVPARAMS")
             .and_then(|p| p.num("velsens"))

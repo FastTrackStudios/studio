@@ -2378,7 +2378,9 @@ impl SampleEngine {
             // A patch layer's breakpoint amp envelope (not on the release
             // samples, which play after the key).
             if !matches!(kind, VoiceKind::Release) {
-                voice = voice.with_amp_points(self.amp_points.clone(), self.sample_rate);
+                voice = voice
+                    .with_amp_points(self.amp_points.clone(), self.sample_rate)
+                    .with_amp_time_scale(self.amp_scale(note));
             }
             // Playback-emitted arrival marker: attach the zone's heard-
             // arrival position (FILE frames at the SOURCE rate) so the voice
@@ -2774,6 +2776,7 @@ impl SampleEngine {
                     .with_attack(attack)
                     .with_decay(self.decay_frames, self.sustain_level)
                     .with_amp_points(self.amp_points.clone(), self.sample_rate)
+                    .with_amp_time_scale(self.amp_scale(note))
                     .with_filter_env(self.new_voice_filter(note))
                     .with_vibrato(self.vibrato)
                     .with_pitch_cents(transpose_cents + h_shift)

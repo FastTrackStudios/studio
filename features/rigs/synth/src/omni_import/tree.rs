@@ -95,6 +95,41 @@ fn amp_points_param(layer: &super::model::OmniLayer) -> String {
     points_param(&layer.amp_points)
 }
 
+/// A layer's amp-envelope timing as block params (see
+/// `sampler::native::breakpoints::EnvTiming`): the Speed knob, and the Key /
+/// Velocity rows onto it and the Velocity row onto the attack — per-note,
+/// so played at note-on rather than as routes.
+fn amp_timing_params(
+    patch: &super::model::OmniPatch,
+    layer_idx: usize,
+    layer: &super::model::OmniLayer,
+) -> Vec<(&'static str, String)> {
+    let letter = ["A ", "B ", "C ", "D "][layer_idx];
+    let (mut key, mut vel, mut attack) = (0.0f32, 0.0f32, 0.0f32);
+    for r in &patch.mod_routes {
+        match (r.target.strip_prefix(letter), r.source.as_str()) {
+            (Some("AmpEnv Speed"), "Key") => key += r.depth,
+            (Some("AmpEnv Speed"), "Velo") => vel += r.depth,
+            (Some("AmpEnvAtk"), "Velo") => attack += r.depth,
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    if let Some(s) = layer.amp_speed.filter(|s| (s - 0.5).abs() > 1e-4) {
+        out.push(("amp_speed", format!("{s:.4}")));
+    }
+    for (name, v) in [
+        ("amp_speed_key", key),
+        ("amp_speed_vel", vel),
+        ("amp_attack_vel", attack),
+    ] {
+        if v != 0.0 {
+            out.push((name, format!("{v:.4}")));
+        }
+    }
+    out
+}
+
 // ── Patch → composition tree ─────────────────────────────────────────────────
 
 pub const LAYER_NAMES: [&str; 4] = ["Layer A", "Layer B", "Layer C", "Layer D"];
@@ -374,6 +409,7 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                 .with_param("transpose", format!("{:.4}", layer.transpose))
                 .with_param("amp_points", amp_points_param(layer))
                 .with_param("amp_sync", if layer.amp_env_synced { "1" } else { "0" })
+                .with_params(amp_timing_params(patch, i, layer))
                 .with_param("vel_sens", format!("{:.3}", layer.amp_velsens))
                 .with_param(
                     "glide_s",
@@ -545,6 +581,7 @@ pub fn patch_to_container(patch: &OmniPatch, index: &SoundsourceIndex) -> Contai
                 sb = sb
                     .with_param("amp_points", amp_points_param(layer))
                     .with_param("amp_sync", if layer.amp_env_synced { "1" } else { "0" })
+                    .with_params(amp_timing_params(patch, i, layer))
                     .with_param("amp_attack", "0");
             } else if let Some((a, d, s, r)) = layer.amp_env {
                 sb = sb

@@ -73,7 +73,12 @@ static and routed within 1 dB per channel. **LFO rate** routes
 sweeping another's rate tracks the plugin's pitch trace (r 0.98).
 **Mod Env depth** rows (`Mod Env n Depth`) are a cut, as the LFO swing's:
 `clamp(1 + depth·source, 0, 1)` — a plain row does nothing, an inverted
-one scales the envelope down (exact on a held envelope).
+one scales the envelope down (exact on a held envelope). **Amp envelope
+timing**: Speed (`AENVPARAMS spd`) is a time factor on every segment
+(`sampler::native::breakpoints::env_speed_time`: ×2.49 … ×1 at 0.5 …
+×0.1 at 1); Key / Velocity rows onto `AmpEnv Speed` add to the knob, a
+Velocity row onto `AmpEnvAtk` takes `1 − depth·velocity²` of the attack —
+played per note, within a few % of the plugin.
 
 ## Status (2026-10-25)
 

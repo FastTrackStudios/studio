@@ -330,6 +330,9 @@ fn wavetable_osc(block: &RigBlock, sample_rate: u32) -> NativeWavetable {
                 .unwrap_or_default(),
         )
         .with_amp_sync(block.param_f32("amp_sync").unwrap_or(0.0) > 0.5)
+        .with_amp_timing(super::breakpoints::EnvTiming::from_params(|k| {
+            block.param_f32(k)
+        }))
         .with_noise((block.param_f32("noise").unwrap_or(0.0) > 0.5).then(|| {
             super::wavetable::NoiseCfg::from_shape(
                 block.param_f32("noise_shape").unwrap_or(0.0),
