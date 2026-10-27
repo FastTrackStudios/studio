@@ -116,12 +116,15 @@ pub(crate) fn Home() -> Element {
         .iter()
         .find(|s| s.tonight && in_space(s.space))
         .cloned();
-    let coming: Vec<Setlist> = l
+    // The dated sets first; then the rest, so a library whose sets carry
+    // no date yet still shows them here.
+    let mut coming: Vec<Setlist> = l
         .setlists
         .iter()
-        .filter(|s| !s.tonight && s.when.is_some() && in_space(s.space))
+        .filter(|s| !s.tonight && in_space(s.space))
         .cloned()
         .collect();
+    coming.sort_by_key(|s| s.when.is_none());
 
     // What changed, newest first, across kinds.
     let mut changed: Vec<(u32, Labelled, String, &'static str)> = Vec::new();
@@ -184,8 +187,14 @@ pub(crate) fn Home() -> Element {
     } else {
         "grid-template-columns: minmax(0, 1fr);"
     };
+    // The app's ways in (Studio: a new project, joining by a link, what
+    // was opened lately), first.
+    let slot = try_consume_context::<super::Slots>().and_then(|s| s.home);
     rsx! {
         Page {
+            if let Some(slot) = slot {
+                {slot.call(())}
+            }
             if let Some(set) = tonight {
                 Tonight { set }
             }

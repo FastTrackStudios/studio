@@ -75,6 +75,12 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
 /// The song `SESSION_NEW` made, until the start screen opens it.
 static MADE: Mutex<Option<String>> = Mutex::new(None);
 
+/// Whether a song `SESSION_NEW` made waits to be opened ([`take_made`]).
+#[must_use]
+pub fn made_pending() -> bool {
+    MADE.lock().is_ok_and(|made| made.is_some())
+}
+
 /// The song `SESSION_NEW` made (its project GUID), for the start screen
 /// to open — once.
 #[must_use]

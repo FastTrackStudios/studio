@@ -604,6 +604,22 @@ static TYPING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::ne
 /// cleared by a click anywhere else.
 static EDITING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// An overlay over the window has the keyboard: Studio's command palette,
+/// open-by-name or shortcuts sheet, typed into while a song is open.
+static OVERLAY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// An overlay over the window takes the keyboard (`true`) or gives it back.
+/// While it has it, the window's keys and the arrangement's stand aside.
+pub fn set_overlay(on: bool) {
+    OVERLAY.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether an overlay over the window has the keyboard ([`set_overlay`]).
+#[must_use]
+pub fn overlay() -> bool {
+    OVERLAY.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// See [`TYPING`]. Set by the arrangement every frame it is drawn (a rename
 /// open or not) — so a field that closes without saying so frees the
 /// keyboard a frame later rather than never.
@@ -621,6 +637,7 @@ pub fn set_editing(on: bool) {
 pub fn typing() -> bool {
     TYPING.load(std::sync::atomic::Ordering::Relaxed)
         || EDITING.load(std::sync::atomic::Ordering::Relaxed)
+        || overlay()
 }
 
 /// Whether the window acts on the transport's keys itself

@@ -7,10 +7,12 @@
 //!   sound a rig plays for an entry ([`model::sound`]).
 //! - [`fixture`]: a band's library to design and review the screens
 //!   against, until the synced docs feed them.
+//! - [`task`]: the library as an account's Task orgs have it.
 //! - `ui` (feature `ui`): the library screens, inline-styled for Blitz.
 
 pub mod fixture;
 pub mod model;
+pub mod task;
 #[cfg(feature = "ui")]
 pub mod ui;
 

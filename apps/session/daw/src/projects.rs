@@ -320,6 +320,18 @@ pub fn take_back() -> bool {
     BACK.swap(false, std::sync::atomic::Ordering::AcqRel)
 }
 
+/// Whether something waits to be opened: a song or file ([`open_next`])
+/// or a library setlist ([`open_setlist_from_outside`]). What Studio's
+/// welcome screen watches for, so an open asked for there (the CLI, a
+/// model) goes into the DAW view without a press.
+#[must_use]
+pub fn pending_open() -> bool {
+    NEXT.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .is_some()
+        || pending_setlist().is_some()
+}
+
 /// What was asked to be opened next, once.
 #[must_use]
 pub fn take_next() -> Option<PathBuf> {

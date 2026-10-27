@@ -73,6 +73,8 @@ pub(crate) fn Conversation(about: Anchor, #[props(default)] exact: bool) -> Elem
                         }
                     }
                     input {
+                        onfocus: move |_| crate::ui::set_field_focused(true),
+                        onblur: move |_| crate::ui::set_field_focused(false),
                         r#type: "text",
                         value: "{draft}",
                         "aria-label": "Comment",

@@ -110,8 +110,9 @@ do not touch.
 6826004255): Signal and Session behind a front screen (`src/front.rs`).
 Signal's and Session's own records get no new builds. The scene delegate
 every build registers is `StudioSceneDelegate` (`app_shell::ios_scene`).
-`FTS_STUDIO_OPEN=signal|session` skips the front screen (simulator:
-`SIMCTL_CHILD_FTS_STUDIO_OPEN=signal`).
+`FTS_STUDIO_OPEN=rig` (the rig view) or `=<path|setlist title|new|demo|link>`
+(the DAW) skips the welcome screen (simulator:
+`SIMCTL_CHILD_FTS_STUDIO_OPEN=rig`).
 
 The studio tree builds Studio on airlock from
 `/Volumes/build-disk/development/studio` (one warm `target/`, under the
@@ -137,7 +138,7 @@ KEYCHAIN=fts-build.keychain KEYCHAIN_PW=fts-build SKIP_BUILD=1 MARKETING_VER=<ta
 - Gigs ride inside the app (`GIG_BUNDLE`, `<App>.app/Gigs/`); make the iPad
   copy with `scripts/signal/gig-ipad.py` first (WAV → Ogg Vorbis, ~7× smaller).
 - Simulator: no Simulator.app on airlock, so no taps — launch with
-  `SIMCTL_CHILD_FTS_STUDIO_OPEN=signal SIMCTL_CHILD_FTS_OPEN_RIG=guitar SIMCTL_CHILD_FTS_GIG_SONG=4 SIMCTL_CHILD_FTS_GIG_PLAY=1`
+  `SIMCTL_CHILD_FTS_STUDIO_OPEN=rig SIMCTL_CHILD_FTS_OPEN_RIG=guitar SIMCTL_CHILD_FTS_GIG_SONG=4 SIMCTL_CHILD_FTS_GIG_PLAY=1`
   (`FTS_GIG_VIEW=studio|keyflow`) and `xcrun simctl io <udid> screenshot`.
 
 ## Related

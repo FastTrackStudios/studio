@@ -81,14 +81,22 @@ pub fn App() -> Element {
     }
     let initial: Option<Setlist> = use_context();
     let mut opened = use_signal(|| initial);
+    let host = try_use_context::<super::handoff::Host>();
     // Back to the start screen: the set stops, and the page is the one
-    // that picks another (its library, a link, a file).
+    // that picks another (its library, a link, a file). Inside Studio
+    // (`Host`) Back with nothing else to open is the welcome screen's; an
+    // open asked for from inside the song (another version, a set picked
+    // from the palette) still comes back out through the start screen,
+    // which opens it behind its loading screen.
     use_context_provider(|| {
         session_daw::shell::Back(Callback::new(move |()| {
             session_daw::engine::transport(session_daw::engine::Move::Stop, 0.0);
             #[cfg(target_os = "ios")]
             super::ios_audio::clear();
-            opened.set(None);
+            match host {
+                Some(host) if !super::handoff::pending() => host.on_leave.call(()),
+                _ => opened.set(None),
+            }
         }))
     });
     let page = match opened() {
@@ -323,6 +331,9 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
             );
         } else if let Some(path) = session_daw::projects::take_next().or(launch) {
             open_path(path);
+        } else if super::handoff::take_new() {
+            // Studio's welcome screen asked for a new song.
+            new_project();
         }
     });
 
@@ -352,7 +363,12 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
             match off_thread(move || task_account::orgs(&account)).await {
                 Some(Ok(list)) => {
                     if org.peek().is_none() {
-                        org.set(first_org(&list, std::env::var("FTS_TASK_ORG").ok()));
+                        org.set(first_org(
+                            &list,
+                            std::env::var("FTS_TASK_ORG")
+                                .ok()
+                                .or_else(task_account::remembered_org),
+                        ));
                     }
                     orgs.set(Load::Ready(list));
                 }
@@ -691,6 +707,44 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
     // Opening: the loading screen, whole.
     if let Opening::Busy(progress) = opening() {
         return rsx! { Loading { progress } };
+    }
+    // Inside Studio the welcome screen is the start page: this one only
+    // opens what was handed to it, so until that is under way (a library
+    // setlist waits for the account's orgs and lists) it says so, and if it
+    // fails, why, with the way back.
+    if let Some(host) = try_consume_context::<super::handoff::Host>() {
+        let (headline, detail, failed) = match opening() {
+            Opening::Failed(why) => ("Could not open it".to_owned(), why, true),
+            _ => match session_daw::projects::pending_setlist() {
+                Some(asked) if account.is_none() => (
+                    format!("Opening {}", asked.setlist),
+                    "Sign in on the welcome screen to open your library's setlists.".to_owned(),
+                    true,
+                ),
+                Some(asked) => (
+                    format!("Opening {}", asked.setlist),
+                    "Finding it in your library…".to_owned(),
+                    false,
+                ),
+                None => ("Opening".to_owned(), String::new(), false),
+            },
+        };
+        return rsx! {
+            session_daw::loading::LoadingFrame { headline, detail, failed,
+                button {
+                    style: "margin-top:14px; height:44px; padding:0 20px; border:1px solid {RULE}; border-radius:10px; \
+                            background:transparent; color:{TEXT}; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer;",
+                    onclick: move |_| {
+                        // What was asked and never opened is dropped.
+                        if let Some(asked) = session_daw::projects::pending_setlist() {
+                            let _ = session_daw::projects::take_setlist(asked.org.as_deref().unwrap_or_default());
+                        }
+                        host.on_leave.call(());
+                    },
+                    "Back to the library"
+                }
+            }
+        };
     }
     // The song editor, whole; leaving it reads the songs again.
     if let Some(song) = song_editing()
@@ -2223,7 +2277,7 @@ const LOCAL_EMPTY: &str = "No songs in Documents/Session yet.";
 
 /// The songs and setlists in the app's documents folder: each entry that is
 /// a song folder, a setlist, or a project — newest first.
-fn documents() -> Vec<PathBuf> {
+pub(super) fn documents() -> Vec<PathBuf> {
     let Some(dir) = documents_dir() else {
         return Vec::new();
     };
@@ -2273,7 +2327,7 @@ fn documents_dir() -> Option<PathBuf> {
 
 /// An entry's name, as a person reads it: a `.setlist` or a project
 /// without its extension.
-fn title_of(path: &std::path::Path) -> String {
+pub(super) fn title_of(path: &std::path::Path) -> String {
     // A checkpoint is its song's: "Unbreakable · Organized".
     if let (Some(alt), Some(base)) = (
         session_daw::projects::alternative_name(path),
@@ -2422,6 +2476,184 @@ fn copy_text(text: &str) {
         return;
     }
     tracing::warn!("account: no clipboard tool to copy with");
+}
+
+/// Who is signed in and which org's library the DAW opens from, for
+/// Studio's welcome screen: Session's own account (one with Signal's on
+/// this computer) and its org switcher, so the welcome screen's bar is
+/// what this page's sidebar foot was. Provided by [`use_welcome_account`].
+#[derive(Clone, Copy)]
+pub struct WelcomeAccount {
+    acct: fts_account::ui::AccountState,
+    orgs: Signal<Load<Vec<String>>>,
+    org: Signal<Option<String>>,
+    lists: Signal<Load<Vec<(String, Vec<LibrarySetlist>)>>>,
+}
+
+/// The library as the account's orgs have it, for the welcome screen.
+#[derive(Clone, Debug, PartialEq)]
+pub enum WelcomeLists {
+    /// Nobody is signed in.
+    Out,
+    /// Being read.
+    Reading,
+    /// Every org's lists, by org slug, in the account's order.
+    Ready(Vec<(String, Vec<LibrarySetlist>)>),
+    /// The server could not be read.
+    Failed(String),
+}
+
+impl WelcomeAccount {
+    /// Who is signed in, by name.
+    #[must_use]
+    pub fn name(&self) -> Option<String> {
+        self.acct.account().map(|a| a.name())
+    }
+
+    /// The lists of every org, as far as they are read (reactive).
+    #[must_use]
+    pub fn lists(&self) -> WelcomeLists {
+        if self.acct.account().is_none() {
+            return WelcomeLists::Out;
+        }
+        match &*self.lists.read() {
+            Load::Waiting => WelcomeLists::Reading,
+            Load::Ready(all) => WelcomeLists::Ready(all.clone()),
+            Load::Failed(why) => WelcomeLists::Failed(why.clone()),
+        }
+    }
+
+    /// Open the account sheet (to sign in).
+    pub fn sign_in(&self) {
+        self.acct.open();
+    }
+}
+
+/// The account and the org, read and kept as this page keeps them: the
+/// orgs once signed in, the org opened on (`FTS_TASK_ORG`, else the one
+/// picked last), and every pick remembered — the org a library setlist
+/// opens from. Provided as context for [`WelcomeAccountMenu`] and
+/// [`WelcomeAccountSheet`].
+pub fn use_welcome_account() -> WelcomeAccount {
+    let acct = fts_account::ui::use_account(fts_account::App::Session);
+    let mut orgs = use_signal(|| Load::<Vec<String>>::Waiting);
+    let mut org = use_signal(|| None::<String>);
+    let account = acct.account();
+    use_effect(use_reactive!(|account| {
+        let Some(account) = account else { return };
+        orgs.set(Load::Waiting);
+        spawn(async move {
+            match off_thread(move || task_account::orgs(&account)).await {
+                Some(Ok(list)) => {
+                    if org.peek().is_none() {
+                        org.set(first_org(
+                            &list,
+                            std::env::var("FTS_TASK_ORG")
+                                .ok()
+                                .or_else(task_account::remembered_org),
+                        ));
+                    }
+                    orgs.set(Load::Ready(list));
+                }
+                Some(Err(e)) => orgs.set(Load::Failed(brief(&e))),
+                None => {}
+            }
+        });
+    }));
+    use_effect(move || {
+        if let Some(picked) = org() {
+            task_account::remember_org(&picked);
+        }
+    });
+    // Every org's setlists, once the orgs are known: the welcome screen's
+    // library (Session's own page read them the same way, the shown org's
+    // and the others' beside them).
+    let mut lists = use_signal(|| Load::<Vec<(String, Vec<LibrarySetlist>)>>::Waiting);
+    let for_lists = acct.account().zip(match &*orgs.read() {
+        Load::Ready(list) => Some(list.clone()),
+        _ => None,
+    });
+    use_effect(use_reactive!(|for_lists| {
+        let Some((account, all)) = for_lists else {
+            return;
+        };
+        lists.set(Load::Waiting);
+        spawn(async move {
+            let read = off_thread(move || {
+                let mut found = Vec::new();
+                let mut failed = None;
+                for slug in all {
+                    let library = account.library(&slug);
+                    match session_daw::stream_set::setlists(&library) {
+                        Ok(got) => found.push((slug, got)),
+                        Err(e) => {
+                            tracing::warn!(task.org = %slug, error = %e, "welcome: an org's library could not be read");
+                            failed = Some(brief(&e));
+                        }
+                    }
+                }
+                match failed {
+                    Some(why) if found.is_empty() => Load::Failed(why),
+                    _ => Load::Ready(found),
+                }
+            })
+            .await;
+            if let Some(read) = read {
+                lists.set(read);
+            }
+        });
+    }));
+    use_context_provider(|| WelcomeAccount {
+        acct,
+        orgs,
+        org,
+        lists,
+    })
+}
+
+/// The org this person picked on the welcome screen, if signed in.
+#[must_use]
+pub fn welcome_org() -> Option<String> {
+    try_consume_context::<WelcomeAccount>().and_then(|w| w.org.peek().clone())
+}
+
+/// The welcome screen's account control: Sign in, or the org's badge,
+/// pressed for every org this person is in, Account… and Sign out.
+#[component]
+pub fn WelcomeAccountMenu() -> Element {
+    let WelcomeAccount { acct, orgs, org, .. } = use_context::<WelcomeAccount>();
+    let email = acct
+        .account()
+        .map(|a| a.session.email.clone().unwrap_or_else(|| a.name()));
+    rsx! {
+        OrgSwitcher {
+            email,
+            orgs: orgs(),
+            org,
+            compact: true,
+            on_sign_in: move |()| acct.open(),
+            on_account: move |()| acct.open(),
+            on_sign_out: move |()| acct.sign_out(),
+        }
+    }
+}
+
+/// The account sheet (signing in, Account…), over the whole window: mount
+/// it at the root, beside the page.
+#[component]
+pub fn WelcomeAccountSheet() -> Element {
+    let WelcomeAccount { acct, .. } = use_context::<WelcomeAccount>();
+    let width = use_width();
+    rsx! {
+        fts_account::ui::AccountSheet {
+            state: acct,
+            top: 0,
+            width: width().max(0.0) as u32,
+            on_open: move |url: String| super::open_url(&url),
+            on_copy: move |text: String| copy_text(&text),
+            rows: None,
+        }
+    }
 }
 
 /// The org the library opens on: `wanted` (`FTS_TASK_ORG`, the same

@@ -18,8 +18,8 @@ use blitz_traits::shell::{ColorScheme, Viewport as Screen};
 use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
 use library::ui::{
-    InitialRoute, LibraryApp, LibraryData, Player, PlayerSheet, Route, SessionStart, SessionTab,
-    Viewport,
+    AppCommand, AppCommands, CommandLayer, InitialOverlay, InitialRoute, LibraryApp, LibraryData,
+    Overlay, Player, PlayerSheet, Route, SessionStart, SessionTab, Viewport,
 };
 
 /// Pixels per point, as on an iPad.
@@ -73,6 +73,15 @@ fn main() {
     let page = args.next().unwrap_or_else(|| "home".into());
 
     let first = route(&page);
+    // A keyboard menu up: ⌘K (`palette`), ⌘O (`finder`) or `?` (`help`),
+    // over the library as Studio mounts it (a command layer, the app's
+    // commands beside the library's).
+    let overlay = match page.as_str() {
+        "palette" => Some(Overlay::Palette),
+        "finder" => Some(Overlay::Finder),
+        "help" => Some(Overlay::Help),
+        _ => None,
+    };
     let status = page == "status";
     // The player's state for a page of it: 0 none, 1 the mini player,
     // 2 Now Playing, 3 its queue.
@@ -89,6 +98,7 @@ fn main() {
             first,
             status,
             sheet,
+            overlay,
         },
     );
     let (pw, ph) = ((w * SCALE) as u32, (h * SCALE) as u32);
@@ -120,7 +130,13 @@ fn main() {
 }
 
 #[component]
-fn Shot(size: (f32, f32), first: Route, status: bool, sheet: u8) -> Element {
+fn Shot(
+    size: (f32, f32),
+    first: Route,
+    status: bool,
+    sheet: u8,
+    overlay: Option<Overlay>,
+) -> Element {
     let lib = use_context_provider(|| LibraryData(Signal::new(library::fixture::library())));
     if sheet > 0 {
         use_context_provider(|| {
@@ -142,11 +158,39 @@ fn Shot(size: (f32, f32), first: Route, status: bool, sheet: u8) -> Element {
     if status {
         use_context_provider(|| SessionStart(SessionTab::Status));
     }
+    if let Some(up) = overlay {
+        use_context_provider(|| InitialOverlay(up));
+        // What an app adds: in Studio, Session's Action List.
+        use_context_provider(|| AppCommands {
+            list: Callback::new(|()| {
+                [
+                    ("SESSION_PLAY_STOP", "Play or stop", "Transport", "Space"),
+                    ("SESSION_SAVE", "Save the song", "Session", "Ctrl+S"),
+                    ("SESSION_NEW", "New song", "Session", ""),
+                    ("SESSION_MODE_EDIT", "Edit mode", "Modes", ""),
+                ]
+                .into_iter()
+                .map(|(id, label, group, keys)| AppCommand {
+                    id: id.into(),
+                    label: label.into(),
+                    group: group.into(),
+                    keys: keys.into(),
+                    enabled: true,
+                })
+                .collect::<Vec<_>>()
+            }),
+            run: Callback::new(|_: String| {}),
+        });
+    }
     rsx! {
         // A real `<style>` node: a headless document has no head for
         // `document::Style` to land in.
         style { {"html,body{margin:0;padding:0;height:100%;background:#0c0c0f;overflow:hidden;}*{box-sizing:border-box;}"} }
         style { {library::ui::SHEET_CSS} }
-        LibraryApp {}
+        if overlay.is_some() {
+            CommandLayer { LibraryApp {} }
+        } else {
+            LibraryApp {}
+        }
     }
 }

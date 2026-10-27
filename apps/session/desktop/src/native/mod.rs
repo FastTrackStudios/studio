@@ -19,7 +19,8 @@
 #[cfg(target_os = "ios")]
 mod ios_audio;
 
-/// What Studio's home screen hands Session (recent songs, open or join first).
+/// What Studio's welcome screen hands Session (what to open, the way back,
+/// the account, the Action List).
 pub mod handoff;
 mod library;
 mod shell;
@@ -248,10 +249,39 @@ pub fn prepare() -> Option<Prepared> {
     }
 }
 
-/// Session inside another app's window: Studio's, once its front screen
-/// has chosen Session. Prepares as [`launch`] does (on the first render,
-/// on the UI thread, where a desktop's dialogs must be asked), provides
-/// what `run` hands the window as root contexts, and draws the app.
+impl Prepared {
+    /// Whether the window drives another system whose set is open already
+    /// (Remote, Cue): there is nothing to pick, the set is the window's.
+    #[must_use]
+    pub const fn attached(&self) -> bool {
+        self.setlist.is_some()
+    }
+}
+
+/// [`prepare`] for a host whose own page comes first (Studio's welcome
+/// screen): at the host's launch, so the Action List is served from then
+/// (`studio open <setlist>` from the CLI works on the welcome screen), and
+/// nothing opened by itself — not the last song, not the example. What the
+/// host hands Session ([`handoff::request`]) is what opens. Quitting at a
+/// failed attach quits the process, as it does Session's own.
+#[must_use]
+pub fn prepare_hosted() -> Prepared {
+    let prepared = prepare().unwrap_or_else(|| {
+        tracing::info!("session: quit at the attach dialog");
+        std::process::exit(0)
+    });
+    Prepared {
+        open: None,
+        ..prepared
+    }
+}
+
+/// Session inside another app's window: Studio's, once something on its
+/// welcome screen opened a song or a set. Takes the [`Prepared`] the host
+/// provides ([`prepare_hosted`]), else prepares as [`launch`] does (on the
+/// first render, on the UI thread, where a desktop's dialogs must be
+/// asked); provides what `run` hands the window as root contexts, and
+/// draws the app. A host that provides [`handoff::Host`] gets Back.
 ///
 /// The host draws the window: its attributes are the host's, and on iOS
 /// the host registers the scene delegate (`app_shell::ios_scene`). Quitting
@@ -259,9 +289,11 @@ pub fn prepare() -> Option<Prepared> {
 #[component]
 pub fn Embedded() -> Element {
     let Prepared { setlist, open } = use_hook(|| {
-        prepare().unwrap_or_else(|| {
-            tracing::info!("session: quit at the attach dialog");
-            std::process::exit(0)
+        try_consume_context::<Prepared>().unwrap_or_else(|| {
+            prepare().unwrap_or_else(|| {
+                tracing::info!("session: quit at the attach dialog");
+                std::process::exit(0)
+            })
         })
     });
     use_context_provider(move || setlist);

@@ -3987,6 +3987,11 @@ impl ArrangementWidget {
         // named keys are variants of it rather than of a `NamedKey`
         // beside it.
         use blitz_traits::events::Key;
+        // Studio's palette (or open-by-name) is up over the window: what
+        // is typed is its query, not an edit.
+        if crate::keys::overlay() {
+            return false;
+        }
         let Some(rename) = self.renaming.as_mut() else {
             // No field open, so the key is the session's rather than a
             // letter. While one IS open the keyboard belongs to it —

@@ -557,6 +557,8 @@ fn CommentsPanel() -> Element {
                     div { style: "position: relative; flex: 1; min-width: 0; height: 44px; display: flex; align-items: center;",
                         if empty { span { style: "position: absolute; left: 0; top: 13px; {META} color: {INK_3}; pointer-events: none;", "Comment at this moment…" } }
                         input { r#type: "text", value: "{draft}", "aria-label": "Comment at the playhead",
+                            onfocus: move |_| crate::ui::set_field_focused(true),
+                            onblur: move |_| crate::ui::set_field_focused(false),
                             style: "position: relative; width: 100%; height: 44px; border: none; outline: none; padding: 0; background: transparent; \
                                     color: {INK}; font-family: {FONT}; font-size: 14px;",
                             oninput: move |e| draft.set(e.value()),

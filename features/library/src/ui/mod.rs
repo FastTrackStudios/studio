@@ -31,6 +31,7 @@ use crate::model::{
     AlbumId, ArrangementId, Edit, EntryId, Library, PartId, ProjectId, SessionId, SetlistId,
     SongId, SpaceId,
 };
+pub use command::{MenuKey, Menus, Overlay, use_menus};
 pub use kit::SHEET_CSS;
 use kit::*;
 pub use player::{Player, Sheet as PlayerSheet};
@@ -63,6 +64,22 @@ pub(crate) fn edit(e: Edit) {
     }
 }
 
+/// Whether one of the library's text fields has the keyboard: a plain key
+/// (`?`, a letter) is that field's, not the menus'. Read by an app that
+/// hears the window's keys itself ([`Menus::key`]'s `typing`).
+static FIELD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// A text field took the keyboard (`true`) or let it go.
+pub fn set_field_focused(on: bool) {
+    FIELD.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether a text field has the keyboard ([`set_field_focused`]).
+#[must_use]
+pub fn field_focused() -> bool {
+    FIELD.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// What a press that leaves the library asks the app to do.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Open {
@@ -84,9 +101,59 @@ pub struct BarInset(pub u32);
 #[derive(Clone, Copy)]
 pub struct InitialRoute(pub Route);
 
+/// A menu up as the library opens (a screenshot of one).
+#[derive(Clone, Copy)]
+pub struct InitialOverlay(pub Overlay);
+
 /// The app's handler for [`Open`].
 #[derive(Clone, Copy)]
 pub struct Opener(pub Callback<Open>);
+
+/// One of the app's commands, for ⌘K and `?` beside the library's own:
+/// in Studio, an action of Session's Action List.
+#[derive(Clone, PartialEq, Debug)]
+pub struct AppCommand {
+    /// What [`AppCommands::run`] runs it by.
+    pub id: String,
+    pub label: String,
+    pub group: String,
+    /// Its shortcut as the app says it (`"Shift+G"`); empty for none.
+    pub keys: String,
+    /// Whether it can run now.
+    pub enabled: bool,
+}
+
+/// The app's commands: listed afresh each time a menu is drawn, and run.
+#[derive(Clone, Copy)]
+pub struct AppCommands {
+    pub list: Callback<(), Vec<AppCommand>>,
+    pub run: Callback<String>,
+}
+
+/// What brings the library back on screen when a command goes somewhere
+/// in it from over another page (⌘K's Go to Setlists with a song open).
+#[derive(Clone, Copy)]
+pub struct ShowLibrary(pub Callback<()>);
+
+/// What the app adds to the library's own screens: its controls at the
+/// bar's right end in place of the avatar (the account), and a section at
+/// the top of Home (its ways in: a new project, joining by a link, what
+/// was opened lately). Each draws a component of the app's.
+#[derive(Clone, Copy, Default)]
+pub struct Slots {
+    pub bar: Option<Callback<(), Element>>,
+    pub home: Option<Callback<(), Element>>,
+}
+
+/// Whether a [`CommandLayer`] is over the library, and takes the menus'
+/// keys and draws them.
+#[derive(Clone, Copy)]
+struct Layered;
+
+/// Is a page's text field typing (when the layer is over a page that is
+/// not the library)? A plain `?` is that field's then.
+#[derive(Clone, Copy)]
+pub struct Typing(pub Callback<(), bool>);
 
 /// Where the library is.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -204,11 +271,11 @@ fn use_full_sidebar() -> bool {
     w >= 1366.0 || (w >= 1000.0 && !detail)
 }
 
-/// The library: the root a window mounts.
-#[component]
-pub fn LibraryApp() -> Element {
-    // What the app did not provide falls back once, on the first render
-    // (a hook, so every render calls the same hooks in the same order).
+/// What the library reads that the app may not have provided, once, on
+/// the first render (a hook, so every render calls the same hooks in the
+/// same order): the library (the fixture), the window's size, where the
+/// library is, and the keyboard menus. Kept when provided above.
+fn use_library_contexts() -> (Nav, command::Keys) {
     use_hook(|| {
         if try_consume_context::<LibraryData>().is_none() {
             provide_context(LibraryData(Signal::new(crate::fixture::library())));
@@ -217,14 +284,84 @@ pub fn LibraryApp() -> Element {
             provide_context(Viewport(Signal::new((1194.0, 834.0))));
         }
     });
-    let first = try_consume_context::<InitialRoute>().map_or(Route::Home, |r| r.0);
-    use_context_provider(|| Nav {
-        route: Signal::new(first),
-        back: Signal::new(Vec::new()),
-        space: Signal::new(None),
-        query: Signal::new(String::new()),
+    let nav = use_hook(|| {
+        try_consume_context::<Nav>().unwrap_or_else(|| {
+            let first = try_consume_context::<InitialRoute>().map_or(Route::Home, |r| r.0);
+            Nav {
+                route: Signal::new(first),
+                back: Signal::new(Vec::new()),
+                space: Signal::new(None),
+                query: Signal::new(String::new()),
+            }
+        })
     });
-    let keys = use_context_provider(command::Keys::new);
+    use_context_provider(|| nav);
+    let keys = use_hook(|| {
+        try_consume_context::<command::Keys>().unwrap_or_else(|| {
+            let keys = command::Keys::new();
+            if let Some(InitialOverlay(up)) = try_consume_context::<InitialOverlay>() {
+                keys.show(up);
+            }
+            keys
+        })
+    });
+    use_context_provider(|| keys);
+    (nav, keys)
+}
+
+/// The keyboard menus — ⌘K (the library's commands and the app's), ⌘O
+/// (open by name) and `?` (every shortcut) — over whatever the app shows
+/// under it: the library, or a song open in the DAW. Mount it at the
+/// window's root, around every page, so the menus and where the library
+/// is stay the same whichever page is up. `on_overlay` hears a menu go up
+/// (`true`) and down: a page that reads the keyboard itself stands aside
+/// while one is up.
+#[component]
+pub fn CommandLayer(
+    on_overlay: Option<EventHandler<bool>>,
+    /// The app feeds the menus the window's keys itself ([`Menus::key`]):
+    /// a page's key reaches the DOM only through what has the focus, and
+    /// at first nothing does.
+    #[props(default)]
+    window_keys: bool,
+    children: Element,
+) -> Element {
+    let (_, keys) = use_library_contexts();
+    use_context_provider(|| Layered);
+    let menus = command::use_menus();
+    let up = (keys.overlay)() != command::Overlay::None;
+    let mut was = use_signal(|| false);
+    if *was.peek() != up {
+        was.set(up);
+        if let Some(cb) = on_overlay {
+            cb.call(up);
+        }
+    }
+    rsx! {
+        div {
+            style: "position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; overflow: hidden; \
+                    color: {INK}; font-family: {FONT};",
+            onkeydown: move |e| {
+                // An app that hears the window's keys feeds them itself
+                // (`Menus::key`); this is for one that does not.
+                if !window_keys {
+                    let typing = try_consume_context::<Typing>().is_some_and(|t| t.0.call(()));
+                    command::on_menu_key(&e, menus, typing);
+                }
+            },
+            document::Style { {SHEET_CSS} }
+            {children}
+            command::Overlays {}
+        }
+    }
+}
+
+/// The library: the root a window mounts.
+#[component]
+pub fn LibraryApp() -> Element {
+    let (nav, keys) = use_library_contexts();
+    let layered = try_use_context::<Layered>().is_some();
+    let menus = command::use_menus();
     // The app's player when it provides one (a screenshot of it playing),
     // else the library's own.
     let player = use_hook(|| {
@@ -232,8 +369,6 @@ pub fn LibraryApp() -> Element {
             .unwrap_or_else(|| provide_context(player::Player::new()))
     });
     player::use_clock(player);
-    let nav = use_nav();
-    let lib = use_library();
     let phone = use_phone();
     let route = (nav.route)();
     rsx! {
@@ -252,7 +387,15 @@ pub fn LibraryApp() -> Element {
                     e.prevent_default();
                     return;
                 }
-                command::on_key(&e, &lib.read(), nav, keys);
+                // Under a layer, the menus' keys are the layer's (it hears
+                // them as they bubble up from here).
+                if layered {
+                    if *keys.overlay.peek() == command::Overlay::None {
+                        command::on_page_key(&e, nav);
+                    }
+                } else {
+                    command::on_key(&e, menus);
+                }
             },
             document::Style { {SHEET_CSS} }
             AppBar {}
@@ -280,7 +423,7 @@ pub fn LibraryApp() -> Element {
             player::MiniPlayer {}
             if phone { TabBar {} }
             player::NowPlaying {}
-            command::Overlays {}
+            if !layered { command::Overlays {} }
         }
     }
 }
@@ -335,7 +478,10 @@ fn AppBar() -> Element {
                     if !phone { span { style: "color: {INK_2};", "Syncing {pending}" } }
                 }
             }
-            Avatar { name: me, size: 32 }
+            match try_use_context::<Slots>().and_then(|s| s.bar) {
+                Some(bar) => bar.call(()),
+                None => rsx! { Avatar { name: me, size: 32 } },
+            }
         }
     }
 }
@@ -377,6 +523,8 @@ fn SearchField(wide: bool) -> Element {
                     }
                 }
                 input {
+                    onfocus: move |_| crate::ui::set_field_focused(true),
+                    onblur: move |_| crate::ui::set_field_focused(false),
                     r#type: "text",
                     value: "{q}",
                     "aria-label": "Search",

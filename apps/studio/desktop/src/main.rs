@@ -1,14 +1,14 @@
 //! Studio — FastTrackStudio's one app.
 //!
-//! Signal (the live rig) and Session (the DAW) in one binary. The window
-//! opens on the front screen (`front.rs`), which chooses the side a launch
-//! goes into; this crate is Signal's app, and Session comes in as a library
-//! (`session_desktop::native`, feature `session-app`).
+//! The live rig and the DAW in one binary, one app. The window opens on
+//! the welcome screen, the library (`front.rs`), and goes from there into
+//! what it opens: the DAW view (Session's shell, `session_desktop::native`,
+//! feature `session-app`) or the rig view (this crate's rig app).
 //!
 //! Signal's side is a remote of its engine, the same architecture as the
 //! web remotes: on a desk the header's Engines area supervises the
 //! `signal-engine` child process (`engines.rs`); on a phone the engine runs
-//! in-process (`rig_engine.rs`), started when the Signal door is chosen.
+//! in-process (`rig_engine.rs`), started when the rig view is first opened.
 //!
 //! It is ALSO the engine itself: `studio-desktop --engine` runs the
 //! headless signal engine (`engine_main.rs`) — the same binary the
@@ -111,20 +111,14 @@ mod web_keys_threads;
 // ── iPhone: the in-process rig + the phone shell ────────────────────────
 // iOS forbids child processes, so the signal engine runs inside the app
 // (rig_engine.rs) and the UI is a phone-sized shell (mobile_view.rs).
-/// The front screen: Signal or Session (the window's root on a desk and
-/// a phone; the web build and the WebView escape hatch are Signal only).
+/// The window's root: the welcome screen (the library) and the views it
+/// opens into, the DAW and the rig view (on a desk and a phone; the web
+/// build and the WebView escape hatch are the rig view only).
 #[cfg(any(
     target_os = "ios",
     all(not(target_arch = "wasm32"), not(feature = "webview"))
 ))]
 mod front;
-/// Studio's home: play here (a rig, a setlist, a project) or join a session
-/// happening elsewhere — the front screen's page.
-#[cfg(any(
-    target_os = "ios",
-    all(not(target_arch = "wasm32"), not(feature = "webview"))
-))]
-mod home;
 #[cfg(all(feature = "signal-guitar", target_os = "ios"))]
 mod ios_audio;
 #[cfg(all(feature = "signal-guitar", target_os = "ios"))]
@@ -135,8 +129,8 @@ mod ios_orientation;
 #[allow(dead_code)]
 #[cfg(all(feature = "signal-keys-rig", not(target_arch = "wasm32")))]
 mod keys_view;
-/// The library as the front screen's home: the window's size and what a
-/// press that leaves it opens, handed to `library::ui`.
+/// The library as Studio's welcome screen: the window's size, the ways in
+/// at the top of its Home, and where what it opens goes.
 #[cfg(any(
     target_os = "ios",
     all(not(target_arch = "wasm32"), not(feature = "webview"))
@@ -345,8 +339,8 @@ fn main() {
             }
         }
         // The audio session and the in-process rig engine start when the
-        // front screen's Signal door is chosen (`front::enter`): Session,
-        // the other door, opens its own engine, and a process runs one.
+        // rig view is first opened (`front::enter_rig`): a process runs one
+        // engine.
     }
 
     launch_app();
@@ -470,7 +464,7 @@ fn launch_app() {
     let (w, h) = size.unwrap_or_else(default_window_size);
     // The system's title bar, drawn through on macOS: the home, Session and
     // the rig each keep the window's buttons in their own top bar (the rig
-    // through `WindowButtons`, `front::SignalSide`).
+    // through `WindowButtons`, `front::RigView`).
     let mut window = WindowAttributes::default()
         .with_title("Studio")
         .with_surface_size(LogicalSize::new(w, h))
