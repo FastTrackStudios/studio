@@ -32,6 +32,7 @@ use core::f64::consts::PI;
 
 use crate::saturate::curve_table::{CurveTable, Left};
 use crate::saturate::halfband::Oversampler;
+use alloc::sync::Arc;
 
 /// Saturation Frequency.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -308,44 +309,68 @@ fn sat_alt(v: f64) -> f64 {
     SAT_ALT.at(v)
 }
 
-/// The five curves, tabulated (or, for checking, in closed form).
+/// The five curves, tabulated (or, for checking, in closed form). The
+/// tables are the same for every instance — they depend on constants only —
+/// so they are shared: a song with 69 saturators built them 138 times, 44%
+/// of the song's load.
 #[derive(Clone, Debug)]
 struct Curves {
     exact: bool,
-    sat0: CurveTable,
-    sat1: CurveTable,
-    plate1: CurveTable,
-    limit: CurveTable,
-    plate2: CurveTable,
+    sat0: Arc<CurveTable>,
+    sat1: Arc<CurveTable>,
+    plate1: Arc<CurveTable>,
+    limit: Arc<CurveTable>,
+    plate2: Arc<CurveTable>,
 }
 
 impl Curves {
+    /// The curves, `exact` or tabulated — the tables built once per
+    /// process where there is `std` to keep them in.
+    fn new(exact: bool) -> Self {
+        #[cfg(feature = "std")]
+        {
+            static TABLES: std::sync::OnceLock<Curves> = std::sync::OnceLock::new();
+            let mut curves = TABLES.get_or_init(Self::tabulate).clone();
+            curves.exact = exact;
+            curves
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            let mut curves = Self::tabulate();
+            curves.exact = exact;
+            curves
+        }
+    }
+
     /// Fine steps over each knee, 1/4 V either side: within 3e-7 V of the
     /// closed forms everywhere (`curves_match_their_equations`).
-    fn new(exact: bool) -> Self {
+    fn tabulate() -> Self {
         let (f, c) = (1.0 / 32.0, 0.25);
+        let table = |curve: fn(f64) -> f64, left: Left, edges: [f64; 4], steps: [f64; 3]| {
+            Arc::new(CurveTable::new(curve, left, edges, steps))
+        };
         Self {
-            exact,
-            sat0: CurveTable::new(
+            exact: false,
+            sat0: table(
                 sat_normal,
                 Left::Const(12.0),
                 [-12.0, -6.0, 6.0, 300.0],
                 [c, f, c],
             ),
-            sat1: CurveTable::new(
+            sat1: table(
                 sat_alt,
                 Left::Const(12.0),
                 [-10.0, -5.0, 6.0, 300.0],
                 [c, f, c],
             ),
-            plate1: CurveTable::new(
+            plate1: table(
                 plate1,
                 Left::Const(SUPPLY),
                 [-25.0, -10.0, 15.0, 400.0],
                 [c, f, c],
             ),
-            limit: CurveTable::new(limit, Left::Identity, [-45.0, -5.0, 35.0, 400.0], [c, f, c]),
-            plate2: CurveTable::new(
+            limit: table(limit, Left::Identity, [-45.0, -5.0, 35.0, 400.0], [c, f, c]),
+            plate2: table(
                 plate2,
                 Left::Const(plate2(-150.0)),
                 [-150.0, -45.0, 30.0, 100.0],
@@ -996,4 +1021,28 @@ pub fn static_curve(params: &BlueboxParams, input: f64) -> f64 {
     };
     let swing = stages(1.0).abs().max(stages(-1.0).abs()).max(1e-9);
     stages(input) / swing
+}
+
+#[cfg(all(test, feature = "std"))]
+mod shared_curve_tests {
+    use super::Curves;
+    use alloc::sync::Arc;
+
+    #[test]
+    fn every_saturator_shares_one_set_of_tables_that_matches_a_fresh_one() {
+        let (a, b) = (Curves::new(false), Curves::new(true));
+        assert!(Arc::ptr_eq(&a.sat0, &b.sat0), "built once, shared");
+        assert!(Arc::ptr_eq(&a.plate2, &b.plate2));
+        assert!(!a.exact && b.exact, "each keeps its own mode");
+        let fresh = Curves::tabulate();
+        for v in [
+            -150.0, -45.0, -12.0, -5.5, 0.0, 0.3, 6.0, 35.0, 120.0, 400.0,
+        ] {
+            assert_eq!(a.sat0.eval(v), fresh.sat0.eval(v));
+            assert_eq!(a.sat1.eval(v), fresh.sat1.eval(v));
+            assert_eq!(a.plate1.eval(v), fresh.plate1.eval(v));
+            assert_eq!(a.limit.eval(v), fresh.limit.eval(v));
+            assert_eq!(a.plate2.eval(v), fresh.plate2.eval(v));
+        }
+    }
 }
