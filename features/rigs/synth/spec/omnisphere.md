@@ -63,8 +63,15 @@ active sample layers) is an exact semitone remap — the zone of the note minus
 matches the plugin to its own noise on a chromatic source. Past 0.82 the
 remap continues (+12 at 0.83 … +24 at 1) under a grain layer the plugin adds
 (sidebands ~18 Hz about each harmonic; on the cello also far quieter from
-0.98) — the remap is modelled, the grains and that drop are not. `tbmd` 0
-is another process (open). **Mogrify** starts a fresh note
+0.98) — the remap is modelled, the grains and that drop are not: the
+cello's harmonics pulse at a steady ~19.4 Hz from 0.84 while the piano's
+show no such rate (only a ~6 Hz wobble), so the grain is no generic Timbre
+effect — likely the source's loop repeating under a large upward remap
+(open). `tbmd` 0 is a filter mode: flat 0.35–0.65, above 0.65 a 24 dB/oct
+high-pass rising ~105 Hz → ~1.8 kHz (modelled); below 0.35 and its high
+lift are source-dependent (open). Envelope points' `s` is a segment type:
+0 straight, 0x18 bends as `1 + 31.5·|c − 0.5|`, 0x14 as `1 + 18·|c − 0.5|`,
+for amp, filter and mod envelopes alike. **Mogrify** starts a fresh note
 part way into its sample (25 ms at 0.05 … 257 ms at 1, measured on a
 piano), static and routed. A sample soundsource takes `tune` routes.
 **Filter Spread** (`sprd`, 0.5 none) splits the section's cutoff across the
