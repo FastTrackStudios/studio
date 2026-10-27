@@ -222,6 +222,9 @@ pub fn prepare() -> Option<Prepared> {
             Ok((daw, Box::new(engine) as session_daw::open::EngineConnection))
         })
     });
+    // The Action List served to a model and the CLI from the start, so
+    // either can open the first song (`SESSION_OPEN`, `SESSION_OPEN_SETLIST`).
+    session_daw::open::serve_actions();
     let mode = session_daw::open::launch_mode();
     session_daw::open::set_mode(mode.clone());
     let remote = if mode.owns_project() {

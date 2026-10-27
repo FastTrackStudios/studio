@@ -257,6 +257,57 @@ pub fn open_from_outside(path: PathBuf) {
     BACK.store(true, std::sync::atomic::Ordering::Release);
 }
 
+/// A setlist of an org's library asked to be opened from outside the window
+/// (the Action List's `SESSION_OPEN_SETLIST`): the start screen streams it in
+/// the way a click on it does.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetlistOpen {
+    /// The org whose library holds it; the one shown when `None`.
+    pub org: Option<String>,
+    /// Its title, as the library lists it.
+    pub setlist: String,
+    /// One of its songs (slug or title) to open alone; the whole set when
+    /// `None`.
+    pub song: Option<String>,
+}
+
+static NEXT_SET: std::sync::Mutex<Option<SetlistOpen>> = std::sync::Mutex::new(None);
+
+/// Open `request` from outside the window: the window goes back out of
+/// the song, and the start screen takes it ([`take_setlist`]).
+pub fn open_setlist_from_outside(request: SetlistOpen) {
+    *NEXT_SET
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(request);
+    BACK.store(true, std::sync::atomic::Ordering::Release);
+}
+
+/// The setlist asked to be opened, if any — still waiting.
+#[must_use]
+pub fn pending_setlist() -> Option<SetlistOpen> {
+    NEXT_SET
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+}
+
+/// The setlist asked to be opened, once — taken when the library shown is
+/// `org`'s (or the request names none).
+#[must_use]
+pub fn take_setlist(org: &str) -> Option<SetlistOpen> {
+    let mut next = NEXT_SET
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if next
+        .as_ref()
+        .is_some_and(|r| r.org.as_deref().is_none_or(|o| o == org))
+    {
+        next.take()
+    } else {
+        None
+    }
+}
+
 /// Ask the window to go back out of the song, to the start screen — for
 /// what the start screen then opens itself (a new song,
 /// `crate::project_new`).

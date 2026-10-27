@@ -118,6 +118,12 @@ pub fn through_list(actions: Vec<Action>) -> Vec<Action> {
     for action in actions {
         match id_and_args(&action) {
             Some((id, args)) if behind_the_window(id) => off_the_window(id, args),
+            // The window's own transport keys took this press already
+            // (`keys::use_window_transport_keys`): once is a toggle.
+            #[cfg(feature = "native")]
+            Some((id, _))
+                if [PLAY_STOP.id, PLAY_PAUSE.id].contains(&id)
+                    && crate::keys::window_has_transport() => {}
             Some((id, args)) => {
                 if let Err(e) = list.run_json(id, args.as_bytes()) {
                     tracing::warn!(action.id = id, error = %e, "key action refused");
@@ -660,10 +666,26 @@ fn register_window(list: &ActionList) -> Result<(), architect::action::ActionErr
         crate::quantize_panel::ask();
         Ok("the Quantize panel shown, or hidden if it was".to_owned())
     })?;
-    let plain: [(&'static ActionMeta, Effect, Action); 26] = [
-        (&PLAY_STOP, Effect::Mutating, Action::PlayStop),
-        (&PLAY_PAUSE, Effect::Mutating, Action::PlayPause),
-        (&GO_TO_START, Effect::Mutating, Action::GoToStart),
+    // The transport is the engine's, not the window's: these run on it at
+    // once, the window or none (headless, hidden, another monitor), and the
+    // window shows what the engine does.
+    for (meta, command) in [
+        (&PLAY_STOP, crate::engine::Move::PlayStop),
+        (&PLAY_PAUSE, crate::engine::Move::PlayStop),
+    ] {
+        list.register(meta, Effect::Mutating, move |(): ()| {
+            crate::engine::transport(command, 0.0);
+            Ok(format!("{}: done", meta.display_name))
+        })?;
+    }
+    // Home is the engine's too; the window, when there is one, also takes
+    // its edit cursor home (idempotent: it asks the engine again).
+    list.register(&GO_TO_START, Effect::Mutating, |(): ()| {
+        crate::engine::transport(crate::engine::Move::Home, 0.0);
+        queue(Action::GoToStart);
+        Ok(format!("{}: done", GO_TO_START.display_name))
+    })?;
+    let plain: [(&'static ActionMeta, Effect, Action); 23] = [
         (&TOGGLE_RECORD, Effect::Destructive, Action::ToggleRecord),
         (&SPLIT, Effect::Mutating, Action::SplitAtCursor),
         (&QUANTIZE_DRUMS, Effect::Mutating, Action::QuantizeDrums),
@@ -2011,6 +2033,43 @@ struct OpenArg {
 }
 
 #[cfg(feature = "native")]
+static OPEN_SETLIST: ActionMeta = meta(
+    "SESSION_OPEN_SETLIST",
+    "session_open_setlist",
+    "Open a setlist from the library",
+    "Stream a setlist of an org's Task library in, as a click on it on the start screen does: `setlist` its title, `org` the org whose library holds it (the one shown when left out), `song` one of its songs (slug or title) to open alone. What is open is not saved first. Through the start screen.",
+    "Session",
+    "",
+);
+
+/// Which setlist of which library, and optionally which of its songs.
+#[cfg(feature = "native")]
+#[derive(Facet)]
+struct OpenSetlistArg {
+    setlist: String,
+    org: Option<String>,
+    song: Option<String>,
+}
+
+#[cfg(feature = "native")]
+static STREAMS: ActionMeta = meta(
+    "SESSION_STREAMS",
+    "session_streams",
+    "What is streaming",
+    "Every song streamed in from elsewhere (a Task library, a share link, another engine) and how far along it is: `state` local (every recording it plays is here, kept on disk), arriving, or streaming (nothing yet); its recordings, each with its bytes and how many have arrived, the least arrived first; where they are kept. `song` (the engine project) narrows it to one; `top` caps the recordings listed (all when left out). Read-only.",
+    "Session",
+    "",
+);
+
+/// Which song, and how many of its recordings to list.
+#[cfg(feature = "native")]
+#[derive(Facet)]
+struct StreamsArg {
+    song: Option<String>,
+    top: Option<u32>,
+}
+
+#[cfg(feature = "native")]
 static RECENT: ActionMeta = meta(
     "SESSION_RECENT",
     "session_recent",
@@ -2398,6 +2457,44 @@ fn register_save(list: &ActionList) -> Result<(), architect::action::ActionError
         }
         crate::projects::open_from_outside(path.clone());
         Ok(format!("opening {}", path.display()))
+    })?;
+    list.register(&STREAMS, Effect::ReadOnly, |a: StreamsArg| {
+        let mut songs = crate::stream_set::report();
+        if let Some(song) = &a.song {
+            songs.retain(|s| &s.project == song);
+        }
+        if let Some(top) = a.top {
+            for s in &mut songs {
+                s.recordings.truncate(top as usize);
+            }
+        }
+        Ok(songs)
+    })?;
+    list.register(&OPEN_SETLIST, Effect::Mutating, |a: OpenSetlistArg| {
+        let setlist = a.setlist.trim().to_owned();
+        if setlist.is_empty() {
+            return Err("`setlist`: the title of a setlist in the library".to_owned());
+        }
+        let said = format!(
+            "opening the setlist {setlist:?}{}{}",
+            a.song
+                .as_deref()
+                .map(|s| format!(", its song {s:?}"))
+                .unwrap_or_default(),
+            a.org
+                .as_deref()
+                .map(|o| format!(" from {o}'s library"))
+                .unwrap_or_default()
+        );
+        crate::projects::open_setlist_from_outside(crate::projects::SetlistOpen {
+            org: a.org.map(|o| o.trim().to_owned()).filter(|o| !o.is_empty()),
+            setlist,
+            song: a
+                .song
+                .map(|s| s.trim().to_owned())
+                .filter(|s| !s.is_empty()),
+        });
+        Ok(said)
     })?;
     list.register(&ALTERNATIVES, Effect::ReadOnly, |(): ()| {
         let (daw, project) = song()?;

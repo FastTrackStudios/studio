@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 
+mod app;
 mod lyrics;
 mod multitracks;
 mod peaks;
@@ -135,6 +136,13 @@ enum Command {
         #[arg(long, default_value_t = 0.6)]
         quality: f32,
     },
+    /// Drive the Session window that is running (Studio's, or Session's
+    /// own), through its Action List: open a song or a library setlist,
+    /// list and run any action it has.
+    App {
+        #[command(subcommand)]
+        command: AppCommand,
+    },
     /// Share a project with an org on Task: from now on it syncs there
     /// from any device it is opened on. Waits until every branch (the song
     /// and each alternative) has reached Task, then prints their doc ids.
@@ -150,6 +158,38 @@ enum Command {
     Lyrics {
         #[command(subcommand)]
         command: LyricsCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AppCommand {
+    /// Open a song, setlist or `.session` (a path), or a version of the
+    /// open song (its name).
+    Open {
+        /// A path, or a version's name.
+        what: String,
+    },
+    /// Stream a setlist of an org's Task library in, as a click on it does.
+    OpenSetlist {
+        /// Its title (`Crescendum`).
+        setlist: String,
+        /// The org whose library holds it; the one shown when left out.
+        #[arg(long)]
+        org: Option<String>,
+        /// One of its songs (slug or title) to open alone.
+        #[arg(long)]
+        song: Option<String>,
+    },
+    /// The window's actions, by id (`--filter` narrows them).
+    Actions {
+        #[arg(long)]
+        filter: Option<String>,
+    },
+    /// Run one action: its id (`SESSION_PLAY`, `play`) and its arguments as
+    /// JSON.
+    Run {
+        action: String,
+        args: Option<String>,
     },
 }
 
@@ -294,6 +334,7 @@ async fn run(command: Command) -> eyre::Result<()> {
             force,
         } => import(&folders, &out, force),
         Command::Share { project, org } => share(&project, &org).await,
+        Command::App { command } => app_command(command),
         Command::Lyrics {
             command:
                 LyricsCommand::Fetch {
@@ -329,6 +370,37 @@ fn media_list(from: &Path) -> eyre::Result<Vec<PathBuf>> {
         .filter(|l| !l.is_empty())
         .map(PathBuf::from)
         .collect())
+}
+
+/// `session app …`: the running window, driven.
+fn app_command(command: AppCommand) -> eyre::Result<()> {
+    let said = match command {
+        AppCommand::Open { what } => {
+            let path = std::path::Path::new(&what);
+            let args = if path.exists() {
+                let full = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+                serde_json::json!({"path": full.to_string_lossy()})
+            } else {
+                serde_json::json!({"name": what})
+            };
+            app::run("open", args)?
+        }
+        AppCommand::OpenSetlist { setlist, org, song } => app::run(
+            "open_setlist",
+            serde_json::json!({"setlist": setlist, "org": org, "song": song}),
+        )?,
+        AppCommand::Actions { filter } => return app::list(filter.as_deref()),
+        AppCommand::Run { action, args } => {
+            let args = match args {
+                Some(text) => serde_json::from_str(&text)
+                    .map_err(|e| eyre::eyre!("the arguments are not JSON: {e}"))?,
+                None => serde_json::Value::Null,
+            };
+            app::run(&action, args)?
+        }
+    };
+    println!("{said}");
+    Ok(())
 }
 
 /// `session share`: the project synced into `org`, each branch's doc id

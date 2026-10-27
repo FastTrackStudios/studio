@@ -180,6 +180,12 @@ impl SparseBytes {
     /// has: a reader that stopped short can wait for it to move rather
     /// than read the same bytes again to find out.
     #[must_use]
+    /// How many of its bytes have arrived.
+    #[must_use]
+    pub fn arrived(&self) -> u64 {
+        self.have().iter().map(|r| r.end - r.start).sum()
+    }
+
     pub fn arrivals(&self) -> u64 {
         lock(&self.inner).arrivals
     }

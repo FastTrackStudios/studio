@@ -612,12 +612,10 @@ impl Library {
                 }
             }
         }
-        // The project first: the top-level `.RPP`.
+        // The project first: the song's top-level project file (`.session`,
+        // the sidecars of its log aside), else its top-level `.RPP`.
         entries.sort_by(|a, b| a.0.cmp(&b.0));
-        if let Some(at) = entries
-            .iter()
-            .position(|(rel, _)| !rel.contains('/') && rel.to_lowercase().ends_with(".rpp"))
-        {
+        if let Some(at) = project_entry(&entries) {
             let project = entries.remove(at);
             entries.insert(0, project);
         }
@@ -882,4 +880,61 @@ async fn fetch_to(
     drop(out);
     std::fs::rename(&partial, local)?;
     Ok(())
+}
+
+/// Which of a song folder's files is the song's project: a top-level
+/// `.session` (not a history copy kept beside it, `Song.before-sync.session`,
+/// nor a backup), the one named most like the rest when there are several
+/// (`Song.session` over `Song.current.session`); else its top-level `.RPP`.
+fn project_entry(entries: &[(String, u64)]) -> Option<usize> {
+    let top = |rel: &str| !rel.contains('/');
+    let kept_aside = |lower: &str| lower.contains(".before-sync.") || lower.contains(".bak");
+    let sessions: Vec<usize> = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, (rel, _))| {
+            let lower = rel.to_lowercase();
+            top(rel) && lower.ends_with(".session") && !kept_aside(&lower)
+        })
+        .map(|(i, _)| i)
+        .collect();
+    // Fewest dots in the stem: `Song.session` before `Song.current.session`.
+    sessions
+        .into_iter()
+        .min_by_key(|&i| entries[i].0.matches('.').count())
+        .or_else(|| {
+            entries
+                .iter()
+                .position(|(rel, _)| top(rel) && rel.to_lowercase().ends_with(".rpp"))
+        })
+}
+
+#[cfg(test)]
+mod project_entry_tests {
+    use super::project_entry;
+
+    fn at(names: &[&str]) -> Option<String> {
+        let entries: Vec<(String, u64)> = names.iter().map(|n| ((*n).to_owned(), 1)).collect();
+        project_entry(&entries).map(|i| entries[i].0.clone())
+    }
+
+    #[test]
+    fn the_song_s_own_session_is_its_project_not_a_copy_kept_beside_it() {
+        assert_eq!(
+            at(&[
+                "Unbreakable.before-sync.session",
+                "Unbreakable.session",
+                "Unbreakable.session.bak-2026-10-26-before-share",
+                "unbreakable.current.session",
+                "Unbreakable.RPP",
+            ])
+            .as_deref(),
+            Some("Unbreakable.session")
+        );
+        assert_eq!(
+            at(&["Song.RPP", "Media/a.wav"]).as_deref(),
+            Some("Song.RPP")
+        );
+        assert_eq!(at(&["Media/a.session"]), None);
+    }
 }

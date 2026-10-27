@@ -342,7 +342,7 @@ pub fn stream(song: StreamedSong, local: &str) {
         stream.by_reference = by_reference,
         "stream-set: takes attached to their streams"
     );
-    let takes = Arc::new(Mutex::new(takes));
+    let takes = Arc::new(Mutex::new(whole_files(takes)));
     let stop = Arc::new(AtomicBool::new(false));
     song.fetch(Arc::clone(&takes), playhead, Arc::clone(&stop));
     if let Ok(mut streams) = STREAMS.lock() {
@@ -598,4 +598,120 @@ pub fn remove_download(into: &std::path::Path, file: &std::path::Path) -> eyre::
         }
     }
     Ok(())
+}
+
+/// What the fetcher brings: each recording once, whole — not each item
+/// cut from it. A song is thousands of items over a few hundred files
+/// (Unbreakable: 21 775 over 185), and what streams in is kept, so the
+/// file is wanted whole anyway. Each file is placed on the timeline where
+/// the first item that plays it does (so the bytes under the playhead
+/// still come first), and listed in the order the files are first heard.
+fn whole_files(
+    takes: Vec<daw::standalone::audio_engine::media_fetch::StreamedTake>,
+) -> Vec<daw::standalone::audio_engine::media_fetch::StreamedTake> {
+    let mut takes = takes;
+    takes.sort_by(|a, b| a.start.total_cmp(&b.start));
+    let mut seen = std::collections::HashSet::new();
+    takes
+        .into_iter()
+        .filter(|t| seen.insert(t.path.clone()))
+        .map(|mut t| {
+            let rate = if t.playrate > 0.0 { t.playrate } else { 1.0 };
+            // The file's own start on the timeline, as this item has it.
+            t.start -= t.source_offset / rate;
+            t.source_offset = 0.0;
+            // To its end: past the last page, `bytes_for` stops there.
+            t.end = t.start + 24.0 * 3600.0;
+            t
+        })
+        .collect()
+}
+
+/// How much of one recording a streaming song has.
+#[derive(Clone, Debug, PartialEq, facet::Facet)]
+pub struct FileStream {
+    /// The proxy, as the song names it (`Media/Proxies/Kick.ogg`).
+    pub path: String,
+    pub bytes: u64,
+    pub arrived: u64,
+    /// Every byte of it is here.
+    pub complete: bool,
+}
+
+/// What a song streamed in has: how much of what it plays has arrived,
+/// and where it is kept.
+#[derive(Clone, Debug, PartialEq, facet::Facet)]
+pub struct SongStreams {
+    /// The song as opened here (its engine project).
+    pub project: String,
+    /// Where its files are mirrored (and its streams kept, on disk).
+    pub folder: String,
+    /// `local` (every recording here), `arriving` (some), or `streaming`
+    /// (none yet).
+    pub state: String,
+    pub files: u32,
+    pub complete: u32,
+    pub bytes: u64,
+    pub arrived: u64,
+    /// Played by its reference: the stems wait until asked for.
+    pub by_reference: bool,
+    /// The recordings, the least arrived first.
+    pub recordings: Vec<FileStream>,
+}
+
+/// Every song streaming in this process, and how far along each is.
+#[must_use]
+pub fn report() -> Vec<SongStreams> {
+    let Ok(streams) = STREAMS.lock() else {
+        return Vec::new();
+    };
+    streams
+        .iter()
+        .map(|s| {
+            let takes = s.takes.lock().map(|t| t.clone()).unwrap_or_default();
+            let mut recordings: Vec<FileStream> = takes
+                .iter()
+                .chain(s.held.iter().map(|(t, _)| t))
+                .map(|t| {
+                    let (bytes, arrived) = (t.bytes.len(), t.bytes.arrived());
+                    FileStream {
+                        path: t.path.clone(),
+                        bytes,
+                        arrived,
+                        complete: arrived >= bytes,
+                    }
+                })
+                .collect();
+            recordings.sort_by(|a, b| {
+                let part = |f: &FileStream| f.arrived as f64 / f.bytes.max(1) as f64;
+                part(a).total_cmp(&part(b))
+            });
+            let complete = recordings.iter().filter(|f| f.complete).count();
+            let (bytes, arrived) = recordings
+                .iter()
+                .fold((0, 0), |(b, a), f| (b + f.bytes, a + f.arrived));
+            let state = if complete == recordings.len() {
+                "local"
+            } else if arrived > 0 {
+                "arriving"
+            } else {
+                "streaming"
+            };
+            SongStreams {
+                project: s.project.clone(),
+                folder: s
+                    ._song
+                    .project
+                    .parent()
+                    .map_or_else(String::new, |p| p.display().to_string()),
+                state: state.to_owned(),
+                files: u32::try_from(recordings.len()).unwrap_or(u32::MAX),
+                complete: u32::try_from(complete).unwrap_or(u32::MAX),
+                bytes,
+                arrived,
+                by_reference: !s.held.is_empty(),
+                recordings,
+            }
+        })
+        .collect()
 }

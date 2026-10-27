@@ -226,6 +226,11 @@ fn write_fresh(file: &Path, model: &session::sync::SessionModel) -> eyre::Result
     store
         .rebase(MAIN, doc.loro())
         .map_err(|e| eyre::eyre!("{}: {e}", file.display()))?;
+    // One file, its log folded in: what a library serves and a device
+    // copies is the song whole, not half of it in a sidecar.
+    store
+        .checkpoint()
+        .map_err(|e| eyre::eyre!("{}: {e}", file.display()))?;
     Ok(())
 }
 

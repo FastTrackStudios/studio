@@ -525,7 +525,16 @@ impl Keep {
     fn fetch_config(&self) -> FetchConfig {
         match self {
             #[cfg(not(target_arch = "wasm32"))]
-            Self::Disk(_) => FetchConfig::default(),
+            // Kept on disk, whole: many requests in flight, each as large as
+            // a request goes. A request costs about the same however small
+            // (a third of a second to a local Task), and a song plays a few
+            // hundred streams at once — four small ones at a time could not
+            // keep up with Unbreakable's 185 (≈3 MB/s needed).
+            Self::Disk(_) => FetchConfig {
+                concurrency: 32,
+                max_request: 1024 * 1024,
+                ..FetchConfig::default()
+            },
             Self::Memory(_) => FetchConfig {
                 resident: Some(daw::standalone::audio_engine::media_fetch::Resident::BROWSER),
                 // A seek needs every stem's block at the new place at once,
@@ -603,6 +612,11 @@ pub struct StreamedSong {
     peaks: HashMap<String, (String, u64)>,
     /// The streams attached so far, by their original's file name.
     attached: Mutex<Vec<(String, daw::standalone::audio_engine::streamed::Streamed)>>,
+    /// Each proxy's bytes and page index, once: every item cut from one
+    /// recording reads the same store (a song is thousands of items over a
+    /// few hundred files — one store each would truncate the file the
+    /// others write, and fetch every header thousands of times).
+    opened: Mutex<HashMap<PathBuf, (Arc<SparseBytes>, OggIndex)>>,
 }
 
 fn safe_name(text: &str) -> String {
@@ -1061,6 +1075,7 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
         proxies,
         peaks,
         attached: Mutex::default(),
+        opened: Mutex::default(),
     })
 }
 
@@ -1229,6 +1244,20 @@ impl StreamedSong {
     /// Attach `media` (a take of the song opened into `daw` as `local`) as
     /// a stream of its proxy — silent until its bytes arrive. `None` when
     /// the peer has no indexed proxy for it.
+    /// The proxy at `at`'s bytes and page index, opened the first time any
+    /// item asks for it and shared from then on.
+    fn opened(&self, at: &Path, size: u64) -> Option<(Arc<SparseBytes>, OggIndex)> {
+        let mut opened = self.opened.lock().ok()?;
+        if let Some((bytes, index)) = opened.get(at) {
+            return Some((Arc::clone(bytes), index.clone()));
+        }
+        let index =
+            OggIndex::from_text(&self.folder.read_to_string(&OggIndex::path_for(at)).ok()?)?;
+        let bytes = self.keep.sparse(at, size)?;
+        opened.insert(at.to_path_buf(), (Arc::clone(&bytes), index.clone()));
+        Some((bytes, index))
+    }
+
     pub fn attach(&self, daw: &Standalone, local: &str, media: &PendingMedia) -> Option<Attached> {
         let stem = Path::new(&media.path)
             .file_stem()?
@@ -1236,9 +1265,7 @@ impl StreamedSong {
             .to_lowercase();
         let (path, size) = self.proxies.get(&stem)?.clone();
         let at = self.base.join(&path);
-        let index =
-            OggIndex::from_text(&self.folder.read_to_string(&OggIndex::path_for(&at)).ok()?)?;
-        let bytes = self.keep.sparse(&at, size)?;
+        let (bytes, index) = self.opened(&at, size)?;
         let feeder = daw::standalone::audio_engine::materialize::attach_remote_ogg(
             daw,
             local,

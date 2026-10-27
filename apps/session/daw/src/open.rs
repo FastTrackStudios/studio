@@ -87,14 +87,22 @@ pub fn open_first_with(path: &Path, audio: bool, media: Media) -> eyre::Result<O
     Ok(opened)
 }
 
-/// The window's Action List served to a model (`crate::mcp_server`), once
-/// a song is open in a window that plays — not for a renderer or a test,
-/// which open silent.
-fn serve_actions() {
+/// The window's Action List served to a model (`crate::mcp_server`): from
+/// the window's start (`session_desktop::native::prepare`), so a model or
+/// the CLI can open the first song too, and once a song is open in a window
+/// that plays — never for a renderer or a test, which open silent. Once per
+/// process.
+pub fn serve_actions() {
     #[cfg(feature = "native")]
     {
         static STARTED: OnceLock<()> = OnceLock::new();
         STARTED.get_or_init(|| {
+            // The engine's runtime, made now if no song has made it yet:
+            // the server runs on it.
+            if let Err(error) = engine_runtime() {
+                tracing::warn!(%error, "mcp: no runtime to serve on");
+                return;
+            }
             let _ = crate::mcp_server::start();
         });
     }

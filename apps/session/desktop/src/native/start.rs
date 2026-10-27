@@ -487,6 +487,72 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
         );
     });
 
+    // A setlist asked for from outside the window (the Action List's
+    // `SESSION_OPEN_SETLIST`): the org it names shown, then — once that
+    // org's lists are in — streamed in exactly as a click on it would.
+    // Polled, because the ask arrives on another thread.
+    let mut asked = use_signal(|| 0_u32);
+    use_hook(move || {
+        spawn(async move {
+            loop {
+                futures_timer::Delay::new(std::time::Duration::from_millis(300)).await;
+                if session_daw::projects::pending_setlist().is_some() {
+                    asked += 1;
+                }
+            }
+        })
+    });
+    let for_asked = account.clone();
+    use_effect(move || {
+        let _ = asked();
+        let Some(request) = session_daw::projects::pending_setlist() else {
+            return;
+        };
+        if let Some(want) = request.org.clone()
+            && org.peek().as_deref() != Some(want.as_str())
+        {
+            match &*orgs.peek() {
+                Load::Ready(list) if list.contains(&want) => org.set(Some(want)),
+                Load::Ready(_) => {
+                    let _ = session_daw::projects::take_setlist(&want);
+                    tracing::warn!(open.org = %want, "open setlist: not an org of this account");
+                }
+                _ => {}
+            }
+            return;
+        }
+        let (Some(account), Some(shown)) = (for_asked.clone(), org.peek().clone()) else {
+            return;
+        };
+        let Load::Ready(lists) = &*setlists.read() else {
+            return;
+        };
+        let Some(request) = session_daw::projects::take_setlist(&shown) else {
+            return;
+        };
+        // Taken here, on the start screen: the "back out of the song" the
+        // ask raised is spent, or the song it opens would leave at once.
+        let _ = session_daw::projects::take_back();
+        let Some(mut list) = lists
+            .iter()
+            .find(|l| l.title.eq_ignore_ascii_case(request.setlist.trim()))
+            .cloned()
+        else {
+            tracing::warn!(open.setlist = %request.setlist, open.org = %shown, "open setlist: no such setlist");
+            return;
+        };
+        if let Some(song) = &request.song {
+            list.songs.retain(|s| {
+                s.slug.eq_ignore_ascii_case(song) || s.title.eq_ignore_ascii_case(song)
+            });
+            if list.songs.is_empty() {
+                tracing::warn!(open.setlist = %request.setlist, open.song = %song, "open setlist: no such song in it");
+                return;
+            }
+        }
+        play((account, list));
+    });
+
     // Downloading a list (or a song) onto this device, to open with no
     // connection: one at a time, its progress along the foot.
     let mut downloading = use_signal(|| None::<Downloading>);
