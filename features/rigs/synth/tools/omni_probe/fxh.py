@@ -24,9 +24,9 @@ OURS_EXE = os.path.join(F.REPO, "target/release/examples/render_patch")
 
 
 def ours(xml):
-    src = "/tmp/fxh_ours.prt_omn"
+    src = "/Volumes/dev-drive/scratch/omni-probe/fxh_ours.prt_omn"
     open(src, "w", encoding="latin-1").write(xml)
-    out = "/tmp/fxh_ours.wav"
+    out = "/Volumes/dev-drive/scratch/omni-probe/fxh_ours.wav"
     env = dict(os.environ, RUST_LOG="error", FTS_PRELOAD_PROFILE="full")
     subprocess.run([OURS_EXE, src, out, "--note", F.NOTE, "--hold", str(F.HOLD), "--tail", str(F.TAIL)],
                    env=env, capture_output=True, timeout=300, check=True)

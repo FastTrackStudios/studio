@@ -23,7 +23,7 @@ OMNI = os.path.join(REPO, "target/release/examples/omni_render")
 OURS = os.path.join(REPO, "target/release/examples/render_patch")
 HOLD, TAIL = "2.0", "1.0"
 # Omnisphere references, shared by every run (`OMNI_REFS` to move them).
-REFS = os.environ.get("OMNI_REFS", "/tmp/omni-refs")
+REFS = os.environ.get("OMNI_REFS", "/Volumes/dev-drive/AudioHaven/Sampled/Synth/Omnisphere-Measurements/refs")
 LINE = re.compile(r"level\s+([-+\d.]+) dB.*held spectrum rms\s+([\d.]+) dB\s+attack\s+([\d.]+) dB")
 
 

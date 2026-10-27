@@ -17,7 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "../../../../.."))
 OMNI = os.path.join(REPO, "target/release/examples/omni_render")
 OURS = os.path.join(REPO, "target/release/examples/render_patch")
-REFS = os.environ.get("OMNI_REFS", "/tmp/omni-refs")
+REFS = os.environ.get("OMNI_REFS", "/Volumes/dev-drive/AudioHaven/Sampled/Synth/Omnisphere-Measurements/refs")
 NOTE = os.environ.get("NOTE", "48")
 LINE = re.compile(r"level\s+([-+\d.]+) dB.*held spectrum rms\s+([\d.]+) dB")
 SR = 48000
@@ -51,7 +51,7 @@ def read(p):
 def render(xml, ours):
     key = hashlib.sha1((xml + NOTE).encode()).hexdigest()[:16]
     src = os.path.join(REFS, f"vs_{key}.prt_omn")
-    out = f"/tmp/vs_{key}_s.wav" if ours else os.path.join(REFS, f"vs_{key}.wav")
+    out = f"/Volumes/dev-drive/scratch/omni-probe/vs_{key}_s.wav" if ours else os.path.join(REFS, f"vs_{key}.wav")
     open(src, "w", encoding="latin-1").write(xml)
     if ours or not os.path.exists(out):
         env = dict(os.environ, RUST_LOG="error", FTS_PRELOAD_PROFILE="full")

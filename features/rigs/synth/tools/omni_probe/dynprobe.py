@@ -16,10 +16,10 @@ base = open(os.path.join(HERE, "init_part.prt_omn")).read()
 LEVELS = [int(v) for v in os.environ.get("LEVELS", "0,-6,-12,-18,-24").split(",")]
 
 def rend(xml, exe):
-    open("/tmp/dy.prt_omn", "w").write(xml)
-    subprocess.run([exe, "/tmp/dy.prt_omn", "/tmp/dy.wav", "--note", "48", "--hold", "1.5", "--tail", "0.1"],
+    open("/Volumes/dev-drive/scratch/omni-probe/dy.prt_omn", "w").write(xml)
+    subprocess.run([exe, "/Volumes/dev-drive/scratch/omni-probe/dy.prt_omn", "/Volumes/dev-drive/scratch/omni-probe/dy.wav", "--note", "48", "--hold", "1.5", "--tail", "0.1"],
                    capture_output=True, stdin=subprocess.DEVNULL)
-    d = open("/tmp/dy.wav", "rb").read(); i = 12
+    d = open("/Volumes/dev-drive/scratch/omni-probe/dy.wav", "rb").read(); i = 12
     while i < len(d):
         cid, sz = d[i:i+4], struct.unpack("<I", d[i+4:i+8])[0]
         if cid == b"data": data = d[i+8:i+8+sz]

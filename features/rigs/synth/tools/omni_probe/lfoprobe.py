@@ -71,7 +71,7 @@ def read(path):
 def render(xml, ours):
     key = hashlib.sha1((xml + NOTE + str(HOLD)).encode()).hexdigest()[:16]
     src = os.path.join(S.REFS, f"lfo_{key}.prt_omn")
-    out = f"/tmp/lfo_{key}_s.wav" if ours else os.path.join(S.REFS, f"lfo_{key}.wav")
+    out = f"/Volumes/dev-drive/scratch/omni-probe/lfo_{key}_s.wav" if ours else os.path.join(S.REFS, f"lfo_{key}.wav")
     open(src, "w", encoding="latin-1").write(xml)
     if ours or not os.path.exists(out):
         env = dict(os.environ, RUST_LOG="error")

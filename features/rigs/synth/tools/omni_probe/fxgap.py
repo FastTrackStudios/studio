@@ -26,7 +26,7 @@ HOLD, TAIL = "2.0", "2.0"
 def render(xml, ours):
     key = hashlib.sha1((xml + F.NOTE).encode()).hexdigest()[:16]
     src = os.path.join(F.REFS, f"fg_{key}.prt_omn")
-    out = f"/tmp/fg_{key}_s.wav" if ours else os.path.join(F.REFS, f"fg_{key}.wav")
+    out = f"/Volumes/dev-drive/scratch/omni-probe/fg_{key}_s.wav" if ours else os.path.join(F.REFS, f"fg_{key}.wav")
     open(src, "w", encoding="latin-1").write(xml)
     if ours or not os.path.exists(out):
         env = dict(os.environ, RUST_LOG="error", FTS_PRELOAD_PROFILE="full")

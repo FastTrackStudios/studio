@@ -17,10 +17,10 @@ base = open(os.path.join(HERE, "init_part.prt_omn")).read()
 PTS = [31, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 12000, 16000]
 
 def rend(xml, exe):
-    open("/tmp/eq.prt_omn", "w").write(xml)
-    subprocess.run([exe, "/tmp/eq.prt_omn", "/tmp/eq.wav", "--note", str(NOTE), "--hold", "1.2",
+    open("/Volumes/dev-drive/scratch/omni-probe/eq.prt_omn", "w").write(xml)
+    subprocess.run([exe, "/Volumes/dev-drive/scratch/omni-probe/eq.prt_omn", "/Volumes/dev-drive/scratch/omni-probe/eq.wav", "--note", str(NOTE), "--hold", "1.2",
                     "--tail", "0.1"], capture_output=True, stdin=subprocess.DEVNULL)
-    d = open("/tmp/eq.wav", "rb").read(); i = 12
+    d = open("/Volumes/dev-drive/scratch/omni-probe/eq.wav", "rb").read(); i = 12
     while i < len(d):
         cid, sz = d[i:i+4], struct.unpack("<I", d[i+4:i+8])[0]
         if cid == b"data": data = d[i+8:i+8+sz]

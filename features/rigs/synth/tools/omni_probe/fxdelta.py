@@ -20,7 +20,7 @@ os.environ.setdefault("FTS_SAMPLED_ROOT", "/Volumes/dev-drive/AudioHaven/Sampled
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "../../../../.."))
 OMNI = os.path.join(REPO, "target/release/examples/omni_render")
-REFS = os.environ.get("OMNI_REFS", "/tmp/omni-refs")
+REFS = os.environ.get("OMNI_REFS", "/Volumes/dev-drive/AudioHaven/Sampled/Synth/Omnisphere-Measurements/refs")
 NOTE = os.environ.get("NOTE", "48")
 SR, HOLD, TAIL = 48000, 2.0, 1.5
 EDGES = 50 * 2 ** (np.arange(0, 28) / 3)

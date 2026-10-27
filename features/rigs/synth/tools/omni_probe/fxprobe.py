@@ -30,13 +30,13 @@ def set_fx(xml, typ, params, slot=16):
     return xml[:a] + el + xml[b:]
 
 def render(xml, exe):
-    open("/tmp/fx.prt_omn", "w").write(xml)
+    open("/Volumes/dev-drive/scratch/omni-probe/fx.prt_omn", "w").write(xml)
     hold = "0.05" if os.environ.get("SRC", "click") == "click" else "2.0"
     if os.environ.get("SRC") == "holdenv":
         hold = "1.0"
-    r = subprocess.run([exe, "/tmp/fx.prt_omn", "/tmp/fx.wav", "--note", os.environ.get("NOTE", "60"), "--hold", hold,
+    r = subprocess.run([exe, "/Volumes/dev-drive/scratch/omni-probe/fx.prt_omn", "/Volumes/dev-drive/scratch/omni-probe/fx.wav", "--note", os.environ.get("NOTE", "60"), "--hold", hold,
                         "--tail", os.environ.get("TAIL", "4.0"), "--bpm", os.environ.get("BPM", "120")], capture_output=True, text=True, stdin=subprocess.DEVNULL)
-    d = open("/tmp/fx.wav", "rb").read(); i = 12
+    d = open("/Volumes/dev-drive/scratch/omni-probe/fx.wav", "rb").read(); i = 12
     while i < len(d):
         cid, sz = d[i:i+4], struct.unpack("<I", d[i+4:i+8])[0]
         if cid == b"data": data = d[i+8:i+8+sz]

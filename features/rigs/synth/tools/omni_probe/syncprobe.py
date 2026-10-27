@@ -37,12 +37,12 @@ def period(wav):
 
 for bpm in [float(b) for b in os.environ.get("BPMS", "120,90").split(",")]:
     for r in [float(v) for v in (sys.argv[1:] or ["0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.8", "1"])]:
-        open("/tmp/sp.prt_omn", "w").write(patch(r))
+        open("/Volumes/dev-drive/scratch/omni-probe/sp.prt_omn", "w").write(patch(r))
         out = []
         for tag, exe in (("omni", H), ("ours", O)):
             if tag == "ours" and not os.environ.get("OURS"): continue
-            subprocess.run([exe, "/tmp/sp.prt_omn", "/tmp/sp.wav", "--note", "48", "--hold", os.environ.get("HOLD", "6"), "--tail", "0.1",
+            subprocess.run([exe, "/Volumes/dev-drive/scratch/omni-probe/sp.prt_omn", "/Volumes/dev-drive/scratch/omni-probe/sp.wav", "--note", "48", "--hold", os.environ.get("HOLD", "6"), "--tail", "0.1",
                             "--bpm", str(bpm)], capture_output=True, stdin=subprocess.DEVNULL)
-            p = period("/tmp/sp.wav")
+            p = period("/Volumes/dev-drive/scratch/omni-probe/sp.wav")
             out.append(f"{tag} {p:7.0f} ms = {p/ (60000/bpm):5.3f} beats")
         print(f"bpm {bpm:5.0f} rate {r:4.2f}  " + "   ".join(out), flush=True)

@@ -25,10 +25,10 @@ def set_env(xml, spec):
     return xml[:a] + head + body + xml[b:]
 
 def run(xml, exe):
-    open("/tmp/ep.prt_omn", "w").write(xml)
-    subprocess.run([exe, "/tmp/ep.prt_omn", "/tmp/ep.wav", "--note", "60", "--hold", HOLD, "--tail", TAIL],
+    open("/Volumes/dev-drive/scratch/omni-probe/ep.prt_omn", "w").write(xml)
+    subprocess.run([exe, "/Volumes/dev-drive/scratch/omni-probe/ep.prt_omn", "/Volumes/dev-drive/scratch/omni-probe/ep.wav", "--note", "60", "--hold", HOLD, "--tail", TAIL],
                    capture_output=True, stdin=subprocess.DEVNULL)
-    d = open("/tmp/ep.wav", "rb").read(); i = 12
+    d = open("/Volumes/dev-drive/scratch/omni-probe/ep.wav", "rb").read(); i = 12
     while i < len(d):
         cid, sz = d[i:i+4], struct.unpack("<I", d[i+4:i+8])[0]
         if cid == b"data": data = d[i+8:i+8+sz]
