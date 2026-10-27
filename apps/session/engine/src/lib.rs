@@ -50,13 +50,13 @@ pub mod options;
 #[cfg(feature = "native")]
 pub mod organize_edit;
 pub mod play_return;
+pub mod presence;
 #[cfg(feature = "native")]
 pub mod project_file;
 #[cfg(feature = "native")]
 pub mod project_new;
 #[cfg(feature = "native")]
 pub mod projects;
-pub mod presence;
 #[cfg(feature = "signal")]
 pub mod rig_actions;
 #[cfg(feature = "show")]
@@ -70,9 +70,9 @@ pub mod stream_in;
 pub mod stream_set;
 // The engine side, behind its own boundary: the set, its actions, the
 // Action List's MCP server, and the engine with no window (`studio engine`).
+pub mod stream_quality;
 #[cfg(feature = "native")]
 pub mod studio_engine;
-pub mod stream_quality;
 pub mod take_colors;
 #[cfg(feature = "native")]
 pub mod task_account;

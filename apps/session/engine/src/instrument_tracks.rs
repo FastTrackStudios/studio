@@ -27,7 +27,6 @@ use dynamic_template::golden_session::shape::Node;
 use dynamic_template::golden_session::{GROUP_KEY, KIND_KEY, Kind};
 use facet::Facet;
 
-
 pub static ADD: ActionMeta = crate::actions::meta(
     "TRACK_ADD_INSTRUMENT",
     "track_add_instrument",

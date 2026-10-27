@@ -18,8 +18,8 @@ use session::sync::presence::{PeerState, Pointer};
 use vello::kurbo::{Affine, BezPath, Point, Rect, RoundedRect, Stroke};
 use vello::peniko::{Color, Fill};
 
-pub use crate::presence::*;
 use crate::arrangement::{Arrangement, Palette, Viewport};
+pub use crate::presence::*;
 use crate::text::Font;
 
 // ── panels: where each named part of the window is ──────────────────────

@@ -20,13 +20,13 @@ use timeline::razor::RazorArea;
 use timeline::select::Selection;
 use timeline::snap::Snap;
 
-pub use crate::stretch::*;
 use crate::arrangement::{Arrangement, Fades, ItemZone, Viewport};
 use crate::cursor;
 use crate::engine::{Edit, Move};
 use crate::hit::{Hit, Target};
 use crate::keys::Action;
 use crate::mousemap::{self, Gesture, Mods};
+pub use crate::stretch::*;
 
 /// What an interaction asks the window to do beyond the picture.
 #[derive(Clone, Debug, PartialEq)]

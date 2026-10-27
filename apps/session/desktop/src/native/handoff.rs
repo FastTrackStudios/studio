@@ -13,13 +13,13 @@
 
 use std::path::{Path, PathBuf};
 
-use dioxus::prelude::*;
 pub use super::start::{
     WelcomeAccount, WelcomeAccountMenu, WelcomeAccountSheet, WelcomeLists, use_welcome_account,
     welcome_org,
 };
-pub use session_ui::stream_set::{LibrarySetlist, LibrarySong, ListKind};
+use dioxus::prelude::*;
 pub use session_ui::projects::{Recent, ago, open_next, recent};
+pub use session_ui::stream_set::{LibrarySetlist, LibrarySong, ListKind};
 
 static JOIN: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
@@ -158,7 +158,10 @@ pub fn session_named(title: &str) -> Option<PathBuf> {
 
 /// The first of `candidates` (name, file) whose name is `title`, ignoring
 /// case and the space around it.
-fn find_named(title: &str, candidates: impl IntoIterator<Item = (String, PathBuf)>) -> Option<PathBuf> {
+fn find_named(
+    title: &str,
+    candidates: impl IntoIterator<Item = (String, PathBuf)>,
+) -> Option<PathBuf> {
     let title = title.trim();
     candidates
         .into_iter()
@@ -260,7 +263,9 @@ mod tests {
         assert_eq!(Entry::parse("demo", none), Some(Entry::Join("demo".into())));
         assert_eq!(
             Entry::parse("https://task.example.app/org/x/share/abc", none),
-            Some(Entry::Join("https://task.example.app/org/x/share/abc".into()))
+            Some(Entry::Join(
+                "https://task.example.app/org/x/share/abc".into()
+            ))
         );
         assert_eq!(
             Entry::parse("task.example.app/org/x/share/abc", none),

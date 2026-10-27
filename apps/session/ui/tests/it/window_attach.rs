@@ -15,16 +15,26 @@ fn listed(id: &str) -> Option<bool> {
 
 #[test]
 fn a_window_brings_its_actions_and_they_fall_disabled_when_it_goes() {
-    assert_eq!(listed("SESSION_ZOOM"), None, "a window's action, with no window");
+    assert_eq!(
+        listed("SESSION_ZOOM"),
+        None,
+        "a window's action, with no window"
+    );
     assert_eq!(listed("SESSION_SONGS"), Some(true), "the engine's own");
     // A window attaches: its actions join the list, enabled; it goes, and
     // they stay listed but cannot run.
     let window = session_ui::window::attach();
     assert_eq!(listed("SESSION_ZOOM"), Some(true));
-    assert!(session_ui::window::action_ids().iter().any(|id| id == "SESSION_VIEW"));
+    assert!(
+        session_ui::window::action_ids()
+            .iter()
+            .any(|id| id == "SESSION_VIEW")
+    );
     drop(window);
     assert_eq!(listed("SESSION_ZOOM"), Some(false));
-    let refused = session_engine::actions::list()
-        .run_json("SESSION_ZOOM", json!({"zoom": "Project"}).to_string().as_bytes());
+    let refused = session_engine::actions::list().run_json(
+        "SESSION_ZOOM",
+        json!({"zoom": "Project"}).to_string().as_bytes(),
+    );
     assert!(refused.is_err(), "{refused:?}");
 }

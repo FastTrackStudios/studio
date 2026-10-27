@@ -328,14 +328,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             .map(|t| t.guid.clone())
             .expect("the folder");
         let mut effects = Vec::new();
-        session_ui::arrange_edit::Editor::comp(
-            &mut project,
-            &folder,
-            take,
-            from,
-            to,
-            &mut effects,
-        );
+        session_ui::arrange_edit::Editor::comp(&mut project, &folder, take, from, to, &mut effects);
         let sent = effects
             .iter()
             .filter_map(|e| match e {

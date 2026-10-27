@@ -19,9 +19,9 @@
 //! session and the reads the widget is built from. The app opens it once
 //! and provides it as context; every Arrangement panel reads that.
 
+use dioxus::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
-use dioxus::prelude::*;
 
 /// Pixels a second at zoom 1 — the studio's base scale.
 pub const PPS: f64 = 40.0;

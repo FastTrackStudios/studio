@@ -43,8 +43,15 @@ fn a_headless_engine_is_driven_through_its_action_list() -> Result<(), String> {
     // not, until a window attaches.
     assert_eq!(listed("SESSION_SONGS"), Some(true));
     assert_eq!(listed("SESSION_PLAY_STOP"), Some(true));
-    assert_eq!(listed("SESSION_ZOOM"), None, "a window's action, with no window");
-    assert_eq!(run("SESSION_OPENING", &Value::Null)?["state"], json!("idle"));
+    assert_eq!(
+        listed("SESSION_ZOOM"),
+        None,
+        "a window's action, with no window"
+    );
+    assert_eq!(
+        run("SESSION_OPENING", &Value::Null)?["state"],
+        json!("idle")
+    );
 
     // A song made in the engine (no file, no audio), and its edit state set and read back.
     run("SESSION_NEW", &json!({}))?;
@@ -52,15 +59,25 @@ fn a_headless_engine_is_driven_through_its_action_list() -> Result<(), String> {
     let edit = run("SESSION_EDIT_STATE", &Value::Null)?;
     let seconds = |key: &str| edit[key].as_f64();
     assert_eq!(
-        (seconds("cursor"), seconds("selection_start"), seconds("selection_end")),
+        (
+            seconds("cursor"),
+            seconds("selection_start"),
+            seconds("selection_end")
+        ),
         (Some(1.0), Some(1.0), Some(2.0)),
         "{edit}"
     );
 
     // Live mode's roll-on is the engine's.
-    assert_eq!(run("SESSION_LIVE", &json!({"on": true}))?, json!("live: on"));
+    assert_eq!(
+        run("SESSION_LIVE", &json!({"on": true}))?,
+        json!("live: on")
+    );
     assert_eq!(run("SESSION_LIVE", &json!({}))?, json!("live: on"));
-    assert_eq!(run("SESSION_LIVE", &json!({"on": false}))?, json!("live: off"));
+    assert_eq!(
+        run("SESSION_LIVE", &json!({"on": false}))?,
+        json!("live: off")
+    );
 
     Ok(())
 }

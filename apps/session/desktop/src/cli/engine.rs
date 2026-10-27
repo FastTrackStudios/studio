@@ -111,7 +111,11 @@ fn default_socket() -> PathBuf {
         .filter(|d| !d.is_empty())
         .map_or_else(
             || PathBuf::from(format!("/tmp/fts-engine-{pid}.sock")),
-            |dir| PathBuf::from(dir).join("fts").join(format!("engine-{pid}.sock")),
+            |dir| {
+                PathBuf::from(dir)
+                    .join("fts")
+                    .join(format!("engine-{pid}.sock"))
+            },
         )
 }
 

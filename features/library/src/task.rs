@@ -105,7 +105,8 @@ pub fn library(me: &str, orgs: &[TaskOrg]) -> Library {
             let mut entries = Vec::new();
             for (at, song) in list.songs.iter().enumerate() {
                 let song_id = SongId(id_of(&format!("{}/song/{}", org.slug, song.slug)));
-                let arrangement = ArrangementId(id_of(&format!("{}/song/{}/a", org.slug, song.slug)));
+                let arrangement =
+                    ArrangementId(id_of(&format!("{}/song/{}/a", org.slug, song.slug)));
                 if !lib.songs.iter().any(|s| s.id == song_id) {
                     lib.songs.push(Song {
                         id: song_id,
@@ -213,7 +214,10 @@ mod tests {
         assert_eq!(lib.spaces.len(), 2);
         assert_eq!(lib.spaces[1].name, "Tombrooksmusic");
         let titles: Vec<&str> = lib.setlists.iter().map(|s| s.title.as_str()).collect();
-        assert_eq!(titles, ["Crescendum", "Favourites", "PNG Worship Collective"]);
+        assert_eq!(
+            titles,
+            ["Crescendum", "Favourites", "PNG Worship Collective"]
+        );
         // A song in two lists of one org is one song.
         assert_eq!(lib.songs.len(), 3);
         let png = &lib.setlists[2];

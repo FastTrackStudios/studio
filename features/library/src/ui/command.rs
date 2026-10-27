@@ -830,7 +830,10 @@ mod tests {
             .expect("the app's command is listed");
         assert_eq!(play.keys, vec!["Space".to_owned()]);
         let found = rows(&l, Route::Home, &app, Overlay::Palette, "play or");
-        assert_eq!(found.first().map(|r| r.label.as_str()), Some("Play or stop"));
+        assert_eq!(
+            found.first().map(|r| r.label.as_str()),
+            Some("Play or stop")
+        );
     }
 
     #[test]

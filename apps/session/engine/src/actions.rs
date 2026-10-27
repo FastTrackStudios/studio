@@ -362,10 +362,7 @@ pub struct SectionOut {
 }
 
 /// The song's sections, in order.
-pub fn sections(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-) -> Vec<SectionOut> {
+pub fn sections(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Vec<SectionOut> {
     let mut all: Vec<SectionOut> =
         <daw::standalone::Standalone as daw::service::region::Regions>::all(daw, project.clone())
             .into_iter()

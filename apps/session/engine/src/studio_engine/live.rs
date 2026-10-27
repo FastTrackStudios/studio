@@ -57,16 +57,27 @@ pub enum Pending {
 pub enum Step {
     Wait,
     /// Schedule the hand-over to song `to` at `end`.
-    Schedule { to: usize, end: f64 },
+    Schedule {
+        to: usize,
+        end: f64,
+    },
     /// The hand-over to `to` has happened: the set follows (its transport
     /// is playing already).
-    Follow { to: usize, end: f64 },
+    Follow {
+        to: usize,
+        end: f64,
+    },
     /// The song ended with nothing scheduled: pick `to` and play it from
     /// its start.
-    PickAndPlay { to: usize, end: f64 },
+    PickAndPlay {
+        to: usize,
+        end: f64,
+    },
     /// Stopped before the moment: the hand-over to `to` is called off, so
     /// it does not start by itself.
-    CallOff { to: usize },
+    CallOff {
+        to: usize,
+    },
 }
 
 /// The roll-on's decision, from where the set is and what is pending.
@@ -102,7 +113,11 @@ pub fn set_live(on: bool) {
         start();
     }
     if on != was {
-        tracing::info!(live.on = on, "live: roll-on {}", if on { "on" } else { "off" });
+        tracing::info!(
+            live.on = on,
+            "live: roll-on {}",
+            if on { "on" } else { "off" }
+        );
     }
 }
 
@@ -150,7 +165,9 @@ fn tick(pending: &mut (String, Pending)) {
         let setlist = view.setlist.as_ref()?;
         let song = setlist.current()?;
         let next = setlist.next();
-        let next_project = next.and_then(|n| setlist.songs.get(n)).map(|s| s.project.clone());
+        let next_project = next
+            .and_then(|n| setlist.songs.get(n))
+            .map(|s| s.project.clone());
         let end = (song.span.1 > song.span.0).then_some(song.span.1);
         Some((song.project.clone(), next_project, end, next))
     }) else {
@@ -201,12 +218,18 @@ fn tick(pending: &mut (String, Pending)) {
             {
                 tracing::warn!(live.to = %to_project, error = %why, "live: the hand-over could not be called off");
             }
-            tracing::info!(setlist.next = to, "live: stopped before the end; the next song stays put");
+            tracing::info!(
+                setlist.next = to,
+                "live: stopped before the end; the next song stays put"
+            );
             pending.1 = Pending::Nothing;
         }
         Step::PickAndPlay { to, end } => {
             if super::set::pick(to, end).is_some() {
-                tracing::info!(setlist.next = to, "live: the song ended; the next one plays");
+                tracing::info!(
+                    setlist.next = to,
+                    "live: the song ended; the next one plays"
+                );
                 crate::engine::transport(crate::engine::Move::PlayFrom, 0.0);
             }
             *pending = (String::new(), Pending::Nothing);

@@ -172,7 +172,12 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         if let Some(on) = a.on {
             super::live::set_live(on);
         }
-        Ok(if super::live::is_live() { "live: on" } else { "live: off" }.to_owned())
+        Ok(if super::live::is_live() {
+            "live: on"
+        } else {
+            "live: off"
+        }
+        .to_owned())
     })?;
     list.register(&EDIT_STATE, Effect::ReadOnly, |(): ()| {
         let edit = crate::edit_state::current();

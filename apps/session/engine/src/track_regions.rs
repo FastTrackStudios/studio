@@ -732,11 +732,7 @@ struct TrackOut {
 
 /// `at` as the ruler writes it: `78.3`, `78.3.500`.
 #[cfg(feature = "native")]
-pub fn bar_of(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    at: f64,
-) -> String {
+pub fn bar_of(daw: &daw::standalone::Standalone, project: &ProjectContext, at: f64) -> String {
     let (bar, beat, fraction) = crate::song_bars::musical(daw, project, at);
     let sub = (fraction * 1000.0).round();
     if (0.5..=999.5).contains(&sub) {

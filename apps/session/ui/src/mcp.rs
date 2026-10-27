@@ -1838,9 +1838,12 @@ pub fn click(
         Control::Folder => None,
         // The lamp is only drawn on an armed track, and what is not
         // drawn is not clicked.
-        Control::Monitor => from
-            .armed
-            .then(|| crate::engine::Edit::SetInputMonitor(guid, crate::engine::next_monitor(from.input_monitor))),
+        Control::Monitor => from.armed.then(|| {
+            crate::engine::Edit::SetInputMonitor(
+                guid,
+                crate::engine::next_monitor(from.input_monitor),
+            )
+        }),
     }
 }
 
@@ -1864,7 +1867,10 @@ pub fn drag(
             let at = daw_ui::art::paint::tcp::gain_norm(from.volume);
             let to = (at + fraction).clamp(0.0, 1.0);
             let db = daw_ui::art::paint::tcp::fader_db(to);
-            Some(crate::engine::Edit::SetVolume(guid.to_owned(), crate::engine::db_to_gain(db)))
+            Some(crate::engine::Edit::SetVolume(
+                guid.to_owned(),
+                crate::engine::db_to_gain(db),
+            ))
         }
         Control::Pan => {
             // Pan is linear and two-sided, so the same drag is worth

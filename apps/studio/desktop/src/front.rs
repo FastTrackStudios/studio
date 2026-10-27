@@ -314,7 +314,9 @@ pub fn Studio() -> Element {
                 #[cfg(feature = "session-app")]
                 Destination::Session(title) => {
                     match session_desktop::native::handoff::session_named(&title) {
-                        Some(path) => enter.call(session_desktop::native::handoff::Entry::Path(path)),
+                        Some(path) => {
+                            enter.call(session_desktop::native::handoff::Entry::Path(path))
+                        }
                         None => {
                             tracing::warn!(open.session = %title, "open: no session of that name on this device");
                             say(format!("{title} is not on this device yet."));

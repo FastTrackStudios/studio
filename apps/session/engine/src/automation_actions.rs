@@ -75,12 +75,7 @@ impl Found {
 }
 
 /// The envelope `name` names on `track`.
-pub fn find(
-    daw: &Daw,
-    project: &ProjectContext,
-    track: &str,
-    name: &str,
-) -> Result<Found, String> {
+pub fn find(daw: &Daw, project: &ProjectContext, track: &str, name: &str) -> Result<Found, String> {
     let wanted = name.trim().to_ascii_lowercase();
     let track_env = |ty: EnvelopeType, label: &str| Found {
         target: EnvelopeRef::Type(ty),

@@ -85,7 +85,9 @@ impl Lineup {
 
     /// The current song's title, or nothing.
     fn current_title(&self) -> &str {
-        self.songs.get(self.at).map_or("", |(title, _)| title.as_str())
+        self.songs
+            .get(self.at)
+            .map_or("", |(title, _)| title.as_str())
     }
 }
 
@@ -119,11 +121,21 @@ pub enum PickRefused {
     Arriving(String),
     NoSuchSong(String),
     /// The last song open, the rest still arriving.
-    LastSoFar { current: String },
-    Last { current: String },
-    First { current: String },
-    Already { current: String },
-    OutOfRange { len: usize },
+    LastSoFar {
+        current: String,
+    },
+    Last {
+        current: String,
+    },
+    First {
+        current: String,
+    },
+    Already {
+        current: String,
+    },
+    OutOfRange {
+        len: usize,
+    },
 }
 
 impl std::fmt::Display for PickRefused {
@@ -133,7 +145,10 @@ impl std::fmt::Display for PickRefused {
             Self::Arriving(title) => write!(f, "{title:?} is still arriving"),
             Self::NoSuchSong(title) => write!(f, "no song {title:?} in the set"),
             Self::LastSoFar { current } => {
-                write!(f, "{current} is the last song here yet; the rest are arriving")
+                write!(
+                    f,
+                    "{current} is the last song here yet; the rest are arriving"
+                )
             }
             Self::Last { current } => write!(f, "{current} is the last song"),
             Self::First { current } => write!(f, "{current} is the first song"),
@@ -610,7 +625,9 @@ fn open_library_now(request: &LibraryOpen, progress: &dyn Fn(Progress)) -> eyre:
 /// Where `want` is among `titles`, ignoring case and the space around it.
 fn position_named(titles: &[&str], want: &str) -> Option<usize> {
     let want = want.trim();
-    titles.iter().position(|t| t.trim().eq_ignore_ascii_case(want))
+    titles
+        .iter()
+        .position(|t| t.trim().eq_ignore_ascii_case(want))
 }
 
 /// Open what is at `path` — a song (`.RPP`, `.session`, a song's folder) or

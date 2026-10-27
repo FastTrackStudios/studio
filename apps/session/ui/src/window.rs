@@ -169,7 +169,12 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
 /// save) would hold the window still while it did.
 #[cfg(feature = "native")]
 fn behind_the_window(id: &str) -> bool {
-    [crate::actions::UNDO.id, crate::actions::REDO.id, crate::actions::SAVE.id].contains(&id)
+    [
+        crate::actions::UNDO.id,
+        crate::actions::REDO.id,
+        crate::actions::SAVE.id,
+    ]
+    .contains(&id)
 }
 
 #[cfg(not(feature = "native"))]
@@ -804,7 +809,10 @@ pub fn attach() -> crate::window_queue::Attached {
         for id in &ids {
             let _ = list.set_enabled(id, crate::window_queue::needs_a_window);
         }
-        tracing::info!(window.actions = ids.len(), "window: its actions joined the engine's list");
+        tracing::info!(
+            window.actions = ids.len(),
+            "window: its actions joined the engine's list"
+        );
         ids
     });
     crate::changes::listen(heard);

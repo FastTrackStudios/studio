@@ -57,7 +57,8 @@ fn main() -> eyre::Result<()> {
     for round in 0..rounds {
         let copy = copy_song(&song, &scratch.path().join(format!("whole-{round}")))?;
         let t = Instant::now();
-        session_engine::project_file::load(&daw, "song", &copy, MAIN).map_err(|e| eyre::eyre!(e))?;
+        session_engine::project_file::load(&daw, "song", &copy, MAIN)
+            .map_err(|e| eyre::eyre!(e))?;
         println!("whole     project_file::load            {:>8.1} ms", ms(t));
     }
 

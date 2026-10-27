@@ -27,8 +27,8 @@ use architect_input::{
     KeymapConfig, LeafAction, ModeId, Modifiers, WhichKeyEntry, WhichKeyLabels, WhichKeyNext,
 };
 
-pub use crate::window_queue::{Action, StretchEdit, Visibility};
 use crate::which_key::{Entry, WhichKey};
+pub use crate::window_queue::{Action, StretchEdit, Visibility};
 
 /// The arrangement's action for a verb every timeline shares
 /// (`timeline::actions`), where it has one: the view's zooms and history,

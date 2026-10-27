@@ -33,14 +33,12 @@ pub fn destination(lib: &Library, open: Open) -> Destination {
             Some(part) => Destination::Rig(lib.rig(part.rig).map(|r| r.kind)),
             None => Destination::Nowhere,
         },
-        Open::Rehearse(id) => lib
-            .setlist(id)
-            .map_or(Destination::Nowhere, |s| {
-                Destination::Setlist(s.title.clone(), s.space)
-            }),
-        Open::Session(id) => lib
-            .session(id)
-            .map_or(Destination::Nowhere, |s| Destination::Session(s.title.clone())),
+        Open::Rehearse(id) => lib.setlist(id).map_or(Destination::Nowhere, |s| {
+            Destination::Setlist(s.title.clone(), s.space)
+        }),
+        Open::Session(id) => lib.session(id).map_or(Destination::Nowhere, |s| {
+            Destination::Session(s.title.clone())
+        }),
     }
 }
 
@@ -133,11 +131,9 @@ mod ways_in {
                 "Your orgs' setlists and songs, from Task.".to_owned(),
                 false,
             )),
-            handoff::WelcomeLists::Failed(why) => Some((
-                "Could not read your library".to_owned(),
-                why,
-                false,
-            )),
+            handoff::WelcomeLists::Failed(why) => {
+                Some(("Could not read your library".to_owned(), why, false))
+            }
             handoff::WelcomeLists::Ready(_) => None,
         };
         rsx! {
@@ -328,6 +324,9 @@ mod tests {
     fn what_the_library_does_not_have_goes_nowhere() {
         let mut l = fixture::library();
         let set = l.setlists.remove(0);
-        assert_eq!(destination(&l, Open::Rehearse(set.id)), Destination::Nowhere);
+        assert_eq!(
+            destination(&l, Open::Rehearse(set.id)),
+            Destination::Nowhere
+        );
     }
 }

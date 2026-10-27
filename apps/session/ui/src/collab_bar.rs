@@ -685,7 +685,10 @@ fn go_to(_shown: &mut Signal<crate::setlist::Setlist>, index: usize, at: f64) {
 
 #[cfg(not(feature = "native"))]
 fn go_to(shown: &mut Signal<crate::setlist::Setlist>, index: usize, at: f64) {
-    let picked = shown.write().pick(index, at).map(|song| song.project.clone());
+    let picked = shown
+        .write()
+        .pick(index, at)
+        .map(|song| song.project.clone());
     if let Some(project) = picked {
         crate::open::switch_song(&project);
     }

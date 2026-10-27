@@ -2580,7 +2580,9 @@ pub fn welcome_org() -> Option<String> {
 /// pressed for every org this person is in, Account… and Sign out.
 #[component]
 pub fn WelcomeAccountMenu() -> Element {
-    let WelcomeAccount { acct, orgs, org, .. } = use_context::<WelcomeAccount>();
+    let WelcomeAccount {
+        acct, orgs, org, ..
+    } = use_context::<WelcomeAccount>();
     let email = acct
         .account()
         .map(|a| a.session.email.clone().unwrap_or_else(|| a.name()));

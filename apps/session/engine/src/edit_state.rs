@@ -220,6 +220,9 @@ mod tests {
             selection: Some(Span::between(1.0, 3.0)),
         };
         assert!(states.show("a", selected), "selecting is a change");
-        assert_eq!(states.of("a").and_then(|e| e.selection), Some(Span::between(1.0, 3.0)));
+        assert_eq!(
+            states.of("a").and_then(|e| e.selection),
+            Some(Span::between(1.0, 3.0))
+        );
     }
 }

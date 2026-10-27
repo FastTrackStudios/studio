@@ -317,11 +317,7 @@ pub fn param_of<'a>(
 /// The normalized value for `text` on `param` of `fx`: `=0.42` as given;
 /// a choice by its label; else the plugin's own reading of the words (an
 /// FTS processor's, `builtin::engine::setting`).
-pub fn value_of(
-    fx: &str,
-    param: &daw_proto::fx::FxParameter,
-    text: &str,
-) -> Result<f64, String> {
+pub fn value_of(fx: &str, param: &daw_proto::fx::FxParameter, text: &str) -> Result<f64, String> {
     let text = text.trim();
     if let Some(raw) = text.strip_prefix('=') {
         let v: f64 = raw
@@ -397,9 +393,7 @@ pub fn moment(
 }
 
 /// The shape a word names.
-pub fn shape_of(
-    word: Option<&str>,
-) -> Result<daw::service::automation::EnvelopeShape, String> {
+pub fn shape_of(word: Option<&str>) -> Result<daw::service::automation::EnvelopeShape, String> {
     use daw::service::automation::EnvelopeShape;
     match word.map(|w| w.trim().to_lowercase()).as_deref() {
         None | Some("" | "linear" | "line" | "ramp") => Ok(EnvelopeShape::Linear),
