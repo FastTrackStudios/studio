@@ -982,7 +982,8 @@ const FILTER_MODELS: &[(u32, FilterModel)] = &[
 /// 12db: a saw through it at each corner and resonance, each point a
 /// band-pass fit within ~0.3 dB (1 dB at the highest resonance) and its
 /// peak 20·log10(Q); above 0.4 at high resonance the fits wander (the
-/// rows there are smoothed).
+/// rows there are smoothed), and from 0.8 resonance all but goes (the
+/// corner nears the top of the band; rough fits).
 #[must_use]
 pub fn resonance_table(name: &str) -> Option<&'static [(f32, &'static [(f32, f32)])]> {
     match name {
@@ -1102,6 +1103,26 @@ pub fn resonance_table(name: &str) -> Option<&'static [(f32, &'static [(f32, f32
                     (0.525, 3.09),
                     (0.75, 3.27),
                     (1.0, 3.27),
+                ],
+            ),
+            (
+                0.80,
+                &[
+                    (0.0, 0.64),
+                    (0.25, 0.86),
+                    (0.525, 1.02),
+                    (0.75, 1.02),
+                    (1.0, 1.15),
+                ],
+            ),
+            (
+                0.90,
+                &[
+                    (0.0, 0.64),
+                    (0.25, 0.76),
+                    (0.525, 0.81),
+                    (0.75, 0.81),
+                    (1.0, 0.81),
                 ],
             ),
         ]),
