@@ -1380,6 +1380,30 @@ pub fn SongTabs(
         return rsx! { div { style: "flex:1;" } };
     };
     let reading = crate::progress::use_reading();
+    // Songs playing behind the one on screen move their tabs' lines on:
+    // redrawn a few times a second while any does (the current song's
+    // transport redraws them by itself).
+    #[cfg(feature = "native")]
+    {
+        let mut tick = use_signal(|| 0_u32);
+        use_future(move || async move {
+            loop {
+                futures_timer::Delay::new(std::time::Duration::from_millis(200)).await;
+                let behind = {
+                    let list = setlist.peek();
+                    list.songs.iter().enumerate().any(|(i, song)| {
+                        i != list.at
+                            && crate::engine::playhead_of(&song.project)
+                                .is_some_and(|(_, playing)| playing)
+                    })
+                };
+                if behind {
+                    tick += 1;
+                }
+            }
+        });
+        let _ = tick();
+    }
     let mut coloring = use_signal(|| None::<usize>);
     let list = setlist();
     if list.songs.is_empty() {
@@ -1430,6 +1454,13 @@ pub fn SongTabs(
             for (index, song) in list.songs.iter().cloned().enumerate().filter(|(i, _)| shown.contains(i)) {
                 {
                     let current = index == list.at;
+                    // A song playing behind the one on screen moves on too.
+                    #[cfg(feature = "native")]
+                    let percent = match (index != list.at, crate::engine::playhead_of(&song.project)) {
+                        (true, Some((there, true))) => song.progress(there) * 100.0,
+                        _ => list.progress_of(index, at) * 100.0,
+                    };
+                    #[cfg(not(feature = "native"))]
                     let percent = list.progress_of(index, at) * 100.0;
                     let ground = if current { RAISED } else { "transparent" };
                     let ink = if current { TEXT } else { DIM };

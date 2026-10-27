@@ -752,6 +752,22 @@ pub struct Reading {
 /// The one poller every panel reads — see [`Transport::shared`].
 static SHARED: std::sync::OnceLock<Option<Transport>> = std::sync::OnceLock::new();
 
+/// Where `project` is, seconds, and whether it is playing — read off its
+/// own transport: a song playing behind the one on screen (every song of a
+/// set is a voice of one engine) shows how far it has got. `None` with no
+/// engine in this process.
+#[cfg(feature = "native")]
+#[must_use]
+pub fn playhead_of(project: &str) -> Option<(f64, bool)> {
+    let daw = crate::open::local_engine()?;
+    let shared = daw.transport_engine_for(project).shared.clone();
+    let rate = f64::from(shared.sample_rate().max(1));
+    Some((
+        shared.playhead_samples_f64() / rate,
+        shared.play_state().is_advancing(),
+    ))
+}
+
 impl Transport {
     /// Start polling. `None` if the facade is not up.
     #[must_use]
