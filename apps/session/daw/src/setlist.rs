@@ -204,6 +204,10 @@ pub struct Setlist {
     /// shows its first song while the rest open behind it; each moves into
     /// `songs` as it arrives. Their tabs show them coming.
     pub pending: Vec<String>,
+    /// The set's order, by title, when its songs arrive out of it (they
+    /// open at once, and finish when they finish): each takes its place.
+    /// Empty: arrivals go at the end.
+    pub order: Vec<String>,
 }
 
 impl Setlist {
@@ -213,6 +217,7 @@ impl Setlist {
             songs,
             at: 0,
             pending: Vec::new(),
+            order: Vec::new(),
         }
     }
 
@@ -324,11 +329,29 @@ impl Setlist {
                 if let Some(at) = self.pending.iter().position(|t| *t == song.name) {
                     self.pending.remove(at);
                 }
-                self.songs.push(song);
+                let here: Vec<&str> = self.songs.iter().map(|s| s.name.as_str()).collect();
+                let to = slot(&self.order, &here, &song.name);
+                // The song on screen stays the song on screen.
+                if to <= self.at && self.at < self.songs.len() {
+                    self.at += 1;
+                }
+                self.songs.insert(to, song);
             }
             Arrival::Failed(title) => self.pending.retain(|t| *t != title),
         }
     }
+}
+
+/// Where a song named `name` goes among the songs `here` (in set order),
+/// by the set's `order`: after every song that comes before it, and any
+/// the order does not name. At the end when the order does not name it.
+fn slot(order: &[String], here: &[&str], name: &str) -> usize {
+    let place = |name: &str| order.iter().position(|t| t == name);
+    place(name).map_or(here.len(), |mine| {
+        here.iter()
+            .filter(|s| place(s).is_none_or(|p| p < mine))
+            .count()
+    })
 }
 
 /// A song for a set to open: its project — and, when it is streamed in
@@ -572,6 +595,7 @@ impl Setlist {
             songs,
             at,
             pending: Vec::new(),
+            order: Vec::new(),
         })
     }
 
@@ -716,6 +740,21 @@ impl ReadOnlySet {
 #[cfg(test)]
 mod tests {
     use super::names_song;
+
+    #[test]
+    fn songs_that_finish_out_of_order_take_their_places_in_the_set() {
+        use super::slot;
+        let order = ["A", "B", "C", "D"].map(str::to_owned);
+        assert_eq!(slot(&order, &["A"], "D"), 1);
+        assert_eq!(slot(&order, &["A", "D"], "B"), 1, "before D, after A");
+        assert_eq!(slot(&order, &["B"], "A"), 0, "before the song on screen");
+        assert_eq!(
+            slot(&order, &["A", "B"], "Z"),
+            2,
+            "not in the order: at the end"
+        );
+        assert_eq!(slot(&[], &["A"], "B"), 1, "no order: at the end");
+    }
 
     #[test]
     fn a_song_region_names_its_own_song() {

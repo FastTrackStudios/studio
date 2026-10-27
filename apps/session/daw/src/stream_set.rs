@@ -138,18 +138,30 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
             (sources, set, name)
         }
     };
-    let mut sources = sources.into_iter();
     let cache = cache_dir();
-    // The first song that comes in opens the set; the rest open behind it.
-    let (setlist, rest) = loop {
-        let Some((title, source)) = sources.next() else {
+    let titles: Vec<String> = sources.iter().map(|(title, _)| title.clone()).collect();
+    // Every song brought in at once — each its own fetch, none waiting on
+    // another's: a set of eleven took a minute one after another.
+    let fetches: Vec<(String, Fetch)> = sources
+        .into_iter()
+        .map(|(title, source)| {
+            let cache = cache.clone();
+            let fetch = runtime.spawn(async move { bring_in(&source, &cache).await });
+            (title, fetch)
+        })
+        .collect();
+    let mut fetches = fetches.into_iter();
+    // The set opens on its first song (in set order) to come in; the rest
+    // open behind it as theirs do.
+    let (mut setlist, rest) = loop {
+        let Some((title, fetch)) = fetches.next() else {
             eyre::bail!("none of the set's songs could be brought in");
         };
         progress(Progress::Fetching {
             title: title.clone(),
             retry: None,
         });
-        let song = match runtime.block_on(bring_in(&source, &cache)) {
+        let song = match fetched(runtime, fetch) {
             Ok(song) => song,
             Err(e) => {
                 tracing::warn!(song.title = %title, error = %e, "stream-set: a song could not be brought in; the set goes on without it");
@@ -159,44 +171,21 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
         progress(Progress::Opening {
             title: title.clone(),
         });
-        let mut setlist = Setlist::open_streamed(vec![Opening {
+        let setlist = Setlist::open_streamed(vec![Opening {
             path: song.project.clone(),
             title: Some(title),
             streamed: Some(song),
         }])?;
-        let rest: Vec<(String, Source)> = sources.collect();
-        setlist.pending = rest.iter().map(|(title, _)| title.clone()).collect();
-        break (setlist, rest);
+        break (setlist, fetches.collect::<Vec<_>>());
     };
+    setlist.pending = rest.iter().map(|(title, _)| title.clone()).collect();
+    setlist.order = titles;
     crate::collab::join_task_in_background(set, name);
     let (arrive, arrivals) = tokio::sync::mpsc::unbounded_channel();
     if let Ok(mut slot) = ARRIVALS.lock() {
         *slot = Some(arrivals);
     }
-    std::thread::spawn(move || {
-        let _entered = runtime.enter();
-        for (title, source) in rest {
-            let opened = runtime
-                .block_on(bring_in(&source, &cache))
-                .and_then(|song| {
-                    Setlist::open_behind(Opening {
-                        path: song.project.clone(),
-                        title: Some(title.clone()),
-                        streamed: Some(song),
-                    })
-                });
-            let arrival = match opened {
-                Ok(song) => Arrival::Song(song),
-                Err(e) => {
-                    tracing::warn!(song.title = %title, error = %e, "stream-set: a song did not open; the set goes on without it");
-                    Arrival::Failed(title)
-                }
-            };
-            if arrive.send(arrival).is_err() {
-                break;
-            }
-        }
-    });
+    open_behind_all(runtime, rest, &arrive);
     Ok(setlist)
 }
 
@@ -220,6 +209,65 @@ impl Source {
 
 /// A song reached and its small files mirrored into `cache` — tried again
 /// a few times, since Task may be busy.
+/// A song being brought in, on the engine's runtime.
+type Fetch = tokio::task::JoinHandle<eyre::Result<StreamedSong>>;
+
+/// Songs opened behind the first at once — the engine's loads run on
+/// their own threads, never a window's.
+const OPENING_AT_ONCE: usize = 4;
+
+/// The song `fetch` brought in, waited for.
+fn fetched(runtime: &tokio::runtime::Runtime, fetch: Fetch) -> eyre::Result<StreamedSong> {
+    runtime
+        .block_on(fetch)
+        .map_err(|e| eyre::eyre!("its fetch stopped: {e}"))?
+}
+
+/// Open `rest` behind the set's first song, [`OPENING_AT_ONCE`] at a time,
+/// each as soon as its fetch is in, every one sent to `arrive` — the window
+/// puts it in its place in the set, whatever order they finish in.
+fn open_behind_all(
+    runtime: &'static tokio::runtime::Runtime,
+    rest: Vec<(String, Fetch)>,
+    arrive: &tokio::sync::mpsc::UnboundedSender<Arrival>,
+) {
+    let queue = Arc::new(Mutex::new(std::collections::VecDeque::from(rest)));
+    for worker in 0..OPENING_AT_ONCE {
+        let (queue, arrive) = (Arc::clone(&queue), arrive.clone());
+        let spawned = std::thread::Builder::new()
+            .name(format!("set-open-{worker}"))
+            .spawn(move || {
+                let _entered = runtime.enter();
+                loop {
+                    let next = queue.lock().ok().and_then(|mut q| q.pop_front());
+                    let Some((title, fetch)) = next else {
+                        return;
+                    };
+                    let opened = fetched(runtime, fetch).and_then(|song| {
+                        Setlist::open_behind(Opening {
+                            path: song.project.clone(),
+                            title: Some(title.clone()),
+                            streamed: Some(song),
+                        })
+                    });
+                    let arrival = match opened {
+                        Ok(song) => Arrival::Song(song),
+                        Err(e) => {
+                            tracing::warn!(song.title = %title, error = %e, "stream-set: a song did not open; the set goes on without it");
+                            Arrival::Failed(title)
+                        }
+                    };
+                    if arrive.send(arrival).is_err() {
+                        return;
+                    }
+                }
+            });
+        if let Err(e) = spawned {
+            tracing::warn!(error = %e, "stream-set: no thread to open songs on");
+        }
+    }
+}
+
 async fn bring_in(source: &Source, cache: &std::path::Path) -> eyre::Result<StreamedSong> {
     let reached = source.reach().await?;
     crate::task_set::until_ok(
