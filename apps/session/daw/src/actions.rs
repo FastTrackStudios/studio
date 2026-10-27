@@ -2324,7 +2324,7 @@ fn register_style(list: &ActionList) -> Result<(), architect::action::ActionErro
     list.register(&JOBS, Effect::ReadOnly, |(): ()| {
         Ok(crate::jobs::running()
             .into_iter()
-            .map(|(label, done, total)| JobRow {
+            .map(|crate::jobs::Running { label, done, total, .. }| JobRow {
                 label,
                 done: u64::try_from(done).unwrap_or(u64::MAX),
                 total: u64::try_from(total).unwrap_or(u64::MAX),

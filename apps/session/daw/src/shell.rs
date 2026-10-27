@@ -622,7 +622,7 @@ pub fn BottomBar(
 /// when nothing is running.
 #[component]
 fn Jobs() -> Element {
-    let mut shown = use_signal(Vec::<(String, usize, usize)>::new);
+    let mut shown = use_signal(Vec::<crate::jobs::Running>::new);
     use_future(move || async move {
         loop {
             architect::platform::sleep(std::time::Duration::from_millis(200)).await;
@@ -640,9 +640,11 @@ fn Jobs() -> Element {
         div {
             style: "flex:none; display:flex; align-items:center; gap:10px; padding:0 10px;",
             Divider {}
-            for (label, done, total) in jobs {
+            // Keyed by the job, not its label: a set's songs open several
+            // at once, each an "Opening" of its own.
+            for crate::jobs::Running { id, label, done, total } in jobs {
                 div {
-                    key: "{label}",
+                    key: "{id}",
                     title: "{label}: {done} of {total}",
                     style: "display:flex; flex-direction:column; justify-content:center; gap:4px; min-width:110px;",
                     span {
