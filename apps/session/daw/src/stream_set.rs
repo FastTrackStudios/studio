@@ -180,6 +180,7 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
         break (setlist, fetches.collect::<Vec<_>>());
     };
     setlist.pending = rest.iter().map(|(title, _)| title.clone()).collect();
+    ARRIVING.store(rest.len(), std::sync::atomic::Ordering::Release);
     setlist.order = titles;
     crate::collab::join_task_in_background(set, name);
     let (arrive, arrivals) = tokio::sync::mpsc::unbounded_channel();
@@ -251,6 +252,13 @@ fn open_behind_all(
                             streamed: Some(song),
                         })
                     });
+                    ARRIVING
+                        .fetch_update(
+                            std::sync::atomic::Ordering::AcqRel,
+                            std::sync::atomic::Ordering::Acquire,
+                            |n| n.checked_sub(1),
+                        )
+                        .ok();
                     let arrival = match opened {
                         Ok(song) => Arrival::Song(song),
                         Err(e) => {
@@ -322,39 +330,91 @@ fn cache_dir() -> PathBuf {
 }
 
 /// A song's streams, kept playing for as long as the process runs.
+///
+/// Every streamed song is heard from its Ogg proxies first. A song with a
+/// reference ([`crate::reference`]) is heard by it the moment it opens —
+/// its preview, then the reference proper — while its stems come in
+/// behind it, fetched and decoded but not heard ([`Held`]); once they have
+/// arrived where the song is, they take over ([`conduct`]). The tracks the
+/// reference leaves out (the guide) play live throughout ([`Self::live`]).
+/// At full resolution ([`crate::stream_quality`]) the originals follow,
+/// once every song's proxies are here.
 struct Streaming {
-    _song: StreamedSong,
+    song: Arc<StreamedSong>,
     /// The song as opened here.
     project: String,
-    /// The takes being fetched — the fetch reads this list as it goes, so
-    /// what is added to it is fetched from then on.
-    takes: Arc<Mutex<Vec<StreamedTake>>>,
-    /// Heard by its reference ([`crate::reference_play`]): the stems,
-    /// attached and not fetched, with the streams they fill.
-    held: Vec<(
-        StreamedTake,
-        daw::standalone::audio_engine::streamed::Streamed,
-    )>,
+    /// Where the song is, for the fetches that follow it.
+    playhead: Arc<dyn Fn() -> f64 + Send + Sync>,
+    /// The recordings heard whatever the song is heard by (each file once,
+    /// [`whole_files`]): every one when it has no reference, else the
+    /// tracks the reference leaves out.
+    live: Vec<StreamedTake>,
+    /// The stems a reference stands in for (each file once): heard once
+    /// they take over from it.
+    stems: Vec<StreamedTake>,
+    /// The reference's preview and the reference proper, while the song is
+    /// heard by them.
+    reference: Vec<StreamedTake>,
+    /// Heard by its reference: the stems, held.
+    held: Option<Held>,
+    /// When it was streamed in.
+    since: web_time::Instant,
+    /// Every take attached, and the file it plays (as the project names
+    /// it): what moves to its original at full resolution.
+    media: Vec<(String, String)>,
+    /// The takes moved to their originals.
+    on_originals: std::collections::HashSet<String>,
     _fetching: FetchGuard,
+    /// The stems' own fetch, once they have taken over.
+    _stems: Option<FetchGuard>,
     /// The reference's own fetch, while it is heard by it.
     _reference: Option<FetchGuard>,
 }
 
+/// A song's stems while its reference plays: attached to streams that are
+/// never fed (their waveforms draw), and the streams that will play them,
+/// fetched and decoded behind the reference until they take over.
+struct Held {
+    /// Not yet adopted: nothing decodes them.
+    waiting: Vec<crate::song_stream::Detached>,
+    /// Their bytes are being fetched — a fetch of their own: one that has
+    /// brought everything in its list is over, so stems added to the live
+    /// tracks' fetch once it had were never fetched.
+    fetching: Option<FetchGuard>,
+    /// Adopted (decoding) since then: each take and the stream it will play.
+    decoding: Option<(
+        web_time::Instant,
+        Vec<(
+            String,
+            StreamedTake,
+            daw::standalone::audio_engine::streamed::Streamed,
+        )>,
+    )>,
+}
+
 static STREAMS: Mutex<Vec<Streaming>> = Mutex::new(Vec::new());
+
+/// Songs of the open still to arrive behind the first ([`open`]): until
+/// they have, the set's references are not all here, nor its proxies.
+static ARRIVING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// Attach every take of the song just opened as `local` to a stream of its
 /// proxy in `song`, and start bringing their bytes in from the song's
 /// playhead on.
 ///
-/// A song with a reference is heard by it until the multitracks are asked
-/// for ([`crate::reference_play`]): only the reference's bytes are fetched,
-/// and the tracks it leaves out (the guide) — they play live over it. The
-/// other stems are attached (their waveforms draw) and held.
+/// A song with a reference is heard by it at once (its preview first): its
+/// bytes are fetched first, and the tracks it leaves out (the guide) play
+/// live over it. Its stems are attached (their waveforms draw) and held;
+/// their bytes come in behind the reference ([`stems_may_start`]), and they
+/// take over once they have arrived where the song is ([`conduct`]). A song
+/// whose stems are all here already (kept from before) is heard by them
+/// straight away.
 pub fn stream(song: StreamedSong, local: &str) {
     let Some(daw) = crate::open::local_engine() else {
         tracing::warn!("stream-set: no engine to stream into");
         return;
     };
+    let song = Arc::new(song);
     let playhead: Arc<dyn Fn() -> f64 + Send + Sync> = match daw.sync_backend(local) {
         Some(backend) => Arc::new(move || {
             daw_transport_sync::TransportBackend::snapshot(&backend)
@@ -362,35 +422,9 @@ pub fn stream(song: StreamedSong, local: &str) {
         }),
         None => Arc::new(|| 0.0),
     };
-    let reference = if crate::reference_play::multitracks() {
-        None
-    } else {
-        song.reference()
-    };
-    let by_reference = reference.is_some();
-    let reference_fetch = reference.map(|crate::song_stream::Reference { full, preview }| {
-        let (preview_take, preview) = preview.unzip();
-        crate::reference_play::hear(
-            local,
-            full.1.source().clone(),
-            preview.as_ref().map(|p| p.source().clone()),
-        );
-        daw::standalone::audio_engine::streamed::butler_adopt(full.1);
-        if let Some(preview) = preview {
-            daw::standalone::audio_engine::streamed::butler_adopt(preview);
-        }
-        // The preview first: small, so it is heard almost at once.
-        let takes = preview_take.into_iter().chain([full.0]).collect();
-        let stop = Arc::new(AtomicBool::new(false));
-        song.fetch(
-            Arc::new(Mutex::new(takes)),
-            Arc::clone(&playhead),
-            Arc::clone(&stop),
-        );
-        FetchGuard(stop)
-    });
-    // Heard by its reference, the tracks it leaves out play live.
-    let live = if by_reference {
+    let reference = song.reference();
+    // What the reference leaves out plays live.
+    let live_tracks = if reference.is_some() {
         crate::reference::left_out(daw, local)
     } else {
         std::collections::HashSet::new()
@@ -398,101 +432,420 @@ pub fn stream(song: StreamedSong, local: &str) {
     // What plays: each item's active take on a lane that sounds. Other
     // takes and lanes are fetched when they are needed (comping).
     let media = playing_media(daw, local);
-    let mut takes = Vec::new();
-    let mut held = Vec::new();
+    let mut live = Vec::new();
+    let mut detached = Vec::new();
+    let mut attached = Vec::new();
     for m in &media {
-        let Some(attached) = song.attach(daw, local, m) else {
+        let stem = reference.is_some() && !live_tracks.contains(&m.track_guid);
+        let take = if stem {
+            song.attach_detached(daw, local, m).map(|d| {
+                let take = d.take.clone();
+                detached.push(d);
+                take
+            })
+        } else {
+            song.attach(daw, local, m).map(|a| {
+                live.push(a.take.clone());
+                a.take
+            })
+        };
+        if take.is_none() {
             tracing::warn!(stream.media = %m.path, "stream-set: no indexed proxy for this take");
             continue;
-        };
-        if by_reference && !live.contains(&m.track_guid) {
-            held.push((attached.take, attached.source));
-        } else {
-            takes.push(attached.take);
         }
+        attached.push((m.take_guid.clone(), m.path.clone()));
     }
+    let live = whole_files(live);
+    let stems = whole_files(detached.iter().map(|d| d.take.clone()).collect());
+    // Kept from before, every stem is here: no reference.
+    let stems_here = stems.iter().all(StreamedTake::complete);
+    let (held, reference_fetch, reference_takes) = match reference {
+        Some(_) if stems_here => {
+            hear_now(daw, local, detached);
+            (None, None, Vec::new())
+        }
+        Some(crate::song_stream::Reference { full, preview }) => {
+            let (preview_take, preview) = preview.unzip();
+            crate::reference_play::hear(
+                local,
+                full.1.source().clone(),
+                preview.as_ref().map(|p| p.source().clone()),
+            );
+            daw::standalone::audio_engine::streamed::butler_adopt(full.1);
+            if let Some(preview) = preview {
+                daw::standalone::audio_engine::streamed::butler_adopt(preview);
+            }
+            // The preview first: small, so it is heard almost at once.
+            let takes: Vec<StreamedTake> = preview_take.into_iter().chain([full.0]).collect();
+            let stop = Arc::new(AtomicBool::new(false));
+            song.fetch(
+                Arc::new(Mutex::new(takes.clone())),
+                Arc::clone(&playhead),
+                Arc::clone(&stop),
+            );
+            let held = Held {
+                waiting: detached,
+                fetching: None,
+                decoding: None,
+            };
+            (Some(held), Some(FetchGuard(stop)), takes)
+        }
+        None => (None, None, Vec::new()),
+    };
+    // Heard by its stems from the start, they are fetched from the start.
+    let fetched: Vec<StreamedTake> = if held.is_some() {
+        live.clone()
+    } else {
+        live.iter().chain(&stems).cloned().collect()
+    };
     tracing::info!(
         stream.song = local,
         stream.media = media.len(),
-        stream.fetched = takes.len(),
-        stream.held = held.len(),
-        stream.by_reference = by_reference,
+        stream.live = live.len(),
+        stream.stems = stems.len(),
+        stream.by_reference = held.is_some(),
+        stream.stems_here = stems_here,
         "stream-set: takes attached to their streams"
     );
-    let takes = Arc::new(Mutex::new(whole_files(takes)));
+    let takes = Arc::new(Mutex::new(fetched));
     let stop = Arc::new(AtomicBool::new(false));
-    song.fetch(Arc::clone(&takes), playhead, Arc::clone(&stop));
+    song.fetch(Arc::clone(&takes), Arc::clone(&playhead), Arc::clone(&stop));
     watch();
+    conduct();
     if let Ok(mut streams) = STREAMS.lock() {
         streams.push(Streaming {
-            _song: song,
+            song,
             project: local.to_owned(),
-            takes,
+            playhead,
+            live,
+            stems,
+            reference: reference_takes,
             held,
+            since: web_time::Instant::now(),
+            media: attached,
+            on_originals: std::collections::HashSet::new(),
             _fetching: FetchGuard(stop),
+            _stems: None,
             _reference: reference_fetch,
         });
     }
 }
 
-/// How long a song keeps its reference once its stems are asked for, at
-/// most: a stem that will not come must not keep it on its reference.
-const HANDOVER: std::time::Duration = std::time::Duration::from_secs(20);
+/// Hear `stems` now: each one's stream decoded and attached to its take.
+fn hear_now(
+    daw: &daw::standalone::Standalone,
+    project: &str,
+    stems: Vec<crate::song_stream::Detached>,
+) {
+    for d in stems {
+        let source = d.feeder.source().clone();
+        daw::standalone::audio_engine::streamed::butler_adopt(d.feeder);
+        daw::standalone::audio_engine::materialize::attach_source(
+            daw,
+            project,
+            &d.take_guid,
+            daw::standalone::audio_engine::AudioSource::Streamed(source),
+        );
+    }
+}
 
-/// Hear every streamed song by its stems: the held stems are fetched, and
-/// each song's reference goes once its stems have all arrived at the
-/// playhead (or after [`HANDOVER`]) — so the sound never drops out between
-/// the two.
-pub fn hear_stems() {
-    let waiting: Vec<(
-        String,
-        Vec<(
-            StreamedTake,
-            daw::standalone::audio_engine::streamed::Streamed,
-        )>,
-    )> = STREAMS
-        .lock()
-        .map(|mut streams| {
-            streams
-                .iter_mut()
-                .filter(|s| !s.held.is_empty())
-                .map(|s| {
-                    let held = std::mem::take(&mut s.held);
-                    if let Ok(mut takes) = s.takes.lock() {
-                        takes.extend(held.iter().map(|(take, _)| take.clone()));
-                    }
-                    (s.project.clone(), held)
+/// What decides whether a song's stems start coming in behind its
+/// reference.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StemGate {
+    /// All of its reference (and preview) is here.
+    pub reference_here: bool,
+    /// It is the song on screen.
+    pub current: bool,
+    /// Every song of the set has arrived, and every one's reference is
+    /// here.
+    pub every_reference_here: bool,
+    /// The multitracks were asked for ([`crate::reference_play`]).
+    pub asked: bool,
+    /// It has waited [`STEMS_WAIT`] already.
+    pub waited: bool,
+}
+
+/// How long a song's stems wait on the references before coming in
+/// regardless: a reference that will not come must not keep them out.
+pub const STEMS_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Whether a song heard by its reference starts fetching its stems: the
+/// song on screen once its own reference is here; every other once every
+/// song's is — so the whole set is playable before any song's multitracks
+/// take the bandwidth. Asked for, or kept waiting too long, at once.
+#[must_use]
+pub const fn stems_may_start(gate: StemGate) -> bool {
+    gate.asked
+        || gate.waited
+        || (gate.reference_here && (gate.current || gate.every_reference_here))
+}
+
+/// Seconds of every stem a song needs ahead of where it is before they
+/// take over from its reference: well past what a start needs
+/// ([`READY_AHEAD`]), so a stem that comes in late is not heard as a gap
+/// after the reference has gone.
+const HANDOVER_AHEAD: f64 = 30.0;
+
+/// Seconds a song's held stems, decoding, may take to be decoded where it
+/// is before they take over all the same.
+const DECODE_WITHIN: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Look after every streaming song every quarter second, from the first
+/// song streamed in, for as long as the process runs ([`conduct_once`]).
+fn conduct() {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        let spawned = std::thread::Builder::new()
+            .name("stream-conduct".into())
+            .spawn(|| {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    conduct_once();
+                }
+            });
+        if let Err(e) = spawned {
+            tracing::warn!(error = %e, "stream-set: no thread to look after the streams");
+        }
+    });
+}
+
+/// One look at every streaming song: stems whose turn has come start
+/// coming in; stems that have arrived where their song is start decoding,
+/// and take over from its reference once decoded there; at full
+/// resolution, the originals come down once every proxy is here, and a
+/// stopped song's takes move to the originals that have.
+fn conduct_once() {
+    let Some(daw) = crate::open::local_engine() else {
+        return;
+    };
+    let current = crate::open::current_song();
+    let arriving = ARRIVING.load(std::sync::atomic::Ordering::Acquire);
+    let asked = crate::reference_play::multitracks();
+    let quality = crate::stream_quality::current();
+    let Ok(mut streams) = STREAMS.lock() else {
+        return;
+    };
+    let every_reference_here = arriving == 0
+        && streams
+            .iter()
+            .all(|s| s.held.is_none() || s.reference.iter().all(StreamedTake::complete));
+    for s in streams.iter_mut() {
+        let at = transport_of(&s.project).map_or(0.0, |(at, _)| at);
+        let gate = StemGate {
+            reference_here: s.reference.iter().all(StreamedTake::complete),
+            current: current.as_deref() == Some(s.project.as_str()),
+            every_reference_here,
+            asked,
+            waited: s.since.elapsed() >= STEMS_WAIT,
+        };
+        let Some(held) = s.held.as_mut() else {
+            continue;
+        };
+        if held.fetching.is_none() && stems_may_start(gate) {
+            let stop = Arc::new(AtomicBool::new(false));
+            s.song.fetch(
+                Arc::new(Mutex::new(s.stems.clone())),
+                Arc::clone(&s.playhead),
+                Arc::clone(&stop),
+            );
+            held.fetching = Some(FetchGuard(stop));
+            tracing::info!(stream.song = %s.project, stream.asked = asked, "stream-set: the stems come in behind the reference");
+        }
+        if held.fetching.is_some()
+            && held.decoding.is_none()
+            && s.stems.iter().all(|t| t.has_at(at, HANDOVER_AHEAD))
+        {
+            let decoding = std::mem::take(&mut held.waiting)
+                .into_iter()
+                .map(|d| {
+                    let source = d.feeder.source().clone();
+                    source.want(frame_at(&d.take, &source, at));
+                    daw::standalone::audio_engine::streamed::butler_adopt(d.feeder);
+                    (d.take_guid, d.take, source)
                 })
-                .collect()
-        })
-        .unwrap_or_default();
-    if waiting.is_empty() {
+                .collect();
+            held.decoding = Some((web_time::Instant::now(), decoding));
+        }
+        let Some((began, decoding)) = held.decoding.as_ref() else {
+            continue;
+        };
+        for (_, take, source) in decoding {
+            source.want(frame_at(take, source, at));
+        }
+        let decoded = decoding
+            .iter()
+            .all(|(_, take, source)| arrived_at(take, source, at));
+        let late = began.elapsed() >= DECODE_WITHIN;
+        if !(decoded || late) {
+            continue;
+        }
+        // In one go, between two blocks: the stems in, the reference out.
+        for (take_guid, _, source) in decoding {
+            daw::standalone::audio_engine::materialize::attach_source(
+                daw,
+                &s.project,
+                take_guid,
+                daw::standalone::audio_engine::AudioSource::Streamed(source.clone()),
+            );
+        }
+        crate::reference_play::stop(&s.project);
+        // Their fetch goes on with the song (the rest of the stems).
+        let stems_fetch = s.held.take().and_then(|h| h.fetching);
+        s._stems = stems_fetch;
+        s.reference.clear();
+        s._reference = None;
+        tracing::info!(
+            stream.song = %s.project,
+            stream.late = late,
+            stream.after_ms = u64::try_from(s.since.elapsed().as_millis()).unwrap_or(u64::MAX),
+            "stream-set: the stems take over from the reference"
+        );
+    }
+    if quality == crate::stream_quality::Quality::Full {
+        full_resolution(daw, &mut streams, arriving);
+    }
+}
+
+/// What the songs streaming have, for whether the originals may come.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SetProgress {
+    /// Songs still to arrive.
+    pub arriving: usize,
+    /// Songs still heard by their reference.
+    pub by_reference: usize,
+    /// Songs with a proxy not all here.
+    pub proxies_missing: usize,
+}
+
+/// Whether the originals may start coming down: every song of the set has
+/// arrived, none is heard by its reference, and every proxy is here — the
+/// originals are the lowest priority there is.
+#[must_use]
+pub const fn originals_may_start(set: SetProgress) -> bool {
+    set.arriving == 0 && set.by_reference == 0 && set.proxies_missing == 0
+}
+
+/// Whether the originals are being fetched.
+static ORIGINALS: AtomicBool = AtomicBool::new(false);
+
+/// Originals that would not come down this run: not tried again.
+static ORIGINALS_FAILED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
+/// Full resolution, one look: once every proxy is here, the originals
+/// still missing come down one at a time, the songs in the order they
+/// opened, each song's in the order they are heard; and every stopped
+/// song's takes whose original is here move to it — from the next block,
+/// at the same place on the timeline, so the swap is not heard as a jump
+/// (a playing song's wait for it to stop).
+fn full_resolution(daw: &daw::standalone::Standalone, streams: &mut [Streaming], arriving: usize) {
+    let progress = SetProgress {
+        arriving,
+        by_reference: streams.iter().filter(|s| s.held.is_some()).count(),
+        proxies_missing: streams
+            .iter()
+            .filter(|s| !s.live.iter().chain(&s.stems).all(StreamedTake::complete))
+            .count(),
+    };
+    if !originals_may_start(progress) {
         return;
     }
-    let spawned = std::thread::Builder::new()
-        .name("session-stems-handover".into())
-        .spawn(move || {
-            let started = web_time::Instant::now();
-            let mut waiting = waiting;
-            while !waiting.is_empty() {
-                let at = crate::engine::Transport::shared().map_or(0.0, |t| t.read().0);
-                let late = started.elapsed() >= HANDOVER;
-                waiting.retain(|(project, stems)| {
-                    let here = stems.iter().all(|(take, source)| arrived_at(take, source, at));
-                    if here || late {
-                        tracing::info!(stream.song = %project, stream.late = late, "stream-set: the stems take over from the reference");
-                        crate::reference_play::stop(project);
-                        false
-                    } else {
-                        true
-                    }
-                });
-                std::thread::sleep(std::time::Duration::from_millis(250));
+    let failed = ORIGINALS_FAILED
+        .lock()
+        .map(|f| f.clone())
+        .unwrap_or_default();
+    // What is here, by file: looked at once a look, not once a take.
+    let mut here: std::collections::HashMap<PathBuf, bool> = std::collections::HashMap::new();
+    let mut wanted: Vec<(Arc<StreamedSong>, crate::song_stream::Original)> = Vec::new();
+    for s in streams.iter_mut() {
+        let stopped = is_stopped(&s.project);
+        let mut moved = 0usize;
+        for (take_guid, path) in &s.media {
+            let Some(original) = s.song.original_of(path) else {
+                continue;
+            };
+            let is_here = *here
+                .entry(original.local.clone())
+                .or_insert_with(|| original.is_here());
+            if !is_here {
+                if !failed.contains(&original.local)
+                    && !wanted.iter().any(|(_, o)| o.local == original.local)
+                {
+                    wanted.push((Arc::clone(&s.song), original));
+                }
+                continue;
             }
-        });
-    if let Err(e) = spawned {
-        tracing::warn!(error = %e, "stream-set: no thread to hand over to the stems");
+            if !stopped || s.on_originals.contains(take_guid) {
+                continue;
+            }
+            match daw::standalone::audio_engine::PcmFile::open(&original.local) {
+                Ok(pcm) => {
+                    daw::standalone::audio_engine::materialize::attach_source(
+                        daw,
+                        &s.project,
+                        take_guid,
+                        daw::standalone::audio_engine::AudioSource::PcmFile(pcm),
+                    );
+                    moved += 1;
+                }
+                Err(e) => {
+                    tracing::warn!(stream.original = %original.path, error = %e, "stream-set: an original would not open; its take stays on its proxy");
+                }
+            }
+            s.on_originals.insert(take_guid.clone());
+        }
+        if moved > 0 {
+            tracing::info!(stream.song = %s.project, stream.moved = moved, "stream-set: takes moved to their originals");
+        }
     }
+    if wanted.is_empty() || ORIGINALS.swap(true, std::sync::atomic::Ordering::AcqRel) {
+        return;
+    }
+    let Some(runtime) = crate::open::runtime() else {
+        ORIGINALS.store(false, std::sync::atomic::Ordering::Release);
+        return;
+    };
+    runtime.spawn(async move {
+        let count = wanted.len();
+        let mut fetched = 0usize;
+        for (song, original) in wanted {
+            // Asked for proxies only meanwhile: not another original.
+            if crate::stream_quality::current() != crate::stream_quality::Quality::Full {
+                break;
+            }
+            match song.fetch_original(&original).await {
+                Ok(()) => fetched += 1,
+                Err(e) => {
+                    tracing::warn!(stream.original = %original.path, error = %e, "stream-set: an original did not come down; its take stays on its proxy");
+                    if let Ok(mut failed) = ORIGINALS_FAILED.lock() {
+                        failed.push(original.local);
+                    }
+                }
+            }
+        }
+        tracing::info!(stream.originals = count, stream.fetched = fetched, "stream-set: originals down");
+        ORIGINALS.store(false, std::sync::atomic::Ordering::Release);
+    });
+}
+
+/// Hear every streamed song by its stems as soon as they are here: every
+/// song's stems come in now, whatever the references are doing (the
+/// Multitracks switch). Each keeps its reference until its stems have
+/// arrived and decoded where it is ([`conduct`]), so the sound never drops
+/// out or doubles between the two.
+pub fn hear_stems() {
+    conduct();
+}
+
+/// The frame of `source` that `take` plays at the timeline moment `at` —
+/// its first, before the take starts.
+fn frame_at(
+    take: &StreamedTake,
+    source: &daw::standalone::audio_engine::streamed::Streamed,
+    at: f64,
+) -> u64 {
+    let seconds = (at.max(take.start) - take.start) * take.playrate + take.source_offset;
+    (seconds.max(0.0) * f64::from(source.sample_rate())) as u64
 }
 
 /// Whether `take`'s audio has arrived where the song is at `at` seconds —
@@ -505,8 +858,7 @@ fn arrived_at(
     if at < take.start || at >= take.end {
         return true;
     }
-    let seconds = (at - take.start) * take.playrate + take.source_offset;
-    let frame = (seconds.max(0.0) * f64::from(source.sample_rate())) as usize;
+    let frame = usize::try_from(frame_at(take, source, at)).unwrap_or(usize::MAX);
     source.resident(frame / daw::standalone::audio_engine::streamed::CHUNK)
 }
 
@@ -731,70 +1083,89 @@ pub struct SongStreams {
     pub complete: u32,
     pub bytes: u64,
     pub arrived: u64,
-    /// Played by its reference: the stems wait until asked for.
+    /// Heard by its reference now: its stems are coming in behind it.
     pub by_reference: bool,
+    /// The original recordings it can move to at full resolution, and how
+    /// many of them are here.
+    pub originals: u32,
+    pub originals_here: u32,
+    /// Takes moved to their originals.
+    pub on_originals: u32,
     /// The recordings, the least arrived first.
     pub recordings: Vec<FileStream>,
     /// Whether it can play from its playhead (filled by the action).
     pub readiness: Option<Readiness>,
 }
 
-/// Every song streaming in this process, and how far along each is.
+/// Every song streaming in this process, and how far along each is: its
+/// live tracks, its stems and — while it is heard by it — its reference.
 #[must_use]
 pub fn report() -> Vec<SongStreams> {
     let Ok(streams) = STREAMS.lock() else {
         return Vec::new();
     };
-    streams
+    streams.iter().map(song_report).collect()
+}
+
+fn song_report(s: &Streaming) -> SongStreams {
+    let mut recordings: Vec<FileStream> = s
+        .live
         .iter()
-        .map(|s| {
-            let takes = s.takes.lock().map(|t| t.clone()).unwrap_or_default();
-            let mut recordings: Vec<FileStream> = takes
-                .iter()
-                .chain(s.held.iter().map(|(t, _)| t))
-                .map(|t| {
-                    let (bytes, arrived) = (t.bytes.len(), t.bytes.arrived());
-                    FileStream {
-                        path: t.path.clone(),
-                        bytes,
-                        arrived,
-                        complete: arrived >= bytes,
-                    }
-                })
-                .collect();
-            recordings.sort_by(|a, b| {
-                let part = |f: &FileStream| f.arrived as f64 / f.bytes.max(1) as f64;
-                part(a).total_cmp(&part(b))
-            });
-            let complete = recordings.iter().filter(|f| f.complete).count();
-            let (bytes, arrived) = recordings
-                .iter()
-                .fold((0, 0), |(b, a), f| (b + f.bytes, a + f.arrived));
-            let state = if complete == recordings.len() {
-                "local"
-            } else if arrived > 0 {
-                "arriving"
-            } else {
-                "streaming"
-            };
-            SongStreams {
-                project: s.project.clone(),
-                folder: s
-                    ._song
-                    .project
-                    .parent()
-                    .map_or_else(String::new, |p| p.display().to_string()),
-                state: state.to_owned(),
-                files: u32::try_from(recordings.len()).unwrap_or(u32::MAX),
-                complete: u32::try_from(complete).unwrap_or(u32::MAX),
+        .chain(&s.stems)
+        .chain(&s.reference)
+        .map(|t| {
+            let (bytes, arrived) = (t.bytes.len(), t.bytes.arrived());
+            FileStream {
+                path: t.path.clone(),
                 bytes,
                 arrived,
-                by_reference: !s.held.is_empty(),
-                recordings,
-                readiness: None,
+                complete: arrived >= bytes,
             }
         })
-        .collect()
+        .collect();
+    recordings.sort_by(|a, b| {
+        let part = |f: &FileStream| f.arrived as f64 / f.bytes.max(1) as f64;
+        part(a).total_cmp(&part(b))
+    });
+    let complete = recordings.iter().filter(|f| f.complete).count();
+    let (bytes, arrived) = recordings
+        .iter()
+        .fold((0, 0), |(b, a), f| (b + f.bytes, a + f.arrived));
+    let state = if complete == recordings.len() {
+        "local"
+    } else if arrived > 0 {
+        "arriving"
+    } else {
+        "streaming"
+    };
+    let mut originals: Vec<crate::song_stream::Original> = Vec::new();
+    for (_, path) in &s.media {
+        if let Some(o) = s.song.original_of(path)
+            && !originals.iter().any(|seen| seen.local == o.local)
+        {
+            originals.push(o);
+        }
+    }
+    let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+    SongStreams {
+        project: s.project.clone(),
+        folder: s
+            .song
+            .project
+            .parent()
+            .map_or_else(String::new, |p| p.display().to_string()),
+        state: state.to_owned(),
+        files: count(recordings.len()),
+        complete: count(complete),
+        bytes,
+        arrived,
+        by_reference: s.held.is_some(),
+        originals: count(originals.len()),
+        originals_here: count(originals.iter().filter(|o| o.is_here()).count()),
+        on_originals: count(s.on_originals.len()),
+        recordings,
+        readiness: None,
+    }
 }
 
 /// How far a streamed song can play from where it is, every recording it
@@ -828,30 +1199,58 @@ fn transport_of(project: &str) -> Option<(f64, bool)> {
     Some((snap.playhead_seconds, snap.is_playing))
 }
 
-/// Whether `project` (a song streaming in) can play from its playhead:
-/// `None` when it is not streaming (local songs are always ready).
+/// Whether `project` (a song streaming in) can play from its playhead —
+/// by what it is heard by now: its live tracks, and its stems or its
+/// reference (the preview will do). `None` when it is not streaming
+/// (local songs are always ready).
 #[must_use]
 pub fn readiness(project: &str) -> Option<Readiness> {
     let (playhead, _) = transport_of(project).unwrap_or((0.0, false));
-    let takes = {
+    let (heard, reference) = {
         let streams = STREAMS.lock().ok()?;
         let s = streams.iter().find(|s| s.project == project)?;
-        s.takes.lock().ok()?.clone()
+        let mut heard = s.live.clone();
+        if s.held.is_none() {
+            heard.extend(s.stems.iter().cloned());
+        }
+        (heard, s.held.as_ref().map(|_| s.reference.clone()))
     };
-    let missing = |t: f64, ahead: f64| takes.iter().filter(|k| !k.has_at(t, ahead)).count();
+    Some(readiness_of(
+        project,
+        playhead,
+        &heard,
+        reference.as_deref(),
+    ))
+}
+
+/// [`readiness`], of what a song is heard by: `heard` (each recording that
+/// sounds) and, heard by its reference, its preview and reference proper
+/// (`reference`) — either of which will do.
+fn readiness_of(
+    project: &str,
+    playhead: f64,
+    heard: &[StreamedTake],
+    reference: Option<&[StreamedTake]>,
+) -> Readiness {
+    let reference_at = |t: f64, ahead: f64| {
+        reference.is_none_or(|r| r.is_empty() || r.iter().any(|k| k.has_at(t, ahead)))
+    };
+    let missing = |t: f64, ahead: f64| {
+        heard.iter().filter(|k| !k.has_at(t, ahead)).count() + usize::from(!reference_at(t, ahead))
+    };
     let waiting_on = missing(playhead, READY_AHEAD);
     // Half-second steps out to the look-ahead, while all of it is here.
     let mut buffered = 0.0;
     while buffered < LOOK_AHEAD && missing(playhead + buffered, 0.5) == 0 {
         buffered += 0.5;
     }
-    Some(Readiness {
+    Readiness {
         project: project.to_owned(),
         playhead,
         buffered,
         ready: waiting_on == 0,
         waiting_on: u32::try_from(waiting_on).unwrap_or(u32::MAX),
-    })
+    }
 }
 
 /// Whether `project` is stopped (or not a song here).
@@ -985,4 +1384,74 @@ fn compute_shown() -> Shown {
         );
     }
     shown
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::{SetProgress, StemGate, originals_may_start, stems_may_start};
+
+    const WAITING: StemGate = StemGate {
+        reference_here: false,
+        current: false,
+        every_reference_here: false,
+        asked: false,
+        waited: false,
+    };
+
+    #[test]
+    fn the_song_on_screen_takes_its_stems_once_its_reference_is_here_the_rest_once_every_one_is() {
+        // Its reference not here yet: the reference first, on screen or not.
+        assert!(!stems_may_start(StemGate {
+            current: true,
+            ..WAITING
+        }));
+        let here = StemGate {
+            reference_here: true,
+            ..WAITING
+        };
+        assert!(stems_may_start(StemGate {
+            current: true,
+            ..here
+        }));
+        assert!(
+            !stems_may_start(here),
+            "another song's reference is still coming"
+        );
+        assert!(stems_may_start(StemGate {
+            every_reference_here: true,
+            ..here
+        }));
+        // Asked for, or waited long enough: at once.
+        assert!(stems_may_start(StemGate {
+            asked: true,
+            ..WAITING
+        }));
+        assert!(stems_may_start(StemGate {
+            waited: true,
+            ..WAITING
+        }));
+    }
+
+    #[test]
+    fn originals_come_only_once_every_song_has_arrived_with_every_proxy_and_none_on_its_reference()
+    {
+        let done = SetProgress {
+            arriving: 0,
+            by_reference: 0,
+            proxies_missing: 0,
+        };
+        assert!(originals_may_start(done));
+        assert!(!originals_may_start(SetProgress {
+            arriving: 1,
+            ..done
+        }));
+        assert!(!originals_may_start(SetProgress {
+            by_reference: 1,
+            ..done
+        }));
+        assert!(!originals_may_start(SetProgress {
+            proxies_missing: 3,
+            ..done
+        }));
+    }
 }

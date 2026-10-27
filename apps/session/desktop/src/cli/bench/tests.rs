@@ -1,4 +1,4 @@
-use super::{Observation, SongSeen, SongTiming, StreamSeen, Timings, timings};
+use super::{Observation, ReadySeen, SongSeen, SongTiming, StreamSeen, Timings, timings};
 
 fn song(number: u32, title: &str, project: &str, current: bool, state: &str) -> SongSeen {
     SongSeen {
@@ -14,6 +14,14 @@ fn stream(project: &str, state: &str) -> StreamSeen {
     StreamSeen {
         project: project.to_owned(),
         state: state.to_owned(),
+        readiness: None,
+    }
+}
+
+fn playable(project: &str, state: &str, ready: bool) -> StreamSeen {
+    StreamSeen {
+        readiness: Some(ReadySeen { ready }),
+        ..stream(project, state)
     }
 }
 
@@ -153,4 +161,49 @@ fn an_open_song_that_is_not_current_does_not_count_as_the_first_song() {
         None,
     ));
     assert_eq!(t.first_song_ms, None);
+}
+
+#[test]
+fn a_set_is_playable_once_every_open_song_can_play_from_its_playhead_before_it_is_local() {
+    let a = song(1, "Praise", "p-a", true, "open");
+    let b = song(2, "Holy Forever", "p-b", false, "open");
+    let runs = [
+        // The second song can play (by its reference), but has not opened.
+        seen(
+            100,
+            vec![a.clone(), song(2, "Holy Forever", "", false, "arriving")],
+            Some(vec![playable("p-a", "arriving", true)]),
+        ),
+        seen(
+            200,
+            vec![a.clone(), b.clone()],
+            Some(vec![
+                playable("p-a", "arriving", true),
+                playable("p-b", "streaming", false),
+            ]),
+        ),
+        seen(
+            300,
+            vec![a.clone(), b.clone()],
+            Some(vec![
+                playable("p-a", "arriving", true),
+                playable("p-b", "arriving", true),
+            ]),
+        ),
+        seen(
+            900,
+            vec![a, b],
+            Some(vec![
+                playable("p-a", "local", true),
+                playable("p-b", "local", true),
+            ]),
+        ),
+    ];
+
+    let t = timings(Vec::new(), &runs);
+
+    assert_eq!(
+        (t.all_open_ms, t.all_playable_ms, t.all_local_ms),
+        (Some(200), Some(300), Some(900))
+    );
 }

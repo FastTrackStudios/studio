@@ -206,6 +206,7 @@ fn Settings() -> Element {
         if let Some(text) = note() {
             div { style: "padding:10px 18px; color:#e3b341; font-size:12px;", "{text}" }
         }
+        StreamingQuality {}
         if let Some(stems) = listening() {
             Heading { title: "Playback" }
             Toggle {
@@ -229,6 +230,52 @@ fn Settings() -> Element {
                 detail: "Sized for a finger: bigger rows, strips and grips; a drag scrolls.",
             }
         }
+    }
+}
+
+/// What a streamed song is heard from once it can be: its proxies only, or
+/// its original recordings where they can be had
+/// ([`crate::stream_quality`]). Kept per device. A page streams proxies
+/// only (it has no disk for the originals): nothing to choose.
+#[component]
+fn StreamingQuality() -> Element {
+    #[cfg(feature = "native")]
+    {
+        use crate::stream_quality::Quality;
+        let mut now = use_signal(crate::stream_quality::current);
+        rsx! {
+            Heading { title: "Streaming quality" }
+            for each in Quality::ALL {
+                {
+                    let on = now() == each;
+                    let (bg, ink) = if on { (RAISED, TEXT) } else { ("transparent", DIM) };
+                    rsx! {
+                        button {
+                            key: "{each.key()}",
+                            style: "width:100%; display:flex; align-items:center; gap:14px; padding:12px 18px; \
+                                    border:none; border-bottom:1px solid {RULE}; background:{bg}; color:{ink}; \
+                                    text-align:left; font-family:inherit; cursor:pointer;",
+                            onclick: move |_| {
+                                crate::stream_quality::set(each);
+                                now.set(each);
+                            },
+                            div {
+                                style: "flex:1; min-width:0; display:flex; flex-direction:column; gap:3px;",
+                                span { style: "font-size:14px; font-weight:650; color:{TEXT};", "{each.label()}" }
+                                span { style: "font-size:12px; color:{DIM}; line-height:1.5;", "{each.blurb()}" }
+                            }
+                            if on {
+                                lucide_dioxus::Check { size: 18, color: TEXT }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    #[cfg(not(feature = "native"))]
+    {
+        rsx! {}
     }
 }
 
@@ -304,7 +351,7 @@ const fn stems_detail(stems: bool) -> &'static str {
     if stems {
         "Every song is heard by its stems, so the mix can be changed."
     } else {
-        "Off: each song plays its stereo reference — a few MB — with the guide live over it. On: every stem of every song is downloaded, so the mix can be changed."
+        "Each song plays its stereo reference — a few MB — with the guide live over it while its stems come in behind, and switches to them once they are here. On: every song's stems come in now."
     }
 }
 

@@ -2170,6 +2170,23 @@ static STREAMS: ActionMeta = meta(
     "",
 );
 
+#[cfg(feature = "native")]
+static STREAM_QUALITY: ActionMeta = meta(
+    "SESSION_STREAM_QUALITY",
+    "session_stream_quality",
+    "Streaming quality",
+    "What streamed songs are heard from, on this device: `proxies` (the compressed proxies only; an original is never fetched) or `full` (the proxies first, then — once every song's proxies are here — the original recordings, fetched one at a time behind everything else, each take moving to its original the next time its song is stopped). Left out, says what it is. Kept for every set.",
+    "Session",
+    "",
+);
+
+/// The quality to stream at, or nothing to ask what it is.
+#[cfg(feature = "native")]
+#[derive(Facet)]
+struct StreamQualityArg {
+    quality: Option<String>,
+}
+
 /// Which song, and how many of its recordings to list.
 #[cfg(feature = "native")]
 #[derive(Facet)]
@@ -2324,11 +2341,15 @@ fn register_style(list: &ActionList) -> Result<(), architect::action::ActionErro
     list.register(&JOBS, Effect::ReadOnly, |(): ()| {
         Ok(crate::jobs::running()
             .into_iter()
-            .map(|crate::jobs::Running { label, done, total, .. }| JobRow {
-                label,
-                done: u64::try_from(done).unwrap_or(u64::MAX),
-                total: u64::try_from(total).unwrap_or(u64::MAX),
-            })
+            .map(
+                |crate::jobs::Running {
+                     label, done, total, ..
+                 }| JobRow {
+                    label,
+                    done: u64::try_from(done).unwrap_or(u64::MAX),
+                    total: u64::try_from(total).unwrap_or(u64::MAX),
+                },
+            )
             .collect::<Vec<_>>())
     })?;
     list.register(&ITEM_STYLE, Effect::Mutating, |a: ItemStyleArg| {
@@ -2581,6 +2602,15 @@ fn register_save(list: &ActionList) -> Result<(), architect::action::ActionError
             }
         }
         Ok(songs)
+    })?;
+    list.register(&STREAM_QUALITY, Effect::Mutating, |a: StreamQualityArg| {
+        use crate::stream_quality::{Quality, current, set};
+        if let Some(word) = a.quality.as_deref() {
+            let quality = Quality::parse(word)
+                .ok_or_else(|| format!("`quality`: `proxies` or `full`, not {word:?}"))?;
+            set(quality);
+        }
+        Ok(current().key().to_owned())
     })?;
     list.register(&OPEN_SETLIST, Effect::Mutating, |a: OpenSetlistArg| {
         let setlist = a.setlist.trim().to_owned();

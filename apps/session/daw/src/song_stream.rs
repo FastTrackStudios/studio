@@ -654,6 +654,10 @@ pub struct StreamedSong {
     source: Arc<dyn SongSource>,
     /// Proxies by their file stem, lower-case: (path in the song, size).
     proxies: HashMap<String, (String, u64)>,
+    /// The original recordings a take can move to at full resolution
+    /// ([`crate::stream_quality`]), by file name, lower-case (`bass.wav`):
+    /// (path in the song, size). Only what the engine maps from disk (WAV).
+    originals: HashMap<String, (String, u64)>,
     /// Waveform caches by their original's file name, lower-case
     /// (`bass.wav`): (path in the song, size). Ours before REAPER's.
     peaks: HashMap<String, (String, u64)>,
@@ -695,9 +699,28 @@ fn is_media(lower: &str) -> bool {
     lower.starts_with("media/") || RECORDINGS.iter().any(|ext| lower.ends_with(ext))
 }
 
+/// Whether a recording (lower-case path) is one the engine plays straight
+/// from disk — a WAV, memory-mapped — and so worth fetching at full
+/// resolution. Anything else stays on its proxy.
+fn is_mapped_original(lower: &str) -> bool {
+    !lower.contains("/proxies/") && (lower.ends_with(".wav") || lower.ends_with(".wave"))
+}
+
 #[cfg(test)]
 mod media_tests {
-    use super::is_media;
+    use super::{is_mapped_original, is_media};
+
+    #[test]
+    fn only_a_wav_beside_its_proxies_is_an_original_to_fetch() {
+        assert!(is_mapped_original("samples/imported/bass.wav"));
+        assert!(is_mapped_original("media/vox.wave"));
+        assert!(!is_mapped_original("media/proxies/vox.ogg"));
+        assert!(
+            !is_mapped_original("media/vox.mp3"),
+            "not mapped: its proxy is as good"
+        );
+        assert!(!is_mapped_original("media/proxies/odd.wav"));
+    }
 
     #[test]
     fn a_recording_streams_wherever_the_session_keeps_it() {
@@ -1049,6 +1072,7 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
     // this version; else each small file comes again.
     let current = keep.at_version(&base, version.as_deref());
     let mut proxies = HashMap::new();
+    let mut originals = HashMap::new();
     let mut peaks: HashMap<String, (String, u64)> = HashMap::new();
     let mut wanted = Vec::new();
     for (path, size) in &list {
@@ -1078,6 +1102,12 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
         let is_log = ["session-wal", "session-shm", "session-tshm"]
             .iter()
             .any(|log| lower.ends_with(log));
+        if is_media(&lower) && is_mapped_original(&lower) {
+            if let Some(name) = Path::new(&lower).file_name() {
+                originals.insert(name.to_string_lossy().into_owned(), (path.clone(), *size));
+            }
+            continue;
+        }
         if is_log || is_media(&lower) || *size == 0 || !keep.wants(&lower) {
             continue;
         }
@@ -1156,6 +1186,7 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
         stream.kept = docs.kept(),
         stream.batched = batched,
         stream.proxies = proxies.len(),
+        stream.originals = originals.len(),
         "song-stream: mirrored"
     );
     Ok(StreamedSong {
@@ -1165,6 +1196,7 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
         base,
         source,
         proxies,
+        originals,
         peaks,
         attached: Mutex::default(),
         opened: Mutex::default(),
@@ -1396,6 +1428,98 @@ impl StreamedSong {
         })
     }
 
+    /// Attach `media` as [`Self::attach`] does, but heard from nothing yet:
+    /// the take holds a stream that is never fed (its waveform draws from
+    /// the original's cache all the same), and the stream that will play
+    /// is returned with its feeder, decoded by whoever adopts it and
+    /// attached when it should be heard ([`Detached::source`]). What a song
+    /// heard by its reference holds its stems as: fetched and decoded
+    /// behind the reference, silent, until they take over with no gap and
+    /// no doubling. `None` as [`Self::attach`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn attach_detached(
+        &self,
+        daw: &Standalone,
+        local: &str,
+        media: &PendingMedia,
+    ) -> Option<Detached> {
+        use daw::standalone::audio_engine::streamed::{RemoteOgg, StreamFeeder, Streamed};
+        let stem = Path::new(&media.path)
+            .file_stem()?
+            .to_string_lossy()
+            .to_lowercase();
+        let (path, size) = self.proxies.get(&stem)?.clone();
+        let (bytes, index) = self.opened(&self.base.join(&path), size)?;
+        // The stand-in the take holds until it is heard: never fed.
+        drop(
+            daw::standalone::audio_engine::materialize::attach_remote_ogg(
+                daw,
+                local,
+                &media.take_guid,
+                Arc::clone(&bytes),
+                index.clone(),
+            ),
+        );
+        let feeder = StreamFeeder::new(
+            Streamed::new(index.channels, index.sample_rate, index.frames),
+            RemoteOgg::new(Arc::clone(&bytes), index.clone()),
+        );
+        Some(Detached {
+            take_guid: media.take_guid.clone(),
+            take: StreamedTake {
+                path,
+                bytes,
+                index,
+                start: media.start,
+                end: media.end,
+                source_offset: media.source_offset,
+                playrate: media.playrate,
+            },
+            feeder,
+        })
+    }
+
+    /// The original recording `media_path` (a take's file, as the project
+    /// names it) stands for, when the song has one to fetch at full
+    /// resolution: where it is in the song, its size, and where it is kept
+    /// here.
+    #[must_use]
+    pub fn original_of(&self, media_path: &str) -> Option<Original> {
+        let name = Path::new(media_path)
+            .file_name()?
+            .to_string_lossy()
+            .to_lowercase();
+        let (path, size) = self.originals.get(&name)?.clone();
+        let local = self.base.join(&path);
+        Some(Original { path, size, local })
+    }
+
+    /// Bring `original` down whole, beside the song's mirror — written
+    /// aside and moved in complete, so a fetch cut short never leaves a
+    /// file that looks whole. Kept on disk only.
+    ///
+    /// # Errors
+    ///
+    /// The source would not give it, or it could not be written.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn fetch_original(&self, original: &Original) -> eyre::Result<()> {
+        /// Tries before the file is given up on for this run.
+        const TRIES: u32 = 3;
+        if !matches!(self.keep, Keep::Disk(_)) {
+            eyre::bail!("a song kept in memory keeps no originals");
+        }
+        let got = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        fetch_proxy(
+            &*self.source,
+            &original.path,
+            original.size,
+            &original.local,
+            &got,
+            TRIES,
+        )
+        .await
+    }
+
     /// The song's reference ([`crate::reference`]) as streams of their own
     /// — attached to no take: what a page in reference mode plays instead
     /// of the stems. Its preview too, when it has one: small enough to be
@@ -1576,6 +1700,154 @@ pub enum Heard {
     Preview,
     Reference,
     Stems,
+}
+
+/// A take attached to a stream that is not heard yet
+/// ([`StreamedSong::attach_detached`]): its fetch, and the stream that will
+/// play it with its feeder.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct Detached {
+    pub take_guid: String,
+    pub take: StreamedTake,
+    pub feeder: daw::standalone::audio_engine::streamed::StreamFeeder<
+        daw::standalone::audio_engine::streamed::RemoteOgg,
+    >,
+}
+
+/// An original recording of a streamed song ([`StreamedSong::original_of`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Original {
+    /// Its path in the song folder.
+    pub path: String,
+    pub size: u64,
+    /// Where it is kept on this device.
+    pub local: PathBuf,
+}
+
+impl Original {
+    /// Whether all of it is here.
+    #[must_use]
+    pub fn is_here(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::fs::metadata(&self.local).is_ok_and(|m| m.len() == self.size)
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            false
+        }
+    }
+}
+
+/// One step of what a page brings in behind the song on screen
+/// ([`warm_order`]): a song (by its place counted from the one on screen)
+/// heard by something, or that song switched to its stems.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WarmStep {
+    /// Bring all of what song `song` is heard by in.
+    Warm { song: usize, heard: Heard },
+    /// Start the song's stems coming in to take over from its reference
+    /// where it is playing.
+    HearStems { song: usize },
+}
+
+/// The order a page brings a set in behind the song on screen, `songs[0]`
+/// (the rest in set order from it; `true` for a song with a reference):
+/// every song's preview, so the whole set is playable almost at once; the
+/// song on screen's reference, then its stems — taking over from the
+/// reference once they are where it is; every other song's reference; then
+/// every other song's stems. Proxies only, always: the originals are not
+/// streamed to a page.
+#[must_use]
+pub fn warm_order(songs: &[bool]) -> Vec<WarmStep> {
+    let by_reference = |song: &usize| songs.get(*song).copied().unwrap_or(false);
+    let rest = 1..songs.len();
+    let mut steps: Vec<WarmStep> = (0..songs.len())
+        .filter(by_reference)
+        .map(|song| WarmStep::Warm {
+            song,
+            heard: Heard::Preview,
+        })
+        .collect();
+    if !songs.is_empty() {
+        if by_reference(&0) {
+            steps.push(WarmStep::Warm {
+                song: 0,
+                heard: Heard::Reference,
+            });
+            steps.push(WarmStep::HearStems { song: 0 });
+        }
+        steps.push(WarmStep::Warm {
+            song: 0,
+            heard: Heard::Stems,
+        });
+    }
+    steps.extend(
+        rest.clone()
+            .filter(by_reference)
+            .map(|song| WarmStep::Warm {
+                song,
+                heard: Heard::Reference,
+            }),
+    );
+    steps.extend(rest.map(|song| WarmStep::Warm {
+        song,
+        heard: Heard::Stems,
+    }));
+    steps
+}
+
+#[cfg(test)]
+mod warm_tests {
+    use super::{Heard, WarmStep, warm_order};
+
+    #[test]
+    fn a_page_brings_every_preview_then_the_song_on_screen_then_the_rest() {
+        use WarmStep::{HearStems, Warm};
+        // On screen with a reference; then one without; then one with.
+        assert_eq!(
+            warm_order(&[true, false, true]),
+            [
+                Warm {
+                    song: 0,
+                    heard: Heard::Preview
+                },
+                Warm {
+                    song: 2,
+                    heard: Heard::Preview
+                },
+                Warm {
+                    song: 0,
+                    heard: Heard::Reference
+                },
+                HearStems { song: 0 },
+                Warm {
+                    song: 0,
+                    heard: Heard::Stems
+                },
+                Warm {
+                    song: 2,
+                    heard: Heard::Reference
+                },
+                Warm {
+                    song: 1,
+                    heard: Heard::Stems
+                },
+                Warm {
+                    song: 2,
+                    heard: Heard::Stems
+                },
+            ]
+        );
+        assert_eq!(
+            warm_order(&[false]),
+            [Warm {
+                song: 0,
+                heard: Heard::Stems
+            }]
+        );
+        assert_eq!(warm_order(&[]), Vec::<WarmStep>::new());
+    }
 }
 
 /// A stream attached to no take: its fetch and its feeder.

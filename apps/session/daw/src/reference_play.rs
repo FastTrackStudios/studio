@@ -4,11 +4,13 @@
 //! song's mix but the guide, [`crate::reference`]) instead of every stem,
 //! the guide playing live over it from the engine.
 //!
-//! The stems are attached all the same (their waveforms draw) but their
-//! bytes are not fetched ([`crate::stream_set::stream`]). Loading the
-//! multitracks ([`load_multitracks`]) fetches them; each song keeps its
-//! reference until its stems have arrived at the playhead
-//! ([`crate::stream_set`] hands over), so there is no gap.
+//! The stems are attached all the same (their waveforms draw) and come in
+//! behind the reference — the song on screen's once its reference is here,
+//! the rest once every song's is — decoded but not heard; each song keeps
+//! its reference until its stems have arrived and decoded where it is
+//! ([`crate::stream_set`] hands over), so there is no gap and no doubling.
+//! Loading the multitracks ([`load_multitracks`]) brings every song's
+//! stems in at once.
 //!
 //! The reference is mixed into the device's output by the audio engine's
 //! post-render hook ([`renderer`], installed by `crate::open`), for the
@@ -30,8 +32,8 @@ struct Heard {
 /// The songs heard by their reference, by project.
 static HEARD: LazyLock<Mutex<HashMap<String, Heard>>> = LazyLock::new(Mutex::default);
 
-/// Whether the multitracks were asked for: from then on every song is heard
-/// by its stems.
+/// Whether the multitracks were asked for: from then on every song's stems
+/// come in at once, not after the references.
 static MULTITRACKS: AtomicBool = AtomicBool::new(false);
 
 /// Whether songs are heard by their stems ([`load_multitracks`]) rather
@@ -88,8 +90,8 @@ pub fn any() -> bool {
     HEARD.lock().is_ok_and(|heard| !heard.is_empty())
 }
 
-/// Ask for the multitracks: every song's stems are fetched, and each hands
-/// over from its reference as they arrive ([`crate::stream_set`]).
+/// Ask for the multitracks now: every song's stems come in at once, and
+/// each hands over from its reference as they arrive ([`crate::stream_set`]).
 pub fn load_multitracks() {
     if !MULTITRACKS.swap(true, Ordering::Relaxed) {
         crate::stream_set::hear_stems();

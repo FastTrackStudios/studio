@@ -116,6 +116,7 @@ pub mod song_stream;
 pub mod stream_in;
 #[cfg(feature = "native")]
 pub mod stream_set;
+pub mod stream_quality;
 pub mod take_colors;
 #[cfg(feature = "native")]
 pub mod task_account;

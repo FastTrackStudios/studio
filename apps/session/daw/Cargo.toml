@@ -112,6 +112,9 @@ frame = { workspace = true, features = ["anyrender-0-11", "live", "theme"] }
 # window run on a machine that has no REAPER at all.
 daw = { workspace = true }
 studio = { workspace = true }
+# Per-device preferences (the streaming quality): a file natively,
+# localStorage in a browser.
+utils = { workspace = true }
 
 # The GPU-accelerated arrangement. `anyrender` is the 2D abstraction
 # (`PaintScene`: fill/stroke/draw_glyphs/draw_image) and the portable

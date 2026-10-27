@@ -3,7 +3,8 @@
 //! After the open is asked for, the window is polled every [`POLL`] —
 //! `SESSION_SONGS` (each song `open` or `arriving`, which is `current`) and
 //! `SESSION_STREAMS` (each streamed song `local`, `arriving` or
-//! `streaming`) — until every song is open and, when the set streams in,
+//! `streaming`, and whether it can play from its playhead — by its
+//! reference or its multitracks) — until every song is open and, when the set streams in,
 //! every song is local; or until the timeout. One JSON object says when
 //! each point was reached, in ms after the request was sent.
 //!
@@ -47,6 +48,25 @@ pub struct StreamSeen {
     pub project: String,
     /// `local`, `arriving` or `streaming`.
     pub state: String,
+    /// Whether it can play from its playhead now; `None` from a window that
+    /// does not say.
+    #[serde(default)]
+    pub readiness: Option<ReadySeen>,
+}
+
+/// A streamed song's readiness, as `SESSION_STREAMS` gives it (the field
+/// used here).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct ReadySeen {
+    /// Every recording it is heard by (its reference, or its stems) has
+    /// the seconds ahead of the playhead it needs to start.
+    pub ready: bool,
+}
+
+impl StreamSeen {
+    fn is_playable(&self) -> bool {
+        self.readiness.as_ref().is_some_and(|r| r.ready)
+    }
 }
 
 /// What one poll of the window saw, `elapsed_ms` after the open was asked for.
@@ -78,6 +98,9 @@ pub struct Timings {
     started: bool,
     pub first_song_ms: Option<u64>,
     pub all_open_ms: Option<u64>,
+    /// Every song open and able to play from its playhead — by its
+    /// reference or its multitracks.
+    pub all_playable_ms: Option<u64>,
     pub all_local_ms: Option<u64>,
     /// How many songs the set had when every one was open.
     pub songs: usize,
@@ -97,6 +120,7 @@ impl Timings {
             started,
             first_song_ms: None,
             all_open_ms: None,
+            all_playable_ms: None,
             all_local_ms: None,
             songs: 0,
             open_at: BTreeMap::new(),
@@ -138,8 +162,11 @@ impl Timings {
             .flatten()
             .filter(|st| seen.songs.iter().any(|s| s.project == st.project))
             .collect();
-        // A song that does not stream in is local already.
+        // A song that does not stream in is local already — and playable.
         self.streamed = !ours.is_empty();
+        if self.all_playable_ms.is_none() && all_open && ours.iter().all(|st| st.is_playable()) {
+            self.all_playable_ms = Some(at);
+        }
         if self.all_local_ms.is_none()
             && all_open
             && self.streamed
@@ -181,6 +208,7 @@ struct Report<'a> {
     said: Value,
     first_song_ms: Option<u64>,
     all_open_ms: Option<u64>,
+    all_playable_ms: Option<u64>,
     all_local_ms: Option<u64>,
     song_count: usize,
     songs: Vec<SongTiming>,
@@ -228,6 +256,7 @@ pub fn bench(url: &str, action: &str, args: Value, timeout: Duration) -> eyre::R
         said: serde_json::from_str(&said).unwrap_or(Value::String(said)),
         first_song_ms: timings.first_song_ms,
         all_open_ms: timings.all_open_ms,
+        all_playable_ms: timings.all_playable_ms,
         all_local_ms: timings.all_local_ms,
         song_count: timings.songs,
         songs: timings.per_song(),
