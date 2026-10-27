@@ -1008,6 +1008,8 @@ resvg = "0.45"
 rfd = "0.17"
 roxmltree = "0.20"
 rustc-hash = "2"
+# zstd in pure Rust: session-format's `read` (a browser has no C zstd).
+ruzstd = "0.8"
 rusty_link = "0.4"
 smallvec = "1.15.2"
 styx-tree = "5.0.0-rc.5"

@@ -16691,6 +16691,7 @@ dependencies = [
  "interchange",
  "loro",
  "pollster",
+ "ruzstd",
  "session-format",
  "sha2 0.10.9",
  "styx-format",
