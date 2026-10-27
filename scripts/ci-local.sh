@@ -119,6 +119,8 @@ checks() {
   cargo rail change check --since "$base"
   echo "── rail config ──"
   cargo rail config validate --strict
+  echo "── engine boundary ──"
+  python3 scripts/engine-boundary.py
   echo "── generated workflows + actionlint ──"
   just workflows-check
   # The release tooling's end-to-end test (~40 s), when it changed. CI's

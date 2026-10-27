@@ -1900,6 +1900,12 @@ web-wasm-check:
 signal-wasm-check:
     cargo check -p studio-desktop --target wasm32-unknown-unknown --no-default-features --features signal
 
+# A static check over apps/session/daw/src (docs/design/engine-boundary.md),
+# run by `just ci-local`, until the crate cut makes the compiler say it.
+# Check that Session's engine modules use no window module (`--list`: both sides).
+engine-boundary *ARGS:
+    python3 scripts/engine-boundary.py {{ARGS}}
+
 # The workflows in .github/workflows are GENERATED from xtask/workflows (one
 # Rust module per workflow, the reasons as comments there). Edit the Rust,
 # then run this and commit both.
