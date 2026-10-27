@@ -1,7 +1,8 @@
-//! The running window's Action List, served to a model over MCP.
+//! The engine's Action List, served to a model and the CLI over MCP.
 //!
-//! Whatever this window can do is an action in its Action List
-//! (`crate::actions`); this puts a model on it while you work — on
+//! Whatever Session can do is an action in its Action List
+//! (`crate::actions`); this puts a model on it while you work — the
+//! window's process or `studio engine` with no window, the same list — on
 //! `http://127.0.0.1:47811/mcp` (`FTS_MCP_PORT` to move it, `FTS_MCP=0`
 //! for none). Found without asking: the repository's `.mcp.json` names
 //! it for Claude Code, and `~/.config/fts/session-mcp.json` says where it
