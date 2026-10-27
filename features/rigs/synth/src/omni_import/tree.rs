@@ -93,7 +93,11 @@ fn modelled_filter(
                 "res_table",
                 table
                     .iter()
-                    .map(|(r, q)| format!("{r}:{q}"))
+                    .map(|(s, row)| {
+                        let pts: Vec<String> =
+                            row.iter().map(|(r, q)| format!("{r}:{q}")).collect();
+                        format!("{s}@{}", pts.join(","))
+                    })
                     .collect::<Vec<_>>()
                     .join(";"),
             )
@@ -295,10 +299,11 @@ pub fn translate_route(
         // Harmonia mix.
         "Harmmix" => ("Soundsource", "harm_mix", 1.0),
         // Pan: the Amp's balance, in the same knob units.
-        // Pan: measured, a layer's pan row pans the whole part (layer A's
-        // row moved layer B too, every layer's row on a part whose layers
-        // all play) — the part's pan stage, after the layer mix.
-        "pan" => ("Part Pan", "pan", 1.0),
+        // Pan: measured, layer A's pan row pans the whole part (it moved
+        // layer B too) and another layer's does nothing (B pan, B alone,
+        // stayed centred) — so only A's, onto the part's pan stage after the
+        // layer mix. An all-layers row reaches it through its A copy.
+        "pan" if layer_idx == 0 => ("Part Pan", "pan", 1.0),
         // The filter envelope's depth: a modulated depth on the envelope
         // itself (the section route then runs at unit depth; see below).
         "envdpth" => ("Filter Env", "amp", 1.0),

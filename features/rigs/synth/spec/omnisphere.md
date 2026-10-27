@@ -86,7 +86,14 @@ layer B too); **Alt** is bipolar, −1 on the first note (the toggle on
 later notes is assumed — the harness holds its earlier note into the
 next); **Random Unipolar** draws 0..1. Open: a `B pan` row on the init
 part (layer B switched on by its amp envelope only) does nothing in the
-plugin, while on a factory patch every layer's row pans the part.
+plugin, while on a factory patch every layer's row pans the part —
+resolved: a row's `allN` flag (20 925 active rows in 6 403 patches) drives
+its target on every layer, and only layer A's pan row (or an all-layers
+one) pans the part. **`SYNTHENG share`** ("1" in 6 920 patches) plays every
+layer through layer A's filter (and its envelope), amp envelope,
+Waveshaper and layer FX. **Bandpass Juicy 12db**'s resonance depends on
+the cutoff (Q 2.6 at knob 0.05 … 11.8 at 0.35 at full resonance): a
+measured grid.
 
 ## Status (2026-10-25)
 

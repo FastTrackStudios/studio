@@ -257,9 +257,11 @@ pub struct NativeFilter {
     /// Q 0.5..12 / feedback 0..3.8 curves).
     resonance: f32,
     res_map: Option<ResonanceMap>,
-    /// A measured resonance knob → Q table (`(knob, Q)`, log-interpolated),
-    /// over `res_map` when set.
-    res_table: Vec<(f32, f32)>,
+    /// A measured resonance → Q grid over the cutoff: rows `(knob setting,
+    /// [(resonance, Q)])` in rising setting (see `taper`), log-interpolated
+    /// both ways — a model whose resonance depends on where the cutoff is.
+    /// Over `res_map` when set; one row is a plain resonance table.
+    res_table: Vec<(f32, Vec<(f32, f32)>)>,
     /// The band-pass as the SVF's raw band output (peak gain = Q, so
     /// resonance raises the level) instead of the unity-peak `k·bp`.
     raw_bandpass: bool,
@@ -414,12 +416,27 @@ impl NativeFilter {
         self
     }
 
-    /// A measured resonance → Q table (`(knob, Q)` points, rising knob).
+    /// A measured resonance → Q grid: rows `(knob setting, [(resonance,
+    /// Q)])`, both rising (one row: Q by resonance alone).
     #[must_use]
-    pub fn with_resonance_table(mut self, points: Vec<(f32, f32)>) -> Self {
-        self.res_table = points;
+    pub fn with_resonance_table(mut self, rows: Vec<(f32, Vec<(f32, f32)>)>) -> Self {
+        self.res_table = rows;
         self.update_coeffs();
         self
+    }
+
+    /// `ln Q` at resonance `r` along one row.
+    fn row_ln_q(row: &[(f32, f32)], r: f32) -> f32 {
+        let (first, last) = (row[0], row[row.len() - 1]);
+        if r <= first.0 {
+            return first.1.ln();
+        }
+        row.windows(2)
+            .find(|w| r <= w[1].0)
+            .map_or(last.1.ln(), |w| {
+                let t = (r - w[0].0) / (w[1].0 - w[0].0).max(1e-6);
+                w[0].1.ln() + t * (w[1].1.ln() - w[0].1.ln())
+            })
     }
 
     /// Band-pass from the SVF's raw band output: its peak gain is Q.
@@ -525,18 +542,20 @@ impl NativeFilter {
     /// The first SVF section's Q.
     fn svf_q(&self) -> f32 {
         let r = self.resonance;
-        if let (Some(first), Some(last)) = (self.res_table.first(), self.res_table.last()) {
-            if r <= first.0 {
-                return first.1;
-            }
-            return self
-                .res_table
-                .windows(2)
-                .find(|w| r <= w[1].0)
-                .map_or(last.1, |w| {
-                    let t = (r - w[0].0) / (w[1].0 - w[0].0).max(1e-6);
-                    (w[0].1.ln() + t * (w[1].1.ln() - w[0].1.ln())).exp()
-                });
+        let rows = &self.res_table;
+        if let (Some(first), Some(last)) = (rows.first(), rows.last()) {
+            let s = Self::KNOB_MIN + Self::KNOB_SPAN * self.knob;
+            let ln_q = if rows.len() == 1 || s <= first.0 {
+                Self::row_ln_q(&first.1, r)
+            } else if s >= last.0 {
+                Self::row_ln_q(&last.1, r)
+            } else {
+                let i = rows.windows(2).position(|w| s <= w[1].0).unwrap_or(0);
+                let (a, b) = (&rows[i], &rows[i + 1]);
+                let t = (s - a.0) / (b.0 - a.0).max(1e-6);
+                Self::row_ln_q(&a.1, r) * (1.0 - t) + Self::row_ln_q(&b.1, r) * t
+            };
+            return ln_q.exp();
         }
         self.res_map.map_or_else(
             || Self::q_from_norm(r),

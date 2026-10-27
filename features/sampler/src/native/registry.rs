@@ -404,17 +404,26 @@ fn build_filter(block: &RigBlock, sample_rate: u32) -> Box<dyn PluginInstance> {
         let curve = block.param_f32("res_curve").unwrap_or(1.0);
         f = f.with_resonance_map(super::ResonanceMap { lo, hi, curve });
     }
-    // A measured knob → Q table, "knob:q;…".
+    // A measured resonance → Q grid over the cutoff knob:
+    // "setting@res:q,res:q,…;setting@…" (a row without "setting@" is a
+    // plain resonance table).
     if let Some(t) = block.param_str("res_table") {
-        let points: Vec<(f32, f32)> = t
+        let rows: Vec<(f32, Vec<(f32, f32)>)> = t
             .split(';')
-            .filter_map(|p| {
-                let (r, q) = p.split_once(':')?;
-                Some((r.trim().parse().ok()?, q.trim().parse().ok()?))
+            .filter_map(|row| {
+                let (s, pts) = row.split_once('@').unwrap_or(("0", row));
+                let pts: Vec<(f32, f32)> = pts
+                    .split(',')
+                    .filter_map(|p| {
+                        let (r, q) = p.split_once(':')?;
+                        Some((r.trim().parse().ok()?, q.trim().parse().ok()?))
+                    })
+                    .collect();
+                (pts.len() >= 2).then(|| Some((s.trim().parse().ok()?, pts)))?
             })
             .collect();
-        if points.len() >= 2 {
-            f = f.with_resonance_table(points);
+        if !rows.is_empty() {
+            f = f.with_resonance_table(rows);
         }
     }
     if block.param_f32("raw_bandpass").unwrap_or(0.0) > 0.5 {

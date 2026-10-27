@@ -977,27 +977,172 @@ const FILTER_MODELS: &[(u32, FilterModel)] = &[
 /// A model's resonance knob → Q, measured where the fitted `res` curve
 /// cannot follow it — and these play the SVF's raw band output (peak gain
 /// = Q, so resonance raises the level; `gain_db` then stays 0).
-/// Bandpass Juicy 12db: a saw through it at a fixed corner, every 0.1,
-/// each point a band-pass fit within 0.3 dB and its peak 20·log10(Q).
+/// Rows by cutoff knob setting: the resonance's reach depends on the
+/// corner (most Q around 0.3–0.4, far less low and high). Bandpass Juicy
+/// 12db: a saw through it at each corner and resonance, each point a
+/// band-pass fit within ~0.3 dB (1 dB at the highest resonance) and its
+/// peak 20·log10(Q); above 0.4 at high resonance the fits wander (the
+/// rows there are smoothed).
 #[must_use]
-pub fn resonance_table(name: &str) -> Option<&'static [(f32, f32)]> {
+pub fn resonance_table(name: &str) -> Option<&'static [(f32, &'static [(f32, f32)])]> {
     match name {
         "Bandpass Juicy 12db" => Some(&[
-            (0.0, 0.72),
-            (0.1, 1.08),
-            (0.2, 1.45),
-            (0.3, 1.83),
-            (0.4, 2.18),
-            (0.5, 2.59),
-            (0.6, 3.27),
-            (0.7, 4.13),
-            (0.8, 5.53),
-            (0.9, 7.41),
-            (0.95, 9.35),
-            (1.0, 11.8),
+            (
+                0.05,
+                &[
+                    (0.0, 0.72),
+                    (0.25, 1.45),
+                    (0.525, 1.94),
+                    (0.75, 2.31),
+                    (1.0, 2.59),
+                ],
+            ),
+            (
+                0.10,
+                &[
+                    (0.0, 0.72),
+                    (0.25, 1.45),
+                    (0.525, 2.05),
+                    (0.75, 2.18),
+                    (1.0, 2.31),
+                ],
+            ),
+            (
+                0.15,
+                &[
+                    (0.0, 0.72),
+                    (0.25, 1.45),
+                    (0.525, 2.18),
+                    (0.75, 2.75),
+                    (1.0, 3.47),
+                ],
+            ),
+            (
+                0.20,
+                &[
+                    (0.0, 0.72),
+                    (0.25, 1.53),
+                    (0.525, 2.45),
+                    (0.75, 3.27),
+                    (1.0, 5.22),
+                ],
+            ),
+            (
+                0.25,
+                &[
+                    (0.0, 0.72),
+                    (0.25, 1.53),
+                    (0.525, 2.59),
+                    (0.75, 4.13),
+                    (1.0, 7.85),
+                ],
+            ),
+            (
+                0.30,
+                &[
+                    (0.0, 0.72),
+                    (0.25, 1.63),
+                    (0.525, 2.75),
+                    (0.75, 4.65),
+                    (1.0, 11.1),
+                ],
+            ),
+            (
+                0.35,
+                &[
+                    (0.0, 0.72),
+                    (0.1, 1.08),
+                    (0.2, 1.45),
+                    (0.3, 1.83),
+                    (0.4, 2.18),
+                    (0.5, 2.59),
+                    (0.6, 3.27),
+                    (0.7, 4.13),
+                    (0.8, 5.53),
+                    (0.9, 7.41),
+                    (0.95, 9.35),
+                    (1.0, 11.8),
+                ],
+            ),
+            (
+                0.40,
+                &[
+                    (0.0, 0.72),
+                    (0.25, 1.53),
+                    (0.525, 2.75),
+                    (0.75, 4.65),
+                    (1.0, 11.8),
+                ],
+            ),
+            (
+                0.50,
+                &[
+                    (0.0, 0.68),
+                    (0.25, 1.53),
+                    (0.525, 3.09),
+                    (0.75, 5.0),
+                    (1.0, 6.59),
+                ],
+            ),
+            (
+                0.60,
+                &[
+                    (0.0, 0.64),
+                    (0.25, 1.72),
+                    (0.525, 2.59),
+                    (0.75, 3.9),
+                    (1.0, 3.9),
+                ],
+            ),
+            (
+                0.70,
+                &[
+                    (0.0, 0.60),
+                    (0.25, 1.37),
+                    (0.525, 3.09),
+                    (0.75, 3.27),
+                    (1.0, 3.27),
+                ],
+            ),
         ]),
         _ => None,
     }
+}
+
+/// Give `l` layer `a`'s shaping — its filter section (and the filter
+/// envelope), amp envelope, Waveshaper, DFS and layer FX — as `SYNTHENG
+/// share` does.
+fn share_shaping(l: &mut OmniLayer, a: &OmniLayer) {
+    l.filter_name.clone_from(&a.filter_name);
+    l.filter_parallel = a.filter_parallel;
+    l.filter_active = a.filter_active;
+    l.filter_freq = a.filter_freq;
+    l.filter_type1 = a.filter_type1;
+    l.filter1_on = a.filter1_on;
+    l.filter_type2 = a.filter_type2;
+    l.filter_res = a.filter_res;
+    l.filter2 = a.filter2;
+    l.filter_balance = a.filter_balance;
+    l.filter_key_track = a.filter_key_track;
+    l.filter_spread = a.filter_spread;
+    l.filter_gain_db = a.filter_gain_db;
+    l.filter_points.clone_from(&a.filter_points);
+    l.filter_env = a.filter_env;
+    l.filter_env_depth = a.filter_env_depth;
+    l.filter_env_velsens = a.filter_env_velsens;
+    l.filter_env_synced = a.filter_env_synced;
+    l.amp_points.clone_from(&a.amp_points);
+    l.amp_env = a.amp_env;
+    l.amp_env_synced = a.amp_env_synced;
+    l.amp_velsens = a.amp_velsens;
+    l.amp_speed = a.amp_speed;
+    l.shaper = a.shaper;
+    l.shaper_post = a.shaper_post;
+    l.shaper_fold = a.shaper_fold;
+    l.shaper_pre = a.shaper_pre;
+    l.dfs = a.dfs;
+    l.fx.clone_from(&a.fx);
+    l.fx_params.clone_from(&a.fx_params);
 }
 
 /// The model for a `type1` value: exact, else the nearest measured one in
@@ -1711,6 +1856,18 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
         }
         patch.layers.push(layer);
     }
+    // `SYNTHENG share` (an integer flag; "1" in ~19 % of factory patches,
+    // the init part's default): every layer plays through layer A's shaping
+    // — measured, with A muted, layer B took A's filter (and its envelope),
+    // A's amp envelope, A's Waveshaper and A's layer FX; with `share` 0 its
+    // own. Each layer keeps its oscillator, level, pan, tuning and switch.
+    if engine.attr("share").map(str::trim) == Some("1") {
+        if let Some(a) = patch.layers.first().cloned() {
+            for l in patch.layers.iter_mut().skip(1) {
+                share_shaping(l, &a);
+            }
+        }
+    }
 
     // Part racks: the SYNTHENG-level EFFRACK is the Common rack.
     if let Some(rack) = engine.child("EFFRACK") {
@@ -1737,12 +1894,24 @@ pub fn parse_patch_node(root: &XmlNode) -> Result<OmniPatch, String> {
             }
             let lo = matrix.num(&format!("lo{n}")).unwrap_or(0.0);
             let hi = matrix.num(&format!("hi{n}")).unwrap_or(0.0);
-            patch.mod_routes.push(OmniModRoute {
+            let route = |target: String| OmniModRoute {
                 source: source.to_string(),
-                target: target.to_string(),
+                target,
                 depth: if lo > 0.75 { -hi } else { hi },
                 offset: 0.0,
-            });
+            };
+            // `allN`: the row drives its target on every layer (measured:
+            // a B tune row moved layer A's pitch, a B pan row panned the
+            // part) — one row per layer.
+            let all = matrix.num(&format!("all{n}")).unwrap_or(0.0) != 0.0;
+            match target.split_once(' ') {
+                Some((l, param)) if all && matches!(l, "A" | "B" | "C" | "D") => {
+                    for letter in ["A", "B", "C", "D"] {
+                        patch.mod_routes.push(route(format!("{letter} {param}")));
+                    }
+                }
+                _ => patch.mod_routes.push(route(target.to_string())),
+            }
         }
     }
 
