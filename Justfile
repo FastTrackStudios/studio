@@ -2137,7 +2137,12 @@ release-sandbox:
 web-daw SESSION="../sessions/Always On Time" RPP="Always On Time.RPP" CHART="Always_on_Time.kf" PROFILE="wasm-release":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build -p session-daw-web --target wasm32-unknown-unknown --profile {{PROFILE}}
+    # SIMD: vello's painting (fearless_simd) picks its level at compile
+    # time and runs its scalar fallback without it. RUSTFLAGS reaches only
+    # the wasm target here (not host build scripts); keep it in step with
+    # nix/modules/packages/web-bundles.nix's session-app-web.
+    RUSTFLAGS="-C target-feature=+simd128" \
+        cargo build -p session-daw-web --target wasm32-unknown-unknown --profile {{PROFILE}}
     out=apps/session/daw-web/dist
     mkdir -p "$out/session"
     dir=$([ "{{PROFILE}}" = "dev" ] && echo debug || echo "{{PROFILE}}")
@@ -2147,7 +2152,7 @@ web-daw SESSION="../sessions/Always On Time" RPP="Always On Time.RPP" CHART="Alw
     if [ "{{PROFILE}}" != "dev" ] && command -v wasm-opt >/dev/null; then
         wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int \
             --enable-sign-ext --enable-mutable-globals --enable-reference-types \
-            --enable-multivalue "$out/session-daw-web_bg.wasm" -o "$out/session-daw-web_bg.wasm"
+            --enable-multivalue --enable-simd "$out/session-daw-web_bg.wasm" -o "$out/session-daw-web_bg.wasm"
     fi
     cp apps/session/daw-web/www/index.html "$out/"
     cp "{{SESSION}}/{{RPP}}" "$out/session/demo.RPP"

@@ -110,13 +110,20 @@
       # live link open, served under the site's /app/. A plain cargo +
       # wasm-bindgen build (no dx: the page is a library host, see
       # session-daw's web_host).
+      # SIMD: vello's painting (fearless_simd) picks its level at compile
+      # time and runs its scalar fallback without `+simd128`. The same
+      # RUSTFLAGS on the deps, or their fingerprints miss (`just web-daw`
+      # sets them too).
+      sessionAppWebRustflags = "-C target-feature=+simd128";
       session-app-web-deps = wasmDeps {
         pname = "session-app-web";
         profile = "wasm-release";
         cargoExtraArgs = "--locked -p session-daw-web --target wasm32-unknown-unknown";
+        env.RUSTFLAGS = sessionAppWebRustflags;
       };
       session-app-web = craneLib.buildPackage (commonArgs // dxWebEnv // {
         pname = "session-app-web";
+        RUSTFLAGS = sessionAppWebRustflags;
         version = "0.1.0";
         # The open-a-set page's "try the live demo" opens it in the app
         # itself (`session::open_link::demo_href`), wherever it is served.
@@ -133,7 +140,7 @@
             target/wasm32-unknown-unknown/wasm-release/session-daw-web.wasm
           wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int \
             --enable-sign-ext --enable-mutable-globals --enable-reference-types \
-            --enable-multivalue dist/session-daw-web_bg.wasm -o dist/session-daw-web_bg.wasm
+            --enable-multivalue --enable-simd dist/session-daw-web_bg.wasm -o dist/session-daw-web_bg.wasm
         '';
         installPhaseCommand = ''
           mkdir -p $out/www
