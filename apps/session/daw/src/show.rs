@@ -73,6 +73,7 @@ pub fn split(set: &Path, into: &Path) -> eyre::Result<Vec<Song>> {
     for range in ranges {
         let mut cropped = session::sync::crop::crop(&model, range.start_seconds, range.end_seconds);
         name_song(&mut cropped, &range.name, &titles);
+        fresh_track_guids(&mut cropped);
         let dir = into.join(&range.slug);
         ShowPlace {
             show: relative_to(&show_dir.join(format!("{stem}.session")), &dir),
@@ -154,6 +155,45 @@ fn name_song(song: &mut session::sync::SessionModel, name: &str, titles: &[Strin
         if region.lane == Some(lane) {
             name.clone_into(&mut region.name);
         }
+    }
+}
+
+/// The track ext-state key a song's track keeps its show track's guid
+/// under: what writing the song back into the show matches tracks by.
+pub const SHOW_TRACK: &str = "FTS:show_track";
+
+/// New guids for every track of `song`, and every reference to one moved
+/// with it (a folder's children, sends, items): cut from one show, every
+/// song had the show's 160 track guids, and two songs open at once had
+/// the same tracks — anything keyed by a track across songs collided (the
+/// window panicked on duplicate keys as a set's songs arrived together).
+/// Each track keeps its show track's guid under [`SHOW_TRACK`].
+fn fresh_track_guids(song: &mut session::sync::SessionModel) {
+    let fresh: std::collections::HashMap<String, String> = song
+        .tracks
+        .iter()
+        .map(|t| {
+            let guid = format!("{{{}}}", uuid::Uuid::new_v4().hyphenated()).to_uppercase();
+            (t.guid.clone(), guid)
+        })
+        .collect();
+    let moved = |guid: &mut String| {
+        if let Some(new) = fresh.get(guid.as_str()) {
+            new.clone_into(guid);
+        }
+    };
+    for track in &mut song.tracks {
+        track.ext.insert(SHOW_TRACK.to_owned(), track.guid.clone());
+        moved(&mut track.guid);
+        if let Some(parent) = track.parent.as_mut() {
+            moved(parent);
+        }
+        for send in &mut track.sends {
+            moved(&mut send.dest);
+        }
+    }
+    for item in song.items.values_mut() {
+        moved(&mut item.track);
     }
 }
 
@@ -353,7 +393,9 @@ fn file_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ShowPlace, file_name, name_song, relative_to, rooted_under};
+    use super::{
+        SHOW_TRACK, ShowPlace, file_name, fresh_track_guids, name_song, relative_to, rooted_under,
+    };
 
     #[test]
     fn media_from_the_machine_a_set_was_made_on_is_found_under_the_show() {
@@ -405,6 +447,47 @@ mod tests {
             .collect();
         names.sort_unstable();
         assert_eq!(names, vec![(Some(0), "Drive To LA"), (Some(1), "Verse 1")]);
+    }
+
+    #[test]
+    fn songs_cut_from_one_show_have_tracks_of_their_own() {
+        use session::sync::{ItemState, SendState, SessionModel, TrackState};
+        let track = |guid: &str, parent: Option<&str>| TrackState {
+            guid: guid.to_owned(),
+            parent: parent.map(str::to_owned),
+            ..TrackState::default()
+        };
+        let mut show = SessionModel::default();
+        show.tracks = vec![track("{F}", None), track("{K}", Some("{F}"))];
+        show.tracks[1].sends.push(SendState {
+            dest: "{F}".to_owned(),
+            ..SendState::default()
+        });
+        show.items.insert(
+            "item".to_owned(),
+            ItemState {
+                track: "{K}".to_owned(),
+                ..ItemState::default()
+            },
+        );
+        let (mut a, mut b) = (show.clone(), show.clone());
+        fresh_track_guids(&mut a);
+        fresh_track_guids(&mut b);
+        assert_ne!(
+            a.tracks[0].guid, b.tracks[0].guid,
+            "two songs, two sets of tracks"
+        );
+        assert_ne!(a.tracks[0].guid, "{F}");
+        assert_eq!(
+            a.tracks[1].parent.as_deref(),
+            Some(a.tracks[0].guid.as_str())
+        );
+        assert_eq!(a.tracks[1].sends[0].dest, a.tracks[0].guid);
+        assert_eq!(a.items["item"].track, a.tracks[1].guid);
+        assert_eq!(
+            a.tracks[1].ext[SHOW_TRACK], "{K}",
+            "the show's track remembered"
+        );
     }
 
     #[test]
