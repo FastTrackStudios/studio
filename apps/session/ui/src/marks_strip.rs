@@ -9,7 +9,6 @@
 //! markers are), read again whenever they change.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyrender::PaintScene;
@@ -24,61 +23,47 @@ pub struct Snapshot {
     pub marks: HashMap<String, Marks>,
 }
 
-static SHOWN: Mutex<Option<Arc<Snapshot>>> = Mutex::new(None);
-static VERSION: AtomicU64 = AtomicU64::new(0);
-static BUSY: AtomicBool = AtomicBool::new(false);
-static AGAIN: AtomicBool = AtomicBool::new(false);
+/// The picture, made from what the engine last said
+/// (`crate::view_client::marks`), and the version it was made at.
+static SHOWN: Mutex<Option<(u64, Arc<Snapshot>)>> = Mutex::new(None);
 
-/// The picture, once one has been read.
+/// The picture, once the engine has said what the marks are.
 #[must_use]
 pub fn current() -> Option<Arc<Snapshot>> {
-    SHOWN.lock().ok().and_then(|s| s.clone())
+    #[cfg(feature = "native")]
+    {
+        let frame = crate::view_client::marks()?;
+        let mut shown = SHOWN.lock().ok()?;
+        if let Some((version, snapshot)) = shown.as_ref()
+            && *version == frame.version
+        {
+            return Some(Arc::clone(snapshot));
+        }
+        let snapshot = Arc::new(Snapshot {
+            marks: frame.marks.iter().cloned().collect(),
+        });
+        *shown = Some((frame.version, Arc::clone(&snapshot)));
+        Some(snapshot)
+    }
+    #[cfg(not(feature = "native"))]
+    SHOWN
+        .lock()
+        .ok()
+        .and_then(|s| s.as_ref().map(|(_, s)| Arc::clone(s)))
 }
 
 /// Goes up on every change: a window compares it with the one it drew.
 #[must_use]
 pub fn version() -> u64 {
-    VERSION.load(Ordering::Relaxed)
-}
-
-/// Read the marks again, off the window's thread.
-pub fn refresh() {
     #[cfg(feature = "native")]
-    {
-        AGAIN.store(true, Ordering::Release);
-        if BUSY.swap(true, Ordering::AcqRel) {
-            return;
-        }
-        let Some(runtime) = crate::open::runtime() else {
-            BUSY.store(false, Ordering::Release);
-            return;
-        };
-        runtime.spawn_blocking(|| {
-            loop {
-                AGAIN.store(false, Ordering::Release);
-                if let Ok((daw, project)) = crate::actions::song() {
-                    publish(Snapshot {
-                        marks: crate::track_regions::all(daw, &project)
-                            .into_iter()
-                            .collect(),
-                    });
-                }
-                BUSY.store(false, Ordering::Release);
-                if !AGAIN.load(Ordering::Acquire) || BUSY.swap(true, Ordering::AcqRel) {
-                    break;
-                }
-            }
-        });
-    }
+    return crate::view_client::marks().map_or(0, |frame| frame.version);
+    #[cfg(not(feature = "native"))]
+    0
 }
 
-/// Show `snapshot`.
-pub fn publish(snapshot: Snapshot) {
-    if let Ok(mut shown) = SHOWN.lock() {
-        *shown = Some(Arc::new(snapshot));
-    }
-    VERSION.fetch_add(1, Ordering::Relaxed);
-}
+/// The engine reads the marks again whenever they change and says so to
+/// every window: nothing for the window to do.
+pub const fn refresh() {}
 
 /// A region's colour by what it says: a grid teal, as played red, a fill
 /// amber, a note grey.

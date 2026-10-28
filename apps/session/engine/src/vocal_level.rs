@@ -778,6 +778,22 @@ static DIALS: architect::action::ActionMeta = crate::actions::meta(
     "",
 );
 
+static RELEVEL: architect::action::ActionMeta = crate::actions::meta(
+    "VOCAL_RELEVEL",
+    "vocal_relevel",
+    "Write a leveled item as drawn",
+    "Leveled item `leveled.item` of `track`, as a window has it after a hand on its stage lanes: its four stages kept with the track and their sum through the track's dials written as its volume. What a drag on a leveler lane does. One undo step.",
+    "Vocals",
+    "",
+);
+
+/// A leveled item, as a window has it.
+#[derive(Facet)]
+struct RelevelArg {
+    track: String,
+    leveled: crate::view::WireLeveled,
+}
+
 static DIAL: architect::action::ActionMeta = crate::actions::meta(
     "VOCAL_LEVELER_SET",
     "vocal_leveler_set",
@@ -997,5 +1013,18 @@ pub fn register(
     list.register(&DIAL, architect::action::Effect::Mutating, |a: DialArg| {
         dial(&a)
     })?;
+    list.register(
+        &RELEVEL,
+        architect::action::Effect::Mutating,
+        |a: RelevelArg| {
+            let (daw, project) = crate::actions::song()?;
+            let leveled = crate::leveler::from_wire(a.leveled);
+            if !relevel(daw, &project, &a.track, &leveled) {
+                return Err(format!("{}: no such item", leveled.item));
+            }
+            crate::song_model::request_resync();
+            Ok(format!("{} written as drawn", leveled.item))
+        },
+    )?;
     Ok(())
 }

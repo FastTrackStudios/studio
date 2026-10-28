@@ -63,7 +63,8 @@ pub fn db_at(points: &[dsp::level::envelope::EnvPoint], t: f64) -> f64 {
 
 /// What a lane automates — which decides how its values are drawn and
 /// read out.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, facet::Facet)]
 pub enum Kind {
     /// Linear gain, 1 at 0 dB (the fader trims it).
     Volume,
@@ -330,7 +331,7 @@ pub const TAKE_LINES_KEY: &str = "FTS:take-lines";
 
 /// An item's take volume curve: `(seconds into the item, linear gain)`
 /// points, drawn over the item and dragged there.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, facet::Facet)]
 pub struct TakeCurve {
     /// The item's track.
     pub track: String,
@@ -1000,4 +1001,101 @@ pub fn show_takes(
         crate::automation::TAKE_LINES_KEY,
         if shown { "1" } else { "" },
     );
+}
+
+// ── Over the window's link ───────────────────────────────────────────
+
+/// `song`'s lanes, take curves and leveled items, read from the engine in
+/// this process as a window draws them: the engine's answer to a window
+/// (`crate::view::EngineView::automation`).
+#[cfg(feature = "native")]
+#[must_use]
+pub fn read_for_window(
+    daw: &daw::standalone::Standalone,
+    song: &str,
+) -> crate::view::AutomationRead {
+    let project = daw_proto::ProjectContext::Project(song.to_owned());
+    let tracks = daw_proto::Tracks::all(daw, project.clone());
+    let leveled = read_leveled(daw, &project, &tracks);
+    let lanes = read_with(daw, &project, &tracks, &leveled);
+    let takes = read_takes(daw, &project, &tracks);
+    let mut wire_lanes: Vec<crate::view::WireLane> =
+        lanes.into_values().flatten().map(wire_lane).collect();
+    wire_lanes.sort_by(|a, b| a.track.cmp(&b.track));
+    let mut takes: Vec<(String, TakeCurve)> = takes.into_iter().collect();
+    takes.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut leveled: Vec<(String, Vec<crate::view::WireLeveled>)> = leveled
+        .into_iter()
+        .map(|(track, items)| (track, items.iter().map(crate::leveler::to_wire).collect()))
+        .collect();
+    leveled.sort_by(|a, b| a.0.cmp(&b.0));
+    crate::view::AutomationRead {
+        lanes: wire_lanes,
+        takes,
+        leveled,
+    }
+}
+
+/// A lane as it crosses to a window (its leveled items go once per track).
+#[cfg(feature = "native")]
+fn wire_lane(lane: Lane) -> crate::view::WireLane {
+    crate::view::WireLane {
+        track: lane.track,
+        target: lane.target,
+        name: lane.name,
+        kind: lane.kind,
+        height: lane.height,
+        mode: lane.mode,
+        points: lane.points,
+        items: lane.items,
+        played: lane.played,
+        rest: lane.rest,
+        fx_name: lane.fx_name,
+        choices: lane.choices,
+    }
+}
+
+/// Put what the engine read ([`read_for_window`]) in place of the
+/// window's lanes, take curves and leveled items — keeping each lane's
+/// stacking order.
+pub fn adopt_read(read: crate::view::AutomationRead) {
+    let leveled: HashMap<String, Vec<Leveled>> = read
+        .leveled
+        .into_iter()
+        .map(|(track, items)| {
+            (
+                track,
+                items.into_iter().map(crate::leveler::from_wire).collect(),
+            )
+        })
+        .collect();
+    let mut lanes: HashMap<String, Vec<Lane>> = HashMap::new();
+    for wire in read.lanes {
+        let items = if wire.kind.is_leveler() {
+            leveled.get(&wire.track).cloned().unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let lane = Lane {
+            track: wire.track,
+            target: wire.target,
+            name: wire.name,
+            kind: wire.kind,
+            height: wire.height,
+            mode: wire.mode,
+            points: wire.points,
+            items: wire.items,
+            played: wire.played,
+            rest: wire.rest,
+            fx_name: wire.fx_name,
+            leveled: items,
+            choices: wire.choices,
+        };
+        lanes.entry(lane.track.clone()).or_default().push(lane);
+    }
+    for stack in lanes.values_mut() {
+        stack.sort_by_key(order);
+    }
+    adopt_remote(lanes, read.takes);
+    crate::leveler::adopt(leveled);
 }

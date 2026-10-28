@@ -155,9 +155,10 @@ pub fn press(hit: &Hit, y: f64, keys: Keys) -> (Option<LaneDrag>, Vec<Edit>) {
             lanes.retain(|l| !l.kind.is_leveler());
             automation::replace([(track.clone(), lanes)]);
             #[cfg(feature = "native")]
-            if let Ok((daw, project)) = crate::actions::song() {
-                crate::vocal_level::show_lane(daw, &project, &track, false);
-            }
+            crate::actions::off_the_window(
+                "VOCAL_LEVELER_SET",
+                serde_json::json!({ "tracks": [track.clone()], "expanded": false }).to_string(),
+            );
             (None, Vec::new())
         }
         Spot::Hide => {
@@ -461,13 +462,19 @@ fn set_ride(track: &str, item: &str, ride: &[dsp::level::envelope::EnvPoint]) {
 fn relevel(track: &str, item: &str) {
     #[cfg(feature = "native")]
     {
-        let Some(leveled) = crate::leveler::with_item(item, Clone::clone) else {
+        let Some(leveled) = crate::leveler::with_item(item, crate::leveler::to_wire) else {
             return;
         };
-        if let Ok((daw, project)) = crate::actions::song() {
-            crate::vocal_level::relevel(daw, &project, track, &leveled);
-            crate::song_model::request_resync();
-        }
+        let Ok(leveled) = facet_json::to_string(&leveled) else {
+            return;
+        };
+        crate::actions::off_the_window(
+            "VOCAL_RELEVEL",
+            format!(
+                r#"{{"track":{},"leveled":{leveled}}}"#,
+                serde_json::Value::from(track)
+            ),
+        );
     }
     #[cfg(not(feature = "native"))]
     let _ = (track, item);
@@ -484,11 +491,20 @@ fn dial_of(lane: &automation::Lane, stage: crate::leveler::Stage) -> crate::leve
 /// every leveled item's volume written through them.
 fn dials_done(track: &str) {
     #[cfg(feature = "native")]
-    if let (Some(stages), Ok((daw, project))) =
-        (crate::leveler::stages_of(track), crate::actions::song())
-    {
-        let _rewritten = crate::vocal_level::set_stages(daw, &project, track, &stages);
-        crate::song_model::request_resync();
+    if let Some(stages) = crate::leveler::stages_of(track) {
+        for stage in crate::leveler::Stage::ALL {
+            let dial = stages.get(stage);
+            crate::actions::off_the_window(
+                "VOCAL_LEVELER_SET",
+                serde_json::json!({
+                    "tracks": [track],
+                    "stage": stage.name(),
+                    "on": dial.on,
+                    "amount": dial.amount * 100.0,
+                })
+                .to_string(),
+            );
+        }
     }
     #[cfg(not(feature = "native"))]
     let _ = track;

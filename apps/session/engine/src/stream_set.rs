@@ -1286,6 +1286,47 @@ pub struct SongShown {
 static SHOWN: std::sync::RwLock<Option<Shown>> = std::sync::RwLock::new(None);
 static SHOWN_VERSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+/// What the engine told this window streams in (`crate::view::StreamsFrame`,
+/// over its link): shown from now on.
+pub fn adopt_shown(frame: crate::view::StreamsFrame) {
+    let shown = Shown {
+        items: frame.items.into_iter().collect(),
+        songs: frame
+            .songs
+            .into_iter()
+            .map(|(song, s)| {
+                (
+                    song,
+                    SongShown {
+                        arrived: s.arrived,
+                        ready: s.ready,
+                        waiting_on: s.waiting_on,
+                    },
+                )
+            })
+            .collect(),
+    };
+    keep_shown(shown, frame.waiting);
+}
+
+/// This process's [`shown`] (and whether a play waits), moved on.
+fn keep_shown(shown: Shown, waiting: bool) {
+    if let Ok(mut s) = SHOWN.write() {
+        *s = Some(shown);
+    }
+    WAITING.store(waiting, std::sync::atomic::Ordering::Release);
+    SHOWN_VERSION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+}
+
+/// Whether a play pressed on a song still streaming waits for it, as the
+/// engine last told this window.
+#[must_use]
+pub fn play_waiting() -> bool {
+    WAITING.load(std::sync::atomic::Ordering::Acquire)
+}
+
+static WAITING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// What is shown now ([`Shown`]); empty when nothing streams.
 #[must_use]
 pub fn shown() -> Shown {
@@ -1310,18 +1351,23 @@ fn watch() {
         let _ = std::thread::Builder::new()
             .name("stream-shown".into())
             .spawn(|| {
+                // What the engine last told the windows, at the precision
+                // it is drawn at.
+                let mut told = None;
                 loop {
                     std::thread::sleep(std::time::Duration::from_millis(500));
                     let next = compute_shown();
-                    let changed = SHOWN
-                        .read()
-                        .map(|s| s.as_ref().map(rounded) != Some(rounded(&next)))
-                        .unwrap_or(true);
-                    if changed {
-                        if let Ok(mut s) = SHOWN.write() {
-                            *s = Some(next);
+                    let waiting = crate::engine::buffering::waiting();
+                    let now = (rounded(&next), waiting);
+                    if told.as_ref() != Some(&now) {
+                        crate::studio_engine::view_host::streams_read(&next, waiting);
+                        // A window linked here adopts what was published
+                        // (`adopt_shown`); without one, this process's own
+                        // readers (the waveforms' retry) keep up here.
+                        if !crate::view_client::is_linked() {
+                            keep_shown(next, waiting);
                         }
-                        SHOWN_VERSION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                        told = Some(now);
                     }
                 }
             });

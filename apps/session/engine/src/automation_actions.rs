@@ -426,6 +426,98 @@ static BY_SECTION: architect::action::ActionMeta = crate::actions::meta(
     "",
 );
 
+static MENU: architect::action::ActionMeta = crate::actions::meta(
+    "AUTOMATION_MENU",
+    "automation_menu",
+    "What a track can automate",
+    "What a track's automate menu lists: the envelopes it shows, whether its items' volume curves are shown (`takes`), whether it has the vocal leveler's lanes and shows them (`leveler`), its own automation `mode`, its plugins (`fxs`) — and, given `fx` (its place in the chain, from 1), that plugin's parameters. Read-only.",
+    "Automation",
+    "",
+);
+
+static SET_MODE: architect::action::ActionMeta = crate::actions::meta(
+    "AUTOMATION_SET_MODE",
+    "automation_set_mode",
+    "Set an automation mode",
+    "Set the automation `mode` of envelope `target` on `track` — or, with no `target`, the track's own (how a fader move writes where no envelope is yet). What the automate menu's modes do.",
+    "Automation",
+    "",
+);
+
+/// A track's automate menu, as the engine reads it.
+#[derive(Facet, Clone, Debug, Default)]
+pub struct MenuFacts {
+    pub shown: Vec<daw_proto::automation::EnvelopeRef>,
+    pub takes: bool,
+    /// `Some(shown)` when the track has the leveler's lanes.
+    pub leveler: Option<bool>,
+    pub mode: Option<daw_proto::primitives::AutomationMode>,
+    /// Each plugin: its guid and name, in chain order.
+    pub fxs: Vec<(String, String)>,
+    /// The parameters of the plugin asked for: index and name.
+    pub params: Vec<(u32, String)>,
+}
+
+/// Which track's menu, and which plugin's parameters.
+#[derive(Facet)]
+struct MenuArg {
+    track: String,
+    fx: Option<u32>,
+}
+
+/// An envelope's (or the track's) automation mode.
+#[derive(Facet)]
+struct SetModeArg {
+    track: String,
+    target: Option<daw_proto::automation::EnvelopeRef>,
+    mode: daw_proto::primitives::AutomationMode,
+}
+
+/// `track`'s automate menu, read.
+fn menu_facts(daw: &Daw, project: &ProjectContext, a: &MenuArg) -> MenuFacts {
+    let track = TrackRef::Guid(a.track.clone());
+    let shown = Automation::envelopes(daw, project.clone(), track.clone())
+        .into_iter()
+        .filter(|e| e.visible)
+        .map(|e| match (e.fx_guid, e.param_index) {
+            (Some(fx_guid), Some(param_index)) => EnvelopeRef::FxParam {
+                fx_guid,
+                param_index,
+            },
+            _ => EnvelopeRef::Type(e.envelope_type),
+        })
+        .collect();
+    let takes = daw::service::Tracks::ext_state(daw, project.clone(), track.clone())
+        .iter()
+        .any(|e| e.key == crate::automation::TAKE_LINES_KEY && e.value == "1");
+    let leveler = crate::vocal_level::has_lanes(daw, project, &a.track)
+        .then(|| crate::vocal_level::lane_shown(daw, project, &a.track));
+    let mode = daw::service::Tracks::get(daw, project.clone(), track).map(|t| t.automation_mode);
+    let chain = daw_proto::fx::FxChainContext::Track(a.track.clone());
+    let list = daw_proto::fx::Effects::list(daw, project.clone(), chain.clone());
+    let params =
+        a.fx.and_then(|fx| list.get(usize::try_from(fx).ok()?.checked_sub(1)?))
+            .map(|plugin| {
+                let target = daw_proto::fx::FxTarget::new(
+                    chain,
+                    daw_proto::fx::FxRef::Guid(plugin.guid.clone()),
+                );
+                daw_proto::fx::Effects::parameters(daw, project.clone(), target)
+                    .into_iter()
+                    .map(|p| (p.index, p.name))
+                    .collect()
+            })
+            .unwrap_or_default();
+    MenuFacts {
+        shown,
+        takes,
+        leveler,
+        mode,
+        fxs: list.into_iter().map(|fx| (fx.guid, fx.name)).collect(),
+        params,
+    }
+}
+
 #[derive(Facet)]
 struct TrackArg {
     track: String,
@@ -1080,6 +1172,27 @@ pub fn register(
 ) -> Result<(), architect::action::ActionError> {
     use architect::action::Effect;
     list.register(&LANES, Effect::ReadOnly, |a: TrackArg| lanes(&a))?;
+    list.register(&MENU, Effect::ReadOnly, |a: MenuArg| {
+        let (daw, project) = crate::actions::song()?;
+        Ok::<_, String>(menu_facts(daw, &project, &a))
+    })?;
+    list.register(&SET_MODE, Effect::Mutating, |a: SetModeArg| {
+        let (daw, project) = crate::actions::song()?;
+        let track = TrackRef::Guid(a.track.clone());
+        match a.target {
+            Some(target) => daw_proto::automation::Automation::set_automation_mode(
+                daw,
+                project,
+                daw_proto::automation::EnvelopeLocation::new(track, target),
+                a.mode,
+            ),
+            None => {
+                let _ = daw::service::Tracks::set_automation_mode(daw, project, track, a.mode);
+            }
+        }
+        crate::song_model::request_resync();
+        Ok(format!("{}: {:?}", a.track, a.mode))
+    })?;
     list.register(&SHOW, Effect::Mutating, |a: ShowArg| {
         let (daw, project) = crate::actions::song()?;
         let track = track_of(daw, &project, &a.track)?;

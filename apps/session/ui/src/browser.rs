@@ -52,13 +52,24 @@ struct Shown {
 /// it — read off the window's thread.
 #[cfg(feature = "native")]
 fn read() -> Option<Shown> {
-    let (daw, project) = crate::actions::song().ok()?;
-    let track = daw::service::Tracks::all(daw, project.clone())
-        .into_iter()
-        .find(|t| t.selected)?;
+    let track = crate::open::facade_blocking("the selected track", |daw| async move {
+        let tracks = daw.current_project().await?.tracks().all().await?;
+        Ok(tracks.into_iter().find(|t| t.selected))
+    })
+    .ok()
+    .flatten()?;
+    // The rig as the engine reads it (`RIG_BROWSE`), over the link.
+    #[cfg(feature = "signal")]
+    let rig = crate::actions::run(
+        "RIG_BROWSE",
+        format!(r#"{{"track":"{}"}}"#, track.guid).as_bytes(),
+    )
+    .ok()
+    .and_then(|json| facet_json::from_slice::<Option<crate::rig_actions::RigView>>(&json).ok())
+    .flatten();
     Some(Shown {
         #[cfg(feature = "signal")]
-        rig: crate::rig_actions::browse(daw, &project, &track.guid),
+        rig,
         track: track.guid,
         name: track.name,
     })
@@ -70,7 +81,7 @@ fn run(id: &'static str, args: serde_json::Value) {
     #[cfg(feature = "native")]
     if let Some(runtime) = crate::open::runtime() {
         runtime.spawn_blocking(move || {
-            if let Err(e) = crate::actions::list().run_json(id, args.to_string().as_bytes()) {
+            if let Err(e) = crate::actions::run(id, args.to_string().as_bytes()) {
                 tracing::warn!(browser.action = id, browser.error = %e, "the browser's press was refused");
             }
         });

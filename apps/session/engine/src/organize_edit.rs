@@ -13,6 +13,101 @@ pub enum Button {
     TimeSig(i32, i32),
 }
 
+impl Button {
+    /// Every marker and section button.
+    const NAMED: [Self; 22] = [
+        Self::Marker(MarkerKind::CountIn),
+        Self::Marker(MarkerKind::Start),
+        Self::Marker(MarkerKind::End),
+        Self::Marker(MarkerKind::SongStart),
+        Self::Marker(MarkerKind::SongEnd),
+        Self::Section(SectionKind::Intro),
+        Self::Section(SectionKind::Verse),
+        Self::Section(SectionKind::PreChorus),
+        Self::Section(SectionKind::Chorus),
+        Self::Section(SectionKind::Bridge),
+        Self::Section(SectionKind::Outro),
+        Self::Section(SectionKind::Instrumental),
+        Self::Section(SectionKind::Solo),
+        Self::Section(SectionKind::Hits),
+        Self::Section(SectionKind::Interlude),
+        Self::Section(SectionKind::Breakdown),
+        Self::Section(SectionKind::Vamp),
+        Self::Section(SectionKind::Refrain),
+        Self::Section(SectionKind::Tag),
+        Self::Section(SectionKind::Turnaround),
+        Self::Section(SectionKind::CountIn),
+        Self::Section(SectionKind::End),
+    ];
+
+    /// What a window names the button by (`ORGANIZE_PRESS`): `Marker(SongEnd)`,
+    /// `Section(Chorus)`, `TimeSig(3, 4)`.
+    #[must_use]
+    pub fn key(self) -> String {
+        format!("{self:?}")
+    }
+
+    /// The button `key` names ([`Self::key`]).
+    #[must_use]
+    pub fn from_key(key: &str) -> Option<Self> {
+        if let Some(sig) = key
+            .strip_prefix("TimeSig(")
+            .and_then(|k| k.strip_suffix(')'))
+        {
+            let (num, den) = sig.split_once(',')?;
+            return Some(Self::TimeSig(
+                num.trim().parse().ok()?,
+                den.trim().parse().ok()?,
+            ));
+        }
+        Self::NAMED.into_iter().find(|b| b.key() == key)
+    }
+}
+
+static PRESS: architect::action::ActionMeta = crate::actions::meta(
+    "ORGANIZE_PRESS",
+    "organize_press",
+    "Press an Organize button",
+    "What a press on the Organize toolbar does, at the edit cursor or over the time selection: `button` a marker (`Marker(SongEnd)`), a section (`Section(Chorus)`) or a time signature (`TimeSig(3, 4)`; `shift` for one bar only). The guide is generated again.",
+    "Structure",
+    "",
+);
+
+/// A toolbar press.
+#[derive(facet::Facet)]
+struct PressArg {
+    button: String,
+    shift: Option<bool>,
+}
+
+/// `ORGANIZE_PRESS` onto `list`.
+///
+/// # Errors
+///
+/// The list refused it (a duplicate id).
+pub fn register(
+    list: &architect::action::ActionList,
+) -> Result<(), architect::action::ActionError> {
+    list.register(
+        &PRESS,
+        architect::action::Effect::Mutating,
+        |a: PressArg| {
+            let button =
+                Button::from_key(&a.button).ok_or_else(|| format!("no button {}", a.button))?;
+            let daw = crate::open::local_engine().ok_or("no song open in the engine")?;
+            insert(
+                daw,
+                button,
+                a.shift.unwrap_or(false),
+                crate::edit_state::current(),
+            );
+            crate::song_model::request_resync();
+            Ok(format!("{} pressed", a.button))
+        },
+    )?;
+    Ok(())
+}
+
 /// Insert `button`'s marker, section or time signature, then bring the
 /// guide up to date.
 ///
@@ -130,5 +225,22 @@ pub fn reach_song_end(daw: &daw::standalone::Standalone, project: &daw::service:
         {
             tracing::warn!(error = %e, "organize: the SONG region did not grow");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_window_names_every_button_by_a_key_the_engine_reads_back() {
+        for button in Button::NAMED {
+            assert_eq!(Button::from_key(&button.key()), Some(button), "{button:?}");
+        }
+        assert_eq!(
+            Button::from_key("TimeSig(7, 8)"),
+            Some(Button::TimeSig(7, 8))
+        );
+        assert_eq!(Button::from_key("Section(Polka)"), None);
     }
 }

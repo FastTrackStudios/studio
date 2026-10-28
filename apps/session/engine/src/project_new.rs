@@ -10,13 +10,9 @@
 //! The song has no file until it is first saved: `SESSION_SAVE` then needs
 //! a `to`, and the stem of `to` becomes its name ([`named`]).
 //!
-//! The start screen's New Project makes it and opens it as a set of one
-//! ([`setlist`]). The action, run from inside another song, makes it in
-//! the engine at once — so a model can go straight on — and asks the
-//! window back out to the start screen, which opens what was made
-//! ([`take_made`]).
-
-use std::sync::Mutex;
+//! The action (a window's New Project, the CLI, a model) makes it the
+//! engine's set, a set of one ([`setlist`],
+//! `crate::studio_engine::set::open_new`); every window shows it.
 
 use architect::action::{ActionList, ActionMeta, Effect};
 use daw::service::transport::service::Transport as _;
@@ -40,7 +36,7 @@ static NEW: ActionMeta = crate::actions::meta(
     "SESSION_NEW",
     "session_new",
     "New project",
-    "Start a new song from nothing, untitled: COUNT-IN on bar 1, SONGSTART after the two-bar count-in, SONGEND eight bars on, the guide (Click, Count, Guide) generated over them, the window in Organize mode. The song open now is left as it is — SESSION_SAVE it first if it should be. The new one has no file until its first SESSION_SAVE, which needs `to` and takes its name from it. `template` is not there yet.",
+    "Start a new song from nothing, untitled: COUNT-IN on bar 1, SONGSTART after the two-bar count-in, SONGEND eight bars on, the guide (Click, Count, Guide) generated over them, the window in Organize mode. It opens in the background: the action returns at once, and the song is there once SESSION_OPENING is idle — wait for that before acting on it. The song open now is left as it is — SESSION_SAVE it first if it should be. The new one has no file until its first SESSION_SAVE, which needs `to` and takes its name from it. `template` is not there yet.",
     "Session",
     "",
 );
@@ -59,33 +55,14 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                 "no templates yet ({template}): leave `template` out for an empty song"
             ));
         }
-        let guid = create(None)?;
-        if let Ok(mut made) = MADE.lock() {
-            *made = Some(guid);
-        }
-        // Out of the song on screen; the start screen opens the new one.
-        crate::projects::go_back();
+        // The engine's set from now on: a set of the one new song. A
+        // window shows it as it does any set the engine opens.
+        crate::studio_engine::set::open_new().map_err(|e| e.to_string())?;
         Ok(format!(
-            "a new song, {UNTITLED}, in Organize: COUNT-IN, SONGSTART and SONGEND placed and the guide over them. It is named when it is first saved (SESSION_SAVE with `to`)."
+            "a new song, {UNTITLED}, opening in the background: wait for SESSION_OPENING to be idle before acting on it. It comes up in Organize, COUNT-IN, SONGSTART and SONGEND placed and the guide over them, and is named when it is first saved (SESSION_SAVE with `to`)."
         ))
     })?;
     Ok(())
-}
-
-/// The song `SESSION_NEW` made, until the start screen opens it.
-static MADE: Mutex<Option<String>> = Mutex::new(None);
-
-/// Whether a song `SESSION_NEW` made waits to be opened ([`take_made`]).
-#[must_use]
-pub fn made_pending() -> bool {
-    MADE.lock().is_ok_and(|made| made.is_some())
-}
-
-/// The song `SESSION_NEW` made (its project GUID), for the start screen
-/// to open — once.
-#[must_use]
-pub fn take_made() -> Option<String> {
-    MADE.lock().ok().and_then(|mut made| made.take())
 }
 
 /// Make a new, untitled song in the window's engine and make it current.

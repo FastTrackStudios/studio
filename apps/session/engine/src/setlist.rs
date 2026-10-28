@@ -600,59 +600,32 @@ impl Setlist {
         Ok(Self::of(songs))
     }
 
-    /// The set of a Studio engine this window drives in another process
-    /// (`crate::studio_engine::link`), as it lists it (`shown`): each song
-    /// read back through the facade by its project, without selecting it —
-    /// the engine may be playing one of them — in the engine's order, its
-    /// current one current. Songs saved on this machine get their track
-    /// kinds and chart from their files; songs this window shows already
-    /// are kept as they are.
+    /// The engine's set as a window shows it (`frame`, from its link —
+    /// `crate::view_client`): each song not shown already (`have`) read back
+    /// through the facade by its project, without selecting it — the engine
+    /// may be playing one of them — in the engine's order, its current one
+    /// current; its track kinds and chart asked of the engine. With how
+    /// many songs were read.
     ///
     /// # Errors
     ///
     /// No song could be read.
     #[cfg(feature = "native")]
-    pub fn from_engine(shown: &crate::studio_engine::link::Shown) -> eyre::Result<Self> {
+    pub fn from_link(
+        frame: &crate::view::SetFrame,
+        have: Vec<Song>,
+    ) -> eyre::Result<(Self, usize)> {
         let rt = crate::open::engine_runtime()?;
-        // The songs this window has read already are kept: a set arriving
-        // song by song is read once a song, not once a song per arrival.
-        let have: Vec<Song> = crate::studio_engine::set::peek(|view| {
-            view.setlist
-                .as_ref()
-                .map(|s| s.songs.clone())
-                .unwrap_or_default()
-        });
         let mut songs = Vec::new();
-        for (project, title) in shown.projects.iter().zip(&shown.titles) {
+        let mut read = 0;
+        for (title, project) in &frame.songs {
             if let Some(song) = have.iter().find(|s| &s.project == project) {
                 songs.push(song.clone());
                 continue;
             }
-            let path = crate::open::facade_blocking("project path", |daw| {
-                let guid = project.clone();
-                async move { Ok(daw.project(guid).await?.info().await?.path) }
-            })
-            .ok()
-            .filter(|p| !p.is_empty())
-            .map(std::path::PathBuf::from)
-            .filter(|p| p.exists());
-            let rpp_text = path
-                .as_deref()
-                .filter(|p| !crate::project_file::is_project_file(p))
-                .and_then(|p| crate::open::project_text(p).ok())
-                .map(|read| read.text)
-                .unwrap_or_default();
-            let chart = path.as_deref().and_then(crate::prepare::chart_beside);
-            let chart_text = chart.as_ref().and_then(|p| std::fs::read_to_string(p).ok());
-            match rt.block_on(StudioSession::read_project(
-                project,
-                title,
-                &rpp_text,
-                chart_text.as_deref(),
-                true,
-            )) {
-                Ok(mut session) => {
-                    session.chart_file = chart;
+            match rt.block_on(StudioSession::read_linked(project, title)) {
+                Ok(session) => {
+                    read += 1;
                     songs.push(Song::of(title.clone(), project.clone(), session));
                 }
                 Err(e) => {
@@ -663,17 +636,18 @@ impl Setlist {
         if songs.is_empty() {
             eyre::bail!(
                 "none of the engine's {} songs could be read",
-                shown.projects.len()
+                frame.songs.len()
             );
         }
-        let at = shown
+        let at = frame
             .current
-            .and_then(|i| shown.projects.get(i))
-            .and_then(|p| songs.iter().position(|s| &s.project == p))
+            .and_then(|i| frame.songs.get(i as usize))
+            .and_then(|(_, p)| songs.iter().position(|s| &s.project == p))
             .unwrap_or(0);
         let mut setlist = Self::of(songs);
         setlist.at = at;
-        Ok(setlist)
+        setlist.pending.clone_from(&frame.arriving);
+        Ok((setlist, read))
     }
 
     /// The set a Remote or Cue window drives: attach to `target`, and make

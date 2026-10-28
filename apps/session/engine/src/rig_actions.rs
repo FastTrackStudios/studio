@@ -40,6 +40,21 @@ static TONE_INSERT: architect::action::ActionMeta = crate::actions::meta(
     "",
 );
 
+static RIG_BROWSE: architect::action::ActionMeta = crate::actions::meta(
+    "RIG_BROWSE",
+    "rig_browse",
+    "What a track's rig offers",
+    "What the browser shows for `track`: its `instrument` (guitar or bass), whether a rig is `loaded`, the `profile` playing and every profile, and each stack's patches (each with whether it plays) — or, with no rig yet, the profiles its instrument's library has. Nothing for a track that is no guitar or bass. Read-only.",
+    "Signal",
+    "",
+);
+
+/// Which track's rig.
+#[derive(Facet)]
+struct BrowseArg {
+    track: String,
+}
+
 #[derive(Facet)]
 struct LoadArg {
     track: String,
@@ -218,6 +233,11 @@ pub fn register(
     list: &architect::action::ActionList,
 ) -> Result<(), architect::action::ActionError> {
     use architect::action::Effect;
+    list.register(&RIG_BROWSE, Effect::ReadOnly, |a: BrowseArg| {
+        let (daw, project) = crate::actions::song()?;
+        let guid = crate::actions::resolve(daw, &project, &a.track)?;
+        Ok(browse(daw, &project, &guid))
+    })?;
     list.register(&RIG_LOAD, Effect::Mutating, |a: LoadArg| {
         let (daw, project) = crate::actions::song()?;
         let guid = crate::actions::resolve(daw, &project, &a.track)?;
@@ -272,7 +292,7 @@ pub fn register(
 /// What the browser shows for a track: its rig's profiles, stacks and
 /// patches — or, with no rig yet, the profiles its instrument's library
 /// has to load.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Facet)]
 pub struct RigView {
     /// `guitar` or `bass`.
     pub instrument: String,

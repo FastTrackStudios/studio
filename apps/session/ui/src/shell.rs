@@ -1395,7 +1395,7 @@ pub fn SongTabs(
                     let list = setlist.peek();
                     list.songs.iter().enumerate().any(|(i, song)| {
                         i != list.at
-                            && crate::engine::playhead_of(&song.project)
+                            && crate::view_client::playhead_of(&song.project)
                                 .is_some_and(|(_, playing)| playing)
                     })
                 };
@@ -1458,7 +1458,7 @@ pub fn SongTabs(
                     let current = index == list.at;
                     // A song playing behind the one on screen moves on too.
                     #[cfg(feature = "native")]
-                    let percent = match (index != list.at, crate::engine::playhead_of(&song.project)) {
+                    let percent = match (index != list.at, crate::view_client::playhead_of(&song.project)) {
                         (true, Some((there, true))) => song.progress(there) * 100.0,
                         _ => list.progress_of(index, at) * 100.0,
                     };

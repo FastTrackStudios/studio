@@ -345,21 +345,10 @@ fn apply(project: &str, file: Option<&std::path::Path>, text: &str) -> Outcome {
     if crate::open::current_song().as_deref() != Some(project) {
         return Outcome::Refused("another song is up".to_owned());
     }
-    let applied = crate::open::with_local_engine(crate::open::LocalOnly::ChartRebuild, |daw| {
-        let rebuilt = crate::prepare::apply_chart(daw, project, text, true)?;
-        // Saved where the song was opened from, when that is a `.session`.
-        let saved = daw
-            .read_project(project, |p| std::path::PathBuf::from(&p.info.path))
-            .filter(|path| crate::open::is_session(path));
-        if let Some(dir) = saved {
-            crate::session_file::save_session_behind(daw, project, &dir);
-        }
-        Ok::<_, eyre::Report>(rebuilt)
-    });
-    // Remote: nothing to lay it over here. The chart is still the song's
-    // chart — saved, and shown — and its tempo and sections stay the
-    // remote's until it is opened in Engine mode.
-    let Some(applied) = applied else {
+    // Laid over the song by the engine (`CHART_APPLY`), over the link. A
+    // REAPER driven has no rebuild: the chart is still the song's chart —
+    // saved, and shown — and its tempo and sections stay the remote's.
+    if !crate::view_client::is_linked() {
         if let Some(path) = file
             && let Err(e) = std::fs::write(path, text)
         {
@@ -367,7 +356,12 @@ fn apply(project: &str, file: Option<&std::path::Path>, text: &str) -> Outcome {
         }
         crate::chart_panel::publish_live(project, std::sync::Arc::new(chart), None);
         return Outcome::ChartOnly;
-    };
+    }
+    let asked = serde_json::json!({ "song": project, "text": text });
+    let applied =
+        crate::actions::run("CHART_APPLY", asked.to_string().as_bytes()).and_then(|said| {
+            facet_json::from_slice::<crate::prepare::ChartApplied>(&said).map_err(|e| e.to_string())
+        });
     match applied {
         Ok(rebuilt) => {
             if let Some(path) = file
@@ -378,14 +372,13 @@ fn apply(project: &str, file: Option<&std::path::Path>, text: &str) -> Outcome {
             crate::chart_panel::publish_live(
                 project,
                 std::sync::Arc::new(chart),
-                Some(rebuilt.built.song_start_seconds),
+                Some(rebuilt.song_start),
             );
-            crate::song_model::request_resync();
             Outcome::Applied {
-                sections: rebuilt.built.sections,
-                bpm: rebuilt.built.tempo_bpm,
+                sections: usize::try_from(rebuilt.sections).unwrap_or(usize::MAX),
+                bpm: rebuilt.bpm,
             }
         }
-        Err(e) => Outcome::Refused(e.to_string()),
+        Err(e) => Outcome::Refused(e),
     }
 }

@@ -4,20 +4,17 @@
 //! An engine says where it is in `$XDG_CONFIG_HOME/fts/engines/studio-<pid>.json`
 //! ([`Found`], written by [`publish`] as it comes up, removed as it stops).
 //! A desktop window, as it launches, picks how to have an engine
-//! ([`Mode`], `FTS_ENGINE=inprocess|spawn|attach`) and [`plan`]s from what
-//! is running: attach to a live one, spawn one ([`spawn`]: `studio engine`
-//! in a process group of its own, so the audio outlives the window), or run
-//! the engine in this process as before. Linked ([`set_linked`]), the
-//! window's actions that are not its own run on the engine ([`run`]), the
-//! set it shows follows the engine's ([`follow`]), and its picks and opens
-//! go to the engine (`super::set`).
+//! ([`Mode`], `FTS_ENGINE=spawn|attach`) and [`plan`]s from what is
+//! running: attach to a live one, or spawn one ([`spawn`]: `studio engine`
+//! in a process group of its own, so the audio outlives the window). There
+//! is no engine in a desktop window's process. Linked ([`set_linked`]), the
+//! window's actions that are not its own run on the engine ([`run`]), and
+//! everything it shows comes over its link (`crate::view_client`).
 //!
-//! The decisions ([`Mode::parse`], [`plan`], [`newest_first`], [`Changed`])
-//! are pure; the rest is the file system, a socket, a child process and the
-//! engine's MCP endpoint.
+//! The decisions ([`Mode::parse`], [`plan`], [`newest_first`], [`changed_songs`])
+//! are pure; the rest is the file system, a socket and a child process.
 
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 use std::time::Duration;
 
 /// Where a running engine is, for a window or the CLI to find it.
@@ -30,16 +27,36 @@ pub struct Found {
     pub mcp: String,
     /// The facade over WebSocket, when the engine serves one.
     pub ws: Option<String>,
+    /// Which build it is ([`build_id`]): a window of another build (an
+    /// update, a rebuild) starts one of its own in its place.
+    #[serde(default)]
+    pub build: String,
 }
 
-/// How a window has its engine.
+/// This program's build: its executable's size and modification time — what
+/// tells a window an engine of the same build from an older one.
+#[must_use]
+pub fn build_id() -> String {
+    std::env::current_exe()
+        .and_then(std::fs::metadata)
+        .map(|m| {
+            let at = m
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(web_time::UNIX_EPOCH).ok())
+                .map_or(0, |d| d.as_secs());
+            format!("{}-{at}", m.len())
+        })
+        .unwrap_or_default()
+}
+
+/// How a desktop window has its engine — always in another process.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
-    /// In this process, as a window always had it.
-    InProcess,
     /// A running engine if there is one, else one spawned for it.
     Spawn,
-    /// A running engine only; in this process when there is none.
+    /// A running engine only: the window waits for one (started by hand,
+    /// under a debugger).
     Attach,
 }
 
@@ -48,32 +65,42 @@ impl Mode {
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
         match text.trim().to_ascii_lowercase().as_str() {
-            "inprocess" | "in-process" | "local" => Some(Self::InProcess),
             "spawn" => Some(Self::Spawn),
             "attach" => Some(Self::Attach),
             _ => None,
         }
     }
 
-    /// The mode `FTS_ENGINE` asks for, else this platform's: in process on
-    /// iOS and in a browser (no helper process there), and — until the
-    /// window draws everything it draws in process from an engine in
-    /// another (`docs/design/engine-boundary.md` step 5) — on the desktop.
+    /// The mode `FTS_ENGINE` asks for, else [`Mode::Spawn`]. There is no
+    /// engine in the window's process on the desktop: the window is a
+    /// client of `studio engine` (`docs/design/engine-boundary.md`).
     #[must_use]
     pub fn from_env() -> Self {
-        std::env::var("FTS_ENGINE")
-            .ok()
-            .and_then(|v| Self::parse(&v))
-            .unwrap_or(Self::InProcess)
+        let asked = std::env::var("FTS_ENGINE").ok();
+        match asked.as_deref().map(Self::parse) {
+            Some(Some(mode)) => mode,
+            Some(None) => {
+                tracing::warn!(
+                    engine.asked = asked.as_deref().unwrap_or_default(),
+                    "engine: FTS_ENGINE is spawn or attach; spawning"
+                );
+                Self::Spawn
+            }
+            None => Self::Spawn,
+        }
     }
 }
 
 /// What a launching window does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Plan {
-    InProcess,
     Attach(Found),
+    /// One of another build runs: stopped, and one of this build started
+    /// in its place, opening what it had open.
+    Replace(Found),
     Spawn,
+    /// None running, and none to be spawned: wait for one.
+    Wait,
 }
 
 /// Engines newest first: a window attaches to the one most recently
@@ -84,18 +111,55 @@ pub fn newest_first(mut found: Vec<(Found, std::time::SystemTime)>) -> Vec<Found
     found.into_iter().map(|(f, _)| f).collect()
 }
 
-/// What to do, in `mode`, with `found` running (newest first) and
-/// `alive` saying which of them answer.
+/// What to do, in `mode`, with `found` running (newest first), `alive`
+/// saying which of them answer and `ours` which are of this window's build.
 #[must_use]
-pub fn plan(mode: Mode, found: &[Found], alive: impl Fn(&Found) -> bool) -> Plan {
-    if mode == Mode::InProcess {
-        return Plan::InProcess;
-    }
+pub fn plan(
+    mode: Mode,
+    found: &[Found],
+    alive: impl Fn(&Found) -> bool,
+    ours: impl Fn(&Found) -> bool,
+) -> Plan {
     match (found.iter().find(|f| alive(f)), mode) {
+        (Some(running), Mode::Spawn) if !ours(running) => Plan::Replace(running.clone()),
         (Some(running), _) => Plan::Attach(running.clone()),
         (None, Mode::Spawn) => Plan::Spawn,
-        (None, _) => Plan::InProcess,
+        (None, Mode::Attach) => Plan::Wait,
     }
+}
+
+/// Whether `found` is of the build this window would start: always, when
+/// the engine is a `studio` CLI of its own (`FTS_STUDIO_BIN`).
+#[must_use]
+pub fn of_this_build(found: &Found) -> bool {
+    std::env::var_os("FTS_STUDIO_BIN").is_some_and(|b| !b.is_empty()) || found.build == build_id()
+}
+
+/// Stop the engine `found` (SIGTERM: it stops its audio, says it is gone
+/// and exits), waiting at most `wait` for it to go.
+///
+/// # Errors
+///
+/// It could not be signalled, or it did not go in time.
+pub fn stop(found: &Found, wait: Duration) -> Result<(), String> {
+    let sent = std::process::Command::new("kill")
+        .args(["-TERM", &found.pid.to_string()])
+        .status()
+        .map_err(|e| e.to_string())?;
+    if !sent.success() {
+        return Err(format!(
+            "the engine (pid {}) could not be stopped",
+            found.pid
+        ));
+    }
+    let began = web_time::Instant::now();
+    while began.elapsed() < wait {
+        if !alive(found) {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    Err(format!("the engine (pid {}) did not stop", found.pid))
 }
 
 // ── Where engines say they are ───────────────────────────────────────
@@ -151,23 +215,29 @@ pub fn alive(found: &Found) -> bool {
 
 // ── Spawning one ─────────────────────────────────────────────────────
 
-/// The `studio` CLI to run `studio engine` with: `FTS_STUDIO_BIN`, else a
-/// `studio` beside this executable, else one on `PATH`.
+/// How to start an engine: a program, and the arguments before the
+/// engine's own.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EngineCommand {
+    pub bin: PathBuf,
+    pub args: Vec<String>,
+}
+
+/// The engine to start: `FTS_STUDIO_BIN engine` when that names a `studio`
+/// CLI, else this very program as its own engine (`--session-engine`) — the
+/// same build as the window, so the two always speak one protocol.
 #[must_use]
-pub fn studio_bin() -> Option<PathBuf> {
+pub fn engine_command() -> Option<EngineCommand> {
     if let Some(bin) = std::env::var_os("FTS_STUDIO_BIN").filter(|b| !b.is_empty()) {
-        return Some(PathBuf::from(bin));
+        return Some(EngineCommand {
+            bin: PathBuf::from(bin),
+            args: vec!["engine".to_owned()],
+        });
     }
-    let beside = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|d| d.join("studio")))
-        .filter(|p| p.is_file());
-    beside.or_else(|| {
-        std::env::var_os("PATH").and_then(|paths| {
-            std::env::split_paths(&paths)
-                .map(|d| d.join("studio"))
-                .find(|p| p.is_file())
-        })
+    let exe = std::env::current_exe().ok()?;
+    Some(EngineCommand {
+        bin: exe,
+        args: vec!["--session-engine".to_owned()],
     })
 }
 
@@ -177,14 +247,15 @@ pub fn log_file() -> Option<PathBuf> {
     Some(dirs::cache_dir()?.join("fts").join("studio-engine.log"))
 }
 
-/// Start `studio engine` with `bin`, in a process group of its own (a
-/// window that crashes, or a Ctrl-C to it, leaves the engine playing), its
-/// output to [`log_file`]; wait at most `wait` for it to say where it is.
+/// Start an engine with `command` (and `args` of its own), in a process
+/// group of its own (a window that crashes, or a Ctrl-C to it, leaves the
+/// engine playing), its output to [`log_file`]; wait at most `wait` for it
+/// to say where it is.
 ///
 /// # Errors
 ///
 /// It could not be started, or it did not come up in time.
-pub fn spawn(bin: &Path, wait: Duration) -> Result<Found, String> {
+pub fn spawn(command: &EngineCommand, args: &[&str], wait: Duration) -> Result<Found, String> {
     use std::os::unix::process::CommandExt as _;
     let log = log_file().ok_or("no cache directory for the engine's log")?;
     if let Some(parent) = log.parent() {
@@ -196,8 +267,10 @@ pub fn spawn(bin: &Path, wait: Duration) -> Result<Found, String> {
         .open(&log)
         .map_err(|e| format!("{}: {e}", log.display()))?;
     let err = out.try_clone().map_err(|e| e.to_string())?;
+    let bin = &command.bin;
     let mut child = std::process::Command::new(bin)
-        .arg("engine")
+        .args(&command.args)
+        .args(args)
         .stdin(std::process::Stdio::null())
         .stdout(out)
         .stderr(err)
@@ -226,228 +299,258 @@ pub fn spawn(bin: &Path, wait: Duration) -> Result<Found, String> {
     ))
 }
 
-/// Have an engine as `mode` says: the one attached to or spawned, or
-/// `None` for one in this process.
-#[must_use]
-pub fn choose(mode: Mode) -> Option<Found> {
+/// Have an engine as `mode` says: one running attached to, else one
+/// spawned (or, attaching only, waited for up to `wait`).
+///
+/// # Errors
+///
+/// No `studio` to spawn, it did not come up, or none came to attach to.
+pub fn choose(mode: Mode, wait: Duration) -> Result<Found, String> {
     let span = tracing::info_span!("engine.link", engine.mode = ?mode, engine.plan = tracing::field::Empty);
     let _in = span.enter();
-    let decided = plan(mode, &found(), alive);
+    let decided = plan(mode, &found(), alive, of_this_build);
     span.record("engine.plan", format!("{decided:?}").as_str());
     match decided {
-        Plan::InProcess => None,
-        Plan::Attach(running) => Some(running),
+        Plan::Attach(running) => Ok(running),
+        Plan::Replace(old) => {
+            tracing::warn!(engine.pid = old.pid, engine.build = %old.build, "engine: one of another build runs; this build's in its place");
+            stop(&old, Duration::from_secs(10))?;
+            let command = engine_command().ok_or("no program to run the engine with")?;
+            spawn(&command, &["--reopen"], wait)
+        }
         Plan::Spawn => {
-            let Some(bin) = studio_bin() else {
-                tracing::warn!(
-                    "engine: no `studio` to spawn (FTS_STUDIO_BIN); in this process instead"
-                );
-                return None;
-            };
-            spawn(&bin, Duration::from_secs(30))
-                .inspect_err(|why| tracing::warn!(error = %why, "engine: not spawned; in this process instead"))
-                .ok()
+            let command = engine_command().ok_or("no program to run the engine with")?;
+            spawn(&command, &[], wait)
+        }
+        Plan::Wait => {
+            let began = web_time::Instant::now();
+            while began.elapsed() < wait {
+                if let Some(up) = found().into_iter().find(alive) {
+                    return Ok(up);
+                }
+                std::thread::sleep(Duration::from_millis(250));
+            }
+            Err("no engine came up to attach to (FTS_ENGINE=attach)".to_owned())
         }
     }
 }
 
 // ── Linked ───────────────────────────────────────────────────────────
 
-static LINKED: OnceLock<Found> = OnceLock::new();
+/// The engine linked to now (a relink replaces it).
+static CURRENT: std::sync::RwLock<Option<Found>> = std::sync::RwLock::new(None);
 
-/// This window drives `found` from now on (once per process).
+/// This window drives `found` from now on.
 pub fn set_linked(found: Found) {
-    let _ = LINKED.set(found);
+    if let Ok(mut now) = CURRENT.write() {
+        *now = Some(found);
+    }
 }
 
 /// The engine this window drives in another process, if it does.
 #[must_use]
-pub fn linked() -> Option<&'static Found> {
-    LINKED.get()
+pub fn linked() -> Option<Found> {
+    CURRENT.read().ok().and_then(|f| f.clone())
 }
 
-/// Run `id` with `args` (JSON) on the linked engine's Action List; what it
-/// said. Waits at most 60 s (an open, a save).
+/// Run `id` with `args` (JSON) on the engine's Action List, over the
+/// window's link to it (`crate::view_client`); what it said.
 ///
 /// # Errors
 ///
 /// Not linked, the engine did not answer, or the action refused.
 pub fn run(id: &str, args: &[u8]) -> Result<String, String> {
-    let engine = linked().ok_or("not linked to an engine")?;
-    let args: serde_json::Value = if args.iter().all(u8::is_ascii_whitespace) {
-        serde_json::Value::Null
-    } else {
-        serde_json::from_slice(args).map_err(|e| format!("{id}: {e}"))?
-    };
-    call(&engine.mcp, id, args)
+    crate::view_client::run(id, args)
 }
 
-/// One `run` on the MCP endpoint at `url`.
-fn call(url: &str, id: &str, args: serde_json::Value) -> Result<String, String> {
-    let mut params = serde_json::json!({ "id": id });
-    if !args.is_null() {
-        params["args"] = args;
+// ── Kept linked ─────────────────────────────────────────────────────
+
+/// What a window said about its engine coming back: shown once by the
+/// window (`take_notice`).
+static NOTICE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// What there is to tell the person about the engine since last asked
+/// (it stopped and was started again), once.
+#[must_use]
+pub fn take_notice() -> Option<String> {
+    NOTICE.lock().ok().and_then(|mut n| n.take())
+}
+
+fn notice(text: String) {
+    if let Ok(mut slot) = NOTICE.lock() {
+        *slot = Some(text);
     }
-    let body = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/call",
-        "params": { "name": "run", "arguments": params },
-    });
-    let url = url.to_owned();
-    let rt = crate::open::engine_runtime().map_err(|e| e.to_string())?;
-    let answer: serde_json::Value = std::thread::scope(|scope| {
-        scope
-            .spawn(|| {
-                rt.block_on(async {
-                    let client = reqwest::Client::builder()
-                        .timeout(Duration::from_secs(60))
-                        .build()
-                        .map_err(|e| e.to_string())?;
-                    let mut request = client
-                        .post(&url)
-                        .header("content-type", "application/json")
-                        .header("accept", "application/json, text/event-stream")
-                        .body(body.to_string());
-                    if let Some(token) = std::env::var("FTS_MCP_TOKEN")
-                        .ok()
-                        .filter(|t| !t.is_empty())
-                    {
-                        request = request.bearer_auth(token);
-                    }
-                    let text = request
-                        .send()
-                        .await
-                        .map_err(|e| format!("{url}: {e}"))?
-                        .text()
-                        .await
-                        .map_err(|e| e.to_string())?;
-                    serde_json::from_str::<serde_json::Value>(&text).map_err(|e| e.to_string())
-                })
-            })
-            .join()
-            .unwrap_or_else(|_| Err("the call panicked".to_owned()))
-    })?;
-    if let Some(error) = answer.get("error") {
-        return Err(format!("{id}: {error}"));
+}
+
+/// Keep this window linked for as long as the process lives: when its
+/// engine goes away (killed, crashed), find another running one or spawn
+/// one — asked to open again what the last one had open — attach to it
+/// with `attach` (the facade and the view link re-made), and say so; when
+/// the link alone dropped (the engine still answers), attach to it again.
+/// `mode` as at launch. Once per process.
+pub fn keep_linked(mode: Mode, attach: fn(&Found) -> Result<(), String>) {
+    static KEEPING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if KEEPING.swap(true, std::sync::atomic::Ordering::AcqRel) {
+        return;
     }
-    let result = answer.get("result").cloned().unwrap_or_default();
-    let said: Vec<&str> = result
-        .get("content")
-        .and_then(serde_json::Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|c| c.get("text").and_then(serde_json::Value::as_str))
-        .collect();
-    let said = said.join("\n");
-    if result.get("isError").and_then(serde_json::Value::as_bool) == Some(true) {
-        return Err(format!("{id}: {said}"));
+    let spawned = std::thread::Builder::new()
+        .name("engine-keep".into())
+        .spawn(move || {
+            // Relinks close together back off: an engine that keeps
+            // dropping the link (one of another build) is not hammered.
+            let mut pause = Duration::from_millis(250);
+            loop {
+                std::thread::sleep(Duration::from_millis(250));
+                if crate::view_client::state() != crate::view_client::LinkState::Down {
+                    pause = Duration::from_millis(250);
+                    continue;
+                }
+                relink(mode, attach);
+                std::thread::sleep(pause);
+                pause = (pause * 2).min(Duration::from_secs(10));
+            }
+        });
+    if let Err(e) = spawned {
+        tracing::warn!(error = %e, "engine: no thread to keep the window linked");
     }
-    Ok(said)
+}
+
+/// The link went down: the same engine again while it answers, else
+/// another — until one is linked.
+fn relink(mode: Mode, attach: fn(&Found) -> Result<(), String>) {
+    let was = linked();
+    let gone = was.as_ref().map(|f| f.pid);
+    let mut wait = Duration::from_millis(250);
+    loop {
+        let span = tracing::info_span!(
+            "engine.relink",
+            engine.gone = gone,
+            engine.pid = tracing::field::Empty,
+            engine.outcome = tracing::field::Empty
+        );
+        let _in = span.enter();
+        // The engine still answers: only the link dropped.
+        if let Some(same) = was.as_ref().filter(|f| alive(f)) {
+            match attach(same) {
+                Ok(()) => {
+                    span.record("engine.pid", same.pid);
+                    span.record("engine.outcome", "reattached");
+                    return;
+                }
+                Err(why) => {
+                    span.record("engine.outcome", "retry");
+                    tracing::warn!(error = %why, "engine: it answers but did not take the window again");
+                    std::thread::sleep(wait);
+                    wait = (wait * 2).min(Duration::from_secs(5));
+                    continue;
+                }
+            }
+        }
+        // Gone. Dead ones say where they were until their file is swept:
+        // never one of those again.
+        let still_up = |f: &Found| Some(f.pid) != gone && alive(f);
+        let found = match plan(mode, &found(), still_up, of_this_build) {
+            Plan::Attach(running) => Ok(running),
+            Plan::Replace(old) => stop(&old, Duration::from_secs(10)).and_then(|()| {
+                engine_command()
+                    .ok_or_else(|| "no program to run the engine with".to_owned())
+                    .and_then(|command| spawn(&command, &["--reopen"], Duration::from_secs(30)))
+            }),
+            Plan::Spawn => engine_command()
+                .ok_or_else(|| "no program to run the engine with".to_owned())
+                .and_then(|command| spawn(&command, &["--reopen"], Duration::from_secs(30))),
+            Plan::Wait => Err("waiting for an engine to attach to".to_owned()),
+        };
+        match found.and_then(|f| attach(&f).map(|()| f)) {
+            Ok(up) => {
+                span.record("engine.pid", up.pid);
+                span.record("engine.outcome", "relinked");
+                tracing::warn!(
+                    engine.pid = up.pid,
+                    "engine: it stopped; this window is on a new one"
+                );
+                notice(format!(
+                    "The engine stopped (pid {}); Studio started it again (pid {}) and opened what it had open.",
+                    gone.unwrap_or_default(),
+                    up.pid
+                ));
+                set_linked(up);
+                return;
+            }
+            Err(why) => {
+                span.record("engine.outcome", "retry");
+                tracing::warn!(error = %why, "engine: not linked yet; trying again");
+                std::thread::sleep(wait);
+                wait = (wait * 2).min(Duration::from_secs(5));
+            }
+        }
+    }
+}
+
+// ── What the engine last opened ──────────────────────────────────────
+
+/// Where an engine keeps what it last opened (`id` and its arguments), for
+/// one started in its place to open it again.
+fn last_open_file() -> Option<PathBuf> {
+    Some(dir()?.join("last-open.json"))
+}
+
+/// The engine opened something with `id` and `args`: kept, for an engine
+/// started after it dies (`--reopen`).
+pub fn remember_open(id: &str, args: &serde_json::Value) {
+    let Some(file) = last_open_file() else { return };
+    let kept = serde_json::json!({ "id": id, "args": args });
+    let written = file
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(&file, kept.to_string()));
+    if let Err(e) = written {
+        tracing::warn!(error = %e, "engine: what it opened could not be kept");
+    }
+}
+
+/// Open what the last engine had open ([`remember_open`]), on the Action
+/// List of the engine in this process.
+pub fn reopen_last() {
+    let Some(kept) = last_open_file()
+        .and_then(|f| std::fs::read(f).ok())
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+    else {
+        return;
+    };
+    let (Some(id), Some(args)) = (kept["id"].as_str(), kept.get("args")) else {
+        return;
+    };
+    let ran = crate::actions::list().run_json(id, args.to_string().as_bytes());
+    match ran {
+        Ok(_) => tracing::info!(
+            engine.reopen = id,
+            "engine: opened what the last one had open"
+        ),
+        Err(e) => {
+            tracing::warn!(engine.reopen = id, error = %e, "engine: what the last one had open did not open")
+        }
+    }
 }
 
 // ── The set, followed ────────────────────────────────────────────────
 
-/// The engine's set as a window follows it: its songs' projects, in order,
-/// and which is current.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Shown {
-    pub projects: Vec<String>,
-    pub titles: Vec<String>,
-    pub current: Option<usize>,
+/// Whether the songs a window shows are the engine's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SongsChanged {
+    /// The same songs, in the same order: follow the rest in place.
+    Same,
+    /// Others (another set, a song arrived or gone, reordered): read them.
+    Read,
 }
 
-/// What changed between the set a window shows and the engine's.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Changed {
-    Nothing,
-    /// Another set (or none): read it again.
-    Set,
-    /// Same songs, another current one.
-    Current(usize),
-}
-
-/// What changed from `shown` to `now`.
+/// Whether `shown` (the window's songs' projects) are `engine`'s.
 #[must_use]
-pub fn changed(shown: &Shown, now: &Shown) -> Changed {
-    if shown.projects != now.projects {
-        return Changed::Set;
-    }
-    match now.current {
-        Some(at) if shown.current != Some(at) => Changed::Current(at),
-        _ => Changed::Nothing,
-    }
-}
-
-/// The linked engine's set, as `SESSION_SONGS` lists it (open songs only).
-///
-/// # Errors
-///
-/// The engine did not answer.
-pub fn engine_set() -> Result<Shown, String> {
-    let said = run("SESSION_SONGS", b"")?;
-    let rows: Vec<serde_json::Value> = serde_json::from_str(&said).map_err(|e| e.to_string())?;
-    let mut shown = Shown::default();
-    for row in rows.iter().filter(|r| r["state"] == "open") {
-        if row["current"].as_bool() == Some(true) {
-            shown.current = Some(shown.projects.len());
-        }
-        shown
-            .projects
-            .push(row["project"].as_str().unwrap_or_default().to_owned());
-        shown
-            .titles
-            .push(row["title"].as_str().unwrap_or_default().to_owned());
-    }
-    Ok(shown)
-}
-
-/// Follow the linked engine's set, on a thread of its own, for as long as
-/// the process lives: a new set read in and shown, another current song
-/// marked current, no set closed. `read` reads a set from the engine (its
-/// songs, read back through the facade) — the window's
-/// (`crate::setlist::Setlist::from_engine`).
-pub fn follow(read: fn(&Shown) -> eyre::Result<crate::setlist::Setlist>) {
-    static FOLLOWING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    if FOLLOWING.swap(true, std::sync::atomic::Ordering::AcqRel) {
-        return;
-    }
-    let spawned = std::thread::Builder::new()
-        .name("engine-follow".into())
-        .spawn(move || {
-            let mut shown = Shown::default();
-            loop {
-                std::thread::sleep(Duration::from_millis(400));
-                let Ok(now) = engine_set() else {
-                    continue;
-                };
-                match changed(&shown, &now) {
-                    Changed::Nothing => {}
-                    Changed::Set if now.projects.is_empty() => {
-                        super::set::close();
-                        shown = now;
-                    }
-                    Changed::Set => match read(&now) {
-                        Ok(setlist) => {
-                            tracing::info!(
-                                set.songs = now.projects.len(),
-                                "engine: its set, shown"
-                            );
-                            super::set::install(setlist);
-                            shown = now;
-                        }
-                        Err(e) => tracing::warn!(error = %e, "engine: its set could not be read"),
-                    },
-                    Changed::Current(at) => {
-                        tracing::info!(set.current = at, "engine: its current song, shown");
-                        super::set::mark_current(at, 0.0);
-                        shown.current = Some(at);
-                    }
-                }
-            }
-        });
-    if let Err(e) = spawned {
-        tracing::warn!(error = %e, "engine: no thread to follow its set");
+pub fn changed_songs(shown: &[String], engine: &[String]) -> SongsChanged {
+    if shown == engine {
+        SongsChanged::Same
+    } else {
+        SongsChanged::Read
     }
 }
 
@@ -461,33 +564,54 @@ mod tests {
             socket: PathBuf::from(format!("/run/user/1000/fts/engine-{pid}.sock")),
             mcp: "http://127.0.0.1:47811/mcp".to_owned(),
             ws: None,
+            build: "b1".to_owned(),
         }
     }
 
     #[test]
-    fn fts_engine_names_the_three_modes() {
+    fn fts_engine_names_the_two_modes_and_nothing_runs_in_the_window() {
         assert_eq!(Mode::parse("spawn"), Some(Mode::Spawn));
         assert_eq!(Mode::parse(" Attach "), Some(Mode::Attach));
-        assert_eq!(Mode::parse("inprocess"), Some(Mode::InProcess));
-        assert_eq!(Mode::parse("in-process"), Some(Mode::InProcess));
+        assert_eq!(Mode::parse("inprocess"), None);
         assert_eq!(Mode::parse("remote"), None);
     }
 
     #[test]
-    fn a_running_engine_is_attached_to_whatever_the_mode_but_in_process() {
+    fn a_running_engine_is_attached_to_whatever_the_mode() {
         let running = [engine(7), engine(5)];
         let alive = |f: &Found| f.pid == 5;
-        assert_eq!(plan(Mode::Spawn, &running, alive), Plan::Attach(engine(5)));
-        assert_eq!(plan(Mode::Attach, &running, alive), Plan::Attach(engine(5)));
-        assert_eq!(plan(Mode::InProcess, &running, alive), Plan::InProcess);
+        let ours = |f: &Found| f.build == "b1";
+        assert_eq!(
+            plan(Mode::Spawn, &running, alive, ours),
+            Plan::Attach(engine(5))
+        );
+        assert_eq!(
+            plan(Mode::Attach, &running, alive, ours),
+            Plan::Attach(engine(5))
+        );
     }
 
     #[test]
-    fn with_none_running_spawn_spawns_and_attach_stays_in_process() {
+    fn an_engine_of_another_build_is_replaced_unless_only_attaching() {
+        let running = [engine(5)];
+        let theirs = |_: &Found| false;
+        assert_eq!(
+            plan(Mode::Spawn, &running, |_| true, theirs),
+            Plan::Replace(engine(5))
+        );
+        assert_eq!(
+            plan(Mode::Attach, &running, |_| true, theirs),
+            Plan::Attach(engine(5))
+        );
+    }
+
+    #[test]
+    fn with_none_running_spawn_spawns_and_attach_waits() {
         let dead = [engine(7)];
-        assert_eq!(plan(Mode::Spawn, &dead, |_| false), Plan::Spawn);
-        assert_eq!(plan(Mode::Attach, &dead, |_| false), Plan::InProcess);
-        assert_eq!(plan(Mode::Spawn, &[], |_| true), Plan::Spawn);
+        let ours = |_: &Found| true;
+        assert_eq!(plan(Mode::Spawn, &dead, |_| false, ours), Plan::Spawn);
+        assert_eq!(plan(Mode::Attach, &dead, |_| false, ours), Plan::Wait);
+        assert_eq!(plan(Mode::Spawn, &[], |_| true, ours), Plan::Spawn);
     }
 
     #[test]
@@ -510,27 +634,20 @@ mod tests {
     }
 
     #[test]
-    fn the_window_reads_a_new_set_and_follows_a_new_current_song() {
-        let shown = Shown {
-            projects: vec!["a".into(), "b".into()],
-            titles: vec!["A".into(), "B".into()],
-            current: Some(0),
-        };
-        assert_eq!(changed(&shown, &shown), Changed::Nothing);
-        let next = Shown {
-            current: Some(1),
-            ..shown.clone()
-        };
-        assert_eq!(changed(&shown, &next), Changed::Current(1));
-        let other = Shown {
-            projects: vec!["c".into()],
-            titles: vec!["C".into()],
-            current: Some(0),
-        };
-        assert_eq!(changed(&shown, &other), Changed::Set);
+    fn the_window_reads_songs_only_when_they_are_not_the_ones_it_shows() {
+        let songs = |p: &[&str]| p.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
         assert_eq!(
-            changed(&Shown::default(), &Shown::default()),
-            Changed::Nothing
+            changed_songs(&songs(&["a", "b"]), &songs(&["a", "b"])),
+            SongsChanged::Same
         );
+        assert_eq!(
+            changed_songs(&songs(&["a"]), &songs(&["a", "b"])),
+            SongsChanged::Read
+        );
+        assert_eq!(
+            changed_songs(&songs(&["b", "a"]), &songs(&["a", "b"])),
+            SongsChanged::Read
+        );
+        assert_eq!(changed_songs(&[], &[]), SongsChanged::Same);
     }
 }

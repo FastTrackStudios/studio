@@ -379,15 +379,6 @@ fn arrive(epoch: u64, arrival: Arrival) -> bool {
 /// gone to, or `None` when `to` is out of range or current already.
 pub fn pick(to: usize, left_at: f64) -> Option<String> {
     let project = mark_current(to, left_at)?;
-    // A window driving an engine in another process: the engine picks (its
-    // set, its audio); this window shows it already.
-    if super::link::linked().is_some() {
-        let to = format!(r#"{{"to":"{}"}}"#, to.saturating_add(1));
-        if let Err(e) = super::link::run("SESSION_SONG", to.as_bytes()) {
-            tracing::warn!(error = %e, "set: the engine refused the pick");
-        }
-        return Some(project);
-    }
     crate::open::switch_song(&project);
     Some(project)
 }
@@ -583,14 +574,6 @@ pub struct LibraryOpen {
 ///
 /// Another open is under way.
 pub fn open_library(request: LibraryOpen) -> Result<(), Busy> {
-    if super::link::linked().is_some() {
-        let args = serde_json::json!({
-            "setlist": request.setlist,
-            "org": request.org,
-            "song": request.song,
-        });
-        return forward("SESSION_OPEN_SETLIST", &args);
-    }
     open_with(
         Progress::Joining { retry: None },
         Box::new(move |progress| open_library_now(&request, progress)),
@@ -608,6 +591,33 @@ fn open_library_now(request: &LibraryOpen, progress: &dyn Fn(Progress)) -> eyre:
         .or_else(crate::task_account::remembered_org)
         .ok_or_else(|| eyre::eyre!("which org's library? (`org`, or FTS_TASK_ORG)"))?;
     let library = account.library(&org);
+    // One song of the library alone, in no list: a set of it.
+    if request.setlist.trim().is_empty() {
+        let want = request
+            .song
+            .clone()
+            .ok_or_else(|| eyre::eyre!("which setlist, or which song?"))?;
+        let songs = crate::stream_set::with_library(&library, |l| async move { l.songs().await })?;
+        let song = songs
+            .into_iter()
+            .map(|(song, _)| song)
+            .find(|s| s.slug.eq_ignore_ascii_case(&want) || s.title.eq_ignore_ascii_case(&want))
+            .ok_or_else(|| eyre::eyre!("no song {want:?} in {org}'s library"))?;
+        let setlist = crate::stream_set::LibrarySetlist {
+            id: format!("song-{}", song.slug),
+            title: song.title.clone(),
+            kind: crate::stream_set::ListKind::Songs,
+            songs: vec![song],
+        };
+        return crate::stream_set::open(
+            crate::stream_set::Remote::Library {
+                library,
+                setlist,
+                name: account.name(),
+            },
+            progress,
+        );
+    }
     let lists = crate::stream_set::setlists(&library)?;
     let titles: Vec<&str> = lists.iter().map(|l| l.title.as_str()).collect();
     let at = position_named(&titles, &request.setlist)
@@ -654,10 +664,6 @@ fn position_named(titles: &[&str], want: &str) -> Option<usize> {
 ///
 /// Another open is under way.
 pub fn open_path(path: PathBuf) -> Result<(), Busy> {
-    if super::link::linked().is_some() {
-        let args = serde_json::json!({ "path": path.display().to_string() });
-        return forward("SESSION_OPEN", &args);
-    }
     let title = path.file_stem().map_or_else(
         || path.display().to_string(),
         |n| n.to_string_lossy().into_owned(),
@@ -669,6 +675,35 @@ pub fn open_path(path: PathBuf) -> Result<(), Busy> {
                 .ok_or_else(|| eyre::eyre!("{} is not a song or a setlist", path.display()))?;
             Setlist::open(&songs)
         }),
+    )
+}
+
+/// Join a set Task keeps, by its live link (`link`), as `name`: its songs
+/// stream in and play here — `SESSION_JOIN`.
+///
+/// # Errors
+///
+/// Another open is under way.
+pub fn open_live(link: String, name: String) -> Result<(), Busy> {
+    open_with(
+        Progress::Joining { retry: None },
+        Box::new(move |progress| {
+            crate::stream_set::open(crate::stream_set::Remote::Live { link, name }, progress)
+        }),
+    )
+}
+
+/// A new, untitled song as the set — `SESSION_NEW`.
+///
+/// # Errors
+///
+/// Another open is under way.
+pub fn open_new() -> Result<(), Busy> {
+    open_with(
+        Progress::Opening {
+            title: crate::project_new::UNTITLED.to_owned(),
+        },
+        Box::new(|_| crate::project_new::setlist(None)),
     )
 }
 
@@ -694,14 +729,3 @@ pub fn songs_at(target: &Path) -> Option<Vec<PathBuf>> {
 
 #[cfg(test)]
 mod tests;
-
-/// An open asked of the engine this window drives in another process; it
-/// opens there, and the window follows its set (`super::link::follow`).
-fn forward(id: &str, args: &serde_json::Value) -> Result<(), Busy> {
-    super::link::run(id, args.to_string().as_bytes())
-        .map(|_| ())
-        .map_err(|why| {
-            tracing::warn!(error = %why, action.id = id, "set: the engine refused the open");
-            Busy(Progress::Opening { title: why })
-        })
-}

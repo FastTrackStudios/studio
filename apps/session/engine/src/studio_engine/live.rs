@@ -122,15 +122,6 @@ static LIVE: AtomicBool = AtomicBool::new(false);
 /// Put the set in Live (`true`) or take it out: the roll-on runs only in
 /// Live, so working on a song in another mode never jumps away from it.
 pub fn set_live(on: bool) {
-    // A window driving an engine in another process: the roll-on is that
-    // engine's.
-    if super::link::linked().is_some() {
-        let args = format!(r#"{{"on":{on}}}"#);
-        if let Err(e) = super::link::run("SESSION_LIVE", args.as_bytes()) {
-            tracing::warn!(error = %e, "live: the engine did not take Live");
-        }
-        return;
-    }
     let was = LIVE.swap(on, Ordering::AcqRel);
     if on && !was {
         start();
@@ -253,7 +244,7 @@ fn tick(pending: &mut (String, Pending)) {
                     setlist.next = to,
                     "live: the song ended; the next one plays"
                 );
-                crate::engine::transport(crate::engine::Move::PlayFrom, 0.0);
+                crate::engine::transport_here(crate::engine::Move::PlayFrom, 0.0);
             }
             *pending = (String::new(), Pending::Nothing);
         }

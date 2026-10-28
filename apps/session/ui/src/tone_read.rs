@@ -98,31 +98,33 @@ pub fn millis(text: &str) -> Option<f64> {
 }
 
 /// The engine's chain on `track` (its processors in order), each with its
-/// parameters. Empty with no song, or a track with none.
+/// parameters, read through the facade. Empty with no song, or a track
+/// with none.
 #[cfg(feature = "native")]
 #[must_use]
 pub fn chain(track: &str) -> Vec<EngineFx> {
-    use daw::service::{Effects, FxChainContext, FxRef, FxTarget, ProjectContext};
-    let (Some(daw), Some(song)) = (crate::open::local_engine(), crate::open::current_song()) else {
-        return Vec::new();
-    };
-    let project = ProjectContext::Project(song);
-    let context = FxChainContext::Track(track.to_owned());
-    Effects::list(daw, project.clone(), context.clone())
-        .into_iter()
-        .map(|fx| EngineFx {
-            params: Effects::parameters(
-                daw,
-                project.clone(),
-                FxTarget {
-                    context: context.clone(),
-                    fx: FxRef::Guid(fx.guid.clone()),
-                },
-            ),
-            name: fx.name,
-            enabled: fx.enabled,
-        })
-        .collect()
+    let track = track.to_owned();
+    crate::open::facade_blocking("a track's chain", move |daw| async move {
+        let project = daw.current_project().await?;
+        let Some(handle) = project.tracks().by_guid(&track).await? else {
+            return Ok(Vec::new());
+        };
+        let chain = handle.fx_chain();
+        let mut out = Vec::new();
+        for fx in chain.all().await? {
+            let params = match chain.by_guid(&fx.guid).await? {
+                Some(plugin) => plugin.parameters().await?,
+                None => Vec::new(),
+            };
+            out.push(EngineFx {
+                name: fx.name,
+                enabled: fx.enabled,
+                params,
+            });
+        }
+        Ok(out)
+    })
+    .unwrap_or_default()
 }
 
 /// Put what `chain` holds into `tone`.

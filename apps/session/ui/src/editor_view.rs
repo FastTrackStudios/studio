@@ -398,13 +398,13 @@ pub fn analysis(item: &str, length: f64, volume: f64) -> Option<editor::audio::A
     session(item.to_owned(), length, volume).map(|s| s.analysis().clone())
 }
 
-/// One audio take loaded and analysed through the in-process engine:
-/// `None` with no engine, or a take with no samples.
+/// One audio take loaded and analysed, its samples read from the engine
+/// over the window's link (`crate::view_client::LinkedAudio`): `None` with
+/// no engine, or a take with no samples.
 #[cfg(feature = "native")]
 fn session(item: String, length: f64, volume: f64) -> Option<editor::audio::AudioSession> {
-    let daw = crate::open::local_engine()?;
     editor::audio::AudioSession::load(
-        daw,
+        &crate::view_client::LinkedAudio,
         editor::audio::AudioTakeLocation {
             project: daw::service::ProjectContext::Current,
             item: daw::service::ItemRef::Guid(item),
@@ -1019,9 +1019,6 @@ fn frame_item(view: &mut Expression) {
 /// takes that aligned, each with its item's start and its alignment.
 #[cfg(feature = "native")]
 fn align_all(reference: &Take, dubs: &[Take]) -> Vec<(String, f64, editor::audio::Alignment)> {
-    let Some(daw) = crate::open::local_engine() else {
-        return Vec::new();
-    };
     dubs.iter()
         .filter_map(|dub| {
             let alignment = editor::audio::align_placed(
@@ -1031,18 +1028,44 @@ fn align_all(reference: &Take, dubs: &[Take]) -> Vec<(String, f64, editor::audio
                 dub.start,
                 editor::audio::AlignConfig::default(),
             )?;
-            if let Err(error) = editor::audio::apply_quantize::apply_warp(
-                daw,
-                daw::service::ProjectContext::Current,
-                &[daw::service::ItemRef::Guid(dub.item.clone())],
-                &alignment,
-            ) {
-                tracing::warn!(editor.item = %dub.item, error = ?error, "a take's alignment could not be written");
+            if let Err(error) = write_warp(&dub.item, &alignment) {
+                tracing::warn!(editor.item = %dub.item, error = %error, "a take's alignment could not be written");
                 return None;
             }
             Some((dub.item.clone(), dub.start, alignment))
         })
         .collect()
+}
+
+/// `alignment` written as `item`'s active take's stretch markers, on the
+/// engine, through the facade: placed where its item and take are now.
+#[cfg(feature = "native")]
+fn write_warp(item: &str, alignment: &editor::audio::Alignment) -> eyre::Result<()> {
+    let item = item.to_owned();
+    let alignment = alignment.clone();
+    crate::open::facade_blocking("a take's alignment", move |daw| async move {
+        let project = daw.current_project().await?;
+        let handle = project
+            .items()
+            .by_guid(&item)
+            .await?
+            .ok_or_else(|| daw::rpc::Error::InvalidOperation(format!("no item {item}")))?;
+        let info = handle.info().await?;
+        let take = handle.active_take();
+        let taken = take.info().await?;
+        let placement = editor::audio::TakePlacement {
+            item_position: info.position.as_seconds(),
+            start_offset: taken.start_offset.as_seconds(),
+            play_rate: if taken.play_rate > 0.0 {
+                taken.play_rate
+            } else {
+                1.0
+            },
+            frame_rate: alignment.frame_rate,
+        };
+        let markers = editor::audio::retime::alignment_markers(&alignment, placement);
+        take.set_stretch_markers(markers).await
+    })
 }
 
 /// Every note of `doc` moved by `warp` (a unit to a unit): its start and

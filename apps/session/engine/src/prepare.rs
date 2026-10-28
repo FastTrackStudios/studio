@@ -773,3 +773,75 @@ mod tests {
         }
     }
 }
+
+// ── The chart, laid over the song ────────────────────────────────────
+
+#[cfg(feature = "native")]
+static CHART_APPLY: architect::action::ActionMeta = crate::actions::meta(
+    "CHART_APPLY",
+    "chart_apply",
+    "Lay a chart over the song",
+    "Rebuild song `song` (its engine project; the current one when left out) from keyflow chart `text`: its tempo, meter and sections as the chart says, the click, count and cues generated again, and the song saved behind when it was opened from a `.session`. Text that does not parse changes nothing. Says its sections, tempo and where the song starts. What the chart editor does as typing pauses. One undo step.",
+    "Structure",
+    "",
+);
+
+/// Which song, and the chart.
+#[cfg(feature = "native")]
+#[derive(facet::Facet)]
+struct ChartApplyArg {
+    song: Option<String>,
+    text: String,
+}
+
+/// What a chart laid over a song came to.
+#[derive(facet::Facet, Clone, Debug, PartialEq)]
+pub struct ChartApplied {
+    pub sections: u32,
+    pub bpm: f64,
+    /// Seconds.
+    pub song_start: f64,
+}
+
+/// `CHART_APPLY` onto `list`.
+///
+/// # Errors
+///
+/// The list refused it (a duplicate id).
+#[cfg(feature = "native")]
+pub fn register(
+    list: &architect::action::ActionList,
+) -> Result<(), architect::action::ActionError> {
+    list.register(
+        &CHART_APPLY,
+        architect::action::Effect::Mutating,
+        |a: ChartApplyArg| {
+            let daw = crate::open::local_engine().ok_or("no song open in the engine")?;
+            let song = a
+                .song
+                .filter(|s| !s.is_empty())
+                .or_else(crate::open::current_song)
+                .ok_or("no song open in the engine")?;
+            // The rebuild and the guide spawn on the engine's runtime: run
+            // inside it, whichever thread the action came from (a key's
+            // runs on a plain thread behind the window).
+            let runtime = crate::open::engine_runtime().map_err(|e| e.to_string())?;
+            let _inside = runtime.enter();
+            let rebuilt = apply_chart(daw, &song, &a.text, true).map_err(|e| e.to_string())?;
+            // Saved where the song was opened from, when that is a `.session`.
+            let saved = daw
+                .read_project(&song, |p| std::path::PathBuf::from(&p.info.path))
+                .filter(|path| crate::open::is_session(path));
+            if let Some(dir) = saved {
+                crate::session_file::save_session_behind(daw, &song, &dir);
+            }
+            crate::song_model::request_resync();
+            Ok(ChartApplied {
+                sections: u32::try_from(rebuilt.built.sections).unwrap_or(u32::MAX),
+                bpm: rebuilt.built.tempo_bpm,
+                song_start: rebuilt.built.song_start_seconds,
+            })
+        },
+    )?;
+    Ok(())
+}

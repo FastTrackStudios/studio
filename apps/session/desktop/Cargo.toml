@@ -48,6 +48,10 @@ cli = [
     "dep:serde",
     "dep:serde_json",
     "dep:session",
+    "dep:session-engine",
+    "session-engine?/show",
+    "dep:dirs",
+    "dep:uuid",
     "dep:tokio",
     "dep:ureq",
     "dep:vox",
@@ -64,7 +68,7 @@ cli = [
 # The app on Blitz (dioxus-native): the panels-and-views shell with our own
 # title bar — see docs/app-on-blitz.md. Desktop only for now (iOS follows);
 # without it the desktop build launches the WRY app as before.
-native = ["session-domain", "dep:dioxus-native", "dep:session-ui", "dep:winit", "dep:rfd", "dep:dirs", "dep:lucide-dioxus"]
+native = ["session-domain", "dep:dioxus-native", "dep:session-ui", "dep:winit", "dep:rfd", "dep:dirs", "dep:lucide-dioxus", "dep:serde_json"]
 # signal's rigs in the session engine: the bass rig, the kit's sampled
 # voices (session-ui's `signal`; NAM's C++ and the sampler build with it).
 signal = ["native", "session-ui/signal"]
@@ -188,6 +192,10 @@ tracing-subscriber.workspace = true
 # winit for the window's title bar.
 dioxus-native = { workspace = true, optional = true }
 session-ui = { workspace = true, optional = true, features = ["native"] }
+# `studio ingest` (cli/ingest.rs): the engine's ingest, and its Live-set
+# splitter (`show`).
+session-engine = { workspace = true, optional = true, features = ["native"] }
+uuid = { workspace = true, optional = true }
 # The shared FastTrackStudio account and its sign-in UI (STA-361).
 fts-account = { workspace = true, features = ["ui"] }
 winit = { version = "0.31.0-beta.2", optional = true }

@@ -111,8 +111,8 @@ pub fn request(entry: Entry) {
                 setlist: title,
                 song: None,
             };
-            if let Err(busy) = session_ui::studio_engine::set::open_library(request) {
-                tracing::warn!(error = %busy, "open: the setlist waits for the open under way");
+            if let Err(busy) = session_ui::view_client::ask::open_library(&request) {
+                tracing::warn!(error = %busy, "open: the engine did not take the setlist");
             }
         }
         Entry::Join(link) => join_on_start(link),
@@ -126,7 +126,6 @@ pub fn request(entry: Entry) {
 #[must_use]
 pub fn pending() -> bool {
     session_ui::projects::pending_open()
-        || session_ui::project_new::made_pending()
         || NEW.load(std::sync::atomic::Ordering::Acquire)
         || JOIN
             .lock()
@@ -138,6 +137,7 @@ pub fn pending() -> bool {
 /// open from outside raised is spent, since there is no song to leave.
 pub fn entering() {
     let _ = session_ui::projects::take_back();
+    session_ui::projects::entered_set();
 }
 
 /// Ask Session, a song open, to leave it for what was just [`request`]ed.
@@ -246,16 +246,11 @@ pub fn stop() {
     session_ui::engine::transport(session_ui::engine::Move::Stop, 0.0);
 }
 
-/// Stop the transport before the DAW view takes what was handed to it —
-/// unless this window drives an engine in another process
-/// (`session_ui::studio_engine::link`): that engine owns the set and its
-/// transport, and a window coming up over it (a relaunch after a crash, a
-/// second window) shows what it plays without stopping it.
-pub fn stop_for_entry() {
-    if session_ui::studio_engine::link::linked().is_none() {
-        stop();
-    }
-}
+/// What the DAW view does to the transport as it takes what was handed to
+/// it: nothing. The engine owns the set and its transport, and a window
+/// coming up over it (a relaunch after a crash, a second window) shows
+/// what it plays without stopping it.
+pub const fn stop_for_entry() {}
 
 #[cfg(test)]
 mod tests {

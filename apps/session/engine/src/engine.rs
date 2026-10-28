@@ -26,7 +26,8 @@
 use std::collections::VecDeque;
 
 /// Something the user did that the engine needs to know about.
-#[derive(Clone, PartialEq, Debug)]
+#[repr(C)]
+#[derive(Clone, PartialEq, Debug, facet::Facet)]
 pub enum Edit {
     /// A barrier: when it is applied, every edit sent before it has been
     /// ([`ticket`], [`wait_done`]) — what an action that queued an edit
@@ -316,7 +317,8 @@ pub enum Edit {
 }
 
 /// Which of a track's controls a [`Edit::Touch`] is about.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, facet::Facet)]
 pub enum Touched {
     Volume,
     Pan,
@@ -337,6 +339,16 @@ impl Touched {
 }
 
 impl Edit {
+    /// The name the window gave an item this makes (a split's right half,
+    /// a copy), which the engine answers with its own.
+    #[must_use]
+    pub fn predicted(&self) -> Option<&str> {
+        match self {
+            Self::SplitItem(_, _, made) | Self::CopyItem(_, _, made) => Some(made),
+            _ => None,
+        }
+    }
+
     /// The track this is about.
     #[must_use]
     pub fn guid(&self) -> &str {
@@ -724,18 +736,39 @@ impl Transport {
         std::thread::Builder::new()
             .name("session-engine-transport".into())
             .spawn(move || {
+                let mut asked = web_time::Instant::now() - std::time::Duration::from_secs(1);
+                let mut last = Reading::default();
                 loop {
-                    let read = runtime.block_on(read_transport());
+                    // The playhead from the engine's stamped positions
+                    // (`TransportSync::positions`, pushed), carried on to
+                    // now — no call; the rest (loop, record, tempo) asked a
+                    // few times a second. A system that pushes none (a
+                    // REAPER) is asked for all of it.
+                    let pushed = crate::open::current_song()
+                        .as_deref()
+                        .and_then(crate::view_client::playhead_of);
+                    let read = match pushed {
+                        Some((at, playing)) => {
+                            if asked.elapsed() >= std::time::Duration::from_millis(250) {
+                                asked = web_time::Instant::now();
+                                if let Some(full) = runtime.block_on(read_transport()) {
+                                    last = full;
+                                }
+                            }
+                            Some(Reading {
+                                at,
+                                playing,
+                                ..last
+                            })
+                        }
+                        None => runtime.block_on(read_transport()),
+                    };
                     if let Some(read) = read {
                         if let Ok(mut slot) = writer.lock() {
                             *slot = read;
                         }
                     }
-                    // Faster than an audio block, slower than a frame:
-                    // polling per frame would ask the engine 240 times
-                    // a second for a number that changes 40 times, and
-                    // the extrapolation exists precisely so it does not
-                    // have to be asked more often than it moves.
+                    // Faster than an audio block, slower than a frame.
                     std::thread::sleep(std::time::Duration::from_millis(8));
                 }
             })
@@ -824,21 +857,43 @@ pub fn jumps() -> u64 {
 /// tells the window what happened, so waiting for the call to return
 /// would be waiting for news the window is already subscribed to.
 pub fn transport(command: Move, seconds: f64) {
+    // A press by a person: playing together, everyone's.
+    #[cfg(any(feature = "native", feature = "web"))]
+    if !matches!(command, Move::ToggleLoop | Move::ToggleRecord) {
+        crate::collab::transport_pressed();
+    }
+    // A window on an engine: play and record are the engine's actions
+    // (`SESSION_PLAY_STOP`, `TRANSPORT_RECORD`) — the engine holds a play
+    // for a song still streaming in and writes the takes a stop makes; the
+    // rest are the facade's.
+    #[cfg(feature = "native")]
+    if crate::view_client::is_linked() {
+        match command {
+            Move::PlayStop => {
+                crate::actions::off_the_window(crate::actions::PLAY_STOP.id, String::new());
+                return;
+            }
+            Move::ToggleRecord => {
+                crate::actions::off_the_window(crate::record::TRANSPORT_RECORD.id, "{}".to_owned());
+                return;
+            }
+            _ => {}
+        }
+    }
+    transport_here(command, seconds);
+}
+
+/// Move the transport of the engine in this process — what the engine's own
+/// actions do (a window's press is [`transport`]).
+pub fn transport_here(command: Move, seconds: f64) {
     if matches!(
         command,
         Move::Seek | Move::Home | Move::End | Move::PlayFrom
     ) {
         JUMPS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
-    // A press by a person: playing together, everyone's.
-    #[cfg(any(feature = "native", feature = "web"))]
-    if !matches!(command, Move::ToggleLoop | Move::ToggleRecord) {
-        crate::collab::transport_pressed();
-    }
-    // Record is an action (`TRANSPORT_RECORD`): the button and the key
-    // run what a model runs — off the event loop, as the rest are, since
-    // a stop writes the takes. A window with no song of its own (a
-    // remote) sends it to the engine it talks to.
+    // Record is an action (`TRANSPORT_RECORD`): what a model runs — off the
+    // caller's thread, since a stop writes the takes.
     #[cfg(feature = "native")]
     if matches!(command, Move::ToggleRecord) && crate::open::local_engine().is_some() {
         let _ = std::thread::Builder::new()
@@ -1115,17 +1170,11 @@ impl Applier {
                     while let Ok(more) = rx.try_recv() {
                         queue.push(more);
                     }
-                    let mut items = false;
+                    let mut batch = Vec::with_capacity(queue.len());
                     while let Some(edit) = queue.pop() {
-                        items |= edit.is_item();
-                        runtime.block_on(apply_reported(&edit));
+                        batch.push(edit);
                     }
-                    // What the engine plays now is what the window drew:
-                    // the tracks' detail and the hit markers read again.
-                    if items {
-                        crate::wave_detail::engine_changed();
-                        crate::hit_overlay::refresh();
-                    }
+                    send_batch(runtime, batch);
                 }
             })
             .ok()?;
@@ -1137,6 +1186,33 @@ impl Applier {
     #[cfg(feature = "native")]
     pub fn send(&self, edit: Edit) {
         let _ = self.edits.send(edit);
+    }
+}
+
+/// Carry out `batch` (in order) on the engine this window drives: as one
+/// call over its link (`crate::view_client::apply` — a kit's slip edit is a
+/// hundred thousand edits, one message), the engine answering with the
+/// items it made; or, driving a system with no link (a REAPER), edit by
+/// edit through the facade.
+#[cfg(feature = "native")]
+fn send_batch(runtime: &tokio::runtime::Runtime, batch: Vec<Edit>) {
+    if crate::view_client::is_linked() {
+        let song = crate::open::current_song().unwrap_or_default();
+        let Some(applied) = runtime.block_on(crate::view_client::apply(song, batch)) else {
+            return;
+        };
+        for (predicted, real) in &applied.made {
+            remember(predicted, real);
+        }
+        return;
+    }
+    let mut items = false;
+    for edit in &batch {
+        items |= edit.is_item();
+        runtime.block_on(apply_reported(edit));
+    }
+    if items {
+        crate::wave_detail::engine_changed();
     }
 }
 
@@ -1549,7 +1625,7 @@ pub fn apply_now(edit: &Edit) -> bool {
 /// One edit, against the engine — then said to the Action List, so
 /// whoever watches the app (a model, through `architect-mcp`'s `watch`)
 /// hears the session change as it changes.
-async fn apply_reported(edit: &Edit) {
+pub async fn apply_reported(edit: &Edit) {
     apply(edit).await;
     #[cfg(feature = "native")]
     if !matches!(edit, Edit::BeginUndo(_) | Edit::EndUndo(_) | Edit::Done(_)) {
@@ -2544,12 +2620,17 @@ impl Meters {
                     let Some(daw) = daw::rpc::Daw::try_get() else {
                         return;
                     };
-                    let Ok(project) = daw.current_project().await else {
-                        return;
-                    };
-                    let mut stream = project.meter_events();
+                    // Every song's frames: the song on screen's drawn, the
+                    // song changing under a running subscription (a tab
+                    // picked, the set rolling on in Live).
+                    let mut stream = daw.meter_events();
                     while let Ok(Some(frame)) = stream.recv().await {
                         let frame = frame.get();
+                        if crate::open::current_song()
+                            .is_some_and(|song| song != frame.project_guid)
+                        {
+                            continue;
+                        }
                         // Overwrite rather than append: the only frame
                         // worth drawing is the one that just arrived.
                         let Ok(mut slot) = into_thread.lock() else {

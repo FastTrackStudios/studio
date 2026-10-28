@@ -271,11 +271,24 @@ pub fn pending_open() -> bool {
     NEXT.lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .is_some()
-        || crate::studio_engine::set::is_opening()
-        // A window driving an engine in another process: the set that
-        // engine opened (the CLI's `studio open`) is shown here as it is.
-        || (crate::studio_engine::link::linked().is_some()
-            && crate::studio_engine::set::lineup().is_some())
+        // The engine opening a set, or one it opened that this window has
+        // not gone into yet (the CLI's `studio open`, another window's, the
+        // set open as the window attached): shown here as it is.
+        || crate::view_client::peek_set(|view| {
+            matches!(view.opening, crate::studio_engine::set::Opening::Busy(_))
+                || (view.setlist.is_some()
+                    && view.epoch != ENTERED.load(std::sync::atomic::Ordering::Acquire))
+        })
+}
+
+/// The engine's set this window last went into (its epoch).
+static ENTERED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(u64::MAX);
+
+/// The window goes into the set the engine has open now: it is not
+/// [`pending_open`] again until the engine opens another.
+pub fn entered_set() {
+    let epoch = crate::view_client::peek_set(|view| view.epoch);
+    ENTERED.store(epoch, std::sync::atomic::Ordering::Release);
 }
 
 /// What was asked to be opened next, once.

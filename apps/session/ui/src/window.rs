@@ -11,10 +11,9 @@
 //! for the window's next frame (`crate::window_queue`).
 
 use architect::action::{ActionList, ActionMeta, Effect};
-use daw::service::TempoMap as _;
 use facet::Facet;
 
-use crate::actions::{meta, resolve, song};
+use crate::actions::meta;
 use crate::window_queue::{Action, queue, take_window};
 
 /// A key's actions run through the list, and what the window is to do
@@ -689,71 +688,16 @@ static VIEW: ActionMeta = meta(
     "",
 );
 
-/// What to look at.
-#[derive(Facet)]
-struct ViewArg {
-    from: Option<f64>,
-    to: Option<f64>,
-    bars: Option<Vec<i32>>,
-    section: Option<String>,
-    /// Which of the sections of that name, from 1 (1).
-    nth: Option<u32>,
-    tracks: Option<Vec<String>>,
-}
-
-/// The span `a` asks for, if it asks for one.
-fn view_span(
-    daw: &daw::standalone::Standalone,
-    project: &daw::service::ProjectContext,
-    a: &ViewArg,
-) -> Result<Option<(f64, f64)>, String> {
-    if let Some(name) = &a.section {
-        let all = crate::actions::sections(daw, project);
-        let named: Vec<&crate::actions::SectionOut> = all
-            .iter()
-            .filter(|s| s.name.trim().eq_ignore_ascii_case(name.trim()))
-            .collect();
-        let nth = usize::try_from(a.nth.unwrap_or(1).max(1)).unwrap_or(1);
-        return named
-            .get(nth.saturating_sub(1))
-            .map(|s| Some((s.start, s.end)))
-            .ok_or_else(|| {
-                let mut known: Vec<&str> = all.iter().map(|s| s.name.as_str()).collect();
-                known.dedup();
-                format!("no section {name} (#{nth}): the song has {known:?}")
-            });
-    }
-    if let Some(bars) = &a.bars {
-        let (Some(&first), Some(&last)) = (bars.first(), bars.last()) else {
-            return Err("`bars` is [first, last]".to_owned());
-        };
-        // Bars as the song counts them; the bar after the last found in
-        // the engine's, where there is no bar 0 to step over.
-        let from = crate::song_bars::time(daw, &project, first.min(last), 1, 0.0);
-        let after = crate::song_bars::measure(daw, &project, first.max(last)).saturating_add(1);
-        let to = daw.musical_to_time(project.clone(), after, 1, 0.0);
-        return Ok(Some((from, to)));
-    }
-    match (a.from, a.to) {
-        (Some(from), Some(to)) if to > from => Ok(Some((from.max(0.0), to))),
-        (Some(_), Some(_)) => Err("`to` must be after `from`".to_owned()),
-        (None, None) => Ok(None),
-        _ => Err("a span is `from` and `to` together".to_owned()),
-    }
-}
-
 /// `SESSION_VIEW`: frame part of the song and/or some tracks in the
 /// arrangement.
 fn register_view(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&VIEW, Effect::Mutating, |a: ViewArg| {
-        let (daw, project) = song()?;
-        let span = view_span(daw, &project, &a)?;
-        let tracks = a
-            .tracks
-            .iter()
-            .flatten()
-            .map(|t| resolve(daw, &project, t))
-            .collect::<Result<Vec<String>, String>>()?;
+    list.register(&VIEW, Effect::Mutating, |a: crate::page::ViewArg| {
+        // The span and tracks as the song has them (`SESSION_SPAN`, on the
+        // engine).
+        let asked = facet_json::to_string(&a).map_err(|e| e.to_string())?;
+        let said = crate::actions::run("SESSION_SPAN", asked.as_bytes())?;
+        let crate::page::SpanOut { span, tracks } =
+            facet_json::from_slice(&said).map_err(|e| format!("SESSION_SPAN: {e}"))?;
         if span.is_none() && tracks.is_empty() {
             return Err(
                 "nothing to view: give a span (from/to, bars, section) or tracks".to_owned(),

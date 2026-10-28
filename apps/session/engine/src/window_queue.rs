@@ -232,6 +232,180 @@ pub fn queue(action: Action) -> bool {
     false
 }
 
+// ── What the engine asks of a window ───────────────────────────────
+
+/// What the engine asks a window to do: an edit the arrangement carries
+/// out where it is seen (the kit slipped by the hits an action moved), or
+/// a place to look. Engine side: queued with [`ask`], taken by a window
+/// over its link (`crate::view::EngineView::take_window`) — each by one
+/// window — and turned into its [`Action`].
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, facet::Facet)]
+pub enum Asked {
+    GoToStart,
+    /// See [`Action::Frame`].
+    Frame {
+        time: Option<(i64, i64)>,
+        tracks: Vec<String>,
+    },
+    /// See [`Action::RemoveRange`].
+    RemoveRange {
+        tracks: Vec<String>,
+        from_us: i64,
+        to_us: i64,
+    },
+    /// See [`Action::StretchDrums`].
+    StretchDrums {
+        edits: Vec<StretchEdit>,
+        ticket: u64,
+    },
+    /// See [`Action::SlipDrums`].
+    SlipDrums {
+        moves: Vec<(i64, i64)>,
+        pre_roll_us: i64,
+        crossfade_us: i64,
+        stretch_over_us: i64,
+        attacks_us: Vec<i64>,
+        ticket: u64,
+    },
+    /// See [`Action::RestoreDrums`].
+    RestoreDrums {
+        from_us: i64,
+        to_us: i64,
+        ticket: u64,
+    },
+    /// Run one of the window's own actions (`id`, its arguments as JSON) —
+    /// what an engine action does to the view (a step pages it).
+    Run {
+        id: String,
+        args: String,
+    },
+}
+
+impl From<Asked> for Action {
+    fn from(asked: Asked) -> Self {
+        match asked {
+            Asked::GoToStart => Self::GoToStart,
+            Asked::Frame { time, tracks } => Self::Frame { time, tracks },
+            Asked::RemoveRange {
+                tracks,
+                from_us,
+                to_us,
+            } => Self::RemoveRange {
+                tracks,
+                from_us,
+                to_us,
+            },
+            Asked::StretchDrums { edits, ticket } => Self::StretchDrums { edits, ticket },
+            Asked::SlipDrums {
+                moves,
+                pre_roll_us,
+                crossfade_us,
+                stretch_over_us,
+                attacks_us,
+                ticket,
+            } => Self::SlipDrums {
+                moves,
+                pre_roll_us,
+                crossfade_us,
+                stretch_over_us,
+                attacks_us,
+                ticket,
+            },
+            Asked::RestoreDrums {
+                from_us,
+                to_us,
+                ticket,
+            } => Self::RestoreDrums {
+                from_us,
+                to_us,
+                ticket,
+            },
+            Asked::Run { id, .. } => Self::Unbound(id),
+        }
+    }
+}
+
+/// What the engine has asked, not yet taken by a window.
+static ASKED: Mutex<VecDeque<Asked>> = Mutex::new(VecDeque::new());
+
+/// How many windows follow this engine over a link (the engine's view
+/// host counts them): what [`ask`] needs one of.
+static LINKED_WINDOWS: AtomicUsize = AtomicUsize::new(0);
+
+/// Told when something is asked: the engine's view host, which tells the
+/// windows.
+static ON_ASK: std::sync::OnceLock<fn(usize)> = std::sync::OnceLock::new();
+
+/// The engine's view host counts `windows` following it.
+pub fn set_linked_windows(windows: usize) {
+    LINKED_WINDOWS.store(windows, Ordering::Release);
+}
+
+/// Whether a window follows this engine.
+#[must_use]
+pub fn engine_has_window() -> bool {
+    LINKED_WINDOWS.load(Ordering::Acquire) > 0
+}
+
+/// How the engine's view host hears of an ask (once per process).
+pub fn on_ask(notify: fn(usize)) {
+    let _ = ON_ASK.set(notify);
+}
+
+/// Ask a window to do `asked`; refused (`false`) when no window follows
+/// the engine — nobody would ever take it.
+pub fn ask(asked: Asked) -> bool {
+    if !engine_has_window() {
+        tracing::debug!(?asked, "engine ask dropped: no window follows the engine");
+        return false;
+    }
+    let pending = match ASKED.lock() {
+        Ok(mut q) => {
+            q.push_back(asked);
+            q.len()
+        }
+        Err(_) => return false,
+    };
+    if let Some(notify) = ON_ASK.get() {
+        notify(pending);
+    }
+    true
+}
+
+/// What has been asked, taken: one window carries each out.
+#[must_use]
+pub fn take_asked() -> Vec<Asked> {
+    ASKED
+        .lock()
+        .map(|mut q| q.drain(..).collect())
+        .unwrap_or_default()
+}
+
+/// What is waiting to be taken.
+#[must_use]
+pub fn asked_pending() -> usize {
+    ASKED.lock().map_or(0, |q| q.len())
+}
+
+/// Hand `asked` to this window: its own actions run (`run` runs one by
+/// id), the rest queued for its next frame.
+pub fn receive(asked: Vec<Asked>, run: impl Fn(&str, &str)) {
+    let mut queued = Vec::new();
+    for one in asked {
+        match one {
+            Asked::Run { id, args } => run(&id, &args),
+            other => queued.push(Action::from(other)),
+        }
+    }
+    if queued.is_empty() {
+        return;
+    }
+    if let Ok(mut q) = WINDOW.lock() {
+        q.extend(queued);
+    }
+}
+
 // ── The windows attached ─────────────────────────────────────────────
 
 /// The ids of the window's own actions, once a window registered them.

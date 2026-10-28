@@ -97,7 +97,7 @@ fn menu_bar() -> Node {
 /// bus's thread so a long one (a save) holds nothing up. A window action
 /// queues for the window, which the shell's frame loop carries out.
 fn run_action(id: &str) {
-    if let Err(error) = crate::actions::list().run_json(id, b"{}") {
+    if let Err(error) = crate::actions::run(id, b"{}") {
         tracing::warn!(action.id = id, error = %error, "menu action refused");
     }
 }

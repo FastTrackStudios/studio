@@ -500,7 +500,7 @@ fn cell(i: usize, align: &str) -> String {
 /// Move song `song` to `to`, in the engine's set: the window follows it.
 #[cfg(feature = "native")]
 fn reorder(_shown: Signal<Setlist>, song: usize, to: usize) {
-    crate::studio_engine::set::reorder(song, to);
+    crate::view_client::ask::reorder(song, to);
 }
 
 /// Move song `song` to `to` — a web page holds its own set.
@@ -512,7 +512,7 @@ fn reorder(mut shown: Signal<Setlist>, song: usize, to: usize) {
 /// Take song `song` out of the engine's set.
 #[cfg(feature = "native")]
 fn remove(_shown: Signal<Setlist>, song: usize) {
-    crate::studio_engine::set::remove(song);
+    crate::view_client::ask::remove(song);
 }
 
 /// Take song `song` out of a web page's own set.

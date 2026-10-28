@@ -5,8 +5,7 @@
 //! at a time — each ticked where it is shown in a lane, a click showing or
 //! hiding it.
 
-use daw::service::{ProjectContext, TrackRef};
-use daw_proto::automation::{Automation, EnvelopeLocation, EnvelopeRef};
+use daw_proto::automation::EnvelopeRef;
 use daw_proto::primitives::AutomationMode;
 
 use crate::popup::Choice;
@@ -73,45 +72,24 @@ pub fn modes(
         .collect()
 }
 
-/// The envelopes of `track` that are shown, by reference.
-fn shown(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    track: &str,
-) -> Vec<EnvelopeRef> {
-    Automation::envelopes(daw, project.clone(), TrackRef::Guid(track.to_owned()))
-        .into_iter()
-        .filter(|e| e.visible)
-        .map(|e| match (e.fx_guid, e.param_index) {
-            (Some(fx_guid), Some(param_index)) => EnvelopeRef::FxParam {
-                fx_guid,
-                param_index,
-            },
-            _ => EnvelopeRef::Type(e.envelope_type),
-        })
-        .collect()
-}
-
-/// Whether `track` shows its items' volume curves on them.
-#[must_use]
-pub fn takes_shown(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    track: &str,
-) -> bool {
-    daw::service::Tracks::ext_state(daw, project.clone(), TrackRef::Guid(track.to_owned()))
-        .iter()
-        .any(|e| e.key == crate::automation::TAKE_LINES_KEY && e.value == "1")
+/// What the engine says `track`'s menu lists (`AUTOMATION_MENU`), with
+/// plugin `fx`'s parameters when asked; `None` when it would not say.
+fn facts(track: &str, fx: Option<usize>) -> Option<crate::automation_actions::MenuFacts> {
+    let args = serde_json::json!({ "track": track, "fx": fx });
+    let said = crate::actions::run("AUTOMATION_MENU", args.to_string().as_bytes())
+        .inspect_err(|e| tracing::warn!(error = %e, "automation menu: the engine did not say"))
+        .ok()?;
+    facet_json::from_slice(&said).ok()
 }
 
 /// The first list: the track's own envelopes, then its plugins.
 #[must_use]
 pub fn top(track: &str) -> Vec<Choice<Pick>> {
     use daw_proto::automation::EnvelopeType as T;
-    let Ok((daw, project)) = crate::actions::song() else {
+    let Some(facts) = facts(track, None) else {
         return Vec::new();
     };
-    let on = shown(daw, &project, track);
+    let on = &facts.shown;
     let mut out = vec![Choice::heading("Track")];
     for (label, ty) in [
         ("Volume", T::Volume),
@@ -131,17 +109,15 @@ pub fn top(track: &str) -> Vec<Choice<Pick>> {
             },
         ));
     }
-    let takes_on = takes_shown(daw, &project, track);
     out.push(Choice::new(
         "Item volume curves",
-        takes_on,
+        facts.takes,
         Pick::TakeLines {
             track: track.to_owned(),
-            show: !takes_on,
+            show: !facts.takes,
         },
     ));
-    if crate::vocal_level::has_lanes(daw, &project, track) {
-        let is_on = crate::vocal_level::lane_shown(daw, &project, track);
+    if let Some(is_on) = facts.leveler {
         out.push(Choice::new(
             crate::automation::LEVELER,
             is_on,
@@ -152,21 +128,21 @@ pub fn top(track: &str) -> Vec<Choice<Pick>> {
         ));
     }
     // The track's mode: how a fader move writes where no envelope is yet.
-    let now = daw::service::Tracks::get(daw, project.clone(), TrackRef::Guid(track.to_owned()))
-        .map_or(AutomationMode::TrimRead, |t| t.automation_mode);
     out.push(Choice::heading("Track mode"));
-    out.extend(modes(track, None, now));
-    let chain = daw_proto::fx::FxChainContext::Track(track.to_owned());
-    let fxs = daw_proto::fx::Effects::list(daw, project, chain);
-    if !fxs.is_empty() {
+    out.extend(modes(
+        track,
+        None,
+        facts.mode.unwrap_or(AutomationMode::TrimRead),
+    ));
+    if !facts.fxs.is_empty() {
         out.push(Choice::heading("Effects"));
     }
-    for (i, fx) in fxs.iter().enumerate() {
+    for (i, (guid, name)) in facts.fxs.iter().enumerate() {
         let automated = on
             .iter()
-            .any(|t| matches!(t, EnvelopeRef::FxParam { fx_guid, .. } if *fx_guid == fx.guid));
+            .any(|t| matches!(t, EnvelopeRef::FxParam { fx_guid, .. } if fx_guid == guid));
         let mut choice = Choice::more(
-            fx.name.clone(),
+            name.clone(),
             Pick::Fx {
                 track: track.to_owned(),
                 fx: i.saturating_add(1),
@@ -181,15 +157,10 @@ pub fn top(track: &str) -> Vec<Choice<Pick>> {
 /// One plugin's parameters.
 #[must_use]
 pub fn params(track: &str, fx: usize) -> Vec<Choice<Pick>> {
-    let Ok((daw, project)) = crate::actions::song() else {
+    let Some(facts) = facts(track, Some(fx)) else {
         return Vec::new();
     };
-    let on = shown(daw, &project, track);
-    let chain = daw_proto::fx::FxChainContext::Track(track.to_owned());
-    let Some(plugin) = daw_proto::fx::Effects::list(daw, project.clone(), chain.clone())
-        .into_iter()
-        .nth(fx.saturating_sub(1))
-    else {
+    let Some((guid, name)) = facts.fxs.get(fx.saturating_sub(1)) else {
         return Vec::new();
     };
     let mut out = vec![
@@ -200,26 +171,30 @@ pub fn params(track: &str, fx: usize) -> Vec<Choice<Pick>> {
                 track: track.to_owned(),
             },
         ),
-        Choice::heading(plugin.name.clone()),
+        Choice::heading(name.clone()),
     ];
-    let target =
-        daw_proto::fx::FxTarget::new(chain, daw_proto::fx::FxRef::Guid(plugin.guid.clone()));
-    for p in daw_proto::fx::Effects::parameters(daw, project, target) {
-        let is_on = on.contains(&EnvelopeRef::FxParam {
-            fx_guid: plugin.guid.clone(),
-            param_index: p.index,
+    for (index, param) in &facts.params {
+        let is_on = facts.shown.contains(&EnvelopeRef::FxParam {
+            fx_guid: guid.clone(),
+            param_index: *index,
         });
         out.push(Choice::new(
-            p.name.clone(),
+            param.clone(),
             is_on,
             Pick::Toggle {
                 track: track.to_owned(),
-                envelope: format!("#{fx}/{}", p.name),
+                envelope: format!("#{fx}/{param}"),
                 show: !is_on,
             },
         ));
     }
     out
+}
+
+/// Run `id` on the engine with `args`, behind the window; the engine's
+/// handler asks the windows to read the song back.
+fn ask(id: &'static str, args: serde_json::Value) {
+    crate::actions::off_the_window(id, args.to_string());
 }
 
 /// Do what `pick` says: the next list to show, or `None` when the menu is
@@ -234,39 +209,33 @@ pub fn act(pick: &Pick) -> Option<Vec<Choice<Pick>>> {
             envelope,
             mode,
         } => {
-            if let Ok((daw, project)) = crate::actions::song() {
-                match envelope {
-                    Some(target) => Automation::set_automation_mode(
-                        daw,
-                        project,
-                        EnvelopeLocation::new(TrackRef::Guid(track.clone()), target.clone()),
-                        *mode,
-                    ),
-                    None => {
-                        let _ = daw::service::Tracks::set_automation_mode(
-                            daw,
-                            project,
-                            TrackRef::Guid(track.clone()),
-                            *mode,
-                        );
-                    }
-                }
-                crate::song_model::request_resync();
-            }
+            let Ok(target) = facet_json::to_string(envelope) else {
+                return None;
+            };
+            let Ok(mode) = facet_json::to_string(mode) else {
+                return None;
+            };
+            crate::actions::off_the_window(
+                "AUTOMATION_SET_MODE",
+                format!(
+                    r#"{{"track":{},"target":{target},"mode":{mode}}}"#,
+                    serde_json::Value::from(track.as_str())
+                ),
+            );
             None
         }
         Pick::TakeLines { track, show } => {
-            if let Ok((daw, project)) = crate::actions::song() {
-                crate::automation::show_takes(daw, &project, track, *show);
-                crate::song_model::request_resync();
-            }
+            ask(
+                "AUTOMATION_SHOW",
+                serde_json::json!({ "track": track, "envelope": "Item volume", "shown": show }),
+            );
             None
         }
         Pick::Leveler { track, show } => {
-            if let Ok((daw, project)) = crate::actions::song() {
-                crate::vocal_level::show_lane(daw, &project, track, *show);
-                crate::song_model::request_resync();
-            }
+            ask(
+                "AUTOMATION_SHOW",
+                serde_json::json!({ "track": track, "envelope": crate::automation::LEVELER, "shown": show }),
+            );
             None
         }
         Pick::Toggle {
@@ -274,25 +243,10 @@ pub fn act(pick: &Pick) -> Option<Vec<Choice<Pick>>> {
             envelope,
             show,
         } => {
-            let Ok((daw, project)) = crate::actions::song() else {
-                return None;
-            };
-            match crate::automation_actions::find(daw, &project, track, envelope) {
-                Ok(found) => {
-                    if *show {
-                        crate::automation_actions::show(daw, &project, track, &found, 64);
-                    } else {
-                        Automation::set_visible(
-                            daw,
-                            project,
-                            EnvelopeLocation::new(TrackRef::Guid(track.clone()), found.target),
-                            false,
-                        );
-                    }
-                    crate::song_model::request_resync();
-                }
-                Err(error) => tracing::warn!(error = %error, "automation menu: no such envelope"),
-            }
+            ask(
+                "AUTOMATION_SHOW",
+                serde_json::json!({ "track": track, "envelope": envelope, "shown": show }),
+            );
             None
         }
     }

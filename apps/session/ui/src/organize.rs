@@ -29,7 +29,7 @@
 use dioxus::prelude::*;
 use session::section_kinds::{MarkerKind, SectionKind};
 
-pub use crate::organize_edit::{Button, engine_edit, insert};
+pub use crate::organize_edit::Button;
 use crate::shell::{DIM, RULE, TEXT};
 
 /// The structure buttons, as the REAPER toolbar has them.
@@ -88,9 +88,16 @@ fn ToolButton(button: Button, label: String) -> Element {
 /// Run a button's action on the engine, as the arrangement has the cursor
 /// and selection, then bring the guide and the arrangement up to date.
 fn press(button: Button, shift: bool) {
-    if let Some(daw) = crate::open::local_engine() {
-        insert(daw, button, shift, crate::edit_state::current());
-    } else if let Err(e) = press_remote(button, shift) {
+    // Studio's engine: its own press (`ORGANIZE_PRESS`), over the link. A
+    // REAPER driven: its commands, through the facade.
+    if crate::view_client::is_linked() {
+        crate::actions::off_the_window(
+            "ORGANIZE_PRESS",
+            serde_json::json!({ "button": button.key(), "shift": shift }).to_string(),
+        );
+        return;
+    }
+    if let Err(e) = press_remote(button, shift) {
         tracing::warn!(error = %e, ?button, "organize: the remote refused the insert");
     }
     crate::song_model::request_resync();
