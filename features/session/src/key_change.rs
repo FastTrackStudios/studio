@@ -162,6 +162,18 @@ mod tests {
     }
 
     #[test]
+    fn a_root_picked_in_the_songs_mode_is_named_in_that_mode() {
+        // C major set to A moves −3 and sounds in A major, so it is
+        // labelled A major, never A minor.
+        let p = plan(&[], &key("C"), &key("A"));
+        assert_eq!(p.semitones, -3);
+        assert_eq!(p.key_name, "A major");
+        let minor = |r| key_from_name(r, false).unwrap();
+        let p = plan(&[], &minor("A"), &minor("C"));
+        assert_eq!((p.semitones, p.key_name.as_str()), (3, "C minor"));
+    }
+
+    #[test]
     fn the_interval_goes_the_nearer_way() {
         assert_eq!(interval(&key("C"), &key("G")), -5);
         assert_eq!(interval(&key("C"), &key("F")), 5);

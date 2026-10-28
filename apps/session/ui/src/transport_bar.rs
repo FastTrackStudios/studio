@@ -138,7 +138,9 @@ fn TransportBarView(reading: crate::engine::Reading, big: bool) -> Element {
     } else {
         format!("{card}px")
     };
-    // The key picker: a root and a mode, then the engine changes the song.
+    // The key picker: twelve roots in the song's own mode, then the engine
+    // changes the song.
+    let suffix = if key.ends_with('m') { "m" } else { "" };
     let picker = rsx! {
         if key_menu() {
             div {
@@ -154,22 +156,20 @@ fn TransportBarView(reading: crate::engine::Reading, big: bool) -> Element {
                         display:grid; grid-template-columns:repeat(6, 38px); gap:3px; \
                         box-shadow:0 10px 30px rgba(0,0,0,0.5);",
                 onclick: move |e| e.stop_propagation(),
-                for mode in ["major", "minor"] {
-                    for root in KEY_ROOTS {
-                        button {
-                            key: "{root}-{mode}",
-                            style: stop_option(false),
-                            title: "Change the song to {root} {mode}",
-                            onclick: move |_| {
-                                #[cfg(feature = "native")]
-                                crate::actions::off_the_window(
-                                    "SONG_KEY",
-                                    format!("{{\"root\":\"{root}\",\"mode\":\"{mode}\"}}"),
-                                );
-                                key_menu.set(false);
-                            },
-                            if mode == "minor" { "{root}m" } else { "{root}" }
-                        }
+                for root in KEY_ROOTS {
+                    button {
+                        key: "{root}",
+                        style: stop_option(false),
+                        title: "Change the song to {root}{suffix}",
+                        onclick: move |_| {
+                            #[cfg(feature = "native")]
+                            crate::actions::off_the_window(
+                                "SONG_KEY",
+                                format!("{{\"root\":\"{root}\"}}"),
+                            );
+                            key_menu.set(false);
+                        },
+                        "{root}{suffix}"
                     }
                 }
             }

@@ -192,6 +192,7 @@ pub mod hits;
 pub mod hits_midi;
 #[cfg(feature = "native")]
 pub mod item_actions;
+#[cfg(feature = "native")]
 pub mod key_change;
 pub mod kit_gate;
 pub mod mix_chains;
