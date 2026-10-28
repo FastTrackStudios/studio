@@ -813,6 +813,7 @@ fn write_item(
         ItemField::Stretch,
         ItemField::TakeVolume,
         ItemField::Notes,
+        ItemField::TakePitch,
         ItemField::TakeSettings,
         ItemField::TakeEnvelopes,
         ItemField::Midi,

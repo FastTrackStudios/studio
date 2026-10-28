@@ -462,6 +462,7 @@ fn register_mode(list: &ActionList) -> Result<(), architect::action::ActionError
 fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError> {
     register_mode(list)?;
     register_phase(list)?;
+    crate::key_change::register(list)?;
     register_sections(list)?;
     register_tracks(list)?;
     register_fundamental(list)?;

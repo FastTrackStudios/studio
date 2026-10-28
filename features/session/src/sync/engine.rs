@@ -1250,6 +1250,7 @@ async fn set_item_fields(
             | ItemField::TakeEnvelopes
             | ItemField::Midi
             | ItemField::Takes => {}
+            ItemField::TakePitch => h.active_take().set_pitch(item.take.pitch).await?,
             ItemField::Muted if item.muted => h.mute().await?,
             ItemField::Muted => h.unmute().await?,
             ItemField::Locked if item.locked => h.lock().await?,

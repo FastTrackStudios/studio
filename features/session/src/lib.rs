@@ -70,6 +70,7 @@ pub mod guide;
 pub mod key;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod key_actions;
+pub mod key_change;
 pub mod load_selection;
 // NOT gated, deliberately: `chart_import`, `setlist::service::demo` and
 // `task-player-ui` (the browser setlist engine) all reach into

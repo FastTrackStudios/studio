@@ -87,6 +87,7 @@ fn TransportBarView(reading: crate::engine::Reading, big: bool) -> Element {
     let density = crate::shell::use_density();
     let r = reading;
     let mut stop_menu = use_signal(|| false);
+    let mut key_menu = use_signal(|| false);
     // Open above the bottom bar's buttons, below a small bar's.
     let menu_side = if big { "bottom:100%;" } else { "top:100%;" };
     // Counted from the song, as the ruler counts.
@@ -136,6 +137,43 @@ fn TransportBarView(reading: crate::engine::Reading, big: bool) -> Element {
         "100%".to_owned()
     } else {
         format!("{card}px")
+    };
+    // The key picker: a root and a mode, then the engine changes the song.
+    let picker = rsx! {
+        if key_menu() {
+            div {
+                style: "{crate::shell::SCRIM} z-index:40;",
+                onclick: move |e| {
+                    e.stop_propagation();
+                    key_menu.set(false);
+                },
+            }
+            div {
+                style: "position:absolute; right:0; {menu_side} z-index:41; padding:8px; \
+                        background:{BG}; border:1px solid {RULE}; border-radius:10px; \
+                        display:grid; grid-template-columns:repeat(6, 38px); gap:3px; \
+                        box-shadow:0 10px 30px rgba(0,0,0,0.5);",
+                onclick: move |e| e.stop_propagation(),
+                for mode in ["major", "minor"] {
+                    for root in KEY_ROOTS {
+                        button {
+                            key: "{root}-{mode}",
+                            style: stop_option(false),
+                            title: "Change the song to {root} {mode}",
+                            onclick: move |_| {
+                                #[cfg(feature = "native")]
+                                crate::actions::off_the_window(
+                                    "SONG_KEY",
+                                    format!("{{\"root\":\"{root}\",\"mode\":\"{mode}\"}}"),
+                                );
+                                key_menu.set(false);
+                            },
+                            if mode == "minor" { "{root}m" } else { "{root}" }
+                        }
+                    }
+                }
+            }
+        }
     };
     rsx! {
         div {
@@ -266,7 +304,13 @@ fn TransportBarView(reading: crate::engine::Reading, big: bool) -> Element {
                             {card_look}",
                     Reading { label: "BPM", value: bpm, mono: true, big }
                     div { style: "width:1px; margin:5px 0; background:{RULE};" }
-                    Reading { label: "KEY", value: key, big }
+                    div {
+                        style: "position:relative; height:100%; display:flex; align-items:center; cursor:pointer;",
+                        title: "Change the song's key",
+                        onclick: move |_| key_menu.toggle(),
+                        Reading { label: "KEY", value: key, big }
+                        {picker}
+                    }
                 }
             } else {
                 // One small pill: `68 · F`, a note glyph for what the
@@ -275,13 +319,15 @@ fn TransportBarView(reading: crate::engine::Reading, big: bool) -> Element {
                     Hairline {}
                 }
                 div {
-                    title: "Tempo {bpm} BPM, key {key}",
-                    style: "height:{high}; box-sizing:border-box; display:flex; align-items:center; \
-                            gap:6px; padding:0 12px; {card_look} white-space:nowrap;",
+                    title: "Tempo {bpm} BPM, key {key} (click to change the key)",
+                    onclick: move |_| key_menu.toggle(),
+                    style: "position:relative; height:{high}; box-sizing:border-box; display:flex; align-items:center; \
+                            gap:6px; padding:0 12px; {card_look} white-space:nowrap; cursor:pointer;",
                     NoteGlyph {}
                     span { style: "font-size:{pill_px}px; color:{TEXT}; font-family:ui-monospace, monospace;", "{bpm}" }
                     span { style: "font-size:{pill_px}px; color:{DIM};", "·" }
                     span { style: "font-size:{pill_px}px; font-weight:700; color:{TEXT};", "{key}" }
+                    {picker}
                 }
             }
         }
@@ -309,6 +355,12 @@ fn stop_option(on: bool) -> String {
          cursor:pointer; color:{ink}; background:{wash};"
     )
 }
+
+/// The twelve roots the key picker offers, flats where a song is usually
+/// written in them.
+const KEY_ROOTS: [&str; 12] = [
+    "C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B",
+];
 
 /// A hairline between the big transport's parts.
 #[component]
