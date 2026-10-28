@@ -81,7 +81,10 @@ struct SatStage {
 impl SatStage {
     fn new(sample_rate: f32) -> Self {
         Self {
-            pre: [ClassAPreamp::new(sample_rate), ClassAPreamp::new(sample_rate)],
+            pre: [
+                ClassAPreamp::new(sample_rate),
+                ClassAPreamp::new(sample_rate),
+            ],
             quantiser: [DigitalStage::new(), DigitalStage::new()],
             emph: [EmphasisEq::new(sample_rate), EmphasisEq::new(sample_rate)],
             deluxe: Deluxe::new(f64::from(sample_rate)),

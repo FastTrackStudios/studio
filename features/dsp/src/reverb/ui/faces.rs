@@ -682,8 +682,8 @@ fn IrBrowser(ink: String, accent: String) -> Element {
 
         let state = ui.state.clone();
         let params = ui.params.clone();
-        let stage = crate::stack::host::use_focused_stage()
-            .min(crate::reverb::ui::params::MAX_STAGES - 1);
+        let stage =
+            crate::stack::host::use_focused_stage().min(crate::reverb::ui::params::MAX_STAGES - 1);
         let loading = state.ir_loading[stage].load(std::sync::atomic::Ordering::Relaxed);
         let loaded = state.ir_loaded[stage].lock().clone();
         let error = state.ir_error[stage].lock().clone();

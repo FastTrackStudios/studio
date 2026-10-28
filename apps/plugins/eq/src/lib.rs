@@ -184,10 +184,8 @@ impl EqStage {
         // preset that used to stop at the translator: Character is a squarer
         // rather than a trim, Auto Gain moves the whole output, and the pan
         // is either L/R or M/S depending on its mode.
-        self.engine
-            .set_auto_gain(p.auto_gain.value() > 0.5);
-        self.engine
-            .set_character(p.character.value().max(0) as u32);
+        self.engine.set_auto_gain(p.auto_gain.value() > 0.5);
+        self.engine.set_character(p.character.value().max(0) as u32);
         self.engine.set_output_pan(
             f64::from(p.output_pan.value()),
             p.output_pan_mid_side.value() > 0.5,
@@ -242,14 +240,10 @@ impl EqStage {
                 low_freq_hz: pultec_low_freq(p.pultec_low_freq.value()),
                 low_boost_db: f64::from(p.pultec_low_boost_db.value()),
                 low_atten_db: f64::from(p.pultec_low_atten_db.value()),
-                high_boost_freq_hz: pultec_high_boost_freq(
-                    p.pultec_high_boost_freq.value(),
-                ),
+                high_boost_freq_hz: pultec_high_boost_freq(p.pultec_high_boost_freq.value()),
                 high_boost_db: f64::from(p.pultec_high_boost_db.value()),
                 high_bandwidth: f64::from(p.pultec_bandwidth.value()),
-                high_atten_freq_hz: pultec_high_atten_freq(
-                    p.pultec_high_atten_freq.value(),
-                ),
+                high_atten_freq_hz: pultec_high_atten_freq(p.pultec_high_atten_freq.value()),
                 high_atten_db: f64::from(p.pultec_high_atten_db.value()),
                 drive_percent: f64::from(p.pultec_drive.value()),
                 trim_db: f64::from(p.pultec_trim_db.value()),
@@ -593,9 +587,10 @@ impl Plugin for FtsEqPlugin {
         // keys from the same input, so each gets a copy — a stage only sees
         // its own audio.
         let key = match aux.inputs.first().map(Buffer::as_slice_immutable) {
-            Some(channels) if !channels.is_empty() && channels[0].len() >= n => {
-                Some((&*channels[0], channels.get(1).map_or(&*channels[0], |c| &**c)))
-            }
+            Some(channels) if !channels.is_empty() && channels[0].len() >= n => Some((
+                &*channels[0],
+                channels.get(1).map_or(&*channels[0], |c| &**c),
+            )),
             _ => None,
         };
         for si in 0..MAX_STAGES {

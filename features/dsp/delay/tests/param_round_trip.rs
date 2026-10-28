@@ -103,7 +103,11 @@ const PRE_STACK_IDS: &[&str] = &[
 const PLACEMENT_IDS: &[&str] = &["use", "on", "lane"];
 
 fn ids(params: &DelayParams) -> Vec<String> {
-    params.param_map().into_iter().map(|(id, _, _)| id).collect()
+    params
+        .param_map()
+        .into_iter()
+        .map(|(id, _, _)| id)
+        .collect()
 }
 
 /// Stage 1's ids, in order: the pre-stack set, then the placement.
@@ -133,7 +137,11 @@ fn stage_n_ids_are_prefixed_stage_one_ids() {
     for n in 2..=MAX_STAGES {
         let start = (n - 1) * per_stage.len();
         let expected: Vec<String> = per_stage.iter().map(|id| format!("s{n}_{id}")).collect();
-        assert_eq!(all[start..start + per_stage.len()], expected[..], "stage {n}");
+        assert_eq!(
+            all[start..start + per_stage.len()],
+            expected[..],
+            "stage {n}"
+        );
     }
 }
 

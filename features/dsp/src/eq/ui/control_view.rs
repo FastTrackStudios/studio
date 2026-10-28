@@ -70,10 +70,10 @@ use crate::eq::analyzer::AnalyzerSettings;
 use crate::eq::analyzer::ui::AnalyzerSettingsPanel;
 use crate::eq::ui::param_adapter::param_handle;
 use crate::eq::ui::params::{EqStageRef, EqUiState, NUM_BANDS, SPECTRUM_BINS};
-use crate::stack::host::{FocusedStage, StackHandle, StackHost as _};
 use crate::eq::ui::profile_view::{
     Api550aProfileView, Neve1073ProfileView, PultecProfileView, SslEProfileView, SslGProfileView,
 };
+use crate::stack::host::{FocusedStage, StackHandle, StackHost as _};
 
 /// A cheat-sheet [`TrackInfoProvider`](crate::eq::ui::cheatsheet::TrackInfoProvider)
 /// backed by the editor's shared state. In the plugin this surfaces the track
@@ -163,7 +163,8 @@ fn AppShell() -> Element {
     // every component below (faces, presets, strip), restored from the
     // session. Everything this shell draws and writes is that stage: the
     // graph's bands, the rack face, the presets.
-    let focus = use_context_provider(|| Signal::new(FocusedStage(ui.params.resolved_focused_stage())));
+    let focus =
+        use_context_provider(|| Signal::new(FocusedStage(ui.params.resolved_focused_stage())));
     let focused_stage = focus.read().0;
     // The audio thread publishes the focused stage's band rings and model
     // response.

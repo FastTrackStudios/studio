@@ -454,11 +454,10 @@ impl crate::stack::host::StackHost for SatParams {
     }
 
     fn style_badge(&self, index: usize) -> String {
-        crate::saturate::profiles::PROFILES
-            .get(index)
-            .map_or_else(|| "SAT".to_string(), |p| {
-                crate::saturate::ui::control_view::profile_badge(p.id)
-            })
+        crate::saturate::profiles::PROFILES.get(index).map_or_else(
+            || "SAT".to_string(),
+            |p| crate::saturate::ui::control_view::profile_badge(p.id),
+        )
     }
 
     fn style_name(&self, index: usize) -> String {

@@ -504,7 +504,11 @@ fn lane_dot_style(on: bool, colour: &str) -> String {
     format!(
         "font-size:8px; font-weight:800; cursor:pointer; \
          padding:0 3px; border-radius:3px; color:{}; background:{};",
-        if on { "#0b0b0d" } else { "var(--muted-foreground)" },
+        if on {
+            "#0b0b0d"
+        } else {
+            "var(--muted-foreground)"
+        },
         if on { colour } else { "transparent" },
     )
 }
@@ -516,7 +520,11 @@ fn chip_style(focused: bool, enabled: bool) -> String {
          font-weight:{}; letter-spacing:0.02em; \
          color:{}; background:{}; border:1px solid {}; opacity:{};",
         if focused { 800 } else { 600 },
-        if focused { "#0b0b0d" } else { "var(--foreground)" },
+        if focused {
+            "#0b0b0d"
+        } else {
+            "var(--foreground)"
+        },
         if focused {
             "var(--primary, #c8a86e)"
         } else {

@@ -366,7 +366,11 @@ impl<S: Stage> Stack<S> {
                 continue;
             }
             // DryOnce trims the whole sum (dry included) below.
-            let g = if dry_once { lane.gain } else { lane.gain * norm };
+            let g = if dry_once {
+                lane.gain
+            } else {
+                lane.gain * norm
+            };
             for i in 0..frames {
                 if dry_once {
                     l[i] += (lane.scratch_l[i] - self.dry_l[i]) * g;

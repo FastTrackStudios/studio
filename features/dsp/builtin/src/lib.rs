@@ -2747,7 +2747,8 @@ fn stack_param_id(prefix: &str, name: &str) -> Option<u32> {
         }
     }
     let (i, base) = split_stage_name(prefix, name);
-    param_id(STACK_STAGE_PARAMS, base).map(|local| STACK_BASE + i as u32 * STACK_STAGE_STRIDE + local)
+    param_id(STACK_STAGE_PARAMS, base)
+        .map(|local| STACK_BASE + i as u32 * STACK_STAGE_STRIDE + local)
 }
 
 /// The stack's topology as the block's params set it — applied to the
@@ -2986,7 +2987,10 @@ impl StageLog {
     }
 
     fn take(&mut self, stage: usize) -> Vec<(u32, f64)> {
-        self.0.get_mut(stage).map(std::mem::take).unwrap_or_default()
+        self.0
+            .get_mut(stage)
+            .map(std::mem::take)
+            .unwrap_or_default()
     }
 }
 

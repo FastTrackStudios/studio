@@ -104,7 +104,11 @@ fn stage1_ids() -> Vec<String> {
 }
 
 fn ids(params: &SatParams) -> Vec<String> {
-    params.param_map().into_iter().map(|(id, _, _)| id).collect()
+    params
+        .param_map()
+        .into_iter()
+        .map(|(id, _, _)| id)
+        .collect()
 }
 
 #[test]
@@ -129,10 +133,7 @@ fn stage_n_ids_are_prefixed_stage_one_ids() {
     let all = ids(&params);
     let per = stage1_ids().len();
     for n in 2..=MAX_STAGES {
-        let expected: Vec<String> = stage1_ids()
-            .iter()
-            .map(|id| format!("s{n}_{id}"))
-            .collect();
+        let expected: Vec<String> = stage1_ids().iter().map(|id| format!("s{n}_{id}")).collect();
         let start = per * (n - 1);
         assert_eq!(all[start..start + per], expected[..], "stage {n}'s ids");
     }
@@ -164,8 +165,16 @@ fn persist_keys_keep_their_names() {
     *params.editor_form.write() = "responsive".to_string();
     *params.focused_stage.write() = "0".to_string();
     let keys: Vec<String> = params.serialize_fields().into_keys().collect();
-    for key in ["profile_id", "editor_form", "focused_stage", "s2_profile_id"] {
-        assert!(keys.iter().any(|k| k == key), "missing persist key {key}: {keys:?}");
+    for key in [
+        "profile_id",
+        "editor_form",
+        "focused_stage",
+        "s2_profile_id",
+    ] {
+        assert!(
+            keys.iter().any(|k| k == key),
+            "missing persist key {key}: {keys:?}"
+        );
     }
 }
 

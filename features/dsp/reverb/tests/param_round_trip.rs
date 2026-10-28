@@ -131,7 +131,11 @@ fn stage1_ids() -> Vec<String> {
 }
 
 fn ids(params: &ReverbParams) -> Vec<String> {
-    params.param_map().into_iter().map(|(id, _, _)| id).collect()
+    params
+        .param_map()
+        .into_iter()
+        .map(|(id, _, _)| id)
+        .collect()
 }
 
 #[test]
@@ -155,10 +159,7 @@ fn stage_n_ids_are_prefixed_stage_one_ids() {
     let all = ids(&params);
     let per = stage1_ids().len();
     for n in 2..=MAX_STAGES {
-        let expected: Vec<String> = stage1_ids()
-            .iter()
-            .map(|id| format!("s{n}_{id}"))
-            .collect();
+        let expected: Vec<String> = stage1_ids().iter().map(|id| format!("s{n}_{id}")).collect();
         let start = per * (n - 1);
         assert_eq!(all[start..start + per], expected[..], "stage {n}'s ids");
     }
@@ -194,12 +195,18 @@ fn persist_keys_keep_their_names() {
     let keys: Vec<String> = params.serialize_fields().into_keys().collect();
     // Stage 1's are the pre-stack keys, unprefixed.
     for key in ["profile_id", "ir_path", "editor_form", "focused_stage"] {
-        assert!(keys.iter().any(|k| k == key), "missing persist key {key}: {keys:?}");
+        assert!(
+            keys.iter().any(|k| k == key),
+            "missing persist key {key}: {keys:?}"
+        );
     }
     for n in 2..=MAX_STAGES {
         for key in ["profile_id", "ir_path"] {
             let key = format!("s{n}_{key}");
-            assert!(keys.iter().any(|k| *k == key), "missing persist key {key}: {keys:?}");
+            assert!(
+                keys.iter().any(|k| *k == key),
+                "missing persist key {key}: {keys:?}"
+            );
         }
     }
 }
@@ -225,7 +232,11 @@ fn a_pre_stack_session_loads_into_stage_one() {
     assert_eq!(loaded.stage(0).resolved_profile().id, "plate_classic");
     assert_eq!(*loaded.stage(0).ir_path.read(), "/irs/hall.wav");
     for i in 1..MAX_STAGES {
-        assert!(loaded.stage(i).profile_id.read().is_empty(), "stage {}", i + 1);
+        assert!(
+            loaded.stage(i).profile_id.read().is_empty(),
+            "stage {}",
+            i + 1
+        );
         assert!(loaded.stage(i).ir_path.read().is_empty(), "stage {}", i + 1);
     }
 }

@@ -118,8 +118,7 @@ impl ReverbUiState {
                         // No channel means the editor is running without a
                         // plugin behind it (the headless harness), which is
                         // worth saying rather than silently doing nothing.
-                        *state.ir_error[stage].lock() =
-                            Some(format!("{name}: no engine attached"));
+                        *state.ir_error[stage].lock() = Some(format!("{name}: no engine attached"));
                     }
                 }
                 Err(e) => *state.ir_error[stage].lock() = Some(format!("{name}: {e}")),
@@ -900,12 +899,10 @@ impl crate::stack::host::StackHost for ReverbParams {
     }
 
     fn style_badge(&self, index: usize) -> String {
-        crate::reverb::profiles::PROFILES
-            .get(index)
-            .map_or_else(
-                || "RVB".to_string(),
-                |p| crate::reverb::ui::control_view::profile_badge(p.id),
-            )
+        crate::reverb::profiles::PROFILES.get(index).map_or_else(
+            || "RVB".to_string(),
+            |p| crate::reverb::ui::control_view::profile_badge(p.id),
+        )
     }
 
     fn style_name(&self, index: usize) -> String {

@@ -309,8 +309,9 @@ impl Plugin for FtsDelay {
 
 impl ClapPlugin for FtsDelay {
     const CLAP_ID: &'static str = "com.fasttrackstudio.delay";
-    const CLAP_DESCRIPTION: Option<&'static str> =
-        Some("Delay stack: up to eight stereo delays (tape/digital/BBD/lo-fi/...) in serial/parallel lanes");
+    const CLAP_DESCRIPTION: Option<&'static str> = Some(
+        "Delay stack: up to eight stereo delays (tape/digital/BBD/lo-fi/...) in serial/parallel lanes",
+    );
     const CLAP_MANUAL_URL: Option<&'static str> = None;
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[

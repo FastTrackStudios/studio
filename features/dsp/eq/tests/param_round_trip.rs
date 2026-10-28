@@ -186,7 +186,11 @@ fn stage1_ids() -> Vec<String> {
 
 fn all_ids() -> Vec<String> {
     let params = dsp::eq::ui::params::FtsEqParams::default();
-    params.param_map().into_iter().map(|(id, _, _)| id).collect()
+    params
+        .param_map()
+        .into_iter()
+        .map(|(id, _, _)| id)
+        .collect()
 }
 
 #[test]
@@ -245,8 +249,14 @@ fn stage_one_keeps_the_pre_stack_persist_keys() {
         assert!(keys.contains(key), "persist key {key} missing");
     }
     for n in 2..=MAX_STAGES {
-        assert!(keys.contains(&format!("s{n}_model_id")), "stage {n} model_id");
-        assert!(keys.contains(&format!("s{n}_name_1")), "stage {n} band names");
+        assert!(
+            keys.contains(&format!("s{n}_model_id")),
+            "stage {n} model_id"
+        );
+        assert!(
+            keys.contains(&format!("s{n}_name_1")),
+            "stage {n} band names"
+        );
     }
     assert!(keys.contains(&"focused_stage".to_string()));
 }
@@ -260,7 +270,11 @@ fn default_stack_is_one_stage_on_lane_zero() {
     assert_eq!(params.placement(0).lane_index(), 0);
     assert!(params.placement(0).stage_on.value());
     for i in 1..MAX_STAGES {
-        assert!(!params.placement(i).in_use.value(), "stage {} in use", i + 1);
+        assert!(
+            !params.placement(i).in_use.value(),
+            "stage {} in use",
+            i + 1
+        );
     }
     assert_eq!(params.resolved_focused_stage(), 0);
 }
