@@ -926,6 +926,15 @@ pub fn switch_song(project: &str) {
             return;
         };
         if song.started.replace(true) {
+            // Back on a song already streaming: its waveforms still to
+            // come are built now (none when all are drawn).
+            if let Some(streamed) = song.streamed.clone() {
+                let previews = song.previews.clone();
+                let song_guid = project.to_owned();
+                wasm_bindgen_futures::spawn_local(async move {
+                    waveforms(previews, streamed, song_guid, Vec::new()).await;
+                });
+            }
             return;
         }
         let Some(streamed) = song.streamed.clone() else {
@@ -936,8 +945,7 @@ pub fn switch_song(project: &str) {
             hear_stems(web, project, true);
         }
         // The waveforms: each take's original's peaks where the share has
-        // them, fetched and reduced; else built from its proxy once it has
-        // all arrived — read again until it has (`read_whole_as_arriving`).
+        // them, fetched and reduced; else built here from its proxy.
         let previews = song.previews.clone();
         let items: Vec<String> =
             daw_standalone::audio_engine::materialize::pending_media(&web.standalone, project)
@@ -947,36 +955,53 @@ pub fn switch_song(project: &str) {
         let song_guid = project.to_owned();
         wasm_bindgen_futures::spawn_local(async move {
             let _ = streamed.load_peaks(crate::midi::WAVE_BLOCK).await;
-            previews.fill_waves(items).await;
-            read_whole_as_arriving(previews, song_guid).await;
+            waveforms(previews, streamed, song_guid, items).await;
         });
     });
 }
 
-/// Read `song`'s partial waveforms again every few seconds while any are
-/// partial and it is the song on screen: each is drawn whole once its
-/// proxy has all arrived (its peaks built from it then). Gives up after
-/// half an hour — a proxy that never arrives is not read forever.
-async fn read_whole_as_arriving(previews: crate::midi::Previews, song: String) {
-    const EVERY_MS: u32 = 2_000;
-    const TRIES: u32 = 900;
-    for _ in 0..TRIES {
-        gloo_timers::future::TimeoutFuture::new(EVERY_MS).await;
-        if crate::open::current_song().as_deref() != Some(song.as_str()) {
-            return;
-        }
-        let partial = previews.partial();
-        if partial.is_empty() {
-            return;
-        }
-        let Some(facade) = daw_control::Daw::try_get() else {
-            return;
-        };
-        let Ok(project) = facade.project(song.clone()).await else {
-            return;
-        };
-        previews.fill_waves_in(&project, partial).await;
+/// Draw `song`'s waveforms: `items` read first — from the caches its share
+/// shipped — then every take with none has its waveform built from its
+/// proxy (`StreamedSong::build_missing_peaks`), and what was not drawn is
+/// read again as they come, a few at a time. Read from `song` itself, not
+/// whichever is current when it answers; one at a time per song.
+async fn waveforms(
+    previews: crate::midi::Previews,
+    streamed: Rc<crate::song_stream::StreamedSong>,
+    song: String,
+    items: Vec<String>,
+) {
+    /// Waveforms built between two reads: the first drawn soon, the rest
+    /// as they come.
+    const BUILT_PER_READ: usize = 4;
+    thread_local! {
+        static BUILDING: std::cell::RefCell<std::collections::HashSet<String>> =
+            std::cell::RefCell::default();
     }
+    if !BUILDING.with(|b| b.borrow_mut().insert(song.clone())) {
+        return;
+    }
+    let Some(facade) = daw_control::Daw::try_get() else {
+        BUILDING.with(|b| b.borrow_mut().remove(&song));
+        return;
+    };
+    let Ok(project) = facade.project(song.clone()).await else {
+        BUILDING.with(|b| b.borrow_mut().remove(&song));
+        return;
+    };
+    if !items.is_empty() {
+        previews.fill_waves_in(&project, items).await;
+    }
+    while !previews.partial().is_empty()
+        && streamed
+            .build_missing_peaks(crate::midi::WAVE_BLOCK, BUILT_PER_READ)
+            .await
+            > 0
+    {
+        // What the builds made drawable, read again.
+        previews.fill_waves_in(&project, previews.partial()).await;
+    }
+    BUILDING.with(|b| b.borrow_mut().remove(&song));
 }
 
 /// Bring the set in behind `project`, now on screen, in

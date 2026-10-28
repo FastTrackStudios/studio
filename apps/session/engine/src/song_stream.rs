@@ -677,6 +677,10 @@ pub struct StreamedSong {
     /// few hundred files — one store each would truncate the file the
     /// others write, and fetch every header thousands of times).
     opened: Mutex<HashMap<PathBuf, (Arc<SparseBytes>, OggIndex)>>,
+    /// Recordings whose waveform could not be built here
+    /// ([`Self::build_missing_peaks`]).
+    #[cfg(feature = "web")]
+    unbuildable: Mutex<std::collections::HashSet<String>>,
 }
 
 fn safe_name(text: &str) -> String {
@@ -1270,6 +1274,8 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
         peaks,
         attached: Mutex::default(),
         opened: Mutex::default(),
+        #[cfg(feature = "web")]
+        unbuildable: Mutex::default(),
     })
 }
 
@@ -1694,6 +1700,71 @@ impl StreamedSong {
         }
         tracing::info!(stream.source = %self.source.label(), stream.waveforms = loaded, "song-stream: waveforms in");
         loaded
+    }
+
+    /// Build the waveform of each attached take that has none — its share
+    /// shipped no cache ([`Self::load_peaks`]) — from its proxy, fetched
+    /// whole into a buffer of its own (what streams in for playback is
+    /// only a window round the playhead), decoded and let go: one at a
+    /// time, `most` of them. Returns how many were built; 0 when none is
+    /// left that can be.
+    #[cfg(feature = "web")]
+    pub async fn build_missing_peaks(&self, block: u32, most: usize) -> usize {
+        let attached = self.attached.lock().map(|a| a.clone()).unwrap_or_default();
+        let mut built = 0usize;
+        let mut seen = std::collections::HashSet::new();
+        for (original, streamed) in attached {
+            if built >= most {
+                break;
+            }
+            if streamed.has_peaks() || !seen.insert(original.clone()) || self.unbuildable(&original)
+            {
+                continue;
+            }
+            let stem = Path::new(&original)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            let Some((path, size)) = self.proxies.get(&stem).cloned() else {
+                continue;
+            };
+            let bytes = match self.source.read(path.clone(), 0..size).await {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    tracing::warn!(media = %path, error = %e, "song-stream: a proxy for its waveform did not arrive");
+                    self.give_up_on(&original);
+                    continue;
+                }
+            };
+            let peaks = fts_sample::ogg_stream::OggStream::open(Arc::from(bytes))
+                .ok()
+                .and_then(daw::standalone::audio_engine::streamed::peaks_of_ogg);
+            let Some(peaks) = peaks else {
+                tracing::warn!(media = %path, "song-stream: a proxy's waveform could not be built");
+                self.give_up_on(&original);
+                continue;
+            };
+            streamed.set_peaks(Arc::new(peaks.coarsened(block)));
+            built = built.saturating_add(1);
+        }
+        if built > 0 {
+            tracing::info!(stream.source = %self.source.label(), stream.waveforms_built = built, "song-stream: waveforms built here");
+        }
+        built
+    }
+
+    /// Whether `original`'s waveform could not be built (its proxy did not
+    /// arrive or would not decode): not tried again this visit.
+    #[cfg(feature = "web")]
+    fn unbuildable(&self, original: &str) -> bool {
+        self.unbuildable.lock().is_ok_and(|u| u.contains(original))
+    }
+
+    #[cfg(feature = "web")]
+    fn give_up_on(&self, original: &str) {
+        if let Ok(mut u) = self.unbuildable.lock() {
+            u.insert(original.to_owned());
+        }
     }
 
     /// Start fetching `takes`' bytes in the order they will be heard from
