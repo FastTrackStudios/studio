@@ -237,7 +237,7 @@ fn pick_file() -> Option<PathBuf> {
 
 /// Run `id` on the engine with `args`, its answer as JSON.
 fn run(id: &str, args: &Value) -> Result<Value, String> {
-    let bytes = session_ui::actions::run(id, args.to_string().as_bytes())?;
+    let bytes = session_engine::actions::run(id, args.to_string().as_bytes())?;
     serde_json::from_slice(&bytes)
         .or_else(|_| Ok(Value::String(String::from_utf8_lossy(&bytes).into_owned())))
 }

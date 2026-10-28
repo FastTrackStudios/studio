@@ -11,6 +11,7 @@ publish = false
 # workspace-wide build) session-ui's `web` feature would unify into the
 # desktop's and compile the browser-only host there.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+session-engine = { workspace = true, features = ["web"] }
 session-ui = { workspace = true, features = ["web"] }
 # What the address opens, and the "open a set" page when it names nothing
 # (`session::open_link`).

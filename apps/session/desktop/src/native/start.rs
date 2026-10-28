@@ -6,8 +6,8 @@
 //!
 //! - **Join a set** — one Task keeps, by its live link: the public demo, or
 //!   one someone shared. Its songs stream in and play here, with everyone
-//!   else in the set (`session_ui::stream_set`).
-//! - **Task** — sign in from another device (`session_ui::task_account`)
+//!   else in the set (`session_engine::stream_set`).
+//! - **Task** — sign in from another device (`session_engine::task_account`)
 //!   and pick a setlist from an org's library; it streams in the same way.
 //! - **On this device** — a song or setlist in the app's documents folder
 //!   (on a phone, what the Files app shows under Session), or, on a
@@ -15,7 +15,7 @@
 //!
 //! Opening runs in the engine (`studio engine`, or the engine in this
 //! process on iOS), asked over the window's link
-//! (`session_ui::view_client::ask`): the set is the engine's, and the
+//! (`session_engine::view_client::ask`): the set is the engine's, and the
 //! window shows whatever set the engine has — read back over its link —
 //! or its start screen when it has none ([`App`]). An open asked for by the
 //! CLI or a model shows here the same way as one asked for by a click.
@@ -30,10 +30,10 @@ use lucide_dioxus::{
     Plus, Radio, Search, Trash2, X,
 };
 use session_ui::loading::{Loading, Progress, mark_src};
-use session_ui::setlist::Setlist;
-use session_ui::song_stream::Offline;
-use session_ui::stream_set::{Downloading, LibrarySetlist, LibrarySong, ListKind, with_library};
-use session_ui::task_account::{self, Account, AccountLibrary as _};
+use session_engine::setlist::Setlist;
+use session_engine::song_stream::Offline;
+use session_engine::stream_set::{Downloading, LibrarySetlist, LibrarySong, ListKind, with_library};
+use session_engine::task_account::{self, Account, AccountLibrary as _};
 
 pub(super) const BG: &str = "#0f1012";
 pub(super) const BAR: &str = "#17181b";
@@ -86,7 +86,7 @@ pub fn App() -> Element {
     let initial: Option<Setlist> = use_context();
     use_hook(move || {
         if let Some(setlist) = initial {
-            session_ui::view_client::show_set(setlist);
+            session_engine::view_client::show_set(setlist);
         }
     });
     let engine = use_engine_set();
@@ -101,7 +101,7 @@ pub fn App() -> Element {
         session_ui::shell::Back(Callback::new(move |()| {
             #[cfg(target_os = "ios")]
             super::ios_audio::clear();
-            session_ui::view_client::ask::close();
+            session_engine::view_client::ask::close();
             match host {
                 Some(host) if !super::handoff::pending() => host.on_leave.call(()),
                 _ => {}
@@ -113,7 +113,7 @@ pub fn App() -> Element {
     // shell: its views are made again for it.
     let shown = engine.read();
     let page = match (&shown.opening, shown.setlist.clone()) {
-        (session_ui::studio_engine::set::Opening::Busy(_), _) | (_, None) => {
+        (session_engine::studio_engine::set::Opening::Busy(_), _) | (_, None) => {
             rsx! { Start {} }
         }
         (_, Some(setlist)) => {
@@ -132,7 +132,7 @@ pub fn App() -> Element {
 }
 
 /// What the window says about its engine — it stopped and was started
-/// again (`session_ui::studio_engine::link::take_notice`) — across the
+/// again (`session_engine::studio_engine::link::take_notice`) — across the
 /// foot of the window for a few seconds.
 #[component]
 fn EngineNotice() -> Element {
@@ -142,7 +142,7 @@ fn EngineNotice() -> Element {
         loop {
             futures_timer::Delay::new(std::time::Duration::from_millis(500)).await;
             #[cfg(not(target_os = "ios"))]
-            if let Some(text) = session_ui::studio_engine::link::take_notice() {
+            if let Some(text) = session_engine::studio_engine::link::take_notice() {
                 said.set(Some(text));
                 shown_for = 0;
                 continue;
@@ -197,19 +197,19 @@ fn WithSetlist(setlist: Setlist, children: Element) -> Element {
     // measuring a session while it plays without a hand on the mouse.
     use_hook(|| {
         if std::env::var("FTS_SESSION_AUTOPLAY").is_ok_and(|v| v != "0") {
-            session_ui::engine::transport(session_ui::engine::Move::PlayStop, 0.0);
+            session_engine::engine::transport(session_engine::engine::Move::PlayStop, 0.0);
         }
     });
     children
 }
 
 /// The engine's set, as it changes: every window shows the one set the
-/// engine has, read back over its link (`session_ui::view_client`), whoever
+/// engine has, read back over its link (`session_engine::view_client`), whoever
 /// changed it.
-pub(super) fn use_engine_set() -> Signal<session_ui::studio_engine::set::SetView> {
-    let mut shown = use_signal(session_ui::view_client::set_view);
+pub(super) fn use_engine_set() -> Signal<session_engine::studio_engine::set::SetView> {
+    let mut shown = use_signal(session_engine::view_client::set_view);
     use_future(move || async move {
-        let mut changes = session_ui::view_client::subscribe_set();
+        let mut changes = session_engine::view_client::subscribe_set();
         loop {
             let now = changes.borrow_and_update().clone();
             if now.revision != shown.peek().revision {
@@ -253,11 +253,11 @@ pub(super) async fn off_thread<T: Send + 'static>(
 
 /// A way of opening a set, run in the engine on a thread of its own: it
 /// says each step to its `progress` — the loading screen's.
-use session_ui::studio_engine::set::OpenWork;
+use session_engine::studio_engine::set::OpenWork;
 
 /// An error for a person: the whole chain, in a few words.
 pub(super) fn brief(e: &eyre::Report) -> String {
-    session_ui::task_set::brief(&format!("{e:#}"))
+    session_engine::task_set::brief(&format!("{e:#}"))
 }
 
 /// Where the start screen is: its sections, down a sidebar (a tab bar
@@ -334,7 +334,7 @@ fn Start() -> Element {
     let mut local = use_signal(documents);
     // The songs opened lately, each with its alternatives — read again
     // each time the start screen is shown.
-    let recent = use_hook(session_ui::projects::recent);
+    let recent = use_hook(session_engine::projects::recent);
     let mut section = use_signal(|| Section::Home);
     let width = use_width();
 
@@ -344,7 +344,7 @@ fn Start() -> Element {
     let engine = use_engine_set();
     let shown_from = use_hook(|| engine.peek().revision);
     use_effect(move || {
-        use session_ui::studio_engine::set::Opening as Engine;
+        use session_engine::studio_engine::set::Opening as Engine;
         let now = engine.read();
         match &now.opening {
             Engine::Busy(step) => opening.set(Opening::Busy(step.clone())),
@@ -368,7 +368,7 @@ fn Start() -> Element {
             match read {
                 Some(Ok(setlist)) => {
                     opening.set(Opening::Idle);
-                    session_ui::view_client::show_set(setlist);
+                    session_engine::view_client::show_set(setlist);
                 }
                 Some(Err(e)) => opening.set(Opening::Failed(brief(&e))),
                 None => opening.set(Opening::Failed("the attach stopped".to_owned())),
@@ -386,7 +386,7 @@ fn Start() -> Element {
             || path.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        let opened = session_ui::view_client::ask::open_path(&path);
+        let opened = session_engine::view_client::ask::open_path(&path);
         if opened.is_ok() {
             super::remember(&path);
         }
@@ -396,11 +396,11 @@ fn Start() -> Element {
     // count-in, start and guide placed.
     let mut new_project = move || {
         let first = Progress::Opening {
-            title: session_ui::project_new::UNTITLED.to_owned(),
+            title: session_engine::project_new::UNTITLED.to_owned(),
         };
         opening.set(Opening::Busy(first.clone()));
         spawn(async move {
-            let refused = off_thread(session_ui::view_client::ask::new_song)
+            let refused = off_thread(session_engine::view_client::ask::new_song)
                 .await
                 .unwrap_or_else(|| Err("the ask stopped".to_owned()));
             asked(first, refused);
@@ -417,7 +417,7 @@ fn Start() -> Element {
         // the app was launched with went straight back into it.
         let launch =
             first.filter(|_| !LAUNCH_OPENED.swap(true, std::sync::atomic::Ordering::AcqRel));
-        if let Some(path) = session_ui::projects::take_next().or(launch) {
+        if let Some(path) = session_engine::projects::take_next().or(launch) {
             open_path(path);
         } else if super::handoff::take_new() {
             // Studio's welcome screen asked for a new song.
@@ -478,7 +478,7 @@ fn Start() -> Element {
         let library = account.library(&org);
         let for_songs = library.clone();
         spawn(async move {
-            match off_thread(move || session_ui::stream_set::setlists(&library)).await {
+            match off_thread(move || session_engine::stream_set::setlists(&library)).await {
                 Some(Ok(list)) => setlists.set(Load::Ready(list)),
                 Some(Err(e)) => setlists.set(Load::Failed(brief(&e))),
                 None => {}
@@ -512,7 +512,7 @@ fn Start() -> Element {
             for other in others {
                 let library = account.library(&other);
                 if let Some(Ok(lists)) =
-                    off_thread(move || session_ui::stream_set::setlists(&library)).await
+                    off_thread(move || session_engine::stream_set::setlists(&library)).await
                 {
                     found.extend(lists.into_iter().map(|l| (other.clone(), l)));
                 }
@@ -533,10 +533,10 @@ fn Start() -> Element {
         open_set(
             Progress::Joining { retry: None },
             Box::new(move |_| {
-                use session_ui::open::{ModeState, RemoteTarget};
+                use session_engine::open::{ModeState, RemoteTarget};
                 let target = RemoteTarget::Session { address };
-                session_ui::open::set_mode(ModeState {
-                    requested: session_ui::open::AudioMode::Remote,
+                session_engine::open::set_mode(ModeState {
+                    requested: session_engine::open::AudioMode::Remote,
                     target: Some(target.clone()),
                     ..ModeState::engine()
                 });
@@ -565,7 +565,7 @@ fn Start() -> Element {
             opening.set(Opening::Busy(first.clone()));
             let who = who.clone();
             spawn(async move {
-                let refused = off_thread(move || session_ui::view_client::ask::join(&live, &who))
+                let refused = off_thread(move || session_engine::view_client::ask::join(&live, &who))
                     .await
                     .unwrap_or_else(|| Err("the ask stopped".to_owned()));
                 asked(first, refused);
@@ -615,13 +615,13 @@ fn Start() -> Element {
         // The engine streams it in, as the person signed in on this
         // machine: a list by its title, a song of no list alone.
         let request = if setlist.kind == ListKind::Songs && setlist.id.starts_with("song-") {
-            session_ui::studio_engine::set::LibraryOpen {
+            session_engine::studio_engine::set::LibraryOpen {
                 org: Some(org),
                 setlist: String::new(),
                 song: setlist.songs.first().map(|s| s.slug.clone()),
             }
         } else {
-            session_ui::studio_engine::set::LibraryOpen {
+            session_engine::studio_engine::set::LibraryOpen {
                 org: Some(org),
                 setlist: setlist.title.clone(),
                 song: None,
@@ -632,7 +632,7 @@ fn Start() -> Element {
                 title: first,
                 retry: None,
             },
-            session_ui::view_client::ask::open_library(&request),
+            session_engine::view_client::ask::open_library(&request),
         );
     });
 
@@ -673,7 +673,7 @@ fn Start() -> Element {
             spawn(async move {
                 let named = title.clone();
                 let outcome = off_thread(move || {
-                    session_ui::stream_set::download(
+                    session_engine::stream_set::download(
                         &library,
                         &named,
                         &list,
@@ -724,7 +724,7 @@ fn Start() -> Element {
     );
     let remove = use_callback(move |path: PathBuf| {
         let Some(into) = documents_dir() else { return };
-        match session_ui::stream_set::remove_download(&into, &path) {
+        match session_engine::stream_set::remove_download(&into, &path) {
             Ok(()) => local.set(documents()),
             Err(e) => note.set(Some((
                 false,
@@ -887,7 +887,7 @@ fn Start() -> Element {
     let into = documents_dir();
     let downloaded = move |title: &str| {
         into.as_ref()
-            .is_some_and(|dir| session_ui::stream_set::download_file(dir, title).exists())
+            .is_some_and(|dir| session_engine::stream_set::download_file(dir, title).exists())
     };
 
     // What the section shows.
@@ -2042,19 +2042,19 @@ fn LocalRow(
 
 /// A song opened lately: its name, which version was open and when, and
 /// a pill for each version to open — the song itself and every
-/// checkpoint saved beside it (`session_ui::projects`).
+/// checkpoint saved beside it (`session_engine::projects`).
 #[component]
-fn RecentRow(song: session_ui::projects::Recent, on_open: EventHandler<PathBuf>) -> Element {
+fn RecentRow(song: session_engine::projects::Recent, on_open: EventHandler<PathBuf>) -> Element {
     let name = song.name();
-    let alternatives = session_ui::projects::alternatives(&song.base);
-    let main = session_ui::projects::main_of(&song.base);
+    let alternatives = session_engine::projects::alternatives(&song.base);
+    let main = session_engine::projects::main_of(&song.base);
     let detail = match (song.is_song(), song.opened_alternative()) {
-        (_, Some(alt)) => format!("{alt} · {}", session_ui::projects::ago(song.at)),
-        (true, None) => format!("Song · {}", session_ui::projects::ago(song.at)),
+        (_, Some(alt)) => format!("{alt} · {}", session_engine::projects::ago(song.at)),
+        (true, None) => format!("Song · {}", session_engine::projects::ago(song.at)),
         (false, None) => format!(
             "{} · {}",
             kind_of(&song.opened),
-            session_ui::projects::ago(song.at)
+            session_engine::projects::ago(song.at)
         ),
     };
     let last = song.opened.clone();
@@ -2309,7 +2309,7 @@ pub(super) fn documents() -> Vec<PathBuf> {
             // downloaded is listed by its `.setlist` instead.
             !p.file_name().is_some_and(|n| {
                 n.to_string_lossy().starts_with('.')
-                    || n == session_ui::stream_set::DOWNLOADED_SONGS
+                    || n == session_engine::stream_set::DOWNLOADED_SONGS
             })
         })
         .map(|p| {
@@ -2340,8 +2340,8 @@ fn documents_dir() -> Option<PathBuf> {
 pub(super) fn title_of(path: &std::path::Path) -> String {
     // A checkpoint is its song's: "Unbreakable · Organized".
     if let (Some(alt), Some(base)) = (
-        session_ui::projects::alternative_name(path),
-        session_ui::projects::base_of(path),
+        session_engine::projects::alternative_name(path),
+        session_engine::projects::base_of(path),
     ) {
         let song = base
             .file_name()
@@ -2372,7 +2372,7 @@ fn kind_of(path: &std::path::Path) -> String {
         "setlist" => "Setlist".to_owned(),
         "rpp" => "REAPER project".to_owned(),
         "session" => "Song".to_owned(),
-        _ if session_ui::setlist::song_in(path).is_some() => "Song".to_owned(),
+        _ if session_engine::setlist::song_in(path).is_some() => "Song".to_owned(),
         _ => "Setlist".to_owned(),
     }
 }
@@ -2594,7 +2594,7 @@ pub fn use_welcome_account() -> WelcomeAccount {
                 let mut failed = None;
                 for slug in all {
                     let library = account.library(&slug);
-                    match session_ui::stream_set::setlists(&library) {
+                    match session_engine::stream_set::setlists(&library) {
                         Ok(got) => found.push((slug, got)),
                         Err(e) => {
                             tracing::warn!(task.org = %slug, error = %e, "welcome: an org's library could not be read");

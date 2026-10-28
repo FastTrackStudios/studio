@@ -6,7 +6,7 @@
 //!
 //! Studio shows its library first; Session's own start screen is never a
 //! page there. A library setlist is opened by the engine
-//! (`session_ui::studio_engine::set::open_library`, as the Action List's
+//! (`session_engine::studio_engine::set::open_library`, as the Action List's
 //! `SESSION_OPEN_SETLIST` opens one); a song, a live link or a new song is
 //! handed to Session's start screen, which opens it in the engine too. A
 //! hosted start screen draws only its loading screen (`super::start`).
@@ -18,8 +18,8 @@ pub use super::start::{
     welcome_org,
 };
 use dioxus::prelude::*;
-pub use session_ui::projects::{Recent, ago, open_next, recent};
-pub use session_ui::stream_set::{LibrarySetlist, LibrarySong, ListKind};
+pub use session_engine::projects::{Recent, ago, open_next, recent};
+pub use session_engine::stream_set::{LibrarySetlist, LibrarySong, ListKind};
 
 static JOIN: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
@@ -106,12 +106,12 @@ pub fn request(entry: Entry) {
     match entry {
         Entry::Path(path) => open_next(path),
         Entry::Setlist { org, title } => {
-            let request = session_ui::studio_engine::set::LibraryOpen {
+            let request = session_engine::studio_engine::set::LibraryOpen {
                 org,
                 setlist: title,
                 song: None,
             };
-            if let Err(busy) = session_ui::view_client::ask::open_library(&request) {
+            if let Err(busy) = session_engine::view_client::ask::open_library(&request) {
                 tracing::warn!(error = %busy, "open: the engine did not take the setlist");
             }
         }
@@ -125,7 +125,7 @@ pub fn request(entry: Entry) {
 /// — from the CLI or a model while the welcome screen is up.
 #[must_use]
 pub fn pending() -> bool {
-    session_ui::projects::pending_open()
+    session_engine::projects::pending_open()
         || NEW.load(std::sync::atomic::Ordering::Acquire)
         || JOIN
             .lock()
@@ -136,13 +136,13 @@ pub fn pending() -> bool {
 /// Going into Session for what is [`pending`]: the "out of the song" an
 /// open from outside raised is spent, since there is no song to leave.
 pub fn entering() {
-    let _ = session_ui::projects::take_back();
-    session_ui::projects::entered_set();
+    let _ = session_engine::projects::take_back();
+    session_engine::projects::entered_set();
 }
 
 /// Ask Session, a song open, to leave it for what was just [`request`]ed.
 pub fn leave_song_for_request() {
-    session_ui::projects::go_back();
+    session_engine::projects::go_back();
 }
 
 /// The file of a session named `title` on this device: one opened lately,
@@ -194,7 +194,7 @@ pub struct ActionRow {
 /// nothing and run at once.
 #[must_use]
 pub fn actions() -> Vec<ActionRow> {
-    let list = session_ui::actions::list();
+    let list = session_engine::actions::list();
     list.infos()
         .into_iter()
         .filter(|a| a.params_schema.is_none() && !list.is_async(&a.id))
@@ -223,7 +223,7 @@ pub fn actions() -> Vec<ActionRow> {
 ///
 /// No such action, it cannot run now, or it failed.
 pub fn run_action(id: &str) -> Result<(), String> {
-    session_ui::actions::list()
+    session_engine::actions::list()
         .run(id)
         .map_err(|e| e.to_string())
 }
@@ -243,7 +243,7 @@ pub fn typing() -> bool {
 
 /// Stop the transport: Session is being left (or replaced) from outside.
 pub fn stop() {
-    session_ui::engine::transport(session_ui::engine::Move::Stop, 0.0);
+    session_engine::engine::transport(session_engine::engine::Move::Stop, 0.0);
 }
 
 /// What the DAW view does to the transport as it takes what was handed to

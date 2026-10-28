@@ -7,17 +7,17 @@
 //!
 //! The window is a client of its engine, never the engine: on the desktop
 //! it attaches to a running `studio engine` or spawns one
-//! (`session_ui::studio_engine::link`), and starts another when that one
+//! (`session_engine::studio_engine::link`), and starts another when that one
 //! goes; on iOS (no helper process) the engine runs in this process and the
 //! window reaches it over an in-memory link — the same client either way
-//! (`session_ui::view_client`). The engine opens sets; the window shows
+//! (`session_engine::view_client`). The engine opens sets; the window shows
 //! what it has open.
 //!
 //! In Remote and Cue on another system (`--audio remote|cue`,
 //! `--reaper [socket]`, `FTS_AUDIO_MODE`, or the top bar's audio menu last
-//! time — see `session_ui::open::launch_mode`) the window attaches to the
+//! time — see `session_engine::open::launch_mode`) the window attaches to the
 //! system it drives instead, and its open projects are the set
-//! (`session_ui::setlist::Setlist::attach`).
+//! (`session_engine::setlist::Setlist::attach`).
 
 #[cfg(target_os = "ios")]
 mod ios_audio;
@@ -64,9 +64,9 @@ fn choose() -> Option<PathBuf> {
 
 /// The songs `target` names: the one song it is (a project, a `.session`,
 /// or a song's folder); or a setlist's (a folder of song folders, or a
-/// `.setlist` file — see `session_ui::setlist::read_setlist`).
+/// `.setlist` file — see `session_engine::setlist::read_setlist`).
 fn songs_of(target: &Path) -> Option<Vec<PathBuf>> {
-    session_ui::studio_engine::set::songs_at(target)
+    session_engine::studio_engine::set::songs_at(target)
 }
 
 /// The Open dialog: a REAPER project.
@@ -162,7 +162,7 @@ fn remembered() -> Option<PathBuf> {
 
 fn remember(project: &Path) {
     // The start screen's Recent, too.
-    session_ui::projects::opened(project);
+    session_engine::projects::opened(project);
     let Some(file) = memory() else { return };
     let written = file
         .parent()
@@ -192,7 +192,7 @@ pub fn launch() {
 /// or what the engine is to open as it comes up ([`choose`]).
 #[derive(Clone)]
 pub struct Prepared {
-    setlist: Option<session_ui::setlist::Setlist>,
+    setlist: Option<session_engine::setlist::Setlist>,
     open: Option<PathBuf>,
 }
 
@@ -207,20 +207,20 @@ pub fn prepare() -> Option<Prepared> {
     // How this app dials a Session engine (Remote on another Session): the
     // connector lives with the app's iroh identity (`crate::remote`).
     #[cfg(feature = "session-domain")]
-    session_ui::open::set_engine_dialer(|address| {
+    session_engine::open::set_engine_dialer(|address| {
         Box::pin(async move {
             let addr = crate::remote::EngineAddr::parse(&address).map_err(|e| eyre::eyre!(e))?;
             let engine = crate::remote::connect_engine_daw(&addr).await?;
             let daw = engine.daw.clone();
-            Ok((daw, Box::new(engine) as session_ui::open::EngineConnection))
+            Ok((daw, Box::new(engine) as session_engine::open::EngineConnection))
         })
     });
-    let mode = session_ui::open::launch_mode();
+    let mode = session_engine::open::launch_mode();
     let remote = mode.target.clone().filter(|_| !mode.owns_project());
     let Some(target) = remote else {
         return engine_link();
     };
-    session_ui::open::set_mode(mode);
+    session_engine::open::set_mode(mode);
     match attach(&target)? {
         Attached::Set(setlist) => Some(Prepared {
             setlist: Some(setlist),
@@ -245,9 +245,9 @@ fn engine_link() -> Option<Prepared> {
 /// desktop. It serves the Action List (MCP) as `studio engine` does.
 #[cfg(target_os = "ios")]
 fn link_engine() -> bool {
-    session_ui::open::set_mode(session_ui::open::ModeState::engine());
-    session_ui::open::serve_actions();
-    if let Err(e) = session_ui::open::link_window_here() {
+    session_engine::open::set_mode(session_engine::open::ModeState::engine());
+    session_engine::open::serve_actions();
+    if let Err(e) = session_engine::open::link_window_here() {
         tracing::error!(error = %e, "engine: it did not start in this process");
         return false;
     }
@@ -255,13 +255,13 @@ fn link_engine() -> bool {
 }
 
 /// The desktop: the window as a client of a Studio engine in another
-/// process (`session_ui::studio_engine::link`) — a running one attached
+/// process (`session_engine::studio_engine::link`) — a running one attached
 /// to, else one spawned in a process group of its own (the audio outlives
 /// the window), and another started if it goes. Asked again, or to quit,
 /// when none can be had.
 #[cfg(not(target_os = "ios"))]
 fn link_engine() -> bool {
-    use session_ui::studio_engine::link;
+    use session_engine::studio_engine::link;
     let mode = link::Mode::from_env();
     loop {
         let linked = link::choose(mode, std::time::Duration::from_secs(30))
@@ -295,13 +295,13 @@ fn link_engine() -> bool {
 /// Attach this window to `found`: the daw facade and the view link over
 /// its socket, and it is the engine this window drives.
 #[cfg(not(target_os = "ios"))]
-fn attach_engine(found: &session_ui::studio_engine::link::Found) -> Result<(), String> {
-    let target = session_ui::open::RemoteTarget::Engine {
+fn attach_engine(found: &session_engine::studio_engine::link::Found) -> Result<(), String> {
+    let target = session_engine::open::RemoteTarget::Engine {
         socket: found.socket.clone(),
     };
-    session_ui::open::set_mode(session_ui::open::ModeState::remote(target.clone(), false));
-    session_ui::open::attach(&target).map_err(|e| e.to_string())?;
-    session_ui::studio_engine::link::set_linked(found.clone());
+    session_engine::open::set_mode(session_engine::open::ModeState::remote(target.clone(), false));
+    session_engine::open::attach(&target).map_err(|e| e.to_string())?;
+    session_engine::studio_engine::link::set_linked(found.clone());
     Ok(())
 }
 
@@ -360,7 +360,7 @@ pub fn Embedded() -> Element {
 /// What attaching came to: the set the other system has open, or Studio's
 /// engine after all (it was not there).
 enum Attached {
-    Set(session_ui::setlist::Setlist),
+    Set(session_engine::setlist::Setlist),
     Engine,
 }
 
@@ -368,9 +368,9 @@ enum Attached {
 /// there, say so and offer to try again, to open a session here in Engine
 /// mode instead, or to quit — never quietly play the set here while
 /// someone thinks REAPER is.
-fn attach(target: &session_ui::open::RemoteTarget) -> Option<Attached> {
+fn attach(target: &session_engine::open::RemoteTarget) -> Option<Attached> {
     loop {
-        match session_ui::setlist::Setlist::attach(target) {
+        match session_engine::setlist::Setlist::attach(target) {
             Ok(setlist) => return Some(Attached::Set(setlist)),
             Err(e) => {
                 tracing::error!(error = %e, audio.target = target.kind(), "could not attach to the system this window drives");
@@ -392,7 +392,7 @@ fn attach(target: &session_ui::open::RemoteTarget) -> Option<Attached> {
 /// The window: over `setlist` when it is open already (Remote, Cue);
 /// otherwise the start screen, opening `open` — the window is up at once,
 /// and the song comes in behind its loading note (`start`).
-fn run(setlist: Option<session_ui::setlist::Setlist>, open: Option<PathBuf>) {
+fn run(setlist: Option<session_engine::setlist::Setlist>, open: Option<PathBuf>) {
     // iOS 27 stops an app that has not adopted scenes: ours is registered
     // before UIKit starts, for Info.plist to name.
     #[cfg(target_os = "ios")]

@@ -2,11 +2,11 @@
 //! plays before any remote has connected.
 //!
 //! Opened exactly as the app opens a song in Engine mode — through
-//! `session_ui::open::open_song_into`, the one way a song is opened: the
+//! `session_engine::open::open_song_into`, the one way a song is opened: the
 //! prepared `.session` when there is one (organized tracks, the chart, the
 //! guides), otherwise the file itself, prepared and saved as its `.session`
 //! once; into an engine `equip`ped like the app's (the guide instrument).
-//! A setlist is read by the app's own reader (`session_ui::setlist::read_setlist`).
+//! A setlist is read by the app's own reader (`session_engine::setlist::read_setlist`).
 //! Then the setlist service is rebuilt from what is open, so the browser
 //! remote sees what the daw facade sees.
 
@@ -24,7 +24,7 @@ use crate::session_engine::SessionEngine;
 pub async fn open(engine: &'static SessionEngine, target: &OpenTarget) -> eyre::Result<()> {
     let songs = match target {
         OpenTarget::Project(path) => vec![path.clone()],
-        OpenTarget::Setlist(path) => session_ui::setlist::read_setlist(path)?,
+        OpenTarget::Setlist(path) => session_engine::setlist::read_setlist(path)?,
     };
     // Parsing, preparing and decoding are blocking, and can take seconds.
     let opened = tokio::task::spawn_blocking(move || open_songs(engine, &songs))
@@ -44,7 +44,7 @@ pub async fn open(engine: &'static SessionEngine, target: &OpenTarget) -> eyre::
 /// opened.
 fn open_songs(engine: &SessionEngine, songs: &[PathBuf]) -> eyre::Result<usize> {
     let daw = &engine.standalone;
-    session_ui::open::equip(daw);
+    session_engine::open::equip(daw);
     let mut first: Option<String> = None;
     let mut opened = 0usize;
     for path in songs {
@@ -64,8 +64,8 @@ fn open_songs(engine: &SessionEngine, songs: &[PathBuf]) -> eyre::Result<usize> 
 }
 
 fn open_song(daw: &daw_standalone::sync::Standalone, path: &Path) -> eyre::Result<String> {
-    let prepare = session_ui::prepare::Prepare::for_song(path);
-    let (opened, plan) = session_ui::open::open_song_into(daw, path, &prepare)?;
+    let prepare = session_engine::prepare::Prepare::for_song(path);
+    let (opened, plan) = session_engine::open::open_song_into(daw, path, &prepare)?;
     tracing::info!(
         engine.song = %opened.name,
         engine.opened = %plan.open.display(),
