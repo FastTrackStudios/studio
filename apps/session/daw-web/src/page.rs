@@ -53,7 +53,10 @@ fn guest_name() -> String {
 /// (`?live=<link>&name=<who>`), or the song a share link shares
 /// (`?share=<link>`) — and the guide library's link (`&guide=<link>`).
 /// `None` when the address names neither: the page asks for a link.
-fn source() -> (Option<session_engine::web_engine::WebSource>, Option<String>) {
+fn source() -> (
+    Option<session_engine::web_engine::WebSource>,
+    Option<String>,
+) {
     use session::open_link::{AppOpen, app_open};
     use session_engine::web_engine::WebSource;
     let query = web_sys::window()

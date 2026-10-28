@@ -29,11 +29,13 @@ use lucide_dioxus::{
     HardDriveDownload, House, Library, LibraryBig, Link, ListMusic, LogOut, Music, Pencil, Play,
     Plus, Radio, Search, Trash2, X,
 };
-use session_ui::loading::{Loading, Progress, mark_src};
 use session_engine::setlist::Setlist;
 use session_engine::song_stream::Offline;
-use session_engine::stream_set::{Downloading, LibrarySetlist, LibrarySong, ListKind, with_library};
+use session_engine::stream_set::{
+    Downloading, LibrarySetlist, LibrarySong, ListKind, with_library,
+};
 use session_engine::task_account::{self, Account, AccountLibrary as _};
+use session_ui::loading::{Loading, Progress, mark_src};
 
 pub(super) const BG: &str = "#0f1012";
 pub(super) const BAR: &str = "#17181b";
@@ -565,9 +567,10 @@ fn Start() -> Element {
             opening.set(Opening::Busy(first.clone()));
             let who = who.clone();
             spawn(async move {
-                let refused = off_thread(move || session_engine::view_client::ask::join(&live, &who))
-                    .await
-                    .unwrap_or_else(|| Err("the ask stopped".to_owned()));
+                let refused =
+                    off_thread(move || session_engine::view_client::ask::join(&live, &who))
+                        .await
+                        .unwrap_or_else(|| Err("the ask stopped".to_owned()));
                 asked(first, refused);
             });
         }

@@ -212,7 +212,10 @@ pub fn prepare() -> Option<Prepared> {
             let addr = crate::remote::EngineAddr::parse(&address).map_err(|e| eyre::eyre!(e))?;
             let engine = crate::remote::connect_engine_daw(&addr).await?;
             let daw = engine.daw.clone();
-            Ok((daw, Box::new(engine) as session_engine::open::EngineConnection))
+            Ok((
+                daw,
+                Box::new(engine) as session_engine::open::EngineConnection,
+            ))
         })
     });
     let mode = session_engine::open::launch_mode();
@@ -299,7 +302,10 @@ fn attach_engine(found: &session_engine::studio_engine::link::Found) -> Result<(
     let target = session_engine::open::RemoteTarget::Engine {
         socket: found.socket.clone(),
     };
-    session_engine::open::set_mode(session_engine::open::ModeState::remote(target.clone(), false));
+    session_engine::open::set_mode(session_engine::open::ModeState::remote(
+        target.clone(),
+        false,
+    ));
     session_engine::open::attach(&target).map_err(|e| e.to_string())?;
     session_engine::studio_engine::link::set_linked(found.clone());
     Ok(())
