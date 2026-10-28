@@ -892,14 +892,14 @@ fn stream_version() -> u64 {
 /// no cache of its original's to draw from (the stretch decoded near the
 /// playhead, silent everywhere else), or one with no audio attached yet (a
 /// streamed song's takes before their streams are).
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 fn streaming_partial(
-    daw: &daw::standalone::Standalone,
+    daw: &daw_standalone::sync::Standalone,
     project: &daw::service::ProjectContext,
     guid: &str,
 ) -> bool {
     use daw::service::{ItemRef, Takes as _};
-    use daw::standalone::audio_engine::AudioSource;
+    use daw_standalone::audio_engine::AudioSource;
     let song = match project {
         daw::service::ProjectContext::Project(song) => song.clone(),
         daw::service::ProjectContext::Current => match crate::open::current_song() {
@@ -918,8 +918,18 @@ fn streaming_partial(
 }
 
 /// [`streaming_partial`] for `guid` of `song`, on the engine in this
-/// process — `false` with none here (a page: its waveforms are handed in).
+/// process (a page's own) — `false` with none here.
 fn partial_here(song: &str, guid: &str) -> bool {
+    #[cfg(feature = "web")]
+    if let Some(partial) = crate::web_engine::with_engine(|daw| {
+        streaming_partial(
+            daw,
+            &daw::service::ProjectContext::Project(song.to_owned()),
+            guid,
+        )
+    }) {
+        return partial;
+    }
     #[cfg(feature = "native")]
     if let Some(daw) = crate::open::local_engine() {
         return streaming_partial(

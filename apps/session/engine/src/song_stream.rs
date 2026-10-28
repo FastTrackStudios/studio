@@ -691,6 +691,24 @@ fn safe_name(text: &str) -> String {
         .collect()
 }
 
+/// The recording a waveform cache in a song's file list is of, by its
+/// lowercased file name, and whether it is ours (`.sessionpeaks`, which
+/// wins over REAPER's `.reapeaks`): a `Peaks/` folder beside the
+/// recordings, wherever the session keeps them — `Media/Peaks/` for a
+/// prepared song, `Samples/Imported/Peaks/` for one cut from a Live set.
+fn peaks_cache_of(lower: &str) -> Option<(&str, bool)> {
+    let (dir, name) = lower.rsplit_once('/')?;
+    if !(dir == "peaks" || dir.ends_with("/peaks")) {
+        return None;
+    }
+    let (original, ext) = name.rsplit_once('.')?;
+    match ext {
+        "sessionpeaks" => Some((original, true)),
+        "reapeaks" => Some((original, false)),
+        _ => None,
+    }
+}
+
 /// Whether a song-folder path is audio the fetcher streams (a proxy) or
 /// leaves alone (an original): everything else is small, and mirrored.
 fn is_media(lower: &str) -> bool {
@@ -760,6 +778,21 @@ mod media_tests {
             "not mapped: its proxy is as good"
         );
         assert!(!is_mapped_original("media/proxies/odd.wav"));
+    }
+
+    #[test]
+    fn a_waveform_cache_is_found_beside_its_recordings_wherever_they_are() {
+        assert_eq!(
+            super::peaks_cache_of("media/peaks/bass.wav.sessionpeaks"),
+            Some(("bass.wav", true))
+        );
+        assert_eq!(
+            super::peaks_cache_of("samples/imported/peaks/kick 1.wav.reapeaks"),
+            Some(("kick 1.wav", false))
+        );
+        assert_eq!(super::peaks_cache_of("media/bass.wav"), None);
+        assert_eq!(super::peaks_cache_of("media/peaks/notes.txt"), None);
+        assert_eq!(super::peaks_cache_of("speaks/bass.wav.sessionpeaks"), None);
     }
 
     #[test]
@@ -1117,13 +1150,10 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
     let mut wanted = Vec::new();
     for (path, size) in &list {
         let lower = path.to_lowercase();
-        if let Some(cache) = lower.strip_prefix("media/peaks/") {
-            // `bass.wav.sessionpeaks` or `bass.wav.reapeaks`: ours wins.
-            if let Some((original, ext)) = cache.rsplit_once('.')
-                && (ext == "sessionpeaks" || (ext == "reapeaks" && !peaks.contains_key(original)))
-            {
-                peaks.insert(original.to_owned(), (path.clone(), *size));
-            }
+        if let Some((original, ours)) = peaks_cache_of(&lower)
+            && (ours || !peaks.contains_key(original))
+        {
+            peaks.insert(original.to_owned(), (path.clone(), *size));
         }
         // A prepared song keeps its proxies in `Media/Proxies/`; a song cut
         // from a Live set beside its recordings (`Samples/Imported/Proxies/`).

@@ -208,6 +208,11 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+/// `f` on the page's engine, once it is made.
+pub(crate) fn with_engine<R>(f: impl FnOnce(&daw_standalone::sync::Standalone) -> R) -> Option<R> {
+    ENGINE.with(|engine| engine.borrow().as_ref().map(f))
+}
+
 /// The kinds the page's engine holds for `project`'s tracks — a song
 /// opened from its `.session`, which has no text to read them from
 /// (`StudioSession::read_project`). `None` before the engine is up.
@@ -930,20 +935,48 @@ pub fn switch_song(project: &str) {
         if MULTITRACKS.with(std::cell::Cell::get) {
             hear_stems(web, project, true);
         }
-        // The waveforms: each take's original's peaks, fetched and reduced,
-        // then drawn — the audio need not have arrived.
+        // The waveforms: each take's original's peaks where the share has
+        // them, fetched and reduced; else built from its proxy once it has
+        // all arrived — read again until it has (`read_whole_as_arriving`).
         let previews = song.previews.clone();
         let items: Vec<String> =
             daw_standalone::audio_engine::materialize::pending_media(&web.standalone, project)
                 .into_iter()
                 .map(|m| m.item_guid)
                 .collect();
+        let song_guid = project.to_owned();
         wasm_bindgen_futures::spawn_local(async move {
-            if streamed.load_peaks(crate::midi::WAVE_BLOCK).await > 0 {
-                previews.fill_waves(items).await;
-            }
+            let _ = streamed.load_peaks(crate::midi::WAVE_BLOCK).await;
+            previews.fill_waves(items).await;
+            read_whole_as_arriving(previews, song_guid).await;
         });
     });
+}
+
+/// Read `song`'s partial waveforms again every few seconds while any are
+/// partial and it is the song on screen: each is drawn whole once its
+/// proxy has all arrived (its peaks built from it then). Gives up after
+/// half an hour — a proxy that never arrives is not read forever.
+async fn read_whole_as_arriving(previews: crate::midi::Previews, song: String) {
+    const EVERY_MS: u32 = 2_000;
+    const TRIES: u32 = 900;
+    for _ in 0..TRIES {
+        gloo_timers::future::TimeoutFuture::new(EVERY_MS).await;
+        if crate::open::current_song().as_deref() != Some(song.as_str()) {
+            return;
+        }
+        let partial = previews.partial();
+        if partial.is_empty() {
+            return;
+        }
+        let Some(facade) = daw_control::Daw::try_get() else {
+            return;
+        };
+        let Ok(project) = facade.project(song.clone()).await else {
+            return;
+        };
+        previews.fill_waves_in(&project, partial).await;
+    }
 }
 
 /// Bring the set in behind `project`, now on screen, in
