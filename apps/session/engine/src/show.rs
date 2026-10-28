@@ -80,7 +80,7 @@ pub fn split(set: &Path, into: &Path) -> eyre::Result<Vec<Song>> {
             .map(|c| Card {
                 start: map.seconds_at(c.start_beats) - range.start_seconds,
                 end: map.seconds_at(c.end_beats) - range.start_seconds,
-                name: c.name,
+                name: section_name(&c.name, &range.name),
                 color: c.color,
             })
             .collect();
@@ -177,6 +177,22 @@ struct Card {
     start: f64,
     end: f64,
     color: Option<u32>,
+}
+
+/// A section card's name as the song's section: a card named after the
+/// song itself (a set's first card, `NO ONE KNOWS`) is its `Intro`.
+fn section_name(card: &str, song: &str) -> String {
+    let key = |text: &str| -> String {
+        text.chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    };
+    if !key(card).is_empty() && key(card) == key(song) {
+        "Intro".to_owned()
+    } else {
+        card.to_owned()
+    }
 }
 
 /// The song's structure from its section cards (`ableton::setlist::sections`):
@@ -476,6 +492,18 @@ fn file_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_card_named_after_its_song_is_the_intro() {
+        assert_eq!(super::section_name("NO ONE KNOWS", "No One Knows"), "Intro");
+        assert_eq!(
+            super::section_name("Heart Isn't Ready", "Heart isn't Ready"),
+            "Intro"
+        );
+        assert_eq!(super::section_name("Chorus 1", "No One Knows"), "Chorus 1");
+        assert_eq!(super::section_name("", ""), "");
+    }
+
     use super::{
         Card, SHOW_TRACK, ShowPlace, file_name, fresh_track_guids, lay_out_song, name_song,
         relative_to, rooted_under,
