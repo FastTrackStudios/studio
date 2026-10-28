@@ -58,6 +58,26 @@ it is opened.
 Sessions can open a brand new session with nothing in it: an empty
 project, entirely local, to work in as in any DAW.
 
+## Decided (2026-10-28)
+
+- **The library lives in Task projects.** A session is a Task project with
+  the `music-production` capability; sessions nest by the project's
+  parent; folders (Church → HSM) are plain parent projects; tags are the
+  project's own tags, apart from folders. `docs/design/library.md`'s Loro
+  typed-docs library gives way to this.
+- **Live or studio is a Task capability**: `live-performance`, beside
+  `music-production`. LIVE-SONG is a live song project; a LIVE-SETLIST is
+  a `live-set` project holding a setlist collection, or a `concert`
+  project whose children are the songs of one split show.
+- **A setlist references both** songs (the `song:` items that stream
+  today) and whole sessions (project items).
+- **Rig data syncs completely.** The one setlist builder writes to Task,
+  and everything a rig keeps about a setlist and its songs (start patch,
+  profile, per-song key and tempo, the rigs themselves) syncs too —
+  nothing a rig needs lives only on one device.
+- **A new empty session** is saved to disk at once (Documents), and can
+  be put into Task later.
+
 ## Related
 
 - `docs/design/engine-boundary.md`: every window is a client of its
