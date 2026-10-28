@@ -282,6 +282,9 @@ pub struct MarksFrame {
     pub song: String,
     pub version: u64,
     pub marks: Vec<(String, crate::track_regions::Marks)>,
+    /// The song's points of interest (`crate::poi`), and the one stepped to.
+    pub pois: Vec<crate::poi::Poi>,
+    pub poi_current: Option<String>,
 }
 
 /// What streams in: each item's share arrived (by item guid, those not all
@@ -378,6 +381,9 @@ pub enum Change {
     Waves,
     /// The tracks' own markers and regions.
     Marks,
+    /// A Session undo or redo was done: read the whole song back, and an
+    /// Editor waiting on one reads again.
+    Undone,
 }
 
 /// What the engine asks of a window it cannot do itself — an edit the

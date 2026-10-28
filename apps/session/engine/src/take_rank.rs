@@ -381,7 +381,8 @@ pub fn level_of_take(
     .unwrap_or(0)
 }
 
-/// [`settle`] on the song this window plays, if it plays one.
+/// [`settle`] on the engine's current song, if it has one: what the
+/// engine does a few times a second (`studio_engine::view_host`).
 pub fn settle_open() {
     if let (Some(daw), Some(song)) = (crate::open::local_engine(), crate::open::current_song()) {
         settle(daw, &ProjectContext::Project(song));
@@ -403,7 +404,7 @@ pub fn press_while_recording(t: f64, by: i8) {
 
 /// Once a recording pass has ended: its takes selected (what the arrows
 /// rank next), and the ranks pressed while it recorded written on them.
-/// Cheap when nothing changed; called from the window each frame.
+/// Cheap when nothing changed; called by the engine a few times a second.
 pub fn settle(daw: &daw::standalone::Standalone, project: &ProjectContext) {
     let ProjectContext::Project(guid) = project else {
         return;

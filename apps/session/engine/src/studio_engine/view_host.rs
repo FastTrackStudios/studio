@@ -126,6 +126,16 @@ pub fn start() {
         let _ = std::thread::Builder::new()
             .name("view-jobs".into())
             .spawn(follow_jobs);
+        // A recording pass that ends has its takes selected and the ranks
+        // pressed while it ran written on them, window or none.
+        let _ = std::thread::Builder::new()
+            .name("take-settle".into())
+            .spawn(|| {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    crate::take_rank::settle_open();
+                }
+            });
     });
 }
 
@@ -240,6 +250,8 @@ pub fn marks_changed() {
             song: song.clone(),
             version,
             marks: crate::track_regions::all(daw, &project),
+            pois: crate::poi::read(daw, &project),
+            poi_current: crate::poi::current(),
         };
         if let Ok(mut last) = host.inner.last_marks.lock() {
             *last = frame.clone();

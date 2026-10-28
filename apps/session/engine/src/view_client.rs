@@ -576,6 +576,7 @@ pub mod ask {
 static MARKS: RwLock<Option<Arc<MarksFrame>>> = RwLock::new(None);
 
 fn marks_arrived(frame: MarksFrame) {
+    crate::poi::adopt(frame.pois.clone(), frame.poi_current.clone());
     if let Ok(mut slot) = MARKS.write() {
         *slot = Some(Arc::new(frame));
     }
@@ -682,6 +683,10 @@ fn changed(change: crate::view::Changed) {
     use crate::view::Change;
     match change.what {
         Change::All | Change::Automation => crate::song_model::request_resync_here(),
+        Change::Undone => {
+            crate::actions::undone_there();
+            crate::song_model::request_resync_here();
+        }
         Change::Items => {
             crate::song_model::request_resync_items_here();
             crate::wave_detail::engine_changed();

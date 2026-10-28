@@ -1727,6 +1727,15 @@ pub fn undone() -> u64 {
 
 fn stepped() {
     UNDONE.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    // A window in another process counts it too.
+    #[cfg(feature = "native")]
+    crate::studio_engine::view_host::changed(None, crate::view::Change::Undone);
+}
+
+/// The engine said it undid or redid a step: counted here, as one done
+/// here is ([`undone`]).
+pub fn undone_there() {
+    UNDONE.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
 }
 
 /// Run `SESSION_UNDO` (`back`) or `SESSION_REDO` behind the window, as

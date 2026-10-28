@@ -83,6 +83,21 @@ fn publish(points: Vec<Poi>) {
         *shown = Some(Arc::new(points));
     }
     VERSION.fetch_add(1, Ordering::Relaxed);
+    // Windows draw them from the marks the engine sends.
+    crate::changes::announce(crate::changes::Change::Marks);
+}
+
+/// The points and the one stepped to, as the engine sent them with the
+/// song's marks: what a window draws.
+pub fn adopt(points: Vec<Poi>, stepped: Option<String>) {
+    ASKED.store(true, Ordering::Release);
+    if let Ok(mut shown) = SHOWN.lock() {
+        *shown = Some(Arc::new(points));
+    }
+    if let Ok(mut c) = CURRENT.lock() {
+        *c = stepped;
+    }
+    VERSION.fetch_add(1, Ordering::Relaxed);
 }
 
 /// Goes up on every change: a window compares it with the one it drew.
@@ -122,6 +137,7 @@ fn set_current(id: Option<String>) {
         *c = id;
     }
     VERSION.fetch_add(1, Ordering::Relaxed);
+    crate::changes::announce(crate::changes::Change::Marks);
 }
 
 /// Where `at` is: a bar as the ruler writes it (`83.1`), `12.5s`, a

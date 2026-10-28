@@ -4660,10 +4660,6 @@ impl ArrangementWidget {
     pub fn paint_scene(&mut self, width: u32, height: u32, scale: f64) -> Scene {
         let began = web_time::Instant::now();
         self.paint_began = began;
-        // A recording pass just ended: its takes selected, the ranks
-        // pressed while it ran written on them.
-        #[cfg(feature = "native")]
-        crate::take_rank::settle_open();
         // What was run on the Action List for the window, from elsewhere
         // than a key (a model, a menu): done before the picture is.
         #[cfg(feature = "native")]

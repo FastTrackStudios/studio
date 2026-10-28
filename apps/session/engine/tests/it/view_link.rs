@@ -249,6 +249,22 @@ fn a_window_on_the_in_memory_link_gets_the_set_waves_lanes_overlay_and_controls(
         session_engine::edit_state::revision() >= before + 2
     })?;
 
+    // A point of interest the engine writes reaches the window with the
+    // song's marks (one step for the engine's, one for the window's).
+    let before = session_engine::poi::version();
+    run("POI_ADD", &json!({ "at": "1s", "note": "Linked probe" }))?;
+    within(10, "the point of interest shown", || {
+        session_engine::poi::version() >= before + 2
+            && session_engine::poi::shown()
+                .is_some_and(|p| p.iter().any(|p| p.note == "Linked probe"))
+    })?;
+    // An undo the engine does is counted by the window too.
+    let before = session_engine::actions::undone();
+    run("SESSION_UNDO", &json!({}))?;
+    within(10, "the undo counted", || {
+        session_engine::actions::undone() >= before + 2
+    })?;
+
     // Closed by the engine: the window's set goes with it.
     run("SESSION_CLOSE", &Value::Null)?;
     within(30, "the set closed", || {
