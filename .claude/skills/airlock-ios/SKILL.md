@@ -115,8 +115,8 @@ every build registers is `StudioSceneDelegate` (`app_shell::ios_scene`).
 `SIMCTL_CHILD_FTS_STUDIO_OPEN=rig`).
 
 The studio tree builds Studio on airlock from
-`/Volumes/build-disk/development/studio` (one warm `target/`, under the
-build-lease), not `~/fts`:
+`/Volumes/build-disk/development/studio` (the one canonical checkout and its
+warm `target/`; never a worktree), not `~/fts`:
 
 ```bash
 cd /Volumes/build-disk/development/studio/apps/studio/desktop
