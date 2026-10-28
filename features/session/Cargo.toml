@@ -17,6 +17,9 @@ collab = ["engine", "net"]
 desktop = ["dioxus", "dock/ui", "dock/web"]
 engine = ["dep:daw-control", "dep:daw-standalone"]
 library = ["dep:collection-proto", "dep:files-client", "dep:files-proto", "dep:futures-util", "dep:links-proto", "dep:resources-proto", "dep:task-dial", "dep:vox-core"]
+# Putting songs into the library (session::library::publish, native: the
+# `studio ingest` side) — their roots, files, lists, projects and links.
+publish = ["library", "dep:project-proto", "dep:share-proto"]
 net = ["dep:crdt", "dep:futures"]
 # A project file synced through the org that owns it (session::project_sync,
 # native only): its branches as `session` docs on the account's driver.
@@ -62,6 +65,8 @@ music-catalog = { workspace = true }
 num-traits = { workspace = true }
 ort = { workspace = true, optional = true }
 resources-proto = { workspace = true, optional = true }
+project-proto = { workspace = true, optional = true, features = ["vox"] }
+share-proto = { workspace = true, optional = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }

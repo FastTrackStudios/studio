@@ -71,6 +71,59 @@ pub fn session_root_dir(song_slug: &str) -> String {
     format!("session/{song_slug}")
 }
 
+#[cfg(feature = "publish")]
+pub mod publish;
+
+/// The File Root the song `slug` plays from, among `roots`.
+///
+/// Best first: a root at `…/session/<slug>` (what `studio ingest` and
+/// the library make); else one whose folder is named for the song — its
+/// title, a track number before it or not (`Projects/Crescendum/05 Empty
+/// Focus`, how albums were uploaded before there was a `session/` folder);
+/// else one whose own name is the song's title. A root with no live tree
+/// on the server (`path` none) is never one.
+#[must_use]
+pub fn session_root_for<'a>(
+    roots: &'a [files_proto::model::FileRootInfo],
+    slug: &str,
+) -> Option<&'a files_proto::model::FileRootInfo> {
+    let rank = |root: &files_proto::model::FileRootInfo| -> Option<u8> {
+        let path = root.path.as_deref()?.trim_end_matches('/');
+        let mut segments = path.rsplit(['/', '\\']);
+        let folder = segments.next()?;
+        if folder == slug && segments.next() == Some("session") {
+            return Some(0);
+        }
+        if slugify(without_track_number(folder)) == slug {
+            return Some(1);
+        }
+        (slugify(without_track_number(&root.name)) == slug).then_some(2)
+    };
+    roots
+        .iter()
+        .filter_map(|root| rank(root).map(|r| (r, root)))
+        .min_by_key(|(r, _)| *r)
+        .map(|(_, root)| root)
+}
+
+/// `name` without the track number an album's folders lead with
+/// (`05 Empty Focus`, `05 - Empty Focus`, `05_Empty Focus`); as it is
+/// when it has none, or is nothing but a number (`1999`).
+#[must_use]
+pub fn without_track_number(name: &str) -> &str {
+    let name = name.trim();
+    let digits = name.len() - name.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+    if digits == 0 || digits > 3 {
+        return name;
+    }
+    let rest = name[digits..].trim_start_matches([' ', '-', '_', '.']);
+    if rest.is_empty() || rest.len() == name.len() - digits {
+        name
+    } else {
+        rest
+    }
+}
+
 /// A song's library id from its title (`God, I'm` → `god-im`) — the rule
 /// lives with the live session's code, which matches songs by it too.
 pub use crate::sync::slug::slugify;
@@ -151,6 +204,15 @@ impl Library {
             .trim_end_matches('/')
             .replacen("wss://", "https://", 1)
             .replacen("ws://", "http://", 1)
+    }
+
+    /// One of the org's services, dialled as this person: any generated
+    /// client (`CollectionServiceClient`, `ProjectServiceClient`, …).
+    ///
+    /// # Errors
+    /// The server cannot be reached, or refused.
+    pub async fn service<C: vox_core::FromVoxLane + 'static>(&self) -> eyre::Result<C> {
+        self.client().await
     }
 
     async fn client<C: vox_core::FromVoxLane + 'static>(&self) -> eyre::Result<C> {
@@ -271,14 +333,7 @@ impl Library {
             .list()
             .await
             .map_err(|e| eyre::eyre!("listing roots: {e:?}"))?;
-        let has_session = |slug: &str| {
-            let dir = session_root_dir(slug);
-            roots.iter().any(|r| {
-                r.path
-                    .as_deref()
-                    .is_some_and(|p| p.trim_end_matches('/').ends_with(&dir))
-            })
-        };
+        let has_session = |slug: &str| session_root_for(&roots, slug).is_some();
         let mut songs: Vec<(Song, bool)> = listed
             .into_iter()
             .map(|s| {
@@ -581,13 +636,7 @@ impl Library {
             .list()
             .await
             .map_err(|e| eyre::eyre!("listing roots: {e:?}"))?;
-        let root = roots
-            .iter()
-            .find(|r| {
-                r.path
-                    .as_deref()
-                    .is_some_and(|p| p.trim_end_matches('/').ends_with(&dir))
-            })
+        let root = session_root_for(&roots, song)
             .ok_or_else(|| eyre::eyre!("no session for song:{song} (no `{dir}` root)"))?;
         let id = files_client::root_id(root);
         let mut entries = Vec::new();
@@ -963,6 +1012,9 @@ fn project_entry(entries: &[(String, u64)]) -> Option<usize> {
                 .position(|(rel, _)| top(rel) && rel.to_lowercase().ends_with(".rpp"))
         })
 }
+
+#[cfg(test)]
+mod root_tests;
 
 #[cfg(test)]
 mod project_entry_tests {
