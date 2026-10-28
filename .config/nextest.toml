@@ -21,3 +21,11 @@ slow-timeout = { period = "60s", terminate-after = 2 }
 [[profile.default.overrides]]
 filter = 'package(daw-standalone) & test(/audio_engine::ahead::tests::/)'
 threads-required = 'num-test-threads'
+
+# The per-project lock tests time how long one song's readers wait while
+# another is edited (a few µs alone). Beside the whole suite on CI's pool
+# a busy box let a read wait 5.4 ms against its 5 ms budget: the wait was
+# the scheduler's, not a lock's. They run alone.
+[[profile.default.overrides]]
+filter = 'package(daw-standalone) & test(/sync::daw::tests::/)'
+threads-required = 'num-test-threads'
