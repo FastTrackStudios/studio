@@ -241,7 +241,7 @@ fn a_reference_made_before_the_log_is_folded_stays_current() {
     touch(&made[0], b"ogg");
     touch(&song, b"song");
     // The fold writes the song after the bounce.
-    let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+    let later = web_time::SystemTime::now() + std::time::Duration::from_secs(60);
     std::fs::File::options()
         .write(true)
         .open(&song)

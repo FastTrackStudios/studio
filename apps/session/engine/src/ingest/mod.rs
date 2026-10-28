@@ -24,7 +24,7 @@
 //! or a song in the setlist.
 
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use web_time::Instant;
 
 use facet::Facet;
 pub use session::library::publish::Form;

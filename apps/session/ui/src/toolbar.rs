@@ -253,6 +253,11 @@ pub fn MainToolbar(
             if let Some(option) = other.option() {
                 let now = option.toggle();
                 if other == Toggle::Grouping {
+                    // Groups move in the engine, where the mix is; a page's
+                    // engine is its own.
+                    #[cfg(feature = "native")]
+                    crate::actions::off_the_window("SESSION_GROUPING", format!("{{\"on\":{now}}}"));
+                    #[cfg(not(feature = "native"))]
                     crate::options::grouping_changed(now);
                 }
                 if other == Toggle::Lock

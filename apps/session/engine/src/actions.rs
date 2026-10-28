@@ -484,6 +484,8 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     crate::record::register(list)?;
     #[cfg(feature = "native")]
     crate::render_ahead::register(list)?;
+    #[cfg(feature = "native")]
+    register_window_controls(list)?;
     crate::grow::register(list)?;
     crate::project_new::register(list)?;
     crate::instrument_tracks::register(list)?;
@@ -1300,7 +1302,7 @@ static RECENT: ActionMeta = meta(
 /// that is not known.
 #[cfg(feature = "native")]
 #[must_use]
-pub fn open_song_unsaved() -> Option<bool> {
+pub(crate) fn open_song_unsaved() -> Option<bool> {
     let (daw, ProjectContext::Project(guid)) = song().ok()? else {
         return None;
     };
@@ -1314,7 +1316,7 @@ pub fn open_song_unsaved() -> Option<bool> {
 /// one open.
 #[cfg(feature = "native")]
 #[must_use]
-pub fn open_song_versions() -> Vec<crate::projects::Version> {
+pub(crate) fn open_song_versions() -> Vec<crate::projects::Version> {
     let Ok((daw, ProjectContext::Project(guid))) = song() else {
         return Vec::new();
     };
@@ -1452,6 +1454,159 @@ fn register_style(list: &ActionList) -> Result<(), architect::action::ActionErro
     Ok(())
 }
 
+static MULTITRACKS: ActionMeta = meta(
+    "SESSION_MULTITRACKS",
+    "session_multitracks",
+    "Load the multitracks",
+    "Hear every streamed song by its stems: they all come in now, and each song moves over from its stereo reference as they arrive. Says how the songs are heard (`stems`, and `referenced` while any still plays its reference).",
+    "Streaming",
+    "",
+);
+
+static GROUPING: ActionMeta = meta(
+    "SESSION_GROUPING",
+    "session_grouping",
+    "Grouping",
+    "Whether a fader, mute or solo moved on a grouped track moves its group (`on`). Says what it is now.",
+    "Mix",
+    "",
+);
+
+/// Grouping on or off.
+#[cfg(feature = "native")]
+#[derive(Facet)]
+struct GroupingArg {
+    on: bool,
+}
+
+static VERSIONS: ActionMeta = meta(
+    "SESSION_VERSIONS",
+    "session_versions",
+    "The song's versions",
+    "The open song's versions, the newest first: the song's own (`\"The song\"`) and its checkpoints, each its `name`, when it was saved (`when`), where it is (`path`) and whether it is the one open (`open`); and whether the song has changes not saved (`unsaved`, absent with no song or no file). Read-only.",
+    "File",
+    "",
+);
+
+/// The open song's versions, as the top bar's Versions lists them.
+#[cfg(feature = "native")]
+#[derive(Facet)]
+pub struct VersionsRead {
+    pub versions: Vec<VersionRow>,
+    pub unsaved: Option<bool>,
+}
+
+/// One version.
+#[cfg(feature = "native")]
+#[derive(Facet)]
+pub struct VersionRow {
+    pub name: String,
+    pub when: String,
+    pub path: String,
+    pub open: bool,
+}
+
+static ACTIONS: ActionMeta = meta(
+    "SESSION_ACTIONS",
+    "session_actions",
+    "Actions a palette runs",
+    "The actions that take nothing and run at once — what a command palette offers — each its `id`, `label`, `group`, `shortcut`, `description` and whether it can run now (`enabled`). Read-only.",
+    "View",
+    "",
+);
+
+/// An action a palette runs.
+#[cfg(feature = "native")]
+#[derive(Facet)]
+pub struct PaletteRow {
+    pub id: String,
+    pub label: String,
+    pub group: String,
+    pub shortcut: String,
+    pub description: String,
+    pub enabled: bool,
+}
+
+/// The actions a palette offers, as the engine lists them
+/// (`SESSION_ACTIONS`): none when it cannot say.
+#[cfg(feature = "native")]
+#[must_use]
+pub fn palette() -> Vec<PaletteRow> {
+    run(ACTIONS.id, b"")
+        .ok()
+        .and_then(|bytes| facet_json::from_slice::<Vec<PaletteRow>>(&bytes).ok())
+        .unwrap_or_default()
+}
+
+/// The open song's versions, as the engine reads them
+/// (`SESSION_VERSIONS`): `None` when it cannot say.
+#[cfg(feature = "native")]
+#[must_use]
+pub fn versions() -> Option<VersionsRead> {
+    run(VERSIONS.id, b"")
+        .ok()
+        .and_then(|bytes| facet_json::from_slice::<VersionsRead>(&bytes).ok())
+}
+
+/// What a window's controls ask of the engine: the multitracks, grouping,
+/// the song's versions and the palette's actions — so a window in another
+/// process (and MCP, and the CLI) reads and sets them where they live.
+#[cfg(feature = "native")]
+fn register_window_controls(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    list.register(&MULTITRACKS, Effect::Mutating, |(): ()| {
+        crate::reference_play::load_multitracks();
+        Ok::<_, String>(crate::view::Listening {
+            stems: crate::reference_play::multitracks(),
+            referenced: crate::reference_play::any(),
+        })
+    })?;
+    list.register(&GROUPING, Effect::Mutating, |a: GroupingArg| {
+        crate::options::GROUPING.set(a.on);
+        crate::options::grouping_changed(a.on);
+        Ok::<_, String>(a.on)
+    })?;
+    list.register(&VERSIONS, Effect::ReadOnly, |(): ()| {
+        Ok::<_, String>(VersionsRead {
+            versions: open_song_versions()
+                .into_iter()
+                .map(|v| VersionRow {
+                    name: v.name,
+                    when: v.when,
+                    path: v.path.to_string_lossy().into_owned(),
+                    open: v.open,
+                })
+                .collect(),
+            unsaved: open_song_unsaved(),
+        })
+    })?;
+    list.register(&ACTIONS, Effect::ReadOnly, |(): ()| {
+        let all = crate::actions::list();
+        Ok::<_, String>(
+            all.infos()
+                .into_iter()
+                .filter(|a| a.params_schema.is_none() && !all.is_async(&a.id))
+                .map(|a| PaletteRow {
+                    label: if a.display_name.is_empty() {
+                        a.id.clone()
+                    } else {
+                        a.display_name
+                    },
+                    id: a.id,
+                    group: if a.group.is_empty() {
+                        a.category
+                    } else {
+                        a.group
+                    },
+                    shortcut: a.shortcut,
+                    description: a.description,
+                    enabled: a.enabled,
+                })
+                .collect::<Vec<_>>(),
+        )
+    })?;
+    Ok(())
+}
+
 #[cfg(feature = "native")]
 fn register_undo(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&FOLD, Effect::Mutating, |a: FoldArg| {
@@ -1571,6 +1726,15 @@ pub fn undone() -> u64 {
 }
 
 fn stepped() {
+    UNDONE.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    // A window in another process counts it too.
+    #[cfg(feature = "native")]
+    crate::studio_engine::view_host::changed(None, crate::view::Change::Undone);
+}
+
+/// The engine said it undid or redid a step: counted here, as one done
+/// here is ([`undone`]).
+pub(crate) fn undone_there() {
     UNDONE.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
 }
 

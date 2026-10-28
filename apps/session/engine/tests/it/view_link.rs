@@ -4,7 +4,9 @@
 //! same client as a desktop window's socket), and what the window draws
 //! checked as it arrives over that link — the set (opened, then closed),
 //! the waveforms as the engine draws them, the automation lanes and a take
-//! volume curve the window's own edits wrote, and the hit overlay.
+//! volume curve the window's own edits wrote, and the hit overlay — and
+//! the window's controls (the palette, the versions, the jobs bar,
+//! grouping) answered by the engine.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -68,7 +70,8 @@ fn song(dir: &Path) -> Result<PathBuf, String> {
 }
 
 #[test]
-fn a_window_on_the_in_memory_link_gets_the_set_waves_lanes_and_overlay() -> Result<(), String> {
+fn a_window_on_the_in_memory_link_gets_the_set_waves_lanes_overlay_and_controls()
+-> Result<(), String> {
     // SAFETY: set before the engine starts any thread of its own; this
     // test's process starts the engine once.
     unsafe {
@@ -176,6 +179,90 @@ fn a_window_on_the_in_memory_link_gets_the_set_waves_lanes_and_overlay() -> Resu
     // The hit overlay of the song on screen came over its stream.
     within(30, "the overlay", || {
         session_engine::hit_overlay::current().is_some()
+    })?;
+
+    // The palette is the engine's list, what can run now as it says.
+    let palette = session_engine::actions::palette();
+    assert!(
+        palette
+            .iter()
+            .any(|a| a.id == "SESSION_PLAY_STOP" && a.enabled),
+        "{} palette rows",
+        palette.len()
+    );
+    // The versions panel's read is answered by the engine.
+    assert!(
+        session_engine::actions::versions().is_some(),
+        "no versions answer"
+    );
+    // Grouping is set where the mix is.
+    assert_eq!(
+        run("SESSION_GROUPING", &json!({ "on": false }))?,
+        json!(false)
+    );
+    run("SESSION_GROUPING", &json!({ "on": true }))?;
+    // A job the engine runs reaches the window's bottom bar over its
+    // stream, and goes when it ends.
+    let job = session_engine::jobs::start("Linked probe", 3);
+    within(10, "the job shown", || {
+        view_client::jobs()
+            .iter()
+            .any(|j| j.label == "Linked probe")
+    })?;
+    drop(job);
+    within(10, "the job gone", || {
+        !view_client::jobs()
+            .iter()
+            .any(|j| j.label == "Linked probe")
+    })?;
+
+    // What the window selects is what the engine's actions act on: told
+    // over the link (nothing here writes the engine's state).
+    let shown = session_engine::edit_state::Edit {
+        at: 0.5,
+        selection: Some(session_engine::edit_state::Span::between(0.5, 1.5)),
+    };
+    view_client::show_edit(
+        shown,
+        Some(editing::scope::Scope {
+            tracks: vec!["Guitar".to_owned()],
+            spans: Vec::new(),
+        }),
+    );
+    within(10, "the window's cursor on the engine", || {
+        session_engine::edit_state::of(&song).is_some_and(|e| e.at == 0.5 && e.selection.is_some())
+    })?;
+    // A guitar has no editing profile: the engine says so, naming what the
+    // window selected.
+    let scope = match view_client::run("EDIT_SCOPE", b"") {
+        Ok(said) | Err(said) => said,
+    };
+    assert!(scope.contains("Guitar"), "EDIT_SCOPE: {scope}");
+    // Where an action puts the time selection comes back over the link:
+    // the window takes it up as an ask of its own (one revision more).
+    let before = session_engine::edit_state::revision();
+    run(
+        "TIME_SELECTION_SET",
+        &json!({ "from": "1s", "to": "1.75s" }),
+    )?;
+    within(10, "the engine's ask taken up by the window", || {
+        session_engine::edit_state::revision() >= before + 2
+    })?;
+
+    // A point of interest the engine writes reaches the window with the
+    // song's marks (one step for the engine's, one for the window's).
+    let before = session_engine::poi::version();
+    run("POI_ADD", &json!({ "at": "1s", "note": "Linked probe" }))?;
+    within(10, "the point of interest shown", || {
+        session_engine::poi::version() >= before + 2
+            && session_engine::poi::shown()
+                .is_some_and(|p| p.iter().any(|p| p.note == "Linked probe"))
+    })?;
+    // An undo the engine does is counted by the window too.
+    let before = session_engine::actions::undone();
+    run("SESSION_UNDO", &json!({}))?;
+    within(10, "the undo counted", || {
+        session_engine::actions::undone() >= before + 2
     })?;
 
     // Closed by the engine: the window's set goes with it.

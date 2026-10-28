@@ -20,10 +20,10 @@ use architect::PubSub;
 use daw::service::ProjectContext;
 
 use crate::view::{
-    ActionCall, Applied, AutomationRead, Change, Changed, ChangesAsk, DetailAsk, EditBatch,
-    EngineView, EngineViewStreamSource, ItemChanges, ItemNow, MarksFrame, OverlayFrame, Playhead,
-    Queued, SetFrame, SetOpening, SongFacts, StreamSong, StreamsFrame, ViewError, WaveRead,
-    WavesAsk,
+    ActionCall, Applied, AutomationRead, Change, Changed, ChangesAsk, DetailAsk, EditAsked,
+    EditBatch, EditShown, EngineView, EngineViewStreamSource, ItemChanges, ItemNow, JobRow,
+    JobsFrame, MarksFrame, OverlayFrame, Playhead, Queued, SetFrame, SetOpening, SongFacts,
+    StreamSong, StreamsFrame, ViewError, WaveRead, WavesAsk,
 };
 
 /// The engine's view host: its hubs and what each last said.
@@ -37,12 +37,15 @@ struct Inner {
     overlays: PubSub<OverlayFrame>,
     marks: PubSub<MarksFrame>,
     streams: PubSub<StreamsFrame>,
+    jobs: PubSub<JobsFrame>,
+    edits: PubSub<EditAsked>,
     changes: PubSub<Changed>,
     queued: PubSub<Queued>,
     last_set: Mutex<SetFrame>,
     last_overlay: Mutex<OverlayFrame>,
     last_marks: Mutex<MarksFrame>,
     last_streams: Mutex<StreamsFrame>,
+    last_jobs: Mutex<JobsFrame>,
     revision: AtomicU64,
     asked: AtomicU64,
     /// The engine's own waveform reads: what it cuts slices from.
@@ -61,12 +64,15 @@ pub fn host() -> &'static ViewHost {
             overlays: PubSub::sliding(4),
             marks: PubSub::sliding(4),
             streams: PubSub::sliding(4),
+            jobs: PubSub::sliding(4),
+            edits: PubSub::sliding(16),
             changes: PubSub::sliding(1024),
             queued: PubSub::sliding(64),
             last_set: Mutex::new(SetFrame::default()),
             last_overlay: Mutex::new(OverlayFrame::default()),
             last_marks: Mutex::new(MarksFrame::default()),
             last_streams: Mutex::new(StreamsFrame::default()),
+            last_jobs: Mutex::new(JobsFrame::default()),
             revision: AtomicU64::new(0),
             asked: AtomicU64::new(0),
             previews: crate::midi::Previews::default(),
@@ -98,6 +104,16 @@ pub fn start() {
                 revision,
             });
         });
+        crate::edit_state::on_ask(|song, edit, revision| {
+            host().inner.edits.publish(EditAsked {
+                song: song.to_owned(),
+                revision,
+                at: edit.at,
+                selection: edit
+                    .selection
+                    .map(|s| editing::scope::Span::between(s.start, s.end)),
+            });
+        });
         crate::changes::listen(|change| match change {
             crate::changes::Change::Marks => marks_changed(),
         });
@@ -107,6 +123,19 @@ pub fn start() {
         };
         runtime.spawn(follow_set());
         runtime.spawn(count_windows());
+        let _ = std::thread::Builder::new()
+            .name("view-jobs".into())
+            .spawn(follow_jobs);
+        // A recording pass that ends has its takes selected and the ranks
+        // pressed while it ran written on them, window or none.
+        let _ = std::thread::Builder::new()
+            .name("take-settle".into())
+            .spawn(|| {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    crate::take_rank::settle_open();
+                }
+            });
     });
 }
 
@@ -221,6 +250,8 @@ pub fn marks_changed() {
             song: song.clone(),
             version,
             marks: crate::track_regions::all(daw, &project),
+            pois: crate::poi::read(daw, &project),
+            poi_current: crate::poi::current(),
         };
         if let Ok(mut last) = host.inner.last_marks.lock() {
             *last = frame.clone();
@@ -230,7 +261,11 @@ pub fn marks_changed() {
 }
 
 /// The streaming state, as the engine reads it every half second.
-pub fn streams_read(shown: &crate::stream_set::Shown, waiting: bool) {
+pub fn streams_read(
+    shown: &crate::stream_set::Shown,
+    waiting: bool,
+    listening: crate::view::Listening,
+) {
     let host = host();
     let mut items: Vec<(String, f32)> = shown.items.iter().map(|(k, v)| (k.clone(), *v)).collect();
     items.sort_by(|a, b| a.0.cmp(&b.0));
@@ -254,11 +289,50 @@ pub fn streams_read(shown: &crate::stream_set::Shown, waiting: bool) {
         items,
         songs,
         waiting,
+        listening,
     };
     if let Ok(mut last) = host.inner.last_streams.lock() {
         *last = frame.clone();
     }
     host.inner.streams.publish(frame);
+}
+
+/// What the engine is doing in the background, published when it changes:
+/// read four times a second, as the bottom bar draws it.
+fn follow_jobs() {
+    let host = host();
+    let mut told: Vec<JobRow> = Vec::new();
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        let now: Vec<JobRow> = crate::jobs::running()
+            .into_iter()
+            .map(
+                |crate::jobs::Running {
+                     id,
+                     label,
+                     done,
+                     total,
+                 }| JobRow {
+                    id,
+                    label,
+                    done: u64::try_from(done).unwrap_or(u64::MAX),
+                    total: u64::try_from(total).unwrap_or(u64::MAX),
+                },
+            )
+            .collect();
+        if now == told {
+            continue;
+        }
+        told.clone_from(&now);
+        let frame = JobsFrame {
+            version: host.inner.revision.fetch_add(1, Ordering::AcqRel) + 1,
+            jobs: now,
+        };
+        if let Ok(mut last) = host.inner.last_jobs.lock() {
+            *last = frame.clone();
+        }
+        host.inner.jobs.publish(frame);
+    }
 }
 
 /// Something about `song` changed in the engine: every window reads it
@@ -436,6 +510,21 @@ impl EngineView for ViewHost {
         .unwrap_or_default()
     }
 
+    async fn show_edit(&self, shown: EditShown) -> bool {
+        if let Some(scope) = shown.scope {
+            crate::edit_actions::publish(scope);
+        }
+        let edit = crate::edit_state::Edit {
+            at: shown.at,
+            selection: shown
+                .selection
+                .map(|s| crate::edit_state::Span::between(s.from, s.to)),
+        };
+        let before = crate::edit_state::of(&shown.song);
+        crate::edit_state::show_on(&shown.song, edit);
+        !before.is_some_and(|b| crate::edit_state::same(&b, &edit))
+    }
+
     async fn playheads(&self) -> Vec<Playhead> {
         let lineup = super::set::lineup();
         lineup
@@ -498,6 +587,18 @@ impl EngineViewStreamSource for ViewHost {
 
     fn streams_intro(&self) -> Option<StreamsFrame> {
         self.inner.last_streams.lock().ok().map(|f| f.clone())
+    }
+
+    fn jobs_hub(&self) -> &PubSub<JobsFrame> {
+        &self.inner.jobs
+    }
+
+    fn jobs_intro(&self) -> Option<JobsFrame> {
+        self.inner.last_jobs.lock().ok().map(|f| f.clone())
+    }
+
+    fn edits_hub(&self) -> &PubSub<EditAsked> {
+        &self.inner.edits
     }
 
     fn changes_hub(&self) -> &PubSub<Changed> {

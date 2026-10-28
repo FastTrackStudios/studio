@@ -130,6 +130,9 @@ fn Routing() -> Element {
 /// touched.
 #[component]
 fn Settings() -> Element {
+    // Drawn again as the streams change: the Multitracks switch says how
+    // the engine hears the songs, which it says later than a press.
+    crate::shell::use_streams();
     // Re-read after a pick: the mode changes off this page's signals.
     let mut picked = use_signal(|| 0_u32);
     let mut note = use_signal(|| None::<String>);
@@ -279,13 +282,25 @@ fn StreamingQuality() -> Element {
     }
 }
 
+/// Ask the engine to render ahead as `want` (`SESSION_RENDER_AHEAD`): it
+/// keeps it and opens its audio again, behind the window. Shown as asked
+/// at once; the engine keeps it in the file this window reads it from.
+#[cfg(feature = "native")]
+fn render_ahead(want: crate::render_ahead::RenderAhead) -> crate::render_ahead::RenderAhead {
+    crate::actions::off_the_window(
+        "SESSION_RENDER_AHEAD",
+        format!("{{\"on\":{},\"depth_ms\":{}}}", want.on, want.depth_ms),
+    );
+    want
+}
+
 /// The engine's render ahead: on or off, and how far. A page has no
 /// engine of its own: nothing to set.
 #[component]
 fn RenderAheadSettings() -> Element {
     #[cfg(feature = "native")]
     {
-        let mut now = use_signal(crate::render_ahead::current);
+        let mut now = use_signal(crate::render_ahead::saved);
         let r = now();
         rsx! {
             Heading { title: "Engine" }
@@ -294,7 +309,7 @@ fn RenderAheadSettings() -> Element {
                 label: "Render ahead",
                 detail: "Render the tracks nobody is playing live ahead of the playhead, on a thread of their own: a busy machine eats into that time, not into the audio's deadline, and a session too big for one block still plays. Armed, monitored and played tracks, and a plugin open, stay live. Edits are heard at once either way.",
                 on_change: move |on: bool| {
-                    now.set(crate::render_ahead::set(crate::render_ahead::RenderAhead { on, ..r }));
+                    now.set(render_ahead(crate::render_ahead::RenderAhead { on, ..r }));
                 },
             }
             if r.on {
@@ -311,7 +326,7 @@ fn RenderAheadSettings() -> Element {
                                     style: "height:30px; padding:0 12px; border-radius:15px; border:1px solid {RULE}; \
                                             background:{bg}; color:{ink}; font-family:inherit; font-size:12px; cursor:pointer;",
                                     onclick: move |_| {
-                                        now.set(crate::render_ahead::set(crate::render_ahead::RenderAhead {
+                                        now.set(render_ahead(crate::render_ahead::RenderAhead {
                                             depth_ms: ms,
                                             ..r
                                         }));
@@ -337,8 +352,8 @@ fn RenderAheadSettings() -> Element {
 fn listening() -> Option<bool> {
     #[cfg(feature = "native")]
     {
-        let stems = crate::reference_play::multitracks();
-        (stems || crate::reference_play::any()).then_some(stems)
+        let heard = crate::stream_set::listening();
+        (heard.stems || heard.referenced).then_some(heard.stems)
     }
     #[cfg(not(feature = "native"))]
     {
@@ -358,7 +373,7 @@ const fn stems_detail(stems: bool) -> &'static str {
 /// Hear every streamed song by its stems.
 fn load_multitracks() {
     #[cfg(feature = "native")]
-    crate::reference_play::load_multitracks();
+    crate::actions::off_the_window("SESSION_MULTITRACKS", String::new());
 }
 
 /// A fact about the device, as a row: its name and its value.

@@ -4660,10 +4660,6 @@ impl ArrangementWidget {
     pub fn paint_scene(&mut self, width: u32, height: u32, scale: f64) -> Scene {
         let began = web_time::Instant::now();
         self.paint_began = began;
-        // A recording pass just ended: its takes selected, the ranks
-        // pressed while it ran written on them.
-        #[cfg(feature = "native")]
-        crate::take_rank::settle_open();
         // What was run on the Action List for the window, from elsewhere
         // than a key (a model, a menu): done before the picture is.
         #[cfg(feature = "native")]
@@ -5449,8 +5445,14 @@ impl ArrangementWidget {
             self.editor.cursor = asked;
         }
         crate::cursor::publish(self.editor.cursor);
+        // The engine's actions act on what is selected here: told of it as
+        // it changes.
         #[cfg(feature = "native")]
-        crate::edit_actions::publish(self.scope());
+        {
+            let scope = self.scope();
+            crate::edit_actions::publish(scope.clone());
+            crate::view_client::show_edit(self.editor.cursor, Some(scope));
+        }
         crate::ghosts::local_selection(self.editor.selected.as_set(), &self.rows);
         crate::ghosts::local_shown(&self.rows, &self.scene);
         // The engine changed the session under us (a toolbar insert, an

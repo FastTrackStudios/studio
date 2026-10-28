@@ -6,7 +6,7 @@
 //!
 //! Studio shows its library first; Session's own start screen is never a
 //! page there. A library setlist is opened by the engine
-//! (`session_ui::studio_engine::set::open_library`, as the Action List's
+//! (`session_engine::studio_engine::set::open_library`, as the Action List's
 //! `SESSION_OPEN_SETLIST` opens one); a song, a live link or a new song is
 //! handed to Session's start screen, which opens it in the engine too. A
 //! hosted start screen draws only its loading screen (`super::start`).
@@ -18,8 +18,8 @@ pub use super::start::{
     welcome_org,
 };
 use dioxus::prelude::*;
-pub use session_ui::projects::{Recent, ago, open_next, recent};
-pub use session_ui::stream_set::{LibrarySetlist, LibrarySong, ListKind};
+pub use session_engine::projects::{Recent, ago, open_next, recent};
+pub use session_engine::stream_set::{LibrarySetlist, LibrarySong, ListKind};
 
 static JOIN: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
@@ -106,12 +106,12 @@ pub fn request(entry: Entry) {
     match entry {
         Entry::Path(path) => open_next(path),
         Entry::Setlist { org, title } => {
-            let request = session_ui::studio_engine::set::LibraryOpen {
+            let request = session_engine::studio_engine::set::LibraryOpen {
                 org,
                 setlist: title,
                 song: None,
             };
-            if let Err(busy) = session_ui::view_client::ask::open_library(&request) {
+            if let Err(busy) = session_engine::view_client::ask::open_library(&request) {
                 tracing::warn!(error = %busy, "open: the engine did not take the setlist");
             }
         }
@@ -125,7 +125,7 @@ pub fn request(entry: Entry) {
 /// — from the CLI or a model while the welcome screen is up.
 #[must_use]
 pub fn pending() -> bool {
-    session_ui::projects::pending_open()
+    session_engine::projects::pending_open()
         || NEW.load(std::sync::atomic::Ordering::Acquire)
         || JOIN
             .lock()
@@ -136,13 +136,13 @@ pub fn pending() -> bool {
 /// Going into Session for what is [`pending`]: the "out of the song" an
 /// open from outside raised is spent, since there is no song to leave.
 pub fn entering() {
-    let _ = session_ui::projects::take_back();
-    session_ui::projects::entered_set();
+    let _ = session_engine::projects::take_back();
+    session_engine::projects::entered_set();
 }
 
 /// Ask Session, a song open, to leave it for what was just [`request`]ed.
 pub fn leave_song_for_request() {
-    session_ui::projects::go_back();
+    session_engine::projects::go_back();
 }
 
 /// The file of a session named `title` on this device: one opened lately,
@@ -192,24 +192,49 @@ pub struct ActionRow {
 /// Session's Action List — the actions its keys, its menus, the CLI and a
 /// model over MCP run — that a palette can run as they are: those that take
 /// nothing and run at once.
+///
+/// Read from the engine behind the window, a second old at most: a
+/// palette drawn while the engine is slow to answer is not held still.
 #[must_use]
 pub fn actions() -> Vec<ActionRow> {
-    let list = session_ui::actions::list();
-    list.infos()
+    use std::sync::{Mutex, OnceLock};
+    static LISTED: Mutex<Option<Vec<ActionRow>>> = Mutex::new(None);
+    static READER: OnceLock<()> = OnceLock::new();
+    READER.get_or_init(|| {
+        let _ = std::thread::Builder::new()
+            .name("palette-actions".into())
+            .spawn(|| {
+                loop {
+                    let rows = engine_actions();
+                    if let Ok(mut listed) = LISTED.lock() {
+                        *listed = Some(rows);
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+            });
+    });
+    // The first time, the engine's first answer if it is quick.
+    let began = std::time::Instant::now();
+    loop {
+        if let Some(rows) = LISTED.lock().ok().and_then(|l| l.clone()) {
+            return rows;
+        }
+        if began.elapsed() > std::time::Duration::from_millis(150) {
+            return Vec::new();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+/// The engine's list, with what can run now as the engine says: the
+/// window's own actions are on it too, forwarded to the window.
+fn engine_actions() -> Vec<ActionRow> {
+    session_engine::actions::palette()
         .into_iter()
-        .filter(|a| a.params_schema.is_none() && !list.is_async(&a.id))
         .map(|a| ActionRow {
-            label: if a.display_name.is_empty() {
-                a.id.clone()
-            } else {
-                a.display_name
-            },
             id: a.id,
-            group: if a.group.is_empty() {
-                a.category
-            } else {
-                a.group
-            },
+            label: a.label,
+            group: a.group,
             shortcut: a.shortcut,
             description: a.description,
             enabled: a.enabled,
@@ -217,14 +242,24 @@ pub fn actions() -> Vec<ActionRow> {
         .collect()
 }
 
-/// Run `id` from Session's Action List, as a key would.
+/// Run `id` from Session's Action List, as a key would: on the engine,
+/// behind the window; a refusal is logged.
 ///
 /// # Errors
 ///
-/// No such action, it cannot run now, or it failed.
+/// No thread to run it on.
 pub fn run_action(id: &str) -> Result<(), String> {
-    session_ui::actions::list()
-        .run(id)
+    // On the engine, behind the window: a refusal is said where it is
+    // known.
+    let id = id.to_owned();
+    std::thread::Builder::new()
+        .name("palette-run".into())
+        .spawn(move || {
+            if let Err(error) = session_engine::actions::run(&id, b"") {
+                tracing::warn!(action.id = %id, %error, "palette: the action did not run");
+            }
+        })
+        .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
@@ -243,7 +278,7 @@ pub fn typing() -> bool {
 
 /// Stop the transport: Session is being left (or replaced) from outside.
 pub fn stop() {
-    session_ui::engine::transport(session_ui::engine::Move::Stop, 0.0);
+    session_engine::engine::transport(session_engine::engine::Move::Stop, 0.0);
 }
 
 /// What the DAW view does to the transport as it takes what was handed to

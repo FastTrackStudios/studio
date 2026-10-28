@@ -729,7 +729,7 @@ pub fn call_off_handoff(from: &str, to: &str) -> Result<(), String> {
 /// The set's engine opened again: how a change to how it renders (the
 /// render ahead) is taken up. Every song stays a voice; the current one
 /// stays current. Nothing open, nothing to do.
-pub fn restart_audio() {
+pub(crate) fn restart_audio() {
     let playing = AUDIO
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)

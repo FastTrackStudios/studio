@@ -47,8 +47,11 @@ the engine directly.
   router). A test does the same (`tests/it/view_link.rs`).
 - **The engine's view service** (`view::EngineView`, `#[architect::rpc]`,
   served beside the daw facade on one router — `view_host::router`):
-  streams `set`, `overlays` (hit overlay), `marks` (tracks' own marks),
-  `streams` (arrival status), `changes` (what to read back), `queued` (what
+  streams `set`, `overlays` (hit overlay), `marks` (tracks' own marks and
+  the points of interest), `streams` (arrival status, how songs are heard),
+  `jobs` (the bottom bar), `edits` (where actions put the edit cursor and
+  time selection), `changes` (what to read back, an undo among them),
+  `queued` (what
   the engine asks of a window; subscribing is what attaches a window); calls
   `run` (the Action List over vox), `apply` (the window's edits, one batch a
   call — a kit's slip edit is one message), `take_window`, `waves` (coarse
@@ -56,7 +59,9 @@ the engine directly.
   recording already read, partial reads flagged), `detail` (fine detail at
   the zoom asked), `automation` (lanes, take volume curves, leveled items),
   `item_changes` + `journal_now` (the window's item read-back), `song_facts`
-  (track kinds, chart), `playheads`.
+  (track kinds, chart), `playheads`, `show_edit` (where the window shows the
+  edit cursor, time selection and selection: the latest change only, so
+  `EDIT_*` and every action that reads the selection act on it).
 - **The window's replicas** (`view_client`): the set it shows (read back
   over the facade as songs arrive, waveforms behind), the overlay, the
   marks, the streams, every song's playhead (from `TransportSync::positions`,
@@ -66,14 +71,27 @@ the engine directly.
   the engine for what needs the song (`SESSION_PAGE`, `SESSION_SPAN`); the
   window's menus and toolbars run engine actions (`AUTOMATION_MENU`,
   `AUTOMATION_SET_MODE`, `ORGANIZE_PRESS`, `CHART_APPLY`, `VOCAL_RELEVEL`,
-  `RIG_BROWSE`, `SESSION_SONG_SET`, `SESSION_CLOSE`, `SESSION_JOIN`).
-- **Still to do**: meters are the song on screen's (the pump publishes the
-  current project's bank only; per-voice banks are `SetAudio` work); the
-  web build keeps its own engine reach (`web_engine`, `web_host`) and its
-  own set; `session-ui` still depends on `session-engine` whole (the
-  in-process reach points are not yet `pub(crate)`, so the compiler does
-  not forbid a regression — `local_engine` & co. are unused in session-ui
-  and the desktop shell today).
+  `RIG_BROWSE`, `SESSION_SONG_SET`, `SESSION_CLOSE`, `SESSION_JOIN`,
+  `SESSION_STOP_BEHAVIOUR`, `SESSION_RENDER_AHEAD`, `SESSION_GROUPING`,
+  `SESSION_MULTITRACKS`); ⌘K lists and runs the engine's (`SESSION_ACTIONS`),
+  Versions reads `SESSION_VERSIONS`. A recording pass's takes are settled by
+  the engine.
+- **The compiler holds it**: other crates name the engine as
+  `session_engine`, `session-ui` re-exports only the engine modules its
+  window uses, and what reads or writes engine-process state for a window
+  is `pub(crate)` (`take_rank::settle_open`, `render_ahead::set`,
+  `reference_play::{multitracks, any, load_multitracks}`,
+  `open::restart_audio`, `open_song_versions`, …; `local_engine` was
+  already) — a window that reaches for one does not build.
+- **Still to do**: collaboration runs in the window (`collab`,
+  `live_host`: song docs go over the facade, but the shared-transport
+  follower needs the engine — it belongs in the engine beside
+  `SESSION_JOIN`); three engine actions write window view state
+  (`SESSION_ITEM_STYLE`, `SHOW_LANES`, an instrument's add folding its
+  track) and should be window asks; the Linux app menu reads enabled flags
+  from the window's own list; meters are the song on screen's (per-voice
+  banks are `SetAudio` work); the web build keeps its own engine reach
+  (`web_engine`, `web_host`) and its own set.
 
 ### Phase C: the window on an engine in another process
 

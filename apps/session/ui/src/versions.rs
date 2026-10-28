@@ -32,16 +32,32 @@ async fn behind<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) ->
 /// An action run behind the window: what it said, or why not.
 async fn run_behind(id: &'static str, args: String) -> Result<String, String> {
     behind(move || {
-        crate::actions::list()
-            .run_json(id, args.as_bytes())
-            .map(|bytes| {
-                serde_json::from_slice::<String>(&bytes)
-                    .unwrap_or_else(|_| String::from_utf8_lossy(&bytes).into_owned())
-            })
-            .map_err(|e| e.to_string())
+        crate::actions::run(id, args.as_bytes()).map(|bytes| {
+            serde_json::from_slice::<String>(&bytes)
+                .unwrap_or_else(|_| String::from_utf8_lossy(&bytes).into_owned())
+        })
     })
     .await
     .unwrap_or_else(|| Err("the action did not finish".to_owned()))
+}
+
+/// The open song's versions and whether it has changes not saved, as the
+/// engine reads them (`SESSION_VERSIONS`): none when it cannot say.
+fn read_versions() -> (Vec<Version>, Option<bool>) {
+    let Some(read) = crate::actions::versions() else {
+        return (Vec::new(), None);
+    };
+    let versions = read
+        .versions
+        .into_iter()
+        .map(|v| Version {
+            name: v.name,
+            when: v.when,
+            path: std::path::PathBuf::from(v.path),
+            open: v.open,
+        })
+        .collect();
+    (versions, read.unsaved)
 }
 
 /// A version's row: the open one lit.
@@ -66,14 +82,7 @@ pub fn Versions() -> Element {
     // (a fingerprint of every item, the file opened), shown when read.
     let refresh = move || {
         spawn(async move {
-            if let Some((versions, dirty)) = behind(|| {
-                (
-                    crate::actions::open_song_versions(),
-                    crate::actions::open_song_unsaved(),
-                )
-            })
-            .await
-            {
+            if let Some((versions, dirty)) = behind(read_versions).await {
                 listed.set(versions);
                 unsaved.set(dirty);
             }
@@ -321,7 +330,7 @@ impl Streaming {
 
     fn label(&self) -> String {
         let percent = (self.state.arrived * 100.0).floor();
-        if self.open && crate::engine::buffering::waiting() && !self.state.ready {
+        if self.open && crate::stream_set::play_waiting() && !self.state.ready {
             format!("play waits · {percent}%")
         } else if self.state.ready {
             format!("{percent}%")

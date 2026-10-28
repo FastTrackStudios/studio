@@ -273,7 +273,7 @@ fn main() {
     }
 
     // `studio-desktop --session-engine …`: Session's engine with no window
-    // — what this app spawns to drive (`session_ui::studio_engine::link`),
+    // — what this app spawns to drive (`session_engine::studio_engine::link`),
     // the same build as the window, so the two always speak one protocol.
     // Runs until it is stopped; the window that spawned it may come and go.
     #[cfg(all(

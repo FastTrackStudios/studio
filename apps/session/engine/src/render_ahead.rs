@@ -55,6 +55,13 @@ fn store() -> &'static std::sync::Mutex<RenderAhead> {
     STORE.get_or_init(|| std::sync::Mutex::new(load().unwrap_or_default()))
 }
 
+/// The render ahead as it was last kept — what a window shows, read
+/// afresh: the engine that keeps it is another process.
+#[must_use]
+pub fn saved() -> RenderAhead {
+    load().unwrap_or_default()
+}
+
 /// The render ahead as it stands.
 #[must_use]
 pub fn current() -> RenderAhead {
@@ -65,7 +72,7 @@ pub fn current() -> RenderAhead {
 
 /// Change it, keep it, and play on with it: the audio device is opened
 /// again, which is how an engine takes it up. Says what it is now.
-pub fn set(want: RenderAhead) -> RenderAhead {
+pub(crate) fn set(want: RenderAhead) -> RenderAhead {
     let now = RenderAhead {
         depth_ms: want.depth_ms.clamp(1, MOST_MS),
         ..want

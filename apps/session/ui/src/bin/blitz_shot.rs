@@ -38,7 +38,7 @@
 //! The session is laid out by `FTS_BLITZ_SCENE` (`drum-mixing` by
 //! default, the app's), and prepared first if `FTS_BLITZ_ORGANIZE`,
 //! `FTS_BLITZ_CHART` or `FTS_BLITZ_GUIDE` ask — see
-//! [`session_ui::prepare`].
+//! [`session_engine::prepare`].
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -226,14 +226,14 @@ fn main() {
 /// exists so a render never waits on a sound server — see its docs.
 fn open(path: &std::path::Path, audio: bool) -> StudioSession {
     let opened = if audio {
-        session_ui::open::open_and_serve(path)
+        session_engine::open::open_and_serve(path)
     } else {
-        session_ui::open::open_silent(path)
+        session_engine::open::open_silent(path)
     }
     .expect("open project");
     // Organize / build from the chart / generate the guide, if asked —
     // before the view reads the session, so it opens on the prepared one.
-    let prepare = session_ui::prepare::Prepare::from_env();
+    let prepare = session_engine::prepare::Prepare::from_env();
     if !prepare.is_empty()
         && let Err(e) = prepare.run(&opened)
     {
@@ -242,7 +242,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
     // `FTS_BLITZ_EXPORT=name`: the prepared song written as `name.RPP`
     // beside its source, to finish the mix in REAPER.
     if let Ok(name) = std::env::var("FTS_BLITZ_EXPORT") {
-        match session_ui::mix_export::write_rpp(&opened.daw, &opened.project_guid, &name) {
+        match session_engine::mix_export::write_rpp(&opened.daw, &opened.project_guid, &name) {
             Ok(done) => {
                 tracing::info!(path = %done.path.display(), chained = ?done.chained, "blitz: exported")
             }
@@ -257,7 +257,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             .and_then(|(a, b)| Some((a.parse::<f64>().ok()?, b.parse::<f64>().ok()?)))
     }) {
         let (heard, kit, mix) =
-            session_ui::gain_stage::heard_levels(&opened.daw, &opened.project_guid, from, to);
+            session_engine::gain_stage::heard_levels(&opened.daw, &opened.project_guid, from, to);
         for each in &heard {
             tracing::info!(
                 track = %each.name,
@@ -284,15 +284,15 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
     // facade as the keys run them.
     if let Ok(how) = std::env::var("FTS_BLITZ_STAGE") {
         let clear = how == "clear";
-        let said = session_ui::open::block_on_engine(async move {
+        let said = session_engine::open::block_on_engine(async move {
             let daw = daw::rpc::Daw::try_get().ok_or_else(|| eyre::eyre!("no facade"))?;
             let project = daw.current_project().await?;
             if clear {
-                session_ui::gain_stage::clear_live(&project)
+                session_engine::gain_stage::clear_live(&project)
                     .await
                     .map(|cleared| format!("cleared {}", cleared.len()))
             } else {
-                session_ui::gain_stage::stage_live(&project)
+                session_engine::gain_stage::stage_live(&project)
                     .await
                     .map(|report| {
                         format!(
@@ -335,7 +335,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
                 session_ui::arrange_edit::Effect::Send(edit) => Some(edit),
                 _ => None,
             })
-            .filter(|edit| session_ui::engine::apply_now(edit))
+            .filter(|edit| session_engine::engine::apply_now(edit))
             .count();
         let back = session_ui::studio::fetch().expect("read it back");
         let lane = back
@@ -369,7 +369,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
                     .iter()
                     .any(|n| n.eq_ignore_ascii_case(track.name.trim()))
             {
-                session_ui::folds::toggle(&track.guid, false);
+                session_engine::folds::toggle(&track.guid, false);
             }
         }
     }
@@ -385,12 +385,12 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
             })
             .map(|t| t.guid.clone())
             .collect();
-        let _ = session_ui::lanes::set_expanded(&guids, Some(true));
+        let _ = session_engine::lanes::set_expanded(&guids, Some(true));
     }
     let planner = session_ui::studio::Planner {
         raw: Arc::new(raw),
         scene: Some(scene),
-        kinds: Arc::new(session_ui::plan::Kinds::read(path)),
+        kinds: Arc::new(session_engine::plan::Kinds::read(path)),
     };
     let (project, rows) = planner.plan(&planner.raw);
     let previews = session_ui::studio::previews_of(&project);

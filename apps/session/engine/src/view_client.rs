@@ -113,6 +113,8 @@ pub fn connect(caller: vox::Caller) {
         *slot = Some(link.clone());
     }
     state_cell().send_replace(LinkState::Up);
+    // A new engine has heard nothing of the window's edit cursor yet.
+    forget_shown_edit();
     let Some(rt) = runtime() else {
         tracing::warn!("view link: no runtime to follow the engine on");
         return;
@@ -121,6 +123,8 @@ pub fn connect(caller: vox::Caller) {
     rt.spawn(follow(link.clone(), Stream::Overlays));
     rt.spawn(follow(link.clone(), Stream::Marks));
     rt.spawn(follow(link.clone(), Stream::Streams));
+    rt.spawn(follow(link.clone(), Stream::Jobs));
+    rt.spawn(follow(link.clone(), Stream::Edits));
     rt.spawn(follow(link.clone(), Stream::Changes));
     rt.spawn(follow(link.clone(), Stream::Queued));
     rt.spawn(follow_playheads(link));
@@ -136,6 +140,10 @@ fn dropped(link: &Link, why: &str) {
     if !current(link) {
         return;
     }
+    // Its jobs went with it.
+    if let Ok(mut slot) = JOBS.write() {
+        *slot = None;
+    }
     if state_cell().send_replace(LinkState::Down) != LinkState::Down {
         tracing::warn!(link.why = why, "view link: the engine went away");
     }
@@ -147,6 +155,8 @@ enum Stream {
     Overlays,
     Marks,
     Streams,
+    Jobs,
+    Edits,
     Changes,
     Queued,
 }
@@ -180,6 +190,14 @@ async fn follow(link: Link, which: Stream) {
                 let _ = frame;
             })
             .await
+        }
+        Stream::Jobs => {
+            let (tx, rx) = vox::channel::<crate::view::JobsFrame>();
+            drain(link.streams.jobs(tx), rx, jobs_arrived).await
+        }
+        Stream::Edits => {
+            let (tx, rx) = vox::channel::<crate::view::EditAsked>();
+            drain(link.streams.edits(tx), rx, edit_asked).await
         }
         Stream::Changes => {
             let (tx, rx) = vox::channel::<crate::view::Changed>();
@@ -564,6 +582,7 @@ pub mod ask {
 static MARKS: RwLock<Option<Arc<MarksFrame>>> = RwLock::new(None);
 
 fn marks_arrived(frame: MarksFrame) {
+    crate::poi::adopt(frame.pois.clone(), frame.poi_current.clone());
     if let Ok(mut slot) = MARKS.write() {
         *slot = Some(Arc::new(frame));
     }
@@ -575,12 +594,126 @@ pub fn marks() -> Option<Arc<MarksFrame>> {
     MARKS.read().ok().and_then(|m| m.clone())
 }
 
+// ── The engine's jobs ────────────────────────────────────────────────
+
+static JOBS: RwLock<Option<Arc<crate::view::JobsFrame>>> = RwLock::new(None);
+
+fn jobs_arrived(frame: crate::view::JobsFrame) {
+    if let Ok(mut slot) = JOBS.write() {
+        *slot = Some(Arc::new(frame));
+    }
+}
+
+/// What the engine is doing in the background, as it last said: none
+/// with no engine linked.
+#[must_use]
+pub fn jobs() -> Vec<crate::view::JobRow> {
+    JOBS.read()
+        .ok()
+        .and_then(|j| j.as_ref().map(|f| f.jobs.clone()))
+        .unwrap_or_default()
+}
+
+// ── The edit cursor ──────────────────────────────────────────────────
+
+/// An action put a song's edit cursor and time selection somewhere: the
+/// window's frames take it up as they would one asked here.
+fn edit_asked(asked: crate::view::EditAsked) {
+    crate::edit_state::take_up(
+        &asked.song,
+        crate::edit_state::Edit {
+            at: asked.at,
+            selection: asked
+                .selection
+                .map(|s| crate::edit_state::Span::between(s.from, s.to)),
+        },
+    );
+}
+
+/// Tell the engine where the window shows the current song's edit cursor,
+/// time selection and selection (every frame; only a change is sent, the
+/// latest winning) — what its actions act on.
+pub fn show_edit(edit: crate::edit_state::Edit, scope: Option<editing::scope::Scope>) {
+    let Some(song) = crate::open::current_song() else {
+        return;
+    };
+    let shown = crate::view::EditShown {
+        song,
+        at: edit.at,
+        selection: edit
+            .selection
+            .map(|s| editing::scope::Span::between(s.start, s.end)),
+        scope,
+    };
+    // The sender starts with its task, on the runtime it needs.
+    let Some(rt) = runtime() else {
+        return;
+    };
+    let tx = SHOWN_EDIT.get_or_init(|| {
+        let (tx, rx) = watch::channel(None);
+        rt.spawn(send_edits(rx));
+        tx
+    });
+    tx.send_if_modified(|was| {
+        if was.as_ref() == Some(&shown) {
+            return false;
+        }
+        *was = Some(shown);
+        true
+    });
+}
+
+/// What [`show_edit`] last told the engine; its sender task holds the
+/// other end.
+static SHOWN_EDIT: std::sync::OnceLock<watch::Sender<Option<crate::view::EditShown>>> =
+    std::sync::OnceLock::new();
+
+/// The engine is not known to have what the window last showed: the next
+/// [`show_edit`] sends it, the same or not.
+fn forget_shown_edit() {
+    if let Some(tx) = SHOWN_EDIT.get() {
+        tx.send_if_modified(|was| {
+            *was = None;
+            false
+        });
+    }
+}
+
+/// Send what [`show_edit`] was told, the latest each time, while the
+/// window runs.
+async fn send_edits(mut rx: watch::Receiver<Option<crate::view::EditShown>>) {
+    while rx.changed().await.is_ok() {
+        let Some(shown) = rx.borrow_and_update().clone() else {
+            continue;
+        };
+        // Not sent: the same place shown again is sent then.
+        let Some(link) = link() else {
+            forget_shown_edit();
+            continue;
+        };
+        if tokio::time::timeout(CALL, link.view.show_edit(shown))
+            .await
+            .is_err()
+        {
+            forget_shown_edit();
+            tracing::warn!(
+                view.call = "show_edit",
+                "view link: the engine did not answer in time"
+            );
+        }
+    }
+}
+
 // ── What changed ─────────────────────────────────────────────────────
 
 fn changed(change: crate::view::Changed) {
     use crate::view::Change;
     match change.what {
         Change::All | Change::Automation => crate::song_model::request_resync_here(),
+        Change::Undone => {
+            crate::actions::undone_there();
+            crate::song_model::request_resync_here();
+        }
         Change::Items => {
             crate::song_model::request_resync_items_here();
             crate::wave_detail::engine_changed();

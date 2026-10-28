@@ -16506,6 +16506,7 @@ dependencies = [
  "getrandom 0.3.4",
  "js-sys",
  "session",
+ "session-engine",
  "session-ui",
  "tracing",
  "tracing-subscriber",

@@ -73,7 +73,7 @@ pub fn Shell() -> Element {
     let back = try_use_context::<session_ui::shell::Back>();
     use_future(move || async move {
         loop {
-            if let Some(next) = session_ui::actions::take_mode_request() {
+            if let Some(next) = session_engine::actions::take_mode_request() {
                 asked.set(next);
             }
             // What the arrangement queued, to the engine — with no frame
@@ -82,7 +82,7 @@ pub fn Shell() -> Element {
             // Another song or version asked for over the Action List
             // (`SESSION_OPEN`): out of this one, and the start screen
             // opens it.
-            if session_ui::projects::take_back()
+            if session_engine::projects::take_back()
                 && let Some(session_ui::shell::Back(back)) = back
             {
                 back.call(());
@@ -110,10 +110,10 @@ pub fn Shell() -> Element {
     use_context_provider(session_ui::lyrics_panel::LyricsChoice::new);
     // The songs, as the launch opened them — a signal from here on, which
     // the tabs read and a pick or a recolour writes.
-    let opened: session_ui::setlist::Setlist = use_context();
+    let opened: session_engine::setlist::Setlist = use_context();
     let mut setlist = use_context_provider(|| Signal::new(opened));
     // Each song in the mode it was last worked in.
-    session_ui::song_modes::use_song_modes(setlist, mode);
+    session_engine::song_modes::use_song_modes(setlist, mode);
     // In Mix mode, the guide folder muted.
     session_ui::mix_guide::use_mix_guide(setlist, mode);
     // The set is the engine's, followed over the link: the songs arriving
@@ -148,14 +148,14 @@ pub fn Shell() -> Element {
             let window = window.clone();
             async move {
                 loop {
-                    let moving = session_ui::engine::moving();
+                    let moving = session_engine::engine::moving();
                     // Or an action run on the Action List for the window
                     // (a model's, over MCP): no event of the window's own
                     // will come to carry it out, nor to send what it
                     // edited on to the engine, so frames are asked for.
                     if moving
-                        || session_ui::window_queue::window_pending()
-                        || session_ui::window_queue::frame_owed()
+                        || session_engine::window_queue::window_pending()
+                        || session_engine::window_queue::frame_owed()
                         || session_ui::studio::resync_pending()
                     {
                         window.request_redraw();
@@ -175,7 +175,7 @@ pub fn Shell() -> Element {
             .ok()
             .and_then(|n| n.parse::<usize>().ok());
         if let Some(index) = index.and_then(|n| n.checked_sub(1)) {
-            session_ui::view_client::ask::pick(index);
+            session_engine::view_client::ask::pick(index);
         }
     });
     // Space plays and stops whatever has the focus.
@@ -276,9 +276,9 @@ pub fn Shell() -> Element {
     // and the audio moves to it. Where the one it replaces had got to is
     // kept on its tab.
     let pick = move |index: usize| {
-        if session_ui::view_client::ask::pick(index).is_some() {
+        if session_engine::view_client::ask::pick(index).is_some() {
             // Playing together, everyone goes with it.
-            session_ui::collab::transport_pressed();
+            session_engine::collab::transport_pressed();
         }
     };
     // The record view's song menu picks the same way.
@@ -294,7 +294,7 @@ pub fn Shell() -> Element {
     #[cfg(target_os = "ios")]
     use_future(move || async move {
         use super::ios_audio::{Command, NowPlaying};
-        use session_ui::engine::{Move, Transport, transport};
+        use session_engine::engine::{Move, Transport, transport};
         let mut pick = pick;
         let mut shown: Option<NowPlaying> = None;
         let mut since = 0_u32;
@@ -392,7 +392,7 @@ pub fn Shell() -> Element {
                 // it. Where the one it replaces had got to is kept on its tab.
                 on_pick: pick,
                 on_color: move |(index, color): (usize, Option<String>)| {
-                    session_ui::view_client::ask::recolor(index, color);
+                    session_engine::view_client::ask::recolor(index, color);
                 },
             }
 
@@ -559,13 +559,13 @@ const FX_DOCK_H: f64 = session_ui::fx_view::LANE_H;
 
 /// Live mode runs the set: when the song playing reaches its end, the next
 /// one plays. The roll-on is the engine's
-/// (`session_ui::studio_engine::live`: the next song starts on the frame
+/// (`session_engine::studio_engine::live`: the next song starts on the frame
 /// the current one ends, window or none); the window only tells it whether
 /// the set is in Live — so working on a song in the other modes never
 /// jumps away from it.
 fn use_live_advance(mode: Signal<Mode>) {
     use_effect(move || {
-        session_ui::view_client::ask::live(mode() == Mode::Live);
+        session_engine::view_client::ask::live(mode() == Mode::Live);
     });
 }
 

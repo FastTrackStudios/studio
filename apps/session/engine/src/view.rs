@@ -282,6 +282,9 @@ pub struct MarksFrame {
     pub song: String,
     pub version: u64,
     pub marks: Vec<(String, crate::track_regions::Marks)>,
+    /// The song's points of interest (`crate::poi`), and the one stepped to.
+    pub pois: Vec<crate::poi::Poi>,
+    pub poi_current: Option<String>,
 }
 
 /// What streams in: each item's share arrived (by item guid, those not all
@@ -293,6 +296,54 @@ pub struct StreamsFrame {
     pub songs: Vec<(String, StreamSong)>,
     /// A play pressed on a song still streaming waits for it.
     pub waiting: bool,
+    /// How the streamed songs are heard, as Settings offers it.
+    pub listening: Listening,
+}
+
+/// How the streamed songs are heard: by their stems, once asked for
+/// (`crate::reference_play::load_multitracks`), and whether any is heard
+/// by its reference now.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Facet)]
+pub struct Listening {
+    pub stems: bool,
+    pub referenced: bool,
+}
+
+/// What the engine is doing in the background, as the bottom bar shows it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Facet)]
+pub struct JobsFrame {
+    pub version: u64,
+    pub jobs: Vec<JobRow>,
+}
+
+/// One job, as [`crate::jobs::running`] reads it.
+#[derive(Debug, Clone, PartialEq, Eq, Facet)]
+pub struct JobRow {
+    pub id: u64,
+    pub label: String,
+    pub done: u64,
+    pub total: u64,
+}
+
+/// Where a window shows a song's edit cursor and time selection, and the
+/// selection an edit would act on — what the engine's actions read
+/// (`crate::edit_state`, `crate::edit_actions`).
+#[derive(Debug, Clone, Default, PartialEq, Facet)]
+pub struct EditShown {
+    pub song: String,
+    pub at: f64,
+    pub selection: Option<editing::scope::Span>,
+    pub scope: Option<editing::scope::Scope>,
+}
+
+/// Where an action put a song's edit cursor and time selection, for its
+/// windows to take up.
+#[derive(Debug, Clone, Default, PartialEq, Facet)]
+pub struct EditAsked {
+    pub song: String,
+    pub revision: u64,
+    pub at: f64,
+    pub selection: Option<editing::scope::Span>,
 }
 
 /// A streaming song, as its tab shows it.
@@ -330,6 +381,9 @@ pub enum Change {
     Waves,
     /// The tracks' own markers and regions.
     Marks,
+    /// A Session undo or redo was done: read the whole song back, and an
+    /// Editor waiting on one reads again.
+    Undone,
 }
 
 /// What the engine asks of a window it cannot do itself — an edit the
@@ -377,6 +431,10 @@ pub trait EngineView {
     /// Every song's playhead.
     async fn playheads(&self) -> Vec<Playhead>;
 
+    /// Where the window shows the edit cursor, the time selection and the
+    /// selection an edit acts on; whether it moved.
+    async fn show_edit(&self, shown: EditShown) -> bool;
+
     /// The set, now and as it changes.
     #[subscribe]
     fn set(&self) -> SetFrame;
@@ -392,6 +450,14 @@ pub trait EngineView {
     /// What streams in.
     #[subscribe]
     fn streams(&self) -> StreamsFrame;
+
+    /// What the engine is doing in the background.
+    #[subscribe]
+    fn jobs(&self) -> JobsFrame;
+
+    /// Where actions put the edit cursor and time selection.
+    #[subscribe]
+    fn edits(&self) -> EditAsked;
 
     /// What changed in a song.
     #[subscribe]

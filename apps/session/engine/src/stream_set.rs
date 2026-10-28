@@ -1306,15 +1306,17 @@ pub fn adopt_shown(frame: crate::view::StreamsFrame) {
             })
             .collect(),
     };
-    keep_shown(shown, frame.waiting);
+    keep_shown(shown, frame.waiting, frame.listening);
 }
 
 /// This process's [`shown`] (and whether a play waits), moved on.
-fn keep_shown(shown: Shown, waiting: bool) {
+fn keep_shown(shown: Shown, waiting: bool, listening: crate::view::Listening) {
     if let Ok(mut s) = SHOWN.write() {
         *s = Some(shown);
     }
     WAITING.store(waiting, std::sync::atomic::Ordering::Release);
+    STEMS.store(listening.stems, std::sync::atomic::Ordering::Release);
+    REFERENCED.store(listening.referenced, std::sync::atomic::Ordering::Release);
     SHOWN_VERSION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
 }
 
@@ -1326,6 +1328,19 @@ pub fn play_waiting() -> bool {
 }
 
 static WAITING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// How the streamed songs are heard, as the engine last told this window:
+/// by their stems, and whether any is heard by its reference.
+#[must_use]
+pub fn listening() -> crate::view::Listening {
+    crate::view::Listening {
+        stems: STEMS.load(std::sync::atomic::Ordering::Acquire),
+        referenced: REFERENCED.load(std::sync::atomic::Ordering::Acquire),
+    }
+}
+
+static STEMS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static REFERENCED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// What is shown now ([`Shown`]); empty when nothing streams.
 #[must_use]
@@ -1358,14 +1373,18 @@ fn watch() {
                     std::thread::sleep(std::time::Duration::from_millis(500));
                     let next = compute_shown();
                     let waiting = crate::engine::buffering::waiting();
-                    let now = (rounded(&next), waiting);
+                    let listening = crate::view::Listening {
+                        stems: crate::reference_play::multitracks(),
+                        referenced: crate::reference_play::any(),
+                    };
+                    let now = (rounded(&next), waiting, listening);
                     if told.as_ref() != Some(&now) {
-                        crate::studio_engine::view_host::streams_read(&next, waiting);
+                        crate::studio_engine::view_host::streams_read(&next, waiting, listening);
                         // A window linked here adopts what was published
                         // (`adopt_shown`); without one, this process's own
                         // readers (the waveforms' retry) keep up here.
                         if !crate::view_client::is_linked() {
-                            keep_shown(next, waiting);
+                            keep_shown(next, waiting, listening);
                         }
                         told = Some(now);
                     }
