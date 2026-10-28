@@ -38,16 +38,18 @@
 //!
 //! ```text
 //!   studio-main    rail plan, check (`cargo check --workspace`), wasm, tests
-//!                  (the core test set), lint (advisory clippy)
+//!                  (the core test set)
 //!   ubuntu-latest  plan, gates, deps-cache and the `CI passed` aggregator
 //!   macos-latest   release tooling (the sandbox, macOS's own tools)
 //! ```
 //!
-//! One job per BUILD KIND, as Task's lint/tests/wasm: check mode, clippy's
-//! check mode, test codegen and wasm32 share no workspace units, so each has
-//! its own target dir and they build side by side. Clippy used to run after
-//! the check in `Check` (one target dir, 4-6 minutes on every run's critical
-//! path); in its own `Lint` job it holds up nothing.
+//! One job per BUILD KIND: check mode, test codegen and wasm32 share no
+//! workspace units, so each has its own target dir and they build side by
+//! side.
+//!
+//! No clippy: it is a local job (`just clippy`), not a CI one. It was
+//! advisory here (it never failed a run) and ran after the check in `Check`,
+//! 4-6 minutes on every run's critical path.
 //!
 //! No tailwind step: every sheet a crate `include_str!`s is committed, and
 //! session-web's build.rs writes a placeholder for its generated one (dx
@@ -94,7 +96,6 @@ workflow_dispatch:
     .job("deps-cache", deps_cache())
     .job("gates", gates())
     .job("check", check())
-    .job("lint", lint())
     .job("wasm", wasm())
     .job("tests", tests())
     .job("release-macos", release_macos())
@@ -397,7 +398,7 @@ cargo rail change check --since \"${BASE_SHA}\"
 const POOL: RunsOn = RunsOn::Labels(&["self-hosted", "studio-main"]);
 
 /// The pool's shared cache holds one target dir per build kind (check mode,
-/// clippy, test codegen and wasm32 share no artifacts), so the jobs of a run
+/// test codegen and wasm32 share no artifacts), so the jobs of a run
 /// build side by side, each warm whichever instance claims it; two jobs of
 /// the same kind wait on cargo's own lock. The pool's total is capped at
 /// 200 GB: over it, this kind's dir is emptied (its next build is cold).
@@ -485,7 +486,7 @@ fn in_shell(script: &str) -> String {
     )
 }
 
-/// When a run checks the workspace at all ([`check`] and [`lint`]).
+/// When a run checks the workspace at all ([`check`]).
 const CHECK_PLANNED: &str =
     "${{ needs.rail.outputs.check == 'true' || needs.rail.outputs.cargo == 'true' }}";
 
@@ -498,24 +499,6 @@ fn check() -> Job {
             "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}",
         ))
         .step(mark_green("check"))
-}
-
-/// ADVISORY: clippy over the workspace. The lint debt is being paid down
-/// crate by crate, so it reports (grouped by lint and crate,
-/// .github/scripts/clippy-report.py) without failing, and `CI passed` does
-/// not wait for it. Its own job and target dir: clippy's units for workspace
-/// crates are not `cargo check`'s, so sharing Check's dir saved nothing and
-/// put it after the check on the run's critical path.
-fn lint() -> Job {
-    pool_job("Lint", "lint", 90).cond(CHECK_PLANNED).step(
-        Step::run(
-            "cargo clippy (advisory, does not block)",
-            &in_shell(
-                "cargo clippy --workspace --no-deps --all-targets --keep-going \\\n  --message-format=json -- --cap-lints warn \\\n  | python3 .github/scripts/clippy-report.py\n",
-            ),
-        )
-        .continue_on_error(),
-    )
 }
 
 /// The workspace check, recording rail's evidence on a push to main: the
@@ -697,8 +680,7 @@ exit "$rc"
 /// green on the commit they release (scripts/release.sh `BUILD_CHECK`). A
 /// skipped required check counts as passing, so this never skips: it fails
 /// unless the plan, the gates, check, wasm, tests and the macOS
-/// release-tooling run all succeeded. The advisory work (clippy, `Lint`)
-/// is not among its needs: it can neither fail nor delay it.
+/// release-tooling run all succeeded.
 ///
 /// The escape hatch for a push the pre-push hook couldn't vouch for (a
 /// contributor without the hook, a dirty tree, `SKIP=local-ci`): a green

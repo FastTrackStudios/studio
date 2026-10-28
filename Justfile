@@ -804,6 +804,13 @@ mod reaper 'features/adapters/reaper/reaper.just'
 check:
     cargo check --workspace
 
+# Clippy over the workspace, as a report (.github/scripts/clippy-report.py):
+# grouped by lint and crate, never fails. Local only; CI runs no clippy.
+clippy:
+    cargo clippy --workspace --no-deps --all-targets --keep-going \
+      --message-format=json -- --cap-lints warn \
+      | python3 .github/scripts/clippy-report.py
+
 # Run tests. nextest: parallel per-test binaries, much faster than
 # `cargo test` on this many crates. It does NOT run doctests — use
 # `just test-doc` for those.

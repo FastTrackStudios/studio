@@ -265,11 +265,6 @@ impl Step {
         self
     }
 
-    pub const fn continue_on_error(mut self) -> Self {
-        self.continue_on_error = Some(true);
-        self
-    }
-
     pub fn with(mut self, key: &str, value: impl Into<Value>) -> Self {
         self.with.insert(key.to_owned(), value.into());
         self

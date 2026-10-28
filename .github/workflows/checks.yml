@@ -317,52 +317,6 @@ jobs:
       run: |
         mkdir -p "$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA"
         touch "$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA/check.ok"
-  lint:
-    name: Lint
-    needs:
-    - plan
-    - rail
-    if: ${{ needs.rail.outputs.check == 'true' || needs.rail.outputs.cargo == 'true' }}
-    runs-on:
-    - self-hosted
-    - studio-main
-    timeout-minutes: 90
-    env:
-      CARGO_INCREMENTAL: '0'
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        persist-credentials: false
-    - name: CI cargo config (the pool's cargo home)
-      run: |
-        home="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}/cargo-home"
-        mkdir -p "$home"
-        echo "CARGO_HOME=$home" >> "$GITHUB_ENV"
-        # The old per-checkout copy, which cargo would still find from the checkout.
-        rm -f ../.cargo/config.toml
-        tmp="$(mktemp "$home/config.toml.XXXXXX")"
-        cp .cargo/ci-config.toml "$tmp"
-        mv -f "$tmp" "$home/config.toml"
-    - name: Target dir (lint, pool capped at 200 GB)
-      run: |
-        pool="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"
-        dir="$pool/lint"
-        mkdir -p "$dir"
-        echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
-        used="$(du -s --block-size=1G "$pool" | cut -f1)"
-        if [ "$used" -gt 200 ]; then
-          echo "::warning::the pool cache is ${used} GB, over 200 GB: emptying $dir (a cold lint build)"
-          rm -rf "$dir" && mkdir -p "$dir"
-        fi
-        echo "target dir: $dir; pool $(du -sh "$pool" | cut -f1) of 200 GB; $(df -h "$pool" | awk 'NR==2 {print $4}') free on the disk"
-    - name: cargo clippy (advisory, does not block)
-      continue-on-error: true
-      run: |
-        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
-        cargo clippy --workspace --no-deps --all-targets --keep-going \
-          --message-format=json -- --cap-lints warn \
-          | python3 .github/scripts/clippy-report.py
-        EOF
   wasm:
     name: Wasm
     needs:
