@@ -285,15 +285,14 @@ fn import_ableton(path: &str) -> Result<String, Box<dyn std::error::Error>> {
         set.time_signature.denominator as i32,
     );
 
-    // Tempo automation. Live parks a breakpoint far before the
-    // arrangement; what it says at 0 is the map's first point.
+    // Tempo automation, one square point per change (`TempoMap::steps`):
+    // Live's step is two breakpoints at one beat, and two points at one
+    // moment read as either tempo — the engine took the one a step leaves.
     if !set.tempo_automation.is_empty() {
         builder = builder.tempo_envelope(|env| {
-            let mut env = env.point(0.0, map.bpm_at(0.0));
-            for point in set.tempo_automation.iter().filter(|p| p.time > 0.0) {
-                env = env.point(map.seconds_at(point.time), point.value);
-            }
-            env
+            map.steps()
+                .into_iter()
+                .fold(env, |env, (beat, bpm)| env.point(map.seconds_at(beat), bpm))
         });
     }
 

@@ -112,16 +112,24 @@ fn trim_take_head(take: &mut TakeState, head: f64) {
 }
 
 /// The tempo in force at `start` at 0, then the changes before `end`.
+///
+/// A change a hair past `start` (a song cut where its tempo changes, the
+/// change read back from a file a few ulps later) is the change at it: the
+/// song starts at its own tempo, not the one before for a picosecond.
 fn crop_tempo(tempo: &[TempoPoint], start: f64, end: f64) -> Vec<TempoPoint> {
+    const SAME: f64 = 1e-9;
     let mut sorted: Vec<&TempoPoint> = tempo.iter().collect();
     sorted.sort_by(|a, b| a.at.total_cmp(&b.at));
     let mut out = Vec::new();
-    if let Some(at_start) = sorted.iter().rev().find(|t| t.at <= start) {
+    if let Some(at_start) = sorted.iter().rev().find(|t| t.at <= start + SAME) {
         let mut first = (*at_start).clone();
         first.at = 0.0;
         out.push(first);
     }
-    for t in sorted.into_iter().filter(|t| t.at > start && t.at < end) {
+    for t in sorted
+        .into_iter()
+        .filter(|t| t.at > start + SAME && t.at < end)
+    {
         let mut t = t.clone();
         t.at -= start;
         out.push(t);
@@ -352,6 +360,26 @@ mod tests {
             [(0.0, 126.0), (50.0, 92.0)],
             "the tempo in force at the cut, then the change"
         );
+    }
+
+    #[test]
+    fn a_song_cut_at_its_tempo_change_starts_at_its_own_tempo() {
+        // `Heart isn't Ready`: 160 before it, 107 from where it starts —
+        // the change read back from the show's file 2e-13 s past the cut.
+        let point = |at, bpm| TempoPoint {
+            at,
+            bpm,
+            beats_per_bar: 4,
+            beat_unit: 4,
+        };
+        let start = 1529.515_400_425_068_7;
+        let show = SessionModel {
+            tempo: vec![point(1527.0, 160.0), point(start + 2.3e-13, 107.0)],
+            ..SessionModel::default()
+        };
+        let song = crop(&show, start, start + 200.0);
+        let tempo: Vec<(f64, f64)> = song.tempo.iter().map(|t| (t.at, t.bpm)).collect();
+        assert_eq!(tempo, [(0.0, 107.0)], "not 160 with a 107 a picosecond in");
     }
 
     #[test]
