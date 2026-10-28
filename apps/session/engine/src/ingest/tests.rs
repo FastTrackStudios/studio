@@ -169,3 +169,82 @@ fn a_second_look_at_an_unchanged_folder_sends_nothing_and_hashes_nothing() {
         "vouched for without reading it"
     );
 }
+
+#[test]
+fn a_second_ingest_is_refused_while_one_runs() {
+    use super::actions::{IngestRow, claim};
+    let slot = std::sync::Mutex::new(None);
+    assert_eq!(claim(&slot), Ok(None));
+    assert!(claim(&slot).is_err(), "two ingests at once");
+    let done = IngestRow {
+        state: "done".into(),
+        ..IngestRow::default()
+    };
+    let slot = std::sync::Mutex::new(Some(done.clone()));
+    assert_eq!(claim(&slot), Ok(Some(done)), "a finished one is no bar");
+}
+
+#[test]
+fn what_no_worker_took_is_what_did_not_go() {
+    let queue = [(0, 0), (0, 1), (1, 0)];
+    assert_eq!(upload::unsent(&queue, 0), &queue[..], "nobody connected");
+    assert_eq!(upload::unsent(&queue, 1), &queue[1..]);
+    // Every worker overshoots `next` once on its way out.
+    assert!(upload::unsent(&queue, 7).is_empty());
+}
+
+#[test]
+fn an_upload_is_resumed_only_for_the_file_it_began_from() {
+    use super::plan::{Kept, Local, Why};
+    let id = "6f1c1a52-7b3e-4f7e-9d0a-0c4b2a1e9f10";
+    let send = upload::Send {
+        local: Local {
+            rel: "Media/Kick.wav".into(),
+            size: 10,
+            modified: 5,
+        },
+        hash: Some("aa".into()),
+        why: Why::New,
+    };
+    let kept = Kept {
+        size: 10,
+        modified: 5,
+        blake3: Some("aa".into()),
+        remote: None,
+        pending: Some(id.into()),
+    };
+    let resumed = |k: &Kept| upload::resumable(Some(k), &send).map(|u| u.to_string());
+    assert_eq!(resumed(&kept), Some(id.to_owned()));
+    let touched = Kept {
+        modified: 6,
+        ..kept.clone()
+    };
+    assert_eq!(resumed(&touched), None, "changed since, same size");
+    let other_bytes = Kept {
+        blake3: Some("bb".into()),
+        ..kept.clone()
+    };
+    assert_eq!(resumed(&other_bytes), None, "same size and time, other bytes");
+    assert_eq!(upload::resumable(None, &send).map(|u| u.to_string()), None);
+}
+
+#[test]
+fn a_reference_made_before_the_log_is_folded_stays_current() {
+    use super::prepare::{is_current, stamp_current};
+    let tmp = tempfile::tempdir().unwrap();
+    let made = [tmp.path().join("Reference.ogg")];
+    let song = tmp.path().join("Song.session");
+    touch(&made[0], b"ogg");
+    touch(&song, b"song");
+    // The fold writes the song after the bounce.
+    let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+    std::fs::File::options()
+        .write(true)
+        .open(&song)
+        .unwrap()
+        .set_modified(later)
+        .unwrap();
+    assert!(!is_current(&made, &song));
+    stamp_current(&made, &song).unwrap();
+    assert!(is_current(&made, &song));
+}

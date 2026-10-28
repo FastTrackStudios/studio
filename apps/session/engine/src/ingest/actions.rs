@@ -74,6 +74,24 @@ fn set(row: IngestRow) {
     }
 }
 
+/// Mark `slot` running unless an ingest runs there already — the check
+/// and the claim under one lock, so two asks close together cannot both
+/// start. The row it held before, to put back if the start goes no
+/// further.
+pub(super) fn claim(slot: &Mutex<Option<IngestRow>>) -> Result<Option<IngestRow>, String> {
+    let mut now = slot
+        .lock()
+        .map_err(|_| "the ingest state is poisoned".to_owned())?;
+    if now.as_ref().is_some_and(|row| row.state == "running") {
+        return Err("an ingest is running; SESSION_INGEST_STATUS says how it goes".into());
+    }
+    Ok(now.replace(IngestRow {
+        state: "running".into(),
+        status: Some(Status::default()),
+        ..IngestRow::default()
+    }))
+}
+
 /// Start ingesting `request` into `org`'s library as the person signed in
 /// on this machine, on a thread of its own; [`current`] follows it.
 ///
@@ -82,9 +100,6 @@ fn set(row: IngestRow) {
 /// One is running already, nobody is signed in, or no org was named.
 pub fn start(request: Request, org: Option<String>) -> Result<String, String> {
     use crate::task_account::AccountLibrary as _;
-    if current().state == "running" {
-        return Err("an ingest is running; SESSION_INGEST_STATUS says how it goes".into());
-    }
     let account =
         crate::task_account::signed_in().ok_or("not signed in to Task on this machine")?;
     let org = org
@@ -98,12 +113,8 @@ pub fn start(request: Request, org: Option<String>) -> Result<String, String> {
         request.inputs.len(),
         if request.dry_run { " (dry run)" } else { "" }
     );
-    set(IngestRow {
-        state: "running".into(),
-        status: Some(Status::default()),
-        ..IngestRow::default()
-    });
-    std::thread::Builder::new()
+    let before = claim(&NOW)?;
+    let spawned = std::thread::Builder::new()
         .name("session-ingest".into())
         .spawn(move || {
             let progress = |status: &Status| {
@@ -129,8 +140,13 @@ pub fn start(request: Request, org: Option<String>) -> Result<String, String> {
                 }
             };
             set(row);
-        })
-        .map_err(|e| e.to_string())?;
+        });
+    if let Err(e) = spawned {
+        if let Ok(mut now) = NOW.lock() {
+            *now = before;
+        }
+        return Err(e.to_string());
+    }
     Ok(said)
 }
 
@@ -171,3 +187,4 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
     list.register(&STATUS, Effect::ReadOnly, |(): ()| Ok(current()))?;
     Ok(())
 }
+

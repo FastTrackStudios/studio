@@ -244,6 +244,19 @@ pub async fn send_all(
         };
         futures_util::future::join_all((0..workers.max(1)).map(|_| worker())).await;
     }
+    // What no worker took (none could connect) did not go: a failure, not
+    // a quiet nothing, or the songs it belongs to would be published
+    // without it.
+    let claimed = next.into_inner();
+    for &(b, f) in unsent(&queue, claimed) {
+        let rel = batches.get(b).and_then(|batch| batch.sends.get(f));
+        if let (Some(send), Some(Ok(mut sent))) = (rel, results.get(b).map(Mutex::lock)) {
+            sent.failed.push(format!(
+                "{}: not sent (no upload worker could connect)",
+                send.local.rel
+            ));
+        }
+    }
     for (batch, kept) in batches.iter_mut().zip(ledgers) {
         if let Ok((ledger, _)) = kept.into_inner() {
             batch.ledger = ledger;
@@ -253,6 +266,32 @@ pub async fn send_all(
         .into_iter()
         .map(|r| r.into_inner().unwrap_or_default())
         .collect()
+}
+
+/// The part of `queue` the workers never took, `claimed` the next index
+/// they would have.
+pub(super) fn unsent(queue: &[(usize, usize)], claimed: usize) -> &[(usize, usize)] {
+    queue.get(claimed..).unwrap_or(&[])
+}
+
+/// The upload a previous run began for `send`, to resume — only when the
+/// ledger's entry is of the file as it is now (size, time and, when known,
+/// content): resuming one begun from other bytes would land a mix.
+pub(super) fn resumable(kept: Option<&Kept>, send: &Send) -> Option<UploadId> {
+    let kept = kept?;
+    let same_content = match (&send.hash, &kept.blake3) {
+        (Some(now), Some(then)) => now == then,
+        (Some(_), None) => false,
+        (None, _) => true,
+    };
+    if !kept.describes(&send.local) || !same_content {
+        return None;
+    }
+    kept.pending
+        .as_deref()?
+        .parse::<uuid::Uuid>()
+        .ok()
+        .map(UploadId::new)
 }
 
 /// Send one file, recording it in the batch's ledger: the upload's id as
@@ -275,9 +314,7 @@ async fn send_one(
     let resume = ledger
         .lock()
         .ok()
-        .and_then(|l| l.0.files.get(&send.local.rel)?.pending.clone())
-        .and_then(|id| id.parse::<uuid::Uuid>().ok())
-        .map(UploadId::new);
+        .and_then(|l| resumable(l.0.files.get(&send.local.rel), send));
     let keep = |entry: Kept| {
         if let Ok(mut l) = ledger.lock() {
             l.0.files.insert(send.local.rel.clone(), entry);

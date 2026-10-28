@@ -81,18 +81,33 @@ pub mod publish;
 /// title, a track number before it or not (`Projects/Crescendum/05 Empty
 /// Focus`, how albums were uploaded before there was a `session/` folder);
 /// else one whose own name is the song's title. A root with no live tree
-/// on the server (`path` none) is never one.
+/// on the server (`path` none) is never one, and neither is, by name, a
+/// root that holds other roots (an album's, which shares its title with
+/// its title track).
 #[must_use]
 pub fn session_root_for<'a>(
     roots: &'a [files_proto::model::FileRootInfo],
     slug: &str,
 ) -> Option<&'a files_proto::model::FileRootInfo> {
+    let trimmed = |root: &'a files_proto::model::FileRootInfo| {
+        root.path.as_deref().map(|p| p.trim_end_matches(['/', '\\']))
+    };
+    let holds_others = |path: &str| {
+        roots.iter().filter_map(trimmed).any(|other| {
+            other
+                .strip_prefix(path)
+                .is_some_and(|rest| rest.starts_with(['/', '\\']))
+        })
+    };
     let rank = |root: &files_proto::model::FileRootInfo| -> Option<u8> {
-        let path = root.path.as_deref()?.trim_end_matches('/');
+        let path = root.path.as_deref()?.trim_end_matches(['/', '\\']);
         let mut segments = path.rsplit(['/', '\\']);
         let folder = segments.next()?;
         if folder == slug && segments.next() == Some("session") {
             return Some(0);
+        }
+        if holds_others(path) {
+            return None;
         }
         if slugify(without_track_number(folder)) == slug {
             return Some(1);

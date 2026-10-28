@@ -276,7 +276,9 @@ impl Library {
     /// The server cannot be reached, or refused.
     pub async fn ensure_song(&self, slug: &str, title: &str) -> eyre::Result<Made> {
         let resources: ResourcesServiceClient = self.service().await?;
-        if resources.song(slug.to_owned()).await.is_ok() {
+        if is_there(resources.song(slug.to_owned()).await)
+            .map_err(|e| eyre::eyre!("reading song:{slug}: {e}"))?
+        {
             return Ok(Made::Found);
         }
         let made = resources
@@ -472,6 +474,26 @@ fn project_node(path: &str) -> String {
         .to_owned()
 }
 
+/// Whether a read found the thing: `false` only when the server says it
+/// is not there — any other failure (a dropped link, a refusal) is an
+/// error, never taken for "make it", which would write over what is there.
+///
+/// # Errors
+/// The read failed for any reason but "not found".
+pub(crate) fn is_there<T>(
+    read: Result<T, vox::VoxError<resources_proto::ResourcesError>>,
+) -> eyre::Result<bool> {
+    match read {
+        Ok(_) => Ok(true),
+        Err(vox::VoxError::User(e))
+            if matches!(*e, resources_proto::ResourcesError::NotFound(_)) =>
+        {
+            Ok(false)
+        }
+        Err(e) => Err(eyre::eyre!("{e:?}")),
+    }
+}
+
 /// Upload one file into a root, streamed from `source`, resumable: a
 /// dropped stream is re-sent from the server's own account of what it
 /// lacks ([`RESENDS`] times), and `upload.resume` picks up a previous
@@ -601,7 +623,28 @@ async fn send_ranges(
 
 #[cfg(test)]
 mod tests {
-    use super::project_node;
+    use super::{is_there, project_node};
+    use resources_proto::ResourcesError;
+
+    #[test]
+    fn only_not_found_reads_as_a_missing_song() {
+        let read = |r: Result<(), vox::VoxError<ResourcesError>>| is_there(r).map_err(|_| ());
+        assert_eq!(read(Ok(())), Ok(true));
+        assert_eq!(
+            read(Err(vox::VoxError::User(Box::new(ResourcesError::NotFound(
+                "song:x".into()
+            ))))),
+            Ok(false)
+        );
+        assert_eq!(read(Err(vox::VoxError::ConnectionClosed)), Err(()));
+        assert_eq!(
+            read(Err(vox::VoxError::User(Box::new(ResourcesError::Io(
+                "disk".into()
+            ))))),
+            Err(()),
+            "a refusal is not \"make it\""
+        );
+    }
 
     #[test]
     fn a_project_is_linked_by_its_directory_not_its_page() {

@@ -85,6 +85,36 @@ fn an_album_uploaded_before_session_folders_is_found_by_its_song_folders() {
 }
 
 #[test]
+fn an_album_root_is_never_its_title_track_s() {
+    let album = root(
+        "Crescendum",
+        Some("/mnt/storage/Task/fta/Projects/Crescendum/"),
+    );
+    let song = root(
+        "Kornesque",
+        Some("/mnt/storage/Task/fta/Projects/Crescendum/Kornesque"),
+    );
+    let title_track = root(
+        "01 Crescendum",
+        Some("/mnt/storage/Task/fta/Projects/Crescendum/01 Crescendum"),
+    );
+    assert_eq!(
+        found(&[album.clone(), song.clone(), title_track], "crescendum").as_deref(),
+        Some("/mnt/storage/Task/fta/Projects/Crescendum/01 Crescendum")
+    );
+    assert_eq!(
+        found(&[album.clone(), song], "crescendum"),
+        None,
+        "the album holds songs: it is not one"
+    );
+    // An album root with no song roots under it is still found by name.
+    assert_eq!(
+        found(&[album], "crescendum").as_deref(),
+        Some("/mnt/storage/Task/fta/Projects/Crescendum/")
+    );
+}
+
+#[test]
 fn a_root_with_no_tree_on_the_server_is_no_song_s() {
     assert_eq!(found(&[root("Fire", None)], "fire"), None);
 }

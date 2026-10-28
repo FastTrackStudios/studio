@@ -50,6 +50,9 @@ pub struct Steps {
 /// The song would not open, or its project file would not fold. A proxy
 /// or peaks file that fails is counted, not fatal.
 pub fn prepare(song: &SongSource, steps: Steps) -> eyre::Result<Prepared> {
+    // First: the reference is judged against the song as it travels, its
+    // log folded in — a fold after the check would make it look stale.
+    fold_logs(&song.folder)?;
     let reference = if steps.reference {
         reference(song)?
     } else {
@@ -62,6 +65,11 @@ pub fn prepare(song: &SongSource, steps: Steps) -> eyre::Result<Prepared> {
     // (an `.RPP` gets a `.session` beside it), and what travels is the
     // file with its log folded in.
     fold_logs(&song.folder)?;
+    if reference == Done::Made {
+        // The bounce is of the song as it is now: what folding the log
+        // the bounce wrote did to the file's time does not make it stale.
+        stamp_current(&reference_files(song), &song.file)?;
+    }
     Ok(Prepared {
         proxies,
         peaks,
@@ -174,18 +182,46 @@ fn playing_media(song: &SongSource) -> eyre::Result<(Vec<PathBuf>, Vec<String>)>
 /// The song's reference bounce (`crate::reference`), unless its proxies
 /// and peaks are there and newer than the song.
 fn reference(song: &SongSource) -> eyre::Result<Done> {
-    let media = song.folder.join("Media");
-    let made = [
-        media.join("Proxies").join("Reference.ogg"),
-        media.join("Proxies").join("Reference Preview.ogg"),
-        media.join("Peaks").join("Reference.wav.sessionpeaks"),
-    ];
-    let song_time = modified(&song.file);
-    if made.iter().all(|p| p.is_file() && modified(p) >= song_time) {
+    if is_current(&reference_files(song), &song.file) {
         return Ok(Done::Current);
     }
     crate::reference::bounce(&song.file)?;
     Ok(Done::Made)
+}
+
+/// What the reference bounce leaves in the song's `Media/`.
+fn reference_files(song: &SongSource) -> [PathBuf; 3] {
+    let media = song.folder.join("Media");
+    [
+        media.join("Proxies").join("Reference.ogg"),
+        media.join("Proxies").join("Reference Preview.ogg"),
+        media.join("Peaks").join("Reference.wav.sessionpeaks"),
+    ]
+}
+
+/// Every one of `made` there and no older than `source`.
+pub(super) fn is_current(made: &[PathBuf], source: &Path) -> bool {
+    let source_time = modified(source);
+    made.iter()
+        .all(|p| p.is_file() && modified(p) >= source_time)
+}
+
+/// Bring each of `made` that is older than `source` up to its time, so
+/// [`is_current`] holds: what was made from `source` before a change that
+/// left its content alone (a log folded in) stays current.
+///
+/// # Errors
+///
+/// One of `made` could not be touched.
+pub(super) fn stamp_current(made: &[PathBuf], source: &Path) -> eyre::Result<()> {
+    let source_time = modified(source);
+    for path in made.iter().filter(|p| p.is_file() && modified(p) < source_time) {
+        std::fs::File::options()
+            .write(true)
+            .open(path)?
+            .set_modified(source_time)?;
+    }
+    Ok(())
 }
 
 /// What one proxy or peaks file came to.
