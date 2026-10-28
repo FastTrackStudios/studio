@@ -293,6 +293,33 @@ pub struct StreamsFrame {
     pub songs: Vec<(String, StreamSong)>,
     /// A play pressed on a song still streaming waits for it.
     pub waiting: bool,
+    /// How the streamed songs are heard, as Settings offers it.
+    pub listening: Listening,
+}
+
+/// How the streamed songs are heard: by their stems, once asked for
+/// (`crate::reference_play::load_multitracks`), and whether any is heard
+/// by its reference now.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Facet)]
+pub struct Listening {
+    pub stems: bool,
+    pub referenced: bool,
+}
+
+/// What the engine is doing in the background, as the bottom bar shows it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Facet)]
+pub struct JobsFrame {
+    pub version: u64,
+    pub jobs: Vec<JobRow>,
+}
+
+/// One job, as [`crate::jobs::running`] reads it.
+#[derive(Debug, Clone, PartialEq, Eq, Facet)]
+pub struct JobRow {
+    pub id: u64,
+    pub label: String,
+    pub done: u64,
+    pub total: u64,
 }
 
 /// A streaming song, as its tab shows it.
@@ -392,6 +419,10 @@ pub trait EngineView {
     /// What streams in.
     #[subscribe]
     fn streams(&self) -> StreamsFrame;
+
+    /// What the engine is doing in the background.
+    #[subscribe]
+    fn jobs(&self) -> JobsFrame;
 
     /// What changed in a song.
     #[subscribe]

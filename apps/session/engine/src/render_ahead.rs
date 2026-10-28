@@ -55,6 +55,13 @@ fn store() -> &'static std::sync::Mutex<RenderAhead> {
     STORE.get_or_init(|| std::sync::Mutex::new(load().unwrap_or_default()))
 }
 
+/// The render ahead as it was last kept — what a window shows, read
+/// afresh: the engine that keeps it is another process.
+#[must_use]
+pub fn saved() -> RenderAhead {
+    load().unwrap_or_default()
+}
+
 /// The render ahead as it stands.
 #[must_use]
 pub fn current() -> RenderAhead {

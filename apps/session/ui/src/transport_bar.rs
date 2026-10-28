@@ -174,6 +174,12 @@ fn TransportBarView(reading: crate::engine::Reading, big: bool) -> Element {
                                 style: stop_option(crate::play_return::get() == each),
                                 onclick: move |_| {
                                     crate::play_return::set(each);
+                                    // Stop is the engine's: it stops as asked.
+                                    #[cfg(feature = "native")]
+                                    crate::actions::off_the_window(
+                                        "SESSION_STOP_BEHAVIOUR",
+                                        format!("{{\"behaviour\":\"{}\"}}", each.slug()),
+                                    );
                                     stop_menu.set(false);
                                 },
                                 "{each.label()}"

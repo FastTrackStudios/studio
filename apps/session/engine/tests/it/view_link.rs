@@ -4,7 +4,9 @@
 //! same client as a desktop window's socket), and what the window draws
 //! checked as it arrives over that link — the set (opened, then closed),
 //! the waveforms as the engine draws them, the automation lanes and a take
-//! volume curve the window's own edits wrote, and the hit overlay.
+//! volume curve the window's own edits wrote, and the hit overlay — and
+//! the window's controls (the palette, the versions, the jobs bar,
+//! grouping) answered by the engine.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -68,7 +70,8 @@ fn song(dir: &Path) -> Result<PathBuf, String> {
 }
 
 #[test]
-fn a_window_on_the_in_memory_link_gets_the_set_waves_lanes_and_overlay() -> Result<(), String> {
+fn a_window_on_the_in_memory_link_gets_the_set_waves_lanes_overlay_and_controls()
+-> Result<(), String> {
     // SAFETY: set before the engine starts any thread of its own; this
     // test's process starts the engine once.
     unsafe {
@@ -176,6 +179,41 @@ fn a_window_on_the_in_memory_link_gets_the_set_waves_lanes_and_overlay() -> Resu
     // The hit overlay of the song on screen came over its stream.
     within(30, "the overlay", || {
         session_engine::hit_overlay::current().is_some()
+    })?;
+
+    // The palette is the engine's list, what can run now as it says.
+    let palette = session_engine::actions::palette();
+    assert!(
+        palette
+            .iter()
+            .any(|a| a.id == "SESSION_PLAY_STOP" && a.enabled),
+        "{} palette rows",
+        palette.len()
+    );
+    // The versions panel's read is answered by the engine.
+    assert!(
+        session_engine::actions::versions().is_some(),
+        "no versions answer"
+    );
+    // Grouping is set where the mix is.
+    assert_eq!(
+        run("SESSION_GROUPING", &json!({ "on": false }))?,
+        json!(false)
+    );
+    run("SESSION_GROUPING", &json!({ "on": true }))?;
+    // A job the engine runs reaches the window's bottom bar over its
+    // stream, and goes when it ends.
+    let job = session_engine::jobs::start("Linked probe", 3);
+    within(10, "the job shown", || {
+        view_client::jobs()
+            .iter()
+            .any(|j| j.label == "Linked probe")
+    })?;
+    drop(job);
+    within(10, "the job gone", || {
+        !view_client::jobs()
+            .iter()
+            .any(|j| j.label == "Linked probe")
     })?;
 
     // Closed by the engine: the window's set goes with it.

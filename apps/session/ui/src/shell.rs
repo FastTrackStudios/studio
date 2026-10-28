@@ -617,6 +617,29 @@ pub fn BottomBar(
     }
 }
 
+/// What is running: the engine's jobs, as it last said, and the window's
+/// own — each once, by its id (one process, as on iOS, has one list).
+fn jobs_now() -> Vec<crate::jobs::Running> {
+    #[cfg(not(feature = "native"))]
+    let mut now: Vec<crate::jobs::Running> = Vec::new();
+    #[cfg(feature = "native")]
+    let mut now: Vec<crate::jobs::Running> = crate::view_client::jobs()
+        .into_iter()
+        .map(|j| crate::jobs::Running {
+            id: j.id,
+            label: j.label,
+            done: usize::try_from(j.done).unwrap_or(usize::MAX),
+            total: usize::try_from(j.total).unwrap_or(usize::MAX),
+        })
+        .collect();
+    for own in crate::jobs::running() {
+        if !now.iter().any(|j| j.id == own.id) {
+            now.push(own);
+        }
+    }
+    now
+}
+
 /// What is being done off the window's thread (`crate::jobs`): each
 /// job's name and how far along, a bar filling under it — nothing at all
 /// when nothing is running.
@@ -626,7 +649,7 @@ fn Jobs() -> Element {
     use_future(move || async move {
         loop {
             architect::platform::sleep(std::time::Duration::from_millis(200)).await;
-            let now = crate::jobs::running();
+            let now = jobs_now();
             if now != *shown.peek() {
                 shown.set(now);
             }
@@ -1773,7 +1796,7 @@ pub fn use_streams() {
         let mut version = version;
         loop {
             futures_timer::Delay::new(std::time::Duration::from_millis(250)).await;
-            let now = crate::stream_set::version() ^ u64::from(crate::engine::buffering::waiting());
+            let now = crate::stream_set::version() ^ u64::from(crate::stream_set::play_waiting());
             if *version.peek() != now {
                 version.set(now);
             }

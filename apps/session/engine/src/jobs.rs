@@ -38,13 +38,24 @@ fn all() -> &'static Mutex<Vec<Weak<Inner>>> {
     &JOBS
 }
 
+/// Where this process's job ids start: its pid, high. A window shows its
+/// engine's jobs beside its own, and two processes' ids must not meet —
+/// while one process (iOS, a test) lists each job once, by its one id.
+fn base() -> u64 {
+    // A page is one process with no pid to ask for.
+    #[cfg(target_arch = "wasm32")]
+    return 0;
+    #[cfg(not(target_arch = "wasm32"))]
+    return u64::from(std::process::id()) << 32;
+}
+
 /// Start a piece of work named `label`, `total` steps long (0 for one
 /// that does not know).
 #[must_use]
 pub fn start(label: &str, total: usize) -> Job {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let inner = Arc::new(Inner {
-        id: NEXT.fetch_add(1, Ordering::Relaxed),
+        id: base() + NEXT.fetch_add(1, Ordering::Relaxed),
         label: label.to_owned(),
         done: AtomicUsize::new(0),
         total: AtomicUsize::new(total),

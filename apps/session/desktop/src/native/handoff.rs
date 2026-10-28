@@ -194,22 +194,14 @@ pub struct ActionRow {
 /// nothing and run at once.
 #[must_use]
 pub fn actions() -> Vec<ActionRow> {
-    let list = session_engine::actions::list();
-    list.infos()
+    // The engine's list, with what can run now as the engine says: the
+    // window's own actions are on it too, forwarded to the window.
+    session_engine::actions::palette()
         .into_iter()
-        .filter(|a| a.params_schema.is_none() && !list.is_async(&a.id))
         .map(|a| ActionRow {
-            label: if a.display_name.is_empty() {
-                a.id.clone()
-            } else {
-                a.display_name
-            },
             id: a.id,
-            group: if a.group.is_empty() {
-                a.category
-            } else {
-                a.group
-            },
+            label: a.label,
+            group: a.group,
             shortcut: a.shortcut,
             description: a.description,
             enabled: a.enabled,
@@ -223,9 +215,7 @@ pub fn actions() -> Vec<ActionRow> {
 ///
 /// No such action, it cannot run now, or it failed.
 pub fn run_action(id: &str) -> Result<(), String> {
-    session_engine::actions::list()
-        .run(id)
-        .map_err(|e| e.to_string())
+    session_engine::actions::run(id, b"").map(|_| ())
 }
 
 /// An overlay over the window takes the keyboard (`true`) or gives it

@@ -121,6 +121,7 @@ pub fn connect(caller: vox::Caller) {
     rt.spawn(follow(link.clone(), Stream::Overlays));
     rt.spawn(follow(link.clone(), Stream::Marks));
     rt.spawn(follow(link.clone(), Stream::Streams));
+    rt.spawn(follow(link.clone(), Stream::Jobs));
     rt.spawn(follow(link.clone(), Stream::Changes));
     rt.spawn(follow(link.clone(), Stream::Queued));
     rt.spawn(follow_playheads(link));
@@ -147,6 +148,7 @@ enum Stream {
     Overlays,
     Marks,
     Streams,
+    Jobs,
     Changes,
     Queued,
 }
@@ -180,6 +182,10 @@ async fn follow(link: Link, which: Stream) {
                 let _ = frame;
             })
             .await
+        }
+        Stream::Jobs => {
+            let (tx, rx) = vox::channel::<crate::view::JobsFrame>();
+            drain(link.streams.jobs(tx), rx, jobs_arrived).await
         }
         Stream::Changes => {
             let (tx, rx) = vox::channel::<crate::view::Changed>();
@@ -573,6 +579,26 @@ fn marks_arrived(frame: MarksFrame) {
 #[must_use]
 pub fn marks() -> Option<Arc<MarksFrame>> {
     MARKS.read().ok().and_then(|m| m.clone())
+}
+
+// ── The engine's jobs ────────────────────────────────────────────────
+
+static JOBS: RwLock<Option<Arc<crate::view::JobsFrame>>> = RwLock::new(None);
+
+fn jobs_arrived(frame: crate::view::JobsFrame) {
+    if let Ok(mut slot) = JOBS.write() {
+        *slot = Some(Arc::new(frame));
+    }
+}
+
+/// What the engine is doing in the background, as it last said: none
+/// with no engine linked.
+#[must_use]
+pub fn jobs() -> Vec<crate::view::JobRow> {
+    JOBS.read()
+        .ok()
+        .and_then(|j| j.as_ref().map(|f| f.jobs.clone()))
+        .unwrap_or_default()
 }
 
 // ── What changed ─────────────────────────────────────────────────────
