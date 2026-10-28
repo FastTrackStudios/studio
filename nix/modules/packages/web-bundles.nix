@@ -128,7 +128,13 @@
         # The open-a-set page's "try the live demo" opens it in the app
         # itself (`session::open_link::demo_href`), wherever it is served.
         SESSION_DEMO_LINK = sessionDemoLink;
-        cargoArtifacts = session-app-web-deps;
+        # No prebuilt dependencies: the deps-only build stubs the
+        # workspace's crates, and keyflow's git deps are patched to the
+        # in-tree `daw` (`[patch."…/daw"]`), so `keyflow-daw-analysis`
+        # (session → keyflow) compiled against an empty `daw` and failed
+        # (v26.10.6's image). `session-app-web-deps` waits for a dummy
+        # source that keeps the patched crates real.
+        cargoArtifacts = null;
         nativeBuildInputs = dxWebNativeInputs;
         doNotPostBuildInstallCargoBinaries = true;
         buildPhaseCargoCommand = ''
@@ -343,12 +349,9 @@
         # dx's own cargo flags for a web release: its `wasm-release`
         # profile (the workspace's), the wasm target, no default features,
         # and `strip=false` (dx strips after the asset pass).
-        cargoArtifacts = wasmDeps {
-          pname = "studio-signal-web";
-          profile = "wasm-release";
-          cargoExtraArgs = "--locked -p studio-desktop --target wasm32-unknown-unknown --no-default-features --features signal --config profile.wasm-release.strip=false";
-          env.SIGNAL_RIG_NO_CAPTURES = "1";
-        };
+        # No prebuilt dependencies, as session-app-web: signal reaches
+        # session → keyflow-daw-analysis, patched onto the in-tree `daw`.
+        cargoArtifacts = null;
         env = {
           # Nothing here ships a rig's NAM captures (rig-models, `just
           # assets`): the guitar crate's release check stands down
