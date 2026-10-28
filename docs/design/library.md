@@ -3,6 +3,14 @@
 Status: draft for review (2026-10-26). Builds on `docs/design/sync.md` and
 ADR 0002, and revises two of its rows (see "What changes in ADR 0002").
 
+> **Superseded for the library's model (2026-10-28):** the library lives in
+> Task projects, not in Loro typed documents of Studio's own. A *session*
+> is what a person sees; underneath it is a Task project with the
+> `music-production` capability, nested by its parent, tagged with the
+> project's tags. See `docs/design/studio-app-shell.md` ("Decided"). What
+> this document says about media, rigs and sync still stands where it does
+> not describe how library items are stored.
+
 Studio's iPad home becomes one library: everything a person or a band has
 (songs, setlists, albums, projects, rigs), organized and opened from one
 place, live-editable, synced through Task, and readable inside Task without

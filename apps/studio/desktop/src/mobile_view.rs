@@ -122,10 +122,22 @@ pub fn MobileApp() -> Element {
         if *corners.0.peek() != radius {
             corners.0.set(radius);
         }
-        // The housing moves side only with a rotation, which resizes.
         let left = app_shell::ios_scene::island_on_left() == Some(true);
         if *island.0.peek() != left {
             island.0.set(left);
+        }
+    });
+    // The housing also changes side when the phone turns over end to end,
+    // which resizes nothing — so the effect above never sees it: asked
+    // again twice a second.
+    use_future(move || async move {
+        let mut island = island;
+        loop {
+            futures_timer::Delay::new(std::time::Duration::from_millis(500)).await;
+            let left = app_shell::ios_scene::island_on_left() == Some(true);
+            if *island.0.peek() != left {
+                island.0.set(left);
+            }
         }
     });
     let pad = screen().insets.padding();

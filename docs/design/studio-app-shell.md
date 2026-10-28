@@ -25,6 +25,10 @@ whole; Signal and Charts each stand alone.
   capture button): find any session, setlist, song, rig or chart and
   open it in the mode you are in.
 - **A sidebar** (a drawer on a phone).
+- **On a phone held sideways, the modes run down the side** (a rail, as
+  Task's wide layout has), not along the bottom: sideways the height is
+  what is short, and a bar along it takes the room the content needs.
+  Upright they are along the bottom, as above.
 - **Top right: the mode's important actions**, always there. One of them
   in every mode: join a remote session / Signal / chart.
 
@@ -52,6 +56,23 @@ lives under a folder entry, nested as deep as it needs —
 One flow, in all three modes: the setlist builder Signal already has,
 combined with Session's and made to build setlists of sessions wherever
 it is opened.
+
+### A setlist's entries
+
+A setlist is an ordered list of entries, each with an id of its own (its
+place in the list, stable while it is reordered). An entry is one of:
+
+- **a song** (`song:<slug>`): plays the song's default session;
+- **a session** (a project): plays that session — one arrangement of a
+  song, a medley, a session made for this show.
+
+A session of a song is tied to the song (its project links `song:<slug>`).
+So "is this song in the set already?" and "the song's key and tempo for
+this set" look through a session entry to its song: one song in a set is
+one song, whichever way it was added, and an edit made to the entry
+applies to what it references. Changing an entry from a song to one of its
+sessions keeps the entry's id, place and per-entry settings (key, tempo,
+rig settings). Existing setlists of songs need no migration.
 
 ## A new empty session
 
