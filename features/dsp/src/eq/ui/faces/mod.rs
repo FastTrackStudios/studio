@@ -28,7 +28,7 @@ pub struct EqCategory {
     pub badges: &'static [&'static str],
 }
 
-/// The rail. `model` values are the ones `FtsEqParams::model` already uses —
+/// The rail. `model` values are the ones `EqStageParams::model` already uses —
 /// 0 default, 1 Pultec, 2 Neve, 3 API, 4 SSL E, 5 SSL G — so the rail is a new
 /// way to reach existing state, not new state.
 pub static CATEGORIES: &[EqCategory] = &[
@@ -74,7 +74,7 @@ pub static CATEGORIES: &[EqCategory] = &[
 pub use units::design_for as design_for_model;
 
 /// The stable id for a `model` value — what a session persists instead of the
-/// number. See `FtsEqParams::model_id`.
+/// number. See `EqStageParams::model_id`.
 #[must_use]
 pub const fn model_id(model: i32) -> &'static str {
     match model {
@@ -95,8 +95,9 @@ pub fn model_for_id(id: &str) -> Option<i32> {
 
 /// The model a loaded session should be showing: the persisted id when it
 /// names a model we still have, the index otherwise (sessions saved before
-/// ids, or a project from a newer build).
-pub fn resolved_model(params: &crate::eq::ui::params::FtsEqParams) -> i32 {
+/// ids, or a project from a newer build). Per stage: each stage of the stack
+/// is its own model (`fx.stack.model`).
+pub fn resolved_model(params: &crate::eq::ui::params::EqStageParams) -> i32 {
     let id = params.model_id.read();
     model_for_id(&id).unwrap_or_else(|| params.model.value())
 }
@@ -119,8 +120,41 @@ pub fn editor_size_for(model: i32, form: fts_audio_ui::EditorForm) -> (u32, u32)
 }
 
 /// Record the id for `model` — call this wherever the model changes.
-pub fn store_model_id(params: &crate::eq::ui::params::FtsEqParams, model: i32) {
+pub fn store_model_id(params: &crate::eq::ui::params::EqStageParams, model: i32) {
     *params.model_id.write() = model_id(model).to_string();
+}
+
+/// A `model` value's full name — the stack chip's tooltip, and what the
+/// `model` parameter prints.
+#[must_use]
+pub const fn model_name(model: i32) -> &'static str {
+    match model {
+        1 => "Pultec EQP-1A",
+        2 => "Neve 1073",
+        3 => "API 550A",
+        4 => "SSL E",
+        5 => "SSL G",
+        _ => "Default",
+    }
+}
+
+/// A `model` value's short badge for the stack strip: the rail's badge, with
+/// the family in front where one rail entry cycles several models — a bare
+/// "E" says nothing on a chip away from the SSL entry.
+#[must_use]
+pub fn model_badge(model: i32) -> String {
+    match category_of(model) {
+        Some((ci, vi)) => {
+            let category = &CATEGORIES[ci];
+            let badge = category.badges.get(vi).copied().unwrap_or(category.badge);
+            if category.models.len() > 1 {
+                format!("{} {badge}", category.badge)
+            } else {
+                badge.to_string()
+            }
+        }
+        None => model.to_string(),
+    }
 }
 
 /// The category a `model` value belongs to, and its position within it.

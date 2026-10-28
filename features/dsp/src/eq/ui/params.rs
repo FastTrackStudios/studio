@@ -2,13 +2,20 @@
 //!
 //! Lives in `eq-ui` (not `eq-plugin`) so the [`crate::eq::ui::control_view`] component
 //! can render against the param tree without forcing a circular dep.
+//!
+//! The tree is a stack (`docs/spec/fx/stack.md`): [`FtsEqParams`] holds
+//! [`MAX_STAGES`] complete EQs ([`EqStageParams`]) plus the lanes and stack
+//! globals. The editor edits one stage at a time — the focused one — through
+//! an [`EqStageRef`], which derefs to the stage so the surfaces read
+//! `params.bands[i]` exactly as they did before the split.
 
 use crate::eq::analyzer::{Analyzer, AudioFeed};
+use crate::stack::host::{LaneParams, StackHost, StagePlacement};
 use atomic_float::AtomicF32;
 use parking_lot::Mutex;
 use plugin_core::prelude::*;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 /// Process-global source of unique analyzer instance ids (used for cross-instance
 /// spectrum sharing).
@@ -38,6 +45,10 @@ pub struct EqUiState {
     /// Audio-thread feed for the analyzer. The processor takes this out once on
     /// the first `process` call (or `initialize`); `None` afterwards.
     pub audio_feed: Mutex<Option<AudioFeed>>,
+    /// The stage the editor is focused on (`fx.stack.focus`) — written by the
+    /// editor, read by the audio thread so the per-stage readouts (the band
+    /// rings, the model response) describe the stage being edited.
+    pub focused_stage: AtomicUsize,
 }
 
 impl EqUiState {
@@ -54,6 +65,7 @@ impl EqUiState {
             band_dyn_gain_db: Box::new(std::array::from_fn(|_| AtomicF32::new(0.0))),
             analyzer,
             audio_feed: Mutex::new(Some(feed)),
+            focused_stage: AtomicUsize::new(0),
         }
     }
 
@@ -576,14 +588,28 @@ impl BandParams {
     }
 }
 
+/// How many stages the EQ stack can hold (`fx.stack.limits`): four, because
+/// a stage is a whole 24-band EQ and the motivating chain — a Pro-Q-style
+/// subtractive pass into a Pultec boost — is two of them.
+pub const MAX_STAGES: usize = 4;
+
+/// One stage's complete parameter set (`fx.stack.model`): a whole EQ — its
+/// model, that model's controls, the 24 parametric bands, the output section
+/// and the display range — plus its place in the stack.
+///
+/// [`FtsEqParams`] holds [`MAX_STAGES`] of these; stage 1 is nested bare so
+/// its ids and persist keys are exactly the pre-stack plugin's and a saved
+/// session loads into it bit-for-bit (`fx.stack.params`); stages 2+ get
+/// `s{n}_` prefixes. The field order is the old plugin's, with the stack
+/// placement appended last — hosts persist VST3 state by index.
 #[derive(Params)]
-pub struct FtsEqParams {
+pub struct EqStageParams {
     /// Processing model:
     /// 0=Default parametric, 1=Pultec, 2=Neve 1073, 3=API, 4=SSL E, 5=SSL G.
     ///
     /// An *index*, because a host parameter has to be a number, and the
     /// automatable model switch. Not how the choice is persisted — see
-    /// [`FtsEqParams::model_id`].
+    /// [`EqStageParams::model_id`].
     #[id = "model"]
     pub model: IntParam,
 
@@ -597,11 +623,6 @@ pub struct FtsEqParams {
     /// existed", and then the index stands.
     #[persist = "model_id"]
     pub model_id: parking_lot::RwLock<String>,
-
-    /// The editor's form factor — Responsive, a rack size, a 500-series
-    /// module. Persisted by id for the same reason the model is.
-    #[persist = "editor_form"]
-    pub editor_form: parking_lot::RwLock<String>,
 
     #[id = "output_gain"]
     pub output_gain_db: FloatParam,
@@ -759,6 +780,12 @@ pub struct FtsEqParams {
     /// persists with the session and presets.
     #[id = "auto_range"]
     pub auto_range: FloatParam,
+
+    // ── Stack placement (appended — `fx.stack.params`) ────────────────────
+    /// `use` / `on` / `lane`. Bare, so stage 1's are unprefixed. The bands'
+    /// own `on_1`…`on_24` do not collide with the stage's `on`.
+    #[nested]
+    pub place: StagePlacement,
 }
 
 // The range table itself lives in the portable graph model
@@ -768,11 +795,19 @@ pub use crate::eq::ui::eq_graph_model::{
     DB_RANGE_STEPS, DEFAULT_DB_RANGE, db_range_for_index, db_range_index_containing,
 };
 
-impl Default for FtsEqParams {
+impl Default for EqStageParams {
     fn default() -> Self {
+        Self::new(true)
+    }
+}
+
+impl EqStageParams {
+    /// A stage's params. `first` = stage 1, which starts in the stack (the
+    /// plain plugin); the rest start unused until added (`fx.stack.add`).
+    #[must_use]
+    pub fn new(first: bool) -> Self {
         Self {
             model_id: parking_lot::RwLock::new(String::new()),
-            editor_form: parking_lot::RwLock::new(String::new()),
 
             model: IntParam::new("Model", 0, IntRange::Linear { min: 0, max: 5 })
                 .with_value_to_string(Arc::new(|v| match v {
@@ -1050,7 +1085,174 @@ impl Default for FtsEqParams {
             )
             .with_value_to_string(on_off_string("On", "Off"))
             .with_string_to_value(on_off_value("On", "Off")),
+
+            place: StagePlacement::new(first, MAX_STAGES),
         }
+    }
+}
+
+/// The full parameter tree: the stage pool, the lanes and the stack globals
+/// (`fx.stack.params`).
+///
+/// Stage 1 is nested bare so its ids are the pre-stack plugin's, unchanged;
+/// stages 2–4 are prefixed `s2_`…`s4_`.
+#[derive(Params)]
+pub struct FtsEqParams {
+    #[nested]
+    pub stage1: EqStageParams,
+    #[nested(id_prefix = "s2", group = "Stage 2")]
+    pub stage2: EqStageParams,
+    #[nested(id_prefix = "s3", group = "Stage 3")]
+    pub stage3: EqStageParams,
+    #[nested(id_prefix = "s4", group = "Stage 4")]
+    pub stage4: EqStageParams,
+
+    /// Per-lane gain / mute / solo, ids `lgain_1`…`lsolo_4`.
+    #[nested(array, group = "Lane")]
+    pub lanes: [LaneParams; MAX_STAGES],
+
+    /// Parallel sum law (`fx.stack.sum`).
+    #[id = "summode"]
+    pub sum_mode: IntParam,
+    /// Stack output trim.
+    #[id = "stktrim"]
+    pub output_trim_db: FloatParam,
+
+    /// The editor's form factor — Responsive, a rack size, a 500-series
+    /// module. Persisted by id for the same reason the model is. One per
+    /// editor, not per stage: it is the window, not the sound.
+    #[persist = "editor_form"]
+    pub editor_form: parking_lot::RwLock<String>,
+
+    /// Which stage the editor is focused on (`fx.stack.focus`), 0-based —
+    /// UI state, persisted so the editor reopens where it was left.
+    #[persist = "focused_stage"]
+    pub focused_stage: parking_lot::RwLock<String>,
+}
+
+impl Default for FtsEqParams {
+    fn default() -> Self {
+        Self {
+            stage1: EqStageParams::new(true),
+            stage2: EqStageParams::new(false),
+            stage3: EqStageParams::new(false),
+            stage4: EqStageParams::new(false),
+            lanes: std::array::from_fn(|_| LaneParams::default()),
+            sum_mode: crate::stack::host::sum_mode_param(),
+            output_trim_db: crate::stack::host::output_trim_param(),
+            editor_form: parking_lot::RwLock::new(String::new()),
+            focused_stage: parking_lot::RwLock::new(String::new()),
+        }
+    }
+}
+
+impl FtsEqParams {
+    /// Stage `i` (0-based).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i >= MAX_STAGES`.
+    #[must_use]
+    pub fn stage(&self, i: usize) -> &EqStageParams {
+        match i {
+            0 => &self.stage1,
+            1 => &self.stage2,
+            2 => &self.stage3,
+            3 => &self.stage4,
+            _ => panic!("stage {i} out of range"),
+        }
+    }
+
+    /// All stages, in pool order.
+    pub fn stages(&self) -> impl Iterator<Item = &EqStageParams> {
+        (0..MAX_STAGES).map(|i| self.stage(i))
+    }
+}
+
+impl StackHost for FtsEqParams {
+    fn max_stages(&self) -> usize {
+        MAX_STAGES
+    }
+    fn placement(&self, stage: usize) -> &StagePlacement {
+        &self.stage(stage).place
+    }
+    fn lane(&self, lane: usize) -> &LaneParams {
+        &self.lanes[lane]
+    }
+    fn sum_mode(&self) -> &IntParam {
+        &self.sum_mode
+    }
+    fn output_trim_db(&self) -> &FloatParam {
+        &self.output_trim_db
+    }
+    fn focused_cell(&self) -> &parking_lot::RwLock<String> {
+        &self.focused_stage
+    }
+    fn style_param(&self, stage: usize) -> &IntParam {
+        &self.stage(stage).model
+    }
+    fn resolved_style(&self, stage: usize) -> usize {
+        crate::eq::ui::faces::resolved_model(self.stage(stage)).max(0) as usize
+    }
+    fn store_style_id(&self, stage: usize, index: usize) {
+        crate::eq::ui::faces::store_model_id(self.stage(stage), index as i32);
+    }
+    fn style_badge(&self, index: usize) -> String {
+        crate::eq::ui::faces::model_badge(index as i32)
+    }
+    fn style_name(&self, index: usize) -> String {
+        crate::eq::ui::faces::model_name(index as i32).to_string()
+    }
+}
+
+/// One stage of the tree, as the editor holds it: cheap to clone, `'static`,
+/// and a `Deref` to the stage — so a surface that used to take the whole
+/// tree takes this instead and its `params.bands[i]` reads the stage.
+///
+/// The index is fixed at construction. Components rebuild it every render
+/// from the focus signal, so a closure built this render edits the stage
+/// that was focused when it was built — the one on screen.
+#[derive(Clone)]
+pub struct EqStageRef {
+    root: Arc<FtsEqParams>,
+    index: usize,
+}
+
+impl EqStageRef {
+    /// Stage `index` of `root` (clamped into the pool).
+    #[must_use]
+    pub fn new(root: Arc<FtsEqParams>, index: usize) -> Self {
+        Self {
+            root,
+            index: index.min(MAX_STAGES - 1),
+        }
+    }
+
+    /// The stage the editor is focused on (`fx.stack.focus`) — stage 0 where
+    /// no focus provider is mounted. Reads a context, so call it from a
+    /// component body like any hook.
+    #[must_use]
+    pub fn focused(root: Arc<FtsEqParams>) -> Self {
+        Self::new(root, crate::stack::host::use_focused_stage())
+    }
+
+    /// The whole tree — for the editor-level state (form, focus, stack).
+    #[must_use]
+    pub const fn root(&self) -> &Arc<FtsEqParams> {
+        &self.root
+    }
+
+    /// Which stage this is, 0-based.
+    #[must_use]
+    pub const fn index(&self) -> usize {
+        self.index
+    }
+}
+
+impl std::ops::Deref for EqStageRef {
+    type Target = EqStageParams;
+    fn deref(&self) -> &EqStageParams {
+        self.root.stage(self.index)
     }
 }
 

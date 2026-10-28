@@ -641,7 +641,9 @@ pub fn SpaceFace(
 ///
 /// Clicking a name does not load anything here. It leaves the path on the
 /// shared state and the plugin's worker does the decoding — see
-/// [`ReverbUiState::request_ir`](crate::reverb::ui::params::ReverbUiState::request_ir).
+/// [`ReverbUiState::load_ir`](crate::reverb::ui::params::ReverbUiState::load_ir).
+/// It loads into the focused stack stage (`fx.stack.focus`) — each stage is
+/// a complete reverb with its own impulse — and shows that stage's state.
 /// The body is native-only: it scans a directory. There is no filesystem to
 /// browse in a wasm build, so rather than gate the component away (and with it
 /// every call site inside an `rsx!`, which cannot take a `cfg`), the component
@@ -680,9 +682,11 @@ fn IrBrowser(ink: String, accent: String) -> Element {
 
         let state = ui.state.clone();
         let params = ui.params.clone();
-        let loading = state.ir_loading.load(std::sync::atomic::Ordering::Relaxed);
-        let loaded = state.ir_loaded.lock().clone();
-        let error = state.ir_error.lock().clone();
+        let stage = crate::stack::host::use_focused_stage()
+            .min(crate::reverb::ui::params::MAX_STAGES - 1);
+        let loading = state.ir_loading[stage].load(std::sync::atomic::Ordering::Relaxed);
+        let loaded = state.ir_loaded[stage].lock().clone();
+        let error = state.ir_error[stage].lock().clone();
         let list = entries.read().clone();
         let empty = list.is_empty();
 
@@ -751,8 +755,9 @@ fn IrBrowser(ink: String, accent: String) -> Element {
                                 let params = params.clone();
                                 let path = path;
                                 move |_| {
-                                    *params.ir_path.write() = path.display().to_string();
-                                    state.load_ir(path.clone());
+                                    *params.stage(stage).ir_path.write() =
+                                        path.display().to_string();
+                                    state.load_ir(stage, path.clone());
                                 }
                             },
                             "{name}"

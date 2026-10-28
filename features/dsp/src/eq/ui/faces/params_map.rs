@@ -10,10 +10,10 @@
 use nice_plug::prelude::ParamPtr;
 use plugin_core::prelude::Param;
 
-use crate::eq::ui::params::FtsEqParams;
+use crate::eq::ui::params::EqStageParams;
 
 /// Resolve `model` + panel control id to the parameter behind it.
-pub fn control_ptr(params: &FtsEqParams, model: i32, id: &str) -> Option<ParamPtr> {
+pub fn control_ptr(params: &EqStageParams, model: i32, id: &str) -> Option<ParamPtr> {
     Some(match (model, id) {
         // ── Pultec EQP-1A ────────────────────────────────────────────────
         (1, "eq_in") => params.pultec_eq_in.as_ptr(),

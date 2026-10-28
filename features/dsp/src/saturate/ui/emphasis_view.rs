@@ -11,9 +11,11 @@
 //! line and do nothing — a flat band costs nothing in DSP). Dragging a band
 //! off the graph resets it to 0 dB rather than deleting it; shapes coerce to
 //! Bell / Low Shelf / High Shelf, the only invertible ones.
+//!
+//! Each stack stage has its own emphasis pair; the view edits the focused
+//! stage's (`fx.stack.focus`).
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use crate::eq::ui::eq_graph::EqGraph;
 use crate::eq::ui::eq_graph_model::{EqBand, EqBandShape};
@@ -22,7 +24,7 @@ use fts_audio_ui::ParamHandle;
 use nice_plug::prelude::Param;
 use nice_plug_dioxus::prelude::{ParamContext, use_param_context};
 
-use crate::saturate::ui::params::SatParams;
+use crate::saturate::ui::params::SatStageParams;
 
 /// Coerce any graph shape onto the invertible three
 /// (`fx.sat.emphasis.mirror`).
@@ -51,8 +53,8 @@ const fn index_to_shape(i: i32) -> EqBandShape {
 }
 
 /// Write one graph band back into its params, as host gestures.
-fn commit_band(params: &Arc<SatParams>, ctx: &ParamContext, idx: usize, band: &EqBand) {
-    let Some(bp) = params.emph.get(idx) else {
+fn commit_band(stage: &SatStageParams, ctx: &ParamContext, idx: usize, band: &EqBand) {
+    let Some(bp) = stage.emph.get(idx) else {
         return;
     };
     let writes: [(nice_plug::prelude::ParamPtr, f32); 4] = [
@@ -94,6 +96,7 @@ pub fn EmphasisView(
         .get::<crate::saturate::ui::control_view::SatUi>()
         .expect("the editor was mounted without its SatUi");
     let params = ui.params.clone();
+    let focused = crate::stack::host::use_focused_stage();
     let ctx = use_param_context();
 
     // The graph's working copy, refreshed from params every render — the
@@ -101,7 +104,7 @@ pub fn EmphasisView(
     // callbacks (the eq plugin's own pattern).
     let bands_vec: Vec<EqBand> = (0..crate::saturate::emphasis::BANDS)
         .map(|i| {
-            let bp = &params.emph[i];
+            let bp = &params.stage(focused).emph[i];
             EqBand {
                 index: i,
                 used: true,
@@ -153,12 +156,12 @@ pub fn EmphasisView(
                 overlay_sel: overlay_off,
                 sample_rate: 48_000.0,
                 on_band_change: move |(idx, band): (usize, EqBand)| {
-                    commit_band(&params_change, &ctx_change, idx, &band);
+                    commit_band(params_change.stage(focused), &ctx_change, idx, &band);
                 },
                 // Dragging a band off the graph resets it to 0 dB — the six
                 // bands are fixed slots, not a growable list.
                 on_band_remove: move |idx: usize| {
-                    if let Some(bp) = params_remove.emph.get(idx) {
+                    if let Some(bp) = params_remove.stage(focused).emph.get(idx) {
                         let ptr = bp.gain_db.as_ptr();
                         let normalized = bp.gain_db.preview_normalized(0.0);
                         ctx_remove.begin_set_raw(ptr);

@@ -15,6 +15,8 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
+#[cfg(feature = "stack-host")]
+pub mod host;
 pub mod pool;
 pub mod verify;
 
@@ -202,6 +204,14 @@ pub enum SumMode {
     Power,
     /// Raw sum, no normalization.
     Raw,
+    /// Insert-style parallel: each lane adds its *difference from the dry
+    /// input*, and the dry is counted once — `dry + Σ gain·(lane − dry)`.
+    /// For stages that blend their own dry (a delay's or reverb's `mix`),
+    /// this is the hardware dual-effect law: two 30 % reverbs side by side
+    /// keep the dry at full level and add both wets. Appended (not exposed
+    /// as a plugin `summode` value); the signal native blocks use it for the
+    /// `Parallel` routing (`fx.stack.every-shell`).
+    DryOnce,
 }
 
 impl SumMode {
@@ -212,7 +222,7 @@ impl SumMode {
         match self {
             Self::Coherent => 1.0 / n,
             Self::Power => 1.0 / sqrt(n),
-            Self::Raw => 1.0,
+            Self::Raw | Self::DryOnce => 1.0,
         }
     }
 }
@@ -247,6 +257,9 @@ pub struct Stack<S> {
     max_block: usize,
     max_latency: usize,
     prepared: bool,
+    /// The block's input, kept for [`SumMode::DryOnce`]. Sized at prepare.
+    dry_l: Vec<f64>,
+    dry_r: Vec<f64>,
 }
 
 impl<S: Stage> Stack<S> {
@@ -259,6 +272,8 @@ impl<S: Stage> Stack<S> {
             max_block: 0,
             max_latency: 0,
             prepared: false,
+            dry_l: Vec::new(),
+            dry_r: Vec::new(),
         }
     }
 
@@ -276,6 +291,8 @@ impl<S: Stage> Stack<S> {
             lane.fade_r = vec![0.0; max_block];
             lane.comp.prepare(max_latency + 1);
         }
+        self.dry_l = vec![0.0; max_block];
+        self.dry_r = vec![0.0; max_block];
         self.update_alignment();
         self.prepared = true;
     }
@@ -334,17 +351,35 @@ impl<S: Stage> Stack<S> {
             lane.run(frames);
         }
 
-        l[..frames].iter_mut().for_each(|x| *x = 0.0);
-        r[..frames].iter_mut().for_each(|x| *x = 0.0);
+        let dry_once = self.sum_mode == SumMode::DryOnce && n_active > 0;
+        if dry_once {
+            // Lane alignment never delays the dry, so this law is only exact
+            // for zero-latency lanes — which every stage using it is.
+            self.dry_l[..frames].copy_from_slice(&l[..frames]);
+            self.dry_r[..frames].copy_from_slice(&r[..frames]);
+        } else {
+            l[..frames].iter_mut().for_each(|x| *x = 0.0);
+            r[..frames].iter_mut().for_each(|x| *x = 0.0);
+        }
         for (idx, lane) in self.lanes.iter().enumerate() {
             if idx < 64 && active & (1 << idx) == 0 {
                 continue;
             }
-            let g = lane.gain * norm;
+            // DryOnce trims the whole sum (dry included) below.
+            let g = if dry_once { lane.gain } else { lane.gain * norm };
             for i in 0..frames {
-                l[i] += lane.scratch_l[i] * g;
-                r[i] += lane.scratch_r[i] * g;
+                if dry_once {
+                    l[i] += (lane.scratch_l[i] - self.dry_l[i]) * g;
+                    r[i] += (lane.scratch_r[i] - self.dry_r[i]) * g;
+                } else {
+                    l[i] += lane.scratch_l[i] * g;
+                    r[i] += lane.scratch_r[i] * g;
+                }
             }
+        }
+        if dry_once && self.output_trim != 1.0 {
+            l[..frames].iter_mut().for_each(|x| *x *= self.output_trim);
+            r[..frames].iter_mut().for_each(|x| *x *= self.output_trim);
         }
     }
 

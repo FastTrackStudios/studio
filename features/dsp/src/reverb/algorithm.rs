@@ -1322,7 +1322,8 @@ pub fn tilt_midband_factor(low_decay_mult: f64, high_decay_mult: f64) -> f64 {
 /// *is* shorter — inverting that (as a first pass at these numbers did, by
 /// reading floors off what the analyzer could still fit) makes a room ring
 /// longer than a hall at the bottom of the range, which is nonsense and which
-/// `dual::tests::split_isolates_channels` rightly rejects.
+/// the dual-reverb split test (Magneto on one side, Hall on the other) rightly
+/// rejected.
 ///
 /// The spread matters beyond plausibility: callers use it to decide whether an
 /// engine suits a request. A preset named for a big space is often a short one

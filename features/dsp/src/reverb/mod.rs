@@ -38,7 +38,6 @@ pub mod algorithms;
 pub mod analysis;
 pub mod calibration;
 pub mod chain;
-pub mod dual;
 pub mod ir;
 pub mod primitives;
 
@@ -50,4 +49,3 @@ pub use algorithm::{
     ShimmerParams, SpringDwell, SpringParams, SwellType,
 };
 pub use chain::{InfiniteMode, ReverbChain};
-pub use dual::{DualReverb, DualRouting};

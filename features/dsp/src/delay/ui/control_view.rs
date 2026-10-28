@@ -4,6 +4,12 @@
 //! Same shell as the compressor, deliberately — the two plugins are the same
 //! instrument as far as your hands are concerned. Clicking the family you are
 //! already on cycles the spaces inside it.
+//!
+//! The plugin is a stack of delays (`fx.stack.every-shell`): the face edits
+//! the *focused* stage (`fx.stack.focus`), a plain rail click replaces that
+//! stage's space, Shift-click stacks the space serially after it and
+//! Ctrl/Cmd+Shift-click on a new parallel lane (`fx.stack.add`). The strip
+//! over the face shows the stack once there is more than one stage.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,6 +26,7 @@ use nice_plug_dioxus::prelude::use_param_context;
 use crate::delay::ui::faces::EchoFace;
 use crate::delay::ui::param_adapter::param_handle;
 use crate::delay::ui::params::{DelayParams, DelayUiState};
+use crate::stack::host::{FocusedStage, StackHandle, StackHost, StackStrip};
 
 pub use fts_audio_ui::shell::RAIL_W;
 
@@ -93,8 +100,23 @@ pub fn App() -> Element {
     app_tick += 1;
     let frame = *app_tick.read();
 
-    let profile_index = params.resolved_profile_index();
-    let profile = params.resolved_profile();
+    // Which stack stage the editor is on (`fx.stack.focus`) — provided to
+    // the whole tree; the strip and the rail's shift-click move it.
+    let focus = use_context_provider(|| Signal::new(FocusedStage(params.resolved_focused_stage())));
+    // A stage removed under the editor (host undo, automation of `use`)
+    // must not leave the face on a stage that is no longer in the stack.
+    let focused = {
+        let f = focus.read().0;
+        if params.stage(f).place.in_use.value() {
+            f
+        } else {
+            params.resolved_focused_stage()
+        }
+    };
+    let stage = params.stage(focused);
+
+    let profile_index = stage.resolved_profile_index();
+    let profile = stage.resolved_profile();
     let design = crate::delay::ui::faces::design_for(profile.id);
     let form = params.resolved_editor_form();
 
@@ -102,13 +124,14 @@ pub fn App() -> Element {
     // than an effect: the profile lives in a plugin param, not a signal, so
     // comparing here also catches the host automating it.
     #[expect(clippy::type_complexity)]
-    let last: std::rc::Rc<std::cell::Cell<Option<(usize, fts_audio_ui::EditorForm)>>> =
+    let last: std::rc::Rc<std::cell::Cell<Option<(usize, usize, fts_audio_ui::EditorForm)>>> =
         use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None)));
-    if last.get() != Some((profile_index, form)) {
-        last.set(Some((profile_index, form)));
-        // Keep the automatable index in step with the persisted id.
-        if params.profile.value().max(0) as usize != profile_index {
-            let ptr = params.profile.as_ptr();
+    if last.get() != Some((focused, profile_index, form)) {
+        last.set(Some((focused, profile_index, form)));
+        // Keep the focused stage's automatable index in step with its
+        // persisted id.
+        if stage.profile.value().max(0) as usize != profile_index {
+            let ptr = stage.profile.as_ptr();
             let count = crate::delay::profiles::PROFILES.len();
             let normalized = if count > 1 {
                 profile_index as f32 / (count - 1) as f32
@@ -127,7 +150,7 @@ pub fn App() -> Element {
         }
     }
 
-    // Every control the faces can bind, by name.
+    // Every control the faces can bind, by name — the focused stage's.
     // Zero is how the audio thread says "this host has no transport"; a note
     // value means nothing then, so it becomes `None` rather than 0 BPM.
     let tempo = {
@@ -139,21 +162,21 @@ pub fn App() -> Element {
     };
 
     let handles: HashMap<String, ParamHandle> = [
-        ("time_l", params.time_l.as_ptr()),
-        ("time_r", params.time_r.as_ptr()),
-        ("feedback", params.feedback.as_ptr()),
-        ("tone", params.tone.as_ptr()),
-        ("drive", params.drive.as_ptr()),
-        ("wow", params.wow.as_ptr()),
-        ("flutter", params.flutter.as_ptr()),
-        ("duck", params.duck.as_ptr()),
-        ("mix", params.mix.as_ptr()),
-        ("character_a", params.character_a.as_ptr()),
-        ("character_b", params.character_b.as_ptr()),
-        ("time_sync", params.time_sync.as_ptr()),
-        ("link", params.link.as_ptr()),
-        ("div_l", params.div_l.as_ptr()),
-        ("div_r", params.div_r.as_ptr()),
+        ("time_l", stage.time_l.as_ptr()),
+        ("time_r", stage.time_r.as_ptr()),
+        ("feedback", stage.feedback.as_ptr()),
+        ("tone", stage.tone.as_ptr()),
+        ("drive", stage.drive.as_ptr()),
+        ("wow", stage.wow.as_ptr()),
+        ("flutter", stage.flutter.as_ptr()),
+        ("duck", stage.duck.as_ptr()),
+        ("mix", stage.mix.as_ptr()),
+        ("character_a", stage.character_a.as_ptr()),
+        ("character_b", stage.character_b.as_ptr()),
+        ("time_sync", stage.time_sync.as_ptr()),
+        ("link", stage.link.as_ptr()),
+        ("div_l", stage.div_l.as_ptr()),
+        ("div_r", stage.div_r.as_ptr()),
     ]
     .into_iter()
     .map(|(name, ptr)| (name.to_string(), param_handle(ptr, ctx.clone())))
@@ -184,8 +207,13 @@ pub fn App() -> Element {
         })
         .collect();
 
-    let profile_handle = param_handle(params.profile.as_ptr(), ctx);
+    // The rail writes the focused stage's profile through the same
+    // host-gesture path as any knob, so a space change is automatable and
+    // undoable.
+    let profile_handle = param_handle(stage.profile.as_ptr(), ctx.clone());
+    let ctx_for_rail = ctx;
     let params_for_id = ui.params.clone();
+    let strip_host = StackHandle(ui.params.clone());
     let params_for_form = ui.params.clone();
     let profile_count = crate::delay::profiles::PROFILES.len();
     let accent = design.accent.to_string();
@@ -203,8 +231,21 @@ pub fn App() -> Element {
                 items,
                 selected: active_category,
                 accent: accent,
-                on_select: move |category: usize| {
+                on_select_mods: move |(category, mods): (usize, fts_audio_ui::shell::RailModifiers)| {
                     let index = crate::delay::profiles::rail_click_target(profile_index, category);
+                    if mods.shift() {
+                        // Shift-click STACKS the space instead of replacing
+                        // it: serial after the focused stage, or with
+                        // Ctrl/Cmd a new parallel lane (`fx.stack.add`).
+                        let new_lane = mods.ctrl() || mods.meta();
+                        let host: &dyn StackHost = params_for_id.as_ref();
+                        if let Some(lane) =
+                            crate::stack::host::add_target_lane(host, focus.peek().0, new_lane)
+                        {
+                            crate::stack::host::add_stage(host, &ctx_for_rail, focus, index, lane);
+                        }
+                        return;
+                    }
                     let normalized = if profile_count > 1 {
                         index as f32 / (profile_count - 1) as f32
                     } else {
@@ -213,7 +254,7 @@ pub fn App() -> Element {
                     profile_handle.begin_edit();
                     profile_handle.set_normalized(normalized);
                     profile_handle.end_edit();
-                    params_for_id.store_profile_id(index);
+                    params_for_id.stage(focus.peek().0).store_profile_id(index);
                 },
                 rail_footer: rsx! {
                     RailButton {
@@ -232,9 +273,11 @@ pub fn App() -> Element {
 
                 // Keyed list of one: swapping a face swaps a whole subtree,
                 // and blitz's mutator wants a stable, keyed node to land on.
+                // Keyed on the stage too, so refocusing onto another stage of
+                // the same space still rebinds every control.
                 for id in [profile.id] {
                     EchoFace {
-                        key: "{id}",
+                        key: "{focused}-{id}",
                         profile_id: id.to_string(),
                         handles: handles.clone(),
                         // The tempo comes from the audio thread — it is the
@@ -243,11 +286,16 @@ pub fn App() -> Element {
                         // the face cannot show a different number than the
                         // delay is actually running at.
                         tempo,
-                        resolved_ms: params.time_l_ms(tempo),
-                        resolved_r_ms: params.time_r_ms(tempo),
+                        resolved_ms: stage.time_l_ms(tempo),
+                        resolved_r_ms: stage.time_r_ms(tempo),
                         frame,
                     }
                 }
+
+                // The stack strip floats over the face. Mounted LAST: blitz
+                // hit-tests in document order, so an earlier sibling would
+                // lose its clicks to the face (`fx.stack.strip`).
+                StackStrip { host: strip_host, frame }
             }
             }
         }

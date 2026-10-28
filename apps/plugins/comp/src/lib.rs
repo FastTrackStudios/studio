@@ -220,6 +220,7 @@ impl FtsComp {
                     gain: db_to_gain_f64(f64::from(lp.gain_db.value())),
                     mute: lp.mute.value(),
                     solo: lp.solo.value(),
+                    pan: 0.0,
                 },
             );
         }

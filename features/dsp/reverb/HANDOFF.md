@@ -5,7 +5,7 @@ Authoritative behavior spec: `features/fx/reverb/spec/bigsky-mx-reference.md`.
 
 | Pass | Commit | Contents |
 |---|---|---|
-| A | `5b558cbf` | DualReverb routing, per-slot pan, wet tremolo, copy_params |
+| A | `5b558cbf` | DualReverb routing, per-slot pan, wet tremolo, copy_params (the dual routings now run on the FX stack in `builtin::NativeReverb`; `DualReverb` is gone, copy is `NativeReverb::copy_stage_params`) |
 | B | `ad19ba1a` | Impulse live params (decay/tail/attack/stretch/direction/feedback), ImpulseReshaper worker + deadlock fix |
 | C | `76e69343` | Shimmer dual shift + feedback modes, Magneto ping-pong, NonLinear chop/gate/late stage |
 | D | `d3e52929` | Cloud Ensemble (PLL string layer), Bloom Harmonics (POG), Chorale choir/voice/mod |

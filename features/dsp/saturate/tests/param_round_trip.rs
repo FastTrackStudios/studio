@@ -73,3 +73,108 @@ fn every_parameter_parses_the_string_it_prints() {
         broken.join("\n  ")
     );
 }
+
+// ── The stack layout (`fx.stack.params`) ──────────────────────────────────
+
+use dsp::saturate::ui::params::{MAX_STAGES, SatParams};
+
+/// Stage 1's ids before the stack existed, in declaration order, read off
+/// origin/main's `SatParams`. A saved single-circuit session must land in
+/// stage 1 bit-for-bit, so this list never changes.
+fn pre_stack_ids() -> Vec<String> {
+    let mut ids: Vec<String> = [
+        "profile", "drive", "q_point", "sag", "tilt", "mix", "output", "chara", "charb",
+    ]
+    .iter()
+    .map(ToString::to_string)
+    .collect();
+    for band in 1..=6 {
+        for id in ["eshape", "efreq", "egain", "eq"] {
+            ids.push(format!("{id}_{band}"));
+        }
+    }
+    ids
+}
+
+/// Stage 1's full id list: the pre-stack ids, then its stack placement.
+fn stage1_ids() -> Vec<String> {
+    let mut ids = pre_stack_ids();
+    ids.extend(["use", "on", "lane"].map(ToString::to_string));
+    ids
+}
+
+fn ids(params: &SatParams) -> Vec<String> {
+    params.param_map().into_iter().map(|(id, _, _)| id).collect()
+}
+
+#[test]
+fn stage_one_keeps_the_pre_stack_ids() {
+    let params = SatParams::default();
+    let all = ids(&params);
+    let stage1 = stage1_ids();
+    assert_eq!(all[..stage1.len()], stage1[..], "stage 1's ids moved");
+    // And nothing else in the tree is unprefixed under a pre-stack name.
+    for id in pre_stack_ids() {
+        assert_eq!(
+            all.iter().filter(|x| **x == id).count(),
+            1,
+            "{id} appears more than once"
+        );
+    }
+}
+
+#[test]
+fn stage_n_ids_are_prefixed_stage_one_ids() {
+    let params = SatParams::default();
+    let all = ids(&params);
+    let per = stage1_ids().len();
+    for n in 2..=MAX_STAGES {
+        let expected: Vec<String> = stage1_ids()
+            .iter()
+            .map(|id| format!("s{n}_{id}"))
+            .collect();
+        let start = per * (n - 1);
+        assert_eq!(all[start..start + per], expected[..], "stage {n}'s ids");
+    }
+}
+
+#[test]
+fn lane_and_stack_globals_are_present() {
+    let params = SatParams::default();
+    let all = ids(&params);
+    let mut expected: Vec<String> = Vec::new();
+    for lane in 1..=MAX_STAGES {
+        for id in ["lgain", "lmute", "lsolo"] {
+            expected.push(format!("{id}_{lane}"));
+        }
+    }
+    expected.extend(["summode", "stktrim"].map(ToString::to_string));
+    let start = stage1_ids().len() * MAX_STAGES;
+    assert_eq!(all[start..], expected[..]);
+
+    let unique: std::collections::BTreeSet<&String> = all.iter().collect();
+    assert_eq!(unique.len(), all.len(), "duplicate parameter ids");
+}
+
+#[test]
+fn persist_keys_keep_their_names() {
+    let params = SatParams::default();
+    params.stage(0).store_profile_id(0);
+    params.stage(1).store_profile_id(0);
+    *params.editor_form.write() = "responsive".to_string();
+    *params.focused_stage.write() = "0".to_string();
+    let keys: Vec<String> = params.serialize_fields().into_keys().collect();
+    for key in ["profile_id", "editor_form", "focused_stage", "s2_profile_id"] {
+        assert!(keys.iter().any(|k| k == key), "missing persist key {key}: {keys:?}");
+    }
+}
+
+#[test]
+fn a_default_tree_is_one_stage_on_lane_zero() {
+    use dsp::stack::host::StackHost;
+    let params = SatParams::default();
+    assert_eq!(params.stages_in_use(), vec![0]);
+    assert_eq!(params.stage(0).place.lane_index(), 0);
+    assert!(params.stage(0).place.stage_on.value());
+    assert_eq!(params.resolved_focused_stage(), 0);
+}

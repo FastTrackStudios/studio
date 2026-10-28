@@ -4,6 +4,14 @@
 //! Same shell as the compressor, deliberately — the two plugins are the same
 //! instrument as far as your hands are concerned. Clicking the family you are
 //! already on cycles the spaces inside it.
+//!
+//! The editor shows one stage of the stack at a time — the focused one
+//! (`fx.stack.focus`): the face, the EQ sidecar, the IR browser and the
+//! presets all edit that stage. The rail replaces the focused stage's space;
+//! Shift-click stacks the space after it on its lane, Ctrl/Cmd+Shift-click
+//! on a new parallel lane (`fx.stack.add`). The stack strip, shown once
+//! there is more than one stage, focuses, bypasses and removes stages
+//! (`fx.stack.strip`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,6 +28,7 @@ use nice_plug_dioxus::prelude::use_param_context;
 use crate::reverb::ui::faces::SpaceFace;
 use crate::reverb::ui::param_adapter::param_handle;
 use crate::reverb::ui::params::{ReverbParams, ReverbUiState};
+use crate::stack::host::{FocusedStage, StackHandle, StackHost, add_stage, add_target_lane};
 
 pub use fts_audio_ui::shell::RAIL_W;
 
@@ -127,8 +136,18 @@ pub fn App() -> Element {
     app_tick += 1;
     let frame = *app_tick.read();
 
-    let profile_index = params.resolved_profile_index();
-    let profile = params.resolved_profile();
+    // Which stage the editor is on (`fx.stack.focus`) — provided to every
+    // component below (faces, the IR browser, the EQ sidecar, the strip),
+    // restored from the session.
+    let focus = use_context_provider(|| Signal::new(FocusedStage(params.resolved_focused_stage())));
+    let focused = focus.read().0;
+    ui.state
+        .focused_stage
+        .store(focused, std::sync::atomic::Ordering::Relaxed);
+    let stage = params.stage(focused);
+
+    let profile_index = stage.resolved_profile_index();
+    let profile = stage.resolved_profile();
     let design = crate::reverb::ui::faces::design_for(profile.id);
     let form = params.resolved_editor_form();
 
@@ -156,18 +175,19 @@ pub fn App() -> Element {
         n.set(note);
     }
 
-    // Profile / form / EQ-strip change → ask the host to resize. A plain
-    // Cell rather than an effect: the profile lives in a plugin param, not a
-    // signal, so comparing here also catches the host automating it.
+    // Profile / form / EQ-strip / focus change → ask the host to resize. A
+    // plain Cell rather than an effect: the profile lives in a plugin param,
+    // not a signal, so comparing here also catches the host automating it.
     #[expect(clippy::type_complexity)]
     let last: std::rc::Rc<
-        std::cell::Cell<Option<(usize, fts_audio_ui::EditorForm, bool, bool)>>,
+        std::cell::Cell<Option<(usize, usize, fts_audio_ui::EditorForm, bool, bool)>>,
     > = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None)));
-    if last.get() != Some((profile_index, form, eq_open, preset_open)) {
-        last.set(Some((profile_index, form, eq_open, preset_open)));
-        // Keep the automatable index in step with the persisted id.
-        if params.profile.value().max(0) as usize != profile_index {
-            let ptr = params.profile.as_ptr();
+    if last.get() != Some((focused, profile_index, form, eq_open, preset_open)) {
+        last.set(Some((focused, profile_index, form, eq_open, preset_open)));
+        // Keep the focused stage's automatable index in step with its
+        // persisted id.
+        if stage.profile.value().max(0) as usize != profile_index {
+            let ptr = stage.profile.as_ptr();
             let count = crate::reverb::profiles::PROFILES.len();
             let normalized = if count > 1 {
                 profile_index as f32 / (count - 1) as f32
@@ -203,7 +223,7 @@ pub fn App() -> Element {
     };
     let face_w = (win_w - sidecar_w - preset_w).max(240.0);
 
-    // Every control the faces can bind, by name.
+    // Every control the faces can bind, by name — the focused stage's.
     // Zero is how the audio thread says "this host has no transport"; a note
     // value means nothing then, so it becomes `None` rather than 0 BPM.
     let tempo = {
@@ -215,26 +235,26 @@ pub fn App() -> Element {
     };
 
     let handles: HashMap<String, ParamHandle> = [
-        ("decay", params.decay.as_ptr()),
-        ("size", params.size.as_ptr()),
-        ("predelay", params.predelay.as_ptr()),
-        ("predelay_sync", params.predelay_sync.as_ptr()),
-        ("predelay_div", params.predelay_div.as_ptr()),
-        ("damping", params.damping.as_ptr()),
-        ("tone", params.tone.as_ptr()),
-        ("width", params.width.as_ptr()),
-        ("mix", params.mix.as_ptr()),
-        ("diffusion", params.diffusion.as_ptr()),
-        ("modulation", params.modulation.as_ptr()),
-        ("bass", params.bass.as_ptr()),
-        ("character_a", params.character_a.as_ptr()),
-        ("character_b", params.character_b.as_ptr()),
-        ("shimmer_interval", params.shimmer_interval.as_ptr()),
-        ("springs", params.springs.as_ptr()),
-        ("harmonics", params.harmonics.as_ptr()),
-        ("singers", params.singers.as_ptr()),
-        ("regen", params.regen.as_ptr()),
-        ("chop", params.chop.as_ptr()),
+        ("decay", stage.decay.as_ptr()),
+        ("size", stage.size.as_ptr()),
+        ("predelay", stage.predelay.as_ptr()),
+        ("predelay_sync", stage.predelay_sync.as_ptr()),
+        ("predelay_div", stage.predelay_div.as_ptr()),
+        ("damping", stage.damping.as_ptr()),
+        ("tone", stage.tone.as_ptr()),
+        ("width", stage.width.as_ptr()),
+        ("mix", stage.mix.as_ptr()),
+        ("diffusion", stage.diffusion.as_ptr()),
+        ("modulation", stage.modulation.as_ptr()),
+        ("bass", stage.bass.as_ptr()),
+        ("character_a", stage.character_a.as_ptr()),
+        ("character_b", stage.character_b.as_ptr()),
+        ("shimmer_interval", stage.shimmer_interval.as_ptr()),
+        ("springs", stage.springs.as_ptr()),
+        ("harmonics", stage.harmonics.as_ptr()),
+        ("singers", stage.singers.as_ptr()),
+        ("regen", stage.regen.as_ptr()),
+        ("chop", stage.chop.as_ptr()),
     ]
     .into_iter()
     .map(|(name, ptr)| (name.to_string(), param_handle(ptr, ctx.clone())))
@@ -265,8 +285,10 @@ pub fn App() -> Element {
         })
         .collect();
 
-    let profile_handle = param_handle(params.profile.as_ptr(), ctx);
+    let profile_handle = param_handle(stage.profile.as_ptr(), ctx.clone());
+    let ctx_for_rail = ctx;
     let params_for_id = ui.params.clone();
+    let strip_host = StackHandle(ui.params.clone());
     let params_for_form = ui.params.clone();
     let profile_count = crate::reverb::profiles::PROFILES.len();
     let accent = design.accent.to_string();
@@ -292,8 +314,20 @@ pub fn App() -> Element {
                 items,
                 selected: active_category,
                 accent: accent,
-                on_select: move |category: usize| {
+                on_select_mods: move |(category, mods): (usize, fts_audio_ui::shell::RailModifiers)| {
                     let index = crate::reverb::profiles::rail_click_target(profile_index, category);
+                    if mods.shift() {
+                        // Shift-click STACKS the space instead of replacing
+                        // it: serial after the focused stage, or with
+                        // Ctrl/Cmd on a new parallel lane (`fx.stack.add`).
+                        let new_lane = mods.ctrl() || mods.meta();
+                        if let Some(lane) =
+                            add_target_lane(params_for_id.as_ref(), focus.peek().0, new_lane)
+                        {
+                            add_stage(params_for_id.as_ref(), &ctx_for_rail, focus, index, lane);
+                        }
+                        return;
+                    }
                     let normalized = if profile_count > 1 {
                         index as f32 / (profile_count - 1) as f32
                     } else {
@@ -302,7 +336,8 @@ pub fn App() -> Element {
                     profile_handle.begin_edit();
                     profile_handle.set_normalized(normalized);
                     profile_handle.end_edit();
-                    params_for_id.store_profile_id(index);
+                    // What the session restores from.
+                    params_for_id.stage(focus.peek().0).store_profile_id(index);
                 },
                 rail_footer: rsx! {
                     // The layer's sidecar toggle (`fx.reverb.eq-display`):
@@ -371,7 +406,7 @@ pub fn App() -> Element {
                         ),
                         for id in [profile.id] {
                             FaceInBox {
-                                key: "{id}",
+                                key: "{focused}-{id}",
                                 profile_id: id.to_string(),
                                 handles: handles.clone(),
                                 // The tempo comes from the audio thread —
@@ -381,7 +416,7 @@ pub fn App() -> Element {
                                 // show a different number than the reverb
                                 // is running at.
                                 tempo,
-                                resolved_ms: params.predelay_ms(tempo),
+                                resolved_ms: stage.predelay_ms(tempo),
                                 frame,
                                 box_w: face_w,
                                 box_h: win_h,
@@ -396,9 +431,9 @@ pub fn App() -> Element {
                                  border-left:1px solid var(--border, rgba(148,163,184,0.3)); \
                                  background:var(--background);"
                             ),
-                            for key in ["eq-sidecar"] {
+                            for key in [focused] {
                                 crate::reverb::ui::eq_view::ReverbEqSidecar {
-                                    key: "{key}",
+                                    key: "eq-sidecar-{key}",
                                     frame,
                                 }
                             }
@@ -426,6 +461,11 @@ pub fn App() -> Element {
                     }
                     }
                 }
+
+                // The stack strip (`fx.stack.strip`) floats over the face.
+                // Mounted LAST: blitz hit-tests in document order, so an
+                // earlier sibling would lose its clicks to the face.
+                crate::stack::host::StackStrip { host: strip_host, frame }
             }
             }
         }

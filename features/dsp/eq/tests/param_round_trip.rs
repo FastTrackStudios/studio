@@ -73,3 +73,194 @@ fn every_parameter_parses_the_string_it_prints() {
         broken.join("\n  ")
     );
 }
+
+// ── The stack's param layout (`fx.stack.params`) ──────────────────────────
+//
+// The EQ became a stack of up to four complete EQs. Stage 1 is nested bare,
+// so a session saved by the single-EQ plugin has to land on it bit-for-bit:
+// the same ids, in the same order (VST3 persists by index), and the same
+// persist keys. These lists are the pre-stack plugin's, copied from
+// `origin/main` before the split — not derived from the code under test.
+
+/// The pre-stack top-level ids, in declaration order. The band block sits
+/// between `ssl_trim` and `auto_range`.
+const OLD_TOP_IDS_BEFORE_BANDS: &[&str] = &[
+    "model",
+    "output_gain",
+    "delta",
+    "db_range",
+    "gain_scale",
+    "auto_gain",
+    "character",
+    "output_pan",
+    "output_pan_mode",
+    "tune_peak_q_comp",
+    "neve_eq_in",
+    "neve_phase",
+    "neve_trim",
+    "neve_drive",
+    "neve_hpf",
+    "neve_low_freq",
+    "neve_low_gain",
+    "neve_mid_freq",
+    "neve_mid_gain",
+    "neve_high_gain",
+    "pultec_eq_in",
+    "pultec_low_freq",
+    "pultec_low_boost",
+    "pultec_low_atten",
+    "pultec_high_boost_freq",
+    "pultec_high_boost",
+    "pultec_bandwidth",
+    "pultec_high_atten_freq",
+    "pultec_high_atten",
+    "pultec_drive",
+    "pultec_trim",
+    "api_eq_in",
+    "api_low_freq",
+    "api_low_gain",
+    "api_mid_freq",
+    "api_mid_gain",
+    "api_high_freq",
+    "api_high_gain",
+    "api_drive",
+    "api_trim",
+    "ssl_eq_in",
+    "ssl_hpf",
+    "ssl_lpf",
+    "ssl_lf_freq",
+    "ssl_lf_gain",
+    "ssl_lmf_freq",
+    "ssl_lmf_gain",
+    "ssl_hmf_freq",
+    "ssl_hmf_gain",
+    "ssl_hf_freq",
+    "ssl_hf_gain",
+    "ssl_drive",
+    "ssl_trim",
+];
+const OLD_TOP_IDS_AFTER_BANDS: &[&str] = &["auto_range"];
+
+/// The pre-stack per-band ids, suffixed `_1`…`_24`.
+const OLD_BAND_IDS: &[&str] = &[
+    "on",
+    "type",
+    "freq",
+    "gain",
+    "q",
+    "slope",
+    "focus",
+    "dynrange",
+    "dynthr",
+    "dynatk",
+    "dynrel",
+    "dynauto",
+    "spectral",
+    "place",
+    "specdens",
+    "spectilt",
+    "scfilt",
+    "sclo",
+    "schi",
+    "dynrelmode",
+    "dynkey",
+];
+const OLD_BANDS: usize = 24;
+
+/// The stack placement each stage appends (`fx.stack.params`).
+const PLACEMENT_IDS: &[&str] = &["use", "on", "lane"];
+
+/// Stage 1's ids in param-map order: the old plugin's, then the placement.
+fn stage1_ids() -> Vec<String> {
+    let mut ids: Vec<String> = OLD_TOP_IDS_BEFORE_BANDS
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    for band in 1..=OLD_BANDS {
+        ids.extend(OLD_BAND_IDS.iter().map(|id| format!("{id}_{band}")));
+    }
+    ids.extend(OLD_TOP_IDS_AFTER_BANDS.iter().map(ToString::to_string));
+    ids.extend(PLACEMENT_IDS.iter().map(ToString::to_string));
+    ids
+}
+
+fn all_ids() -> Vec<String> {
+    let params = dsp::eq::ui::params::FtsEqParams::default();
+    params.param_map().into_iter().map(|(id, _, _)| id).collect()
+}
+
+#[test]
+fn stage_one_keeps_the_pre_stack_ids_in_order() {
+    let ids = all_ids();
+    let want = stage1_ids();
+    assert_eq!(
+        &ids[..want.len()],
+        &want[..],
+        "stage 1 must lead the param map with exactly the pre-stack ids"
+    );
+}
+
+#[test]
+fn stage_n_is_stage_one_prefixed() {
+    use dsp::eq::ui::params::MAX_STAGES;
+    let ids = all_ids();
+    let per_stage = stage1_ids();
+    for n in 2..=MAX_STAGES {
+        let start = (n - 1) * per_stage.len();
+        let want: Vec<String> = per_stage.iter().map(|id| format!("s{n}_{id}")).collect();
+        assert_eq!(&ids[start..start + want.len()], &want[..], "stage {n}");
+    }
+}
+
+#[test]
+fn lane_and_stack_globals_follow_the_stages() {
+    use dsp::eq::ui::params::MAX_STAGES;
+    let ids = all_ids();
+    let tail = &ids[MAX_STAGES * stage1_ids().len()..];
+    let mut want: Vec<String> = Vec::new();
+    for lane in 1..=MAX_STAGES {
+        want.extend(["lgain", "lmute", "lsolo"].map(|id| format!("{id}_{lane}")));
+    }
+    want.push("summode".to_string());
+    want.push("stktrim".to_string());
+    assert_eq!(tail, &want[..]);
+
+    let mut unique = ids.clone();
+    unique.sort();
+    unique.dedup();
+    assert_eq!(unique.len(), ids.len(), "duplicate param ids");
+}
+
+#[test]
+fn stage_one_keeps_the_pre_stack_persist_keys() {
+    use dsp::eq::ui::params::MAX_STAGES;
+    let params = dsp::eq::ui::params::FtsEqParams::default();
+    let keys: Vec<String> = params.serialize_fields().into_keys().collect();
+    let mut want = vec!["model_id".to_string(), "editor_form".to_string()];
+    for band in 1..=OLD_BANDS {
+        want.push(format!("name_{band}"));
+        want.push(format!("notes_{band}"));
+    }
+    for key in &want {
+        assert!(keys.contains(key), "persist key {key} missing");
+    }
+    for n in 2..=MAX_STAGES {
+        assert!(keys.contains(&format!("s{n}_model_id")), "stage {n} model_id");
+        assert!(keys.contains(&format!("s{n}_name_1")), "stage {n} band names");
+    }
+    assert!(keys.contains(&"focused_stage".to_string()));
+}
+
+#[test]
+fn default_stack_is_one_stage_on_lane_zero() {
+    use dsp::eq::ui::params::MAX_STAGES;
+    use dsp::stack::host::StackHost;
+    let params = dsp::eq::ui::params::FtsEqParams::default();
+    assert_eq!(params.stages_in_use(), vec![0]);
+    assert_eq!(params.placement(0).lane_index(), 0);
+    assert!(params.placement(0).stage_on.value());
+    for i in 1..MAX_STAGES {
+        assert!(!params.placement(i).in_use.value(), "stage {} in use", i + 1);
+    }
+    assert_eq!(params.resolved_focused_stage(), 0);
+}

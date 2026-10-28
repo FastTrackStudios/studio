@@ -10,7 +10,7 @@
 //! (`fx.stack.process`).
 //!
 //! Semantics match [`crate::stack::Stack`]: within a lane, stages run serially in
-//! pool order; lanes run the same input in parallel and are summed by the
+//! `order` (pool order by default, [`StagePool::set_order`]); lanes run the same input in parallel and are summed by the
 //! [`SumMode`] law over the active lanes; short lanes are delay-compensated
 //! to the longest (`fx.stack.latency`); stage enable/disable crossfades
 //! (`FADE_SAMPLES`).
@@ -27,6 +27,11 @@ pub struct LaneCtl {
     pub gain: f64,
     pub mute: bool,
     pub solo: bool,
+    /// Lane placement, −1 (left) … 0 (as is) … +1 (right). At 0 the lane's
+    /// stereo output passes untouched; off centre the lane is summed to mono
+    /// and placed with a linear law, so ±1 is total — one lane per side is
+    /// the dual-effect `Split` routing (`fx.stack.every-shell`).
+    pub pan: f64,
 }
 
 impl Default for LaneCtl {
@@ -35,7 +40,20 @@ impl Default for LaneCtl {
             gain: 1.0,
             mute: false,
             solo: false,
+            pan: 0.0,
         }
+    }
+}
+
+impl LaneCtl {
+    /// The (left, right) gains a mono-summed lane is placed with, or `None`
+    /// for a centred lane (stereo kept).
+    fn pan_gains(&self) -> Option<(f64, f64)> {
+        if self.pan == 0.0 {
+            return None;
+        }
+        let p = self.pan.clamp(-1.0, 1.0);
+        Some(((1.0 - p).min(1.0), (1.0 + p).min(1.0)))
     }
 }
 
@@ -47,6 +65,8 @@ struct PoolSlot<S> {
     /// Stage bypass (present in the topology, crossfaded to identity).
     enabled: bool,
     lane: usize,
+    /// Serial position within the lane; ties fall back to pool order.
+    order: usize,
     /// 0..=1 bypass crossfade (1 = fully processing).
     fade: f64,
 }
@@ -114,6 +134,12 @@ pub struct StagePool<S> {
     /// Pre-stage snapshot for the bypass crossfade.
     fade_l: Vec<f64>,
     fade_r: Vec<f64>,
+    /// The block's input, kept for [`SumMode::DryOnce`].
+    dry_l: Vec<f64>,
+    dry_r: Vec<f64>,
+    /// Slot indices in run order (`order`, then pool index). Sized at
+    /// construction; re-sorted in place when an order changes.
+    run: Vec<usize>,
     max_block: usize,
     prepared: bool,
 }
@@ -132,6 +158,7 @@ impl<S: Stage> StagePool<S> {
                 in_use: i == 0,
                 enabled: true,
                 lane: 0,
+                order: i,
                 fade: 1.0,
             })
             .collect();
@@ -149,6 +176,9 @@ impl<S: Stage> StagePool<S> {
             output_trim: 1.0,
             fade_l: Vec::new(),
             fade_r: Vec::new(),
+            dry_l: Vec::new(),
+            dry_r: Vec::new(),
+            run: (0..n).collect(),
             max_block: 0,
             prepared: false,
         }
@@ -175,6 +205,8 @@ impl<S: Stage> StagePool<S> {
         }
         self.fade_l = vec![0.0; max_block];
         self.fade_r = vec![0.0; max_block];
+        self.dry_l = vec![0.0; max_block];
+        self.dry_r = vec![0.0; max_block];
         self.update_alignment();
         self.prepared = true;
     }
@@ -204,6 +236,22 @@ impl<S: Stage> StagePool<S> {
             slot.enabled = enabled;
             slot.lane = lane.min(n - 1);
         }
+    }
+
+    /// Set slot `i`'s serial position within its lane: lower runs first,
+    /// ties in pool order. Every slot starts at its own index, so a pool
+    /// nobody orders runs in pool order (`fx.stack.params` — `order`).
+    /// Allocation-free; re-sorts only on a change.
+    pub fn set_order(&mut self, i: usize, order: usize) {
+        let Some(slot) = self.slots.get_mut(i) else {
+            return;
+        };
+        if slot.order == order {
+            return;
+        }
+        slot.order = order;
+        let slots = &self.slots;
+        self.run.sort_unstable_by_key(|&k| (slots[k].order, k));
     }
 
     /// Set lane `l`'s mix controls. Call every block from the param sync.
@@ -295,7 +343,8 @@ impl<S: Stage> StagePool<S> {
                 lane.scratch_l[..frames].copy_from_slice(&l[..frames]);
                 lane.scratch_r[..frames].copy_from_slice(&r[..frames]);
             }
-            for si in 0..self.slots.len() {
+            for ri in 0..self.run.len() {
+                let si = self.run[ri];
                 if !(self.slots[si].in_use && self.slots[si].lane == lane_idx) {
                     continue;
                 }
@@ -332,19 +381,45 @@ impl<S: Stage> StagePool<S> {
                 .process(&mut lane.scratch_l[..frames], &mut lane.scratch_r[..frames]);
         }
 
-        // Sum the audible lanes.
-        l[..frames].iter_mut().for_each(|x| *x = 0.0);
-        r[..frames].iter_mut().for_each(|x| *x = 0.0);
+        // Sum the audible lanes. DryOnce keeps the input and adds each
+        // lane's difference from it, trimming the whole sum after.
+        let dry_once = self.sum_mode == SumMode::DryOnce && n_active > 0;
+        if dry_once {
+            self.dry_l[..frames].copy_from_slice(&l[..frames]);
+            self.dry_r[..frames].copy_from_slice(&r[..frames]);
+        } else {
+            l[..frames].iter_mut().for_each(|x| *x = 0.0);
+            r[..frames].iter_mut().for_each(|x| *x = 0.0);
+        }
         for lane_idx in 0..n_lanes {
             if !self.lane_active(lane_idx) {
                 continue;
             }
             let lane = &self.lanes[lane_idx];
-            let g = lane.ctl.gain * norm;
+            let g = if dry_once {
+                lane.ctl.gain
+            } else {
+                lane.ctl.gain * norm
+            };
+            let pan = lane.ctl.pan_gains();
             for i in 0..frames {
-                l[i] += lane.scratch_l[i] * g;
-                r[i] += lane.scratch_r[i] * g;
+                let (mut ol, mut or) = (lane.scratch_l[i], lane.scratch_r[i]);
+                if let Some((gl, gr)) = pan {
+                    let mono = (ol + or) * 0.5;
+                    (ol, or) = (mono * gl, mono * gr);
+                }
+                if dry_once {
+                    ol -= self.dry_l[i];
+                    or -= self.dry_r[i];
+                }
+                l[i] += ol * g;
+                r[i] += or * g;
             }
+        }
+        if dry_once && self.output_trim != 1.0 {
+            let t = self.output_trim;
+            l[..frames].iter_mut().for_each(|x| *x *= t);
+            r[..frames].iter_mut().for_each(|x| *x *= t);
         }
     }
 
@@ -357,5 +432,105 @@ impl<S: Stage> StagePool<S> {
         for lane in &mut self.lanes {
             lane.delay.reset();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A stage that multiplies by a gain then adds an offset — order-sensitive.
+    struct Affine {
+        gain: f64,
+        offset: f64,
+    }
+
+    impl Stage for Affine {
+        fn process(&mut self, l: &mut [f64], r: &mut [f64]) {
+            for x in l.iter_mut().chain(r.iter_mut()) {
+                *x = x.mul_add(self.gain, self.offset);
+            }
+        }
+    }
+
+    fn pool(stages: Vec<Affine>) -> StagePool<Affine> {
+        let mut p = StagePool::new(stages);
+        p.prepare(16, 0);
+        p
+    }
+
+    fn run(p: &mut StagePool<Affine>, l: f64, r: f64) -> (f64, f64) {
+        let (mut bl, mut br) = ([l; 4], [r; 4]);
+        p.process(&mut bl, &mut br);
+        (bl[3], br[3])
+    }
+
+    fn two() -> Vec<Affine> {
+        vec![
+            Affine {
+                gain: 2.0,
+                offset: 0.0,
+            },
+            Affine {
+                gain: 1.0,
+                offset: 1.0,
+            },
+        ]
+    }
+
+    #[test]
+    fn single_stage_is_the_stage() {
+        let mut p = pool(two());
+        assert_eq!(run(&mut p, 0.25, -0.5), (0.5, -1.0));
+    }
+
+    #[test]
+    fn order_swaps_a_lane_serial_chain() {
+        let mut p = pool(two());
+        p.set_slot(1, true, true, 0);
+        // Pool order: ×2 then +1.
+        assert_eq!(run(&mut p, 1.0, 1.0), (3.0, 3.0));
+        // Slot 1 first: +1 then ×2.
+        p.set_order(0, 1);
+        p.set_order(1, 0);
+        assert_eq!(run(&mut p, 1.0, 1.0), (4.0, 4.0));
+    }
+
+    #[test]
+    fn pan_places_each_lane_mono_on_one_side() {
+        let mut p = pool(two());
+        p.set_slot(1, true, true, 1);
+        p.sum_mode = SumMode::Raw;
+        p.set_lane(
+            0,
+            LaneCtl {
+                pan: -1.0,
+                ..LaneCtl::default()
+            },
+        );
+        p.set_lane(
+            1,
+            LaneCtl {
+                pan: 1.0,
+                ..LaneCtl::default()
+            },
+        );
+        // Lane 0 (×2) mono → left only; lane 1 (+1) mono → right only.
+        let (l, r) = run(&mut p, 1.0, 3.0);
+        assert_eq!(l, (2.0 + 6.0) * 0.5);
+        assert_eq!(r, (2.0 + 4.0) * 0.5);
+    }
+
+    #[test]
+    fn dry_once_counts_the_dry_once() {
+        let mut p = pool(two());
+        p.set_slot(1, true, true, 1);
+        p.sum_mode = SumMode::DryOnce;
+        // a + b − dry, with a = 2x, b = x + 1.
+        let x = 0.75;
+        assert_eq!(run(&mut p, x, x).0, 2.0 * x + (x + 1.0) - x);
+        // One lane: the lane, untouched.
+        p.set_slot(1, false, true, 1);
+        assert_eq!(run(&mut p, x, x).0, 2.0 * x);
     }
 }

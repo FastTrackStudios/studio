@@ -153,7 +153,8 @@ impl GuiContextInner for StandaloneGuiContext {
 fn animate_demo_bands(ui: Arc<EqUiState>) {
     use std::time::Instant;
     let start = Instant::now();
-    let params = &ui.params;
+    // The demo animates stage 1 — the plain EQ the standalone opens on.
+    let params = ui.params.stage(0);
 
     let shapes: [(usize, i32); 4] = [(0, 0), (1, 1), (2, 0), (3, 3)];
     for &(idx, shape) in &shapes {

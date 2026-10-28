@@ -67,7 +67,7 @@ pub fn EqRackFace(
     let shared = use_context::<SharedState>();
     let ui = shared.get::<EqUiState>().expect("EqUiState missing");
     let ctx = use_param_context();
-    let params = ui.params.clone();
+    let params = crate::eq::ui::params::EqStageRef::focused(ui.params.clone());
     let scale = panel_scale(design.w, design.h, RAIL_W);
     // The console's LED ladders read the plugin's own metering.
     let in_db = ui.input_peak_db.load(std::sync::atomic::Ordering::Relaxed);
@@ -369,7 +369,7 @@ fn CompactEqRack(design: RackDesign, model: i32, avail_h: f64) -> Element {
     let shared = use_context::<SharedState>();
     let ui = shared.get::<EqUiState>().expect("EqUiState missing");
     let ctx = use_param_context();
-    let params = ui.params.clone();
+    let params = crate::eq::ui::params::EqStageRef::focused(ui.params.clone());
 
     let handle = move |id: &str| -> ParamHandle {
         // An empty id is a control the panel has and the DSP does not yet: it
