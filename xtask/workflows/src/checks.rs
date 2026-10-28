@@ -29,16 +29,25 @@
 //!                  branch's head (for a push the hook couldn't vouch for).
 //! ```
 //!
-//! No nightly, no schedule. RUNNERS: GitHub's free hosted runners only (the
-//! repo is public), with rust-cache that main saves; macos-latest for the
-//! release tooling on macOS. No WarpBuild (2026-10-24).
+//! No nightly, no schedule. RUNNERS: the builds run on THEBATTLESHIP's
+//! `studio-main` pool (see [`POOL`]), whose target dirs stay warm from one
+//! merge to the next; everything that builds nothing (or only the small
+//! workflows crate) runs on GitHub's free hosted runners (the repo is
+//! public). No rust-cache: the pool's cache is its own disk, and main's
+//! `deps-cache` entries are the only thing CI writes to the Actions cache.
 //!
 //! ```text
-//!   ubuntu-latest  plan, gates, check (`cargo check --workspace` + advisory
-//!                  clippy), wasm, tests (the core test set), deps-cache and
-//!                  the `CI passed` aggregator
+//!   studio-main    rail plan, check (`cargo check --workspace`), wasm, tests
+//!                  (the core test set), lint (advisory clippy)
+//!   ubuntu-latest  plan, gates, deps-cache and the `CI passed` aggregator
 //!   macos-latest   release tooling (the sandbox, macOS's own tools)
 //! ```
+//!
+//! One job per BUILD KIND, as Task's lint/tests/wasm: check mode, clippy's
+//! check mode, test codegen and wasm32 share no workspace units, so each has
+//! its own target dir and they build side by side. Clippy used to run after
+//! the check in `Check` (one target dir, 4-6 minutes on every run's critical
+//! path); in its own `Lint` job it holds up nothing.
 //!
 //! No tailwind step: every sheet a crate `include_str!`s is committed, and
 //! session-web's build.rs writes a placeholder for its generated one (dx
@@ -51,7 +60,7 @@
 //! (.cargo/ci-config.toml) and incremental is off.
 
 use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
-use crate::steps::{Tools, cargo_deps_save, checkout, hosted_setup, rust_cache};
+use crate::steps::{Tools, cargo_deps_restore, cargo_deps_save, checkout, hosted_setup};
 use anyhow::Result;
 
 pub fn workflow() -> Result<Workflow> {
@@ -85,6 +94,7 @@ workflow_dispatch:
     .job("deps-cache", deps_cache())
     .job("gates", gates())
     .job("check", check())
+    .job("lint", lint())
     .job("wasm", wasm())
     .job("tests", tests())
     .job("release-macos", release_macos())
@@ -248,7 +258,9 @@ const NOT_CANCELLED: &str = "${{ !cancelled() }}";
 /// lockfile, fmt, the generated workflows + actionlint, change files (a
 /// hotfix PR), the rail config. `just ci-local` runs the same
 /// set before every push; pr.yml re-checks the compile-nothing half.
-/// Compiles only the workflows crate.
+/// Compiles only the workflows crate (four dependencies, seconds cold), so
+/// no rust-cache: it held one ~480 MB entry per lockfile, half of the 10 GB
+/// Actions cache budget. Main's downloaded dependencies are enough.
 fn gates() -> Job {
     hosted_cargo_job(Job::new(UBUNTU).name("Gates").needs(&["plan"]).timeout(30))
         .step(checkout())
@@ -264,7 +276,7 @@ fn gates() -> Job {
                 ..Tools::default()
             },
         ))
-        .steps(rust_cache("gates"))
+        .step(cargo_deps_restore())
         .step(Step::run("Manifests + lockfile", LOCKFILE))
         // Each extra version of a crate is another compile: fail when Cargo.lock
         // gains one (.config/duplicate-deps.toml lists the ones we carry).
@@ -385,7 +397,7 @@ cargo rail change check --since \"${BASE_SHA}\"
 const POOL: RunsOn = RunsOn::Labels(&["self-hosted", "studio-main"]);
 
 /// The pool's shared cache holds one target dir per build kind (check mode,
-/// test codegen and wasm32 share no artifacts), so the three jobs of a run
+/// clippy, test codegen and wasm32 share no artifacts), so the jobs of a run
 /// build side by side, each warm whichever instance claims it; two jobs of
 /// the same kind wait on cargo's own lock. The pool's total is capped at
 /// 200 GB: over it, this kind's dir is emptied (its next build is cold).
@@ -473,28 +485,37 @@ fn in_shell(script: &str) -> String {
     )
 }
 
-/// REQUIRED on full runs: `cargo check --workspace`. Clippy reports here
-/// too, advisory: the lint debt is being paid down crate by crate, so it
-/// reports (grouped by lint and crate, .github/scripts/clippy-report.py)
-/// without failing. Same check-mode units, so same job and target dir.
+/// When a run checks the workspace at all ([`check`] and [`lint`]).
+const CHECK_PLANNED: &str =
+    "${{ needs.rail.outputs.check == 'true' || needs.rail.outputs.cargo == 'true' }}";
+
+/// REQUIRED on full runs: `cargo check --workspace`.
 fn check() -> Job {
     pool_job("Check", "check", 90)
-    .cond("${{ needs.rail.outputs.check == 'true' || needs.rail.outputs.cargo == 'true' }}")
-    .step(
-        Step::run("cargo check --workspace", &in_shell(CHECK))
-            .env("RECORD", "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"),
-    )
-    .step(mark_green("check"))
-        .step(
-            Step::run(
-                "cargo clippy (advisory, does not block)",
-                &in_shell(
-                    "cargo clippy --workspace --no-deps --all-targets --keep-going \\\n  --message-format=json -- --cap-lints warn \\\n  | python3 .github/scripts/clippy-report.py\n",
-                ),
-            )
-            .cond(NOT_CANCELLED)
-            .continue_on_error(),
+        .cond(CHECK_PLANNED)
+        .step(Step::run("cargo check --workspace", &in_shell(CHECK)).env(
+            "RECORD",
+            "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}",
+        ))
+        .step(mark_green("check"))
+}
+
+/// ADVISORY: clippy over the workspace. The lint debt is being paid down
+/// crate by crate, so it reports (grouped by lint and crate,
+/// .github/scripts/clippy-report.py) without failing, and `CI passed` does
+/// not wait for it. Its own job and target dir: clippy's units for workspace
+/// crates are not `cargo check`'s, so sharing Check's dir saved nothing and
+/// put it after the check on the run's critical path.
+fn lint() -> Job {
+    pool_job("Lint", "lint", 90).cond(CHECK_PLANNED).step(
+        Step::run(
+            "cargo clippy (advisory, does not block)",
+            &in_shell(
+                "cargo clippy --workspace --no-deps --all-targets --keep-going \\\n  --message-format=json -- --cap-lints warn \\\n  | python3 .github/scripts/clippy-report.py\n",
+            ),
         )
+        .continue_on_error(),
+    )
 }
 
 /// The workspace check, recording rail's evidence on a push to main: the
@@ -676,8 +697,8 @@ exit "$rc"
 /// green on the commit they release (scripts/release.sh `BUILD_CHECK`). A
 /// skipped required check counts as passing, so this never skips: it fails
 /// unless the plan, the gates, check, wasm, tests and the macOS
-/// release-tooling run all succeeded. The advisory work (clippy) cannot
-/// fail it.
+/// release-tooling run all succeeded. The advisory work (clippy, `Lint`)
+/// is not among its needs: it can neither fail nor delay it.
 ///
 /// The escape hatch for a push the pre-push hook couldn't vouch for (a
 /// contributor without the hook, a dirty tree, `SKIP=local-ci`): a green

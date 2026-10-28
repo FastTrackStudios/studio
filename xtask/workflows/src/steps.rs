@@ -327,39 +327,6 @@ cp .cargo/ci-config.toml ../.cargo/config.toml
     )
 }
 
-/// Swatinem/rust-cache with ONE shared key per build kind, saved by main
-/// only: PRs restore main's entry and never write their own, so a cache
-/// budget holds one set per kind instead of being evicted by every open PR. `cache-on-failure`: the cache holds compiled dependencies,
-/// not results.
-///
-/// No `key:` — rust-cache already fingerprints the active rustc
-/// (`rustc -vV`, i.e. the [`RUST`] pin) and the lockfiles/manifests. (It
-/// used to be `hashFiles('flake.lock')`, because the toolchain was nix's and
-/// not the rustc on the image's PATH that rust-cache fingerprints.)
-///
-/// Followed by Dioxus's prune-cargo-target (.github/actions): it marks every
-/// fingerprint right after the restore and, at the end of a successful job,
-/// deletes every unit the build did not read, so the entry main saves holds
-/// only what this build used instead of piling up the `-<hash>` units of
-/// every past Cargo.lock.
-pub fn rust_cache(shared_key: &str) -> [Step; 2] {
-    [
-        Step::uses(
-            &format!("Rust cache ({shared_key}, main saves)"),
-            "Swatinem/rust-cache@v2",
-        )
-        .with("shared-key", shared_key)
-        .with("save-if", "${{ github.ref == 'refs/heads/main' }}")
-        .with("cache-on-failure", true)
-        .with("cache-bin", false),
-        Step::uses(
-            "Prune unused units before the cache is saved",
-            "./.github/actions/prune-cargo-target",
-        )
-        .with("target-dir", "target"),
-    ]
-}
-
 /// What [`cargo_deps_restore`] / [`cargo_deps_save`] keep: cargo's
 /// downloaded registry and git dependencies (not anything built).
 const CARGO_DEPS_PATHS: &str = "\
