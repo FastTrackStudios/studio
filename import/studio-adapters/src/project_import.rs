@@ -272,19 +272,26 @@ fn emit_rpp_to_context(
 fn import_ableton(path: &str) -> Result<String, Box<dyn std::error::Error>> {
     let set = ableton::read_live_set(path)?;
 
+    // Live keeps every position in beats; REAPER keeps seconds. Everything
+    // placed on the timeline goes through the set's tempo map.
+    let map = ableton::tempo::TempoMap::of(&set);
+
+    // The tempo it starts at: its automation's, when it has any (the
+    // set's own `Manual` tempo is then only where the knob was left).
     let mut builder = ReaperProjectBuilder::new();
     builder = builder.tempo_with_time_sig(
-        set.tempo,
+        map.bpm_at(0.0),
         set.time_signature.numerator as i32,
         set.time_signature.denominator as i32,
     );
 
-    // Tempo automation
+    // Tempo automation. Live parks a breakpoint far before the
+    // arrangement; what it says at 0 is the map's first point.
     if !set.tempo_automation.is_empty() {
         builder = builder.tempo_envelope(|env| {
-            let mut env = env;
-            for point in &set.tempo_automation {
-                env = env.point(point.time, point.value);
+            let mut env = env.point(0.0, map.bpm_at(0.0));
+            for point in set.tempo_automation.iter().filter(|p| p.time > 0.0) {
+                env = env.point(map.seconds_at(point.time), point.value);
             }
             env
         });
@@ -292,19 +299,21 @@ fn import_ableton(path: &str) -> Result<String, Box<dyn std::error::Error>> {
 
     // Markers (locators)
     for (i, loc) in set.locators.iter().enumerate() {
-        builder = builder.marker(i as i32 + 1, loc.time, &loc.name);
+        builder = builder.marker(i as i32 + 1, map.seconds_at(loc.time), &loc.name);
     }
 
     // Audio tracks
     for track in &set.audio_tracks {
         builder = builder.track(&track.common.effective_name, |t| {
-            build_audio_track(t, track)
+            build_audio_track(t, track, &map)
         });
     }
 
     // MIDI tracks
     for track in &set.midi_tracks {
-        builder = builder.track(&track.common.effective_name, |t| build_midi_track(t, track));
+        builder = builder.track(&track.common.effective_name, |t| {
+            build_midi_track(t, track, &map)
+        });
     }
 
     // Return tracks → REAPER tracks
@@ -388,19 +397,24 @@ fn apply_common_track_props(t: TrackBuilder, common: &ableton::TrackCommon) -> T
 }
 
 #[cfg(feature = "ableton")]
-fn build_audio_track(t: TrackBuilder, track: &ableton::AudioTrack) -> TrackBuilder {
+fn build_audio_track(
+    t: TrackBuilder,
+    track: &ableton::AudioTrack,
+    map: &ableton::tempo::TempoMap,
+) -> TrackBuilder {
     let mut t = apply_common_track_props(t, &track.common);
 
-    // Arrangement clips → items
+    // Arrangement clips → items, placed in seconds.
     for clip in &track.arrangement_clips {
-        let position = clip.common.time;
-        let length = clip.common.current_end - clip.common.current_start;
-
-        if length <= 0.0 {
+        let beats = clip.common.current_end - clip.common.current_start;
+        if beats <= 0.0 {
             continue;
         }
-
-        t = t.item(position, length, |item| build_audio_item(item, clip));
+        let position = map.seconds_at(clip.common.time);
+        let length = map.span(clip.common.time, beats);
+        t = t.item(position, length, |item| {
+            build_audio_item(item, clip, map, length)
+        });
     }
 
     // FX / Devices
@@ -412,7 +426,12 @@ fn build_audio_track(t: TrackBuilder, track: &ableton::AudioTrack) -> TrackBuild
 }
 
 #[cfg(feature = "ableton")]
-fn build_audio_item(item: ItemBuilder, clip: &ableton::AudioClip) -> ItemBuilder {
+fn build_audio_item(
+    item: ItemBuilder,
+    clip: &ableton::AudioClip,
+    map: &ableton::tempo::TempoMap,
+    length: f64,
+) -> ItemBuilder {
     let mut item = item.name(&clip.common.name);
 
     // Audio source
@@ -422,6 +441,42 @@ fn build_audio_item(item: ItemBuilder, clip: &ableton::AudioClip) -> ItemBuilder
         item = item.source_wave(path.to_string_lossy().into_owned());
     }
 
+    // Where in its file the clip starts, and how fast it plays it. Live
+    // gives an arrangement clip's region in absolute beats (`CurrentStart`
+    // is where the region starts on the timeline, `Time` where the clip
+    // does), and where its content starts as `LoopStart`: clip beats for a
+    // warped clip, read through its warp markers, and seconds into the file
+    // for an unwarped one, which plays its audio as recorded.
+    let lead = (clip.common.current_start - clip.common.time).max(0.0);
+    let beats = clip.common.current_end - clip.common.current_start;
+    let loops = clip.common.loop_settings.as_ref();
+    let warped = clip.is_warped.then(|| {
+        let at = loops.map_or(0.0, |l| {
+            l.loop_start + if l.loop_on { l.start_relative } else { 0.0 }
+        }) + lead;
+        Some((
+            ableton::tempo::sample_seconds(&clip.warp_markers, at)?,
+            ableton::tempo::sample_seconds(&clip.warp_markers, at + beats)?,
+        ))
+    });
+    match warped.flatten() {
+        Some((from, to)) if length > 0.0 && to > from => {
+            item = item.slip_offset(from.max(0.0));
+            let rate = (to - from) / length;
+            if (rate - 1.0).abs() > 1e-6 {
+                item = item.playrate(rate);
+            }
+        }
+        _ => {
+            let content = loops.map_or(0.0, |l| l.loop_start);
+            let offset = content + lead * 60.0 / map.bpm_at(clip.common.time);
+            if offset > 0.0 {
+                item = item.slip_offset(offset);
+            }
+        }
+    }
+    let beat_seconds = 60.0 / map.bpm_at(clip.common.time);
+
     // Pitch
     if clip.pitch_coarse != 0.0 {
         item = item.pitch(clip.pitch_coarse);
@@ -429,15 +484,16 @@ fn build_audio_item(item: ItemBuilder, clip: &ableton::AudioClip) -> ItemBuilder
 
     // Fades
     if let Some(ref fades) = clip.fades {
+        // Live's fades are in beats.
         if fades.fade_in_length > 0.0 {
             item = item.fade_in(
-                fades.fade_in_length,
+                fades.fade_in_length * beat_seconds,
                 dawfile_reaper::types::item::FadeCurveType::Linear,
             );
         }
         if fades.fade_out_length > 0.0 {
             item = item.fade_out(
-                fades.fade_out_length,
+                fades.fade_out_length * beat_seconds,
                 dawfile_reaper::types::item::FadeCurveType::Linear,
             );
         }
@@ -447,18 +503,22 @@ fn build_audio_item(item: ItemBuilder, clip: &ableton::AudioClip) -> ItemBuilder
 }
 
 #[cfg(feature = "ableton")]
-fn build_midi_track(t: TrackBuilder, track: &ableton::MidiTrack) -> TrackBuilder {
+fn build_midi_track(
+    t: TrackBuilder,
+    track: &ableton::MidiTrack,
+    map: &ableton::tempo::TempoMap,
+) -> TrackBuilder {
     let mut t = apply_common_track_props(t, &track.common);
 
-    // Arrangement MIDI clips
+    // Arrangement MIDI clips, placed in seconds (their notes stay in ticks:
+    // REAPER reads those through the tempo map itself).
     for clip in &track.arrangement_clips {
-        let position = clip.common.time;
-        let length = clip.common.current_end - clip.common.current_start;
-
-        if length <= 0.0 {
+        let beats = clip.common.current_end - clip.common.current_start;
+        if beats <= 0.0 {
             continue;
         }
-
+        let position = map.seconds_at(clip.common.time);
+        let length = map.span(clip.common.time, beats);
         t = t.item(position, length, |item| build_midi_item(item, clip));
     }
 
