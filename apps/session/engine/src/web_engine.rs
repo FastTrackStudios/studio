@@ -208,6 +208,11 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+/// `f` on the page's engine, once it is made.
+pub(crate) fn with_engine<R>(f: impl FnOnce(&daw_standalone::sync::Standalone) -> R) -> Option<R> {
+    ENGINE.with(|engine| engine.borrow().as_ref().map(f))
+}
+
 /// The kinds the page's engine holds for `project`'s tracks — a song
 /// opened from its `.session`, which has no text to read them from
 /// (`StudioSession::read_project`). `None` before the engine is up.
@@ -921,6 +926,15 @@ pub fn switch_song(project: &str) {
             return;
         };
         if song.started.replace(true) {
+            // Back on a song already streaming: its waveforms still to
+            // come are built now (none when all are drawn).
+            if let Some(streamed) = song.streamed.clone() {
+                let previews = song.previews.clone();
+                let song_guid = project.to_owned();
+                wasm_bindgen_futures::spawn_local(async move {
+                    waveforms(previews, streamed, song_guid, Vec::new()).await;
+                });
+            }
             return;
         }
         let Some(streamed) = song.streamed.clone() else {
@@ -930,20 +944,66 @@ pub fn switch_song(project: &str) {
         if MULTITRACKS.with(std::cell::Cell::get) {
             hear_stems(web, project, true);
         }
-        // The waveforms: each take's original's peaks, fetched and reduced,
-        // then drawn — the audio need not have arrived.
+        // The waveforms: each take's original's peaks where the share has
+        // them, fetched and reduced; else built here from its proxy.
         let previews = song.previews.clone();
         let items: Vec<String> =
             daw_standalone::audio_engine::materialize::pending_media(&web.standalone, project)
                 .into_iter()
                 .map(|m| m.item_guid)
                 .collect();
+        let song_guid = project.to_owned();
         wasm_bindgen_futures::spawn_local(async move {
-            if streamed.load_peaks(crate::midi::WAVE_BLOCK).await > 0 {
-                previews.fill_waves(items).await;
-            }
+            let _ = streamed.load_peaks(crate::midi::WAVE_BLOCK).await;
+            waveforms(previews, streamed, song_guid, items).await;
         });
     });
+}
+
+/// Draw `song`'s waveforms: `items` read first — from the caches its share
+/// shipped — then every take with none has its waveform built from its
+/// proxy (`StreamedSong::build_missing_peaks`), and what was not drawn is
+/// read again as they come, a few at a time. Read from `song` itself, not
+/// whichever is current when it answers; one at a time per song.
+async fn waveforms(
+    previews: crate::midi::Previews,
+    streamed: Rc<crate::song_stream::StreamedSong>,
+    song: String,
+    items: Vec<String>,
+) {
+    /// Waveforms built between two reads: the first drawn soon, the rest
+    /// as they come.
+    const BUILT_PER_READ: usize = 4;
+    thread_local! {
+        static BUILDING: std::cell::RefCell<std::collections::HashSet<String>> =
+            std::cell::RefCell::default();
+    }
+    if !BUILDING.with(|b| b.borrow_mut().insert(song.clone())) {
+        return;
+    }
+    let Some(facade) = daw_control::Daw::try_get() else {
+        BUILDING.with(|b| b.borrow_mut().remove(&song));
+        return;
+    };
+    let Ok(project) = facade.project(song.clone()).await else {
+        BUILDING.with(|b| b.borrow_mut().remove(&song));
+        return;
+    };
+    if !items.is_empty() {
+        previews.fill_waves_in(&project, items).await;
+    }
+    while !previews.partial().is_empty()
+        && streamed
+            .build_missing_peaks(crate::midi::WAVE_BLOCK, BUILT_PER_READ)
+            .await
+            > 0
+    {
+        // What the builds made drawable, read again: those alone.
+        previews
+            .fill_waves_in(&project, previews.partial_now_whole(&song))
+            .await;
+    }
+    BUILDING.with(|b| b.borrow_mut().remove(&song));
 }
 
 /// Bring the set in behind `project`, now on screen, in

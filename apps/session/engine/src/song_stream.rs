@@ -677,6 +677,10 @@ pub struct StreamedSong {
     /// few hundred files — one store each would truncate the file the
     /// others write, and fetch every header thousands of times).
     opened: Mutex<HashMap<PathBuf, (Arc<SparseBytes>, OggIndex)>>,
+    /// Recordings whose waveform could not be built here
+    /// ([`Self::build_missing_peaks`]).
+    #[cfg(feature = "web")]
+    unbuildable: Mutex<std::collections::HashSet<String>>,
 }
 
 fn safe_name(text: &str) -> String {
@@ -689,6 +693,24 @@ fn safe_name(text: &str) -> String {
             }
         })
         .collect()
+}
+
+/// The recording a waveform cache in a song's file list is of, by its
+/// lowercased file name, and whether it is ours (`.sessionpeaks`, which
+/// wins over REAPER's `.reapeaks`): a `Peaks/` folder beside the
+/// recordings, wherever the session keeps them — `Media/Peaks/` for a
+/// prepared song, `Samples/Imported/Peaks/` for one cut from a Live set.
+fn peaks_cache_of(lower: &str) -> Option<(&str, bool)> {
+    let (dir, name) = lower.rsplit_once('/')?;
+    if !(dir == "peaks" || dir.ends_with("/peaks")) {
+        return None;
+    }
+    let (original, ext) = name.rsplit_once('.')?;
+    match ext {
+        "sessionpeaks" => Some((original, true)),
+        "reapeaks" => Some((original, false)),
+        _ => None,
+    }
 }
 
 /// Whether a song-folder path is audio the fetcher streams (a proxy) or
@@ -760,6 +782,21 @@ mod media_tests {
             "not mapped: its proxy is as good"
         );
         assert!(!is_mapped_original("media/proxies/odd.wav"));
+    }
+
+    #[test]
+    fn a_waveform_cache_is_found_beside_its_recordings_wherever_they_are() {
+        assert_eq!(
+            super::peaks_cache_of("media/peaks/bass.wav.sessionpeaks"),
+            Some(("bass.wav", true))
+        );
+        assert_eq!(
+            super::peaks_cache_of("samples/imported/peaks/kick 1.wav.reapeaks"),
+            Some(("kick 1.wav", false))
+        );
+        assert_eq!(super::peaks_cache_of("media/bass.wav"), None);
+        assert_eq!(super::peaks_cache_of("media/peaks/notes.txt"), None);
+        assert_eq!(super::peaks_cache_of("speaks/bass.wav.sessionpeaks"), None);
     }
 
     #[test]
@@ -1117,13 +1154,10 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
     let mut wanted = Vec::new();
     for (path, size) in &list {
         let lower = path.to_lowercase();
-        if let Some(cache) = lower.strip_prefix("media/peaks/") {
-            // `bass.wav.sessionpeaks` or `bass.wav.reapeaks`: ours wins.
-            if let Some((original, ext)) = cache.rsplit_once('.')
-                && (ext == "sessionpeaks" || (ext == "reapeaks" && !peaks.contains_key(original)))
-            {
-                peaks.insert(original.to_owned(), (path.clone(), *size));
-            }
+        if let Some((original, ours)) = peaks_cache_of(&lower)
+            && (ours || !peaks.contains_key(original))
+        {
+            peaks.insert(original.to_owned(), (path.clone(), *size));
         }
         // A prepared song keeps its proxies in `Media/Proxies/`; a song cut
         // from a Live set beside its recordings (`Samples/Imported/Proxies/`).
@@ -1240,6 +1274,8 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
         peaks,
         attached: Mutex::default(),
         opened: Mutex::default(),
+        #[cfg(feature = "web")]
+        unbuildable: Mutex::default(),
     })
 }
 
@@ -1641,17 +1677,20 @@ impl StreamedSong {
     /// mirror on disk has them where the peak store looks.
     pub async fn load_peaks(&self, block: u32) -> usize {
         use daw::standalone::reapeaks::ReaPeaks;
-        let attached = self.attached.lock().map(|a| a.clone()).unwrap_or_default();
         let mut loaded = 0usize;
-        for (original, streamed) in attached {
+        // One fetch and parse per recording, shared by every take of it.
+        for (original, takes) in self.attached_by_original() {
             let Some((path, size)) = self.peaks.get(&original).cloned() else {
                 continue;
             };
             match self.source.read(path.clone(), 0..size).await {
                 Ok(bytes) => match ReaPeaks::parse(&bytes) {
                     Ok(peaks) => {
-                        streamed.set_peaks(Arc::new(peaks.coarsened(block)));
-                        loaded = loaded.saturating_add(1);
+                        let peaks = Arc::new(peaks.coarsened(block));
+                        for streamed in &takes {
+                            streamed.set_peaks(Arc::clone(&peaks));
+                        }
+                        loaded = loaded.saturating_add(takes.len());
                     }
                     Err(e) => {
                         tracing::warn!(media = %path, error = %e, "song-stream: a waveform cache did not parse")
@@ -1664,6 +1703,92 @@ impl StreamedSong {
         }
         tracing::info!(stream.source = %self.source.label(), stream.waveforms = loaded, "song-stream: waveforms in");
         loaded
+    }
+
+    /// Build the waveform of each attached take that has none — its share
+    /// shipped no cache ([`Self::load_peaks`]) — from its proxy, fetched
+    /// whole into a buffer of its own (what streams in for playback is
+    /// only a window round the playhead), decoded and let go: one at a
+    /// time, `most` of them. Returns how many were built; 0 when none is
+    /// left that can be.
+    #[cfg(feature = "web")]
+    pub async fn build_missing_peaks(&self, block: u32, most: usize) -> usize {
+        let mut built = 0usize;
+        for (original, takes) in self.attached_by_original() {
+            if built >= most {
+                break;
+            }
+            let takes: Vec<_> = takes.into_iter().filter(|t| !t.has_peaks()).collect();
+            if takes.is_empty() || self.unbuildable(&original) {
+                continue;
+            }
+            let stem = Path::new(&original)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            let Some((path, size)) = self.proxies.get(&stem).cloned() else {
+                continue;
+            };
+            let bytes = match self.source.read(path.clone(), 0..size).await {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    tracing::warn!(media = %path, error = %e, "song-stream: a proxy for its waveform did not arrive");
+                    self.give_up_on(&original);
+                    continue;
+                }
+            };
+            let peaks = fts_sample::ogg_stream::OggStream::open(Arc::from(bytes))
+                .ok()
+                .and_then(daw::standalone::audio_engine::streamed::peaks_of_ogg);
+            let Some(peaks) = peaks else {
+                tracing::warn!(media = %path, "song-stream: a proxy's waveform could not be built");
+                self.give_up_on(&original);
+                continue;
+            };
+            // Once per recording, for every take cut from it.
+            let peaks = Arc::new(peaks.coarsened(block));
+            for streamed in &takes {
+                streamed.set_peaks(Arc::clone(&peaks));
+            }
+            built = built.saturating_add(1);
+        }
+        if built > 0 {
+            tracing::info!(stream.source = %self.source.label(), stream.waveforms_built = built, "song-stream: waveforms built here");
+        }
+        built
+    }
+
+    /// The attached takes by the recording they stream, in the order first
+    /// attached: every item cut from one recording shares its waveform.
+    fn attached_by_original(
+        &self,
+    ) -> Vec<(
+        String,
+        Vec<daw::standalone::audio_engine::streamed::Streamed>,
+    )> {
+        let attached = self.attached.lock().map(|a| a.clone()).unwrap_or_default();
+        let mut grouped: Vec<(String, Vec<_>)> = Vec::new();
+        for (original, streamed) in attached {
+            match grouped.iter_mut().find(|(o, _)| *o == original) {
+                Some((_, takes)) => takes.push(streamed),
+                None => grouped.push((original, vec![streamed])),
+            }
+        }
+        grouped
+    }
+
+    /// Whether `original`'s waveform could not be built (its proxy did not
+    /// arrive or would not decode): not tried again this visit.
+    #[cfg(feature = "web")]
+    fn unbuildable(&self, original: &str) -> bool {
+        self.unbuildable.lock().is_ok_and(|u| u.contains(original))
+    }
+
+    #[cfg(feature = "web")]
+    fn give_up_on(&self, original: &str) {
+        if let Ok(mut u) = self.unbuildable.lock() {
+            u.insert(original.to_owned());
+        }
     }
 
     /// Start fetching `takes`' bytes in the order they will be heard from
