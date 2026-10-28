@@ -235,12 +235,18 @@ fn lay_out_song(song: &mut session::sync::SessionModel, cards: &[Card], length: 
         .iter()
         .find(|c| !ableton::setlist::is_count_in(&c.name))
         .map(|c| c.start);
+    // A count-in is the song's own only before its first section: one
+    // later is the next song's, run into by a song with no `SONG END`.
+    let mut sectioned = false;
     for card in cards {
         if ableton::setlist::is_count_in(&card.name) {
-            mark(song, "COUNT-IN", card.start.max(0.0));
-            start = Some(card.end);
+            if !sectioned {
+                mark(song, "COUNT-IN", card.start.max(0.0));
+                start = Some(card.end);
+            }
             continue;
         }
+        sectioned = true;
         song.regions.insert(
             guid(),
             RegionState {
@@ -586,6 +592,36 @@ mod tests {
                 ("SONGEND", 263.0, Some(2)),
             ],
             "bar 1 where the count-in ends; the show's SONGSTART gone"
+        );
+    }
+
+    #[test]
+    fn the_next_songs_count_in_inside_a_song_is_not_its_count_in() {
+        let mut song = session::sync::SessionModel::default();
+        let card = |name: &str, start, end| Card {
+            name: name.into(),
+            start,
+            end,
+            color: None,
+        };
+        // No SONG END: the song runs to the next locator, over the next
+        // song's count-in.
+        let cards = [
+            card("Intro", 0.0, 10.0),
+            card("Outro", 10.0, 96.0),
+            card("Count In", 96.0, 100.0),
+        ];
+        lay_out_song(&mut song, &cards, 100.0);
+        let mut marks: Vec<_> = song
+            .markers
+            .values()
+            .map(|m| (m.name.as_str(), m.at))
+            .collect();
+        marks.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(b.0)));
+        assert_eq!(
+            marks,
+            [("SONGSTART", 0.0), ("=END", 100.0), ("SONGEND", 100.0)],
+            "bar 1 where the song starts; no COUNT-IN at its tail"
         );
     }
 
