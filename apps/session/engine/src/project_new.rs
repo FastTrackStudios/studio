@@ -36,7 +36,7 @@ static NEW: ActionMeta = crate::actions::meta(
     "SESSION_NEW",
     "session_new",
     "New project",
-    "Start a new song from nothing, untitled: COUNT-IN on bar 1, SONGSTART after the two-bar count-in, SONGEND eight bars on, the guide (Click, Count, Guide) generated over them, the window in Organize mode. The song open now is left as it is — SESSION_SAVE it first if it should be. The new one has no file until its first SESSION_SAVE, which needs `to` and takes its name from it. `template` is not there yet.",
+    "Start a new song from nothing, untitled: COUNT-IN on bar 1, SONGSTART after the two-bar count-in, SONGEND eight bars on, the guide (Click, Count, Guide) generated over them, the window in Organize mode. It opens in the background: the action returns at once, and the song is there once SESSION_OPENING is idle — wait for that before acting on it. The song open now is left as it is — SESSION_SAVE it first if it should be. The new one has no file until its first SESSION_SAVE, which needs `to` and takes its name from it. `template` is not there yet.",
     "Session",
     "",
 );
@@ -59,7 +59,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         // window shows it as it does any set the engine opens.
         crate::studio_engine::set::open_new().map_err(|e| e.to_string())?;
         Ok(format!(
-            "a new song, {UNTITLED}, in Organize: COUNT-IN, SONGSTART and SONGEND placed and the guide over them. It is named when it is first saved (SESSION_SAVE with `to`)."
+            "a new song, {UNTITLED}, opening in the background: wait for SESSION_OPENING to be idle before acting on it. It comes up in Organize, COUNT-IN, SONGSTART and SONGEND placed and the guide over them, and is named when it is first saved (SESSION_SAVE with `to`)."
         ))
     })?;
     Ok(())

@@ -822,6 +822,11 @@ pub fn register(
                 .filter(|s| !s.is_empty())
                 .or_else(crate::open::current_song)
                 .ok_or("no song open in the engine")?;
+            // The rebuild and the guide spawn on the engine's runtime: run
+            // inside it, whichever thread the action came from (a key's
+            // runs on a plain thread behind the window).
+            let runtime = crate::open::engine_runtime().map_err(|e| e.to_string())?;
+            let _inside = runtime.enter();
             let rebuilt = apply_chart(daw, &song, &a.text, true).map_err(|e| e.to_string())?;
             // Saved where the song was opened from, when that is a `.session`.
             let saved = daw

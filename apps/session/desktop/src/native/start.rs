@@ -395,10 +395,16 @@ fn Start() -> Element {
     // A song from nothing (`SESSION_NEW`): untitled, in Organize mode, its
     // count-in, start and guide placed.
     let mut new_project = move || {
-        opening.set(Opening::Busy(Progress::Opening {
+        let first = Progress::Opening {
             title: session_ui::project_new::UNTITLED.to_owned(),
-        }));
-        session_ui::view_client::ask::new_song();
+        };
+        opening.set(Opening::Busy(first.clone()));
+        spawn(async move {
+            let refused = off_thread(session_ui::view_client::ask::new_song)
+                .await
+                .unwrap_or_else(|| Err("the ask stopped".to_owned()));
+            asked(first, refused);
+        });
     };
 
     // What the launch chose, opened as the window opens.
@@ -555,8 +561,15 @@ fn Start() -> Element {
                 ));
                 return;
             };
-            opening.set(Opening::Busy(Progress::Joining { retry: None }));
-            session_ui::view_client::ask::join(live, who.clone());
+            let first = Progress::Joining { retry: None };
+            opening.set(Opening::Busy(first.clone()));
+            let who = who.clone();
+            spawn(async move {
+                let refused = off_thread(move || session_ui::view_client::ask::join(&live, &who))
+                    .await
+                    .unwrap_or_else(|| Err("the ask stopped".to_owned()));
+                asked(first, refused);
+            });
         }
     };
     // Studio's home (`handoff::join_on_start`), or `FTS_SESSION_LIVE=<link>`,

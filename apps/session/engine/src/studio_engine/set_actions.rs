@@ -273,6 +273,8 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             return Err(format!("no song {} in a set of {len}", a.song));
         }
         let mut said = Vec::new();
+        // Where the song is now: a move puts it elsewhere before a remove.
+        let mut at = index;
         if let Some(color) = a.color {
             said.push(format!(
                 "coloured {}",
@@ -289,10 +291,11 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                 .unwrap_or(0)
                 .min(len - 1);
             set::reorder(index, to);
+            at = to;
             said.push(format!("moved to {}", to + 1));
         }
         if a.remove == Some(true) {
-            set::remove(index);
+            set::remove(at);
             said.push("removed".to_owned());
         }
         Ok(format!("song {}: {}", a.song, said.join(", ")))

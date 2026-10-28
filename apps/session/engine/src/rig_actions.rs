@@ -235,7 +235,8 @@ pub fn register(
     use architect::action::Effect;
     list.register(&RIG_BROWSE, Effect::ReadOnly, |a: BrowseArg| {
         let (daw, project) = crate::actions::song()?;
-        Ok(browse(daw, &project, &a.track))
+        let guid = crate::actions::resolve(daw, &project, &a.track)?;
+        Ok(browse(daw, &project, &guid))
     })?;
     list.register(&RIG_LOAD, Effect::Mutating, |a: LoadArg| {
         let (daw, project) = crate::actions::song()?;

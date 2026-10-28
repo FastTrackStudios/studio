@@ -188,8 +188,9 @@ async fn serve_client(stream: tokio::net::UnixStream, router: daw::LayerRouter) 
         .establish_connection()
         .await
     {
-        // The connection serves its lanes while it is held.
-        Ok(_connection) => std::future::pending::<()>().await,
+        // The connection serves its lanes while it is held: hold it until
+        // the client hangs up, then let the task end.
+        Ok(connection) => connection.closed().await,
         Err(e) => tracing::warn!(error = ?e, "engine: a client's handshake failed"),
     }
 }

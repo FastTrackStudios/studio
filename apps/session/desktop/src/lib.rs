@@ -173,6 +173,25 @@ pub fn run() {
         app_shell::log_ring::install_panic_hook("Session");
     }
 
+    // `session-desktop --session-engine …`: the engine with no window, as
+    // `studio-desktop --session-engine` runs it — what this app spawns to
+    // drive when FTS_STUDIO_BIN is unset (`studio_engine::link::
+    // engine_command`): the same build as the window, one protocol.
+    #[cfg(all(
+        feature = "native",
+        not(target_arch = "wasm32"),
+        not(target_os = "ios")
+    ))]
+    if let Some(at) = std::env::args().position(|a| a == "--session-engine") {
+        let rest: Vec<String> = std::env::args().skip(at + 1).collect();
+        let args = engine_host::Args::parse(&rest);
+        if let Err(e) = engine_host::run(&args) {
+            tracing::error!(error = %e, "the session engine stopped");
+            std::process::exit(1);
+        }
+        return;
+    }
+
     // `--engine`: headless — serves the setlist and (Live Mode) the whole
     // daw facade over a LAN-reachable /vox WebSocket and over iroh, for
     // other devices and for Session UIs attaching to it as a Remote — no

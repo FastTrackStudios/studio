@@ -191,8 +191,8 @@ pub fn params(track: &str, fx: usize) -> Vec<Choice<Pick>> {
     out
 }
 
-/// Run `id` on the engine with `args`, behind the window, then read the
-/// song back.
+/// Run `id` on the engine with `args`, behind the window; the engine's
+/// handler asks the windows to read the song back.
 fn ask(id: &'static str, args: serde_json::Value) {
     crate::actions::off_the_window(id, args.to_string());
 }

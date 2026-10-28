@@ -296,6 +296,12 @@ fn engine_and(song: &str) -> Option<(&'static daw::standalone::Standalone, Strin
     Some((daw, song))
 }
 
+/// Whether a batch the window made for `song` (empty: it did not say)
+/// may be applied while `current` is the engine's current song.
+fn targets_current(song: &str, current: Option<&str>) -> bool {
+    song.is_empty() || current == Some(song)
+}
+
 impl EngineView for ViewHost {
     async fn run(&self, call: ActionCall) -> Result<String, ViewError> {
         let span = tracing::info_span!("view.run", action.id = %call.id, action.outcome = tracing::field::Empty);
@@ -316,6 +322,23 @@ impl EngineView for ViewHost {
 
     async fn apply(&self, batch: EditBatch) -> Applied {
         let mut applied = Applied::default();
+        // The edits name no song of their own: they go to the song current
+        // here, so a batch made against another (the window moved on
+        // before the engine did) is refused whole — but its barriers
+        // still release whoever waits on them.
+        let current = crate::open::current_song();
+        if !targets_current(&batch.song, current.as_deref()) {
+            tracing::warn!(
+                edit.song = %batch.song,
+                edit.current = current.as_deref().unwrap_or(""),
+                edit.count = batch.edits.len(),
+                "view link: edits for a song that is not current refused"
+            );
+            for done in batch.edits.iter().filter(|e| matches!(e, crate::engine::Edit::Done(_))) {
+                crate::engine::apply_reported(done).await;
+            }
+            return applied;
+        }
         for edit in &batch.edits {
             applied.items |= edit.is_item();
             crate::engine::apply_reported(edit).await;
@@ -537,3 +560,6 @@ fn song_facts(daw: &daw::standalone::Standalone, song: &str) -> SongFacts {
     let path = daw.project(song).map(|info| info.path).unwrap_or_default();
     SongFacts { kinds, chart, path }
 }
+
+#[cfg(test)]
+mod tests;

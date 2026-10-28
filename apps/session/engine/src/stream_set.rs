@@ -1306,10 +1306,15 @@ pub fn adopt_shown(frame: crate::view::StreamsFrame) {
             })
             .collect(),
     };
+    keep_shown(shown, frame.waiting);
+}
+
+/// This process's [`shown`] (and whether a play waits), moved on.
+fn keep_shown(shown: Shown, waiting: bool) {
     if let Ok(mut s) = SHOWN.write() {
         *s = Some(shown);
     }
-    WAITING.store(frame.waiting, std::sync::atomic::Ordering::Release);
+    WAITING.store(waiting, std::sync::atomic::Ordering::Release);
     SHOWN_VERSION.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
 }
 
@@ -1356,6 +1361,12 @@ fn watch() {
                     let now = (rounded(&next), waiting);
                     if told.as_ref() != Some(&now) {
                         crate::studio_engine::view_host::streams_read(&next, waiting);
+                        // A window linked here adopts what was published
+                        // (`adopt_shown`); without one, this process's own
+                        // readers (the waveforms' retry) keep up here.
+                        if !crate::view_client::is_linked() {
+                            keep_shown(next, waiting);
+                        }
                         told = Some(now);
                     }
                 }

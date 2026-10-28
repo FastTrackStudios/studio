@@ -33,8 +33,14 @@ use crate::view::{
     EngineViewStreamClient, ItemChanges, MarksFrame, SetFrame, SongFacts, WaveRead, WavesAsk,
 };
 
-/// How long a call may take before the window gives up on it.
+/// How long a call may take before the window gives up on it. Giving up
+/// on one call is that call's failure, not the link's: only the streams
+/// ending ([`follow`]) say the engine went away.
 const CALL: Duration = Duration::from_secs(20);
+
+/// How long an action may take: some run long on purpose (a quantize
+/// waits up to half a minute for the window to land its edits).
+const RUN: Duration = Duration::from_secs(120);
 
 /// The link: the engine's view service over one connection.
 #[derive(Clone)]
@@ -500,17 +506,25 @@ pub mod ask {
         off_the_window("SESSION_CLOSE", serde_json::json!({}));
     }
 
-    /// A new, untitled song as the engine's set.
-    pub fn new_song() {
-        off_the_window("SESSION_NEW", serde_json::json!({}));
+    /// A new, untitled song as the engine's set. Blocks on the engine's
+    /// answer, as [`open_path`] does: call it off the UI thread.
+    ///
+    /// # Errors
+    ///
+    /// The engine refused (another open is under way, or no engine).
+    pub fn new_song() -> Result<String, String> {
+        super::run("SESSION_NEW", b"{}")
     }
 
-    /// Join a live set by its link, as `name`.
-    pub fn join(link: String, name: String) {
-        off_the_window(
-            "SESSION_JOIN",
-            serde_json::json!({ "link": link, "name": name }),
-        );
+    /// Join a live set by its link, as `name`. Blocks on the engine's
+    /// answer: call it off the UI thread.
+    ///
+    /// # Errors
+    ///
+    /// The engine refused (another open is under way, or no engine).
+    pub fn join(link: &str, name: &str) -> Result<String, String> {
+        let args = serde_json::json!({ "link": link, "name": name });
+        super::run("SESSION_JOIN", args.to_string().as_bytes())
     }
 
     /// Put the set in Live, or take it out.
@@ -643,16 +657,20 @@ pub fn extrapolate(stamp: &daw_proto::StampedPosition, since: f64) -> (f64, bool
 
 // ── Calls ────────────────────────────────────────────────────────────
 
-/// Run `call` on the link, from sync code, bounded; `None` unlinked or
-/// when the engine did not answer in time.
-fn block<T: Send, F>(what: &str, call: impl FnOnce(EngineViewClient) -> F) -> Option<T>
+/// Run `call` on the link, from sync code, bounded by `within`; `None`
+/// unlinked or when the engine did not answer in time.
+fn block<T: Send, F>(
+    what: &str,
+    within: Duration,
+    call: impl FnOnce(EngineViewClient) -> F,
+) -> Option<T>
 where
     F: std::future::Future<Output = T> + Send,
 {
     let link = link()?;
     let rt = runtime()?;
     let asked = call(link.view.clone());
-    let bounded = async move { tokio::time::timeout(CALL, asked).await.ok() };
+    let bounded = async move { tokio::time::timeout(within, asked).await.ok() };
     // Blocking on the runtime from inside one panics: a thread of its own.
     let answered = if tokio::runtime::Handle::try_current().is_err() {
         rt.block_on(bounded)
@@ -664,7 +682,6 @@ where
             view.call = what,
             "view link: the engine did not answer in time"
         );
-        dropped(&link, what);
     }
     answered
 }
@@ -679,8 +696,11 @@ pub fn run(id: &str, args: &[u8]) -> Result<String, String> {
         id: id.to_owned(),
         args: String::from_utf8_lossy(args).into_owned(),
     };
-    block("run", |view| async move { view.run(call).await })
-        .ok_or_else(|| format!("{id}: no engine to run it on"))?
+    if !is_linked() {
+        return Err(format!("{id}: no engine to run it on"));
+    }
+    block("run", RUN, |view| async move { view.run(call).await })
+        .ok_or_else(|| format!("{id}: the engine did not answer in time"))?
         .map_err(|e| match e {
             vox::VoxError::User(e) => e.to_string(),
             other => format!("{id}: {other:?}"),
@@ -697,7 +717,7 @@ pub async fn apply(song: String, edits: Vec<crate::engine::Edit>) -> Option<Appl
             None
         }
         Err(_) => {
-            dropped(&link, "apply");
+            tracing::warn!("view link: the engine did not apply the window's edits in time");
             None
         }
     }
@@ -710,7 +730,7 @@ pub fn waves(song: &str, items: Vec<String>) -> Option<Vec<WaveRead>> {
         song: song.to_owned(),
         items,
     };
-    block("waves", |view| async move { view.waves(ask).await.ok() }).flatten()
+    block("waves", CALL, |view| async move { view.waves(ask).await.ok() }).flatten()
 }
 
 /// `items` of `song`'s waveforms, as the engine draws them, awaited.
@@ -723,7 +743,7 @@ pub async fn waves_of(song: &str, items: Vec<String>) -> Option<Vec<WaveRead>> {
     match tokio::time::timeout(CALL, link.view.waves(ask)).await {
         Ok(read) => read.ok(),
         Err(_) => {
-            dropped(&link, "waves");
+            tracing::warn!(view.call = "waves", "view link: the engine did not answer in time");
             None
         }
     }
@@ -732,7 +752,7 @@ pub async fn waves_of(song: &str, items: Vec<String>) -> Option<Vec<WaveRead>> {
 /// One stretch's detail, from the engine.
 #[must_use]
 pub fn detail(ask: DetailAsk) -> Option<crate::wave_detail::Detail> {
-    block("detail", |view| async move { view.detail(ask).await.ok() })
+    block("detail", CALL, |view| async move { view.detail(ask).await.ok() })
         .flatten()
         .flatten()
 }
@@ -741,7 +761,7 @@ pub fn detail(ask: DetailAsk) -> Option<crate::wave_detail::Detail> {
 #[must_use]
 pub fn automation(song: &str) -> Option<AutomationRead> {
     let song = song.to_owned();
-    block("automation", |view| async move {
+    block("automation", CALL, |view| async move {
         view.automation(song).await.ok()
     })
     .flatten()
@@ -763,7 +783,7 @@ pub fn item_changes(song: &str, since: u64) -> Option<ItemChanges> {
         song: song.to_owned(),
         since,
     };
-    block("item_changes", |view| async move {
+    block("item_changes", CALL, |view| async move {
         view.item_changes(ask).await.ok()
     })
     .flatten()
@@ -772,7 +792,7 @@ pub fn item_changes(song: &str, since: u64) -> Option<ItemChanges> {
 /// Where the engine's journal stands.
 #[must_use]
 pub fn journal_now() -> Option<u64> {
-    block("journal_now", |view| async move {
+    block("journal_now", CALL, |view| async move {
         view.journal_now().await.ok()
     })
     .flatten()
@@ -792,6 +812,7 @@ pub async fn song_facts(song: &str) -> Option<SongFacts> {
 pub fn playheads() -> Option<Vec<crate::view::Playhead>> {
     block(
         "playheads",
+        CALL,
         |view| async move { view.playheads().await.ok() },
     )
     .flatten()

@@ -403,11 +403,19 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
             for &(from, to) in &spans {
                 let us = |t: f64| num_traits::ToPrimitive::to_i64(&(t * 1e6).round()).unwrap_or(0);
                 let ticket = crate::engine::ticket();
-                crate::window_queue::ask(crate::window_queue::Asked::RestoreDrums {
+                // The window carries the restore out; with none following
+                // the engine there is nothing to wait for.
+                let asked = crate::window_queue::ask(crate::window_queue::Asked::RestoreDrums {
                     from_us: us(from),
                     to_us: us(to),
                     ticket,
                 });
+                if !asked {
+                    return Err(
+                        "no window follows the engine to put the drums back in: open the song in Session first"
+                            .to_owned(),
+                    );
+                }
                 stages.mark("edit.slip_ms");
                 crate::actions::landed(ticket);
                 stages.mark("edit.land_ms");
