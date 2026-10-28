@@ -34,7 +34,16 @@ fn candidates() -> Vec<PathBuf> {
 fn main() {
     println!("cargo:rerun-if-env-changed=FTS_MIC_MODELS");
     // A fresh `just assets` creates the links: rebuild with the models in.
-    println!("cargo:rerun-if-changed=models");
+    // Watched only once it is there — cargo counts a path that does not
+    // exist as changed, which rebuilt this crate and everything above it
+    // (the builtin effects, the engine, the apps) on every build. Until
+    // then the folder it is linked into is watched, so the link's
+    // arrival is still seen.
+    if Path::new("models").exists() {
+        println!("cargo:rerun-if-changed=models");
+    } else {
+        println!("cargo:rerun-if-changed=.");
+    }
     let root = candidates()
         .into_iter()
         .find(|d| d.join("48000").join(DEFAULT).is_file());
