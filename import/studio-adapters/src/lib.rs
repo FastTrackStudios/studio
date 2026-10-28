@@ -60,6 +60,8 @@ pub mod devices;
 pub mod error;
 pub mod io;
 pub mod parse;
+pub mod setlist;
+pub mod tempo;
 pub mod types;
 pub mod write;
 
