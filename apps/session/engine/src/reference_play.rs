@@ -39,7 +39,7 @@ static MULTITRACKS: AtomicBool = AtomicBool::new(false);
 /// Whether songs are heard by their stems ([`load_multitracks`]) rather
 /// than their reference.
 #[must_use]
-pub fn multitracks() -> bool {
+pub(crate) fn multitracks() -> bool {
     MULTITRACKS.load(Ordering::Relaxed)
 }
 
@@ -86,13 +86,13 @@ pub fn stop(project: &str) {
 /// Whether any song is heard by its reference — what Settings offers the
 /// multitracks for.
 #[must_use]
-pub fn any() -> bool {
+pub(crate) fn any() -> bool {
     HEARD.lock().is_ok_and(|heard| !heard.is_empty())
 }
 
 /// Ask for the multitracks now: every song's stems come in at once, and
 /// each hands over from its reference as they arrive ([`crate::stream_set`]).
-pub fn load_multitracks() {
+pub(crate) fn load_multitracks() {
     if !MULTITRACKS.swap(true, Ordering::Relaxed) {
         crate::stream_set::hear_stems();
     }

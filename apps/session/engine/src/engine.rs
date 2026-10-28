@@ -923,7 +923,7 @@ pub mod buffering {
 
     /// Whether a play press is waiting for the song to arrive.
     #[must_use]
-    pub fn waiting() -> bool {
+    pub(crate) fn waiting() -> bool {
         WAITING.load(Ordering::Acquire) != 0
     }
 

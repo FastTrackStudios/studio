@@ -383,7 +383,7 @@ pub fn level_of_take(
 
 /// [`settle`] on the engine's current song, if it has one: what the
 /// engine does a few times a second (`studio_engine::view_host`).
-pub fn settle_open() {
+pub(crate) fn settle_open() {
     if let (Some(daw), Some(song)) = (crate::open::local_engine(), crate::open::current_song()) {
         settle(daw, &ProjectContext::Project(song));
     }

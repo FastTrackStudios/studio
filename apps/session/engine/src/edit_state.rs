@@ -142,7 +142,7 @@ pub fn show(edit: Edit) {
 
 /// A window shows `edit` on `song`: what the engine hears from a window in
 /// another process.
-pub fn show_on(song: &str, edit: Edit) {
+pub(crate) fn show_on(song: &str, edit: Edit) {
     with(|states| states.show(song, edit));
 }
 
@@ -162,7 +162,7 @@ pub fn ask(edit: Edit) {
 /// What the engine was asked, taken up by a window in this process from
 /// its engine's word — its own frames take it up as they would an ask
 /// made here, and the engine is not told again.
-pub fn take_up(song: &str, edit: Edit) {
+pub(crate) fn take_up(song: &str, edit: Edit) {
     with(|states| states.ask(song, edit));
 }
 

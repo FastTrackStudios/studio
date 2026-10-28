@@ -1302,7 +1302,7 @@ static RECENT: ActionMeta = meta(
 /// that is not known.
 #[cfg(feature = "native")]
 #[must_use]
-pub fn open_song_unsaved() -> Option<bool> {
+pub(crate) fn open_song_unsaved() -> Option<bool> {
     let (daw, ProjectContext::Project(guid)) = song().ok()? else {
         return None;
     };
@@ -1316,7 +1316,7 @@ pub fn open_song_unsaved() -> Option<bool> {
 /// one open.
 #[cfg(feature = "native")]
 #[must_use]
-pub fn open_song_versions() -> Vec<crate::projects::Version> {
+pub(crate) fn open_song_versions() -> Vec<crate::projects::Version> {
     let Ok((daw, ProjectContext::Project(guid))) = song() else {
         return Vec::new();
     };
@@ -1734,7 +1734,7 @@ fn stepped() {
 
 /// The engine said it undid or redid a step: counted here, as one done
 /// here is ([`undone`]).
-pub fn undone_there() {
+pub(crate) fn undone_there() {
     UNDONE.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
 }
 

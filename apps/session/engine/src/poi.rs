@@ -89,7 +89,7 @@ fn publish(points: Vec<Poi>) {
 
 /// The points and the one stepped to, as the engine sent them with the
 /// song's marks: what a window draws.
-pub fn adopt(points: Vec<Poi>, stepped: Option<String>) {
+pub(crate) fn adopt(points: Vec<Poi>, stepped: Option<String>) {
     ASKED.store(true, Ordering::Release);
     if let Ok(mut shown) = SHOWN.lock() {
         *shown = Some(Arc::new(points));
