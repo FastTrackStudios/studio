@@ -2,7 +2,8 @@
 //! loading screen (`crate::loading`) shows.
 
 /// Where opening a set has got to: what its loading screen says.
-#[derive(Clone, Debug, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, facet::Facet)]
 pub enum Progress {
     /// Reaching Task and joining the set — `retry` says why the last try
     /// failed, while it keeps trying.

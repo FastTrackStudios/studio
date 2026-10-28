@@ -403,7 +403,7 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
             for &(from, to) in &spans {
                 let us = |t: f64| num_traits::ToPrimitive::to_i64(&(t * 1e6).round()).unwrap_or(0);
                 let ticket = crate::engine::ticket();
-                crate::window_queue::queue(crate::window_queue::Action::RestoreDrums {
+                crate::window_queue::ask(crate::window_queue::Asked::RestoreDrums {
                     from_us: us(from),
                     to_us: us(to),
                     ticket,

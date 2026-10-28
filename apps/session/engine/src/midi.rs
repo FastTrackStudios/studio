@@ -52,7 +52,7 @@ pub struct Note {
 /// The take's peaks, not the source's — the engine has already applied
 /// the item's slip, play rate and stretch, so point `i` is item time
 /// `i * step` and nothing here has to know how it got there.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, facet::Facet)]
 pub struct Wave {
     /// Seconds each point stands for.
     pub step: f64,
@@ -64,8 +64,18 @@ pub struct Wave {
 /// take's volume curve was rewritten — to be read again.
 static STALE: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
 
-/// Say `items`' waveforms are stale: the window reads them again.
+/// Say `items`' waveforms are stale: every window reads them again (told
+/// over its link, `crate::view::Change::Waves`).
 pub fn mark_stale(items: impl IntoIterator<Item = String>) {
+    let items: Vec<String> = items.into_iter().collect();
+    #[cfg(feature = "native")]
+    crate::studio_engine::view_host::changed_items(None, crate::view::Change::Waves, items.clone());
+    mark_stale_here(items);
+}
+
+/// `items`' waveforms stale in this window: read again at its next
+/// read-back.
+pub fn mark_stale_here(items: Vec<String>) {
     if let Ok(mut stale) = STALE.lock() {
         stale.extend(items);
     }
@@ -571,22 +581,54 @@ impl Previews {
     /// read behind a song's opening must not look for its items in the
     /// song a setlist switched to meanwhile. `None`: the current song.
     pub fn fill_waves_blocking_in(&self, song: Option<String>, guids: Vec<String>) {
+        let Some(runtime) = crate::open::runtime() else {
+            return;
+        };
         #[cfg(feature = "native")]
-        if self.fill_waves_local(song, &guids) {
+        if crate::view_client::is_linked() {
+            let Some(song) = song.or_else(crate::open::current_song) else {
+                return;
+            };
+            runtime.block_on(self.fill_waves_linked(&song, guids));
             return;
         }
         #[cfg(not(feature = "native"))]
         let _ = song;
-        let Some(runtime) = crate::open::runtime() else {
-            return;
-        };
         runtime.block_on(self.fill_waves(guids));
     }
 
-    /// Read every item's peaks from the engine in this process, in
-    /// parallel on the waveform pool; `false` with no engine here.
+    /// Read `guids`' waveforms of `song` as the engine draws them, over the
+    /// window's link to it (`crate::view_client::waves`): through each
+    /// take's volume curve, a slice cut from its recording — in batches,
+    /// each kept as it lands.
     #[cfg(feature = "native")]
-    fn fill_waves_local(&self, song: Option<String>, guids: &[String]) -> bool {
+    pub async fn fill_waves_linked(&self, song: &str, guids: Vec<String>) {
+        /// Items a call: a sliced kit's thousands go as a few dozen calls,
+        /// each answer a few megabytes at most.
+        const BATCH: usize = 128;
+        let at = stream_version();
+        for batch in guids.chunks(BATCH) {
+            let Some(read) = crate::view_client::waves_of(song, batch.to_vec()).await else {
+                return;
+            };
+            for one in read {
+                let (item, read) = match one {
+                    crate::view::WaveRead::Whole { item, wave } => (item, Read::Whole(wave)),
+                    crate::view::WaveRead::Partial { item } => (item, Read::Partial { at }),
+                    crate::view::WaveRead::None { .. } => continue,
+                };
+                self.keep_read(item, read, Some(song.to_owned()));
+            }
+            self.arrived();
+        }
+    }
+
+    /// Read every item's peaks from the engine in this process, in
+    /// parallel on the waveform pool; `false` with no engine here. The
+    /// engine's own reading — what it answers a window's ask with
+    /// (`crate::view::EngineView::waves`).
+    #[cfg(feature = "native")]
+    pub fn read_here(&self, song: Option<String>, guids: &[String]) -> bool {
         use daw::service::ProjectContext;
         let (Some(daw), Some(song)) = (
             crate::open::local_engine(),

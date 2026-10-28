@@ -15,16 +15,12 @@
 
 #[cfg(feature = "native")]
 use architect::action::{ActionList, ActionMeta, Effect};
-#[cfg(feature = "native")]
-use daw::service::{Markers, ProjectContext, Tracks};
 use dioxus::prelude::*;
 #[cfg(feature = "native")]
 use facet::Facet;
 
 /// How much of the bars either side a page shows, as a part of a bar: a
 /// beat of 4/4.
-#[cfg(feature = "native")]
-const EDGE_OF_A_BAR: f64 = 0.25;
 
 /// The page sizes the buttons offer, bars.
 pub const SIZES: [i32; 5] = [1, 2, 4, 8, 16];
@@ -146,98 +142,9 @@ const fn add_bars(bar: i32, n: i32) -> i32 {
     }
 }
 
-/// The first bar of the page of `bars` holding `bar`, pages counted from
-/// bar 1 (bars before it, the count-in, page backwards from −1).
-#[cfg(feature = "native")]
-const fn page_of(bar: i32, bars: i32) -> i32 {
-    let bars = if bars < 1 { 1 } else { bars };
-    // How many whole pages before it, counted from bar 1 (or, before the
-    // song, back from −1).
-    let into = if bar > 0 {
-        bar.saturating_sub(1)
-    } else {
-        bar.saturating_neg().saturating_sub(1)
-    };
-    let pages = match into.checked_div(bars) {
-        Some(pages) => pages,
-        None => 0,
-    };
-    let start = pages.saturating_mul(bars).saturating_add(1);
-    if bar > 0 {
-        start
-    } else {
-        // Mirrored: the count-in's pages run back from −1.
-        start
-            .saturating_neg()
-            .saturating_sub(bars.saturating_sub(1))
-    }
-}
-
-/// The song's last bar: the one its `SONGEND` falls in (just before it,
-/// when it is on a bar line), `None` without one.
-#[cfg(feature = "native")]
-fn last_bar(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Option<i32> {
-    let end = Markers::all(daw, project.clone())
-        .into_iter()
-        .find(|m| m.name == "SONGEND")
-        .and_then(|m| m.position.seconds())?;
-    Some(crate::song_bars::musical(daw, project, (end - 1e-3).max(0.0)).0)
-}
-
-/// The tracks a page frames down the view: the group's tracks, kept to the
-/// top-level folder holding most of them (the kit, not the references'
-/// rehearsal drums) and everything under it. Empty for every track.
-#[cfg(feature = "native")]
-fn framed(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    group: &str,
-) -> Result<Vec<String>, String> {
-    if group.is_empty() {
-        return Ok(Vec::new());
-    }
-    let tracks = Tracks::all(daw, project.clone());
-    let names: Vec<String> = tracks.iter().map(|t| t.name.clone()).collect();
-    let groups = dynamic_template::visibility::groups(names).map_err(|e| e.to_string())?;
-    let key = dynamic_template::visibility::normalize_key(group);
-    let members = groups
-        .get(&key)
-        .filter(|m| !m.is_empty())
-        .ok_or_else(|| format!("no tracks in the {group} group"))?;
-    let top_of = |guid: &str| -> String {
-        let mut at = guid.to_owned();
-        while let Some(parent) = tracks
-            .iter()
-            .find(|t| t.guid == at)
-            .and_then(|t| t.parent_guid.clone())
-        {
-            at = parent;
-        }
-        at
-    };
-    let mut counts: Vec<(String, usize)> = Vec::new();
-    for track in tracks.iter().filter(|t| members.contains(&t.name)) {
-        let top = top_of(&track.guid);
-        match counts.iter_mut().find(|(t, _)| *t == top) {
-            Some((_, n)) => *n = n.saturating_add(1),
-            None => counts.push((top, 1)),
-        }
-    }
-    let (top, _) = counts
-        .into_iter()
-        .max_by_key(|(_, n)| *n)
-        .ok_or_else(|| format!("no tracks in the {group} group"))?;
-    Ok(tracks
-        .iter()
-        .filter(|t| top_of(&t.guid) == top)
-        .map(|t| t.guid.clone())
-        .collect())
-}
-
 #[cfg(feature = "native")]
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&STEP_ACTION, Effect::Mutating, |a: StepArg| {
-        let (daw, project) = crate::actions::song()?;
         let mut step = get();
         if let Some(bars) = a.bars {
             if !SIZES.contains(&bars) {
@@ -248,63 +155,42 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         if let Some(group) = a.group {
             step.group = dynamic_template::visibility::normalize_key(&group);
         }
-        let tracks = framed(daw, &project, &step.group)?;
-        let by = a.by.unwrap_or(0);
-        let first = if let Some(bar) = a.bar {
-            page_of(bar, step.bars)
-        } else if let Some(at) = a.at {
-            page_of(crate::song_bars::musical(daw, &project, at).0, step.bars)
-        } else if let (Some(first), true, false) = (step.first, by != 0, a.bars.is_some()) {
-            add_bars(page_of(first, step.bars), by.saturating_mul(step.bars))
-        } else {
-            let at = crate::edit_state::current()
-                .unwrap_or_else(|| crate::organize::engine_edit(daw, &project))
-                .at;
-            let here = page_of(crate::song_bars::musical(daw, &project, at).0, step.bars);
-            add_bars(here, by.saturating_mul(step.bars))
-        };
-        // Not past the song's either end.
-        let lowest = page_of(crate::song_bars::musical(daw, &project, 0.0).0, step.bars);
-        let mut first = first.max(lowest);
-        if let Some(end_bar) = last_bar(daw, &project) {
-            first = first.min(page_of(end_bar, step.bars));
-        }
-        let after = add_bars(first, step.bars);
-        let closing = add_bars(after, -1);
-        let from = crate::song_bars::time(daw, &project, first, 1, 0.0);
-        let to = crate::song_bars::time(daw, &project, after, 1, 0.0);
-        step.first = Some(first);
+        // The page as the engine works it out (`SESSION_PAGE`): it has the
+        // tempo map, the markers and the tracks.
+        let ask = serde_json::json!({
+            "bars": step.bars,
+            "group": step.group,
+            "by": a.by,
+            "bar": a.bar,
+            "at": a.at,
+            "first": step.first,
+            "resized": a.bars.is_some(),
+        });
+        let said = crate::actions::run("SESSION_PAGE", ask.to_string().as_bytes())?;
+        let page: crate::page::PageOut =
+            facet_json::from_slice(&said).map_err(|e| format!("SESSION_PAGE: {e}"))?;
+        step.first = Some(page.first_bar);
         set(step.clone());
-
-        let playing = crate::engine::Transport::shared().is_some_and(|t| t.reading().playing);
-        if !playing {
-            daw::service::transport::service::Transport::set_position(daw, project, from)
-                .map_err(|e| e.to_string())?;
-            crate::edit_state::ask(crate::edit_state::Edit {
-                at: from,
-                selection: None,
+        if let Ok(mut shown) = PAGE.lock() {
+            *shown = Some(Page {
+                from: page.from,
+                to: page.to,
+                shown: (page.shown_from, page.shown_to),
             });
-        }
-        // A little of the bars either side: a hit on the page's first
-        // downbeat, or the next page's, is seen whole.
-        let margin = (to - from) / f64::from(step.bars) * EDGE_OF_A_BAR;
-        let shown = ((from - margin).max(0.0), to + margin);
-        if let Ok(mut page) = PAGE.lock() {
-            *page = Some(Page { from, to, shown });
         }
         TURNING.store(false, std::sync::atomic::Ordering::Release);
         let us = |s: f64| num_traits::ToPrimitive::to_i64(&(s * 1_000_000.0).round()).unwrap_or(0);
         crate::window_queue::queue(crate::window_queue::Action::Frame {
-            time: Some((us(shown.0), us(shown.1))),
-            tracks,
+            time: Some((us(page.shown_from), us(page.shown_to))),
+            tracks: page.tracks,
         });
         Ok(StepOut {
-            first_bar: first,
-            last_bar: closing,
+            first_bar: page.first_bar,
+            last_bar: page.last_bar,
             bars: step.bars,
             group: step.group,
-            from,
-            to,
+            from: page.from,
+            to: page.to,
         })
     })?;
     Ok(())

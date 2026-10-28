@@ -37,7 +37,7 @@ use std::sync::{Arc, Mutex};
 /// A real item — or a whole track (`track`), read through the track's
 /// accessor rather than item by item: a slip-edited kit is thousands of
 /// slices of a few takes.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, facet::Facet)]
 pub struct Source {
     /// The item's guid — or, read as a track, the track's name for what
     /// is held of it (one for every item of it).
@@ -112,7 +112,7 @@ impl Source {
 }
 
 /// A stretch of an item's audio, fine.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, facet::Facet)]
 pub struct Detail {
     /// Project seconds of the first point.
     pub from: f64,
@@ -361,13 +361,33 @@ fn newest(wanted: &HashMap<String, (Want, u64)>) -> Option<String> {
         .map(|(guid, _)| guid.clone())
 }
 
-/// Read one stretch from the engine.
+/// Read one stretch from the engine, over the window's link to it.
 #[cfg(feature = "native")]
 fn read((source, a, b, step, _): &Want) -> Option<Detail> {
+    crate::view_client::detail(crate::view::DetailAsk {
+        song: crate::open::current_song().unwrap_or_default(),
+        source: source.clone(),
+        from: *a,
+        to: *b,
+        step: *step,
+    })
+}
+
+/// Read `source` of `song` from `a` to `b` project seconds, a point every
+/// `step` seconds at most, from the engine in this process: the engine's
+/// answer to a window's ask (`crate::view::EngineView::detail`).
+#[cfg(feature = "native")]
+#[must_use]
+pub fn read_in(
+    daw: &daw::standalone::Standalone,
+    song: &str,
+    source: &Source,
+    (a, b): (f64, f64),
+    step: f64,
+) -> Option<Detail> {
     use daw::service::{ItemRef, ProjectContext, TakeRef};
     use daw_proto::{AudioAccessors as _, GetSamplesRequest};
-    let daw = crate::open::local_engine()?;
-    let project = ProjectContext::Project(crate::open::current_song()?);
+    let project = ProjectContext::Project(song.to_owned());
     // A track, read as it plays — its time is the project's; an item, by
     // the engine's name for it: a piece the window split off has its own
     // name in the window until the song is read back, and asked by that
@@ -409,7 +429,7 @@ fn read((source, a, b, step, _): &Want) -> Option<Detail> {
     daw.destroy_accessor(&accessor);
     let per = crate::num::index((step * rate / 2.0).floor()).max(1);
     let channels = usize::try_from(channels).unwrap_or(1);
-    Some(reduce(&data.samples, channels, rate, *a, per))
+    Some(reduce(&data.samples, channels, rate, a, per))
 }
 
 #[cfg(not(feature = "native"))]

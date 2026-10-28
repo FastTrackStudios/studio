@@ -38,9 +38,7 @@ pub fn InstrumentRail() -> Element {
 /// A button of the column: its instrument added, through the Action List.
 pub(crate) fn press(instrument: Instrument) {
     let args = format!(r#"{{"instrument":"{}"}}"#, instrument.name());
-    if let Err(e) =
-        crate::actions::list().run_json(crate::instrument_tracks::ADD.id, args.as_bytes())
-    {
+    if let Err(e) = crate::actions::run(crate::instrument_tracks::ADD.id, args.as_bytes()) {
         tracing::warn!(
             track.instrument = instrument.name(),
             error = %e,

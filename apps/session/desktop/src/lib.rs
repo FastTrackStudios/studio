@@ -71,6 +71,14 @@ mod collection_browser;
 /// `studio` binary (apps/studio/desktop) puts at its top level.
 #[cfg(all(feature = "cli", not(target_arch = "wasm32")))]
 pub mod cli;
+/// The engine with no window, serving windows over its socket: what
+/// `studio engine` and `studio-desktop --session-engine` run.
+#[cfg(all(
+    feature = "native",
+    not(target_arch = "wasm32"),
+    not(target_os = "ios")
+))]
+pub mod engine_host;
 /// The app on Blitz — see `docs/app-on-blitz.md`. The desktop's, and the
 /// iPhone's: the same renderer and the same panels, laid out for the screen.
 #[cfg(all(feature = "native", not(target_arch = "wasm32")))]

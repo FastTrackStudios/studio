@@ -333,7 +333,7 @@ fn run_hit_action(id: &'static str, args: String) {
     #[cfg(feature = "native")]
     if let Some(runtime) = crate::open::runtime() {
         runtime.spawn_blocking(move || {
-            if let Err(e) = crate::actions::list().run_json(id, args.as_bytes()) {
+            if let Err(e) = crate::actions::run(id, args.as_bytes()) {
                 tracing::warn!(hits.action = id, hits.error = %e, "a hit edit by hand was refused");
             }
             crate::hit_overlay::refresh();
@@ -351,7 +351,7 @@ fn run_comp(args: String) {
     if let Some(runtime) = crate::open::runtime() {
         runtime.spawn_blocking(move || {
             let id = crate::comp::SWIPE_COMP.id;
-            if let Err(e) = crate::actions::list().run_json(id, args.as_bytes()) {
+            if let Err(e) = crate::actions::run(id, args.as_bytes()) {
                 tracing::warn!(comp.action = id, comp.error = %e, "a swipe comp was refused");
             }
         });
@@ -1814,7 +1814,7 @@ impl ArrangementWidget {
                     "hold": hold,
                     "keep_manual": keep_manual,
                 });
-                let out = crate::actions::list().run_json("EDIT_REVERT", args.to_string().as_bytes());
+                let out = crate::actions::run("EDIT_REVERT", args.to_string().as_bytes());
                 let text = match &out {
                     Ok(json) if String::from_utf8_lossy(json).contains(r#""restored":false"#) => {
                         "put back — but not every hit plays where it was recorded yet (DRUMS_REVIEW)"
@@ -1876,7 +1876,7 @@ impl ArrangementWidget {
                     "tracks": scope.tracks,
                     "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
                 });
-                let out = crate::actions::list().run_json("EDIT_LEVEL", args.to_string().as_bytes());
+                let out = crate::actions::run("EDIT_LEVEL", args.to_string().as_bytes());
                 let text = match &out {
                     Ok(_) => "leveled — each stroke brought toward the drum's level",
                     Err(e) => {
@@ -1920,7 +1920,7 @@ impl ArrangementWidget {
             runtime.spawn_blocking(move || {
                 let job = crate::jobs::start("Comping the best takes", 0);
                 let args = serde_json::json!({ "spans": spans });
-                let out = crate::actions::list().run_json("COMP_BEST", args.to_string().as_bytes());
+                let out = crate::actions::run("COMP_BEST", args.to_string().as_bytes());
                 drop(job);
                 let text = match &out {
                     Ok(_) => "comped from the best takes",
@@ -2078,7 +2078,7 @@ impl ArrangementWidget {
             runtime.spawn_blocking(move || {
                 let run = |mut args: serde_json::Value| {
                     place(&mut args);
-                    crate::actions::list().run_json("TAKES_RANK", args.to_string().as_bytes())
+                    crate::actions::run("TAKES_RANK", args.to_string().as_bytes())
                 };
                 // The items as one call, so a take selected on every mic
                 // is ranked once (`TAKES_RANK` takes each take once).
@@ -2157,7 +2157,7 @@ impl ArrangementWidget {
                     "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
                     "toggle": true,
                 });
-                let out = crate::actions::list().run_json("COMP_KEEP", args.to_string().as_bytes());
+                let out = crate::actions::run("COMP_KEEP", args.to_string().as_bytes());
                 let text = match &out {
                     Ok(json) if String::from_utf8_lossy(json).contains("released") => {
                         "let go: the takes may be chosen here again"
@@ -2202,7 +2202,7 @@ impl ArrangementWidget {
                     "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
                     "by": by,
                 });
-                let out = crate::actions::list().run_json("COMP_CYCLE", args.to_string().as_bytes());
+                let out = crate::actions::run("COMP_CYCLE", args.to_string().as_bytes());
                 let text = match &out {
                     Ok(_) if by < 0 => "comped from the take before",
                     Ok(_) => "comped from the next take",
@@ -2268,7 +2268,7 @@ impl ArrangementWidget {
                         .collect(),
                 );
                 let args = serde_json::Value::Object(args).to_string();
-                let out = crate::actions::list().run_json("EDIT_QUANTIZE", args.as_bytes());
+                let out = crate::actions::run("EDIT_QUANTIZE", args.as_bytes());
                 let text = match &out {
                     Ok(json) if String::from_utf8_lossy(json).contains(r#""ok":false"#) => {
                         "quantized — the check found hits lost or doubled (HITS_AUDIT)"

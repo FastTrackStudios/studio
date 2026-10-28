@@ -13,11 +13,12 @@
 //!   (on a phone, what the Files app shows under Session), or, on a
 //!   desktop, from the Open dialog.
 //!
-//! Opening runs in the engine, on a thread of its own (it takes seconds):
-//! the set is the engine's (`session_ui::studio_engine::set`), and the
-//! window shows whatever set the engine has, or its start screen when it
-//! has none ([`App`]). An open asked for by the CLI or a model shows here
-//! the same way as one asked for by a click.
+//! Opening runs in the engine (`studio engine`, or the engine in this
+//! process on iOS), asked over the window's link
+//! (`session_ui::view_client::ask`): the set is the engine's, and the
+//! window shows whatever set the engine has — read back over its link —
+//! or its start screen when it has none ([`App`]). An open asked for by the
+//! CLI or a model shows here the same way as one asked for by a click.
 
 use std::path::PathBuf;
 
@@ -31,9 +32,7 @@ use lucide_dioxus::{
 use session_ui::loading::{Loading, Progress, mark_src};
 use session_ui::setlist::Setlist;
 use session_ui::song_stream::Offline;
-use session_ui::stream_set::{
-    Downloading, LibrarySetlist, LibrarySong, ListKind, Remote, with_library,
-};
+use session_ui::stream_set::{Downloading, LibrarySetlist, LibrarySong, ListKind, with_library};
 use session_ui::task_account::{self, Account, AccountLibrary as _};
 
 pub(super) const BG: &str = "#0f1012";
@@ -87,7 +86,7 @@ pub fn App() -> Element {
     let initial: Option<Setlist> = use_context();
     use_hook(move || {
         if let Some(setlist) = initial {
-            session_ui::studio_engine::set::install(setlist);
+            session_ui::view_client::show_set(setlist);
         }
     });
     let engine = use_engine_set();
@@ -100,10 +99,9 @@ pub fn App() -> Element {
     // which opens it behind its loading screen.
     use_context_provider(|| {
         session_ui::shell::Back(Callback::new(move |()| {
-            session_ui::engine::transport(session_ui::engine::Move::Stop, 0.0);
             #[cfg(target_os = "ios")]
             super::ios_audio::clear();
-            session_ui::studio_engine::set::close();
+            session_ui::view_client::ask::close();
             match host {
                 Some(host) if !super::handoff::pending() => host.on_leave.call(()),
                 _ => {}
@@ -129,6 +127,46 @@ pub fn App() -> Element {
     rsx! {
         document::Style { {ROOT_CSS} }
         {page}
+        EngineNotice {}
+    }
+}
+
+/// What the window says about its engine — it stopped and was started
+/// again (`session_ui::studio_engine::link::take_notice`) — across the
+/// foot of the window for a few seconds.
+#[component]
+fn EngineNotice() -> Element {
+    let mut said = use_signal(|| None::<String>);
+    use_future(move || async move {
+        let mut shown_for = 0_u32;
+        loop {
+            futures_timer::Delay::new(std::time::Duration::from_millis(500)).await;
+            #[cfg(not(target_os = "ios"))]
+            if let Some(text) = session_ui::studio_engine::link::take_notice() {
+                said.set(Some(text));
+                shown_for = 0;
+                continue;
+            }
+            if said.peek().is_some() {
+                shown_for = shown_for.saturating_add(1);
+                if shown_for >= 12 {
+                    said.set(None);
+                }
+            }
+        }
+    });
+    let Some(text) = said() else {
+        return rsx! {};
+    };
+    rsx! {
+        div {
+            style: "position:absolute; left:0; right:0; bottom:56px; display:flex; justify-content:center;",
+            div {
+                style: "padding:8px 14px; border-radius:8px; background:#2a2310; border:1px solid {WARN}; \
+                        color:{TEXT}; font-size:12px;",
+                "{text}"
+            }
+        }
     }
 }
 
@@ -166,11 +204,12 @@ fn WithSetlist(setlist: Setlist, children: Element) -> Element {
 }
 
 /// The engine's set, as it changes: every window shows the one set the
-/// engine has (`session_ui::studio_engine::set`), whoever changed it.
+/// engine has, read back over its link (`session_ui::view_client`), whoever
+/// changed it.
 pub(super) fn use_engine_set() -> Signal<session_ui::studio_engine::set::SetView> {
-    let mut shown = use_signal(session_ui::studio_engine::set::view);
+    let mut shown = use_signal(session_ui::view_client::set_view);
     use_future(move || async move {
-        let mut changes = session_ui::studio_engine::set::subscribe();
+        let mut changes = session_ui::view_client::subscribe_set();
         loop {
             let now = changes.borrow_and_update().clone();
             if now.revision != shown.peek().revision {
@@ -319,39 +358,47 @@ fn Start() -> Element {
         }
     });
 
-    // Open a set in the engine, on a thread of its own; the window shows it
-    // when it is ready, and meanwhile the loading screen.
+    // A set this window drives on another system (a REAPER's bridge):
+    // attached on a thread of its own, shown when it is read; the loading
+    // screen meanwhile.
     let mut open_set = move |first: Progress, work: OpenWork| {
-        opening.set(Opening::Busy(first.clone()));
-        if let Err(busy) = session_ui::studio_engine::set::open_with(first, work) {
-            opening.set(Opening::Failed(busy.to_string()));
-        }
+        opening.set(Opening::Busy(first));
+        spawn(async move {
+            let read = off_thread(move || work(&|_| ())).await;
+            match read {
+                Some(Ok(setlist)) => {
+                    opening.set(Opening::Idle);
+                    session_ui::view_client::show_set(setlist);
+                }
+                Some(Err(e)) => opening.set(Opening::Failed(brief(&e))),
+                None => opening.set(Opening::Failed("the attach stopped".to_owned())),
+            }
+        });
+    };
+    // What the engine is asked to open; the loading screen follows its
+    // opening (`use_engine_set`), a refusal is said at once.
+    let mut asked = move |first: Progress, refused: Result<String, String>| match refused {
+        Ok(_) => opening.set(Opening::Busy(first)),
+        Err(why) => opening.set(Opening::Failed(why)),
     };
     let mut open_path = move |path: PathBuf| {
         let title = path.file_stem().map_or_else(
             || path.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        open_set(
-            Progress::Opening { title },
-            Box::new(move |_| {
-                let songs = super::songs_of(&path)
-                    .ok_or_else(|| eyre::eyre!("{} is not a song or a setlist", path.display()))?;
-                let setlist = Setlist::open(&songs)?;
-                super::remember(&path);
-                Ok(setlist)
-            }),
-        );
+        let opened = session_ui::view_client::ask::open_path(&path);
+        if opened.is_ok() {
+            super::remember(&path);
+        }
+        asked(Progress::Opening { title }, opened);
     };
     // A song from nothing (`SESSION_NEW`): untitled, in Organize mode, its
     // count-in, start and guide placed.
     let mut new_project = move || {
-        open_set(
-            Progress::Opening {
-                title: session_ui::project_new::UNTITLED.to_owned(),
-            },
-            Box::new(|_| session_ui::project_new::setlist(Some(true))),
-        );
+        opening.set(Opening::Busy(Progress::Opening {
+            title: session_ui::project_new::UNTITLED.to_owned(),
+        }));
+        session_ui::view_client::ask::new_song();
     };
 
     // What the launch chose, opened as the window opens.
@@ -364,16 +411,7 @@ fn Start() -> Element {
         // the app was launched with went straight back into it.
         let launch =
             first.filter(|_| !LAUNCH_OPENED.swap(true, std::sync::atomic::Ordering::AcqRel));
-        if let Some(guid) = session_ui::project_new::take_made() {
-            // A new song made from inside another (`SESSION_NEW`), which
-            // came back out here to open it: it is in the engine already.
-            open_set(
-                Progress::Opening {
-                    title: session_ui::project_new::UNTITLED.to_owned(),
-                },
-                Box::new(move |_| session_ui::project_new::setlist_of(guid)),
-            );
-        } else if let Some(path) = session_ui::projects::take_next().or(launch) {
+        if let Some(path) = session_ui::projects::take_next().or(launch) {
             open_path(path);
         } else if super::handoff::take_new() {
             // Studio's welcome screen asked for a new song.
@@ -517,13 +555,8 @@ fn Start() -> Element {
                 ));
                 return;
             };
-            let name = who.clone();
-            open_set(
-                Progress::Joining { retry: None },
-                Box::new(move |progress| {
-                    session_ui::stream_set::open(Remote::Live { link: live, name }, progress)
-                }),
-            );
+            opening.set(Opening::Busy(Progress::Joining { retry: None }));
+            session_ui::view_client::ask::join(live, who.clone());
         }
     };
     // Studio's home (`handoff::join_on_start`), or `FTS_SESSION_LIVE=<link>`,
@@ -560,28 +593,33 @@ fn Start() -> Element {
         let Some(org) = own.or_else(|| org()) else {
             return;
         };
-        let library = account.library(&org);
-        let name = account.name();
+        let _ = account;
         let first = setlist
             .songs
             .first()
             .map(|s| s.title.clone())
             .unwrap_or_default();
-        open_set(
+        // The engine streams it in, as the person signed in on this
+        // machine: a list by its title, a song of no list alone.
+        let request = if setlist.kind == ListKind::Songs && setlist.id.starts_with("song-") {
+            session_ui::studio_engine::set::LibraryOpen {
+                org: Some(org),
+                setlist: String::new(),
+                song: setlist.songs.first().map(|s| s.slug.clone()),
+            }
+        } else {
+            session_ui::studio_engine::set::LibraryOpen {
+                org: Some(org),
+                setlist: setlist.title.clone(),
+                song: None,
+            }
+        };
+        asked(
             Progress::Fetching {
                 title: first,
                 retry: None,
             },
-            Box::new(move |progress| {
-                session_ui::stream_set::open(
-                    Remote::Library {
-                        library,
-                        setlist,
-                        name,
-                    },
-                    progress,
-                )
-            }),
+            session_ui::view_client::ask::open_library(&request),
         );
     });
 

@@ -14,7 +14,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// Who put a hit there.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, facet::Facet)]
 pub enum Who {
     /// A detector run, unchecked.
     Auto,
@@ -25,7 +26,8 @@ pub enum Who {
 }
 
 /// What has been done to a hit's timing.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, facet::Facet)]
 pub enum Edited {
     /// It plays where it was played.
     #[default]
@@ -37,7 +39,7 @@ pub enum Edited {
 }
 
 /// One hit, where it plays now.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, facet::Facet)]
 pub struct Mark {
     /// Its marker's id: what a hand on it edits.
     pub id: String,
@@ -55,7 +57,7 @@ pub struct Mark {
 }
 
 /// A fill or exception zone, shaded over the kit.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, facet::Facet)]
 pub struct Shade {
     pub start: f64,
     pub end: f64,
@@ -65,7 +67,7 @@ pub struct Shade {
 
 /// A stretch of a piece's slices played slower or faster than recorded
 /// — a slice drawn out over a gap — where it plays now.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, facet::Facet)]
 pub struct Stretch {
     /// Its piece: an index into [`Overlay::pieces`].
     pub piece: usize,
@@ -77,7 +79,7 @@ pub struct Stretch {
 }
 
 /// What is drawn.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, facet::Facet)]
 pub struct Overlay {
     /// The pieces' names (`Kick`, `Snare`, `Tom 1`).
     pub pieces: Vec<String>,
@@ -99,7 +101,7 @@ pub struct Overlay {
 }
 
 /// A take's rank or note where the song plays it ([`crate::take_rank`]).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, facet::Facet)]
 pub struct TakeMark {
     /// Song seconds; `to` ends a take region.
     pub from: f64,
@@ -138,14 +140,14 @@ pub fn rejected(marks: &[TakeMark], (start, end): (f64, f64)) -> bool {
 }
 
 /// Every take's ranks and notes: by item, and by the kit's take (pass).
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, facet::Facet)]
 pub struct TakeMarks {
     pub by_item: std::collections::HashMap<String, Vec<TakeMark>>,
     pub by_pass: std::collections::HashMap<String, Vec<TakeMark>>,
 }
 
 /// A stretch of the song the comp plays from one take.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, facet::Facet)]
 pub struct CompSpan {
     /// Project seconds.
     pub start: f64,
@@ -239,10 +241,12 @@ static BUSY: AtomicBool = AtomicBool::new(false);
 /// Asked for again while one ran: the hits may have changed under it.
 static AGAIN: AtomicBool = AtomicBool::new(false);
 
-/// Read the markers again, off the window's thread, and publish them —
-/// after anything that moves a hit or a slice — and the tracks' waveform
-/// detail with them. Asked for while a read
-/// runs, one more runs after it; never two at once.
+/// Read the markers again in the engine, off the caller's thread, and
+/// show them to every window (`crate::studio_engine::view_host`) — after
+/// anything that moves a hit or a slice; a window reads its tracks'
+/// waveform detail again with them. Asked for while a read runs, one more
+/// runs after it; never two at once. Nothing with no engine in this
+/// process.
 pub fn refresh() {
     #[cfg(feature = "native")]
     {
@@ -257,16 +261,19 @@ pub fn refresh() {
         runtime.spawn_blocking(|| {
             loop {
                 AGAIN.store(false, Ordering::Release);
-                if let Ok((daw, project)) = crate::actions::song() {
-                    publish(crate::hits::overlay(daw, &project));
+                // Told to every window, which reads its tracks' detail
+                // again with it: what moved the hits moved the audio (an
+                // action — a quantize over MCP — edits the engine directly;
+                // a track read while its edits were landing was held
+                // half-edited, the take as played drawn under hits that
+                // had moved, for good).
+                if let Ok((daw, project)) = crate::actions::song()
+                    && let daw::service::ProjectContext::Project(song) = &project
+                {
+                    let mut overlay = crate::hits::overlay(daw, &project);
+                    overlay.marks.sort_by(|a, b| a.time.total_cmp(&b.time));
+                    crate::studio_engine::view_host::overlay_read(song.clone(), overlay);
                 }
-                // What moved the hits moved the audio: the tracks' detail
-                // is read again from the engine. An action (a quantize run
-                // over MCP) edits the engine directly, past the window's
-                // edit worker; a track read while its edits were landing
-                // was held half-edited — the take as played drawn under
-                // hits that had moved, for good.
-                crate::wave_detail::engine_changed();
                 BUSY.store(false, Ordering::Release);
                 if !AGAIN.load(Ordering::Acquire) || BUSY.swap(true, Ordering::AcqRel) {
                     break;

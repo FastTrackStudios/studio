@@ -34,6 +34,8 @@ pub mod fx_actions;
 pub mod grow;
 pub mod guide_instrument;
 #[cfg(feature = "native")]
+pub mod ingest;
+#[cfg(feature = "native")]
 pub mod instrument_tracks;
 pub mod jobs;
 pub mod lanes;
@@ -70,6 +72,9 @@ pub mod stream_in;
 pub mod stream_set;
 // The engine side, behind its own boundary: the set, its actions, the
 // Action List's MCP server, and the engine with no window (`studio engine`).
+/// A page of bars, as a window steps through the song (`SESSION_PAGE`).
+#[cfg(feature = "native")]
+pub mod page;
 pub mod stream_quality;
 #[cfg(feature = "native")]
 pub mod studio_engine;
@@ -79,6 +84,11 @@ pub mod task_account;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod task_set;
 pub mod track_regions;
+/// The engine as a window sees it: one vox service beside the daw facade.
+pub mod view;
+/// A window's link to its engine: replicas and calls.
+#[cfg(feature = "native")]
+pub mod view_client;
 #[cfg(feature = "native")]
 pub mod vocal_level;
 #[cfg(feature = "native")]
@@ -141,7 +151,7 @@ pub mod open {
     }
 
     /// The local engine's handle, for what needs it — none on a page yet.
-    pub fn with_local_engine<R>(
+    pub(crate) fn with_local_engine<R>(
         _what: LocalOnly,
         _f: impl FnOnce(&daw::standalone::Standalone) -> R,
     ) -> Option<R> {

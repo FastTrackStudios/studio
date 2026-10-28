@@ -16,6 +16,8 @@
 //! studio actions --filter drums                # what the window can do
 //! studio run SESSION_PLAY                      # run one action, args as JSON
 //! studio engine                                # the whole engine, no window
+//! studio ingest Album/ --org fasttrackaudio --project Album --form album --link
+//!                                              # songs into Task, ready to open anywhere
 //! ```
 //!
 //! `studio engine` ([`engine`]) runs Session's engine with no window and
@@ -32,6 +34,7 @@ pub mod app;
 pub mod bench;
 #[cfg(feature = "native")]
 pub mod engine;
+pub mod ingest;
 mod lyrics;
 mod multitracks;
 mod peaks;
@@ -75,6 +78,13 @@ pub enum Command {
     /// WebSocket). Until Ctrl-C.
     #[cfg(feature = "native")]
     Engine(engine::Args),
+    /// Put songs into an org's Task library, ready to open anywhere: a
+    /// Live set (split into songs), song folders, `.session`/`.RPP` files
+    /// or an album folder. Prepares each (proxies, peaks, reference),
+    /// uploads what the server lacks to its root at `session/<slug>`,
+    /// makes the setlist and projects, and with `--link` a live link. Run
+    /// again, it only updates.
+    Ingest(Box<ingest::Args>),
     /// The running app's actions, by id (`--filter` narrows them).
     Actions {
         #[arg(long)]
@@ -314,6 +324,7 @@ pub async fn run(command: Command) -> eyre::Result<ExitCode> {
         }
         #[cfg(feature = "native")]
         Command::Engine(args) => run_engine(args),
+        Command::Ingest(args) => run_ingest(*args),
         Command::Actions { filter } => app::list(filter.as_deref()),
         Command::Run { action, args } => {
             let args = match args {
@@ -378,6 +389,9 @@ pub fn log_filter(command: &Command) -> Option<&'static str> {
     match command {
         #[cfg(feature = "native")]
         Command::Engine(_) => Some("info,wgpu=warn,naga=warn,symphonia=warn,iroh=warn,vox=warn"),
+        // Opening songs to prepare them is the engine's own business: its
+        // per-block complaints would bury the progress.
+        Command::Ingest(_) => Some("error"),
         _ => None,
     }
 }
@@ -391,6 +405,16 @@ fn run_engine(args: engine::Args) -> eyre::Result<()> {
         .spawn(move || engine::run(&args))?
         .join()
         .map_err(|_| eyre::eyre!("the engine stopped with a panic"))?
+}
+
+/// `studio ingest`, on a thread of its own: it runs a runtime of its own
+/// and blocks on it, which it may not do on this one's.
+fn run_ingest(args: ingest::Args) -> eyre::Result<()> {
+    std::thread::Builder::new()
+        .name("studio-ingest".into())
+        .spawn(move || ingest::run(&args))?
+        .join()
+        .map_err(|_| eyre::eyre!("the ingest stopped with a panic"))?
 }
 
 /// `studio open`: a path that exists is opened (`SESSION_OPEN`), anything

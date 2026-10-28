@@ -18,8 +18,62 @@ Steps 1–3 of the research's migration path (§7) are under way:
 | 1. The boundary inside one process | done, and cut: `session-engine` (`apps/session/engine`, 100 modules) and `session-ui` (`apps/session/ui`, the window); the compiler holds the line |
 | 2. The Action List and set state to the engine | done: the list is the engine's; a window registers its own actions when it attaches; the edit cursor and time selection are engine state; Live's roll-on is the engine's |
 | 3. `studio engine` | runs: the engine, the set, SetAudio, MCP on 47811, the daw facade on a Unix socket (`--listen` adds WS) |
-| 4. The app attaches or spawns | done behind `FTS_ENGINE=spawn\|attach` (default `inprocess`): see Phase C |
-| 5–6 | planned below |
+| 4. The app attaches or spawns | done, and the only way: see Phase C and Phase D |
+| 5. The data plane | done for what a window draws: see Phase D |
+| 6. The desktop is always a client | done: no in-process engine in a desktop window |
+
+### Phase D: one path (2026-10-27)
+
+A window is a client of its engine everywhere; nothing in a window calls
+the engine directly.
+
+- **Desktop**: always another process. `link::choose` attaches to a
+  running engine of the same build or spawns one — by default the app's
+  own binary run as `studio-desktop --session-engine` (`session_desktop::
+  engine_host`, the same code `studio engine` runs), so a window never
+  drives an engine of another build; `FTS_STUDIO_BIN` spawns `studio
+  engine` from a CLI instead, `FTS_ENGINE=attach` waits for one started by
+  hand. An engine of another build (an update, a dev rebuild) is stopped
+  (SIGTERM) and one of this build started with `--reopen`, which opens what
+  the last one had open (`link::remember_open`, `last-open.json`).
+  `FTS_ENGINE=inprocess` is gone.
+- **Lifecycle**: `link::keep_linked` watches the link; the same engine is
+  attached again while it answers, a dead one is replaced (spawned with
+  `--reopen`) and the window says so (`link::take_notice`, shown by
+  `start::EngineNotice`). The engine outlives the window.
+- **iOS** (no helper process): the engine runs in the window's process and
+  the window reaches it through the same client over an in-memory vox link
+  (`open::link_window_here`, `architect::LocalServer` over the engine's
+  router). A test does the same (`tests/it/view_link.rs`).
+- **The engine's view service** (`view::EngineView`, `#[architect::rpc]`,
+  served beside the daw facade on one router — `view_host::router`):
+  streams `set`, `overlays` (hit overlay), `marks` (tracks' own marks),
+  `streams` (arrival status), `changes` (what to read back), `queued` (what
+  the engine asks of a window; subscribing is what attaches a window); calls
+  `run` (the Action List over vox), `apply` (the window's edits, one batch a
+  call — a kit's slip edit is one message), `take_window`, `waves` (coarse
+  waveforms as the engine draws them: through take volume, cut from a
+  recording already read, partial reads flagged), `detail` (fine detail at
+  the zoom asked), `automation` (lanes, take volume curves, leveled items),
+  `item_changes` + `journal_now` (the window's item read-back), `song_facts`
+  (track kinds, chart), `playheads`.
+- **The window's replicas** (`view_client`): the set it shows (read back
+  over the facade as songs arrive, waveforms behind), the overlay, the
+  marks, the streams, every song's playhead (from `TransportSync::positions`,
+  carried on at its rate between stamps), what the engine asked. A frame
+  reads replicas only.
+- **Window actions the engine runs** (`SESSION_STEP`, `SESSION_VIEW`) ask
+  the engine for what needs the song (`SESSION_PAGE`, `SESSION_SPAN`); the
+  window's menus and toolbars run engine actions (`AUTOMATION_MENU`,
+  `AUTOMATION_SET_MODE`, `ORGANIZE_PRESS`, `CHART_APPLY`, `VOCAL_RELEVEL`,
+  `RIG_BROWSE`, `SESSION_SONG_SET`, `SESSION_CLOSE`, `SESSION_JOIN`).
+- **Still to do**: meters are the song on screen's (the pump publishes the
+  current project's bank only; per-voice banks are `SetAudio` work); the
+  web build keeps its own engine reach (`web_engine`, `web_host`) and its
+  own set; `session-ui` still depends on `session-engine` whole (the
+  in-process reach points are not yet `pub(crate)`, so the compiler does
+  not forbid a regression — `local_engine` & co. are unused in session-ui
+  and the desktop shell today).
 
 ### Phase C: the window on an engine in another process
 
@@ -50,13 +104,8 @@ Steps 1–3 of the research's migration path (§7) are under way:
   engine played on; relaunched, it attached to the same engine without
   stopping it; a second window followed the same set; Live handed song 1
   to song 2 on the frame (`SESSION_TRANSPORT` read the new song at 3.2 s).
-- **Not yet** (why the default stays `inprocess`): step 5's replica. A
-  linked window is a Remote window: what it draws per frame from the
-  in-process engine (hit overlays, wave detail, take volume curves, the
-  meters) is what Remote mode draws, not what Engine mode does; actions
-  that queue for the window from the engine (`window_queue`) do not cross
-  processes; an engine that dies is not restarted. Flip `link::Mode::from_env`
-  once those are measured.
+- What Phase C lacked (the replica, the window queue across processes,
+  restarting a dead engine) is Phase D.
 
 ### Phase B: two crates
 

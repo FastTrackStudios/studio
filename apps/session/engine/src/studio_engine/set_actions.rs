@@ -30,7 +30,7 @@ static OPEN_SETLIST: ActionMeta = meta(
     "SESSION_OPEN_SETLIST",
     "session_open_setlist",
     "Open a setlist from the library",
-    "Stream a setlist of an org's Task library in, as a click on it does: `setlist` its title, `org` the org whose library holds it (FTS_TASK_ORG, else the one last picked, when left out), `song` one of its songs (slug or title) to open alone. What is open is not saved first. Opens in the engine, as the person signed in on this machine, a window or none; returns at once — SESSION_OPENING says how it goes, SESSION_SONGS lists the songs as they open.",
+    "Stream a setlist of an org's Task library in, as a click on it does: `setlist` its title, `org` the org whose library holds it (FTS_TASK_ORG, else the one last picked, when left out), `song` one of its songs (slug or title) to open alone — or, with no `setlist`, a song of the library in no list. What is open is not saved first. Opens in the engine, as the person signed in on this machine, a window or none; returns at once — SESSION_OPENING says how it goes, SESSION_SONGS lists the songs as they open.",
     "Session",
     "",
 );
@@ -118,6 +118,49 @@ struct LiveArg {
     on: Option<bool>,
 }
 
+static CLOSE: ActionMeta = meta(
+    "SESSION_CLOSE",
+    "session_close",
+    "Close the set",
+    "Stop and close the set open in the engine (nothing is saved first — SESSION_SAVE what should be). A window goes back to its start screen.",
+    "Set",
+    "",
+);
+
+static JOIN: ActionMeta = meta(
+    "SESSION_JOIN",
+    "session_join",
+    "Join a live set",
+    "Join a set Task keeps, by its live link (`link`, `https://…/org/<org>/share/<id>`), as `name` (left out: Guest): its songs stream into the engine and play, the set followed with everyone in it. Returns at once — SESSION_OPENING says how it goes.",
+    "Set",
+    "",
+);
+
+/// Which live set, as whom.
+#[derive(Facet)]
+struct JoinArg {
+    link: String,
+    name: Option<String>,
+}
+
+static SONG_SET: ActionMeta = meta(
+    "SESSION_SONG_SET",
+    "session_song_set",
+    "Change a song of the set",
+    "Change song `song` of the open set (its number, 1 the first, as SESSION_SONGS lists them): `color` gives it a colour (`#rrggbb`; empty: the one its title makes), `to` moves it to that place, `remove` takes it out of the set. What a window's set editor does.",
+    "Set",
+    "",
+);
+
+/// Which song, and what to change of it.
+#[derive(Facet)]
+struct SongSetArg {
+    song: u32,
+    color: Option<String>,
+    to: Option<u32>,
+    remove: Option<bool>,
+}
+
 static TRANSPORT: ActionMeta = meta(
     "SESSION_TRANSPORT",
     "transport",
@@ -162,12 +205,22 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
     list.register(&OPEN, Effect::Mutating, |a: OpenArg| {
         let path = path_to_open(a)?;
         set::open_path(path.clone()).map_err(|e| e.to_string())?;
+        super::link::remember_open(
+            "SESSION_OPEN",
+            &serde_json::json!({ "path": path.display().to_string() }),
+        );
         Ok(format!("opening {}", path.display()))
     })?;
     list.register(&OPEN_SETLIST, Effect::Mutating, |a: OpenSetlistArg| {
         let request = library_open(a)?;
         let said = opening_said(&request);
+        let kept = serde_json::json!({
+            "setlist": request.setlist,
+            "org": request.org,
+            "song": request.song,
+        });
         set::open_library(request).map_err(|e| e.to_string())?;
+        super::link::remember_open("SESSION_OPEN_SETLIST", &kept);
         Ok(said)
     })?;
     list.register(&OPENING, Effect::ReadOnly, |(): ()| {
@@ -195,6 +248,54 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             "live: off"
         }
         .to_owned())
+    })?;
+    list.register(&CLOSE, Effect::Mutating, |(): ()| {
+        crate::engine::transport_here(crate::engine::Move::Stop, 0.0);
+        set::close();
+        Ok("the set is closed".to_owned())
+    })?;
+    list.register(&JOIN, Effect::Mutating, |a: JoinArg| {
+        let name = a
+            .name
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or_else(|| "Guest".to_owned());
+        set::open_live(a.link.clone(), name.clone()).map_err(|e| e.to_string())?;
+        super::link::remember_open(
+            "SESSION_JOIN",
+            &serde_json::json!({ "link": a.link, "name": name }),
+        );
+        Ok(format!("joining {}", a.link))
+    })?;
+    list.register(&SONG_SET, Effect::Mutating, |a: SongSetArg| {
+        let index = usize::try_from(a.song.saturating_sub(1)).unwrap_or(usize::MAX);
+        let len = set::lineup().map_or(0, |l| l.songs.len());
+        if a.song == 0 || index >= len {
+            return Err(format!("no song {} in a set of {len}", a.song));
+        }
+        let mut said = Vec::new();
+        if let Some(color) = a.color {
+            said.push(format!(
+                "coloured {}",
+                if color.is_empty() {
+                    "by its title"
+                } else {
+                    &color
+                }
+            ));
+            set::recolor(index, Some(color).filter(|c| !c.is_empty()));
+        }
+        if let Some(to) = a.to {
+            let to = usize::try_from(to.saturating_sub(1))
+                .unwrap_or(0)
+                .min(len - 1);
+            set::reorder(index, to);
+            said.push(format!("moved to {}", to + 1));
+        }
+        if a.remove == Some(true) {
+            set::remove(index);
+            said.push("removed".to_owned());
+        }
+        Ok(format!("song {}: {}", a.song, said.join(", ")))
     })?;
     list.register(&TRANSPORT, Effect::ReadOnly, |(): ()| {
         let song = crate::open::current_song();
@@ -241,14 +342,18 @@ fn path_to_open(a: OpenArg) -> Result<std::path::PathBuf, String> {
 /// title refused.
 fn library_open(a: OpenSetlistArg) -> Result<set::LibraryOpen, String> {
     let setlist = a.setlist.trim().to_owned();
-    if setlist.is_empty() {
-        return Err("`setlist`: the title of a setlist in the library".to_owned());
-    }
     let given = |s: Option<String>| s.map(|s| s.trim().to_owned()).filter(|s| !s.is_empty());
+    let song = given(a.song);
+    // No list: one song of the library, alone.
+    if setlist.is_empty() && song.is_none() {
+        return Err(
+            "`setlist`: the title of a setlist in the library (or `song` alone)".to_owned(),
+        );
+    }
     Ok(set::LibraryOpen {
         org: given(a.org),
         setlist,
-        song: given(a.song),
+        song,
     })
 }
 

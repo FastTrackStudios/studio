@@ -152,7 +152,7 @@ pub fn Arrangement() -> Element {
                 };
                 if let Some(id) = rank {
                     if state.is_pressed()
-                        && let Err(e) = crate::actions::list().run_json(id, b"")
+                        && let Err(e) = crate::actions::run(id, b"")
                     {
                         tracing::warn!(rank.error = %e, "mouse button: the take could not be ranked");
                     }

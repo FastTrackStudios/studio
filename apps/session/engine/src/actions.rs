@@ -120,7 +120,7 @@ fn register_transport(list: &ActionList) -> Result<(), architect::action::Action
         (&PLAY_PAUSE, crate::engine::Move::PlayStop),
     ] {
         list.register(meta, Effect::Mutating, move |(): ()| {
-            crate::engine::transport(command, 0.0);
+            crate::engine::transport_here(command, 0.0);
             if crate::engine::buffering::waiting() {
                 let waiting = crate::open::current_song()
                     .and_then(|s| crate::stream_set::readiness(&s))
@@ -135,8 +135,8 @@ fn register_transport(list: &ActionList) -> Result<(), architect::action::Action
     // Home is the engine's too; the window, when there is one, also takes
     // its edit cursor home (idempotent: it asks the engine again).
     list.register(&GO_TO_START, Effect::Mutating, |(): ()| {
-        crate::engine::transport(crate::engine::Move::Home, 0.0);
-        crate::window_queue::queue(crate::window_queue::Action::GoToStart);
+        crate::engine::transport_here(crate::engine::Move::Home, 0.0);
+        crate::window_queue::ask(crate::window_queue::Asked::GoToStart);
         Ok(format!("{}: done", GO_TO_START.display_name))
     })?;
     Ok(())
@@ -488,6 +488,9 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     crate::project_new::register(list)?;
     crate::instrument_tracks::register(list)?;
     crate::timeline_actions::register(list)?;
+    crate::organize_edit::register(list)?;
+    crate::page::register(list)?;
+    crate::prepare::register(list)?;
     crate::edit_actions::register(list)?;
     crate::perf::register(list)?;
     crate::audio_health::register(list)?;
@@ -495,6 +498,7 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     crate::comp_song::register(list)?;
     crate::poi::register(list)?;
     crate::track_regions::register(list)?;
+    crate::ingest::actions::register(list)?;
     #[cfg(feature = "signal")]
     crate::rig_actions::register(list)?;
     Ok(())
@@ -1817,7 +1821,7 @@ fn register_remove(list: &ActionList) -> Result<(), architect::action::ActionErr
             .map(|t| resolve(daw, &project, t))
             .collect::<Result<Vec<String>, String>>()?;
         let us = |s: f64| num_traits::ToPrimitive::to_i64(&(s * 1_000_000.0).round()).unwrap_or(0);
-        crate::window_queue::queue(crate::window_queue::Action::RemoveRange {
+        crate::window_queue::ask(crate::window_queue::Asked::RemoveRange {
             tracks,
             from_us: us(a.from),
             to_us: us(a.to),
@@ -2384,7 +2388,7 @@ fn register_track_set(list: &ActionList) -> Result<(), architect::action::Action
 
 /// The engine and the open song, as a pair — for the call sites not yet
 /// on [`crate::song::Song`], which new code takes instead.
-pub fn song() -> Result<(&'static daw::standalone::Standalone, ProjectContext), String> {
+pub(crate) fn song() -> Result<(&'static daw::standalone::Standalone, ProjectContext), String> {
     let song = crate::song::Song::current()?;
     Ok((song.daw(), song.context()))
 }
@@ -3990,7 +3994,7 @@ fn register_stretch(list: &ActionList) -> Result<(), architect::action::ActionEr
         let us = |s: f64| num_traits::ToPrimitive::to_i64(&(s * 1_000_000.0).round()).unwrap_or(0);
         let slices = u32::try_from(edits.len()).unwrap_or(u32::MAX);
         let ticket = crate::engine::ticket();
-        crate::window_queue::queue(crate::window_queue::Action::StretchDrums {
+        crate::window_queue::ask(crate::window_queue::Asked::StretchDrums {
             ticket,
             edits: edits
                 .into_iter()
@@ -4626,7 +4630,7 @@ fn slip_now(
         .collect();
     attacks_us.sort_unstable();
     let ticket = crate::engine::ticket();
-    crate::window_queue::queue(crate::window_queue::Action::SlipDrums {
+    crate::window_queue::ask(crate::window_queue::Asked::SlipDrums {
         ticket,
         attacks_us,
         moves: cuts,
@@ -4757,9 +4761,10 @@ fn register_peaks(list: &ActionList) -> Result<(), architect::action::ActionErro
 /// The action refused, or the engine did not answer.
 #[cfg(feature = "native")]
 pub fn run(id: &str, args: &[u8]) -> Result<Vec<u8>, String> {
-    if crate::studio_engine::link::linked().is_some() && !crate::window_queue::is_window_action(id)
-    {
-        return crate::studio_engine::link::run(id, args).map(String::into_bytes);
+    // A window's: every action but its own runs on its engine, over its
+    // link — in another process or this one alike.
+    if crate::view_client::is_linked() && !crate::window_queue::is_window_action(id) {
+        return crate::view_client::run(id, args).map(String::into_bytes);
     }
     list().run_json(id, args).map_err(|e| e.to_string())
 }

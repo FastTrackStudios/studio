@@ -91,6 +91,45 @@ impl Kinds {
         Self { by_guid }
     }
 
+    /// Every track it knows, as a window is told them.
+    #[must_use]
+    pub fn entries(&self) -> Vec<crate::view::TrackKind> {
+        let mut out: Vec<crate::view::TrackKind> = self
+            .by_guid
+            .values()
+            .map(|ext| crate::view::TrackKind {
+                guid: ext.guid.clone(),
+                name: ext.name.clone(),
+                kind: ext.kind.map(|k| k.as_str().to_owned()),
+                group: ext.group.clone(),
+            })
+            .collect();
+        out.sort_by(|a, b| a.guid.cmp(&b.guid));
+        out
+    }
+
+    /// The kinds a window was told ([`Self::entries`]).
+    #[must_use]
+    pub fn from_entries(entries: Vec<crate::view::TrackKind>) -> Self {
+        use dynamic_template::golden_session::Kind;
+        Self {
+            by_guid: entries
+                .into_iter()
+                .map(|e| {
+                    (
+                        e.guid.clone(),
+                        TrackExt {
+                            guid: e.guid,
+                            name: e.name,
+                            kind: e.kind.as_deref().and_then(Kind::parse),
+                            group: e.group,
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
     /// The open song's kinds: from the engine, else from the project at
     /// `path`'s text.
     #[must_use]

@@ -25,6 +25,8 @@
 //!   one, spawning one, running the Action List on it, following its set.
 //! - [`live`]: Live mode's roll-on — the next song on the frame the current
 //!   one ends.
+//! - [`view_host`]: the engine's side of `crate::view::EngineView` — what a
+//!   window reads and asks of the engine, over its link.
 //!
 //! The rule for code here: nothing in it draws, and nothing in it waits for
 //! a window to do something. A window reads [`set::subscribe`] and asks
@@ -36,3 +38,4 @@ pub mod live;
 pub mod mcp;
 pub mod set;
 pub mod set_actions;
+pub mod view_host;

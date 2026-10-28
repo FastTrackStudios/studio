@@ -116,7 +116,7 @@ pub fn Shell() -> Element {
     session_ui::song_modes::use_song_modes(setlist, mode);
     // In Mix mode, the guide folder muted.
     session_ui::mix_guide::use_mix_guide(setlist, mode);
-    // The set is the engine's (`studio_engine::set`): the songs arriving
+    // The set is the engine's, followed over the link: the songs arriving
     // behind the first, a pick from the CLI or a model, a reorder — each
     // changes it there, and the window follows. A new set remounts the
     // shell (`super::start::App`), so only this set's changes come here.
@@ -175,7 +175,7 @@ pub fn Shell() -> Element {
             .ok()
             .and_then(|n| n.parse::<usize>().ok());
         if let Some(index) = index.and_then(|n| n.checked_sub(1)) {
-            session_ui::studio_engine::set::pick(index, 0.0);
+            session_ui::view_client::ask::pick(index);
         }
     });
     // Space plays and stops whatever has the focus.
@@ -276,8 +276,7 @@ pub fn Shell() -> Element {
     // and the audio moves to it. Where the one it replaces had got to is
     // kept on its tab.
     let pick = move |index: usize| {
-        let at = session_ui::engine::Transport::shared().map_or(0.0, |t| t.read().0);
-        if session_ui::studio_engine::set::pick(index, at).is_some() {
+        if session_ui::view_client::ask::pick(index).is_some() {
             // Playing together, everyone goes with it.
             session_ui::collab::transport_pressed();
         }
@@ -393,7 +392,7 @@ pub fn Shell() -> Element {
                 // it. Where the one it replaces had got to is kept on its tab.
                 on_pick: pick,
                 on_color: move |(index, color): (usize, Option<String>)| {
-                    session_ui::studio_engine::set::recolor(index, color);
+                    session_ui::view_client::ask::recolor(index, color);
                 },
             }
 
@@ -566,7 +565,7 @@ const FX_DOCK_H: f64 = session_ui::fx_view::LANE_H;
 /// jumps away from it.
 fn use_live_advance(mode: Signal<Mode>) {
     use_effect(move || {
-        session_ui::studio_engine::live::set_live(mode() == Mode::Live);
+        session_ui::view_client::ask::live(mode() == Mode::Live);
     });
 }
 

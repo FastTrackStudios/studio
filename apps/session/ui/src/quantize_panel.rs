@@ -358,7 +358,7 @@ pub fn take_asked() -> bool {
 async fn run(id: &'static str, args: String) -> Result<Value, String> {
     let runtime = crate::open::runtime().ok_or("no engine")?;
     let out = runtime
-        .spawn_blocking(move || crate::actions::list().run_json(id, args.as_bytes()))
+        .spawn_blocking(move || crate::actions::run(id, args.as_bytes()))
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())?;

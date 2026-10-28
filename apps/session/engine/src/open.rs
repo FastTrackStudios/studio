@@ -57,7 +57,18 @@ pub use crate::audio_mode::{
 
 /// Keeps the in-process link's acceptor alive for the process's
 /// lifetime. Dropping it silently disconnects every panel.
-static BUNDLE: OnceLock<daw::standalone::bootstrap::InProcessDaw> = OnceLock::new();
+static BUNDLE: OnceLock<Served> = OnceLock::new();
+
+/// The engine's router served in this process over an in-memory vox link:
+/// the daw facade and the view service (`crate::studio_engine::view_host`)
+/// on one connection — what the engine's own code and a window in this
+/// process (iOS, a test) reach it through, as a window on the desktop
+/// reaches `studio engine` over its socket.
+struct Served {
+    caller: vox::Caller,
+    /// Owns the acceptor task behind the link.
+    _scope: Arc<architect::Scope>,
+}
 
 /// The engine runtime. Held because anything that spawns tasks — the
 /// audio engine does, on construction — needs to be built inside it, and
@@ -215,7 +226,9 @@ fn engine() -> &'static Standalone {
 pub fn start_engine() -> eyre::Result<Standalone> {
     let daw = engine();
     bootstrap(daw)?;
-    AUDIBLE.store(true, std::sync::atomic::Ordering::Relaxed);
+    // `FTS_ENGINE_SILENT=1`: no audio device (a test, a renderer).
+    let audible = std::env::var_os("FTS_ENGINE_SILENT").is_none_or(|v| v.is_empty() || v == "0");
+    AUDIBLE.store(audible, std::sync::atomic::Ordering::Relaxed);
     Ok(daw.clone())
 }
 
@@ -336,7 +349,7 @@ fn cue_follow_song(project_guid: &str) {
 /// The engine a Cue window plays its click and guide on: this process's
 /// own — the one Engine mode plays a whole song on (Cue is its first
 /// stage).
-pub fn cue_engine() -> &'static Standalone {
+pub(crate) fn cue_engine() -> &'static Standalone {
     engine()
 }
 
@@ -381,7 +394,7 @@ static WARNED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(
 /// `None` in Remote and Cue — for a caller that has its own remote path
 /// (the Organize toolbar), so nothing is warned about.
 #[must_use]
-pub fn local_engine() -> Option<&'static Standalone> {
+pub(crate) fn local_engine() -> Option<&'static Standalone> {
     crate::audio_mode::owns_project().then(engine)
 }
 
@@ -389,7 +402,7 @@ pub fn local_engine() -> Option<&'static Standalone> {
 /// (Engine mode) — for what acts on the session directly rather than
 /// through the facade. `None` in Remote and Cue, where there is no local
 /// project to act on: `what` says what was skipped, once.
-pub fn with_local_engine<R>(what: LocalOnly, f: impl FnOnce(&Standalone) -> R) -> Option<R> {
+pub(crate) fn with_local_engine<R>(what: LocalOnly, f: impl FnOnce(&Standalone) -> R) -> Option<R> {
     if let Some(daw) = local_engine() {
         return Some(f(daw));
     }
@@ -562,9 +575,17 @@ fn bootstrap(standalone: &Standalone) -> eyre::Result<()> {
     }
     let rt = engine_runtime()?;
 
-    let bundle = rt.block_on(daw::standalone::bootstrap::build_in_process_daw(
-        standalone.clone(),
-    ))?;
+    let router = {
+        let _inside = rt.enter();
+        crate::studio_engine::view_host::router(standalone)
+    };
+    let scope = architect::Scope::new();
+    let caller = rt.block_on(architect::LocalServer::serve(router, Arc::clone(&scope)).caller())?;
+    let bundle = Served {
+        caller,
+        _scope: scope,
+    };
+    let facade = daw::rpc::Daw::new(bundle.caller.clone());
     // A separate current-thread runtime for `daw::block_on` in sync
     // contexts, so it can never be entered from inside the engine
     // runtime's own workers.
@@ -573,7 +594,7 @@ fn bootstrap(standalone: &Standalone) -> eyre::Result<()> {
             .enable_all()
             .build()?,
     );
-    daw::init_from_parts(bundle.daw.clone(), block_on_rt);
+    daw::init_from_parts(facade, block_on_rt);
     BUNDLE
         .set(bundle)
         .map_err(|_| eyre::eyre!("the daw facade was bootstrapped twice"))?;
@@ -1112,6 +1133,25 @@ pub fn attach_to_engine(address: &str) -> eyre::Result<Attached> {
     )
 }
 
+/// Link a window in this process to the engine in it, over the in-memory
+/// link the engine serves itself on: the same client a desktop window has
+/// to `studio engine` over its socket (`crate::view_client`) — what iOS
+/// (no helper process) and a test do. Starts the engine when it is not up.
+///
+/// # Errors
+///
+/// The engine could not be started.
+pub fn link_window_here() -> eyre::Result<()> {
+    if BUNDLE.get().is_none() {
+        start_engine()?;
+    }
+    let served = BUNDLE
+        .get()
+        .ok_or_else(|| eyre::eyre!("the engine's link did not come up"))?;
+    crate::view_client::connect(served.caller.clone());
+    Ok(())
+}
+
 /// Attach to a Studio engine on this machine (`studio engine`, found or
 /// spawned by `crate::studio_engine::link`) over its Unix socket — the
 /// lanes REAPER's bridge serves, so the facade is the same one. The engine
@@ -1141,6 +1181,8 @@ pub fn attach_to_local_engine(socket: &Path) -> eyre::Result<Attached> {
             .build()?,
     );
     daw::init_from_parts(connection.daw.clone(), block_on_rt);
+    // The engine's view of itself, over the same connection.
+    crate::view_client::connect(connection.daw.caller().clone());
     if let Ok(mut slot) = CONNECTION.write() {
         *slot = Some(connection);
     }

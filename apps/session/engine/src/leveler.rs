@@ -41,7 +41,8 @@ pub const ITEM_FLOOR_DB: f64 = -24.0;
 pub const ITEM_TOP_DB: f64 = 24.0;
 
 /// One of the leveler's four stages.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, facet::Facet)]
 pub enum Stage {
     /// Each "ess" eased.
     DeEss,
@@ -638,4 +639,100 @@ pub fn set_dial(track: &str, stage: Stage, dial: Dial) {
         l.stages.set(stage, dial);
         l.resum();
     });
+}
+
+// ── Over the window's link ───────────────────────────────────────────
+
+/// A leveled item as it crosses to a window: where it is, its stages as
+/// made and the track's dials — the window remakes the curves.
+#[must_use]
+pub fn to_wire(leveled: &Leveled) -> crate::view::WireLeveled {
+    let points = |points: &[EnvPoint]| -> Vec<crate::view::WirePoint> {
+        points
+            .iter()
+            .map(|p| crate::view::WirePoint {
+                t: p.t_s,
+                db: p.db,
+                hold: p.hold,
+            })
+            .collect()
+    };
+    let lanes = &leveled.lanes;
+    let dial = |stage: Stage| {
+        let d = leveled.stages.get(stage);
+        (d.on, d.amount)
+    };
+    crate::view::WireLeveled {
+        track: leveled.track.clone(),
+        item: leveled.item.clone(),
+        position: leveled.position,
+        length: leveled.length,
+        stretch: leveled.stretch,
+        origin: leveled.origin,
+        gate: points(&lanes.gate),
+        breath: points(&lanes.breath),
+        sibilance: lanes
+            .sibilance
+            .iter()
+            .map(|s| crate::view::WireSpan {
+                from: s.from_s,
+                to: s.to_s,
+                db: s.db,
+            })
+            .collect(),
+        ride: points(&lanes.ride),
+        bypass: [
+            lanes.bypass.gate,
+            lanes.bypass.breath,
+            lanes.bypass.sibilance,
+            lanes.bypass.ride,
+        ],
+        dials: Stage::ALL.map(dial),
+    }
+}
+
+/// A leveled item a window was told of ([`to_wire`]), its curves made.
+#[must_use]
+pub fn from_wire(wire: crate::view::WireLeveled) -> Leveled {
+    let points = |points: Vec<crate::view::WirePoint>| -> Vec<EnvPoint> {
+        points
+            .into_iter()
+            .map(|p| EnvPoint {
+                t_s: p.t,
+                db: p.db,
+                hold: p.hold,
+            })
+            .collect()
+    };
+    let [gate, breath, sibilance, ride] = wire.bypass;
+    let lanes = Contributions {
+        gate: points(wire.gate),
+        breath: points(wire.breath),
+        sibilance: wire
+            .sibilance
+            .into_iter()
+            .map(|s| GainSpan {
+                from_s: s.from,
+                to_s: s.to,
+                db: s.db,
+            })
+            .collect(),
+        ride: points(wire.ride),
+        bypass: env::Bypass {
+            gate,
+            breath,
+            sibilance,
+            ride,
+        },
+    };
+    let mut stages = Stages::default();
+    for (stage, (on, amount)) in Stage::ALL.into_iter().zip(wire.dials) {
+        stages.set(stage, Dial { on, amount });
+    }
+    Leveled::new(
+        (wire.track.as_str(), wire.item.as_str()),
+        (wire.position, wire.length, wire.stretch, wire.origin),
+        lanes,
+        stages,
+    )
 }

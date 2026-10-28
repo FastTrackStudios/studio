@@ -188,6 +188,8 @@ pub use session_engine::mix_chains;
 #[cfg(feature = "native")]
 pub use session_engine::mix_export;
 pub mod overlay;
+#[cfg(feature = "native")]
+pub use session_engine::page;
 pub mod panel;
 #[cfg(feature = "native")]
 pub mod patch_list;
@@ -256,6 +258,9 @@ pub mod toolbar;
 pub mod touch;
 pub mod track_icon;
 pub mod transport_bar;
+pub use session_engine::view;
+#[cfg(feature = "native")]
+pub use session_engine::view_client;
 pub use session_engine::wave_detail;
 #[cfg(feature = "web")]
 pub use session_engine::web_audio;

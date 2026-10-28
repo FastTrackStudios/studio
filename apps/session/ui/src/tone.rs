@@ -9983,15 +9983,10 @@ impl Store {
     /// shows, not a placeholder.
     #[cfg(feature = "native")]
     pub fn sync_tracks(&mut self, guids: impl IntoIterator<Item = String>) {
-        let bpm = crate::open::local_engine()
-            .zip(crate::open::current_song())
-            .map_or(120.0, |(daw, song)| {
-                daw_proto::TempoMap::get_tempo_at(
-                    daw,
-                    daw::service::ProjectContext::Project(song),
-                    0.0,
-                )
-            });
+        let bpm = crate::open::facade_blocking("the tempo", |daw| async move {
+            daw.current_project().await?.tempo_map().tempo_at(0.0).await
+        })
+        .unwrap_or(120.0);
         for guid in guids {
             if self.read.contains(&guid) || !self.by_guid.contains_key(&guid) {
                 continue;

@@ -846,6 +846,10 @@ org-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" 
 # Live sessions Task keeps: joining a set, the clock, the epochs.
 live-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 links-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+# Ingest (`studio ingest`, session::library::publish): the projects that
+# hold a set, and the live link that shares it.
+project-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
+share-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 
 # Task's externals not already pinned above (root pins win everywhere
 # a key already existed — dioxus, serde, tokio, facet/vox rc.5 fleet,

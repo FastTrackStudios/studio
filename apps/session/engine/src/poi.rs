@@ -362,11 +362,10 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             .clone();
         // The window pages its view to it, when one is attached (its bar
         // step, `crate::bar_step`); headless there is no view to page.
-        if crate::window_queue::attached() {
-            crate::actions::list()
-                .run_json(BAR_STEP, format!(r#"{{"at":{}}}"#, point.at).as_bytes())
-                .map_err(|e| e.to_string())?;
-        }
+        crate::window_queue::ask(crate::window_queue::Asked::Run {
+            id: BAR_STEP.to_owned(),
+            args: format!(r#"{{"at":{}}}"#, point.at),
+        });
         let playing = crate::engine::Transport::shared().is_some_and(|t| t.reading().playing);
         if !playing {
             daw::service::transport::service::Transport::set_position(

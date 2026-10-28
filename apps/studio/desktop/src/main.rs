@@ -272,7 +272,24 @@ fn main() {
         app_shell::log_ring::install_panic_hook("Studio");
     }
 
-    // Session: bring up the in-process engine (standalone daw + setlist
+    // `studio-desktop --session-engine …`: Session's engine with no window
+    // — what this app spawns to drive (`session_ui::studio_engine::link`),
+    // the same build as the window, so the two always speak one protocol.
+    // Runs until it is stopped; the window that spawned it may come and go.
+    #[cfg(all(
+        feature = "session-app",
+        not(target_arch = "wasm32"),
+        not(target_os = "ios")
+    ))]
+    if let Some(at) = std::env::args().position(|a| a == "--session-engine") {
+        let rest: Vec<String> = std::env::args().skip(at + 1).collect();
+        let args = session_desktop::engine_host::Args::parse(&rest);
+        if let Err(e) = session_desktop::engine_host::run(&args) {
+            tracing::error!(error = %e, "the session engine stopped");
+            std::process::exit(1);
+        }
+        return;
+    }
 
     // iPhone: configure the audio session (duplex, speaker default), then
     // run the signal engine IN-PROCESS — iOS forbids child processes, so

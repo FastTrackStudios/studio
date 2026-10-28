@@ -242,6 +242,98 @@ impl StudioSession {
 }
 
 impl StudioSession {
+    /// The song `project` of the engine this window is linked to
+    /// (`crate::view_client`), read back as the studio lays it out: its
+    /// tracks and items through the facade, its track kinds, chart,
+    /// automation and waveforms as the engine has them — by the project, so
+    /// reading it does not select it.
+    ///
+    /// # Errors
+    ///
+    /// The facade is not up, or the project is not in the engine or could
+    /// not be read.
+    #[cfg(feature = "native")]
+    pub async fn read_linked(project: &str, name: &str) -> eyre::Result<Self> {
+        const SCENE: &str = "drum-mixing";
+        let mut stages = crate::stages::Stages::start();
+        let facade =
+            daw_control::Daw::try_get().ok_or_else(|| eyre::eyre!("the daw facade is not up"))?;
+        let handle = facade
+            .project(project.to_owned())
+            .await
+            .map_err(|e| eyre::eyre!("{name} is not in the engine: {e}"))?;
+        let (raw, facts, automation) = futures_util::join!(
+            daw_ui::studio::project::fetch_of(handle.clone()),
+            crate::view_client::song_facts(project),
+            crate::view_client::automation_of(project),
+        );
+        let raw = raw.ok_or_else(|| eyre::eyre!("could not read {name} back"))?;
+        let facts = facts.unwrap_or_default();
+        let fetch_ms = stages.mark("read.fetch_ms");
+        if let Some(read) = automation {
+            crate::automation::adopt_read(read);
+        }
+        let planner = Planner {
+            raw: Arc::new(raw),
+            scene: Some(SCENE),
+            kinds: Arc::new(crate::plan::Kinds::from_entries(facts.kinds)),
+        };
+        let (studio, rows) = planner.plan(&planner.raw);
+        let plan_ms = stages.mark("read.plan_ms");
+        let previews = crate::midi::Previews::default();
+        let items = || studio.0.items.values().flatten();
+        previews
+            .fill_in(
+                &handle,
+                items()
+                    .filter(|item| studio.0.is_midi(&item.guid))
+                    .map(|item| (item.guid.clone(), item.length.as_seconds()))
+                    .collect(),
+            )
+            .await;
+        // The waveforms come in behind: the song is shown at once, each
+        // lane drawn as its waveform lands (`Previews` counts them).
+        let audio: Vec<String> = items()
+            .filter(|item| !studio.0.is_midi(&item.guid))
+            .map(|item| item.guid.clone())
+            .collect();
+        if let Some(rt) = crate::open::runtime() {
+            let previews = previews.clone();
+            let song = project.to_owned();
+            rt.spawn(async move { previews.fill_waves_linked(&song, audio).await });
+        }
+        let previews_ms = stages.mark("read.previews_ms");
+        tracing::info!(
+            song.name = name,
+            read.fetch_ms = fetch_ms,
+            read.plan_ms = plan_ms,
+            read.previews_ms = previews_ms,
+            "song read back over the link"
+        );
+        let chart = Some(facts.chart)
+            .filter(|text| !text.is_empty())
+            .and_then(|text| {
+                keyflow::parse(text.as_str())
+                    .inspect_err(
+                        |e| tracing::warn!(error = %e, "chart: the engine's did not parse"),
+                    )
+                    .ok()
+                    .map(Arc::new)
+            });
+        let chart_file = Some(std::path::PathBuf::from(&facts.path))
+            .filter(|p| p.exists())
+            .as_deref()
+            .and_then(crate::prepare::chart_beside);
+        Ok(Self {
+            project: studio,
+            rows,
+            previews,
+            chart,
+            chart_file,
+            planner,
+        })
+    }
+
     /// Read `project`'s pictures — its MIDI items' notes, its audio items'
     /// waveforms — into its previews, after the song has joined its set:
     /// read first, every song of a set waited seconds on them before it
@@ -465,6 +557,15 @@ pub enum Resync {
 /// Ask the arrangement to read the session back from the engine — all of
 /// it: the safe ask, for a change that does not say what it touched.
 pub fn request_resync() {
+    request_resync_here();
+    // And every window on the engine, over its link.
+    #[cfg(feature = "native")]
+    crate::studio_engine::view_host::changed(None, crate::view::Change::All);
+}
+
+/// [`request_resync`] for this window alone — what its link does when the
+/// engine says something changed.
+pub fn request_resync_here() {
     ALL.store(true, std::sync::atomic::Ordering::Release);
     RESYNC.store(true, std::sync::atomic::Ordering::Release);
 }
@@ -474,6 +575,13 @@ pub fn request_resync() {
 /// nothing else of the song — not the tracks, not the ruler. Which items,
 /// the engine's journal says.
 pub fn request_resync_items() {
+    request_resync_items_here();
+    #[cfg(feature = "native")]
+    crate::studio_engine::view_host::changed(None, crate::view::Change::Items);
+}
+
+/// [`request_resync_items`] for this window alone.
+pub fn request_resync_items_here() {
     RESYNC.store(true, std::sync::atomic::Ordering::Release);
 }
 
@@ -507,8 +615,10 @@ pub fn take_resync_scope() -> Option<Resync> {
 /// Taken BEFORE the read, so a write during it is read again next time.
 #[cfg(feature = "native")]
 pub fn mark_seen() {
+    // The engine's journal, over the window's link: none, and every edit
+    // reads the whole song back.
     SEEN.store(
-        daw::standalone::journal::now(),
+        crate::view_client::journal_now().unwrap_or(0),
         std::sync::atomic::Ordering::Release,
     );
 }
@@ -521,50 +631,68 @@ pub fn mark_seen() {
 #[cfg(feature = "native")]
 #[must_use]
 pub fn patch_items(raw: &mut daw_ui::studio::project::Project) -> Option<Vec<String>> {
-    use daw::service::{ItemRef, Items as _, Takes as _};
-    let (daw, song) = (crate::open::local_engine()?, crate::open::current_song()?);
+    let song = crate::open::current_song()?;
     let seen = SEEN.load(std::sync::atomic::Ordering::Acquire);
     // Never read whole yet: nowhere to read on from.
     if seen == 0 {
         return None;
     }
-    let changes = daw.item_changes_since(&song, seen)?;
-    let changed = changes.items?;
+    let changes = crate::view_client::item_changes(&song, seen)?;
+    let changed = changes.changed?;
     SEEN.store(changes.cursor, std::sync::atomic::Ordering::Release);
-    if changed.is_empty() {
-        return Some(Vec::new());
+    Some(patch_with(raw, changed, &changes.gone))
+}
+
+/// `raw` with `changed` (each item as it is now) put where it is and
+/// `gone` taken out: each where it was, taken out; then each where it is,
+/// put back, its lane in order, its take's name and whether it is MIDI.
+/// The guids of those still in the song.
+#[must_use]
+pub fn patch_with(
+    raw: &mut daw_ui::studio::project::Project,
+    changed: Vec<crate::view::ItemNow>,
+    gone: &[String],
+) -> Vec<String> {
+    if changed.is_empty() && gone.is_empty() {
+        return Vec::new();
     }
-    let project = daw::service::ProjectContext::Project(song);
-    // Each where it was, taken out; then each where it is, put back.
+    let named: std::collections::HashSet<&str> = changed
+        .iter()
+        .map(|c| c.item.guid.as_str())
+        .chain(gone.iter().map(String::as_str))
+        .collect();
     let mut lanes: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (track, items) in &mut raw.items {
         let before = items.len();
-        items.retain(|i| !changed.contains(&i.guid));
+        items.retain(|i| !named.contains(i.guid.as_str()));
         if items.len() != before {
             lanes.insert(track.clone());
         }
     }
+    for guid in &named {
+        raw.names.remove(*guid);
+        raw.midi.remove(*guid);
+    }
     let mut now = Vec::new();
-    for guid in &changed {
-        raw.names.remove(guid);
-        raw.midi.remove(guid);
-        let Some(item) = daw.get_item(project.clone(), ItemRef::Guid(guid.clone())) else {
-            continue;
-        };
-        if let Some(take) = daw.get_active_take(project.clone(), ItemRef::Guid(guid.clone())) {
-            if !take.name.is_empty() {
-                raw.names.insert(guid.clone(), take.name);
-            }
-            if take.is_midi {
-                raw.midi.insert(guid.clone());
-            }
+    for crate::view::ItemNow {
+        item,
+        take_name,
+        midi,
+    } in changed
+    {
+        let guid = item.guid.clone();
+        if let Some(name) = take_name {
+            raw.names.insert(guid.clone(), name);
+        }
+        if midi {
+            raw.midi.insert(guid.clone());
         }
         lanes.insert(item.track_guid.clone());
         raw.items
             .entry(item.track_guid.clone())
             .or_default()
             .push(item);
-        now.push(guid.clone());
+        now.push(guid);
     }
     for track in &lanes {
         if let Some(items) = raw.items.get_mut(track) {
@@ -582,7 +710,7 @@ pub fn patch_items(raw: &mut daw_ui::studio::project::Project) -> Option<Vec<Str
         .map(|i| i.position.as_seconds() + i.length.as_seconds())
         .fold(0.0_f64, f64::max);
     raw.length_secs = reach.max(60.0);
-    Some(now)
+    now
 }
 
 /// The open project, as the engine has it.
@@ -597,14 +725,16 @@ pub fn fetch() -> Option<daw_ui::studio::project::Project> {
     mark_seen();
     let project = rt.block_on(daw_ui::studio::project::fetch())?;
     stages.mark("fetch.read_ms");
-    if crate::open::local_engine().is_some() {
-        crate::automation::refresh(&project.tracks);
-        stages.mark("fetch.automation_ms");
-    } else {
-        // The engine is elsewhere: its lanes through the facade.
-        let (lanes, takes) = rt.block_on(crate::automation::read_remote(&project.tracks));
-        crate::automation::adopt_remote(lanes, takes);
+    // The lanes as the engine reads them (the leveler's among them), over
+    // the window's link; a REAPER driven has its lanes on the facade.
+    match crate::open::current_song().and_then(|song| crate::view_client::automation(&song)) {
+        Some(read) => crate::automation::adopt_read(read),
+        None => {
+            let (lanes, takes) = rt.block_on(crate::automation::read_remote(&project.tracks));
+            crate::automation::adopt_remote(lanes, takes);
+        }
     }
+    stages.mark("fetch.automation_ms");
     Some(project)
 }
 

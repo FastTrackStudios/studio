@@ -230,6 +230,11 @@ mod ways_in {
                         }
                     }
                 }
+                // Songs on this machine, into the org's library.
+                session_desktop::native::publish::Publish {
+                    on_join: move |link: String| join(link),
+                    on_typing: move |on: bool| library::ui::set_field_focused(on),
+                }
                 // What was opened lately, one press from opening again.
                 if !recent.is_empty() {
                     div {

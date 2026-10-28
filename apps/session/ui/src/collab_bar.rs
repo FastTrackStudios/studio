@@ -668,8 +668,11 @@ pub fn use_follow_song(mut setlist: Signal<crate::setlist::Setlist>) {
 /// The set follows a song already current on the system driven: in the
 /// engine's set, which the window follows (a web page holds its own).
 #[cfg(feature = "native")]
-fn follow(_shown: &mut Signal<crate::setlist::Setlist>, index: usize, at: f64) {
-    crate::studio_engine::set::mark_current(index, at);
+fn follow(_shown: &mut Signal<crate::setlist::Setlist>, index: usize, _at: f64) {
+    // On an engine the set's stream says so already.
+    if crate::studio_engine::link::linked().is_none() {
+        crate::view_client::show_current(index);
+    }
 }
 
 #[cfg(not(feature = "native"))]
@@ -679,8 +682,8 @@ fn follow(shown: &mut Signal<crate::setlist::Setlist>, index: usize, at: f64) {
 
 /// Go to song `index`, a collaborator asked: the engine's current song.
 #[cfg(feature = "native")]
-fn go_to(_shown: &mut Signal<crate::setlist::Setlist>, index: usize, at: f64) {
-    crate::studio_engine::set::pick(index, at);
+fn go_to(_shown: &mut Signal<crate::setlist::Setlist>, index: usize, _at: f64) {
+    crate::view_client::ask::pick(index);
 }
 
 #[cfg(not(feature = "native"))]

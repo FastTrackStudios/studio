@@ -62,7 +62,7 @@ impl Song {
     ///
     /// # Errors
     /// With no engine in this process, or nothing open in it.
-    pub fn current() -> Result<Self, NoSong> {
+    pub(crate) fn current() -> Result<Self, NoSong> {
         let daw = crate::open::local_engine().ok_or(NoSong::NoEngine)?;
         let id = crate::open::current_song().ok_or(NoSong::NothingOpen)?;
         Ok(Self {
@@ -75,7 +75,7 @@ impl Song {
     ///
     /// # Errors
     /// With no engine in this process, or no such song open in it.
-    pub fn open(id: ProjectId) -> Result<Self, NoSong> {
+    pub(crate) fn open(id: ProjectId) -> Result<Self, NoSong> {
         let daw = crate::open::local_engine().ok_or(NoSong::NoEngine)?;
         if daw.read_project(id.as_str(), |_| ()).is_none() {
             return Err(NoSong::NotOpen(id));
