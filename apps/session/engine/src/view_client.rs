@@ -113,6 +113,8 @@ pub fn connect(caller: vox::Caller) {
         *slot = Some(link.clone());
     }
     state_cell().send_replace(LinkState::Up);
+    // A new engine has heard nothing of the window's edit cursor yet.
+    forget_shown_edit();
     let Some(rt) = runtime() else {
         tracing::warn!("view link: no runtime to follow the engine on");
         return;
@@ -137,6 +139,10 @@ fn current(link: &Link) -> bool {
 fn dropped(link: &Link, why: &str) {
     if !current(link) {
         return;
+    }
+    // Its jobs went with it.
+    if let Ok(mut slot) = JOBS.write() {
+        *slot = None;
     }
     if state_cell().send_replace(LinkState::Down) != LinkState::Down {
         tracing::warn!(link.why = why, "view link: the engine went away");
@@ -628,8 +634,6 @@ fn edit_asked(asked: crate::view::EditAsked) {
 /// time selection and selection (every frame; only a change is sent, the
 /// latest winning) — what its actions act on.
 pub fn show_edit(edit: crate::edit_state::Edit, scope: Option<editing::scope::Scope>) {
-    static SHOWN: std::sync::OnceLock<watch::Sender<Option<crate::view::EditShown>>> =
-        std::sync::OnceLock::new();
     let Some(song) = crate::open::current_song() else {
         return;
     };
@@ -641,11 +645,13 @@ pub fn show_edit(edit: crate::edit_state::Edit, scope: Option<editing::scope::Sc
             .map(|s| editing::scope::Span::between(s.start, s.end)),
         scope,
     };
-    let tx = SHOWN.get_or_init(|| {
+    // The sender starts with its task, on the runtime it needs.
+    let Some(rt) = runtime() else {
+        return;
+    };
+    let tx = SHOWN_EDIT.get_or_init(|| {
         let (tx, rx) = watch::channel(None);
-        if let Some(rt) = runtime() {
-            rt.spawn(send_edits(rx));
-        }
+        rt.spawn(send_edits(rx));
         tx
     });
     tx.send_if_modified(|was| {
@@ -657,6 +663,22 @@ pub fn show_edit(edit: crate::edit_state::Edit, scope: Option<editing::scope::Sc
     });
 }
 
+/// What [`show_edit`] last told the engine; its sender task holds the
+/// other end.
+static SHOWN_EDIT: std::sync::OnceLock<watch::Sender<Option<crate::view::EditShown>>> =
+    std::sync::OnceLock::new();
+
+/// The engine is not known to have what the window last showed: the next
+/// [`show_edit`] sends it, the same or not.
+fn forget_shown_edit() {
+    if let Some(tx) = SHOWN_EDIT.get() {
+        tx.send_if_modified(|was| {
+            *was = None;
+            false
+        });
+    }
+}
+
 /// Send what [`show_edit`] was told, the latest each time, while the
 /// window runs.
 async fn send_edits(mut rx: watch::Receiver<Option<crate::view::EditShown>>) {
@@ -664,11 +686,16 @@ async fn send_edits(mut rx: watch::Receiver<Option<crate::view::EditShown>>) {
         let Some(shown) = rx.borrow_and_update().clone() else {
             continue;
         };
-        let Some(link) = link() else { continue };
+        // Not sent: the same place shown again is sent then.
+        let Some(link) = link() else {
+            forget_shown_edit();
+            continue;
+        };
         if tokio::time::timeout(CALL, link.view.show_edit(shown))
             .await
             .is_err()
         {
+            forget_shown_edit();
             tracing::warn!(
                 view.call = "show_edit",
                 "view link: the engine did not answer in time"

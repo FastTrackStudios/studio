@@ -192,10 +192,43 @@ pub struct ActionRow {
 /// Session's Action List — the actions its keys, its menus, the CLI and a
 /// model over MCP run — that a palette can run as they are: those that take
 /// nothing and run at once.
+///
+/// Read from the engine behind the window, a second old at most: a
+/// palette drawn while the engine is slow to answer is not held still.
 #[must_use]
 pub fn actions() -> Vec<ActionRow> {
-    // The engine's list, with what can run now as the engine says: the
-    // window's own actions are on it too, forwarded to the window.
+    use std::sync::{Mutex, OnceLock};
+    static LISTED: Mutex<Option<Vec<ActionRow>>> = Mutex::new(None);
+    static READER: OnceLock<()> = OnceLock::new();
+    READER.get_or_init(|| {
+        let _ = std::thread::Builder::new()
+            .name("palette-actions".into())
+            .spawn(|| {
+                loop {
+                    let rows = engine_actions();
+                    if let Ok(mut listed) = LISTED.lock() {
+                        *listed = Some(rows);
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+            });
+    });
+    // The first time, the engine's first answer if it is quick.
+    let began = std::time::Instant::now();
+    loop {
+        if let Some(rows) = LISTED.lock().ok().and_then(|l| l.clone()) {
+            return rows;
+        }
+        if began.elapsed() > std::time::Duration::from_millis(150) {
+            return Vec::new();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+/// The engine's list, with what can run now as the engine says: the
+/// window's own actions are on it too, forwarded to the window.
+fn engine_actions() -> Vec<ActionRow> {
     session_engine::actions::palette()
         .into_iter()
         .map(|a| ActionRow {
@@ -209,13 +242,25 @@ pub fn actions() -> Vec<ActionRow> {
         .collect()
 }
 
-/// Run `id` from Session's Action List, as a key would.
+/// Run `id` from Session's Action List, as a key would: on the engine,
+/// behind the window; a refusal is logged.
 ///
 /// # Errors
 ///
-/// No such action, it cannot run now, or it failed.
+/// No thread to run it on.
 pub fn run_action(id: &str) -> Result<(), String> {
-    session_engine::actions::run(id, b"").map(|_| ())
+    // On the engine, behind the window: a refusal is said where it is
+    // known.
+    let id = id.to_owned();
+    std::thread::Builder::new()
+        .name("palette-run".into())
+        .spawn(move || {
+            if let Err(error) = session_engine::actions::run(&id, b"") {
+                tracing::warn!(action.id = %id, %error, "palette: the action did not run");
+            }
+        })
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// An overlay over the window takes the keyboard (`true`) or gives it

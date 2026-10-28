@@ -1796,7 +1796,9 @@ pub fn use_streams() {
         let mut version = version;
         loop {
             futures_timer::Delay::new(std::time::Duration::from_millis(250)).await;
-            let now = crate::stream_set::version() ^ u64::from(crate::stream_set::play_waiting());
+            // The waiting flag in a bit of its own: no change hides another.
+            let now =
+                (crate::stream_set::version() << 1) | u64::from(crate::stream_set::play_waiting());
             if *version.peek() != now {
                 version.set(now);
             }

@@ -130,6 +130,9 @@ fn Routing() -> Element {
 /// touched.
 #[component]
 fn Settings() -> Element {
+    // Drawn again as the streams change: the Multitracks switch says how
+    // the engine hears the songs, which it says later than a press.
+    crate::shell::use_streams();
     // Re-read after a pick: the mode changes off this page's signals.
     let mut picked = use_signal(|| 0_u32);
     let mut note = use_signal(|| None::<String>);
