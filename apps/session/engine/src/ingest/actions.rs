@@ -187,4 +187,3 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
     list.register(&STATUS, Effect::ReadOnly, |(): ()| Ok(current()))?;
     Ok(())
 }
-

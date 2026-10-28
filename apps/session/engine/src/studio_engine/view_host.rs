@@ -334,7 +334,11 @@ impl EngineView for ViewHost {
                 edit.count = batch.edits.len(),
                 "view link: edits for a song that is not current refused"
             );
-            for done in batch.edits.iter().filter(|e| matches!(e, crate::engine::Edit::Done(_))) {
+            for done in batch
+                .edits
+                .iter()
+                .filter(|e| matches!(e, crate::engine::Edit::Done(_)))
+            {
                 crate::engine::apply_reported(done).await;
             }
             return applied;

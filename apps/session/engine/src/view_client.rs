@@ -730,7 +730,12 @@ pub fn waves(song: &str, items: Vec<String>) -> Option<Vec<WaveRead>> {
         song: song.to_owned(),
         items,
     };
-    block("waves", CALL, |view| async move { view.waves(ask).await.ok() }).flatten()
+    block(
+        "waves",
+        CALL,
+        |view| async move { view.waves(ask).await.ok() },
+    )
+    .flatten()
 }
 
 /// `items` of `song`'s waveforms, as the engine draws them, awaited.
@@ -743,7 +748,10 @@ pub async fn waves_of(song: &str, items: Vec<String>) -> Option<Vec<WaveRead>> {
     match tokio::time::timeout(CALL, link.view.waves(ask)).await {
         Ok(read) => read.ok(),
         Err(_) => {
-            tracing::warn!(view.call = "waves", "view link: the engine did not answer in time");
+            tracing::warn!(
+                view.call = "waves",
+                "view link: the engine did not answer in time"
+            );
             None
         }
     }
@@ -752,9 +760,13 @@ pub async fn waves_of(song: &str, items: Vec<String>) -> Option<Vec<WaveRead>> {
 /// One stretch's detail, from the engine.
 #[must_use]
 pub fn detail(ask: DetailAsk) -> Option<crate::wave_detail::Detail> {
-    block("detail", CALL, |view| async move { view.detail(ask).await.ok() })
-        .flatten()
-        .flatten()
+    block(
+        "detail",
+        CALL,
+        |view| async move { view.detail(ask).await.ok() },
+    )
+    .flatten()
+    .flatten()
 }
 
 /// `song`'s automation, from the engine.
@@ -810,11 +822,9 @@ pub async fn song_facts(song: &str) -> Option<SongFacts> {
 /// Every song's playhead, asked of the engine.
 #[must_use]
 pub fn playheads() -> Option<Vec<crate::view::Playhead>> {
-    block(
-        "playheads",
-        CALL,
-        |view| async move { view.playheads().await.ok() },
-    )
+    block("playheads", CALL, |view| async move {
+        view.playheads().await.ok()
+    })
     .flatten()
 }
 

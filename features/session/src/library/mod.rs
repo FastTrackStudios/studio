@@ -90,7 +90,9 @@ pub fn session_root_for<'a>(
     slug: &str,
 ) -> Option<&'a files_proto::model::FileRootInfo> {
     let trimmed = |root: &'a files_proto::model::FileRootInfo| {
-        root.path.as_deref().map(|p| p.trim_end_matches(['/', '\\']))
+        root.path
+            .as_deref()
+            .map(|p| p.trim_end_matches(['/', '\\']))
     };
     let holds_others = |path: &str| {
         roots.iter().filter_map(trimmed).any(|other| {

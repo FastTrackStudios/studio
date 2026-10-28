@@ -631,9 +631,9 @@ mod tests {
         let read = |r: Result<(), vox::VoxError<ResourcesError>>| is_there(r).map_err(|_| ());
         assert_eq!(read(Ok(())), Ok(true));
         assert_eq!(
-            read(Err(vox::VoxError::User(Box::new(ResourcesError::NotFound(
-                "song:x".into()
-            ))))),
+            read(Err(vox::VoxError::User(Box::new(
+                ResourcesError::NotFound("song:x".into())
+            )))),
             Ok(false)
         );
         assert_eq!(read(Err(vox::VoxError::ConnectionClosed)), Err(()));

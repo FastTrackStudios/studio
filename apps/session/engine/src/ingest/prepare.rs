@@ -215,7 +215,10 @@ pub(super) fn is_current(made: &[PathBuf], source: &Path) -> bool {
 /// One of `made` could not be touched.
 pub(super) fn stamp_current(made: &[PathBuf], source: &Path) -> eyre::Result<()> {
     let source_time = modified(source);
-    for path in made.iter().filter(|p| p.is_file() && modified(p) < source_time) {
+    for path in made
+        .iter()
+        .filter(|p| p.is_file() && modified(p) < source_time)
+    {
         std::fs::File::options()
             .write(true)
             .open(path)?

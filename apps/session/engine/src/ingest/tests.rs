@@ -224,7 +224,11 @@ fn an_upload_is_resumed_only_for_the_file_it_began_from() {
         blake3: Some("bb".into()),
         ..kept.clone()
     };
-    assert_eq!(resumed(&other_bytes), None, "same size and time, other bytes");
+    assert_eq!(
+        resumed(&other_bytes),
+        None,
+        "same size and time, other bytes"
+    );
     assert_eq!(upload::resumable(None, &send).map(|u| u.to_string()), None);
 }
 
