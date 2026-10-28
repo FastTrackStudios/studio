@@ -96,7 +96,7 @@ pub fn SetupView(
                 }
             }
             div {
-                style: "flex:1; min-height:0; overflow-y:auto;",
+                style: "flex:1; min-height:0; overflow-y:scroll;",
                 match tab() {
                     Tab::Setlist => match setlist {
                         Some(setlist) => rsx! { SongTable { setlist, on_pick } },

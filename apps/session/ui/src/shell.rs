@@ -433,6 +433,18 @@ pub const SAFE_AREA: &str = "position:absolute; top:0; left:0; width:100vw; heig
     padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) \
     env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);";
 
+/// [`SAFE_AREA`] on dioxus-native, where Blitz fills no CSS `env()`: the
+/// same box, padded by `insets` (the screen's, `app_shell::ui::Screen`).
+#[must_use]
+pub fn safe_area_box(insets: app_shell::ui::Insets) -> String {
+    format!(
+        "position:absolute; top:0; left:0; width:100vw; height:100vh; \
+         box-sizing:border-box; display:flex; overflow:hidden; background:#17181b; \
+         padding:{};",
+        insets.padding()
+    )
+}
+
 /// [`SAFE_AREA`] round the performer view (`crate::performer`): the same
 /// box, filled the desk (`#0c0c0f`) so the status and home insets read as
 /// the screen's edge, never as a lighter band.
@@ -443,10 +455,12 @@ pub const SAFE_AREA_PERFORMER: &str = "position:absolute; top:0; left:0; width:1
 
 /// A press-outside-closes layer under a popup: the whole screen, from
 /// wherever the popup is. Past the screen's edges on every side, because
-/// Blitz places a `fixed` box from its container rather than the
-/// viewport — a layer at 0,0 of a picker in the bottom-right corner
-/// covered nothing a finger could press.
-pub const SCRIM: &str = "position:fixed; top:-100vh; left:-100vw; width:300vw; height:300vh;";
+/// it is placed from its container, not the viewport (Blitz has no
+/// `fixed`, so it is `absolute`) — a layer at 0,0 of a picker in the
+/// bottom-right corner covered nothing a finger could press. A popup is
+/// never under a clipping box (it would be clipped itself), so neither
+/// is its scrim, in a browser either.
+pub const SCRIM: &str = "position:absolute; top:-100vh; left:-100vw; width:300vw; height:300vh;";
 
 /// How tall the bottom bar is: an icon with its word under it, for a
 /// finger.

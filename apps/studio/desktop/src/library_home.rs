@@ -1,6 +1,6 @@
 //! The library (`library::ui`) as Studio's welcome screen. The library
 //! knows nothing of engines or of the DAW: this hands it the window's size
-//! in points, kept current through a rotation, the app's pieces of it
+//! in points (from the screen Studio publishes), kept current through a rotation, the app's pieces of it
 //! (the account in its bar, the ways in at the top of Home), and turns what
 //! a press opens into where it goes ([`destination`]): a part into the rig
 //! view, a setlist or a session straight into the DAW.
@@ -45,29 +45,20 @@ pub fn destination(lib: &Library, open: Open) -> Destination {
 /// The welcome screen: the library, at the window's size.
 #[component]
 pub fn LibraryHome() -> Element {
-    let window = dioxus_native::use_window();
     // A Mac draws its window buttons over the bar's left end.
     #[cfg(target_os = "macos")]
     use_context_provider(|| BarInset(crate::front::MAC_WINDOW_BUTTONS + 4));
-    let mut size = use_context_provider(|| Viewport(Signal::new((1194.0, 834.0))));
-    use_future(move || {
-        let window = window.clone();
-        async move {
-            loop {
-                let px = window.surface_size();
-                if px.height > 0 {
-                    let scale = window.scale_factor().max(0.1);
-                    let pt = (
-                        (f64::from(px.width) / scale) as f32,
-                        (f64::from(px.height) / scale) as f32,
-                    );
-                    let was = *size.0.peek();
-                    if (was.0 - pt.0).abs() > 1.0 || (was.1 - pt.1).abs() > 1.0 {
-                        size.0.set(pt);
-                    }
-                }
-                futures_timer::Delay::new(std::time::Duration::from_millis(300)).await;
-            }
+    // The window's size, from the screen Studio publishes (`front`).
+    let screen = app_shell::ui::form::use_window_screen();
+    let mut size = use_context_provider(|| {
+        let s = *screen.peek();
+        Viewport(Signal::new((s.width as f32, s.height as f32)))
+    });
+    use_effect(move || {
+        let s = screen();
+        let pt = (s.width as f32, s.height as f32);
+        if *size.0.peek() != pt {
+            size.0.set(pt);
         }
     });
     rsx! { LibraryApp {} }

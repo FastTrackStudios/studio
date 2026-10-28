@@ -39,19 +39,25 @@ pub enum Form {
 
 impl Form {
     /// Narrower than this (and taller than wide) is a phone held upright.
-    pub const NARROW: f64 = 700.0;
+    pub const NARROW: f64 = app_shell::ui::FormFactor::NARROW;
     /// Shorter than this (and wider than tall) is a phone on its side.
-    pub const SHORT: f64 = 500.0;
+    pub const SHORT: f64 = app_shell::ui::FormFactor::SHORT;
 
-    /// The form of a window `width` × `height` logical pixels.
+    /// The form of a window `width` × `height` logical pixels: the shared
+    /// classification ([`app_shell::ui::FormFactor::of`]).
     #[must_use]
     pub fn of(width: f64, height: f64) -> Self {
-        if width < Self::NARROW && width <= height {
-            Self::Portrait
-        } else if height < Self::SHORT && width > height {
-            Self::Landscape
-        } else {
-            Self::Wide
+        Self::from_screen(&app_shell::ui::Screen::desk(width, height))
+    }
+
+    /// The layout a [`app_shell::ui::Screen`] takes: a phone's by its
+    /// orientation, a tablet's and a desk's the wide one.
+    #[must_use]
+    pub fn from_screen(screen: &app_shell::ui::Screen) -> Self {
+        match (screen.phone(), screen.landscape()) {
+            (false, _) => Self::Wide,
+            (true, false) => Self::Portrait,
+            (true, true) => Self::Landscape,
         }
     }
 
@@ -168,6 +174,13 @@ pub fn CompactShell(
 ) -> Element {
     let setlist: Signal<Setlist> = use_context();
     let sides = use_sides();
+    // The app's outer box: on dioxus-native the host published the screen,
+    // and the box keeps clear of what of the safe area the page must keep
+    // clear itself; in a page (no screen published) of the CSS insets.
+    let outer = try_use_context::<Signal<app_shell::ui::Screen>>().map_or_else(
+        || crate::shell::SAFE_AREA.to_owned(),
+        |screen| crate::shell::safe_area_box(screen().insets),
+    );
     // The housing on the left: the rail goes to the right edge instead.
     let mirrored = sides.left > 0.0;
     // The record view's song menu (in Control, in record mode) picks as the
@@ -278,12 +291,13 @@ pub fn CompactShell(
     rsx! {
         // An explicit size, not insets: Blitz gives an absolutely placed box
         // stretched by `top`/`bottom` no height, and the column collapses to
-        // its content (the wide shell does the same). In the app the
-        // viewport is already the safe area (Blitz's shell keeps the notch
-        // and the home indicator out of it); in a page the outer box insets
-        // itself from them (`shell::SAFE_AREA`).
+        // its content (the wide shell does the same). In the app the box is
+        // padded by the screen's insets (`app_shell::ui::form::page_insets`:
+        // what Blitz has not already kept out of the viewport — today
+        // nothing, as blitz-shell insets the viewport by all of winit's
+        // safe area); in a page by the CSS ones (`shell::SAFE_AREA`).
         div {
-            style: "{crate::shell::SAFE_AREA}",
+            style: "{outer}",
         div {
             style: "flex:1; min-width:0; min-height:0; display:flex; \
                     flex-direction:{direction}; \
@@ -509,7 +523,7 @@ fn More(view: Signal<PhoneView>, session: Element) -> Element {
     );
     rsx! {
         div {
-            style: "position:absolute; top:0; left:0; width:100%; height:100%; overflow-y:auto;",
+            style: "position:absolute; top:0; left:0; width:100%; height:100%; overflow-y:scroll;",
             button {
                 style: "{row}",
                 onclick: move |_| view.set(PhoneView::Setup),
@@ -686,5 +700,20 @@ fn ViewIcon(view: PhoneView, color: &'static str) -> Element {
         PhoneView::More => rsx! { Ellipsis { size, color } },
         PhoneView::Setup => rsx! { Settings { size, color } },
         PhoneView::Editor => rsx! { AudioWaveform { size, color } },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Form;
+
+    /// The layout follows the window's size alone: a desk window made
+    /// phone-sized takes the phone's, and widened takes the wide one back.
+    #[test]
+    fn a_phone_sized_window_takes_the_phone_layout() {
+        assert_eq!(Form::of(390.0, 844.0), Form::Portrait);
+        assert_eq!(Form::of(874.0, 402.0), Form::Landscape);
+        assert_eq!(Form::of(1440.0, 900.0), Form::Wide);
+        assert_eq!(Form::of(1194.0, 834.0), Form::Wide);
     }
 }

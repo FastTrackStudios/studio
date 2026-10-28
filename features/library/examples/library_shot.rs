@@ -10,6 +10,8 @@
 //! upright). `PAGE`: `home` (default), `setlists`, `songs`, `albums`,
 //! `sessions`, `rigs`, `setlist` (tonight's, with its fourth entry
 //! picked), `song` (the one with three arrangements), `album`, `session`.
+//! `LIBRARY_SHOT_INSETS=top,right,bottom,left` draws it on a touch screen
+//! whose page keeps that much clear itself (the tab bar's home indicator).
 
 use anyrender::ImageRenderer as _;
 use anyrender_vello::VelloImageRenderer;
@@ -129,6 +131,24 @@ fn main() {
     image.save(&out).expect("write the picture");
 }
 
+/// The insets `LIBRARY_SHOT_INSETS` asks for, if it does.
+fn shot_insets() -> Option<app_shell::ui::Insets> {
+    let text = std::env::var("LIBRARY_SHOT_INSETS").ok()?;
+    let n: Vec<f64> = text
+        .split(',')
+        .filter_map(|v| v.trim().parse().ok())
+        .collect();
+    let [top, right, bottom, left] = n[..] else {
+        return None;
+    };
+    Some(app_shell::ui::Insets {
+        top,
+        right,
+        bottom,
+        left,
+    })
+}
+
 #[component]
 fn Shot(
     size: (f32, f32),
@@ -154,6 +174,12 @@ fn Shot(
         });
     }
     use_context_provider(|| Viewport(Signal::new(size)));
+    // `LIBRARY_SHOT_INSETS=top,right,bottom,left`: a touch screen whose
+    // page keeps that much clear itself (`app_shell::ui::form`).
+    if let Some(insets) = shot_insets() {
+        let (w, h) = (f64::from(size.0), f64::from(size.1));
+        use_context_provider(|| Signal::new(app_shell::ui::Screen::of(w, h, true, insets)));
+    }
     use_context_provider(|| InitialRoute(first));
     if status {
         use_context_provider(|| SessionStart(SessionTab::Status));

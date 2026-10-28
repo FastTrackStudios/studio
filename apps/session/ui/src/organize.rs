@@ -57,7 +57,7 @@ pub fn OrganizeToolbar() -> Element {
             // One row, always: what does not fit scrolls sideways rather
             // than wrapping the toolbar taller over the arrangement.
             style: "flex:none; display:flex; flex-wrap:nowrap; align-items:center; gap:4px; \
-                    height:36px; padding:0 8px; overflow-x:auto; overflow-y:hidden; \
+                    height:36px; padding:0 8px; overflow-x:scroll; overflow-y:hidden; \
                     background:#141518; border-bottom:1px solid {RULE};",
             for (button, label) in STRUCTURE {
                 ToolButton { button, label: label.to_owned() }

@@ -232,7 +232,7 @@ pub fn CloseupLayer(landscape: bool) -> Element {
                 }
                 if let Some(tabs) = row_tabs {
                     div {
-                        style: "flex:1; min-width:0; display:flex; gap:4px; overflow-x:auto; \
+                        style: "flex:1; min-width:0; display:flex; gap:4px; overflow-x:scroll; \
                                 scrollbar-width:none;",
                         {tabs}
                     }
@@ -243,7 +243,7 @@ pub fn CloseupLayer(landscape: bool) -> Element {
                 if let Some(tabs) = column_tabs {
                     div {
                         style: "flex:none; width:150px; height:100%; display:flex; flex-direction:column; \
-                                gap:4px; padding:10px 8px; overflow-y:auto; background:#141518; \
+                                gap:4px; padding:10px 8px; overflow-y:scroll; background:#141518; \
                                 border-right:1px solid #2a2c31;",
                         {tabs}
                     }

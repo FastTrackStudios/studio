@@ -206,7 +206,7 @@ pub fn SpaceView() -> Element {
                     }
                     div { style: "font-size:12px; color:#8a8fa3; margin-top:6px;", "similar:" }
                     div {
-                        style: "display:flex; flex-direction:column; gap:4px; overflow-y:auto; min-height:0;",
+                        style: "display:flex; flex-direction:column; gap:4px; overflow-y:scroll; min-height:0;",
                         for hit in similar() {
                             {
                                 let color = class_color(&hit.class);

@@ -41,7 +41,7 @@ pub fn Navigator(on_pick: EventHandler<usize>) -> Element {
     rsx! {
         div {
             style: "position:absolute; top:0; left:0; width:100%; height:100%; box-sizing:border-box; \
-                    overflow-y:auto; display:flex; flex-direction:column;",
+                    overflow-y:scroll; display:flex; flex-direction:column;",
             for (index, data, current, starts) in rows {
                 NavSong {
                     key: "{index}",

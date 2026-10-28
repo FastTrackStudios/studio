@@ -271,7 +271,7 @@ pub fn RigMenu(
             div { style: "flex: 1; min-height: 0; display: flex; flex-direction: {direction}; gap: {gap}px; padding: {gap}px {trail}px {foot}px {lead}px; box-sizing: border-box;",
                 // Where you were, and the other rigs — no wider than a hand's
                 // reach on a big screen; the set takes the rest.
-                div { style: "{left} min-width: 0; display: flex; flex-direction: column; gap: {gap}px; overflow-y: auto;",
+                div { style: "{left} min-width: 0; display: flex; flex-direction: column; gap: {gap}px; overflow-y: scroll;",
                     if let Some(rig) = last {
                         Resume { rig, tile: front.tile(rig), set: front.set.clone(), phone, on_pick: move |()| on_pick.call(rig) }
                     }
@@ -525,7 +525,7 @@ fn RunSheet(
                             if set.day.is_empty() { "Tonight · {set.songs.len()} songs" } else { "{set.day} · {set.songs.len()} songs" }
                         }
                     }
-                    div { style: "flex: 1; min-height: 0; overflow-y: auto;",
+                    div { style: "flex: 1; min-height: 0; overflow-y: scroll;",
                         for (i, song) in set.songs.iter().cloned().enumerate() {
                             {
                                 let up = i == set.up;

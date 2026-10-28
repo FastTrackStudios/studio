@@ -304,7 +304,7 @@ fn setlist_panel() -> Element {
                     }
                 }
             }
-            div { style: "flex: 1; min-height: 0; overflow-y: auto; padding: 6px;",
+            div { style: "flex: 1; min-height: 0; overflow-y: scroll; padding: 6px;",
                 for (i, s) in gig.songs.iter().enumerate() {
                     button {
                         key: "{i}",
@@ -412,7 +412,7 @@ fn chart_panel() -> Element {
                     }
                 }
             }
-            div { style: "flex: 1; min-height: 0; overflow-y: auto; padding: 0 18px 18px;",
+            div { style: "flex: 1; min-height: 0; overflow-y: scroll; padding: 0 18px 18px;",
                 match chart_src {
                     Some(src) => rsx! {
                         img { src: "{src}", style: "width: 100%; height: auto; border-radius: 6px; background: #fff;" }

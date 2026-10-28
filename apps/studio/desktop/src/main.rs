@@ -176,7 +176,10 @@ fn main() {
     // phone pages keep clear of the one thing that matters, the camera
     // housing, themselves (`IslandLeft`); the bars reach the edges. (UIKit's
     // safe area is also unreliable here: an app that rotated at launch kept
-    // portrait's insets on a landscape window.)
+    // portrait's insets on a landscape window.) NB: blitz-shell at the
+    // pinned tag (fts-pointer-2026-10) reads no BLITZ_SAFE_AREA* variable
+    // and insets the viewport by all of winit's safe area; what the page
+    // must still keep clear is `app_shell::ui::form::page_insets`.
     #[cfg(target_os = "ios")]
     // SAFETY: first thing in main, before any thread starts.
     unsafe {
@@ -1100,7 +1103,8 @@ fn ResizeHandles() -> Element {
     rsx! {
         for (pos, dir) in handles.iter().copied() {
             div {
-                style: "position: fixed; z-index: 2147483647; {pos}",
+                // Against the window's root (Blitz has no `fixed`).
+                style: "position: absolute; z-index: 2147483647; {pos}",
                 onmousedown: move |_| {
                     chrome::resize(dir);
                 },

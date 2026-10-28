@@ -213,7 +213,7 @@ pub fn LibrariesPage(on_back: EventHandler<()>) -> Element {
                     "Connect"
                 }
             }
-            div { style: "flex: 1; min-height: 0; overflow-y: auto; padding: 8px 18px 24px;",
+            div { style: "flex: 1; min-height: 0; overflow-y: scroll; padding: 8px 18px 24px;",
                 if !note().is_empty() {
                     div { style: "padding: 10px 0; font-size: 13px; color: #a1a1aa;", "{note}" }
                 }

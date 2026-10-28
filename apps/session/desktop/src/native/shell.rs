@@ -203,28 +203,17 @@ pub fn Shell() -> Element {
     // The window's size in logical pixels, kept as it is resized: the
     // bar's width says how much of it is spelled out, and the shape says
     // which layout — a phone's (or a window made that small) takes the
-    // small-screen one, the same panels rearranged.
-    let logical = |w: &std::sync::Arc<dyn winit::window::Window>| {
-        let size = w.surface_size();
-        let scale = w.scale_factor().max(1.0);
-        (
-            f64::from(size.width) / scale,
-            f64::from(size.height) / scale,
-        )
-    };
-    let mut size = use_signal(|| logical(&window));
-    let measuring = window.clone();
-    dioxus_native::use_window_event(move |event, _| {
-        if matches!(
-            event,
-            winit::event::WindowEvent::SurfaceResized(_)
-                | winit::event::WindowEvent::ScaleFactorChanged { .. }
-        ) {
-            let now = logical(&measuring);
-            let was = *size.peek();
-            if (was.0 - now.0).abs() > 0.5 || (was.1 - now.1).abs() > 0.5 {
-                size.set(now);
-            }
+    // small-screen one, the same panels rearranged. The screen is the one
+    // the host published (Studio's, at its root), else measured here.
+    let screen = app_shell::ui::form::use_window_screen();
+    let mut size = use_signal(|| {
+        let s = *screen.peek();
+        (s.width, s.height)
+    });
+    use_effect(move || {
+        let s = screen();
+        if *size.peek() != (s.width, s.height) {
+            size.set((s.width, s.height));
         }
     });
     use_context_provider(|| session_ui::shell::WindowSize(size));
@@ -269,10 +258,7 @@ pub fn Shell() -> Element {
         });
     }
     let width = move || size().0;
-    let form = use_memo(move || {
-        let (w, h) = size();
-        session_ui::compact::Form::of(w, h)
-    });
+    let form = use_memo(move || session_ui::compact::Form::from_screen(&screen()));
     let mut form_signal = use_context_provider(|| Signal::new(*form.peek()));
     use_effect(move || {
         let now = form();

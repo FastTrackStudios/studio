@@ -5,7 +5,8 @@
 //!
 //! Design: `docs/design/unified-shell/spec.md` (STA-152). Plan: the
 //! STA-153 audit §4 — this is its stage 1 (frame + state) and the registry
-//! half of stage 2. Not here yet, by design: size classes and phone
+//! half of stage 2. The form factor (phone, tablet, desk, and the safe
+//! area the page keeps clear) is [`form`]. Not here yet, by design: phone
 //! overlays (spec §3), drag-to-dock (spec §10 step 6, on `dock`), and the
 //! shared `TransportSource`/`SetlistSource` services (audit §4.1 stage 2).
 //!
@@ -35,6 +36,7 @@
 //! }
 //! ```
 
+pub mod form;
 mod frame;
 mod layout;
 pub mod perform;
@@ -43,6 +45,7 @@ pub mod playback;
 mod registry;
 pub mod rig;
 
+pub use form::{FormFactor, Insets, Orientation, Screen, provide_screen, use_screen};
 pub use frame::{
     RegionHost, ShellFrame, ShellState, load_layout, use_panel_registry, use_shell,
     use_shell_state, use_shell_state_with,

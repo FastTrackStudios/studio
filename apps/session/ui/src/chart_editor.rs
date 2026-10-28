@@ -149,7 +149,7 @@ pub fn ChartEditor() -> Element {
                 }
             }
             div {
-                style: "flex:1; min-height:0; overflow:auto; padding:8px 12px; color:{TEXT}; \
+                style: "flex:1; min-height:0; overflow:scroll; padding:8px 12px; color:{TEXT}; \
                         font-family: ui-monospace, Menlo, monospace; font-size:13px;",
                 editor_view::Editor {
                     state,

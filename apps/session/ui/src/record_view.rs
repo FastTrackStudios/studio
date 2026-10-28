@@ -162,14 +162,15 @@ fn RecordMenu(height: String) -> Element {
                 lucide_dioxus::Menu { size: 24, color: "currentColor" }
             }
             if open() {
-                // A press outside closes it.
+                // A press outside closes it: the whole screen, from
+                // wherever the button is (`shell::SCRIM`).
                 div {
-                    style: "position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:61;",
+                    style: "{crate::shell::SCRIM} z-index:61;",
                     onclick: move |_| open.set(false),
                 }
                 div {
                     style: "position:absolute; top:100%; margin-top:8px; left:0; z-index:62; width:300px; \
-                            max-height:70vh; overflow-y:auto; display:flex; flex-direction:column; gap:10px; \
+                            max-height:70vh; overflow-y:scroll; display:flex; flex-direction:column; gap:10px; \
                             padding:10px; border-radius:16px; background:#1c1e22; border:1px solid {RULE}; \
                             box-shadow:0 16px 40px rgba(0,0,0,0.6);",
                     if let Some(mut mode) = mode {
