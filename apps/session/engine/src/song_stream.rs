@@ -1677,17 +1677,20 @@ impl StreamedSong {
     /// mirror on disk has them where the peak store looks.
     pub async fn load_peaks(&self, block: u32) -> usize {
         use daw::standalone::reapeaks::ReaPeaks;
-        let attached = self.attached.lock().map(|a| a.clone()).unwrap_or_default();
         let mut loaded = 0usize;
-        for (original, streamed) in attached {
+        // One fetch and parse per recording, shared by every take of it.
+        for (original, takes) in self.attached_by_original() {
             let Some((path, size)) = self.peaks.get(&original).cloned() else {
                 continue;
             };
             match self.source.read(path.clone(), 0..size).await {
                 Ok(bytes) => match ReaPeaks::parse(&bytes) {
                     Ok(peaks) => {
-                        streamed.set_peaks(Arc::new(peaks.coarsened(block)));
-                        loaded = loaded.saturating_add(1);
+                        let peaks = Arc::new(peaks.coarsened(block));
+                        for streamed in &takes {
+                            streamed.set_peaks(Arc::clone(&peaks));
+                        }
+                        loaded = loaded.saturating_add(takes.len());
                     }
                     Err(e) => {
                         tracing::warn!(media = %path, error = %e, "song-stream: a waveform cache did not parse")
@@ -1710,15 +1713,13 @@ impl StreamedSong {
     /// left that can be.
     #[cfg(feature = "web")]
     pub async fn build_missing_peaks(&self, block: u32, most: usize) -> usize {
-        let attached = self.attached.lock().map(|a| a.clone()).unwrap_or_default();
         let mut built = 0usize;
-        let mut seen = std::collections::HashSet::new();
-        for (original, streamed) in attached {
+        for (original, takes) in self.attached_by_original() {
             if built >= most {
                 break;
             }
-            if streamed.has_peaks() || !seen.insert(original.clone()) || self.unbuildable(&original)
-            {
+            let takes: Vec<_> = takes.into_iter().filter(|t| !t.has_peaks()).collect();
+            if takes.is_empty() || self.unbuildable(&original) {
                 continue;
             }
             let stem = Path::new(&original)
@@ -1744,13 +1745,36 @@ impl StreamedSong {
                 self.give_up_on(&original);
                 continue;
             };
-            streamed.set_peaks(Arc::new(peaks.coarsened(block)));
+            // Once per recording, for every take cut from it.
+            let peaks = Arc::new(peaks.coarsened(block));
+            for streamed in &takes {
+                streamed.set_peaks(Arc::clone(&peaks));
+            }
             built = built.saturating_add(1);
         }
         if built > 0 {
             tracing::info!(stream.source = %self.source.label(), stream.waveforms_built = built, "song-stream: waveforms built here");
         }
         built
+    }
+
+    /// The attached takes by the recording they stream, in the order first
+    /// attached: every item cut from one recording shares its waveform.
+    fn attached_by_original(
+        &self,
+    ) -> Vec<(
+        String,
+        Vec<daw::standalone::audio_engine::streamed::Streamed>,
+    )> {
+        let attached = self.attached.lock().map(|a| a.clone()).unwrap_or_default();
+        let mut grouped: Vec<(String, Vec<_>)> = Vec::new();
+        for (original, streamed) in attached {
+            match grouped.iter_mut().find(|(o, _)| *o == original) {
+                Some((_, takes)) => takes.push(streamed),
+                None => grouped.push((original, vec![streamed])),
+            }
+        }
+        grouped
     }
 
     /// Whether `original`'s waveform could not be built (its proxy did not

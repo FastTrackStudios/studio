@@ -998,8 +998,10 @@ async fn waveforms(
             .await
             > 0
     {
-        // What the builds made drawable, read again.
-        previews.fill_waves_in(&project, previews.partial()).await;
+        // What the builds made drawable, read again: those alone.
+        previews
+            .fill_waves_in(&project, previews.partial_now_whole(&song))
+            .await;
     }
     BUILDING.with(|b| b.borrow_mut().remove(&song));
 }

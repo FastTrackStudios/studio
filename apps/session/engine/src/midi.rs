@@ -510,6 +510,17 @@ impl Previews {
         }
     }
 
+    /// Of the items read partially, those of `song` that would read whole
+    /// now (their waveform has come since): what to read again, and no
+    /// more.
+    #[must_use]
+    pub fn partial_now_whole(&self, song: &str) -> Vec<String> {
+        self.partial()
+            .into_iter()
+            .filter(|guid| !partial_here(song, guid))
+            .collect()
+    }
+
     /// The items read partially, waiting to be read whole.
     #[must_use]
     pub fn partial(&self) -> Vec<String> {
