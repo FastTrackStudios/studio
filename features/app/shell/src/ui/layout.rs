@@ -83,6 +83,9 @@ pub struct RegionLayout {
     /// Width for a sidebar, height cap for a drawer, in logical px.
     pub size: u32,
     /// The panel showing when the region holds more than one, by id.
+    /// Left out when unset: the prefs format writes `None` as a bare `@`
+    /// it then cannot read back, which lost every saved layout.
+    #[facet(default, skip_serializing_if = Option::is_none)]
     pub active: Option<String>,
 }
 
@@ -98,6 +101,14 @@ impl RegionLayout {
     }
 }
 
+/// A panel a person moved out of the region it lives in by default
+/// (comments to the bottom, tasks to the left).
+#[derive(Debug, Clone, PartialEq, Eq, Facet)]
+pub struct Placement {
+    pub panel: String,
+    pub region: Region,
+}
+
 /// The whole shell's layout, one per scope (an app, or a workspace inside it).
 #[derive(Debug, Clone, PartialEq, Eq, Facet)]
 pub struct ShellLayout {
@@ -105,6 +116,10 @@ pub struct ShellLayout {
     pub right: RegionLayout,
     pub top: RegionLayout,
     pub bottom: RegionLayout,
+    /// The panels moved out of their home region. Missing from a layout
+    /// saved before panels could move: every panel at home.
+    #[facet(default)]
+    pub moved: Vec<Placement>,
 }
 
 impl Default for ShellLayout {
@@ -114,6 +129,7 @@ impl Default for ShellLayout {
             right: RegionLayout::initial(Region::Right),
             top: RegionLayout::initial(Region::Top),
             bottom: RegionLayout::initial(Region::Bottom),
+            moved: Vec::new(),
         }
     }
 }
@@ -203,6 +219,35 @@ impl ShellLayout {
         }
     }
 
+    /// Where a panel is: where it was moved to, else `home` (the region it
+    /// was registered in).
+    #[must_use]
+    pub fn placed(&self, panel: &str, home: Region) -> Region {
+        self.moved
+            .iter()
+            .find(|m| m.panel == panel)
+            .map_or(home, |m| m.region)
+    }
+
+    /// Move a panel to `to` (its `home` forgets the move), and show it
+    /// there, opened. Main holds the page, not panels: a move there is
+    /// refused. Returns whether anything changed.
+    pub fn move_panel(&mut self, panel: &str, home: Region, to: Region) -> bool {
+        if to == Region::Main || self.placed(panel, home) == to {
+            return false;
+        }
+        self.moved.retain(|m| m.panel != panel);
+        if to != home {
+            self.moved.push(Placement {
+                panel: panel.to_string(),
+                region: to,
+            });
+        }
+        self.set_active(to, panel);
+        self.set_open(to, true);
+        true
+    }
+
     /// Bring a stored layout back inside the limits this build enforces, so
     /// a hand-edited or older preference can't make a region unusable.
     #[must_use]
@@ -225,4 +270,42 @@ impl ShellLayout {
 #[must_use]
 pub fn pref_key(scope: &str) -> String {
     format!("shell.layout.v1.{scope}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_layout_with_a_moved_panel_reads_back_as_it_was_saved() {
+        let mut layout = ShellLayout::default();
+        layout.move_panel("session.comments", Region::Right, Region::Bottom);
+        let text = facet_styx::to_string(&layout).unwrap();
+        let back: Result<ShellLayout, _> = facet_styx::from_str(&text);
+        assert_eq!(back.as_ref().ok(), Some(&layout), "{text}\n{back:?}");
+    }
+
+    #[test]
+    fn a_moved_panel_lives_where_it_was_moved_and_moving_home_forgets_it() {
+        let mut layout = ShellLayout::default();
+        assert_eq!(layout.placed("talk", Region::Right), Region::Right);
+        layout.set_open(Region::Bottom, false);
+        assert!(layout.move_panel("talk", Region::Right, Region::Bottom));
+        assert_eq!(layout.placed("talk", Region::Right), Region::Bottom);
+        assert!(
+            layout.is_open(Region::Bottom),
+            "a move opens where it lands"
+        );
+        assert_eq!(layout.active(Region::Bottom), Some("talk"));
+        assert!(
+            !layout.move_panel("talk", Region::Right, Region::Bottom),
+            "already there"
+        );
+        assert!(
+            !layout.move_panel("talk", Region::Right, Region::Main),
+            "main holds the page"
+        );
+        assert!(layout.move_panel("talk", Region::Right, Region::Right));
+        assert!(layout.moved.is_empty(), "home again: nothing to remember");
+    }
 }

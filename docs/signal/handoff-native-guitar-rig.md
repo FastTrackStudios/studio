@@ -19,7 +19,8 @@ computer becomes the rig, all audio in the tab) is planned — see
   `studio-desktop` with a *different* feature set or profile makes cargo
   recompile every shared crate (that was the 15-minute rebuilds). The CLI
   builds alongside with no penalty:
-  `cargo build --profile release-fast -p studio-desktop -p studio-desktop --features cli --bin signal --features studio-desktop/signal-keys-rig`.
+  `cargo build --profile release-fast -p studio-desktop --features cli,signal-keys-rig --bin studio`
+  (`studio rig …`, `studio tone3000 …`).
 - **release-fast** (root `Cargo.toml`): release opt, incremental, 256 CGUs.
   An edit in `signal-sampler` rebuilds the app in ~15 s. Local only.
   **dev** now has the render stack (Blitz/Stylo/Taffy/Parley/Vello/wgpu) at
@@ -65,8 +66,8 @@ the switch paths' single hook). A drive knob moved live
 (`session::apply_drive`) corrects *relative* to the block's built level via
 the cached drive curve.
 
-Commands, in order: `signal rig level-modules` → `signal rig level-presets`
-→ `signal rig level <Profile>` (all `--dry-run` capable). A full cold pass is
+Commands, in order: `studio rig level-modules` → `studio rig level-presets`
+→ `studio rig level <Profile>` (all `--dry-run` capable). A full cold pass is
 ~7 min; unchanged chains are cache hits (seconds). The app's **Level
 patches** writes per-patch offsets the same way.
 
@@ -105,7 +106,7 @@ engine; switching through a whole profile on one offline rig is repeatable
 - **Preset tab = audition**: `choose_preset` plays the snapshot alone (the
   `compose::snapshot_patch` template levelling measures), never writes the
   profile. It used to repoint and save the live patch on every click.
-- **Presets named for gear** (`signal rig regroup-presets`): the
+- **Presets named for gear** (`studio rig regroup-presets`): the
   profile-named presets (Worship Clean …) were dissolved into the amp
   presets; profiles repointed. Worship Drive → Fender Deluxe Reverb ·
   Cranked (user asked for "more normal").
@@ -161,7 +162,7 @@ the old GuitarLSTM DI is `di-reference.guitarlstm-ts9.wav`).
 5. ~~Log flood.~~ DONE (signal `24ca794a`, processor `eb06151`): the
    tuner's empty pitch trace, zero-size reverb/saturate face rects, the
    gate band at the floor.
-6. `signal rig level` (non-dry-run) writes `patch.level_db`; with the new
+6. `studio rig level` (non-dry-run) writes `patch.level_db`; with the new
    offset semantics that is right, but `levelling::level_profile` measures
    with offsets zeroed, so its dry-run shows the *raw* figure, not the
    final one — confusing when verifying.
@@ -197,7 +198,7 @@ the old GuitarLSTM DI is `di-reference.guitarlstm-ts9.wav`).
 - **Post Comp** presets (Live Glue 2 dB, Clean Punch 4, Lead Sustain 5,
   Rhythm Catch 1 — `target_gr_db` in blocks.styx) carry the character; each
   preset snapshot's threshold is its own override, dialled on its own chain
-  by `signal rig dial-post-comp` (all 113 within ±0.2 dB; thresholds span
+  by `studio rig dial-post-comp` (all 113 within ±0.2 dB; thresholds span
   8 dB between amps). `examples/comp_verify` checks them.
 - Every snapshot picks a Pre and Post Comp in presets.styx by gain class
   (Amp modules no longer set Post Comp). New variations: Twin Reverb ·
@@ -206,7 +207,7 @@ the old GuitarLSTM DI is `di-reference.guitarlstm-ts9.wav`).
   +1, crunch +2, high-gain rhythm +2.5, lead +3). All three levelling paths
   use `compose::loudness_target`. Measuring it (peak-to-loudness of the gain
   stages) was tried and does not sort by gain.
-- **Order after changing a comp preset or an amp:** `signal rig
+- **Order after changing a comp preset or an amp:** `studio rig
   dial-post-comp` → `level-presets` → `level <Profile>` ×4 (dial ~18 min,
   presets ~4 min).
 - Sidebar shows each patch's variation under its preset.
@@ -301,7 +302,7 @@ no pointer capture.
 Plan from this session (research, no code): mirror the keys rig —
 `apps/desktop/src/web_keys_rig.rs` + `web_keys_backend.rs` — as
 `web_guitar_rig.rs` (route `/rigs/guitar`) + `web_guitar_backend.rs`: an
-in-page `Rig` implementation over `rig.json` (`signal rig web-bundle`)
+in-page `Rig` implementation over `rig.json` (`studio rig web-bundle`)
 driving `features/rigs/guitar/worklet`, mounting the real
 `GuitarRigRemote`. `GuitarRigBackend` itself is too native to compile for
 wasm. Phase 1: stacks into the bundle, `setParamByName` in the worklet, the

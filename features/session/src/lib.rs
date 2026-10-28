@@ -22,6 +22,9 @@
 
 #[cfg(feature = "library")]
 pub mod library;
+/// A project file synced through the org that owns it.
+#[cfg(all(feature = "project-sync", not(target_arch = "wasm32")))]
+pub mod project_sync;
 pub mod proto;
 pub mod sync;
 #[cfg(feature = "ui")]

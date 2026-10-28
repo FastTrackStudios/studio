@@ -2,7 +2,8 @@
 
 **studio is FastTrackStudio's audio/music product in one repo**: the DAW
 (`daw`) and everything built on it — **Studio, the one app** (Signal, the
-live rig, and Session, the full DAW, behind one front screen), Patchbay
+live rig, and Session, the full DAW, as views of one project behind one
+welcome screen, the library), Patchbay
 (studio routing), the CLAP/VST3 plugins, and frame (the design /
 control-surface engine). It is the merger, in October
 2026, of the former session, daw, processor, signal, patchbay and frame
@@ -12,13 +13,19 @@ repos. One Cargo workspace, one lockfile, one `target/`, one flake.
 
 ```
 apps/       studio/desktop                     Studio, THE app (desktop + iOS, one
-                                               TestFlight upload): its front screen
-                                               opens Signal or Session; Signal's app
+                                               TestFlight upload): its welcome screen
+                                               (the library) opens the DAW view or
+                                               the rig view; the rig app
                                                crate (`studio-desktop`, and its
                                                headless `--engine`)
-            session/{desktop,daw,web,daw-web}  Session: its app as a library Studio
-                                               mounts (+ its own binary and CLIs), the
-                                               DAW view, the site, the DAW in a browser
+            session/{desktop,engine,ui,web,daw-web}
+                                               Session: its app as a library Studio
+                                               mounts (+ its own binary and CLIs), its
+                                               engine (`session-engine`: the set, the
+                                               Action List, `studio engine`; draws
+                                               nothing), its window (`session-ui`: the
+                                               DAW view, a view of the engine), the
+                                               site, the DAW in a browser
             signal/{mobile,web}                Signal: Android, the site
             patchbay/                          fts-patchbay: app, agent CLI, browser remote
             plugins/*                          the CLAP/VST3 plugins (`<name>-plugin`),
@@ -75,9 +82,13 @@ working there.
   tracks in that project (`signal_rig_host::engine::{Engine, Rig}`), not an
   engine of its own. Signal and Session both just run the DAW: Signal is
   the isolated live rig, Session the full DAW, and rigs live in Session
-  as tracks. In Studio a launch goes into one of the two (its front
-  screen, `apps/studio/desktop/src/front.rs`), so the side not chosen
-  never starts an engine. More engines means more processes of the same engine. Read
+  as tracks. A desktop window can also drive the engine in a process of
+  its own (`FTS_ENGINE=spawn|attach`: `studio engine`, found or spawned,
+  outliving the window — `session_engine::studio_engine::link`). In
+  Studio the window opens on the welcome screen (the
+  library, `apps/studio/desktop/src/front.rs`) and goes into the DAW view
+  or the rig view of what is opened; Session's Action List is served from
+  launch. More engines means more processes of the same engine. Read
   **`docs/design/one-engine.md`** before touching rigs, engines, meters or
   MIDI.
 - **The apps share their shell**: the log ring / crash log / flight log,
@@ -143,7 +154,7 @@ just check                 # cargo check --workspace
 just test                  # the core test set: cargo nextest run -p <each of the Justfile's test_packages>
 just test-doc              # doctests (nextest cannot run them)
 just app [PROJECT]         # Session (session-desktop, release-fast)
-just guitar / just keys    # Signal's rigs (studio-desktop; FTS_STUDIO_OPEN=signal|session skips the front screen)
+just guitar / just keys    # the rig view (studio-desktop --guitar/--keys skip the welcome screen; FTS_STUDIO_OPEN=<path|setlist|rig> too)
 just signal-engine         # studio-desktop --engine: the headless rig engine (ws://:4040/vox)
 just reaper-test [FILTER]  # Session's #[reaper_test] suites in a real REAPER
 just reaper daw-test       # daw-reaper's suites (module: features/adapters/reaper/reaper.just)

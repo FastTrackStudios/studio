@@ -94,6 +94,12 @@ impl ShellState {
         });
     }
 
+    /// Move a panel (registered in `home`) to another region, show it
+    /// there, and save.
+    pub fn move_panel(&mut self, panel: &str, home: Region, to: Region) {
+        self.update(|l| l.move_panel(panel, home, to));
+    }
+
     /// Apply an edit; write it back (and wake readers) only if it changed
     /// something — the shell must not cost a redraw per frame (audit §4.2).
     fn update(&mut self, edit: impl FnOnce(&mut ShellLayout) -> bool) {
@@ -172,6 +178,10 @@ pub fn ShellFrame(
     root: bool,
 ) -> Element {
     let registry = try_use_context::<PanelRegistry>().unwrap_or_default();
+    // Where the person moved panels (none without a shell state above).
+    let layout = try_use_context::<ShellState>()
+        .map(|s| s.layout())
+        .unwrap_or_default();
     let fill = if root {
         // The same page AppFrame drew, so Signal looks unchanged on the shell.
         "height: 100vh; background: #0a0a0a; color: #e4e4e7; font-family: sans-serif;"
@@ -179,7 +189,11 @@ pub fn ShellFrame(
         "flex: 1; min-width: 0;"
     };
     let slot = |given: Option<Element>, region: Region| -> Option<Element> {
-        given.or_else(|| registry.has(region).then(|| rsx! { RegionHost { region } }))
+        given.or_else(|| {
+            registry
+                .has(region, &layout)
+                .then(|| rsx! { RegionHost { region } })
+        })
     };
     let left = slot(left, Region::Left);
     let right = slot(right, Region::Right);
@@ -215,9 +229,13 @@ pub fn ShellFrame(
 pub fn RegionHost(region: Region) -> Element {
     let registry = try_use_context::<PanelRegistry>().unwrap_or_default();
     let shell = use_shell();
-    let panels: Vec<Panel> = registry.in_region(region).cloned().collect();
+    let layout = shell.layout();
+    let panels: Vec<Panel> = registry.in_region(region, &layout).cloned().collect();
     let remembered = shell.active(region);
-    let Some(showing) = registry.showing(region, remembered.as_deref()).cloned() else {
+    let Some(showing) = registry
+        .showing(region, remembered.as_deref(), &layout)
+        .cloned()
+    else {
         return rsx! {};
     };
     let body = rsx! { PanelSlot { key: "{showing.id}", render: showing.render } };
@@ -280,6 +298,51 @@ fn Tabs(region: Region, panels: Vec<Panel>, showing: &'static str) -> Element {
     }
 }
 
+/// "Move to": the showing panel to another edge. Pressed, it lists the
+/// regions the panel is not in; one pressed there moves it (and the
+/// layout remembers). A touch path to docking, no drag needed (spec §2.2).
+#[component]
+fn MoveTo(region: Region, panels: Vec<Panel>, showing: &'static str) -> Element {
+    let mut shell = use_shell();
+    let mut open = use_signal(|| false);
+    let Some(home) = panels.iter().find(|p| p.id == showing).map(|p| p.region) else {
+        return rsx! {};
+    };
+    let targets: Vec<(Region, &'static str)> = [
+        (Region::Left, "Left"),
+        (Region::Right, "Right"),
+        (Region::Bottom, "Bottom"),
+        (Region::Top, "Top"),
+    ]
+    .into_iter()
+    .filter(|(r, _)| *r != region)
+    .collect();
+    rsx! {
+        if open() {
+            for (to, label) in targets {
+                button {
+                    key: "{label}",
+                    style: "{HANDLE_BTN} padding: 0 8px; font-size: 12px; font-weight: 650; border: 1px solid {LINE};",
+                    title: "Move to the {label}",
+                    onclick: move |_| {
+                        shell.move_panel(showing, home, to);
+                        open.set(false);
+                    },
+                    "{label}"
+                }
+            }
+            button { style: HANDLE_BTN, title: "Cancel", onclick: move |_| open.set(false), "×" }
+        } else {
+            button {
+                style: "{HANDLE_BTN} padding: 0 8px; font-size: 12px; font-weight: 650;",
+                title: "Move this panel",
+                onclick: move |_| open.set(true),
+                "Move"
+            }
+        }
+    }
+}
+
 /// A sidebar: the panel at its saved width with a collapse button, or —
 /// collapsed — a rail with one button per panel.
 #[component]
@@ -330,9 +393,11 @@ fn Sidebar(region: Region, panels: Vec<Panel>, showing: &'static str, body: Elem
                 if left {
                     Tabs { region, panels: panels.clone(), showing }
                     span { style: "flex: 1;" }
+                    MoveTo { region, panels: panels.clone(), showing }
                     button { style: HANDLE_BTN, title: "Collapse", onclick: move |_| shell.set_open(region, false), "{close_glyph}" }
                 } else {
                     button { style: HANDLE_BTN, title: "Collapse", onclick: move |_| shell.set_open(region, false), "{close_glyph}" }
+                    MoveTo { region, panels: panels.clone(), showing }
                     span { style: "flex: 1;" }
                     Tabs { region, panels: panels.clone(), showing }
                 }
@@ -398,6 +463,8 @@ fn DrawerHandle(region: Region, panels: Vec<Panel>, showing: &'static str) -> El
             if open {
                 Tabs { region, panels: panels.clone(), showing }
             }
+            span { style: "flex: 1;" }
+            MoveTo { region, panels: panels.clone(), showing }
         }
     }
 }

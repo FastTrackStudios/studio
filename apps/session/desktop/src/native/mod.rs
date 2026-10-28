@@ -1,7 +1,7 @@
 //! The Session app on Blitz (dioxus-native) — see `docs/app-on-blitz.md`.
 //!
 //! The desktop build launches this instead of the WRY app when the `native`
-//! feature is on. It is the app as panels (`session_daw::studio::Arrangement`,
+//! feature is on. It is the app as panels (`session_ui::studio::Arrangement`,
 //! the progress bar, …) composed into views under one top bar, with the
 //! window's own title bar made transparent so the traffic lights sit in ours.
 //!
@@ -12,14 +12,15 @@
 //!
 //! That is Engine mode. In Remote and Cue (`--audio remote|cue`,
 //! `--reaper [socket]`, `FTS_AUDIO_MODE`, or the top bar's audio menu last
-//! time — see `session_daw::open::launch_mode`) nothing is opened here: the
+//! time — see `session_ui::open::launch_mode`) nothing is opened here: the
 //! window attaches to the system it drives and its open projects are the
-//! set (`session_daw::setlist::Setlist::attach`).
+//! set (`session_ui::setlist::Setlist::attach`).
 
 #[cfg(target_os = "ios")]
 mod ios_audio;
 
-/// What Studio's home screen hands Session (recent songs, open or join first).
+/// What Studio's welcome screen hands Session (what to open, the way back,
+/// the account, the Action List).
 pub mod handoff;
 mod library;
 mod shell;
@@ -58,22 +59,9 @@ fn choose() -> Option<PathBuf> {
 
 /// The songs `target` names: the one song it is (a project, a `.session`,
 /// or a song's folder); or a setlist's (a folder of song folders, or a
-/// `.setlist` file — see `session_daw::setlist::read_setlist`).
+/// `.setlist` file — see `session_ui::setlist::read_setlist`).
 fn songs_of(target: &Path) -> Option<Vec<PathBuf>> {
-    use session_daw::setlist::{read_setlist, song_in};
-    if target.is_dir() && !session_daw::open::is_session(target) {
-        if let Some(song) = song_in(target) {
-            return Some(vec![song]);
-        }
-    } else if !target
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("setlist"))
-    {
-        return Some(vec![target.to_path_buf()]);
-    }
-    read_setlist(target)
-        .inspect_err(|e| tracing::error!(error = %e, "the setlist could not be read"))
-        .ok()
+    session_ui::studio_engine::set::songs_at(target)
 }
 
 /// The Open dialog: a REAPER project.
@@ -169,7 +157,7 @@ fn remembered() -> Option<PathBuf> {
 
 fn remember(project: &Path) {
     // The start screen's Recent, too.
-    session_daw::projects::opened(project);
+    session_ui::projects::opened(project);
     let Some(file) = memory() else { return };
     let written = file
         .parent()
@@ -199,7 +187,7 @@ pub fn launch() {
 /// or (Engine mode) what to open as it comes up ([`choose`]).
 #[derive(Clone)]
 pub struct Prepared {
-    setlist: Option<session_daw::setlist::Setlist>,
+    setlist: Option<session_ui::setlist::Setlist>,
     open: Option<PathBuf>,
 }
 
@@ -210,20 +198,28 @@ pub fn prepare() -> Option<Prepared> {
     // The global app menu (File, Edit, View, …) for the desktop shell's
     // top bar, on the session bus — on a thread of its own.
     #[cfg(target_os = "linux")]
-    session_daw::app_menu::start();
+    session_ui::app_menu::start();
     // How this app dials a Session engine (Remote on another Session): the
     // connector lives with the app's iroh identity (`crate::remote`).
     #[cfg(feature = "session-domain")]
-    session_daw::open::set_engine_dialer(|address| {
+    session_ui::open::set_engine_dialer(|address| {
         Box::pin(async move {
             let addr = crate::remote::EngineAddr::parse(&address).map_err(|e| eyre::eyre!(e))?;
             let engine = crate::remote::connect_engine_daw(&addr).await?;
             let daw = engine.daw.clone();
-            Ok((daw, Box::new(engine) as session_daw::open::EngineConnection))
+            Ok((daw, Box::new(engine) as session_ui::open::EngineConnection))
         })
     });
-    let mode = session_daw::open::launch_mode();
-    session_daw::open::set_mode(mode.clone());
+    // The engine in another process (`FTS_ENGINE=spawn|attach`): this
+    // window drives it — the engine serves the Action List and owns the set.
+    if let Some(prepared) = linked() {
+        return Some(prepared);
+    }
+    // The Action List served to a model and the CLI from the start, so
+    // either can open the first song (`SESSION_OPEN`, `SESSION_OPEN_SETLIST`).
+    session_ui::open::serve_actions();
+    let mode = session_ui::open::launch_mode();
+    session_ui::open::set_mode(mode.clone());
     let remote = if mode.owns_project() {
         None
     } else {
@@ -245,10 +241,66 @@ pub fn prepare() -> Option<Prepared> {
     }
 }
 
-/// Session inside another app's window: Studio's, once its front screen
-/// has chosen Session. Prepares as [`launch`] does (on the first render,
-/// on the UI thread, where a desktop's dialogs must be asked), provides
-/// what `run` hands the window as root contexts, and draws the app.
+/// The window as a view of a Studio engine in another process, when
+/// `FTS_ENGINE` asks for one (`session_ui::studio_engine::link`): a running
+/// engine attached to, or one spawned in a process group of its own (the
+/// audio outlives the window). The window shows the engine's set, and
+/// follows it as the CLI, a model or another window changes it. `None`:
+/// the engine runs in this process, as it always did.
+fn linked() -> Option<Prepared> {
+    use session_ui::studio_engine::link;
+    let found = link::choose(link::Mode::from_env())?;
+    let target = session_ui::open::RemoteTarget::Engine {
+        socket: found.socket.clone(),
+    };
+    session_ui::open::set_mode(session_ui::open::ModeState::remote(target.clone(), false));
+    if let Err(e) = session_ui::open::attach(&target) {
+        tracing::warn!(engine.pid = found.pid, error = %e, "engine: not attached; in this process instead");
+        session_ui::open::set_mode(session_ui::open::ModeState::engine());
+        return None;
+    }
+    tracing::info!(engine.pid = found.pid, engine.socket = %found.socket.display(), "engine: this window drives it");
+    link::set_linked(found);
+    link::follow(session_ui::setlist::Setlist::from_engine);
+    Some(Prepared {
+        setlist: None,
+        open: None,
+    })
+}
+
+impl Prepared {
+    /// Whether the window drives another system whose set is open already
+    /// (Remote, Cue): there is nothing to pick, the set is the window's.
+    #[must_use]
+    pub const fn attached(&self) -> bool {
+        self.setlist.is_some()
+    }
+}
+
+/// [`prepare`] for a host whose own page comes first (Studio's welcome
+/// screen): at the host's launch, so the Action List is served from then
+/// (`studio open <setlist>` from the CLI works on the welcome screen), and
+/// nothing opened by itself — not the last song, not the example. What the
+/// host hands Session ([`handoff::request`]) is what opens. Quitting at a
+/// failed attach quits the process, as it does Session's own.
+#[must_use]
+pub fn prepare_hosted() -> Prepared {
+    let prepared = prepare().unwrap_or_else(|| {
+        tracing::info!("session: quit at the attach dialog");
+        std::process::exit(0)
+    });
+    Prepared {
+        open: None,
+        ..prepared
+    }
+}
+
+/// Session inside another app's window: Studio's, once something on its
+/// welcome screen opened a song or a set. Takes the [`Prepared`] the host
+/// provides ([`prepare_hosted`]), else prepares as [`launch`] does (on the
+/// first render, on the UI thread, where a desktop's dialogs must be
+/// asked); provides what `run` hands the window as root contexts, and
+/// draws the app. A host that provides [`handoff::Host`] gets Back.
 ///
 /// The host draws the window: its attributes are the host's, and on iOS
 /// the host registers the scene delegate (`app_shell::ios_scene`). Quitting
@@ -256,9 +308,11 @@ pub fn prepare() -> Option<Prepared> {
 #[component]
 pub fn Embedded() -> Element {
     let Prepared { setlist, open } = use_hook(|| {
-        prepare().unwrap_or_else(|| {
-            tracing::info!("session: quit at the attach dialog");
-            std::process::exit(0)
+        try_consume_context::<Prepared>().unwrap_or_else(|| {
+            prepare().unwrap_or_else(|| {
+                tracing::info!("session: quit at the attach dialog");
+                std::process::exit(0)
+            })
         })
     });
     use_context_provider(move || setlist);
@@ -269,7 +323,7 @@ pub fn Embedded() -> Element {
 /// What attaching came to: the set the other system has open, or Engine
 /// mode after all (it was not there, and this window plays the set).
 enum Attached {
-    Set(session_daw::setlist::Setlist),
+    Set(session_ui::setlist::Setlist),
     Engine,
 }
 
@@ -277,9 +331,9 @@ enum Attached {
 /// there, say so and offer to try again, to open a session here in Engine
 /// mode instead, or to quit — never quietly play the set here while
 /// someone thinks REAPER is.
-fn attach(target: &session_daw::open::RemoteTarget) -> Option<Attached> {
+fn attach(target: &session_ui::open::RemoteTarget) -> Option<Attached> {
     loop {
-        match session_daw::setlist::Setlist::attach(target) {
+        match session_ui::setlist::Setlist::attach(target) {
             Ok(setlist) => return Some(Attached::Set(setlist)),
             Err(e) => {
                 tracing::error!(error = %e, audio.target = target.kind(), "could not attach to the system this window drives");
@@ -291,7 +345,7 @@ fn attach(target: &session_daw::open::RemoteTarget) -> Option<Attached> {
                 match answer.as_deref() {
                     Some("Try Again") => {}
                     Some("Open in Engine Mode") => {
-                        session_daw::open::set_mode(session_daw::open::ModeState::engine());
+                        session_ui::open::set_mode(session_ui::open::ModeState::engine());
                         return Some(Attached::Engine);
                     }
                     _ => return None,
@@ -304,7 +358,7 @@ fn attach(target: &session_daw::open::RemoteTarget) -> Option<Attached> {
 /// The window: over `setlist` when it is open already (Remote, Cue);
 /// otherwise the start screen, opening `open` — the window is up at once,
 /// and the song comes in behind its loading note (`start`).
-fn run(setlist: Option<session_daw::setlist::Setlist>, open: Option<PathBuf>) {
+fn run(setlist: Option<session_ui::setlist::Setlist>, open: Option<PathBuf>) {
     // iOS 27 stops an app that has not adopted scenes: ours is registered
     // before UIKit starts, for Info.plist to name.
     #[cfg(target_os = "ios")]
@@ -356,7 +410,7 @@ fn window_attributes() -> winit::window::WindowAttributes {
         .with_maximized(pos.is_none() && size.is_none())
         .with_surface_size(winit::dpi::LogicalSize::new(w, h))
         // Small enough to be phone-sized: below ~700 wide (or ~500 tall)
-        // the app takes its small-screen layout (`session_daw::compact`).
+        // the app takes its small-screen layout (`session_ui::compact`).
         .with_min_surface_size(winit::dpi::LogicalSize::new(320.0, 300.0));
     if let Some((x, y)) = pos {
         attributes = attributes.with_position(winit::dpi::LogicalPosition::new(x, y));

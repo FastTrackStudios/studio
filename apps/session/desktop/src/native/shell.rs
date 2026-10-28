@@ -37,7 +37,7 @@ const TEXT: &str = "#e5e7eb";
 /// The whole window.
 #[component]
 pub fn Shell() -> Element {
-    use session_daw::shell::{TopBar, View};
+    use session_ui::shell::{TopBar, View};
 
     // `FTS_SESSION_VIEW` opens on a view other than the DAW.
     let view = use_signal(|| match std::env::var("FTS_SESSION_VIEW").as_deref() {
@@ -51,7 +51,7 @@ pub fn Shell() -> Element {
         _ => View::Daw,
     });
     // The Mixer button, `x` and the toolbar's mixer: one toggle.
-    session_daw::shell::use_mixer_toggle(view);
+    session_ui::shell::use_mixer_toggle(view);
     // Live unless `FTS_SESSION_MODE` names another (`organize`, …): the
     // docked mixer's compact strips are the Live ones.
     let mode = use_signal(|| {
@@ -70,20 +70,20 @@ pub fn Shell() -> Element {
     // A mode asked for on the Action List (`SESSION_MODE`, a model over
     // MCP): taken up within a tenth of a second.
     let mut asked = mode;
-    let back = try_use_context::<session_daw::shell::Back>();
+    let back = try_use_context::<session_ui::shell::Back>();
     use_future(move || async move {
         loop {
-            if let Some(next) = session_daw::actions::take_mode_request() {
+            if let Some(next) = session_ui::actions::take_mode_request() {
                 asked.set(next);
             }
             // What the arrangement queued, to the engine — with no frame
             // coming (the window hidden), an action's edits would wait.
-            session_daw::panel::send_pending();
+            session_ui::panel::send_pending();
             // Another song or version asked for over the Action List
             // (`SESSION_OPEN`): out of this one, and the start screen
             // opens it.
-            if session_daw::projects::take_back()
-                && let Some(session_daw::shell::Back(back)) = back
+            if session_ui::projects::take_back()
+                && let Some(session_ui::shell::Back(back)) = back
             {
                 back.call(());
             }
@@ -98,34 +98,42 @@ pub fn Shell() -> Element {
     use_effect(move || editor_open.set(mode() == Mode::Organize));
     // Whether the mixer is open, per mode (Organize starts closed) — above
     // the songs, so it holds across them.
-    use_context_provider(session_daw::mixer_panel::MixerMemory::new);
+    use_context_provider(session_ui::mixer_panel::MixerMemory::new);
     // Touch mode: on where the screen is the pointer, switched in the
     // record view's menu.
-    use_context_provider(session_daw::touch::Touch::detect);
+    use_context_provider(session_ui::touch::Touch::detect);
     // What is shown full screen, if anything, and the racks' settings
-    // every view of them shares (`session_daw::closeup`).
-    use_context_provider(session_daw::closeup::Closeups::new);
-    session_daw::shell::use_pins();
+    // every view of them shares (`session_ui::closeup`).
+    use_context_provider(session_ui::closeup::Closeups::new);
+    session_ui::shell::use_pins();
     // The lyrics' Audience / Performer and layer, held across songs.
-    use_context_provider(session_daw::lyrics_panel::LyricsChoice::new);
+    use_context_provider(session_ui::lyrics_panel::LyricsChoice::new);
     // The songs, as the launch opened them — a signal from here on, which
     // the tabs read and a pick or a recolour writes.
-    let opened: session_daw::setlist::Setlist = use_context();
+    let opened: session_ui::setlist::Setlist = use_context();
     let mut setlist = use_context_provider(|| Signal::new(opened));
     // Each song in the mode it was last worked in.
-    session_daw::song_modes::use_song_modes(setlist, mode);
+    session_ui::song_modes::use_song_modes(setlist, mode);
     // In Mix mode, the guide folder muted.
-    session_daw::mix_guide::use_mix_guide(setlist, mode);
-    // A streamed set's songs after the first, as each opens behind it.
-    use_future(move || async move {
-        let Some(mut arrivals) = session_daw::stream_set::take_arrivals() else {
+    session_ui::mix_guide::use_mix_guide(setlist, mode);
+    // The set is the engine's (`studio_engine::set`): the songs arriving
+    // behind the first, a pick from the CLI or a model, a reorder — each
+    // changes it there, and the window follows. A new set remounts the
+    // shell (`super::start::App`), so only this set's changes come here.
+    let engine = super::start::use_engine_set();
+    let epoch = use_hook(|| engine.peek().epoch);
+    let mut applied = use_signal(|| engine.peek().revision);
+    use_effect(move || {
+        let now = engine.read();
+        if now.epoch != epoch || now.revision == *applied.peek() {
             return;
-        };
-        while let Some(arrival) = arrivals.recv().await {
-            setlist.write().arrive(arrival);
+        }
+        applied.set(now.revision);
+        if let Some(changed) = now.setlist.clone() {
+            setlist.set(changed);
         }
     });
-    use_live_advance(setlist, mode);
+    use_live_advance(mode);
     // The window draws a frame only when something asks: an event, a
     // change here, or a panel whose picture moves (the arrangement, the
     // mixer, the chart — each asks while the transport moves). While it
@@ -140,15 +148,15 @@ pub fn Shell() -> Element {
             let window = window.clone();
             async move {
                 loop {
-                    let moving = session_daw::engine::moving();
+                    let moving = session_ui::engine::moving();
                     // Or an action run on the Action List for the window
                     // (a model's, over MCP): no event of the window's own
                     // will come to carry it out, nor to send what it
                     // edited on to the engine, so frames are asked for.
                     if moving
-                        || session_daw::actions::window_pending()
-                        || session_daw::actions::frame_owed()
-                        || session_daw::studio::resync_pending()
+                        || session_ui::window_queue::window_pending()
+                        || session_ui::window_queue::frame_owed()
+                        || session_ui::studio::resync_pending()
                     {
                         window.request_redraw();
                     }
@@ -158,7 +166,7 @@ pub fn Shell() -> Element {
             }
         });
     }
-    session_daw::collab_bar::use_follow_song(setlist);
+    session_ui::collab_bar::use_follow_song(setlist);
     // `FTS_SESSION_SONG=<n>` (1-based): open the set on its n-th song — to
     // start somewhere other than the top, or (the collaboration demo) to
     // put a second window on a different song from the first.
@@ -167,17 +175,11 @@ pub fn Shell() -> Element {
             .ok()
             .and_then(|n| n.parse::<usize>().ok());
         if let Some(index) = index.and_then(|n| n.checked_sub(1)) {
-            let picked = setlist
-                .write()
-                .pick(index, 0.0)
-                .map(|song| song.project.clone());
-            if let Some(project) = picked {
-                session_daw::open::switch_song(&project);
-            }
+            session_ui::studio_engine::set::pick(index, 0.0);
         }
     });
     // Space plays and stops whatever has the focus.
-    session_daw::keys::use_window_transport_keys();
+    session_ui::keys::use_window_transport_keys();
     let window = dioxus_native::use_window();
     // The window's size in logical pixels, kept as it is resized: the
     // bar's width says how much of it is spelled out, and the shape says
@@ -206,7 +208,7 @@ pub fn Shell() -> Element {
             }
         }
     });
-    use_context_provider(|| session_daw::shell::WindowSize(size));
+    use_context_provider(|| session_ui::shell::WindowSize(size));
     // A phone on its side is drawn to both edges (`BLITZ_SAFE_AREA_SIDES=0`
     // in main): the view runs under the camera housing, and only the
     // controls on its side get out of its way — the views' rail moving to the
@@ -214,12 +216,12 @@ pub fn Shell() -> Element {
     // it is on the right — while the top rows keep clear of the rounded
     // corners.
     #[cfg_attr(not(target_os = "ios"), allow(unused_variables, unused_mut))]
-    let mut sides = use_context_provider(|| Signal::new(session_daw::compact::Sides::default()));
+    let mut sides = use_context_provider(|| Signal::new(session_ui::compact::Sides::default()));
     #[cfg(target_os = "ios")]
     {
         let reading = window.clone();
         dioxus_native::use_window_event(move |event, _| {
-            use session_daw::compact::Sides;
+            use session_ui::compact::Sides;
             /// The housing and the gap beside it: less than the inset the
             /// system reports, which pads for the rounded corners too.
             const HOUSING: f64 = 50.0;
@@ -250,7 +252,7 @@ pub fn Shell() -> Element {
     let width = move || size().0;
     let form = use_memo(move || {
         let (w, h) = size();
-        session_daw::compact::Form::of(w, h)
+        session_ui::compact::Form::of(w, h)
     });
     let mut form_signal = use_context_provider(|| Signal::new(*form.peek()));
     use_effect(move || {
@@ -262,7 +264,7 @@ pub fn Shell() -> Element {
     // On a phone, `FTS_SESSION_VIEW` names the tab it opens on, as it
     // names the view on a wider screen; the chart otherwise.
     let phone_view = use_signal(|| {
-        use session_daw::compact::PhoneView;
+        use session_ui::compact::PhoneView;
         match std::env::var("FTS_SESSION_VIEW").as_deref() {
             Ok("daw") => PhoneView::Arrangement,
             Ok("performance") => PhoneView::Control,
@@ -274,22 +276,17 @@ pub fn Shell() -> Element {
     // and the audio moves to it. Where the one it replaces had got to is
     // kept on its tab.
     let pick = move |index: usize| {
-        let at = session_daw::engine::Transport::shared().map_or(0.0, |t| t.read().0);
-        let picked = setlist
-            .write()
-            .pick(index, at)
-            .map(|song| song.project.clone());
-        if let Some(project) = picked {
-            session_daw::open::switch_song(&project);
+        let at = session_ui::engine::Transport::shared().map_or(0.0, |t| t.read().0);
+        if session_ui::studio_engine::set::pick(index, at).is_some() {
             // Playing together, everyone goes with it.
-            session_daw::collab::transport_pressed();
+            session_ui::collab::transport_pressed();
         }
     };
     // The record view's song menu picks the same way.
-    use_context_provider(|| session_daw::record_view::PickSong(Callback::new(pick)));
+    use_context_provider(|| session_ui::record_view::PickSong(Callback::new(pick)));
     // On iOS: the device's audio session, for Settings → This device.
     #[cfg(target_os = "ios")]
-    use_context_provider(|| session_daw::device_audio::DeviceAudio {
+    use_context_provider(|| session_ui::device_audio::DeviceAudio {
         read: Callback::new(|()| super::ios_audio::report()),
         change: Callback::new(super::ios_audio::change),
     });
@@ -298,7 +295,7 @@ pub fn Shell() -> Element {
     #[cfg(target_os = "ios")]
     use_future(move || async move {
         use super::ios_audio::{Command, NowPlaying};
-        use session_daw::engine::{Move, Transport, transport};
+        use session_ui::engine::{Move, Transport, transport};
         let mut pick = pick;
         let mut shown: Option<NowPlaying> = None;
         let mut since = 0_u32;
@@ -346,8 +343,8 @@ pub fn Shell() -> Element {
     if form().compact() {
         return rsx! {
             style { {TAILWIND} }
-            session_daw::collab_pointers::CollabPointers {}
-            session_daw::compact::CompactShell {
+            session_ui::collab_pointers::CollabPointers {}
+            session_ui::compact::CompactShell {
                 form: form(),
                 view: phone_view,
                 on_pick: pick,
@@ -355,8 +352,8 @@ pub fn Shell() -> Element {
                 more: rsx! {
                     div {
                         style: "display:flex; align-items:center; gap:8px; flex-wrap:wrap;",
-                        session_daw::collab_bar::CollabBar {}
-                        session_daw::shell::AudioBadge { density: session_daw::shell::Density::Full }
+                        session_ui::collab_bar::CollabBar {}
+                        session_ui::shell::AudioBadge { density: session_ui::shell::Density::Full }
                     }
                 },
                 body: rsx! {
@@ -365,7 +362,7 @@ pub fn Shell() -> Element {
                     }
                 },
             }
-            session_daw::closeup::CloseupLayer { landscape: size().0 > size().1 }
+            session_ui::closeup::CloseupLayer { landscape: size().0 > size().1 }
         };
     }
     rsx! {
@@ -375,14 +372,14 @@ pub fn Shell() -> Element {
                     overflow:hidden; background:#0f1012; color:{TEXT}; font-family:system-ui, sans-serif;",
             // A press anywhere but the chart editor (which stops it) gives
             // the keyboard back to the transport.
-            onmousedown: move |_| session_daw::keys::set_editing(false),
+            onmousedown: move |_| session_ui::keys::set_editing(false),
             // Everyone else's mouse, over everything (collab_pointers).
-            session_daw::collab_pointers::CollabPointers {}
+            session_ui::collab_pointers::CollabPointers {}
             TopBar {
                 lights: LIGHTS_W,
                 // Once, not per song: it is the whole set's session, and
                 // mounting it starts one from the environment.
-                badges: rsx! { session_daw::collab_bar::CollabBar {} },
+                badges: rsx! { session_ui::collab_bar::CollabBar {} },
                 width: width(),
                 // Anywhere on the bar that is not a control drags the
                 // window; a double click zooms it.
@@ -396,7 +393,7 @@ pub fn Shell() -> Element {
                 // it. Where the one it replaces had got to is kept on its tab.
                 on_pick: pick,
                 on_color: move |(index, color): (usize, Option<String>)| {
-                    setlist.write().recolor(index, color);
+                    session_ui::studio_engine::set::recolor(index, color);
                 },
             }
 
@@ -404,8 +401,8 @@ pub fn Shell() -> Element {
             // beside it.
             div {
                 style: "flex:1; min-height:0; display:flex;",
-                session_daw::shell::NavigatorColumn { on_pick: pick }
-                session_daw::browser::BrowserColumn {}
+                session_ui::shell::NavigatorColumn { on_pick: pick }
+                session_ui::browser::BrowserColumn {}
                 div {
                     style: "position:relative; flex:1; min-width:0; display:flex; flex-direction:column;",
                     if let Some(song) = current.clone() {
@@ -419,7 +416,7 @@ pub fn Shell() -> Element {
             // The views, across the foot of the window, and each view's
             // own controls beside them — the arrangement's the transport,
             // which reads the song it drives, so it is mounted per song.
-            session_daw::shell::BottomBar {
+            session_ui::shell::BottomBar {
                 view,
                 mode,
                 width: width(),
@@ -428,13 +425,13 @@ pub fn Shell() -> Element {
                         WithSong {
                             key: "{song.project}",
                             session: song.session.clone(),
-                            session_daw::transport_bar::TransportBar { big: true }
+                            session_ui::transport_bar::TransportBar { big: true }
                         }
                     }
                 },
             }
             // Whatever is zoomed into, over all of it.
-            session_daw::closeup::CloseupLayer { landscape: size().0 > size().1 }
+            session_ui::closeup::CloseupLayer { landscape: size().0 > size().1 }
         }
     }
 }
@@ -443,31 +440,31 @@ pub fn Shell() -> Element {
 /// same panels as the wide layout's, over one song.
 #[component]
 fn PhoneViews(
-    session: session_daw::studio::StudioSession,
-    view: Signal<session_daw::compact::PhoneView>,
+    session: session_ui::studio::StudioSession,
+    view: Signal<session_ui::compact::PhoneView>,
 ) -> Element {
-    use session_daw::compact::PhoneView;
+    use session_ui::compact::PhoneView;
     use_context_provider(|| session);
     let mode: Signal<Mode> = use_context();
     match view() {
         // The shell's own pages (`compact::CompactShell`).
         PhoneView::Control | PhoneView::More | PhoneView::Setup | PhoneView::Editor => rsx! {},
-        PhoneView::Chart => rsx! { session_daw::chart_panel::Chart { paged: true } },
-        PhoneView::Lyrics => rsx! { session_daw::lyrics_panel::LyricsPanel {} },
+        PhoneView::Chart => rsx! { session_ui::chart_panel::Chart { paged: true } },
+        PhoneView::Lyrics => rsx! { session_ui::lyrics_panel::LyricsPanel {} },
         // Keyed apart: the same component in the same place would otherwise
         // be kept and handed the other view's props.
         PhoneView::Arrangement => rsx! {
-            session_daw::mixer_panel::DawPanels { key: "{view():?}", mode: Some(mode()) }
+            session_ui::mixer_panel::DawPanels { key: "{view():?}", mode: Some(mode()) }
         },
         PhoneView::Mixer => rsx! {
-            session_daw::mixer_panel::DawPanels { key: "{view():?}", mode: Some(mode()), mixer_only: true }
+            session_ui::mixer_panel::DawPanels { key: "{view():?}", mode: Some(mode()), mixer_only: true }
         },
     }
 }
 
 /// Whatever it holds, over one song: that song's session, as context.
 #[component]
-fn WithSong(session: session_daw::studio::StudioSession, children: Element) -> Element {
+fn WithSong(session: session_ui::studio::StudioSession, children: Element) -> Element {
     use_context_provider(|| session);
     children
 }
@@ -475,22 +472,22 @@ fn WithSong(session: session_daw::studio::StudioSession, children: Element) -> E
 /// The views, over one song: its session is what every panel below reads.
 #[component]
 fn SongViews(
-    session: session_daw::studio::StudioSession,
-    view: Signal<session_daw::shell::View>,
+    session: session_ui::studio::StudioSession,
+    view: Signal<session_ui::shell::View>,
     editor_open: Signal<bool>,
 ) -> Element {
-    use session_daw::chart_editor::{ChartEditor, EditorToggle};
-    use session_daw::shell::{OverviewLayout, View};
+    use session_ui::chart_editor::{ChartEditor, EditorToggle};
+    use session_ui::shell::{OverviewLayout, View};
     use_context_provider(|| session);
     let mode: Signal<session::modes::Mode> = use_context();
     let record_mode = move || mode() == session::modes::Mode::Record;
     // The FX, pinned under the arrangement or the mixer: the view gives
     // up its bottom to it.
-    let fx = try_use_context::<session_daw::shell::FxToggle>();
+    let fx = try_use_context::<session_ui::shell::FxToggle>();
     let fx_docked = fx.is_some_and(|f| (f.docked)() && (f.open)() && f.hosts.contains(&view()));
     // The Editor, pinned under the arrangement (above the FX when both
     // are): the lower part of the window, the arrangement keeping the top.
-    let editor = try_use_context::<session_daw::shell::EditorPane>();
+    let editor = try_use_context::<session_ui::shell::EditorPane>();
     let editor_docked =
         editor.is_some_and(|e| (e.docked)() && (e.open)() && e.hosts.contains(&view()));
     let fx_h = if fx_docked { FX_DOCK_H } else { 0.0 };
@@ -500,36 +497,36 @@ fn SongViews(
         format!("{fx_h}px")
     };
     rsx! {
-        session_daw::shell::PinnedProgress { view: view() }
+        session_ui::shell::PinnedProgress { view: view() }
         div {
             style: "position:relative; flex:1; min-height:0;",
             div {
             style: "position:absolute; left:0; right:0; top:0; bottom:{view_bottom};",
             match view() {
-                View::Setup => rsx! { session_daw::setup::SetupView {} },
+                View::Setup => rsx! { session_ui::setup::SetupView {} },
                 View::Daw => rsx! { Arrangement {} },
                 View::Performance => rsx! {
                     if record_mode() {
-                        session_daw::record_view::RecordView {}
+                        session_ui::record_view::RecordView {}
                     } else {
                         PerformanceView {}
                     }
                 },
-                View::Chart => rsx! { session_daw::chart_panel::Chart { paged: true } },
-                View::Lyrics => rsx! { session_daw::lyrics_panel::LyricsPanel {} },
-                View::Editor => rsx! { session_daw::editor_view::EditorPanel {} },
+                View::Chart => rsx! { session_ui::chart_panel::Chart { paged: true } },
+                View::Lyrics => rsx! { session_ui::lyrics_panel::LyricsPanel {} },
+                View::Editor => rsx! { session_ui::editor_view::EditorPanel {} },
                 View::Mixer => rsx! {
-                    session_daw::mixer_panel::DawPanels { mode: Some(mode()), mixer_only: true }
+                    session_ui::mixer_panel::DawPanels { mode: Some(mode()), mixer_only: true }
                 },
                 // Its own view: four tracks' chains at once.
-                View::Fx => rsx! { session_daw::fx_view::FxPanel { lanes: 4 } },
+                View::Fx => rsx! { session_ui::fx_view::FxPanel { lanes: 4 } },
                 View::Overview => rsx! {
                     OverviewLayout {
-                        progress: rsx! { session_daw::progress::ProgressBar {} },
+                        progress: rsx! { session_ui::progress::ProgressBar {} },
                         editor: editor_open().then(|| rsx! { ChartEditor {} }),
-                        chart: rsx! { session_daw::chart_panel::Chart { paged: true } },
+                        chart: rsx! { session_ui::chart_panel::Chart { paged: true } },
                         chart_corner: rsx! { EditorToggle { open: editor_open } },
-                        under_chart: rsx! { session_daw::lyrics_panel::LyricsPanel {} },
+                        under_chart: rsx! { session_ui::lyrics_panel::LyricsPanel {} },
                         panels: rsx! { Arrangement { docked: true } },
                     }
                 },
@@ -539,18 +536,18 @@ fn SongViews(
                 div {
                     style: "position:absolute; left:0; right:0; bottom:{fx_h}px; \
                             height:{EDITOR_DOCK_SHARE}%; border-top:1px solid #000;",
-                    session_daw::editor_view::EditorPanel {}
+                    session_ui::editor_view::EditorPanel {}
                 }
             }
             if fx_docked {
                 div {
                     style: "position:absolute; left:0; right:0; bottom:0; height:{FX_DOCK_H}px; \
                             border-top:1px solid #000;",
-                    session_daw::fx_view::FxPanel {}
+                    session_ui::fx_view::FxPanel {}
                 }
             }
         }
-        session_daw::shell::PinnedTransport { view: view() }
+        session_ui::shell::PinnedTransport { view: view() }
     }
 }
 
@@ -559,45 +556,17 @@ const EDITOR_DOCK_SHARE: f64 = 45.0;
 
 /// How tall the FX is, pinned under the arrangement or the mixer: one
 /// lane of its full-size view, so a track's chain is the same in both.
-const FX_DOCK_H: f64 = session_daw::fx_view::LANE_H;
+const FX_DOCK_H: f64 = session_ui::fx_view::LANE_H;
 
 /// Live mode runs the set: when the song playing reaches its end, the next
-/// one is picked and plays from its count-in. Checked each frame — the
-/// window redraws while the transport moves — and only in Live, so working
-/// on a song in the other modes never jumps away from it.
-fn use_live_advance(mut setlist: Signal<session_daw::setlist::Setlist>, mode: Signal<Mode>) {
-    dioxus_native::use_window_event(move |event, _| {
-        if !matches!(event, winit::event::WindowEvent::RedrawRequested) || mode() != Mode::Live {
-            return;
-        }
-        // Playing together, only the leader rolls on; this window follows
-        // it into the next song.
-        if session_daw::collab::following() {
-            return;
-        }
-        let Some((at, playing)) = session_daw::engine::Transport::shared().map(|t| t.read()) else {
-            return;
-        };
-        let next = {
-            let list = setlist.peek();
-            match (playing, list.current(), list.next()) {
-                (true, Some(song), Some(next)) if song.ended(at) => Some(next),
-                _ => None,
-            }
-        };
-        let Some(next) = next else { return };
-        let picked = setlist
-            .write()
-            .pick(next, at)
-            .map(|song| song.project.clone());
-        if let Some(project) = picked {
-            tracing::info!(
-                setlist.next = next,
-                "live: the song ended; the next one plays"
-            );
-            session_daw::open::switch_song(&project);
-            session_daw::engine::transport(session_daw::engine::Move::PlayFrom, 0.0);
-        }
+/// one plays. The roll-on is the engine's
+/// (`session_ui::studio_engine::live`: the next song starts on the frame
+/// the current one ends, window or none); the window only tells it whether
+/// the set is in Live — so working on a song in the other modes never
+/// jumps away from it.
+fn use_live_advance(mode: Signal<Mode>) {
+    use_effect(move || {
+        session_ui::studio_engine::live::set_live(mode() == Mode::Live);
     });
 }
 
@@ -613,17 +582,17 @@ fn Arrangement(#[props(default)] docked: bool) -> Element {
         div {
             style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column;",
             if mode() == Mode::Organize {
-                session_daw::organize::OrganizeToolbar {}
+                session_ui::organize::OrganizeToolbar {}
             }
             div {
                 style: "position:relative; flex:1; min-height:0; display:flex;",
                 // Organize's instruments down the left: Drums, Bass, Guitar.
                 if mode() == Mode::Organize {
-                    session_daw::instrument_tracks::InstrumentRail {}
+                    session_ui::instrument_rail::InstrumentRail {}
                 }
                 div {
                     style: "position:relative; flex:1; min-width:0;",
-                    session_daw::mixer_panel::DawPanels { docked, mode: Some(mode()) }
+                    session_ui::mixer_panel::DawPanels { docked, mode: Some(mode()) }
                 }
             }
         }
@@ -635,13 +604,13 @@ fn Arrangement(#[props(default)] docked: bool) -> Element {
 #[component]
 fn PerformanceView() -> Element {
     // The iPad (a finger, room for the wide layout): the shared performer
-    // screen (`session_daw::performer`, STA-360).
-    let touch = session_daw::touch::use_touch();
-    let form = session_daw::compact::use_form();
-    if session_daw::performer::wants_performer(touch, form) {
+    // screen (`session_ui::performer`, STA-360).
+    let touch = session_ui::touch::use_touch();
+    let form = session_ui::compact::use_form();
+    if session_ui::performer::wants_performer(touch, form) {
         return rsx! {
             div { style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex;",
-                session_daw::performer::SessionPerformer {}
+                session_ui::performer::SessionPerformer {}
             }
         };
     }
@@ -649,21 +618,21 @@ fn PerformanceView() -> Element {
         div {
             style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; \
                     flex-direction:column; gap:16px; padding:16px;",
-            session_daw::progress::ProgressBar {}
+            session_ui::progress::ProgressBar {}
             div {
                 style: "position:relative; flex:1; min-height:0; display:flex; gap:16px;",
                 div {
                     style: "position:relative; flex:1; min-width:0; height:100%; border-radius:8px; \
                             overflow:hidden; border:1px solid {RULE};",
-                    session_daw::chart_panel::Chart { paged: true }
+                    session_ui::chart_panel::Chart { paged: true }
                 }
                 div {
                     style: "position:relative; width:38%; min-width:320px; height:100%; border-radius:8px; \
                             overflow:hidden; border:1px solid {RULE};",
-                    session_daw::lyrics_panel::LyricsPanel {}
+                    session_ui::lyrics_panel::LyricsPanel {}
                 }
             }
-            session_daw::progress::TransportButtons {}
+            session_ui::progress::TransportButtons {}
         }
     }
 }

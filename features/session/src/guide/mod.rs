@@ -710,3 +710,118 @@ where
 }
 
 pub mod engine;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use daw::service::MidiTakeLocation;
+    use daw_proto::service::Transport;
+    use daw_standalone::Standalone;
+
+    /// "The Plague": 165 bpm in 4/4, its sections as the session has them
+    /// (the song starts at IN A, two bars in), a RERECORD note among them.
+    const TEMPO: f64 = 165.0;
+    const SECTIONS: [(&str, f64); 13] = [
+        ("IN A", 2.909_090_909_090_9),
+        ("IN B", 32.0),
+        ("VS 1", 43.636_363_636_363_63),
+        ("CH 1", 66.909_090_909_090_91),
+        ("VS 2", 78.545_454_545_454_55),
+        ("CH 2", 101.818_181_818_181_81),
+        ("BR", 125.090_909_090_909_09),
+        ("BR B", 136.727_272_727_272_72),
+        ("SOLO", 148.363_636_363_636_37),
+        ("BD", 171.636_363_636_363_65),
+        ("BD B", 183.272_727_272_727_28),
+        ("CH 3", 194.909_090_909_090_93),
+        ("OUT", 218.181_818_181_818_19),
+    ];
+    const SONG_END: f64 = 231.272_727_272_727_27;
+
+    /// The Plague in a fresh engine, its guide generated.
+    fn the_plague() -> Standalone {
+        let daw = Standalone::new();
+        daw.seed_project(daw_proto::ProjectInfo {
+            guid: "the-plague".into(),
+            name: "The Plague".into(),
+            path: String::new(),
+        });
+        let project = ProjectContext::Current;
+        daw.set_tempo(project.clone(), TEMPO).unwrap();
+        Regions::add(&daw, project.clone(), SECTIONS[0].1, SONG_END, "The Plague").unwrap();
+        for (i, (name, start)) in SECTIONS.iter().enumerate() {
+            let end = SECTIONS.get(i + 1).map_or(SONG_END, |next| next.1);
+            Regions::add(&daw, project.clone(), *start, end, name).unwrap();
+        }
+        Markers::add(&daw, project, 52.363_636_363_636_37, "RERECORD").unwrap();
+        Guide::new(daw.clone()).generate(GuideScope::All).unwrap();
+        daw
+    }
+
+    /// Every note on the generated `track`, as (seconds, pitch) — where
+    /// the engine plays it: a take's notes count from its item's start.
+    fn played(daw: &Standalone, track: &str) -> Vec<(f64, u8)> {
+        let project = ProjectContext::Current;
+        let guid = Tracks::all(daw, project.clone())
+            .into_iter()
+            .find(|t| t.name == track && t.folder_depth <= 0)
+            .unwrap()
+            .guid;
+        let mut out = Vec::new();
+        for item in Items::get_items(daw, project.clone(), TrackRef::Guid(guid)) {
+            let at = item.position.as_seconds();
+            let take = MidiTakeLocation::active(project.clone(), ItemRef::Guid(item.guid));
+            for note in Midi::notes(daw, take) {
+                out.push((note.start_ppq.mul_add(60.0 / TEMPO, at), note.pitch));
+            }
+        }
+        out
+    }
+
+    /// The count finishes on each section's downbeat: "1" a bar before
+    /// it, "4" a beat before it, and the section's name on the "1". The
+    /// guide's items start at the song (2.909 s), not at zero, and their
+    /// notes once played that far late — two bars, into the middle of
+    /// every section.
+    // The engine spawns its transport task on the tokio runtime.
+    #[tokio::test]
+    async fn the_guide_counts_into_each_section_on_its_downbeat() {
+        let daw = the_plague();
+        let count = played(&daw, "Count");
+        let guide = played(&daw, "Guide");
+        let beat = 60.0 / TEMPO;
+        let bar = 4.0 * beat;
+        let at = |notes: &[(f64, u8)], time: f64, pitch: u8| {
+            notes
+                .iter()
+                .any(|(t, p)| *p == pitch && (t - time).abs() < 0.001)
+        };
+        for (name, start) in SECTIONS {
+            for (beats, pitch) in [0.0_f64, 1.0, 2.0, 3.0]
+                .into_iter()
+                .zip(engine::midi::MIDI_NOTES_COUNT)
+            {
+                let time = beats.mul_add(beat, start - bar);
+                assert!(
+                    at(&count, time, pitch),
+                    "{name}: count {} at {time:.3} s, into {start:.3} s; counts: {count:?}",
+                    beats + 1.0
+                );
+            }
+            assert!(
+                guide
+                    .iter()
+                    .any(|(t, p)| *p != 95 && (t - (start - bar)).abs() < 0.001),
+                "{name}: announced on the count's 1, {:.3} s; cues: {guide:?}",
+                start - bar
+            );
+        }
+        // Nothing counted before the song's count-in, or after its end.
+        assert!(
+            count
+                .iter()
+                .all(|(t, _)| *t >= SECTIONS[0].1 - bar - 1e-6 && *t < SONG_END),
+            "a count outside the song: {count:?}"
+        );
+    }
+}

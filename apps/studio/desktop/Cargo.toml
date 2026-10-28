@@ -30,12 +30,14 @@ authors = ["FastTrackStudio"]
 name = "studio-desktop"
 path = "src/main.rs"
 
-# The command lines (`--features cli`): `signal`, the rig and its tone
-# library without a GUI, and `fts-convert`, which swaps third-party plugin
-# instances in a REAPER project for FTS equivalents.
+# The command lines (`--features cli`): `studio`, FastTrackStudio's one
+# command line, every command at its top level — the running app, files,
+# the library and REAPER from session-desktop's `cli` module; the rig's
+# library and TONE3000 from src/bin/studio/ — and `fts-convert`, which swaps third-party plugin instances in a REAPER
+# project for FTS equivalents.
 [[bin]]
-name = "signal"
-path = "src/bin/signal/main.rs"
+name = "studio"
+path = "src/bin/studio/main.rs"
 required-features = ["cli"]
 
 [[bin]]
@@ -53,8 +55,10 @@ workspace = true
 # skips the heavy `signal` rig (nam C++, lucide icons, webkit engine deps),
 # and `--no-default-features --features signal` leaves Session out.
 default = ["signal", "session-app", "tts", "doc-sync"]
-# The command-line tools (src/bin/): native only.
+# The command-line tools (src/bin/): native only. `studio` takes Session's
+# commands from session-desktop's `cli` feature.
 cli = [
+    "session-desktop/cli",
     "dep:builtin",
     "dep:clap",
     "dep:guitar",
@@ -117,7 +121,7 @@ session-app = ["dep:session-desktop"]
 # Sync after sign-in (sync.rs): the rig books kept in step with the
 # account's other devices through Task (architect's crdt::docs). On by
 # default, and in every iOS build's feature list.
-doc-sync = ["signal-guitar", "dep:async-trait", "dep:crdt", "dep:org-proto", "dep:session-format", "dep:task-dial", "dep:uuid"]
+doc-sync = ["signal-guitar", "fts-account/sync", "dep:crdt", "dep:session-format", "dep:uuid"]
 # Session's spoken section cues (Chatterbox TTS over ONNX Runtime). ort has
 # no prebuilt binary for aarch64-apple-ios, so the iOS build leaves this off
 # and the guide falls back to its synthesized cues, as Session's own did.
@@ -183,6 +187,9 @@ utils.workspace = true
 futures-timer.workspace = true
 # `ui`: the shared studio shell the window is drawn in (app_shell::ui).
 app-shell = { workspace = true, features = ["ui"] }
+# The library: the front screen's home (songs, setlists, albums, projects,
+# rigs as parts; docs/design/library.md).
+library = { workspace = true, features = ["ui"] }
 # Sample-space + Electronic Kit WIRE CONTRACTS (#77). Wasm-clean — the
 # browser remote renders the map and the pad grid from these; their
 # backends (signal-space / signal-ekit) stay native-only below.
@@ -262,14 +269,10 @@ dsp = { workspace = true, optional = true }
 # session on every desktop, not only macOS); its `book`, the rig libraries
 # as synced Loro docs (books.rs).
 signal-rig-host = { workspace = true, features = ["book"] }
-# Sync after sign-in (sync.rs, feature `doc-sync`): the doc driver and its
-# device index, a rig book's `.session` as its replica, the dial to Task
-# and the org lane.
-async-trait = { workspace = true, optional = true }
+# Sync after sign-in (sync.rs, feature `doc-sync`): the rig books on the
+# driver `fts-account/sync` keeps per org.
 crdt = { workspace = true, features = ["vox", "turso"], optional = true }
-org-proto = { workspace = true, optional = true }
 session-format = { workspace = true, features = ["store", "sync"], optional = true }
-task-dial = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
 # The Blitz native renderer — the desktop path and the iPhone's.
 #

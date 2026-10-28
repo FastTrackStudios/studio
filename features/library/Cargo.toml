@@ -1,0 +1,35 @@
+[package]
+name = "library"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Studio's library: songs and their arrangements, setlists, albums, projects, and the rigs attached to a setlist as parts (docs/design/library.md). The model is plain data; feature `ui` is the iPad-first library screens, on Blitz."
+
+[features]
+# The library screens (src/ui): inline styles only, so they render on
+# Blitz, a WebView and the web alike; the app picks the renderer.
+ui = ["dep:dioxus", "dep:lucide-dioxus", "dep:futures-timer", "app-shell/ui"]
+
+[dependencies]
+app-shell = { workspace = true }
+uuid = { workspace = true }
+dioxus = { workspace = true, optional = true }
+lucide-dioxus = { workspace = true, optional = true }
+# The review player's clock (ui): a timer that needs no runtime.
+futures-timer = { workspace = true, optional = true }
+
+# `library_shot`: the screens rendered to a PNG with no window (the same
+# Blitz paint path the app takes), for review at any size.
+[dev-dependencies]
+anyrender = { workspace = true }
+anyrender_vello = { workspace = true }
+blitz-dom = { workspace = true }
+blitz-paint = { workspace = true }
+blitz-traits = { workspace = true }
+dioxus-native-dom = { workspace = true }
+image = { workspace = true }
+
+[[example]]
+name = "library_shot"
+required-features = ["ui"]

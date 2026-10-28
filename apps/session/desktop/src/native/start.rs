@@ -6,15 +6,18 @@
 //!
 //! - **Join a set** — one Task keeps, by its live link: the public demo, or
 //!   one someone shared. Its songs stream in and play here, with everyone
-//!   else in the set (`session_daw::stream_set`).
-//! - **Task** — sign in from another device (`session_daw::task_account`)
+//!   else in the set (`session_ui::stream_set`).
+//! - **Task** — sign in from another device (`session_ui::task_account`)
 //!   and pick a setlist from an org's library; it streams in the same way.
 //! - **On this device** — a song or setlist in the app's documents folder
 //!   (on a phone, what the Files app shows under Session), or, on a
 //!   desktop, from the Open dialog.
 //!
-//! Opening runs on a thread of its own (it takes seconds), and the set it
-//! opened becomes the window's ([`App`]).
+//! Opening runs in the engine, on a thread of its own (it takes seconds):
+//! the set is the engine's (`session_ui::studio_engine::set`), and the
+//! window shows whatever set the engine has, or its start screen when it
+//! has none ([`App`]). An open asked for by the CLI or a model shows here
+//! the same way as one asked for by a click.
 
 use std::path::PathBuf;
 
@@ -25,13 +28,13 @@ use lucide_dioxus::{
     HardDriveDownload, House, Library, LibraryBig, Link, ListMusic, LogOut, Music, Pencil, Play,
     Plus, Radio, Search, Trash2, X,
 };
-use session_daw::loading::{Loading, Progress, mark_src};
-use session_daw::setlist::Setlist;
-use session_daw::song_stream::Offline;
-use session_daw::stream_set::{
+use session_ui::loading::{Loading, Progress, mark_src};
+use session_ui::setlist::Setlist;
+use session_ui::song_stream::Offline;
+use session_ui::stream_set::{
     Downloading, LibrarySetlist, LibrarySong, ListKind, Remote, with_library,
 };
-use session_daw::task_account::{self, Account, AccountLibrary as _};
+use session_ui::task_account::{self, Account, AccountLibrary as _};
 
 pub(super) const BG: &str = "#0f1012";
 pub(super) const BAR: &str = "#17181b";
@@ -79,24 +82,50 @@ pub fn App() -> Element {
             // gesture would cancel the touches it is made of.
         });
     }
+    // A set the launch attached to (Remote: the projects the driven system
+    // has open) is the engine's set from the start.
     let initial: Option<Setlist> = use_context();
-    let mut opened = use_signal(|| initial);
+    use_hook(move || {
+        if let Some(setlist) = initial {
+            session_ui::studio_engine::set::install(setlist);
+        }
+    });
+    let engine = use_engine_set();
+    let host = try_use_context::<super::handoff::Host>();
     // Back to the start screen: the set stops, and the page is the one
-    // that picks another (its library, a link, a file).
+    // that picks another (its library, a link, a file). Inside Studio
+    // (`Host`) Back with nothing else to open is the welcome screen's; an
+    // open asked for from inside the song (another version, a set picked
+    // from the palette) still comes back out through the start screen,
+    // which opens it behind its loading screen.
     use_context_provider(|| {
-        session_daw::shell::Back(Callback::new(move |()| {
-            session_daw::engine::transport(session_daw::engine::Move::Stop, 0.0);
+        session_ui::shell::Back(Callback::new(move |()| {
+            session_ui::engine::transport(session_ui::engine::Move::Stop, 0.0);
             #[cfg(target_os = "ios")]
             super::ios_audio::clear();
-            opened.set(None);
+            session_ui::studio_engine::set::close();
+            match host {
+                Some(host) if !super::handoff::pending() => host.on_leave.call(()),
+                _ => {}
+            }
         }))
     });
-    let page = match opened() {
-        Some(setlist) => rsx! {
-            WithSetlist { setlist, super::shell::Shell {} }
-        },
-        None => rsx! { Start { opened } },
+    // The engine's set, while no other is opening; the start screen (and,
+    // while a set opens, its loading screen) otherwise. A new set is a new
+    // shell: its views are made again for it.
+    let shown = engine.read();
+    let page = match (&shown.opening, shown.setlist.clone()) {
+        (session_ui::studio_engine::set::Opening::Busy(_), _) | (_, None) => {
+            rsx! { Start {} }
+        }
+        (_, Some(setlist)) => {
+            let epoch = shown.epoch;
+            rsx! {
+                WithSetlist { key: "{epoch}", setlist, super::shell::Shell {} }
+            }
+        }
     };
+    drop(shown);
     rsx! {
         document::Style { {ROOT_CSS} }
         {page}
@@ -108,7 +137,7 @@ pub fn App() -> Element {
 /// parent — the body — so without this every view sat 8px right and down
 /// and ran off the right edge. And the canvas takes the page's background,
 /// which is what fills a phone's status bar and home indicator: the bars'
-/// colour (`session_daw::shell::BAR_BG`), so the top bar runs up under the
+/// colour (`session_ui::shell::BAR_BG`), so the top bar runs up under the
 /// status bar and the bottom bar down under the home indicator, into the
 /// screen's rounded corners, rather than stopping short of a darker strip.
 const ROOT_CSS: &str = "html, body { margin: 0; padding: 0; background: #17181b; }";
@@ -130,10 +159,29 @@ fn WithSetlist(setlist: Setlist, children: Element) -> Element {
     // measuring a session while it plays without a hand on the mouse.
     use_hook(|| {
         if std::env::var("FTS_SESSION_AUTOPLAY").is_ok_and(|v| v != "0") {
-            session_daw::engine::transport(session_daw::engine::Move::PlayStop, 0.0);
+            session_ui::engine::transport(session_ui::engine::Move::PlayStop, 0.0);
         }
     });
     children
+}
+
+/// The engine's set, as it changes: every window shows the one set the
+/// engine has (`session_ui::studio_engine::set`), whoever changed it.
+pub(super) fn use_engine_set() -> Signal<session_ui::studio_engine::set::SetView> {
+    let mut shown = use_signal(session_ui::studio_engine::set::view);
+    use_future(move || async move {
+        let mut changes = session_ui::studio_engine::set::subscribe();
+        loop {
+            let now = changes.borrow_and_update().clone();
+            if now.revision != shown.peek().revision {
+                shown.set(now);
+            }
+            if changes.changed().await.is_err() {
+                return;
+            }
+        }
+    });
+    shown
 }
 
 /// Where opening has got to.
@@ -164,13 +212,13 @@ pub(super) async fn off_thread<T: Send + 'static>(
     answer.await.ok()
 }
 
-/// A way of opening a set, run on a thread of its own: it says each step
-/// to its `progress` — the loading screen's.
-type OpenWork = Box<dyn FnOnce(&dyn Fn(Progress)) -> eyre::Result<Setlist> + Send>;
+/// A way of opening a set, run in the engine on a thread of its own: it
+/// says each step to its `progress` — the loading screen's.
+use session_ui::studio_engine::set::OpenWork;
 
 /// An error for a person: the whole chain, in a few words.
 pub(super) fn brief(e: &eyre::Report) -> String {
-    session_daw::task_set::brief(&format!("{e:#}"))
+    session_ui::task_set::brief(&format!("{e:#}"))
 }
 
 /// Where the start screen is: its sections, down a sidebar (a tab bar
@@ -242,38 +290,42 @@ fn use_width() -> Signal<f64> {
 }
 
 #[component]
-fn Start(opened: Signal<Option<Setlist>>) -> Element {
+fn Start() -> Element {
     let mut opening = use_signal(|| Opening::Idle);
     let mut local = use_signal(documents);
     // The songs opened lately, each with its alternatives — read again
     // each time the start screen is shown.
-    let recent = use_hook(session_daw::projects::recent);
+    let recent = use_hook(session_ui::projects::recent);
     let mut section = use_signal(|| Section::Home);
     let width = use_width();
 
-    // Open a set on a thread of its own; it becomes the window's when it
-    // is ready. Meanwhile the loading screen says where it has got to.
+    // An open is the engine's (`studio_engine::set`), whoever asked for it:
+    // its loading screen here says where it has got to, and how it failed
+    // if it did — a failure from before this screen was shown is not news.
+    let engine = use_engine_set();
+    let shown_from = use_hook(|| engine.peek().revision);
+    use_effect(move || {
+        use session_ui::studio_engine::set::Opening as Engine;
+        let now = engine.read();
+        match &now.opening {
+            Engine::Busy(step) => opening.set(Opening::Busy(step.clone())),
+            Engine::Failed(why) if now.revision > shown_from => {
+                opening.set(Opening::Failed(why.clone()));
+            }
+            Engine::Idle if matches!(*opening.peek(), Opening::Busy(_)) => {
+                opening.set(Opening::Idle);
+            }
+            Engine::Failed(_) | Engine::Idle => {}
+        }
+    });
+
+    // Open a set in the engine, on a thread of its own; the window shows it
+    // when it is ready, and meanwhile the loading screen.
     let mut open_set = move |first: Progress, work: OpenWork| {
-        opening.set(Opening::Busy(first));
-        let (tell, mut heard) = tokio::sync::mpsc::unbounded_channel::<Progress>();
-        spawn(async move {
-            while let Some(step) = heard.recv().await {
-                if matches!(*opening.peek(), Opening::Busy(_)) {
-                    opening.set(Opening::Busy(step));
-                }
-            }
-        });
-        spawn(async move {
-            let outcome = off_thread(move || work(&|step| drop(tell.send(step)))).await;
-            match outcome {
-                Some(Ok(setlist)) => opened.set(Some(setlist)),
-                Some(Err(e)) => {
-                    tracing::warn!(error = %e, "start: the set did not open");
-                    opening.set(Opening::Failed(brief(&e)));
-                }
-                None => opening.set(Opening::Failed("opening stopped".to_owned())),
-            }
-        });
+        opening.set(Opening::Busy(first.clone()));
+        if let Err(busy) = session_ui::studio_engine::set::open_with(first, work) {
+            opening.set(Opening::Failed(busy.to_string()));
+        }
     };
     let mut open_path = move |path: PathBuf| {
         let title = path.file_stem().map_or_else(
@@ -296,9 +348,9 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
     let mut new_project = move || {
         open_set(
             Progress::Opening {
-                title: session_daw::project_new::UNTITLED.to_owned(),
+                title: session_ui::project_new::UNTITLED.to_owned(),
             },
-            Box::new(|_| session_daw::project_new::setlist(Some(true))),
+            Box::new(|_| session_ui::project_new::setlist(Some(true))),
         );
     };
 
@@ -306,23 +358,26 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
     let OpenFirst(first) = use_context();
     use_hook(move || {
         // A version picked from inside a song, which came back out here to
-        // open it (`session_daw::versions`, `SESSION_OPEN`) — or, the
+        // open it (`session_ui::versions`, `SESSION_OPEN`) — or, the
         // first time only, what the launch chose. Every time, that was
         // reopened whenever the start screen came back: Back from a song
         // the app was launched with went straight back into it.
         let launch =
             first.filter(|_| !LAUNCH_OPENED.swap(true, std::sync::atomic::Ordering::AcqRel));
-        if let Some(guid) = session_daw::project_new::take_made() {
+        if let Some(guid) = session_ui::project_new::take_made() {
             // A new song made from inside another (`SESSION_NEW`), which
             // came back out here to open it: it is in the engine already.
             open_set(
                 Progress::Opening {
-                    title: session_daw::project_new::UNTITLED.to_owned(),
+                    title: session_ui::project_new::UNTITLED.to_owned(),
                 },
-                Box::new(move |_| session_daw::project_new::setlist_of(guid)),
+                Box::new(move |_| session_ui::project_new::setlist_of(guid)),
             );
-        } else if let Some(path) = session_daw::projects::take_next().or(launch) {
+        } else if let Some(path) = session_ui::projects::take_next().or(launch) {
             open_path(path);
+        } else if super::handoff::take_new() {
+            // Studio's welcome screen asked for a new song.
+            new_project();
         }
     });
 
@@ -333,6 +388,9 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
     let mut orgs = use_signal(|| Load::<Vec<String>>::Waiting);
     let mut org = use_signal(|| None::<String>);
     let mut setlists = use_signal(|| Load::<Vec<LibrarySetlist>>::Waiting);
+    // The account's other orgs' setlists, by org: what the home shows beside
+    // the chosen org's, so every set the person has is one click away.
+    let mut elsewhere = use_signal(Vec::<(String, LibrarySetlist)>::new);
     let mut songs = use_signal(|| Load::<Vec<(LibrarySong, bool)>>::Waiting);
     // The list editor, over the page; leaving it reads the lists again.
     let mut editing = use_signal(|| None::<Editing>);
@@ -349,7 +407,12 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
             match off_thread(move || task_account::orgs(&account)).await {
                 Some(Ok(list)) => {
                     if org.peek().is_none() {
-                        org.set(list.first().cloned());
+                        org.set(first_org(
+                            &list,
+                            std::env::var("FTS_TASK_ORG")
+                                .ok()
+                                .or_else(task_account::remembered_org),
+                        ));
                     }
                     orgs.set(Load::Ready(list));
                 }
@@ -371,7 +434,7 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
         let library = account.library(&org);
         let for_songs = library.clone();
         spawn(async move {
-            match off_thread(move || session_daw::stream_set::setlists(&library)).await {
+            match off_thread(move || session_ui::stream_set::setlists(&library)).await {
                 Some(Ok(list)) => setlists.set(Load::Ready(list)),
                 Some(Err(e)) => setlists.set(Load::Failed(brief(&e))),
                 None => {}
@@ -387,6 +450,32 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
             }
         });
     }));
+    // The other orgs' setlists, once the orgs are known.
+    let for_elsewhere = account.clone().zip(org()).map(|(a, o)| {
+        let all = match &*orgs.read() {
+            Load::Ready(list) => list.clone(),
+            _ => Vec::new(),
+        };
+        (a, o, all, reread())
+    });
+    use_effect(use_reactive!(|for_elsewhere| {
+        let Some((account, shown, all, _)) = for_elsewhere else {
+            return;
+        };
+        let others: Vec<String> = all.into_iter().filter(|o| *o != shown).collect();
+        spawn(async move {
+            let mut found = Vec::new();
+            for other in others {
+                let library = account.library(&other);
+                if let Some(Ok(lists)) =
+                    off_thread(move || session_ui::stream_set::setlists(&library)).await
+                {
+                    found.extend(lists.into_iter().map(|l| (other.clone(), l)));
+                }
+            }
+            elsewhere.set(found);
+        });
+    }));
     // The start card signs in inline; the org switcher opens the sheet.
     let start_sign_in = move |()| acct.begin();
     let open_account = move |()| acct.open();
@@ -400,10 +489,10 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
         open_set(
             Progress::Joining { retry: None },
             Box::new(move |_| {
-                use session_daw::open::{ModeState, RemoteTarget};
+                use session_ui::open::{ModeState, RemoteTarget};
                 let target = RemoteTarget::Session { address };
-                session_daw::open::set_mode(ModeState {
-                    requested: session_daw::open::AudioMode::Remote,
+                session_ui::open::set_mode(ModeState {
+                    requested: session_ui::open::AudioMode::Remote,
                     target: Some(target.clone()),
                     ..ModeState::engine()
                 });
@@ -432,7 +521,7 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
             open_set(
                 Progress::Joining { retry: None },
                 Box::new(move |progress| {
-                    session_daw::stream_set::open(Remote::Live { link: live, name }, progress)
+                    session_ui::stream_set::open(Remote::Live { link: live, name }, progress)
                 }),
             );
         }
@@ -461,7 +550,16 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
 
     // Streaming one of the library's lists in, as the member signed in.
     let play = use_callback(move |(account, setlist): (Account, LibrarySetlist)| {
-        let Some(org) = org() else { return };
+        // From the org whose library holds it: another org's, shown on the
+        // home beside this one's, streams from there.
+        let own = elsewhere
+            .peek()
+            .iter()
+            .find(|(_, l)| l.id == setlist.id)
+            .map(|(o, _)| o.clone());
+        let Some(org) = own.or_else(|| org()) else {
+            return;
+        };
         let library = account.library(&org);
         let name = account.name();
         let first = setlist
@@ -475,7 +573,7 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
                 retry: None,
             },
             Box::new(move |progress| {
-                session_daw::stream_set::open(
+                session_ui::stream_set::open(
                     Remote::Library {
                         library,
                         setlist,
@@ -524,7 +622,7 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
             spawn(async move {
                 let named = title.clone();
                 let outcome = off_thread(move || {
-                    session_daw::stream_set::download(
+                    session_ui::stream_set::download(
                         &library,
                         &named,
                         &list,
@@ -575,7 +673,7 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
     );
     let remove = use_callback(move |path: PathBuf| {
         let Some(into) = documents_dir() else { return };
-        match session_daw::stream_set::remove_download(&into, &path) {
+        match session_ui::stream_set::remove_download(&into, &path) {
             Ok(()) => local.set(documents()),
             Err(e) => note.set(Some((
                 false,
@@ -587,6 +685,25 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
     // Opening: the loading screen, whole.
     if let Opening::Busy(progress) = opening() {
         return rsx! { Loading { progress } };
+    }
+    // Inside Studio the welcome screen is the start page: this one only
+    // shows what was handed to it opening (in the engine), and if it fails,
+    // why, with the way back.
+    if let Some(host) = try_consume_context::<super::handoff::Host>() {
+        let (headline, detail, failed) = match opening() {
+            Opening::Failed(why) => ("Could not open it".to_owned(), why, true),
+            _ => ("Opening".to_owned(), String::new(), false),
+        };
+        return rsx! {
+            session_ui::loading::LoadingFrame { headline, detail, failed,
+                button {
+                    style: "margin-top:14px; height:44px; padding:0 20px; border:1px solid {RULE}; border-radius:10px; \
+                            background:transparent; color:{TEXT}; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer;",
+                    onclick: move |_| host.on_leave.call(()),
+                    "Back to the library"
+                }
+            }
+        };
     }
     // The song editor, whole; leaving it reads the songs again.
     if let Some(song) = song_editing()
@@ -719,7 +836,7 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
     let into = documents_dir();
     let downloaded = move |title: &str| {
         into.as_ref()
-            .is_some_and(|dir| session_daw::stream_set::download_file(dir, title).exists())
+            .is_some_and(|dir| session_ui::stream_set::download_file(dir, title).exists())
     };
 
     // What the section shows.
@@ -825,7 +942,7 @@ fn Start(opened: Signal<Option<Setlist>>) -> Element {
                         Load::Failed(why) => rsx! { Banner { good: false, text: format!("Could not read the library — {why}") } },
                         Load::Ready(_) => rsx! {
                             Covers {
-                                for list in lists_now.iter().filter(|l| l.kind == ListKind::Set).take(8).cloned() {
+                                for list in lists_now.iter().cloned().chain(elsewhere().into_iter().map(|(_, l)| l)).filter(|l| l.kind == ListKind::Set).take(12) {
                                     Cover {
                                         key: "{list.id}",
                                         title: list.title.clone(),
@@ -1470,7 +1587,7 @@ fn OrgSwitcher(
             style: "position:relative; flex:none;",
             if open() {
                 div {
-                    style: "{session_daw::shell::SCRIM} z-index:20;",
+                    style: "{session_ui::shell::SCRIM} z-index:20;",
                     onclick: move |_| open.set(false),
                 }
                 div {
@@ -1703,7 +1820,7 @@ fn DownloadChoice(downloaded: bool, busy: bool, on_pick: EventHandler<Offline>) 
             }
             if open() {
                 div {
-                    style: "{session_daw::shell::SCRIM} z-index:20;",
+                    style: "{session_ui::shell::SCRIM} z-index:20;",
                     onclick: move |_| open.set(false),
                 }
                 div {
@@ -1874,19 +1991,19 @@ fn LocalRow(
 
 /// A song opened lately: its name, which version was open and when, and
 /// a pill for each version to open — the song itself and every
-/// checkpoint saved beside it (`session_daw::projects`).
+/// checkpoint saved beside it (`session_ui::projects`).
 #[component]
-fn RecentRow(song: session_daw::projects::Recent, on_open: EventHandler<PathBuf>) -> Element {
+fn RecentRow(song: session_ui::projects::Recent, on_open: EventHandler<PathBuf>) -> Element {
     let name = song.name();
-    let alternatives = session_daw::projects::alternatives(&song.base);
-    let main = session_daw::projects::main_of(&song.base);
+    let alternatives = session_ui::projects::alternatives(&song.base);
+    let main = session_ui::projects::main_of(&song.base);
     let detail = match (song.is_song(), song.opened_alternative()) {
-        (_, Some(alt)) => format!("{alt} · {}", session_daw::projects::ago(song.at)),
-        (true, None) => format!("Song · {}", session_daw::projects::ago(song.at)),
+        (_, Some(alt)) => format!("{alt} · {}", session_ui::projects::ago(song.at)),
+        (true, None) => format!("Song · {}", session_ui::projects::ago(song.at)),
         (false, None) => format!(
             "{} · {}",
             kind_of(&song.opened),
-            session_daw::projects::ago(song.at)
+            session_ui::projects::ago(song.at)
         ),
     };
     let last = song.opened.clone();
@@ -2119,7 +2236,7 @@ const LOCAL_EMPTY: &str = "No songs in Documents/Session yet.";
 
 /// The songs and setlists in the app's documents folder: each entry that is
 /// a song folder, a setlist, or a project — newest first.
-fn documents() -> Vec<PathBuf> {
+pub(super) fn documents() -> Vec<PathBuf> {
     let Some(dir) = documents_dir() else {
         return Vec::new();
     };
@@ -2141,7 +2258,7 @@ fn documents() -> Vec<PathBuf> {
             // downloaded is listed by its `.setlist` instead.
             !p.file_name().is_some_and(|n| {
                 n.to_string_lossy().starts_with('.')
-                    || n == session_daw::stream_set::DOWNLOADED_SONGS
+                    || n == session_ui::stream_set::DOWNLOADED_SONGS
             })
         })
         .map(|p| {
@@ -2169,11 +2286,11 @@ fn documents_dir() -> Option<PathBuf> {
 
 /// An entry's name, as a person reads it: a `.setlist` or a project
 /// without its extension.
-fn title_of(path: &std::path::Path) -> String {
+pub(super) fn title_of(path: &std::path::Path) -> String {
     // A checkpoint is its song's: "Unbreakable · Organized".
     if let (Some(alt), Some(base)) = (
-        session_daw::projects::alternative_name(path),
-        session_daw::projects::base_of(path),
+        session_ui::projects::alternative_name(path),
+        session_ui::projects::base_of(path),
     ) {
         let song = base
             .file_name()
@@ -2204,7 +2321,7 @@ fn kind_of(path: &std::path::Path) -> String {
         "setlist" => "Setlist".to_owned(),
         "rpp" => "REAPER project".to_owned(),
         "session" => "Song".to_owned(),
-        _ if session_daw::setlist::song_in(path).is_some() => "Song".to_owned(),
+        _ if session_ui::setlist::song_in(path).is_some() => "Song".to_owned(),
         _ => "Setlist".to_owned(),
     }
 }
@@ -2318,4 +2435,214 @@ fn copy_text(text: &str) {
         return;
     }
     tracing::warn!("account: no clipboard tool to copy with");
+}
+
+/// Who is signed in and which org's library the DAW opens from, for
+/// Studio's welcome screen: Session's own account (one with Signal's on
+/// this computer) and its org switcher, so the welcome screen's bar is
+/// what this page's sidebar foot was. Provided by [`use_welcome_account`].
+#[derive(Clone, Copy)]
+pub struct WelcomeAccount {
+    acct: fts_account::ui::AccountState,
+    orgs: Signal<Load<Vec<String>>>,
+    org: Signal<Option<String>>,
+    lists: Signal<Load<Vec<(String, Vec<LibrarySetlist>)>>>,
+}
+
+/// The library as the account's orgs have it, for the welcome screen.
+#[derive(Clone, Debug, PartialEq)]
+pub enum WelcomeLists {
+    /// Nobody is signed in.
+    Out,
+    /// Being read.
+    Reading,
+    /// Every org's lists, by org slug, in the account's order.
+    Ready(Vec<(String, Vec<LibrarySetlist>)>),
+    /// The server could not be read.
+    Failed(String),
+}
+
+impl WelcomeAccount {
+    /// Who is signed in, by name.
+    #[must_use]
+    pub fn name(&self) -> Option<String> {
+        self.acct.account().map(|a| a.name())
+    }
+
+    /// The lists of every org, as far as they are read (reactive).
+    #[must_use]
+    pub fn lists(&self) -> WelcomeLists {
+        if self.acct.account().is_none() {
+            return WelcomeLists::Out;
+        }
+        match &*self.lists.read() {
+            Load::Waiting => WelcomeLists::Reading,
+            Load::Ready(all) => WelcomeLists::Ready(all.clone()),
+            Load::Failed(why) => WelcomeLists::Failed(why.clone()),
+        }
+    }
+
+    /// Open the account sheet (to sign in).
+    pub fn sign_in(&self) {
+        self.acct.open();
+    }
+}
+
+/// The account and the org, read and kept as this page keeps them: the
+/// orgs once signed in, the org opened on (`FTS_TASK_ORG`, else the one
+/// picked last), and every pick remembered — the org a library setlist
+/// opens from. Provided as context for [`WelcomeAccountMenu`] and
+/// [`WelcomeAccountSheet`].
+pub fn use_welcome_account() -> WelcomeAccount {
+    let acct = fts_account::ui::use_account(fts_account::App::Session);
+    let mut orgs = use_signal(|| Load::<Vec<String>>::Waiting);
+    let mut org = use_signal(|| None::<String>);
+    let account = acct.account();
+    use_effect(use_reactive!(|account| {
+        let Some(account) = account else { return };
+        orgs.set(Load::Waiting);
+        spawn(async move {
+            match off_thread(move || task_account::orgs(&account)).await {
+                Some(Ok(list)) => {
+                    if org.peek().is_none() {
+                        org.set(first_org(
+                            &list,
+                            std::env::var("FTS_TASK_ORG")
+                                .ok()
+                                .or_else(task_account::remembered_org),
+                        ));
+                    }
+                    orgs.set(Load::Ready(list));
+                }
+                Some(Err(e)) => orgs.set(Load::Failed(brief(&e))),
+                None => {}
+            }
+        });
+    }));
+    use_effect(move || {
+        if let Some(picked) = org() {
+            task_account::remember_org(&picked);
+        }
+    });
+    // Every org's setlists, once the orgs are known: the welcome screen's
+    // library (Session's own page read them the same way, the shown org's
+    // and the others' beside them).
+    let mut lists = use_signal(|| Load::<Vec<(String, Vec<LibrarySetlist>)>>::Waiting);
+    let for_lists = acct.account().zip(match &*orgs.read() {
+        Load::Ready(list) => Some(list.clone()),
+        _ => None,
+    });
+    use_effect(use_reactive!(|for_lists| {
+        let Some((account, all)) = for_lists else {
+            return;
+        };
+        lists.set(Load::Waiting);
+        spawn(async move {
+            let read = off_thread(move || {
+                let mut found = Vec::new();
+                let mut failed = None;
+                for slug in all {
+                    let library = account.library(&slug);
+                    match session_ui::stream_set::setlists(&library) {
+                        Ok(got) => found.push((slug, got)),
+                        Err(e) => {
+                            tracing::warn!(task.org = %slug, error = %e, "welcome: an org's library could not be read");
+                            failed = Some(brief(&e));
+                        }
+                    }
+                }
+                match failed {
+                    Some(why) if found.is_empty() => Load::Failed(why),
+                    _ => Load::Ready(found),
+                }
+            })
+            .await;
+            if let Some(read) = read {
+                lists.set(read);
+            }
+        });
+    }));
+    use_context_provider(|| WelcomeAccount {
+        acct,
+        orgs,
+        org,
+        lists,
+    })
+}
+
+/// The org this person picked on the welcome screen, if signed in.
+#[must_use]
+pub fn welcome_org() -> Option<String> {
+    try_consume_context::<WelcomeAccount>().and_then(|w| w.org.peek().clone())
+}
+
+/// The welcome screen's account control: Sign in, or the org's badge,
+/// pressed for every org this person is in, Account… and Sign out.
+#[component]
+pub fn WelcomeAccountMenu() -> Element {
+    let WelcomeAccount {
+        acct, orgs, org, ..
+    } = use_context::<WelcomeAccount>();
+    let email = acct
+        .account()
+        .map(|a| a.session.email.clone().unwrap_or_else(|| a.name()));
+    rsx! {
+        OrgSwitcher {
+            email,
+            orgs: orgs(),
+            org,
+            compact: true,
+            on_sign_in: move |()| acct.open(),
+            on_account: move |()| acct.open(),
+            on_sign_out: move |()| acct.sign_out(),
+        }
+    }
+}
+
+/// The account sheet (signing in, Account…), over the whole window: mount
+/// it at the root, beside the page.
+#[component]
+pub fn WelcomeAccountSheet() -> Element {
+    let WelcomeAccount { acct, .. } = use_context::<WelcomeAccount>();
+    let width = use_width();
+    rsx! {
+        fts_account::ui::AccountSheet {
+            state: acct,
+            top: 0,
+            width: width().max(0.0) as u32,
+            on_open: move |url: String| super::open_url(&url),
+            on_copy: move |text: String| copy_text(&text),
+            rows: None,
+        }
+    }
+}
+
+/// The org the library opens on: `wanted` (`FTS_TASK_ORG`, the same
+/// variable the headless library reads) when the account belongs to it,
+/// else the first the account belongs to.
+fn first_org(orgs: &[String], wanted: Option<String>) -> Option<String> {
+    wanted
+        .filter(|w| orgs.iter().any(|o| o == w))
+        .or_else(|| orgs.first().cloned())
+}
+
+#[cfg(test)]
+mod org_tests {
+    use super::first_org;
+
+    #[test]
+    fn the_library_opens_on_the_org_asked_for_when_the_account_is_in_it() {
+        let orgs = vec!["codywright".to_owned(), "fasttrackaudio".to_owned()];
+        assert_eq!(
+            first_org(&orgs, Some("fasttrackaudio".into())).as_deref(),
+            Some("fasttrackaudio")
+        );
+        assert_eq!(
+            first_org(&orgs, Some("elsewhere".into())).as_deref(),
+            Some("codywright"),
+            "an org the account is not in is not opened"
+        );
+        assert_eq!(first_org(&orgs, None).as_deref(), Some("codywright"));
+        assert_eq!(first_org(&[], Some("fasttrackaudio".into())), None);
+    }
 }

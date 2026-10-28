@@ -1,7 +1,7 @@
 //! The arrangement's colours, as CSS.
 //!
 //! What is left of the component lanes: the arrangement is painted by
-//! `session_daw::widget::ArrangementWidget`, and the DOM around it (the
+//! `session_ui::widget::ArrangementWidget`, and the DOM around it (the
 //! panel's ground, its scrollbars, the toolbar) takes its colours from
 //! here so the two agree.
 

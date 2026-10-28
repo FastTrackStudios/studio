@@ -140,6 +140,67 @@ process, and keeps the docs it is editing in its own memory. On iOS the
 foreground app holds the engine and never waits for it; nothing of it
 runs on the audio thread.
 
+## Projects
+
+A project syncs the way a rig's book does, with three differences: it
+belongs to an org that is often not the person's own, it is open in the
+engine while it syncs, and its media is far bigger than its doc.
+
+- **One driver per org.** The device runs a `DocsDriver` for every org
+  that owns something on it, each with its own index
+  (`<config>/sync/<org>.index`), all on the one kept session. Crescendum
+  is `fasttrackaudio`'s, so it syncs there, not in the personal org.
+- **A branch is a doc of kind `session`.** Its id is the store's
+  `doc:<branch>` (`Store::doc_id`); `main` is made `Strict`, and an
+  alternative is a doc whose `parent` is the doc it was forked from.
+  Registering a project is `driver.create` for each branch, with
+  [`Replica`] over the project's own file as its persistence. Nothing is
+  copied: the file stays the one place the project lives.
+- **One doc in memory.** While a synced project is open, the bridge edits
+  the driver's `CrdtDoc` (as a book edits its doc), so a remote update and
+  a local step land in the same `LoroDoc`. The `CrdtDoc` persists every
+  local commit itself, so the project file stops appending its own steps
+  for that branch; the step's name still reaches the history (the replica
+  is told the label before the commit). A remote update goes through the
+  bridge's diff to the engine, as a live collaborator's does.
+- **Opening one made elsewhere.** The org's catalog, listed by kind
+  `session`, is the device's list of projects. Opening one creates its file
+  under the sync directory (or where the person puts it), adopts the doc
+  ids, and waits until it has caught up before the engine reads it.
+- **Media: streamed in, then kept.** The doc names its media relative to
+  the song folder and records the File Root that holds it (`media.root`, an
+  opaque id Task can resolve). A song opened from Task gets a home on the
+  device (its folder under the projects folder, per org) and opens at once:
+  what is not there yet streams from the root, and **what streams in stays**
+  — written into the song's folder as it arrives (resumable, verified
+  against the file's hash), so the next open plays from disk with nothing
+  to fetch. Streaming is how a file arrives, not a mode the song is in.
+- **Top level first.** By default only what plays is fetched: for each
+  item, its *active* take's media (and its proxy first, so playback starts
+  before the original lands). The other takes, comp lanes and muted lanes
+  are named by the doc but not fetched until they are needed — opening the
+  comp view, auditioning a lane, swapping a take fetches exactly those, the
+  same way. A song of 400 takes over 12 lanes costs the 12 that play.
+  Pinning a setlist (offline) fetches everything its songs reference.
+- **Then it is local.** Once fetched, the song opens from its folder and
+  edits on any client land in its synced doc: the device's driver keeps it
+  in step with Task while it is open (and catches up on the next open when
+  it was not), so a song edited on the desk is the edited song on the iPad.
+- **How local it is, at a glance.** No "Streamed" label: the song's tab
+  icon carries the state — fully local (no mark), arriving (a ring filling
+  with how much of what plays is on disk), streaming only (a hollow ring,
+  nothing kept yet), and offline with media missing (a warning dot). The
+  same state shows on the song's row in the library and setlists.
+
+### Task stays app-agnostic
+
+Task never learns what a session is. A project names the app docs that
+belong to it the same way it names anything: a link from the project to
+an app doc (`NodeKind::AppDoc`, the doc's id), with the catalog's kind and
+name to show. Attaching, listing and detaching are generic — a Keyflow
+chart set or a Signal rig attaches the same way — and a session link is
+built from what the link already holds: the org, the doc id, the kind.
+
 ## Peer to peer
 
 Devices also exchange docs directly over iroh (`crdt::peer`, the lane
@@ -156,7 +217,12 @@ device alone.
 
 ## What ships in the app
 
-Only the demo: the demo setlist and what it plays. Everything real is in
+Nothing that is content. The demo is a project like any other: its songs
+are `session` docs in FastTrackStudio's org, attached to a Demo project,
+their media in that project's File Root, and the app opens it the way it
+opens anyone's — by link, streamed, with no account needed to play it (a
+public share). It needs no code of its own and no copy in the binary;
+"open the demo" is a link the home screen carries. Everything real is in
 the person's account and arrives by sync. Gigs stop riding inside the iOS
 build (`GIG_BUNDLE`); a gig is imported into the account once.
 
@@ -180,3 +246,8 @@ build (`GIG_BUNDLE`); a gig is imported into the account once.
 5. Imports: CAA 2026 and the rest of the real sets into the account; the
    app keeps the demo only.
 6. Peer to peer and the device registry (#85).
+7. Projects (see Projects): a driver per org; a project's branches as
+   `session` docs, the open song editing the driver's doc; the org's
+   projects listed and opened on another device; media fetched or
+   streamed from the project's File Root; app docs attached to Task
+   projects by link. Unbreakable first.

@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let packages = vec![TestPackage {
-        package: "session-daw".into(),
+        package: "session-ui".into(),
         // The suites are behind this feature so an ordinary
         // `cargo nextest run --workspace` does not try to talk to a
         // REAPER that is not there.

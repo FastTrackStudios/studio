@@ -12,10 +12,12 @@
 //! `engine` feature adds the bridge to a daw project (daw-standalone
 //! in-process, or REAPER), through `daw_control`.
 
+pub mod align;
 #[cfg(feature = "engine")]
 pub mod bridge;
 #[cfg(feature = "net")]
 pub mod clock;
+pub mod crop;
 pub mod diff;
 #[cfg(feature = "engine")]
 pub mod direct;

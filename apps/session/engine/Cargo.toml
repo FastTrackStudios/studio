@@ -1,0 +1,232 @@
+[package]
+name = "session-engine"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Session's engine — the set, the Action List, opening, streaming and editing a song; everything but the window"
+
+# What this is, and what it is not.
+#
+# Session's engine, the DAW with no window: one `Standalone`, the set and
+# its songs (`studio_engine`), the Action List every caller runs
+# (`actions`), opening and saving, streaming a set in, collaboration, and
+# every edit of a song's data. `studio engine` runs it headless; a window
+# (`session-ui`) attaches to it. Nothing here draws — the rule the crate
+# boundary now holds (docs/design/engine-boundary.md).
+#
+# Some dependencies are still the window's kind (dioxus signals, daw-ui's
+# project types, vello's colour): the read-back model a window draws from
+# (`song_model`) is built here until the GUI keeps its own replica.
+
+[dependencies]
+# The panels are dioxus components, hosted by dioxus-native (Blitz) on the
+# desktop and by dioxus-web in a browser.
+dioxus = { workspace = true, features = ["hooks", "signals", "macro", "html"] }
+
+# The UI's shared pieces: `theming::Theme` (the colour model every
+# painter reads), the studio's project reads (`studio::project`) and the
+# folder fold (`studio::folded`).
+daw-ui = { workspace = true, features = ["studio"] }
+daw-control = { workspace = true }
+daw-proto = { workspace = true }
+# The waveform readers' pool (`wave_pool`).
+rayon = { workspace = true, optional = true }
+# The project file: one Turso file per song, its Loro doc and blobs.
+# `store` natively (Turso); `read` on the web (the file read from its bytes).
+session-format = { workspace = true, optional = true }
+ableton = { workspace = true, optional = true }
+# The mix phases the mixer's left rail lists.
+session = { workspace = true, features = ["library", "ui", "web"] }
+# The chord items' numbers and names — `arrangement::Lettering`.
+keyflow = { workspace = true }
+# The guide engine the Click / Count / Guide MIDI tracks play through —
+# see `src/guide_instrument.rs`.
+# The visual presets. Which tracks a preset shows, and how large, is a
+# rule resolved against the session's own taxonomy — not a list of GUIDs
+# this window keeps. See `src/plan.rs`.
+dynamic-template = { workspace = true }
+# The hit detector (native: it reads whole recordings and runs on cores).
+dsp = { workspace = true, features = ["comp", "comp-ui", "eq", "eq-ui", "saturate", "saturate-analysis", "saturate-profiles", "saturate-ui", "saturate-viz", "delay", "delay-profiles", "delay-ui", "delay-viz", "reverb", "reverb-profiles", "reverb-ui", "reverb-viz", "modulation", "modulation-ui", "modulation-viz", "level"] }
+
+# The expression editor: its engine, its painter and gestures (no
+# dioxus), and the take-to-document conversion.
+editor = { workspace = true, features = ["audio", "audio-daw", "daw", "paint"] }
+# BS.1770 K-weighting: gain staging sets the drum kit by its short-term loudness.
+dsp-core = { workspace = true, features = ["audio"] }
+
+
+# `standalone-rpp` = the standalone backend plus the `.rpp` loader and
+# source decoding — what makes a real project openable with no REAPER in
+# the picture. `standalone-bootstrap` = the in-process daw-control client
+# every panel reads through.
+# `cli` is the CLIENT half: vox over a stream plus socket discovery. It
+# pulls no REAPER — attaching to a live one means talking to the
+# extension's Unix socket, not linking its FFI, which is what lets this
+# window run on a machine that has no REAPER at all.
+daw = { workspace = true }
+studio = { workspace = true }
+# Per-device preferences (the streaming quality): a file natively,
+# localStorage in a browser.
+utils = { workspace = true }
+
+vello = "0.9"
+# Finding REAPER's resource path, for the toolbar icons it installs.
+dirs = { workspace = true, optional = true }
+timeline = { workspace = true, features = ["actions"] }
+# `Instant` that works in a browser (std's panics on wasm32); std's own
+# everywhere else.
+web-time = { workspace = true }
+
+eyre = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+# Collaboration (collab.rs, native): hosting/joining over iroh, and the
+# chart editor's remote edits and carets.
+architect = { workspace = true, optional = true, features = ["vox", "platform", "action-list"] }
+crdt = { workspace = true, optional = true, features = ["vox"] }
+vox-core = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true }
+# Sample-accurate shared transport: the drift follower and the shared clock.
+daw-transport-sync = { workspace = true, optional = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true }
+
+web-sys = { workspace = true, optional = true, features = [
+    "Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement",
+    "DomRect", "CssStyleDeclaration", "console", "Response", "Headers", "PointerEvent",
+    "EventTarget",
+    # The audio out (`web_audio`): a worklet the page posts rendered blocks to.
+    "AudioContext", "AudioContextOptions", "BaseAudioContext", "AudioContextState",
+    "AudioWorklet", "AudioWorkletNode", "AudioWorkletNodeOptions",
+    "AudioNode", "AudioDestinationNode", "MessagePort", "MessageEvent",
+    "Blob", "BlobPropertyBag", "Url", "Worklet", "WorkletOptions",
+    "KeyboardEvent", "Event", "AddEventListenerOptions",
+    # The live session card's invite, onto the clipboard.
+    "Navigator", "Clipboard", "UrlSearchParams",
+    # A shared song's proxies, kept off the wasm heap and across reloads
+    # (`song_stream::CachedFetch`).
+    "CacheStorage", "Cache",
+    # Whether this viewer chose the multitracks, kept across a set's resets.
+    "Storage",
+    # Touch mode's default: whether the page's pointer is a finger.
+    "MediaQueryList",
+] }
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+# The web demo fetches the guide library's files together (`web_engine`).
+futures-util = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+gloo-timers = { workspace = true, optional = true }
+# The engine, in the page (the native build reaches it through `daw`'s
+# standalone features instead).
+daw-standalone = { workspace = true, features = ["bootstrap", "rpp-project-wasm"] }
+dawfile-reaper = { workspace = true, optional = true }
+# The FTS processors as built-in FX (desktop: they are nice-plug plugins).
+builtin = { workspace = true, optional = true, features = ["engine"] }
+realfft = { workspace = true, optional = true }
+architect-mcp = { workspace = true, optional = true, features = ["http"] }
+# signal's rigs, as built-in FX (`signal` feature).
+signal-fx = { workspace = true, optional = true }
+num-traits = { workspace = true }
+facet = { workspace = true }
+editing = { workspace = true }
+architect-telemetry = { workspace = true }
+facet-json = { workspace = true }
+# The web demo's stems: Ogg proxies decoded a window at a time (`web_audio`).
+fts-sample = { workspace = true, optional = true, features = ["engine-core"] }
+# Streaming a song in from the Task library (song_stream::TaskSource).
+# A set Task keeps: joined through Task, its clock followed.
+live-proto = { workspace = true, optional = true }
+# A page follows its set's resets (live-proto's epochs stream).
+vox = { workspace = true, optional = true }
+task-dial = { workspace = true, optional = true }
+# A song streamed from a share link (the public demo): its listing, its
+# documents and its proxies over HTTP.
+reqwest = { workspace = true, optional = true }
+# Signing in to Task from another device (task_account): the protocol and
+# the kept session.
+auth-client = { workspace = true, optional = true }
+# The shared account (device-code sign-in, the one desktop session file).
+fts-account = { workspace = true, optional = true }
+# Where a running engine is (`studio_engine::link::Found`), as a file.
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# The browser's tokio: channels and `select!` for the live session's loop
+# (collab.rs), no runtime — tasks and timers there are the page's
+# (`architect::platform`).
+# The global app menu (`app_menu`): served on the session bus, which is
+# Linux's. Behind `native`.
+[target.'cfg(target_os = "linux")'.dependencies]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1.48", default-features = false, features = ["sync", "macros"] }
+
+[features]
+default = ["native"]
+# signal's rigs run in Session's own engine: the bass rig's NAM amp and
+# cab on a bass track, the drum sampler's per-mic voices on the kit.
+signal = ["native", "dep:signal-fx"]
+# The desktop app: dioxus-native (Blitz) hosts for the panels, the
+# in-process engine with its audio device, threads, the plugin-UI graph.
+native = ["dep:realfft", "dep:architect-mcp", "dep:dirs", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:rayon", "dsp/hits", "dep:session-format", "session-format/store", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "session/library", "dep:auth-client", "dep:fts-account", "session/project-sync", "dep:live-proto", "dep:task-dial", "dep:reqwest"]
+# A show recorded as one Live set, split into its songs (src/show.rs,
+# the `show-split` bin): the Live-set reader and the .als → .RPP converter.
+show = ["native", "dep:ableton", "studio/convert-ableton"]
+# The browser: the same widgets, hosted in <canvas> elements under
+# dioxus-web and drawn with vello_hybrid's WebGL renderer (keyflow-ui's
+# `wasm-graphics` pattern). See `web_host`.
+web = ["dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers", "daw-standalone/stream-ogg", "dep:fts-sample", "dep:futures-util", "dep:reqwest", "daw/standalone-session-file", "session/collab", "dep:architect", "dep:crdt", "dep:uuid", "dep:daw-transport-sync", "dep:live-proto", "dep:task-dial", "dep:vox", "daw-standalone/reapeaks", "dep:session-format", "session-format/read"]
+# The `#[]` suites, which need a REAPER to talk to. Behind a
+# feature so an ordinary `cargo nextest run --workspace` does not try to
+# reach one that is not running — `just reaper-test` turns it on, via
+# session-reaper-xtask, which starts the REAPER first.
+reaper-tests = ["studio/test-harness"]
+
+
+# Every binary is a desktop tool over the engine (no window).
+
+[[bin]]
+name = "hits"
+path = "src/bin/hits.rs"
+required-features = ["native"]
+
+[[bin]]
+name = "show-split"
+path = "src/bin/show-split.rs"
+required-features = ["show"]
+
+[[bin]]
+name = "session-media"
+path = "src/bin/session-media.rs"
+required-features = ["native"]
+
+[[bin]]
+name = "reference"
+path = "src/bin/reference.rs"
+required-features = ["native"]
+
+[[bin]]
+name = "prepare"
+path = "src/bin/prepare.rs"
+required-features = ["native"]
+
+[[bin]]
+name = "chain-probe"
+path = "src/bin/chain-probe.rs"
+required-features = ["native"]
+
+[dev-dependencies]
+builtin = { workspace = true, features = ["engine"] }
+# Temp project trees for the Patch List view's discovery tests, and the
+# scratch directory the golden scene renders (`tests/golden_scenes.rs`)
+# draw into before comparing with the committed pictures.
+tempfile = { workspace = true }
+# The file backend of the organize pass, to hold the live one to it
+# (`tests/organize_live.rs`).
+dawfile-reaper = { workspace = true }
+# The guide instrument's test encodes the Ogg library a browser streams.
+fts-sample = { workspace = true, features = ["engine-native"] }
+
+[lints]
+workspace = true

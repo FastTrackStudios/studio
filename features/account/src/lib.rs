@@ -24,6 +24,8 @@
 pub mod copy;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod flow;
+#[cfg(all(feature = "sync", not(target_arch = "wasm32")))]
+pub mod sync;
 #[cfg(all(feature = "ui", not(target_arch = "wasm32")))]
 pub mod ui;
 

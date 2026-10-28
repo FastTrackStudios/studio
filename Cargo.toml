@@ -28,6 +28,7 @@ members = [
     "features/ui/daw-ui",
     "features/dynamic-template",
     "features/app/shell",
+    "features/library",
     "features/account",
     "features/audio",
     "features/dsp/builtin",
@@ -49,7 +50,8 @@ members = [
     "features/adapters/reaper/tests/daw-reaper-dioxus-ext-test",
     "apps/session/desktop",
     "apps/session/daw-web",
-    "apps/session/daw",
+    "apps/session/engine",
+    "apps/session/ui",
     "apps/session/web",
     "features/adapters/reaper/dynamic-template-extension",
     "features/patch-list",
@@ -226,6 +228,7 @@ nice-plug-dioxus = { git = "https://github.com/FastTrackStudios/nice-plug.git", 
 nice-plug-xtask = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
 utils = { path = "crates/daw/utils" }
 app-shell = { path = "features/app/shell" }
+library = { path = "features/library" }
 fts-account = { path = "features/account" }
 # The grid that follows the zoom. Pure arithmetic and no dependencies, so
 # the arrange view and the expression editor can agree on it without
@@ -912,6 +915,10 @@ signal-web = { path = "apps/signal/web" }
 # Session's app as a library: Studio (apps/studio/desktop) mounts it behind
 # its front screen. No default features: Studio picks the iOS-clean set.
 session-desktop = { path = "apps/session/desktop", default-features = false }
+# Session's engine, and its window (a view of it): features chosen by each
+# dependent (`native` on a desktop, `web` in a page).
+session-engine = { path = "apps/session/engine", default-features = false }
+session-ui = { path = "apps/session/ui", default-features = false }
 signal-daw-bridge = { path = "features/signal/daw-bridge" }
 signal-rig-host = { path = "features/rigs/host" }
 signal-rigs-proto = { path = "features/rigs/proto" }
@@ -1006,6 +1013,8 @@ resvg = "0.45"
 rfd = "0.17"
 roxmltree = "0.20"
 rustc-hash = "2"
+# zstd in pure Rust: session-format's `read` (a browser has no C zstd).
+ruzstd = "0.8"
 rusty_link = "0.4"
 smallvec = "1.15.2"
 styx-tree = "5.0.0-rc.5"
