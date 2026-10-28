@@ -20,10 +20,10 @@ use architect::PubSub;
 use daw::service::ProjectContext;
 
 use crate::view::{
-    ActionCall, Applied, AutomationRead, Change, Changed, ChangesAsk, DetailAsk, EditBatch,
-    EngineView, EngineViewStreamSource, ItemChanges, ItemNow, JobRow, JobsFrame, MarksFrame,
-    OverlayFrame, Playhead, Queued, SetFrame, SetOpening, SongFacts, StreamSong, StreamsFrame,
-    ViewError, WaveRead, WavesAsk,
+    ActionCall, Applied, AutomationRead, Change, Changed, ChangesAsk, DetailAsk, EditAsked,
+    EditBatch, EditShown, EngineView, EngineViewStreamSource, ItemChanges, ItemNow, JobRow,
+    JobsFrame, MarksFrame, OverlayFrame, Playhead, Queued, SetFrame, SetOpening, SongFacts,
+    StreamSong, StreamsFrame, ViewError, WaveRead, WavesAsk,
 };
 
 /// The engine's view host: its hubs and what each last said.
@@ -38,6 +38,7 @@ struct Inner {
     marks: PubSub<MarksFrame>,
     streams: PubSub<StreamsFrame>,
     jobs: PubSub<JobsFrame>,
+    edits: PubSub<EditAsked>,
     changes: PubSub<Changed>,
     queued: PubSub<Queued>,
     last_set: Mutex<SetFrame>,
@@ -64,6 +65,7 @@ pub fn host() -> &'static ViewHost {
             marks: PubSub::sliding(4),
             streams: PubSub::sliding(4),
             jobs: PubSub::sliding(4),
+            edits: PubSub::sliding(16),
             changes: PubSub::sliding(1024),
             queued: PubSub::sliding(64),
             last_set: Mutex::new(SetFrame::default()),
@@ -100,6 +102,16 @@ pub fn start() {
             host.inner.queued.publish(Queued {
                 pending: u32::try_from(pending).unwrap_or(u32::MAX),
                 revision,
+            });
+        });
+        crate::edit_state::on_ask(|song, edit, revision| {
+            host().inner.edits.publish(EditAsked {
+                song: song.to_owned(),
+                revision,
+                at: edit.at,
+                selection: edit
+                    .selection
+                    .map(|s| editing::scope::Span::between(s.start, s.end)),
             });
         });
         crate::changes::listen(|change| match change {
@@ -486,6 +498,21 @@ impl EngineView for ViewHost {
         .unwrap_or_default()
     }
 
+    async fn show_edit(&self, shown: EditShown) -> bool {
+        if let Some(scope) = shown.scope {
+            crate::edit_actions::publish(scope);
+        }
+        let edit = crate::edit_state::Edit {
+            at: shown.at,
+            selection: shown
+                .selection
+                .map(|s| crate::edit_state::Span::between(s.from, s.to)),
+        };
+        let before = crate::edit_state::of(&shown.song);
+        crate::edit_state::show_on(&shown.song, edit);
+        !before.is_some_and(|b| crate::edit_state::same(&b, &edit))
+    }
+
     async fn playheads(&self) -> Vec<Playhead> {
         let lineup = super::set::lineup();
         lineup
@@ -556,6 +583,10 @@ impl EngineViewStreamSource for ViewHost {
 
     fn jobs_intro(&self) -> Option<JobsFrame> {
         self.inner.last_jobs.lock().ok().map(|f| f.clone())
+    }
+
+    fn edits_hub(&self) -> &PubSub<EditAsked> {
+        &self.inner.edits
     }
 
     fn changes_hub(&self) -> &PubSub<Changed> {

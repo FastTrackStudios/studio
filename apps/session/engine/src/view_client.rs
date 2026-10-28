@@ -122,6 +122,7 @@ pub fn connect(caller: vox::Caller) {
     rt.spawn(follow(link.clone(), Stream::Marks));
     rt.spawn(follow(link.clone(), Stream::Streams));
     rt.spawn(follow(link.clone(), Stream::Jobs));
+    rt.spawn(follow(link.clone(), Stream::Edits));
     rt.spawn(follow(link.clone(), Stream::Changes));
     rt.spawn(follow(link.clone(), Stream::Queued));
     rt.spawn(follow_playheads(link));
@@ -149,6 +150,7 @@ enum Stream {
     Marks,
     Streams,
     Jobs,
+    Edits,
     Changes,
     Queued,
 }
@@ -186,6 +188,10 @@ async fn follow(link: Link, which: Stream) {
         Stream::Jobs => {
             let (tx, rx) = vox::channel::<crate::view::JobsFrame>();
             drain(link.streams.jobs(tx), rx, jobs_arrived).await
+        }
+        Stream::Edits => {
+            let (tx, rx) = vox::channel::<crate::view::EditAsked>();
+            drain(link.streams.edits(tx), rx, edit_asked).await
         }
         Stream::Changes => {
             let (tx, rx) = vox::channel::<crate::view::Changed>();
@@ -599,6 +605,75 @@ pub fn jobs() -> Vec<crate::view::JobRow> {
         .ok()
         .and_then(|j| j.as_ref().map(|f| f.jobs.clone()))
         .unwrap_or_default()
+}
+
+// ── The edit cursor ──────────────────────────────────────────────────
+
+/// An action put a song's edit cursor and time selection somewhere: the
+/// window's frames take it up as they would one asked here.
+fn edit_asked(asked: crate::view::EditAsked) {
+    crate::edit_state::take_up(
+        &asked.song,
+        crate::edit_state::Edit {
+            at: asked.at,
+            selection: asked
+                .selection
+                .map(|s| crate::edit_state::Span::between(s.from, s.to)),
+        },
+    );
+}
+
+/// Tell the engine where the window shows the current song's edit cursor,
+/// time selection and selection (every frame; only a change is sent, the
+/// latest winning) — what its actions act on.
+pub fn show_edit(edit: crate::edit_state::Edit, scope: Option<editing::scope::Scope>) {
+    static SHOWN: std::sync::OnceLock<watch::Sender<Option<crate::view::EditShown>>> =
+        std::sync::OnceLock::new();
+    let Some(song) = crate::open::current_song() else {
+        return;
+    };
+    let shown = crate::view::EditShown {
+        song,
+        at: edit.at,
+        selection: edit
+            .selection
+            .map(|s| editing::scope::Span::between(s.start, s.end)),
+        scope,
+    };
+    let tx = SHOWN.get_or_init(|| {
+        let (tx, rx) = watch::channel(None);
+        if let Some(rt) = runtime() {
+            rt.spawn(send_edits(rx));
+        }
+        tx
+    });
+    tx.send_if_modified(|was| {
+        if was.as_ref() == Some(&shown) {
+            return false;
+        }
+        *was = Some(shown);
+        true
+    });
+}
+
+/// Send what [`show_edit`] was told, the latest each time, while the
+/// window runs.
+async fn send_edits(mut rx: watch::Receiver<Option<crate::view::EditShown>>) {
+    while rx.changed().await.is_ok() {
+        let Some(shown) = rx.borrow_and_update().clone() else {
+            continue;
+        };
+        let Some(link) = link() else { continue };
+        if tokio::time::timeout(CALL, link.view.show_edit(shown))
+            .await
+            .is_err()
+        {
+            tracing::warn!(
+                view.call = "show_edit",
+                "view link: the engine did not answer in time"
+            );
+        }
+    }
 }
 
 // ── What changed ─────────────────────────────────────────────────────

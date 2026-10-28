@@ -5449,8 +5449,14 @@ impl ArrangementWidget {
             self.editor.cursor = asked;
         }
         crate::cursor::publish(self.editor.cursor);
+        // The engine's actions act on what is selected here: told of it as
+        // it changes.
         #[cfg(feature = "native")]
-        crate::edit_actions::publish(self.scope());
+        {
+            let scope = self.scope();
+            crate::edit_actions::publish(scope.clone());
+            crate::view_client::show_edit(self.editor.cursor, Some(scope));
+        }
         crate::ghosts::local_selection(self.editor.selected.as_set(), &self.rows);
         crate::ghosts::local_shown(&self.rows, &self.scene);
         // The engine changed the session under us (a toolbar insert, an

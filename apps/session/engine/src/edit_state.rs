@@ -140,14 +140,40 @@ pub fn show(edit: Edit) {
     }
 }
 
+/// A window shows `edit` on `song`: what the engine hears from a window in
+/// another process.
+pub fn show_on(song: &str, edit: Edit) {
+    with(|states| states.show(song, edit));
+}
+
 /// Put the current song's edit cursor and time selection at `edit`: what
 /// an action that sets them asks. It is [`current`] at once; every window
-/// takes it up on its next frame.
+/// takes it up on its next frame — one in another process told by
+/// [`on_ask`].
 pub fn ask(edit: Edit) {
     if let Some(song) = song_now() {
-        with(|states| states.ask(&song, edit));
+        let revision = with(|states| states.ask(&song, edit));
+        if let Some(told) = TOLD.get() {
+            told(&song, edit, revision);
+        }
     }
 }
+
+/// What the engine was asked, taken up by a window in this process from
+/// its engine's word — its own frames take it up as they would an ask
+/// made here, and the engine is not told again.
+pub fn take_up(song: &str, edit: Edit) {
+    with(|states| states.ask(song, edit));
+}
+
+/// Tell `told` of every ask (its song, where, its revision): how the engine
+/// passes them to its windows.
+pub fn on_ask(told: impl Fn(&str, Edit, u64) + Send + Sync + 'static) {
+    let _ = TOLD.set(Box::new(told));
+}
+
+type Told = Box<dyn Fn(&str, Edit, u64) + Send + Sync>;
+static TOLD: std::sync::OnceLock<Told> = std::sync::OnceLock::new();
 
 /// What was asked for on the current song after revision `seen`.
 #[must_use]

@@ -216,6 +216,39 @@ fn a_window_on_the_in_memory_link_gets_the_set_waves_lanes_overlay_and_controls(
             .any(|j| j.label == "Linked probe")
     })?;
 
+    // What the window selects is what the engine's actions act on: told
+    // over the link (nothing here writes the engine's state).
+    let shown = session_engine::edit_state::Edit {
+        at: 0.5,
+        selection: Some(session_engine::edit_state::Span::between(0.5, 1.5)),
+    };
+    view_client::show_edit(
+        shown,
+        Some(editing::scope::Scope {
+            tracks: vec!["Guitar".to_owned()],
+            spans: Vec::new(),
+        }),
+    );
+    within(10, "the window's cursor on the engine", || {
+        session_engine::edit_state::of(&song).is_some_and(|e| e.at == 0.5 && e.selection.is_some())
+    })?;
+    // A guitar has no editing profile: the engine says so, naming what the
+    // window selected.
+    let scope = match view_client::run("EDIT_SCOPE", b"") {
+        Ok(said) | Err(said) => said,
+    };
+    assert!(scope.contains("Guitar"), "EDIT_SCOPE: {scope}");
+    // Where an action puts the time selection comes back over the link:
+    // the window takes it up as an ask of its own (one revision more).
+    let before = session_engine::edit_state::revision();
+    run(
+        "TIME_SELECTION_SET",
+        &json!({ "from": "1s", "to": "1.75s" }),
+    )?;
+    within(10, "the engine's ask taken up by the window", || {
+        session_engine::edit_state::revision() >= before + 2
+    })?;
+
     // Closed by the engine: the window's set goes with it.
     run("SESSION_CLOSE", &Value::Null)?;
     within(30, "the set closed", || {

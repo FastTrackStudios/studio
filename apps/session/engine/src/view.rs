@@ -322,6 +322,27 @@ pub struct JobRow {
     pub total: u64,
 }
 
+/// Where a window shows a song's edit cursor and time selection, and the
+/// selection an edit would act on — what the engine's actions read
+/// (`crate::edit_state`, `crate::edit_actions`).
+#[derive(Debug, Clone, Default, PartialEq, Facet)]
+pub struct EditShown {
+    pub song: String,
+    pub at: f64,
+    pub selection: Option<editing::scope::Span>,
+    pub scope: Option<editing::scope::Scope>,
+}
+
+/// Where an action put a song's edit cursor and time selection, for its
+/// windows to take up.
+#[derive(Debug, Clone, Default, PartialEq, Facet)]
+pub struct EditAsked {
+    pub song: String,
+    pub revision: u64,
+    pub at: f64,
+    pub selection: Option<editing::scope::Span>,
+}
+
 /// A streaming song, as its tab shows it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Facet)]
 pub struct StreamSong {
@@ -404,6 +425,10 @@ pub trait EngineView {
     /// Every song's playhead.
     async fn playheads(&self) -> Vec<Playhead>;
 
+    /// Where the window shows the edit cursor, the time selection and the
+    /// selection an edit acts on; whether it moved.
+    async fn show_edit(&self, shown: EditShown) -> bool;
+
     /// The set, now and as it changes.
     #[subscribe]
     fn set(&self) -> SetFrame;
@@ -423,6 +448,10 @@ pub trait EngineView {
     /// What the engine is doing in the background.
     #[subscribe]
     fn jobs(&self) -> JobsFrame;
+
+    /// Where actions put the edit cursor and time selection.
+    #[subscribe]
+    fn edits(&self) -> EditAsked;
 
     /// What changed in a song.
     #[subscribe]
