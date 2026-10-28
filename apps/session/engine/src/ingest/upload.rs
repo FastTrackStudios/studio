@@ -74,7 +74,7 @@ pub fn scan(folder: &Path, media: Media) -> std::io::Result<Vec<Local>> {
 fn nanos(meta: &std::fs::Metadata) -> i128 {
     meta.modified()
         .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .and_then(|t| t.duration_since(web_time::UNIX_EPOCH).ok())
         .map_or(0, |d| i128::try_from(d.as_nanos()).unwrap_or(i128::MAX))
 }
 
