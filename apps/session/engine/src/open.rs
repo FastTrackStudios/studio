@@ -784,7 +784,8 @@ fn open_set_audio(daw: &Standalone) -> Option<daw::standalone::audio_engine::Set
                 audio.attach_ms = began.elapsed().as_millis(),
                 "audio device attached: the set's engine"
             );
-            crate::audio_health::watch(audio.stats(), audio.sample_rate());
+            crate::audio_health::watch(daw.clone(), audio.stats(), audio.sample_rate());
+            crate::perf_meter::watch(daw.clone(), audio.stats(), audio.sample_rate());
             Some(audio)
         }
         Err(e) => {

@@ -316,6 +316,56 @@ pub struct JobsFrame {
     pub jobs: Vec<JobRow>,
 }
 
+/// The performance meter, twice a second (`crate::perf_meter`): the
+/// engine as a whole and every track of the current song. CPU of one core
+/// is 100 per core; `cpu_pct` is of all cores.
+#[derive(Debug, Clone, Default, PartialEq, Facet)]
+pub struct PerfFrame {
+    pub version: u64,
+    /// The song the tracks are of.
+    pub song: String,
+    pub cores: u32,
+    /// The engine's process, of all cores.
+    pub cpu_pct: f64,
+    /// The audio callback's render (RT CPU), and the render ahead's, of
+    /// one core.
+    pub rt_cpu_pct: f64,
+    pub ahead_cpu_pct: f64,
+    /// The longest block of the last two seconds against a block's time.
+    pub rt_longest_ms: f64,
+    pub block_ms: f64,
+    /// Since the engine started: blocks over their budget, xruns the
+    /// device reported, the time the device went without audio, and blocks
+    /// that played the tracks ahead short.
+    pub overruns: u64,
+    pub xruns: u64,
+    pub gap_ms: f64,
+    pub ahead_short: u64,
+    /// The engine's disk reads and writes, bytes a second.
+    pub disk_read_bps: f64,
+    pub disk_write_bps: f64,
+    /// The engine's resident memory; the system's available and total.
+    pub ram_bytes: u64,
+    pub system_free_bytes: u64,
+    pub system_total_bytes: u64,
+    pub tracks: Vec<TrackPerf>,
+}
+
+/// One track in the performance meter.
+#[derive(Debug, Clone, Default, PartialEq, Facet)]
+pub struct TrackPerf {
+    /// Its place in the song.
+    pub index: u32,
+    pub guid: String,
+    pub name: String,
+    /// Its FX, and its items (read, resampled, stretched), of one core.
+    pub fx_cpu_pct: f64,
+    pub media_cpu_pct: f64,
+    pub fx_count: u32,
+    /// Its FX's delay compensation, samples.
+    pub pdc_samples: u32,
+}
+
 /// One job, as [`crate::jobs::running`] reads it.
 #[derive(Debug, Clone, PartialEq, Eq, Facet)]
 pub struct JobRow {
@@ -491,6 +541,11 @@ pub trait EngineView {
     /// What the engine is doing in the background.
     #[subscribe]
     fn jobs(&self) -> JobsFrame;
+
+    /// The performance meter: the engine's CPU, memory, disk and
+    /// dropouts, and every track's FX and media CPU.
+    #[subscribe]
+    fn perf(&self) -> PerfFrame;
 
     /// Where actions put the edit cursor and time selection.
     #[subscribe]

@@ -574,6 +574,7 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     crate::edit_actions::register(list)?;
     crate::perf::register(list)?;
     crate::audio_health::register(list)?;
+    crate::perf_meter::register(list)?;
     crate::comp_rank::register(list)?;
     crate::comp_song::register(list)?;
     crate::poi::register(list)?;

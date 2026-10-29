@@ -430,6 +430,15 @@ static QUANTIZE_PANEL: ActionMeta = meta(
     "Shift+Q",
 );
 
+static PERF_METER: ActionMeta = meta(
+    "SESSION_PERF_METER",
+    "perf_meter",
+    "Performance meter",
+    "Show or hide the Performance meter over the window: the engine's CPU over the last minute (all cores, the audio callback's, the render ahead's), the longest block, dropouts, disk and RAM, and every track's FX CPU, FX count, delay compensation and media CPU — sortable by any column. SESSION_PERF reads the same numbers.",
+    "View",
+    "",
+);
+
 static TOGGLE_EDITOR: ActionMeta = meta(
     "SESSION_TOGGLE_EDITOR",
     "toggle_editor",
@@ -577,6 +586,15 @@ fn register_window(list: &ActionList) -> Result<(), architect::action::ActionErr
     list.register(&QUANTIZE_PANEL, Effect::Mutating, |(): ()| {
         crate::quantize_panel::ask();
         Ok("the Quantize panel shown, or hidden if it was".to_owned())
+    })?;
+    list.register(&PERF_METER, Effect::Mutating, |(): ()| {
+        crate::perf_meter::toggle();
+        Ok(if crate::perf_meter::open() {
+            "the Performance meter shown"
+        } else {
+            "the Performance meter hidden"
+        }
+        .to_owned())
     })?;
     let plain: [(&'static ActionMeta, Effect, Action); 23] = [
         (&TOGGLE_RECORD, Effect::Destructive, Action::ToggleRecord),
