@@ -6,7 +6,9 @@
 //! one before ([`painted`]), the gap is exported as `ui.frame.slow`, with
 //! the frame's costs on it and the work done in the gap nested under it at
 //! the times it ran — `window.resync` taking 24 ms of a 31 ms frame reads as
-//! exactly that. A frame on time drops what was noted: nothing is exported.
+//! exactly that. A frame on time drops what was noted: nothing is exported;
+//! so does a late frame in whose gap nothing ran — when and how often frames
+//! are late is the metrics' (`ui.frame.missed`, `ui.frame.interval`).
 //!
 //! The spans go through OpenTelemetry's global tracer (a no-op until the app
 //! installs a provider), not `tracing`: a frame's span starts in the past,
@@ -126,6 +128,11 @@ fn export(frame: &Frame, work: &[Work]) {
         .checked_sub(Duration::from_micros(frame.since))
         .unwrap_or(end);
     let mut work: Vec<&Work> = work.iter().filter(|w| w.end >= start).collect();
+    // Nothing ran on the paint thread in the gap: the trace would say
+    // nothing the metrics (ui.frame.missed, ui.frame.interval) do not.
+    if work.is_empty() {
+        return;
+    }
     work.sort_by_key(|w| w.start);
     // What took the frame: the longest work with no parent in the gap.
     let top = |w: &&&Work| w.parent.is_none_or(|p| !work.iter().any(|o| o.id == p));

@@ -199,3 +199,29 @@ fn a_late_frame_is_a_trace_of_what_the_paint_thread_did_in_it() {
         .map(|kv| kv.value.to_string());
     assert_eq!(cause.as_deref(), Some("window.resync"));
 }
+
+#[test]
+fn a_late_frame_with_nothing_in_its_gap_is_no_trace() {
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    opentelemetry::global::set_tracer_provider(provider.clone());
+    let subscriber = tracing_subscriber::registry().with(super::slow::WorkLayer);
+    tracing::subscriber::with_default(subscriber, || {
+        // Idle redraws 30 ms apart: late, but the metrics say all of it.
+        super::slow::painted(&Frame {
+            since: 30_000,
+            ..Frame::default()
+        });
+    });
+    provider.force_flush().expect("flush");
+    let spans = exporter.get_finished_spans().expect("spans");
+    assert!(
+        spans.iter().all(|s| s.name != "ui.frame.slow"),
+        "{spans:#?}"
+    );
+}
