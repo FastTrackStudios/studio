@@ -29,6 +29,7 @@ const EXACT_MAX: usize = 1 << 24;
     clippy::cast_precision_loss,
     reason = "the audited boundary: the input is range-checked against the f32 mantissa on the line above"
 )]
+#[inline]
 pub const fn count_to_f32(n: usize) -> f32 {
     if n > EXACT_MAX {
         return EXACT_MAX as f32;
@@ -48,6 +49,7 @@ pub const fn count_to_f32(n: usize) -> f32 {
     clippy::cast_sign_loss,
     reason = "the audited boundary: float-to-int `as` saturates in Rust, and every case is enumerated above"
 )]
+#[inline]
 pub fn f32_to_index(x: f32) -> usize {
     if x.is_nan() || x <= 0.0 {
         return 0;
@@ -63,6 +65,7 @@ pub fn f32_to_index(x: f32) -> usize {
     clippy::cast_possible_truncation,
     reason = "the audited boundary: f64 holds every u32 exactly, and the narrowing is range-checked"
 )]
+#[inline]
 pub fn u32_to_f32(n: u32) -> f32 {
     const EXACT_MAX_U32: u32 = 1 << 24;
     if n > EXACT_MAX_U32 {
@@ -83,6 +86,7 @@ pub fn u32_to_f32(n: u32) -> f32 {
     clippy::cast_possible_truncation,
     reason = "the audited boundary: f64-to-f32 narrowing is this function's stated purpose"
 )]
+#[inline]
 pub const fn narrow(x: f64) -> f32 {
     x as f32
 }
@@ -104,6 +108,7 @@ const EXACT_MAX_F64: u64 = 1 << 53;
     clippy::cast_precision_loss,
     reason = "the audited boundary: the input is range-checked against the f64 mantissa on the line above"
 )]
+#[inline]
 pub fn count_to_f64(n: usize) -> f64 {
     let clamped = u64::try_from(n).unwrap_or(u64::MAX).min(EXACT_MAX_F64);
     clamped as f64
@@ -118,6 +123,7 @@ pub fn count_to_f64(n: usize) -> f64 {
     clippy::cast_precision_loss,
     reason = "the audited boundary: the input is range-checked against the f64 mantissa on the line above"
 )]
+#[inline]
 pub fn u64_to_f64(n: u64) -> f64 {
     n.min(EXACT_MAX_F64) as f64
 }
@@ -131,6 +137,7 @@ pub fn u64_to_f64(n: u64) -> f64 {
     clippy::cast_precision_loss,
     reason = "the audited boundary: the input is range-checked against the f64 mantissa on the line above"
 )]
+#[inline]
 pub fn i64_to_f64(n: i64) -> f64 {
     // `saturating_neg` rather than `-limit`: the unary minus is itself an
     // arithmetic side effect the policy denies, and would overflow at i64::MIN.
@@ -148,6 +155,7 @@ pub fn i64_to_f64(n: i64) -> f64 {
     clippy::cast_possible_truncation,
     reason = "the audited boundary: saturating float-to-int truncation is this function's stated purpose"
 )]
+#[inline]
 pub const fn trunc_to_i64(x: f64) -> i64 {
     x as i64
 }
@@ -157,6 +165,7 @@ pub const fn trunc_to_i64(x: f64) -> i64 {
 /// For the many filter routines that take an order or a section index as a
 /// signed integer because the reference implementation did.
 #[must_use]
+#[inline]
 pub fn count_to_i32(n: usize) -> i32 {
     i32::try_from(n).unwrap_or(i32::MAX)
 }
@@ -167,6 +176,7 @@ pub fn count_to_i32(n: usize) -> i32 {
 /// saturation below is unreachable; it exists so the conversion is total
 /// without an `as`.
 #[must_use]
+#[inline]
 pub fn u32_to_index(n: u32) -> usize {
     usize::try_from(n).unwrap_or(usize::MAX)
 }
@@ -182,6 +192,7 @@ pub fn u32_to_index(n: u32) -> usize {
     clippy::cast_sign_loss,
     reason = "the audited boundary: float-to-int `as` saturates in Rust, and every case is enumerated above"
 )]
+#[inline]
 pub fn f64_to_index(x: f64) -> usize {
     if x.is_nan() || x <= 0.0 {
         return 0;
@@ -202,6 +213,7 @@ pub fn f64_to_index(x: f64) -> usize {
     clippy::cast_sign_loss,
     reason = "the audited boundary: float-to-int `as` saturates in Rust, and every case is enumerated above"
 )]
+#[inline]
 pub fn f64_to_u64(x: f64) -> u64 {
     if x.is_nan() || x <= 0.0 {
         return 0;
@@ -220,6 +232,7 @@ pub fn f64_to_u64(x: f64) -> u64 {
     clippy::cast_sign_loss,
     reason = "the audited boundary: float-to-int `as` saturates in Rust, and every case is enumerated above"
 )]
+#[inline]
 pub fn f64_to_u32(x: f64) -> u32 {
     if x.is_nan() || x <= 0.0 {
         return 0;
@@ -240,6 +253,7 @@ pub fn f64_to_u32(x: f64) -> u32 {
     clippy::cast_possible_truncation,
     reason = "the audited boundary: the value is clamped into f32's range on the line above, and the rounding is the point"
 )]
+#[inline]
 pub fn f64_to_f32(x: f64) -> f32 {
     x.clamp(f64::from(f32::MIN), f64::from(f32::MAX)) as f32
 }
@@ -251,6 +265,7 @@ pub fn f64_to_f32(x: f64) -> f32 {
     clippy::cast_precision_loss,
     reason = "the audited boundary: the input is range-checked against the f32 mantissa on the lines above"
 )]
+#[inline]
 pub const fn i32_to_f32(n: i32) -> f32 {
     const EXACT: i32 = 1 << 24;
     if n > EXACT {
@@ -268,6 +283,7 @@ pub const fn i32_to_f32(n: i32) -> f32 {
 /// NaN gives `0`, and magnitudes past the `i32` range saturate, matching the
 /// float-to-int conversion this is built on.
 #[must_use]
+#[inline]
 pub fn floor_to_i32(x: f32) -> i32 {
     let truncated = trunc_to_i32(x);
     // Truncation rounds toward zero, so it overshoots upward for negatives.
@@ -288,6 +304,7 @@ pub fn floor_to_i32(x: f32) -> i32 {
     clippy::cast_possible_truncation,
     reason = "the audited boundary: saturating float-to-int truncation is this function's stated purpose"
 )]
+#[inline]
 pub const fn trunc_to_i32(x: f32) -> i32 {
     x as i32
 }
@@ -304,6 +321,7 @@ pub const fn trunc_to_i32(x: f32) -> i32 {
     clippy::cast_precision_loss,
     reason = "the audited boundary: the round trip through i64 is the floor, and magnitudes past its range are handled above"
 )]
+#[inline]
 pub fn floor_f64(x: f64) -> f64 {
     const INTEGRAL: f64 = (1_u64 << 53) as f64;
     if !x.is_finite() || x.abs() >= INTEGRAL {
