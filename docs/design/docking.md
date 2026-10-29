@@ -64,11 +64,29 @@ throws working copies away. Turning the device round switches working
 copy without losing the other orientation's edits. Number slots recall
 sets by key.
 
-Shipped (`dock::builtin`): **1 Session** (tracks; mixer / editor / FX
-below; browser left), **2 Signal** (rig; chain and transport below; chart
-right), **3 Mix**, **4 Edit** (tracks over the editor), **5 Charts**
-(chart and chart editor; lyrics right). Every variant keeps the transport
-in the centre or the bottom dock, never a phone sheet.
+Shipped (`dock::builtin`), in number-key order:
+
+| Key | Set | What it is |
+|---|---|---|
+| 1 | **Performance** | progress over chart \| lyrics, transport under (Session's Performance view) |
+| 2 | **Overview** | progress over [chart editor] \| chart over lyrics \| tracks (Session's Overview) |
+| 3 | **Session** | tracks; mixer / editor / FX below; browser left (the DAW view) |
+| 4 | **Mix** | the mixer, FX beside it |
+| 5 | **Edit** | tracks over the editor |
+| 6 | **Charts** | chart and chart editor; lyrics right |
+| 7 | **Signal** | rig; chain and transport below; chart right |
+
+Every variant keeps the transport in the centre or the bottom dock, never
+a phone sheet.
+
+**Session's views are screensets.** Session's `shell::View` switch
+(Performance, Overview, DAW, Chart, Lyrics, Mixer, FX, Editor, Setup) and
+its `Pane` / `Pins` docking become this: Performance, Overview and the DAW
+are the sets above; the whole-window views (Chart, Lyrics, Mixer, FX,
+Editor) are one panel maximised, from any set; Setup is a panel. The
+pinned progress and transport are the `progress` and `transport` panels
+each set places. Record mode swapping Performance's chart for the record
+view stays a mode's concern (a panel reading the mode), not a layout.
 
 ## The host (Blitz)
 

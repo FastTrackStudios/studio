@@ -149,6 +149,7 @@ fn catalog() -> Catalog {
             "INS",
             Place::Edge(Side::Right),
         ),
+        k(kind::PROGRESS, "Progress", "PRG", Place::Edge(Side::Top)),
     ])
 }
 

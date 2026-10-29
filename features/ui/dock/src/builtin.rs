@@ -30,12 +30,17 @@ pub mod kind {
     pub const SETLIST: &str = "setlist";
     pub const RIG: &str = "rig";
     pub const INSPECTOR: &str = "inspector";
+    /// The song's progress, its sections as a bar (Session's
+    /// `PinnedProgress`, Signal's NOW / NEXT strip).
+    pub const PROGRESS: &str = "progress";
 }
 
 /// The built-in sets' ids, fixed so the active one survives a restart.
 pub mod id {
     use super::{ScreensetId, Uuid};
 
+    pub const PERFORMANCE: ScreensetId = ScreensetId::from_uuid(Uuid::from_u128(0x9e4f));
+    pub const OVERVIEW: ScreensetId = ScreensetId::from_uuid(Uuid::from_u128(0x0e4e));
     pub const SESSION: ScreensetId = ScreensetId::from_uuid(Uuid::from_u128(0x5e55_1011));
     pub const SIGNAL: ScreensetId = ScreensetId::from_uuid(Uuid::from_u128(0x5197_a1));
     pub const MIX: ScreensetId = ScreensetId::from_uuid(Uuid::from_u128(0x0313));
@@ -49,10 +54,20 @@ const TOOLBAR_H: f32 = 40.0;
 const TRANSPORT_H: f32 = 56.0;
 const TRANSPORT_TOUCH_H: f32 = 64.0;
 
-/// Every built-in set, Session first.
+/// Every built-in set, in the order of their number keys: Session's
+/// views first (as its view switch had them), then Charts and Signal.
+/// Session is active.
 #[must_use]
 pub fn screensets() -> Screensets {
-    let mut sets = Screensets::new(vec![session(), signal(), mix(), edit(), charts()]);
+    let mut sets = Screensets::new(vec![
+        performance(),
+        overview(),
+        session(),
+        mix(),
+        edit(),
+        charts(),
+        signal(),
+    ]);
     sets.active = Some(id::SESSION);
     sets
 }
@@ -147,6 +162,128 @@ fn set(id: ScreensetId, name: &str, slot: u8, variants: [(FormClass, Dockspace);
     set
 }
 
+/// A progress strip `h` px over `main`.
+fn under_progress(l: &mut Lay, main: Node, h: f32) -> Node {
+    let progress = l.bare(kind::PROGRESS);
+    Node::column(progress, main, Share::First(h))
+}
+
+/// Playing the song: the chart and the lyrics, the progress over them and
+/// the transport under them (Session's Performance view).
+fn performance() -> Screenset {
+    use kind::*;
+    use FormClass::*;
+    let wide = |touch: bool, lyrics_share: f32| {
+        let mut l = Lay::new();
+        let chart = l.one(CHART);
+        let lyrics = l.one(LYRICS);
+        let main = Node::row(chart, lyrics, Share::Ratio(1.0 - lyrics_share));
+        let main = under_progress(&mut l, main, 48.0);
+        let main = l.over_transport(main, touch);
+        l.center(main).done()
+    };
+    let tablet_tall = {
+        let mut l = Lay::new();
+        let chart = l.one(CHART);
+        let lyrics = l.one(LYRICS);
+        let main = Node::column(chart, lyrics, Share::Ratio(0.62));
+        let main = under_progress(&mut l, main, 56.0);
+        let main = l.over_transport(main, true);
+        l.center(main).done()
+    };
+    // A phone has room for one: the chart, the lyrics a tap away.
+    let phone = |progress_h: f32| {
+        let mut l = Lay::new();
+        let chart = l.one(CHART);
+        let main = under_progress(&mut l, chart, progress_h);
+        let main = l.over_transport(main, true);
+        let lyrics = l.one(LYRICS);
+        l.center(main).edge(Side::Right, 0.0, lyrics).done()
+    };
+    set(
+        id::PERFORMANCE,
+        "Performance",
+        1,
+        [
+            (Desk, wide(false, 0.38)),
+            (TabletLandscape, wide(true, 0.4)),
+            (TabletPortrait, tablet_tall),
+            (PhoneLandscape, phone(40.0)),
+            (PhonePortrait, phone(48.0)),
+        ],
+    )
+}
+
+/// The whole song at once: the chart over its lyrics beside the
+/// arrangement, the chart editor a column to their left (Session's
+/// Overview).
+fn overview() -> Screenset {
+    use kind::*;
+    use FormClass::*;
+    let wide = |touch: bool, editor: bool| {
+        let mut l = Lay::new();
+        let chart = l.one(CHART);
+        let lyrics = l.one(LYRICS);
+        let words = Node::column(chart, lyrics, Share::Ratio(0.62));
+        let tracks = l.tracks(if touch { 150.0 } else { 180.0 });
+        let main = Node::row(words, tracks, Share::Ratio(0.36));
+        let main = if editor {
+            let ed = l.one(CHART_EDITOR);
+            Node::row(ed, main, Share::First(380.0))
+        } else {
+            main
+        };
+        let main = under_progress(&mut l, main, 48.0);
+        let main = l.over_transport(main, touch);
+        l.center(main).done()
+    };
+    let tablet_tall = {
+        let mut l = Lay::new();
+        let chart = l.one(CHART);
+        let lyrics = l.one(LYRICS);
+        let words = Node::row(chart, lyrics, Share::Ratio(0.6));
+        let tracks = l.tracks(140.0);
+        let main = Node::column(words, tracks, Share::Ratio(0.5));
+        let main = under_progress(&mut l, main, 56.0);
+        let main = l.over_transport(main, true);
+        let ed = l.one(CHART_EDITOR);
+        l.center(main)
+            .edge(Side::Left, 360.0, ed)
+            .collapsed(Side::Left)
+            .done()
+    };
+    let phone = |portrait: bool| {
+        let mut l = Lay::new();
+        let chart = l.one(CHART);
+        let tracks = l.tracks(if portrait { 88.0 } else { 110.0 });
+        let main = if portrait {
+            Node::column(chart, tracks, Share::Ratio(0.5))
+        } else {
+            Node::row(chart, tracks, Share::Ratio(0.42))
+        };
+        let main = under_progress(&mut l, main, 40.0);
+        let main = l.over_transport(main, true);
+        let lyrics = l.one(LYRICS);
+        let ed = l.one(CHART_EDITOR);
+        l.center(main)
+            .edge(Side::Right, 0.0, lyrics)
+            .edge(Side::Left, 0.0, ed)
+            .done()
+    };
+    set(
+        id::OVERVIEW,
+        "Overview",
+        2,
+        [
+            (Desk, wide(false, true)),
+            (TabletLandscape, wide(true, false)),
+            (TabletPortrait, tablet_tall),
+            (PhoneLandscape, phone(false)),
+            (PhonePortrait, phone(true)),
+        ],
+    )
+}
+
 /// The full DAW: tracks in the middle, the mixer and editors below.
 fn session() -> Screenset {
     use kind::*;
@@ -221,7 +358,7 @@ fn session() -> Screenset {
     set(
         id::SESSION,
         "Session",
-        1,
+        3,
         [
             (Desk, desk),
             (TabletLandscape, tablet_wide),
@@ -293,7 +430,7 @@ fn signal() -> Screenset {
     set(
         id::SIGNAL,
         "Signal",
-        2,
+        7,
         [
             (Desk, wide(false, 380.0, true)),
             (TabletLandscape, wide(true, 340.0, false)),
@@ -322,7 +459,7 @@ fn mix() -> Screenset {
     set(
         id::MIX,
         "Mix",
-        3,
+        4,
         [
             (Desk, make(false, true)),
             (TabletLandscape, make(true, true)),
@@ -348,7 +485,7 @@ fn edit() -> Screenset {
     set(
         id::EDIT,
         "Edit",
-        4,
+        5,
         [
             (Desk, make(false, 220.0, 0.42)),
             (TabletLandscape, make(true, 160.0, 0.4)),
@@ -393,7 +530,7 @@ fn charts() -> Screenset {
     set(
         id::CHARTS,
         "Charts",
-        5,
+        6,
         [
             (Desk, wide(false)),
             (TabletLandscape, wide(true)),
@@ -407,7 +544,7 @@ fn charts() -> Screenset {
 /// True for kinds drawn without a tab strip wherever they are opened.
 #[must_use]
 pub fn is_bare(kind: &str) -> bool {
-    matches!(kind, kind::TOOLBAR | kind::TRANSPORT)
+    matches!(kind, kind::TOOLBAR | kind::TRANSPORT | kind::PROGRESS)
 }
 
 /// The chrome a new `kind` panel gets.
