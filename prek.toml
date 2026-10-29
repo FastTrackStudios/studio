@@ -2,7 +2,11 @@
 # dev shell carries the pinned release, nix/modules/prek.nix). Install
 # once per clone: `just install-hooks`.
 #
-#   commit   rustfmt, shellcheck and actionlint on the STAGED files only.
+#   commit   rustfmt, shellcheck and actionlint on the STAGED files only;
+#            with a Cargo.toml staged, the committed Cargo.lock made from
+#            the staged manifests (scripts/lock-sync.sh — with the fts-dev
+#            link active, the local lock is not main's; never edit it by
+#            hand).
 #            prek stashes unstaged edits while hooks run, so a hook sees
 #            exactly what is being committed. A hook that rewrites a file
 #            fails the commit: `git add` the result and commit again.
@@ -44,6 +48,17 @@ name = "actionlint (workflows)"
 language = "system"
 entry = "actionlint"
 files = "^\\.github/workflows/.*\\.ya?ml$"
+stages = ["pre-commit"]
+
+# Runs after rustfmt, before the commit: it stages the lock itself.
+[[repos.hooks]]
+id = "lock-sync"
+name = "Cargo.lock from the staged manifests"
+language = "system"
+entry = "bash scripts/lock-sync.sh"
+files = "(^|/)Cargo\\.toml$"
+pass_filenames = false
+require_serial = true
 stages = ["pre-commit"]
 
 [[repos.hooks]]
