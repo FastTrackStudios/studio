@@ -120,11 +120,24 @@ gui_step() {
 # select_framed FROM TO — frame FROM..TO (s) and drag a time selection over
 # the whole of it on the ruler; the selection the window made.
 select_framed() {
-    run SESSION_VIEW "$(jq -nc --argjson f "$1" --argjson t "$2" '{from:$f,to:$t}')" >/dev/null
-    sleep 1
-    li drag "$((lanes_left + 3))" "$ruler_y" "$((lanes_right - 3))" "$ruler_y"
-    sleep 0.5
-    run SESSION_EDIT_STATE | jq -c '{selection_start, selection_end}'
+    local sel
+    for _ in 1 2 3; do
+        run SESSION_VIEW "$(jq -nc --argjson f "$1" --argjson t "$2" '{from:$f,to:$t}')" >/dev/null
+        sleep 1
+        li drag "$((lanes_left + 3))" "$ruler_y" "$((lanes_right - 3))" "$ruler_y"
+        sleep 0.5
+        sel=$(run SESSION_EDIT_STATE | jq -c '{selection_start, selection_end}')
+        # Made, and over what was framed (within a beat either side): the
+        # window had the view when it was dragged.
+        if jq -e --argjson f "$1" --argjson t "$2" \
+            '.selection_start != null and (.selection_start - $f | fabs) < 1 and (.selection_end - $t | fabs) < 1.5' \
+            <<<"$sel" >/dev/null; then
+            echo "$sel"
+            return 0
+        fi
+        sleep 2
+    done
+    echo "$sel (not over $1–$2 after 3 tries)"
 }
 
 gui() {
