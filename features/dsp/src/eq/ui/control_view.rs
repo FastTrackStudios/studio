@@ -165,7 +165,9 @@ fn AppShell() -> Element {
     // graph's bands, the rack face, the presets.
     let focus =
         use_context_provider(|| Signal::new(FocusedStage(ui.params.resolved_focused_stage())));
-    let focused_stage = focus.read().0;
+    // A stage removed under the editor (host undo, automation of `use`)
+    // must not leave the graph on a stage that is no longer in the stack.
+    let focused_stage = ui.params.visible_stage(focus.read().0);
     // The audio thread publishes the focused stage's band rings and model
     // response.
     ui.focused_stage.store(focused_stage, Ordering::Relaxed);

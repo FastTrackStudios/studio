@@ -2259,6 +2259,7 @@ version = "26.10.3"
 dependencies = [
  "builtin",
  "comp-plugin",
+ "crossbeam-channel",
  "daw",
  "daw-proto",
  "daw-standalone",

@@ -121,13 +121,20 @@ pub const SUM_MODE_LABELS: &[&str] = &["1/N", "Power", "Raw"];
 /// (`fx.stack.sum`).
 #[must_use]
 pub fn sum_mode_param() -> IntParam {
-    IntParam::new("Sum Mode", 0, IntRange::Linear { min: 0, max: 2 }).with_value_to_string(
-        Arc::new(|v| {
+    IntParam::new("Sum Mode", 0, IntRange::Linear { min: 0, max: 2 })
+        .with_value_to_string(Arc::new(|v| {
             SUM_MODE_LABELS
                 .get(v.max(0) as usize)
                 .map_or_else(|| v.to_string(), ToString::to_string)
-        }),
-    )
+        }))
+        .with_string_to_value(Arc::new(|s| {
+            let s = s.trim();
+            SUM_MODE_LABELS
+                .iter()
+                .position(|l| l.eq_ignore_ascii_case(s))
+                .map(|i| i as i32)
+                .or_else(|| s.parse().ok())
+        }))
 }
 
 /// The `stktrim` param: the stack's output trim.
@@ -221,6 +228,17 @@ pub trait StackHost: Send + Sync + 'static {
     fn store_focused_stage(&self, idx: usize) {
         *self.focused_cell().write() = idx.min(self.max_stages() - 1).to_string();
     }
+
+    /// The stage the editor shows for `focus`: `focus` itself, unless that
+    /// stage left the stack under the editor (host undo, automation of
+    /// `use`) — then [`Self::resolved_focused_stage`].
+    fn visible_stage(&self, focus: usize) -> usize {
+        if focus < self.max_stages() && self.placement(focus).in_use.value() {
+            focus
+        } else {
+            self.resolved_focused_stage()
+        }
+    }
 }
 
 /// Push the host's topology, lanes and globals into `pool` (no allocation).
@@ -255,6 +273,13 @@ pub fn use_focused_stage() -> usize {
         Some(sig) => sig.read().0,
         None => 0,
     }
+}
+
+/// The stage a component should edit: the focus, resolved to a stage still
+/// in the stack ([`StackHost::visible_stage`]) — what the editor root shows.
+#[must_use]
+pub fn use_visible_stage(host: &dyn StackHost) -> usize {
+    host.visible_stage(use_focused_stage())
 }
 
 /// The focus signal itself, for components that *set* focus.
@@ -537,4 +562,19 @@ fn chip_style(focused: bool, enabled: bool) -> String {
         },
         if enabled { "1.0" } else { "0.5" },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sum_mode_labels_round_trip() {
+        let p = sum_mode_param();
+        for (i, label) in SUM_MODE_LABELS.iter().enumerate() {
+            let n = p.string_to_normalized_value(label).expect(label);
+            assert_eq!(p.preview_plain(n), i as i32);
+            assert_eq!(p.normalized_value_to_string(n, false), *label);
+        }
+    }
 }

@@ -96,7 +96,7 @@ pub fn EmphasisView(
         .get::<crate::saturate::ui::control_view::SatUi>()
         .expect("the editor was mounted without its SatUi");
     let params = ui.params.clone();
-    let focused = crate::stack::host::use_focused_stage();
+    let focused = crate::stack::host::use_visible_stage(params.as_ref());
     let ctx = use_param_context();
 
     // The graph's working copy, refreshed from params every render — the

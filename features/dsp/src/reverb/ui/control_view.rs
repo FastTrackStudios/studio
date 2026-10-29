@@ -140,7 +140,9 @@ pub fn App() -> Element {
     // component below (faces, the IR browser, the EQ sidecar, the strip),
     // restored from the session.
     let focus = use_context_provider(|| Signal::new(FocusedStage(params.resolved_focused_stage())));
-    let focused = focus.read().0;
+    // A stage removed under the editor (host undo, automation of `use`)
+    // must not leave the face on a stage that is no longer in the stack.
+    let focused = params.visible_stage(focus.read().0);
     ui.state
         .focused_stage
         .store(focused, std::sync::atomic::Ordering::Relaxed);
@@ -322,7 +324,7 @@ pub fn App() -> Element {
                         // Ctrl/Cmd on a new parallel lane (`fx.stack.add`).
                         let new_lane = mods.ctrl() || mods.meta();
                         if let Some(lane) =
-                            add_target_lane(params_for_id.as_ref(), focus.peek().0, new_lane)
+                            add_target_lane(params_for_id.as_ref(), focused, new_lane)
                         {
                             add_stage(params_for_id.as_ref(), &ctx_for_rail, focus, index, lane);
                         }
@@ -337,7 +339,7 @@ pub fn App() -> Element {
                     profile_handle.set_normalized(normalized);
                     profile_handle.end_edit();
                     // What the session restores from.
-                    params_for_id.stage(focus.peek().0).store_profile_id(index);
+                    params_for_id.stage(focused).store_profile_id(index);
                 },
                 rail_footer: rsx! {
                     // The layer's sidecar toggle (`fx.reverb.eq-display`):

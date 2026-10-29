@@ -1,6 +1,7 @@
 ---
 "comp-plugin" = "minor"
 "delay-plugin" = "minor"
+"eq-plugin" = "minor"
 "eq-standalone" = "minor"
 "reverb-plugin" = "minor"
 "saturate-plugin" = "minor"

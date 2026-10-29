@@ -105,14 +105,7 @@ pub fn App() -> Element {
     let focus = use_context_provider(|| Signal::new(FocusedStage(params.resolved_focused_stage())));
     // A stage removed under the editor (host undo, automation of `use`)
     // must not leave the face on a stage that is no longer in the stack.
-    let focused = {
-        let f = focus.read().0;
-        if params.stage(f).place.in_use.value() {
-            f
-        } else {
-            params.resolved_focused_stage()
-        }
-    };
+    let focused = params.visible_stage(focus.read().0);
     let stage = params.stage(focused);
 
     let profile_index = stage.resolved_profile_index();
@@ -240,7 +233,7 @@ pub fn App() -> Element {
                         let new_lane = mods.ctrl() || mods.meta();
                         let host: &dyn StackHost = params_for_id.as_ref();
                         if let Some(lane) =
-                            crate::stack::host::add_target_lane(host, focus.peek().0, new_lane)
+                            crate::stack::host::add_target_lane(host, focused, new_lane)
                         {
                             crate::stack::host::add_stage(host, &ctx_for_rail, focus, index, lane);
                         }
@@ -254,7 +247,7 @@ pub fn App() -> Element {
                     profile_handle.begin_edit();
                     profile_handle.set_normalized(normalized);
                     profile_handle.end_edit();
-                    params_for_id.stage(focus.peek().0).store_profile_id(index);
+                    params_for_id.stage(focused).store_profile_id(index);
                 },
                 rail_footer: rsx! {
                     RailButton {

@@ -3869,13 +3869,17 @@ pub struct NativeReverb {
     par: ParallelMix,
     scratch_l: Vec<f64>,
     scratch_r: Vec<f64>,
-    /// Impulse re-prepare workers (native only), one per built stage:
-    /// re-bake the IR off the audio thread when imp_* shaping params change
-    /// and take the displaced buffers for off-thread deallocation. Without
-    /// them the Impulse live params would mark slots dirty and never
-    /// re-prepare.
+    /// Impulse re-prepare workers (native only), one per stage, spawned in
+    /// `prepare`: re-bake the IR off the audio thread when imp_* shaping
+    /// params change and take the displaced buffers for off-thread
+    /// deallocation. Without them the Impulse live params would mark slots
+    /// dirty and never re-prepare.
     #[cfg(not(target_arch = "wasm32"))]
     reshapers: Vec<Option<dsp::reverb::ir::ImpulseReshaper>>,
+    /// Each worker's output, held until its stage is built and takes it —
+    /// a stage the stack builds mid-stream wires up without spawning.
+    #[cfg(not(target_arch = "wasm32"))]
+    reshaper_rx: Vec<Option<crossbeam_channel::Receiver<dsp::reverb::ir::PreparedIrPair>>>,
 }
 
 impl NativeReverb {
@@ -3901,6 +3905,8 @@ impl NativeReverb {
             par: ParallelMix::new(0.08),
             #[cfg(not(target_arch = "wasm32"))]
             reshapers: (0..FX_STAGES).map(|_| None).collect(),
+            #[cfg(not(target_arch = "wasm32"))]
+            reshaper_rx: (0..FX_STAGES).map(|_| None).collect(),
             scratch_l: Vec::new(),
             scratch_r: Vec::new(),
         }
@@ -4039,26 +4045,40 @@ impl NativeReverb {
             s.0 = Some(c);
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if self.prepared {
-            self.wire_reshaper(i);
-        }
+        self.wire_reshaper(i);
     }
 
-    /// Stage `i`'s Impulse re-prepare worker (see `reshapers`), once the
-    /// stage exists.
+    /// Spawn stage `i`'s Impulse re-prepare worker (see `reshapers`) if it
+    /// has none. Spawns a thread — `prepare` only, never the audio thread.
     #[cfg(not(target_arch = "wasm32"))]
-    fn wire_reshaper(&mut self, i: usize) {
+    fn spawn_reshaper(&mut self, i: usize) {
         if self.reshapers.get(i).is_none_or(Option::is_some) {
             return;
         }
-        let Some(c) = self.chain_mut(i) else {
+        let (reshaper, rx) = dsp::reverb::ir::ImpulseReshaper::new();
+        self.reshapers[i] = Some(reshaper);
+        self.reshaper_rx[i] = Some(rx);
+    }
+
+    /// Hand stage `i` its worker's channels, once both exist. Allocation-
+    /// and spawn-free, so `ensure_stage` can call it on the audio thread.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn wire_reshaper(&mut self, i: usize) {
+        if self.chain_mut(i).is_none() {
+            return;
+        }
+        let Some(rx) = self.reshaper_rx.get_mut(i).and_then(Option::take) else {
             return;
         };
-        let (reshaper, rx) = dsp::reverb::ir::ImpulseReshaper::new();
-        c.set_prepared_ir_receiver(rx);
-        c.set_reshape_sender(reshaper.sender());
-        c.set_ir_trash_sender(reshaper.trash_sender());
-        self.reshapers[i] = Some(reshaper);
+        let Some(reshaper) = self.reshapers[i].as_ref() else {
+            return;
+        };
+        let (jobs, trash) = (reshaper.sender(), reshaper.trash_sender());
+        if let Some(c) = self.chain_mut(i) {
+            c.set_prepared_ir_receiver(rx);
+            c.set_reshape_sender(jobs);
+            c.set_ir_trash_sender(trash);
+        }
     }
 
     /// Copy one stage's parameter surface onto another (`BigSky` MX "copy
@@ -4476,11 +4496,14 @@ impl PluginInstance for NativeReverb {
         self.pool_block = stack_block(config.max_buffer_size);
         self.pool.prepare(self.pool_block, 0);
         self.pool.reset();
-        // Impulse live-param pipeline, one worker per built stage (each
-        // can host its own Impulse engine): workers re-prepare shaped IRs
-        // and dispose swap garbage off the audio thread.
+        // Impulse live-param pipeline, one worker per stage (each can host
+        // its own Impulse engine): workers re-prepare shaped IRs and dispose
+        // swap garbage off the audio thread. Spawned here for every stage so
+        // a stage the stack builds mid-stream never spawns on the audio
+        // thread.
         #[cfg(not(target_arch = "wasm32"))]
         for i in 0..FX_STAGES {
+            self.spawn_reshaper(i);
             self.wire_reshaper(i);
         }
         self.scratch_l = vec![0.0; block_size.max(1) as usize];

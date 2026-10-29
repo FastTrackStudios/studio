@@ -1233,7 +1233,8 @@ impl EqStageRef {
     /// component body like any hook.
     #[must_use]
     pub fn focused(root: Arc<FtsEqParams>) -> Self {
-        Self::new(root, crate::stack::host::use_focused_stage())
+        let stage = crate::stack::host::use_visible_stage(root.as_ref());
+        Self::new(root, stage)
     }
 
     /// The whole tree — for the editor-level state (form, focus, stack).

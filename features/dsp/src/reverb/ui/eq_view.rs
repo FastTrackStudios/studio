@@ -147,7 +147,7 @@ pub fn ReverbEqView(mode_is_decay: bool, frame: u64) -> Element {
         .expect("the editor was mounted without its ReverbUi");
     let params = ui.params.clone();
     let ctx = use_param_context();
-    let focused = crate::stack::host::use_focused_stage();
+    let focused = crate::stack::host::use_visible_stage(params.as_ref());
     let stage = params.stage(focused);
 
     let bands_vec: Vec<EqBand> = (0..6usize)

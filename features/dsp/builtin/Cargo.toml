@@ -14,6 +14,7 @@ engine = ["dep:comp-plugin", "dep:daw-standalone", "dep:delay-plugin", "dep:eq-p
 [dependencies]
 dsp = { workspace = true, features = ["comp", "delay", "eq", "level", "modulation", "pitch", "reverb", "saturate", "saturate-analysis", "stack", "tune"] }
 comp-plugin = { workspace = true, optional = true }
+crossbeam-channel = { workspace = true }
 daw = { workspace = true, features = ["standalone"] }
 daw-proto = { workspace = true }
 daw-standalone = { workspace = true, optional = true }
