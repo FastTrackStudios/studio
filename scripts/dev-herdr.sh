@@ -25,6 +25,9 @@
 #              `bunx teley-cli mcp --host localhost:8787`, subscribing to
 #              the same room — as many sessions as there are, nothing to
 #              reconnect), so the agents read what you are watching.
+#   feed       every signal as JSON lines in target/dev-telemetry/feed.jsonl
+#              (a local teley on 4321, FTS_FEED_PORT): what an agent reads
+#              (`scripts/drum-lab.sh report`).
 #   web        teley's web dashboard and its ingest, served locally by its
 #              worker (`wrangler dev`) from a checkout of teley (TELEY_DIR,
 #              default ../../teley; clone github.com/logaretm/teley there).
@@ -135,6 +138,10 @@ envs+=(FTS_TASK_ORG="${FTS_TASK_ORG:-fasttrackaudio}")
 # paths.
 otlp_port="${FTS_OTLP_PORT:-4318}"
 tui_port=4319
+# The agents' feed: a local teley that keeps every signal as JSON lines in
+# target/dev-telemetry/feed.jsonl — what a model reads traces from without
+# the relay (whose room a dashboard tab with another token can claim).
+feed_port="${FTS_FEED_PORT:-4321}"
 web_port="${FTS_TELEY_WEB_PORT:-8787}"
 tel="$repo/target/dev-telemetry"
 teley_dir="${TELEY_DIR:-$dev_root/teley}"
@@ -179,12 +186,13 @@ if [ "$telemetry" = 1 ]; then
         # wants now, not a backlog.
         printf '    retry_on_failure: {enabled: false}\n    sending_queue: {enabled: true, queue_size: 200}\n'
     }
-    to="otlp_http/tui"
+    to="otlp_http/tui, otlp_http/feed"
     [ "$web" = 1 ] && to="$to, otlp_http/web"
     {
         printf 'receivers:\n  otlp:\n    protocols:\n      http: {endpoint: "127.0.0.1:%s"}\n' "$otlp_port"
         printf 'exporters:\n'
         exporter tui "$tui_port" "$room"
+        exporter feed "$feed_port" "$room"
         [ "$web" = 1 ] && exporter web "$web_port" "$web_room"
         # Every call's rate and timings come from the apps themselves
         # (architect records `rpc.server.duration` per service and method),
@@ -210,7 +218,7 @@ if [ "$telemetry" = 1 ]; then
         printf '      - {name: slow, type: latency, latency: {threshold_ms: 5}}\n'
         printf 'service:\n  telemetry: {logs: {level: warn}, metrics: {level: none}}\n  pipelines:\n'
         printf '    traces: {receivers: [otlp], processors: [tail_sampling, batch], exporters: [%s]}\n' "$to"
-        printf '    metrics: {receivers: [otlp], processors: [batch], exporters: [otlp_http/tui]}\n'
+        printf '    metrics: {receivers: [otlp], processors: [batch], exporters: [otlp_http/tui, otlp_http/feed]}\n'
         [ "$web" = 1 ] && printf '    metrics/web: {receivers: [otlp], processors: [interval, batch], exporters: [otlp_http/web]}\n'
         printf '    logs: {receivers: [otlp], processors: [batch], exporters: [%s]}\n' "$to"
     } > "$tel/otelcol.yaml"
@@ -261,6 +269,9 @@ if [ "$telemetry" = 1 ]; then
     collector_pane="$first_pane"
     h pane rename "$collector_pane" collector >/dev/null
     h pane run "$collector_pane" "$otelcol --config $tel/otelcol.yaml"
+    feed_pane="$(h pane split "$collector_pane" --direction down --ratio 0.85 --cwd "$repo" --no-focus | pane_of)"
+    h pane rename "$feed_pane" feed >/dev/null
+    h pane run "$feed_pane" "while true; do bunx teley-cli --local --port $feed_port --json >> $tel/feed.jsonl; echo 'feed: stopped; starting again'; sleep 2; done"
     if [ "$web" = 1 ]; then
         web_pane="$(h pane split "$collector_pane" --direction right --cwd "$teley_dir" --no-focus | pane_of)"
         h pane rename "$web_pane" web >/dev/null
