@@ -236,6 +236,26 @@ impl FtsReverb {
         dsp::stack::host::sync_pool(&mut self.pool, &*self.params);
     }
 
+    /// Load every stacked stage's saved impulse again.
+    ///
+    /// A session saves each stage's impulse by path, not by content, so
+    /// reopening it has to read the file again — for every stage in the
+    /// stack, at the rate the host just gave us. The worker does the reading
+    /// and resampling; the chains pick the result up in `process`, as they do
+    /// when the user picks a file.
+    fn reload_saved_irs(&self) {
+        for i in 0..MAX_STAGES {
+            let sp = self.params.stage(i);
+            if i != 0 && !sp.place.in_use.value() {
+                continue;
+            }
+            let path = sp.ir_path.read().clone();
+            if !path.is_empty() {
+                self.ui_state.load_ir(i, std::path::PathBuf::from(path));
+            }
+        }
+    }
+
     /// Whether stage `i`'s chain has been built — for tests.
     #[cfg(test)]
     fn built(&self, i: usize) -> bool {
@@ -315,6 +335,7 @@ impl Plugin for FtsReverb {
                 stage.ensure_built(sp, None, self.config);
             }
         }
+        self.reload_saved_irs();
         // Every reverb stage is zero-latency, so lane alignment needs no
         // buffer beyond the pool's minimum.
         self.pool.prepare(max, 0);
@@ -426,5 +447,25 @@ mod tests {
         assert!(plugin.built(0));
         assert!((1..MAX_STAGES).all(|i| !plugin.built(i)));
         assert_eq!(plugin.pool.latency(), 0);
+    }
+
+    /// A saved impulse is loaded again on activate for every stage in the
+    /// stack, and only for those. A missing file is the observable proof the
+    /// worker went looking: it reports the failure on that stage.
+    #[test]
+    fn saved_irs_reload_for_stacked_stages() {
+        let plugin = FtsReverb::default();
+        for i in [0, 2] {
+            *plugin.params.stage(i).ir_path.write() = format!("/nonexistent/sta560-{i}.wav");
+        }
+        plugin.reload_saved_irs();
+        let state = &plugin.ui_state;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while state.ir_error[0].lock().is_none() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(state.ir_error[0].lock().is_some());
+        assert!(state.ir_error[2].lock().is_none());
+        assert!(!state.ir_loading[2].load(std::sync::atomic::Ordering::Relaxed));
     }
 }
