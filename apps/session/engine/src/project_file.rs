@@ -283,6 +283,20 @@ fn open_songs() -> &'static tokio::sync::Mutex<HashMap<String, Open>> {
     &OPEN
 }
 
+/// The file the open song `project` (its guid) was opened from.
+#[must_use]
+pub fn path_of(project: &str) -> Option<PathBuf> {
+    run(async {
+        open_songs()
+            .lock()
+            .await
+            .get(project)
+            .map(|o| o.path.clone())
+    })
+    .ok()
+    .flatten()
+}
+
 /// Whether `path` is a project file — a `Song.session` that is a file,
 /// not the folder of the format before.
 #[must_use]
