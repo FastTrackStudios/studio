@@ -275,10 +275,14 @@ pub enum Asked {
         ticket: u64,
     },
     /// Run one of the window's own actions (`id`, its arguments as JSON) —
-    /// what an engine action does to the view (a step pages it).
+    /// what an engine action does to the view (a step pages it), or one run
+    /// on the engine's Action List for the window ([`ask_window_action`]).
+    /// A `ticket` other than 0 wants the result back
+    /// (`crate::view::EngineView::answer`).
     Run {
         id: String,
         args: String,
+        ticket: u64,
     },
 }
 
@@ -389,12 +393,13 @@ pub fn asked_pending() -> usize {
 }
 
 /// Hand `asked` to this window: its own actions run (`run` runs one by
-/// id), the rest queued for its next frame.
-pub fn receive(asked: Vec<Asked>, run: impl Fn(&str, &str)) {
+/// id, with the ticket its result goes back on), the rest queued for its
+/// next frame.
+pub fn receive(asked: Vec<Asked>, run: impl Fn(&str, &str, u64)) {
     let mut queued = Vec::new();
     for one in asked {
         match one {
-            Asked::Run { id, args } => run(&id, &args),
+            Asked::Run { id, args, ticket } => run(&id, &args, ticket),
             other => queued.push(Action::from(other)),
         }
     }
@@ -404,6 +409,99 @@ pub fn receive(asked: Vec<Asked>, run: impl Fn(&str, &str)) {
     if let Ok(mut q) = WINDOW.lock() {
         q.extend(queued);
     }
+}
+
+// ── The window's actions, run from the engine's list ────────────────
+
+/// How long the engine waits for a window to answer one of its actions.
+#[cfg(feature = "native")]
+const ANSWER_WITHIN: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// What a window's action came to: its result as JSON, or why not.
+pub type Answer = Result<String, String>;
+
+/// The asks waiting on a window's answer, by ticket.
+#[cfg(feature = "native")]
+static WAITING: Mutex<
+    Option<std::collections::HashMap<u64, tokio::sync::oneshot::Sender<Answer>>>,
+> = Mutex::new(None);
+
+/// The last ticket given out.
+#[cfg(feature = "native")]
+static TICKETS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Run the window's action `id` with `args` (JSON) there, and what it
+/// gave back: what the engine's Action List does with a window action
+/// (`crate::view::EngineView::window_actions`).
+///
+/// # Errors
+///
+/// No window follows the engine, it refused, or did not answer in time.
+#[cfg(feature = "native")]
+pub async fn ask_window_action(id: String, args: String) -> Answer {
+    let ticket = TICKETS.fetch_add(1, Ordering::AcqRel) + 1;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if let Ok(mut waiting) = WAITING.lock() {
+        waiting
+            .get_or_insert_with(std::collections::HashMap::new)
+            .insert(ticket, tx);
+    }
+    let forget = || {
+        if let Ok(mut waiting) = WAITING.lock()
+            && let Some(map) = waiting.as_mut()
+        {
+            map.remove(&ticket);
+        }
+    };
+    if !ask(Asked::Run { id, args, ticket }) {
+        forget();
+        return Err("no window follows the engine".to_owned());
+    }
+    match tokio::time::timeout(ANSWER_WITHIN, rx).await {
+        Ok(Ok(answer)) => answer,
+        Ok(Err(_)) => Err("the window went before it answered".to_owned()),
+        Err(_) => {
+            forget();
+            Err(format!(
+                "the window did not answer within {} s",
+                ANSWER_WITHIN.as_secs()
+            ))
+        }
+    }
+}
+
+/// A window's answer to the ask `ticket`; one nobody waits for (late, or
+/// answered twice) is dropped.
+#[cfg(feature = "native")]
+pub fn answered(ticket: u64, answer: Answer) {
+    let waiting = WAITING
+        .lock()
+        .ok()
+        .and_then(|mut waiting| waiting.as_mut().and_then(|map| map.remove(&ticket)));
+    if let Some(tx) = waiting {
+        let _ = tx.send(answer);
+    }
+}
+
+/// Whether a window follows the engine, as an Action List enabled check
+/// for the actions it runs there.
+///
+/// # Errors
+///
+/// None follows it.
+pub fn a_window_follows() -> Result<(), String> {
+    if engine_has_window() {
+        Ok(())
+    } else {
+        Err("no window follows the engine".to_owned())
+    }
+}
+
+/// The ids of the window's own actions, once registered: what a window
+/// offers its engine's list.
+#[must_use]
+pub fn window_action_ids() -> Vec<String> {
+    WINDOW_IDS.get().cloned().unwrap_or_default()
 }
 
 // ── The windows attached ─────────────────────────────────────────────
@@ -493,5 +591,56 @@ mod tests {
         assert!(!attached());
         assert!(!window_pending(), "the last window's queue goes with it");
         assert!(needs_a_window().is_err());
+    }
+}
+
+#[cfg(all(test, feature = "native"))]
+mod window_action_tests {
+    use super::{Asked, answered, ask_window_action, set_linked_windows, take_asked};
+
+    /// The ticket of the one `Run` asked so far, taken.
+    fn asked_ticket() -> u64 {
+        match take_asked().as_slice() {
+            [Asked::Run { ticket, .. }] => *ticket,
+            other => panic!("one run asked, not {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_window_action_is_asked_of_the_window_and_its_answer_comes_back() {
+        // No window follows the engine: nobody to ask.
+        set_linked_windows(0);
+        assert!(
+            ask_window_action("SESSION_VIEW".into(), "{}".into())
+                .await
+                .is_err()
+        );
+
+        set_linked_windows(1);
+        let asking = tokio::spawn(ask_window_action("SESSION_FRAMES".into(), "{}".into()));
+        let ticket = loop {
+            if super::asked_pending() > 0 {
+                break asked_ticket();
+            }
+            tokio::task::yield_now().await;
+        };
+        assert_ne!(ticket, 0);
+        answered(ticket, Ok(r#"{"fps":118.2}"#.to_owned()));
+        assert_eq!(
+            asking.await.expect("joined"),
+            Ok(r#"{"fps":118.2}"#.to_owned())
+        );
+
+        // A refusal comes back as one.
+        let asking = tokio::spawn(ask_window_action("SESSION_VIEW".into(), "{}".into()));
+        let ticket = loop {
+            if super::asked_pending() > 0 {
+                break asked_ticket();
+            }
+            tokio::task::yield_now().await;
+        };
+        answered(ticket, Err("bad args".to_owned()));
+        assert_eq!(asking.await.expect("joined"), Err("bad args".to_owned()));
+        set_linked_windows(0);
     }
 }

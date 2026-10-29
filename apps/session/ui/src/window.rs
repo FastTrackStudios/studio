@@ -757,6 +757,9 @@ pub fn attach() -> crate::window_queue::Attached {
             "window: its actions joined the engine's list"
         );
         crate::window_queue::window_actions(ids.clone());
+        // And on the engine's list, when the window drives an engine in
+        // another process (it serves no list of its own).
+        crate::view_client::offer_window_actions();
         ids
     });
     crate::changes::listen(heard);
