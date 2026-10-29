@@ -51,5 +51,11 @@ if git diff --quiet --no-index -- <(git show :Cargo.lock) "$scratch/Cargo.lock" 
     exit 0
 fi
 blob="$(git hash-object -w "$scratch/Cargo.lock")"
+# Staging by blob resets the entry's flags: the local lock stays
+# skip-worktree (it is the link's, not main's).
+skip="$(git ls-files -v Cargo.lock | cut -c1)"
 git update-index --cacheinfo "100644,$blob,Cargo.lock"
+if [ "$skip" = "S" ]; then
+    git update-index --skip-worktree Cargo.lock
+fi
 echo "lock-sync: staged Cargo.lock as the staged manifests resolve it" >&2
