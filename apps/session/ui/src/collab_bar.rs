@@ -65,15 +65,14 @@ pub fn CollabBar() -> Element {
     use_hook(move || {
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(1500));
-            // The song's own record of its edits, from the first moment —
-            // shared or not.
+            // The song's own record of its edits is the engine's: it keeps
+            // each song's in its `.session` (`project_file`). This window
+            // drives that engine in another process, so it opens no record
+            // of its own — a second bridge here, against the same engine,
+            // made the engine match its doc while the engine's bridge wrote
+            // the engine back into the doc, and every FX chain was added
+            // again each round (Unbreakable's reverbs: 50 deep in an hour).
             let task_set = crate::collab::TaskSet::from_env();
-            if !crate::collab::env_set("FTS_COLLAB_JOIN")
-                && task_set.is_none()
-                && let Err(e) = crate::collab::open_local()
-            {
-                tracing::warn!(collab.error = %e, "collab: the song's history is not being kept");
-            }
             if let Some(set) = task_set {
                 match crate::collab::join_task(&set, display_name()) {
                     Ok(()) => {
