@@ -230,6 +230,8 @@ pub mod stretch;
 pub mod take_rank;
 #[cfg(feature = "native")]
 pub mod timeline_actions;
+#[cfg(feature = "native")]
+pub mod trigger_from_mics;
 pub mod wave_detail;
 #[cfg(feature = "web")]
 pub mod web_audio;
