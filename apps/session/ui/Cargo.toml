@@ -20,6 +20,8 @@ description = "Session's window — the arrangement, the mixer and the panels, a
 # rate with a real session open.
 
 [dependencies]
+# The process-wide keyboard switch (`utils::keyboard`) the keys honour.
+utils = { workspace = true }
 # The engine this window is a view of (its modules are re-exported at the
 # root, so `crate::actions`, `crate::open`, … read as they always did).
 session-engine = { workspace = true }

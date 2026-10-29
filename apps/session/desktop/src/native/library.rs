@@ -49,6 +49,7 @@ pub fn LibraryEditor(
     on_back: EventHandler<()>,
     on_play: EventHandler<LibrarySetlist>,
 ) -> Element {
+    let keys = app_shell::ui::use_text_focus();
     let mut lists = use_signal(|| lists);
     let mut songs = use_signal(|| Load::<Vec<(LibrarySong, bool)>>::Waiting);
     let mut selected = use_signal(|| {
@@ -450,6 +451,8 @@ pub fn LibraryEditor(
                                 match renaming() {
                                     Some(text) => rsx! {
                                         input {
+                                            onfocus: move |_| keys.focus(),
+                                            onblur: move |_| keys.blur(),
                                             style: "flex:1; min-width:0; height:40px; box-sizing:border-box; padding:0 10px; border-radius:9px; \
                                                     border:1px solid {ACCENT}; background:#101216; color:{TEXT}; font-family:inherit; font-size:17px; font-weight:650;",
                                             r#type: "text",
@@ -568,6 +571,8 @@ pub fn LibraryEditor(
                                 border-radius:10px; background:#101216; border:1px solid {RULE}; color:{DIM};",
                         Search { size: 16, color: "currentColor" }
                         input {
+                            onfocus: move |_| keys.focus(),
+                            onblur: move |_| keys.blur(),
                             style: "flex:1; min-width:0; height:38px; border:none; background:transparent; color:{TEXT}; \
                                     font-family:inherit; font-size:15px;",
                             r#type: "text",
@@ -814,6 +819,7 @@ pub fn SongEditor(
     /// Done: saved, deleted, or left.
     on_done: EventHandler<()>,
 ) -> Element {
+    let keys = app_shell::ui::use_text_focus();
     let is_new = song.is_none();
     let title = use_signal(|| song.as_ref().map(|s| s.title.clone()).unwrap_or_default());
     let key = use_signal(|| song.as_ref().map(|s| s.key.clone()).unwrap_or_default());
@@ -918,6 +924,8 @@ pub fn SongEditor(
                         }
                     }
                     input {
+                        onfocus: move |_| keys.focus(),
+                        onblur: move |_| keys.blur(),
                         style: "position:absolute; top:0; left:0; width:100%; height:44px; box-sizing:border-box; padding:0 12px; \
                                 border-radius:10px; border:1px solid {RULE}; background:#101216; color:{TEXT}; \
                                 font-family:inherit; font-size:15px;",

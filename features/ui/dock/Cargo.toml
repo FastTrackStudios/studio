@@ -11,12 +11,14 @@ workspace = true
 [features]
 # The dock host on Blitz (`host`): the Dockspace drawn with inline styles
 # and pointer events, for dioxus-native. No desktop, no Tailwind.
-host = ["dep:dioxus"]
+host = ["dep:dioxus", "dep:utils"]
 native = ["dioxus/desktop", "ui"]
 ui = ["dep:serde", "dep:serde_json", "dep:tokio", "web"]
 web = ["dep:dioxus", "dep:tracing"]
 
 [dependencies]
+# host: the arrange key stands aside while text is typed (`utils::keyboard`).
+utils = { workspace = true, optional = true }
 dioxus = { workspace = true, optional = true }
 facet = { workspace = true, features = ["uuid"] }
 facet-json = { workspace = true }

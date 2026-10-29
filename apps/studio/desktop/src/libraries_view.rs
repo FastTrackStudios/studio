@@ -89,6 +89,7 @@ fn use_kit(library: PathBuf) {
 
 #[component]
 pub fn LibrariesPage(on_back: EventHandler<()>) -> Element {
+    let keys = app_shell::ui::use_text_focus();
     let mut client = use_signal(|| None::<ContentLibraryClient>);
     let mut bundles = use_signal(Vec::<BundleInfo>::new);
     let mut note = use_signal(String::new);
@@ -202,6 +203,8 @@ pub fn LibrariesPage(on_back: EventHandler<()>) -> Element {
                 span { style: "font-size: 20px; font-weight: 800;", "Libraries" }
                 span { style: "flex: 1;" }
                 input {
+                    onfocus: move |_| keys.focus(),
+                    onblur: move |_| keys.blur(),
                     style: "width: 340px; max-width: 40%; height: 40px; background: #131316; border: 1px solid #1f1f23; border-radius: 10px; padding: 0 12px; color: #e4e4e7; font-size: 13px;",
                     placeholder: "Studio: ws://host:4040/vox or iroh id",
                     value: "{host}",

@@ -243,15 +243,17 @@ impl Dock {
     }
 
     /// True while panels can be grabbed: the arrange key is held or
-    /// Arrange is on.
+    /// Arrange is on. A held key lets go the moment typing starts.
     #[must_use]
     pub fn arranging(&self) -> bool {
-        (self.held)() || (self.latched)()
+        ((self.held)() && utils::keyboard::hotkeys_on()) || (self.latched)()
     }
 
     /// Holds or lets go of arranging, for an app that reads the keyboard
     /// itself (the Session window reads winit's keys, not the DOM's).
+    /// Ignored while text is being typed (`utils::keyboard::typing`).
     pub fn set_arranging(&self, on: bool) {
+        let on = on && utils::keyboard::hotkeys_on();
         let mut held = self.held;
         if *held.peek() != on {
             held.set(on);

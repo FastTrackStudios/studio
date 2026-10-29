@@ -31,6 +31,7 @@ fn class_color(class: &str) -> &'static str {
 
 #[component]
 pub fn SpaceView() -> Element {
+    let keys = app_shell::ui::use_text_focus();
     let client = use_resource(move || async move {
         let target = EngineTarget::current();
         loop {
@@ -130,6 +131,8 @@ pub fn SpaceView() -> Element {
                         }
                     }
                     input {
+                        onfocus: move |_| keys.focus(),
+                        onblur: move |_| keys.blur(),
                         style: "margin-left:auto; padding:4px 8px; border-radius:6px; \
                                 border:1px solid #333a4a; background:#1a1e28; color:#e6e8ef;",
                         placeholder: "filter…",

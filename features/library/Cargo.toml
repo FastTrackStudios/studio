@@ -13,6 +13,8 @@ ui = ["dep:dioxus", "dep:lucide-dioxus", "dep:futures-timer", "app-shell/ui"]
 
 [dependencies]
 app-shell = { workspace = true }
+# The process-wide keyboard switch its fields hold (`utils::keyboard`).
+utils = { workspace = true }
 uuid = { workspace = true }
 dioxus = { workspace = true, optional = true }
 lucide-dioxus = { workspace = true, optional = true }
