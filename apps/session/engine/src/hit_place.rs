@@ -278,6 +278,8 @@ fn mics(song: &crate::song::Song) -> Vec<Mic> {
     song.daw()
         .all(song.context())
         .into_iter()
+        // The hits' MIDI views are written from the hits, not cut with the mics.
+        .filter(|t| !crate::hits_midi::is_view(t))
         .filter_map(|t| {
             Some(Mic {
                 comp: lane_named(&t, COMP)?,

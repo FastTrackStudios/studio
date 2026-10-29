@@ -555,6 +555,10 @@ pub fn record_steps() {
                             "song.step",
                             steps.labels = labels.len(),
                             steps.label = labels.first().map(String::as_str).unwrap_or_default(),
+                            steps.views_edited = tracing::field::Empty,
+                            steps.hits_added = tracing::field::Empty,
+                            steps.hits_moved = tracing::field::Empty,
+                            steps.hits_removed = tracing::field::Empty,
                         );
                         let _step = step.enter();
                         let mut stages = crate::stages::Stages::start();
