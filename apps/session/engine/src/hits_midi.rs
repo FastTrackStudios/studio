@@ -493,7 +493,9 @@ pub fn sync(
             continue;
         }
         write(daw, project, &view.track, &shown)?;
-        remember(&view.track, &read(daw, project, view));
+        let reread =
+            tracing::info_span!("hits_midi.reread_view").in_scope(|| read(daw, project, view));
+        remember(&view.track, &reread);
         synced.written = synced.written.saturating_add(1);
     }
     stages.mark("sync.write_ms");
@@ -532,10 +534,13 @@ pub fn write(
     track: &str,
     notes: &[Note],
 ) -> Result<(), String> {
+    let _span = tracing::info_span!("hits_midi.write_view", view.notes = notes.len()).entered();
+    let mut stages = crate::stages::Stages::start();
     for item in daw.get_items(project.clone(), TrackRef::Guid(track.to_owned())) {
         daw.delete_item(project.clone(), ItemRef::Guid(item.guid))
             .map_err(|e| e.to_string())?;
     }
+    stages.mark("view.delete_ms");
     // In time order, whatever order they came in: the item spans them,
     // and each note ends before the next of its pitch.
     let mut notes = notes.to_vec();
@@ -552,6 +557,7 @@ pub fn write(
             last.0 + 5.0,
         )
         .ok_or("the MIDI item would not make")?;
+    stages.mark("view.create_ms");
     let tempos: Vec<(f64, f64)> = daw
         .get_tempo_points(project.clone())
         .into_iter()
@@ -561,10 +567,12 @@ pub fn write(
     let created = placed(&notes, |time| {
         crate::drum_reference::qn_between(start, time, &tempos, bpm)
     });
+    stages.mark("view.place_ms");
     let _ = daw.add_notes_ppq(
         MidiTakeLocation::new(location.project, location.item, TakeRef::Active),
         created,
     );
+    stages.mark("view.add_ms");
     Ok(())
 }
 
