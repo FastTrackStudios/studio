@@ -125,24 +125,95 @@ pub async fn register(
     store: &Store,
 ) -> Result<HashMap<String, (Uuid, CrdtDoc)>, String> {
     let branches = store.branches().map_err(|e| e.to_string())?;
-    let mut made: HashMap<String, (Uuid, CrdtDoc)> = HashMap::new();
+    register_branches(synced, path, store, branches, |_| true, &HashMap::new()).await
+}
+
+/// [`register`] for the branches `wanted` says, parents first, given the
+/// ids of those already made (`made`, the parents a wanted branch may
+/// name). Returns what it made.
+async fn register_branches(
+    synced: &Synced,
+    path: &Path,
+    store: &Store,
+    branches: Vec<session_format::store::Branch>,
+    wanted: impl Fn(&str) -> bool,
+    made: &HashMap<String, Uuid>,
+) -> Result<HashMap<String, (Uuid, CrdtDoc)>, String> {
+    let mut ids = made.clone();
+    let mut out: HashMap<String, (Uuid, CrdtDoc)> = HashMap::new();
     for (branch, parent) in parents_first(branches) {
+        if ids.contains_key(&branch) || !wanted(&branch) {
+            continue;
+        }
         let id = store.doc_id(&branch).map_err(|e| e.to_string())?;
         synced.files.place(id, path.to_path_buf());
-        let doc = synced
-            .driver
-            .create(CreateDoc {
+        let doc = tracing::Instrument::instrument(
+            synced.driver.create(CreateDoc {
                 doc_id: id,
                 kind: SESSION_KIND.to_owned(),
                 name: doc_name(path, &branch),
-                parent: parent.and_then(|p| made.get(&p).map(|(id, _)| *id)),
+                parent: parent.and_then(|p| ids.get(&p).copied()),
                 lineage: Lineage::Strict,
-            })
-            .await
-            .map_err(|e| format!("{branch}: {e:?}"))?;
-        made.insert(branch, (id, doc));
+            }),
+            tracing::info_span!("project_sync.create_doc", sync.branch = %branch),
+        )
+        .await
+        .map_err(|e| format!("{branch}: {e:?}"))?;
+        ids.insert(branch.clone(), id);
+        out.insert(branch, (id, doc));
     }
-    Ok(made)
+    Ok(out)
+}
+
+/// `branch` and every branch it descends from, by name.
+fn lineage_of(branches: &[session_format::store::Branch], branch: &str) -> Vec<String> {
+    let mut chain = vec![branch.to_owned()];
+    let mut at = branch.to_owned();
+    while let Some(parent) = branches
+        .iter()
+        .find(|b| b.name == at)
+        .and_then(|b| b.parent.clone())
+    {
+        if chain.contains(&parent) {
+            break;
+        }
+        chain.push(parent.clone());
+        at = parent;
+    }
+    chain
+}
+
+/// The project's branches not registered yet ([`open`] makes the one it
+/// opens and its ancestors), registered in the background: on a handle of
+/// its own on the file, under a span of their own.
+fn register_rest_later(synced: &Synced, path: &Path, made: &HashMap<String, (Uuid, CrdtDoc)>) {
+    use tracing::Instrument as _;
+    let (synced, path) = (synced.clone(), path.to_path_buf());
+    let made: HashMap<String, Uuid> = made.iter().map(|(b, (id, _))| (b.clone(), *id)).collect();
+    architect::platform::spawn(
+        async move {
+            let Ok(store) = Store::open(&path) else {
+                return;
+            };
+            let Ok(branches) = store.branches() else {
+                return;
+            };
+            let known = made.clone();
+            if let Err(e) = register_branches(
+                &synced,
+                &path,
+                &store,
+                branches,
+                |b| !known.contains_key(b),
+                &made,
+            )
+            .await
+            {
+                tracing::warn!(why = %e, "a project branch would not register with its sync");
+            }
+        }
+        .instrument(tracing::info_span!("project_sync.register_rest")),
+    );
 }
 
 /// A song's branch as its org's synced doc.
@@ -172,14 +243,40 @@ impl SyncedBranch {
 /// project has been shared and this device is signed in; `None` keeps it
 /// a file on this device alone.
 pub async fn open(path: &Path, store: &Store, branch: &str) -> Option<SyncedBranch> {
+    use tracing::Instrument as _;
     let org = org_of(store)?;
-    let synced = driver(&org).await?;
-    let mut made = register(&synced, path, store)
-        .await
+    // Its steps as spans under the song's load: the org's sync driver
+    // (reaching Task), then the project's docs registered with it.
+    let synced = driver(&org)
+        .instrument(tracing::info_span!("project_sync.driver"))
+        .await?;
+    // The branch opened and those it descends from now; the others (old
+    // versions, a checkpoint's) behind the open: each is a whole doc to
+    // read, seconds apiece on a long-edited song, and none is needed to
+    // edit this one.
+    let branches = store
+        .branches()
         .inspect_err(
-            |e| tracing::warn!(sync.org = %org, why = %e, "the project's docs would not open"),
+            |e| tracing::warn!(sync.org = %org, why = %e, "the project's branches would not read"),
         )
         .ok()?;
+    let chain = lineage_of(&branches, branch);
+    let mut made = register_branches(
+        &synced,
+        path,
+        store,
+        branches,
+        |b| chain.iter().any(|c| c == b),
+        &HashMap::new(),
+    )
+    .instrument(tracing::info_span!(
+        "project_sync.register",
+        sync.branches = chain.len()
+    ))
+    .await
+    .inspect_err(|e| tracing::warn!(sync.org = %org, why = %e, "the project's docs would not open"))
+    .ok()?;
+    register_rest_later(&synced, path, &made);
     let (id, doc) = made.remove(branch)?;
     tracing::info!(sync.org = %org, sync.doc = %id, "the song is its synced doc");
     Some(SyncedBranch {
