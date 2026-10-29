@@ -196,7 +196,7 @@ signals, daw-ui's project types, vello's colour) for the read-back model
   `SongPick`/`PICKED`/`pick_song_from_outside`/`take_song_pick`,
   `SetlistOpen`/`NEXT_SET`/`open_setlist_from_outside`/`pending_setlist`/
   `take_setlist`, `open_from_outside`. With no window those never ran.
-- **The window is a view of the set** (`apps/session/desktop/src/native`):
+- **The window is a view of the set** (`apps/studio/desktop/src/session/native`):
   `start::App` shows whatever set the engine has (keyed by its epoch), the
   start screen while there is none or one is opening; the start screen
   opens through `set::open_with` and mirrors `Opening`; the shell mirrors
@@ -206,7 +206,7 @@ signals, daw-ui's project types, vello's colour) for the read-back model
   likewise on native; the web build keeps its own set. Studio's welcome
   screen enters the DAW view while the engine opens a set
   (`projects::pending_open` → `set::is_opening`), whoever asked.
-- **`studio engine`** (`apps/session/desktop/src/cli/engine.rs`): see
+- **`studio engine`** (`apps/studio/desktop/src/session/cli/engine.rs`): see
   [Running it](#running-it).
 
 ### Running it
@@ -251,7 +251,7 @@ facade: `open::engine()`/`local_engine()`/`with_local_engine`/
 `cue_engine`, `actions::song()`/`Song::current()` (both hand out
 `&'static Standalone`), a `&Standalone` parameter, or a `daw_standalone`
 item. 89 files: 79 in `apps/session/daw/src`, 10 in
-`apps/session/desktop/src`; 63 engine, 12 view, 14 mixed. 49 of the daw
+`apps/studio/desktop/src/session/`; 63 engine, 12 view, 14 mixed. 49 of the daw
 files are reached from the Action List.
 
 **engine** — project data for its own sake (tracks, items, takes, hits,
@@ -342,7 +342,7 @@ Borrow only the engine's runtime (no `Standalone`): `task_account.rs`,
 `expression.rs`, `quantize_panel.rs`, `routes.rs`, `take_rating.rs`,
 `widget.rs`, `studio_engine/mcp.rs`.
 
-### apps/session/desktop/src
+### apps/studio/desktop/src/session/
 
 | file | reaches | what it does | side |
 |---|---|---|---|

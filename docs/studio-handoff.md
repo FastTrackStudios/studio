@@ -10,7 +10,7 @@ and playing it through CoreAudio. Everything here was done on the Mac mini
 there is more to push together (§6).
 
 **2026-09-22 follow-on:** this studio is now also embedded as a panel in the
-Session app's own Blitz shell (`session-desktop`, `apps/session/desktop/src/native/`)
+Session app's own Blitz shell (now Studio's DAW view, `apps/studio/desktop/src/session/native/`)
 — a top bar, a DAW view and a Performance view with a live paginated chart
 panel, on the same prepared session this doc describes. See
 `docs/app-on-blitz.md` for that work (currently uncommitted, further along

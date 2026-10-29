@@ -58,8 +58,8 @@ cargo run -p studio-desktop --features cli --bin studio -- lyrics fetch <Song>.R
   ```
 
   ```bash
-  pid=$(pgrep -f "Session Dev.app/Contents/MacOS/session-desktop" | head -1)
-  wid=$(swift winid.swift $pid | grep "name=Session" | awk '{print $1}')
+  pid=$(pgrep -f "Studio Dev.app/Contents/MacOS/studio-desktop" | head -1)
+  wid=$(swift winid.swift $pid | grep "name=Studio" | awk '{print $1}')
   screencapture -x -o -l $wid out.png   # 2560x1320; crop with sips -c H W --cropOffset Y X
   ```
 
@@ -121,7 +121,7 @@ Keyflow language/engine changes (keyflow + daw's keyflow-proto):
   belongs to the section it overlaps most), `slides(sections, 2)`,
   `from_items`, `stamp_lines` (onto the Lyrics track, created before HITS
   in the Keyflow folder), `Anchor` + `align`.
-- **Fetch** — `studio lyrics fetch` (apps/session/desktop/src/cli/lyrics/): LRCLIB (no
+- **Fetch** — `studio lyrics fetch` (apps/studio/desktop/src/session/cli/lyrics/): LRCLIB (no
   auth), provider trait with room for Spotify/Deezer/Musixmatch; title +
   artists from the `.kf` header; picks the version nearest the song's
   SONGSTART→SONGEND length (`--pick N` to override). All 8 songs have a
@@ -283,10 +283,10 @@ daw's tag) and drop the path entries. Data outside git: the songs' `.kf`,
 |---|---|
 | lyrics model, anchors, stamping | `features/session/session/src/lyrics.rs` |
 | lyrics panel (3 views, dropdown) | `apps/session/daw/src/lyrics_panel.rs` |
-| lyrics fetcher (LRCLIB) | `apps/session/desktop/src/cli/lyrics/` |
+| lyrics fetcher (LRCLIB) | `apps/studio/desktop/src/session/cli/lyrics/` |
 | prepare, stamp_lyrics, apply_chart | `apps/session/daw/src/prepare.rs` |
 | the Overview layout | `apps/session/daw/src/shell.rs` (`OverviewLayout`) |
-| the desktop shell (views, editor toggle, contexts) | `apps/session/desktop/src/native/shell.rs` |
+| the desktop shell (views, editor toggle, contexts) | `apps/studio/desktop/src/session/native/shell.rs` |
 | chart panel (paged fit, next-page peek) | `apps/session/daw/src/chart_panel.rs` |
 | chord track voicings (pushes, rests) | `features/session/session/src/keyflow/generate.rs` |
 | rebuild_from_chart | `features/session/session/src/keyflow/from_chart.rs` |

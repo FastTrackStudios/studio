@@ -366,7 +366,7 @@ over Wi-Fi or USB, with the Mac accepting the connection [logic-remote].
   engine directly") (`apps/session/daw/src/actions.rs:1-19`). `hits.rs`,
   `actions.rs`, `open.rs`, `comp.rs`, `grow.rs` and about 50 other files
   take `&daw::standalone::Standalone`. The `studio` CLI drives *the
-  running window* over MCP (`apps/session/desktop/src/cli/mod.rs`).
+  running window* over MCP (`apps/studio/desktop/src/session/cli/mod.rs`).
 
 ### Recommended architecture
 
@@ -616,8 +616,8 @@ Repo sources: `docs/design/one-engine.md`, `docs/design/set-engine.md`,
 `docs/research/item-peaks.md`, `crates/daw/standalone/src/bootstrap.rs`,
 `crates/daw/proto/src/peak/service.rs`,
 `crates/daw/proto/src/transport_sync/{service,types}.rs`,
-`apps/session/desktop/src/{engine_server,session_engine}.rs`,
-`apps/session/desktop/src/cli/mod.rs`,
+`apps/studio/desktop/src/session/{engine_server,session_engine}.rs`,
+`apps/studio/desktop/src/session/cli/mod.rs`,
 `apps/studio/desktop/src/{engines,engine_main}.rs`,
 `apps/session/daw/src/{actions,mcp_server}.rs`,
 `features/adapters/reaper/daw-bridge/src/lib.rs`; vox at `08db2c4`

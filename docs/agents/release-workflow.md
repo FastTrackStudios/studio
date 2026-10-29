@@ -43,9 +43,8 @@ hotfix: release/v26.10.4 (from the tag) ◀── cherry-pick -x PR ── CI pa
 ## One version, one app, and the version is the tag
 
 Signal and Session ship as one app, Studio, so there is one release: one
-version, one tag, one GitHub Release. The app crates (`apps/studio/desktop`,
-and `apps/session/desktop`, which Studio links) say `version.workspace =
-true`. Change-file notes end with `(signal)` or `(session)` so the notes
+version, one tag, one GitHub Release. The app crate (`apps/studio/desktop`,
+Session's side in its `src/session/`) says `version.workspace = true`. Change-file notes end with `(signal)` or `(session)` so the notes
 say which side of Studio changed, or `(studio)` for the app as a whole.
 
 **Releases commit no version.** Every release build runs

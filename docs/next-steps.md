@@ -110,7 +110,7 @@ an app; give it its own sheet.
 ## Working notes
 
 - `cargo nextest run --workspace --features
-  session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys`
+  studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys`
   is the full run (~5 min after the build). Most of the wall clock is
   compiling ~790 test binaries; iterate with `-p <crate>`.
 - ~50 tests fail on a fresh checkout without the private assets

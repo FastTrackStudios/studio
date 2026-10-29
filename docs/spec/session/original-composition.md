@@ -65,7 +65,7 @@ The window applies the queue in `ArrangementWidget::paint_scene`
 (`apps/session/daw/src/widget.rs:3076-3089`, which calls the private
 `apply_actions` at `widget.rs:2411`). `SESSION_MODE` only stores a
 request that the desktop shell takes up
-(`actions.rs:960-977`, `apps/session/desktop/src/native/shell.rs:76`).
+(`actions.rs:960-977`, `apps/studio/desktop/src/session/native/shell.rs:76`).
 
 The harness builds an `ArrangementWidget::for_session` the way
 `tests/default_view.rs:55-71` does. After any window action it calls
@@ -188,7 +188,7 @@ The project gets its name the first time it is saved.
 **1.1. Does:** opens the app and gets the start screen.
 
 - **Today:** the start screen is `Start` in the desktop app
-  (`apps/session/desktop/src/native/start.rs:93-97`). Its home shelves are the
+  (`apps/studio/desktop/src/session/native/start.rs:93-97`). Its home shelves are the
   demo, Reconnect to REAPER, setlists, Recent and On this device
   (`start.rs:712-834`). It is a dioxus desktop view, so the test does not
   drive it.
@@ -198,7 +198,7 @@ The project gets its name the first time it is saved.
 
 - **Today: MISSING.** There is no new-project path:
   - The only "New song" pill makes a Task library song record, not a
-    DAW project (`start.rs:987`, `apps/session/desktop/src/native/library.rs:811`,
+    DAW project (`start.rs:987`, `apps/studio/desktop/src/session/native/library.rs:811`,
     `:932-937`).
   - The app can only open a file (`open.rs:116`, `SESSION_OPEN` at
     `actions.rs:1738`).
@@ -249,7 +249,7 @@ track.
 
 - **Today: partly.**
   - Organize mode mounts `OrganizeToolbar` across the top
-    (`apps/session/desktop/src/native/shell.rs:613-614`). It has the 12 structure
+    (`apps/studio/desktop/src/session/native/shell.rs:613-614`). It has the 12 structure
     buttons and the time signatures (`apps/session/daw/src/organize.rs:42-55`).
   - The left rail lists scenes (`apps/session/daw/src/rails.rs:467-497`).
   - Session has no instrument buttons.
@@ -328,7 +328,7 @@ in place, and setting 68 bpm turns on the eighth-note click.
 - **Today:** `SESSION_MODE {mode: "Record"}` (`actions.rs:758`,
   `:960-977`). The modes are listed in
   `features/session/session/src/modes.rs:15-29`. The request is applied
-  by the shell (`apps/session/desktop/src/native/shell.rs:76`) and, in the test,
+  by the shell (`apps/studio/desktop/src/session/native/shell.rs:76`) and, in the test,
   by the 0.2 harness.
 - **Asserts:** the mode reads back as Record. Record mode shows the
   record arm in the track panel (`apps/session/daw/src/tcp.rs:193`).
@@ -1131,7 +1131,7 @@ remaining step of the demo test in the memory notes.
 
 | # | feature | needs | where | steps |
 |---|---|---|---|---|
-| M1 | `SESSION_NEW` (untitled project, COUNT-IN/SONGSTART/SONGEND, guide, Organize), a New Project button, naming on first save | — | `apps/session/daw/src/actions.rs`, `open.rs`, `apps/session/desktop/src/native/start.rs` | 1.2, 1.3, 3.5, 14.1 |
+| M1 | `SESSION_NEW` (untitled project, COUNT-IN/SONGSTART/SONGEND, guide, Organize), a New Project button, naming on first save | — | `apps/session/daw/src/actions.rs`, `open.rs`, `apps/studio/desktop/src/session/native/start.rs` | 1.2, 1.3, 3.5, 14.1 |
 | M2 | `TRACK_ADD_INSTRUMENT` (golden kit + `Drums/MIDI`, `Bass`, `Guitar`), the Organize instrument rail, `TRACK_RENAME`, `SESSION_TRACKS` readback (`armed`, `record_input`, `open`) | M1 | new `organize_tracks.rs`, `rails.rs`, `actions.rs` | 2.1–2.4, 11.1 |
 | M3 | `TEMPO_SET` (markers keep their bars, guide regenerates), `TIME_SELECTION_SET`, `SECTION_INSERT`, `MARKER_INSERT` on the Action List | M1 | `actions.rs`, `organize.rs` (`press_local` → `pub fn insert`) | 3.6, 4.3, 5.1, 6.0 |
 | M4 | Recording: capture + `finish_recording` into take lanes in daw-standalone, a test input source, `TRACK_ARM`, the record action working (`arrange_edit.rs:1446`) | M2 | `daw:features/standalone/daw-standalone/src/transport.rs`, `audio_engine/render`, `actions.rs` | 3.2, 4.1, 5.2, 7.1, 8.3, 10.2, 11.3, 12.1, 13.2 |
