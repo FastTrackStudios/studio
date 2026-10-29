@@ -186,10 +186,18 @@ fn watch_remote(
 const COMPACT_AFTER: usize = 64;
 
 /// How long the song is left alone before what it has done since its
-/// snapshot is folded into a new one ([`compact_when_idle`]). Even a few
-/// updates on a snapshot make an open read the whole history (36 on
-/// Unbreakable's: 7.9 s, against 0.2 s for the snapshot alone).
-const IDLE: std::time::Duration = std::time::Duration::from_secs(10);
+/// snapshot is folded into a new one ([`compact_when_idle`]), when it has
+/// done at least [`FOLD_AT_LEAST`] since. A fold of a long-edited song is
+/// seconds of work (Unbreakable: 2 s holding the song, 7 s more behind
+/// it): at 10 s it ran after nearly every pause in an edit session.
+const IDLE: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// How many updates on its snapshot make a song worth folding after
+/// [`IDLE`]: a handful replay quickly at an open.
+const FOLD_AT_LEAST: usize = 8;
+
+/// Left alone this long, a song is folded whatever it has done since.
+const LONG_IDLE: std::time::Duration = std::time::Duration::from_secs(600);
 
 /// When a song's file was last written to.
 static LAST_WRITE: Mutex<Option<web_time::Instant>> = Mutex::new(None);
@@ -204,19 +212,21 @@ fn compact_when_idle() {
         let spawned = std::thread::Builder::new()
             .name("song-compact".into())
             .spawn(|| {
+                // The write last looked at, and whether that was at
+                // LONG_IDLE: each write is looked at twice at most, not
+                // every second while a few updates wait for LONG_IDLE.
+                let mut looked: Option<(web_time::Instant, bool)> = None;
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(1));
-                    let quiet = LAST_WRITE
-                        .lock()
-                        .ok()
-                        .and_then(|at| *at)
-                        .is_some_and(|at| at.elapsed() >= IDLE);
-                    if !quiet {
+                    let Some(at) = LAST_WRITE.lock().ok().and_then(|at| *at) else {
+                        continue;
+                    };
+                    let idle = at.elapsed();
+                    let long = idle >= LONG_IDLE;
+                    if idle < IDLE || looked.is_some_and(|(seen, was_long)| seen == at && was_long == long) {
                         continue;
                     }
-                    if let Ok(mut at) = LAST_WRITE.lock() {
-                        *at = None;
-                    }
+                    looked = Some((at, long));
                     // Its own trace: how long the fold held the songs.
                     let fold = tracing::info_span!("song.compact");
                     let _fold = fold.enter();
@@ -227,7 +237,10 @@ fn compact_when_idle() {
                     let taken = run(async {
                         let mut songs = open_songs().lock().await;
                         let mut taken = Vec::new();
-                        for open in songs.values_mut().filter(|o| o.uncompacted > 0) {
+                        let due = |o: &&mut Open| {
+                            o.uncompacted >= FOLD_AT_LEAST || (long && o.uncompacted > 0)
+                        };
+                        for open in songs.values_mut().filter(due) {
                             let doc = open.bridge.doc();
                             match with_store(&open.store, |s| {
                                 s.take_snapshot(&open.branch, doc.loro()).map_err(|e| e.to_string())
@@ -238,6 +251,12 @@ fn compact_when_idle() {
                                 }
                                 Err(e) => tracing::warn!(song.error = %e, "the song's history could not be folded"),
                             }
+                        }
+                        // Nothing left to fold: quiet until the next write.
+                        if songs.values().all(|o| o.uncompacted == 0)
+                            && let Ok(mut at) = LAST_WRITE.lock()
+                        {
+                            *at = None;
                         }
                         taken
                     });
