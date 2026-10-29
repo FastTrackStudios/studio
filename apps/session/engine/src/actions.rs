@@ -339,7 +339,7 @@ pub fn take_mode_request() -> Option<session::modes::Mode> {
 /// asked of the window too — run there on the window's own list, where the
 /// shell reads it. In the window's process no window follows it, so the
 /// ask goes nowhere and nothing loops.
-fn also_in_the_window(id: &str, args: String) {
+pub(crate) fn also_in_the_window(id: &str, args: String) {
     if crate::window_queue::engine_has_window() {
         crate::window_queue::ask(crate::window_queue::Asked::Run {
             id: id.to_owned(),

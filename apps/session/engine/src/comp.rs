@@ -511,7 +511,11 @@ pub fn register(
             .map(|t| crate::actions::resolve(daw, &project, t))
             .collect::<Result<Vec<String>, String>>()?;
         let tracks = swipe(daw, &project, &guids, &a.lane, (a.start, a.end))?;
-        crate::song_model::request_resync();
+        // A swipe cuts and copies items, nothing else a window draws (the
+        // comp area it records is the engine's): the windows read back the
+        // items the journal names, not the whole song — a second and a
+        // half on Unbreakable.
+        crate::song_model::request_resync_items();
         crate::actions::list().changed("lanes", "a lane was comped onto the comp");
         Ok(SwipeOut { tracks })
     })?;
@@ -531,6 +535,13 @@ pub fn register(
             ));
         }
         let shown = crate::lanes::set_expanded(&tracks, a.show);
+        // The lanes a row shows are the window's: run in the engine, the
+        // window is asked too, told the state settled here so the two
+        // agree whichever ran it first.
+        crate::actions::also_in_the_window(
+            SHOW_LANES.id,
+            format!(r#"{{"track":"{guid}","show":{shown}}}"#),
+        );
         Ok(ShowOut { shown, tracks })
     })?;
     Ok(())
