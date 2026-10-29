@@ -22,8 +22,8 @@ use daw::service::ProjectContext;
 use crate::view::{
     ActionCall, Applied, AutomationRead, Change, Changed, ChangesAsk, DetailAsk, EditAsked,
     EditBatch, EditShown, EngineView, EngineViewStreamSource, ItemChanges, ItemNow, JobRow,
-    JobsFrame, MarksFrame, OverlayFrame, Playhead, Queued, SetFrame, SetOpening, SongFacts,
-    StreamSong, StreamsFrame, ViewError, WaveRead, WavesAsk, WindowAction, WindowAnswer,
+    JobsFrame, MarksFrame, OverlayFrame, PerfFrame, Playhead, Queued, SetFrame, SetOpening,
+    SongFacts, StreamSong, StreamsFrame, ViewError, WaveRead, WavesAsk, WindowAction, WindowAnswer,
 };
 
 /// The engine's view host: its hubs and what each last said.
@@ -38,6 +38,7 @@ struct Inner {
     marks: PubSub<MarksFrame>,
     streams: PubSub<StreamsFrame>,
     jobs: PubSub<JobsFrame>,
+    perf: PubSub<PerfFrame>,
     edits: PubSub<EditAsked>,
     changes: PubSub<Changed>,
     queued: PubSub<Queued>,
@@ -46,6 +47,7 @@ struct Inner {
     last_marks: Mutex<MarksFrame>,
     last_streams: Mutex<StreamsFrame>,
     last_jobs: Mutex<JobsFrame>,
+    last_perf: Mutex<PerfFrame>,
     revision: AtomicU64,
     asked: AtomicU64,
     /// The engine's own waveform reads: what it cuts slices from.
@@ -65,6 +67,7 @@ pub fn host() -> &'static ViewHost {
             marks: PubSub::sliding(4),
             streams: PubSub::sliding(4),
             jobs: PubSub::sliding(4),
+            perf: PubSub::sliding(2),
             edits: PubSub::sliding(16),
             changes: PubSub::sliding(1024),
             queued: PubSub::sliding(64),
@@ -73,6 +76,7 @@ pub fn host() -> &'static ViewHost {
             last_marks: Mutex::new(MarksFrame::default()),
             last_streams: Mutex::new(StreamsFrame::default()),
             last_jobs: Mutex::new(JobsFrame::default()),
+            last_perf: Mutex::new(PerfFrame::default()),
             revision: AtomicU64::new(0),
             asked: AtomicU64::new(0),
             previews: crate::midi::Previews::default(),
@@ -333,6 +337,27 @@ fn follow_jobs() {
         }
         host.inner.jobs.publish(frame);
     }
+}
+
+/// A performance meter frame (`crate::perf_meter`): to every window, and
+/// kept for `SESSION_PERF`.
+pub fn perf(frame: PerfFrame) {
+    let host = host();
+    if let Ok(mut last) = host.inner.last_perf.lock() {
+        last.clone_from(&frame);
+    }
+    host.inner.perf.publish(frame);
+}
+
+/// The last performance meter frame.
+#[must_use]
+pub fn last_perf() -> PerfFrame {
+    host()
+        .inner
+        .last_perf
+        .lock()
+        .map(|f| f.clone())
+        .unwrap_or_default()
 }
 
 /// Something about `song` changed in the engine: every window reads it
@@ -672,6 +697,14 @@ impl EngineViewStreamSource for ViewHost {
 
     fn jobs_intro(&self) -> Option<JobsFrame> {
         self.inner.last_jobs.lock().ok().map(|f| f.clone())
+    }
+
+    fn perf_hub(&self) -> &PubSub<PerfFrame> {
+        &self.inner.perf
+    }
+
+    fn perf_intro(&self) -> Option<PerfFrame> {
+        self.inner.last_perf.lock().ok().map(|f| f.clone())
     }
 
     fn edits_hub(&self) -> &PubSub<EditAsked> {
