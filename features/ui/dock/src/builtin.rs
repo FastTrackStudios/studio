@@ -88,7 +88,9 @@ impl Lay {
         node
     }
 
-    /// A stack of new panels as tabs, the first on show.
+    /// A stack of new panels as tabs, the first on show. Its tab strip
+    /// shows: with more than one panel in it, the strip is how the others
+    /// are found.
     fn tabs(&mut self, kinds: &[&str]) -> Node {
         let ids = kinds
             .iter()
@@ -99,12 +101,13 @@ impl Lay {
                 id
             })
             .collect();
-        Node::Stack(crate::dockspace::Stack::of(ids))
+        Node::Stack(crate::dockspace::Stack::of(ids).with_chrome(Chrome::Tabs))
     }
 
-    /// A bare (header-less) panel: a toolbar, the transport.
+    /// A panel of its own, header-less like every single panel: kept as
+    /// its own name where the layout means a toolbar or a band.
     fn bare(&mut self, kind: &str) -> Node {
-        self.one(kind).bare()
+        self.one(kind)
     }
 
     /// The track control panel `tcp` px wide against the arrangement,
@@ -113,7 +116,7 @@ impl Lay {
         let link = LinkId::new();
         let heads = Panel::new(kind::TCP).linked(link);
         let lanes = Panel::new(kind::ARRANGEMENT).linked(link);
-        // Both keep a tab strip: the heads' rows start where the lanes' do.
+        // Both header-less, so the heads' rows start where the lanes' do.
         let node = Node::row(Node::one(heads.id), Node::one(lanes.id), Share::First(tcp));
         self.0.panels.extend([heads, lanes]);
         node
@@ -539,20 +542,4 @@ fn charts() -> Screenset {
             (PhonePortrait, tall(true)),
         ],
     )
-}
-
-/// True for kinds drawn without a tab strip wherever they are opened.
-#[must_use]
-pub fn is_bare(kind: &str) -> bool {
-    matches!(kind, kind::TOOLBAR | kind::TRANSPORT | kind::PROGRESS)
-}
-
-/// The chrome a new `kind` panel gets.
-#[must_use]
-pub fn chrome(kind: &str) -> Chrome {
-    if is_bare(kind) {
-        Chrome::Bare
-    } else {
-        Chrome::Tabs
-    }
 }

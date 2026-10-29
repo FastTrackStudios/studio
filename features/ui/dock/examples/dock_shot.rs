@@ -36,7 +36,12 @@ fn main() {
     for set in &sets.sets {
         for (class, w, h) in SIZES {
             let png = picture(set.id, class, w, h);
-            let path = format!("{dir}/{}-{class:?}.png", set.name.to_lowercase());
+            let mode = if std::env::var_os("FTS_DOCK_ARRANGE").is_some() {
+                "-arrange"
+            } else {
+                ""
+            };
+            let path = format!("{dir}/{}-{class:?}{mode}.png", set.name.to_lowercase());
             png.save(&path).expect("write png");
             println!("{path}");
         }
@@ -91,7 +96,13 @@ fn Shot(props: ShotProps) -> Element {
         s
     });
     let class = use_signal(|| props.class);
-    use_dock_provider(sets, class, catalog());
+    let dock = use_dock_provider(sets, class, catalog());
+    // FTS_DOCK_ARRANGE=1: drawn as while the arrange key is held.
+    use_hook(move || {
+        if std::env::var_os("FTS_DOCK_ARRANGE").is_some() {
+            dock.toggle_arrange();
+        }
+    });
     let (w, h) = props.size;
     rsx! {
         style { "html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; }}" }
@@ -114,7 +125,7 @@ fn catalog() -> Catalog {
         title,
         short,
         home,
-        chrome: builtin::chrome(kind),
+        chrome: dock::dockspace::Chrome::Bare,
         attach: (kind == kind::TCP).then_some((kind::ARRANGEMENT, Side::Left, 200.0)),
         render: stand_in,
     };

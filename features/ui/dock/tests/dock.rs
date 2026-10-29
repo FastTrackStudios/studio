@@ -361,3 +361,32 @@ fn a_drop_near_the_window_edge_docks_and_over_a_stack_splits_or_tabs() {
     );
     assert!(target(2000.0, 10.0, host, &stacks).is_none());
 }
+
+#[test]
+fn panels_have_no_tab_strip_unless_a_stack_asks_for_one() {
+    use dock::dockspace::Chrome;
+    let (mut d, arr, _) = arrange_with_mixer();
+    let (_, stack) = d.locate(arr).unwrap();
+    assert_eq!(d.stack(stack).unwrap().chrome, Chrome::Bare);
+    d.set_chrome(stack, Chrome::Tabs).unwrap();
+    assert_eq!(d.stack(stack).unwrap().chrome, Chrome::Tabs);
+}
+
+#[test]
+fn built_in_stacks_show_tabs_only_where_panels_share_a_place() {
+    use dock::dockspace::Chrome;
+    for set in &dock::builtin::screensets().sets {
+        for v in &set.variants {
+            for (_, root) in v.space.areas() {
+                for s in root.stacks() {
+                    let want = if s.tabs.len() > 1 {
+                        Chrome::Tabs
+                    } else {
+                        Chrome::Bare
+                    };
+                    assert_eq!(s.chrome, want, "{} {:?}", set.name, v.class);
+                }
+            }
+        }
+    }
+}

@@ -102,12 +102,22 @@ globals, so each window or plugin editor hosts its own.
 - **Phone:** the centre fills the screen; every docked or floating panel is
   a 48 px button on a bar — along the bottom upright, down the side
   sideways (studio-app-shell.md) — that opens it as a sheet.
-- **Moving panels:** drag a tab (pointer events; Blitz has no DnD). Near
-  the window edge → that edge dock; over a stack, its outer bands (a
-  quarter of it, 24–96 px) split it, its middle adds a tab. Always also
-  through the panel menu (⋯ or right-click): move to an edge / centre /
-  float, attach, open another instance, maximise, collapse, close. Drag is
-  never the only way (spec §2.2).
+- **No tabs by default.** A stack draws no header: a panel is just its
+  content. Stacks holding more than one panel show their tab strip (it is
+  how the others are found); any stack's strip can be turned on or off
+  (panel menu, or the Tabs chip while arranging). Asked for 2026-10-29.
+- **Moving panels: hold W** (`ArrangeKey`, configurable; an app that reads
+  winit's keys itself calls `Dock::set_arranging`) or turn **Arrange** on
+  (the screenset bar's button, the phone bar's ✥ — touch screens have no
+  key to hold). While arranging, every panel is outlined with its name:
+  grab it anywhere and drag. Near the window edge → that edge dock; over a
+  stack, its outer bands (a quarter of it, 24–96 px) split it, its middle
+  adds it as a tab. Its siblings' names switch to them; right-click opens
+  the panel menu. A visible tab strip still drags the same way.
+- **The panel menu** (right-click while arranging, a tab's ⋯ or
+  right-click): move to an edge / centre / float, attach, show a hidden
+  sibling, show or hide tabs, open another instance, maximise, collapse,
+  close. Drag is never the only way (spec §2.2).
 - **Toolbars** are panels (`toolbar`, bare). Put one on the top edge,
   against the arrangement in a fixed-px split, or in a float.
 
@@ -121,6 +131,11 @@ globals, so each window or plugin editor hosts its own.
   window targeting (`SESSION_WINDOW_TARGET`).
 - Peek (a rail icon showing its panel over the centre) opens the dock for
   now.
+- Holding W while typing in a text field also arranges: the dock cannot
+  tell a field from a panel; an app with its own keymap (Session) should
+  drive `set_arranging` from it, where typing is already known.
+- In a thin strip (a 40 px toolbar) the arrange label is taller than the
+  strip and is clipped.
 - Wiring the real panels into Studio, with the per-instance fixes they
   need: the arrangement's restore key (`panel.rs` `KEPT`, per song) must
   become per instance; the editor's `PICKED` is global; the mixer needs

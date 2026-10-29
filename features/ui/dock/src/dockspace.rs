@@ -199,13 +199,17 @@ impl Share {
 }
 
 /// How a stack draws its header.
+///
+/// Bare by default: panels are moved by holding the arrange key (or
+/// turning Arrange on) and dragging the panel itself, so most need no
+/// header. Tabs are a per-stack choice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Facet)]
 #[repr(u8)]
 pub enum Chrome {
     /// A tab strip over the panel (one tab still shows its title).
-    #[default]
     Tabs,
-    /// No header: the panel alone, as a toolbar or the transport sits.
+    /// No header: the panel alone.
+    #[default]
     Bare,
 }
 
@@ -225,8 +229,15 @@ impl Stack {
             id: StackId::new(),
             tabs,
             active: 0,
-            chrome: Chrome::Tabs,
+            chrome: Chrome::default(),
         }
+    }
+
+    /// This stack drawn with `chrome`.
+    #[must_use]
+    pub const fn with_chrome(mut self, chrome: Chrome) -> Self {
+        self.chrome = chrome;
+        self
     }
 
     /// The panel on show.
@@ -772,6 +783,14 @@ impl Dockspace {
         if px.is_finite() {
             self.edges.get_mut(side).size = px.max(0.0);
         }
+    }
+
+    /// Shows or hides the stack's tab strip.
+    pub fn set_chrome(&mut self, stack: StackId, chrome: Chrome) -> Result<(), DockError> {
+        self.stack_mut(stack)
+            .ok_or(DockError::NoStack(stack))?
+            .chrome = chrome;
+        Ok(())
     }
 
     /// Opens, collapses or hides the edge dock.

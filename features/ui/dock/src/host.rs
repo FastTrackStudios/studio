@@ -166,6 +166,29 @@ pub struct Dock {
     menu: Signal<Option<Menu>>,
     sheet: Signal<Option<InstanceId>>,
     mounts: CopyValue<HashMap<Mount, Rc<MountedData>>>,
+    /// The arrange key is held: every panel can be grabbed and dragged.
+    held: Signal<bool>,
+    /// Arrange is turned on (a touch screen has no key to hold).
+    latched: Signal<bool>,
+    key: CopyValue<ArrangeKey>,
+}
+
+/// The key held to arrange panels: while it is down, every panel shows
+/// its name and can be dragged anywhere (or right-clicked for its menu).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArrangeKey {
+    pub code: Code,
+    pub shift: bool,
+}
+
+impl Default for ArrangeKey {
+    /// Hold W.
+    fn default() -> Self {
+        Self {
+            code: Code::KeyW,
+            shift: false,
+        }
+    }
 }
 
 /// Puts a [`Dock`] over `sets` in context for the [`DockHost`] below.
@@ -182,6 +205,9 @@ pub fn use_dock_provider(
         menu: Signal::new(None),
         sheet: Signal::new(None),
         mounts: CopyValue::new(HashMap::new()),
+        held: Signal::new(false),
+        latched: Signal::new(false),
+        key: CopyValue::new(ArrangeKey::default()),
     })
 }
 
@@ -214,6 +240,35 @@ impl Dock {
         let mut sets = self.sets;
         let mut sets = sets.write();
         f(sets.current(class))
+    }
+
+    /// True while panels can be grabbed: the arrange key is held or
+    /// Arrange is on.
+    #[must_use]
+    pub fn arranging(&self) -> bool {
+        (self.held)() || (self.latched)()
+    }
+
+    /// Holds or lets go of arranging, for an app that reads the keyboard
+    /// itself (the Session window reads winit's keys, not the DOM's).
+    pub fn set_arranging(&self, on: bool) {
+        let mut held = self.held;
+        if *held.peek() != on {
+            held.set(on);
+        }
+    }
+
+    /// Turns Arrange on or off (the button for touch screens).
+    pub fn toggle_arrange(&self) {
+        let mut latched = self.latched;
+        let on = !*latched.peek();
+        latched.set(on);
+    }
+
+    /// Which key is held to arrange.
+    pub fn set_arrange_key(&self, key: ArrangeKey) {
+        let mut k = self.key;
+        k.set(key);
     }
 
     /// Recalls screenset `id`.
@@ -344,7 +399,21 @@ pub fn DockHost() -> Element {
             style: "position:relative; width:100%; height:100%; min-width:0; min-height:0; \
                     display:flex; overflow:hidden; background:{tokens::DESK}; color:{tokens::INK}; \
                     font-size:13px;",
+            tabindex: "0",
             onmounted: move |e| dock.mount(Mount::Host, e.data()),
+            onkeydown: move |e| {
+                let key = *dock.key.read();
+                if e.code() == key.code && (!key.shift || e.modifiers().shift()) {
+                    dock.set_arranging(true);
+                }
+            },
+            onkeyup: move |e| {
+                let key = *dock.key.read();
+                if e.code() == key.code || (key.shift && e.key() == Key::Shift) {
+                    dock.set_arranging(false);
+                }
+            },
+            onblur: move |_| dock.set_arranging(false),
             {body}
             DragLayer {}
             MenuLayer {}
@@ -603,9 +672,75 @@ fn StackView(stack: Stack) -> Element {
             }
             div { style: "flex:1 1 0; min-width:0; min-height:0; display:flex; position:relative; overflow:hidden;",
                 PanelSlot { key: "{active}", id: active }
+                if dock.arranging() {
+                    Grip { tabs: stack.tabs.clone(), active, chrome: stack.chrome, stack: id }
+                }
             }
         }
     }
+}
+
+/// Over a panel while arranging: its name (and its siblings', to switch
+/// to), grabbed anywhere to drag it, right-clicked for its menu.
+#[component]
+fn Grip(tabs: Vec<InstanceId>, active: InstanceId, chrome: Chrome, stack: StackId) -> Element {
+    let mut dock = use_dock();
+    let space = dock.space();
+    let mut grab = move |id: InstanceId, e: &PointerEvent| {
+        let (x, y) = point(e);
+        let _ = dock.edit(|d| d.activate(id));
+        dock.drag.set(Some(Drag::Pressed { id, x, y }));
+    };
+    rsx! {
+        div {
+            style: "position:absolute; inset:0; z-index:5; display:flex; align-items:center; \
+                    justify-content:center; background:{tokens::DROP_WASH}; \
+                    border:2px solid {tokens::FOCUS}; cursor:grab; touch-action:none; user-select:none;",
+            onpointerdown: move |e| grab(active, &e),
+            oncontextmenu: move |e| {
+                e.prevent_default();
+                dock.drag.set(None);
+                dock.menu.set(Some(Menu::Panel(active)));
+            },
+            div {
+                style: "display:flex; flex-wrap:wrap; gap:6px; padding:8px; max-width:90%; \
+                        justify-content:center; border-radius:10px; background:{tokens::SHEET_2};",
+                for id in tabs {
+                    if let Some(p) = space.panel(id) {
+                        div {
+                            key: "{id}",
+                            style: "{grip_chip(id == active)}",
+                            onpointerdown: move |e| {
+                                e.stop_propagation();
+                                grab(id, &e);
+                            },
+                            "{dock.title(p)}"
+                        }
+                    }
+                }
+                div {
+                    style: "{grip_chip(false)}",
+                    title: "Show or hide the tab strip",
+                    onpointerdown: move |e| {
+                        e.stop_propagation();
+                        let next = if chrome == Chrome::Tabs { Chrome::Bare } else { Chrome::Tabs };
+                        let _ = dock.edit(|d| d.set_chrome(stack, next));
+                    },
+                    if chrome == Chrome::Tabs { "Hide tabs" } else { "Tabs" }
+                }
+            }
+        }
+    }
+}
+
+fn grip_chip(on: bool) -> String {
+    format!(
+        "min-height:32px; display:flex; align-items:center; padding:0 12px; border-radius:8px; \
+         white-space:nowrap; font-weight:600; color:{}; background:{}; border:1px solid {};",
+        tokens::INK,
+        if on { tokens::PRIMARY } else { tokens::SHEET },
+        if on { tokens::PRIMARY } else { tokens::RULE },
+    )
 }
 
 #[component]
@@ -782,6 +917,11 @@ fn PhoneBody(space: Dockspace, portrait: bool) -> Element {
                 .collect::<Vec<_>>()
         })
         .collect();
+    let arrange_bg = if (dock.latched)() {
+        tokens::PRIMARY
+    } else {
+        "transparent"
+    };
     let center = rsx! {
         div { style: "flex:1 1 0; min-width:0; min-height:0; display:flex; position:relative;",
             match space.center.clone() {
@@ -824,6 +964,13 @@ fn PhoneBody(space: Dockspace, portrait: bool) -> Element {
                             "{dock.short(p)}"
                         }
                     }
+                }
+                button {
+                    style: "min-width:48px; min-height:48px; border-radius:10px; border:none; \
+                            background:{arrange_bg}; color:{tokens::INK}; font-size:18px;",
+                    title: "Move panels",
+                    onclick: move |_| dock.toggle_arrange(),
+                    "✥"
                 }
                 button {
                     style: "min-width:48px; min-height:48px; border-radius:10px; border:none; \
@@ -1102,6 +1249,8 @@ enum Action {
     Collapse(Side),
     Close(InstanceId),
     Open(&'static str),
+    Show(InstanceId),
+    Chrome(StackId, Chrome),
 }
 
 #[component]
@@ -1154,6 +1303,12 @@ fn run(mut dock: Dock, action: Action) {
             let _ = dock.edit(|d| d.toggle_maximized(id));
         }
         Action::Collapse(side) => dock.edit(|d| d.set_shown(side, Shown::Collapsed)),
+        Action::Show(id) => {
+            let _ = dock.edit(|d| d.activate(id));
+        }
+        Action::Chrome(stack, chrome) => {
+            let _ = dock.edit(|d| d.set_chrome(stack, chrome));
+        }
         Action::Close(id) => {
             let _ = dock.edit(|d| d.close(id));
         }
@@ -1199,6 +1354,23 @@ fn panel_items(dock: Dock, id: InstanceId) -> Vec<Item> {
             let label = format!("Attach to {}", dock.title(host));
             items.push(Item::Act(label, Action::Attach(id, host.id, side, px)));
         }
+    }
+    if let Some(stack) = space.locate(id).and_then(|(_, s)| space.stack(s)) {
+        if stack.chrome == Chrome::Bare {
+            for other in stack.tabs.iter().filter(|t| **t != id) {
+                if let Some(p) = space.panel(*other) {
+                    items.push(Item::Act(
+                        format!("Show {}", dock.title(p)),
+                        Action::Show(*other),
+                    ));
+                }
+            }
+        }
+        let (label, next) = match stack.chrome {
+            Chrome::Tabs => ("Hide tabs", Chrome::Bare),
+            Chrome::Bare => ("Show tabs", Chrome::Tabs),
+        };
+        items.push(Item::Act(label.into(), Action::Chrome(stack.id, next)));
     }
     items.push(Item::Act("Open another".into(), Action::Duplicate(id)));
     let max = if space.maximized == Some(id) {
@@ -1280,6 +1452,12 @@ pub fn ScreensetBar() -> Element {
                 style: "{chip(false)}",
                 onclick: move |_| { dock.sets.write().save_as(format!("Screenset {}", count + 1), class); },
                 "Save as"
+            }
+            button {
+                style: "{chip((dock.latched)())}",
+                title: "Move panels: or hold W",
+                onclick: move |_| dock.toggle_arrange(),
+                "Arrange"
             }
             button {
                 style: "{chip(false)}",
