@@ -28,6 +28,10 @@ pub mod handoff;
 mod library;
 /// The welcome screen's Publish to Task card (`SESSION_INGEST`).
 pub mod publish;
+/// The layer that notes what the paint thread runs, for the traces of the
+/// frames that miss 120 Hz (`session_ui::frames::slow`): the app's
+/// subscriber takes it.
+pub use session_ui::frames::slow::WorkLayer as FrameWorkLayer;
 mod shell;
 mod start;
 
@@ -266,6 +270,7 @@ fn link_engine() -> bool {
 fn link_engine() -> bool {
     use session_engine::studio_engine::link;
     let mode = link::Mode::from_env();
+    let mut waiting = false;
     loop {
         let linked = link::choose(mode, std::time::Duration::from_secs(30))
             .and_then(|found| attach_engine(&found).map(|()| found));
@@ -274,6 +279,15 @@ fn link_engine() -> bool {
                 tracing::info!(engine.pid = found.pid, engine.socket = %found.socket.display(), "engine: this window drives it");
                 link::keep_linked(mode, attach_engine);
                 return true;
+            }
+            // Attaching only, there is nothing to start: the engine is
+            // someone else's to bring up (`just dev` builds it first), so
+            // the window waits for it however long that takes.
+            Err(e) if mode == link::Mode::Attach => {
+                if !waiting {
+                    tracing::warn!(error = %e, "engine: none to attach to yet; waiting for one");
+                    waiting = true;
+                }
             }
             Err(e) => {
                 tracing::error!(error = %e, "engine: this window has none to drive");

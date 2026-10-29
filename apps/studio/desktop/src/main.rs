@@ -157,7 +157,11 @@ mod mac_menu;
 mod mac_activity;
 
 /// The log filter when `RUST_LOG` is unset — the console and the OTel export alike.
-const LOG_FILTER: &str = "info,vox_core=warn,schema_deser=off";
+/// loro's spans are its internals (each collab import opens ~1500 of them);
+/// the Vulkan loader's ICD scan reports harmless driver misses as errors at
+/// every start.
+const LOG_FILTER: &str = "info,vox_core=warn,schema_deser=off,loro=warn,loro_internal=warn,\
+     wgpu_hal::vulkan::instance=off";
 
 fn main() {
     // `--version`: the release's version and nothing else, before any
@@ -249,20 +253,33 @@ fn main() {
     // which never returns normally.
     #[cfg(not(target_arch = "wasm32"))]
     {
+        use tracing_subscriber::Layer as _;
         use tracing_subscriber::layer::SubscriberExt as _;
         use tracing_subscriber::util::SubscriberInitExt as _;
         if let Some(guard) = architect_telemetry::init("studio") {
             std::mem::forget(guard);
         }
+        let otel = architect_telemetry::otel::init("studio", LOG_FILTER);
+        // With a collector the terminal keeps warnings and errors: the rest
+        // is the collector's, and the terminal is `dx serve`'s status.
+        let console = if otel.is_some() {
+            tracing_subscriber::filter::LevelFilter::WARN
+        } else {
+            tracing_subscriber::filter::LevelFilter::TRACE
+        };
         let registry = tracing_subscriber::registry()
             .with(
                 tracing_subscriber::EnvFilter::try_from_default_env()
                     .unwrap_or_else(|_| LOG_FILTER.into()),
             )
-            .with(tracing_subscriber::fmt::layer())
+            .with(tracing_subscriber::fmt::layer().with_filter(console))
             .with(app_shell::log_ring::RingLayer::new())
             .with(architect_telemetry::tracing_layer());
-        match architect_telemetry::otel::init("studio", LOG_FILTER) {
+        // What the paint thread runs, for the traces of frames that miss
+        // 120 Hz (`ui.frame.slow`).
+        #[cfg(all(feature = "session-app", not(target_os = "ios")))]
+        let registry = registry.with(session_desktop::native::FrameWorkLayer);
+        match otel {
             Some((otel_guard, layers)) => {
                 registry.with(layers).init();
                 std::mem::forget(otel_guard);

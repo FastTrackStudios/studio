@@ -760,11 +760,15 @@ fn build_on(
     blobs: Arc<StoreBlobs>,
 ) -> Result<Bridge, String> {
     let engine = stage.engine();
+    // The build is the load's (`project.load`), though on a thread of its
+    // own: its facade calls land under it, the slow ones as spans.
+    let build = tracing::info_span!("song.build");
     std::thread::scope(|scope| {
         std::thread::Builder::new()
             .name("song-build".to_owned())
             .stack_size(16 * 1024 * 1024)
             .spawn_scoped(scope, || {
+                let _build = build.enter();
                 let runtime = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()

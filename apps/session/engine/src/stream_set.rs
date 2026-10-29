@@ -90,6 +90,9 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
     // What opens a song spawns tasks (`architect::platform::spawn`): on
     // the runtime, from this thread as from the one the rest open on.
     let _entered = runtime.enter();
+    // Its stages on the set's span (`set.open`).
+    let set_span = tracing::Span::current();
+    let mut stages = crate::stages::Stages::start();
     let (sources, set, name) = match remote {
         Remote::Live { link, name } => {
             let set = TaskSet::parse(&format!("share:{link}"));
@@ -139,6 +142,7 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
             (sources, set, name)
         }
     };
+    set_span.record("set.join_ms", stages.mark("set.join_ms"));
     let cache = cache_dir();
     let titles: Vec<String> = sources.iter().map(|(title, _)| title.clone()).collect();
     // Every song brought in at once — each its own fetch, none waiting on
@@ -147,7 +151,12 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
         .into_iter()
         .map(|(title, source)| {
             let cache = cache.clone();
-            let fetch = runtime.spawn(async move { bring_in(&source, &cache).await });
+            // Each song's download, side by side under the set's open.
+            let fetching = tracing::info_span!("song.fetch", song.name = %title);
+            let fetch = runtime.spawn(tracing::Instrument::instrument(
+                async move { bring_in(&source, &cache).await },
+                fetching,
+            ));
             (title, fetch)
         })
         .collect();
@@ -163,7 +172,10 @@ pub fn open(remote: Remote, progress: &dyn Fn(Progress)) -> eyre::Result<Setlist
             retry: None,
         });
         let song = match fetched(runtime, fetch) {
-            Ok(song) => song,
+            Ok(song) => {
+                set_span.record("set.first_fetch_ms", stages.mark("set.first_fetch_ms"));
+                song
+            }
             Err(e) => {
                 tracing::warn!(song.title = %title, error = %e, "stream-set: a song could not be brought in; the set goes on without it");
                 continue;
@@ -234,8 +246,11 @@ fn open_behind_all(
     arrive: &tokio::sync::mpsc::UnboundedSender<Arrival>,
 ) {
     let queue = Arc::new(Mutex::new(std::collections::VecDeque::from(rest)));
+    // The set's span (`set.open`): each song's load lands under it, though
+    // it ends with the first song.
+    let set = tracing::Span::current();
     for worker in 0..OPENING_AT_ONCE {
-        let (queue, arrive) = (Arc::clone(&queue), arrive.clone());
+        let (queue, arrive, set) = (Arc::clone(&queue), arrive.clone(), set.clone());
         let spawned = std::thread::Builder::new()
             .name(format!("set-open-{worker}"))
             .spawn(move || {
@@ -245,13 +260,31 @@ fn open_behind_all(
                     let Some((title, fetch)) = next else {
                         return;
                     };
-                    let opened = fetched(runtime, fetch).and_then(|song| {
+                    // A song's load: its files fetched, then opened.
+                    let load = tracing::info_span!(
+                        parent: &set,
+                        "project.load",
+                        song.name = %title,
+                        song.media = "streamed",
+                        song.fetch_ms = tracing::field::Empty,
+                        open.engine_ms = tracing::field::Empty,
+                        open.media_ms = tracing::field::Empty,
+                        open.read_ms = tracing::field::Empty,
+                        song.tracks = tracing::field::Empty,
+                        song.ok = tracing::field::Empty,
+                    );
+                    let _load = load.enter();
+                    let mut stages = crate::stages::Stages::start();
+                    let song = fetched(runtime, fetch);
+                    load.record("song.fetch_ms", stages.mark("song.fetch_ms"));
+                    let opened = song.and_then(|song| {
                         Setlist::open_behind(Opening {
                             path: song.project.clone(),
                             title: Some(title.clone()),
                             streamed: Some(song),
                         })
                     });
+                    load.record("song.ok", opened.is_ok());
                     ARRIVING
                         .fetch_update(
                             std::sync::atomic::Ordering::AcqRel,
