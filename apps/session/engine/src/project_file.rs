@@ -217,24 +217,37 @@ fn compact_when_idle() {
                     if let Ok(mut at) = LAST_WRITE.lock() {
                         *at = None;
                     }
-                    let folded = run(async {
+                    // Its own trace: how long the fold held the songs.
+                    let fold = tracing::info_span!("song.compact");
+                    let _fold = fold.enter();
+                    // Only the snapshot is taken with the songs held (it
+                    // needs the doc as it is); packing and writing it, the
+                    // slow part, is done after — an edit finishing
+                    // meanwhile is recorded at once, not behind the fold.
+                    let taken = run(async {
                         let mut songs = open_songs().lock().await;
+                        let mut taken = Vec::new();
                         for open in songs.values_mut().filter(|o| o.uncompacted > 0) {
-                            let _job = crate::jobs::start("Saving the song's history", 0);
-                            let mut stages = crate::stages::Stages::start();
                             let doc = open.bridge.doc();
-                            if let Err(e) = with_store(&open.store, |s| {
-                                s.compact(&open.branch, doc.loro()).map_err(|e| e.to_string())
+                            match with_store(&open.store, |s| {
+                                s.take_snapshot(&open.branch, doc.loro()).map_err(|e| e.to_string())
                             }) {
-                                tracing::warn!(song.error = %e, "the song's history could not be folded");
-                                continue;
+                                Ok(snapshot) => {
+                                    open.uncompacted = 0;
+                                    taken.push((Arc::clone(&open.store), snapshot));
+                                }
+                                Err(e) => tracing::warn!(song.error = %e, "the song's history could not be folded"),
                             }
-                            stages.mark("song.compact_ms");
-                            open.uncompacted = 0;
                         }
+                        taken
                     });
-                    if let Err(e) = folded {
-                        tracing::warn!(song.error = %e, "folding the songs' history did not run");
+                    match taken {
+                        Ok(taken) => {
+                            for (store, snapshot) in taken {
+                                write_snapshot_later(&store, snapshot, false);
+                            }
+                        }
+                        Err(e) => tracing::warn!(song.error = %e, "folding the songs' history did not run"),
                     }
                 }
             });
@@ -485,15 +498,56 @@ fn append(open: &mut Open, label: &str) -> Result<(), String> {
     // the snapshot holds beyond them is appended again and merged as the
     // same operations.
     if open.uncompacted >= COMPACT_AFTER {
-        let mut stages = crate::stages::Stages::start();
-        with_store(&open.store, |s| {
-            s.compact(&open.branch, doc.loro())
+        let snapshot = with_store(&open.store, |s| {
+            s.take_snapshot(&open.branch, doc.loro())
                 .map_err(|e| e.to_string())
         })?;
-        stages.mark("song.compact_ms");
         open.uncompacted = 0;
+        // Packed and written on a thread of its own: the edit that tipped it
+        // over is recorded now, not after the fold.
+        write_snapshot_later(&open.store, snapshot, true);
     }
     Ok(())
+}
+
+/// Pack `snapshot` and make it its branch's base in `store` — here, or
+/// (`spawned`) on a thread of its own — the song itself not held.
+fn write_snapshot_later(
+    store: &Arc<Mutex<Store>>,
+    snapshot: session_format::store::Snapshot,
+    spawned: bool,
+) {
+    let store = Arc::clone(store);
+    let span = tracing::Span::current();
+    let work = move || {
+        let _in = span.enter();
+        let _job = crate::jobs::start("Saving the song's history", 0);
+        let mut stages = crate::stages::Stages::start();
+        let written = snapshot
+            .pack()
+            .map_err(|e| e.to_string())
+            .and_then(|packed| {
+                with_store(&store, |s| {
+                    s.write_snapshot(packed).map_err(|e| e.to_string())
+                })
+            });
+        match written {
+            Ok(()) => {
+                stages.mark("song.compact_ms");
+            }
+            Err(e) => tracing::warn!(song.error = %e, "the song's history could not be folded"),
+        }
+    };
+    if !spawned {
+        work();
+        return;
+    }
+    if let Err(e) = std::thread::Builder::new()
+        .name("song-compact-write".into())
+        .spawn(work)
+    {
+        tracing::warn!(song.error = %e, "no thread to fold the song's history on");
+    }
 }
 
 /// Record each edit step the engine finishes into its song's file, once
