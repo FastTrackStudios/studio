@@ -160,7 +160,23 @@ pub fn Shell() -> Element {
                     {
                         window.request_redraw();
                     }
-                    let wait = if moving { 33 } else { 100 };
+                    // While anything moves or waits, a frame is asked for
+                    // every 4 ms — a 240 Hz display's vsync — so one is
+                    // always waiting when the last is presented: the
+                    // window then draws on every vsync it can make (every
+                    // other at 240 Hz, for a ~7 ms frame: a steady 120).
+                    // At 33 ms it drew at 30 fps whatever a frame cost; at
+                    // 8 ms a request just past a vsync waited for the next
+                    // (a 9.8 ms median). Requests between vsyncs are
+                    // merged. At rest, a slow poll.
+                    let wait = if moving
+                        || session_engine::window_queue::window_pending()
+                        || session_engine::window_queue::frame_owed()
+                    {
+                        4
+                    } else {
+                        100
+                    };
                     futures_timer::Delay::new(std::time::Duration::from_millis(wait)).await;
                 }
             }
