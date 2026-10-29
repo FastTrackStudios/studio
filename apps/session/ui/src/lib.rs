@@ -52,6 +52,9 @@ pub mod frames;
 pub mod fx_view;
 pub mod gesture;
 pub mod ghosts;
+/// What the window's GPU device asks for: buffers as large as the adapter has.
+#[cfg(feature = "native")]
+pub mod gpu;
 #[cfg(feature = "native")]
 pub mod headless;
 pub mod hit;
