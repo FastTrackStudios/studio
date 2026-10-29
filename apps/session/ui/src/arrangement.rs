@@ -1444,7 +1444,12 @@ impl Arrangement {
             .map(|t| t.guid.as_str())
             .collect();
         let mixes = Mixes::last();
+        // The row that took longest to build, for the trace: a shut
+        // folder's summary of thousands of slices reads very differently
+        // from a hundred rows that each took a little.
+        let mut slowest_row = (String::new(), std::time::Duration::ZERO);
         for (row, (track, depth)) in rows.iter().enumerate() {
+            let row_began = web_time::Instant::now();
             // A folder closes simply by the next row being shallower,
             // so the truncate IS the close.
             // Command indices are `u32`: two per row plus one per item,
@@ -1830,6 +1835,10 @@ impl Arrangement {
             laned_rows.push(opened);
             row_stacks.push(stack);
             head_h.push(head);
+            let took = row_began.elapsed();
+            if took > slowest_row.1 {
+                slowest_row = (track.name.clone(), took);
+            }
             row_takes.push(colors);
             row_lane_takes.push(
                 lane_take
@@ -1850,6 +1859,14 @@ impl Arrangement {
 
         mixes.keep();
         stages.mark("build.rows_ms");
+        drop(
+            tracing::info_span!(
+                "build.slowest_row",
+                build.row = slowest_row.0.as_str(),
+                build.row_ms = slowest_row.1.as_secs_f64() * 1e3,
+            )
+            .entered(),
+        );
         // The panel, cut at zoom 1 to start with. `repanel` re-cuts it
         // whenever the vertical zoom moves.
         let heights = Heights {
