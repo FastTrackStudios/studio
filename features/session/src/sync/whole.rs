@@ -56,17 +56,22 @@ pub fn read_into(
     tracks: bool,
 ) {
     let _ = sa.read_project(project, |p| {
-        let envelopes = EnvelopeIndex::of(p);
+        let envelopes = tracing::info_span!("whole.envelopes").in_scope(|| EnvelopeIndex::of(p));
         if tracks {
-            for track in &mut model.tracks {
-                read_track(p, &envelopes, track, ids);
-            }
+            tracing::info_span!("whole.tracks").in_scope(|| {
+                for track in &mut model.tracks {
+                    read_track(p, &envelopes, track, ids);
+                }
+            });
         }
         read_settings(p, &envelopes, &mut model.project, ids);
-        for (id, item) in &mut model.items {
-            read_item(p, &envelopes, &ids.items.engine(id), item, media);
-        }
-        model.take_markers = read_take_markers(p, &model.items, media, ids);
+        tracing::info_span!("whole.items").in_scope(|| {
+            for (id, item) in &mut model.items {
+                read_item(p, &envelopes, &ids.items.engine(id), item, media);
+            }
+        });
+        model.take_markers = tracing::info_span!("whole.take_markers")
+            .in_scope(|| read_take_markers(p, &model.items, media, ids));
     });
 }
 

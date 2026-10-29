@@ -192,12 +192,19 @@ pub async fn read_keeping(
     direct: Option<&dyn Direct>,
     tracks: Option<Vec<TrackState>>,
 ) -> daw_control::Result<SessionModel> {
+    use tracing::Instrument as _;
     let fresh = tracks.is_none();
     let tracks = match tracks {
         Some(tracks) => tracks,
-        None => read_tracks(project, blobs, ids).await?,
+        None => {
+            read_tracks(project, blobs, ids)
+                .instrument(tracing::info_span!("read.tracks"))
+                .await?
+        }
     };
-    let items = read_items(project, media, ids, direct).await?;
+    let items = read_items(project, media, ids, direct)
+        .instrument(tracing::info_span!("read.items"))
+        .await?;
     let standalone = direct.and_then(Direct::standalone);
     // daw-standalone's own state holds every recording's markers, which
     // [`crate::sync::whole`] reads at once.
@@ -287,7 +294,9 @@ pub async fn read_keeping(
     model.project.master.fx =
         read_chain(&project.tracks().master().await?.fx_chain(), blobs, ids).await?;
     if let Some(sa) = standalone {
-        crate::sync::whole::read_into(sa, project.guid(), &mut model, media, ids, fresh);
+        tracing::info_span!("read.whole").in_scope(|| {
+            crate::sync::whole::read_into(sa, project.guid(), &mut model, media, ids, fresh);
+        });
     }
     Ok(model)
 }
