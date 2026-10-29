@@ -24,15 +24,18 @@ fi
 tree="$(git write-tree)"
 commit="$(git commit-tree "$tree" -p HEAD -m 'lock-sync: the staged tree')"
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/lock-sync.XXXXXX")"
+# As a hook, git hands us the commit's index (GIT_INDEX_FILE): right for
+# write-tree and update-index, wrong for the scratch worktree's own git.
+other_tree() { env -u GIT_INDEX_FILE git "$@"; }
 cleanup() {
-    git worktree remove --force "$scratch" >/dev/null 2>&1 || true
+    other_tree worktree remove --force "$scratch" >/dev/null 2>&1 || true
     rm -rf "$scratch"
 }
 trap cleanup EXIT
 
 # The staged tree, checked out on its own: no LFS downloads (only the
 # manifests matter), no hooks.
-GIT_LFS_SKIP_SMUDGE=1 git worktree add --quiet --detach "$scratch" "$commit" >/dev/null
+GIT_LFS_SKIP_SMUDGE=1 other_tree worktree add --quiet --detach "$scratch" "$commit" >/dev/null
 
 # Resolve there: offline from the caches first, the network only when a
 # git dependency the committed lock pins was never fetched here.
