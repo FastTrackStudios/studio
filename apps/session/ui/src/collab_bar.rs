@@ -72,6 +72,19 @@ pub fn CollabBar() -> Element {
             // made the engine match its doc while the engine's bridge wrote
             // the engine back into the doc, and every FX chain was added
             // again each round (Unbreakable's reverbs: 50 deep in an hour).
+            // Joining or hosting a live session, and hosting what is open in
+            // Task, each bridge the song's doc to the engine the same way,
+            // so none of them starts here while the engine is elsewhere: a
+            // shared song syncs through the engine's own doc
+            // (`project_sync`), until live sessions are kept by the engine
+            // too.
+            if crate::studio_engine::link::linked().is_some() {
+                tracing::info!(
+                    collab.skipped = "engine elsewhere",
+                    "collab: this window starts no live session; the engine keeps the song's doc"
+                );
+                return;
+            }
             let task_set = crate::collab::TaskSet::from_env();
             if let Some(set) = task_set {
                 match crate::collab::join_task(&set, display_name()) {
