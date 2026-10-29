@@ -381,6 +381,8 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         crate::window_queue::ask(crate::window_queue::Asked::Run {
             id: BAR_STEP.to_owned(),
             args: format!(r#"{{"at":{}}}"#, point.at),
+            // Nothing waits on it.
+            ticket: 0,
         });
         let playing = crate::engine::Transport::shared().is_some_and(|t| t.reading().playing);
         if !playing {

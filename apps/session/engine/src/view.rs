@@ -397,6 +397,32 @@ pub struct Queued {
     pub revision: u64,
 }
 
+/// One of the window's own actions, as the window's Action List describes
+/// it, offered to the engine's ([`EngineView::window_actions`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Facet)]
+pub struct WindowAction {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub group: String,
+    pub shortcut: String,
+    /// `read-only`, `mutating` or `destructive`.
+    pub effect: String,
+    /// What it takes and gives back, as JSON Schema.
+    pub params_schema: Option<String>,
+    pub result_schema: Option<String>,
+}
+
+/// What a window's action came to ([`EngineView::answer`]): its result as
+/// JSON when `ok`, else why not.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Facet)]
+pub struct WindowAnswer {
+    pub ticket: u64,
+    pub ok: bool,
+    pub json: String,
+}
+
 /// The engine, as a window reads and drives it.
 #[architect::rpc]
 pub trait EngineView {
@@ -408,6 +434,15 @@ pub trait EngineView {
 
     /// What the engine has asked of a window, taken (each by one window).
     async fn take_window(&self) -> Vec<crate::window_queue::Asked>;
+
+    /// The window's own actions (its view: zoom, page, frame rate), put on
+    /// the engine's Action List: run there, each is asked of the window
+    /// (`crate::window_queue::ask_window_action`). Those listed already
+    /// are left; how many were added.
+    async fn window_actions(&self, actions: Vec<WindowAction>) -> u32;
+
+    /// What one of the window's actions, asked of it with a ticket, came to.
+    async fn answer(&self, answer: WindowAnswer);
 
     /// Coarse waveforms, as the engine draws them.
     async fn waves(&self, ask: WavesAsk) -> Vec<WaveRead>;
