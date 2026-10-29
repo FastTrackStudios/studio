@@ -9,6 +9,9 @@ description = "Docking layouts: the dock tree model and its operations, and (fea
 workspace = true
 
 [features]
+# The dock host on Blitz (`host`): the Dockspace drawn with inline styles
+# and pointer events, for dioxus-native. No desktop, no Tailwind.
+host = ["dep:dioxus"]
 native = ["dioxus/desktop", "ui"]
 ui = ["dep:serde", "dep:serde_json", "dep:tokio", "web"]
 web = ["dep:dioxus", "dep:tracing"]
@@ -22,3 +25,18 @@ serde_json = { workspace = true, optional = true }
 tokio = { version = "1.48", features = ["time"], optional = true }
 tracing = { workspace = true, optional = true }
 uuid = { version = "1.0", features = ["v4"] }
+
+[dev-dependencies]
+# examples/dock_shot: the built-in screensets drawn headless to PNGs.
+anyrender = { workspace = true }
+anyrender_vello = { workspace = true }
+blitz-dom = { workspace = true }
+blitz-paint = { workspace = true }
+blitz-traits = { workspace = true }
+dioxus-native-dom = { workspace = true }
+image = { workspace = true }
+
+[[example]]
+name = "dock_shot"
+required-features = ["host"]
+

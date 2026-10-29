@@ -5436,9 +5436,16 @@ checksum = "780955b8b195a21ab8e4ac6b60dd1dbdcec1dc6c51c0617964b08c81785e12c9"
 name = "dock"
 version = "26.10.3"
 dependencies = [
+ "anyrender 0.11.1",
+ "anyrender_vello 0.12.0",
+ "blitz-dom",
+ "blitz-paint",
+ "blitz-traits",
  "dioxus",
+ "dioxus-native-dom",
  "facet",
  "facet-json",
+ "image",
  "serde",
  "serde_json",
  "tokio",
