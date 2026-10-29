@@ -334,6 +334,37 @@ pub fn take_mode_request() -> Option<session::modes::Mode> {
     MODE_REQUEST.lock().ok()?.take()
 }
 
+/// The window's in a process of its own: an action that sets what the
+/// window shows (its mode, a mode's phase), run on the engine's list, is
+/// asked of the window too — run there on the window's own list, where the
+/// shell reads it. In the window's process no window follows it, so the
+/// ask goes nowhere and nothing loops.
+fn also_in_the_window(id: &str, args: String) {
+    if crate::window_queue::engine_has_window() {
+        crate::window_queue::ask(crate::window_queue::Asked::Run {
+            id: id.to_owned(),
+            args,
+            ticket: 0,
+        });
+    }
+}
+
+/// The mode the window shows, as its shell last said (`note_shown_mode`).
+static SHOWN_MODE: Mutex<Option<session::modes::Mode>> = Mutex::new(None);
+
+/// The window's shell shows `mode` now.
+pub fn note_shown_mode(mode: session::modes::Mode) {
+    if let Ok(mut slot) = SHOWN_MODE.lock() {
+        *slot = Some(mode);
+    }
+}
+
+/// The mode the window shows, once its shell has said.
+#[must_use]
+pub fn shown_mode() -> Option<session::modes::Mode> {
+    SHOWN_MODE.lock().ok().and_then(|m| *m)
+}
+
 /// Ask the window for `mode`, as `SESSION_MODE` does — for an action that
 /// leaves the window in a mode of its own (New Project opens in Organize).
 pub fn request_mode(mode: session::modes::Mode) {
@@ -434,7 +465,52 @@ fn register_phase(list: &ActionList) -> Result<(), architect::action::ActionErro
                 )
             })?;
         session::mode_phases::choose(mode, phase.slug);
+        also_in_the_window(
+            PHASE.id,
+            format!(
+                r#"{{"phase":"{}","mode":"{}"}}"#,
+                phase.slug,
+                mode.display_name()
+            ),
+        );
         Ok(())
+    })?;
+    Ok(())
+}
+
+static WINDOW_TARGET: ActionMeta = meta(
+    "SESSION_WINDOW_TARGET",
+    "window_target",
+    "Which window the actions drive",
+    "With more than one window following the engine, which one its window actions (SESSION_VIEW, SESSION_ZOOM, SESSION_FRAMES, SESSION_WINDOW, SESSION_MODE…) go to: `window` by name (FTS_WINDOW_NAME, `main` by default); empty or left out: whichever takes them first. Says the windows seen and the one now named.",
+    "View",
+    "",
+);
+
+/// Which window, by name.
+#[derive(Facet)]
+struct WindowTargetArg {
+    window: Option<String>,
+}
+
+/// What [`WINDOW_TARGET`] answers.
+#[derive(Facet)]
+struct WindowTarget {
+    /// The window named now; `None`: whichever takes them first.
+    target: Option<String>,
+    /// The windows that have taken the engine's asks, newest last.
+    seen: Vec<String>,
+}
+
+fn register_window_target(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    list.register(&WINDOW_TARGET, Effect::Mutating, |a: WindowTargetArg| {
+        if let Some(window) = a.window {
+            crate::window_queue::set_target(Some(window));
+        }
+        Ok(WindowTarget {
+            target: crate::window_queue::target(),
+            seen: crate::window_queue::seen_windows(),
+        })
     })?;
     Ok(())
 }
@@ -454,6 +530,7 @@ fn register_mode(list: &ActionList) -> Result<(), architect::action::ActionError
         if let Ok(mut slot) = MODE_REQUEST.lock() {
             *slot = Some(mode);
         }
+        also_in_the_window(MODE.id, format!(r#"{{"mode":"{}"}}"#, mode.display_name()));
         Ok(())
     })?;
     Ok(())
@@ -461,6 +538,7 @@ fn register_mode(list: &ActionList) -> Result<(), architect::action::ActionError
 
 fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError> {
     register_mode(list)?;
+    register_window_target(list)?;
     register_phase(list)?;
     register_sections(list)?;
     register_tracks(list)?;
@@ -4717,12 +4795,16 @@ fn apply_cuts(
     settings: &crate::drum_settings::Settings,
     cuts: Vec<(i64, i64)>,
 ) -> Result<(), String> {
+    let mut stages = crate::stages::Stages::start();
     let song = crate::song::Song::current()?;
+    stages.mark("cuts.song_ms");
     if !crate::hit_place::ready(&song) {
         landed(slip_now(daw, project, settings, cuts));
+        stages.mark("cuts.slip_ms");
         return Ok(());
     }
     follow_samples(daw, project, settings, &cuts);
+    stages.mark("cuts.samples_ms");
     let seconds = |us: i64| num_traits::ToPrimitive::to_f64(&us).unwrap_or(0.0) / 1e6;
     let moves: Vec<(f64, f64)> = cuts
         .iter()
@@ -4733,8 +4815,10 @@ fn apply_cuts(
         crossfade: settings.xfade_ms / 1_000.0,
     };
     crate::hit_place::place(&song, &moves, joins)?;
+    stages.mark("cuts.place_ms");
     crate::song_model::request_resync_items();
     crate::hit_overlay::refresh();
+    stages.mark("cuts.refresh_ms");
     Ok(())
 }
 
@@ -4937,15 +5021,18 @@ pub fn run(id: &str, args: &[u8]) -> Result<Vec<u8>, String> {
 /// in the order they were pressed; the window redraws when each is done,
 /// as it does for a model's.
 pub fn off_the_window(id: &'static str, args: String) {
-    static WORKER: std::sync::OnceLock<
-        std::sync::Mutex<std::sync::mpsc::Sender<(&'static str, String)>>,
-    > = std::sync::OnceLock::new();
+    type Job = (&'static str, String, tracing::Span);
+    static WORKER: std::sync::OnceLock<std::sync::Mutex<std::sync::mpsc::Sender<Job>>> =
+        std::sync::OnceLock::new();
     let worker = WORKER.get_or_init(|| {
-        let (tx, rx) = std::sync::mpsc::channel::<(&'static str, String)>();
+        let (tx, rx) = std::sync::mpsc::channel::<Job>();
         let _ = std::thread::Builder::new()
             .name("key-actions".into())
             .spawn(move || {
-                for (id, args) in rx {
+                // Each under the span it was asked in (the key's): its
+                // trace runs from the key to the engine.
+                for (id, args, asked_in) in rx {
+                    let _in = asked_in.entered();
                     if let Err(e) = run(id, args.as_bytes()) {
                         tracing::warn!(action.id = id, error = %e, "key action refused");
                     }
@@ -4954,6 +5041,6 @@ pub fn off_the_window(id: &'static str, args: String) {
         std::sync::Mutex::new(tx)
     });
     if let Ok(tx) = worker.lock() {
-        let _ = tx.send((id, args));
+        let _ = tx.send((id, args, tracing::Span::current()));
     }
 }

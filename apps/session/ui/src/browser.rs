@@ -80,7 +80,7 @@ fn read() -> Option<Shown> {
 fn run(id: &'static str, args: serde_json::Value) {
     #[cfg(feature = "native")]
     if let Some(runtime) = crate::open::runtime() {
-        runtime.spawn_blocking(move || {
+        crate::open::traced_blocking(runtime, move || {
             if let Err(e) = crate::actions::run(id, args.to_string().as_bytes()) {
                 tracing::warn!(browser.action = id, browser.error = %e, "the browser's press was refused");
             }

@@ -330,8 +330,46 @@ impl From<Asked> for Action {
     }
 }
 
-/// What the engine has asked, not yet taken by a window.
-static ASKED: Mutex<VecDeque<Asked>> = Mutex::new(VecDeque::new());
+/// What the engine has asked, not yet taken by a window — each with the
+/// window it is for (`None`: whichever takes it first).
+static ASKED: Mutex<VecDeque<(Option<String>, Asked)>> = Mutex::new(VecDeque::new());
+
+/// The window the engine's asks go to, by name (`SESSION_WINDOW_TARGET`);
+/// `None`: whichever window takes them first.
+static TARGET: Mutex<Option<String>> = Mutex::new(None);
+
+/// The windows that have taken asks, by name, newest last.
+static SEEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Send the engine's asks to the window `name` from now on (`None`: to
+/// whichever window takes them first).
+pub fn set_target(name: Option<String>) {
+    if let Ok(mut target) = TARGET.lock() {
+        *target = name.filter(|n| !n.is_empty());
+    }
+}
+
+/// The window the engine's asks go to, if one was named.
+#[must_use]
+pub fn target() -> Option<String> {
+    TARGET.lock().ok().and_then(|t| t.clone())
+}
+
+/// The windows that have followed this engine and taken its asks, by name.
+#[must_use]
+pub fn seen_windows() -> Vec<String> {
+    SEEN.lock().map(|s| s.clone()).unwrap_or_default()
+}
+
+/// This window's name, as it gives it to its engine (`FTS_WINDOW_NAME`,
+/// else `main`): what `SESSION_WINDOW_TARGET` names it by.
+#[must_use]
+pub fn window_name() -> String {
+    std::env::var("FTS_WINDOW_NAME")
+        .ok()
+        .filter(|n| !n.trim().is_empty())
+        .unwrap_or_else(|| "main".to_owned())
+}
 
 /// How many windows follow this engine over a link (the engine's view
 /// host counts them): what [`ask`] needs one of.
@@ -366,7 +404,7 @@ pub fn ask(asked: Asked) -> bool {
     }
     let pending = match ASKED.lock() {
         Ok(mut q) => {
-            q.push_back(asked);
+            q.push_back((target(), asked));
             q.len()
         }
         Err(_) => return false,
@@ -377,13 +415,22 @@ pub fn ask(asked: Asked) -> bool {
     true
 }
 
-/// What has been asked, taken: one window carries each out.
+/// What has been asked of the window `window` (by name), taken: one
+/// window carries each out — the one it was for, else the first to ask.
 #[must_use]
-pub fn take_asked() -> Vec<Asked> {
-    ASKED
-        .lock()
-        .map(|mut q| q.drain(..).collect())
-        .unwrap_or_default()
+pub fn take_asked(window: &str) -> Vec<Asked> {
+    if let Ok(mut seen) = SEEN.lock() {
+        seen.retain(|w| w != window);
+        seen.push(window.to_owned());
+    }
+    let Ok(mut q) = ASKED.lock() else {
+        return Vec::new();
+    };
+    let (mine, others): (Vec<_>, Vec<_>) = q
+        .drain(..)
+        .partition(|(for_window, _)| for_window.as_deref().is_none_or(|w| w == window));
+    q.extend(others);
+    mine.into_iter().map(|(_, asked)| asked).collect()
 }
 
 /// What is waiting to be taken.
@@ -600,7 +647,7 @@ mod window_action_tests {
 
     /// The ticket of the one `Run` asked so far, taken.
     fn asked_ticket() -> u64 {
-        match take_asked().as_slice() {
+        match take_asked("main").as_slice() {
             [Asked::Run { ticket, .. }] => *ticket,
             other => panic!("one run asked, not {other:?}"),
         }

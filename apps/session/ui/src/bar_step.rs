@@ -200,7 +200,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
 fn run(args: serde_json::Value) {
     #[cfg(feature = "native")]
     if let Some(runtime) = crate::open::runtime() {
-        runtime.spawn_blocking(move || {
+        crate::open::traced_blocking(runtime, move || {
             if let Err(e) =
                 crate::actions::list().run_json(STEP_ACTION.id, args.to_string().as_bytes())
             {

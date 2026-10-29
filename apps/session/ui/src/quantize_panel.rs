@@ -357,11 +357,11 @@ pub fn take_asked() -> bool {
 /// Run `id` with `args` on the Action List, off the window's thread.
 async fn run(id: &'static str, args: String) -> Result<Value, String> {
     let runtime = crate::open::runtime().ok_or("no engine")?;
-    let out = runtime
-        .spawn_blocking(move || crate::actions::run(id, args.as_bytes()))
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())?;
+    let out =
+        crate::open::traced_blocking(runtime, move || crate::actions::run(id, args.as_bytes()))
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
     serde_json::from_slice(&out).map_err(|e| e.to_string())
 }
 

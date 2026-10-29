@@ -25,6 +25,13 @@ use crate::window_queue::{Action, queue, take_window};
 #[must_use]
 pub fn through_list(actions: Vec<Action>) -> Vec<Action> {
     for action in actions {
+        // A key's action, its own unit of work: what it runs — on the
+        // engine over the link, or here — lands under it.
+        let _span = tracing::info_span!(
+            "window.key",
+            window.key_action = id_and_args(&action).map_or("", |(id, _)| id),
+        )
+        .entered();
         match id_and_args(&action) {
             Some((id, args)) if behind_the_window(id) => crate::actions::off_the_window(id, args),
             // The window's own transport keys took this press already
@@ -396,6 +403,24 @@ static TOGGLE_MIXER: ActionMeta = meta(
     "",
 );
 
+static WINDOW_STATE: ActionMeta = meta(
+    "SESSION_WINDOW",
+    "session_window",
+    "What the window shows",
+    "The window's mode and that mode's phase, as its shell shows them now — what a key or a click changed (SESSION_MODE, Alt+1…9, SESSION_PHASE). Read-only.",
+    "View",
+    "",
+);
+
+/// What [`WINDOW_STATE`] answers.
+#[derive(Facet)]
+struct WindowState {
+    /// `Edit`, `Live`, …; empty before the shell has shown one.
+    mode: String,
+    /// The mode's phase (its slug), when it has phases.
+    phase: Option<String>,
+}
+
 static QUANTIZE_PANEL: ActionMeta = meta(
     "SESSION_QUANTIZE_PANEL",
     "quantize_panel",
@@ -538,6 +563,17 @@ enum Zoom {
 const SCENES: &[&str] = &["overview", "overview-top"];
 
 fn register_window(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    list.register(&WINDOW_STATE, Effect::ReadOnly, |(): ()| {
+        let mode = crate::actions::shown_mode();
+        Ok(WindowState {
+            mode: mode
+                .map(|m| m.display_name().to_owned())
+                .unwrap_or_default(),
+            phase: mode
+                .and_then(session::mode_phases::current)
+                .map(|p| p.slug.to_owned()),
+        })
+    })?;
     list.register(&QUANTIZE_PANEL, Effect::Mutating, |(): ()| {
         crate::quantize_panel::ask();
         Ok("the Quantize panel shown, or hidden if it was".to_owned())

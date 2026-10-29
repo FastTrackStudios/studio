@@ -629,6 +629,21 @@ pub fn engine_runtime() -> eyre::Result<&'static tokio::runtime::Runtime> {
     Ok(rt)
 }
 
+/// `work` off the runtime's workers ([`tokio::runtime::Runtime::spawn_blocking`])
+/// under the span it was asked in: a key's or an action's edit traced from
+/// the window to the engine, though it runs on a thread of its own.
+pub fn traced_blocking<F, R>(
+    runtime: &tokio::runtime::Runtime,
+    work: F,
+) -> tokio::task::JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let span = tracing::Span::current();
+    runtime.spawn_blocking(move || span.in_scope(work))
+}
+
 /// The engine's runtime, for work that must not run on the event loop.
 ///
 /// `None` until the project has been opened — a window that is still

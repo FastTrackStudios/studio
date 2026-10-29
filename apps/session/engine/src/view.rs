@@ -432,8 +432,10 @@ pub trait EngineView {
     /// Carry out a window's edits, in order.
     async fn apply(&self, batch: EditBatch) -> Applied;
 
-    /// What the engine has asked of a window, taken (each by one window).
-    async fn take_window(&self) -> Vec<crate::window_queue::Asked>;
+    /// What the engine has asked of the window `window` (by name), taken
+    /// (each by one window: the one `SESSION_WINDOW_TARGET` names, else the
+    /// first to ask).
+    async fn take_window(&self, window: String) -> Vec<crate::window_queue::Asked>;
 
     /// The window's own actions (its view: zoom, page, frame rate), put on
     /// the engine's Action List: run there, each is asked of the window
