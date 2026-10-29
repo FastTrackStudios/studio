@@ -15,8 +15,8 @@
 use dioxus::prelude::*;
 
 /// The compiled Tailwind the session-ui panels (the progress bar, the
-/// transport buttons) are styled with — the desktop app's sheet.
-const TAILWIND: &str = include_str!("../../desktop/assets/tailwind-signal.css");
+/// transport buttons) are styled with — Studio's sheet.
+const TAILWIND: &str = include_str!("../../../studio/desktop/assets/tailwind-signal.css");
 
 /// Start the page: its logging, then the app.
 pub fn run() {

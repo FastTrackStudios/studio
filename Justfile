@@ -24,14 +24,15 @@ default:
     @just --list
 
 # ── Tailwind (app UI sheet) ──────────────────────────────────────────────
-# The single compiled sheet (assets/tailwind-signal.css) is inlined by
-# BOTH apps/session/desktop/src/rig_view.rs (signal UI) and
-# src/main.rs SessionChrome (session UI) via include_str!; rebuild it
-# whenever UI-crate class usage changes. input.css @source globs scan the
-# signal/session UI crates + libs/ui + libs/dock.
+# The single compiled sheet (apps/studio/desktop/assets/tailwind-signal.css)
+# is inlined by Studio's rig views (rig_view.rs) and its DAW view
+# (src/session/native/shell.rs), Session's browser remote, session-daw-web
+# and the editor's chord panel, via include_str!; rebuild it whenever
+# UI-crate class usage changes. input.css @source globs scan the app's
+# source and the rig/session UI crates + features/ui.
 
-# Point apps/{session,signal}/desktop/.lumen-blocks at the lumen-blocks
-# checkout cargo actually resolved.
+# Point apps/studio/desktop/.lumen-blocks at the lumen-blocks checkout cargo
+# actually resolved.
 #
 # input.css used to reach into $CARGO_HOME with a hardcoded /home/cody path
 # and a `lumen-blocks-*/*/` wildcard. That wildcard matched EVERY checkout
@@ -44,31 +45,30 @@ _lumen-link:
     set -euo pipefail
     dir=$(cargo metadata --locked --format-version 1 2>/dev/null \
         | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="lumen-blocks"))')
-    ln -sfn "$dir" apps/session/desktop/.lumen-blocks
     ln -sfn "$dir" apps/studio/desktop/.lumen-blocks
     # architect-ui, for the FX editors' sheets (a git dep has no stable path).
     ui=$(cargo metadata --locked --format-version 1 2>/dev/null \
         | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="architect-ui"))')
     ln -sfn "$ui" features/ui/.architect-ui
 
-# Build Tailwind CSS (v4)
+# Build the app's Tailwind sheet (v4)
 tailwind: _lumen-link
-    cd apps/session/desktop && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --minify
+    cd apps/studio/desktop && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --minify
 
 # Watch Tailwind CSS for changes
 tailwind-watch: _lumen-link
-    cd apps/session/desktop && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --watch --minify
+    cd apps/studio/desktop && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --watch --minify
 
 # Fail if the committed sheet isn't what the sources produce.
 #
-# tailwind-signal.css is `include_str!`d by rig_view.rs and main.rs, so it
+# tailwind-signal.css is `include_str!`d by the app's views, so it
 # has to be committed — which means it can go stale silently when someone
 # adds a class and doesn't rebuild. It was stale by ~50 classes when this
 # check was written.
 tailwind-check: tailwind
     #!/usr/bin/env bash
     set -euo pipefail
-    if ! git diff --quiet -- apps/session/desktop/assets/tailwind-signal.css; then
+    if ! git diff --quiet -- apps/studio/desktop/assets/tailwind-signal.css; then
         echo "tailwind-signal.css is out of date — run 'just tailwind' and commit the result" >&2
         exit 1
     fi
@@ -84,38 +84,40 @@ tailwind-check: tailwind
 
 # The signal engine — the headless rig core (serves the vox router on
 # ws://:4040/vox): the studio-desktop binary in --engine mode. `rigd`
-# kept as an alias for muscle memory. (`session-desktop --engine` is a
-# different thing: the setlist + daw facade server.)
+# kept as an alias for muscle memory. (Session's engine is `studio engine`,
+# or `studio-desktop --session-engine`.)
 signal-engine:
     cargo run --release -p studio-desktop -- --engine
 
 alias rigd := signal-engine
 
-# Launch the desktop app (Session and/or Charts, per default features) via
-# dx serve, so UI edits hot-reload instead of a plain `cargo run`.
-desktop:
-    cd apps/session/desktop && dx serve --release
+# Launch Studio (default features: the rig and the DAW) via dx serve, so UI
+# edits hot-reload instead of a plain `cargo run`. `just dev` is the whole
+# loop (engine and window); this is the window on its own.
+desktop: tailwind
+    cd apps/studio/desktop && dx serve --release --platform desktop
 
-# Stage the fts web bundle (the browser remote) for embedding: tailwind →
-# dx web build (signal rigs + the session setlist remote) →
-# apps/session/desktop/web-dist/, which `cargo build -p session-desktop
-# --features embed-web` compiles into the binary (include_dir). On wasm the
-# session feature is only the wire surface (session-proto clients +
-# session-ui); the player itself runs in the engine. web-dist/ is gitignored.
+# Stage the whole browser remote for embedding: tailwind → studio-desktop's
+# dx web build with the rig (`signal`) and Session's setlist remote
+# (`session-web`: `#session` and `/{org}/{collection}` pages) →
+# apps/studio/desktop/web-dist/, which `cargo build -p studio-desktop
+# --features embed-web` compiles into the binary (include_dir). On wasm
+# Session is only the wire surface (session-proto clients + session-ui); the
+# player itself runs in the engine. `signal-web-stage` is the rig alone.
+# web-dist/ is gitignored.
 web-stage: tailwind
-    cd apps/session/desktop && dx build --platform web --release --no-default-features --features signal,session
-    rm -rf apps/session/desktop/web-dist
-    cp -r target/dx/session-desktop/release/web/public apps/session/desktop/web-dist
+    cd apps/studio/desktop && dx build --platform web --release --no-default-features --features signal,session-web
+    rm -rf apps/studio/desktop/web-dist
+    cp -r target/dx/studio-desktop/release/web/public apps/studio/desktop/web-dist
+    just keys-worklet-wasm
 
 # ── Signal (apps/studio/desktop) ─────────────────────────────────────────
 # The isolated live-rig app: the same one engine as Session, running only
-# the rigs (see docs/design/one-engine.md). Its Tailwind sheet is its own
-# (apps/studio/desktop/assets/tailwind-signal.css, include_str!'d by
-# rig_view.rs), built from apps/studio/desktop/input.css.
+# the rigs (see docs/design/one-engine.md). Its Tailwind sheet is the app's
+# one sheet (`just tailwind`).
 
-# Build the Signal app's Tailwind sheet
-signal-tailwind: _lumen-link
-    cd apps/studio/desktop && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --minify
+# Build the app's Tailwind sheet (the same as `just tailwind`)
+signal-tailwind: tailwind
 
 # Release rather than dev because the rig plays audio in-process, and a
 # debug build xruns. dx rebuilds and relaunches on a source change; that is
@@ -465,17 +467,6 @@ uninstall:
     gtk-update-icon-cache ~/.local/share/icons/hicolor 2>/dev/null || true
     echo "uninstalled (user data in ~/.config/fts and ~/.config/signal kept)"
 
-# Session.app + its macOS .pkg installer (signed with the Developer ID
-# identities in the login keychain), built with the host toolchain — see the
-# script's header for the knobs (NOTARIZE=1, ADHOC_SIGN=1, MAC_TARGETS=...).
-macos-pkg:
-    bash apps/session/desktop/ios/package-session-macos.sh
-
-# Build the installer and install it for this user (~/Applications, no
-# password), replacing any earlier install.
-macos-install: macos-pkg
-    installer -pkg "target/Session-$(cargo pkgid -p session-desktop | sed 's/.*[#@]//')-macos.pkg" -target CurrentUserHomeDirectory
-
 # The FX editors' embedded Tailwind sheets (the editor include_str!s
 # assets/tailwind.css). Rebuild after class changes in the editor or in
 # architect-ui.
@@ -642,7 +633,7 @@ mic-models-install:
 # Package the plugin bundles as a single release tarball in dist/
 # (fts-plugins-v<version>-<platform>.tar.gz + SHA256SUMS entry). The macOS
 # release artifact is NOT this — it's the signed+notarized .zip built by
-# apps/session/desktop/ios/deploy-macos-plugins.sh, since Apple only accepts
+# apps/studio/desktop/ios/deploy-macos-plugins.sh, since Apple only accepts
 # zip/pkg/dmg for notarization.
 plugins-package: plugins-bundle
     #!/usr/bin/env bash
@@ -1664,7 +1655,7 @@ daw-animate PROJECT="" SIZE="2560x1440":
 mixer-golden SIZE="2560x1440":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --profile release-fast -p session-desktop
+    {{signal_build}}
     # A theme by name is themes/<name>/ or themes/fts-<name>.frame; anything
     # else is a path. `:` layers them.
     theme=""
@@ -1681,8 +1672,8 @@ mixer-golden SIZE="2560x1440":
     FTS_SIMULATE="${SIMULATE:-1}" \
     FTS_THEME="$theme" \
     FTS_WINDOW_SIZE="{{SIZE}}" \
-    FTS_SESSION_PROJECT="$PWD/{{GOLDEN_DIR}}/template.rpp" \
-    ./target/release-fast/session-desktop
+    FTS_STUDIO_OPEN="$PWD/{{GOLDEN_DIR}}/template.rpp" \
+    {{signal_bin}}
 
 # How far the themed mixer is from the painters' one: regenerates the
 # fts-dark theme from the painters' own drawings (skin::export), shoots the
@@ -1714,26 +1705,28 @@ dev *ARGS:
 # (tempo, markers, section regions, Keyflow folder), and generate the
 # click and guide — the multitrack's own click/guide stems are kept,
 # muted, beside them. Leave CHART empty to open the session as it is.
-# The desktop app, as you run it while working on it: `release-fast`
-# (release's optimisation, incremental — see Cargo.toml). A one-line edit
-# rebuilds in ~15 s instead of ~60 s. `PROJECT` is a `.RPP` (its prepared
-# `.session` beside it opens instead, once there is one), a `.session`, or
-# a setlist (a folder of songs, or a `.setlist`); `MODE` opens in a mode:
+# Studio's DAW view, as you run it while working on it: `release-fast`
+# (release's optimisation, incremental — see Cargo.toml), the same build as
+# the other app recipes. A one-line edit rebuilds in ~15 s instead of ~60 s.
+# `PROJECT` is a `.RPP` (its prepared `.session` beside it opens instead,
+# once there is one), a `.session`, or a setlist (a folder of songs, or a
+# `.setlist`) — opened past the welcome screen (`FTS_STUDIO_OPEN`); without
+# one the welcome screen opens. `MODE` opens in a mode:
 #   just app "../sessions/Worship Set.setlist" "" organize
 app PROJECT="" CHART="" MODE="":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --profile release-fast -p session-desktop
+    {{signal_build}}
     # A bare binary started from a shell is not a foreground app on macOS
     # (it opens behind whatever is in front); wrapped in a bundle and
     # started with `open`, it comes forward like any app.
-    bundle="target/release-fast/Session Dev.app"
+    bundle="target/release-fast/Studio Dev.app"
     mkdir -p "$bundle/Contents/MacOS"
     printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
         '<plist version="1.0"><dict>' \
-        '<key>CFBundleName</key><string>Session Dev</string>' \
-        '<key>CFBundleIdentifier</key><string>app.fasttrackstudio.session.dev</string>' \
-        '<key>CFBundleExecutable</key><string>session-desktop</string>' \
+        '<key>CFBundleName</key><string>Studio Dev</string>' \
+        '<key>CFBundleIdentifier</key><string>app.fasttrackstudio.studio.dev</string>' \
+        '<key>CFBundleExecutable</key><string>studio-desktop</string>' \
         '<key>CFBundlePackageType</key><string>APPL</string>' \
         '<key>NSHighResolutionCapable</key><true/>' \
         '</dict></plist>' > "$bundle/Contents/Info.plist"
@@ -1741,20 +1734,17 @@ app PROJECT="" CHART="" MODE="":
     # here — `open` would otherwise throw it away.
     # ~/Library/Logs, not target/: `open` cannot write a launched app's
     # output onto an external volume (-10810).
-    mkdir -p "$HOME/Library/Logs/Session Dev"
-    log="$HOME/Library/Logs/Session Dev/session-dev.log"
+    mkdir -p "$HOME/Library/Logs/Studio Dev"
+    log="$HOME/Library/Logs/Studio Dev/studio-dev.log"
     envs=(--env "RUST_LOG=${RUST_LOG:-warn,session_engine=info,session_ui=info}" --env RUST_BACKTRACE=1)
     # quote(): a song title can carry an apostrophe (God, I'm Just Grateful).
     project={{quote(PROJECT)}}
     chart={{quote(CHART)}}
     mode={{quote(MODE)}}
     if [[ -n "$project" ]]; then
-        # A folder or a .setlist is a set; anything else is one song.
-        if [[ -d "$project" && "$project" != *.session ]] || [[ "$project" == *.setlist ]]; then
-            envs+=(--env "FTS_SESSION_SETLIST=$(cd "$(dirname "$project")" && pwd)/$(basename "$project")")
-        else
-            envs+=(--env "FTS_SESSION_PROJECT=$(cd "$(dirname "$project")" && pwd)/$(basename "$project")")
-        fi
+        # A song, a .session, a folder or a .setlist: Studio opens it in the
+        # DAW view straight away, past the welcome screen.
+        envs+=(--env "FTS_STUDIO_OPEN=$(cd "$(dirname "$project")" && pwd)/$(basename "$project")")
     fi
     if [[ -n "$chart" ]]; then envs+=(--env "FTS_SESSION_CHART=$chart"); fi
     if [[ -n "$mode" ]]; then envs+=(--env "FTS_SESSION_MODE=$mode"); fi
@@ -1770,18 +1760,18 @@ app PROJECT="" CHART="" MODE="":
     done
     # FTS_SECOND_WINDOW: the same, for any second window (`duo-task`).
     if [[ -n "${FTS_COLLAB_JOIN:-}" || -n "${FTS_SECOND_WINDOW:-}" ]]; then
-        log="$HOME/Library/Logs/Session Dev/session-dev-joined.log"
+        log="$HOME/Library/Logs/Studio Dev/studio-dev-joined.log"
         open -n --stdout "$log" --stderr "$log" "${envs[@]}" "$bundle"
         echo "log: $log"
         exit 0
     fi
-    pkill -f 'Session Dev.app/Contents/MacOS/session-desktop' || true
+    pkill -f 'Studio Dev.app/Contents/MacOS/studio-desktop' || true
     # Let a killed copy go before its bundle is opened again.
     sleep 1
     # A new file, never an overwrite: macOS caches a binary's code signature
     # by file, and launching one rewritten in place fails (-10810).
-    rm -f "$bundle/Contents/MacOS/session-desktop"
-    cp target/release-fast/session-desktop "$bundle/Contents/MacOS/session-desktop"
+    rm -f "$bundle/Contents/MacOS/studio-desktop"
+    cp {{signal_bin}} "$bundle/Contents/MacOS/studio-desktop"
     # One signature across rebuilds. The linker's ad-hoc one names the
     # binary by a build hash, so every build is a new app to macOS and it
     # asks again for the removable drive; a real identity and a fixed
@@ -1789,7 +1779,7 @@ app PROJECT="" CHART="" MODE="":
     identity="${SESSION_SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null \
         | awk -F'"' '/Apple Development/ {print $2; exit}')}"
     if [[ -n "$identity" ]]; then
-        codesign --force --sign "$identity" --identifier app.fasttrackstudio.session.dev "$bundle" \
+        codesign --force --sign "$identity" --identifier app.fasttrackstudio.studio.dev "$bundle" \
             || echo "codesign with '$identity' failed; the build keeps its ad-hoc signature"
     fi
     open -n --stdout "$log" --stderr "$log" "${envs[@]}" "$bundle"
@@ -1804,7 +1794,7 @@ app PROJECT="" CHART="" MODE="":
 duo PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --profile release-fast -p session-desktop
+    {{signal_build}}
     # The main screen's usable area, in points: below the menu bar, above
     # the Dock — NOT Finder's desktop bounds, which span every monitor.
     read -r X Y W H < <(swift -e 'import AppKit; let s = NSScreen.main!; let f = s.visibleFrame; print(Int(f.origin.x), Int(s.frame.height - f.maxY), Int(f.width), Int(f.height))' 2>/dev/null)
@@ -1833,7 +1823,7 @@ duo PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
 duo-task SETLIST PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --profile release-fast -p session-desktop
+    {{signal_build}}
     read -r X Y W H < <(swift -e 'import AppKit; let s = NSScreen.main!; let f = s.visibleFrame; print(Int(f.origin.x), Int(s.frame.height - f.maxY), Int(f.width), Int(f.height))' 2>/dev/null)
     left=$((W * ${DUO_SPLIT:-44} / 100))
     right=$((W - left))
@@ -2082,7 +2072,7 @@ rail-evidence:
     dir="$(git rev-parse --git-common-dir)/rail-evidence/$(git rev-parse HEAD)"
     mkdir -p "$dir"
     cargo rail plan evidence --work cargo.test -o "$dir/cargo.test.json" -- \
-      test --workspace --no-run --features session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+      test --workspace --no-run --features studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
     cargo rail plan evidence --work cargo.build -o "$dir/cargo.build.json" -- check --workspace
     echo "rail evidence: $dir"
 

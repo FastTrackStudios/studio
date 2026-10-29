@@ -100,7 +100,7 @@ pub fn open_first_with(path: &Path, audio: bool, media: Media) -> eyre::Result<O
 
 /// The Action List served to a model and the CLI
 /// (`crate::studio_engine::mcp`): from
-/// the window's start (`session_desktop::native::prepare`), so a model or
+/// the window's start (studio-desktop's `session::native::prepare`), so a model or
 /// the CLI can open the first song too, and once a song is open in a window
 /// that plays — never for a renderer or a test, which open silent. Once per
 /// process.

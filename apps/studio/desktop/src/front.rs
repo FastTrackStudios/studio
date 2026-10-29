@@ -26,7 +26,7 @@
 //! (`FTS_OPEN_RIG`) open the rig view too.
 //!
 //! [`CommandLayer`]: library::ui::CommandLayer
-//! [`prepare_hosted`]: session_desktop::native::prepare_hosted
+//! [`prepare_hosted`]: crate::session::native::prepare_hosted
 
 use dioxus::prelude::*;
 use library::ui::{AppCommand, AppCommands, CommandLayer, LibraryData, Opener, ShowLibrary, Slots};
@@ -56,7 +56,7 @@ pub(crate) enum Preset {
     Welcome,
     /// The rig view.
     Rig,
-    /// What Session opens, as said (`session_desktop::native::handoff::Entry::parse`).
+    /// What Session opens, as said (`crate::session::native::handoff::Entry::parse`).
     Open(String),
 }
 
@@ -163,7 +163,7 @@ pub fn Studio() -> Element {
     // from the welcome screen on, and the system a Remote window drives
     // attached (its set is open already: straight into the DAW).
     #[cfg(feature = "session-app")]
-    let prepared = use_hook(session_desktop::native::prepare_hosted);
+    let prepared = use_hook(crate::session::native::prepare_hosted);
     #[cfg(feature = "session-app")]
     let attached = prepared.attached();
     #[cfg(feature = "session-app")]
@@ -173,10 +173,10 @@ pub fn Studio() -> Element {
     // a space with its setlists and their songs — empty until read.
     let mut lib = use_context_provider(|| LibraryData(Signal::new(library::Library::default())));
     #[cfg(feature = "session-app")]
-    let welcome = session_desktop::native::handoff::use_welcome_account();
+    let welcome = crate::session::native::handoff::use_welcome_account();
     #[cfg(feature = "session-app")]
     use_effect(move || {
-        use session_desktop::native::handoff::{ListKind, WelcomeLists};
+        use crate::session::native::handoff::{ListKind, WelcomeLists};
         let orgs = match welcome.lists() {
             WelcomeLists::Ready(orgs) => orgs,
             _ => Vec::new(),
@@ -224,7 +224,7 @@ pub fn Studio() -> Element {
             }
             #[cfg(feature = "session-app")]
             Preset::Open(text) => {
-                use session_desktop::native::handoff::{self, Entry};
+                use crate::session::native::handoff::{self, Entry};
                 match Entry::parse(&text, |p| p.exists()) {
                     Some(entry) => {
                         handoff::request(entry);
@@ -261,15 +261,15 @@ pub fn Studio() -> Element {
     // window is: a song open is left (and stopped) for it.
     #[cfg(feature = "session-app")]
     let mut into_daw = move || {
-        use session_desktop::native::handoff;
+        use crate::session::native::handoff;
         handoff::stop_for_entry();
         handoff::entering();
         daw_generation += 1;
         view.set(View::Daw);
     };
     #[cfg(feature = "session-app")]
-    let enter = use_callback(move |entry: session_desktop::native::handoff::Entry| {
-        session_desktop::native::handoff::request(entry);
+    let enter = use_callback(move |entry: crate::session::native::handoff::Entry| {
+        crate::session::native::handoff::request(entry);
         into_daw();
     });
 
@@ -279,7 +279,7 @@ pub fn Studio() -> Element {
     use_future(move || async move {
         loop {
             futures_timer::Delay::new(std::time::Duration::from_millis(300)).await;
-            if *view.peek() != View::Daw && session_desktop::native::handoff::pending() {
+            if *view.peek() != View::Daw && crate::session::native::handoff::pending() {
                 into_daw();
             }
         }
@@ -297,7 +297,7 @@ pub fn Studio() -> Element {
                 Destination::Rig(kind) => rig(kind),
                 #[cfg(feature = "session-app")]
                 Destination::Setlist(title, space) => {
-                    use session_desktop::native::handoff::{Entry, WelcomeLists};
+                    use crate::session::native::handoff::{Entry, WelcomeLists};
                     // The org whose library holds it.
                     let org = match welcome.lists() {
                         WelcomeLists::Ready(orgs) => orgs
@@ -307,15 +307,15 @@ pub fn Studio() -> Element {
                         _ => None,
                     };
                     enter.call(Entry::Setlist {
-                        org: org.or_else(session_desktop::native::handoff::welcome_org),
+                        org: org.or_else(crate::session::native::handoff::welcome_org),
                         title,
                     });
                 }
                 #[cfg(feature = "session-app")]
                 Destination::Session(title) => {
-                    match session_desktop::native::handoff::session_named(&title) {
+                    match crate::session::native::handoff::session_named(&title) {
                         Some(path) => {
-                            enter.call(session_desktop::native::handoff::Entry::Path(path))
+                            enter.call(crate::session::native::handoff::Entry::Path(path))
                         }
                         None => {
                             tracing::warn!(open.session = %title, "open: no session of that name on this device");
@@ -336,14 +336,14 @@ pub fn Studio() -> Element {
         ShowLibrary(Callback::new(move |()| {
             #[cfg(feature = "session-app")]
             if *view.peek() == View::Daw {
-                session_desktop::native::handoff::stop();
+                crate::session::native::handoff::stop();
             }
             view.set(View::Library);
         }))
     });
     // Back out of a song, with nothing else to open: the welcome screen.
     #[cfg(feature = "session-app")]
-    use_context_provider(|| session_desktop::native::handoff::Host {
+    use_context_provider(|| crate::session::native::handoff::Host {
         on_leave: Callback::new(move |()| view.set(View::Library)),
     });
     // ⌘K and `?`: Session's Action List beside the library's commands.
@@ -351,7 +351,7 @@ pub fn Studio() -> Element {
         list: Callback::new(|()| app_commands()),
         run: Callback::new(|id: String| {
             #[cfg(feature = "session-app")]
-            if let Err(error) = session_desktop::native::handoff::run_action(&id) {
+            if let Err(error) = crate::session::native::handoff::run_action(&id) {
                 tracing::warn!(action.id = %id, %error, "palette: the action did not run");
             }
             #[cfg(not(feature = "session-app"))]
@@ -362,7 +362,7 @@ pub fn Studio() -> Element {
     use_context_provider(|| {
         library::ui::Typing(Callback::new(move |()| {
             #[cfg(feature = "session-app")]
-            return *view.peek() == View::Daw && session_desktop::native::handoff::typing();
+            return *view.peek() == View::Daw && crate::session::native::handoff::typing();
             #[cfg(not(feature = "session-app"))]
             false
         }))
@@ -374,7 +374,7 @@ pub fn Studio() -> Element {
     use_context_provider(|| Slots {
         #[cfg(feature = "session-app")]
         bar: Some(Callback::new(|()| {
-            rsx! { session_desktop::native::handoff::WelcomeAccountMenu {} }
+            rsx! { crate::session::native::handoff::WelcomeAccountMenu {} }
         })),
         #[cfg(feature = "session-app")]
         home: Some(Callback::new(|()| rsx! { crate::library_home::WaysIn {} })),
@@ -385,14 +385,14 @@ pub fn Studio() -> Element {
         View::Library => rsx! { crate::library_home::LibraryHome {} },
         View::Rig => rsx! { RigView {} },
         #[cfg(feature = "session-app")]
-        View::Daw => rsx! { session_desktop::native::Embedded { key: "{daw_generation}" } },
+        View::Daw => rsx! { crate::session::native::Embedded { key: "{daw_generation}" } },
     };
     rsx! {
         CommandLayer {
             window_keys: true,
             on_overlay: move |up: bool| {
                 #[cfg(feature = "session-app")]
-                session_desktop::native::handoff::keys_taken(up);
+                crate::session::native::handoff::keys_taken(up);
                 #[cfg(not(feature = "session-app"))]
                 let _ = up;
             },
@@ -457,7 +457,7 @@ fn WindowMenuKeys(daw: bool) -> Element {
                 _ => return,
             };
             #[cfg(feature = "session-app")]
-            let daw_typing = *daw_now.peek() && session_desktop::native::handoff::typing();
+            let daw_typing = *daw_now.peek() && crate::session::native::handoff::typing();
             #[cfg(not(feature = "session-app"))]
             let daw_typing = false;
             // A field's plain keys are the field's — unless a menu is up,
@@ -477,7 +477,7 @@ fn WindowMenuKeys(daw: bool) -> Element {
 #[component]
 fn AccountSheet() -> Element {
     #[cfg(feature = "session-app")]
-    return rsx! { session_desktop::native::handoff::WelcomeAccountSheet {} };
+    return rsx! { crate::session::native::handoff::WelcomeAccountSheet {} };
     #[cfg(not(feature = "session-app"))]
     rsx! {}
 }
@@ -485,7 +485,7 @@ fn AccountSheet() -> Element {
 /// Session's Action List as the palette lists it.
 fn app_commands() -> Vec<AppCommand> {
     #[cfg(feature = "session-app")]
-    return session_desktop::native::handoff::actions()
+    return crate::session::native::handoff::actions()
         .into_iter()
         .map(|a| AppCommand {
             id: a.id,

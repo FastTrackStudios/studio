@@ -1,13 +1,13 @@
-# The Dioxus desktop apps, built as ordinary crane packages —
-# `nix run .#session-desktop`, `nix run .#studio-desktop`. Not the
+# The Dioxus desktop app, built as an ordinary crane package —
+# `nix run .#studio-desktop` (Studio: the rig and the DAW). Not the
 # notarized/bundled .app release artifacts (those are still
-# apps/{session,studio}/desktop/ios/deploy-macos.sh
+# apps/studio/desktop/ios/deploy-macos.sh
 # via `dx build` for now); this is a plain native binary for local dev/rig
 # use (cargoArtifacts = null — the workspace
 # is too large/build.rs-heavy for crane's dummy-src deps split).
 #
 # `desktop`/`launch` are ordinary cargo features on non-wasm/non-ios targets
-# (see the apps' Cargo.toml), so no
+# (see the app's Cargo.toml), so no
 # `dx` involvement is needed to produce a runnable binary — dx is only for
 # the wasm/mobile/.app-bundle pipelines. `embed-web` is deliberately NOT
 # enabled on studio-desktop here yet: it needs apps/studio/desktop/web-dist
@@ -35,16 +35,7 @@
         nativeBuildInputs = config.fts.nativeBuildInputs ++ [ pkgs.python3 ];
       };
 
-      session-desktop = config.fts.craneLib.buildPackage (config.fts.commonArgs // guiArgs // {
-        pname = "session-desktop";
-        version = workspaceVersion;
-        cargoArtifacts = null;
-        cargoExtraArgs = "--package session-desktop";
-        doCheck = false;
-        meta.mainProgram = "session-desktop";
-      });
-
-      # The isolated live-rig app (one engine, rigs only).
+      # Studio, the one app (the rig and the DAW, one engine).
       studio-desktop = config.fts.craneLib.buildPackage (config.fts.commonArgs // guiArgs // {
         pname = "studio-desktop";
         version = workspaceVersion;
@@ -55,6 +46,6 @@
       });
     in
     {
-      packages = { inherit session-desktop studio-desktop; };
+      packages = { inherit studio-desktop; };
     };
 }

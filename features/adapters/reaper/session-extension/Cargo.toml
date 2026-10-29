@@ -19,7 +19,7 @@ daw-extension-runtime.workspace = true
 session = { workspace = true, features = ["reaper"] }
 eyre.workspace = true
 # The bridge: the router this extension mounts, served on the LAN (axum
-# WebSocket, the path `session-desktop --engine` uses) and over iroh — what
+# WebSocket, the path Session's engines use) and over iroh — what
 # an iPad, a phone or a page dials.
 architect = { workspace = true, features = ["server-axum", "iroh"] }
 axum = { workspace = true, features = ["ws"] }

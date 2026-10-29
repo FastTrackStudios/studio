@@ -2,7 +2,7 @@
 //!
 //! The live rig and the DAW in one binary, one app. The window opens on
 //! the welcome screen, the library (`front.rs`), and goes from there into
-//! what it opens: the DAW view (Session's shell, `session_desktop::native`,
+//! what it opens: the DAW view (Session's shell, `session::native`,
 //! feature `session-app`) or the rig view (this crate's rig app).
 //!
 //! Signal's side is a remote of its engine, the same architecture as the
@@ -18,6 +18,13 @@ use dioxus::prelude::*;
 
 #[cfg(all(feature = "signal", not(target_arch = "wasm32")))]
 mod engine_main;
+/// Session: the DAW view and its engine (feature `session-app`), and its
+/// browser remote (feature `session-web`, the web build).
+#[cfg(any(
+    all(feature = "session-app", not(target_arch = "wasm32")),
+    all(feature = "session-web", target_arch = "wasm32")
+))]
+mod session;
 // The watchOS remote's HTTP+SSE bridge (mounted by engine mode; watchOS
 // can't speak vox over WebSocket).
 #[cfg(all(feature = "signal", not(target_arch = "wasm32")))]
@@ -278,7 +285,7 @@ fn main() {
         // What the paint thread runs, for the traces of frames that miss
         // 120 Hz (`ui.frame.slow`).
         #[cfg(all(feature = "session-app", not(target_os = "ios")))]
-        let registry = registry.with(session_desktop::native::FrameWorkLayer);
+        let registry = registry.with(session::native::FrameWorkLayer);
         match otel {
             Some((otel_guard, layers)) => {
                 registry.with(layers).init();
@@ -300,8 +307,8 @@ fn main() {
     ))]
     if let Some(at) = std::env::args().position(|a| a == "--session-engine") {
         let rest: Vec<String> = std::env::args().skip(at + 1).collect();
-        let args = session_desktop::engine_host::Args::parse(&rest);
-        if let Err(e) = session_desktop::engine_host::run(&args) {
+        let args = session::engine_host::Args::parse(&rest);
+        if let Err(e) = session::engine_host::run(&args) {
             tracing::error!(error = %e, "the session engine stopped");
             std::process::exit(1);
         }
@@ -593,6 +600,13 @@ fn launch_app() {
         #[cfg(feature = "signal")]
         if web_keys_rig::route_matches() {
             dioxus::launch(web_keys_rig::KeysWebRig);
+            return;
+        }
+        // Session's browser remote: its own page (`/{org}/{collection}`,
+        // `#session`), or the only page when the rig is not in this build.
+        #[cfg(feature = "session-web")]
+        if session::web_route_matches() || cfg!(not(feature = "signal")) {
+            session::launch_web();
             return;
         }
         dioxus::launch(App);

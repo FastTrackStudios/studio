@@ -35,7 +35,7 @@ use crate::harmony::chords::sink::{LogSink, SinkHandle};
 
 const FTS_THEME: &str = architect_ui::THEME_CSS;
 const APP_TAILWIND: &str =
-    include_str!("../../../../../apps/session/desktop/assets/tailwind-signal.css");
+    include_str!("../../../../../apps/studio/desktop/assets/tailwind-signal.css");
 
 /// Without `html,body{height:100%}` an `h-full` root resolves against
 /// `auto` and the panel collapses to its content. Mirrors the reset

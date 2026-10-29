@@ -4,7 +4,7 @@
 //! app that is running, through its Action List — `studio open`, `studio
 //! songs`, `studio song`, `studio actions`, `studio run` — and the rest work
 //! on sessions, the library, the vault, a real REAPER
-//! (`session_desktop::cli`), the guitar rig's library on disk ([`rig`]) and
+//! (`session::cli`), the guitar rig's library on disk ([`rig`]) and
 //! the TONE3000 tone library ([`tone3000`]).
 //!
 //! ```console
@@ -31,6 +31,21 @@
 mod rig;
 mod tone3000;
 
+/// Session's commands and the engine `studio engine` runs: the app's own
+/// `src/session/cli/` and `src/session/engine_host.rs`, compiled into this
+/// binary as well (a binary cannot reach another's modules, and this
+/// package has no library), under the same path as in the app so their
+/// `crate::session::…` paths hold in both.
+#[path = "../../session"]
+mod session {
+    pub mod cli;
+    #[expect(
+        dead_code,
+        reason = "`Args::parse` reads the app's `--session-engine`; `studio engine` builds its Args from clap"
+    )]
+    pub mod engine_host;
+}
+
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -45,7 +60,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     #[command(flatten)]
-    Session(session_desktop::cli::Command),
+    Session(session::cli::Command),
     /// The TONE3000 tone library — browse it, and bring captures into the
     /// local NAM library the rig plays from.
     Tone3000 {
@@ -63,12 +78,12 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let (service, filter) = match &cli.command {
         Command::Session(command) => (
-            session_desktop::cli::service_of(command),
-            session_desktop::cli::log_filter(command),
+            session::cli::service_of(command),
+            session::cli::log_filter(command),
         ),
         _ => ("studio-cli", None),
     };
-    session_desktop::cli::init_tracing(service, filter.unwrap_or("warn,signal_tone3000=info"));
+    session::cli::init_tracing(service, filter.unwrap_or("warn,signal_tone3000=info"));
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -80,7 +95,7 @@ fn main() -> ExitCode {
         }
     };
     match cli.command {
-        Command::Session(command) => match runtime.block_on(session_desktop::cli::run(command)) {
+        Command::Session(command) => match runtime.block_on(session::cli::run(command)) {
             Ok(code) => code,
             Err(e) => {
                 eprintln!("Error: {e:?}");

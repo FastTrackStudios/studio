@@ -78,7 +78,7 @@ pub fn LibraryHome() -> Element {
 // What the earlier homes had and the library did not: a new project, joining
 // a session happening elsewhere by its live link (or a REAPER bridge's
 // address), the public demo, and the projects opened lately. Each is handed
-// to the DAW as an `Entry` (`session_desktop::native::handoff`) and goes
+// to the DAW as an `Entry` (`crate::session::native::handoff`) and goes
 // straight into it.
 
 #[cfg(feature = "session-app")]
@@ -86,8 +86,8 @@ pub use ways_in::{Doors, WaysIn};
 
 #[cfg(feature = "session-app")]
 mod ways_in {
+    use crate::session::native::handoff::{self, Entry};
     use dioxus::prelude::*;
-    use session_desktop::native::handoff::{self, Entry};
 
     const SHEET: &str = "#0e0e11";
     const RULE: &str = "#222228";
@@ -231,7 +231,7 @@ mod ways_in {
                     }
                 }
                 // Songs on this machine, into the org's library.
-                session_desktop::native::publish::Publish {
+                crate::session::native::publish::Publish {
                     on_join: move |link: String| join(link),
                     on_typing: move |on: bool| library::ui::set_field_focused(on),
                 }

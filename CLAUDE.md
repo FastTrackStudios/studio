@@ -15,15 +15,15 @@ repos. One Cargo workspace, one lockfile, one `target/`, one flake.
 apps/       studio/desktop                     Studio, THE app (desktop + iOS, one
                                                TestFlight upload): its welcome screen
                                                (the library) opens the DAW view or
-                                               the rig view; the rig app
-                                               crate (`studio-desktop`, and its
-                                               headless `--engine`)
-            session/{desktop,engine,ui,web,daw-web}
-                                               Session: its app as a library Studio
-                                               mounts (+ its own binary and CLIs), its
-                                               engine (`session-engine`: the set, the
-                                               Action List, `studio engine`; draws
-                                               nothing), its window (`session-ui`: the
+                                               the rig view (`studio-desktop`, its
+                                               headless `--engine`, the `studio`
+                                               CLI); src/session/ is Session's side:
+                                               the DAW view, `--session-engine`,
+                                               its commands, its browser remote
+            session/{engine,ui,web,daw-web}
+                                               Session: its engine (`session-engine`:
+                                               the set, the Action List, `studio
+                                               engine`; draws nothing), its window (`session-ui`: the
                                                DAW view, a view of the engine), the
                                                site, the DAW in a browser
             signal/{mobile,web}                Signal: Android, the site
@@ -153,7 +153,7 @@ runs in, `.#reaper-test` the REAPER suites, `.#stems` stem separation.
 just check                 # cargo check --workspace
 just test                  # the core test set: cargo nextest run -p <each of the Justfile's test_packages>
 just test-doc              # doctests (nextest cannot run them)
-just app [PROJECT]         # Session (session-desktop, release-fast)
+just app [PROJECT]         # Studio's DAW view on PROJECT (studio-desktop, release-fast)
 just guitar / just keys    # the rig view (studio-desktop --guitar/--keys skip the welcome screen; FTS_STUDIO_OPEN=<path|setlist|rig> too)
 just signal-engine         # studio-desktop --engine: the headless rig engine (ws://:4040/vox)
 just reaper-test [FILTER]  # Session's #[reaper_test] suites in a real REAPER

@@ -11,7 +11,6 @@ node_modules/
 
 # Staged web bundles embedded into the native binaries (just web-stage,
 # just patchbay-web-stage)
-apps/session/desktop/web-dist/
 apps/studio/desktop/web-dist/
 apps/patchbay/web-dist/
 
@@ -25,7 +24,6 @@ result-*
 
 # Symlink to the resolved lumen-blocks checkout, created by `just tailwind`
 # so Tailwind scans the pinned revision instead of every cached one.
-apps/session/desktop/.lumen-blocks
 apps/studio/desktop/.lumen-blocks
 features/ui/.architect-ui
 

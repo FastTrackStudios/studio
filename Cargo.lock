@@ -12194,7 +12194,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6948501a91121d6399b79abaa33a8aa4ea7857fe019f341b8c23ad6e81b79b08"
 dependencies = [
  "bitflags 2.13.1",
- "block2 0.6.2",
  "libc",
  "objc2 0.6.4",
  "objc2-core-audio",
@@ -12222,10 +12221,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13a380031deed8e99db00065c45937da434ca987c034e13b87e4441f9e4090be"
 dependencies = [
  "bitflags 2.13.1",
- "block2 0.6.2",
  "objc2 0.6.4",
- "objc2-audio-toolbox",
- "objc2-core-audio-types",
  "objc2-foundation 0.3.2",
 ]
 
@@ -12484,21 +12480,6 @@ dependencies = [
  "objc2 0.5.2",
  "objc2-app-kit 0.2.2",
  "objc2-foundation 0.2.2",
-]
-
-[[package]]
-name = "objc2-media-player"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85f2a98483f6e76313cb85a5a185eaa3cda86a177b13a8852d56cbd0085bf635"
-dependencies = [
- "bitflags 2.13.1",
- "block2 0.6.2",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
- "objc2-av-foundation",
- "objc2-core-foundation",
- "objc2-foundation 0.3.2",
 ]
 
 [[package]]
@@ -16515,68 +16496,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "session-desktop"
-version = "26.10.3"
-dependencies = [
- "app-shell",
- "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.9.29)",
- "architect-telemetry",
- "axum",
- "base64 0.22.1",
- "block2 0.6.2",
- "chrono",
- "clap",
- "collection-proto",
- "daw",
- "daw-control",
- "daw-proto",
- "daw-standalone",
- "daw-ui",
- "dawfile-reaper",
- "dioxus",
- "dioxus-native",
- "dirs",
- "eyre",
- "fts-account",
- "fts-audio-ui",
- "fts-sample",
- "futures-timer",
- "getrandom 0.3.4",
- "js-sys",
- "keyflow",
- "keyflow-lang",
- "libc",
- "lucide-dioxus",
- "objc2 0.6.4",
- "objc2-avf-audio",
- "objc2-foundation 0.3.2",
- "objc2-media-player",
- "objc2-ui-kit 0.3.2",
- "rfd",
- "serde",
- "serde_json",
- "session",
- "session-engine",
- "session-ui",
- "studio",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "ureq 2.12.1",
- "utils",
- "uuid",
- "vox",
- "vox-core",
- "vox-stream",
- "vox-websocket",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "winit 0.31.0-beta.2",
-]
-
-[[package]]
 name = "session-engine"
 version = "26.10.3"
 dependencies = [
@@ -18375,13 +18294,20 @@ dependencies = [
  "builtin",
  "chrono",
  "clap",
+ "collection-proto",
  "cpal",
  "crdt",
+ "daw",
+ "daw-control",
  "daw-proto",
+ "daw-standalone",
+ "daw-ui",
+ "dawfile-reaper",
  "dioxus",
  "dioxus-native",
  "dioxus-native-dom",
  "dioxus-test",
+ "dirs",
  "drums",
  "dsp",
  "ekit",
@@ -18398,21 +18324,27 @@ dependencies = [
  "guitar",
  "include_dir",
  "js-sys",
+ "keyflow",
+ "keyflow-lang",
  "keys",
  "launcher",
  "libc",
  "library",
+ "lucide-dioxus",
  "midi",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
  "objc2-ui-kit 0.3.2",
  "reqwest 0.12.28",
+ "rfd",
  "sampler",
+ "serde",
  "serde_json",
  "session",
- "session-desktop",
+ "session-engine",
  "session-format",
+ "session-ui",
  "sha2 0.10.9",
  "signal-content-client",
  "signal-content-library",
@@ -18426,21 +18358,25 @@ dependencies = [
  "signal-space",
  "signal-synth-rig",
  "signal-tone3000",
+ "studio",
  "synth",
  "tempfile",
  "tokio",
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "ureq 2.12.1",
  "url",
  "utils",
  "uuid",
  "vox",
  "vox-core",
+ "vox-stream",
  "vox-websocket",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "winit 0.31.0-beta.2",
 ]
 
 [[package]]

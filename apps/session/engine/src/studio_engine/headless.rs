@@ -8,7 +8,7 @@
 //! the CLI and a model drive it exactly as they drive a window's.
 //!
 //! Serving the facade to other processes (a Unix socket, a WebSocket) is
-//! the host's: `session_desktop::cli::engine`.
+//! the host's: studio-desktop's `session::cli::engine`.
 
 use daw::standalone::Standalone;
 
