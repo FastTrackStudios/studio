@@ -171,9 +171,16 @@ fn stages(file: &Path) -> eyre::Result<()> {
         )
         .await?;
         lap("model -> engine (apply)");
-        let shown =
-            engine::read_keeping(&project, &media, &blobs, &ids, Some(direct.as_ref()), None)
-                .await?;
+        let shown = engine::read_keeping(
+            &project,
+            &media,
+            &blobs,
+            &ids,
+            Some(direct.as_ref()),
+            None,
+            None,
+        )
+        .await?;
         lap("engine read-back");
         eyre::ensure!(shown.tracks.len() == target.tracks.len(), "tracks lost");
         Ok::<_, eyre::Report>(())
