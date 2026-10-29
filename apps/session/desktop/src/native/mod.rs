@@ -32,6 +32,9 @@ pub mod publish;
 /// frames that miss 120 Hz (`session_ui::frames::slow`): the app's
 /// subscriber takes it.
 pub use session_ui::frames::slow::WorkLayer as FrameWorkLayer;
+/// The limits the window's GPU device asks for (`session_ui::gpu`): the
+/// app's launch hands them to the renderer.
+pub use session_ui::gpu::window_limits;
 mod shell;
 mod start;
 

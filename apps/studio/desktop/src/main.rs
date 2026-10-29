@@ -538,11 +538,13 @@ fn launch_app() {
                 .with_name("studio", "studio"),
         ))
     };
-    launch_cfg(
-        front::Studio,
-        vec![],
-        vec![Box::new(Config::new().with_window_attributes(window))],
-    );
+    let mut configs: Vec<Box<dyn std::any::Any>> =
+        vec![Box::new(Config::new().with_window_attributes(window))];
+    // The GPU device asks for buffers as large as the adapter has: a long
+    // song's arrangement outgrows wgpu's default 128 MiB in one frame.
+    #[cfg(all(feature = "session-app", not(target_os = "ios")))]
+    configs.push(Box::new(session_desktop::native::window_limits()));
+    launch_cfg(front::Studio, vec![], configs);
     // The event loop returned (last window closed) — reap the engine we
     // spawned so it doesn't outlive the app. The engine's own watchdog is the
     // backstop for exits that never reach here (SIGKILL, crash).
