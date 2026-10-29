@@ -6,7 +6,8 @@
 #
 # Usage: scripts/drum-lab.sh <command> [args]
 #   copy SRC.session DIR   a lab copy of a song (the .session with its -wal;
-#                          its Media linked), to edit without touching SRC
+#                          its Media linked; its sync meta dropped, so it is
+#                          local), to edit without touching SRC or its docs
 #   open DIR/X.session     open it in the engine (SESSION_OPEN), wait for it
 #   actions                the workflow by actions: HITS_DETECT (all takes),
 #                          COMP_MAIN (LAB_MAIN_TAKE, Teal), COMP_BEST,
@@ -188,7 +189,16 @@ copy)
     cp --reflink=auto "$src" "$dir/"
     [ -f "$src-wal" ] && cp --reflink=auto "$src-wal" "$dir/"
     [ -d "$(dirname "$src")/Media" ] && ln -s "$(dirname "$src")/Media" "$dir/Media"
-    echo "drum-lab: $dir/$(basename "$src")"
+    # A copy of a shared song keeps its org and doc ids: opened, it would
+    # sync with the original's docs on Task, and every lab edit land in the
+    # real song. The copy is made local: its sync meta dropped.
+    timeout 120 nix-shell -I nixpkgs=flake:nixpkgs -p sqlite --run \
+        "sqlite3 $(printf %q "$dir/$(basename "$src")") \"delete from meta where key like 'sync:%' or key like 'doc:%';\""
+    # sqlite3 folds the WAL into the file; Turso's own index of it (-tshm)
+    # would then point at frames that are gone.
+    rm -f "$dir/$(basename "$src")-tshm" "$dir/$(basename "$src")-shm"
+    [ -s "$dir/$(basename "$src")-wal" ] || rm -f "$dir/$(basename "$src")-wal"
+    echo "drum-lab: $dir/$(basename "$src") (local: not synced)"
     ;;
 open)
     run SESSION_OPEN "$(jq -nc --arg p "$1" '{path:$p}')"
