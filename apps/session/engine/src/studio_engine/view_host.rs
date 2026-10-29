@@ -475,8 +475,8 @@ impl EngineView for ViewHost {
         applied
     }
 
-    async fn take_window(&self) -> Vec<crate::window_queue::Asked> {
-        crate::window_queue::take_asked()
+    async fn take_window(&self, window: String) -> Vec<crate::window_queue::Asked> {
+        crate::window_queue::take_asked(&window)
     }
 
     async fn window_actions(&self, actions: Vec<WindowAction>) -> u32 {

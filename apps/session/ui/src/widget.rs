@@ -332,7 +332,7 @@ fn quantize_asked() -> bool {
 fn run_hit_action(id: &'static str, args: String) {
     #[cfg(feature = "native")]
     if let Some(runtime) = crate::open::runtime() {
-        runtime.spawn_blocking(move || {
+        crate::open::traced_blocking(runtime, move || {
             if let Err(e) = crate::actions::run(id, args.as_bytes()) {
                 tracing::warn!(hits.action = id, hits.error = %e, "a hit edit by hand was refused");
             }
@@ -349,7 +349,7 @@ fn run_hit_action(id: &'static str, args: String) {
 fn run_comp(args: String) {
     #[cfg(feature = "native")]
     if let Some(runtime) = crate::open::runtime() {
-        runtime.spawn_blocking(move || {
+        crate::open::traced_blocking(runtime, move || {
             let id = crate::comp::SWIPE_COMP.id;
             if let Err(e) = crate::actions::run(id, args.as_bytes()) {
                 tracing::warn!(comp.action = id, comp.error = %e, "a swipe comp was refused");
@@ -1807,7 +1807,7 @@ impl ArrangementWidget {
                 return false;
             };
             let said = std::sync::Arc::clone(&self.staged);
-            runtime.spawn_blocking(move || {
+            crate::open::traced_blocking(runtime, move || {
                 let args = serde_json::json!({
                     "tracks": scope.tracks,
                     "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
@@ -1819,7 +1819,10 @@ impl ArrangementWidget {
                     Ok(json) if String::from_utf8_lossy(json).contains(r#""restored":false"#) => {
                         "put back — but not every hit plays where it was recorded yet (DRUMS_REVIEW)"
                     }
-                    Ok(json) if keep_manual && !String::from_utf8_lossy(json).contains(r#""placed_back":0"#) => {
+                    Ok(json)
+                        if keep_manual
+                            && !String::from_utf8_lossy(json).contains(r#""placed_back":0"#) =>
+                    {
                         "automated edits cleared, your hand placements kept — Backspace again clears them too"
                     }
                     Ok(_) if keep_manual => "automated edits cleared — as recorded",
@@ -1871,7 +1874,7 @@ impl ArrangementWidget {
                 return false;
             };
             let said = std::sync::Arc::clone(&self.staged);
-            runtime.spawn_blocking(move || {
+            crate::open::traced_blocking(runtime, move || {
                 let args = serde_json::json!({
                     "tracks": scope.tracks,
                     "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
@@ -1917,7 +1920,7 @@ impl ArrangementWidget {
                 return false;
             };
             let said = std::sync::Arc::clone(&self.staged);
-            runtime.spawn_blocking(move || {
+            crate::open::traced_blocking(runtime, move || {
                 let job = crate::jobs::start("Comping the best takes", 0);
                 let args = serde_json::json!({ "spans": spans });
                 let out = crate::actions::run("COMP_BEST", args.to_string().as_bytes());
@@ -2075,7 +2078,7 @@ impl ArrangementWidget {
                 return false;
             };
             let said = std::sync::Arc::clone(&self.staged);
-            runtime.spawn_blocking(move || {
+            crate::open::traced_blocking(runtime, move || {
                 let run = |mut args: serde_json::Value| {
                     place(&mut args);
                     crate::actions::run("TAKES_RANK", args.to_string().as_bytes())
@@ -2152,7 +2155,7 @@ impl ArrangementWidget {
                 return false;
             };
             let said = std::sync::Arc::clone(&self.staged);
-            runtime.spawn_blocking(move || {
+            crate::open::traced_blocking(runtime, move || {
                 let args = serde_json::json!({
                     "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
                     "toggle": true,
@@ -2197,7 +2200,7 @@ impl ArrangementWidget {
                 return false;
             };
             let said = std::sync::Arc::clone(&self.staged);
-            runtime.spawn_blocking(move || {
+            crate::open::traced_blocking(runtime, move || {
                 let args = serde_json::json!({
                     "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
                     "by": by,
@@ -2256,7 +2259,7 @@ impl ArrangementWidget {
             };
             let said = std::sync::Arc::clone(&self.staged);
             let last = crate::quantize_panel::last();
-            runtime.spawn_blocking(move || {
+            crate::open::traced_blocking(runtime, move || {
                 let mut args = crate::quantize_panel::again(last.as_ref());
                 args.insert("tracks".into(), serde_json::json!(scope.tracks));
                 args.insert(
@@ -3647,6 +3650,11 @@ impl ArrangementWidget {
         let mut tracks = self.tracks.clone();
         let bpm = self.scene.bpm;
         for action in actions {
+            // Each action the arrangement carries out — a key's, or one the
+            // engine or a model asked for — its own span: what it asks of
+            // the engine lands under it, and a late frame names it.
+            let kind = action_kind(&action);
+            let _span = tracing::info_span!("window.action", window.action = kind).entered();
             if let crate::keys::Action::View(command) = action {
                 if let Some(request) = self.zoom_request(command) {
                     self.zooms.borrow_mut().push(request);
@@ -6198,4 +6206,14 @@ fn attach_window() -> crate::window_queue::Attached {
     {
         crate::window_queue::attach()
     }
+}
+
+/// An action's variant, for its span: `CompCycle`, `View`, `Mode` — not
+/// its arguments (a slip carries thousands of moves).
+fn action_kind(action: &crate::keys::Action) -> String {
+    let shown = format!("{action:?}");
+    let end = shown
+        .find(|c: char| c == '(' || c == '{' || c == ' ')
+        .unwrap_or(shown.len());
+    shown.get(..end).unwrap_or_default().to_owned()
 }

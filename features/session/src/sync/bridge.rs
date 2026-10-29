@@ -130,10 +130,14 @@ impl Bridge {
         blobs: std::sync::Arc<dyn Blobs>,
         direct: Option<std::sync::Arc<dyn Direct>>,
     ) -> eyre::Result<Self> {
+        use tracing::Instrument as _;
+        // Each step its own span, under the song's build: where a join's
+        // time goes.
         let ids = EngineIds::default();
-        let current =
-            engine::read(&project, &media, blobs.as_ref(), &ids, direct.as_deref()).await?;
-        let (undo, naming) = undo_manager(&doc);
+        let current = engine::read(&project, &media, blobs.as_ref(), &ids, direct.as_deref())
+            .instrument(tracing::info_span!("bridge.read_engine"))
+            .await?;
+        let (undo, naming) = tracing::info_span!("bridge.undo").in_scope(|| undo_manager(&doc));
         let watch = doc.watch();
         let mut bridge = Self {
             doc,
@@ -149,11 +153,18 @@ impl Bridge {
             quiet: Vec::new(),
         };
         // The whole doc, whatever the watch has seen so far.
-        bridge.take_touched();
+        tracing::info_span!("bridge.take_touched").in_scope(|| bridge.take_touched());
         let touched = Touched::everything();
-        let target = bridge.doc.read_touched(&bridge.shown, &touched);
-        bridge.adopt(&target);
-        bridge.make_match(target, &touched).await?;
+        let target = tracing::info_span!("bridge.read_doc")
+            .in_scope(|| bridge.doc.read_touched(&bridge.shown, &touched));
+        tracing::info_span!("bridge.adopt").in_scope(|| bridge.adopt(&target));
+        bridge
+            .make_match(target, &touched)
+            .instrument(tracing::info_span!(
+                "bridge.make_match",
+                bridge.changes = tracing::field::Empty
+            ))
+            .await?;
         Ok(bridge)
     }
 
@@ -319,6 +330,7 @@ impl Bridge {
     /// # Errors
     /// When the engine cannot be read or the doc cannot be written.
     pub async fn local_step(&mut self, label: &str) -> eyre::Result<bool> {
+        use tracing::Instrument as _;
         let mut now = engine::read(
             &self.project,
             &self.media,
@@ -326,9 +338,11 @@ impl Bridge {
             &self.ids,
             self.direct.as_deref(),
         )
+        .instrument(tracing::info_span!("bridge.read_engine"))
         .await?;
         now.chart.clone_from(&self.shown.chart);
-        if now == self.shown {
+        let same = tracing::info_span!("bridge.compare").in_scope(|| now == self.shown);
+        if same {
             if self.quiet.len() >= UNDO_STEPS {
                 self.quiet.remove(0);
             }
@@ -336,8 +350,8 @@ impl Bridge {
             return Ok(false);
         }
         self.name_next(label);
-        self.doc
-            .write_step(&self.shown, &now, ORIGIN_LOCAL, label)?;
+        tracing::info_span!("bridge.write_step")
+            .in_scope(|| self.doc.write_step(&self.shown, &now, ORIGIN_LOCAL, label))?;
         self.shown = now;
         self.quiet.clear();
         Ok(true)
@@ -441,10 +455,13 @@ impl Bridge {
         target: SessionModel,
         touched: &Touched,
     ) -> eyre::Result<Vec<Change>> {
-        let changes = diff(&self.shown, &target);
+        use tracing::Instrument as _;
+        let changes = tracing::info_span!("bridge.diff").in_scope(|| diff(&self.shown, &target));
+        tracing::Span::current().record("bridge.changes", changes.len());
         if changes.is_empty() {
             return Ok(changes);
         }
+        let apply = tracing::info_span!("bridge.apply", bridge.changes = changes.len());
         let applied = engine::apply(
             &self.project,
             &self.media,
@@ -454,6 +471,7 @@ impl Bridge {
             &mut self.ids,
             self.direct.as_deref(),
         )
+        .instrument(apply)
         .await;
         // The tracks read again only if a change could have touched them.
         let keep =
@@ -466,6 +484,7 @@ impl Bridge {
             self.direct.as_deref(),
             keep,
         )
+        .instrument(tracing::info_span!("bridge.read_back"))
         .await?;
         now.chart = target.chart;
         self.shown = now;
