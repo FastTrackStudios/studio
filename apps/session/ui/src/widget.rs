@@ -2759,8 +2759,15 @@ impl ArrangementWidget {
     }
 
     /// The rows planned again from the session as the window now holds it,
-    /// and everything they are drawn from.
+    /// and everything they are drawn from — or, when only items changed,
+    /// the rows as they are and only those items drawn again
+    /// ([`Self::repatched`]).
     fn replanned(&mut self) {
+        if self.repatched() {
+            // The engine changed the session: a slice moved is a hit moved.
+            crate::hit_overlay::refresh();
+            return;
+        }
         let Some((planner, raw)) = self.replan.as_mut() else {
             return;
         };
@@ -2771,6 +2778,42 @@ impl ArrangementWidget {
         stages.mark("adopt.restructure_ms");
         // The engine changed the session: a slice moved is a hit moved.
         crate::hit_overlay::refresh();
+    }
+
+    /// The song as the window now holds it drawn without planning the rows
+    /// again, when only its items changed since they were planned (and the
+    /// folds have not moved since): the changed tracks' items and the shut
+    /// folders over them taken into the rows' project, the recording cut
+    /// again from the last, and the mixer's strips left as they are.
+    /// `false` when the rows must be planned again.
+    fn repatched(&mut self) -> bool {
+        let Some((_, raw)) = self.replan.as_ref() else {
+            return false;
+        };
+        if crate::folds::generation() != self.folds_seen {
+            return false;
+        }
+        let mut stages = crate::stages::Stages::start();
+        let patched = crate::replan::patch_planned(
+            &mut self.project,
+            &raw.borrow(),
+            &self.rows,
+            crate::replan::Folding::current(),
+        );
+        stages.mark("adopt.patch_ms");
+        match patched {
+            crate::replan::Patched::Same => true,
+            crate::replan::Patched::Items => {
+                // What was hovered or turned may have moved.
+                self.hovered_item = None;
+                self.turning = None;
+                self.pointer = crate::pointer::Pointer::default();
+                self.recut();
+                stages.mark("adopt.recut_ms");
+                true
+            }
+            crate::replan::Patched::Replan => false,
+        }
     }
 
     /// The rows planned again from the tracks they are planned from — a
@@ -3280,8 +3323,8 @@ impl ArrangementWidget {
                 let open = !crate::lanes::opened(track);
                 let under =
                     crate::lanes::speaks_for(&self.tracks, track, self.scene.lane_tracks(spot.row));
-                let _ =
-                    crate::lanes::set_expanded(&crate::lanes::opened_by(track, &under), Some(open));
+                let opened = lanes_opened_by(&self.project.tracks, track, &under);
+                let _ = crate::lanes::set_expanded(&opened, Some(open));
                 return;
             }
             C::LanePrev | C::LaneNext => {
@@ -3335,6 +3378,11 @@ impl ArrangementWidget {
                     self.assume(&edit);
                     self.edits.borrow_mut().push(edit);
                 }
+                // What a shut folder's row shows is folded from what its
+                // tracks play: folded again from the lane they play now. The
+                // engine says nothing back for a track's lane, so nothing
+                // else would.
+                self.replan_rows();
                 return;
             }
             C::Name => Edit::Select(guid),
@@ -3889,16 +3937,14 @@ impl ArrangementWidget {
         self.hidden = self.rejected_now();
         self.recut_at = Some(web_time::Instant::now());
         self.rebuilds = self.rebuilds.saturating_add(1);
-        let rows = daw_ui::studio::RowsRef(std::sync::Arc::new(self.rows.clone()));
-        let project = daw_ui::studio::ProjectRef(std::sync::Arc::new(self.project.clone()));
         // A view setting, not the session's: an edit must not reset it.
         let lettering = self.scene.lettering;
         let mut stages = crate::stages::Stages::start();
-        stages.mark("recut.clone_ms");
-        self.scene = Arrangement::build_hiding(
+        // From the last recording: only what changed is recorded again.
+        self.scene.rebuild_hiding(
             &self.palette,
             &self.font,
-            (&project, &rows),
+            (&self.project, &self.rows),
             self.layout,
             &self.previews,
             crate::tcp::Tcp {
@@ -4115,6 +4161,8 @@ impl ArrangementWidget {
             };
             self.tracks.iter_mut().for_each(pick);
             self.rows.iter_mut().for_each(|(track, _)| pick(track));
+            // And the rows' project, which an edit's patch compares with the song.
+            self.project.tracks.iter_mut().for_each(pick);
             if let Some((_, raw)) = &self.replan {
                 raw.borrow_mut().tracks.iter_mut().for_each(pick);
             }
@@ -4142,6 +4190,7 @@ impl ArrangementWidget {
             .tracks
             .iter_mut()
             .chain(self.rows.iter_mut().map(|(track, _)| track))
+            .chain(self.project.tracks.iter_mut())
             .filter(|track| track.guid == guid)
         {
             change(track);
@@ -6107,6 +6156,39 @@ impl ArrangementWidget {
     }
 }
 
+/// What a row's lanes button opens or shuts: the track and the tracks its
+/// lane line speaks for (`under`, [`crate::lanes::opened_by`]) — and every
+/// folder between them and it, by `tracks`' parents.
+///
+/// A shut folder's row shows its lanes only when the folder itself is
+/// opened ([`crate::lanes::folder_view`]): the button on an open kit whose
+/// pieces are shut opened the mics and the kit, and every piece's shut row
+/// went on showing what plays — its EDIT lane filling the row — until the
+/// kit was shut over them.
+fn lanes_opened_by(
+    tracks: &[daw_proto::Track],
+    track: &daw_proto::Track,
+    under: &[&daw_proto::Track],
+) -> Vec<String> {
+    let mut opened = crate::lanes::opened_by(track, under);
+    let parent_of = |guid: &str| {
+        tracks
+            .iter()
+            .find(|t| t.guid == guid)
+            .and_then(|t| t.parent_guid.as_deref())
+    };
+    for lane_track in under {
+        let mut at = lane_track.parent_guid.as_deref();
+        while let Some(folder) = at.filter(|folder| *folder != track.guid) {
+            if !opened.iter().any(|g| g == folder) {
+                opened.push(folder.to_owned());
+            }
+            at = parent_of(folder);
+        }
+    }
+    opened
+}
+
 /// The items of `project` whose take `marks` mark bad over the whole of
 /// them ([`crate::hit_overlay::rejected`]), and the folded items every
 /// one of whose ranked items (its mics', not a trigger's) is.
@@ -6217,3 +6299,6 @@ fn action_kind(action: &crate::keys::Action) -> String {
         .unwrap_or(shown.len());
     shown.get(..end).unwrap_or_default().to_owned()
 }
+
+#[cfg(test)]
+mod tests;

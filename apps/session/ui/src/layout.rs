@@ -12,7 +12,7 @@
 //! whole argument of this module — see [`Layout::min`].
 
 /// Row heights, as the user wants them.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Layout {
     /// What a track with no stored height is drawn at.
     ///
