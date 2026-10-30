@@ -22,6 +22,7 @@ mod setlist;
 mod song;
 mod talk;
 
+use app_shell::ui::{Insets, Screen};
 use dioxus::prelude::*;
 use lucide_dioxus::{
     AudioWaveform, ChevronLeft, FolderKanban, Guitar, House, ListMusic, Music, Search, Users, X,
@@ -240,17 +241,33 @@ pub(crate) fn open(what: Open) {
     }
 }
 
+/// The window as the library lays out for it: the size the app hands it
+/// ([`Viewport`]), classified by the apps' one rule
+/// ([`app_shell::ui::FormFactor::of`]), with the touch and the insets of
+/// the screen the host published (none on a desk, or with no host).
+pub(crate) fn use_screen() -> Screen {
+    let Viewport(size) = use_context::<Viewport>();
+    let host = try_use_context::<Signal<Screen>>();
+    let (w, h) = size();
+    let (touch, insets) = host.map_or((false, Insets::ZERO), |s| {
+        let s = s();
+        (s.touch, s.insets)
+    });
+    Screen::of(f64::from(w), f64::from(h), touch, insets)
+}
+
 /// Whether the window is wide enough for a sidebar beside the page (an
 /// iPad in landscape, a desk); upright it is a rail.
 pub(crate) fn use_wide() -> bool {
-    let Viewport(size) = use_context::<Viewport>();
-    size().0 >= 1000.0
+    use_screen().width >= 1000.0
 }
 
-/// Whether the window is a phone's: no sidebar, a tab bar at the foot.
+/// Whether the window is a phone's held upright: no sidebar, a tab bar at
+/// the foot. A phone on its side keeps the rail (its height is the scarce
+/// side).
 pub(crate) fn use_phone() -> bool {
-    let Viewport(size) = use_context::<Viewport>();
-    size().0 < 700.0
+    let screen = use_screen();
+    screen.phone() && !screen.landscape()
 }
 
 /// Whether the sidebar shows its labels and spaces, or folds to a rail.
@@ -604,8 +621,14 @@ fn TabBar() -> Element {
     let nav = use_nav();
     let here = (nav.route)().section();
     let tab = |to: Route| if here == to { INK } else { INK_3 };
+    // Clear of the home indicator and (on its side) the housing, where the
+    // page has to keep clear of them itself.
+    let inset = use_screen().insets;
+    let (left, right, bottom) = (8.0 + inset.left, 8.0 + inset.right, 8.0 + inset.bottom);
+    let height = 56.0 + bottom;
     rsx! {
-        div { style: "flex-shrink: 0; height: 64px; display: flex; align-items: stretch; padding: 0 8px 8px; \
+        div { style: "flex-shrink: 0; height: {height}px; box-sizing: border-box; display: flex; align-items: stretch; \
+                      padding: 0 {right}px {bottom}px {left}px; \
                       background: {SHEET}; border-top: 1px solid {RULE_STRONG};",
             TabItem { to: Route::Home, label: "Home", colour: tab(Route::Home), icon: rsx! { House { size: 22, color: tab(Route::Home) } } }
             TabItem { to: Route::Projects, label: "Projects", colour: tab(Route::Projects), icon: rsx! { FolderKanban { size: 22, color: tab(Route::Projects) } } }

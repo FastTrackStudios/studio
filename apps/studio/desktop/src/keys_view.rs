@@ -172,7 +172,7 @@ fn PlayPage(status: KeysStatus, presets: Vec<KeysPreset>) -> Element {
     let peak_pct = (status.master_peak.clamp(0.0, 1.0) * 100.0) as u32;
 
     rsx! {
-        div { style: "flex: 1; min-height: 0; overflow-y: auto; padding: 8px 14px 20px; \
+        div { style: "flex: 1; min-height: 0; overflow-y: scroll; padding: 8px 14px 20px; \
                       display: flex; flex-direction: column; gap: 12px;",
             // Status strip: engine LED + loaded patch + peak.
             div { style: "display: flex; align-items: center; gap: 10px; padding: 10px 12px; \
@@ -333,7 +333,7 @@ fn LogsPage() -> Element {
                 },
                 if copied() { "Copied ✓" } else { "Copy all logs" }
             }
-            div { style: "flex: 1; min-height: 0; overflow-y: auto; background: #0a0a0c; \
+            div { style: "flex: 1; min-height: 0; overflow-y: scroll; background: #0a0a0c; \
                           border: 1px solid #1b1b1f; border-radius: 10px; padding: 8px;",
                 for line in lines().iter().rev() {
                     div { style: "font-family: ui-monospace, monospace; font-size: 9px; \
@@ -487,7 +487,7 @@ fn LibraryPage(downloaded: Vec<String>) -> Element {
     };
 
     rsx! {
-        div { style: "flex: 1; min-height: 0; overflow-y: auto; padding: 8px 14px 20px; \
+        div { style: "flex: 1; min-height: 0; overflow-y: scroll; padding: 8px 14px 20px; \
                       display: flex; flex-direction: column; gap: 12px;",
             span { style: "font-size: 11px; font-weight: 600; letter-spacing: 0.12em; \
                            text-transform: uppercase; color: #52525b;",

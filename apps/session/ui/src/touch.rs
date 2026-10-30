@@ -110,10 +110,7 @@ pub fn use_touch() -> bool {
 /// Whether the device's own pointer is a finger.
 #[must_use]
 pub fn detected() -> bool {
-    if cfg!(any(target_os = "ios", target_os = "android")) {
-        return true;
-    }
-    coarse_pointer()
+    app_shell::ui::form::touch_device() || coarse_pointer()
 }
 
 #[cfg(feature = "web")]

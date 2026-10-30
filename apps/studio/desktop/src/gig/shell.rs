@@ -1444,7 +1444,7 @@ fn StudioSong() -> Element {
     let device = (st.device)();
     let status = (st.status)();
     rsx! {
-        div { style: "flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; \
+        div { style: "flex: 1; min-height: 0; overflow-y: scroll; display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; \
                       background: {MAIN}; color: {INK}; font-family: {FONT};",
             div { style: "display: flex; align-items: baseline; gap: 12px;",
                 span { style: "font-size: 12px; font-weight: 700; letter-spacing: 0.14em; color: {ACCENT};", "SESSION" }

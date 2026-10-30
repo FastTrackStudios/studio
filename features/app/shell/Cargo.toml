@@ -11,6 +11,9 @@ description = "What every FTS app shares around its UI: the in-memory log ring (
 # Renderer-agnostic Dioxus with inline styles only, so it runs on Blitz, a
 # WebView and the web alike; the app picks the renderer.
 ui = ["dep:dioxus", "dep:dock", "dep:utils"]
+# The form factor's publisher on dioxus-native (`ui::form::use_window_screen`):
+# the window measured from its own events. Only the Blitz apps turn it on.
+native = ["ui", "dep:dioxus-native", "dep:futures-timer"]
 # The web apps' runtime config (`web_config`): the fetch of /config.json
 # in a page. The parsing is always compiled (and tested natively).
 web-config = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
@@ -19,6 +22,8 @@ web-config = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 dioxus = { workspace = true, optional = true }
+dioxus-native = { workspace = true, optional = true }
+futures-timer = { workspace = true, optional = true }
 # Only the pure registry types (PanelConstraints): no dock features, so no
 # WebView, serde or tokio come with it.
 dock = { workspace = true, optional = true }

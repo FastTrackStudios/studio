@@ -366,7 +366,7 @@ async fn run(id: &'static str, args: String) -> Result<Value, String> {
 }
 
 const CARD: &str = "position:absolute; top:12px; right:12px; width:340px; max-height:calc(100% - 24px); \
-                    overflow:auto; box-sizing:border-box; padding:12px; border-radius:10px; \
+                    overflow-x:hidden; overflow-y:scroll; box-sizing:border-box; padding:12px; border-radius:10px; \
                     background:#17191d; border:1px solid #2a2d33; color:#e6e6e6; \
                     font-size:12px; line-height:16px; display:flex; flex-direction:column; gap:10px;";
 const ROW: &str = "display:flex; flex-wrap:wrap; gap:4px; align-items:center;";

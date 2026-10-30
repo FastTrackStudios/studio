@@ -289,9 +289,10 @@ pub fn MainToolbar(
                     lucide_dioxus::Menu { size: 20, color: "currentColor" }
                 }
                 if open() {
-                    // A press outside closes it.
+                    // A press outside closes it: the whole screen, from
+                    // this corner (`shell::SCRIM`).
                     div {
-                        style: "position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:21;",
+                        style: "{crate::shell::SCRIM} z-index:21;",
                         onclick: move |_| open.set(false),
                     }
                     div {

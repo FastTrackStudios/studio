@@ -215,6 +215,10 @@ pub fn SignalWorkspace() -> Element {
     let on_libraries: Option<EventHandler<()>> =
         (!cfg!(target_arch = "wasm32")).then(|| EventHandler::new(move |()| libraries.set(true)));
 
+    // The menu's compact layout follows the window's size alone
+    // (`app_shell::ui::form`): a desk window made phone-sized gets the
+    // phone's, as an iPhone does.
+    let phone_menu = app_shell::ui::use_screen().phone();
     let Some(kind) = selected() else {
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -234,7 +238,7 @@ pub fn SignalWorkspace() -> Element {
         level.crumbs(vec![fts_audio_ui::chrome::Crumb::here("Rigs")]);
         return rsx! {
             RigMenu {
-                phone: false,
+                phone: phone_menu,
                 on_pick: move |rig| pick.call(Some(rig)),
                 on_libraries,
                 // A song from tonight's set: the guitar, on that song.
@@ -367,13 +371,12 @@ fn GuitarRigView(instrument: &'static str) -> Element {
     #[cfg(all(feature = "gig", not(target_arch = "wasm32")))]
     crate::gig::shell::use_gig_shell();
     // The window's width over its height, for the rig's wide layout (the
-    // whole rig on an ultrawide). Blitz has no resize events, so it is
-    // polled from the window a few times a second.
-    #[allow(unused_mut)] // set only by the native polling below
+    // whole rig on an ultrawide), and its size in points, for the form
+    // factor (a phone held sideways lays the chain out a page at a time):
+    // from the screen the app publishes (`app_shell::ui::form`).
+    #[allow(unused_mut)] // set only from the native window below
     let mut aspect = use_signal(|| 1.0_f64);
     use_context_provider(|| guitar::ui::WindowAspect(aspect));
-    // Its size in points, for the form factor (a phone held sideways lays
-    // the chain out a page at a time).
     #[allow(unused_mut)]
     let mut size = use_signal(|| (0.0_f64, 0.0_f64));
     use_context_provider(|| guitar::ui::WindowSize(size));
@@ -382,25 +385,17 @@ fn GuitarRigView(instrument: &'static str) -> Element {
         not(feature = "webview")
     ))]
     {
-        let window = dioxus_native::use_window();
-        use_future(move || {
-            let window = window.clone();
-            async move {
-                loop {
-                    let px = window.surface_size();
-                    if px.height > 0 {
-                        let a = f64::from(px.width) / f64::from(px.height);
-                        if (*aspect.peek() - a).abs() > 0.01 {
-                            aspect.set(a);
-                        }
-                        let scale = window.scale_factor().max(0.1);
-                        let pt = (f64::from(px.width) / scale, f64::from(px.height) / scale);
-                        let was = *size.peek();
-                        if (was.0 - pt.0).abs() > 1.0 || (was.1 - pt.1).abs() > 1.0 {
-                            size.set(pt);
-                        }
-                    }
-                    architect::platform::sleep(std::time::Duration::from_millis(300)).await;
+        let screen = app_shell::ui::form::use_window_screen();
+        use_effect(move || {
+            let s = screen();
+            if s.height > 0.0 {
+                let a = s.width / s.height;
+                if (*aspect.peek() - a).abs() > 0.01 {
+                    aspect.set(a);
+                }
+                let was = *size.peek();
+                if (was.0 - s.width).abs() > 1.0 || (was.1 - s.height).abs() > 1.0 {
+                    size.set((s.width, s.height));
                 }
             }
         });

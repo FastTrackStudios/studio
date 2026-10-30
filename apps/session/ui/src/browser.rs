@@ -167,7 +167,7 @@ pub fn BrowserColumn() -> Element {
     );
     rsx! {
         div {
-            style: "position:relative; flex:none; width:280px; overflow-y:auto; \
+            style: "position:relative; flex:none; width:280px; overflow-y:scroll; \
                     background:{BAR_BG}; border-right:1px solid {RULE};",
             div { style: "padding:12px 10px 6px; font-size:13px; font-weight:600; color:#e5e7eb;",
                 "Browser"

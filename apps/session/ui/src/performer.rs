@@ -256,7 +256,7 @@ fn setlist() -> Element {
         };
     }
     rsx! {
-        div { style: "display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;",
+        div { style: "display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: scroll;",
             crate::navigator::Navigator {
                 on_pick: move |i: usize| if let Some(crate::record_view::PickSong(p)) = pick { p.call(i) },
             }

@@ -79,29 +79,29 @@ pub fn MobileApp() -> Element {
     // First, before anything else: winit's window joins the app's window
     // scene (`ios_scene`) — without one iOS 27 never shows it.
     let window = dioxus_native::use_window();
-    use_hook({
-        let window = window.clone();
-        move || {
-            use dioxus_native::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-            if let Ok(handle) = window.window_handle()
-                && let RawWindowHandle::UiKit(uikit) = handle.as_raw()
-            {
-                app_shell::ios_scene::window_created(uikit.ui_view);
-            }
+    use_hook(move || {
+        use dioxus_native::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        if let Ok(handle) = window.window_handle()
+            && let RawWindowHandle::UiKit(uikit) = handle.as_raw()
+        {
+            app_shell::ios_scene::window_created(uikit.ui_view);
         }
     });
 
     // The window's size in points, its aspect, and the housing's side: the
-    // rig's form factor and where its page keeps clear. Read on a timer
-    // (as the desktop's rig view does) — a rotation changes all three.
-    let mut size = use_context_provider(|| WindowSize(Signal::new((402.0, 874.0))));
-    let mut aspect = use_context_provider(|| WindowAspect(Signal::new(402.0 / 874.0)));
+    // rig's form factor and where its page keeps clear. From the screen
+    // Studio publishes (`front`); a rotation changes all three.
+    let screen = app_shell::ui::form::use_window_screen();
+    let first = *screen.peek();
+    let mut size = use_context_provider(|| WindowSize(Signal::new((first.width, first.height))));
+    let mut aspect =
+        use_context_provider(|| WindowAspect(Signal::new(first.width / first.height.max(1.0))));
     let mut island = use_context_provider(|| IslandLeft(Signal::new(false)));
     // The screen's corner radius, for what sits in its corners to clear the
     // curve: a current iPhone's (62 points on the 16 and 17 Pro, the
     // largest — a smaller one only leaves a little to spare) or an iPad's.
     // UIKit does not publish it.
-    let mut corners = use_context_provider(|| ScreenCorners(Signal::new(PHONE_CORNER_RADIUS)));
+    let mut corners = use_context_provider(|| ScreenCorners(Signal::new(corner_radius(&first))));
     // The log ring, for the Audio mode's Log tab (copied for pasting into a
     // message when the audio misbehaves).
     // The FastTrackStudio account (STA-361): the ⋯ menu's Account item
@@ -111,48 +111,47 @@ pub fn MobileApp() -> Element {
         lines: app_shell::log_ring::snapshot,
         copy: copy_log,
     });
-    use_future(move || {
-        let window = window.clone();
-        async move {
-            loop {
-                let px = window.surface_size();
-                if px.height > 0 {
-                    let scale = window.scale_factor().max(0.1);
-                    let pt = (f64::from(px.width) / scale, f64::from(px.height) / scale);
-                    let was = *size.0.peek();
-                    if (was.0 - pt.0).abs() > 1.0 || (was.1 - pt.1).abs() > 1.0 {
-                        size.0.set(pt);
-                        aspect.0.set(pt.0 / pt.1);
-                        // A phone's short side is under 500 points.
-                        let radius = if pt.0.min(pt.1) < 500.0 {
-                            PHONE_CORNER_RADIUS
-                        } else {
-                            PAD_CORNER_RADIUS
-                        };
-                        if *corners.0.peek() != radius {
-                            corners.0.set(radius);
-                        }
-                    }
-                }
-                let left = app_shell::ios_scene::island_on_left() == Some(true);
-                if *island.0.peek() != left {
-                    island.0.set(left);
-                }
-                architect::platform::sleep(std::time::Duration::from_millis(300)).await;
+    use_effect(move || {
+        let s = screen();
+        let pt = (s.width, s.height);
+        if *size.0.peek() != pt {
+            size.0.set(pt);
+            aspect.0.set(s.width / s.height.max(1.0));
+        }
+        let radius = corner_radius(&s);
+        if *corners.0.peek() != radius {
+            corners.0.set(radius);
+        }
+        let left = app_shell::ios_scene::island_on_left() == Some(true);
+        if *island.0.peek() != left {
+            island.0.set(left);
+        }
+    });
+    // The housing also changes side when the phone turns over end to end,
+    // which resizes nothing — so the effect above never sees it: asked
+    // again twice a second.
+    use_future(move || async move {
+        let mut island = island;
+        loop {
+            futures_timer::Delay::new(std::time::Duration::from_millis(500)).await;
+            let left = app_shell::ios_scene::island_on_left() == Some(true);
+            if *island.0.peek() != left {
+                island.0.set(left);
             }
         }
     });
+    let pad = screen().insets.padding();
 
     let engine = crate::rig_engine::engine();
     rsx! {
         document::Style { {ROOT_CSS} }
         document::Style { {SIGNAL_TAILWIND} }
         // The viewport, sized explicitly: an absolute box stretched only by
-        // its insets gets no height in Blitz. Blitz keeps the safe area's
-        // top and bottom out of the viewport; the sides are the page's own
-        // (`BLITZ_SAFE_AREA_SIDES=0`, so the rig runs under the housing).
+        // its insets gets no height in Blitz. Padded by what of the safe
+        // area the page keeps clear itself (`app_shell::ui::form::page_insets`:
+        // nothing while Blitz keeps all of it out of the viewport).
         div {
-            style: "position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; \
+            style: "position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; padding: {pad}; \
                     box-sizing: border-box; display: flex; flex-direction: column; \
                     background: #0f1012; color: #e4e4e7; overflow: hidden; \
                     font-family: Inter, -apple-system, sans-serif;",
@@ -206,6 +205,15 @@ pub fn MobileApp() -> Element {
 /// The screen corner radii the layout clears (points).
 const PHONE_CORNER_RADIUS: f64 = 62.0;
 const PAD_CORNER_RADIUS: f64 = 18.0;
+
+/// The corner radius of the screen `screen` is on: a phone's or an iPad's.
+fn corner_radius(screen: &app_shell::ui::Screen) -> f64 {
+    if screen.phone() {
+        PHONE_CORNER_RADIUS
+    } else {
+        PAD_CORNER_RADIUS
+    }
+}
 
 /// Menu → rig. Each screen owns its orientation (set on mount), so
 /// navigating swaps the component and rotates the phone.
@@ -313,13 +321,12 @@ struct NoDrums {
 #[component]
 fn MenuPage(on_pick: EventHandler<Rig>, on_libraries: EventHandler<()>) -> Element {
     let front = crate::front_state::use_front();
-    // A phone on its side is short; an iPad is not — the page's compact
-    // layout follows the window, not the device family.
-    let compact = try_use_context::<WindowSize>().is_none_or(|w| w.0.read().1 < 600.0);
-    let portrait = try_use_context::<WindowSize>().is_some_and(|w| {
-        let (width, height) = *w.0.read();
-        height > width
-    });
+    // A phone's screen takes the compact layout; an iPad's does not — the
+    // page follows the window's form (`app_shell::ui::form`), not the
+    // device family.
+    let screen = app_shell::ui::use_screen();
+    let compact = screen.phone();
+    let portrait = screen.height > screen.width;
     rsx! {
         div { style: "flex: 1; min-height: 0; height: 100%; display: flex; flex-direction: column;",
             RigMenu {

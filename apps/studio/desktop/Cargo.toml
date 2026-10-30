@@ -285,6 +285,8 @@ uuid = { workspace = true, optional = true }
 # `webview` feature for the old path.
 dioxus-native = { workspace = true }
 dioxus-native-dom = { workspace = true }
+# The form factor measured from the window (app_shell::ui::form::use_window_screen).
+app-shell = { workspace = true, features = ["native"] }
 # Blitz's shell with custom widgets on: dioxus-native enables them in
 # blitz-dom only, which compiled out freeing a dropped widget's textures
 # and drawing frame faces as composited layers.
