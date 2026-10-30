@@ -23,7 +23,14 @@ use session::modes::Mode;
 /// of its own by kind: Studio's live rig (`rig`), which Session cannot
 /// mount itself. Provided above [`Embedded`](super::Embedded).
 #[derive(Clone, Default)]
-pub struct HostPanels(pub Vec<Kind>);
+pub struct HostPanels {
+    /// Kinds added to the catalog, or put in place of one by kind.
+    pub kinds: Vec<Kind>,
+    /// Drawn around the dock, inside the song's context: where the host
+    /// provides what its panels share (Studio: the rig's connection, its
+    /// gig state and playback). Renders `children` as given when `None`.
+    pub scope: Option<fn(Element) -> Element>,
+}
 
 /// Where the screensets are kept.
 const PREF: &str = "dock.screensets.v1";
@@ -61,6 +68,7 @@ pub fn SongDock(session: session_ui::studio::StudioSession, class: FormClass) ->
         form.set(class);
     }
     let host = try_use_context::<HostPanels>().unwrap_or_default();
+    let scope = host.scope;
     use_dock_provider(sets, form, catalog(host));
     // Kept as they change: a recall, a save, a panel moved or resized.
     use_effect(move || {
@@ -68,9 +76,14 @@ pub fn SongDock(session: session_ui::studio::StudioSession, class: FormClass) ->
             utils::prefs::set_raw(PREF, &json);
         }
     });
+    let dock = rsx! { DockHost {} };
+    let dock = match scope {
+        Some(around) => around(dock),
+        None => dock,
+    };
     rsx! {
         div { style: "position:relative; flex:1; min-height:0; min-width:0; display:flex;",
-            DockHost {}
+            {dock}
         }
     }
 }
@@ -226,7 +239,7 @@ fn catalog(host: HostPanels) -> Catalog {
             rsx! { StandIn { name: "Rig", note: "the live rig mounts here in Studio" } }
         }),
     ];
-    for extra in host.0 {
+    for extra in host.kinds {
         match kinds.iter_mut().find(|k| k.kind == extra.kind) {
             Some(own) => *own = extra,
             None => kinds.push(extra),

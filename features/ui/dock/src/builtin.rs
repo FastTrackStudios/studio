@@ -33,6 +33,16 @@ pub mod kind {
     /// The song's progress, its sections as a bar (Session's
     /// `PinnedProgress`, Signal's NOW / NEXT strip).
     pub const PROGRESS: &str = "progress";
+    /// The rig's footswitch scenes (Signal's switch grid).
+    pub const SWITCHES: &str = "switches";
+    /// The set being played: its songs, now and next (the gig setlist).
+    pub const NAVIGATOR: &str = "navigator";
+    /// The song playing now: its title, key, tempo and progress band.
+    pub const NOW: &str = "now";
+    /// The gig's chart: the song's PDF, Keyflow chart or lanes.
+    pub const GIG_CHART: &str = "gig-chart";
+    /// The rig's tone browser: presets, captures, profiles.
+    pub const TONES: &str = "tones";
 }
 
 /// The built-in sets' ids, fixed so the active one survives a restart.

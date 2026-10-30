@@ -126,7 +126,10 @@ pub fn Studio() -> Element {
     // The live rig as a panel of the DAW view's dock: Session cannot mount
     // it, so Studio hands it over (session_desktop::native::dock::HostPanels).
     #[cfg(feature = "session-app")]
-    use_context_provider(|| session_desktop::native::dock::HostPanels(vec![rig_panel()]));
+    use_context_provider(|| session_desktop::native::dock::HostPanels {
+        kinds: vec![rig_panel()],
+        scope: None,
+    });
     // iOS: winit's window joins the app's scene first, whichever view the
     // window ends up showing — without one iOS 27 never shows it.
     #[cfg(target_os = "ios")]
