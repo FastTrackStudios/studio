@@ -196,6 +196,96 @@ struct EditStateRow {
     selection_end: Option<f64>,
 }
 
+static TOGETHER_STATUS: ActionMeta = meta(
+    "SESSION_TOGETHER",
+    "session_together",
+    "The live session",
+    "The live session the engine is in, as the collaboration control shows it: `status` (the set, hosting or joined, the ticket or link, how many others, whether the transport is shared, this person's name and colour), `joining`, `error` (why the last share or join failed), `locked` (this device is not syncing), `hosted` (the set the engine hosts in Task by itself, signed in) and `host_error`, `people` (everyone else, and the song each is on), and `notices` (what the person should know: a song kept out of the set because it syncs with its org, or their version of a song kept as an alternative when it moved onto the set's). Read-only.",
+    "Set",
+    "",
+);
+
+static TOGETHER_SHARE: ActionMeta = meta(
+    "SESSION_TOGETHER_SHARE",
+    "session_together_share",
+    "Share the set",
+    "Share the set open in the engine with whoever has its ticket (iroh), as `name`: each song's own doc is what they edit. Returns at once — SESSION_TOGETHER has the ticket once it is shared.",
+    "Set",
+    "",
+);
+
+static TOGETHER_JOIN: ActionMeta = meta(
+    "SESSION_TOGETHER_JOIN",
+    "session_together_join",
+    "Join a shared set",
+    "Join a set someone shares by its ticket (`ticket`, `fts-session:…`), as `name`, with the same setlist open in the engine: each song is kept with theirs through its own file. Returns at once — SESSION_TOGETHER says how it went.",
+    "Set",
+    "",
+);
+
+static TOGETHER_LEAVE: ActionMeta = meta(
+    "SESSION_TOGETHER_LEAVE",
+    "session_together_leave",
+    "Leave the live session",
+    "Leave the live session (or stop sharing it). The songs keep everything edited together in their files.",
+    "Set",
+    "",
+);
+
+static TOGETHER_TRANSPORT: ActionMeta = meta(
+    "SESSION_TOGETHER_TRANSPORT",
+    "session_together_transport",
+    "Play together or apart",
+    "In a live session: `together` true plays one transport for everyone, from where this engine is; false lets everyone play on their own.",
+    "Set",
+    "",
+);
+
+static TOGETHER_LOCK: ActionMeta = meta(
+    "SESSION_TOGETHER_LOCK",
+    "session_together_lock",
+    "Lock this device",
+    "`locked` true: this device stops syncing — the others' edits wait, its own stay here. False unlocks it and merges both ways. Remembered on this device.",
+    "Set",
+    "",
+);
+
+/// Who shares, as whom.
+#[derive(Facet)]
+struct ShareArg {
+    name: Option<String>,
+}
+
+/// Which shared set, as whom.
+#[derive(Facet)]
+struct TicketArg {
+    ticket: String,
+    name: Option<String>,
+}
+
+/// Together or apart.
+#[derive(Facet)]
+struct TogetherArg {
+    together: bool,
+}
+
+/// Locked or not.
+#[derive(Facet)]
+struct LockArg {
+    locked: bool,
+}
+
+/// Who this person is in a set, when they are not named: the account's
+/// name, else the machine user's.
+#[must_use]
+pub fn person_name() -> String {
+    std::env::var("FTS_COLLAB_NAME")
+        .ok()
+        .or_else(|| std::env::var("USER").ok())
+        .filter(|n| !n.trim().is_empty())
+        .unwrap_or_else(|| "Someone".to_owned())
+}
+
 /// The set's actions, into `list`.
 ///
 /// # Errors
@@ -308,6 +398,43 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             playing: at.is_some_and(|(_, playing)| playing),
             position: at.map(|(position, _)| position),
         })
+    })?;
+    list.register(&TOGETHER_STATUS, Effect::ReadOnly, |(): ()| {
+        Ok(super::view_host::live_now())
+    })?;
+    list.register(&TOGETHER_SHARE, Effect::Mutating, |a: ShareArg| {
+        crate::collab::host_in_background(a.name.unwrap_or_else(person_name));
+        Ok("sharing the set".to_owned())
+    })?;
+    list.register(&TOGETHER_JOIN, Effect::Mutating, |a: TicketArg| {
+        let ticket = a.ticket.trim().to_owned();
+        if !ticket.starts_with("fts-session:") {
+            return Err("`ticket`: a session ticket (fts-session:…)".to_owned());
+        }
+        crate::collab::join_in_background(ticket, a.name.unwrap_or_else(person_name));
+        Ok("joining the shared set".to_owned())
+    })?;
+    list.register(&TOGETHER_LEAVE, Effect::Mutating, |(): ()| {
+        crate::collab::leave();
+        Ok("left the live session".to_owned())
+    })?;
+    list.register(&TOGETHER_TRANSPORT, Effect::Mutating, |a: TogetherArg| {
+        crate::collab::set_shared_transport(a.together);
+        Ok(if a.together {
+            "playing together"
+        } else {
+            "playing apart"
+        }
+        .to_owned())
+    })?;
+    list.register(&TOGETHER_LOCK, Effect::Mutating, |a: LockArg| {
+        crate::collab::set_sync_locked(a.locked);
+        Ok(if a.locked {
+            "this device is locked"
+        } else {
+            "this device syncs"
+        }
+        .to_owned())
     })?;
     list.register(&EDIT_STATE, Effect::ReadOnly, |(): ()| {
         let edit = crate::edit_state::current();

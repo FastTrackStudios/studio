@@ -56,6 +56,41 @@ pub struct SetHost {
     id: Uuid,
     registry: crdt::DocRegistry,
     docs: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<Uuid, loro::LoroDoc>>>,
+    /// Songs served through a host this set keeps ([`Self::add_relayed`]),
+    /// so what is relayed into them is sent on to their peers.
+    relayed: SetDocs,
+}
+
+/// The set's `DocSync`: a relayed song through its own host, anything else
+/// (the songs added as they are, the presence channel) through the
+/// registry.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone)]
+struct SetDocs {
+    hosts: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<Uuid, DocSyncHost>>>,
+    registry: crdt::DocRegistry,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl crdt::sync::DocSync for SetDocs {
+    async fn sync(
+        &self,
+        doc_id: Uuid,
+        from: Vec<u8>,
+        up: vox::Rx<Vec<u8>>,
+        down: vox::Tx<crdt::sync::SyncDown>,
+    ) -> Result<(), crdt::sync::SyncError> {
+        use crdt::sync::DocSync as _;
+        let host = self
+            .hosts
+            .lock()
+            .ok()
+            .and_then(|hosts| hosts.get(&doc_id).cloned());
+        match host {
+            Some(host) => host.sync(doc_id, from, up, down).await,
+            None => self.registry.sync(doc_id, from, up, down).await,
+        }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -73,7 +108,42 @@ impl SetHost {
             Box::pin(async move { Ok(doc.map_or_else(CrdtDoc::ephemeral, CrdtDoc::from_loro)) })
         })
         .with_presence_timeout(PRESENCE_TIMEOUT_MS);
-        Self { id, registry, docs }
+        let relayed = SetDocs {
+            hosts: std::sync::Arc::default(),
+            registry: registry.clone(),
+        };
+        Self {
+            id,
+            registry,
+            docs,
+            relayed,
+        }
+    }
+
+    /// Share a song's doc under `doc_id` that is kept in step with the
+    /// song's own by a [`crate::sync::relay::Relay`] — so this device's
+    /// lock can hold the peers' edits back from the song, and its own from
+    /// the peers. Returns the doc as the relay's side: what it is passed is
+    /// imported and sent on to every peer attached (an import sends nothing
+    /// by itself). Before anyone syncs it.
+    #[must_use]
+    pub fn add_relayed(&self, doc_id: Uuid, doc: &SessionDoc) -> crate::sync::relay::Side {
+        let host = DocSyncHost::new(doc_id, CrdtDoc::from_loro(doc.loro().clone()));
+        if let Ok(mut hosts) = self.relayed.hosts.lock() {
+            hosts.insert(doc_id, host.clone());
+        }
+        let into = doc.loro().clone();
+        crate::sync::relay::Side {
+            doc: doc.loro().clone(),
+            take: Arc::new(move |bytes: Vec<u8>| {
+                let (into, host) = (into.clone(), host.clone());
+                Box::pin(async move {
+                    into.import(&bytes)?;
+                    host.publish(bytes);
+                    Ok(())
+                })
+            }),
+        }
     }
 
     /// Share a song's doc under `doc_id`. Before anyone syncs it.
@@ -94,7 +164,7 @@ impl SetHost {
         router
             .with(
                 doc_sync_service_descriptor(),
-                DocSyncDispatcher::new(self.registry.clone()),
+                DocSyncDispatcher::new(self.relayed.clone()),
             )
             .with(
                 doc_presence_service_descriptor(),
@@ -191,8 +261,34 @@ impl SetPeer {
     /// each time it attaches, both ways.
     #[must_use]
     pub fn sync_song(doc_id: Uuid, dial: Dial<DocSyncClient>) -> SessionDoc {
+        Self::sync_song_relayed(doc_id, dial).0
+    }
+
+    /// [`Self::sync_song`], and the replica as a side of a
+    /// [`crate::sync::relay::Relay`]: what it is passed is imported and
+    /// sent up its connection too (an import sends nothing up by itself).
+    #[must_use]
+    pub fn sync_song_relayed(
+        doc_id: Uuid,
+        dial: Dial<DocSyncClient>,
+    ) -> (SessionDoc, crate::sync::relay::Side) {
         let doc = SessionDoc::new();
         let mut synced = SyncedDoc::new(doc_id, CrdtDoc::from_loro(doc.loro().clone()));
+        let outbox = synced.outbox();
+        let into = doc.loro().clone();
+        let side = crate::sync::relay::Side {
+            doc: doc.loro().clone(),
+            take: Arc::new(move |bytes: Vec<u8>| {
+                let (into, outbox) = (into.clone(), outbox.clone());
+                Box::pin(async move {
+                    into.import(&bytes)?;
+                    outbox
+                        .send(bytes)
+                        .map_err(|_| eyre::eyre!("the replica's connection is gone"))?;
+                    Ok(())
+                })
+            }),
+        };
         architect::platform::spawn(async move {
             let mut backoff = Backoff::default();
             loop {
@@ -210,7 +306,7 @@ impl SetPeer {
                 backoff.wait(began.elapsed() >= HELD).await;
             }
         });
-        doc
+        (doc, side)
     }
 }
 

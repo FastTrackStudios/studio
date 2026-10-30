@@ -31,6 +31,10 @@ pub fn start() -> eyre::Result<Engine> {
     crate::open::set_mode(crate::open::ModeState::engine());
     let daw = crate::open::start_engine()?;
     crate::open::serve_actions();
+    // Live sessions are the engine's: hosting what is open in Task, signed
+    // in, and any the environment names — each song kept with its set
+    // through its own file's doc, whatever window drives it.
+    crate::collab::start_in_engine(super::set_actions::person_name());
     let runtime = crate::open::runtime()
         .ok_or_else(|| eyre::eyre!("the engine started without its runtime"))?;
     tracing::info!(

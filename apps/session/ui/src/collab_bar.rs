@@ -8,11 +8,14 @@
 //! link: the card is the people, the transport, the invite (the page's own
 //! address) and leaving.
 //!
-//! Natively it also starts a session from the environment, for the two-instance demo
-//! and tests: `FTS_COLLAB_HOST=1` shares the song once it is open and
-//! writes the ticket to `FTS_COLLAB_TICKET` (default: the temp dir's
-//! `fts-session-ticket`); `FTS_COLLAB_JOIN` joins — a ticket, or a path
-//! to a file holding one (waiting for the file to appear).
+//! The live session is the engine's (`collab::start_in_engine`: Task
+//! auto-hosting and the sessions the environment names, each song kept with
+//! its set through its own file's doc). A window driving an engine in
+//! another process starts none: it shows the engine's session as its link
+//! says (`view_client::live`) and asks the engine's actions
+//! (`SESSION_TOGETHER_*`) — a session of its own would be a second bridge
+//! on the engine's songs (#316). A window that is its own engine starts the
+//! engine's, in its process.
 
 use std::time::Duration;
 
@@ -20,26 +23,169 @@ use dioxus::prelude::*;
 
 use crate::shell::{ACCENT, BAR_BG, DIM, Density, RULE, TEXT};
 
-/// Where an env-started host leaves its ticket.
-#[cfg(feature = "native")]
-fn ticket_path() -> std::path::PathBuf {
-    std::env::var_os("FTS_COLLAB_TICKET").map_or_else(
-        || std::env::temp_dir().join("fts-session-ticket"),
-        std::path::PathBuf::from,
-    )
-}
-
 #[cfg(feature = "native")]
 fn display_name() -> String {
-    std::env::var("FTS_COLLAB_NAME")
-        .ok()
-        .or_else(|| std::env::var("USER").ok())
-        .unwrap_or_else(|| "Someone".to_owned())
+    crate::studio_engine::set_actions::person_name()
+}
+
+/// The engine's live session, wherever the engine is: over the window's
+/// link when it is another process's, else this process's own.
+#[cfg(feature = "native")]
+mod live {
+    use crate::collab::Status;
+
+    /// Whether the engine is another process's.
+    fn elsewhere() -> bool {
+        crate::studio_engine::link::linked().is_some()
+    }
+
+    fn frame() -> Option<std::sync::Arc<session_engine::view::LiveFrame>> {
+        crate::view_client::live()
+    }
+
+    pub fn status() -> Option<Status> {
+        if !elsewhere() {
+            return crate::collab::status();
+        }
+        let s = frame()?.status.clone()?;
+        Some(Status {
+            hosting: s.hosting,
+            ticket: s.ticket,
+            peers: s.peers as usize,
+            shared_transport: s.shared_transport,
+            set: s.set,
+            name: s.name,
+            color: s.color,
+            resets_at: s.resets_in_secs.map(|secs| {
+                architect::platform::Instant::now() + std::time::Duration::from_secs(secs)
+            }),
+            locked: s.locked,
+            held: s.held as usize,
+        })
+    }
+
+    pub fn joining() -> bool {
+        if elsewhere() {
+            frame().is_some_and(|f| f.joining)
+        } else {
+            crate::collab::joining()
+        }
+    }
+
+    pub fn last_error() -> Option<String> {
+        if elsewhere() {
+            frame().and_then(|f| f.error.clone())
+        } else {
+            crate::collab::last_error()
+        }
+    }
+
+    pub fn sync_locked() -> bool {
+        if elsewhere() {
+            frame().is_some_and(|f| f.locked)
+        } else {
+            crate::collab::sync_locked()
+        }
+    }
+
+    pub fn hosted() -> Option<String> {
+        if elsewhere() {
+            frame().and_then(|f| f.hosted.clone())
+        } else {
+            crate::live_host::hosted().map(|h| h.title)
+        }
+    }
+
+    pub fn notices() -> Vec<String> {
+        if elsewhere() {
+            frame().map(|f| f.notices.clone()).unwrap_or_default()
+        } else {
+            crate::collab::notices()
+        }
+    }
+
+    pub fn host_error() -> Option<String> {
+        if elsewhere() {
+            frame().and_then(|f| f.host_error.clone())
+        } else {
+            crate::live_host::last_error()
+        }
+    }
+
+    /// Ask the engine's action `id` with `args`, off the window's thread.
+    fn ask(id: &'static str, args: serde_json::Value) {
+        std::thread::spawn(move || {
+            if let Err(e) = crate::studio_engine::link::run(id, args.to_string().as_bytes()) {
+                tracing::warn!(collab.action = id, collab.error = %e, "collab: the engine refused");
+            }
+        });
+    }
+
+    pub fn share(name: String) {
+        if elsewhere() {
+            ask(
+                "SESSION_TOGETHER_SHARE",
+                serde_json::json!({ "name": name }),
+            );
+        } else {
+            crate::collab::host_in_background(name);
+        }
+    }
+
+    pub fn join(ticket: String, name: String) {
+        if elsewhere() {
+            ask(
+                "SESSION_TOGETHER_JOIN",
+                serde_json::json!({ "ticket": ticket, "name": name }),
+            );
+        } else {
+            crate::collab::join_in_background(ticket, name);
+        }
+    }
+
+    pub fn leave() {
+        if elsewhere() {
+            ask("SESSION_TOGETHER_LEAVE", serde_json::json!({}));
+        } else {
+            crate::collab::leave();
+        }
+    }
+
+    pub fn set_shared_transport(together: bool) {
+        if elsewhere() {
+            ask(
+                "SESSION_TOGETHER_TRANSPORT",
+                serde_json::json!({ "together": together }),
+            );
+        } else {
+            crate::collab::set_shared_transport(together);
+        }
+    }
+
+    pub fn set_sync_locked(locked: bool) {
+        if elsewhere() {
+            ask(
+                "SESSION_TOGETHER_LOCK",
+                serde_json::json!({ "locked": locked }),
+            );
+        } else {
+            crate::collab::set_sync_locked(locked);
+        }
+    }
+}
+
+/// A page's live session: its own (a page is its own engine).
+#[cfg(not(feature = "native"))]
+mod live {
+    pub use crate::collab::{
+        joining, last_error, leave, notices, set_shared_transport, set_sync_locked, status,
+        sync_locked,
+    };
 }
 
 #[component]
 pub fn CollabBar() -> Element {
-    let mut status = use_signal(crate::collab::status);
+    let mut status = use_signal(live::status);
     let mut error = use_signal(|| None::<String>);
     // A playground's time left, in whole seconds (ticks the countdown).
     let mut resets_in = use_signal(|| None::<u64>);
@@ -47,99 +193,35 @@ pub fn CollabBar() -> Element {
     let mut joining = use_signal(String::new);
     let mut people = use_signal(crate::ghosts::everyone);
     // Whether a session is being joined (a page joins in the background).
-    let mut session_joining = use_signal(crate::collab::joining);
+    let mut session_joining = use_signal(live::joining);
     let mut open = use_signal(|| false);
     let mut copied = use_signal(|| false);
     // This device's sync switch (`collab::sync_locked`).
-    let mut locked = use_signal(crate::collab::sync_locked);
+    let mut locked = use_signal(live::sync_locked);
+    // What the person should know: a song kept out, a version kept aside.
+    let mut notices = use_signal(live::notices);
     // Natively: the set this window hosts in Task by itself, and why it
     // could not, if it could not (`live_host`).
     #[cfg(feature = "native")]
-    let mut task_hosted = use_signal(|| crate::live_host::hosted().map(|h| h.title));
+    let mut task_hosted = use_signal(live::hosted);
     #[cfg(feature = "native")]
-    let mut host_error = use_signal(crate::live_host::last_error);
+    let mut host_error = use_signal(live::host_error);
     let density = crate::shell::use_density();
 
     #[cfg(feature = "native")]
-    // The environment's session, once the song is up.
+    // The live sessions are the engine's: this window starts them only
+    // when it is the engine (no link to one elsewhere).
     use_hook(move || {
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(1500));
-            // The song's own record of its edits is the engine's: it keeps
-            // each song's in its `.session` (`project_file`). This window
-            // drives that engine in another process, so it opens no record
-            // of its own — a second bridge here, against the same engine,
-            // made the engine match its doc while the engine's bridge wrote
-            // the engine back into the doc, and every FX chain was added
-            // again each round (Unbreakable's reverbs: 50 deep in an hour).
-            // Joining or hosting a live session, and hosting what is open in
-            // Task, each bridge the song's doc to the engine the same way,
-            // so none of them starts here while the engine is elsewhere: a
-            // shared song syncs through the engine's own doc
-            // (`project_sync`), until live sessions are kept by the engine
-            // too.
-            if crate::studio_engine::link::linked().is_some() {
-                tracing::info!(
-                    collab.skipped = "engine elsewhere",
-                    "collab: this window starts no live session; the engine keeps the song's doc"
-                );
-                return;
-            }
-            let task_set = crate::collab::TaskSet::from_env();
-            if let Some(set) = task_set {
-                match crate::collab::join_task(&set, display_name()) {
-                    Ok(()) => {
-                        tracing::info!(collab.setlist = %set.setlist, "collab: in the set Task keeps")
-                    }
-                    Err(e) => {
-                        tracing::warn!(collab.error = %e, "collab: could not join the set Task keeps")
-                    }
-                }
-            } else if crate::collab::env_set("FTS_COLLAB_HOST") {
-                match crate::collab::host(display_name()) {
-                    Ok(ticket) => {
-                        let path = ticket_path();
-                        if let Err(e) = std::fs::write(&path, &ticket) {
-                            tracing::warn!(collab.ticket_error = %e, "collab: the ticket was not written");
-                        }
-                        tracing::info!(collab.ticket_file = %path.display(), "collab: hosting");
-                    }
-                    Err(e) => tracing::warn!(collab.error = %e, "collab: could not host"),
-                }
-            } else if let Some(join) = std::env::var_os("FTS_COLLAB_JOIN").filter(|v| !v.is_empty())
-            {
-                let join = join.to_string_lossy().into_owned();
-                let ticket = if join.starts_with("fts-session:") {
-                    Some(join)
-                } else {
-                    // A file the host writes: wait for it.
-                    (0..120).find_map(|_| {
-                        let t = std::fs::read_to_string(&join)
-                            .ok()
-                            .filter(|t| t.starts_with("fts-session:"));
-                        if t.is_none() {
-                            std::thread::sleep(Duration::from_millis(500));
-                        }
-                        t
-                    })
-                };
-                match ticket.map(|t| crate::collab::join(t.trim(), display_name())) {
-                    Some(Ok(())) => tracing::info!("collab: joined"),
-                    Some(Err(e)) => tracing::warn!(collab.error = %e, "collab: could not join"),
-                    None => tracing::warn!("collab: no ticket to join"),
-                }
-            }
-            // Signed in to Task, what is open goes live there by itself
-            // (off when the environment started a session above).
-            crate::live_host::start(display_name());
-        });
+        if crate::studio_engine::link::linked().is_none() {
+            crate::collab::start_in_engine(display_name());
+        }
     });
 
     // The status, kept current (peers come and go with nothing clicked).
     use_future(move || async move {
         loop {
             architect::platform::sleep(Duration::from_millis(500)).await;
-            let now = crate::collab::status();
+            let now = live::status();
             let left = now.as_ref().and_then(|s| s.resets_at).map(|at| {
                 at.saturating_duration_since(architect::platform::Instant::now())
                     .as_secs()
@@ -150,11 +232,11 @@ pub fn CollabBar() -> Element {
             if *status.peek() != now {
                 status.set(now);
             }
-            let now_joining = crate::collab::joining();
+            let now_joining = live::joining();
             if *session_joining.peek() != now_joining {
                 session_joining.set(now_joining);
             }
-            let why = crate::collab::last_error();
+            let why = live::last_error();
             if *error.peek() != why {
                 error.set(why);
             }
@@ -162,17 +244,21 @@ pub fn CollabBar() -> Element {
             if *people.peek() != here {
                 people.set(here);
             }
-            let now_locked = crate::collab::sync_locked();
+            let now_notices = live::notices();
+            if *notices.peek() != now_notices {
+                notices.set(now_notices);
+            }
+            let now_locked = live::sync_locked();
             if *locked.peek() != now_locked {
                 locked.set(now_locked);
             }
             #[cfg(feature = "native")]
             {
-                let hosted = crate::live_host::hosted().map(|h| h.title);
+                let hosted = live::hosted();
                 if *task_hosted.peek() != hosted {
                     task_hosted.set(hosted);
                 }
-                let why = crate::live_host::last_error();
+                let why = live::host_error();
                 if *host_error.peek() != why {
                     host_error.set(why);
                 }
@@ -250,7 +336,7 @@ pub fn CollabBar() -> Element {
                         "{clock(left)}"
                     }
                 }
-                if error().is_some() {
+                if error().is_some() || !notices().is_empty() {
                     span { style: "width:7px; height:7px; border-radius:4px; background:#e3b341;" }
                 }
                 // Locked: this device is not syncing — say so on the bar.
@@ -302,7 +388,7 @@ pub fn CollabBar() -> Element {
                         None => rsx! {
                             button {
                                 style: primary(),
-                                onclick: move |_| crate::collab::host_in_background(display_name()),
+                                onclick: move |_| live::share(display_name()),
                                 "Share this set"
                             }
                             Section { label: "Join" }
@@ -319,7 +405,7 @@ pub fn CollabBar() -> Element {
                                 }
                                 button {
                                     style: secondary(),
-                                    onclick: move |_| crate::collab::join_in_background(joining.peek().trim().to_owned(), display_name()),
+                                    onclick: move |_| live::join(joining.peek().trim().to_owned(), display_name()),
                                     "Join"
                                 }
                             }
@@ -336,7 +422,7 @@ pub fn CollabBar() -> Element {
                             let ticket = invite_link().unwrap_or(l.ticket.clone());
                             #[cfg(feature = "native")]
                             let ticket = l.ticket.clone();
-                            let current = crate::open::current_song().and_then(|p| crate::collab::key_of(&p));
+                            let current = crate::open::current_song();
                             rsx! {
                                 Section { label: "People" }
                                 div {
@@ -346,7 +432,7 @@ pub fn CollabBar() -> Element {
                                         Row {
                                             name: p.name,
                                             color: p.color,
-                                            note: if current.as_deref() == Some(p.song.as_str()) { "here".to_owned() } else { format!("on {}", p.song) },
+                                            note: if current.as_deref() == Some(p.project.as_str()) { "here".to_owned() } else { format!("on {}", p.song) },
                                         }
                                     }
                                 }
@@ -357,13 +443,13 @@ pub fn CollabBar() -> Element {
                                     button {
                                         style: "{half(!shared)}",
                                         title: "Everyone plays on their own; the others' playheads show faintly",
-                                        onclick: move |_| { crate::collab::set_shared_transport(false); status.set(crate::collab::status()); },
+                                        onclick: move |_| { live::set_shared_transport(false); status.set(live::status()); },
                                         "Apart"
                                     }
                                     button {
                                         style: "{half(shared)}",
                                         title: "One transport: play here and it plays for everyone",
-                                        onclick: move |_| { crate::collab::set_shared_transport(true); status.set(crate::collab::status()); },
+                                        onclick: move |_| { live::set_shared_transport(true); status.set(live::status()); },
                                         "Together"
                                     }
                                 }
@@ -388,7 +474,7 @@ pub fn CollabBar() -> Element {
                                     style: "height:28px; border-radius:7px; border:1px solid #5a2a2a; background:transparent; \
                                             color:#f28b82; font-size:12px; font-weight:600; cursor:pointer;",
                                     onclick: move |_| {
-                                        crate::collab::leave();
+                                        live::leave();
                                         status.set(None);
                                         copied.set(false);
                                     },
@@ -406,13 +492,13 @@ pub fn CollabBar() -> Element {
                         button {
                             style: "{half(!locked())}",
                             title: "Your edits go out as you make them, and everyone else's come in as they make them",
-                            onclick: move |_| { crate::collab::set_sync_locked(false); locked.set(false); },
+                            onclick: move |_| { live::set_sync_locked(false); locked.set(false); },
                             "Live"
                         }
                         button {
                             style: "{half(locked())}",
                             title: "Don't sync this device: the others' edits wait, yours stay here; unlock to merge them",
-                            onclick: move |_| { crate::collab::set_sync_locked(true); locked.set(true); },
+                            onclick: move |_| { live::set_sync_locked(true); locked.set(true); },
                             "Locked"
                         }
                     }
@@ -423,6 +509,9 @@ pub fn CollabBar() -> Element {
                     }
                     if let Some(why) = error() {
                         span { style: "font-size:11px; color:#e3b341;", "{why}" }
+                    }
+                    for line in notices() {
+                        span { style: "font-size:11px; color:#e3b341;", "{line}" }
                     }
                     if let Some(why) = hosting_error() {
                         span { style: "font-size:11px; color:#e3b341;", "Task: {why}" }

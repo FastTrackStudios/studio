@@ -87,11 +87,14 @@ pub fn song_plan_with(
             save_to: None,
         };
     }
-    let prepare = !prepare.is_empty();
+    // An `.RPP` becomes a session file as it opens: saved as `Song.session`
+    // beside it (the `.RPP` left as it is), prepared first if it has
+    // anything to prepare — so from now on it opens, saves and goes live
+    // as its project file, with the one doc and bridge every song has.
     SongPlan {
         open: path.to_path_buf(),
-        prepare,
-        save_to: (prepare && folder.writable()).then_some(saved),
+        prepare: !prepare.is_empty(),
+        save_to: folder.writable().then_some(saved),
     }
 }
 

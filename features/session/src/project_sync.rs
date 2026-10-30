@@ -28,6 +28,7 @@ use std::time::Duration;
 
 use crdt::CrdtDoc;
 use crdt::docs::{CreateDoc, DocSyncEvent, Lineage};
+use crdt::sync::DocSyncClient;
 use fts_account::sync::Synced;
 use session_format::store::{MAIN, Replica, Store};
 use uuid::Uuid;
@@ -236,6 +237,120 @@ impl SyncedBranch {
         if let Some(replica) = &self.replica {
             replica.name_next(label);
         }
+    }
+
+    /// This branch as a side of a [`crate::sync::relay::Relay`] (a live
+    /// set's doc of the song kept in step with it): what it is passed is
+    /// applied to the doc, written through its file, and sent to the org at
+    /// once ([`relayed_side`], over a session of its own with Task). Signed
+    /// out, it is written through the file only, and reaches the org with
+    /// the next sync.
+    #[must_use]
+    pub fn side(&self) -> crate::sync::relay::Side {
+        match fts_account::signed_in() {
+            Some(account) => {
+                let url = fts_account::sync::org_url(&account.server, &self.org);
+                let token = account.session.token.clone();
+                let dial: Dial = Arc::new(move || {
+                    let (url, token) = (url.clone(), token.clone());
+                    Box::pin(async move {
+                        task_dial::establish_at::<DocSyncClient>(&url, Some(&token))
+                            .await
+                            .map_err(|e| format!("dialling {url}: {e}"))
+                    })
+                });
+                relayed_side(&self.doc, self.id, dial)
+            }
+            None => {
+                tracing::warn!(sync.org = %self.org, sync.doc = %self.id, "signed out: what a live set sends this song reaches its org with the next sync");
+                durable_side(&self.doc, self.id, None)
+            }
+        }
+    }
+}
+
+/// Makes a sync client for Task afresh: what an upstream session dials
+/// again with when its connection goes.
+pub type Dial = Arc<
+    dyn Fn() -> architect::platform::BoxFuture<'static, Result<DocSyncClient, String>>
+        + Send
+        + Sync,
+>;
+
+/// The synced doc `doc` (id `id`) as a relay's side whose updates reach
+/// the org at once.
+///
+/// The org's driver sends up only the commits made on this device: what is
+/// imported (a live set's edit relayed in) would wait for its next attach.
+/// So this side keeps a sync session of its own with Task for the doc,
+/// dialled with `dial` (and again whenever it drops), and sends each update
+/// it is passed up that session's outbox, after applying it to the doc and
+/// writing it through the file. Task hands it on to every other session on
+/// the doc — this device's driver gets it back and already has it — and
+/// never back to the live set it came from: that set's doc already holds
+/// it. The session ends when the last copy of the side is dropped.
+#[must_use]
+pub fn relayed_side(doc: &CrdtDoc, id: Uuid, dial: Dial) -> crate::sync::relay::Side {
+    let mut session = crdt::sync::SyncedDoc::new(id, doc.clone());
+    let outbox = session.outbox();
+    let (stop, mut stopped) = tokio::sync::watch::channel(false);
+    architect::platform::spawn(async move {
+        loop {
+            let attempt = async {
+                match dial().await {
+                    Ok(client) => {
+                        if let Err(e) = session.run(&client).await {
+                            tracing::debug!(sync.doc = %id, sync.error = %e, "the song's relay session to its org ended; dialling again");
+                        }
+                    }
+                    Err(e) => {
+                        tracing::debug!(sync.doc = %id, sync.error = %e, "the song's relay session to its org could not dial yet");
+                    }
+                }
+                architect::platform::sleep(Duration::from_secs(2)).await;
+            };
+            tokio::select! {
+                _ = stopped.changed() => break,
+                () = attempt => {}
+            }
+        }
+    });
+    durable_side(doc, id, Some((outbox, Arc::new(Upstream(stop)))))
+}
+
+/// Ends a [`relayed_side`]'s session when its last copy drops.
+struct Upstream(tokio::sync::watch::Sender<bool>);
+
+impl Drop for Upstream {
+    fn drop(&mut self) {
+        let _ = self.0.send(true);
+    }
+}
+
+/// `doc` as a relay's side: an update applied and written through its
+/// file, then sent up `up`'s outbox when there is one.
+fn durable_side(
+    doc: &CrdtDoc,
+    id: Uuid,
+    up: Option<(tokio::sync::mpsc::UnboundedSender<Vec<u8>>, Arc<Upstream>)>,
+) -> crate::sync::relay::Side {
+    let into = doc.clone();
+    crate::sync::relay::Side {
+        doc: doc.loro().clone(),
+        take: Arc::new(move |bytes: Vec<u8>| {
+            let (into, up) = (into.clone(), up.clone());
+            Box::pin(async move {
+                into.apply_remote_durable(id, &bytes)
+                    .await
+                    .map_err(|e| eyre::eyre!("the synced song took no update: {e}"))?;
+                if let Some((outbox, _session)) = up {
+                    outbox
+                        .send(bytes)
+                        .map_err(|_| eyre::eyre!("the song's relay session to its org is gone"))?;
+                }
+                Ok(())
+            })
+        }),
     }
 }
 
@@ -497,8 +612,20 @@ where
     F: Fn() -> Fut + Send + Sync + 'static,
     Fut: std::future::Future<Output = ()> + Send + 'static,
 {
+    watch_imports(synced.doc.loro(), apply)
+}
+
+/// [`watch_remote`] on any doc: each import into `doc` (another device's
+/// edit, a live set's relayed in) wakes `apply`; imports that arrive while
+/// one runs are taken together. Lives as long as the returned
+/// subscription.
+pub fn watch_imports<F, Fut>(doc: &loro::LoroDoc, apply: F) -> crate::sync::loro::Subscription
+where
+    F: Fn() -> Fut + Send + Sync + 'static,
+    Fut: std::future::Future<Output = ()> + Send + 'static,
+{
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-    let subscription = synced.doc.loro().subscribe_root(Arc::new(move |event| {
+    let subscription = doc.subscribe_root(Arc::new(move |event| {
         if matches!(
             event.triggered_by,
             crate::sync::loro::EventTriggerKind::Import

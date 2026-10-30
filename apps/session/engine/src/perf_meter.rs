@@ -13,7 +13,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 use daw::standalone::Standalone;
 use daw::standalone::audio_engine::EngineStats;

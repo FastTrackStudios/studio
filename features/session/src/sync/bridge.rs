@@ -10,6 +10,11 @@
 //! Undo is the doc's too ([`Bridge::undo`]): this peer's own steps,
 //! undone in the doc — where another peer's edits since stay as they are —
 //! and the engine made to match.
+//!
+//! A project has one bridge in a process ([`claim`]): a second is refused.
+//! Anything else that must follow the song — a live set's doc of it — is
+//! kept in step with the bridge's doc, not with the engine
+//! ([`crate::sync::relay`]).
 
 use daw_control::Project;
 
@@ -19,7 +24,14 @@ use crate::sync::doc::{ORIGIN_LOCAL, SessionDoc, Touched, Watch};
 use crate::sync::engine::{self, Blobs, Direct, EngineIds, MediaRoot};
 use crate::sync::model::SessionModel;
 
+pub mod claim;
+
+pub use claim::AlreadyBridged;
+use claim::{Claim, engine_of};
+
 pub struct Bridge {
+    /// This bridge's hold on its project: the only bridge on it here.
+    claim: Claim,
     doc: SessionDoc,
     project: Project,
     media: MediaRoot,
@@ -77,6 +89,28 @@ fn name_of(value: Option<loro::LoroValue>) -> String {
     }
 }
 
+/// The engine's `project` as it is now, written into `doc` once.
+///
+/// There is no bridge, so nothing follows it after, and none is held: what a copy of
+/// a song saved elsewhere, or a check against its file, reads while the
+/// song keeps its own bridge. Returns what was written.
+///
+/// # Errors
+/// When the engine cannot be read or the doc cannot be written.
+pub async fn write_once(
+    project: &Project,
+    media: &MediaRoot,
+    doc: &SessionDoc,
+    chart: String,
+    blobs: &dyn Blobs,
+    direct: Option<&dyn Direct>,
+) -> eyre::Result<SessionModel> {
+    let mut now = engine::read(project, media, blobs, &EngineIds::default(), direct).await?;
+    now.chart = chart;
+    doc.write(&now, ORIGIN_LOCAL)?;
+    Ok(now)
+}
+
 impl Bridge {
     /// Start a session from this engine: the engine is the truth, the doc
     /// is written from it. `chart` is the song's chart text.
@@ -91,6 +125,7 @@ impl Bridge {
         blobs: std::sync::Arc<dyn Blobs>,
         direct: Option<std::sync::Arc<dyn Direct>>,
     ) -> eyre::Result<Self> {
+        let claim = Claim::take(engine_of(direct.as_deref()), project.guid())?;
         let ids = EngineIds::default();
         let mut shown =
             engine::read(&project, &media, blobs.as_ref(), &ids, direct.as_deref()).await?;
@@ -100,6 +135,7 @@ impl Bridge {
         let watch = doc.watch();
         let bridge = Self {
             cursor: None,
+            claim,
             doc,
             project,
             media,
@@ -138,6 +174,7 @@ impl Bridge {
         use tracing::Instrument as _;
         // Each step its own span, under the song's build: where a join's
         // time goes.
+        let claim = Claim::take(engine_of(direct.as_deref()), project.guid())?;
         let ids = EngineIds::default();
         let current = engine::read(&project, &media, blobs.as_ref(), &ids, direct.as_deref())
             .instrument(tracing::info_span!("bridge.read_engine"))
@@ -146,6 +183,7 @@ impl Bridge {
         let watch = doc.watch();
         let mut bridge = Self {
             cursor: None,
+            claim,
             doc,
             project,
             media,
@@ -183,24 +221,32 @@ impl Bridge {
     ///
     /// # Errors
     /// When an engine call fails.
-    pub async fn rejoin(self, doc: SessionDoc) -> eyre::Result<Self> {
+    pub async fn rejoin(mut self, doc: SessionDoc) -> eyre::Result<Self> {
+        self.switch_doc(doc).await?;
+        Ok(self)
+    }
+
+    /// [`Self::rejoin`] in place: the bridge kept on `doc` from now on,
+    /// the engine made to match it. Returns the steps the engine took.
+    /// Undo starts here; the steps on the doc it leaves stay with that
+    /// doc.
+    ///
+    /// # Errors
+    /// When an engine call fails. The bridge is on `doc` either way, and
+    /// the engine re-read, so the next remote pass reconciles the rest.
+    pub async fn switch_doc(&mut self, doc: SessionDoc) -> eyre::Result<Vec<Change>> {
         let (undo, naming) = undo_manager(&doc);
-        let watch = doc.watch();
-        let mut bridge = Self {
-            cursor: None,
-            doc,
-            undo,
-            naming,
-            watch,
-            quiet: Vec::new(),
-            ..self
-        };
-        bridge.take_touched();
+        self.watch = doc.watch();
+        self.doc = doc;
+        self.undo = undo;
+        self.naming = naming;
+        self.quiet.clear();
+        self.cursor = None;
+        self.take_touched();
         let touched = Touched::everything();
-        let target = bridge.doc.read_touched(&bridge.shown, &touched);
-        bridge.adopt(&target);
-        bridge.make_match(target, &touched).await?;
-        Ok(bridge)
+        let target = self.doc.read_touched(&self.shown, &touched);
+        self.adopt(&target);
+        self.make_match(target, &touched).await
     }
 
     /// Take what the engine shows as `target`'s where the two differ only
@@ -219,14 +265,25 @@ impl Bridge {
     /// engine FX and item each doc entry is, its undo steps and what the
     /// doc has touched) holds there as it did here, and nothing is
     /// applied or read again.
-    #[must_use]
-    pub fn moved_to(self, project: Project, direct: Option<std::sync::Arc<dyn Direct>>) -> Self {
-        Self {
+    ///
+    /// The bridge's claim moves with it: the stage's project is let go,
+    /// `project` held.
+    ///
+    /// # Errors
+    /// `project` already has a bridge here ([`AlreadyBridged`]).
+    pub fn moved_to(
+        self,
+        project: Project,
+        direct: Option<std::sync::Arc<dyn Direct>>,
+    ) -> eyre::Result<Self> {
+        let claim = Claim::take(engine_of(direct.as_deref()), project.guid())?;
+        Ok(Self {
+            claim,
             project,
             direct,
             cursor: None,
             ..self
-        }
+        })
     }
 
     /// Join a session while this device is locked ([`crate::sync::Hold`]):
@@ -248,6 +305,7 @@ impl Bridge {
         blobs: std::sync::Arc<dyn Blobs>,
         direct: Option<std::sync::Arc<dyn Direct>>,
     ) -> eyre::Result<Self> {
+        let claim = Claim::take(engine_of(direct.as_deref()), project.guid())?;
         let ids = EngineIds::default();
         let current =
             engine::read(&project, &media, blobs.as_ref(), &ids, direct.as_deref()).await?;
@@ -257,6 +315,7 @@ impl Bridge {
         let target = doc.read();
         let mut bridge = Self {
             cursor: None,
+            claim,
             doc,
             project,
             media,

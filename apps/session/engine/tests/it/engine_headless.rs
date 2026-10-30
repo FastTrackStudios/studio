@@ -52,6 +52,9 @@ fn a_headless_engine_is_driven_through_its_action_list() -> Result<(), String> {
     unsafe {
         std::env::set_var("FTS_MCP", "0");
         std::env::set_var("FTS_ENGINE_SILENT", "1");
+        // The engine hosts what is open in Task when signed in: never a
+        // test's songs.
+        std::env::set_var("FTS_LIVE_AUTOHOST", "0");
     }
     let engine = session_engine::studio_engine::headless::start().map_err(|e| e.to_string())?;
     drop(engine);

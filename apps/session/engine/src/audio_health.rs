@@ -375,8 +375,8 @@ pub fn watch(daw: daw::standalone::Standalone, stats: std::sync::Arc<EngineStats
         .name("session-engine-audio-health".into())
         .spawn(move || {
             let mut before = Reading::of(&stats);
-            let mut began = std::time::SystemTime::now();
-            let mut clock = std::time::Instant::now();
+            let mut began = web_time::SystemTime::now();
+            let mut clock = web_time::Instant::now();
             let mut lag = Lag::default();
             let mut drops_seen = 0u64;
             let (mut last_line, mut since_line) = (None, 0u32);
@@ -384,8 +384,8 @@ pub fn watch(daw: daw::standalone::Standalone, stats: std::sync::Arc<EngineStats
                 std::thread::sleep(std::time::Duration::from_secs(2));
                 let now = Reading::of(&stats);
                 let elapsed_ms = clock.elapsed().as_secs_f64() * 1e3;
-                clock = std::time::Instant::now();
-                let ended = std::time::SystemTime::now();
+                clock = web_time::Instant::now();
+                let ended = web_time::SystemTime::now();
                 let at_end = AtEnd {
                     frames: stats.block_frames.load(Relaxed),
                     peak_ns: stats.peak_render_ns.swap(0, Relaxed),
