@@ -194,7 +194,7 @@ js-sys = { workspace = true, optional = true }
 anyrender_vello_hybrid = { workspace = true, optional = true, features = ["webgl"] }
 vello_hybrid = { workspace = true, optional = true }
 vello_common = { workspace = true, optional = true }
-rustc-hash = { workspace = true, optional = true }
+rustc-hash = { workspace = true }
 gloo-timers = { workspace = true, optional = true }
 # The FTS processors as built-in FX (desktop: they are nice-plug plugins).
 builtin = { workspace = true, optional = true, features = ["engine"] }
@@ -230,7 +230,7 @@ show = ["native", "studio/convert-ableton", "session-engine/show"]
 # The browser: the same widgets, hosted in <canvas> elements under
 # dioxus-web and drawn with vello_hybrid's WebGL renderer (keyflow-ui's
 # `wasm-graphics` pattern). See `web_host`.
-web = ["session-engine/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:anyrender_vello_hybrid", "dep:vello_hybrid", "dep:vello_common", "dep:rustc-hash", "dep:gloo-timers", "dep:futures-util", "daw/standalone-session-file", "session/collab", "dep:architect", "dep:futures-channel"]
+web = ["session-engine/web", "dioxus/web", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:anyrender_vello_hybrid", "dep:vello_hybrid", "dep:vello_common", "dep:gloo-timers", "dep:futures-util", "daw/standalone-session-file", "session/collab", "dep:architect", "dep:futures-channel"]
 # The `#[]` suites, which need a REAPER to talk to. Behind a
 # feature so an ordinary `cargo nextest run --workspace` does not try to
 # reach one that is not running — `just reaper-test` turns it on, via
