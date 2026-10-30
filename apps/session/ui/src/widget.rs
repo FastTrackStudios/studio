@@ -3451,90 +3451,104 @@ impl ArrangementWidget {
             }
             self.last_name = Some((spot.row, now));
         }
-        let edit = match spot.control {
-            C::Mute => Edit::ToggleMute(guid),
-            C::Solo => Edit::ToggleSolo(guid),
-            C::RecArm => Edit::ToggleArm(guid),
-            C::Phase => Edit::SetPhase(guid, !track.phase_inverted),
+        // Every control names an action (`TRACK_SET`, `TRACK_SHOW_LANES`,
+        // …) and runs it through the Action List, as a key would: the
+        // action does the work. What stays here is the preview — the
+        // edit the widget assumes before the engine says so.
+        let (edit, id, args) = match spot.control {
+            C::Mute => (
+                Edit::ToggleMute(guid.clone()),
+                "TRACK_SET",
+                serde_json::json!({ "track": guid, "mute": !track.muted }),
+            ),
+            C::Solo => (
+                Edit::ToggleSolo(guid.clone()),
+                "TRACK_SET",
+                serde_json::json!({ "track": guid, "solo": !track.soloed }),
+            ),
+            C::RecArm => (
+                Edit::ToggleArm(guid.clone()),
+                "TRACK_ARM",
+                serde_json::json!({ "track": guid, "on": !track.armed }),
+            ),
+            C::Phase => (
+                Edit::SetPhase(guid.clone(), !track.phase_inverted),
+                "TRACK_SET",
+                serde_json::json!({ "track": guid, "phase": !track.phase_inverted }),
+            ),
             // The `+`, or the lane's name: every lane shown, to hear and comp
             // from — on a folder its own row's and every track's under it —
             // or only the one that plays again.
             C::LaneShow | C::LaneName => {
-                let open = !crate::lanes::opened(track);
-                let under =
-                    crate::lanes::speaks_for(&self.tracks, track, self.scene.lane_tracks(spot.row));
-                let opened = lanes_opened_by(&self.project.tracks, track, &under);
-                let _ = crate::lanes::set_expanded(&opened, Some(open));
+                let show = !crate::lanes::opened(track);
+                #[cfg(feature = "native")]
+                crate::window::press(
+                    "TRACK_SHOW_LANES",
+                    &serde_json::json!({ "track": guid, "show": show }),
+                );
+                // The browser build has no Action List: the view, here.
+                #[cfg(not(feature = "native"))]
+                {
+                    let under = crate::lanes::speaks_for(
+                        &self.tracks,
+                        track,
+                        self.scene.lane_tracks(spot.row),
+                    );
+                    let opened =
+                        crate::lanes::opened_with_folders(&self.project.tracks, track, &under);
+                    let _ = crate::lanes::set_expanded(&opened, Some(show));
+                }
                 return;
             }
             C::LanePrev | C::LaneNext => {
-                // What the line speaks for: the track, or a folder's tracks
-                // (shut, the ones the scene recorded under it).
-                let shown: Vec<daw_proto::Track> =
-                    crate::lanes::speaks_for(&self.tracks, track, self.scene.lane_tracks(spot.row))
-                        .into_iter()
-                        .cloned()
-                        .collect();
-                let Some(first) = shown.first() else { return };
-                let Some(mask) = crate::lanes::stepped(
-                    first,
-                    self.project
-                        .items
-                        .get(&first.guid)
-                        .map_or(&[][..], Vec::as_slice),
-                    spot.control == C::LaneNext,
-                ) else {
-                    return;
-                };
-                // The lane by name, on each: the same comp on every mic of
-                // a kit, and on their media-edit group while grouping is on.
-                let lane = (0..64)
-                    .find(|l| mask == 1_u64 << l)
-                    .map(|l| {
-                        crate::lanes::label(&daw_proto::Track {
-                            lane_play_mask: 1_u64 << l,
-                            ..first.clone()
-                        })
-                    })
-                    .unwrap_or_default();
-                let mut targets: Vec<String> = Vec::new();
-                for t in &shown {
-                    for g in std::iter::once(t.guid.clone())
-                        .chain(crate::lanes::grouped_tracks(&self.tracks, &t.guid))
-                    {
-                        if !targets.contains(&g) {
-                            targets.push(g);
-                        }
-                    }
-                }
-                for g in targets {
-                    let Some(t) = self.tracks.iter().chain(&shown).find(|t| t.guid == g) else {
+                let by = if spot.control == C::LaneNext { 1 } else { -1 };
+                let said = self.press_control(
+                    "TRACK_LANE_STEP",
+                    &serde_json::json!({ "track": guid, "by": by }),
+                );
+                // The masks it set, shown before the engine says so (it
+                // says nothing back for a track's lane).
+                for t in said
+                    .as_ref()
+                    .and_then(|s| s.get("tracks"))
+                    .and_then(serde_json::Value::as_array)
+                    .into_iter()
+                    .flatten()
+                {
+                    let (Some(g), Some(mask)) = (
+                        t.get("guid").and_then(serde_json::Value::as_str),
+                        t.get("mask").and_then(serde_json::Value::as_u64),
+                    ) else {
                         continue;
                     };
-                    let Some(own) = crate::lanes::mask_named(t, &lane) else {
-                        continue;
-                    };
-                    let edit = Edit::SetLanePlays(g, own);
-                    self.assume(&edit);
-                    self.edits.borrow_mut().push(edit);
+                    self.assume(&Edit::SetLanePlays(g.to_owned(), mask));
                 }
                 // What a shut folder's row shows is folded from what its
-                // tracks play: folded again from the lane they play now. The
-                // engine says nothing back for a track's lane, so nothing
-                // else would.
+                // tracks play: folded again from the lane they play now.
                 self.replan_rows();
                 return;
             }
-            C::Name => Edit::Select(guid),
+            C::Name => (
+                Edit::Select(guid.clone()),
+                "SESSION_SELECT_TRACK",
+                serde_json::json!({ "track": guid }),
+            ),
             // A fold is an edit to the VIEW and not to a track: the
             // window's folds (`crate::folds`), which plan the rows again.
             C::Folder => {
                 // Shut, a click opens it; open, it shuts.
-                let open = !crate::folds::shut(&self.rows, spot.row);
-                crate::folds::toggle(&guid, open);
+                let open = crate::folds::shut(&self.rows, spot.row);
+                #[cfg(feature = "native")]
+                crate::window::press(
+                    "SESSION_FOLD",
+                    &serde_json::json!({ "track": guid, "open": open }),
+                );
+                #[cfg(not(feature = "native"))]
+                crate::folds::toggle(&guid, !open);
                 return;
             }
-            // What the track can automate, to show in lanes.
+            // What the track can automate, to show in lanes: a menu, whose
+            // choices are actions.
             C::Automation => {
                 #[cfg(feature = "native")]
                 self.open_automation_menu(spot.row);
@@ -3551,11 +3565,32 @@ impl ArrangementWidget {
         // for that would make every button feel broken — a mute that
         // lights up two frames after the click reads as a missed click,
         // and the second click un-does the first. So the widget moves
-        // its own copy now and the engine makes it so; when the real
-        // event arrives it agrees, and if the engine refuses, the next
+        // its own copy now and the action makes it so; when the real
+        // event arrives it agrees, and if the action refuses, the next
         // update corrects it.
         self.assume(&edit);
-        self.edits.borrow_mut().push(edit);
+        #[cfg(feature = "native")]
+        crate::window::press(id, &args);
+        // The browser build has no Action List: the edit goes as it is.
+        #[cfg(not(feature = "native"))]
+        {
+            let _ = (id, args);
+            self.edits.borrow_mut().push(edit);
+        }
+    }
+
+    /// A panel control's action run through the Action List
+    /// ([`crate::window::press`]); what it said. The browser build, which
+    /// has no list, does nothing.
+    #[allow(clippy::unused_self)]
+    fn press_control(&self, id: &str, args: &serde_json::Value) -> Option<serde_json::Value> {
+        #[cfg(feature = "native")]
+        return crate::window::press(id, args);
+        #[cfg(not(feature = "native"))]
+        {
+            let _ = (id, args);
+            None
+        }
     }
 
     /// Where a point in the widget falls, as the window's hit test
@@ -4212,14 +4247,19 @@ impl ArrangementWidget {
                     return true;
                 };
                 if let crate::rename::What::Track(guid) = rename.what {
-                    let edit = crate::engine::Edit::Rename(guid, name);
+                    let edit = crate::engine::Edit::Rename(guid.clone(), name.clone());
                     self.assume(&edit);
                     // A name is RECORDED chrome and not a live value,
                     // so moving the track is not enough — the row it is
                     // written into has to be cut again or the field
                     // closes on the old name.
                     self.scene.forget_panel();
-                    self.edits.borrow_mut().push(edit);
+                    // Named through `TRACK_SET`, as a model renames one.
+                    let args = serde_json::json!({ "track": guid, "name": name });
+                    if self.press_control("TRACK_SET", &args).is_none() {
+                        #[cfg(not(feature = "native"))]
+                        self.edits.borrow_mut().push(edit);
+                    }
                 }
             }
             Key::Escape => self.renaming = None,
@@ -6312,39 +6352,6 @@ impl ArrangementWidget {
         crate::arrangement::cut_to_screen(&mut out, f64::from(width), f64::from(height), lanes_cut);
         out
     }
-}
-
-/// What a row's lanes button opens or shuts: the track and the tracks its
-/// lane line speaks for (`under`, [`crate::lanes::opened_by`]) — and every
-/// folder between them and it, by `tracks`' parents.
-///
-/// A shut folder's row shows its lanes only when the folder itself is
-/// opened ([`crate::lanes::folder_view`]): the button on an open kit whose
-/// pieces are shut opened the mics and the kit, and every piece's shut row
-/// went on showing what plays — its EDIT lane filling the row — until the
-/// kit was shut over them.
-fn lanes_opened_by(
-    tracks: &[daw_proto::Track],
-    track: &daw_proto::Track,
-    under: &[&daw_proto::Track],
-) -> Vec<String> {
-    let mut opened = crate::lanes::opened_by(track, under);
-    let parent_of = |guid: &str| {
-        tracks
-            .iter()
-            .find(|t| t.guid == guid)
-            .and_then(|t| t.parent_guid.as_deref())
-    };
-    for lane_track in under {
-        let mut at = lane_track.parent_guid.as_deref();
-        while let Some(folder) = at.filter(|folder| *folder != track.guid) {
-            if !opened.iter().any(|g| g == folder) {
-                opened.push(folder.to_owned());
-            }
-            at = parent_of(folder);
-        }
-    }
-    opened
 }
 
 /// The items of `project` whose take `marks` mark bad over the whole of

@@ -722,13 +722,17 @@ impl DeviceRow {
         if up != control {
             return true;
         }
-        let edit = match control {
+        let press = match control {
             Some(control) => crate::mcp::click(control, &guid, &track, add),
-            None if add => Some(crate::engine::Edit::AddToSelection(guid)),
-            None => Some(crate::engine::Edit::Select(guid)),
+            None => Some(crate::mcp::select(&guid, add)),
         };
-        if let Some(edit) = edit {
-            self.commit(edit);
+        if let Some(press) = press {
+            crate::mixer_panel::predict(&mut self.tracks, &press.preview);
+            if !crate::mcp::run(&press)
+                && let Some(applier) = &self.applier
+            {
+                applier.send(press.preview);
+            }
         }
         true
     }

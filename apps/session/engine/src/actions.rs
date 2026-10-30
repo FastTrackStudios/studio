@@ -111,6 +111,71 @@ pub static GO_TO_START: ActionMeta = meta(
     "Transport",
     "Home",
 );
+pub static STOP: ActionMeta = meta(
+    "SESSION_STOP",
+    "stop",
+    "Stop",
+    "Stop the transport where it is (SESSION_PLAY_STOP toggles).",
+    "Transport",
+    "",
+);
+pub static GO_TO_END: ActionMeta = meta(
+    "SESSION_GO_TO_END",
+    "go_to_end",
+    "Go to end",
+    "The edit cursor to the end of the song.",
+    "Transport",
+    "End",
+);
+pub static LOOP: ActionMeta = meta(
+    "SESSION_LOOP",
+    "loop",
+    "Loop",
+    "Turn looping over the loop range on or off.",
+    "Transport",
+    "",
+);
+pub static SEEK: ActionMeta = meta(
+    "SESSION_SEEK",
+    "seek",
+    "Go to a time",
+    "Move the play position to `at` seconds from the start of the song — what a click on a section in the navigator, the progress bar or the ruler does. Playing, it plays on from there.",
+    "Transport",
+    "",
+);
+pub static PLAY_FROM: ActionMeta = meta(
+    "SESSION_PLAY_FROM",
+    "play_from",
+    "Play from a time",
+    "Move to `at` seconds and play from there, as one step (the play cannot land before the move).",
+    "Transport",
+    "",
+);
+
+/// A time in the song, seconds from its start.
+#[derive(Facet)]
+struct AtArg {
+    at: f64,
+}
+
+/// The action a press of the transport runs (`crate::engine::transport`):
+/// its id and its arguments, `at` seconds where it takes a time.
+#[must_use]
+pub fn transport_action(command: crate::engine::Move, at: f64) -> (&'static str, String) {
+    use crate::engine::Move as M;
+    let at = || format!(r#"{{"at":{at}}}"#);
+    match command {
+        M::PlayStop => (PLAY_STOP.id, String::new()),
+        M::Home => (GO_TO_START.id, String::new()),
+        M::Stop => (STOP.id, String::new()),
+        M::End => (GO_TO_END.id, String::new()),
+        M::ToggleLoop => (LOOP.id, String::new()),
+        M::ToggleRecord => (crate::record::TRANSPORT_RECORD.id, "{}".to_owned()),
+        M::Seek => (SEEK.id, at()),
+        M::PlayFrom => (PLAY_FROM.id, at()),
+    }
+}
+
 /// The transport's actions: the engine's, not the window's — they run on
 /// it at once, the window or none (headless, hidden, another monitor), and
 /// a window shows what the engine does.
@@ -139,6 +204,28 @@ fn register_transport(list: &ActionList) -> Result<(), architect::action::Action
         crate::window_queue::ask(crate::window_queue::Asked::GoToStart);
         Ok(format!("{}: done", GO_TO_START.display_name))
     })?;
+    for (meta, command) in [
+        (&STOP, crate::engine::Move::Stop),
+        (&GO_TO_END, crate::engine::Move::End),
+        (&LOOP, crate::engine::Move::ToggleLoop),
+    ] {
+        list.register(meta, Effect::Mutating, move |(): ()| {
+            crate::engine::transport_here(command, 0.0);
+            Ok(format!("{}: done", meta.display_name))
+        })?;
+    }
+    for (meta, command) in [
+        (&SEEK, crate::engine::Move::Seek),
+        (&PLAY_FROM, crate::engine::Move::PlayFrom),
+    ] {
+        list.register(meta, Effect::Mutating, move |a: AtArg| {
+            if !a.at.is_finite() || a.at < 0.0 {
+                return Err("`at` is seconds from the start, 0 or more".to_owned());
+            }
+            crate::engine::transport_here(command, a.at);
+            Ok(format!("{}: {:.3} s", meta.display_name, a.at))
+        })?;
+    }
     Ok(())
 }
 
@@ -165,7 +252,7 @@ static TRACK_SET: ActionMeta = meta(
     "TRACK_SET",
     "track_set",
     "Set track",
-    "Set a track's fader (dB), pan (-1 left … 1 right), mute or solo — any of them.",
+    "Set any of a track's fader (`volume_db`), pan (-1 left … 1 right), `mute`, `solo`, `phase` (polarity inverted), `monitor` (input monitoring: `off`, `on`, or `auto` — on except while playing) or `name` — only the fields given change. What the track panel's and the mixer's buttons and faders run (arming is TRACK_ARM).",
     "Mix",
     "",
 );
@@ -305,6 +392,11 @@ struct TrackSetArg {
     pan: Option<f64>,
     mute: Option<bool>,
     solo: Option<bool>,
+    /// Polarity inverted.
+    phase: Option<bool>,
+    /// Input monitoring: `off`, `on`, `auto` (on except while playing).
+    monitor: Option<String>,
+    name: Option<String>,
 }
 
 /// How many hits a page holds unless asked.
@@ -1468,6 +1560,11 @@ static FOLD: ActionMeta = meta(
 struct FoldArg {
     track: String,
     open: bool,
+    /// The folders to open or shut, as the engine settled them: what it
+    /// tells a window in another process, which has no song to look them
+    /// up in.
+    #[facet(default)]
+    folders: Vec<String>,
 }
 
 #[cfg(feature = "native")]
@@ -1638,7 +1735,7 @@ static SELECT_TRACK: ActionMeta = meta(
     "SESSION_SELECT_TRACK",
     "session_select_track",
     "Select a track",
-    "Select `track` (its GUID, its path — `Snare/Verb/Plate`, any tail of it — or its name) and nothing else: what the FX row, the mixer and the Editor follow.",
+    "Select `track` (its GUID, its path — `Snare/Verb/Plate`, any tail of it — or its name) and nothing else: what the FX row, the mixer and the Editor follow. `add` true adds it to the selection instead, leaving the rest selected (a modified click on a track's name).",
     "Session",
     "",
 );
@@ -1648,6 +1745,9 @@ static SELECT_TRACK: ActionMeta = meta(
 #[derive(Facet)]
 struct SelectTrackArg {
     track: String,
+    /// Add it to the selection rather than select it alone.
+    #[facet(default)]
+    add: bool,
 }
 
 static JOBS: ActionMeta = meta(
@@ -1883,6 +1983,13 @@ fn register_window_controls(list: &ActionList) -> Result<(), architect::action::
 #[cfg(feature = "native")]
 fn register_undo(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&FOLD, Effect::Mutating, |a: FoldArg| {
+        // Told by the engine which folders it changed: set here as settled.
+        if !a.folders.is_empty() {
+            for folder in &a.folders {
+                crate::folds::toggle(folder, !a.open);
+            }
+            return Ok(a.folders);
+        }
         let (daw, project) = song()?;
         let guid = resolve(daw, &project, &a.track)?;
         let tracks = daw::service::Tracks::all(daw, project);
@@ -1891,11 +1998,13 @@ fn register_undo(list: &ActionList) -> Result<(), architect::action::ActionError
         // Opening a folder opens the ones it is in: a folder open inside a
         // shut one shows nothing.
         let mut opened = Vec::new();
+        let mut folders = Vec::new();
         let mut at = by_guid.get(guid.as_str()).copied();
         while let Some(track) = at {
             if track.is_folder && (a.open || track.guid == guid) {
                 crate::folds::toggle(&track.guid, !a.open);
                 opened.push(track.name.clone());
+                folders.push(track.guid.clone());
             }
             if !a.open {
                 break;
@@ -1905,6 +2014,12 @@ fn register_undo(list: &ActionList) -> Result<(), architect::action::ActionError
                 .as_deref()
                 .and_then(|p| by_guid.get(p).copied());
         }
+        // The folds are the window's view: run here, the window is asked
+        // too, told the folders settled so the two agree.
+        also_in_the_window(
+            FOLD.id,
+            serde_json::json!({ "track": guid, "open": a.open, "folders": folders }).to_string(),
+        );
         Ok(opened)
     })?;
     list.register(&UNDO, Effect::Mutating, |_: NoArg| {
@@ -2062,12 +2177,14 @@ fn register_save(list: &ActionList) -> Result<(), architect::action::ActionError
     list.register(&SELECT_TRACK, Effect::Mutating, |a: SelectTrackArg| {
         let (daw, project) = song()?;
         let guid = resolve(daw, &project, &a.track)?;
-        daw::service::Tracks::select_exclusive(
-            daw,
-            project,
-            daw::service::TrackRef::Guid(guid.clone()),
-        )
+        let at = daw::service::TrackRef::Guid(guid.clone());
+        if a.add {
+            daw::service::Tracks::set_selected(daw, project, at, true)
+        } else {
+            daw::service::Tracks::select_exclusive(daw, project, at)
+        }
         .map_err(|e| e.to_string())?;
+        crate::actions::list().changed("tracks", &guid);
         Ok(guid)
     })?;
     list.register(&MARK_KINDS, Effect::Mutating, |_: NoArg| {
@@ -2815,7 +2932,23 @@ fn register_track_set(list: &ActionList) -> Result<(), architect::action::Action
             Tracks::set_muted(daw, project.clone(), at(), mute).map_err(failed)?;
         }
         if let Some(solo) = a.solo {
-            Tracks::set_soloed(daw, project, at(), solo).map_err(failed)?;
+            Tracks::set_soloed(daw, project.clone(), at(), solo).map_err(failed)?;
+        }
+        if let Some(monitor) = a.monitor.as_deref() {
+            use daw_proto::track::InputMonitoringMode as M;
+            let mode = match monitor.to_ascii_lowercase().as_str() {
+                "off" => M::Off,
+                "on" | "normal" => M::Normal,
+                "auto" | "not_when_playing" => M::NotWhenPlaying,
+                other => return Err(format!("`monitor` is off, on or auto, not {other:?}")),
+            };
+            Tracks::set_input_monitor(daw, project.clone(), at(), mode).map_err(failed)?;
+        }
+        if let Some(phase) = a.phase {
+            Tracks::set_phase_inverted(daw, project.clone(), at(), phase).map_err(failed)?;
+        }
+        if let Some(name) = a.name.as_deref() {
+            Tracks::rename(daw, project, at(), name).map_err(failed)?;
         }
         crate::actions::list().changed("tracks", &guid);
         Ok(())
@@ -5209,7 +5342,13 @@ pub fn run(id: &str, args: &[u8]) -> Result<Vec<u8>, String> {
     if crate::view_client::is_linked() && !crate::window_queue::is_window_action(id) {
         return crate::view_client::run(id, args).map(String::into_bytes);
     }
-    list().run_json(id, args).map_err(|e| e.to_string())
+    let ran = list().run_json(id, args).map_err(|e| e.to_string());
+    // The window's own, run here: said on the engine's list too, where
+    // whoever watches the engine looks.
+    if ran.is_ok() && crate::view_client::is_linked() {
+        crate::view_client::ran_in_window(id, args);
+    }
+    ran
 }
 
 /// Run a key's action on the one thread that runs them behind the window,
@@ -5237,5 +5376,67 @@ pub fn off_the_window(id: &'static str, args: String) {
     });
     if let Ok(tx) = worker.lock() {
         let _ = tx.send((id, args, tracing::Span::current()));
+    }
+}
+
+#[cfg(all(test, feature = "native"))]
+mod presses {
+    use super::list;
+    use crate::engine::Move;
+
+    /// What the window's controls run (`docs/design/actions-everywhere.md`):
+    /// each must be on the engine's list, or a press runs nothing.
+    const PRESSED: &[&str] = &[
+        "TRACK_SET",
+        "TRACK_ARM",
+        "SESSION_SELECT_TRACK",
+        "TRACK_LANE_STEP",
+        "TRACK_SHOW_LANES",
+        "SESSION_FOLD",
+        "SESSION_MODE",
+        "SESSION_PHASE",
+        "SESSION_PANEL",
+        "SESSION_ARRANGE",
+        "SESSION_GROUPING",
+    ];
+
+    #[test]
+    fn every_control_names_an_action_on_the_list() {
+        let missing: Vec<&&str> = PRESSED
+            .iter()
+            .filter(|id| list().info(id).is_none())
+            .collect();
+        assert!(missing.is_empty(), "not on the list: {missing:?}");
+    }
+
+    #[test]
+    fn every_transport_press_runs_an_action() {
+        for command in [
+            Move::PlayStop,
+            Move::Home,
+            Move::Seek,
+            Move::Stop,
+            Move::End,
+            Move::ToggleLoop,
+            Move::ToggleRecord,
+            Move::PlayFrom,
+        ] {
+            let (id, _) = super::transport_action(command, 1.5);
+            assert!(
+                list().info(id).is_some(),
+                "{command:?} runs {id}, not on the list"
+            );
+        }
+    }
+
+    #[test]
+    fn the_list_registers_cleanly() {
+        let list = list();
+        assert!(list.validate().is_ok(), "{:?}", list.validate());
+        assert!(
+            list.probe_hostile_args().is_ok(),
+            "{:?}",
+            list.probe_hostile_args()
+        );
     }
 }

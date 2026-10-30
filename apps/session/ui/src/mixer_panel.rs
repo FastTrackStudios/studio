@@ -1299,7 +1299,14 @@ impl MixerWidget {
                 // The window's one choice of phase: the bottom bar's
                 // switcher shows it.
                 if self.links.switch.is_some() {
-                    session::mode_phases::choose(session::modes::Mode::Mix, phase.slug());
+                    let press = crate::mcp::Press {
+                        id: "SESSION_PHASE",
+                        args: serde_json::json!({ "mode": "Mix", "phase": phase.slug() }),
+                        preview: Edit::Done(0),
+                    };
+                    if !crate::mcp::run(&press) {
+                        session::mode_phases::choose(session::modes::Mode::Mix, phase.slug());
+                    }
                     self.phase_seen = session::mode_phases::version();
                 }
                 self.rails.phase = phase;
@@ -1359,19 +1366,45 @@ impl MixerWidget {
         }
     }
 
+    /// A fader or pan drag over: where it ended committed through
+    /// `TRACK_SET`, the action a model or the CLI sets a fader with. The
+    /// drag itself was a live preview (`flush_drag`, the automation
+    /// writer's edits); this is the one step the Action List sees.
+    fn commit_turn(&self, turn: &Turn) {
+        let Some(track) = self.tracks.iter().find(|t| t.guid == turn.was.guid) else {
+            return;
+        };
+        let args = match turn.spot.control {
+            Control::Volume => serde_json::json!({
+                "track": track.guid,
+                "volume_db": 20.0 * track.volume.max(1e-9).log10(),
+            }),
+            Control::Pan => serde_json::json!({ "track": track.guid, "pan": track.pan }),
+            _ => return,
+        };
+        let _ = crate::mcp::run(&crate::mcp::Press {
+            id: "TRACK_SET",
+            args,
+            preview: Edit::Done(0),
+        });
+    }
+
     fn flush_drag(&mut self) {
         for (_, edit) in std::mem::take(&mut self.dragged) {
             self.send(edit);
         }
     }
 
-    /// Do an edit here, and send it on: to the engine, and to the
-    /// arrangement.
-    fn commit(&mut self, edit: Edit) {
-        predict(&mut self.tracks, &edit);
-        predict(&mut self.targets, &edit);
+    /// A strip control pressed: shown here at once, and its action run
+    /// ([`crate::mcp::run`]) — which does the work, for the engine and the
+    /// arrangement alike.
+    fn press(&mut self, press: crate::mcp::Press) {
+        predict(&mut self.tracks, &press.preview);
+        predict(&mut self.targets, &press.preview);
         self.show_targets();
-        self.send(edit);
+        if !crate::mcp::run(&press) {
+            self.send(press.preview);
+        }
     }
 
     /// Ask for another frame, where the host needs asking.
@@ -1985,6 +2018,7 @@ impl MixerWidget {
             Hold::Turn(turn) => {
                 self.flush_drag();
                 self.touch(&turn, false);
+                self.commit_turn(&turn);
             }
             // Thrown: the strips carry on the way the finger was going.
             Hold::Pan { speed, .. } => {
@@ -2004,7 +2038,14 @@ impl MixerWidget {
                         .get(spot.row + 1)
                         .zip(self.rows.get(spot.row))
                         .is_some_and(|((_, next), (_, this))| next > this);
-                    crate::folds::toggle(&track.guid, open);
+                    let press = crate::mcp::Press {
+                        id: "SESSION_FOLD",
+                        args: serde_json::json!({ "track": track.guid, "open": !open }),
+                        preview: Edit::Done(0),
+                    };
+                    if !crate::mcp::run(&press) {
+                        crate::folds::toggle(&track.guid, open);
+                    }
                     self.redraw();
                 } else if let Some(track) = self.track_at(spot.row).cloned() {
                     // The clip latch clears on a click while it is lit;
@@ -2014,12 +2055,12 @@ impl MixerWidget {
                         Control::Clip => Some(Control::Volume),
                         other => Some(other),
                     };
-                    let edit = control.and_then(|c| {
+                    let press = control.and_then(|c| {
                         let target = self.acts_on(c, &track);
                         crate::mcp::click(c, &target.guid, &target, false)
                     });
-                    if let Some(edit) = edit {
-                        self.commit(edit);
+                    if let Some(press) = press {
+                        self.press(press);
                     }
                 }
             }
@@ -2035,11 +2076,7 @@ impl MixerWidget {
                     .filter(|row| self.strip_row_at(from.0, from.1) == Some(*row))
                     && let Some(track) = self.track_at(row).cloned()
                 {
-                    self.commit(if add {
-                        Edit::AddToSelection(track.guid)
-                    } else {
-                        Edit::Select(track.guid)
-                    });
+                    self.press(crate::mcp::select(&track.guid, add));
                     self.dirty.set(true);
                 }
             }
@@ -2053,8 +2090,11 @@ impl MixerWidget {
     /// its release lost. What it had moved stays moved.
     fn let_go(&mut self, id: BlitzPointerId) {
         if let Some(i) = self.hold_of(id) {
-            self.holds.remove(i);
+            let (_, hold) = self.holds.remove(i);
             self.flush_drag();
+            if let Hold::Turn(turn) = hold {
+                self.commit_turn(&turn);
+            }
             self.pointer.release();
         }
     }

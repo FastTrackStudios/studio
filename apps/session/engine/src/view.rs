@@ -549,6 +549,12 @@ pub trait EngineView {
     /// What one of the window's actions, asked of it with a ticket, came to.
     async fn answer(&self, answer: WindowAnswer);
 
+    /// One of the window's own actions ran in the window (a key, a click):
+    /// said on the engine's Action List as run, so whoever watches the
+    /// engine (`watch`, a guide, a test) sees it as it would one run here.
+    /// Not asked of the window again. Whether the list knew it.
+    async fn ran_in_window(&self, call: ActionCall) -> bool;
+
     /// Coarse waveforms, as the engine draws them.
     async fn waves(&self, ask: WavesAsk) -> Vec<WaveRead>;
 

@@ -86,3 +86,26 @@ pub fn grouping_changed(on: bool) {
 /// Off under test: every editing test would otherwise be a test of the
 /// lock. The lock's own tests turn it on.
 pub static LOCKING: Option = Option::new(!cfg!(test));
+
+/// An arrangement editing option by the name `SESSION_OPTION` takes it by
+/// (`snap`, `grid`, `ripple`, `razor`, `auto_crossfade`, `lock`), with its
+/// name. Grouping is `SESSION_GROUPING`'s, which moves groups in the engine.
+#[must_use]
+pub fn named(name: &str) -> core::option::Option<(&'static str, &'static Option)> {
+    Some(
+        match name
+            .trim()
+            .to_ascii_lowercase()
+            .replace(['-', ' '], "_")
+            .as_str()
+        {
+            "snap" => ("snap", &SNAP),
+            "grid" => ("grid", &GRID),
+            "ripple" => ("ripple", &RIPPLE),
+            "razor" => ("razor", &RAZOR),
+            "auto_crossfade" | "crossfade" => ("auto_crossfade", &AUTO_CROSSFADE),
+            "lock" | "locking" => ("lock", &LOCKING),
+            _ => return None,
+        },
+    )
+}
