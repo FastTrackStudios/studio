@@ -66,6 +66,40 @@ pub fn through_list(actions: Vec<Action>) -> Vec<Action> {
     take_window()
 }
 
+/// A control pressed in the window — a button, a menu item, a gesture's
+/// end: its named action run through the Action List, exactly as a key's
+/// is ([`through_list`]), so `watch`, a guide and the CLI see the same
+/// thing a click does. The action does the work; the control only names
+/// it. What the action said (JSON; `null` for nothing), or `None` when it
+/// refused (said once, as a key's refusal is).
+pub fn press(id: &str, args: &serde_json::Value) -> Option<serde_json::Value> {
+    let _span = tracing::info_span!("window.press", window.press_action = id).entered();
+    let args = if args.is_null() {
+        String::new()
+    } else {
+        args.to_string()
+    };
+    match crate::actions::run(id, args.as_bytes()) {
+        Ok(out) => Some(serde_json::from_slice(&out).unwrap_or(serde_json::Value::Null)),
+        Err(e) => {
+            tracing::warn!(action.id = id, error = %e, "control action refused");
+            None
+        }
+    }
+}
+
+/// [`press`], behind the window: for an action that reads the whole song
+/// or waits on the engine, where the frame must not wait for it. Run in
+/// the order pressed, on the thread keys' slow actions run on.
+pub fn press_behind(id: &'static str, args: &serde_json::Value) {
+    let args = if args.is_null() {
+        String::new()
+    } else {
+        args.to_string()
+    };
+    crate::actions::off_the_window(id, args);
+}
+
 /// What a pane action asks of the dock when the window is a dock: its
 /// panel toggled, or every edge dock hidden or brought back.
 #[must_use]
@@ -617,7 +651,35 @@ enum Zoom {
 /// The scenes a scene action can name: the window's `&'static` slugs.
 const SCENES: &[&str] = &["overview", "overview-top"];
 
+static OPTION: ActionMeta = meta(
+    "SESSION_OPTION",
+    "option",
+    "Editing option",
+    "Turn one of the arrangement's editing options on or off — `option`: `snap` (to the grid), `grid` (its lines), `ripple` (later items follow an edit, per track), `razor` (the razor tool), `auto_crossfade` (overlapping items crossfade), `lock` (drags scroll and move nothing); `on` true or false, the other way when left out. The main toolbar's switches. Says whether it is on now.",
+    "Options",
+    "",
+);
+
+/// Which option, and on or off (left out: the other way).
+#[derive(Facet)]
+struct OptionArg {
+    option: String,
+    #[facet(default)]
+    on: Option<bool>,
+}
+
 fn register_window(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    list.register(&OPTION, Effect::Mutating, |a: OptionArg| {
+        let (name, option) = crate::options::named(&a.option).ok_or_else(|| {
+            format!(
+                "no option {:?}: snap, grid, ripple, razor, auto_crossfade or lock (grouping is SESSION_GROUPING)",
+                a.option
+            )
+        })?;
+        let on = a.on.unwrap_or_else(|| !option.get());
+        option.set(on);
+        Ok::<_, String>(format!("{name}: {}", if on { "on" } else { "off" }))
+    })?;
     list.register(&WINDOW_STATE, Effect::ReadOnly, |(): ()| {
         let mode = crate::actions::shown_mode();
         Ok(WindowState {

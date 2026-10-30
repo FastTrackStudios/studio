@@ -1793,32 +1793,77 @@ fn fill(scene: &mut Scene, color: Color, rect: Rect) {
     scene.fill(Fill::NonZero, Affine::IDENTITY, color, None, &rect);
 }
 
-/// What a gesture on a control means for the engine.
-///
-/// Returns `None` where the control has no engine-side effect yet — the
-/// FX pill opens a chain nothing hosts, and routing opens a matrix that
-/// does not exist. They are hit-testable and will mean something; they
-/// do not mean anything now, and inventing an edit for them would be
-/// worse than doing nothing.
+/// What a press on a strip control runs: the named action that does it
+/// (`TRACK_SET`, `TRACK_ARM`, `SESSION_SELECT_TRACK`), and the edit the
+/// strip shows before the engine says so.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Press {
+    pub id: &'static str,
+    pub args: serde_json::Value,
+    /// Shown at once (`mixer_panel::predict`); in the browser build, which
+    /// has no Action List, sent as it is.
+    pub preview: crate::engine::Edit,
+}
+
+/// A track selected — alone, or (`add`) added to the selection: a click
+/// on a strip's name or its ground.
 #[must_use]
-pub fn click(
-    control: Control,
-    guid: &str,
-    from: &daw_proto::Track,
-    add: bool,
-) -> Option<crate::engine::Edit> {
+pub fn select(guid: &str, add: bool) -> Press {
     let guid = guid.to_owned();
-    match control {
-        Control::Mute => Some(crate::engine::Edit::ToggleMute(guid)),
-        Control::Solo => Some(crate::engine::Edit::ToggleSolo(guid)),
-        Control::RecArm => Some(crate::engine::Edit::ToggleArm(guid)),
-        // Clicking the name selects the track; DOUBLE-clicking renames
-        // it, which is a different gesture and a different edit.
-        Control::Name => Some(if add {
+    Press {
+        id: "SESSION_SELECT_TRACK",
+        args: serde_json::json!({ "track": guid, "add": add }),
+        preview: if add {
             crate::engine::Edit::AddToSelection(guid)
         } else {
             crate::engine::Edit::Select(guid)
+        },
+    }
+}
+
+/// Run `press`'s action through the Action List
+/// ([`crate::window::press`]): whether it did. The browser build has no
+/// list, so it does not, and the caller sends the preview edit instead.
+pub fn run(press: &Press) -> bool {
+    #[cfg(feature = "native")]
+    {
+        crate::window::press(press.id, &press.args);
+        true
+    }
+    #[cfg(not(feature = "native"))]
+    {
+        let _ = press;
+        false
+    }
+}
+
+/// What a click on a strip control runs.
+#[must_use]
+pub fn click(control: Control, guid: &str, from: &daw_proto::Track, add: bool) -> Option<Press> {
+    use crate::engine::Edit;
+    let id = guid.to_owned();
+    let set = |preview: Edit, args: serde_json::Value| Press {
+        id: "TRACK_SET",
+        args,
+        preview,
+    };
+    match control {
+        Control::Mute => Some(set(
+            Edit::ToggleMute(id),
+            serde_json::json!({ "track": guid, "mute": !from.muted }),
+        )),
+        Control::Solo => Some(set(
+            Edit::ToggleSolo(id),
+            serde_json::json!({ "track": guid, "solo": !from.soloed }),
+        )),
+        Control::RecArm => Some(Press {
+            id: "TRACK_ARM",
+            args: serde_json::json!({ "track": guid, "on": !from.armed }),
+            preview: Edit::ToggleArm(id),
         }),
+        // Clicking the name selects the track; DOUBLE-clicking renames
+        // it, which is a different gesture and a different edit.
+        Control::Name => Some(select(guid, add)),
         // The routing widget opens the panel, which is the window's
         // and not an edit at all — see `crate::routing`. The parent
         // send it used to toggle is the panel's first row, where it
@@ -1839,9 +1884,15 @@ pub fn click(
         // The lamp is only drawn on an armed track, and what is not
         // drawn is not clicked.
         Control::Monitor => from.armed.then(|| {
-            crate::engine::Edit::SetInputMonitor(
-                guid,
-                crate::engine::next_monitor(from.input_monitor),
+            let next = crate::engine::next_monitor(from.input_monitor);
+            let word = match next {
+                daw_proto::track::InputMonitoringMode::Off => "off",
+                daw_proto::track::InputMonitoringMode::Normal => "on",
+                daw_proto::track::InputMonitoringMode::NotWhenPlaying => "auto",
+            };
+            set(
+                Edit::SetInputMonitor(id, next),
+                serde_json::json!({ "track": guid, "monitor": word }),
             )
         }),
     }

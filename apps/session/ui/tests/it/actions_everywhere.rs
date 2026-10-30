@@ -1,0 +1,244 @@
+//! Nothing in the window bypasses the Action List
+//! (`docs/design/actions-everywhere.md`).
+//!
+//! A control that changes the song or the window's state runs a named
+//! action (`window::press`, `mcp::run`), so `watch`, a guide and the CLI
+//! see it. This scans session-ui's sources for what a bypass is made of —
+//! an edit pushed straight at the engine, a fold or a lane opened by hand,
+//! the transport moved behind its actions (`transport_here`; a press is
+//! `engine::transport`, which runs `SESSION_PLAY_STOP`, `SESSION_SEEK`, …),
+//! the dock or an option flipped — and holds
+//! each file to the count it is allowed. The allowances are debt: routing a
+//! handler lowers its count here; a new bypass fails.
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+/// What a bypass is written as, with whitespace taken out.
+const PATTERNS: &[&str] = &[
+    "lanes::set_expanded(",
+    "folds::toggle(",
+    "folds::set_tops(",
+    "transport_here(",
+    "request_dock(",
+    "edits.borrow_mut().push(",
+    "Effect::Send(",
+    "mode_phases::choose(",
+    "applier.send(",
+    "from_mixer.borrow_mut().push(",
+    "set_racks_shown(",
+    "play_return::set(",
+    "options::LOCKING.toggle(",
+    "options::LOCKING.set(",
+    "options::GROUPING.toggle(",
+    "options::SNAP.toggle(",
+    "options::GRID.toggle(",
+    "options::RIPPLE.toggle(",
+    "options::RAZOR.toggle(",
+    "options::AUTO_CROSSFADE.toggle(",
+];
+
+/// `(file under src/, pattern, how many, why)`: what is allowed, and why.
+const ALLOWED: &[(&str, &str, usize, &str)] = &[
+    // Inside an action's own handler, or the key path that runs them.
+    (
+        "window.rs",
+        "request_dock(",
+        1,
+        "the docks chord, in through_list",
+    ),
+    (
+        "window.rs",
+        "set_racks_shown(",
+        1,
+        "SESSION_MIXER_FX's handler",
+    ),
+    // The browser build has no Action List: its fallback beside the action.
+    (
+        "widget.rs",
+        "lanes::set_expanded(",
+        1,
+        "browser fallback of TRACK_SHOW_LANES",
+    ),
+    (
+        "widget.rs",
+        "folds::toggle(",
+        1,
+        "browser fallback of SESSION_FOLD",
+    ),
+    (
+        "mixer_panel.rs",
+        "folds::toggle(",
+        1,
+        "browser fallback of SESSION_FOLD",
+    ),
+    (
+        "fx_view.rs",
+        "applier.send(",
+        2,
+        "browser fallback; live fader preview (debt: TRACK_SET on release)",
+    ),
+    (
+        "mixer_panel.rs",
+        "applier.send(",
+        1,
+        "live drag preview and the browser fallback",
+    ),
+    (
+        "mixer_panel.rs",
+        "from_mixer.borrow_mut().push(",
+        1,
+        "live drag preview and the browser fallback",
+    ),
+    // Debt: still to route (the inventory in the design doc).
+    (
+        "widget.rs",
+        "edits.borrow_mut().push(",
+        12,
+        "item knob, take curve, visibility, touch, gestures",
+    ),
+    ("widget.rs", "Effect::Send(", 3, "arrangement gestures"),
+    (
+        "arrange_edit.rs",
+        "Effect::Send(",
+        45,
+        "item, marker and region drags",
+    ),
+    ("arrange_edit.rs", "options::SNAP.toggle(", 1, "snap key"),
+    (
+        "tone.rs",
+        "applier.send(",
+        1,
+        "the rack sink: FX_SET / FX_ENABLE",
+    ),
+    ("studio.rs", "applier.send(", 1, "the arrangement's applier"),
+    (
+        "mix_guide.rs",
+        "applier.send(",
+        1,
+        "Mix mode's guide mute: TRACK_SET inside SESSION_MODE",
+    ),
+    (
+        "mixer_panel.rs",
+        "mode_phases::choose(",
+        2,
+        "the first sync of the shell's phase; browser fallback of SESSION_PHASE",
+    ),
+    ("mixer_panel.rs", "set_racks_shown(", 1, "its definition"),
+    (
+        "shell.rs",
+        "folds::set_tops(",
+        1,
+        "fold every folder: SESSION_FOLD_TOPS",
+    ),
+    (
+        "shell.rs",
+        "mode_phases::choose(",
+        1,
+        "browser fallback of SESSION_PHASE",
+    ),
+    (
+        "shell.rs",
+        "set_racks_shown(",
+        1,
+        "browser fallback of SESSION_MIXER_FX",
+    ),
+    ("shell.rs", "options::LOCKING.set(", 1, "lock: SESSION_LOCK"),
+    (
+        "transport_bar.rs",
+        "play_return::set(",
+        1,
+        "stop behaviour: let SESSION_STOP_BEHAVIOUR set it",
+    ),
+];
+
+/// Every source file of the window, but its tests and binaries.
+fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if path.is_dir() {
+            if name != "bin" && name != "tests" {
+                sources(&path, out);
+            }
+        } else if name.ends_with(".rs") && name != "tests.rs" && name != "test_song.rs" {
+            out.push(path);
+        }
+    }
+}
+
+/// `source` with comments out and no whitespace: what the patterns match.
+fn squeezed(source: &str) -> String {
+    source
+        .lines()
+        .map(|line| line.split("//").next().unwrap_or_default())
+        .flat_map(str::chars)
+        .filter(|c| !c.is_whitespace())
+        .collect()
+}
+
+/// How often each pattern is written in each file.
+fn found() -> BTreeMap<(String, &'static str), usize> {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    sources(&src, &mut files);
+    let mut out = BTreeMap::new();
+    for file in files {
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        let rel = file
+            .strip_prefix(&src)
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let text = squeezed(&text);
+        for pattern in PATTERNS {
+            let n = text.matches(pattern).count();
+            if n > 0 {
+                out.insert((rel.clone(), *pattern), n);
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn no_control_bypasses_the_action_list() {
+    let found = found();
+    let allowed: BTreeMap<(String, &str), usize> = ALLOWED
+        .iter()
+        .map(|(file, pattern, n, _)| (((*file).to_owned(), *pattern), *n))
+        .collect();
+    let mut problems = Vec::new();
+    for ((file, pattern), n) in &found {
+        let may = allowed.get(&(file.clone(), *pattern)).copied().unwrap_or(0);
+        if *n > may {
+            problems.push(format!(
+                "{file}: `{pattern}` {n}× (allowed {may}) — run the control's action (window::press) instead"
+            ));
+        }
+    }
+    for ((file, pattern), may) in &allowed {
+        let n = found.get(&(file.clone(), *pattern)).copied().unwrap_or(0);
+        if n < *may {
+            problems.push(format!(
+                "{file}: `{pattern}` is down to {n} from {may} — lower its allowance"
+            ));
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
+#[test]
+fn every_pattern_is_found_where_it_is_allowed() {
+    // The scan itself works: an allowance names a pattern it looks for.
+    for (file, pattern, _, why) in ALLOWED {
+        assert!(
+            PATTERNS.contains(pattern),
+            "{file}: {pattern} ({why}) is not scanned for"
+        );
+    }
+}
