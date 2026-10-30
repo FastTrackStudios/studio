@@ -191,8 +191,34 @@ impl SetPeer {
     /// each time it attaches, both ways.
     #[must_use]
     pub fn sync_song(doc_id: Uuid, dial: Dial<DocSyncClient>) -> SessionDoc {
+        Self::sync_song_relayed(doc_id, dial).0
+    }
+
+    /// [`Self::sync_song`], and the replica as a side of a
+    /// [`crate::sync::relay::Relay`]: what it is passed is imported and
+    /// sent up its connection too (an import sends nothing up by itself).
+    #[must_use]
+    pub fn sync_song_relayed(
+        doc_id: Uuid,
+        dial: Dial<DocSyncClient>,
+    ) -> (SessionDoc, crate::sync::relay::Side) {
         let doc = SessionDoc::new();
         let mut synced = SyncedDoc::new(doc_id, CrdtDoc::from_loro(doc.loro().clone()));
+        let outbox = synced.outbox();
+        let into = doc.loro().clone();
+        let side = crate::sync::relay::Side {
+            doc: doc.loro().clone(),
+            take: Arc::new(move |bytes: Vec<u8>| {
+                let (into, outbox) = (into.clone(), outbox.clone());
+                Box::pin(async move {
+                    into.import(&bytes)?;
+                    outbox
+                        .send(bytes)
+                        .map_err(|_| eyre::eyre!("the replica's connection is gone"))?;
+                    Ok(())
+                })
+            }),
+        };
         architect::platform::spawn(async move {
             let mut backoff = Backoff::default();
             loop {
@@ -210,7 +236,7 @@ impl SetPeer {
                 backoff.wait(began.elapsed() >= HELD).await;
             }
         });
-        doc
+        (doc, side)
     }
 }
 

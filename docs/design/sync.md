@@ -163,6 +163,22 @@ engine while it syncs, and its media is far bigger than its doc.
   for that branch; the step's name still reaches the history (the replica
   is told the label before the commit). A remote update goes through the
   bridge's diff to the engine, as a live collaborator's does.
+- **One bridge per song, and a live set's doc kept in step with it.** A
+  song open in an engine has one bridge, its file's (a second on the same
+  project is refused: `session::sync::bridge::claim`). Two bridges on one
+  song each kept their own map of which doc FX is which engine FX, and
+  added each other's chains again every round (#316). A live set in Task
+  keeps a doc of each song under an id Task gives it; that doc is a copy of
+  the song's own — seeded from it with a shallow snapshot, so the two share
+  every operation — and what either has that the other lacks is passed
+  across as Loro updates (`session::sync::relay`), never bridged to the
+  engine. A song meeting a live doc another peer seeded from its own copy
+  (another lineage, which cannot merge) is moved onto it: its bridge
+  switched to a copy of the live doc and its file's branch started over
+  from it, the file kept beside it first (`Song.before-live.session`). A
+  song synced through its org is not moved; it stays out of that set.
+  Live sessions are the engine's (`studio engine`): a window that drives
+  an engine elsewhere starts none, and shows the engine's.
 - **Opening one made elsewhere.** The org's catalog, listed by kind
   `session`, is the device's list of projects. Opening one creates its file
   under the sync directory (or where the person puts it), adopts the doc
