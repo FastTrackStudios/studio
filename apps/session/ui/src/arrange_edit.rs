@@ -413,6 +413,20 @@ impl Editor {
                 let Some(item) = scene.item(index) else {
                     return false;
                 };
+                // A take's lane is chosen from (swiped, selected, ranked),
+                // never moved, trimmed or slipped: refused here, at the
+                // press, so the drag never starts.
+                let edits_item = matches!(
+                    action,
+                    mousemap::Action::MoveItem
+                        | mousemap::Action::CopyItem
+                        | mousemap::Action::SlipItem
+                        | mousemap::Action::TrimLeft
+                        | mousemap::Action::TrimRight
+                );
+                if edits_item && !scene.on_active_lane(index) {
+                    return false;
+                }
                 match action {
                     // A fade is not taken hold of while locked.
                     mousemap::Action::FadeIn | mousemap::Action::FadeShape

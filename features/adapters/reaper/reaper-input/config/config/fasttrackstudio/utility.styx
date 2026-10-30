@@ -7,4 +7,6 @@ bindings (
     {keys "<C-s>", action 40026, desc "Save project"}
     {keys "<C-,>", action 40016, desc "Open settings and preferences"}
     {keys "<A-d>", action 40279, desc "Toggle docker visibility"}
+    // The Session window's docks (REAPER's dockers keep Alt+D above).
+    {keys "<S-d>", action "FTS_TOGGLE_DOCKS", desc "Hide or show the window's docks"}
 )
