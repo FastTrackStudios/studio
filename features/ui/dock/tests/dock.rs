@@ -315,19 +315,27 @@ fn every_built_in_set_has_a_whole_layout_for_every_class() {
                 "{} {class:?} is not whole",
                 set.name
             );
-            // The transport never hides in a dock: on a phone the docks are
-            // sheets, and play/stop must stay one tap away.
+            // A phone's transport is in its centre (its docks are sheets, and
+            // play/stop must stay one tap away); a desk's and a tablet's is
+            // the window's bar, so their layouts hold none.
             let transport = space.of_kind(kind::TRANSPORT).next().map(|p| p.id);
             let at = transport
                 .and_then(|t| space.locate(t))
                 .map(|(area, _)| area);
-            let docked_on_desk =
-                !class.is_phone() && matches!(at, Some(AreaRef::Edge(Side::Bottom)));
-            assert!(
-                at == Some(AreaRef::Center) || docked_on_desk,
-                "{} {class:?}: transport at {at:?}",
-                set.name
-            );
+            if class.is_phone() {
+                assert_eq!(
+                    at,
+                    Some(AreaRef::Center),
+                    "{} {class:?}: transport at {at:?}",
+                    set.name
+                );
+            } else {
+                assert_eq!(
+                    at, None,
+                    "{} {class:?}: the window bar carries the transport",
+                    set.name
+                );
+            }
         }
     }
 }

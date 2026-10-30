@@ -103,9 +103,116 @@ pub fn SongDock(session: session_ui::studio::StudioSession, class: FormClass) ->
         None => dock,
     };
     rsx! {
-        div { style: "position:relative; flex:1; min-height:0; min-width:0; display:flex;",
-            {dock}
+        div { style: "position:relative; flex:1; min-height:0; min-width:0; display:flex; flex-direction:column;",
+            div { style: "position:relative; flex:1; min-height:0; min-width:0; display:flex;",
+                {dock}
+            }
+            // The window's bar, the whole width: a phone has its dock bar.
+            if !class.is_phone() {
+                DockBar {}
+            }
         }
+    }
+}
+
+/// The panels the window's bar toggles: what is reached for all the time.
+const BAR_PANELS: [(&str, &str); 6] = [
+    (kind::MIXER, "Mixer"),
+    (kind::EDITOR, "Editor"),
+    (kind::FX_ROW, "FX"),
+    (kind::CHART, "Chart"),
+    (kind::LYRICS, "Lyrics"),
+    (kind::BROWSER, "Browser"),
+];
+
+/// Along the foot of the window, the whole width (under the side docks
+/// too): the common panels a press away, lit while shown; the transport;
+/// the screensets and Arrange. What the old bottom bar held, for the
+/// screens with no menu bar (an iPad) as much as a desk.
+#[component]
+fn DockBar() -> Element {
+    use dock::host::tokens::{INK, INK_3, PRIMARY, RULE, SHEET, SHEET_2};
+    let dock = dock::host::use_dock();
+    let touch = (dock.class)() != FormClass::Desk;
+    let height = if touch { 64 } else { 56 };
+    let space = dock.space();
+    let set_name = dock
+        .sets
+        .read()
+        .active_set()
+        .map(|s| s.name.clone())
+        .unwrap_or_else(|| "Screensets".to_owned());
+    let arranging = dock.arranging();
+    let button = move |on: bool| {
+        format!(
+            "flex:none; min-width:{w}px; height:{h}px; display:flex; flex-direction:column; \
+             align-items:center; justify-content:center; gap:2px; padding:0 8px; border:none; \
+             border-radius:8px; background:{bg}; color:{fg}; font-size:10px; font-weight:600;",
+            w = if touch { 56 } else { 48 },
+            h = height - 12,
+            bg = if on { SHEET_2 } else { "transparent" },
+            fg = if on { INK } else { INK_3 },
+        )
+    };
+    let arrange_style = format!(
+        "{}{}",
+        button(arranging),
+        if arranging {
+            format!("background:{PRIMARY};")
+        } else {
+            String::new()
+        }
+    );
+    rsx! {
+        div {
+            style: "flex:0 0 {height}px; height:{height}px; display:flex; align-items:center; gap:4px; \
+                    padding:0 8px; background:{SHEET}; border-top:1px solid {RULE}; min-width:0; overflow:hidden;",
+            for (kind, label) in BAR_PANELS {
+                button {
+                    key: "{kind}",
+                    style: "{button(space.of_kind(kind).next().is_some())}",
+                    title: "{label}",
+                    onclick: move |_| {
+                        dock.toggle_kind(kind);
+                    },
+                    BarIcon { kind }
+                    "{label}"
+                }
+            }
+            div { style: "flex:none; width:1px; height:{height - 20}px; background:{RULE}; margin:0 4px;" }
+            div { style: "position:relative; flex:1 1 0; min-width:0; height:100%; display:flex; align-items:center; overflow:hidden;",
+                session_ui::transport_bar::TransportBar { big: touch }
+            }
+            div { style: "flex:none; width:1px; height:{height - 20}px; background:{RULE}; margin:0 4px;" }
+            button {
+                style: "{button(true)} min-width:96px;",
+                title: "Screensets and panels",
+                onclick: move |_| dock.show_menu(),
+                lucide_dioxus::LayoutGrid { size: 18, color: INK }
+                "{set_name}"
+            }
+            button {
+                style: "{arrange_style}",
+                title: "Arrange panels (or hold W)",
+                onclick: move |_| dock.toggle_arrange(),
+                lucide_dioxus::Move { size: 18, color: if arranging { INK } else { INK_3 } }
+                "Arrange"
+            }
+        }
+    }
+}
+
+/// A bar button's icon.
+#[component]
+fn BarIcon(kind: &'static str) -> Element {
+    let color = dock::host::tokens::INK;
+    match kind {
+        kind::MIXER => rsx! { lucide_dioxus::SlidersVertical { size: 18, color } },
+        kind::EDITOR => rsx! { lucide_dioxus::AudioWaveform { size: 18, color } },
+        kind::FX_ROW => rsx! { lucide_dioxus::AudioLines { size: 18, color } },
+        kind::CHART => rsx! { lucide_dioxus::FileMusic { size: 18, color } },
+        kind::LYRICS => rsx! { lucide_dioxus::MicVocal { size: 18, color } },
+        _ => rsx! { lucide_dioxus::FolderOpen { size: 18, color } },
     }
 }
 
@@ -145,17 +252,10 @@ fn apply(
         }
         DockRequest::Arrange => dock.toggle_arrange(),
         DockRequest::TogglePanel(kind) => {
-            let shown: Vec<_> = dock.space().of_kind(&kind).map(|p| p.id).collect();
-            if shown.is_empty() {
-                if dock.open(&kind).is_none() {
-                    tracing::warn!(panel.kind = %kind, "no such panel to open");
-                }
-            } else {
-                dock.edit(|d| {
-                    for id in shown {
-                        let _ = d.close(id);
-                    }
-                });
+            let was_shown = dock.shows(&kind);
+            let opened = dock.toggle_kind(&kind);
+            if !was_shown && !opened {
+                tracing::warn!(panel.kind = %kind, "no such panel to open");
             }
         }
     }

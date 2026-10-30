@@ -79,15 +79,22 @@ Shipped (`dock::builtin`), in number-key order:
 Every variant keeps the transport in the centre or the bottom dock, never
 a phone sheet.
 
-**Reaching them.** On a desk the screensets live in the menu bar, not in
-the window: Studio's macOS **View** menu (each set by number, ⌘1–7; Save
-Screenset; Save Screenset As…; Arrange Panels) and, on Linux, the global
-menu Session builds from its Action List. Both run the View actions —
-`SESSION_SCREENSET {screenset}`, `SESSION_SCREENSET_SAVE`,
-`SESSION_SCREENSET_SAVE_AS {name}`, `SESSION_ARRANGE` — which a model or
-the CLI can run too. ⌘/Ctrl+1–9 work in the window. A tablet has no menu
-bar: its layouts get a toolbar panel (the screenset bar) along the top. A
-phone's dock bar menu lists them.
+**Reaching them.** On a desk and a tablet the window has a **bar along
+its foot, the whole width** (under the side docks too): the common
+panels a press away, lit while shown (Mixer, Editor, FX, Chart, Lyrics,
+Browser), the transport, the screensets (the active one's name; a press
+lists them and every panel) and Arrange — what the old bottom bar held,
+and an iPad's way in, having no menu bar. Layouts on a desk or tablet
+leave the transport to the bar. On a desk the menu bar has them too:
+Studio's macOS **View** menu (each set by number, ⌘1–7; Save Screenset;
+Save Screenset As…; Panels ▸ any kind; Arrange Panels; Previous / Next
+Song) and, on Linux, the global menu Session builds from its Action
+List. Both run the View actions — `SESSION_SCREENSET {screenset}`,
+`SESSION_SCREENSET_SAVE`, `SESSION_SCREENSET_SAVE_AS {name}`,
+`SESSION_PANEL {kind}`, `SESSION_ARRANGE` — which a model or the CLI can
+run too. ⌘/Ctrl+1–9 work in the window. A phone has its dock bar (panels
+as sheets, its menu the screensets) and keeps the transport in its
+layout. The window's top bar is the song tabs alone.
 
 **Session's views are screensets.** Session's `shell::View` switch
 (Performance, Overview, DAW, Chart, Lyrics, Mixer, FX, Editor, Setup) and

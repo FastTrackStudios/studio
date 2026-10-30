@@ -273,6 +273,33 @@ impl Dock {
         k.set(key);
     }
 
+    /// True when the layout on screen shows a panel of `kind`.
+    #[must_use]
+    pub fn shows(&self, kind: &str) -> bool {
+        self.space().of_kind(kind).next().is_some()
+    }
+
+    /// Opens a `kind` panel where the kind lives when none is shown, or
+    /// closes every one shown. True when it opened one.
+    pub fn toggle_kind(&self, kind: &str) -> bool {
+        let shown: Vec<InstanceId> = self.space().of_kind(kind).map(|p| p.id).collect();
+        if shown.is_empty() {
+            return self.open(kind).is_some();
+        }
+        self.edit(|d| {
+            for id in shown {
+                let _ = d.close(id);
+            }
+        });
+        false
+    }
+
+    /// Shows the screensets-and-panels menu (what a phone's + opens).
+    pub fn show_menu(&self) {
+        let mut menu = self.menu;
+        menu.set(Some(Menu::Add));
+    }
+
     /// Recalls screenset `id`.
     pub fn recall(&self, id: ScreensetId) {
         let mut sets = self.sets;

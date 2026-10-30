@@ -201,22 +201,29 @@ fn set(id: ScreensetId, name: &str, slot: u8, variants: [(FormClass, Dockspace);
     set.id = id;
     set.builtin = true;
     for (class, mut space) in variants {
-        // A desk reaches the screensets from the menu bar's View menu and
-        // ⌘1–7; a tablet has neither, so it keeps them on a toolbar; a
-        // phone has its dock bar's menu.
-        if matches!(
-            class,
-            FormClass::TabletLandscape | FormClass::TabletPortrait
-        ) {
-            with_toolbar(&mut space);
+        // A desk and a tablet have the window's bar along the bottom (the
+        // transport, the common panels, the screensets): their layouts
+        // leave the transport to it. A phone, with no window bar, keeps
+        // the transport in its layout and the screensets in its dock bar.
+        if !class.is_phone() {
+            without_transport(&mut space);
         }
         set.set_variant(class, space);
     }
     set
 }
 
-/// `space` with a toolbar along its top, where it has none: a tablet's
-/// way to the screensets.
+/// `space` without its transport panels: the window's bar carries it.
+fn without_transport(space: &mut Dockspace) {
+    let ids: Vec<_> = space.of_kind(kind::TRANSPORT).map(|p| p.id).collect();
+    for id in ids {
+        let _ = space.close(id);
+    }
+}
+
+/// `space` with a toolbar along its top, where it has none (for a host
+/// with no window bar; no built-in uses it now).
+#[allow(dead_code)]
 fn with_toolbar(space: &mut Dockspace) {
     if space.of_kind(kind::TOOLBAR).next().is_some() {
         return;
