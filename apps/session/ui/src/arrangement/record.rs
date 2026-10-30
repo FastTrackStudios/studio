@@ -895,15 +895,36 @@ impl<'p> Shown<'p> {
             items.iter().map(|i| i.fixed_lane.unwrap_or(0)),
             head,
         );
+        // Numbered as its kit numbers them: a mic's lanes open on their
+        // own say "the blue take" of the same take the kit's row does.
+        let kit = top_of(project, track);
         Self {
             height: stack.height(),
-            colors: Arc::new(Reads::takes_on(takes, song, tracks_of_row(project, track))),
+            colors: Arc::new(Reads::takes_on(takes, song, tracks_of_row(project, kit))),
             laned,
             items,
             head,
             stack,
         }
     }
+}
+
+/// The folder at the top of `track`'s tree (a kit), or `track` itself.
+fn top_of<'p>(project: &'p Project, track: &'p Track) -> &'p Track {
+    let mut top = track;
+    // Bounded by the depth a session can have, so a parent loop in a
+    // damaged file cannot hang the recording.
+    for _ in 0..64 {
+        let Some(parent) = top
+            .parent_guid
+            .as_deref()
+            .and_then(|guid| project.tracks.iter().find(|t| t.guid == guid))
+        else {
+            break;
+        };
+        top = parent;
+    }
+    top
 }
 
 /// `track` and every track under it.
@@ -1103,6 +1124,78 @@ fn restamp_folded(
     }
 }
 
+/// A take's colour as an item's body is filled with it: part way to its
+/// own grey, so the body says which take without shouting over the
+/// waveform and the hit markers drawn on it in their own colours.
+fn muted(color: Color) -> Color {
+    /// How far to the grey.
+    const TO_GREY: f32 = 0.35;
+    let [r, g, b, a] = color.components;
+    let grey = 0.0722f32.mul_add(b, 0.2126f32.mul_add(r, 0.7152 * g));
+    let mix = |c: f32| (grey - c).mul_add(TO_GREY, c);
+    Color::new([mix(r), mix(g), mix(b), a])
+}
+
+/// A stretch of an item's body cut from one take: `from..to` seconds, of
+/// take `take` ([`crate::take_colors::TakeColors::index_of`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Stretch {
+    pub(super) from: f64,
+    pub(super) to: f64,
+    pub(super) take: usize,
+}
+
+/// Which take is where along `x0..x1`, from the `pieces` it is made of
+/// (each `(at, length, take name)`): a shut kit's item is its mics'
+/// items, a comp's from many takes. Earliest first, each stretch one
+/// take, neighbours of one take joined (the mics of one take agree);
+/// where two takes overlap (a crossfade) the later one starts where it
+/// starts. Pieces of no take (no pass stamp: a glued edit) are left out.
+pub(super) fn take_stretches<'n>(
+    pieces: impl IntoIterator<Item = (f64, f64, &'n str)>,
+    colors: &crate::take_colors::TakeColors,
+    (x0, x1): (f64, f64),
+) -> Vec<Stretch> {
+    /// Closer than this, two pieces touch: a seam, not a gap.
+    const TOUCH: f64 = 1e-3;
+    let mut cut: Vec<Stretch> = pieces
+        .into_iter()
+        .filter_map(|(at, length, name)| {
+            let (from, to) = (at.max(x0), (at + length).min(x1));
+            (to > from).then_some(Stretch {
+                from,
+                to,
+                take: colors.index_of(name)?,
+            })
+        })
+        .collect();
+    cut.sort_by(|a, b| a.from.total_cmp(&b.from).then(a.to.total_cmp(&b.to)));
+    let mut out: Vec<Stretch> = Vec::with_capacity(cut.len().min(64));
+    for piece in cut {
+        match out.last_mut() {
+            Some(last) if last.take == piece.take && piece.from <= last.to + TOUCH => {
+                last.to = last.to.max(piece.to);
+            }
+            Some(last) if piece.from < last.to => {
+                // Another take starting inside this one: it takes over
+                // from there, and what is left after it, if any, resumes.
+                let rest = (piece.to < last.to).then_some(Stretch {
+                    from: piece.to,
+                    ..*last
+                });
+                last.to = piece.from;
+                if last.to - last.from < TOUCH {
+                    out.pop();
+                }
+                out.push(piece);
+                out.extend(rest);
+            }
+            _ => out.push(piece),
+        }
+    }
+    out
+}
+
 /// A row's background, the divider under it and the lines between its
 /// lanes' strips.
 fn record_row_head(
@@ -1186,23 +1279,62 @@ fn record_item(
     let slip = item.start_offset.as_seconds();
     let take = take_name(project, item);
     let numbered = take.and_then(|t| ctx.colors.index_of(t));
+    // Where each take is along it: in Record and Edit (comping), on a row
+    // showing its lanes and on a shut kit's row, each stretch's body is
+    // the colour of the take it was cut from — a comp of three
+    // takes is three colours, its seams where they change, "the blue
+    // take" the same blue on its own lane and on the comp.
+    let folded_guid = daw_ui::studio::folded::parse_guid(&item.guid);
+    let by_take =
+        song.tcp.comping && !ctx.colors.is_empty() && (ctx.lanes_shown || folded_guid.is_some());
+    let stretches: Vec<Stretch> = if !by_take {
+        Vec::new()
+    } else if let (Some((folder, index)), Some(children)) = (folded_guid, children) {
+        project
+            .folds
+            .get(folder)
+            .and_then(|fold| fold.spans.get(index))
+            .map(|span| {
+                let pieces = span.from.iter().filter_map(|guid| {
+                    let child = children.get(guid)?;
+                    Some((child.at, child.length, child.name.as_deref()?))
+                });
+                take_stretches(pieces, &ctx.colors, (x0, drawn_x1))
+            })
+            .unwrap_or_default()
+    } else {
+        numbered
+            .map(|take| Stretch {
+                from: x0,
+                to: drawn_x1,
+                take,
+            })
+            .into_iter()
+            .collect()
+    };
     if ctx.lanes_shown {
-        note_lane_take(lane_takes, item.fixed_lane.unwrap_or(0), numbered);
+        let lane = item.fixed_lane.unwrap_or(0);
+        if stretches.is_empty() {
+            note_lane_take(lane_takes, lane, numbered);
+        }
+        for stretch in &stretches {
+            note_lane_take(lane_takes, lane, Some(stretch.take));
+        }
     }
-    // On a row showing its lanes, each take's body in its own colour —
-    // "the blue take" — and its waveform as ever.
+    // The item's own colour, and on a row showing its takes, its first
+    // take's: what it is ringed and selected in.
     let ink = item_color(item, ctx.track_color, song.tcp.mixing);
-    let take_body = numbered
-        .filter(|_| ctx.lanes_shown)
-        .map(|i| crate::take_colors::swatch(i).1);
+    let take_body = stretches
+        .first()
+        .map(|stretch| crate::take_colors::swatch(stretch.take).1);
     let color = take_body.unwrap_or(ink);
     // A lane that does not play is there to be chosen from, not heard:
     // drawn faint.
     let faint = |c: Color| if plays { c } else { c.multiply_alpha(0.45) };
     let (color, ink) = (faint(color), faint(ink));
     // The body, dimmed, and the waveform over it in the full colour; a
-    // shut folder's body fainter still, a take's stronger.
-    let folded_guid = daw_ui::studio::folded::parse_guid(&item.guid);
+    // shut folder's body fainter still, a take's stronger. Only the body:
+    // the waveform and the hit markers keep their own colours over it.
     let alpha = if take_body.is_some() {
         TAKE_BODY
     } else if folded_guid.is_some() {
@@ -1211,14 +1343,28 @@ fn record_item(
         body_alpha()
     };
     if !inside {
-        out.lanes.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            color.multiply_alpha(alpha),
-            None,
-            &Rect::new(x0, y + ctx.inset, drawn_x1, y + body - ctx.inset),
-        );
-        out.index.x.push((x0, drawn_x1));
+        let (top, bottom) = (y + ctx.inset, y + body - ctx.inset);
+        if stretches.is_empty() {
+            out.lanes.fill(
+                Fill::NonZero,
+                Affine::IDENTITY,
+                color.multiply_alpha(alpha),
+                None,
+                &Rect::new(x0, top, drawn_x1, bottom),
+            );
+            out.index.x.push((x0, drawn_x1));
+        }
+        for stretch in &stretches {
+            let tint = faint(muted(crate::take_colors::swatch(stretch.take).1));
+            out.lanes.fill(
+                Fill::NonZero,
+                Affine::IDENTITY,
+                tint.multiply_alpha(alpha),
+                None,
+                &Rect::new(stretch.from, top, stretch.to, bottom),
+            );
+            out.index.x.push((stretch.from, stretch.to));
+        }
     }
     let top = y + ctx.inset;
     let bottom = y + body - ctx.inset;

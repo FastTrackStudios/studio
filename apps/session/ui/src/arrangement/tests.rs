@@ -406,3 +406,112 @@ fn rebuild_after_a_hit_move_timings() {
         }
     }
 }
+
+/// A comp's body is in the colours of the takes it was cut from: each
+/// stretch the colour its source lane's item is drawn in, a seam where
+/// the take changes, the mics of one take one stretch.
+#[test]
+fn a_comp_stretch_is_its_source_lanes_colour() {
+    let colors = crate::take_colors::TakeColors::of([
+        ("65-In-260906_1754.wav", 200.0),
+        ("65-In-260907_1321-01.wav", 200.0),
+    ]);
+    // The source lanes' items, as `record_item` colours them.
+    let lane_color = |name: &str| {
+        colors
+            .index_of(name)
+            .map(|i| crate::take_colors::swatch(i).1)
+    };
+    // A kit's comp: two mics of one take, then a swipe from the other.
+    let comp = [
+        (0.0, 4.0, "65-In-260907_1321-01.wav"),
+        (0.0, 4.0, "66-Out-260907_1321-01.wav"),
+        (4.0, 2.0, "65-In-260906_1754.wav"),
+        (4.0, 2.0, "66-Out-260906_1754.wav"),
+        (6.0, 4.0, "65-In-260907_1321-01.wav"),
+    ];
+    let stretches = record::take_stretches(comp, &colors, (0.0, 10.0));
+    let drawn: Vec<(f64, f64, Option<vello::peniko::Color>)> = stretches
+        .iter()
+        .map(|s| (s.from, s.to, Some(crate::take_colors::swatch(s.take).1)))
+        .collect();
+    assert_eq!(
+        drawn,
+        vec![
+            (0.0, 4.0, lane_color("65-In-260907_1321-01.wav")),
+            (4.0, 6.0, lane_color("65-In-260906_1754.wav")),
+            (6.0, 10.0, lane_color("65-In-260907_1321-01.wav")),
+        ]
+    );
+    // Clipped to the item it is drawn for.
+    let clipped = record::take_stretches(comp, &colors, (5.0, 7.0));
+    assert_eq!(
+        clipped.iter().map(|s| (s.from, s.to)).collect::<Vec<_>>(),
+        vec![(5.0, 6.0), (6.0, 7.0)]
+    );
+}
+
+/// A swipe being made draws its stretch of the take's lane on the comp
+/// lane: the take's own recorded body and waveform, moved into the comp's
+/// strip and cut to the stretch — nothing outside it, nothing elsewhere.
+#[test]
+fn a_swipe_draws_its_stretch_on_the_comp_lane() {
+    use vello::kurbo::Shape as _;
+    crate::folds::show_cuts(true);
+    let song = song(40);
+    let draw = Draw::new(&song.previews);
+    let (project, rows) = planned(&song);
+    let scene = draw.build((&project, &rows));
+    let row = (0..rows.len())
+        .find(|&row| scene.lanes_shown(row).is_some())
+        .expect("Drums shows its lanes");
+    let laned = scene.lanes_shown(row).expect("laned");
+    let onto = crate::arrange_edit::comp_lane(laned).expect("a comp lane");
+    let stack = scene.lane_stack(row).expect("a stack");
+    let (top, height) = scene.row_box(row).expect("on the rows");
+    let (d0, d1) = stack.band(onto);
+    let (d0, d1) = (d0.mul_add(height, top), d1.mul_add(height, top));
+    let view = Viewport {
+        scroll_x: 0.0,
+        scroll_y: 0.0,
+        pps: 40.0,
+        zoom_y: 1.0,
+        width: 4000.0,
+        height: 4000.0,
+        panel_w: 0.0,
+    };
+    let (start, end) = (2.0, 6.0);
+    // The take lanes that have something recorded there: one is swiped.
+    let drawn = stack
+        .lanes()
+        .iter()
+        .copied()
+        .filter(|&lane| lane != onto)
+        .map(|from| {
+            let mut out = anyrender::recording::Scene::new();
+            scene.replay_swipe(
+                &mut out,
+                (view, Affine::scale_non_uniform(view.pps, view.zoom_y)),
+                (row, from, onto),
+                (start, end),
+                Color::BLACK,
+            );
+            out
+        })
+        .find(|out| out.commands.len() > 3)
+        .expect("a take lane with items in the stretch");
+    // Everything it drew is in the comp lane's strip, on screen.
+    let strip = vello::kurbo::Rect::new(start * view.pps, d0, end * view.pps, d1);
+    for cmd in &drawn.commands {
+        if let anyrender::recording::RenderCommand::Fill(fill) = cmd {
+            let b = fill
+                .transform
+                .transform_rect_bbox(fill.shape.bounding_box());
+            let inside = b.intersect(strip);
+            assert!(
+                inside.area() > 0.0 || b.area() == 0.0,
+                "{b:?} is outside the comp lane's stretch {strip:?}"
+            );
+        }
+    }
+}
