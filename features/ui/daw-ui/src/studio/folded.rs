@@ -120,12 +120,18 @@ const GRAIN: f64 = 0.001;
 /// `children` is one slice per child track, each in position order.
 #[must_use]
 pub fn spans(children: &[&[Item]]) -> Vec<Span> {
+    let children: Vec<Vec<&Item>> = children.iter().map(|lane| lane.iter().collect()).collect();
+    spans_of(&children)
+}
+
+/// [`spans`], over the children's items borrowed.
+fn spans_of(children: &[Vec<&Item>]) -> Vec<Span> {
     // Every edge anybody has, in order and without duplicates. The
     // spans are what lies between consecutive edges, so this is the
     // whole algorithm — the rest is asking who is sounding where.
     let mut edges: Vec<f64> = Vec::new();
     for lane in children {
-        for item in *lane {
+        for item in lane {
             edges.push(item.position.as_seconds());
             edges.push(item.position.as_seconds() + item.length.as_seconds());
         }
@@ -145,7 +151,7 @@ pub fn spans(children: &[&[Item]]) -> Vec<Span> {
     let mut from: Vec<Vec<String>> = vec![Vec::new(); middles.len()];
     let mut whole: Vec<bool> = vec![true; middles.len()];
     for lane in children {
-        for item in *lane {
+        for item in lane {
             let at = item.position.as_seconds();
             let to = at + item.length.as_seconds();
             let first = middles.partition_point(|m| *m <= at);
@@ -258,44 +264,54 @@ pub fn refold_lanes(
     }
     let tracks = std::mem::take(&mut project.tracks);
     for folder in shut(&tracks, shown) {
-        if laned(&tracks, folder) {
-            if let Some(mut fold) = fold_lanes(project, &tracks, folder) {
-                let children = under(&tracks, &folder.guid);
-                fold.gaps = gaps(
-                    children
-                        .iter()
-                        .filter(|t| !t.is_folder && t.lane_count > 1)
-                        .map(|child| project.lane(&child.guid).iter()),
-                );
-                project.folds.insert(folder.guid.clone(), fold);
-            }
-            continue;
+        if let Some(fold) = fold_of(project, &tracks, folder, laned(&tracks, folder)) {
+            project.folds.insert(folder.guid.clone(), fold);
         }
-        // What each child plays: a take on a lane that does not play is
-        // an alternative, not part of the folder's sound.
-        let playing: Vec<Vec<Item>> = under(&tracks, &folder.guid)
-            .iter()
-            .map(|child| {
-                project
-                    .lane(&child.guid)
-                    .iter()
-                    .filter(|item| super::project::on_playing_lane(child, item))
-                    .cloned()
-                    .collect()
-            })
-            .collect();
-        let lanes: Vec<&[Item]> = playing.iter().map(Vec::as_slice).collect();
-        let spans = spans(&lanes);
-        if spans.is_empty() {
-            continue;
-        }
-        let items = lane(folder, &spans);
-        let gaps = gaps(playing.iter().map(|child| child.iter()));
-        project
-            .folds
-            .insert(folder.guid.clone(), Fold { items, spans, gaps });
     }
     project.tracks = tracks;
+}
+
+/// `folder`'s fold: what its shut row shows of the tracks under it — lane
+/// by lane when `laned` (every take beside the comp), else what they play.
+/// `None` when nothing under it holds anything to show. One folder of
+/// [`refold_lanes`], to fold again only the folder an edit was under.
+#[must_use]
+pub fn fold_of(
+    project: &super::project::Project,
+    tracks: &[daw_proto::Track],
+    folder: &daw_proto::Track,
+    laned: bool,
+) -> Option<Fold> {
+    if laned {
+        let mut fold = fold_lanes(project, tracks, folder)?;
+        let children = under(tracks, &folder.guid);
+        fold.gaps = gaps(
+            children
+                .iter()
+                .filter(|t| !t.is_folder && t.lane_count > 1)
+                .map(|child| project.lane(&child.guid).iter()),
+        );
+        return Some(fold);
+    }
+    // What each child plays: a take on a lane that does not play is an
+    // alternative, not part of the folder's sound.
+    let playing: Vec<Vec<&Item>> = under(tracks, &folder.guid)
+        .iter()
+        .map(|child| {
+            project
+                .lane(&child.guid)
+                .iter()
+                .filter(|item| super::project::on_playing_lane(child, item))
+                .collect()
+        })
+        .collect();
+    let spans = spans_of(&playing);
+    if spans.is_empty() {
+        return None;
+    }
+    let items = lane(folder, &spans);
+    let gaps = gaps(playing.iter().map(|child| child.iter().copied()));
+    Some(Fold { items, spans, gaps })
 }
 
 /// A shut folder folded lane by lane: lane `n` of every track under it
@@ -311,23 +327,80 @@ fn fold_lanes(
         .filter(|t| !t.is_folder && t.lane_count > 1)
         .collect();
     let count = children.iter().map(|t| t.lane_count).max()?.min(64);
+    // Each child's items, lane by lane, in one pass over them.
+    let lanes = usize::try_from(count).unwrap_or(64);
+    let mut by_lane: Vec<Vec<Vec<&Item>>> = vec![vec![Vec::new(); children.len()]; lanes];
+    for (k, child) in children.iter().enumerate() {
+        for item in project.lane(&child.guid) {
+            let at = usize::try_from(item.fixed_lane.unwrap_or(0)).unwrap_or(usize::MAX);
+            if let Some(lane) = by_lane.get_mut(at) {
+                lane[k].push(item);
+            }
+        }
+    }
     let mut laned: Vec<(u32, Span)> = Vec::new();
-    for at in 0..count {
-        let on_lane: Vec<Vec<Item>> = children
+    for (at, on_lane) in (0..count).zip(&by_lane) {
+        laned.extend(spans_of(on_lane).into_iter().map(|span| (at, span)));
+    }
+    (!laned.is_empty()).then(|| laned_fold(folder, laned))
+}
+
+/// [`fold_of`] lane by lane again after only the items on `lanes` changed
+/// under `folder`: `was` — its fold before, its seams `joined` or not as
+/// they are to be now — kept on every other lane, those folded again. An
+/// edit to a kit's EDIT lane folds that lane, not the thirty-two beside it.
+/// `None` when no lane holds anything.
+#[must_use]
+pub fn refold_lanes_of(
+    project: &super::project::Project,
+    tracks: &[daw_proto::Track],
+    folder: &daw_proto::Track,
+    (was, lanes): (&Fold, &std::collections::BTreeSet<u32>),
+    joined: bool,
+) -> Option<Fold> {
+    let children: Vec<&daw_proto::Track> = under(tracks, &folder.guid)
+        .into_iter()
+        .filter(|t| !t.is_folder && t.lane_count > 1)
+        .collect();
+    let count = children.iter().map(|t| t.lane_count).max()?.min(64);
+    let mut by_lane: std::collections::BTreeMap<u32, Vec<Span>> = std::collections::BTreeMap::new();
+    for (item, span) in was.items.iter().zip(&was.spans) {
+        let at = item.fixed_lane.unwrap_or(0);
+        if !lanes.contains(&at) {
+            by_lane.entry(at).or_default().push(span.clone());
+        }
+    }
+    for &at in lanes.iter().filter(|at| **at < count) {
+        let on_lane: Vec<Vec<&Item>> = children
             .iter()
             .map(|child| {
                 project
                     .lane(&child.guid)
                     .iter()
                     .filter(|item| item.fixed_lane.unwrap_or(0) == at)
-                    .cloned()
                     .collect()
             })
             .collect();
-        let slices: Vec<&[Item]> = on_lane.iter().map(Vec::as_slice).collect();
-        laned.extend(spans(&slices).into_iter().map(|span| (at, span)));
+        let spans = spans_of(&on_lane);
+        let spans = if joined { join(&spans) } else { spans };
+        if !spans.is_empty() {
+            by_lane.insert(at, spans);
+        }
     }
-    (!laned.is_empty()).then(|| laned_fold(folder, laned))
+    let laned: Vec<(u32, Span)> = by_lane
+        .into_iter()
+        .flat_map(|(at, spans)| spans.into_iter().map(move |span| (at, span)))
+        .collect();
+    if laned.is_empty() {
+        return None;
+    }
+    let mut fold = laned_fold(folder, laned);
+    fold.gaps = gaps(
+        children
+            .iter()
+            .map(|child| project.lane(&child.guid).iter()),
+    );
+    Some(fold)
 }
 
 /// Spans, each on its lane, as a fold: [`lane`]'s items with their lane
@@ -394,30 +467,38 @@ pub fn join_seams(project: &mut super::project::Project) {
         .collect();
     for folder in folders {
         if let Some(fold) = project.folds.get_mut(&folder.guid) {
-            // Folded lane by lane: each lane's seams joined on their own,
-            // a take never run into the comp under it.
-            if fold.items.iter().any(|item| item.fixed_lane.is_some()) {
-                let mut by_lane: std::collections::BTreeMap<u32, Vec<Span>> =
-                    std::collections::BTreeMap::new();
-                for (item, span) in fold.items.iter().zip(&fold.spans) {
-                    by_lane
-                        .entry(item.fixed_lane.unwrap_or(0))
-                        .or_default()
-                        .push(span.clone());
-                }
-                let laned = by_lane
-                    .into_iter()
-                    .flat_map(|(at, spans)| join(&spans).into_iter().map(move |span| (at, span)))
-                    .collect();
-                let gaps = std::mem::take(&mut fold.gaps);
-                *fold = laned_fold(&folder, laned);
-                fold.gaps = gaps;
-                continue;
-            }
-            let spans = join(&fold.spans);
-            fold.items = lane(&folder, &spans);
-            fold.spans = spans;
+            *fold = joined(&folder, std::mem::take(fold));
         }
+    }
+}
+
+/// `folder`'s `fold` with its seams joined ([`join`]): one fold of
+/// [`join_seams`]. Folded lane by lane, each lane's seams joined on their
+/// own, a take never run into the comp under it.
+#[must_use]
+pub fn joined(folder: &daw_proto::Track, fold: Fold) -> Fold {
+    if fold.items.iter().any(|item| item.fixed_lane.is_some()) {
+        let mut by_lane: std::collections::BTreeMap<u32, Vec<Span>> =
+            std::collections::BTreeMap::new();
+        for (item, span) in fold.items.iter().zip(fold.spans) {
+            by_lane
+                .entry(item.fixed_lane.unwrap_or(0))
+                .or_default()
+                .push(span);
+        }
+        let laned = by_lane
+            .into_iter()
+            .flat_map(|(at, spans)| join(&spans).into_iter().map(move |span| (at, span)))
+            .collect();
+        let mut out = laned_fold(folder, laned);
+        out.gaps = fold.gaps;
+        return out;
+    }
+    let spans = join(&fold.spans);
+    Fold {
+        items: lane(folder, &spans),
+        spans,
+        gaps: fold.gaps,
     }
 }
 

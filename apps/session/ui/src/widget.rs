@@ -2759,8 +2759,15 @@ impl ArrangementWidget {
     }
 
     /// The rows planned again from the session as the window now holds it,
-    /// and everything they are drawn from.
+    /// and everything they are drawn from — or, when only items changed,
+    /// the rows as they are and only those items drawn again
+    /// ([`Self::repatched`]).
     fn replanned(&mut self) {
+        if self.repatched() {
+            // The engine changed the session: a slice moved is a hit moved.
+            crate::hit_overlay::refresh();
+            return;
+        }
         let Some((planner, raw)) = self.replan.as_mut() else {
             return;
         };
@@ -2771,6 +2778,42 @@ impl ArrangementWidget {
         stages.mark("adopt.restructure_ms");
         // The engine changed the session: a slice moved is a hit moved.
         crate::hit_overlay::refresh();
+    }
+
+    /// The song as the window now holds it drawn without planning the rows
+    /// again, when only its items changed since they were planned (and the
+    /// folds have not moved since): the changed tracks' items and the shut
+    /// folders over them taken into the rows' project, the recording cut
+    /// again from the last, and the mixer's strips left as they are.
+    /// `false` when the rows must be planned again.
+    fn repatched(&mut self) -> bool {
+        let Some((_, raw)) = self.replan.as_ref() else {
+            return false;
+        };
+        if crate::folds::generation() != self.folds_seen {
+            return false;
+        }
+        let mut stages = crate::stages::Stages::start();
+        let patched = crate::replan::patch_planned(
+            &mut self.project,
+            &raw.borrow(),
+            &self.rows,
+            crate::replan::Folding::current(),
+        );
+        stages.mark("adopt.patch_ms");
+        match patched {
+            crate::replan::Patched::Same => true,
+            crate::replan::Patched::Items => {
+                // What was hovered or turned may have moved.
+                self.hovered_item = None;
+                self.turning = None;
+                self.pointer = crate::pointer::Pointer::default();
+                self.recut();
+                stages.mark("adopt.recut_ms");
+                true
+            }
+            crate::replan::Patched::Replan => false,
+        }
     }
 
     /// The rows planned again from the tracks they are planned from — a
@@ -3889,16 +3932,14 @@ impl ArrangementWidget {
         self.hidden = self.rejected_now();
         self.recut_at = Some(web_time::Instant::now());
         self.rebuilds = self.rebuilds.saturating_add(1);
-        let rows = daw_ui::studio::RowsRef(std::sync::Arc::new(self.rows.clone()));
-        let project = daw_ui::studio::ProjectRef(std::sync::Arc::new(self.project.clone()));
         // A view setting, not the session's: an edit must not reset it.
         let lettering = self.scene.lettering;
         let mut stages = crate::stages::Stages::start();
-        stages.mark("recut.clone_ms");
-        self.scene = Arrangement::build_hiding(
+        // From the last recording: only what changed is recorded again.
+        self.scene.rebuild_hiding(
             &self.palette,
             &self.font,
-            (&project, &rows),
+            (&self.project, &self.rows),
             self.layout,
             &self.previews,
             crate::tcp::Tcp {
@@ -4115,6 +4156,8 @@ impl ArrangementWidget {
             };
             self.tracks.iter_mut().for_each(pick);
             self.rows.iter_mut().for_each(|(track, _)| pick(track));
+            // And the rows' project, which an edit's patch compares with the song.
+            self.project.tracks.iter_mut().for_each(pick);
             if let Some((_, raw)) = &self.replan {
                 raw.borrow_mut().tracks.iter_mut().for_each(pick);
             }
@@ -4142,6 +4185,7 @@ impl ArrangementWidget {
             .tracks
             .iter_mut()
             .chain(self.rows.iter_mut().map(|(track, _)| track))
+            .chain(self.project.tracks.iter_mut())
             .filter(|track| track.guid == guid)
         {
             change(track);
@@ -6217,3 +6261,6 @@ fn action_kind(action: &crate::keys::Action) -> String {
         .unwrap_or(shown.len());
     shown.get(..end).unwrap_or_default().to_owned()
 }
+
+#[cfg(test)]
+mod tests;

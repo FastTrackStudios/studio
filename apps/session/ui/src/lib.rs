@@ -158,6 +158,7 @@ pub mod record_view;
 #[cfg(feature = "native")]
 pub use session_engine::reference_play;
 pub mod rename;
+pub mod replan;
 #[cfg(feature = "native")]
 pub use session_engine::render_ahead;
 pub mod row;
@@ -179,6 +180,8 @@ pub use session_engine::take_rank;
 pub mod take_rating;
 pub mod take_window;
 pub mod tcp;
+#[cfg(test)]
+pub(crate) mod test_song;
 pub mod text;
 pub mod tone;
 #[cfg(feature = "native")]
