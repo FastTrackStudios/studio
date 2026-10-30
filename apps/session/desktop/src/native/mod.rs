@@ -35,6 +35,8 @@ pub use session_ui::frames::slow::WorkLayer as FrameWorkLayer;
 /// The limits the window's GPU device asks for (`session_ui::gpu`): the
 /// app's launch hands them to the renderer.
 pub use session_ui::gpu::window_limits;
+/// The window as a dock: panels laid out by the active screenset.
+mod dock;
 mod shell;
 mod start;
 
@@ -425,6 +427,8 @@ fn run(setlist: Option<session_engine::setlist::Setlist>, open: Option<PathBuf>)
         Box::new(move || Box::new(setlist.clone()) as Box<dyn Any>),
         Box::new(move || Box::new(start::OpenFirst(open.clone())) as Box<dyn Any>),
     ];
+    // Text fields hold the keyboard switch: hotkeys stand aside while typing.
+    app_shell::ui::keyboard::follow_text_fields();
     dioxus_native::launch_cfg(start::App, contexts, vec![Box::new(attributes)]);
 }
 
