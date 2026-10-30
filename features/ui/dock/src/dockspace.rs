@@ -798,6 +798,13 @@ impl Dockspace {
         self.edges.get_mut(side).shown = shown;
     }
 
+    /// True when panel `id` is on screen: not in a hidden edge dock.
+    #[must_use]
+    pub fn on_screen(&self, id: InstanceId) -> bool {
+        self.edge_of(id)
+            .is_none_or(|side| self.edges.get(side).shown != Shown::Hidden)
+    }
+
     /// Maximises `id`, or ends it when it is already.
     pub fn toggle_maximized(&mut self, id: InstanceId) -> Result<(), DockError> {
         self.panel(id).ok_or(DockError::NoPanel(id))?;
@@ -946,7 +953,9 @@ impl Dockspace {
             .collect();
     }
 
-    fn edge_of(&self, id: InstanceId) -> Option<Side> {
+    /// The edge dock `id` is in, if it is in one.
+    #[must_use]
+    pub fn edge_of(&self, id: InstanceId) -> Option<Side> {
         match self.locate(id)? {
             (AreaRef::Edge(side), _) => Some(side),
             _ => None,

@@ -1504,6 +1504,7 @@ impl Editor {
             | Action::ToggleEditor
             | Action::ToggleFx
             | Action::ToggleBrowser
+            | Action::ToggleDocks
             | Action::FxFull
             | Action::BarStep(_)
             | Action::PoiStep(_)

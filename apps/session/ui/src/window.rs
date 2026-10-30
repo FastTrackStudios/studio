@@ -33,7 +33,20 @@ pub fn through_list(actions: Vec<Action>) -> Vec<Action> {
         )
         .entered();
         match id_and_args(&action) {
+            // The docks hidden or brought back, here in the window: a
+            // chord, which the window's own keys may not see the
+            // modifier of.
+            Some(_) if action == Action::ToggleDocks && crate::actions::docked() => {
+                crate::actions::request_dock(crate::actions::DockRequest::ToggleDocks);
+            }
             Some((id, args)) if behind_the_window(id) => crate::actions::off_the_window(id, args),
+            // A dock's panel, which the window's own keys toggled already
+            // (`keys::use_window_transport_keys`): once is a toggle.
+            #[cfg(feature = "native")]
+            Some(_)
+                if crate::actions::docked()
+                    && dock_request(&action).is_some()
+                    && crate::keys::window_has_transport() => {}
             // The window's own transport keys took this press already
             // (`keys::use_window_transport_keys`): once is a toggle.
             #[cfg(feature = "native")]
@@ -51,6 +64,22 @@ pub fn through_list(actions: Vec<Action>) -> Vec<Action> {
         }
     }
     take_window()
+}
+
+/// What a pane action asks of the dock when the window is a dock: its
+/// panel toggled, or every edge dock hidden or brought back.
+#[must_use]
+pub(crate) fn dock_request(action: &Action) -> Option<crate::actions::DockRequest> {
+    use crate::actions::DockRequest;
+    let panel = |kind: &str| Some(DockRequest::TogglePanel(kind.to_owned()));
+    match action {
+        Action::ToggleMixer => panel("mixer"),
+        Action::ToggleEditor => panel("editor"),
+        Action::ToggleFx => panel("fx-row"),
+        Action::ToggleBrowser => panel("browser"),
+        Action::ToggleDocks => Some(DockRequest::ToggleDocks),
+        _ => None,
+    }
 }
 
 /// The list's id for a window action that takes nothing — what a key
@@ -115,6 +144,7 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         Action::ToggleEditor => (TOGGLE_EDITOR.id, String::new()),
         Action::ToggleFx => (TOGGLE_FX.id, String::new()),
         Action::ToggleBrowser => (crate::browser::BROWSER.id, String::new()),
+        Action::ToggleDocks => (crate::actions::DOCKS.id, String::new()),
         Action::BarStep(n) => (crate::bar_step::STEP_ACTION.id, by(*n)),
         Action::PoiStep(n) => (crate::poi::STEP.id, by(*n)),
         Action::PoiToggle => (crate::poi::TOGGLE.id, String::new()),
@@ -439,6 +469,22 @@ static PERF_METER: ActionMeta = meta(
     "",
 );
 
+static MIXER_FX: ActionMeta = meta(
+    "SESSION_MIXER_FX",
+    "mixer_fx",
+    "Mixer FX racks",
+    "Show or hide the FX racks over the mixer's faders (`shown`: true or false; left out, the other way): hidden, the faders have the panel's whole height. Kept across launches.",
+    "View",
+    "",
+);
+
+/// Shown or hidden, or (left out) the other way.
+#[derive(Facet)]
+struct MixerFxArg {
+    #[facet(default)]
+    shown: Option<bool>,
+}
+
 static TOGGLE_EDITOR: ActionMeta = meta(
     "SESSION_TOGGLE_EDITOR",
     "toggle_editor",
@@ -587,6 +633,18 @@ fn register_window(list: &ActionList) -> Result<(), architect::action::ActionErr
         crate::quantize_panel::ask();
         Ok("the Quantize panel shown, or hidden if it was".to_owned())
     })?;
+    list.register(&MIXER_FX, Effect::Mutating, |a: MixerFxArg| {
+        let on = a
+            .shown
+            .unwrap_or_else(|| !crate::mixer_panel::racks_shown());
+        crate::mixer_panel::set_racks_shown(on);
+        Ok(if on {
+            "the mixer's FX racks shown"
+        } else {
+            "the mixer's FX racks hidden"
+        }
+        .to_owned())
+    })?;
     list.register(&PERF_METER, Effect::Mutating, |(): ()| {
         crate::perf_meter::toggle();
         Ok(if crate::perf_meter::open() {
@@ -663,12 +721,19 @@ fn register_window(list: &ActionList) -> Result<(), architect::action::ActionErr
         ),
     ];
     list.register(&crate::browser::BROWSER, Effect::Mutating, |(): ()| {
-        crate::browser::request_toggle();
+        if !crate::actions::if_docked(crate::actions::DockRequest::TogglePanel(
+            "browser".to_owned(),
+        )) {
+            crate::browser::request_toggle();
+        }
         Ok(())
     })?;
     for (meta, effect, action) in plain {
         list.register(meta, effect, move |(): ()| {
-            queue(action.clone());
+            // In a dock, a pane is its panel.
+            if !dock_request(&action).is_some_and(crate::actions::if_docked) {
+                queue(action.clone());
+            }
             Ok(())
         })?;
     }

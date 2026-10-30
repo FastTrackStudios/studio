@@ -128,6 +128,7 @@ pub fn action_of(id: &str) -> Action {
         "FTS_EXPRESSION_EDITOR_OPEN" => Action::ToggleEditor,
         "FTS_TOGGLE_FX" => Action::ToggleFx,
         "FTS_BROWSER" => Action::ToggleBrowser,
+        "40279" => Action::ToggleDocks,
         "FTS_STEP_NEXT" => Action::BarStep(1),
         "FTS_POI_NEXT" => Action::PoiStep(1),
         "FTS_POI_PREV" => Action::PoiStep(-1),
@@ -563,6 +564,15 @@ pub fn use_window_transport_keys() {
                     continue;
                 }
                 use crate::engine::{Move, transport};
+                // In the dock the panes are its panels: the key toggles
+                // the panel, as the dock bar's button does.
+                // Not the docks' chord: that is the keymap's, in
+                // `window::through_list`.
+                if action != Action::ToggleDocks
+                    && crate::window::dock_request(&action).is_some_and(crate::actions::if_docked)
+                {
+                    continue;
+                }
                 match action {
                     Action::PlayStop | Action::PlayPause => transport(Move::PlayStop, 0.0),
                     // Idempotent, so the arrangement also acting on it (it

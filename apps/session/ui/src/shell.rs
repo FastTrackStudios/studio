@@ -658,7 +658,7 @@ fn jobs_now() -> Vec<crate::jobs::Running> {
 /// job's name and how far along, a bar filling under it — nothing at all
 /// when nothing is running.
 #[component]
-fn Jobs() -> Element {
+pub fn Jobs() -> Element {
     let mut shown = use_signal(Vec::<crate::jobs::Running>::new);
     use_future(move || async move {
         loop {
@@ -734,7 +734,7 @@ fn Divider() -> Element {
 /// from (Engine, Cue, Remote) — each its value over its word, as the
 /// views are, and pressed for its picker.
 #[component]
-fn Modes(mode: Signal<Mode>) -> Element {
+pub fn Modes(mode: Signal<Mode>) -> Element {
     let mut mode = mode;
     let mut picking = use_signal(|| false);
     rsx! {
@@ -785,7 +785,7 @@ fn Modes(mode: Signal<Mode>) -> Element {
 /// choice is `session::mode_phases`', so a phase picked on the rails
 /// shows here, and one picked here moves the rails.
 #[component]
-fn PhaseSwitch(mode: Signal<Mode>) -> Element {
+pub fn PhaseSwitch(mode: Signal<Mode>) -> Element {
     let mut picking = use_signal(|| false);
     // Follow a phase chosen elsewhere (the rails are a widget, which
     // cannot set a signal): the choice's version, watched.
@@ -860,36 +860,13 @@ pub(crate) fn mode_option(on: bool) -> String {
 
 /// The view's own controls, after the views in the bottom bar: the
 /// arrangement's inspector, lock and transport (where it is, its tempo
-/// and key); the chart's pages; the mixer's lock and folders.
+/// and key); the chart's pages; the mixer's lock, folders and racks.
 #[component]
 fn Context(view: View, transport: Option<Element>) -> Element {
-    let pins = try_use_context::<Pins>();
     match view {
         View::Daw => rsx! {
             Divider {}
-            if let Some(pins) = pins {
-                button {
-                    title: "The inspector: the selected track's strip, down the arrangement's right",
-                    style: bottom_button((pins.inspector)(), true),
-                    onclick: move |_| {
-                        let mut on = pins.inspector;
-                        on.toggle();
-                    },
-                    lucide_dioxus::PanelRight { size: 19, color: ink((pins.inspector)()) }
-                    span { style: LABEL, "Inspect" }
-                }
-                button {
-                    title: "Quantize the drums: a section on its grid, by its groove, previewed first",
-                    style: bottom_button((pins.quantize)(), true),
-                    onclick: move |_| {
-                        let mut on = pins.quantize;
-                        on.toggle();
-                    },
-                    lucide_dioxus::Drum { size: 19, color: ink((pins.quantize)()) }
-                    span { style: LABEL, "Quantize" }
-                }
-                LockButton { lock: pins.lock }
-            }
+            PanelControls { arrangement: true }
             if let Some(transport) = transport {
                                 Divider {}
                 div {
@@ -904,12 +881,51 @@ fn Context(view: View, transport: Option<Element>) -> Element {
         },
         View::Mixer => rsx! {
             Divider {}
-            if let Some(pins) = pins {
-                LockButton { lock: pins.lock }
-            }
-            FolderSwitch {}
+            PanelControls { mixer: true }
         },
         _ => rsx! {},
+    }
+}
+
+/// The arrangement's switches (the inspector, Quantize) and the mixer's
+/// (folders, its FX racks), the lock once for either — for the panels
+/// shown: the bottom bar's per view, the dock's bar per panel.
+#[component]
+pub fn PanelControls(
+    #[props(default)] arrangement: bool,
+    #[props(default)] mixer: bool,
+) -> Element {
+    let pins = try_use_context::<Pins>();
+    rsx! {
+        if let Some(pins) = pins.filter(|_| arrangement) {
+            button {
+                title: "The inspector: the selected track's strip, down the arrangement's right",
+                style: bottom_button((pins.inspector)(), true),
+                onclick: move |_| {
+                    let mut on = pins.inspector;
+                    on.toggle();
+                },
+                lucide_dioxus::PanelRight { size: 19, color: ink((pins.inspector)()) }
+                span { style: LABEL, "Inspect" }
+            }
+            button {
+                title: "Quantize the drums: a section on its grid, by its groove, previewed first",
+                style: bottom_button((pins.quantize)(), true),
+                onclick: move |_| {
+                    let mut on = pins.quantize;
+                    on.toggle();
+                },
+                lucide_dioxus::Drum { size: 19, color: ink((pins.quantize)()) }
+                span { style: LABEL, "Quantize" }
+            }
+        }
+        if let Some(pins) = pins.filter(|_| arrangement || mixer) {
+            LockButton { lock: pins.lock }
+        }
+        if mixer {
+            FolderSwitch {}
+            RackSwitch {}
+        }
     }
 }
 
@@ -1011,6 +1027,38 @@ pub(crate) fn FolderSwitch() -> Element {
     }
 }
 
+/// The mixer's FX racks over its faders, shown or hidden
+/// (`crate::mixer_panel::racks_shown`, kept across launches): hidden, the
+/// faders have the whole height. Follows `SESSION_MIXER_FX` too.
+#[component]
+pub(crate) fn RackSwitch() -> Element {
+    use crate::mixer_panel::{racks_shown, set_racks_shown};
+    let mut shown = use_signal(racks_shown);
+    // Switched on the Action List (a key, a model): followed here.
+    use_future(move || async move {
+        loop {
+            architect::platform::sleep(std::time::Duration::from_millis(250)).await;
+            let now = racks_shown();
+            if now != *shown.peek() {
+                shown.set(now);
+            }
+        }
+    });
+    let on = shown();
+    rsx! {
+        button {
+            title: if on { "Hide the FX racks: the faders get the whole height" } else { "Show the FX racks over the faders" },
+            style: bottom_button(on, true),
+            onclick: move |_| {
+                set_racks_shown(!on);
+                shown.set(!on);
+            },
+            lucide_dioxus::AudioLines { size: 19, color: ink(on) }
+            span { style: LABEL, "Racks" }
+        }
+    }
+}
+
 /// An icon's colour in a bar: white for what is on or showing, grey for
 /// the rest. Given to the icon outright, never as `currentColor` — Blitz
 /// resolves an SVG's `currentColor` once, so an icon kept the colour its
@@ -1087,10 +1135,15 @@ pub fn TopBar(
     /// window does; `None` lays it out in full).
     #[props(default)]
     width: Option<f64>,
-    /// The song tabs alone, no buttons: the docked window, whose
-    /// navigator, versions and badges are panels (View ▸ Panels).
+    /// The song tabs alone, no buttons (no window has used it since the
+    /// dock gave the bar its buttons back).
     #[props(default)]
     bare: bool,
+    /// What the navigator button does, when not the [`Pins`]' navigator:
+    /// the docked window's, which shows or hides its Set panel (and keeps
+    /// the pin to what it shows, so the button lights).
+    #[props(default)]
+    on_navigator: Option<EventHandler<()>>,
 ) -> Element {
     let density = width.map_or(Density::Full, Density::for_width);
     let mut shared = use_context_provider(|| Signal::new(density));
@@ -1128,7 +1181,9 @@ pub fn TopBar(
                         background:{lit}; color:{ink}; cursor:pointer;",
                 onmousedown: move |event| event.stop_propagation(),
                 onclick: move |_| {
-                    if let Some(mut open) = navigator {
+                    if let Some(on_navigator) = on_navigator {
+                        on_navigator.call(());
+                    } else if let Some(mut open) = navigator {
                         open.toggle();
                     }
                 },
