@@ -29,9 +29,11 @@ pub fn enabled() -> bool {
 }
 
 /// The form class of a window: phone or not (`compact`), touched or not,
-/// upright or not.
+/// upright or not. `FTS_TOUCH=1` makes a desk window a tablet, to see the
+/// iPad layouts without an iPad.
 #[must_use]
 pub fn class_of(compact: bool, touch: bool, (w, h): (f64, f64)) -> FormClass {
+    let touch = touch || std::env::var("FTS_TOUCH").is_ok_and(|v| v == "1");
     FormClass::new(compact, touch, w <= h)
 }
 
@@ -155,7 +157,7 @@ fn catalog() -> Catalog {
             |_| {
                 rsx! {
                     div { style: "flex:1; min-width:0; display:flex; align-items:center; padding:4px 8px;",
-                        session_ui::progress::ProgressBar { height: Some("100%".to_owned()), flat: true }
+                        session_ui::progress::ProgressBar { height: Some("40px".to_owned()), flat: true }
                     }
                 }
             },

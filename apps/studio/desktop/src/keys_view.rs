@@ -351,7 +351,7 @@ fn LogsPage() -> Element {
 
 #[component]
 fn LibraryPage(downloaded: Vec<String>) -> Element {
-    let keys = app_shell::ui::use_text_focus();
+    let field_keys = app_shell::ui::use_text_focus();
     let keys = use_hook(try_consume_context::<KeysRigClient>);
     // The pack host address: a ws URL ("ws://192.168.1.20:4040/vox") or an
     // iroh endpoint id for p2p across networks. Saved via prefs, read by
@@ -496,8 +496,8 @@ fn LibraryPage(downloaded: Vec<String>) -> Element {
             }
             div { style: "display: flex; gap: 8px;",
                 input {
-                    onfocus: move |_| keys.focus(),
-                    onblur: move |_| keys.blur(),
+                    onfocus: move |_| field_keys.focus(),
+                    onblur: move |_| field_keys.blur(),
                     style: "flex: 1; min-width: 0; background: #131316; border: 1px solid #1f1f23; \
                             border-radius: 10px; padding: 10px 12px; color: #e4e4e7; font-size: 13px;",
                     placeholder: "ws://studio:4040/vox or iroh endpoint id",

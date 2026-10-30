@@ -1251,6 +1251,7 @@ enum Action {
     Collapse(Side),
     Close(InstanceId),
     Open(&'static str),
+    Recall(ScreensetId),
     Show(InstanceId),
     Chrome(StackId, Chrome),
 }
@@ -1305,6 +1306,10 @@ fn run(mut dock: Dock, action: Action) {
             let _ = dock.edit(|d| d.toggle_maximized(id));
         }
         Action::Collapse(side) => dock.edit(|d| d.set_shown(side, Shown::Collapsed)),
+        Action::Recall(id) => {
+            dock.sheet.set(None);
+            dock.recall(id);
+        }
         Action::Show(id) => {
             let _ = dock.edit(|d| d.activate(id));
         }
@@ -1392,7 +1397,15 @@ fn panel_items(dock: Dock, id: InstanceId) -> Vec<Item> {
 }
 
 fn add_items(dock: Dock) -> Vec<Item> {
-    let mut items = vec![Item::Heading("Open a panel".into())];
+    let mut items = vec![Item::Heading("Screensets".into())];
+    items.extend(dock.sets.read().sets.iter().map(|set| {
+        let label = match set.slot {
+            Some(n) => format!("{n}  {}", set.name),
+            None => set.name.clone(),
+        };
+        Item::Act(label, Action::Recall(set.id))
+    }));
+    items.push(Item::Heading("Open a panel".into()));
     items.extend(
         dock.catalog
             .read()

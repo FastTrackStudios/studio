@@ -155,10 +155,36 @@ fn set(id: ScreensetId, name: &str, slot: u8, variants: [(FormClass, Dockspace);
     let mut set = Screenset::new(name).in_slot(slot);
     set.id = id;
     set.builtin = true;
-    for (class, space) in variants {
+    for (class, mut space) in variants {
+        if !class.is_phone() {
+            with_toolbar(&mut space);
+        }
         set.set_variant(class, space);
     }
     set
+}
+
+/// `space` with a toolbar along its top, where it has none: the screensets
+/// stay one click away in every desk and tablet layout. (A phone reaches
+/// them from its dock bar's menu.)
+fn with_toolbar(space: &mut Dockspace) {
+    if space.of_kind(kind::TOOLBAR).next().is_some() {
+        return;
+    }
+    let toolbar = Panel::new(kind::TOOLBAR);
+    let bar = Node::one(toolbar.id);
+    space.panels.push(toolbar);
+    let top = &mut space.edges.top;
+    top.root = Some(match top.root.take() {
+        Some(below) => Node::column(bar, below, Share::First(TOOLBAR_H)),
+        None => bar,
+    });
+    if top.size < TOOLBAR_H {
+        top.size = TOOLBAR_H;
+    }
+    if top.root.as_ref().is_some_and(|r| r.stacks().len() == 1) {
+        top.size = TOOLBAR_H;
+    }
 }
 
 /// A progress strip `h` px over `main`.
