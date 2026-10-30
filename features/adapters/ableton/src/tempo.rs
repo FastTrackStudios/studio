@@ -93,6 +93,27 @@ impl TempoMap {
         }
     }
 
+    /// The map as steps, `(beat, bpm)` from beat 0: one per change of
+    /// tempo, held until the next. Live writes a step as two breakpoints
+    /// at one beat — the tempo it leaves, then the one it takes — and pads
+    /// a held tempo with breakpoints that repeat it; a map of held points
+    /// (REAPER's square tempo points, the engine's) wants neither: two
+    /// points at one moment read as either tempo depending on who reads
+    /// them. The last breakpoint at a beat is the tempo from it. A ramp
+    /// comes out as its breakpoints, each held.
+    #[must_use]
+    pub fn steps(&self) -> Vec<(f64, f64)> {
+        let mut out: Vec<(f64, f64)> = Vec::with_capacity(self.points.len());
+        for &(beat, bpm) in &self.points {
+            match out.last_mut() {
+                Some(last) if (beat - last.0).abs() < 1e-9 => last.1 = bpm,
+                _ => out.push((beat, bpm)),
+            }
+        }
+        out.dedup_by(|later, earlier| (later.1 - earlier.1).abs() < 1e-9);
+        out
+    }
+
     /// Seconds `beats` long starting at `at`.
     #[must_use]
     pub fn span(&self, at: f64, beats: f64) -> f64 {
@@ -187,6 +208,36 @@ mod tests {
             "past the last at its rate"
         );
         assert_eq!(sample_seconds(&markers[..1], 4.0), None);
+    }
+
+    #[test]
+    fn a_step_is_one_point_at_the_tempo_it_takes() {
+        // JT's recital: 160 parked before the set, a step to 116 at beat 768
+        // (160 then 116 there), 116 repeated at 1092, a step to 95 at
+        // 1094.75.
+        let map = TempoMap::new(
+            120.0,
+            &[
+                tempo(-63_072_000.0, 160.0),
+                tempo(768.0, 160.0),
+                tempo(768.0, 116.0),
+                tempo(1092.0, 116.0),
+                tempo(1092.0, 116.0),
+                tempo(1094.75, 116.0),
+                tempo(1094.75, 95.0),
+            ],
+        );
+        assert_eq!(
+            map.steps(),
+            [(0.0, 160.0), (768.0, 116.0), (1094.75, 95.0)],
+            "one point per change, the tempo taken, nothing repeated"
+        );
+        // A step back to the tempo before it is no change at all.
+        let back = TempoMap::new(
+            120.0,
+            &[tempo(0.0, 100.0), tempo(8.0, 140.0), tempo(8.0, 100.0)],
+        );
+        assert_eq!(back.steps(), [(0.0, 100.0)]);
     }
 
     #[test]

@@ -70,9 +70,21 @@ pub fn split(set: &Path, into: &Path) -> eyre::Result<Vec<Song>> {
     std::fs::create_dir_all(into)?;
     let mut songs = Vec::with_capacity(ranges.len());
     let titles: Vec<String> = ranges.iter().map(|r| r.name.clone()).collect();
+    let cards = ableton::setlist::sections(&live);
+    let map = ableton::tempo::TempoMap::of(&live);
     for range in ranges {
         let mut cropped = session::sync::crop::crop(&model, range.start_seconds, range.end_seconds);
         name_song(&mut cropped, &range.name, &titles);
+        let song_cards: Vec<Card> = ableton::setlist::sections_of(&cards, &range)
+            .into_iter()
+            .map(|c| Card {
+                start: map.seconds_at(c.start_beats) - range.start_seconds,
+                end: map.seconds_at(c.end_beats) - range.start_seconds,
+                name: section_name(&c.name, &range.name),
+                color: c.color,
+            })
+            .collect();
+        lay_out_song(&mut cropped, &song_cards, range.seconds());
         fresh_track_guids(&mut cropped);
         let dir = into.join(&range.slug);
         ShowPlace {
@@ -156,6 +168,99 @@ fn name_song(song: &mut session::sync::SessionModel, name: &str, titles: &[Strin
             name.clone_into(&mut region.name);
         }
     }
+}
+
+/// A section card of the show, in the song's own seconds.
+#[derive(Debug, Clone, PartialEq)]
+struct Card {
+    name: String,
+    start: f64,
+    end: f64,
+    color: Option<u32>,
+}
+
+/// A section card's name as the song's section: a card named after the
+/// song itself (a set's first card, `NO ONE KNOWS`) is its `Intro`.
+fn section_name(card: &str, song: &str) -> String {
+    let key = |text: &str| -> String {
+        text.chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    };
+    if !key(card).is_empty() && key(card) == key(song) {
+        "Intro".to_owned()
+    } else {
+        card.to_owned()
+    }
+}
+
+/// The song's structure from its section cards (`ableton::setlist::sections`):
+/// each card a region on the Sections lane, in its colour; a `Count In`
+/// card the `COUNT-IN` mark, with `SONGSTART` where it ends (else at the
+/// first card, else at 0); `SONGEND` and `=END` at the song's end. What the
+/// show's own markers made of it (one section over the whole show, its
+/// `SONGSTART` and `SONGEND`) goes: a song cut from it had no sections,
+/// and its progress bars and section strip were empty.
+fn lay_out_song(song: &mut session::sync::SessionModel, cards: &[Card], length: f64) {
+    use session::ruler_lanes::CoreLane;
+    use session::sync::model::{MarkerState, RegionState};
+    let guid = || format!("{{{}}}", uuid::Uuid::new_v4().hyphenated()).to_uppercase();
+    let (song_lane, sections, marks) = (
+        CoreLane::Song.lane_index(),
+        CoreLane::Sections.lane_index(),
+        CoreLane::Marks.lane_index(),
+    );
+    let structural = |name: &str| {
+        let upper = name.trim().to_ascii_uppercase();
+        ableton::setlist::is_count_in(&upper)
+            || matches!(upper.as_str(), "SONGSTART" | "SONGEND" | "=END" | "=START")
+    };
+    song.markers.retain(|_, m| !structural(&m.name));
+    if !cards.is_empty() {
+        song.regions.retain(|_, r| r.lane == Some(song_lane));
+    }
+    let mark = |song: &mut session::sync::SessionModel, name: &str, at: f64| {
+        song.markers.insert(
+            guid(),
+            MarkerState {
+                at,
+                name: name.to_owned(),
+                color: None,
+                lane: Some(marks),
+            },
+        );
+    };
+    let mut start = cards
+        .iter()
+        .find(|c| !ableton::setlist::is_count_in(&c.name))
+        .map(|c| c.start);
+    // A count-in is the song's own only before its first section: one
+    // later is the next song's, run into by a song with no `SONG END`.
+    let mut sectioned = false;
+    for card in cards {
+        if ableton::setlist::is_count_in(&card.name) {
+            if !sectioned {
+                mark(song, "COUNT-IN", card.start.max(0.0));
+                start = Some(card.end);
+            }
+            continue;
+        }
+        sectioned = true;
+        song.regions.insert(
+            guid(),
+            RegionState {
+                start: card.start.max(0.0),
+                end: card.end.min(length),
+                name: card.name.clone(),
+                color: card.color,
+                lane: Some(sections),
+            },
+        );
+    }
+    mark(song, "SONGSTART", start.unwrap_or(0.0).clamp(0.0, length));
+    mark(song, "SONGEND", length);
+    mark(song, "=END", length);
 }
 
 /// The track ext-state key a song's track keeps its show track's guid
@@ -393,9 +498,132 @@ fn file_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_card_named_after_its_song_is_the_intro() {
+        assert_eq!(super::section_name("NO ONE KNOWS", "No One Knows"), "Intro");
+        assert_eq!(
+            super::section_name("Heart Isn't Ready", "Heart isn't Ready"),
+            "Intro"
+        );
+        assert_eq!(super::section_name("Chorus 1", "No One Knows"), "Chorus 1");
+        assert_eq!(super::section_name("", ""), "");
+    }
+
     use super::{
-        SHOW_TRACK, ShowPlace, file_name, fresh_track_guids, name_song, relative_to, rooted_under,
+        Card, SHOW_TRACK, ShowPlace, file_name, fresh_track_guids, lay_out_song, name_song,
+        relative_to, rooted_under,
     };
+
+    #[test]
+    fn a_songs_section_cards_become_its_sections_and_marks() {
+        use session::sync::model::{MarkerState, RegionState};
+        // She's American as the show left it: its SONG region, the show's
+        // one section over everything, the show's SONGSTART.
+        let mut song = session::sync::SessionModel::default();
+        song.regions.insert(
+            "song".into(),
+            RegionState {
+                start: 0.0,
+                end: 263.0,
+                name: "She's American".into(),
+                color: None,
+                lane: Some(0),
+            },
+        );
+        song.regions.insert(
+            "show".into(),
+            RegionState {
+                start: 0.0,
+                end: 263.0,
+                name: "Cinematic Intro".into(),
+                color: None,
+                lane: Some(1),
+            },
+        );
+        song.markers.insert(
+            "start".into(),
+            MarkerState {
+                at: 0.0,
+                name: "SONGSTART".into(),
+                ..MarkerState::default()
+            },
+        );
+        let card = |name: &str, start, end, color| Card {
+            name: name.into(),
+            start,
+            end,
+            color,
+        };
+        let cards = [
+            card("Count In", 0.0, 4.14, Some(0x2F52A2)),
+            card("Intro", 4.14, 20.7, Some(0xFF3636)),
+            card("Verse 1", 20.7, 300.0, None),
+        ];
+        lay_out_song(&mut song, &cards, 263.0);
+
+        let mut regions: Vec<_> = song
+            .regions
+            .values()
+            .map(|r| (r.lane, r.name.as_str(), r.start, r.end, r.color))
+            .collect();
+        regions.sort_by(|a, b| a.0.cmp(&b.0).then(a.2.total_cmp(&b.2)));
+        assert_eq!(
+            regions,
+            [
+                (Some(0), "She's American", 0.0, 263.0, None),
+                (Some(1), "Intro", 4.14, 20.7, Some(0xFF3636)),
+                (Some(1), "Verse 1", 20.7, 263.0, None),
+            ],
+            "the cards on the Sections lane, the count-in not one of them, none past the end"
+        );
+        let mut marks: Vec<_> = song
+            .markers
+            .values()
+            .map(|m| (m.name.as_str(), m.at, m.lane))
+            .collect();
+        marks.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(b.0)));
+        assert_eq!(
+            marks,
+            [
+                ("COUNT-IN", 0.0, Some(2)),
+                ("SONGSTART", 4.14, Some(2)),
+                ("=END", 263.0, Some(2)),
+                ("SONGEND", 263.0, Some(2)),
+            ],
+            "bar 1 where the count-in ends; the show's SONGSTART gone"
+        );
+    }
+
+    #[test]
+    fn the_next_songs_count_in_inside_a_song_is_not_its_count_in() {
+        let mut song = session::sync::SessionModel::default();
+        let card = |name: &str, start, end| Card {
+            name: name.into(),
+            start,
+            end,
+            color: None,
+        };
+        // No SONG END: the song runs to the next locator, over the next
+        // song's count-in.
+        let cards = [
+            card("Intro", 0.0, 10.0),
+            card("Outro", 10.0, 96.0),
+            card("Count In", 96.0, 100.0),
+        ];
+        lay_out_song(&mut song, &cards, 100.0);
+        let mut marks: Vec<_> = song
+            .markers
+            .values()
+            .map(|m| (m.name.as_str(), m.at))
+            .collect();
+        marks.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(b.0)));
+        assert_eq!(
+            marks,
+            [("SONGSTART", 0.0), ("=END", 100.0), ("SONGEND", 100.0)],
+            "bar 1 where the song starts; no COUNT-IN at its tail"
+        );
+    }
 
     #[test]
     fn media_from_the_machine_a_set_was_made_on_is_found_under_the_show() {
