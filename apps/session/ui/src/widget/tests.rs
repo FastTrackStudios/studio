@@ -77,6 +77,84 @@ fn the_lanes_button_on_a_track_shows_every_lane() {
     assert_eq!(stack.lanes().len(), crate::test_song::DRUM_LANES as usize);
 }
 
+/// The guid of the folder called `name`.
+fn folder(song: &crate::test_song::Song, name: &str) -> String {
+    song.raw
+        .tracks
+        .iter()
+        .find(|t| t.is_folder && t.name == name)
+        .map(|t| t.guid.clone())
+        .expect("the folder")
+}
+
+#[test]
+fn the_lanes_button_on_an_open_kit_shows_every_lane_of_its_shut_pieces() {
+    let (song, mut widget) = window(30);
+    // The kit open, its pieces shut: a row a drum, each a fold.
+    crate::folds::toggle(&song.drums, false);
+    let pieces: Vec<String> = ["Kick", "Snare", "Toms", "Cymbals", "Rooms"]
+        .into_iter()
+        .map(|name| folder(&song, name))
+        .collect();
+    for piece in &pieces {
+        crate::folds::toggle(piece, true);
+    }
+    let _ = widget.paint_scene(1600, 900, 1.0);
+    let kit = row_of(&widget, &song.drums);
+    let kick = row_of(&widget, &pieces[0]);
+    assert_eq!(
+        widget.scene.lane_stack(kick),
+        None,
+        "shut, the kick shows what plays"
+    );
+    widget.act(crate::pointer::RowSpot {
+        row: kit,
+        control: crate::row::Control::LaneShow,
+    });
+    let _ = widget.paint_scene(1600, 900, 1.0);
+    for piece in &pieces {
+        let row = row_of(&widget, piece);
+        let stack = widget
+            .scene
+            .lane_stack(row)
+            .expect("each piece's lanes shown");
+        assert_eq!(stack.lanes().len(), crate::test_song::DRUM_LANES as usize);
+    }
+    // And shut again, the same way.
+    widget.act(crate::pointer::RowSpot {
+        row: kit,
+        control: crate::row::Control::LaneShow,
+    });
+    let _ = widget.paint_scene(1600, 900, 1.0);
+    assert_eq!(widget.scene.lane_stack(row_of(&widget, &pieces[0])), None);
+}
+
+#[test]
+fn a_lane_stepped_on_a_shut_kit_folds_the_kit_from_that_lane() {
+    crate::folds::show_cuts(true);
+    let (song, mut widget) = window(30);
+    let kit = row_of(&widget, &song.drums);
+    let drawn = |widget: &ArrangementWidget| {
+        widget
+            .scene
+            .item_boxes()
+            .iter()
+            .filter(|b| b.row == kit)
+            .count()
+    };
+    assert_eq!(drawn(&widget), 30, "what plays: each mic's EDIT slices");
+    widget.act(crate::pointer::RowSpot {
+        row: kit,
+        control: crate::row::Control::LaneNext,
+    });
+    let _ = widget.paint_scene(1600, 900, 1.0);
+    assert_eq!(
+        drawn(&widget),
+        40,
+        "the COMP lane's pieces, every mic stepped to it"
+    );
+}
+
 #[test]
 fn an_edit_of_items_draws_them_without_planning_the_rows_again() {
     crate::folds::show_cuts(true);
