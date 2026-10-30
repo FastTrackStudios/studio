@@ -578,7 +578,7 @@ pub static DOCKS: ActionMeta = meta(
     "Hide or Show the Docks",
     "Hide every edge dock of the window (left, right, top, bottom; the centre stays), or bring back the ones hidden as they were. A panel shown while they are hidden comes back on its own, and stays when the rest return.",
     "View",
-    "Alt+D",
+    "Shift+D",
 );
 
 pub static PANEL: ActionMeta = meta(

@@ -1525,6 +1525,44 @@ impl Arrangement {
         self.items.get(index)
     }
 
+    /// Row `row`'s items as recorded, as one number: where each is and
+    /// which. Another number, another recording of them — what a swipe
+    /// waits for the comp it asked for by.
+    #[must_use]
+    pub fn row_print(&self, row: usize) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = rustc_hash::FxHasher::default();
+        for item in self.items.iter().filter(|item| item.row == row) {
+            item.guid.hash(&mut h);
+            item.x0.to_bits().hash(&mut h);
+            item.x1.to_bits().hash(&mut h);
+        }
+        h.finish()
+    }
+
+    /// Whether item `index` is on its row's active lane: the one that
+    /// plays, or the comp a swipe lands on — what may be moved, trimmed or
+    /// slipped. A take's lane on a row showing its lanes is chosen from,
+    /// never edited in place: its items are not. Every item of a row
+    /// showing only what plays is.
+    #[must_use]
+    pub fn on_active_lane(&self, index: usize) -> bool {
+        let Some(item) = self.items.get(index) else {
+            return false;
+        };
+        let (Some(laned), Some(stack)) = (self.lanes_shown(item.row), self.lane_stack(item.row))
+        else {
+            return true;
+        };
+        let Some(lane) = stack.lane_at(f64::midpoint(item.band.0, item.band.1)) else {
+            return true;
+        };
+        let plays = 1_u64
+            .checked_shl(lane)
+            .is_some_and(|bit| laned.lane_play_mask & bit != 0);
+        plays || crate::arrange_edit::comp_lane(laned) == Some(lane)
+    }
+
     /// Every item's box, in the order they were recorded.
     ///
     /// For the operations that are about a REGION rather than about a
@@ -2620,7 +2658,7 @@ fn star(cx: f64, cy: f64, r: f64) -> BezPath {
 
 /// A take's rank — one to three gold stars, a red X — with its note
 /// after it, its left at `(x, y)` (the glyphs' middle). How wide it drew.
-fn take_mark(
+pub(crate) fn take_mark(
     painter: &mut impl PaintScene,
     font: &crate::text::Font,
     (x, y): (f64, f64),
@@ -4175,7 +4213,6 @@ impl Arrangement {
         transform: Affine,
     ) -> Counts {
         let (left, right) = view.secs();
-        let shown = view.on_screen();
         let mut counts = Counts::default();
         let deadline = web_time::Instant::now() + FINE_BUDGET;
         let mut behind = false;
@@ -4191,80 +4228,173 @@ impl Arrangement {
                     Some(&(x0, x1)) if x1 < left || x0 > right => continue,
                     _ => {}
                 }
-                // A rectangle far wider than the view (a song-long take, a
-                // lane's stripe) cut to it first: the renderer sizes its
-                // buffers by how long every path is on screen, and zoomed
-                // in to the samples a 4-minute take is a hundred million
-                // pixels of it.
-                let cut = match cmd {
-                    RenderCommand::Fill(fill) => {
-                        let extent = self.index.x.get(i).copied();
-                        cut_to_view(&fill.shape, (fill.transform, extent), left, right).map(
-                            |shape| {
-                                RenderCommand::Fill(anyrender::recording::FillCommand {
-                                    shape,
-                                    ..fill.clone()
-                                })
-                            },
-                        )
-                    }
-                    _ => None,
-                };
-                if submit_command(painter, cut.as_ref().unwrap_or(cmd), transform) {
-                    counts.submitted = counts.submitted.saturating_add(1);
-                }
-                // An item body with a waveform over it: the part on
-                // screen, a point a pixel.
-                // Layers in order: a shut kit's are drawn under to over.
-                for lane in u32::try_from(i)
-                    .ok()
-                    .and_then(|i| self.index.waves.get(&i))
-                    .into_iter()
-                    .flatten()
-                {
-                    match fine_kept(lane, shown, (view.pps, transform), deadline, &mut behind) {
-                        Some(FineDrawn::Envelope(path)) => {
-                            painter.fill(Fill::NonZero, transform, lane.color, None, &*path);
-                            counts.submitted = counts.submitted.saturating_add(1);
-                        }
-                        Some(FineDrawn::Samples(lines, dots)) => {
-                            let stroke = vello::kurbo::Stroke::new(1.25);
-                            for line in &lines {
-                                painter.stroke(&stroke, Affine::IDENTITY, lane.color, None, line);
-                            }
-                            for dot in &dots {
-                                painter.fill(
-                                    Fill::NonZero,
-                                    Affine::IDENTITY,
-                                    lane.color,
-                                    None,
-                                    dot,
-                                );
-                            }
-                            counts.submitted = counts.submitted.saturating_add(
-                                u64::try_from(lines.len().saturating_add(dots.len()))
-                                    .unwrap_or(u64::MAX),
-                            );
-                        }
-                        None => {
-                            // A piece is CHUNK points: at more than a
-                            // 128th of the view a point, it reaches past.
-                            if lane.wave.step * view.pps * 128.0 > view.width {
-                                self.lanes_wide.set(true);
-                            }
-                            for path in lane_wave_paths(lane, left, right, view.pps) {
-                                painter.fill(Fill::NonZero, transform, lane.color, None, &*path);
-                                counts.submitted = counts.submitted.saturating_add(1);
-                            }
-                        }
-                    }
-                }
+                self.replay_command(
+                    painter,
+                    (i, cmd),
+                    (view, (left, right), transform),
+                    (deadline, &mut behind),
+                    &mut counts,
+                );
             }
         }
         if behind {
             self.fine_behind.set(true);
         }
         counts
+    }
+
+    /// One recorded command `i` replayed under `transform`, cut to
+    /// `(left, right)` seconds, and the waveform recorded over it: what
+    /// [`Self::replay_lanes`] does for each command on screen, and
+    /// [`Self::replay_swipe`] for each of a swiped stretch.
+    fn replay_command(
+        &self,
+        painter: &mut impl PaintScene,
+        (i, cmd): (usize, &RenderCommand),
+        (view, (left, right), transform): (Viewport, (f64, f64), Affine),
+        (deadline, behind): (web_time::Instant, &mut bool),
+        counts: &mut Counts,
+    ) {
+        // A rectangle far wider than the view (a song-long take, a
+        // lane's stripe) cut to it first: the renderer sizes its
+        // buffers by how long every path is on screen, and zoomed
+        // in to the samples a 4-minute take is a hundred million
+        // pixels of it.
+        let cut = match cmd {
+            RenderCommand::Fill(fill) => {
+                let extent = self.index.x.get(i).copied();
+                cut_to_view(&fill.shape, (fill.transform, extent), left, right).map(|shape| {
+                    RenderCommand::Fill(anyrender::recording::FillCommand {
+                        shape,
+                        ..fill.clone()
+                    })
+                })
+            }
+            _ => None,
+        };
+        if submit_command(painter, cut.as_ref().unwrap_or(cmd), transform) {
+            counts.submitted = counts.submitted.saturating_add(1);
+        }
+        // An item body with a waveform over it: the part on
+        // screen, a point a pixel.
+        // Layers in order: a shut kit's are drawn under to over.
+        let shown = view.on_screen();
+        for lane in u32::try_from(i)
+            .ok()
+            .and_then(|i| self.index.waves.get(&i))
+            .into_iter()
+            .flatten()
+        {
+            match fine_kept(lane, shown, (view.pps, transform), deadline, behind) {
+                Some(FineDrawn::Envelope(path)) => {
+                    painter.fill(Fill::NonZero, transform, lane.color, None, &*path);
+                    counts.submitted = counts.submitted.saturating_add(1);
+                }
+                Some(FineDrawn::Samples(lines, dots)) => {
+                    let stroke = vello::kurbo::Stroke::new(1.25);
+                    for line in &lines {
+                        painter.stroke(&stroke, Affine::IDENTITY, lane.color, None, line);
+                    }
+                    for dot in &dots {
+                        painter.fill(Fill::NonZero, Affine::IDENTITY, lane.color, None, dot);
+                    }
+                    counts.submitted = counts.submitted.saturating_add(
+                        u64::try_from(lines.len().saturating_add(dots.len())).unwrap_or(u64::MAX),
+                    );
+                }
+                None => {
+                    // A piece is CHUNK points: at more than a
+                    // 128th of the view a point, it reaches past.
+                    if lane.wave.step * view.pps * 128.0 > view.width {
+                        self.lanes_wide.set(true);
+                    }
+                    for path in lane_wave_paths(lane, left, right, view.pps) {
+                        painter.fill(Fill::NonZero, transform, lane.color, None, &*path);
+                        counts.submitted = counts.submitted.saturating_add(1);
+                    }
+                }
+            }
+        }
+    }
+
+    /// A swipe's stretch of a take's lane, drawn on the lane it is comped
+    /// onto: what the comp will be there once the engine has done it,
+    /// while the hand is still moving and until it has.
+    ///
+    /// The row's own recording, replayed: the items and waveforms recorded
+    /// inside lane `from`'s strip, cut to `start..end` seconds and moved
+    /// (and scaled, the strips differing in height) into lane `onto`'s,
+    /// over `surface` laid there first — nothing built, nothing asked of
+    /// the engine, per frame. `transform` is the lanes' (content to
+    /// screen), as [`Self::replay_lanes`] takes it.
+    pub fn replay_swipe(
+        &self,
+        painter: &mut impl PaintScene,
+        (view, transform): (Viewport, Affine),
+        (row, from, onto): (usize, u32, u32),
+        (start, end): (f64, f64),
+        surface: Color,
+    ) {
+        use vello::kurbo::Shape as _;
+        let (Some((top, height)), Some(stack), Some(span)) = (
+            self.row_box(row),
+            self.lane_stack(row),
+            self.index.lanes.get(row),
+        ) else {
+            return;
+        };
+        let band = |lane: u32| {
+            let (b0, b1) = stack.band(lane);
+            (b0.mul_add(height, top), b1.mul_add(height, top))
+        };
+        let ((s0, s1), (d0, d1)) = (band(from), band(onto));
+        // Cut to the stretch by the clip, not by what is replayed: a
+        // waveform's detail is kept for the view, and asked for over the
+        // stretch alone it would be built again for the view each frame.
+        let seen = view.secs();
+        let (left, right) = (start.max(seen.0), end.min(seen.1));
+        if s1 <= s0 || d1 <= d0 || right <= left || from == onto {
+            return;
+        }
+        // Content in the source strip, to the same place in the target's.
+        let into = Affine::translate((0.0, d0))
+            * Affine::scale_non_uniform(1.0, (d1 - d0) / (s1 - s0))
+            * Affine::translate((0.0, -s0));
+        let moved = transform * into;
+        let clip = transform.transform_rect_bbox(Rect::new(left, d0, right, d1));
+        painter.push_clip_layer(Affine::IDENTITY, &clip);
+        painter.fill(Fill::NonZero, Affine::IDENTITY, surface, None, &clip);
+        let inside = |shape: &BezPath, at: Affine| {
+            let b = at.transform_rect_bbox(shape.bounding_box());
+            b.y0 >= s0 - 1e-6 && b.y1 <= s1 + 1e-6
+        };
+        let deadline = web_time::Instant::now() + FINE_BUDGET;
+        let (mut behind, mut counts) = (false, Counts::default());
+        for (i, cmd) in commands(&self.lanes, span) {
+            // Only what is inside the stretch, not what touches its ends.
+            match self.index.x.get(i) {
+                Some(&(x0, x1)) if x1 <= left || x0 >= right => continue,
+                _ => {}
+            }
+            let in_strip = match cmd {
+                RenderCommand::Fill(fill) => inside(&fill.shape, fill.transform),
+                RenderCommand::Stroke(stroke) => inside(&stroke.shape, stroke.transform),
+                _ => false,
+            };
+            if in_strip {
+                self.replay_command(
+                    painter,
+                    (i, cmd),
+                    (view, seen, moved),
+                    (deadline, &mut behind),
+                    &mut counts,
+                );
+            }
+        }
+        painter.pop_layer();
+        if behind {
+            self.fine_behind.set(true);
+        }
     }
 
     /// Whether a replay since the last ask left lanes to build from detail

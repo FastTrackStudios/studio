@@ -241,6 +241,12 @@ pub fn ScrollBar(
     window: f64,
     left: f64,
     top: f64,
+    /// Pinned this far above the foot of the panel instead of at `top`:
+    /// laid out by the page, so it moves with the panel's height (a dock
+    /// opened or hidden below it) on the very frame the panel does,
+    /// rather than when the panel's rectangle is next measured.
+    #[props(default)]
+    bottom: Option<f64>,
     length: f64,
     /// How thick, in CSS pixels: the lanes' [`BAR`] as drawn, which touch
     /// mode's zoom makes a finger's width.
@@ -254,9 +260,10 @@ pub fn ScrollBar(
     let thumb = (window / whole * length).max(24.0);
     let along = (at / travel.max(1.0)) * (length - thumb);
     let mut held = use_signal(|| Option::<f64>::None);
+    let edge = bottom.map_or_else(|| format!("top:{top}px;"), |b| format!("bottom:{b}px;"));
     let (size, place) = if across {
         (
-            format!("left:{left}px; top:{top}px; width:{length}px; height:{thick}px;"),
+            format!("left:{left}px; {edge} width:{length}px; height:{thick}px;"),
             format!(
                 "left:{along:.1}px; top:1px; width:{thumb:.1}px; height:{}px;",
                 thick - 2.0
