@@ -713,3 +713,20 @@ name = "pitch_throughput"
 path = "pitch/benches/throughput.rs"
 harness = false
 required-features = ["pitch"]
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
+required-features = ["mic", "reverb"]
+
+[[bench]]
+name = "reverb_cost"
+path = "reverb/benches/cost.rs"
+harness = false
+required-features = ["reverb"]
+
+[[bench]]
+name = "mic_cost"
+path = "mic/benches/cost.rs"
+harness = false
+required-features = ["mic"]

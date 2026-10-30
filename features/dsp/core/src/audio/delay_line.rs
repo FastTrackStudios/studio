@@ -14,6 +14,7 @@ impl DelayLine {
         }
     }
 
+    #[inline]
     pub fn write(&mut self, sample: f64) {
         self.buffer[self.write_pos] = sample;
         self.write_pos += 1;
@@ -23,13 +24,26 @@ impl DelayLine {
     }
 
     // r[impl dsp.delay.integer-read]
+    #[inline]
     pub fn read(&self, delay_samples: usize) -> f64 {
+        // The same index as `(write_pos + len - delay) % len`, without the
+        // integer division: a reverb reads its lines dozens of times a
+        // sample (four per cubic read), and the `%` was most of their cost.
         let len = self.buffer.len();
-        let pos = (self.write_pos + len - delay_samples) % len;
+        let pos = if let Some(back) = self.write_pos.checked_sub(delay_samples) {
+            back
+        } else if delay_samples <= self.write_pos + len {
+            self.write_pos + len - delay_samples
+        } else {
+            // Past the line's length: what the release build's wrapping
+            // arithmetic always gave.
+            self.write_pos.wrapping_add(len).wrapping_sub(delay_samples) % len
+        };
         self.buffer[pos]
     }
 
     // r[impl dsp.delay.fractional-read]
+    #[inline]
     pub fn read_linear(&self, delay_samples: f64) -> f64 {
         let int_delay = delay_samples as usize;
         let frac = delay_samples - int_delay as f64;
@@ -40,6 +54,7 @@ impl DelayLine {
 
     // r[impl dsp.delay.cubic-read]
     /// Catmull-Rom cubic interpolation for higher quality fractional reads.
+    #[inline]
     pub fn read_cubic(&self, delay_samples: f64) -> f64 {
         let int_delay = delay_samples as usize;
         let frac = delay_samples - int_delay as f64;
@@ -64,11 +79,16 @@ impl DelayLine {
         self.write_pos = 0;
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.buffer.len()
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.buffer.is_empty()
     }
 }
+
+#[cfg(test)]
+mod tests;
