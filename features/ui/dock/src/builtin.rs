@@ -43,6 +43,41 @@ pub mod kind {
     pub const GIG_CHART: &str = "gig-chart";
     /// The rig's tone browser: presets, captures, profiles.
     pub const TONES: &str = "tones";
+    /// The set as a vertical progress bar: every song, the one playing
+    /// opened into its sections (Session's navigator).
+    pub const SET: &str = "set";
+    /// Save, and the song's checkpoints.
+    pub const VERSIONS: &str = "versions";
+    /// Who is here, together, and where the sound comes from.
+    pub const COLLAB: &str = "collab";
+
+    /// Every kind with its title, in the order a menu lists them.
+    pub const ALL: [(&str, &str); 24] = [
+        (ARRANGEMENT, "Arrangement"),
+        (TCP, "Tracks"),
+        (MIXER, "Mixer"),
+        (EDITOR, "Editor"),
+        (FX_ROW, "FX"),
+        (TRANSPORT, "Transport"),
+        (PROGRESS, "Progress"),
+        (CHART, "Chart"),
+        (CHART_EDITOR, "Chart Editor"),
+        (LYRICS, "Lyrics"),
+        (LYRIC_EDITOR, "Lyric Editor"),
+        (SET, "Set"),
+        (SETLIST, "Setlist"),
+        (BROWSER, "Browser"),
+        (INSPECTOR, "Inspector"),
+        (VERSIONS, "Versions"),
+        (COLLAB, "Collaborate"),
+        (TOOLBAR, "Toolbar"),
+        (RIG, "Rig"),
+        (SWITCHES, "Switches"),
+        (NAVIGATOR, "Navigator"),
+        (NOW, "Now"),
+        (GIG_CHART, "Gig Chart"),
+        (TONES, "Tones"),
+    ];
 }
 
 /// The built-in sets' ids, fixed so the active one survives a restart.
@@ -331,7 +366,7 @@ fn session() -> Screenset {
     let desk = {
         let mut l = Lay::new();
         let tracks = l.tracks(220.0);
-        let browser = l.tabs(&[BROWSER, SETLIST]);
+        let browser = l.tabs(&[BROWSER, SET, SETLIST]);
         let below = l.tabs(&[MIXER, EDITOR, FX_ROW]);
         let below = l.over_transport(below, false);
         l.center(tracks)
@@ -342,7 +377,7 @@ fn session() -> Screenset {
     let tablet_wide = {
         let mut l = Lay::new();
         let tracks = l.tracks(180.0);
-        let browser = l.tabs(&[BROWSER, SETLIST]);
+        let browser = l.tabs(&[BROWSER, SET, SETLIST]);
         let below = l.tabs(&[MIXER, EDITOR, FX_ROW]);
         let below = l.over_transport(below, true);
         l.center(tracks)
@@ -357,7 +392,7 @@ fn session() -> Screenset {
         let below = l.tabs(&[MIXER, EDITOR, FX_ROW]);
         let main = Node::column(tracks, below, Share::Ratio(0.58));
         let main = l.over_transport(main, true);
-        let browser = l.tabs(&[BROWSER, SETLIST]);
+        let browser = l.tabs(&[BROWSER, SET, SETLIST]);
         l.center(main)
             .edge(Side::Left, 300.0, browser)
             .collapsed(Side::Left)
@@ -368,7 +403,7 @@ fn session() -> Screenset {
         let tracks = l.tracks(120.0);
         let main = l.over_transport(tracks, true);
         let below = l.tabs(&[MIXER, EDITOR, FX_ROW]);
-        let browser = l.tabs(&[BROWSER, SETLIST]);
+        let browser = l.tabs(&[BROWSER, SET, SETLIST]);
         let chart = l.one(CHART);
         l.center(main)
             .edge(Side::Bottom, 0.0, below)
@@ -381,7 +416,7 @@ fn session() -> Screenset {
         let tracks = l.tracks(96.0);
         let main = l.over_transport(tracks, true);
         let below = l.tabs(&[MIXER, EDITOR, FX_ROW]);
-        let browser = l.tabs(&[BROWSER, SETLIST]);
+        let browser = l.tabs(&[BROWSER, SET, SETLIST]);
         let chart = l.one(CHART);
         l.center(main)
             .edge(Side::Bottom, 0.0, below)

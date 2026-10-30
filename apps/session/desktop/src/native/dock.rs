@@ -37,6 +37,12 @@ pub struct HostPanels {
 /// the View actions (`SESSION_SCREENSET`, …) fill.
 pub use session_engine::actions::{DockRequest, request_dock};
 
+/// Runs a window action behind the window, in order — for the View menu's
+/// song items (`SESSION_SONG`).
+pub fn run_action(id: &'static str, args: String) {
+    session_engine::actions::off_the_window(id, args);
+}
+
 /// Where the screensets are kept.
 const PREF: &str = "dock.screensets.v1";
 
@@ -138,6 +144,20 @@ fn apply(
             sets.save_as(name, class);
         }
         DockRequest::Arrange => dock.toggle_arrange(),
+        DockRequest::TogglePanel(kind) => {
+            let shown: Vec<_> = dock.space().of_kind(&kind).map(|p| p.id).collect();
+            if shown.is_empty() {
+                if dock.open(&kind).is_none() {
+                    tracing::warn!(panel.kind = %kind, "no such panel to open");
+                }
+            } else {
+                dock.edit(|d| {
+                    for id in shown {
+                        let _ = d.close(id);
+                    }
+                });
+            }
+        }
     }
 }
 
@@ -249,10 +269,41 @@ fn catalog(host: HostPanels) -> Catalog {
                 }
             },
         ),
+        k(kind::SET, "Set", "SET", Place::Edge(Side::Left), |_| {
+            rsx! { SetPanel {} }
+        }),
+        k(
+            kind::VERSIONS,
+            "Versions",
+            "VER",
+            Place::Edge(Side::Right),
+            |_| {
+                rsx! {
+                    div { style: "flex:1; min-width:0; display:flex; align-items:flex-start; padding:8px;",
+                        session_ui::versions::Versions {}
+                    }
+                }
+            },
+        ),
+        k(
+            kind::COLLAB,
+            "Collaborate",
+            "COL",
+            Place::Edge(Side::Right),
+            |_| {
+                rsx! {
+                    div { style: "flex:1; min-width:0; display:flex; flex-wrap:wrap; align-items:flex-start; \
+                                  gap:8px; padding:8px;",
+                        session_ui::collab_bar::CollabBar {}
+                        session_ui::shell::AudioBadge { density: session_ui::shell::Density::Full }
+                    }
+                }
+            },
+        ),
         k(
             kind::SETLIST,
             "Setlist",
-            "SET",
+            "LST",
             Place::Edge(Side::Left),
             |_| {
                 rsx! { Fill { session_ui::setup::SetupView { on_pick: None } } }
@@ -316,6 +367,24 @@ fn Fill(children: Element) -> Element {
 fn ArrangementPanel() -> Element {
     let mode: Signal<Mode> = use_context();
     rsx! { Fill { session_ui::mixer_panel::DawPanels { mode: Some(mode()) } } }
+}
+
+/// The set as a vertical progress bar (Session's navigator): a song
+/// pressed is gone to, as its tab does.
+#[component]
+fn SetPanel() -> Element {
+    rsx! {
+        Fill {
+            session_ui::navigator::Navigator {
+                on_pick: move |index: usize| {
+                    session_engine::actions::off_the_window(
+                        "SESSION_SONG",
+                        format!(r#"{{"to":"{}"}}"#, index + 1),
+                    );
+                },
+            }
+        }
+    }
 }
 
 /// The transport: the wide bar, or on a phone the compact buttons the

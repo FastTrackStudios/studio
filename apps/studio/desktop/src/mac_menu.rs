@@ -77,6 +77,42 @@ define_class!(
             );
         }
 
+        /// View ▸ Panels ▸ a kind: the item's tag is its place in
+        /// `dock::builtin::kind::ALL`.
+        #[unsafe(method(togglePanel:))]
+        fn toggle_panel(&self, sender: Option<&AnyObject>) {
+            #[cfg(feature = "session-app")]
+            if let Some(sender) = sender {
+                // SAFETY: the sender is the NSMenuItem the action came from.
+                let tag: isize = unsafe { msg_send![sender, tag] };
+                if let Some((kind, _)) = usize::try_from(tag)
+                    .ok()
+                    .and_then(|i| dock::builtin::kind::ALL.get(i))
+                {
+                    session_desktop::native::dock::request_dock(
+                        session_desktop::native::dock::DockRequest::TogglePanel((*kind).to_owned()),
+                    );
+                }
+            }
+            #[cfg(not(feature = "session-app"))]
+            let _ = sender;
+        }
+
+        #[unsafe(method(previousSong:))]
+        fn previous_song(&self, _sender: Option<&AnyObject>) {
+            #[cfg(feature = "session-app")]
+            session_desktop::native::dock::run_action(
+                "SESSION_SONG",
+                r#"{"to":"previous"}"#.to_owned(),
+            );
+        }
+
+        #[unsafe(method(nextSong:))]
+        fn next_song(&self, _sender: Option<&AnyObject>) {
+            #[cfg(feature = "session-app")]
+            session_desktop::native::dock::run_action("SESSION_SONG", r#"{"to":"next"}"#.to_owned());
+        }
+
         #[unsafe(method(arrangePanels:))]
         fn arrange_panels(&self, _sender: Option<&AnyObject>) {
             #[cfg(feature = "session-app")]
@@ -167,6 +203,17 @@ fn view_menu(mtm: MainThreadMarker, target: &MenuTarget) -> Retained<NSMenuItem>
         target,
     ));
     menu.addItem(&NSMenuItem::separatorItem(mtm));
+    // Panels ▸ every kind: shown if the window has none, closed if it does.
+    let panels = NSMenu::new(mtm);
+    panels.setTitle(&NSString::from_str("Panels"));
+    for (i, (_, title)) in dock::builtin::kind::ALL.iter().enumerate() {
+        let entry = action_item(mtm, title, sel!(togglePanel:), "", target);
+        entry.setTag(isize::try_from(i).unwrap_or(isize::MAX));
+        panels.addItem(&entry);
+    }
+    let panels_item = item(mtm, "Panels");
+    panels_item.setSubmenu(Some(&panels));
+    menu.addItem(&panels_item);
     menu.addItem(&action_item(
         mtm,
         "Arrange Panels",
@@ -174,6 +221,15 @@ fn view_menu(mtm: MainThreadMarker, target: &MenuTarget) -> Retained<NSMenuItem>
         "",
         target,
     ));
+    menu.addItem(&NSMenuItem::separatorItem(mtm));
+    menu.addItem(&action_item(
+        mtm,
+        "Previous Song",
+        sel!(previousSong:),
+        "",
+        target,
+    ));
+    menu.addItem(&action_item(mtm, "Next Song", sel!(nextSong:), "", target));
     let view = item(mtm, "View");
     view.setSubmenu(Some(&menu));
     view

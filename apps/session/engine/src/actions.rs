@@ -572,6 +572,21 @@ pub static ARRANGE: ActionMeta = meta(
     "",
 );
 
+pub static PANEL: ActionMeta = meta(
+    "SESSION_PANEL",
+    "panel",
+    "Show or Hide a Panel",
+    "Open a panel of `kind` where that kind lives when the window shows none, or close every one it shows: arrangement, mixer, editor, fx-row, transport, progress, chart, chart-editor, lyrics, set, setlist, browser, inspector, versions, collab, rig, switches, navigator, now, gig-chart, tones.",
+    "View",
+    "",
+);
+
+/// Which panel kind.
+#[derive(Facet)]
+struct PanelArg {
+    kind: String,
+}
+
 /// Which screenset: its number key or its name.
 #[derive(Facet)]
 struct ScreensetArg {
@@ -597,6 +612,8 @@ pub enum DockRequest {
     SaveAs(Option<String>),
     /// Turn arranging on or off.
     Arrange,
+    /// Open a panel of this kind, or close the ones shown.
+    TogglePanel(String),
 }
 
 static DOCK_REQUESTS: Mutex<Vec<DockRequest>> = Mutex::new(Vec::new());
@@ -649,6 +666,16 @@ fn register_dock(list: &ActionList) -> Result<(), architect::action::ActionError
             },
         );
         also_in_the_window(SCREENSET_SAVE_AS.id, args);
+        Ok(())
+    })?;
+    list.register(&PANEL, Effect::Mutating, |a: PanelArg| {
+        let kind = a.kind.trim().to_owned();
+        if kind.is_empty() {
+            return Err("name a panel kind".to_owned());
+        }
+        let quoted = facet_json::to_string(&kind).unwrap_or_default();
+        request_dock(DockRequest::TogglePanel(kind));
+        also_in_the_window(PANEL.id, format!(r#"{{"kind":{quoted}}}"#));
         Ok(())
     })?;
     list.register(&ARRANGE, Effect::Mutating, |(): ()| {
