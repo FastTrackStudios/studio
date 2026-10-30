@@ -551,7 +551,7 @@ impl EditorView {
                 (item, length, t.volume, t.start, t.name.clone()),
                 t.takes.clone(),
             );
-            runtime.spawn_blocking(move || {
+            crate::open::traced_blocking(runtime, move || {
                 let editor = stacked(main, &takes);
                 if let Ok(mut slot) = into.lock() {
                     *slot = Some(Read::Audio(editor));
@@ -764,7 +764,7 @@ impl EditorView {
         let (reference, dubs) = (reference.clone(), dubs.to_vec());
         let slot: Aligning = std::sync::Arc::default();
         let into = std::sync::Arc::clone(&slot);
-        runtime.spawn_blocking(move || {
+        crate::open::traced_blocking(runtime, move || {
             let done = align_all(&reference, &dubs);
             if let Ok(mut slot) = into.lock() {
                 *slot = Some(done);

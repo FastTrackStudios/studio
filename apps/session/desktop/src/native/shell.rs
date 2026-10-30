@@ -67,6 +67,9 @@ pub fn Shell() -> Element {
     // The mode, for the panels that change with it (the mixer's strips
     // are live-mode strips in Live).
     use_context_provider(|| mode);
+    // What the window shows, for SESSION_WINDOW (a model checking what a
+    // key or a click did).
+    use_effect(move || session_engine::actions::note_shown_mode(mode()));
     // A mode asked for on the Action List (`SESSION_MODE`, a model over
     // MCP): taken up within a tenth of a second.
     let mut asked = mode;

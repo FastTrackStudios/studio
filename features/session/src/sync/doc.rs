@@ -246,21 +246,33 @@ impl SessionDoc {
         if before.tempo != model.tempo {
             put(&meta, "tempo", LoroValue::from(encode_tempo(&model.tempo)))?;
         }
+        let span = |name: &'static str| {
+            tracing::info_span!(
+                "doc.write",
+                doc.part = name,
+                doc.entries = tracing::field::Empty,
+                doc.changed = tracing::field::Empty,
+                doc.gone = tracing::field::Empty,
+                doc.writing_ms = tracing::field::Empty,
+            )
+        };
         if before.tracks != model.tracks {
-            self.write_tracks(&model.tracks)?;
+            span("tracks").in_scope(|| self.write_tracks(&model.tracks))?;
         }
         if before.tracks != model.tracks || before.project != model.project {
-            self.write_parts(&model.tracks, &model.project)?;
+            span("parts").in_scope(|| self.write_parts(&model.tracks, &model.project))?;
         }
         if before.project != model.project {
             sync_fields(&self.doc.get_map(PROJECT), &project_fields(&model.project))?;
         }
-        write_changed(
-            &self.doc.get_map(ITEMS),
-            &before.items,
-            &model.items,
-            item_fields,
-        )?;
+        span("items").in_scope(|| {
+            write_changed(
+                &self.doc.get_map(ITEMS),
+                &before.items,
+                &model.items,
+                item_fields,
+            )
+        })?;
         write_changed(
             &self.doc.get_map(MARKERS),
             &before.markers,
@@ -276,17 +288,21 @@ impl SessionDoc {
         if before.chart != model.chart {
             write_text(&self.doc.get_text(CHART), &model.chart)?;
         }
-        write_changed(
-            &self.doc.get_map(TAKE_MARKERS),
-            &before.take_markers,
-            &model.take_markers,
-            take_marker_fields,
-        )?;
+        span("take_markers").in_scope(|| {
+            write_changed(
+                &self.doc.get_map(TAKE_MARKERS),
+                &before.take_markers,
+                &model.take_markers,
+                take_marker_fields,
+            )
+        })?;
         self.doc.set_next_commit_origin(origin);
         if !label.is_empty() {
             self.doc.set_next_commit_message(label);
         }
-        self.doc.commit();
+        // The commit runs the doc's subscribers (the bridge's watch, a
+        // synced doc's outbox): its own span.
+        tracing::info_span!("doc.commit").in_scope(|| self.doc.commit());
         Ok(())
     }
 
@@ -597,15 +613,28 @@ fn write_changed<T: PartialEq>(
     now: &BTreeMap<String, T>,
     fields: fn(&T) -> Fields,
 ) -> LoroResult<()> {
+    let mut changed = 0_usize;
+    let mut writing = std::time::Duration::ZERO;
     for (guid, entity) in now {
         if before.get(guid) != Some(entity) {
+            let began = architect::platform::Instant::now();
             let map = root.ensure_mergeable_map(guid)?;
             sync_fields(&map, &fields(entity))?;
+            writing += began.elapsed();
+            changed = changed.saturating_add(1);
         }
     }
+    let mut gone = 0_usize;
     for guid in before.keys().filter(|k| !now.contains_key(*k)) {
         root.delete(guid)?;
+        gone = gone.saturating_add(1);
     }
+    // How much of the part a step rewrote, on its span (`doc.write`).
+    let span = tracing::Span::current();
+    span.record("doc.entries", now.len());
+    span.record("doc.changed", changed);
+    span.record("doc.gone", gone);
+    span.record("doc.writing_ms", writing.as_secs_f64() * 1e3);
     Ok(())
 }
 

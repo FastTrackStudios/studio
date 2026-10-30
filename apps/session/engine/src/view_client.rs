@@ -780,7 +780,8 @@ fn take_asked(link: &Link) {
     let view = link.view.clone();
     let Some(rt) = runtime() else { return };
     rt.spawn(async move {
-        match tokio::time::timeout(CALL, view.take_window()).await {
+        match tokio::time::timeout(CALL, view.take_window(crate::window_queue::window_name())).await
+        {
             Ok(Ok(asked)) => crate::window_queue::receive(asked, |id, args, ticket| {
                 run_asked(view.clone(), id.to_owned(), args.to_owned(), ticket);
             }),
@@ -897,7 +898,13 @@ where
     let link = link()?;
     let rt = runtime()?;
     let asked = call(link.view.clone());
-    let bounded = async move { tokio::time::timeout(within, asked).await.ok() };
+    // Under the caller's span — a key's, an action's — wherever it is
+    // polled: a scoped thread below has no span of its own, and the call's
+    // trace context comes from the span it is made in.
+    let bounded = tracing::Instrument::instrument(
+        async move { tokio::time::timeout(within, asked).await.ok() },
+        tracing::info_span!("view.call", view.call = what),
+    );
     // Blocking on the runtime from inside one panics: a thread of its own.
     let answered = if tokio::runtime::Handle::try_current().is_err() {
         rt.block_on(bounded)

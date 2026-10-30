@@ -413,9 +413,11 @@ pub fn sync(
     // One sync at a time: the step thread's and a caller's own, run
     // together, both read one note edit as the hits' edit — and the
     // second's rewrite of the views took the first's back.
+    let mut stages = crate::stages::Stages::start();
     let _one = SYNCING
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    stages.mark("sync.wait_ms");
     let tracks = Tracks::all(daw, project.clone());
     let pieces = crate::drum_reference::pieces_of(&tracks);
     let held: Vec<(View, Vec<Note>)> = views(&tracks, &pieces)
@@ -429,10 +431,12 @@ pub fn sync(
             (v, notes)
         })
         .collect();
+    stages.mark("sync.views_ms");
     if held.is_empty() {
         return Ok(Synced::default());
     }
     let mut hits = hit_notes(&crate::hits::playback(daw, project), moved);
+    stages.mark("sync.hits_ms");
     let mut synced = Synced::default();
     if mode == Mode::Reconcile {
         let piece_of = |pitch: u8| {
@@ -472,6 +476,7 @@ pub fn sync(
         remember(&view.track, &read(daw, project, view));
         synced.written = synced.written.saturating_add(1);
     }
+    stages.mark("sync.write_ms");
     Ok(synced)
 }
 

@@ -521,11 +521,15 @@ pub fn record_steps() {
     compact_when_idle();
     static LISTENING: std::sync::Once = std::sync::Once::new();
     LISTENING.call_once(|| {
-        let (tx, rx) = std::sync::mpsc::channel::<(String, String)>();
+        // Each step with the span it finished in (the action that made
+        // it): its recording is traced under that.
+        let (tx, rx) = std::sync::mpsc::channel::<(String, String, tracing::Span)>();
         let tx = Mutex::new(tx);
         daw::standalone::steps::listen(Arc::new(move |project, label| {
             if let Ok(tx) = tx.lock()
-                && tx.send((project.to_owned(), label.to_owned())).is_ok()
+                && tx
+                    .send((project.to_owned(), label.to_owned(), tracing::Span::current()))
+                    .is_ok()
             {
                 PENDING.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
@@ -534,20 +538,29 @@ pub fn record_steps() {
             .name("project-file-steps".into())
             .spawn(move || {
                 while let Ok(first) = rx.recv() {
-                    let mut steps: Vec<(String, Vec<String>)> = Vec::new();
+                    let mut steps: Vec<(String, Vec<String>, tracing::Span)> = Vec::new();
                     let mut taken = 0_usize;
-                    for (project, label) in std::iter::once(first).chain(rx.try_iter()) {
+                    for (project, label, made_in) in std::iter::once(first).chain(rx.try_iter()) {
                         taken = taken.saturating_add(1);
-                        match steps.iter_mut().find(|(p, _)| *p == project) {
-                            Some((_, labels)) => labels.push(label),
-                            None => steps.push((project, vec![label])),
+                        match steps.iter_mut().find(|(p, _, _)| *p == project) {
+                            Some((_, labels, _)) => labels.push(label),
+                            None => steps.push((project, vec![label], made_in)),
                         }
                     }
-                    for (project, labels) in steps {
+                    for (project, labels, made_in) in steps {
+                        // The steps' recording, under the action that made
+                        // the first of them (it may outlast it).
+                        let step = tracing::info_span!(
+                            parent: &made_in,
+                            "song.step",
+                            steps.labels = labels.len(),
+                            steps.label = labels.first().map(String::as_str).unwrap_or_default(),
+                        );
+                        let _step = step.enter();
+                        let mut stages = crate::stages::Stages::start();
                         // What is made from the recording follows it first —
                         // the kit's samples onto where its hits play now — so
                         // it is in the same commit as the edit that moved it.
-                        let started = web_time::Instant::now();
                         if let Some(daw) = crate::open::local_engine() {
                             crate::actions::samples_follow(
                                 daw,
@@ -555,16 +568,11 @@ pub fn record_steps() {
                                 sync_mode(&labels),
                             );
                         }
-                        let followed = started.elapsed();
+                        stages.mark("step.follow_ms");
                         if let Err(why) = record(&project, &labels.join("; ")) {
                             tracing::warn!(project.guid = %project, why, "an edit step was not recorded");
                         }
-                        tracing::debug!(
-                            steps.labels = labels.len(),
-                            steps.follow_ms = followed.as_millis(),
-                            steps.record_ms = started.elapsed().saturating_sub(followed).as_millis(),
-                            "edit steps recorded"
-                        );
+                        stages.mark("step.record_ms");
                     }
                     PENDING.fetch_sub(taken, std::sync::atomic::Ordering::SeqCst);
                 }
@@ -578,20 +586,28 @@ pub fn record_steps() {
 fn record(project_guid: &str, label: &str) -> Result<(), String> {
     let guid = project_guid.to_owned();
     let label = label.to_owned();
-    run(async move {
+    // On the project file's runtime, still under the step's span.
+    run(tracing::Instrument::in_current_span(async move {
         let mut songs = open_songs().lock().await;
         let Some(open) = songs.get_mut(&guid) else {
             return Ok(());
         };
         open.name_next(&label);
-        let recorded = match open.bridge.local_step(&label).await {
-            Ok(true) => append(open, &label),
+        let recorded = match tracing::Instrument::instrument(
+            open.bridge.local_step(&label),
+            tracing::info_span!("bridge.local_step"),
+        )
+        .await
+        {
+            Ok(true) => {
+                tracing::info_span!("project_file.append").in_scope(|| append(open, &label))
+            }
             Ok(false) => Ok(()),
             Err(e) => Err(e.to_string()),
         };
         drop(songs);
         recorded
-    })?
+    }))?
 }
 
 /// What an undo or redo through a song's doc came to.
@@ -690,9 +706,22 @@ async fn step_back(open: &mut Open, pending: &str, back: bool) -> Result<Undone,
 pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<String, String> {
     let _job = crate::jobs::start("Opening", 0);
     record_steps();
+    // The project file's load, one unit of work under the song's open: the
+    // file, its doc, the build and the landing, each timed on it.
+    let span = tracing::info_span!(
+        "project_file.load",
+        load.store_ms = tracing::field::Empty,
+        load.doc_ms = tracing::field::Empty,
+        load.build_ms = tracing::field::Empty,
+        load.land_ms = tracing::field::Empty,
+        load.uncompacted = tracing::field::Empty,
+    );
+    let _load = span.enter();
     let mut stages = crate::stages::Stages::start();
-    let (store, loaded, uncompacted) = open_branch(path, branch)?;
-    stages.mark("load.store_ms");
+    let (store, loaded, uncompacted) =
+        tracing::info_span!("project_file.open_branch").in_scope(|| open_branch(path, branch))?;
+    span.record("load.store_ms", stages.mark("load.store_ms"));
+    span.record("load.uncompacted", uncompacted);
     // A backlog on the snapshot is folded once the song is left alone.
     if uncompacted > 0
         && let Ok(mut at) = LAST_WRITE.lock()
@@ -701,10 +730,14 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
     }
     // A shared project opens as its synced doc: what this device missed
     // is merged in as the driver catches up.
-    let (loaded, synced) = run(song_doc(path, &store, branch, loaded))?;
-    let doc = SessionDoc::from_loro(loaded);
+    let (loaded, synced) = run(tracing::Instrument::instrument(
+        song_doc(path, &store, branch, loaded),
+        tracing::info_span!("project_file.song_doc"),
+    ))?;
+    let doc =
+        tracing::info_span!("project_file.from_loro").in_scope(|| SessionDoc::from_loro(loaded));
     let saved = doc.version();
-    stages.mark("load.doc_ms");
+    span.record("load.doc_ms", stages.mark("load.doc_ms"));
     let guid = uuid::Uuid::new_v4().to_string();
     let stage = daw.stage();
     stage.engine().seed_project(daw_proto::ProjectInfo {
@@ -719,7 +752,7 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
         doc,
         StoreBlobs::new(store.clone()),
     )?;
-    stages.mark("load.build_ms");
+    span.record("load.build_ms", stages.mark("load.build_ms"));
     let daw = daw.clone();
     let path = path.to_path_buf();
     let branch = branch.to_owned();
@@ -744,7 +777,7 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
         );
         Ok::<(), String>(())
     })??;
-    stages.mark("load.land_ms");
+    span.record("load.land_ms", stages.mark("load.land_ms"));
     Ok(guid)
 }
 
