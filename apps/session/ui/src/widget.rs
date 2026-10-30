@@ -3323,8 +3323,8 @@ impl ArrangementWidget {
                 let open = !crate::lanes::opened(track);
                 let under =
                     crate::lanes::speaks_for(&self.tracks, track, self.scene.lane_tracks(spot.row));
-                let _ =
-                    crate::lanes::set_expanded(&crate::lanes::opened_by(track, &under), Some(open));
+                let opened = lanes_opened_by(&self.project.tracks, track, &under);
+                let _ = crate::lanes::set_expanded(&opened, Some(open));
                 return;
             }
             C::LanePrev | C::LaneNext => {
@@ -3378,6 +3378,11 @@ impl ArrangementWidget {
                     self.assume(&edit);
                     self.edits.borrow_mut().push(edit);
                 }
+                // What a shut folder's row shows is folded from what its
+                // tracks play: folded again from the lane they play now. The
+                // engine says nothing back for a track's lane, so nothing
+                // else would.
+                self.replan_rows();
                 return;
             }
             C::Name => Edit::Select(guid),
@@ -6149,6 +6154,39 @@ impl ArrangementWidget {
         crate::arrangement::cut_to_screen(&mut out, f64::from(width), f64::from(height), lanes_cut);
         out
     }
+}
+
+/// What a row's lanes button opens or shuts: the track and the tracks its
+/// lane line speaks for (`under`, [`crate::lanes::opened_by`]) — and every
+/// folder between them and it, by `tracks`' parents.
+///
+/// A shut folder's row shows its lanes only when the folder itself is
+/// opened ([`crate::lanes::folder_view`]): the button on an open kit whose
+/// pieces are shut opened the mics and the kit, and every piece's shut row
+/// went on showing what plays — its EDIT lane filling the row — until the
+/// kit was shut over them.
+fn lanes_opened_by(
+    tracks: &[daw_proto::Track],
+    track: &daw_proto::Track,
+    under: &[&daw_proto::Track],
+) -> Vec<String> {
+    let mut opened = crate::lanes::opened_by(track, under);
+    let parent_of = |guid: &str| {
+        tracks
+            .iter()
+            .find(|t| t.guid == guid)
+            .and_then(|t| t.parent_guid.as_deref())
+    };
+    for lane_track in under {
+        let mut at = lane_track.parent_guid.as_deref();
+        while let Some(folder) = at.filter(|folder| *folder != track.guid) {
+            if !opened.iter().any(|g| g == folder) {
+                opened.push(folder.to_owned());
+            }
+            at = parent_of(folder);
+        }
+    }
+    opened
 }
 
 /// The items of `project` whose take `marks` mark bad over the whole of
