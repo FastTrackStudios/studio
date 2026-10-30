@@ -22,8 +22,9 @@ use daw::service::ProjectContext;
 use crate::view::{
     ActionCall, Applied, AutomationRead, Change, Changed, ChangesAsk, DetailAsk, EditAsked,
     EditBatch, EditShown, EngineView, EngineViewStreamSource, ItemChanges, ItemNow, JobRow,
-    JobsFrame, MarksFrame, OverlayFrame, PerfFrame, Playhead, Queued, SetFrame, SetOpening,
-    SongFacts, StreamSong, StreamsFrame, ViewError, WaveRead, WavesAsk, WindowAction, WindowAnswer,
+    JobsFrame, LiveFrame, MarksFrame, OverlayFrame, PerfFrame, Playhead, Queued, SetFrame,
+    SetOpening, SongFacts, StreamSong, StreamsFrame, ViewError, WaveRead, WavesAsk, WindowAction,
+    WindowAnswer,
 };
 
 /// The engine's view host: its hubs and what each last said.
@@ -39,6 +40,7 @@ struct Inner {
     streams: PubSub<StreamsFrame>,
     jobs: PubSub<JobsFrame>,
     perf: PubSub<PerfFrame>,
+    live: PubSub<LiveFrame>,
     edits: PubSub<EditAsked>,
     changes: PubSub<Changed>,
     queued: PubSub<Queued>,
@@ -48,6 +50,7 @@ struct Inner {
     last_streams: Mutex<StreamsFrame>,
     last_jobs: Mutex<JobsFrame>,
     last_perf: Mutex<PerfFrame>,
+    last_live: Mutex<LiveFrame>,
     revision: AtomicU64,
     asked: AtomicU64,
     /// The engine's own waveform reads: what it cuts slices from.
@@ -68,6 +71,7 @@ pub fn host() -> &'static ViewHost {
             streams: PubSub::sliding(4),
             jobs: PubSub::sliding(4),
             perf: PubSub::sliding(2),
+            live: PubSub::sliding(4),
             edits: PubSub::sliding(16),
             changes: PubSub::sliding(1024),
             queued: PubSub::sliding(64),
@@ -77,6 +81,7 @@ pub fn host() -> &'static ViewHost {
             last_streams: Mutex::new(StreamsFrame::default()),
             last_jobs: Mutex::new(JobsFrame::default()),
             last_perf: Mutex::new(PerfFrame::default()),
+            last_live: Mutex::new(LiveFrame::default()),
             revision: AtomicU64::new(0),
             asked: AtomicU64::new(0),
             previews: crate::midi::Previews::default(),
@@ -130,6 +135,9 @@ pub fn start() {
         let _ = std::thread::Builder::new()
             .name("view-jobs".into())
             .spawn(follow_jobs);
+        let _ = std::thread::Builder::new()
+            .name("view-live".into())
+            .spawn(follow_live);
         // A recording pass that ends has its takes selected and the ranks
         // pressed while it ran written on them, window or none.
         let _ = std::thread::Builder::new()
@@ -336,6 +344,67 @@ fn follow_jobs() {
             *last = frame.clone();
         }
         host.inner.jobs.publish(frame);
+    }
+}
+
+/// The engine's live session, published when it changes: read twice a
+/// second, as the collaboration control polled it in the window.
+fn follow_live() {
+    let host = host();
+    let mut told = LiveFrame::default();
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let now = live_now();
+        if now == told {
+            continue;
+        }
+        told.clone_from(&now);
+        let frame = LiveFrame {
+            version: host.inner.revision.fetch_add(1, Ordering::AcqRel) + 1,
+            ..now
+        };
+        if let Ok(mut last) = host.inner.last_live.lock() {
+            *last = frame.clone();
+        }
+        host.inner.live.publish(frame);
+    }
+}
+
+/// The live session as this engine has it now (version 0).
+#[must_use]
+pub fn live_now() -> LiveFrame {
+    let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+    LiveFrame {
+        version: 0,
+        status: crate::collab::status().map(|s| crate::view::LiveStatus {
+            hosting: s.hosting,
+            ticket: s.ticket,
+            peers: count(s.peers),
+            shared_transport: s.shared_transport,
+            set: s.set,
+            name: s.name,
+            color: s.color,
+            resets_in_secs: s.resets_at.map(|at| {
+                at.saturating_duration_since(architect::platform::Instant::now())
+                    .as_secs()
+            }),
+            locked: s.locked,
+            held: count(s.held),
+        }),
+        joining: crate::collab::joining(),
+        error: crate::collab::last_error(),
+        locked: crate::collab::sync_locked(),
+        hosted: crate::live_host::hosted().map(|h| h.title),
+        host_error: crate::live_host::last_error(),
+        people: crate::presence::everyone()
+            .into_iter()
+            .map(|p| crate::view::LivePerson {
+                project: p.project,
+                song: p.song,
+                name: p.name,
+                color: p.color,
+            })
+            .collect(),
     }
 }
 
@@ -705,6 +774,14 @@ impl EngineViewStreamSource for ViewHost {
 
     fn perf_intro(&self) -> Option<PerfFrame> {
         self.inner.last_perf.lock().ok().map(|f| f.clone())
+    }
+
+    fn live_hub(&self) -> &PubSub<LiveFrame> {
+        &self.inner.live
+    }
+
+    fn live_intro(&self) -> Option<LiveFrame> {
+        self.inner.last_live.lock().ok().map(|f| f.clone())
     }
 
     fn edits_hub(&self) -> &PubSub<EditAsked> {

@@ -316,6 +316,56 @@ pub struct JobsFrame {
     pub jobs: Vec<JobRow>,
 }
 
+/// The engine's live session, as a window's collaboration control shows
+/// it (`crate::collab`, `crate::live_host`): the set it is in, who is
+/// there, this device's lock, and why the last share, join or Task
+/// hosting failed. The session is the engine's: a window starts none.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Facet)]
+pub struct LiveFrame {
+    pub version: u64,
+    /// The live session, if the engine is in one.
+    pub status: Option<LiveStatus>,
+    /// A session is being joined.
+    pub joining: bool,
+    /// Why the last share or join failed.
+    pub error: Option<String>,
+    /// This device is locked: not sending its edits, not taking others'.
+    pub locked: bool,
+    /// The set the engine hosts in Task by itself, by its title.
+    pub hosted: Option<String>,
+    /// Why hosting in Task last failed.
+    pub host_error: Option<String>,
+    /// Everyone else in the set, and the song each is on.
+    pub people: Vec<LivePerson>,
+}
+
+/// A live session, as [`crate::collab::Status`] has it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Facet)]
+pub struct LiveStatus {
+    pub hosting: bool,
+    pub ticket: String,
+    pub peers: u32,
+    pub shared_transport: bool,
+    pub set: String,
+    pub name: String,
+    pub color: u32,
+    /// Seconds until a playground set starts over.
+    pub resets_in_secs: Option<u64>,
+    pub locked: bool,
+    pub held: u32,
+}
+
+/// Someone in the set (`crate::presence::Person`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Facet)]
+pub struct LivePerson {
+    /// Their song's project in the engine.
+    pub project: String,
+    /// Their song's name everywhere.
+    pub song: String,
+    pub name: String,
+    pub color: u32,
+}
+
 /// The performance meter, twice a second (`crate::perf_meter`): the
 /// engine as a whole and every track of the current song. CPU of one core
 /// is 100 per core; `cpu_pct` is of all cores.
@@ -546,6 +596,10 @@ pub trait EngineView {
     /// dropouts, and every track's FX and media CPU.
     #[subscribe]
     fn perf(&self) -> PerfFrame;
+
+    /// The engine's live session, as it changes.
+    #[subscribe]
+    fn live(&self) -> LiveFrame;
 
     /// Where actions put the edit cursor and time selection.
     #[subscribe]

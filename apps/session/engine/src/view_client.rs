@@ -128,6 +128,7 @@ pub fn connect(caller: vox::Caller) {
     rt.spawn(follow(link.clone(), Stream::Streams));
     rt.spawn(follow(link.clone(), Stream::Jobs));
     rt.spawn(follow(link.clone(), Stream::Perf));
+    rt.spawn(follow(link.clone(), Stream::Live));
     rt.spawn(follow(link.clone(), Stream::Edits));
     rt.spawn(follow(link.clone(), Stream::Changes));
     rt.spawn(follow(link.clone(), Stream::Queued));
@@ -189,8 +190,11 @@ fn dropped(link: &Link, why: &str) {
     if !current(link) {
         return;
     }
-    // Its jobs went with it.
+    // Its jobs went with it, and its live session.
     if let Ok(mut slot) = JOBS.write() {
+        *slot = None;
+    }
+    if let Ok(mut slot) = LIVE.write() {
         *slot = None;
     }
     if state_cell().send_replace(LinkState::Down) != LinkState::Down {
@@ -206,6 +210,7 @@ enum Stream {
     Streams,
     Jobs,
     Perf,
+    Live,
     Edits,
     Changes,
     Queued,
@@ -248,6 +253,10 @@ async fn follow(link: Link, which: Stream) {
         Stream::Perf => {
             let (tx, rx) = vox::channel::<crate::view::PerfFrame>();
             drain(link.streams.perf(tx), rx, perf_arrived).await
+        }
+        Stream::Live => {
+            let (tx, rx) = vox::channel::<crate::view::LiveFrame>();
+            drain(link.streams.live(tx), rx, live_arrived).await
         }
         Stream::Edits => {
             let (tx, rx) = vox::channel::<crate::view::EditAsked>();
@@ -683,6 +692,37 @@ fn perf_arrived(frame: crate::view::PerfFrame) {
 #[must_use]
 pub fn perf() -> Option<Arc<crate::view::PerfFrame>> {
     PERF.read().ok().and_then(|p| p.clone())
+}
+
+// ── The live session ─────────────────────────────────────────────────
+
+static LIVE: RwLock<Option<Arc<crate::view::LiveFrame>>> = RwLock::new(None);
+
+/// The engine's live session arrived: kept for the collaboration control,
+/// and its people handed to what draws them (the tabs, the arrangement).
+fn live_arrived(frame: crate::view::LiveFrame) {
+    crate::presence::publish_everyone(
+        frame
+            .people
+            .iter()
+            .map(|p| crate::presence::Person {
+                project: p.project.clone(),
+                song: p.song.clone(),
+                name: p.name.clone(),
+                color: p.color,
+            })
+            .collect(),
+    );
+    if let Ok(mut slot) = LIVE.write() {
+        *slot = Some(Arc::new(frame));
+    }
+}
+
+/// The engine's live session as it last said: none with no engine linked,
+/// or before its first frame.
+#[must_use]
+pub fn live() -> Option<Arc<crate::view::LiveFrame>> {
+    LIVE.read().ok().and_then(|l| l.clone())
 }
 
 // ── The edit cursor ──────────────────────────────────────────────────
