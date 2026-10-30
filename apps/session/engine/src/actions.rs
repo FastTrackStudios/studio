@@ -572,6 +572,15 @@ pub static ARRANGE: ActionMeta = meta(
     "",
 );
 
+pub static DOCKS: ActionMeta = meta(
+    "SESSION_DOCKS",
+    "docks",
+    "Hide or Show the Docks",
+    "Hide every edge dock of the window (left, right, top, bottom; the centre stays), or bring back the ones hidden as they were. A panel shown while they are hidden comes back on its own, and stays when the rest return.",
+    "View",
+    "Alt+D",
+);
+
 pub static PANEL: ActionMeta = meta(
     "SESSION_PANEL",
     "panel",
@@ -614,6 +623,8 @@ pub enum DockRequest {
     Arrange,
     /// Open a panel of this kind, or close the ones shown.
     TogglePanel(String),
+    /// Hide every edge dock, or bring back the ones hidden.
+    ToggleDocks,
 }
 
 static DOCK_REQUESTS: Mutex<Vec<DockRequest>> = Mutex::new(Vec::new());
@@ -632,6 +643,31 @@ pub fn take_dock_requests() -> Vec<DockRequest> {
         .lock()
         .map(|mut queue| std::mem::take(&mut *queue))
         .unwrap_or_default()
+}
+
+/// Whether the window is a dock now (its `SongDock` mounted): the pane
+/// keys and actions (`x`, `e`, `f`, `b`) toggle its panels then, not the
+/// old column's panes.
+static DOCKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The window is a dock, or no longer one.
+pub fn set_docked(on: bool) {
+    DOCKED.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the window is a dock.
+#[must_use]
+pub fn docked() -> bool {
+    DOCKED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Asks the dock for `request` when the window is a dock, saying whether
+/// it did — else the caller presses its pane, as before the dock.
+pub fn if_docked(request: DockRequest) -> bool {
+    if docked() {
+        request_dock(request);
+    }
+    docked()
 }
 
 fn register_dock(list: &ActionList) -> Result<(), architect::action::ActionError> {
@@ -676,6 +712,11 @@ fn register_dock(list: &ActionList) -> Result<(), architect::action::ActionError
         let quoted = facet_json::to_string(&kind).unwrap_or_default();
         request_dock(DockRequest::TogglePanel(kind));
         also_in_the_window(PANEL.id, format!(r#"{{"kind":{quoted}}}"#));
+        Ok(())
+    })?;
+    list.register(&DOCKS, Effect::Mutating, |(): ()| {
+        request_dock(DockRequest::ToggleDocks);
+        also_in_the_window(DOCKS.id, "{}".to_owned());
         Ok(())
     })?;
     list.register(&ARRANGE, Effect::Mutating, |(): ()| {

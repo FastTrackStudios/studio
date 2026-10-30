@@ -364,10 +364,17 @@ pub fn Shell() -> Element {
                 if bar {
                     TopBar {
                         lights: LIGHTS_W,
-                        // The navigator, versions and who is here are
-                        // panels now (View ▸ Panels); the bar is the tabs.
-                        bare: true,
-                        badges: rsx! {},
+                        // As the column's bar: the navigator (the dock's
+                        // Set panel), the tabs, Save and the checkpoints,
+                        // and who is here. Each is a panel too.
+                        badges: rsx! { session_ui::collab_bar::CollabBar {} },
+                        on_navigator: move |()| {
+                            session_engine::actions::request_dock(
+                                session_engine::actions::DockRequest::TogglePanel(
+                                    "set".to_owned(),
+                                ),
+                            );
+                        },
                         width: width(),
                         on_drag: move |()| {
                             if let Err(e) = dragging.drag_window() {
