@@ -103,9 +103,12 @@ fn runtime() -> Option<&'static tokio::runtime::Runtime> {
 /// from now on. A link made before is let go.
 pub fn connect(caller: vox::Caller) {
     let generation = GENERATION.fetch_add(1, std::sync::atomic::Ordering::AcqRel) + 1;
+    // Each call carries the caller's trace context, so the engine's work
+    // for it lands under the window's span (a song's read, its waveforms).
+    let traced = || architect::trace_context::TraceContextMiddleware;
     let link = Link {
-        view: EngineViewClient::new(caller.clone()),
-        streams: EngineViewStreamClient::new(caller.clone()),
+        view: EngineViewClient::new(caller.clone()).with_middleware(traced()),
+        streams: EngineViewStreamClient::new(caller.clone()).with_middleware(traced()),
         daw: daw_control::Daw::new(caller),
         generation,
     };
@@ -128,6 +131,51 @@ pub fn connect(caller: vox::Caller) {
     rt.spawn(follow(link.clone(), Stream::Changes));
     rt.spawn(follow(link.clone(), Stream::Queued));
     rt.spawn(follow_playheads(link));
+    // A new engine knows nothing of the window's own actions yet.
+    offer_window_actions();
+}
+
+/// Offer the window's own actions (once it has registered them) to the
+/// engine's Action List: there, each runs here (`take_asked`). Called as
+/// the link comes up and as the window registers them, whichever is last;
+/// the engine keeps those it has.
+pub fn offer_window_actions() {
+    let ids = crate::window_queue::window_action_ids();
+    let (Some(link), Some(rt)) = (link(), runtime()) else {
+        return;
+    };
+    if ids.is_empty() {
+        return;
+    }
+    let list = crate::actions::list();
+    let actions: Vec<crate::view::WindowAction> = ids
+        .iter()
+        .filter_map(|id| list.info(id))
+        .map(|info| crate::view::WindowAction {
+            effect: match info.effect {
+                architect::action::Effect::ReadOnly => "read-only",
+                architect::action::Effect::Mutating => "mutating",
+                architect::action::Effect::Destructive => "destructive",
+            }
+            .to_owned(),
+            id: info.id,
+            name: info.display_name,
+            description: info.description,
+            category: info.category,
+            group: info.group,
+            shortcut: info.shortcut,
+            params_schema: info.params_schema,
+            result_schema: info.result_schema,
+        })
+        .collect();
+    let view = link.view.clone();
+    rt.spawn(async move {
+        match tokio::time::timeout(CALL, view.window_actions(actions)).await {
+            Ok(Ok(_)) => {}
+            Ok(Err(e)) => tracing::warn!(error = ?e, "view link: the engine did not take the window's actions"),
+            Err(_) => tracing::warn!("view link: offering the window's actions timed out"),
+        }
+    });
 }
 
 /// Whether `link` is still the window's.
@@ -733,13 +781,59 @@ fn take_asked(link: &Link) {
     let Some(rt) = runtime() else { return };
     rt.spawn(async move {
         match tokio::time::timeout(CALL, view.take_window()).await {
-            Ok(Ok(asked)) => crate::window_queue::receive(asked, |id, args| {
-                if let Err(e) = crate::actions::list().run_json(id, args.as_bytes()) {
-                    tracing::warn!(action.id = id, error = %e, "view link: the engine's ask refused");
-                }
+            Ok(Ok(asked)) => crate::window_queue::receive(asked, |id, args, ticket| {
+                run_asked(view.clone(), id.to_owned(), args.to_owned(), ticket);
             }),
-            Ok(Err(e)) => tracing::warn!(error = ?e, "view link: what the engine asked was not taken"),
+            Ok(Err(e)) => {
+                tracing::warn!(error = ?e, "view link: what the engine asked was not taken")
+            }
             Err(_) => tracing::warn!("view link: taking what the engine asked timed out"),
+        }
+    });
+}
+
+/// Run the window action `id` the engine asked for, and answer `ticket`
+/// (not 0) with what it came to.
+fn run_asked(view: EngineViewClient, id: String, args: String, ticket: u64) {
+    let Some(rt) = runtime() else { return };
+    rt.spawn(async move {
+        let list = crate::actions::list();
+        // A sync action may block (`SESSION_FRAMES` waits for frames): off
+        // the link's workers, which carry the engine's other asks and what
+        // the window draws from.
+        let ran = if list.is_async(&id) {
+            list.run_json_async(&id, args.as_bytes()).await
+        } else {
+            let (id, args) = (id.clone(), args.clone());
+            tokio::task::spawn_blocking(move || crate::actions::list().run_json(&id, args.as_bytes()))
+                .await
+                .unwrap_or_else(|e| {
+                    Err(architect::action::ActionError::Failed {
+                        id: String::new(),
+                        message: format!("it panicked: {e}"),
+                    })
+                })
+        };
+        if let Err(e) = &ran {
+            tracing::warn!(action.id = %id, error = %e, "view link: the engine's ask refused");
+        }
+        if ticket == 0 {
+            return;
+        }
+        let answer = match ran {
+            Ok(out) => crate::view::WindowAnswer {
+                ticket,
+                ok: true,
+                json: String::from_utf8_lossy(&out).into_owned(),
+            },
+            Err(e) => crate::view::WindowAnswer {
+                ticket,
+                ok: false,
+                json: e.to_string(),
+            },
+        };
+        if let Err(e) = tokio::time::timeout(CALL, view.answer(answer)).await {
+            tracing::warn!(action.id = %id, error = ?e, "view link: answering the engine's ask timed out");
         }
     });
 }
@@ -998,7 +1092,10 @@ pub struct LinkedAudio;
 impl LinkedAudio {
     fn client() -> Option<daw_proto::AudioAccessorsClient> {
         let daw = daw::rpc::Daw::try_get()?;
-        Some(daw_proto::AudioAccessorsClient::new(daw.caller().clone()))
+        Some(
+            daw_proto::AudioAccessorsClient::new(daw.caller().clone())
+                .with_middleware(architect::trace_context::TraceContextMiddleware),
+        )
     }
 
     fn ask<T: Send, F>(

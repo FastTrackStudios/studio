@@ -23,7 +23,7 @@ use crate::view::{
     ActionCall, Applied, AutomationRead, Change, Changed, ChangesAsk, DetailAsk, EditAsked,
     EditBatch, EditShown, EngineView, EngineViewStreamSource, ItemChanges, ItemNow, JobRow,
     JobsFrame, MarksFrame, OverlayFrame, Playhead, Queued, SetFrame, SetOpening, SongFacts,
-    StreamSong, StreamsFrame, ViewError, WaveRead, WavesAsk,
+    StreamSong, StreamsFrame, ViewError, WaveRead, WavesAsk, WindowAction, WindowAnswer,
 };
 
 /// The engine's view host: its hubs and what each last said.
@@ -354,9 +354,50 @@ pub fn changed_items(song: Option<String>, what: Change, items: Vec<String>) {
     });
 }
 
-/// Run blocking engine work off the runtime's workers.
+/// A window action's description, as the engine's list keeps it.
+fn forwarded_info(action: WindowAction) -> architect::action::ActionInfo {
+    use architect::action::Effect;
+    architect::action::ActionInfo {
+        effect: match action.effect.as_str() {
+            "read-only" => Effect::ReadOnly,
+            "destructive" => Effect::Destructive,
+            _ => Effect::Mutating,
+        },
+        id: action.id,
+        display_name: action.name,
+        description: action.description,
+        category: action.category,
+        group: action.group,
+        shortcut: action.shortcut,
+        params_schema: action.params_schema,
+        result_schema: action.result_schema,
+        enabled: true,
+        disabled_reason: None,
+    }
+}
+
+/// What the engine's list runs for the window action `id`: it asked of
+/// the window, and what the window answered.
+fn forward_to_window(id: String) -> architect::action::AsyncHandler {
+    Arc::new(move |args: &[u8]| {
+        let id = id.clone();
+        let args = String::from_utf8_lossy(args).into_owned();
+        Ok(Box::pin(async move {
+            crate::window_queue::ask_window_action(id.clone(), args)
+                .await
+                .map(String::into_bytes)
+                .map_err(|message| architect::action::ActionError::Failed { id, message })
+        }) as architect::action::ActionFuture)
+    })
+}
+
+/// Run blocking engine work off the runtime's workers, inside the call's
+/// span: what it records (`waves.fill`, its logs) stays the call's.
 async fn blocking<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> Option<T> {
-    tokio::task::spawn_blocking(work).await.ok()
+    let span = tracing::Span::current();
+    tokio::task::spawn_blocking(move || span.in_scope(work))
+        .await
+        .ok()
 }
 
 /// The engine, and `song` (the current one when empty).
@@ -436,6 +477,42 @@ impl EngineView for ViewHost {
 
     async fn take_window(&self) -> Vec<crate::window_queue::Asked> {
         crate::window_queue::take_asked()
+    }
+
+    async fn window_actions(&self, actions: Vec<WindowAction>) -> u32 {
+        let list = crate::actions::list();
+        let mut added = 0;
+        for action in actions {
+            if list.info(&action.id).is_some() {
+                continue;
+            }
+            let id = action.id.clone();
+            match list.register_forwarded(&forwarded_info(action), forward_to_window(id.clone())) {
+                Ok(()) => {
+                    let _ = list.set_enabled(&id, crate::window_queue::a_window_follows);
+                    added += 1;
+                }
+                Err(e) => {
+                    tracing::warn!(action.id = %id, error = %e, "view: a window action could not join the list")
+                }
+            }
+        }
+        if added > 0 {
+            tracing::info!(
+                window.actions = added,
+                "view: the window's actions joined the engine's list"
+            );
+        }
+        added
+    }
+
+    async fn answer(&self, answer: WindowAnswer) {
+        let result = if answer.ok {
+            Ok(answer.json)
+        } else {
+            Err(answer.json)
+        };
+        crate::window_queue::answered(answer.ticket, result);
     }
 
     async fn waves(&self, ask: WavesAsk) -> Vec<WaveRead> {
