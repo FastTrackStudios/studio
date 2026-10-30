@@ -14,17 +14,23 @@
 pub mod ui;
 
 pub mod builder;
+pub mod builtin;
 pub mod context;
 pub mod defaults;
 pub mod diff;
+pub mod dockspace;
 pub mod drop_zone;
 pub mod history;
+pub mod hit;
+#[cfg(feature = "host")]
+pub mod host;
 pub mod id;
 pub mod layout;
 pub mod panel;
 pub mod persistence;
 pub mod preset;
 pub mod registry;
+pub mod screenset;
 pub mod tab_group;
 pub mod tree;
 pub mod workspace;
