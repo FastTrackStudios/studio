@@ -155,9 +155,11 @@ enum Link {
     Bridged(Bridge),
     /// An engine's song: its one bridge is its file's; the set's doc is
     /// kept in step with the song's doc as a CRDT.
+    #[cfg_attr(not(feature = "native"), allow(dead_code))]
     Relayed(Relay),
     /// Nothing to keep: the song's own doc served as it is (hosting over
     /// iroh), or a song the set does not have.
+    #[cfg_attr(not(feature = "native"), allow(dead_code))]
     Kept,
 }
 

@@ -89,8 +89,9 @@ fn name_of(value: Option<loro::LoroValue>) -> String {
     }
 }
 
-/// The engine's `project` as it is now, written into `doc` once — with no
-/// bridge, so nothing follows it after, and none is held: what a copy of
+/// The engine's `project` as it is now, written into `doc` once.
+///
+/// There is no bridge, so nothing follows it after, and none is held: what a copy of
 /// a song saved elsewhere, or a check against its file, reads while the
 /// song keeps its own bridge. Returns what was written.
 ///
