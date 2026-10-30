@@ -302,7 +302,16 @@ h pane rename "$ui_pane" ui >/dev/null
 if [ "$local_task" = 1 ] && [ "$task_up" = 0 ]; then
     task_pane="$(h pane split "$ui_pane" --direction down --cwd "$task_dir" --no-focus | pane_of)"
     h pane rename "$task_pane" task >/dev/null
-    h pane run "$task_pane" "nix develop -c cargo build -p task-server && $dev_home/task-server.sh"
+    # The server sends to the same collector as the engine and the window,
+    # so a call to Task is one trace from Studio to the server and back.
+    task_envs=()
+    if [ "$telemetry" = 1 ]; then
+        task_envs+=(OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:$otlp_port" OTEL_METRIC_EXPORT_INTERVAL=5000)
+        # Only warnings and errors in its terminal (Task's TASK_LOG_CONSOLE,
+        # once it has it; ignored before): the rest is the collector's.
+        task_envs+=(TASK_LOG_CONSOLE=warn)
+    fi
+    h pane run "$task_pane" "nix develop -c cargo build -p task-server && env ${task_envs[*]:+$(printf '%q ' "${task_envs[@]}")}$dev_home/task-server.sh"
 fi
 if [ "$telemetry" = 1 ]; then
     h pane run "$telemetry_pane" "bunx teley-cli --local --port $tui_port"
