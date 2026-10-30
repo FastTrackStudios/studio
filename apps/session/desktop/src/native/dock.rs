@@ -211,7 +211,7 @@ fn catalog(host: HostPanels) -> Catalog {
             "BRW",
             Place::Edge(Side::Left),
             |_| {
-                rsx! { StandIn { name: "Browser", note: "the sample and FX browser moves here next" } }
+                rsx! { Fill { session_ui::browser::BrowserBody {} } }
             },
         ),
         k(

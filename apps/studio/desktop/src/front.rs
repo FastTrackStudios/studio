@@ -33,6 +33,11 @@ use library::ui::{AppCommand, AppCommands, CommandLayer, LibraryData, Opener, Sh
 
 use crate::library_home::{Destination, destination};
 
+/// The rig's panels in the Session window's dock, and the one connection
+/// they share.
+#[cfg(all(feature = "session-app", feature = "signal"))]
+mod rig_panels;
+
 /// How wide a Mac's window buttons are, with their margins, in points.
 #[cfg(target_os = "macos")]
 pub(crate) const MAC_WINDOW_BUTTONS: u32 = 80;
@@ -125,10 +130,12 @@ fn pick_rig(kind: Option<library::model::RigKind>) {
 pub fn Studio() -> Element {
     // The live rig as a panel of the DAW view's dock: Session cannot mount
     // it, so Studio hands it over (session_desktop::native::dock::HostPanels).
-    #[cfg(feature = "session-app")]
+    // Its pieces (the switches, the set, the song up, the chart, the tones)
+    // are panels too, sharing one rig connection and one gig (`rig_panels`).
+    #[cfg(all(feature = "session-app", feature = "signal"))]
     use_context_provider(|| session_desktop::native::dock::HostPanels {
-        kinds: vec![rig_panel()],
-        scope: None,
+        kinds: rig_panels::kinds(),
+        scope: Some(rig_panels::scope),
     });
     // iOS: winit's window joins the app's scene first, whichever view the
     // window ends up showing — without one iOS 27 never shows it.
@@ -492,88 +499,6 @@ fn app_commands() -> Vec<AppCommand> {
         .collect();
     #[cfg(not(feature = "session-app"))]
     Vec::new()
-}
-
-/// The `rig` panel kind for the Session window's dock.
-#[cfg(feature = "session-app")]
-fn rig_panel() -> dock::host::Kind {
-    dock::host::Kind {
-        kind: dock::builtin::kind::RIG,
-        title: "Rig",
-        short: "RIG",
-        home: dock::dockspace::Place::Center,
-        chrome: dock::dockspace::Chrome::Bare,
-        attach: None,
-        render: |_| rsx! { DockRig {} },
-    }
-}
-
-/// The live rig inside the DAW view: the rig workspace (its menu, then the
-/// rig picked), a client of the headless rig engine — never an engine in
-/// this process, which already runs the window's.
-#[cfg(feature = "session-app")]
-#[component]
-fn DockRig() -> Element {
-    use_context_provider(|| crate::rig_view::SupervisedOnly);
-    // The rig lays out by its panel, not the window (`PanelSize`): measured
-    // when mounted, when the window resizes, and on redraws at most four
-    // times a second — which catches a divider dragged across it.
-    let mut size = use_signal(|| (0.0_f64, 0.0_f64));
-    use_context_provider(|| crate::rig_view::PanelSize(size));
-    let node =
-        use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(None::<std::rc::Rc<MountedData>>)));
-    let measure = {
-        let node = std::rc::Rc::clone(&node);
-        move || {
-            let Some(node) = node.borrow().clone() else {
-                return;
-            };
-            spawn(async move {
-                if let Ok(r) = node.get_client_rect().await {
-                    let now = (r.size.width, r.size.height);
-                    let was = *size.peek();
-                    if (was.0 - now.0).abs() > 1.0 || (was.1 - now.1).abs() > 1.0 {
-                        size.set(now);
-                    }
-                }
-            });
-        }
-    };
-    #[cfg(not(target_os = "ios"))]
-    {
-        let measure = measure.clone();
-        let last = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None::<std::time::Instant>)));
-        dioxus_native::use_window_event(move |event, _| {
-            use dioxus_native::winit::event::WindowEvent;
-            let due = match event {
-                WindowEvent::SurfaceResized(_) => true,
-                WindowEvent::RedrawRequested => last
-                    .get()
-                    .is_none_or(|t| t.elapsed() > std::time::Duration::from_millis(250)),
-                _ => false,
-            };
-            if due {
-                last.set(Some(std::time::Instant::now()));
-                measure();
-            }
-        });
-    }
-    let on_mount = {
-        let node = std::rc::Rc::clone(&node);
-        move |e: MountedEvent| {
-            *node.borrow_mut() = Some(e.data());
-            measure();
-        }
-    };
-    rsx! {
-        div {
-            style: "position:relative; flex:1; min-width:0; min-height:0; overflow:hidden;",
-            onmounted: on_mount,
-            div { style: "position:absolute; inset:0; display:flex; flex-direction:column;",
-                crate::rig_view::SignalWorkspace {}
-            }
-        }
-    }
 }
 
 /// The rig view: the phone shell on iOS, the desk's app elsewhere — the
