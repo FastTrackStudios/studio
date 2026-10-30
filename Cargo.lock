@@ -463,7 +463,7 @@ dependencies = [
 [[package]]
 name = "anyrender_vello"
 version = "0.12.0"
-source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.6.1#ae09c12a6637ca5cd0b1bfe5dbde745b61024950"
 dependencies = [
  "anyrender 0.11.1",
  "debug_timer 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -515,7 +515,7 @@ dependencies = [
 [[package]]
 name = "anyrender_vello_hybrid"
 version = "0.8.0"
-source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.6.1#ae09c12a6637ca5cd0b1bfe5dbde745b61024950"
 dependencies = [
  "anyrender 0.11.1",
  "debug_timer 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1754,7 +1754,7 @@ dependencies = [
 [[package]]
 name = "baseview"
 version = "0.3.3"
-source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.6.1#ae09c12a6637ca5cd0b1bfe5dbde745b61024950"
 dependencies = [
  "block2 0.6.2",
  "bytemuck",
@@ -4640,7 +4640,7 @@ source = "git+https://github.com/DioxusLabs/dioxus?rev=f717a8e184a522d078b70bb4b
 [[package]]
 name = "dioxus-core"
 version = "0.8.0-alpha.0"
-source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.6.1#ae09c12a6637ca5cd0b1bfe5dbde745b61024950"
 dependencies = [
  "anyhow",
  "const_format",
@@ -5016,7 +5016,7 @@ dependencies = [
 [[package]]
 name = "dioxus-native"
 version = "0.8.0-alpha.0"
-source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.6.1#ae09c12a6637ca5cd0b1bfe5dbde745b61024950"
 dependencies = [
  "android-activity",
  "anyrender 0.11.1",
@@ -5056,7 +5056,7 @@ dependencies = [
 [[package]]
 name = "dioxus-native-dom"
 version = "0.8.0-alpha.0"
-source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.6.1#ae09c12a6637ca5cd0b1bfe5dbde745b61024950"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
@@ -14760,7 +14760,7 @@ checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 [[package]]
 name = "raw-window-metal"
 version = "1.1.0"
-source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.6.1#ae09c12a6637ca5cd0b1bfe5dbde745b61024950"
 dependencies = [
  "objc2 0.6.4",
  "objc2-core-foundation",
@@ -16492,6 +16492,7 @@ dependencies = [
  "dioxus",
  "dioxus-native",
  "dirs",
+ "dock",
  "eyre",
  "fts-account",
  "fts-audio-ui",
@@ -22078,7 +22079,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "29.0.4"
-source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.6.1#ae09c12a6637ca5cd0b1bfe5dbde745b61024950"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -22998,7 +22999,7 @@ dependencies = [
 [[package]]
 name = "winit-uikit"
 version = "0.31.0-beta.2"
-source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.6.1#ae09c12a6637ca5cd0b1bfe5dbde745b61024950"
 dependencies = [
  "bitflags 2.13.1",
  "block2 0.6.2",
@@ -23180,7 +23181,7 @@ dependencies = [
 [[package]]
 name = "world-sys"
 version = "0.1.2"
-source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.5.0#9253d077d2da99125827efae746fa0c789c366b2"
+source = "git+https://github.com/FastTrackStudios/vendor?tag=v0.6.1#ae09c12a6637ca5cd0b1bfe5dbde745b61024950"
 dependencies = [
  "cc",
 ]

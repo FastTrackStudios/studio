@@ -8,6 +8,10 @@
 //!
 //! The hold goes when the field loses focus or unmounts, whichever is
 //! first: a field closed mid-edit never leaves the keyboard taken.
+//!
+//! On dioxus-native the renderer does this for every text input itself
+//! ([`follow_text_fields`], called once before launch); the hook stays for
+//! fields that are not text inputs to the renderer, and for other hosts.
 
 use dioxus::prelude::*;
 use utils::keyboard::{Claim, claim};
@@ -42,4 +46,12 @@ pub fn use_text_focus() -> TextFocus {
         held.set(None);
     });
     TextFocus(held)
+}
+
+/// Holds the keyboard switch (`utils::keyboard::TEXT_FIELD`) whenever the
+/// renderer has a text input focused, in any window of the process. Call
+/// once, before the app launches.
+#[cfg(feature = "native")]
+pub fn follow_text_fields() {
+    dioxus_native::on_text_focus_change(|on| utils::keyboard::TEXT_FIELD.set(on));
 }

@@ -547,6 +547,8 @@ fn launch_app() {
     // song's arrangement outgrows wgpu's default 128 MiB in one frame.
     #[cfg(all(feature = "session-app", not(target_os = "ios")))]
     configs.push(Box::new(session_desktop::native::window_limits()));
+    // Text fields hold the keyboard switch: hotkeys stand aside while typing.
+    app_shell::ui::keyboard::follow_text_fields();
     launch_cfg(front::Studio, vec![], configs);
     // The event loop returned (last window closed) — reap the engine we
     // spawned so it doesn't outlive the app. The engine's own watchdog is the
@@ -629,6 +631,7 @@ fn launch_app() {
                 .with_prefers_status_bar_hidden(true)
                 .with_preferred_screen_edges_deferring_system_gestures(ScreenEdge::BOTTOM),
         ));
+    app_shell::ui::keyboard::follow_text_fields();
     launch_cfg(
         front::Studio,
         vec![],

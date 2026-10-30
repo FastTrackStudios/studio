@@ -9,7 +9,7 @@
 
 use uuid::Uuid;
 
-use crate::dockspace::{Chrome, Dockspace, LinkId, Node, Panel, Share, Shown, Side};
+use crate::dockspace::{Chrome, Dockspace, Node, Panel, Share, Shown, Side};
 use crate::screenset::{FormClass, Screenset, ScreensetId, Screensets};
 
 /// The panel kinds, as their [`PanelKind`](crate::dockspace::PanelKind)
@@ -110,16 +110,12 @@ impl Lay {
         self.one(kind)
     }
 
-    /// The track control panel `tcp` px wide against the arrangement,
-    /// linked so they scroll as one.
-    fn tracks(&mut self, tcp: f32) -> Node {
-        let link = LinkId::new();
-        let heads = Panel::new(kind::TCP).linked(link);
-        let lanes = Panel::new(kind::ARRANGEMENT).linked(link);
-        // Both header-less, so the heads' rows start where the lanes' do.
-        let node = Node::row(Node::one(heads.id), Node::one(lanes.id), Share::First(tcp));
-        self.0.panels.extend([heads, lanes]);
-        node
+    /// A track view: the arrangement, its track headers drawn in its own
+    /// canvas so they never tear from the lanes ("rendered together when
+    /// in the same spot"). `_tcp` is the headers' width, for when the
+    /// arrangement takes it as view state.
+    fn tracks(&mut self, _tcp: f32) -> Node {
+        self.one(kind::ARRANGEMENT)
     }
 
     /// `top` over the transport band.

@@ -344,6 +344,44 @@ pub fn Shell() -> Element {
     });
     let (dragging, zooming) = (window.clone(), window);
     let current = setlist.read().current().cloned();
+    let touch = session_ui::touch::use_touch();
+    if super::dock::enabled() {
+        let class = super::dock::class_of(form().compact(), touch, size());
+        // A phone keeps the whole screen for the dock: the song tabs and
+        // the window bar are the wide layout's.
+        let bar = !class.is_phone();
+        return rsx! {
+            style { {TAILWIND} }
+            div {
+                style: "position:absolute; top:0; left:0; width:100vw; height:100vh; display:flex; \
+                        flex-direction:column; overflow:hidden; background:#09090b; color:{TEXT}; \
+                        font-family:system-ui, sans-serif;",
+                onmousedown: move |_| session_ui::keys::set_editing(false),
+                session_ui::collab_pointers::CollabPointers {}
+                if bar {
+                    TopBar {
+                        lights: LIGHTS_W,
+                        badges: rsx! { session_ui::collab_bar::CollabBar {} },
+                        width: width(),
+                        on_drag: move |()| {
+                            if let Err(e) = dragging.drag_window() {
+                                tracing::debug!(error = %e, "window drag refused");
+                            }
+                        },
+                        on_zoom: move |()| zooming.set_maximized(!zooming.is_maximized()),
+                        on_pick: pick,
+                        on_color: move |(index, color): (usize, Option<String>)| {
+                            session_engine::view_client::ask::recolor(index, color);
+                        },
+                    }
+                }
+                if let Some(song) = current {
+                    super::dock::SongDock { key: "{song.project}", session: song.session.clone(), class }
+                }
+                session_ui::closeup::CloseupLayer { landscape: size().0 > size().1 }
+            }
+        };
+    }
     if form().compact() {
         return rsx! {
             style { {TAILWIND} }

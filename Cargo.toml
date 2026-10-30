@@ -357,7 +357,7 @@ engraver = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.2.12
 # is wasm-portable; the vello/nice-plug editor is behind its `native` feature.
 # The comp plugin editor. Core (profile view data model) is portable; the
 # nice-plug/Blitz editor is behind its `native` feature.
-world-sys = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.5.0" }
+world-sys = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
 # ── The built-in FX, from the processor repo ──────────────────────────
 # The mixer's Tone rack draws a real EQ, compressor and saturator, and
 # it draws them from the SAME functions the plugins' own editors do:
@@ -579,7 +579,7 @@ dioxus-web = { git = "https://github.com/DioxusLabs/dioxus", rev = "f717a8e184a5
 # nothing in the lockfile to match it, so cargo re-queries the git source
 # — which a vendored, offline build (nix, crane) refuses. daw's crates
 # still name the git URL; the patch covers them.
-dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.5.0", default-features = false, features = ["prelude", "system-fonts", "svg", "autofocus", "data-uri", "vello", "accessibility", "hot-reload", "net", "html", "clipboard", "file-dialog", "vello-hybrid", "woff", "apple-font-embolden", "incremental"] }
+dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1", default-features = false, features = ["prelude", "system-fonts", "svg", "autofocus", "data-uri", "vello", "accessibility", "hot-reload", "net", "html", "clipboard", "file-dialog", "vello-hybrid", "woff", "apple-font-embolden", "incremental"] }
 # On `incremental`, which was suspected of the `hit_inner` panic and
 # exonerated: the crash reproduces with it off, so the stale ids that
 # `resolve.rs` knowingly keeps in `layout_children` are not the cause.
@@ -1087,7 +1087,7 @@ vox-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.3.0" 
 # forks there. nice-plug-dioxus at `fts-baseview-03` is written against
 # 0.3.3 — `host_main_thread_callback` takes `&Self::Window` there — and
 # does not compile against 0.3.0.
-baseview = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.5.0" }
+baseview = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
 # pipewire-rs one commit past its v0.10.0 release. PipeWire 1.6 rewrote
 # constants like SPA_ID_INVALID from a bare `0xffffffff` into a cast form,
 # `((uint32_t)0xffffffff)`, which bindgen's own macro evaluator cannot fold —
@@ -1175,24 +1175,24 @@ anyrender = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-poin
 # measured changes to the present path — the GPU barrier removed, frame
 # latency 1 instead of 2, a switchable present mode — each reversible
 # from the environment. See anyrender_vello/UPSTREAM.md in FastTrackStudios/vendor.
-anyrender_vello = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.5.0" }
+anyrender_vello = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
 # Vendored one-line fix, for the iOS simulator (the one place this
 # renderer runs): a resize that arrives before the renderer is ready left
 # the surface at its first size. See
 # anyrender_vello_hybrid/UPSTREAM.md in FastTrackStudios/vendor.
-anyrender_vello_hybrid = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.5.0" }
+anyrender_vello_hybrid = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
 # The three forks below sat in [workspace.dependencies] after the October
 # merge, where nothing consumed them, so their fixes silently stopped
 # applying; they are patches. Each carries its UPSTREAM.md/FTS-PATCH.md in
 # the vendor repo.
 # A tap that came while a frame was drawn is handled at once, not when the
 # next touch arrives (the proxy wake-up never drained winit's event queue).
-winit-uikit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.5.0" }
+winit-uikit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
 # The iOS Simulator has indirect draw/dispatch, so full Vello runs there.
-wgpu-hal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.5.0" }
+wgpu-hal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
 # No explicit ObjC class name: each plugin bundle links its own copy, and a
 # second plugin registering the same name crashed the host.
-raw-window-metal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.5.0" }
+raw-window-metal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
 # Vendored one-line fix: quote scalars containing `<`/`>` — upstream
 # (facet-rs/facet) styx-format emits them bare but styx-parse rejects
 # them, so serialized keybind configs (`keys "<C-s>"`) could not be
@@ -1486,13 +1486,13 @@ opt-level = 3
 
 # Preserve audio sources on newly split items until the upstream exporter is fixed.
 [patch."https://github.com/DioxusLabs/dioxus"]
-dioxus-native-dom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.5.0" }
+dioxus-native-dom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
 # The renderer's pick, with the iOS simulator on vello-hybrid (see its
 # UPSTREAM.md).
-dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.5.0" }
+dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
 
 # ── joined into studio ──
-dioxus-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.5.0" }  # from signal
+dioxus-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }  # from signal
 
 # keyflow (a git dependency) still takes daw, dawfile-reaper and fts-sample
 # from daw's old repo; this gives it the copies here, so there is one of
