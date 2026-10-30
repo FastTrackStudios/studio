@@ -147,6 +147,8 @@ pub use session_engine::poi;
 pub mod poi_paint;
 pub mod pointer;
 pub use session_engine::prepare;
+#[cfg(feature = "native")]
+pub mod perf_meter;
 pub mod profile;
 pub mod progress;
 #[cfg(feature = "native")]

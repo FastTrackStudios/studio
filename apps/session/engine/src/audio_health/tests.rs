@@ -50,6 +50,7 @@ fn an_interval_is_recorded_as_load_counters_and_the_render_ahead() {
         peak_ms: 4.0,
         over_budget: 1,
         xruns: 2,
+        gap_ms: 30.0,
         ahead_ms: 200.0,
         ahead_aim_ms: 250.0,
         ahead_underruns: 3,
@@ -57,6 +58,12 @@ fn an_interval_is_recorded_as_load_counters_and_the_render_ahead() {
         ahead_rewinds: 4,
         ahead_stale_ms: 12.5,
         ahead_load: 0.25,
+        worst: Some(super::WorstBlock {
+            total_ms: 9.0,
+            items_ms: 7.0,
+            fx_ms: 1.5,
+            ..super::WorstBlock::default()
+        }),
     };
     at.record(&interval);
     at.record(&interval);
@@ -94,4 +101,46 @@ fn an_interval_is_recorded_as_load_counters_and_the_render_ahead() {
     assert_eq!(named("audio.render_ahead.restarts"), one(2.0));
     assert_eq!(named("audio.render_ahead.rewinds"), one(8.0));
     assert_eq!(named("audio.render_ahead.stale"), one(25.0));
+    assert_eq!(named("audio.gap"), one(60.0));
+    // Gauge: a dropout in the last interval.
+    assert_eq!(named("audio.smooth"), one(0.0));
+    let mut worst = named("audio.worst_block.duration");
+    worst.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        worst
+            .iter()
+            .find(|(_, v)| (*v - 7.0).abs() < 1e-9)
+            .map(|p| p.1),
+        Some(7.0)
+    );
+}
+
+#[test]
+fn a_smooth_stream_has_no_gap_however_its_readings_land() {
+    use super::Lag;
+    let mut lag = Lag::default();
+    // Readings land anywhere in a 2.67 ms block: each interval delivers a
+    // little more or less than the clock, never falling behind for good.
+    let wobble = [2.0, -1.5, 2.5, -2.6, 0.4, -0.8, 1.9, -1.9];
+    for _ in 0..100 {
+        for w in wobble {
+            assert!(lag.step(2000.0, 2000.0 - w, 5.0).abs() < f64::EPSILON);
+        }
+    }
+}
+
+#[test]
+fn a_callback_that_blocked_is_a_gap_once_and_never_made_up() {
+    use super::Lag;
+    let mut lag = Lag::default();
+    assert!(lag.step(2000.0, 2000.0, 5.0).abs() < f64::EPSILON);
+    // 389 ms in one block: the device played nothing meanwhile.
+    let gap = lag.step(2000.0, 1611.0, 5.0);
+    assert!((gap - 389.0).abs() < 1e-9, "{gap}");
+    // Smooth again: the lag stays where it rose to, nothing more is owed.
+    assert!(lag.step(2000.0, 2001.0, 5.0).abs() < f64::EPSILON);
+    assert!(lag.step(2000.0, 1999.0, 5.0).abs() < f64::EPSILON);
+    // A stall of a whole interval, no block at all.
+    let gap = lag.step(2000.0, 0.0, 5.0);
+    assert!((gap - 2000.0).abs() < 1e-9, "{gap}");
 }

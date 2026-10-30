@@ -127,6 +127,7 @@ pub fn connect(caller: vox::Caller) {
     rt.spawn(follow(link.clone(), Stream::Marks));
     rt.spawn(follow(link.clone(), Stream::Streams));
     rt.spawn(follow(link.clone(), Stream::Jobs));
+    rt.spawn(follow(link.clone(), Stream::Perf));
     rt.spawn(follow(link.clone(), Stream::Edits));
     rt.spawn(follow(link.clone(), Stream::Changes));
     rt.spawn(follow(link.clone(), Stream::Queued));
@@ -204,6 +205,7 @@ enum Stream {
     Marks,
     Streams,
     Jobs,
+    Perf,
     Edits,
     Changes,
     Queued,
@@ -242,6 +244,10 @@ async fn follow(link: Link, which: Stream) {
         Stream::Jobs => {
             let (tx, rx) = vox::channel::<crate::view::JobsFrame>();
             drain(link.streams.jobs(tx), rx, jobs_arrived).await
+        }
+        Stream::Perf => {
+            let (tx, rx) = vox::channel::<crate::view::PerfFrame>();
+            drain(link.streams.perf(tx), rx, perf_arrived).await
         }
         Stream::Edits => {
             let (tx, rx) = vox::channel::<crate::view::EditAsked>();
@@ -660,6 +666,23 @@ pub fn jobs() -> Vec<crate::view::JobRow> {
         .ok()
         .and_then(|j| j.as_ref().map(|f| f.jobs.clone()))
         .unwrap_or_default()
+}
+
+// ── The performance meter ────────────────────────────────────────────
+
+static PERF: RwLock<Option<Arc<crate::view::PerfFrame>>> = RwLock::new(None);
+
+fn perf_arrived(frame: crate::view::PerfFrame) {
+    if let Ok(mut slot) = PERF.write() {
+        *slot = Some(Arc::new(frame));
+    }
+}
+
+/// The engine's performance meter as it last said: none with no engine
+/// linked, or before its first frame.
+#[must_use]
+pub fn perf() -> Option<Arc<crate::view::PerfFrame>> {
+    PERF.read().ok().and_then(|p| p.clone())
 }
 
 // ── The edit cursor ──────────────────────────────────────────────────

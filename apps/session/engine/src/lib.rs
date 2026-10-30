@@ -197,6 +197,8 @@ pub mod mix_chains;
 pub mod mix_export;
 #[cfg(feature = "native")]
 pub mod perf;
+#[cfg(feature = "native")]
+pub mod perf_meter;
 pub mod plan;
 pub mod poi;
 pub mod prepare;

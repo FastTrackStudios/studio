@@ -381,6 +381,8 @@ pub fn Shell() -> Element {
                 },
             }
             session_ui::closeup::CloseupLayer { landscape: size().0 > size().1 }
+            // The performance meter, over everything while it is open.
+            session_ui::perf_meter::PerfMeter {}
         };
     }
     rsx! {
@@ -450,6 +452,8 @@ pub fn Shell() -> Element {
             }
             // Whatever is zoomed into, over all of it.
             session_ui::closeup::CloseupLayer { landscape: size().0 > size().1 }
+            // The performance meter, over everything while it is open.
+            session_ui::perf_meter::PerfMeter {}
         }
     }
 }
