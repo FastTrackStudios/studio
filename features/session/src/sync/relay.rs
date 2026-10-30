@@ -67,10 +67,12 @@ pub fn same_lineage(a: &LoroDoc, b: &LoroDoc) -> bool {
         .any(|(peer, counter)| *counter > 0 && theirs.get(peer).is_some_and(|c| *c > 0))
 }
 
-/// What seeds an empty doc as a copy of `from`: `from`'s state now, with
-/// none of the history before it (a long-edited song's history weighs far
-/// more than the song, and a first sync is one message), on the same
-/// operations — so what either side writes after merges into the other.
+/// What seeds an empty doc as a copy of `from`.
+///
+/// It is `from`'s state now, with none of the history before it (a
+/// long-edited song's history weighs far more than the song, and a first
+/// sync is one message), on the same operations — so what either side
+/// writes after merges into the other.
 ///
 /// # Errors
 /// When `from` cannot be exported.
@@ -101,20 +103,22 @@ pub fn missing(from: &LoroDoc, to: &LoroDoc) -> eyre::Result<Option<Vec<u8>>> {
 /// # Errors
 /// When a side cannot be exported or refuses what it is given.
 pub async fn exchange(a: &Side, b: &Side) -> eyre::Result<usize> {
-    let mut moved = 0;
-    if let Some(bytes) = missing(&a.doc, &b.doc)? {
+    let to_b = missing(&a.doc, &b.doc)?;
+    let moved_to_b = to_b.is_some();
+    if let Some(bytes) = to_b {
         (b.take)(bytes).await?;
-        moved += 1;
     }
-    if let Some(bytes) = missing(&b.doc, &a.doc)? {
+    let to_a = missing(&b.doc, &a.doc)?;
+    let moved_to_a = to_a.is_some();
+    if let Some(bytes) = to_a {
         (a.take)(bytes).await?;
-        moved += 1;
     }
-    Ok(moved)
+    Ok(usize::from(moved_to_b) + usize::from(moved_to_a))
 }
 
-/// Two docs of one song kept in step for as long as it lives: whenever
-/// either changes, each is passed what the other has. While `locked`
+/// Two docs of one song kept in step for as long as it lives.
+///
+/// Whenever either changes, each is passed what the other has. While `locked`
 /// (this device's "don't sync"), nothing is passed: each keeps its own
 /// edits, and they are passed both ways when it is unlocked.
 pub struct Relay {
