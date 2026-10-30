@@ -47,6 +47,20 @@ pub enum EngineMode {
     Supervised,
 }
 
+/// In context over a rig view that must not start an engine in this
+/// process: the rig as a panel of the Session window, whose process already
+/// runs the window's engine (docs/design/one-engine.md). The rig is then a
+/// vox client of the headless rig engine (`--engine`), started if none
+/// answers, whatever the engine-mode preference says.
+#[derive(Clone, Copy)]
+pub struct SupervisedOnly;
+
+/// In context over a rig view that does not fill the window: the size of
+/// the box it is given (a dock panel), which the rig lays out by in place
+/// of the window's.
+#[derive(Clone, Copy)]
+pub struct PanelSize(pub Signal<(f64, f64)>);
+
 impl EngineMode {
     /// Desktop defaults to embedded; the web build can only ever be a remote.
     ///
@@ -78,7 +92,7 @@ impl EngineMode {
 /// The TONE3000 pair is optional and the rig three are not: an engine
 /// without the tone service is an older engine, and it should still play.
 /// The Tones page renders its disconnected shell in that case.
-type GuitarClients = (
+pub(crate) type GuitarClients = (
     RigClient,
     RigStreamClient,
     AudioSettingsClient,
@@ -89,7 +103,7 @@ type GuitarClients = (
 
 /// The shared performance surface, under the guitar's scope. `Option`s: an
 /// older engine does not serve it.
-type PerformClients = (
+pub(crate) type PerformClients = (
     Option<signal_rigs_proto::perform::service::RigPerformClient>,
     Option<signal_rigs_proto::perform::service::RigPerformStreamClient>,
 );
@@ -362,47 +376,42 @@ fn RemoteEngineForm(generation: Signal<u32>) -> Element {
     }
 }
 
-// ── Guitar rig remote ───────────────────────────────────────────────────────
+// ── The guitar rig's connection ─────────────────────────────────────────────
 
-/// The guitar rig — and the bass, which is the same rig as another
-/// instrument (`instrument`: `guitar`, `bass`): the engine is told which
-/// once connected, and again when the menu picks the other.
-#[component]
-fn GuitarRigView(instrument: &'static str) -> Element {
-    // The gig shell, as on the iPad: the rig's own layout carries the gig
-    // (its chart, its track, its set loaded) — one rig on every screen.
-    #[cfg(all(feature = "gig", not(target_arch = "wasm32")))]
-    crate::gig::shell::use_gig_shell();
-    // The window's width over its height, for the rig's wide layout (the
-    // whole rig on an ultrawide), and its size in points, for the form
-    // factor (a phone held sideways lays the chain out a page at a time):
-    // from the screen the app publishes (`app_shell::ui::form`).
-    #[allow(unused_mut)] // set only from the native window below
-    let mut aspect = use_signal(|| 1.0_f64);
-    use_context_provider(|| guitar::ui::WindowAspect(aspect));
-    #[allow(unused_mut)]
-    let mut size = use_signal(|| (0.0_f64, 0.0_f64));
-    use_context_provider(|| guitar::ui::WindowSize(size));
-    #[cfg(all(
-        not(any(target_arch = "wasm32", target_os = "ios")),
-        not(feature = "webview")
-    ))]
-    {
-        let screen = app_shell::ui::form::use_window_screen();
-        use_effect(move || {
-            let s = screen();
-            if s.height > 0.0 {
-                let a = s.width / s.height;
-                if (*aspect.peek() - a).abs() > 0.01 {
-                    aspect.set(a);
-                }
-                let was = *size.peek();
-                if (was.0 - s.width).abs() > 1.0 || (was.1 - s.height).abs() > 1.0 {
-                    size.set((s.width, s.height));
-                }
-            }
-        });
+/// A guitar rig connection's state: the clients (with the generation they
+/// were made in), the generation (bumped when the engine is lost, which
+/// connects afresh), the failed attempts so far, and whether the engine
+/// was up and went away. `Copy`: handles.
+#[derive(Clone, Copy)]
+pub(crate) struct GuitarLink {
+    clients: Resource<(u32, GuitarClients)>,
+    pub generation: Signal<u32>,
+    pub attempts: Signal<u32>,
+    pub lost: Signal<bool>,
+}
+
+impl GuitarLink {
+    /// The clients of the connection now, if it is up.
+    pub(crate) fn current(&self) -> Option<GuitarClients> {
+        let generation = (self.generation)();
+        self.clients
+            .read()
+            .as_ref()
+            .filter(|(g, _)| *g == generation)
+            .map(|(_, c)| c.clone())
     }
+}
+
+/// In context over rig views that share one connection (Studio's dock):
+/// they use it instead of connecting on their own.
+#[derive(Clone, Copy)]
+pub(crate) struct SharedRig(pub GuitarLink);
+
+/// Connect to the guitar rig and keep the connection: retry until the core
+/// answers (starting the local engine once if nothing does), then ping it
+/// every 1.5 s, and on two failures connect afresh. `supervised_only`:
+/// never the in-process engine, whatever the preference says.
+pub(crate) fn use_guitar_link(supervised_only: bool) -> GuitarLink {
     let mut attempts = use_signal(|| 0u32);
     let mut generation = use_signal(|| 0u32);
     // The engine was up and went away (vs never seen) — changes the copy.
@@ -415,13 +424,15 @@ fn GuitarRigView(instrument: &'static str) -> Element {
             // or auto-start. Bootstrap failure falls through to the remote
             // path rather than dead-ending — an engine may already be up.
             #[cfg(not(target_arch = "wasm32"))]
-            if EngineMode::current() == EngineMode::Embedded {
+            if !supervised_only && EngineMode::current() == EngineMode::Embedded {
                 if let Some(c) = embedded_clients().await {
                     attempts.set(0);
                     return (generation, c);
                 }
                 tracing::warn!("embedded rig unavailable — falling back to a remote engine");
             }
+            #[cfg(target_arch = "wasm32")]
+            let _ = supervised_only;
 
             let target = EngineTarget::current();
             // Opening a rig IS the intent to run it: when the target is the
@@ -484,11 +495,106 @@ fn GuitarRigView(instrument: &'static str) -> Element {
         }
     });
 
-    let state = clients
-        .read()
-        .as_ref()
-        .filter(|(g, _)| *g == generation())
-        .map(|(_, c)| c.clone());
+    GuitarLink {
+        clients,
+        generation,
+        attempts,
+        lost,
+    }
+}
+
+/// Put a connection's clients in context for the rig's views below.
+pub(crate) fn provide_guitar_clients(clients: GuitarClients) {
+    let (rig, stream, settings, tones, tones_stream, (perform, perform_stream)) = clients;
+    let _ = provide_context(rig);
+    let _ = provide_context(stream);
+    let _ = provide_context(settings);
+    // The shared performance screens play the rig through these.
+    let _ = provide_context(signal_rig_perform_ui::PerformClients {
+        client: perform,
+        stream: perform_stream,
+    });
+    // The Tones page reads these; absent ones leave it in its
+    // disconnected state rather than failing to mount.
+    if let Some(tones) = tones {
+        let _ = provide_context(tones);
+    }
+    if let Some(tones_stream) = tones_stream {
+        let _ = provide_context(tones_stream);
+    }
+    // Signing in means handing a page to a real browser — this shell's way
+    // of doing that.
+    let _ = provide_context(signal_tone3000::ui::UrlOpener::new(open_externally));
+}
+
+// ── Guitar rig remote ───────────────────────────────────────────────────────
+
+/// The guitar rig — and the bass, which is the same rig as another
+/// instrument (`instrument`: `guitar`, `bass`): the engine is told which
+/// once connected, and again when the menu picks the other.
+#[component]
+fn GuitarRigView(instrument: &'static str) -> Element {
+    let supervised_only = try_use_context::<SupervisedOnly>().is_some();
+    // The gig shell, as on the iPad: the rig's own layout carries the gig
+    // (its chart, its track, its set loaded) — one rig on every screen.
+    // Under a dock that shares the rig, its gig state is the one.
+    #[cfg(all(feature = "gig", not(target_arch = "wasm32")))]
+    if try_use_context::<crate::gig::shell::GigState>().is_none() {
+        crate::gig::shell::use_gig_shell();
+    }
+    // The window's width over its height, for the rig's wide layout (the
+    // whole rig on an ultrawide), and its size in points, for the form
+    // factor (a phone held sideways lays the chain out a page at a time):
+    // from the screen the app publishes (`app_shell::ui::form`).
+    #[allow(unused_mut)] // set only from the native window below
+    let mut aspect = use_signal(|| 1.0_f64);
+    use_context_provider(|| guitar::ui::WindowAspect(aspect));
+    #[allow(unused_mut)]
+    let mut size = use_signal(|| (0.0_f64, 0.0_f64));
+    use_context_provider(|| guitar::ui::WindowSize(size));
+    #[cfg(all(
+        not(any(target_arch = "wasm32", target_os = "ios")),
+        not(feature = "webview")
+    ))]
+    {
+        let screen = app_shell::ui::form::use_window_screen();
+        let panel = try_use_context::<PanelSize>();
+        use_effect(move || {
+            let (width, height) = match panel {
+                Some(PanelSize(boxed)) => boxed(),
+                None => {
+                    let s = screen();
+                    (s.width, s.height)
+                }
+            };
+            if height > 0.0 {
+                let a = width / height;
+                if (*aspect.peek() - a).abs() > 0.01 {
+                    aspect.set(a);
+                }
+                let was = *size.peek();
+                if (was.0 - width).abs() > 1.0 || (was.1 - height).abs() > 1.0 {
+                    size.set((width, height));
+                }
+            }
+        });
+    }
+    // The connection: the dock's, when the rig is a panel of a dock whose
+    // panels share one (`SharedRig`), else this view's own. Which one is
+    // fixed for the view's life (the dock remounts its panels when it
+    // starts sharing), so the hooks run in the same order every render.
+    let shared = try_use_context::<SharedRig>();
+    let link = match shared {
+        Some(SharedRig(link)) => link,
+        None => use_guitar_link(supervised_only),
+    };
+    let GuitarLink {
+        clients,
+        generation,
+        attempts,
+        lost,
+    } = link;
+    let state = link.current();
     // The instrument, said to the engine whenever it is connected afresh or
     // the menu picks the other one.
     use_effect(use_reactive!(|instrument| {
@@ -503,23 +609,8 @@ fn GuitarRigView(instrument: &'static str) -> Element {
         document::Style { {SIGNAL_TAILWIND} }
         div { style: "flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;",
             match state {
-                Some((rig, stream, settings, tones, tones_stream, (perform, perform_stream))) => {
-                    let _ = provide_context(rig);
-                    let _ = provide_context(stream);
-                    let _ = provide_context(settings);
-                    // The shared performance screens play the rig through these.
-                    let _ = provide_context(signal_rig_perform_ui::PerformClients { client: perform, stream: perform_stream });
-                    // The Tones page reads these; absent ones leave it in its
-                    // disconnected state rather than failing to mount.
-                    if let Some(tones) = tones {
-                        let _ = provide_context(tones);
-                    }
-                    if let Some(tones_stream) = tones_stream {
-                        let _ = provide_context(tones_stream);
-                    }
-                    // Signing in means handing a page to a real browser —
-                    // this shell's way of doing that.
-                    let _ = provide_context(signal_tone3000::ui::UrlOpener::new(open_externally));
+                Some(c) => {
+                    provide_guitar_clients(c);
                     rsx! { GuitarRigRemote { key: "{generation}" } }
                 }
                 None => rsx! {

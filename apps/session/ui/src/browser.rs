@@ -126,7 +126,6 @@ pub fn BrowserColumn() -> Element {
     // some renders panics on the next.
     let pins = try_use_context::<crate::shell::Pins>();
     let open = pins.is_some_and(|pins| (pins.browser)());
-    let mut shown = use_signal(|| None::<Shown>);
     // A toggle asked for on the Action List (a model, a menu).
     use_future(move || async move {
         loop {
@@ -140,6 +139,24 @@ pub fn BrowserColumn() -> Element {
             architect::platform::sleep(std::time::Duration::from_millis(TOGGLE_EVERY_MS)).await;
         }
     });
+    if !open {
+        return rsx! {};
+    }
+    rsx! {
+        div {
+            style: "position:relative; flex:none; width:280px; display:flex; flex-direction:column; \
+                    background:{BAR_BG}; border-right:1px solid {RULE};",
+            BrowserBody {}
+        }
+    }
+}
+
+/// The browser itself, pin-free: its title over what to load on the
+/// selected track, read again as the selection moves. Fills its parent
+/// (a dock panel, the pinned column) and scrolls inside it.
+#[component]
+pub fn BrowserBody() -> Element {
+    let mut shown = use_signal(|| None::<Shown>);
     use_future(move || async move {
         loop {
             #[cfg(feature = "native")]
@@ -152,9 +169,6 @@ pub fn BrowserColumn() -> Element {
             architect::platform::sleep(std::time::Duration::from_millis(READ_EVERY_MS)).await;
         }
     });
-    if !open {
-        return rsx! {};
-    }
     let body = shown().map_or_else(
         || {
             rsx! {
@@ -167,8 +181,7 @@ pub fn BrowserColumn() -> Element {
     );
     rsx! {
         div {
-            style: "position:relative; flex:none; width:280px; overflow-y:scroll; \
-                    background:{BAR_BG}; border-right:1px solid {RULE};",
+            style: "flex:1; min-width:0; min-height:0; overflow-y:scroll; background:{BAR_BG};",
             div { style: "padding:12px 10px 6px; font-size:13px; font-weight:600; color:#e5e7eb;",
                 "Browser"
             }

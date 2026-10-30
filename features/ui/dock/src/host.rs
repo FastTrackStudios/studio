@@ -273,6 +273,33 @@ impl Dock {
         k.set(key);
     }
 
+    /// True when the layout on screen shows a panel of `kind`.
+    #[must_use]
+    pub fn shows(&self, kind: &str) -> bool {
+        self.space().of_kind(kind).next().is_some()
+    }
+
+    /// Opens a `kind` panel where the kind lives when none is shown, or
+    /// closes every one shown. True when it opened one.
+    pub fn toggle_kind(&self, kind: &str) -> bool {
+        let shown: Vec<InstanceId> = self.space().of_kind(kind).map(|p| p.id).collect();
+        if shown.is_empty() {
+            return self.open(kind).is_some();
+        }
+        self.edit(|d| {
+            for id in shown {
+                let _ = d.close(id);
+            }
+        });
+        false
+    }
+
+    /// Shows the screensets-and-panels menu (what a phone's + opens).
+    pub fn show_menu(&self) {
+        let mut menu = self.menu;
+        menu.set(Some(Menu::Add));
+    }
+
     /// Recalls screenset `id`.
     pub fn recall(&self, id: ScreensetId) {
         let mut sets = self.sets;
@@ -378,6 +405,22 @@ fn mark_bare(n: &mut Node, id: InstanceId, chrome: Chrome) {
     }
 }
 
+/// The screenset slot a number key names.
+fn slot_key(code: Code) -> Option<u8> {
+    Some(match code {
+        Code::Digit1 => 1,
+        Code::Digit2 => 2,
+        Code::Digit3 => 3,
+        Code::Digit4 => 4,
+        Code::Digit5 => 5,
+        Code::Digit6 => 6,
+        Code::Digit7 => 7,
+        Code::Digit8 => 8,
+        Code::Digit9 => 9,
+        _ => return None,
+    })
+}
+
 fn point(e: &PointerEvent) -> (f32, f32) {
     let p = e.data().client_coordinates();
     (p.x as f32, p.y as f32)
@@ -405,7 +448,19 @@ pub fn DockHost() -> Element {
             onmounted: move |e| dock.mount(Mount::Host, e.data()),
             onkeydown: move |e| {
                 let key = *dock.key.read();
-                if e.code() == key.code && (!key.shift || e.modifiers().shift()) {
+                let mods = e.modifiers();
+                // ⌘1–9 (Ctrl on Linux and Windows): the screenset in that slot.
+                if (mods.meta() || mods.ctrl()) && utils::keyboard::hotkeys_on() {
+                    if let Some(slot) = slot_key(e.code()) {
+                        let found = dock.sets.peek().in_slot(slot).map(|s| s.id);
+                        if let Some(id) = found {
+                            e.prevent_default();
+                            dock.recall(id);
+                        }
+                        return;
+                    }
+                }
+                if e.code() == key.code && (!key.shift || mods.shift()) {
                     dock.set_arranging(true);
                 }
             },

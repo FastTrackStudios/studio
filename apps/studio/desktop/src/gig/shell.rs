@@ -304,6 +304,22 @@ fn follow_slot() -> Element {
 /// Make the gig shell's state and lend its slots to the rig below — when
 /// there is a gig on this device (the app's own, or one put in Files).
 pub fn use_gig_shell() {
+    use_gig_with(SLOTS);
+}
+
+/// The slots under a dock that shares the gig ([`GigScope`]): the scope
+/// follows the rig's setlist once, so a rig panel below does not again.
+const SCOPED_SLOTS: GigSlots = GigSlots {
+    screen: screen_slot,
+    follow: no_follow,
+};
+
+fn no_follow() -> Element {
+    rsx! {}
+}
+
+/// The gig's state, with `slots` lent to the rig below when there is a gig.
+fn use_gig_with(slots: GigSlots) {
     let st = use_context_provider(|| {
         let gigs = list_gigs();
         let at = super::remembered_index(&gigs);
@@ -328,7 +344,7 @@ pub fn use_gig_shell() {
     });
     use_hook(move || {
         if !st.gigs.peek().is_empty() {
-            provide_context(SLOTS);
+            provide_context(slots);
         }
         // `FTS_GIG_SONG=<n>`: open on the set's nth song (a simulator's
         // screenshot, a rehearsal relaunch); `FTS_GIG_VIEW=studio|keyflow`
@@ -398,6 +414,86 @@ pub fn use_gig_shell() {
             architect::platform::sleep(Duration::from_millis(100)).await;
         }
     });
+}
+
+// ── The gig as dock panels ──────────────────────────────────────────────────
+
+/// The gig shared by a dock's panels (Studio's Session window): its state,
+/// made here so every panel — and a rig panel below — reads the same one.
+#[component]
+pub(crate) fn GigScope(children: Element) -> Element {
+    use_gig_with(SCOPED_SLOTS);
+    rsx! { {children} }
+}
+
+/// Under [`GigScope`] and the rig's connection: the playback the Now panel
+/// drives (the gig page's player, and the rig's setlist when it is the
+/// gig's set), and the gig following the rig's setlist — once for the
+/// whole dock.
+#[component]
+pub(crate) fn GigPlay(children: Element) -> Element {
+    let st = use_context::<GigState>();
+    let perf = try_use_context::<PerfState>();
+    provide_playback(GigPlayback { st, perf });
+    let follow = perf.is_some() && !st.gigs.peek().is_empty();
+    rsx! {
+        if follow {
+            GigFollow {}
+        }
+        {children}
+    }
+}
+
+/// A gig panel's word while the gig's scope is not above it.
+fn no_gig() -> Element {
+    rsx! {
+        div { style: "flex: 1; min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 12px; color: {INK_3}; font-size: 13px; font-family: {FONT}; text-align: center;",
+            "Connecting to the rig engine…"
+        }
+    }
+}
+
+/// The set being played: the rig's setlist over the gig's set.
+#[component]
+pub(crate) fn NavigatorPanel() -> Element {
+    let st = try_use_context::<GigState>();
+    let perf = try_use_context::<PerfState>();
+    if st.is_none() || perf.is_none() {
+        return no_gig();
+    }
+    rsx! {
+        div { style: "flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: {MAIN};",
+            GigSetlist {}
+        }
+    }
+}
+
+/// The song up: its name, clock and the next song, over its progress band.
+#[component]
+pub(crate) fn NowPanel() -> Element {
+    let st = try_use_context::<GigState>();
+    let playback = try_use_context::<app_shell::ui::playback::Playback>();
+    if st.is_none() || playback.is_none() {
+        return no_gig();
+    }
+    rsx! {
+        div { style: "flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: {MAIN};",
+            {now_panel()}
+        }
+    }
+}
+
+/// The song's chart: PDF, Keyflow or Lanes, with its tools.
+#[component]
+pub(crate) fn GigChartPanel() -> Element {
+    if try_use_context::<GigState>().is_none() {
+        return no_gig();
+    }
+    rsx! {
+        div { style: "flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: {MAIN};",
+            GigChart {}
+        }
+    }
 }
 
 // ── Progress ────────────────────────────────────────────────────────────────

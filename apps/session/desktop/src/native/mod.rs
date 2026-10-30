@@ -36,7 +36,7 @@ pub use session_ui::frames::slow::WorkLayer as FrameWorkLayer;
 /// app's launch hands them to the renderer.
 pub use session_ui::gpu::window_limits;
 /// The window as a dock: panels laid out by the active screenset.
-mod dock;
+pub mod dock;
 mod shell;
 mod start;
 

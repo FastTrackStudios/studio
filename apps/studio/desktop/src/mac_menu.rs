@@ -45,6 +45,81 @@ define_class!(
         fn open_audio_settings(&self, _sender: Option<&AnyObject>) {
             AUDIO_SETTINGS_REQUESTED.store(true, Ordering::Relaxed);
         }
+
+        /// View ▸ a screenset: the item's tag is its number key.
+        #[unsafe(method(recallScreenset:))]
+        fn recall_screenset(&self, sender: Option<&AnyObject>) {
+            #[cfg(feature = "session-app")]
+            if let Some(sender) = sender {
+                // SAFETY: the sender is the NSMenuItem the action came from.
+                let tag: isize = unsafe { msg_send![sender, tag] };
+                session_desktop::native::dock::request_dock(
+                    session_desktop::native::dock::DockRequest::Recall(tag.to_string()),
+                );
+            }
+            #[cfg(not(feature = "session-app"))]
+            let _ = sender;
+        }
+
+        #[unsafe(method(saveScreenset:))]
+        fn save_screenset(&self, _sender: Option<&AnyObject>) {
+            #[cfg(feature = "session-app")]
+            session_desktop::native::dock::request_dock(
+                session_desktop::native::dock::DockRequest::Save,
+            );
+        }
+
+        #[unsafe(method(saveScreensetAs:))]
+        fn save_screenset_as(&self, _sender: Option<&AnyObject>) {
+            #[cfg(feature = "session-app")]
+            session_desktop::native::dock::request_dock(
+                session_desktop::native::dock::DockRequest::SaveAs(None),
+            );
+        }
+
+        /// View ▸ Panels ▸ a kind: the item's tag is its place in
+        /// `dock::builtin::kind::ALL`.
+        #[unsafe(method(togglePanel:))]
+        fn toggle_panel(&self, sender: Option<&AnyObject>) {
+            #[cfg(feature = "session-app")]
+            if let Some(sender) = sender {
+                // SAFETY: the sender is the NSMenuItem the action came from.
+                let tag: isize = unsafe { msg_send![sender, tag] };
+                if let Some((kind, _)) = usize::try_from(tag)
+                    .ok()
+                    .and_then(|i| dock::builtin::kind::ALL.get(i))
+                {
+                    session_desktop::native::dock::request_dock(
+                        session_desktop::native::dock::DockRequest::TogglePanel((*kind).to_owned()),
+                    );
+                }
+            }
+            #[cfg(not(feature = "session-app"))]
+            let _ = sender;
+        }
+
+        #[unsafe(method(previousSong:))]
+        fn previous_song(&self, _sender: Option<&AnyObject>) {
+            #[cfg(feature = "session-app")]
+            session_desktop::native::dock::run_action(
+                "SESSION_SONG",
+                r#"{"to":"previous"}"#.to_owned(),
+            );
+        }
+
+        #[unsafe(method(nextSong:))]
+        fn next_song(&self, _sender: Option<&AnyObject>) {
+            #[cfg(feature = "session-app")]
+            session_desktop::native::dock::run_action("SESSION_SONG", r#"{"to":"next"}"#.to_owned());
+        }
+
+        #[unsafe(method(arrangePanels:))]
+        fn arrange_panels(&self, _sender: Option<&AnyObject>) {
+            #[cfg(feature = "session-app")]
+            session_desktop::native::dock::request_dock(
+                session_desktop::native::dock::DockRequest::Arrange,
+            );
+        }
     }
 );
 
@@ -94,6 +169,72 @@ fn item(mtm: MainThreadMarker, title: &str) -> Retained<NSMenuItem> {
     item
 }
 
+/// View ▸ the built-in screensets by number (⌘1–7), Save, Save As, and
+/// Arrange Panels.
+#[cfg(feature = "session-app")]
+fn view_menu(mtm: MainThreadMarker, target: &MenuTarget) -> Retained<NSMenuItem> {
+    let menu = NSMenu::new(mtm);
+    menu.setTitle(&NSString::from_str("View"));
+    for set in &dock::builtin::screensets().sets {
+        let Some(slot) = set.slot else { continue };
+        let key = if slot <= 9 {
+            slot.to_string()
+        } else {
+            String::new()
+        };
+        let entry = action_item(mtm, &set.name, sel!(recallScreenset:), &key, target);
+        entry.setTag(isize::from(slot));
+        menu.addItem(&entry);
+    }
+    menu.addItem(&NSMenuItem::separatorItem(mtm));
+    // No key equivalents: ⌘S is the project's.
+    menu.addItem(&action_item(
+        mtm,
+        "Save Screenset",
+        sel!(saveScreenset:),
+        "",
+        target,
+    ));
+    menu.addItem(&action_item(
+        mtm,
+        "Save Screenset As…",
+        sel!(saveScreensetAs:),
+        "",
+        target,
+    ));
+    menu.addItem(&NSMenuItem::separatorItem(mtm));
+    // Panels ▸ every kind: shown if the window has none, closed if it does.
+    let panels = NSMenu::new(mtm);
+    panels.setTitle(&NSString::from_str("Panels"));
+    for (i, (_, title)) in dock::builtin::kind::ALL.iter().enumerate() {
+        let entry = action_item(mtm, title, sel!(togglePanel:), "", target);
+        entry.setTag(isize::try_from(i).unwrap_or(isize::MAX));
+        panels.addItem(&entry);
+    }
+    let panels_item = item(mtm, "Panels");
+    panels_item.setSubmenu(Some(&panels));
+    menu.addItem(&panels_item);
+    menu.addItem(&action_item(
+        mtm,
+        "Arrange Panels",
+        sel!(arrangePanels:),
+        "",
+        target,
+    ));
+    menu.addItem(&NSMenuItem::separatorItem(mtm));
+    menu.addItem(&action_item(
+        mtm,
+        "Previous Song",
+        sel!(previousSong:),
+        "",
+        target,
+    ));
+    menu.addItem(&action_item(mtm, "Next Song", sel!(nextSong:), "", target));
+    let view = item(mtm, "View");
+    view.setSubmenu(Some(&menu));
+    view
+}
+
 /// Add the readout and Settings… once the app's main menu exists (winit
 /// builds it as the event loop starts). `true` once installed.
 fn install(mtm: MainThreadMarker) -> bool {
@@ -126,6 +267,11 @@ fn install(mtm: MainThreadMarker) -> bool {
         app_menu.insertItem_atIndex(&settings, at + 1);
         app_menu.insertItem_atIndex(&NSMenuItem::separatorItem(mtm), at + 2);
     }
+
+    // View: the screensets (⌘1–7), saving them, and arranging panels — the
+    // window's layout, which the DAW view lays out by screenset.
+    #[cfg(feature = "session-app")]
+    main_menu.addItem(&view_menu(mtm, &target));
 
     // The readout: a menu-bar title, its menu the detail lines.
     let stats_menu = NSMenu::new(mtm);
@@ -241,6 +387,22 @@ fn describe(status: Option<&guitar::proto::RigStatus>) -> (String, Vec<String>) 
 }
 
 /// Mount once in the app root. Renders nothing; drives the menu bar.
+/// Installs the menu bar's items (View, Settings…, the audio readout) from
+/// wherever the window is — the welcome screen, the DAW view — not only
+/// from the rig view that drives the readout ([`MacMenuBar`]).
+pub fn use_menu_installed() {
+    use_future(move || async move {
+        loop {
+            if let Some(mtm) = MainThreadMarker::new()
+                && install(mtm)
+            {
+                break;
+            }
+            architect::platform::sleep(std::time::Duration::from_millis(250)).await;
+        }
+    });
+}
+
 #[component]
 pub fn MacMenuBar(on_settings: Callback<()>) -> Element {
     use_future(move || async move {

@@ -345,6 +345,9 @@ pub fn Shell() -> Element {
     let (dragging, zooming) = (window.clone(), window);
     let current = setlist.read().current().cloned();
     let touch = session_ui::touch::use_touch();
+    // The song's history and the environment's session start with the
+    // window, whether or not the collaboration panel is shown.
+    session_ui::collab_bar::use_collab_start();
     if super::dock::enabled() {
         let class = super::dock::class_of(form().compact(), touch, size());
         // A phone keeps the whole screen for the dock: the song tabs and
@@ -361,7 +364,10 @@ pub fn Shell() -> Element {
                 if bar {
                     TopBar {
                         lights: LIGHTS_W,
-                        badges: rsx! { session_ui::collab_bar::CollabBar {} },
+                        // The navigator, versions and who is here are
+                        // panels now (View ▸ Panels); the bar is the tabs.
+                        bare: true,
+                        badges: rsx! {},
                         width: width(),
                         on_drag: move |()| {
                             if let Err(e) = dragging.drag_window() {

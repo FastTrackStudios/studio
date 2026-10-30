@@ -33,6 +33,11 @@ use library::ui::{AppCommand, AppCommands, CommandLayer, LibraryData, Opener, Sh
 
 use crate::library_home::{Destination, destination};
 
+/// The rig's panels in the Session window's dock, and the one connection
+/// they share.
+#[cfg(all(feature = "session-app", feature = "signal"))]
+mod rig_panels;
+
 /// How wide a Mac's window buttons are, with their margins, in points.
 #[cfg(target_os = "macos")]
 pub(crate) const MAC_WINDOW_BUTTONS: u32 = 80;
@@ -123,6 +128,19 @@ fn pick_rig(kind: Option<library::model::RigKind>) {
 /// The window's root.
 #[component]
 pub fn Studio() -> Element {
+    // The menu bar's View menu (the screensets), Settings… and the audio
+    // readout, from the first screen on — not only in the rig view.
+    #[cfg(all(target_os = "macos", feature = "signal-guitar"))]
+    crate::mac_menu::use_menu_installed();
+    // The live rig as a panel of the DAW view's dock: Session cannot mount
+    // it, so Studio hands it over (session_desktop::native::dock::HostPanels).
+    // Its pieces (the switches, the set, the song up, the chart, the tones)
+    // are panels too, sharing one rig connection and one gig (`rig_panels`).
+    #[cfg(all(feature = "session-app", feature = "signal"))]
+    use_context_provider(|| session_desktop::native::dock::HostPanels {
+        kinds: rig_panels::kinds(),
+        scope: Some(rig_panels::scope),
+    });
     // iOS: winit's window joins the app's scene first, whichever view the
     // window ends up showing — without one iOS 27 never shows it.
     #[cfg(target_os = "ios")]

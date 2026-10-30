@@ -183,6 +183,23 @@ mod live {
     };
 }
 
+/// Starts what a window keeps from its first moment — the live sessions,
+/// when the window is the engine (no link to one elsewhere: the live
+/// sessions are the engine's). Once a process, whoever calls it first: the
+/// collaboration bar, or a window that shows no bar (the docked window,
+/// where the bar is a panel that may be closed).
+pub fn use_collab_start() {
+    #[cfg(feature = "native")]
+    use_hook(move || {
+        static STARTED: std::sync::Once = std::sync::Once::new();
+        STARTED.call_once(|| {
+            if crate::studio_engine::link::linked().is_none() {
+                crate::collab::start_in_engine(display_name());
+            }
+        });
+    });
+}
+
 #[component]
 pub fn CollabBar() -> Element {
     let keys = app_shell::ui::use_text_focus();
@@ -209,14 +226,9 @@ pub fn CollabBar() -> Element {
     let mut host_error = use_signal(live::host_error);
     let density = crate::shell::use_density();
 
-    #[cfg(feature = "native")]
-    // The live sessions are the engine's: this window starts them only
-    // when it is the engine (no link to one elsewhere).
-    use_hook(move || {
-        if crate::studio_engine::link::linked().is_none() {
-            crate::collab::start_in_engine(display_name());
-        }
-    });
+    // The song's history and the environment's session: started once, by
+    // whichever mounts first — this bar or the window's shell.
+    use_collab_start();
 
     // The status, kept current (peers come and go with nothing clicked).
     use_future(move || async move {

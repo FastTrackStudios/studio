@@ -33,6 +33,51 @@ pub mod kind {
     /// The song's progress, its sections as a bar (Session's
     /// `PinnedProgress`, Signal's NOW / NEXT strip).
     pub const PROGRESS: &str = "progress";
+    /// The rig's footswitch scenes (Signal's switch grid).
+    pub const SWITCHES: &str = "switches";
+    /// The set being played: its songs, now and next (the gig setlist).
+    pub const NAVIGATOR: &str = "navigator";
+    /// The song playing now: its title, key, tempo and progress band.
+    pub const NOW: &str = "now";
+    /// The gig's chart: the song's PDF, Keyflow chart or lanes.
+    pub const GIG_CHART: &str = "gig-chart";
+    /// The rig's tone browser: presets, captures, profiles.
+    pub const TONES: &str = "tones";
+    /// The set as a vertical progress bar: every song, the one playing
+    /// opened into its sections (Session's navigator).
+    pub const SET: &str = "set";
+    /// Save, and the song's checkpoints.
+    pub const VERSIONS: &str = "versions";
+    /// Who is here, together, and where the sound comes from.
+    pub const COLLAB: &str = "collab";
+
+    /// Every kind with its title, in the order a menu lists them.
+    pub const ALL: [(&str, &str); 24] = [
+        (ARRANGEMENT, "Arrangement"),
+        (TCP, "Tracks"),
+        (MIXER, "Mixer"),
+        (EDITOR, "Editor"),
+        (FX_ROW, "FX"),
+        (TRANSPORT, "Transport"),
+        (PROGRESS, "Progress"),
+        (CHART, "Chart"),
+        (CHART_EDITOR, "Chart Editor"),
+        (LYRICS, "Lyrics"),
+        (LYRIC_EDITOR, "Lyric Editor"),
+        (SET, "Set"),
+        (SETLIST, "Setlist"),
+        (BROWSER, "Browser"),
+        (INSPECTOR, "Inspector"),
+        (VERSIONS, "Versions"),
+        (COLLAB, "Collaborate"),
+        (TOOLBAR, "Toolbar"),
+        (RIG, "Rig"),
+        (SWITCHES, "Switches"),
+        (NAVIGATOR, "Navigator"),
+        (NOW, "Now"),
+        (GIG_CHART, "Gig Chart"),
+        (TONES, "Tones"),
+    ];
 }
 
 /// The built-in sets' ids, fixed so the active one survives a restart.
@@ -156,17 +201,29 @@ fn set(id: ScreensetId, name: &str, slot: u8, variants: [(FormClass, Dockspace);
     set.id = id;
     set.builtin = true;
     for (class, mut space) in variants {
+        // A desk and a tablet have the window's bar along the bottom (the
+        // transport, the common panels, the screensets): their layouts
+        // leave the transport to it. A phone, with no window bar, keeps
+        // the transport in its layout and the screensets in its dock bar.
         if !class.is_phone() {
-            with_toolbar(&mut space);
+            without_transport(&mut space);
         }
         set.set_variant(class, space);
     }
     set
 }
 
-/// `space` with a toolbar along its top, where it has none: the screensets
-/// stay one click away in every desk and tablet layout. (A phone reaches
-/// them from its dock bar's menu.)
+/// `space` without its transport panels: the window's bar carries it.
+fn without_transport(space: &mut Dockspace) {
+    let ids: Vec<_> = space.of_kind(kind::TRANSPORT).map(|p| p.id).collect();
+    for id in ids {
+        let _ = space.close(id);
+    }
+}
+
+/// `space` with a toolbar along its top, where it has none (for a host
+/// with no window bar; no built-in uses it now).
+#[allow(dead_code)]
 fn with_toolbar(space: &mut Dockspace) {
     if space.of_kind(kind::TOOLBAR).next().is_some() {
         return;
@@ -316,12 +373,10 @@ fn session() -> Screenset {
     let desk = {
         let mut l = Lay::new();
         let tracks = l.tracks(220.0);
-        let toolbar = l.bare(TOOLBAR);
-        let browser = l.tabs(&[BROWSER, SETLIST]);
+        let browser = l.tabs(&[BROWSER, SET, SETLIST]);
         let below = l.tabs(&[MIXER, EDITOR, FX_ROW]);
         let below = l.over_transport(below, false);
         l.center(tracks)
-            .edge(Side::Top, TOOLBAR_H, toolbar)
             .edge(Side::Left, 260.0, browser)
             .edge(Side::Bottom, 340.0, below)
             .done()
@@ -329,12 +384,10 @@ fn session() -> Screenset {
     let tablet_wide = {
         let mut l = Lay::new();
         let tracks = l.tracks(180.0);
-        let toolbar = l.bare(TOOLBAR);
-        let browser = l.tabs(&[BROWSER, SETLIST]);
+        let browser = l.tabs(&[BROWSER, SET, SETLIST]);
         let below = l.tabs(&[MIXER, EDITOR, FX_ROW]);
         let below = l.over_transport(below, true);
         l.center(tracks)
-            .edge(Side::Top, TOOLBAR_H, toolbar)
             .edge(Side::Left, 260.0, browser)
             .collapsed(Side::Left)
             .edge(Side::Bottom, 320.0, below)
@@ -343,13 +396,11 @@ fn session() -> Screenset {
     let tablet_tall = {
         let mut l = Lay::new();
         let tracks = l.tracks(150.0);
-        let toolbar = l.bare(TOOLBAR);
         let below = l.tabs(&[MIXER, EDITOR, FX_ROW]);
         let main = Node::column(tracks, below, Share::Ratio(0.58));
         let main = l.over_transport(main, true);
-        let browser = l.tabs(&[BROWSER, SETLIST]);
+        let browser = l.tabs(&[BROWSER, SET, SETLIST]);
         l.center(main)
-            .edge(Side::Top, TOOLBAR_H, toolbar)
             .edge(Side::Left, 300.0, browser)
             .collapsed(Side::Left)
             .done()
@@ -359,7 +410,7 @@ fn session() -> Screenset {
         let tracks = l.tracks(120.0);
         let main = l.over_transport(tracks, true);
         let below = l.tabs(&[MIXER, EDITOR, FX_ROW]);
-        let browser = l.tabs(&[BROWSER, SETLIST]);
+        let browser = l.tabs(&[BROWSER, SET, SETLIST]);
         let chart = l.one(CHART);
         l.center(main)
             .edge(Side::Bottom, 0.0, below)
@@ -372,7 +423,7 @@ fn session() -> Screenset {
         let tracks = l.tracks(96.0);
         let main = l.over_transport(tracks, true);
         let below = l.tabs(&[MIXER, EDITOR, FX_ROW]);
-        let browser = l.tabs(&[BROWSER, SETLIST]);
+        let browser = l.tabs(&[BROWSER, SET, SETLIST]);
         let chart = l.one(CHART);
         l.center(main)
             .edge(Side::Bottom, 0.0, below)
@@ -394,74 +445,79 @@ fn session() -> Screenset {
     )
 }
 
-/// The live rig: the rig in the middle, its chain and the chart beside.
+/// The live rig, in its parts: the set on the left, the song playing and
+/// its chart in the middle over the footswitches, the transport under
+/// them; the whole rig (chain, tones, routing) a tap away on the right.
 fn signal() -> Screenset {
     use kind::*;
     use FormClass::*;
-    let wide = |touch: bool, chart_w: f32, setlist: bool| {
+    let wide = |touch: bool, left_open: bool| {
         let mut l = Lay::new();
-        let rig = l.one(RIG);
-        let chain = l.bare(FX_ROW);
-        let below = l.over_transport(chain, touch);
-        let chart = l.tabs(&[CHART, LYRICS]);
-        let toolbar = l.bare(TOOLBAR);
+        let now = l.one(NOW);
+        let chart = l.one(GIG_CHART);
+        let switches = l.one(SWITCHES);
+        let stage = Node::column(
+            chart,
+            switches,
+            Share::Second(if touch { 180.0 } else { 160.0 }),
+        );
+        let main = Node::column(now, stage, Share::First(96.0));
+        let main = l.over_transport(main, touch);
+        let left = l.tabs(&[NAVIGATOR, TONES]);
+        let right = l.tabs(&[RIG, LYRICS]);
         let mut l = l
-            .center(rig)
-            .edge(Side::Top, TOOLBAR_H, toolbar)
-            .edge(Side::Right, chart_w, chart)
-            .edge(Side::Bottom, 104.0 + TRANSPORT_TOUCH_H, below);
-        if setlist {
-            let list = l.one(SETLIST);
-            l = l.edge(Side::Left, 260.0, list);
+            .center(main)
+            .edge(Side::Left, 300.0, left)
+            .edge(Side::Right, 420.0, right)
+            .collapsed(Side::Right);
+        if !left_open {
+            l = l.collapsed(Side::Left);
         }
         l.done()
     };
     let tablet_tall = {
         let mut l = Lay::new();
-        let rig = l.one(RIG);
-        let chart = l.tabs(&[CHART, LYRICS]);
-        let main = Node::column(rig, chart, Share::Ratio(0.55));
-        let chain = l.bare(FX_ROW);
-        let below = l.over_transport(chain, true);
-        let list = l.one(SETLIST);
+        let now = l.one(NOW);
+        let chart = l.one(GIG_CHART);
+        let switches = l.one(SWITCHES);
+        let stage = Node::column(chart, switches, Share::Second(200.0));
+        let main = Node::column(now, stage, Share::First(96.0));
+        let main = l.over_transport(main, true);
+        let left = l.tabs(&[NAVIGATOR, TONES]);
+        let right = l.tabs(&[RIG, LYRICS]);
         l.center(main)
-            .edge(Side::Bottom, 104.0 + TRANSPORT_TOUCH_H, below)
-            .edge(Side::Left, 300.0, list)
+            .edge(Side::Left, 320.0, left)
             .collapsed(Side::Left)
+            .edge(Side::Right, 420.0, right)
+            .collapsed(Side::Right)
             .done()
     };
-    let phone = |portrait: bool| {
+    // A phone plays the rig: the song and its switches, the rest in sheets.
+    let phone = |now_h: f32| {
         let mut l = Lay::new();
-        let rig = l.one(RIG);
-        let main = if portrait {
-            let chain = l.bare(FX_ROW);
-            Node::column(rig, chain, Share::Second(88.0))
-        } else {
-            rig
-        };
+        let now = l.one(NOW);
+        let switches = l.one(SWITCHES);
+        let main = Node::column(now, switches, Share::First(now_h));
         let main = l.over_transport(main, true);
-        let chart = l.tabs(&[CHART, LYRICS]);
-        let list = l.one(SETLIST);
-        let mut l = l
-            .center(main)
+        let chart = l.tabs(&[GIG_CHART, LYRICS]);
+        let left = l.tabs(&[NAVIGATOR, TONES]);
+        let rig = l.one(RIG);
+        l.center(main)
             .edge(Side::Right, 0.0, chart)
-            .edge(Side::Left, 0.0, list);
-        if !portrait {
-            let chain = l.one(FX_ROW);
-            l = l.edge(Side::Bottom, 0.0, chain);
-        }
-        l.done()
+            .edge(Side::Left, 0.0, left)
+            .edge(Side::Bottom, 0.0, rig)
+            .done()
     };
     set(
         id::SIGNAL,
         "Signal",
         7,
         [
-            (Desk, wide(false, 380.0, true)),
-            (TabletLandscape, wide(true, 340.0, false)),
+            (Desk, wide(false, true)),
+            (TabletLandscape, wide(true, false)),
             (TabletPortrait, tablet_tall),
-            (PhoneLandscape, phone(false)),
-            (PhonePortrait, phone(true)),
+            (PhoneLandscape, phone(64.0)),
+            (PhonePortrait, phone(88.0)),
         ],
     )
 }

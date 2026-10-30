@@ -1087,6 +1087,10 @@ pub fn TopBar(
     /// window does; `None` lays it out in full).
     #[props(default)]
     width: Option<f64>,
+    /// The song tabs alone, no buttons: the docked window, whose
+    /// navigator, versions and badges are panels (View ▸ Panels).
+    #[props(default)]
+    bare: bool,
 ) -> Element {
     let density = width.map_or(Density::Full, Density::for_width);
     let mut shared = use_context_provider(|| Signal::new(density));
@@ -1116,6 +1120,7 @@ pub fn TopBar(
                     zoom.call(());
                 }
             },
+            if !bare {
             button {
                 title: "The navigator: every song in the set, and the sections of the one playing",
                 style: "flex:none; width:48px; display:flex; align-items:center; \
@@ -1130,7 +1135,9 @@ pub fn TopBar(
                 lucide_dioxus::Menu { size: 18, color: ink }
             }
             Rule {}
-            SongTabs { on_pick, on_color, max_shown: tabs_shown(width, crate::touch::use_touch()) }
+            }
+            SongTabs { on_pick, on_color, max_shown: tabs_shown(width, crate::touch::use_touch()), no_arrows: bare }
+            if !bare {
             Rule {}
             // Save, and the song's checkpoints.
             if cfg!(feature = "native") {
@@ -1142,6 +1149,7 @@ pub fn TopBar(
                 style: "flex:none; display:flex; align-items:stretch;",
                 onmousedown: move |event| event.stop_propagation(),
                 {badges}
+            }
             }
         }
     }
@@ -1412,6 +1420,10 @@ pub fn SongTabs(
     /// A colour picked for a song by hand: its index and the CSS colour,
     /// or `None` for "back to the title's colour".
     on_color: Option<EventHandler<(usize, Option<String>)>>,
+    /// No song-before / song-after buttons: the docked window's are in its
+    /// View menu (Previous Song, Next Song).
+    #[props(default)]
+    no_arrows: bool,
 ) -> Element {
     let Some(setlist) = try_use_context::<Signal<Setlist>>() else {
         // No setlist (a single session opened straight): nothing to show,
@@ -1607,6 +1619,7 @@ pub fn SongTabs(
         div {
             style: "position:relative; flex:1; min-width:0; display:flex; align-items:stretch;",
             onmousedown: move |event| event.stop_propagation(),
+            if !no_arrows {
             button {
                 title: "The song before",
                 style: arrow(current > 0),
@@ -1617,7 +1630,9 @@ pub fn SongTabs(
                 },
                 lucide_dioxus::ChevronLeft { size: 16, color: if current > 0 { TEXT } else { "#3a3d44" } }
             }
+            }
             {tabs}
+            if !no_arrows {
             button {
                 title: "The song after",
                 style: arrow(current + 1 < songs_len),
@@ -1627,6 +1642,7 @@ pub fn SongTabs(
                     }
                 },
                 lucide_dioxus::ChevronRight { size: 16, color: if current + 1 < songs_len { TEXT } else { "#3a3d44" } }
+            }
             }
         }
     }

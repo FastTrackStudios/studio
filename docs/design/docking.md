@@ -74,10 +74,27 @@ Shipped (`dock::builtin`), in number-key order:
 | 4 | **Mix** | the mixer, FX beside it |
 | 5 | **Edit** | tracks over the editor |
 | 6 | **Charts** | chart and chart editor; lyrics right |
-| 7 | **Signal** | rig; chain and transport below; chart right |
+| 7 | **Signal** | the set (navigator, tones) left; now over gig chart over switches, transport under; the whole rig right, collapsed |
 
 Every variant keeps the transport in the centre or the bottom dock, never
 a phone sheet.
+
+**Reaching them.** On a desk and a tablet the window has a **bar along
+its foot, the whole width** (under the side docks too): the common
+panels a press away, lit while shown (Mixer, Editor, FX, Chart, Lyrics,
+Browser), the transport, the screensets (the active one's name; a press
+lists them and every panel) and Arrange — what the old bottom bar held,
+and an iPad's way in, having no menu bar. Layouts on a desk or tablet
+leave the transport to the bar. On a desk the menu bar has them too:
+Studio's macOS **View** menu (each set by number, ⌘1–7; Save Screenset;
+Save Screenset As…; Panels ▸ any kind; Arrange Panels; Previous / Next
+Song) and, on Linux, the global menu Session builds from its Action
+List. Both run the View actions — `SESSION_SCREENSET {screenset}`,
+`SESSION_SCREENSET_SAVE`, `SESSION_SCREENSET_SAVE_AS {name}`,
+`SESSION_PANEL {kind}`, `SESSION_ARRANGE` — which a model or the CLI can
+run too. ⌘/Ctrl+1–9 work in the window. A phone has its dock bar (panels
+as sheets, its menu the screensets) and keeps the transport in its
+layout. The window's top bar is the song tabs alone.
 
 **Session's views are screensets.** Session's `shell::View` switch
 (Performance, Overview, DAW, Chart, Lyrics, Mixer, FX, Editor, Setup) and
@@ -121,6 +138,18 @@ globals, so each window or plugin editor hosts its own.
 - **Toolbars** are panels (`toolbar`, bare). Put one on the top edge,
   against the arrangement in a fixed-px split, or in a float.
 
+## The panels
+
+Session's (`apps/session/desktop/src/native/dock.rs`): arrangement (its
+canvas draws the track headers), mixer, chart, chart editor, lyrics, FX,
+editor, transport (compact on a phone), progress, setlist, browser,
+toolbar. The host app adds or replaces kinds (`HostPanels`): Studio adds
+Signal's — `rig` (the whole rig), `switches`, `navigator` (the set),
+`now` (the song playing), `gig-chart` and `tones` — sharing one
+connection to the headless rig engine through `HostPanels::scope`. The
+rig panels are clients of that engine, never a second engine in the
+window's process (docs/design/one-engine.md).
+
 ## The keyboard switch
 
 Every global hotkey — the arrange key, Session's transport keys, Signal's
@@ -134,10 +163,11 @@ stands aside while it is true. Asked for 2026-10-29.
   rename, chart editor and overlay flags (`session_ui::keys`), and
   `KEYS_OFF`, a user-facing "keys off" switch.
 - Claims and flags are counted, so any number of holders compose.
-- **Next:** make it automatic. Blitz knows the focused node and whether it
-  is a text input (`get_focussed_node_id`, `text_input_data`); a few lines
-  in FastTrackStudio/vendor's dioxus-native, run after each event, can hold
-  the switch for every field, and the per-field claims become a fallback.
+- **Automatic:** the renderer holds it for every text input
+  (`utils::keyboard::TEXT_FIELD`, fed by dioxus-native-dom's
+  `on_text_focus_change`, vendor v0.6.1, installed before each launch by
+  `app_shell::ui::keyboard::follow_text_fields`). The per-field claims
+  stay for fields that are not text inputs to the renderer.
 
 ## Not yet
 
@@ -149,12 +179,11 @@ stands aside while it is true. Asked for 2026-10-29.
   window targeting (`SESSION_WINDOW_TARGET`).
 - Peek (a rail icon showing its panel over the centre) opens the dock for
   now.
-- Text fields must claim the keyboard themselves (below) until the
-  renderer reports a focused text input on its own.
 - In a thin strip (a 40 px toolbar) the arrange label is taller than the
   strip and is clipped.
-- Wiring the real panels into Studio, with the per-instance fixes they
-  need: the arrangement's restore key (`panel.rs` `KEPT`, per song) must
-  become per instance; the editor's `PICKED` is global; the mixer needs
-  `Links` without `DawPanels`; the TCP is drawn inside the arrangement
-  widget today; there is no lyric editor on Blitz.
+- Per-instance view state in the panels: the arrangement's restore key
+  (`panel.rs` `KEPT`, per song) must become per instance, and the
+  editor's `PICKED` is global — two arrangements or two editors share
+  them today. A lone TCP panel and a lyric editor on Blitz do not exist
+  yet (stand-ins).
+- The renderer upgrade (dioxus 0.8.0-alpha.3, Blitz main): #323.
