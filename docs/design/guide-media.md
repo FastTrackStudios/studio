@@ -624,12 +624,12 @@ per `ship-stack`.
 
 ## 7. Open questions
 
-- **Where do the media files live?** They are binaries, so not in git:
-  - build them in the site's image job;
-  - or publish them to `studio-assets` per release;
-  - or a CI artefact the site pulls.
-
-  Whatever is chosen, the guide markdown references them by scenario id.
+- **Where do the media files live?** Decided (2026-10-30): not in git.
+  They go in the docs site's storage, where the site also showcases them
+  (a gallery of what Studio does, beside the guides). Each release
+  attaches them as release assets. The guide markdown references them by
+  scenario id. Still open: which job generates them (the site's image
+  job, or the release build) and the storage bucket's layout.
 - **What does the ```gif fence become?** Teach `ssg` (task@main) a `gif`
   fence that resolves `<id>` to `<id>.webm` + poster, or rewrite the
   guides to `![[<id>.webm]]`, which the renderer already embeds as
