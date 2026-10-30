@@ -43,6 +43,13 @@ pub fn run_action(id: &'static str, args: String) {
     session_engine::actions::off_the_window(id, args);
 }
 
+/// A dock control pressed: its action run through the Action List
+/// (`session_ui::window::press`), which comes back to the dock as a
+/// request (`apply`).
+fn press(id: &str, args: &serde_json::Value) {
+    let _ = session_ui::window::press(id, args);
+}
+
 /// Where the screensets are kept.
 const PREF: &str = "dock.screensets.v1";
 
@@ -190,8 +197,10 @@ fn DockBar() -> Element {
                     key: "{kind}",
                     style: "{button(dock.shows(kind))}",
                     title: "{label}",
+                    // `SESSION_PANEL` toggles it (`apply`), so `watch`
+                    // and the CLI see the press.
                     onclick: move |_| {
-                        dock.toggle_kind(kind);
+                        press("SESSION_PANEL", &serde_json::json!({ "kind": kind }));
                     },
                     BarIcon { kind }
                     "{label}"
@@ -226,7 +235,7 @@ fn DockBar() -> Element {
             button {
                 style: "{arrange_style}",
                 title: "Arrange panels (or hold W)",
-                onclick: move |_| dock.toggle_arrange(),
+                onclick: move |_| press("SESSION_ARRANGE", &serde_json::Value::Null),
                 lucide_dioxus::Move { size: 18, color: if arranging { INK } else { INK_3 } }
                 "Arrange"
             }
