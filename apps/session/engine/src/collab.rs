@@ -6,9 +6,22 @@
 //! the song tabs show who is on which, and the arrangement draws the
 //! people on the song it shows. A lone song is a set of one.
 //!
-//! One task per session owns everything that must not race: the bridges,
-//! this peer's presence, and the shared transport's follower. It wakes on
-//! three things —
+//! **One doc, one bridge, per song.** In an engine (the desktop's `studio
+//! engine`, a window's own) a song's one bridge is its project file's
+//! (`crate::project_file`): the set's doc of the song is never bridged to
+//! the engine. Hosting over iroh serves the song's own doc as it is;
+//! joining a set (by ticket, or one Task keeps) keeps the set's replica of
+//! the song in step with the song's doc as a CRDT
+//! (`session::sync::relay`) — seeded from it when the set has none yet, or,
+//! when another peer seeded the set from a copy of its own, the song moved
+//! onto the set's doc (`project_file::adopt`). Two bridges on one engine
+//! song rewrote each other and doubled its FX chains every round (#316).
+//! A page has no project file: there the set's doc is the song's one doc,
+//! and its bridge is the one the page built the song with.
+//!
+//! One task per session owns everything that must not race: a page's
+//! bridges, this peer's presence, and the shared transport's follower. It
+//! wakes on three things —
 //!
 //! - a song's engine project changed (its event bus): read it back, write
 //!   that song's doc;
@@ -50,6 +63,7 @@ use session::sync::net::{Dial, PresenceSink, SetPeer};
 #[cfg(feature = "native")]
 use session::sync::net::{SetHost, dial_fixed, session_id, song_id};
 use session::sync::presence::{self, PeerState, PlayState, Pointer, Roster, Throttle};
+use session::sync::relay::{Relay, Side};
 use session::sync::transport::{
     self, Command, LocalTransport, SharedTransport, SyncPosition, TransportMode, TransportSync,
 };
@@ -58,6 +72,7 @@ use uuid::Uuid;
 
 /// Where the sessions' FX state is kept while they are shared: one
 /// store for the process, so a song shared twice reads its states once.
+#[cfg_attr(feature = "native", allow(dead_code))]
 fn blobs() -> std::sync::Arc<dyn session::sync::engine::Blobs> {
     static BLOBS: std::sync::LazyLock<std::sync::Arc<session::sync::engine::MemoryBlobs>> =
         std::sync::LazyLock::new(Default::default);
@@ -67,6 +82,7 @@ fn blobs() -> std::sync::Arc<dyn session::sync::engine::Blobs> {
 /// The engine in this process, for the bridge to read and rebuild a
 /// song's items through directly; `None` when the song is another
 /// process's.
+#[cfg_attr(feature = "native", allow(dead_code))]
 fn local() -> Option<std::sync::Arc<dyn session::sync::engine::Direct>> {
     #[cfg(feature = "native")]
     {
@@ -131,6 +147,30 @@ struct Live {
 
 static LIVE: Mutex<Option<Live>> = Mutex::new(None);
 
+/// How a song of the set is kept with the set's doc of it.
+enum Link {
+    /// A page's song: its one bridge, on the set's doc (a page has no
+    /// project file).
+    #[cfg_attr(feature = "native", allow(dead_code))]
+    Bridged(Bridge),
+    /// An engine's song: its one bridge is its file's; the set's doc is
+    /// kept in step with the song's doc as a CRDT.
+    Relayed(Relay),
+    /// Nothing to keep: the song's own doc served as it is (hosting over
+    /// iroh), or a song the set does not have.
+    Kept,
+}
+
+/// Songs with something held by this device's lock: a page's bridges'
+/// (`hold`) and an engine's relays'.
+fn held_count(hold: &Hold, links: &[Link]) -> usize {
+    hold.held()
+        + links
+            .iter()
+            .filter(|l| matches!(l, Link::Relayed(relay) if relay.held()))
+            .count()
+}
+
 /// Who this peer is in a session shared with nobody (this machine's own
 /// record of its songs' edits) — never locked: there is nothing to hold.
 const LOCAL_ME: &str = "local";
@@ -138,7 +178,9 @@ const LOCAL_ME: &str = "local";
 /// Join a song's doc that already holds the session: the engine made to
 /// match it — or, locked ([`sync_locked`]), left as it is until the lock
 /// lifts. A song whose build left its bridge ([`song_built`]) is joined
-/// through it ([`Bridge::rejoin`]): the engine is not read again.
+/// through it ([`Bridge::rejoin`]): the engine is not read again. A
+/// page's: an engine's songs keep their file's bridge.
+#[cfg_attr(feature = "native", allow(dead_code))]
 async fn join_bridge(
     project: daw_control::Project,
     media: MediaRoot,
@@ -170,6 +212,7 @@ pub fn song_built(project: &str, bridge: Bridge) {
 }
 
 /// The bridge `project` was built by, if it left one ([`song_built`]).
+#[cfg_attr(feature = "native", allow(dead_code))]
 fn take_built(project: &str) -> Option<Bridge> {
     BUILT.with(|built| built.borrow_mut().remove(project))
 }
@@ -334,19 +377,6 @@ pub fn history(project: &str) -> Option<session::sync::loro::LoroDoc> {
     song_where(|s| s.project == project).map(|(s, _, _)| s.doc.loro().clone())
 }
 
-/// Presence for a session nobody else is in.
-#[cfg(feature = "native")]
-struct Alone;
-
-#[cfg(feature = "native")]
-impl PresenceSink for Alone {
-    fn set(&self, _: &str, _: session::sync::loro::LoroValue) {}
-    fn delete(&self, _: &str) {}
-    fn states(&self) -> std::collections::HashMap<String, session::sync::loro::LoroValue> {
-        std::collections::HashMap::new()
-    }
-}
-
 /// Every song open in the engine: its project, where its media is, the
 /// name every machine knows it by, and where it was opened from.
 ///
@@ -388,7 +418,9 @@ fn set_key(songs: &[(daw_control::Project, MediaRoot, String, std::path::PathBuf
 }
 
 /// The song's chart: the one beside it (natively), the one the page
-/// opened it with ([`remember_chart`]), or what its doc already holds.
+/// opened it with ([`remember_chart`]), or what its doc already holds. A
+/// page's seed: an engine's song keeps its chart in its file's doc.
+#[cfg_attr(feature = "native", allow(dead_code))]
 fn chart_for(path: &std::path::Path, doc: &SessionDoc) -> String {
     #[cfg(feature = "native")]
     let beside = crate::prepare::chart_beside(path).and_then(|p| std::fs::read_to_string(p).ok());
@@ -415,88 +447,6 @@ pub fn remember_chart(path: &std::path::Path, chart: &str) {
             .get_or_insert_with(HashMap::new)
             .insert(path.to_path_buf(), chart.to_owned());
     }
-}
-
-#[cfg(feature = "native")]
-/// Keep a session doc for every open song, shared with nobody: every edit
-/// is recorded (and saved with the song's `.session`), and sharing later
-/// puts these same docs — history and all — on the network. Each starts
-/// from the history its `.session` was saved with, when it still matches.
-///
-/// # Errors
-/// When the engine is not up or cannot be read.
-pub fn open_local() -> eyre::Result<()> {
-    record(open_local_with(HashMap::new()))
-}
-
-#[cfg(feature = "native")]
-fn open_local_with(mut docs: HashMap<String, SessionDoc>) -> eyre::Result<()> {
-    let runtime = crate::open::runtime().ok_or_else(|| eyre::eyre!("the engine is not up"))?;
-    let live = runtime.block_on(async move {
-        let open = open_songs().await?;
-        // Already keeping exactly these songs: nothing to do.
-        let keeping = |l: &Live| {
-            l.songs.len() == open.len()
-                && open
-                    .iter()
-                    .all(|(p, ..)| l.songs.iter().any(|s| s.project == p.guid()))
-        };
-        // …or sharing: a shared set is changed by leaving it.
-        if docs.is_empty()
-            && LIVE
-                .lock()
-                .ok()
-                .is_some_and(|l| l.as_ref().is_some_and(|l| l.shared || keeping(l)))
-        {
-            return Ok(None);
-        }
-        if docs.is_empty() {
-            docs = LIVE
-                .lock()
-                .ok()
-                .map(|mut l| stop(l.take()))
-                .unwrap_or_default();
-        }
-        let mut bridges = Vec::new();
-        for (project, media, key, path) in open {
-            let doc = docs.remove(&key).unwrap_or_else(|| {
-                crate::project_file::doc_of(&path)
-                    .map_or_else(SessionDoc::new, SessionDoc::from_loro)
-            });
-            let chart = chart_for(&path, &doc);
-            let guid = project.guid().to_owned();
-            let bridge = Bridge::host(project, media, doc, chart, blobs(), local()).await?;
-            bridges.push((
-                Song {
-                    project: guid,
-                    key,
-                    doc: bridge.doc().clone(),
-                },
-                bridge,
-            ));
-        }
-        let presence: Arc<dyn PresenceSink> = Arc::new(Alone);
-        let started = start(
-            bridges,
-            Arc::clone(&presence),
-            SharedClock::owned(),
-            String::new(),
-            LOCAL_ME.into(),
-            String::new(),
-            None,
-            None,
-        );
-        let mut live = started.into_live(String::new(), false, presence);
-        live.shared = false;
-        Ok::<_, eyre::Report>(Some(live))
-    })?;
-    if let Some(live) = live
-        && let Ok(mut slot) = LIVE.lock()
-    {
-        stop(slot.take());
-        *slot = Some(live);
-    }
-    Ok(())
 }
 
 /// Stop whatever is keeping the set, handing back its songs' docs.
@@ -630,30 +580,16 @@ fn local_transport(songs: &[Song]) -> LocalTransport {
 }
 
 /// Leave the session (or stop hosting it). The songs keep their docs —
-/// everything edited together stays in their history — shared with nobody.
+/// everything edited together stays in their history (an engine's song in
+/// its file) — shared with nobody.
 pub fn leave() {
-    let docs = LIVE.lock().ok().map(|mut live| {
-        let shared = live.as_ref().is_some_and(|l| l.shared);
-        if shared {
-            stop(live.take())
-        } else {
-            HashMap::new()
-        }
-    });
+    if let Ok(mut live) = LIVE.lock()
+        && live.as_ref().is_some_and(|l| l.shared)
+    {
+        drop(stop(live.take()));
+    }
     crate::presence::publish(None, 0.0, false);
     crate::presence::publish_everyone(Vec::new());
-    #[cfg(feature = "native")]
-    if let Some(docs) = docs
-        && !docs.is_empty()
-    {
-        std::thread::spawn(move || {
-            if let Err(e) = open_local_with(docs) {
-                tracing::warn!(collab.error = %e, "collab: the songs' history could not be kept");
-            }
-        });
-    }
-    #[cfg(not(feature = "native"))]
-    drop(docs);
 }
 
 fn next_seq() -> u64 {
@@ -692,27 +628,25 @@ fn host_inner(name: String) -> eyre::Result<String> {
         let open = open_songs().await?;
         let set = set_key(&open);
         let id = session_id(&set);
-        // The songs' own docs, history and all, are what go on the network.
-        let mut docs = LIVE
-            .lock()
-            .ok()
-            .map(|mut l| stop(l.take()))
-            .unwrap_or_default();
+        if let Ok(mut live) = LIVE.lock() {
+            drop(stop(live.take()));
+        }
+        // The songs' own docs, history and all, are what go on the network:
+        // served as they are, each song keeping its file's one bridge.
         let host = SetHost::new(id);
         let mut bridges = Vec::new();
-        for (project, media, key, path) in open {
-            let doc = docs.remove(&key).unwrap_or_default();
-            let chart = chart_for(&path, &doc);
+        for (project, _, key, path) in open {
             let guid = project.guid().to_owned();
-            let bridge = Bridge::host(project, media, doc, chart, blobs(), local()).await?;
-            host.add(song_id(&set, &key), bridge.doc());
+            let own = song_side(guid.clone(), path).await?;
+            let doc = SessionDoc::from_loro(own.doc);
+            host.add(song_id(&set, &key), &doc);
             bridges.push((
                 Song {
                     project: guid,
                     key,
-                    doc: bridge.doc().clone(),
+                    doc,
                 },
-                bridge,
+                Link::Kept,
             ));
         }
         let endpoint = architect::iroh_link::bind_endpoint(secret_key())
@@ -791,11 +725,11 @@ fn join_inner(ticket: &str, name: String) -> eyre::Result<()> {
         peer.run_presence(dial_fixed(presence_client));
         let presence: Arc<dyn PresenceSink> = Arc::new(peer.presence().clone());
         // Every song, replicated from the host.
-        let replicas: Vec<(SessionDoc, _)> = open
+        let replicas: Vec<((SessionDoc, Side), _)> = open
             .into_iter()
             .map(|song| {
                 (
-                    SetPeer::sync_song(song_id(&set, &song.2), dial_fixed(sync.clone())),
+                    SetPeer::sync_song_relayed(song_id(&set, &song.2), dial_fixed(sync.clone())),
                     song,
                 )
             })
@@ -804,34 +738,23 @@ fn join_inner(ticket: &str, name: String) -> eyre::Result<()> {
         // its project match. A song the host does not have keeps this
         // machine's own record, unshared.
         for _ in 0..400 {
-            if replicas.iter().all(|(doc, _)| doc.has_session()) {
+            if replicas.iter().all(|((doc, _), _)| doc.has_session()) {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
-        let mut docs = LIVE
-            .lock()
-            .ok()
-            .map(|mut l| stop(l.take()))
-            .unwrap_or_default();
+        if let Ok(mut live) = LIVE.lock() {
+            drop(stop(live.take()));
+        }
         let mut bridges = Vec::new();
-        for (doc, (project, media, key, path)) in replicas {
-            let guid = project.guid().to_owned();
-            let bridge = if doc.has_session() {
-                join_bridge(project, media, doc).await?
+        for ((doc, side), song) in replicas {
+            let meet = if doc.has_session() {
+                Meeting::Join(doc)
             } else {
-                let own = docs.remove(&key).unwrap_or_default();
-                let chart = chart_for(&path, &own);
-                Bridge::host(project, media, own, chart, blobs(), local()).await?
+                Meeting::Own
             };
-            bridges.push((
-                Song {
-                    project: guid,
-                    key,
-                    doc: bridge.doc().clone(),
-                },
-                bridge,
-            ));
+            let (song, link, _) = link_song(meet, song, Some(side), &mut HashMap::new()).await?;
+            bridges.push((song, link));
         }
         crate::song_model::request_resync();
         let me = format!("peer-{}", &endpoint.id().to_string()[..8]);
@@ -1086,7 +1009,12 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
         .into_iter()
         .map(|song| (replicate(&ids, &sync, &song.2), song))
         .collect();
-    settle(replicas.iter().filter_map(|(doc, _)| doc.as_ref())).await;
+    settle(
+        replicas
+            .iter()
+            .filter_map(|(replica, _)| replica.as_ref().map(|(doc, _)| doc)),
+    )
+    .await;
     let mut docs = LIVE
         .lock()
         .ok()
@@ -1096,13 +1024,15 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
     let mut bridges = Vec::new();
     let mut waiting = Vec::new();
     let mut seeded = 0usize;
-    for (doc, song) in replicas {
+    for (replica, song) in replicas {
+        let (doc, side) = replica.unzip();
         match meeting(doc, seeds) {
-            Meeting::Wait(doc) => waiting.push((doc, song)),
+            Meeting::Wait(doc) => waiting.push((doc, side, song)),
             meet => {
-                let (song, bridge, was_seeded) = sliced(bridge_song(meet, song, &mut docs)).await?;
+                let (song, link, was_seeded) =
+                    sliced(link_song(meet, song, side, &mut docs)).await?;
                 seeded += usize::from(was_seeded);
-                bridges.push((song, bridge));
+                bridges.push((song, link));
             }
         }
     }
@@ -1124,10 +1054,10 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
     let mut bridged: std::collections::HashSet<String> = bridges
         .iter()
         .map(|(song, _)| song.project.clone())
-        .chain(waiting.iter().map(|(_, song)| song.0.guid().to_owned()))
+        .chain(waiting.iter().map(|(_, _, song)| song.0.guid().to_owned()))
         .collect();
-    for (doc, song) in waiting {
-        bridge_when_seeded(doc, song, adds_tx.clone());
+    for (doc, side, song) in waiting {
+        bridge_when_seeded(doc, side, song, adds_tx.clone());
     }
     architect::platform::spawn(async move {
         while let Some(project) = opened_rx.recv().await {
@@ -1140,18 +1070,18 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
             let Some(song) = open.into_iter().find(|s| s.0.guid() == project) else {
                 continue;
             };
-            let doc = replicate(&ids, &sync, &song.2);
+            let (doc, side) = replicate(&ids, &sync, &song.2).unzip();
             settle(doc.iter()).await;
             let meet = match meeting(doc, seeds) {
                 Meeting::Wait(doc) => {
-                    bridge_when_seeded(doc, song, adds_tx.clone());
+                    bridge_when_seeded(doc, side, song, adds_tx.clone());
                     continue;
                 }
                 meet => meet,
             };
-            match sliced(bridge_song(meet, song, &mut HashMap::new())).await {
-                Ok((song, bridge, _)) => {
-                    if adds_tx.send((song, bridge)).is_err() {
+            match sliced(link_song(meet, song, side, &mut HashMap::new())).await {
+                Ok((song, link, _)) => {
+                    if adds_tx.send((song, link)).is_err() {
                         break;
                     }
                 }
@@ -1265,15 +1195,15 @@ fn task_clock(set: &TaskSet, lane: live_proto::LiveSessionsClient) -> SharedCloc
     })
 }
 
-/// A replica of the set's doc for the song named `key`, syncing — `None`
-/// for a song the set does not have.
+/// A replica of the set's doc for the song named `key`, syncing, and it as
+/// a relay's side — `None` for a song the set does not have.
 fn replicate(
     ids: &HashMap<String, Uuid>,
     sync: &Dial<crdt::sync::DocSyncClient>,
     key: &str,
-) -> Option<SessionDoc> {
+) -> Option<(SessionDoc, Side)> {
     ids.get(&session::sync::slug::slugify(key))
-        .map(|id| SetPeer::sync_song(*id, Arc::clone(sync)))
+        .map(|id| SetPeer::sync_song_relayed(*id, Arc::clone(sync)))
 }
 
 /// Wait for what Task has of these replicas to arrive — at once, when it
@@ -1327,8 +1257,9 @@ const SEED_POLL: Duration = Duration::from_millis(250);
 /// Until then the song is this machine's alone and nothing is written.
 fn bridge_when_seeded(
     doc: SessionDoc,
+    side: Option<Side>,
     song: OpenSong,
-    adds: tokio::sync::mpsc::UnboundedSender<(Song, Bridge)>,
+    adds: tokio::sync::mpsc::UnboundedSender<(Song, Link)>,
 ) {
     architect::platform::spawn(async move {
         while !doc.has_session() {
@@ -1337,9 +1268,16 @@ fn bridge_when_seeded(
             }
             architect::platform::sleep(SEED_POLL).await;
         }
-        match sliced(bridge_song(Meeting::Join(doc), song, &mut HashMap::new())).await {
-            Ok((song, bridge, _)) => {
-                let _ = adds.send((song, bridge));
+        match sliced(link_song(
+            Meeting::Join(doc),
+            song,
+            side,
+            &mut HashMap::new(),
+        ))
+        .await
+        {
+            Ok((song, link, _)) => {
+                let _ = adds.send((song, link));
             }
             Err(e) => {
                 tracing::warn!(collab.error = %e, "collab: a song seeded by the host could not join the session");
@@ -1348,9 +1286,125 @@ fn bridge_when_seeded(
     });
 }
 
+/// Keep one song with the set's replica of it (`side`, the replica as a
+/// relay's side) as `meet` says — an engine's through its project file's
+/// one doc ([`relay_song`]), a page's through its one bridge
+/// ([`bridge_song`]). Says whether it seeded.
+#[cfg_attr(not(feature = "native"), allow(clippy::unused_async))]
+async fn link_song(
+    meet: Meeting,
+    song: OpenSong,
+    side: Option<Side>,
+    docs: &mut HashMap<String, SessionDoc>,
+) -> eyre::Result<(Song, Link, bool)> {
+    #[cfg(feature = "native")]
+    {
+        let _ = docs;
+        relay_song(meet, song, side).await
+    }
+    #[cfg(not(feature = "native"))]
+    {
+        let _ = side;
+        let (song, bridge, seeded) = bridge_song(meet, song, docs).await?;
+        Ok((song, Link::Bridged(bridge), seeded))
+    }
+}
+
+/// The song `guid`'s one doc, as a relay's side: its project file's,
+/// begun on its file first when it has none (`project_file::live_side`).
+#[cfg(feature = "native")]
+async fn song_side(guid: String, path: std::path::PathBuf) -> eyre::Result<Side> {
+    tokio::task::spawn_blocking(move || {
+        let daw = crate::open::local_engine()
+            .ok_or_else(|| eyre::eyre!("the engine is not in this process"))?;
+        crate::project_file::live_side(daw, &guid, &path).map_err(|e| eyre::eyre!(e))
+    })
+    .await
+    .map_err(|e| eyre::eyre!("the song's doc did not open: {e}"))?
+}
+
+/// An engine's song kept with the set's replica of it (`live`) as `meet`
+/// says, through its file's one doc and bridge — never a second bridge:
+///
+/// - **Seed**: the set has no doc of it yet; it is seeded from the song's
+///   own, and kept in step with it.
+/// - **Join**: the set's doc is of the song's own lineage (seeded from
+///   it, or from a copy of its file): kept in step with it. Of another
+///   lineage (another peer's copy seeded it): the song is moved onto it
+///   (`project_file::adopt`), then kept in step.
+/// - **Own**: the set does not have it; nothing is kept.
+#[cfg(feature = "native")]
+async fn relay_song(
+    meet: Meeting,
+    (project, _, key, path): OpenSong,
+    live: Option<Side>,
+) -> eyre::Result<(Song, Link, bool)> {
+    use session::sync::relay;
+    let guid = project.guid().to_owned();
+    let (doc, link, seeded) = match (meet, live) {
+        (Meeting::Seed(doc), Some(live)) => {
+            let own = song_side(guid.clone(), path).await?;
+            (live.take)(relay::seed(&own.doc)?).await?;
+            (
+                doc,
+                Link::Relayed(Relay::start(own, live, LOCK.subscribe())),
+                true,
+            )
+        }
+        (Meeting::Join(doc), Some(live)) => {
+            let own = song_side(guid.clone(), path).await?;
+            let own = if relay::same_lineage(&own.doc, &live.doc) {
+                Some(own)
+            } else {
+                let (moving, from) = (guid.clone(), live.doc.clone());
+                let moved =
+                    tokio::task::spawn_blocking(move || crate::project_file::adopt(&moving, &from))
+                        .await
+                        .map_err(|e| eyre::eyre!("{key}: the song did not move: {e}"))?;
+                // Refused (a song synced with its org keeps its org's
+                // doc): this song stays out of the set; the rest join.
+                moved
+                    .inspect_err(|why| {
+                        tracing::warn!(collab.song = %key, collab.why = %why, "collab: the song stays out of the set");
+                    })
+                    .ok()
+            };
+            match own {
+                Some(own) => (
+                    doc,
+                    Link::Relayed(Relay::start(own, live, LOCK.subscribe())),
+                    false,
+                ),
+                None => (doc, Link::Kept, false),
+            }
+        }
+        (Meeting::Wait(_), _) => eyre::bail!("{key}: the set's doc is not seeded yet"),
+        (Meeting::Own | Meeting::Seed(_) | Meeting::Join(_), _) => {
+            (SessionDoc::new(), Link::Kept, false)
+        }
+    };
+    tracing::info!(
+        collab.song = %key,
+        collab.seeded = seeded,
+        collab.kept = matches!(link, Link::Kept),
+        "collab: the song is kept with the set through its own doc"
+    );
+    Ok((
+        Song {
+            project: guid,
+            key,
+            doc,
+        },
+        link,
+        seeded,
+    ))
+}
+
 /// Bridge one song to its replica as `meet` says: joining the set's
 /// session of it, seeding it from this song, or (no replica) keeping this
-/// machine's own record from `docs`. Says whether it seeded.
+/// machine's own record from `docs`. Says whether it seeded. A page's: it
+/// has no project file, so the set's doc is its song's one doc.
+#[cfg(not(feature = "native"))]
 async fn bridge_song(
     meet: Meeting,
     (project, media, key, path): OpenSong,
@@ -1397,11 +1451,11 @@ async fn sliced<T>(work: impl std::future::Future<Output = T>) -> T {
     done
 }
 
-/// Songs handed to a running session ([`start`]), each with its bridge.
-type Adds = tokio::sync::mpsc::UnboundedReceiver<(Song, Bridge)>;
+/// Songs handed to a running session ([`start`]), each with its link.
+type Adds = tokio::sync::mpsc::UnboundedReceiver<(Song, Link)>;
 
 /// The next song handed to the session, or never when none can come.
-async fn next_add(adds: &mut Option<Adds>) -> Option<(Song, Bridge)> {
+async fn next_add(adds: &mut Option<Adds>) -> Option<(Song, Link)> {
     match adds.as_mut() {
         Some(adds) => adds.recv().await,
         None => std::future::pending().await,
@@ -1522,7 +1576,7 @@ type Keep = Option<Box<dyn std::any::Any>>;
 /// Spawn the session's task. `keep` lives as long as it.
 #[allow(clippy::too_many_arguments)]
 fn start(
-    bridges: Vec<(Song, Bridge)>,
+    bridges: Vec<(Song, Link)>,
     presence: Arc<dyn PresenceSink>,
     clock: SharedClock,
     set: String,
@@ -1544,21 +1598,20 @@ fn start(
         name: name.clone(),
         set,
     };
-    let mut bridges: Vec<Bridge> = bridges.into_iter().map(|(_, b)| b).collect();
+    let mut links: Vec<Link> = bridges.into_iter().map(|(_, l)| l).collect();
 
-    // Each song's engine changes, from its own slice of the event bus.
+    // A page's songs (bridged): each one's engine changes, from its own
+    // slice of the event bus, and its remote changes — any import into its
+    // doc. An engine's songs are kept by their files' bridges.
     let (local_tx, mut local_rx) = tokio::sync::mpsc::unbounded_channel::<usize>();
-    for (index, song) in songs.iter().enumerate() {
-        follow_engine(index, song.project.clone(), local_tx.clone());
-    }
-
-    // Each song's remote changes: any import into its doc.
     let (remote_tx, mut remote_rx) = tokio::sync::mpsc::unbounded_channel::<usize>();
-    let mut subscriptions: Vec<_> = songs
-        .iter()
-        .enumerate()
-        .map(|(index, song)| follow_doc(index, song, remote_tx.clone()))
-        .collect();
+    let mut subscriptions = Vec::new();
+    for (index, (song, link)) in songs.iter().zip(&links).enumerate() {
+        if matches!(link, Link::Bridged(_)) {
+            follow_engine(index, song.project.clone(), local_tx.clone());
+            subscriptions.push(follow_doc(index, song, remote_tx.clone()));
+        }
+    }
     let mut adds = adds;
     let mut songs = songs;
 
@@ -1579,11 +1632,16 @@ fn start(
         let mut lock_rx = LOCK.subscribe();
         let mut hold = Hold::new(holds && *lock_rx.borrow_and_update());
         if hold.locked() {
-            for index in 0..songs.len() {
-                hold.remote(index);
+            for (index, link) in links.iter().enumerate() {
+                if matches!(link, Link::Bridged(_)) {
+                    hold.remote(index);
+                }
             }
         }
-        HELD.store(hold.held(), std::sync::atomic::Ordering::Relaxed);
+        HELD.store(
+            held_count(&hold, &links),
+            std::sync::atomic::Ordering::Relaxed,
+        );
         let key_of = |songs: &[Song], project: Option<String>| {
             project.and_then(|p| songs.iter().find(|s| s.project == p).map(|s| s.key.clone()))
         };
@@ -1597,7 +1655,7 @@ fn start(
                     let held = hold.set_locked(locked);
                     let showing = crate::open::current_song();
                     for i in &held.songs {
-                        let (Some(bridge), Some(song)) = (bridges.get_mut(*i), songs.get(*i)) else { continue };
+                        let (Some(Link::Bridged(bridge)), Some(song)) = (links.get_mut(*i), songs.get(*i)) else { continue };
                         match bridge.merge_held("Edits while locked").await {
                             Ok(changes) => {
                                 note_remote_chart(&changes, song, &remote_chart);
@@ -1616,27 +1674,30 @@ fn start(
                             "collab: unlocked; what was held is merged"
                         );
                     }
-                    HELD.store(hold.held(), std::sync::atomic::Ordering::Relaxed);
+                    HELD.store(held_count(&hold, &links), std::sync::atomic::Ordering::Relaxed);
                 }
                 // A song opened after the session began (a page's songs
                 // arrive one by one): followed the same way as the rest.
-                Some((song, bridge)) = next_add(&mut adds) => {
+                Some((song, link)) = next_add(&mut adds) => {
                     let index = songs.len();
-                    follow_engine(index, song.project.clone(), local_tx.clone());
-                    subscriptions.push(follow_doc(index, &song, remote_tx.clone()));
+                    let bridged = matches!(link, Link::Bridged(_));
+                    if bridged {
+                        follow_engine(index, song.project.clone(), local_tx.clone());
+                        subscriptions.push(follow_doc(index, &song, remote_tx.clone()));
+                    }
                     if let Ok(mut live) = LIVE.lock()
                         && let Some(l) = live.as_mut()
                     {
                         l.songs.push(song.clone());
                     }
                     tracing::info!(collab.song = %song.key, collab.songs = index + 1, "collab: a song joined the session");
-                    if hold.locked() {
+                    if hold.locked() && bridged {
                         // Joined while locked: its engine waits too.
                         hold.remote(index);
-                        HELD.store(hold.held(), std::sync::atomic::Ordering::Relaxed);
                     }
                     songs.push(song);
-                    bridges.push(bridge);
+                    links.push(link);
+                    HELD.store(held_count(&hold, &links), std::sync::atomic::Ordering::Relaxed);
                     crate::song_model::request_resync();
                 }
                 Some(first) = local_rx.recv() => {
@@ -1652,13 +1713,13 @@ fn start(
                         if !hold.local(i) {
                             continue;
                         }
-                        if let Some(bridge) = bridges.get_mut(i)
+                        if let Some(Link::Bridged(bridge)) = links.get_mut(i)
                             && let Err(e) = bridge.local_changed().await
                         {
                             tracing::warn!(collab.error = %e, "collab: a local edit was not shared");
                         }
                     }
-                    HELD.store(hold.held(), std::sync::atomic::Ordering::Relaxed);
+                    HELD.store(held_count(&hold, &links), std::sync::atomic::Ordering::Relaxed);
                 }
                 Some(first) = remote_rx.recv() => {
                     let mut touched = BTreeSet::from([first]);
@@ -1671,7 +1732,7 @@ fn start(
                         if !hold.remote(i) {
                             continue;
                         }
-                        let (Some(bridge), Some(song)) = (bridges.get_mut(i), songs.get(i)) else { continue };
+                        let (Some(Link::Bridged(bridge)), Some(song)) = (links.get_mut(i), songs.get(i)) else { continue };
                         match bridge.remote_changed().await {
                             Ok(changes) if !changes.is_empty() => {
                                 note_remote_chart(&changes, song, &remote_chart);
@@ -1683,10 +1744,12 @@ fn start(
                             Err(e) => tracing::warn!(collab.error = %e, "collab: a remote edit did not apply"),
                         }
                     }
-                    HELD.store(hold.held(), std::sync::atomic::Ordering::Relaxed);
+                    HELD.store(held_count(&hold, &links), std::sync::atomic::Ordering::Relaxed);
                 }
                 () = architect::platform::sleep(next_tick.saturating_duration_since(architect::platform::now())) => {
                     next_tick = architect::platform::now() + TICK;
+                    // An engine's relays hold and let go on their own.
+                    HELD.store(held_count(&hold, &links), std::sync::atomic::Ordering::Relaxed);
                     let now = crate::presence::now_ms();
                     let here = key_of(&songs, crate::open::current_song());
                     out.publish(presence.as_ref(), now, here.clone());
@@ -2126,6 +2189,94 @@ impl Outbox {
                 &presence::key(&self.me, presence::POINTER),
                 pointer.encode(now),
             );
+        }
+    }
+}
+
+/// Where an env-started host leaves its ticket (`FTS_COLLAB_TICKET`, else
+/// the temp dir's `fts-session-ticket`).
+#[cfg(feature = "native")]
+fn ticket_path() -> std::path::PathBuf {
+    std::env::var_os("FTS_COLLAB_TICKET").map_or_else(
+        || std::env::temp_dir().join("fts-session-ticket"),
+        std::path::PathBuf::from,
+    )
+}
+
+/// The engine's live sessions, started by itself — in the engine's process
+/// (`studio engine`, or a window that is its own engine), never in a
+/// window driving an engine elsewhere: a live session keeps each song with
+/// its doc through the engine's own files, and a window's would be a second
+/// bridge on the engine's songs (#316).
+///
+/// Once the song is up: the session the environment names, for the
+/// two-instance demo and tests — `FTS_COLLAB_TASK` (a set Task keeps),
+/// `FTS_COLLAB_HOST=1` (shares the set and writes the ticket to
+/// `FTS_COLLAB_TICKET`), `FTS_COLLAB_JOIN` (a ticket, or a file the host
+/// writes one to) — then hosting what is open in Task by itself, signed in
+/// ([`crate::live_host`]; off when the environment started a session).
+/// `name` is who this person is in a set when the account does not say.
+#[cfg(feature = "native")]
+pub fn start_in_engine(name: String) {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        let spawned = std::thread::Builder::new()
+            .name("collab-start".into())
+            .spawn(move || {
+                std::thread::sleep(Duration::from_millis(1500));
+                from_env(&name);
+                crate::live_host::start(name);
+            });
+        if let Err(e) = spawned {
+            tracing::warn!(collab.error = %e, "collab: no thread to start the live sessions on");
+        }
+    });
+}
+
+/// The session the environment names, joined or hosted (see
+/// [`start_in_engine`]).
+#[cfg(feature = "native")]
+fn from_env(name: &str) {
+    if let Some(set) = TaskSet::from_env() {
+        match join_task(&set, name.to_owned()) {
+            Ok(()) => {
+                tracing::info!(collab.setlist = %set.setlist, "collab: in the set Task keeps")
+            }
+            Err(e) => {
+                tracing::warn!(collab.error = %e, "collab: could not join the set Task keeps");
+            }
+        }
+    } else if env_set("FTS_COLLAB_HOST") {
+        match host(name.to_owned()) {
+            Ok(ticket) => {
+                let path = ticket_path();
+                if let Err(e) = std::fs::write(&path, &ticket) {
+                    tracing::warn!(collab.ticket_error = %e, "collab: the ticket was not written");
+                }
+                tracing::info!(collab.ticket_file = %path.display(), "collab: hosting");
+            }
+            Err(e) => tracing::warn!(collab.error = %e, "collab: could not host"),
+        }
+    } else if let Some(join) = std::env::var_os("FTS_COLLAB_JOIN").filter(|v| !v.is_empty()) {
+        let join = join.to_string_lossy().into_owned();
+        let ticket = if join.starts_with("fts-session:") {
+            Some(join)
+        } else {
+            // A file the host writes: wait for it.
+            (0..120).find_map(|_| {
+                let t = std::fs::read_to_string(&join)
+                    .ok()
+                    .filter(|t| t.starts_with("fts-session:"));
+                if t.is_none() {
+                    std::thread::sleep(Duration::from_millis(500));
+                }
+                t
+            })
+        };
+        match ticket.map(|t| self::join(t.trim(), name.to_owned())) {
+            Some(Ok(())) => tracing::info!("collab: joined"),
+            Some(Err(e)) => tracing::warn!(collab.error = %e, "collab: could not join"),
+            None => tracing::warn!("collab: no ticket to join"),
         }
     }
 }

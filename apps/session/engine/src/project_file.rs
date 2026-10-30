@@ -157,27 +157,46 @@ async fn song_doc(
     }
 }
 
-/// From now on, what other devices send to the song `guid` reaches its
-/// engine through its bridge.
+/// From now on, what reaches the song `guid`'s doc from elsewhere —
+/// another device of its org, a live set's doc of it ([`live_side`]) —
+/// reaches its engine through its bridge, and (a song not synced through
+/// its org) its file.
 fn watch_remote(
     guid: &str,
-    synced: Option<&session::project_sync::SyncedBranch>,
-) -> Option<session::sync::loro::Subscription> {
+    doc: &session::sync::loro::LoroDoc,
+) -> session::sync::loro::Subscription {
     let guid = guid.to_owned();
-    Some(session::project_sync::watch_remote(synced?, move || {
+    session::project_sync::watch_imports(doc, move || {
         let guid = guid.clone();
         async move {
             let mut songs = open_songs().lock().await;
             // Not in the open songs yet (still opening): the bridge's watch
             // keeps what the edit touched, and the next pass applies it.
-            if let Some(open) = songs.get_mut(&guid)
-                && let Err(e) = open.bridge.remote_changed().await
-            {
-                tracing::warn!(project.guid = %guid, why = %e, "another device's edit did not reach the engine");
+            let Some(open) = songs.get_mut(&guid) else {
+                return;
+            };
+            match open.bridge.remote_changed().await {
+                Ok(changes) => {
+                    if let Err(e) = append(open, REMOTE_LABEL) {
+                        tracing::warn!(project.guid = %guid, why = %e, "another device's edit was not written to the song's file");
+                    }
+                    drop(songs);
+                    if !changes.is_empty()
+                        && crate::open::current_song().as_deref() == Some(guid.as_str())
+                    {
+                        crate::song_model::request_resync();
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(project.guid = %guid, why = %e, "another device's edit did not reach the engine");
+                }
             }
         }
-    }))
+    })
 }
+
+/// What an edit that reached a song from elsewhere is named in its file.
+const REMOTE_LABEL: &str = "Remote edits";
 
 /// How many updates a branch keeps before a save folds them into one
 /// snapshot ([`Store::compact`]) whatever else happens. An open replays
@@ -442,13 +461,15 @@ pub fn save(
             // history so far, the song written over it.
             // A copy saved elsewhere leaves the song's own bridge — and
             // what it knows of the song's ids — where it is.
+            // A project has one bridge (`session::sync::bridge::claim`).
             if songs.contains_key(&guid) {
                 drop(songs);
-                let mut copy = begin(&daw, &guid, &path, &branch).await?;
-                return save_open(&mut copy, &label).await.map(|()| path);
+                return save_copy(&daw, &guid, &path, &branch, &label)
+                    .await
+                    .map(|()| path);
             }
             let mut open = begin(&daw, &guid, &path, &branch).await?;
-            open._remote = watch_remote(&guid, open.synced.as_ref());
+            open._remote = Some(watch_remote(&guid, open.bridge.doc().loro()));
             songs.insert(guid.clone(), open);
         }
         let saved = match songs.get_mut(&guid) {
@@ -492,6 +513,43 @@ async fn begin(daw: &Standalone, guid: &str, path: &Path, branch: &str) -> Resul
         synced,
         _remote: None,
     })
+}
+
+/// The song `guid` as it is now into the project file at `path` on
+/// `branch`, once — a copy saved elsewhere. The engine is read afresh and
+/// written over the branch, and the song keeps its own bridge (a second
+/// would rewrite it against the first).
+async fn save_copy(
+    daw: &Standalone,
+    guid: &str,
+    path: &Path,
+    branch: &str,
+    label: &str,
+) -> Result<(), String> {
+    let (store, loaded, _) = open_branch(path, branch)?;
+    let doc = SessionDoc::from_loro(loaded);
+    let before = doc.version();
+    let chart = doc.read().chart;
+    let blobs = StoreBlobs::new(store.clone());
+    let engine = direct(daw);
+    session::sync::bridge::write_once(
+        &project(daw, guid).await?,
+        &media_of(path),
+        &doc,
+        chart,
+        blobs.as_ref(),
+        Some(engine.as_ref()),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    if doc.version() != before {
+        let update = doc.updates_since(&before).map_err(|e| e.to_string())?;
+        with_store(&store, |s| {
+            s.append_update(branch, label, &update)
+                .map_err(|e| e.to_string())
+        })?;
+    }
+    with_store(&store, |s| s.checkpoint().map_err(|e| e.to_string()))
 }
 
 /// The song as it is now into its file: read, and what changed appended.
@@ -851,8 +909,10 @@ pub fn load(daw: &Standalone, name: &str, path: &Path, branch: &str) -> Result<S
     run(async move {
         // On the project file's runtime: the song's transport lives on it.
         stage.land(&made).map_err(|e| e.to_string())?;
-        let bridge = built.moved_to(project(&daw, &made).await?, Some(direct(&daw)));
-        let remote = watch_remote(&made, synced.as_ref());
+        let bridge = built
+            .moved_to(project(&daw, &made).await?, Some(direct(&daw)))
+            .map_err(|e| e.to_string())?;
+        let remote = Some(watch_remote(&made, bridge.doc().loro()));
         open_songs().lock().await.insert(
             made,
             Open {
@@ -1005,18 +1065,19 @@ pub fn check(daw: &Standalone, project_guid: &str, path: &Path) -> Result<Vec<St
         let own = live_read(&live_guid).await?;
         let live = match own {
             Some(live) => live,
-            None => Bridge::host(
-                project(&daw_for, &live_guid).await?,
-                media_of(&file),
-                SessionDoc::new(),
-                saved.chart.clone(),
-                Arc::new(session::sync::engine::MemoryBlobs::default()),
-                Some(direct(&daw_for)),
-            )
-            .await
-            .map_err(|e| e.to_string())?
-            .shown()
-            .clone(),
+            None => {
+                let engine = direct(&daw_for);
+                session::sync::bridge::write_once(
+                    &project(&daw_for, &live_guid).await?,
+                    &media_of(&file),
+                    &SessionDoc::new(),
+                    saved.chart.clone(),
+                    &session::sync::engine::MemoryBlobs::default(),
+                    Some(engine.as_ref()),
+                )
+                .await
+                .map_err(|e| e.to_string())?
+            }
         };
         Ok::<_, String>((reopened, differences(&live, &saved)))
     })??;
@@ -1139,3 +1200,161 @@ fn differences(
     }
     out
 }
+
+// ── A live set's doc of a song ─────────────────────────────────────────
+//
+// A song has one doc, its file's (or its org's), and one bridge to the
+// engine. A live set keeps a doc of the song too (Task names it); it is
+// kept in step with the song's doc as a CRDT (`session::sync::relay`),
+// never bridged to the engine itself (#316).
+
+/// The song `guid`'s one doc, as a side of a relay: what it is passed
+/// reaches its engine through its bridge and is kept in its file (or its
+/// org's doc). A song open from something other than a project file (an
+/// `.RPP`) is begun on its project file first — `Song.session` beside what
+/// it was opened from (`opened_from`), as a save would make it.
+///
+/// # Errors
+/// The song is not in `daw`, or its file would not open or take the
+/// write.
+pub fn live_side(
+    daw: &Standalone,
+    guid: &str,
+    opened_from: &Path,
+) -> Result<session::sync::relay::Side, String> {
+    let (daw, guid) = (daw.clone(), guid.to_owned());
+    let (file, branch) = save_target(opened_from);
+    run(async move {
+        let mut songs = open_songs().lock().await;
+        if !songs.contains_key(&guid) {
+            let mut open = begin(&daw, &guid, &file, &branch).await?;
+            append(&mut open, "Live")?;
+            open._remote = Some(watch_remote(&guid, open.bridge.doc().loro()));
+            songs.insert(guid.clone(), open);
+        }
+        let open = songs.get(&guid).ok_or("the song is not open")?;
+        Ok(side_of(open))
+    })?
+}
+
+/// `open`'s doc as a relay's side.
+fn side_of(open: &Open) -> session::sync::relay::Side {
+    match &open.synced {
+        // Through the org's doc: written through the file, as an update
+        // from another device is.
+        Some(synced) => synced.side(),
+        // An import: the watch makes the engine match and appends it.
+        None => session::sync::relay::Side::imported(open.bridge.doc().loro().clone()),
+    }
+}
+
+/// Why a song cannot be moved onto a live set's doc.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotAdopted {
+    /// The song is not open from a project file here.
+    NotOpen,
+    /// The song syncs through its org: its doc is the org's, and is not
+    /// replaced by a live set's.
+    SyncedWithItsOrg,
+    /// What went wrong on the way (the file, the engine).
+    Failed(String),
+}
+
+impl std::fmt::Display for NotAdopted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotOpen => f.write_str("the song is not open from a project file"),
+            Self::SyncedWithItsOrg => f.write_str(
+                "the song syncs through its org: its doc is not replaced by a live set's",
+            ),
+            Self::Failed(why) => f.write_str(why),
+        }
+    }
+}
+
+/// Move the song `guid` onto `live`, a live set's doc of it that another
+/// peer seeded from its own copy (so not of this song's lineage, and not
+/// to be merged with it): its one bridge is switched to a copy of `live`
+/// (the engine made to match it, nothing built again that it holds), and
+/// its file's branch starts over from that copy — the file as it was kept
+/// beside it first (`Song.before-live.session`). Returns the song's doc,
+/// now of `live`'s lineage, as a relay's side.
+///
+/// # Errors
+/// See [`NotAdopted`].
+pub fn adopt(
+    guid: &str,
+    live: &session::sync::loro::LoroDoc,
+) -> Result<session::sync::relay::Side, NotAdopted> {
+    let seed = session::sync::relay::seed(live).map_err(|e| NotAdopted::Failed(e.to_string()))?;
+    let guid = guid.to_owned();
+    run(async move {
+        let mut songs = open_songs().lock().await;
+        let open = songs.get_mut(&guid).ok_or(NotAdopted::NotOpen)?;
+        if open.synced.is_some() {
+            return Err(NotAdopted::SyncedWithItsOrg);
+        }
+        let copy = session::sync::loro::LoroDoc::new();
+        copy.import(&seed)
+            .map_err(|e| NotAdopted::Failed(format!("the live doc would not copy: {e}")))?;
+        with_store(&open.store, |s| s.checkpoint().map_err(|e| e.to_string()))
+            .map_err(NotAdopted::Failed)?;
+        keep_before_live(&open.path).map_err(NotAdopted::Failed)?;
+        let switched = open
+            .bridge
+            .switch_doc(SessionDoc::from_loro(copy))
+            .await
+            .map_err(|e| e.to_string());
+        // Whatever the engine made of it, the bridge is on the copy now:
+        // the file follows it, so what it appends is of that lineage.
+        let doc = open.bridge.doc().loro().clone();
+        with_store(&open.store, |s| {
+            s.rebase(&open.branch, &doc).map_err(|e| e.to_string())
+        })
+        .map_err(NotAdopted::Failed)?;
+        open.saved = open.bridge.doc().version();
+        open.uncompacted = 0;
+        open._remote = Some(watch_remote(&guid, &doc));
+        tracing::info!(
+            project.guid = %guid,
+            song.kept = %before_live(&open.path).display(),
+            "the song moved onto the live set's doc of it"
+        );
+        let side = side_of(open);
+        drop(songs);
+        switched.map_err(NotAdopted::Failed)?;
+        Ok(side)
+    })
+    .map_err(NotAdopted::Failed)?
+}
+
+/// Where a song's file is kept as it was before it moved onto a live
+/// set's doc: `Song.before-live.session` beside it.
+fn before_live(path: &Path) -> PathBuf {
+    let stem = path
+        .file_stem()
+        .map_or_else(|| "Song".into(), |s| s.to_string_lossy().into_owned());
+    path.with_file_name(format!("{stem}.before-live.session"))
+}
+
+/// Keep the file at `path` as it is now beside it ([`before_live`]), once:
+/// the first move keeps the song's own history.
+fn keep_before_live(path: &Path) -> Result<(), String> {
+    let kept = before_live(path);
+    if kept.exists() {
+        return Ok(());
+    }
+    std::fs::copy(path, &kept)
+        .map(drop)
+        .map_err(|e| format!("keeping {}: {e}", kept.display()))
+}
+
+/// Whether the song `guid` is open from its project file here — and so
+/// has its one bridge.
+#[must_use]
+pub fn is_open(guid: &str) -> bool {
+    run(async { open_songs().lock().await.contains_key(guid) }).unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests;

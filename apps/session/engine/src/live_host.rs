@@ -14,10 +14,16 @@
 //!   none, and given any open song it lacks at its end (nothing is removed
 //!   or reordered). Then the set is joined as any set Task keeps is
 //!   ([`crate::collab::join_task`]): each song's live doc in Task is seeded
-//!   from this engine when it is empty, or adopted when someone is already
-//!   in it, the set's presence is joined, and from then on members and
-//!   agents edit it live — their edits are made in this engine through the
-//!   doc ↔ engine bridge, and this engine's go out the same way.
+//!   from the song's own doc (its project file's) when it is empty, or the
+//!   song is kept with the one someone already seeded, the set's presence
+//!   is joined, and from then on members and agents edit it live. The live
+//!   doc is kept in step with the song's own doc as a CRDT; the song's one
+//!   bridge to this engine is its file's, so their edits reach the engine
+//!   through it and this engine's go out the same way (#316).
+//!
+//! It runs where the engine runs (`studio engine`, or a window that is its
+//! own engine: [`crate::collab::start_in_engine`]), never in a window that
+//! drives an engine elsewhere.
 //! - **Re-host.** A song opened that the hosted set lacks: the same again,
 //!   so it joins the set too.
 //! - **Leave.** Signed out while hosting: the session is left; the songs
