@@ -128,6 +128,10 @@ fn pick_rig(kind: Option<library::model::RigKind>) {
 /// The window's root.
 #[component]
 pub fn Studio() -> Element {
+    // The menu bar's View menu (the screensets), Settings… and the audio
+    // readout, from the first screen on — not only in the rig view.
+    #[cfg(all(target_os = "macos", feature = "signal-guitar"))]
+    crate::mac_menu::use_menu_installed();
     // The live rig as a panel of the DAW view's dock: Session cannot mount
     // it, so Studio hands it over (session_desktop::native::dock::HostPanels).
     // Its pieces (the switches, the set, the song up, the chart, the tones)

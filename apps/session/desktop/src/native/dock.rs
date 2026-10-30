@@ -32,6 +32,11 @@ pub struct HostPanels {
     pub scope: Option<fn(Element) -> Element>,
 }
 
+/// What the View menu asks of the dock, and the way to ask it — for a menu
+/// in the window's own process (Studio's macOS menu bar). The same queue
+/// the View actions (`SESSION_SCREENSET`, …) fill.
+pub use session_engine::actions::{DockRequest, request_dock};
+
 /// Where the screensets are kept.
 const PREF: &str = "dock.screensets.v1";
 
@@ -69,7 +74,17 @@ pub fn SongDock(session: session_ui::studio::StudioSession, class: FormClass) ->
     }
     let host = try_use_context::<HostPanels>().unwrap_or_default();
     let scope = host.scope;
-    use_dock_provider(sets, form, catalog(host));
+    let dock = use_dock_provider(sets, form, catalog(host));
+    // The View actions (SESSION_SCREENSET, …: the menu bar, keys, a model
+    // over MCP), taken up within a tenth of a second.
+    use_future(move || async move {
+        loop {
+            for request in session_engine::actions::take_dock_requests() {
+                apply(dock, sets, *form.peek(), request);
+            }
+            architect::platform::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    });
     // Kept as they change: a recall, a save, a panel moved or resized.
     use_effect(move || {
         if let Ok(json) = sets.read().to_json() {
@@ -85,6 +100,44 @@ pub fn SongDock(session: session_ui::studio::StudioSession, class: FormClass) ->
         div { style: "position:relative; flex:1; min-height:0; min-width:0; display:flex;",
             {dock}
         }
+    }
+}
+
+/// Carries out one View action on the dock.
+fn apply(
+    dock: dock::host::Dock,
+    mut sets: Signal<Screensets>,
+    class: FormClass,
+    request: session_engine::actions::DockRequest,
+) {
+    use session_engine::actions::DockRequest;
+    match request {
+        DockRequest::Recall(which) => {
+            let found = {
+                let sets = sets.peek();
+                let by_slot = which.parse::<u8>().ok().and_then(|n| sets.in_slot(n));
+                by_slot
+                    .or_else(|| {
+                        sets.sets
+                            .iter()
+                            .find(|s| s.name.eq_ignore_ascii_case(&which))
+                    })
+                    .map(|s| s.id)
+            };
+            match found {
+                Some(id) => dock.recall(id),
+                None => tracing::warn!(screenset = %which, "no such screenset to recall"),
+            }
+        }
+        DockRequest::Save => {
+            sets.write().save(class);
+        }
+        DockRequest::SaveAs(name) => {
+            let mut sets = sets.write();
+            let name = name.unwrap_or_else(|| format!("Screenset {}", sets.sets.len() + 1));
+            sets.save_as(name, class);
+        }
+        DockRequest::Arrange => dock.toggle_arrange(),
     }
 }
 

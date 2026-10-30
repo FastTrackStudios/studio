@@ -378,6 +378,22 @@ fn mark_bare(n: &mut Node, id: InstanceId, chrome: Chrome) {
     }
 }
 
+/// The screenset slot a number key names.
+fn slot_key(code: Code) -> Option<u8> {
+    Some(match code {
+        Code::Digit1 => 1,
+        Code::Digit2 => 2,
+        Code::Digit3 => 3,
+        Code::Digit4 => 4,
+        Code::Digit5 => 5,
+        Code::Digit6 => 6,
+        Code::Digit7 => 7,
+        Code::Digit8 => 8,
+        Code::Digit9 => 9,
+        _ => return None,
+    })
+}
+
 fn point(e: &PointerEvent) -> (f32, f32) {
     let p = e.data().client_coordinates();
     (p.x as f32, p.y as f32)
@@ -405,7 +421,19 @@ pub fn DockHost() -> Element {
             onmounted: move |e| dock.mount(Mount::Host, e.data()),
             onkeydown: move |e| {
                 let key = *dock.key.read();
-                if e.code() == key.code && (!key.shift || e.modifiers().shift()) {
+                let mods = e.modifiers();
+                // ⌘1–9 (Ctrl on Linux and Windows): the screenset in that slot.
+                if (mods.meta() || mods.ctrl()) && utils::keyboard::hotkeys_on() {
+                    if let Some(slot) = slot_key(e.code()) {
+                        let found = dock.sets.peek().in_slot(slot).map(|s| s.id);
+                        if let Some(id) = found {
+                            e.prevent_default();
+                            dock.recall(id);
+                        }
+                        return;
+                    }
+                }
+                if e.code() == key.code && (!key.shift || mods.shift()) {
                     dock.set_arranging(true);
                 }
             },

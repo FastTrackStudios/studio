@@ -536,8 +536,132 @@ fn register_mode(list: &ActionList) -> Result<(), architect::action::ActionError
     Ok(())
 }
 
+pub static SCREENSET: ActionMeta = meta(
+    "SESSION_SCREENSET",
+    "screenset",
+    "Screenset",
+    "Recall a screenset — a saved layout of the window's panels — by its number or name: 1 Performance, 2 Overview, 3 Session, 4 Mix, 5 Edit, 6 Charts, 7 Signal, or one saved since.",
+    "View",
+    "",
+);
+
+pub static SCREENSET_SAVE: ActionMeta = meta(
+    "SESSION_SCREENSET_SAVE",
+    "save_screenset",
+    "Save Screenset",
+    "Keep the window's layout in the screenset on show, for this kind of screen (phone, tablet or desk, upright or sideways).",
+    "View",
+    "",
+);
+
+pub static SCREENSET_SAVE_AS: ActionMeta = meta(
+    "SESSION_SCREENSET_SAVE_AS",
+    "save_screenset_as",
+    "Save Screenset As",
+    "Keep the window's layout as a new screenset, named `name` (else numbered), and show it.",
+    "View",
+    "",
+);
+
+pub static ARRANGE: ActionMeta = meta(
+    "SESSION_ARRANGE",
+    "arrange",
+    "Arrange Panels",
+    "Turn arranging on or off: every panel shows its name and can be dragged to an edge, beside another, or onto it as a tab (holding W does the same while held).",
+    "View",
+    "",
+);
+
+/// Which screenset: its number key or its name.
+#[derive(Facet)]
+struct ScreensetArg {
+    screenset: String,
+}
+
+/// A name for a new screenset, if any.
+#[derive(Facet)]
+struct SaveAsArg {
+    #[facet(default)]
+    name: Option<String>,
+}
+
+/// What the window's dock is asked to do (`session_desktop`'s dock reads
+/// these with [`take_dock_requests`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DockRequest {
+    /// Recall the screenset with this number key or name.
+    Recall(String),
+    /// Save the layout into the screenset on show.
+    Save,
+    /// Save the layout as a new screenset.
+    SaveAs(Option<String>),
+    /// Turn arranging on or off.
+    Arrange,
+}
+
+static DOCK_REQUESTS: Mutex<Vec<DockRequest>> = Mutex::new(Vec::new());
+
+/// Asks the window's dock for `request`, as the View actions do — for a
+/// menu that runs in the window's process (Studio's macOS menu bar).
+pub fn request_dock(request: DockRequest) {
+    if let Ok(mut queue) = DOCK_REQUESTS.lock() {
+        queue.push(request);
+    }
+}
+
+/// What the dock was asked since it last looked, oldest first.
+pub fn take_dock_requests() -> Vec<DockRequest> {
+    DOCK_REQUESTS
+        .lock()
+        .map(|mut queue| std::mem::take(&mut *queue))
+        .unwrap_or_default()
+}
+
+fn register_dock(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    list.register(&SCREENSET, Effect::Mutating, |a: ScreensetArg| {
+        let which = a.screenset.trim().to_owned();
+        if which.is_empty() {
+            return Err("name a screenset: its number or its name".to_owned());
+        }
+        request_dock(DockRequest::Recall(which.clone()));
+        let quoted = facet_json::to_string(&which).unwrap_or_default();
+        also_in_the_window(SCREENSET.id, format!(r#"{{"screenset":{quoted}}}"#));
+        Ok(())
+    })?;
+    list.register(&SCREENSET_SAVE, Effect::Mutating, |(): ()| {
+        request_dock(DockRequest::Save);
+        also_in_the_window(SCREENSET_SAVE.id, "{}".to_owned());
+        Ok(())
+    })?;
+    list.register(&SCREENSET_SAVE_AS, Effect::Mutating, |a: SaveAsArg| {
+        let name = a
+            .name
+            .map(|n| n.trim().to_owned())
+            .filter(|n| !n.is_empty());
+        request_dock(DockRequest::SaveAs(name.clone()));
+        let args = name.map_or_else(
+            || "{}".to_owned(),
+            |n| {
+                format!(
+                    r#"{{"name":{}}}"#,
+                    facet_json::to_string(&n).unwrap_or_default()
+                )
+            },
+        );
+        also_in_the_window(SCREENSET_SAVE_AS.id, args);
+        Ok(())
+    })?;
+    list.register(&ARRANGE, Effect::Mutating, |(): ()| {
+        request_dock(DockRequest::Arrange);
+        also_in_the_window(ARRANGE.id, "{}".to_owned());
+        Ok(())
+    })?;
+    Ok(())
+}
+
 fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError> {
     register_mode(list)?;
+    register_dock(list)?;
     register_window_target(list)?;
     register_phase(list)?;
     register_sections(list)?;
