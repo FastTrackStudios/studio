@@ -14,6 +14,10 @@
 //! `audio.dropout` span at the time it happened, under one
 //! `audio.dropouts` trace per interval, to line up with whatever else the
 //! engine was doing then.
+//! And what the audio sources hold (`memory`): distinct sources, bytes
+//! mapped, streamed and decoded resident — also recorded on the global
+//! OpenTelemetry meter as `session.audio.source_bytes` (by `kind`) and
+//! `session.audio.sources`.
 //!
 //! Logged as `session_engine::audio`: a warning for every interval a block
 //! missed (late, an xrun, or the tracks ahead played short); otherwise
@@ -24,6 +28,7 @@ use std::sync::Mutex;
 use std::sync::atomic::Ordering::Relaxed;
 
 use daw::standalone::audio_engine::EngineStats;
+use daw::standalone::audio_engine::source_cache::{AudioMemory, audio_memory};
 use facet::Facet;
 
 /// The engine's counters at one moment.
@@ -97,6 +102,8 @@ pub struct Health {
     /// The slowest render of the interval — a device block or a chunk
     /// rendered ahead — and where its time went.
     pub worst: Option<WorstBlock>,
+    /// What the audio sources hold at the interval's end.
+    pub memory: SourceMemory,
 }
 
 /// The slowest render of an interval, stage by stage, ms.
@@ -143,6 +150,71 @@ impl WorstBlock {
     }
 }
 
+/// What the audio sources hold, MB.
+#[derive(Clone, Debug, Default, PartialEq, Facet)]
+pub struct SourceMemory {
+    /// Distinct sources loaded (one per recording, however many items
+    /// are cut from it).
+    pub sources: u64,
+    /// Files mapped and their size: paged in around the playhead from the
+    /// page cache, not the engine's own memory.
+    pub mapped_files: u64,
+    pub mapped_mb: f64,
+    /// Proxies' decoded chunks, resident around the playhead.
+    pub streamed_mb: f64,
+    /// Media decoded whole, resident (the preload budget's count, shared
+    /// with the sampler).
+    pub resident_mb: f64,
+}
+
+impl SourceMemory {
+    #[must_use]
+    pub fn of(m: AudioMemory) -> Self {
+        let mb = |bytes: u64| bytes as f64 / (1024.0 * 1024.0);
+        Self {
+            sources: m.sources,
+            mapped_files: m.mapped_files,
+            mapped_mb: mb(m.mapped_bytes),
+            streamed_mb: mb(m.streamed_bytes),
+            resident_mb: mb(m.resident_bytes),
+        }
+    }
+}
+
+/// Record `m` on the global meter: bytes by kind, and the sources.
+fn record(m: AudioMemory) {
+    use opentelemetry::KeyValue;
+    struct Gauges {
+        bytes: opentelemetry::metrics::Gauge<u64>,
+        sources: opentelemetry::metrics::Gauge<u64>,
+    }
+    static GAUGES: std::sync::OnceLock<Gauges> = std::sync::OnceLock::new();
+    let gauges = GAUGES.get_or_init(|| {
+        let meter = opentelemetry::global::meter("session_engine");
+        Gauges {
+            bytes: meter
+                .u64_gauge("session.audio.source_bytes")
+                .with_unit("By")
+                .with_description(
+                    "What the audio sources hold, by kind: mapped, streamed, resident",
+                )
+                .build(),
+            sources: meter
+                .u64_gauge("session.audio.sources")
+                .with_description("Distinct audio sources loaded (one per recording)")
+                .build(),
+        }
+    });
+    for (kind, bytes) in [
+        ("mapped", m.mapped_bytes),
+        ("streamed", m.streamed_bytes),
+        ("resident", m.resident_bytes),
+    ] {
+        gauges.bytes.record(bytes, &[KeyValue::new("kind", kind)]);
+    }
+    gauges.sources.record(m.sources, &[]);
+}
+
 /// What a sample count is in ms at `rate`.
 fn ms(frames: f64, rate: u32) -> f64 {
     frames * 1000.0 / f64::from(rate.max(1))
@@ -185,6 +257,7 @@ impl Health {
                 0.0
             },
             worst: None,
+            memory: SourceMemory::default(),
         }
     }
 
@@ -319,7 +392,12 @@ pub fn watch(daw: daw::standalone::Standalone, stats: std::sync::Arc<EngineStats
                     ahead_fill: stats.ahead_fill_frames.load(Relaxed),
                     ahead_aim: stats.ahead_depth_frames.load(Relaxed),
                 };
-                let mut health = Health::between(before, now, at_end, rate);
+                let memory = audio_memory();
+                record(memory);
+                let mut health = Health {
+                    memory: SourceMemory::of(memory),
+                    ..Health::between(before, now, at_end, rate)
+                };
                 health.worst = worst_block(&daw);
                 let streaming = stats.stream_state.load(Relaxed) == STREAMING;
                 if streaming && (health.blocks > 0 || before.calls > 0) {
@@ -658,6 +736,7 @@ fn log(h: &Health) {
         ahead_stale_ms,
         ahead_load,
         worst,
+        memory,
     } = h.clone();
     if h.missed() {
         let worst = worst.unwrap_or_default();
@@ -676,6 +755,8 @@ fn log(h: &Health) {
             target: "session_engine::audio",
             blocks, frames, budget_ms, mean_ms, peak_ms,
             ahead_ms, ahead_aim_ms, ahead_restarts, ahead_rewinds, ahead_stale_ms, ahead_load,
+            sources = memory.sources, mapped_mb = memory.mapped_mb,
+            streamed_mb = memory.streamed_mb, resident_mb = memory.resident_mb,
             "audio: keeping up"
         );
     }
@@ -689,7 +770,7 @@ mod action {
         "SESSION_AUDIO",
         "session_audio",
         "Audio health",
-        "How the audio callback kept up over the last two seconds: the device's block (`frames`) and its `budget_ms`, the render's `mean_ms` and `peak_ms`, blocks `over_budget` and `xruns`, and `gap_ms` (time the device went without audio from the engine: a dropout, whatever the render timing says — a callback that blocked or never ran counts here); and the render ahead (the tracks nobody plays live rendered ahead of the playhead, the rest in the callback): `ahead_ms` rendered ahead now and `ahead_aim_ms` how far it aims (its depth, less while it keeps up with time to spare or while edits come in), `ahead_underruns` (blocks that played the tracks ahead short), `ahead_restarts` (a locate, play, a changed live set), `ahead_rewinds` (edits to tracks ahead, each heard from just past the playhead) and `ahead_stale_ms` (time played from before an edit while its frames came: the edit heard that late), and `ahead_load` (its render time over realtime: past 1 it cannot keep up). Null before the device has played. Read-only.",
+        "How the audio callback kept up over the last two seconds: the device's block (`frames`) and its `budget_ms`, the render's `mean_ms` and `peak_ms`, blocks `over_budget` and `xruns`, and `gap_ms` (time the device went without audio from the engine: a dropout, whatever the render timing says — a callback that blocked or never ran counts here); and the render ahead (the tracks nobody plays live rendered ahead of the playhead, the rest in the callback): `ahead_ms` rendered ahead now and `ahead_aim_ms` how far it aims (its depth, less while it keeps up with time to spare or while edits come in), `ahead_underruns` (blocks that played the tracks ahead short), `ahead_restarts` (a locate, play, a changed live set), `ahead_rewinds` (edits to tracks ahead, each heard from just past the playhead) and `ahead_stale_ms` (time played from before an edit while its frames came: the edit heard that late), and `ahead_load` (its render time over realtime: past 1 it cannot keep up); and `memory`, what the audio sources hold: `sources` (one per recording), `mapped_files` and `mapped_mb` (paged in from disk around the playhead), `streamed_mb` (proxies' chunks) and `resident_mb` (media decoded whole). Null before the device has played. Read-only.",
         "View",
         "",
     );

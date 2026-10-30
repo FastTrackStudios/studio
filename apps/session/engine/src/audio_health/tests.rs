@@ -64,6 +64,7 @@ fn an_interval_is_recorded_as_load_counters_and_the_render_ahead() {
             fx_ms: 1.5,
             ..super::WorstBlock::default()
         }),
+        memory: super::SourceMemory::default(),
     };
     at.record(&interval);
     at.record(&interval);

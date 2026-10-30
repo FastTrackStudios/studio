@@ -6,7 +6,8 @@
 #
 # Usage: scripts/drum-lab.sh <command> [args]
 #   copy SRC.session DIR   a lab copy of a song (the .session with its -wal;
-#                          its Media linked; its sync meta dropped, so it is
+#                          its recordings linked into a Media of its own; its
+#                          sync meta dropped, so it is
 #                          local), to edit without touching SRC or its docs
 #   open DIR/X.session     open it in the engine (SESSION_OPEN), wait for it
 #   actions                the workflow by actions: HITS_DETECT (all takes),
@@ -201,7 +202,15 @@ copy)
     mkdir -p "$dir"
     cp --reflink=auto "$src" "$dir/"
     [ -f "$src-wal" ] && cp --reflink=auto "$src-wal" "$dir/"
-    [ -d "$(dirname "$src")/Media" ] && ln -s "$(dirname "$src")/Media" "$dir/Media"
+    # Each recording linked, the folder the lab's own: what the engine
+    # writes beside the media (waveform sidecars, made triggers) stays in
+    # the lab, never in the song it was copied from.
+    if [ -d "$(dirname "$src")/Media" ]; then
+        mkdir -p "$dir/Media"
+        for f in "$(dirname "$src")/Media"/*; do
+            ln -s "$f" "$dir/Media/$(basename "$f")"
+        done
+    fi
     # A copy of a shared song keeps its org and doc ids: opened, it would
     # sync with the original's docs on Task, and every lab edit land in the
     # real song. The copy is made local: its sync meta dropped.
