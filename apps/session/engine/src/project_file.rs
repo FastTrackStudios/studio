@@ -1265,29 +1265,65 @@ impl std::fmt::Display for NotAdopted {
         match self {
             Self::NotOpen => f.write_str("the song is not open from a project file"),
             Self::SyncedWithItsOrg => f.write_str(
-                "the song syncs through its org: its doc is not replaced by a live set's",
+                "it syncs with its org and keeps the org's version — the set was started from another copy of it",
             ),
             Self::Failed(why) => f.write_str(why),
         }
     }
 }
 
+/// A song moved onto a live set's doc ([`adopt`]).
+pub struct Adopted {
+    /// The song's doc, now of the set's lineage, as a relay's side.
+    pub side: session::sync::relay::Side,
+    /// The branch of the song's file its own version is kept as.
+    pub kept_as: String,
+}
+
+/// The branch a song's own version is kept as when it moves onto a live
+/// set's doc: `Before joining <set> (<date>)` — a name a branch can have
+/// (no path separator in it).
+#[must_use]
+pub fn archive_name(set: &str, date: &str) -> String {
+    let set = set.trim().replace(['/', '\\'], "-");
+    let set = if set.is_empty() { "a live set" } else { &set };
+    format!("Before joining {set} ({date})")
+}
+
+/// `unix_secs` as a calendar date (UTC), `2026-10-29`.
+#[must_use]
+pub fn date_of(unix_secs: u64) -> String {
+    // Days since 1970-01-01 to a civil date (Howard Hinnant's algorithm).
+    let days = i64::try_from(unix_secs / 86_400).unwrap_or(0) + 719_468;
+    let era = days.div_euclid(146_097);
+    let day_of_era = days.rem_euclid(146_097);
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let mp = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
 /// Move the song `guid` onto `live`, a live set's doc of it that another
 /// peer seeded from its own copy (so not of this song's lineage, and not
-/// to be merged with it): its one bridge is switched to a copy of `live`
-/// (the engine made to match it, nothing built again that it holds), and
-/// its file's branch starts over from that copy — the file as it was kept
-/// beside it first (`Song.before-live.session`). Returns the song's doc,
-/// now of `live`'s lineage, as a relay's side.
+/// to be merged with it). Nothing of the song's own version is lost: it is
+/// kept in the song's file as the branch `archive` (made unique), listed
+/// with its alternatives, and opens as one. Then its one bridge is
+/// switched to a copy of `live` (the engine made to match it, nothing
+/// built again that it holds), and its branch starts over from that copy.
 ///
 /// # Errors
 /// See [`NotAdopted`].
 pub fn adopt(
     guid: &str,
     live: &session::sync::loro::LoroDoc,
-) -> Result<session::sync::relay::Side, NotAdopted> {
-    let seed = session::sync::relay::seed(live).map_err(|e| NotAdopted::Failed(e.to_string()))?;
-    let guid = guid.to_owned();
+    archive: &str,
+) -> Result<Adopted, NotAdopted> {
+    let frames = session::sync::relay::seed(live).map_err(|e| NotAdopted::Failed(e.to_string()))?;
+    let (guid, archive) = (guid.to_owned(), archive.to_owned());
     run(async move {
         let mut songs = open_songs().lock().await;
         let open = songs.get_mut(&guid).ok_or(NotAdopted::NotOpen)?;
@@ -1295,11 +1331,16 @@ pub fn adopt(
             return Err(NotAdopted::SyncedWithItsOrg);
         }
         let copy = session::sync::loro::LoroDoc::new();
-        copy.import(&seed)
+        copy.import_batch(&frames)
             .map_err(|e| NotAdopted::Failed(format!("the live doc would not copy: {e}")))?;
-        with_store(&open.store, |s| s.checkpoint().map_err(|e| e.to_string()))
-            .map_err(NotAdopted::Failed)?;
-        keep_before_live(&open.path).map_err(NotAdopted::Failed)?;
+        // The song's own version, whole: what it holds unsaved written
+        // first, then kept aside in its file.
+        append(open, "Before joining").map_err(NotAdopted::Failed)?;
+        let own = open.bridge.doc().loro().clone();
+        let kept_as = with_store(&open.store, |s| {
+            keep_aside(s, &open.branch, &own, &archive).map_err(|e| e.to_string())
+        })
+        .map_err(NotAdopted::Failed)?;
         let switched = open
             .bridge
             .switch_doc(SessionDoc::from_loro(copy))
@@ -1309,7 +1350,9 @@ pub fn adopt(
         // the file follows it, so what it appends is of that lineage.
         let doc = open.bridge.doc().loro().clone();
         with_store(&open.store, |s| {
-            s.rebase(&open.branch, &doc).map_err(|e| e.to_string())
+            s.rebase(&open.branch, &doc)
+                .and_then(|()| s.checkpoint())
+                .map_err(|e| e.to_string())
         })
         .map_err(NotAdopted::Failed)?;
         open.saved = open.bridge.doc().version();
@@ -1317,36 +1360,44 @@ pub fn adopt(
         open._remote = Some(watch_remote(&guid, &doc));
         tracing::info!(
             project.guid = %guid,
-            song.kept = %before_live(&open.path).display(),
+            song.kept_as = %kept_as,
             "the song moved onto the live set's doc of it"
         );
         let side = side_of(open);
         drop(songs);
         switched.map_err(NotAdopted::Failed)?;
-        Ok(side)
+        Ok(Adopted { side, kept_as })
     })
     .map_err(NotAdopted::Failed)?
 }
 
-/// Where a song's file is kept as it was before it moved onto a live
-/// set's doc: `Song.before-live.session` beside it.
-fn before_live(path: &Path) -> PathBuf {
-    let stem = path
-        .file_stem()
-        .map_or_else(|| "Song".into(), |s| s.to_string_lossy().into_owned());
-    path.with_file_name(format!("{stem}.before-live.session"))
-}
-
-/// Keep the file at `path` as it is now beside it ([`before_live`]), once:
-/// the first move keeps the song's own history.
-fn keep_before_live(path: &Path) -> Result<(), String> {
-    let kept = before_live(path);
-    if kept.exists() {
-        return Ok(());
+/// Keep `own`, `branch`'s version as it is, in `store` as a branch of its
+/// own called `name` (or `name 2`, `name 3`, … when that is taken), before
+/// `branch` starts over from another lineage. Returns the name it got.
+///
+/// Every other branch is made whole first (its own snapshot, no longer read
+/// through the branch it was forked from): one forked from `branch` reads
+/// `branch`'s history up to where it forked, which is about to go. The kept
+/// branch is whole too, so it opens whatever `branch` becomes.
+fn keep_aside(
+    store: &Store,
+    branch: &str,
+    own: &session::sync::loro::LoroDoc,
+    name: &str,
+) -> session_format::store::StoreResult<String> {
+    let branches = store.branches()?;
+    for other in branches.iter().filter(|b| b.name != branch) {
+        let whole = store.load(&other.name)?;
+        store.rebase(&other.name, &whole)?;
     }
-    std::fs::copy(path, &kept)
-        .map(drop)
-        .map_err(|e| format!("keeping {}: {e}", kept.display()))
+    let taken = |n: &str| branches.iter().any(|b| b.name == n);
+    let kept = std::iter::once(name.to_owned())
+        .chain((2..).map(|n| format!("{name} {n}")))
+        .find(|n| !taken(n))
+        .unwrap_or_else(|| name.to_owned());
+    store.fork(&kept, branch, own)?;
+    store.rebase(&kept, own)?;
+    Ok(kept)
 }
 
 /// Whether the song `guid` is open from its project file here — and so

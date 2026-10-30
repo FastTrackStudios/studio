@@ -816,7 +816,7 @@ fn a_song_hosted_live_keeps_one_of_each_fx_across_many_rounds() {
         // Hosted: the live doc seeded from the song's doc, then kept in step.
         let live = SessionDoc::new();
         live.loro()
-            .import(&seed(here.doc().loro()).expect("a seed"))
+            .import_batch(&seed(here.doc().loro()).expect("a seed"))
             .expect("seeded");
         let song_side = Side::imported(here.doc().loro().clone());
         let live_side = Side::imported(live.loro().clone());
@@ -826,7 +826,7 @@ fn a_song_hosted_live_keeps_one_of_each_fx_across_many_rounds() {
         let replica = SessionDoc::new();
         replica
             .loro()
-            .import(&seed(live.loro()).expect("the live doc"))
+            .import_batch(&seed(live.loro()).expect("the live doc"))
             .expect("replicated");
         let replica_side = Side::imported(replica.loro().clone());
         peer.seed_project(info("joined"));

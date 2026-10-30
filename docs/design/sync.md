@@ -167,18 +167,28 @@ engine while it syncs, and its media is far bigger than its doc.
   song open in an engine has one bridge, its file's (a second on the same
   project is refused: `session::sync::bridge::claim`). Two bridges on one
   song each kept their own map of which doc FX is which engine FX, and
-  added each other's chains again every round (#316). A live set in Task
-  keeps a doc of each song under an id Task gives it; that doc is a copy of
-  the song's own — seeded from it with a shallow snapshot, so the two share
-  every operation — and what either has that the other lacks is passed
-  across as Loro updates (`session::sync::relay`), never bridged to the
-  engine. A song meeting a live doc another peer seeded from its own copy
-  (another lineage, which cannot merge) is moved onto it: its bridge
-  switched to a copy of the live doc and its file's branch started over
-  from it, the file kept beside it first (`Song.before-live.session`). A
-  song synced through its org is not moved; it stays out of that set.
-  Live sessions are the engine's (`studio engine`): a window that drives
-  an engine elsewhere starts none, and shows the engine's.
+  added each other's chains again every round (#316). An `.RPP` becomes
+  its `Song.session` as it opens (the `.RPP` left as it is), so every song
+  has that file and that bridge. A live set keeps a doc of each song (Task
+  gives it its id; a set hosted over iroh, the host): a copy of the song's
+  own, seeded from its whole history (in frames a link takes; a shallow
+  seed could not hand a peer joining later the song), and kept in step
+  with it as a CRDT — what either has that the other lacks passed across
+  as Loro updates (`session::sync::relay`), never bridged to the engine,
+  and held both ways while the device is locked. What reaches a song
+  synced with its org that way goes up to the org at once, on a sync
+  session of its own (the org's driver sends only local commits).
+- **Joining with your own copy.** A song meeting a live doc another peer
+  seeded from its own copy (another lineage, which cannot merge) is moved
+  onto it: its own version is kept in its file as the branch
+  `Before joining <set> (<date>)` — whole, listed and opened with its
+  alternatives, as is every alternative made before (each made whole
+  first) — then its bridge is switched to a copy of the set's doc and its
+  branch starts over from that. A song synced with its org keeps its
+  org's version and stays out of that set; the collaboration control and
+  `SESSION_TOGETHER` say so. Live sessions are the engine's (`studio
+  engine`): a window that drives an engine elsewhere starts none, and
+  shows the engine's.
 - **Opening one made elsewhere.** The org's catalog, listed by kind
   `session`, is the device's list of projects. Opening one creates its file
   under the sync directory (or where the person puts it), adopts the doc

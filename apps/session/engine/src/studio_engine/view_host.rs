@@ -396,6 +396,7 @@ pub fn live_now() -> LiveFrame {
         locked: crate::collab::sync_locked(),
         hosted: crate::live_host::hosted().map(|h| h.title),
         host_error: crate::live_host::last_error(),
+        notices: crate::collab::notices(),
         people: crate::presence::everyone()
             .into_iter()
             .map(|p| crate::view::LivePerson {
