@@ -67,25 +67,30 @@ pub fn same_lineage(a: &LoroDoc, b: &LoroDoc) -> bool {
         .any(|(peer, counter)| *counter > 0 && theirs.get(peer).is_some_and(|c| *c > 0))
 }
 
-/// What seeds an empty doc as a copy of `from`.
+/// The most one update passed across holds: a link takes 16 MiB a
+/// message (architect's `MAX_FRAME`), and the rest of a frame is room.
+pub const FRAME: usize = 8 * 1024 * 1024;
+
+/// What seeds an empty doc as a copy of `from`, in frames.
 ///
-/// It is `from`'s state now, with none of the history before it (a
-/// long-edited song's history weighs far more than the song, and a first
-/// sync is one message), on the same operations — so what either side
-/// writes after merges into the other.
+/// It is `from`'s whole history — the same operations, so what either side
+/// writes after merges into the other. Not a shallow snapshot: a doc seeded
+/// from one cannot hand a later replica (a peer joining with nothing) the
+/// history before it, and that replica would get an empty song. A long
+/// history goes in several frames ([`FRAME`]).
 ///
 /// # Errors
 /// When `from` cannot be exported.
-pub fn seed(from: &LoroDoc) -> eyre::Result<Vec<u8>> {
-    Ok(from.export(ExportMode::shallow_snapshot(&from.oplog_frontiers()))?)
+pub fn seed(from: &LoroDoc) -> eyre::Result<Vec<Vec<u8>>> {
+    frames(from, &loro::VersionVector::default())
 }
 
-/// What `from` holds that `to` lacks, as one update; `None` when `to` has
-/// it all.
+/// What `from` holds that `to` lacks, in frames; `None` when `to` has it
+/// all.
 ///
 /// # Errors
 /// When `from` cannot be exported.
-pub fn missing(from: &LoroDoc, to: &LoroDoc) -> eyre::Result<Option<Vec<u8>>> {
+pub fn missing(from: &LoroDoc, to: &LoroDoc) -> eyre::Result<Option<Vec<Vec<u8>>>> {
     let theirs = to.oplog_vv();
     let ours = from.oplog_vv();
     let ahead = ours
@@ -94,7 +99,62 @@ pub fn missing(from: &LoroDoc, to: &LoroDoc) -> eyre::Result<Option<Vec<u8>>> {
     if !ahead {
         return Ok(None);
     }
-    Ok(Some(from.export(ExportMode::updates(&theirs))?))
+    Ok(Some(frames(from, &theirs)?))
+}
+
+/// `doc`'s operations since `since`, as updates of at most [`FRAME`] each
+/// (one that cannot be cut smaller goes as it is): split by writer, then
+/// each writer's run in halves.
+fn frames(doc: &LoroDoc, since: &loro::VersionVector) -> eyre::Result<Vec<Vec<u8>>> {
+    let whole = doc.export(ExportMode::updates(since))?;
+    if whole.len() <= FRAME {
+        return Ok(vec![whole]);
+    }
+    let spans: Vec<loro::IdSpan> = doc
+        .oplog_vv()
+        .iter()
+        .filter_map(|(peer, end)| {
+            let start = since.get(peer).copied().unwrap_or(0);
+            (*end > start).then(|| loro::IdSpan::new(*peer, start, *end))
+        })
+        .collect();
+    let mut out = Vec::new();
+    let mut todo = vec![spans];
+    while let Some(spans) = todo.pop() {
+        let bytes = doc.export(ExportMode::UpdatesInRange {
+            spans: std::borrow::Cow::Borrowed(&spans),
+        })?;
+        match spans.as_slice() {
+            _ if bytes.len() <= FRAME => out.push(bytes),
+            [] => {}
+            [one] if one.counter.end.saturating_sub(one.counter.start) <= 1 => out.push(bytes),
+            [one] => {
+                let mid = one
+                    .counter
+                    .start
+                    .saturating_add(one.counter.end.saturating_sub(one.counter.start) / 2);
+                todo.push(vec![loro::IdSpan::new(one.peer, mid, one.counter.end)]);
+                todo.push(vec![loro::IdSpan::new(one.peer, one.counter.start, mid)]);
+            }
+            many => {
+                let (a, b) = many.split_at(many.len() / 2);
+                todo.push(b.to_vec());
+                todo.push(a.to_vec());
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Pass `frames` to `side`, in order.
+///
+/// # Errors
+/// When `side` refuses one.
+pub async fn pass(side: &Side, frames: Vec<Vec<u8>>) -> eyre::Result<()> {
+    for frame in frames {
+        (side.take)(frame).await?;
+    }
+    Ok(())
 }
 
 /// Pass each side what the other has and it lacks. Returns how many
@@ -105,13 +165,13 @@ pub fn missing(from: &LoroDoc, to: &LoroDoc) -> eyre::Result<Option<Vec<u8>>> {
 pub async fn exchange(a: &Side, b: &Side) -> eyre::Result<usize> {
     let to_b = missing(&a.doc, &b.doc)?;
     let moved_to_b = to_b.is_some();
-    if let Some(bytes) = to_b {
-        (b.take)(bytes).await?;
+    if let Some(frames) = to_b {
+        pass(b, frames).await?;
     }
     let to_a = missing(&b.doc, &a.doc)?;
     let moved_to_a = to_a.is_some();
-    if let Some(bytes) = to_a {
-        (a.take)(bytes).await?;
+    if let Some(frames) = to_a {
+        pass(a, frames).await?;
     }
     Ok(usize::from(moved_to_b) + usize::from(moved_to_a))
 }

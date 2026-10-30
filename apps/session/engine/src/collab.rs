@@ -163,6 +163,31 @@ enum Link {
     Kept,
 }
 
+/// What the person should know about the live session they are in, as
+/// lines the collaboration control and `SESSION_TOGETHER` show: a song
+/// kept out of the set, or a version of theirs kept aside when a song
+/// moved onto the set's. Cleared when a session starts or is left.
+static NOTICES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// What the person should know about the live session ([`NOTICES`]).
+#[must_use]
+pub fn notices() -> Vec<String> {
+    NOTICES.lock().map(|n| n.clone()).unwrap_or_default()
+}
+
+#[cfg_attr(not(feature = "native"), allow(dead_code))]
+fn notice(line: String) {
+    if let Ok(mut notices) = NOTICES.lock() {
+        notices.push(line);
+    }
+}
+
+fn clear_notices() {
+    if let Ok(mut notices) = NOTICES.lock() {
+        notices.clear();
+    }
+}
+
 /// Songs with something held by this device's lock: a page's bridges'
 /// (`hold`) and an engine's relays'.
 fn held_count(hold: &Hold, links: &[Link]) -> usize {
@@ -585,6 +610,7 @@ fn local_transport(songs: &[Song]) -> LocalTransport {
 /// everything edited together stays in their history (an engine's song in
 /// its file) — shared with nobody.
 pub fn leave() {
+    clear_notices();
     if let Ok(mut live) = LIVE.lock()
         && live.as_ref().is_some_and(|l| l.shared)
     {
@@ -633,22 +659,28 @@ fn host_inner(name: String) -> eyre::Result<String> {
         if let Ok(mut live) = LIVE.lock() {
             drop(stop(live.take()));
         }
-        // The songs' own docs, history and all, are what go on the network:
-        // served as they are, each song keeping its file's one bridge.
+        clear_notices();
+        // Each song's set doc is a copy of its own, history and all, kept
+        // in step with it — so this device's lock holds the peers' edits
+        // back here, as in a set Task keeps; each song keeps its file's one
+        // bridge.
         let host = SetHost::new(id);
         let mut bridges = Vec::new();
         for (project, _, key, path) in open {
             let guid = project.guid().to_owned();
             let own = song_side(guid.clone(), path).await?;
-            let doc = SessionDoc::from_loro(own.doc);
-            host.add(song_id(&set, &key), &doc);
+            let doc = SessionDoc::new();
+            doc.loro()
+                .import_batch(&session::sync::relay::seed(&own.doc)?)
+                .map_err(|e| eyre::eyre!("{key}: its set doc did not seed: {e}"))?;
+            let served = host.add_relayed(song_id(&set, &key), &doc);
             bridges.push((
                 Song {
                     project: guid,
                     key,
                     doc,
                 },
-                Link::Kept,
+                Link::Relayed(Relay::start(own, served, LOCK.subscribe())),
             ));
         }
         let endpoint = architect::iroh_link::bind_endpoint(secret_key())
@@ -748,6 +780,7 @@ fn join_inner(ticket: &str, name: String) -> eyre::Result<()> {
         if let Ok(mut live) = LIVE.lock() {
             drop(stop(live.take()));
         }
+        clear_notices();
         let mut bridges = Vec::new();
         for ((doc, side), song) in replicas {
             let meet = if doc.has_session() {
@@ -755,7 +788,8 @@ fn join_inner(ticket: &str, name: String) -> eyre::Result<()> {
             } else {
                 Meeting::Own
             };
-            let (song, link, _) = link_song(meet, song, Some(side), &mut HashMap::new()).await?;
+            let (song, link, _) =
+                link_song(meet, song, Some(side), &set, &mut HashMap::new()).await?;
             bridges.push((song, link));
         }
         crate::song_model::request_resync();
@@ -1023,6 +1057,8 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
         .map(|mut l| stop(l.take()))
         .unwrap_or_default();
     let seeds = may_seed(&set, joined.read_only);
+    clear_notices();
+    let title = joined.title.clone();
     let mut bridges = Vec::new();
     let mut waiting = Vec::new();
     let mut seeded = 0usize;
@@ -1032,7 +1068,7 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
             Meeting::Wait(doc) => waiting.push((doc, side, song)),
             meet => {
                 let (song, link, was_seeded) =
-                    sliced(link_song(meet, song, side, &mut docs)).await?;
+                    sliced(link_song(meet, song, side, &title, &mut docs)).await?;
                 seeded += usize::from(was_seeded);
                 bridges.push((song, link));
             }
@@ -1059,8 +1095,9 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
         .chain(waiting.iter().map(|(_, _, song)| song.0.guid().to_owned()))
         .collect();
     for (doc, side, song) in waiting {
-        bridge_when_seeded(doc, side, song, adds_tx.clone());
+        bridge_when_seeded(doc, side, song, title.clone(), adds_tx.clone());
     }
+    let later = title.clone();
     architect::platform::spawn(async move {
         while let Some(project) = opened_rx.recv().await {
             if !bridged.insert(project.clone()) {
@@ -1076,12 +1113,12 @@ async fn join_task_live(set: TaskSet, name: String) -> eyre::Result<Live> {
             settle(doc.iter()).await;
             let meet = match meeting(doc, seeds) {
                 Meeting::Wait(doc) => {
-                    bridge_when_seeded(doc, side, song, adds_tx.clone());
+                    bridge_when_seeded(doc, side, song, later.clone(), adds_tx.clone());
                     continue;
                 }
                 meet => meet,
             };
-            match sliced(link_song(meet, song, side, &mut HashMap::new())).await {
+            match sliced(link_song(meet, song, side, &later, &mut HashMap::new())).await {
                 Ok((song, link, _)) => {
                     if adds_tx.send((song, link)).is_err() {
                         break;
@@ -1261,6 +1298,7 @@ fn bridge_when_seeded(
     doc: SessionDoc,
     side: Option<Side>,
     song: OpenSong,
+    set: String,
     adds: tokio::sync::mpsc::UnboundedSender<(Song, Link)>,
 ) {
     architect::platform::spawn(async move {
@@ -1274,6 +1312,7 @@ fn bridge_when_seeded(
             Meeting::Join(doc),
             song,
             side,
+            &set,
             &mut HashMap::new(),
         ))
         .await
@@ -1291,25 +1330,34 @@ fn bridge_when_seeded(
 /// Keep one song with the set's replica of it (`side`, the replica as a
 /// relay's side) as `meet` says — an engine's through its project file's
 /// one doc ([`relay_song`]), a page's through its one bridge
-/// ([`bridge_song`]). Says whether it seeded.
-#[cfg_attr(not(feature = "native"), allow(clippy::unused_async))]
+/// ([`bridge_song`]). `set` is the set's title. Says whether it seeded.
 async fn link_song(
     meet: Meeting,
     song: OpenSong,
     side: Option<Side>,
+    set: &str,
     docs: &mut HashMap<String, SessionDoc>,
 ) -> eyre::Result<(Song, Link, bool)> {
     #[cfg(feature = "native")]
     {
         let _ = docs;
-        relay_song(meet, song, side).await
+        relay_song(meet, song, side, set).await
     }
     #[cfg(not(feature = "native"))]
     {
-        let _ = side;
+        let _ = (side, set);
         let (song, bridge, seeded) = bridge_song(meet, song, docs).await?;
         Ok((song, Link::Bridged(bridge), seeded))
     }
+}
+
+/// Today's date on this machine (UTC), `2026-10-29`.
+#[cfg(feature = "native")]
+fn today() -> String {
+    let secs = web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    crate::project_file::date_of(secs)
 }
 
 /// The song `guid`'s one doc, as a relay's side: its project file's,
@@ -1333,20 +1381,24 @@ async fn song_side(guid: String, path: std::path::PathBuf) -> eyre::Result<Side>
 /// - **Join**: the set's doc is of the song's own lineage (seeded from
 ///   it, or from a copy of its file): kept in step with it. Of another
 ///   lineage (another peer's copy seeded it): the song is moved onto it
-///   (`project_file::adopt`), then kept in step.
+///   (`project_file::adopt`) — this device's version kept in its file as
+///   `Before joining <set> (<date>)` — then kept in step. A song synced with
+///   its org is not moved: it stays out of the set, and the person is told
+///   ([`notices`]).
 /// - **Own**: the set does not have it; nothing is kept.
 #[cfg(feature = "native")]
 async fn relay_song(
     meet: Meeting,
     (project, _, key, path): OpenSong,
     live: Option<Side>,
+    set: &str,
 ) -> eyre::Result<(Song, Link, bool)> {
     use session::sync::relay;
     let guid = project.guid().to_owned();
     let (doc, link, seeded) = match (meet, live) {
         (Meeting::Seed(doc), Some(live)) => {
             let own = song_side(guid.clone(), path).await?;
-            (live.take)(relay::seed(&own.doc)?).await?;
+            relay::pass(&live, relay::seed(&own.doc)?).await?;
             (
                 doc,
                 Link::Relayed(Relay::start(own, live, LOCK.subscribe())),
@@ -1359,17 +1411,28 @@ async fn relay_song(
                 Some(own)
             } else {
                 let (moving, from) = (guid.clone(), live.doc.clone());
-                let moved =
-                    tokio::task::spawn_blocking(move || crate::project_file::adopt(&moving, &from))
-                        .await
-                        .map_err(|e| eyre::eyre!("{key}: the song did not move: {e}"))?;
-                // Refused (a song synced with its org keeps its org's
-                // doc): this song stays out of the set; the rest join.
-                moved
-                    .inspect_err(|why| {
+                let archive = crate::project_file::archive_name(set, &today());
+                let moved = tokio::task::spawn_blocking(move || {
+                    crate::project_file::adopt(&moving, &from, &archive)
+                })
+                .await
+                .map_err(|e| eyre::eyre!("{key}: the song did not move: {e}"))?;
+                match moved {
+                    Ok(adopted) => {
+                        notice(format!(
+                            "{key}: your version is kept as \"{}\" (the song's alternatives)",
+                            adopted.kept_as
+                        ));
+                        Some(adopted.side)
+                    }
+                    // Refused (a song synced with its org keeps its org's
+                    // doc): this song stays out of the set; the rest join.
+                    Err(why) => {
                         tracing::warn!(collab.song = %key, collab.why = %why, "collab: the song stays out of the set");
-                    })
-                    .ok()
+                        notice(format!("{key} is not in this set: {why}"));
+                        None
+                    }
+                }
             };
             match own {
                 Some(own) => (

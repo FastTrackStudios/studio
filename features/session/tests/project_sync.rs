@@ -242,3 +242,80 @@ fn a_song_folded_fresh_holds_the_same_song_in_less_and_its_alternative_still_ope
         "each branch keeps its doc id"
     );
 }
+
+/// An edit a live set relays into a song synced with its org reaches the
+/// org at once — on the relay's own session, not the device driver's next
+/// attach (which sends only commits made on the device) — and reaches
+/// another device of the org from there.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_relayed_edit_reaches_the_org_at_once() {
+    let task = task().await;
+    let (a_dir, b_dir) = (
+        tempfile::tempdir().expect("a"),
+        tempfile::tempdir().expect("b"),
+    );
+    let path = a_dir.path().join("Unbreakable.session");
+    let store = project(&path);
+    let a = device(a_dir.path());
+    let made = register(&a, &path, &store).await.expect("registered");
+    let (song, on_a) = made.get(MAIN).expect("the song's doc").clone();
+    online(&task, a.driver.clone()).await;
+    let b = device(b_dir.path());
+    online(&task, b.driver.clone()).await;
+    until("B lists the song", async || {
+        b.driver
+            .docs()
+            .await
+            .unwrap_or_default()
+            .iter()
+            .any(|d| d.meta.doc_id == song)
+    })
+    .await;
+    let on_b = b.driver.open(song).await.expect("B opens the song");
+    let want = items(on_a.loro());
+    until("B's song holds A's", async || items(on_b.loro()) == want).await;
+
+    // A live set's copy of the song (its lineage), edited there.
+    let live = LoroDoc::new();
+    live.import(
+        &on_a
+            .loro()
+            .export(ExportMode::Snapshot)
+            .expect("the song whole"),
+    )
+    .expect("a copy");
+    let relayed = put(&live, "ride", 4.0);
+
+    // Relayed into A's synced doc: imported there, not committed — and
+    // still at B, through Task, within moments.
+    let server = std::sync::Arc::new(task);
+    let dial: session::project_sync::Dial = {
+        let server = std::sync::Arc::clone(&server);
+        std::sync::Arc::new(move || {
+            let server = std::sync::Arc::clone(&server);
+            Box::pin(async move {
+                server
+                    .establish::<DocSyncClient>()
+                    .await
+                    .map_err(|e| format!("{e:?}"))
+            })
+        })
+    };
+    let side = session::project_sync::relayed_side(&on_a, song, dial);
+    (side.take)(relayed).await.expect("taken");
+    assert!(
+        on_a.loro().get_map("items").get("ride").is_some(),
+        "A holds it"
+    );
+    until("B has the relayed edit", async || {
+        on_b.loro().get_map("items").get("ride").is_some()
+    })
+    .await;
+    until("A's file holds it", async || {
+        Store::open(&path)
+            .and_then(|s| s.load(MAIN))
+            .map(|doc| doc.get_map("items").get("ride").is_some())
+            .unwrap_or(false)
+    })
+    .await;
+}

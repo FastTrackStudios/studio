@@ -96,6 +96,14 @@ mod live {
         }
     }
 
+    pub fn notices() -> Vec<String> {
+        if elsewhere() {
+            frame().map(|f| f.notices.clone()).unwrap_or_default()
+        } else {
+            crate::collab::notices()
+        }
+    }
+
     pub fn host_error() -> Option<String> {
         if elsewhere() {
             frame().and_then(|f| f.host_error.clone())
@@ -170,7 +178,8 @@ mod live {
 #[cfg(not(feature = "native"))]
 mod live {
     pub use crate::collab::{
-        joining, last_error, leave, set_shared_transport, set_sync_locked, status, sync_locked,
+        joining, last_error, leave, notices, set_shared_transport, set_sync_locked, status,
+        sync_locked,
     };
 }
 
@@ -189,6 +198,8 @@ pub fn CollabBar() -> Element {
     let mut copied = use_signal(|| false);
     // This device's sync switch (`collab::sync_locked`).
     let mut locked = use_signal(live::sync_locked);
+    // What the person should know: a song kept out, a version kept aside.
+    let mut notices = use_signal(live::notices);
     // Natively: the set this window hosts in Task by itself, and why it
     // could not, if it could not (`live_host`).
     #[cfg(feature = "native")]
@@ -232,6 +243,10 @@ pub fn CollabBar() -> Element {
             let here = crate::ghosts::everyone();
             if *people.peek() != here {
                 people.set(here);
+            }
+            let now_notices = live::notices();
+            if *notices.peek() != now_notices {
+                notices.set(now_notices);
             }
             let now_locked = live::sync_locked();
             if *locked.peek() != now_locked {
@@ -321,7 +336,7 @@ pub fn CollabBar() -> Element {
                         "{clock(left)}"
                     }
                 }
-                if error().is_some() {
+                if error().is_some() || !notices().is_empty() {
                     span { style: "width:7px; height:7px; border-radius:4px; background:#e3b341;" }
                 }
                 // Locked: this device is not syncing — say so on the bar.
@@ -494,6 +509,9 @@ pub fn CollabBar() -> Element {
                     }
                     if let Some(why) = error() {
                         span { style: "font-size:11px; color:#e3b341;", "{why}" }
+                    }
+                    for line in notices() {
+                        span { style: "font-size:11px; color:#e3b341;", "{line}" }
                     }
                     if let Some(why) = hosting_error() {
                         span { style: "font-size:11px; color:#e3b341;", "Task: {why}" }

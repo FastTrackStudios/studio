@@ -98,6 +98,9 @@ fn saved(daw: &Standalone, guid: &str, file: &Path) {
     super::save(daw, guid, file, MAIN, "Save").expect("saved");
 }
 
+/// A joiner's own mix, told apart from the host's.
+const OWN_MIX: f64 = 0.33;
+
 #[test]
 fn a_hosted_set_is_joined_through_the_project_file_with_one_bridge_a_song() {
     let dir = tempfile::tempdir().expect("a temp dir");
@@ -115,7 +118,7 @@ fn a_hosted_set_is_joined_through_the_project_file_with_one_bridge_a_song() {
     let host = super::live_side(&daw, "host-song", &host_file).expect("its doc");
     let live = SessionDoc::new();
     live.loro()
-        .import(&seed(&host.doc).expect("a seed"))
+        .import_batch(&seed(&host.doc).expect("a seed"))
         .expect("seeded");
     let live_side = Side::imported(live.loro().clone());
     assert!(
@@ -131,20 +134,61 @@ fn a_hosted_set_is_joined_through_the_project_file_with_one_bridge_a_song() {
     assert!(same_lineage(&copy_side.doc, live.loro()));
     pass(&copy_side, &live_side);
 
-    // A peer with its own copy of the song (another lineage) joins: moved
-    // onto the set's doc, through its file.
+    // A peer with its own copy of the song (another lineage), its own mix
+    // on it and an alternative made from it, joins: moved onto the set's
+    // doc, through its file — its own version kept in that file.
     seed_song(&daw, "own-song");
+    daw.write_project("own-song", |p| {
+        if let Some(t) = p.tracks.iter_mut().find(|t| t.name == "Verb") {
+            t.volume = OWN_MIX;
+        }
+    });
     let own_file = dir.path().join("Own.session");
     saved(&daw, "own-song", &own_file);
+    super::fork(&daw, "own-song", &own_file, "Organized").expect("an alternative");
     let own_side = super::live_side(&daw, "own-song", &own_file).expect("its doc");
     assert!(!same_lineage(&own_side.doc, live.loro()));
-    let own_side = super::adopt("own-song", live.loro()).expect("moved onto the set's doc");
+    let archive = super::archive_name("Sunday / Night", "2026-10-29");
+    assert_eq!(archive, "Before joining Sunday - Night (2026-10-29)");
+    let adopted =
+        super::adopt("own-song", live.loro(), &archive).expect("moved onto the set's doc");
+    assert_eq!(adopted.kept_as, archive);
+    let own_side = adopted.side;
     assert!(same_lineage(&own_side.doc, live.loro()));
-    assert!(
-        dir.path().join("Own.before-live.session").exists(),
-        "its own history kept beside it"
-    );
     pass(&own_side, &live_side);
+    assert_eq!(
+        verb_volume(&daw, "own-song"),
+        verb_volume(&daw, "host-song"),
+        "the engine is the set's song now"
+    );
+    // Nothing of its own version is lost: kept as a branch of its file,
+    // listed with its alternatives, and opening as it was — as is the
+    // alternative made before, though the song it was forked from started
+    // over.
+    let names: Vec<String> = super::branches(&own_file)
+        .expect("its branches")
+        .into_iter()
+        .map(|b| b.name)
+        .collect();
+    assert!(names.contains(&archive), "kept as {archive}: {names:?}");
+    for (branch, why) in [
+        (archive.as_str(), "the kept version"),
+        ("Organized", "the alternative"),
+    ] {
+        let doc = super::doc_of(&own_file.join(branch)).unwrap_or_else(|| panic!("{why} opens"));
+        let volume = SessionDoc::from_loro(doc)
+            .read()
+            .tracks
+            .iter()
+            .find(|t| t.name == "Verb")
+            .map(|t| t.volume);
+        assert_eq!(volume, Some(OWN_MIX), "{why} holds its own mix");
+    }
+    let main = super::doc_of(&own_file).expect("the song opens");
+    assert!(
+        same_lineage(&main, live.loro()),
+        "the song's file is of the set's lineage now"
+    );
 
     for guid in ["host-song", copy.as_str(), "own-song"] {
         assert!(has_its_one_bridge(&daw, guid), "{guid}: one bridge");
@@ -202,4 +246,62 @@ fn a_copy_saved_elsewhere_makes_no_second_bridge() {
         1
     );
     assert!(has_its_one_bridge(&daw, "copied-song"));
+}
+
+#[test]
+fn a_date_is_the_calendar_day() {
+    assert_eq!(super::date_of(0), "1970-01-01");
+    assert_eq!(super::date_of(951_782_400), "2000-02-29");
+    assert_eq!(super::date_of(1_793_232_000), "2026-10-29");
+}
+
+/// An `.RPP` is a session file from the moment it opens: `Song.session`
+/// beside it, the song open from it (its one bridge), the `.RPP` as it
+/// was — and the next open is the `.session`.
+#[test]
+fn an_rpp_opens_as_its_session_file() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let rpp = dir.path().join("Washed.RPP");
+    let text = "<REAPER_PROJECT 0.1 \"7.0/test\" 1700000000\n  SAMPLERATE 48000 0 0\n  TEMPO 120 4 4 0\n  <TRACK {0B5E0000-0000-0000-0000-000000000001}\n    NAME Guitar\n  >\n>\n";
+    std::fs::write(&rpp, text).expect("an .RPP");
+    let daw = Standalone::new();
+    let (opened, _) = crate::open_core::open_song_in(
+        crate::folder::disk(),
+        &daw,
+        &rpp,
+        &crate::prepare::Prepare::default(),
+        crate::open_core::Media::Deferred,
+    )
+    .expect("opened");
+    let session = dir.path().join("Washed.session");
+    assert!(
+        super::is_project_file(&session),
+        "its session file is there"
+    );
+    assert!(
+        super::is_open(&opened.project_guid),
+        "the song is open from it"
+    );
+    assert!(has_its_one_bridge(&daw, &opened.project_guid));
+    assert_eq!(
+        std::fs::read_to_string(&rpp).expect("the .RPP"),
+        text,
+        "the .RPP is left as it was"
+    );
+    let names: Vec<String> = SessionDoc::from_loro(super::doc_of(&session).expect("its doc"))
+        .read()
+        .tracks
+        .into_iter()
+        .map(|t| t.name)
+        .collect();
+    assert_eq!(names, ["Guitar"]);
+    let plan = crate::open_core::song_plan_in(
+        crate::folder::disk(),
+        &rpp,
+        &crate::prepare::Prepare::default(),
+    );
+    assert_eq!(
+        plan.open, session,
+        "it opens as its session file from now on"
+    );
 }

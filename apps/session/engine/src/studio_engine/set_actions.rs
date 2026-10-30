@@ -200,7 +200,7 @@ static TOGETHER_STATUS: ActionMeta = meta(
     "SESSION_TOGETHER",
     "session_together",
     "The live session",
-    "The live session the engine is in, as the collaboration control shows it: `status` (the set, hosting or joined, the ticket or link, how many others, whether the transport is shared, this person's name and colour), `joining`, `error` (why the last share or join failed), `locked` (this device is not syncing), `hosted` (the set the engine hosts in Task by itself, signed in) and `host_error`, and `people` (everyone else, and the song each is on). Read-only.",
+    "The live session the engine is in, as the collaboration control shows it: `status` (the set, hosting or joined, the ticket or link, how many others, whether the transport is shared, this person's name and colour), `joining`, `error` (why the last share or join failed), `locked` (this device is not syncing), `hosted` (the set the engine hosts in Task by itself, signed in) and `host_error`, `people` (everyone else, and the song each is on), and `notices` (what the person should know: a song kept out of the set because it syncs with its org, or their version of a song kept as an alternative when it moved onto the set's). Read-only.",
     "Set",
     "",
 );

@@ -23,7 +23,7 @@ publish = ["library", "dep:project-proto", "dep:share-proto"]
 net = ["dep:crdt", "dep:futures"]
 # A project file synced through the org that owns it (session::project_sync,
 # native only): its branches as `session` docs on the account's driver.
-project-sync = ["dep:crdt", "dep:dirs", "dep:fts-account", "fts-account/sync", "dep:session-format", "session-format/sync"]
+project-sync = ["dep:crdt", "dep:task-dial", "dep:dirs", "dep:fts-account", "fts-account/sync", "dep:session-format", "session-format/sync"]
 reaper = ["studio/reaper", "dep:daw-actions", "dep:daw-reaper", "dep:daw-sync", "dep:reaper-high", "dep:reaper-low", "dep:reaper-medium"]
 tts = ["dep:chatterbox-rs", "dep:ort", "ort/load-dynamic"]
 ui = ["dep:architect-ui", "dep:dock", "dock?/ui", "dep:lucide-dioxus", "web"]

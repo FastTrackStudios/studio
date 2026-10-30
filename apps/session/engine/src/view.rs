@@ -337,6 +337,9 @@ pub struct LiveFrame {
     pub host_error: Option<String>,
     /// Everyone else in the set, and the song each is on.
     pub people: Vec<LivePerson>,
+    /// What the person should know about the session: a song kept out of
+    /// the set, a version of theirs kept aside (`crate::collab::notices`).
+    pub notices: Vec<String>,
 }
 
 /// A live session, as [`crate::collab::Status`] has it.

@@ -32,7 +32,7 @@ fn seeded() -> (SessionDoc, SessionDoc) {
     song_doc.write(&louder, ORIGIN_LOCAL).expect("an edit");
     let live = SessionDoc::new();
     live.loro()
-        .import(&seed(song_doc.loro()).expect("a seed"))
+        .import_batch(&seed(song_doc.loro()).expect("a seed"))
         .expect("seeded");
     (song_doc, live)
 }
@@ -55,6 +55,22 @@ fn a_seeded_doc_is_the_song_and_of_its_lineage() {
     );
     assert!(!same_lineage(song_doc.loro(), SessionDoc::new().loro()));
     assert_eq!(missing(song_doc.loro(), live.loro()).expect("read"), None);
+}
+
+/// A fresh replica of a seeded doc (a peer joining the set later, its
+/// version empty) gets the whole song from it, as a sync host sends it —
+/// and stays of the song's lineage.
+#[test]
+fn a_fresh_replica_of_a_seeded_doc_gets_the_whole_song() {
+    let (song_doc, live) = seeded();
+    let fresh = SessionDoc::new();
+    let backlog = live
+        .loro()
+        .export(loro::ExportMode::updates(&loro::VersionVector::default()))
+        .expect("everything the seeded doc holds, from nothing");
+    fresh.loro().import(&backlog).expect("taken whole");
+    assert_eq!(fresh.read(), song_doc.read());
+    assert!(same_lineage(song_doc.loro(), fresh.loro()));
 }
 
 /// The regression's shape at the doc level: edits on either side, passed
@@ -127,5 +143,65 @@ fn a_relay_keeps_both_in_step_and_holds_while_locked() {
         until(|| volume(&live) == 0.2).await;
         assert!(!relay.held());
         assert_eq!(fx_count(&live), 1);
+    });
+}
+
+/// A set this device hosts (over iroh, here an in-process link) holds a
+/// peer's edits back from the song while the device is locked, and the
+/// song's edits back from the peer — the same as a set Task keeps — then
+/// passes both ways when it is unlocked: the song's edits reach the peer
+/// through the set's host, though they are imports there.
+#[cfg(feature = "net")]
+#[test]
+fn a_hosted_set_holds_both_ways_while_locked() {
+    use crate::sync::net::{SetHost, SetPeer, dial_fixed, song_id};
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .expect("a runtime");
+    runtime.block_on(async {
+        let (song_doc, _) = seeded();
+        let set = SetHost::new(uuid::Uuid::from_u128(316));
+        let doc_id = song_id("Set", "Song");
+        let served = SessionDoc::new();
+        served
+            .loro()
+            .import_batch(&seed(song_doc.loro()).expect("a seed"))
+            .expect("seeded");
+        let served_side = set.add_relayed(doc_id, &served);
+        let server = architect::LocalServer::serve(
+            set.mount(architect::LayerRouter::new()),
+            architect::Scope::new(),
+        );
+        let client: crdt::sync::DocSyncClient = server.establish().await.expect("a client");
+        let peer = SetPeer::sync_song(doc_id, dial_fixed(client));
+        until(|| peer.read() == song_doc.read()).await;
+
+        let (lock, locked) = tokio::sync::watch::channel(true);
+        let relay = Relay::start(Side::imported(song_doc.loro().clone()), served_side, locked);
+        let track = |doc: &SessionDoc| doc.read().tracks[0].clone();
+
+        // Locked: the peer's edit reaches the set, not the song …
+        let mut model = peer.read();
+        model.tracks[0].volume = 0.1;
+        peer.write(&model, ORIGIN_LOCAL).expect("the peer's edit");
+        until(|| track(&served).volume == 0.1).await;
+        // … and the song's edit stays here.
+        let mut model = song_doc.read();
+        model.tracks[0].name = "Hall".into();
+        song_doc.write(&model, ORIGIN_LOCAL).expect("an edit here");
+        until(|| relay.held()).await;
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert_eq!(track(&song_doc).volume, 0.9, "the peer's edit held");
+        assert_eq!(track(&peer).name, "Verb", "this device's edit held");
+
+        // Unlocked: both ways, the song's edit reaching the peer.
+        lock.send_replace(false);
+        until(|| track(&song_doc).volume == 0.1).await;
+        until(|| track(&peer).name == "Hall").await;
+        assert!(!relay.held());
+        assert_eq!(fx_count(&peer), 1);
+        drop(server);
     });
 }
