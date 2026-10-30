@@ -29,6 +29,7 @@ pub mod model;
 #[cfg(feature = "net")]
 pub mod net;
 pub mod presence;
+pub mod relay;
 pub mod slug;
 pub mod transport;
 #[cfg(feature = "engine")]

@@ -97,7 +97,7 @@ async fn staged(daw: &Standalone, guid: &str, song: &Song) -> Bridge {
         .await
         .expect("a facade");
     let project = facade.daw.project(guid.to_owned()).await.expect("the song");
-    built.moved_to(project, direct(daw))
+    built.moved_to(project, direct(daw)).expect("moved")
 }
 
 /// Everything project `guid` holds, by part, as text — with each take's
@@ -446,7 +446,8 @@ async fn join_built(daw: &Standalone, guid: &str, song: &Song, doc: SessionDoc) 
 /// guids, not the file's ids), as `collab` hosts a song.
 async fn seeded_elsewhere(song: &Song) -> SessionDoc {
     let daw = Standalone::new();
-    let _built = in_place(&daw, "host", song).await;
+    // Its build's bridge let go: a project has one bridge at a time.
+    drop(in_place(&daw, "host", song).await);
     let facade = daw_standalone::bootstrap::build_in_process_daw(daw.clone())
         .await
         .expect("a facade");
@@ -514,7 +515,8 @@ async fn joins_without_building(song: &Song) {
         ("a peer's seed", seeded),
     ] {
         let daw = Standalone::new();
-        let built = in_place(&daw, "joined-song", song).await;
+        // Its build's bridge let go: a project has one bridge at a time.
+        drop(in_place(&daw, "joined-song", song).await);
         let before = made(&daw, "joined-song");
         let joined = join_built(&daw, "joined-song", song, live.fork()).await;
         assert_eq!(
@@ -545,7 +547,6 @@ async fn joins_without_building(song: &Song) {
         let mut doc = live.read();
         doc.chart.clone_from(&joined.shown().chart);
         assert_eq!(joined.shown(), &doc, "{case}: the bridge shows the doc");
-        drop(built);
     }
 }
 
@@ -691,6 +692,206 @@ fn a_real_song_staged_never_stalls_another_songs_reader() {
         worst < Duration::from_millis(20),
         "a read of another song waited {worst:?}"
     );
+}
+
+/// A project has one bridge in a process: a second, whichever way it is
+/// made, is refused while the first lives — two would rewrite each other
+/// (#316) — and is allowed once the first is gone. Another engine's
+/// project of the same guid is another project.
+#[test]
+fn a_second_bridge_on_one_project_is_refused() {
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let song = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(async {
+        let daw = Standalone::new();
+        let first = in_place(&daw, "one-song", &song).await;
+        let facade = daw_standalone::bootstrap::build_in_process_daw(daw.clone())
+            .await
+            .expect("a facade");
+        let project = facade
+            .daw
+            .project("one-song".to_owned())
+            .await
+            .expect("the song");
+        let refused = |result: eyre::Result<Bridge>, how: &str| {
+            let error = result
+                .err()
+                .unwrap_or_else(|| panic!("{how}: a second bridge was made"));
+            assert_eq!(
+                error.downcast_ref::<crate::sync::bridge::AlreadyBridged>(),
+                Some(&crate::sync::bridge::AlreadyBridged {
+                    project: "one-song".into()
+                }),
+                "{how}: refused for another reason: {error}"
+            );
+        };
+        refused(
+            Bridge::host(
+                project.clone(),
+                song.media.clone(),
+                SessionDoc::new(),
+                String::new(),
+                song.blobs.clone(),
+                direct(&daw),
+            )
+            .await,
+            "host",
+        );
+        refused(
+            Bridge::join(
+                project.clone(),
+                song.media.clone(),
+                song.doc.fork(),
+                song.blobs.clone(),
+                direct(&daw),
+            )
+            .await,
+            "join",
+        );
+        refused(
+            Bridge::join_held(
+                project.clone(),
+                song.media.clone(),
+                song.doc.fork(),
+                song.blobs.clone(),
+                direct(&daw),
+            )
+            .await,
+            "join_held",
+        );
+
+        // Another engine's song of the same guid is its own.
+        let other = Standalone::new();
+        let _theirs = in_place(&other, "one-song", &song).await;
+
+        drop(first);
+        Bridge::host(
+            project,
+            song.media.clone(),
+            SessionDoc::new(),
+            String::new(),
+            song.blobs.clone(),
+            direct(&daw),
+        )
+        .await
+        .expect("the first gone, a bridge may be made again");
+    });
+}
+
+/// How many FX project `guid` holds, over every chain.
+fn fx_in(daw: &Standalone, guid: &str) -> usize {
+    daw.read_project(guid, |p| p.fx_chains.values().map(Vec::len).sum())
+        .expect("the project")
+}
+
+/// The #316 regression. A song hosted live: its engine keeps one bridge,
+/// on the song's own doc; the live set's doc is a copy of that doc, kept
+/// in step as a CRDT ([`crate::sync::relay`]); a peer joins the live doc
+/// with its own engine. Edited on both engines and passed around for many
+/// rounds, every FX stays one FX on both — where two bridges on the
+/// host's engine (its doc's and the live doc's) added each chain again
+/// each round.
+#[test]
+fn a_song_hosted_live_keeps_one_of_each_fx_across_many_rounds() {
+    use crate::sync::relay::{Side, exchange, seed};
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let song = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(async {
+        // The host: the song open from its file, one bridge.
+        let host = Standalone::new();
+        let mut here = in_place(&host, "hosted", &song).await;
+        let fx = fx_in(&host, "hosted");
+        assert!(fx > 0, "the song has FX to lose count of");
+
+        // Hosted: the live doc seeded from the song's doc, then kept in step.
+        let live = SessionDoc::new();
+        live.loro()
+            .import(&seed(here.doc().loro()).expect("a seed"))
+            .expect("seeded");
+        let song_side = Side::imported(here.doc().loro().clone());
+        let live_side = Side::imported(live.loro().clone());
+
+        // The peer: its replica of the live doc, one bridge on it.
+        let peer = Standalone::new();
+        let replica = SessionDoc::new();
+        replica
+            .loro()
+            .import(&seed(live.loro()).expect("the live doc"))
+            .expect("replicated");
+        let replica_side = Side::imported(replica.loro().clone());
+        peer.seed_project(info("joined"));
+        let facade = daw_standalone::bootstrap::build_in_process_daw(peer.clone())
+            .await
+            .expect("a facade");
+        let project = facade
+            .daw
+            .project("joined".to_owned())
+            .await
+            .expect("the song");
+        let mut there = Bridge::join(
+            project,
+            song.media.clone(),
+            replica.clone(),
+            song.blobs.clone(),
+            direct(&peer),
+        )
+        .await
+        .expect("joined");
+        assert_eq!(fx_in(&peer, "joined"), fx, "the peer built the song once");
+
+        // Rounds of edits on both engines, each passed all the way round,
+        // and passed again for good measure.
+        let track = song.doc.read().tracks[0].guid.clone();
+        for round in 0..24_u32 {
+            let (daw, guid) = if round % 2 == 0 {
+                (&host, "hosted")
+            } else {
+                (&peer, "joined")
+            };
+            daw.write_project(guid, |p| {
+                if let Some(t) = p.tracks.iter_mut().find(|t| t.guid == track) {
+                    t.volume = f64::from(round) / 24.0;
+                }
+            });
+            if round % 2 == 0 {
+                here.local_step("Turn it").await.expect("a host step");
+            } else {
+                there.local_step("Turn it").await.expect("a peer step");
+            }
+            for _ in 0..2 {
+                exchange(&song_side, &live_side).await.expect("relayed");
+                exchange(&live_side, &replica_side).await.expect("synced");
+                here.remote_changed().await.expect("the host follows");
+                there.remote_changed().await.expect("the peer follows");
+                here.local_changed().await.expect("the host reads back");
+                there.local_changed().await.expect("the peer reads back");
+            }
+            assert_eq!(fx_in(&host, "hosted"), fx, "round {round}: the host's FX");
+            assert_eq!(fx_in(&peer, "joined"), fx, "round {round}: the peer's FX");
+        }
+        let fx_of =
+            |doc: &SessionDoc| -> usize { doc.read().tracks.iter().map(|t| t.fx.len()).sum() };
+        assert_eq!(fx_of(here.doc()), fx, "the song's doc");
+        assert_eq!(fx_of(&live), fx, "the live doc");
+        let volume = |daw: &Standalone, guid: &str| {
+            daw.read_project(guid, |p| {
+                p.tracks.iter().find(|t| t.guid == track).map(|t| t.volume)
+            })
+            .flatten()
+        };
+        assert_eq!(volume(&host, "hosted"), volume(&peer, "joined"));
+        assert_eq!(volume(&host, "hosted"), Some(23.0 / 24.0));
+    });
 }
 
 /// A step after the first reads only what the engine's journals say

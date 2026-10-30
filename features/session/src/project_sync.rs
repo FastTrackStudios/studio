@@ -237,6 +237,29 @@ impl SyncedBranch {
             replica.name_next(label);
         }
     }
+
+    /// This branch as a side of a [`crate::sync::relay::Relay`]: what it
+    /// is passed is applied to the doc and written through its file, as
+    /// an update from another device is.
+    ///
+    /// What it is passed reaches the org when the driver next attaches
+    /// (it catches up by version vector): the driver sends up only the
+    /// commits made here.
+    #[must_use]
+    pub fn side(&self) -> crate::sync::relay::Side {
+        let (doc, id) = (self.doc.clone(), self.id);
+        crate::sync::relay::Side {
+            doc: self.doc.loro().clone(),
+            take: Arc::new(move |bytes: Vec<u8>| {
+                let doc = doc.clone();
+                Box::pin(async move {
+                    doc.apply_remote_durable(id, &bytes)
+                        .await
+                        .map_err(|e| eyre::eyre!("the synced song took no update: {e}"))
+                })
+            }),
+        }
+    }
 }
 
 /// `branch` of the project at `path` as its org's synced doc, if the
@@ -497,8 +520,20 @@ where
     F: Fn() -> Fut + Send + Sync + 'static,
     Fut: std::future::Future<Output = ()> + Send + 'static,
 {
+    watch_imports(synced.doc.loro(), apply)
+}
+
+/// [`watch_remote`] on any doc: each import into `doc` (another device's
+/// edit, a live set's relayed in) wakes `apply`; imports that arrive while
+/// one runs are taken together. Lives as long as the returned
+/// subscription.
+pub fn watch_imports<F, Fut>(doc: &loro::LoroDoc, apply: F) -> crate::sync::loro::Subscription
+where
+    F: Fn() -> Fut + Send + Sync + 'static,
+    Fut: std::future::Future<Output = ()> + Send + 'static,
+{
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-    let subscription = synced.doc.loro().subscribe_root(Arc::new(move |event| {
+    let subscription = doc.subscribe_root(Arc::new(move |event| {
         if matches!(
             event.triggered_by,
             crate::sync::loro::EventTriggerKind::Import
