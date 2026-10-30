@@ -168,6 +168,9 @@ pub fn set_item_fields(
             | ItemField::TakeEnvelopes
             | ItemField::Midi
             | ItemField::Takes => {}
+            ItemField::TakePitch => {
+                d.set_pitch(c(), at(), TakeRef::Active, item.take.pitch)?;
+            }
             ItemField::Muted => d.set_muted(c(), at(), item.muted)?,
             ItemField::Locked => d.set_locked(c(), at(), item.locked)?,
             ItemField::Volume => daw_proto::Items::set_volume(d, c(), at(), item.volume)?,

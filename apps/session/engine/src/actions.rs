@@ -691,6 +691,7 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     register_dock(list)?;
     register_window_target(list)?;
     register_phase(list)?;
+    crate::key_change::register(list)?;
     register_sections(list)?;
     register_tracks(list)?;
     register_fundamental(list)?;

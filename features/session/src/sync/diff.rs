@@ -151,8 +151,10 @@ pub enum ItemField {
     Notes,
     /// How it follows tempo, its auto-stretch, group and own offset.
     Timing,
-    /// The active take's colour, gain, pitch, channel mode, source
-    /// details and stretch mode.
+    /// The active take's pitch, in semitones (a song's key change).
+    TakePitch,
+    /// The active take's colour, gain, channel mode, source details and
+    /// stretch mode.
     TakeSettings,
     /// The active take's envelopes other than volume.
     TakeEnvelopes,
@@ -405,10 +407,10 @@ pub fn item_fields(a: &ItemState, b: &ItemState) -> Vec<ItemField> {
         (a.take.volume != b.take.volume, ItemField::TakeVolume),
         (a.take.notes != b.take.notes, ItemField::Notes),
         (a.timing != b.timing, ItemField::Timing),
+        (a.take.pitch != b.take.pitch, ItemField::TakePitch),
         (
             a.take.color != b.take.color
                 || a.take.gain != b.take.gain
-                || a.take.pitch != b.take.pitch
                 || a.take.preserve_pitch != b.take.preserve_pitch
                 || a.take.channel_mode != b.take.channel_mode
                 || a.take.source_type != b.take.source_type
