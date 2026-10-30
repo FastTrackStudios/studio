@@ -13,7 +13,12 @@ use daw::service::{ItemRef, Items as _, ProjectContext, Takes as _, TrackRef, Tr
 pub use crate::lanes::{COMP, EDIT, lane_named};
 
 /// The kit's tracks: every track under the top-level Drums folder, but
-/// none in its Process (the mix, not the recording).
+/// none in its Process (the mix, not the recording), and no piece's
+/// `Sample` track — its notes are a view of the hits (`hits_midi`), written
+/// from them after every edit, not a recording: given COMP and EDIT lanes,
+/// a requantize copied its old notes back into EDIT, the hits' sync read
+/// that as the notes edited by hand, and the hits it made from them piled
+/// up run after run.
 #[must_use]
 pub fn kit_tracks(
     daw: &daw::standalone::Standalone,
@@ -25,6 +30,7 @@ pub fn kit_tracks(
     tracks
         .iter()
         .filter(|t| !t.is_folder)
+        .filter(|t| !crate::hits_midi::is_view(t))
         .filter(|t| {
             let path = crate::gain_stage::path_of(t, &by_guid);
             path.first()

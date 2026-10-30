@@ -162,6 +162,18 @@ pub fn views(tracks: &[daw_proto::Track], pieces: &[(String, String)]) -> Vec<Vi
     kit.into_iter().chain(each).collect()
 }
 
+/// Whether `track` is one of the hits' MIDI views — the full kit's track
+/// or a piece's `Sample`: notes written from the hits after every edit,
+/// never a recording an edit cuts (`hit_place`, `drum_lanes`). Cut with the
+/// mics, a view's notes moved under the sync, which read them as edited by
+/// hand and made hits of them — hundreds more every requantize.
+#[must_use]
+pub fn is_view(track: &daw_proto::Track) -> bool {
+    let name = track.name.trim();
+    !track.is_folder
+        && (name.eq_ignore_ascii_case(KIT_TRACK) || name.to_ascii_lowercase().ends_with("sample"))
+}
+
 /// The Sample track beside a piece's trigger: a sibling named `Sample`
 /// (`Sample`, `T1 Sample`).
 #[must_use]
@@ -446,6 +458,7 @@ pub fn sync(
                 .map(|(p, _)| p.clone())
         };
         let mut edit = MidiEdit::default();
+        let mut edited_views: Vec<&str> = Vec::new();
         for (view, notes) in &held {
             let shown: Vec<HitNote> = hits
                 .iter()
@@ -453,11 +466,18 @@ pub fn sync(
                 .cloned()
                 .collect();
             if edited(&view.track, notes) {
+                edited_views.push(view.name.as_str());
                 edit.join(edit_of(&shown, notes, &piece_of));
             }
         }
+        // What the step read as the views edited by hand, on its span.
+        let step = tracing::Span::current();
+        step.record("steps.views_edited", edited_views.join(", ").as_str());
         if !edit.is_empty() {
             let applied = crate::hits::apply_midi(daw, project, &edit.changes, &edit.added);
+            step.record("steps.hits_added", applied.added);
+            step.record("steps.hits_moved", applied.moved);
+            step.record("steps.hits_removed", applied.removed);
             hits = hit_notes(&crate::hits::playback(daw, project), moved);
             synced.applied = Some(applied);
         }
@@ -778,4 +798,27 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             .collect::<Vec<_>>())
     })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod view_tests {
+    use super::is_view;
+
+    fn track(name: &str, folder: bool) -> daw_proto::Track {
+        let mut t = daw_proto::Track::new(name.to_owned(), 0, name.to_owned());
+        t.is_folder = folder;
+        t
+    }
+
+    /// The hits' MIDI views are the kit's track and each piece's Sample —
+    /// never a recording, never a folder: what an edit leaves to the sync.
+    #[test]
+    fn the_views_are_the_kit_and_the_samples() {
+        assert!(is_view(&track("Drum Hits", false)));
+        assert!(is_view(&track("Sample", false)));
+        assert!(is_view(&track("T1 Sample", false)));
+        assert!(!is_view(&track("In", false)));
+        assert!(!is_view(&track("Trig", false)));
+        assert!(!is_view(&track("Sample", true)));
+    }
 }
