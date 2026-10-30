@@ -236,20 +236,19 @@ impl FtsReverb {
         dsp::stack::host::sync_pool(&mut self.pool, &*self.params);
     }
 
-    /// Load every stacked stage's saved impulse again.
+    /// Load every stage's saved impulse again.
     ///
     /// A session saves each stage's impulse by path, not by content, so
-    /// reopening it has to read the file again — for every stage in the
-    /// stack, at the rate the host just gave us. The worker does the reading
-    /// and resampling; the chains pick the result up in `process`, as they do
-    /// when the user picks a file.
+    /// reopening it has to read the file again, at the rate the host just
+    /// gave us. That includes stages outside the stack: their result waits
+    /// in the stage's queue, and the chain picks it up when the stage is
+    /// added — so a stage brought back into the stack plays the impulse it
+    /// was saved with. The worker does the reading and resampling; the
+    /// chains pick the result up in `process`, as they do when the user
+    /// picks a file.
     fn reload_saved_irs(&self) {
         for i in 0..MAX_STAGES {
-            let sp = self.params.stage(i);
-            if i != 0 && !sp.place.in_use.value() {
-                continue;
-            }
-            let path = sp.ir_path.read().clone();
+            let path = self.params.stage(i).ir_path.read().clone();
             if !path.is_empty() {
                 self.ui_state.load_ir(i, std::path::PathBuf::from(path));
             }
@@ -333,6 +332,11 @@ impl Plugin for FtsReverb {
                 chain.update(self.config);
             } else if i == 0 || sp.place.in_use.value() {
                 stage.ensure_built(sp, None, self.config);
+            } else {
+                // Nothing drains an unbuilt stage's queue, and what waits
+                // there was resampled for the last activation. The reload
+                // below queues it again at this rate.
+                while stage.ir_rx.try_recv().is_ok() {}
             }
         }
         self.reload_saved_irs();
@@ -449,11 +453,12 @@ mod tests {
         assert_eq!(plugin.pool.latency(), 0);
     }
 
-    /// A saved impulse is loaded again on activate for every stage in the
-    /// stack, and only for those. A missing file is the observable proof the
-    /// worker went looking: it reports the failure on that stage.
+    /// A saved impulse is loaded again on activate for every stage, in the
+    /// stack or not, so a stage added later plays the impulse it was saved
+    /// with. A missing file is the observable proof the worker went looking:
+    /// it reports the failure on that stage.
     #[test]
-    fn saved_irs_reload_for_stacked_stages() {
+    fn saved_irs_reload_for_every_stage() {
         let plugin = FtsReverb::default();
         for i in [0, 2] {
             *plugin.params.stage(i).ir_path.write() = format!("/nonexistent/sta560-{i}.wav");
@@ -461,11 +466,14 @@ mod tests {
         plugin.reload_saved_irs();
         let state = &plugin.ui_state;
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while state.ir_error[0].lock().is_none() && std::time::Instant::now() < deadline {
+        while [0, 2].iter().any(|&i| state.ir_error[i].lock().is_none())
+            && std::time::Instant::now() < deadline
+        {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         assert!(state.ir_error[0].lock().is_some());
-        assert!(state.ir_error[2].lock().is_none());
-        assert!(!state.ir_loading[2].load(std::sync::atomic::Ordering::Relaxed));
+        assert!(state.ir_error[2].lock().is_some());
+        assert!(state.ir_error[1].lock().is_none());
+        assert!(!state.ir_loading[1].load(std::sync::atomic::Ordering::Relaxed));
     }
 }

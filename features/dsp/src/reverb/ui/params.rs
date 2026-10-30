@@ -16,11 +16,11 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use crate::reverb::ir::PreparedIrPair;
 use atomic_float::AtomicF32;
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Sender, TrySendError};
 use nice_plug::prelude::*;
 use parking_lot::Mutex;
 
@@ -68,6 +68,12 @@ pub struct ReverbUiState {
     pub ir_loading: [AtomicBool; MAX_STAGES],
     /// The stage's last failure, if the file could not be read.
     pub ir_error: [Mutex<Option<String>>; MAX_STAGES],
+    /// Bumped by every [`Self::load_ir`] on that stage. Workers finish in
+    /// whatever order their files take to decode, so each one carries the
+    /// number it started with and posts nothing once a newer load has begun
+    /// — otherwise a slow restore could land after the user's pick and
+    /// replace it, while the saved path still names the pick.
+    pub ir_generation: [AtomicU64; MAX_STAGES],
 }
 
 impl ReverbUiState {
@@ -82,6 +88,7 @@ impl ReverbUiState {
     pub fn load_ir(self: &Arc<Self>, stage: usize, path: PathBuf) {
         let stage = stage.min(MAX_STAGES - 1);
         let state = self.clone();
+        let generation = state.ir_generation[stage].fetch_add(1, Ordering::Relaxed) + 1;
         state.ir_loading[stage].store(true, Ordering::Relaxed);
         *state.ir_error[stage].lock() = None;
         std::thread::spawn(move || {
@@ -96,31 +103,45 @@ impl ReverbUiState {
                 48_000.0
             };
 
-            match crate::reverb::ir::IrAsset::load(&path, sample_rate) {
-                Ok(asset) => {
-                    // A mono file convolves to both sides; a stereo one keeps
-                    // its own image, which is most of why you record a space
-                    // in stereo in the first place.
-                    let left = asset.channels[0].clone();
-                    let right = asset
-                        .channels
-                        .get(1)
-                        .cloned()
-                        .unwrap_or_else(|| left.clone());
-                    let pair = PreparedIrPair::build(&left, &right);
-                    let sent = state.ir_tx[stage]
-                        .lock()
-                        .as_ref()
-                        .is_some_and(|tx| tx.send(pair).is_ok());
-                    if sent {
-                        *state.ir_loaded[stage].lock() = name;
-                    } else {
-                        // No channel means the editor is running without a
-                        // plugin behind it (the headless harness), which is
-                        // worth saying rather than silently doing nothing.
+            let loaded = crate::reverb::ir::IrAsset::load(&path, sample_rate).map(|asset| {
+                // A mono file convolves to both sides; a stereo one keeps
+                // its own image, which is most of why you record a space
+                // in stereo in the first place.
+                let left = asset.channels[0].clone();
+                let right = asset
+                    .channels
+                    .get(1)
+                    .cloned()
+                    .unwrap_or_else(|| left.clone());
+                PreparedIrPair::build(&left, &right)
+            });
+
+            // The generation check and the send happen under the channel's
+            // lock, so a newer load that started after this check posts
+            // after this one and wins.
+            let tx = state.ir_tx[stage].lock();
+            if state.ir_generation[stage].load(Ordering::Relaxed) != generation {
+                // Superseded: the newer load owns the panel state too.
+                return;
+            }
+            match loaded {
+                Ok(pair) => match tx.as_ref().map(|tx| tx.try_send(pair)) {
+                    Some(Ok(())) => *state.ir_loaded[stage].lock() = name,
+                    // The chain drains its queue every block, so a full one
+                    // means the stage is not running (not built yet) and
+                    // already has impulses waiting. Never block here: this
+                    // worker holds the lock the next load needs.
+                    Some(Err(TrySendError::Full(_))) => {
+                        *state.ir_error[stage].lock() = Some(format!("{name}: engine busy"));
+                    }
+                    // No channel (or a plugin that has gone) means the
+                    // editor is running without an engine behind it (the
+                    // headless harness), which is worth saying rather than
+                    // silently doing nothing.
+                    Some(Err(TrySendError::Disconnected(_))) | None => {
                         *state.ir_error[stage].lock() = Some(format!("{name}: no engine attached"));
                     }
-                }
+                },
                 Err(e) => *state.ir_error[stage].lock() = Some(format!("{name}: {e}")),
             }
             state.ir_loading[stage].store(false, Ordering::Relaxed);
@@ -909,5 +930,31 @@ impl crate::stack::host::StackHost for ReverbParams {
         crate::reverb::profiles::PROFILES
             .get(index)
             .map_or_else(|| "—".to_string(), |p| p.name.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A load that a newer one has superseded posts nothing, whichever
+    /// finishes first: the stage ends up reporting the newer file.
+    #[test]
+    fn superseded_ir_load_posts_nothing() {
+        let state = Arc::new(ReverbUiState::default());
+        // Hold the publish lock so both workers queue up behind it.
+        let guard = state.ir_tx[0].lock();
+        state.load_ir(0, PathBuf::from("/nonexistent/sta560-old.wav"));
+        state.load_ir(0, PathBuf::from("/nonexistent/sta560-new.wav"));
+        drop(guard);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while state.ir_loading[0].load(Ordering::Relaxed) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        // Let a stale worker that lost the race for the lock run too.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let error = state.ir_error[0].lock().clone().unwrap_or_default();
+        assert!(error.contains("sta560-new"), "{error}");
+        assert!(!state.ir_loading[0].load(Ordering::Relaxed));
     }
 }
