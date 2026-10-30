@@ -27,21 +27,44 @@ pub fn read_items(
 ) -> BTreeMap<String, ItemState> {
     d.get_all_items(ctx.clone())
         .into_iter()
-        .map(|item| {
-            let at = ItemRef::Guid(item.guid.clone());
-            let take = d.get_active_take(ctx.clone(), at.clone()).map(|take| {
-                let stretch = d.get_stretch_markers(ctx.clone(), at.clone(), TakeRef::Active);
-                let notes = if take.is_midi {
-                    d.notes(location(ctx, &at))
-                } else {
-                    Vec::new()
-                };
-                let volume = d.points(ctx.clone(), volume_of(&item.guid, &take.guid));
-                (take, stretch, notes, volume)
-            });
-            (ids.items.doc(&item.guid), item_state(item, take, media))
-        })
+        .map(|item| read_one(d, ctx, media, ids, item))
         .collect()
+}
+
+/// The item `guid` (the engine's) as the doc keeps it, by its id in the
+/// doc — `None` when the engine has no such item (it was removed).
+#[must_use]
+pub fn read_item(
+    d: &dyn Direct,
+    ctx: &ProjectContext,
+    media: &MediaRoot,
+    ids: &EngineIds,
+    guid: &str,
+) -> Option<(String, ItemState)> {
+    let item = d.get_item(ctx.clone(), ItemRef::Guid(guid.to_owned()))?;
+    Some(read_one(d, ctx, media, ids, item))
+}
+
+/// `item` with its active take, as the doc keeps it, by its id in the doc.
+fn read_one(
+    d: &dyn Direct,
+    ctx: &ProjectContext,
+    media: &MediaRoot,
+    ids: &EngineIds,
+    item: daw_proto::Item,
+) -> (String, ItemState) {
+    let at = ItemRef::Guid(item.guid.clone());
+    let take = d.get_active_take(ctx.clone(), at.clone()).map(|take| {
+        let stretch = d.get_stretch_markers(ctx.clone(), at.clone(), TakeRef::Active);
+        let notes = if take.is_midi {
+            d.notes(location(ctx, &at))
+        } else {
+            Vec::new()
+        };
+        let volume = d.points(ctx.clone(), volume_of(&item.guid, &take.guid));
+        (take, stretch, notes, volume)
+    });
+    (ids.items.doc(&item.guid), item_state(item, take, media))
 }
 
 /// Where `item`'s take `take`'s volume envelope is.

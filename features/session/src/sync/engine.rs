@@ -174,7 +174,7 @@ pub async fn read(
     ids: &EngineIds,
     direct: Option<&dyn Direct>,
 ) -> daw_control::Result<SessionModel> {
-    read_keeping(project, media, blobs, ids, direct, None).await
+    read_keeping(project, media, blobs, ids, direct, None, None).await
 }
 
 /// As [`read`], with `tracks` kept as they are when given.
@@ -191,6 +191,7 @@ pub async fn read_keeping(
     ids: &EngineIds,
     direct: Option<&dyn Direct>,
     tracks: Option<Vec<TrackState>>,
+    since: Option<Since<'_>>,
 ) -> daw_control::Result<SessionModel> {
     use tracing::Instrument as _;
     let fresh = tracks.is_none();
@@ -202,13 +203,45 @@ pub async fn read_keeping(
                 .await?
         }
     };
-    let items = read_items(project, media, ids, direct)
-        .instrument(tracing::info_span!("read.items"))
-        .await?;
     let standalone = direct.and_then(Direct::standalone);
+    // What the journals say changed since `since` was read, when they can
+    // say and the engine is here to ask: those items read again, the rest
+    // kept from `since`.
+    let changed = since
+        .zip(standalone)
+        .zip(direct)
+        .and_then(|((since, sa), d)| {
+            crate::sync::whole::changed_since(sa, project.guid(), since.cursor)
+                .map(|c| (since, c, d))
+        });
+    let (items, kept_markers, named) = if let Some((since, c, d)) = &changed {
+        let _read = tracing::info_span!("read.items_changed", read.items = c.items.len()).entered();
+        let ctx = context_of(project);
+        let mut items = since.before.items.clone();
+        let mut named = std::collections::HashSet::new();
+        for guid in &c.items {
+            match crate::sync::direct::read_item(*d, &ctx, media, ids, guid) {
+                Some((id, state)) => {
+                    named.insert(id.clone());
+                    items.insert(id, state);
+                }
+                None => {
+                    items.remove(&ids.items.doc(guid));
+                }
+            }
+        }
+        (items, Some(since.before.take_markers.clone()), named)
+    } else {
+        let items = read_items(project, media, ids, direct)
+            .instrument(tracing::info_span!("read.items"))
+            .await?;
+        (items, None, std::collections::HashSet::new())
+    };
     // daw-standalone's own state holds every recording's markers, which
     // [`crate::sync::whole`] reads at once.
-    let take_markers = if standalone.is_some() {
+    let take_markers = if let Some(kept) = kept_markers {
+        kept
+    } else if standalone.is_some() {
         BTreeMap::new()
     } else {
         read_take_markers(project, &items, ids).await?
@@ -295,10 +328,20 @@ pub async fn read_keeping(
         read_chain(&project.tracks().master().await?.fx_chain(), blobs, ids).await?;
     if let Some(sa) = standalone {
         tracing::info_span!("read.whole").in_scope(|| {
-            crate::sync::whole::read_into(sa, project.guid(), &mut model, media, ids, fresh);
+            let only = changed.as_ref().map(|(_, c, _)| (&named, &c.recordings));
+            crate::sync::whole::read_into(sa, project.guid(), &mut model, media, ids, fresh, only);
         });
     }
     Ok(model)
+}
+
+/// A model read before and where the engine's journals stood when it was
+/// read ([`daw_standalone::journal::now`], taken before the read): what a
+/// read starting from it needs to read again only what changed since.
+#[derive(Clone, Copy)]
+pub struct Since<'a> {
+    pub before: &'a SessionModel,
+    pub cursor: u64,
 }
 
 /// Every recording's markers, keyed as the doc keeps them: read once a

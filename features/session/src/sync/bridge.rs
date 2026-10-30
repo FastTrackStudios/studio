@@ -31,6 +31,10 @@ pub struct Bridge {
     direct: Option<std::sync::Arc<dyn Direct>>,
     /// What the engine showed after the last reconcile, chart included.
     shown: SessionModel,
+    /// Where the engine's journals stood when `shown` was read, when it
+    /// was read whole from an engine in this process: a step reads again
+    /// only what changed since ([`engine::Since`]). `None`: read it whole.
+    cursor: Option<u64>,
     /// This peer's steps, to undo and redo — from when the bridge began,
     /// so opening a song is not a step.
     undo: loro::UndoManager,
@@ -95,6 +99,7 @@ impl Bridge {
         let (undo, naming) = undo_manager(&doc);
         let watch = doc.watch();
         let bridge = Self {
+            cursor: None,
             doc,
             project,
             media,
@@ -140,6 +145,7 @@ impl Bridge {
         let (undo, naming) = tracing::info_span!("bridge.undo").in_scope(|| undo_manager(&doc));
         let watch = doc.watch();
         let mut bridge = Self {
+            cursor: None,
             doc,
             project,
             media,
@@ -181,6 +187,7 @@ impl Bridge {
         let (undo, naming) = undo_manager(&doc);
         let watch = doc.watch();
         let mut bridge = Self {
+            cursor: None,
             doc,
             undo,
             naming,
@@ -217,6 +224,7 @@ impl Bridge {
         Self {
             project,
             direct,
+            cursor: None,
             ..self
         }
     }
@@ -248,6 +256,7 @@ impl Bridge {
         let watch = doc.watch();
         let target = doc.read();
         let mut bridge = Self {
+            cursor: None,
             doc,
             project,
             media,
@@ -298,6 +307,7 @@ impl Bridge {
     /// # Errors
     /// When the engine cannot be read or the doc cannot be written.
     pub async fn local_changed(&mut self) -> eyre::Result<bool> {
+        let at = self.journal_now();
         let mut now = engine::read(
             &self.project,
             &self.media,
@@ -313,6 +323,7 @@ impl Bridge {
         self.name_next("Edits");
         self.doc.write(&now, ORIGIN_LOCAL)?;
         self.shown = now;
+        self.cursor = at;
         self.quiet.clear();
         Ok(true)
     }
@@ -331,15 +342,23 @@ impl Bridge {
     /// When the engine cannot be read or the doc cannot be written.
     pub async fn local_step(&mut self, label: &str) -> eyre::Result<bool> {
         use tracing::Instrument as _;
-        let mut now = engine::read(
+        let at = self.journal_now();
+        let since = self.cursor.map(|cursor| engine::Since {
+            before: &self.shown,
+            cursor,
+        });
+        let mut now = engine::read_keeping(
             &self.project,
             &self.media,
             self.blobs.as_ref(),
             &self.ids,
             self.direct.as_deref(),
+            None,
+            since,
         )
         .instrument(tracing::info_span!("bridge.read_engine"))
         .await?;
+        self.cursor = at;
         now.chart.clone_from(&self.shown.chart);
         let same = tracing::info_span!("bridge.compare").in_scope(|| now == self.shown);
         if same {
@@ -476,6 +495,7 @@ impl Bridge {
         // The tracks read again only if a change could have touched them.
         let keep =
             (!touched.everything && !touched.parts.tracks).then(|| self.shown.tracks.clone());
+        let at = self.journal_now();
         let mut now = engine::read_keeping(
             &self.project,
             &self.media,
@@ -483,13 +503,24 @@ impl Bridge {
             &self.ids,
             self.direct.as_deref(),
             keep,
+            None,
         )
         .instrument(tracing::info_span!("bridge.read_back"))
         .await?;
         now.chart = target.chart;
         self.shown = now;
+        self.cursor = at;
         applied?;
         Ok(changes)
+    }
+
+    /// Where the engine's journals stand now, when the engine is in this
+    /// process — taken before a read, so a write during it is read again.
+    fn journal_now(&self) -> Option<u64> {
+        self.direct
+            .as_ref()
+            .and_then(|d| d.standalone())
+            .map(|_| daw_standalone::journal::now())
     }
 
     /// What the doc's changes have touched since last asked, cleared.

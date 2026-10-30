@@ -16,7 +16,7 @@
 //! here publishes the engine's events: the renderer follows the
 //! project's revision, and the bridge's caller redraws from the changes.
 
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use daw_proto::automation::{
     AutomationItem, EnvelopePoint, EnvelopeType, SendEnvelopeKind, TakeEnvelopeKind,
@@ -42,11 +42,39 @@ use crate::sync::model::{
 
 // ── reading ─────────────────────────────────────────────────────────────
 
+/// What the engine's journals say changed in a project since a reader's
+/// cursor ([`changed_since`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Changed {
+    /// The items written, made or removed — the engine's guids.
+    pub items: HashSet<String>,
+    /// The recordings whose take markers were written, as the engine keys
+    /// them (a file, or a fileless take's guid).
+    pub recordings: HashSet<String>,
+}
+
+/// What changed in `project` since `cursor` ([`daw_standalone::journal`]),
+/// or `None` when a journal cannot say (a song loaded, a reader too far
+/// behind): read everything then.
+#[must_use]
+pub fn changed_since(sa: &Standalone, project: &str, cursor: u64) -> Option<Changed> {
+    sa.read_project(project, |p| {
+        let items = p.item_changes_since(cursor).items?;
+        let recordings = p.take_markers.written_since(cursor)?.cloned().collect();
+        Some(Changed { items, recordings })
+    })
+    .flatten()
+}
+
 /// Fill `model` with what only the engine's own state holds.
 ///
 /// `model` is read through the facade; this adds the project's settings and master bus, every take of
 /// every item, and (when `tracks` were read afresh rather than kept) each
 /// track's channels, comping, ext sections, envelopes and FX parameters.
+///
+/// `only`: read again just these items (their ids in the doc) and these
+/// recordings' take markers ([`Changed::recordings`]) — the rest of
+/// `model`'s items and markers are as they were read last.
 pub fn read_into(
     sa: &Standalone,
     project: &str,
@@ -54,6 +82,7 @@ pub fn read_into(
     media: &MediaRoot,
     ids: &EngineIds,
     tracks: bool,
+    only: Option<(&HashSet<String>, &HashSet<String>)>,
 ) {
     let _ = sa.read_project(project, |p| {
         let envelopes = tracing::info_span!("whole.envelopes").in_scope(|| EnvelopeIndex::of(p));
@@ -67,11 +96,22 @@ pub fn read_into(
         read_settings(p, &envelopes, &mut model.project, ids);
         tracing::info_span!("whole.items").in_scope(|| {
             for (id, item) in &mut model.items {
+                if only.is_some_and(|(items, _)| !items.contains(id)) {
+                    continue;
+                }
                 read_item(p, &envelopes, &ids.items.engine(id), item, media);
             }
         });
-        model.take_markers = tracing::info_span!("whole.take_markers")
-            .in_scope(|| read_take_markers(p, &model.items, media, ids));
+        model.take_markers = tracing::info_span!("whole.take_markers").in_scope(|| match only {
+            None => read_take_markers(p, &model.items, media, ids),
+            Some((_, recordings)) => patch_take_markers(
+                p,
+                std::mem::take(&mut model.take_markers),
+                &model.items,
+                (media, ids),
+                recordings,
+            ),
+        });
     });
 }
 
@@ -448,6 +488,35 @@ fn read_take_markers(
         }
     }
     out
+}
+
+/// `markers` with `recordings`' read again: what they held taken out, what
+/// they hold now put in — the other recordings' as they were.
+fn patch_take_markers(
+    p: &ProjectState,
+    mut markers: BTreeMap<String, TakeMarkerState>,
+    items: &BTreeMap<String, ItemState>,
+    (media, ids): (&MediaRoot, &EngineIds),
+    recordings: &HashSet<String>,
+) -> BTreeMap<String, TakeMarkerState> {
+    if recordings.is_empty() {
+        return markers;
+    }
+    let fileless = fileless_takes(p, items, ids);
+    let source = |key: &str| match fileless.get(key) {
+        Some((item, place)) => format!("take:{item}:{place}"),
+        None => media.to_doc(key),
+    };
+    let sources: HashSet<String> = recordings.iter().map(|k| source(k)).collect();
+    markers.retain(|_, m| !sources.contains(&m.source));
+    for key in recordings {
+        let at = source(key);
+        for m in p.take_markers.get(key).into_iter().flatten() {
+            let state = crate::sync::engine::take_marker_state(&at, m.clone());
+            markers.insert(state.key(), state);
+        }
+    }
+    markers
 }
 
 /// The takes with no file, by guid: where each one is in the doc.

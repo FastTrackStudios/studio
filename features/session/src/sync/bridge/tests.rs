@@ -692,3 +692,80 @@ fn a_real_song_staged_never_stalls_another_songs_reader() {
         "a read of another song waited {worst:?}"
     );
 }
+
+/// A step after the first reads only what the engine's journals say
+/// changed — an item moved, one removed, a recording's markers written —
+/// and comes to the very model a whole read gives.
+#[test]
+fn a_step_read_from_the_journal_is_the_engine_read_whole() {
+    let doc = SessionDoc::new();
+    doc.write(&synthetic(), ORIGIN_LOCAL).expect("written");
+    let song = Song {
+        doc,
+        media: MediaRoot(PathBuf::from("/song")),
+        blobs: Arc::new(MemoryBlobs::default()),
+    };
+    runtime().block_on(async {
+        let daw = Standalone::new();
+        let mut bridge = in_place(&daw, "song", &song).await;
+        // The first step reads whole and leaves the bridge its cursor.
+        daw.write_project("song", |p| {
+            if let Some(t) = p.tracks.first_mut() {
+                t.volume = 0.5;
+            }
+        });
+        assert!(bridge.local_step("Turn it down").await.expect("a step"));
+        assert!(bridge.cursor.is_some(), "read whole, the journal from here");
+
+        let (moved, gone, source) = daw
+            .read_project("song", |p| {
+                let mut kicks: Vec<&String> =
+                    p.items.keys().filter(|k| k.contains("kick")).collect();
+                kicks.sort();
+                let source = p
+                    .takes
+                    .get(kicks[0])
+                    .and_then(|l| l.takes.first())
+                    .and_then(|t| t.source_file_path.clone())
+                    .expect("a recording");
+                (kicks[0].clone(), kicks[1].clone(), source)
+            })
+            .expect("the song");
+        daw.write_project("song", |p| {
+            if let Some(entry) = p.items.get_mut(&moved) {
+                entry.item.position = daw_proto::primitives::PositionInSeconds::from_seconds(7.25);
+            }
+            p.items.remove(&gone);
+            p.take_markers
+                .entry(source)
+                .or_default()
+                .push(daw_proto::TakeMarker {
+                    id: "hit-1".into(),
+                    name: "kick".into(),
+                    source_position_seconds: 0.5,
+                    ..daw_proto::TakeMarker::default()
+                });
+        });
+        assert!(bridge.local_step("Edit the kick").await.expect("a step"));
+
+        let whole = engine::read(
+            &bridge.project,
+            &bridge.media,
+            bridge.blobs.as_ref(),
+            &bridge.ids,
+            bridge.direct.as_deref(),
+        )
+        .await
+        .expect("read whole");
+        assert_eq!(bridge.shown.items, whole.items, "items");
+        assert_eq!(
+            bridge.shown.take_markers, whole.take_markers,
+            "take markers"
+        );
+        assert!(!whole.take_markers.is_empty(), "the marker was read");
+        assert!(
+            !bridge.shown.items.contains_key(&gone),
+            "the removed item is gone"
+        );
+    });
+}
