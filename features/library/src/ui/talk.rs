@@ -12,6 +12,7 @@ use crate::model::{Anchor, Edit};
 /// what is inside it), oldest first, then the box.
 #[component]
 pub(crate) fn Conversation(about: Anchor, #[props(default)] exact: bool) -> Element {
+    let keys = app_shell::ui::use_text_focus();
     let lib = use_library();
     let l = lib.read();
     let me = l.me.clone();
@@ -73,8 +74,8 @@ pub(crate) fn Conversation(about: Anchor, #[props(default)] exact: bool) -> Elem
                         }
                     }
                     input {
-                        onfocus: move |_| crate::ui::set_field_focused(true),
-                        onblur: move |_| crate::ui::set_field_focused(false),
+                        onfocus: move |_| { crate::ui::set_field_focused(true); keys.focus(); },
+                        onblur: move |_| { crate::ui::set_field_focused(false); keys.blur(); },
                         r#type: "text",
                         value: "{draft}",
                         "aria-label": "Comment",

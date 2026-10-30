@@ -332,6 +332,7 @@ fn use_width() -> Signal<f64> {
 
 #[component]
 fn Start() -> Element {
+    let keys = app_shell::ui::use_text_focus();
     let mut opening = use_signal(|| Opening::Idle);
     let mut local = use_signal(documents);
     // The songs opened lately, each with its alternatives — read again
@@ -948,6 +949,8 @@ fn Start() -> Element {
                         }
                     }
                     input {
+                        onfocus: move |_| keys.focus(),
+                        onblur: move |_| keys.blur(),
                         style: "position:absolute; top:0; left:0; width:100%; height:40px; box-sizing:border-box; \
                                 padding:0 4px; border:none; background:transparent; color:{TEXT}; \
                                 font-family:inherit; font-size:15px;",
@@ -1914,6 +1917,7 @@ fn SongsList(
     on_download: EventHandler<(LibrarySong, Offline)>,
     on_edit: EventHandler<LibrarySong>,
 ) -> Element {
+    let keys = app_shell::ui::use_text_focus();
     let mut query = use_signal(String::new);
     let wanted = query().trim().to_lowercase();
     rsx! {
@@ -1931,6 +1935,8 @@ fn SongsList(
                     }
                 }
                 input {
+                    onfocus: move |_| keys.focus(),
+                    onblur: move |_| keys.blur(),
                     style: "position:absolute; top:0; left:0; width:100%; height:42px; box-sizing:border-box; padding:0 2px; \
                             border:none; background:transparent; color:{TEXT}; font-family:inherit; font-size:15px;",
                     r#type: "text",

@@ -121,6 +121,24 @@ globals, so each window or plugin editor hosts its own.
 - **Toolbars** are panels (`toolbar`, bare). Put one on the top edge,
   against the arrangement in a fixed-px split, or in a float.
 
+## The keyboard switch
+
+Every global hotkey — the arrange key, Session's transport keys, Signal's
+— asks one process-wide switch first, `utils::keyboard::typing()`, and
+stands aside while it is true. Asked for 2026-10-29.
+
+- A text field holds it while focused: `app_shell::ui::use_text_focus()`
+  (call `focus()` from `onfocus`, `blur()` from `onblur`; released on
+  unmount too, so a field closed mid-edit never leaves the keyboard taken).
+- State polled or switched elsewhere holds it through a `Flag`: Session's
+  rename, chart editor and overlay flags (`session_ui::keys`), and
+  `KEYS_OFF`, a user-facing "keys off" switch.
+- Claims and flags are counted, so any number of holders compose.
+- **Next:** make it automatic. Blitz knows the focused node and whether it
+  is a text input (`get_focussed_node_id`, `text_input_data`); a few lines
+  in FastTrackStudio/vendor's dioxus-native, run after each event, can hold
+  the switch for every field, and the per-field claims become a fallback.
+
 ## Not yet
 
 - Panels keep hook state only while their place in the tree is unchanged:
@@ -131,9 +149,8 @@ globals, so each window or plugin editor hosts its own.
   window targeting (`SESSION_WINDOW_TARGET`).
 - Peek (a rail icon showing its panel over the centre) opens the dock for
   now.
-- Holding W while typing in a text field also arranges: the dock cannot
-  tell a field from a panel; an app with its own keymap (Session) should
-  drive `set_arranging` from it, where typing is already known.
+- Text fields must claim the keyboard themselves (below) until the
+  renderer reports a focused text input on its own.
 - In a thin strip (a 40 px toolbar) the arrange label is taller than the
   strip and is clipped.
 - Wiring the real panels into Studio, with the per-instance fixes they

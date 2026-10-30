@@ -185,6 +185,7 @@ mod live {
 
 #[component]
 pub fn CollabBar() -> Element {
+    let keys = app_shell::ui::use_text_focus();
     let mut status = use_signal(live::status);
     let mut error = use_signal(|| None::<String>);
     // A playground's time left, in whole seconds (ticks the countdown).
@@ -395,6 +396,8 @@ pub fn CollabBar() -> Element {
                             div {
                                 style: "display:flex; gap:6px;",
                                 input {
+                                    onfocus: move |_| keys.focus(),
+                                    onblur: move |_| keys.blur(),
                                     style: "flex:1; min-width:0; height:26px; box-sizing:border-box; padding:0 8px; \
                                             border-radius:6px; border:1px solid {RULE}; background:#0f1012; \
                                             color:{TEXT}; font-size:11px;",
@@ -457,6 +460,8 @@ pub fn CollabBar() -> Element {
                                 div {
                                     style: "display:flex; gap:6px;",
                                     input {
+                                        onfocus: move |_| keys.focus(),
+                                        onblur: move |_| keys.blur(),
                                         style: "flex:1; min-width:0; height:26px; box-sizing:border-box; padding:0 8px; \
                                                 border-radius:6px; border:1px solid {RULE}; background:#0f1012; \
                                                 color:{DIM}; font-size:10px; font-family:ui-monospace, monospace;",

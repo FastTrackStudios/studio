@@ -311,6 +311,7 @@ pub fn SignalWorkspace() -> Element {
 /// local WebSocket.
 #[component]
 fn RemoteEngineForm(generation: Signal<u32>) -> Element {
+    let keys = app_shell::ui::use_text_focus();
     let mut input = use_signal(String::new);
     let mut error = use_signal(String::new);
     let remote_active = engine_iroh_id().is_some();
@@ -320,6 +321,8 @@ fn RemoteEngineForm(generation: Signal<u32>) -> Element {
             span { style: "font-size: 11px; color: #a1a1aa;", "Remote engine (iroh endpoint id)" }
             div { style: "display: flex; gap: 6px;",
                 input {
+                    onfocus: move |_| keys.focus(),
+                    onblur: move |_| keys.blur(),
                     style: "width: 340px; padding: 4px 8px; border-radius: 6px; background: #111113; color: #e4e4e7; border: 1px solid #27272a; font-size: 11px; font-family: monospace;",
                     placeholder: "endpoint id from the engine's startup log",
                     value: "{input}",

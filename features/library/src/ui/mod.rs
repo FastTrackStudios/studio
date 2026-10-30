@@ -65,20 +65,24 @@ pub(crate) fn edit(e: Edit) {
     }
 }
 
-/// Whether one of the library's text fields has the keyboard: a plain key
-/// (`?`, a letter) is that field's, not the menus'. Read by an app that
-/// hears the window's keys itself ([`Menus::key`]'s `typing`).
-static FIELD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// One of the library's text fields has the keyboard: a plain key (`?`, a
+/// letter) is that field's, not the menus'. A flag on the process-wide
+/// switch (`utils::keyboard`), so the dock's arrange key and Session's
+/// keys stand aside for it too.
+static FIELD: utils::keyboard::Flag = utils::keyboard::Flag::new();
 
 /// A text field took the keyboard (`true`) or let it go.
 pub fn set_field_focused(on: bool) {
-    FIELD.store(on, std::sync::atomic::Ordering::Relaxed);
+    FIELD.set(on);
 }
 
-/// Whether a text field has the keyboard ([`set_field_focused`]).
+/// Whether text is being typed anywhere (`utils::keyboard::typing`): a
+/// library field, or any other field, rename or overlay in the process.
+/// Read by an app that hears the window's keys itself ([`Menus::key`]'s
+/// `typing`).
 #[must_use]
 pub fn field_focused() -> bool {
-    FIELD.load(std::sync::atomic::Ordering::Relaxed)
+    utils::keyboard::typing()
 }
 
 /// What a press that leaves the library asks the app to do.
@@ -524,6 +528,7 @@ fn CommandButton() -> Element {
 /// Escape clears it.
 #[component]
 fn SearchField(wide: bool) -> Element {
+    let keys = app_shell::ui::use_text_focus();
     let mut nav = use_nav();
     let q = (nav.query)();
     let empty = q.is_empty();
@@ -540,8 +545,8 @@ fn SearchField(wide: bool) -> Element {
                     }
                 }
                 input {
-                    onfocus: move |_| crate::ui::set_field_focused(true),
-                    onblur: move |_| crate::ui::set_field_focused(false),
+                    onfocus: move |_| { crate::ui::set_field_focused(true); keys.focus(); },
+                    onblur: move |_| { crate::ui::set_field_focused(false); keys.blur(); },
                     r#type: "text",
                     value: "{q}",
                     "aria-label": "Search",

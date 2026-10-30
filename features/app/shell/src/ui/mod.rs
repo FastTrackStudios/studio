@@ -38,6 +38,7 @@
 
 pub mod form;
 mod frame;
+pub mod keyboard;
 mod layout;
 pub mod perform;
 pub mod performer;
@@ -50,6 +51,7 @@ pub use frame::{
     RegionHost, ShellFrame, ShellState, load_layout, use_panel_registry, use_shell,
     use_shell_state, use_shell_state_with,
 };
+pub use keyboard::{TextFocus, use_text_focus};
 pub use layout::{Region, RegionLayout, ShellLayout, pref_key};
 pub use perform::{
     FollowCard, LevelPeek, MoreMenu, NowBand, SpeedMenu, SyncPill, TransportNudgeRow,

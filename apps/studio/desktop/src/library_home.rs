@@ -99,6 +99,7 @@ mod ways_in {
     /// New project, join by a link or the demo, and the recent projects.
     #[component]
     pub fn WaysIn() -> Element {
+        let keys = app_shell::ui::use_text_focus();
         let Doors(enter) = use_context::<Doors>();
         let mut link = use_signal(String::new);
         let join = move |text: String| {
@@ -194,8 +195,8 @@ mod ways_in {
                                         border: 1px solid {RULE_STRONG}; border-radius: 8px; background: transparent; \
                                         color: {INK}; font-family: {FONT}; font-size: 15px; box-sizing: border-box;",
                                 oninput: move |e| link.set(e.value()),
-                                onfocus: move |_| library::ui::set_field_focused(true),
-                                onblur: move |_| library::ui::set_field_focused(false),
+                                onfocus: move |_| { library::ui::set_field_focused(true); keys.focus(); },
+                                onblur: move |_| { library::ui::set_field_focused(false); keys.blur(); },
                                 onkeydown: move |e| {
                                     if e.key() == Key::Enter {
                                         join(link());

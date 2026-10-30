@@ -423,49 +423,50 @@ const BUILTIN: &str = r#"{
   }
 }"#;
 
-/// Whether a text field has the keyboard — a rename open in the
-/// arrangement, the chart editor. While it does, the window's own keys
-/// (the transport's) stand aside, so a space typed into a name is a space.
-static TYPING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// A rename open in the arrangement has the keyboard. Each of these flags
+/// holds the one process-wide switch, `utils::keyboard`, so the dock's
+/// arrange key, Signal's keys and any other global hotkey stand aside too,
+/// and a field anywhere else in Studio silences the window's keys here.
+static TYPING: utils::keyboard::Flag = utils::keyboard::Flag::new();
 
-/// The chart editor's half of [`TYPING`]: set when it is clicked into,
+/// The chart editor has the keyboard: set when it is clicked into,
 /// cleared by a click anywhere else.
-static EDITING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static EDITING: utils::keyboard::Flag = utils::keyboard::Flag::new();
 
 /// An overlay over the window has the keyboard: Studio's command palette,
 /// open-by-name or shortcuts sheet, typed into while a song is open.
-static OVERLAY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static OVERLAY: utils::keyboard::Flag = utils::keyboard::Flag::new();
 
 /// An overlay over the window takes the keyboard (`true`) or gives it back.
 /// While it has it, the window's keys and the arrangement's stand aside.
 pub fn set_overlay(on: bool) {
-    OVERLAY.store(on, std::sync::atomic::Ordering::Relaxed);
+    OVERLAY.set(on);
 }
 
 /// Whether an overlay over the window has the keyboard ([`set_overlay`]).
 #[must_use]
 pub fn overlay() -> bool {
-    OVERLAY.load(std::sync::atomic::Ordering::Relaxed)
+    OVERLAY.get()
 }
 
 /// See [`TYPING`]. Set by the arrangement every frame it is drawn (a rename
 /// open or not) — so a field that closes without saying so frees the
 /// keyboard a frame later rather than never.
 pub fn set_typing(on: bool) {
-    TYPING.store(on, std::sync::atomic::Ordering::Relaxed);
+    TYPING.set(on);
 }
 
 /// The chart editor has the keyboard (`true`) or has lost it.
 pub fn set_editing(on: bool) {
-    EDITING.store(on, std::sync::atomic::Ordering::Relaxed);
+    EDITING.set(on);
 }
 
-/// Whether a text field has the keyboard: a rename, or the chart editor.
+/// Whether text is being typed anywhere in the process: a rename, the
+/// chart editor, an overlay, any field holding `utils::keyboard`, or the
+/// user's keys-off switch. The window's own keys stand aside while it is.
 #[must_use]
 pub fn typing() -> bool {
-    TYPING.load(std::sync::atomic::Ordering::Relaxed)
-        || EDITING.load(std::sync::atomic::Ordering::Relaxed)
-        || overlay()
+    utils::keyboard::typing()
 }
 
 /// Whether the window acts on the transport's keys itself
