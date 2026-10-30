@@ -4371,8 +4371,9 @@ impl Arrangement {
         let deadline = web_time::Instant::now() + FINE_BUDGET;
         let (mut behind, mut counts) = (false, Counts::default());
         for (i, cmd) in commands(&self.lanes, span) {
+            // Only what is inside the stretch, not what touches its ends.
             match self.index.x.get(i) {
-                Some(&(x0, x1)) if x1 < left || x0 > right => continue,
+                Some(&(x0, x1)) if x1 <= left || x0 >= right => continue,
                 _ => {}
             }
             let in_strip = match cmd {
