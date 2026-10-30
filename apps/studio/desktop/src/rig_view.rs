@@ -47,6 +47,20 @@ pub enum EngineMode {
     Supervised,
 }
 
+/// In context over a rig view that must not start an engine in this
+/// process: the rig as a panel of the Session window, whose process already
+/// runs the window's engine (docs/design/one-engine.md). The rig is then a
+/// vox client of the headless rig engine (`--engine`), started if none
+/// answers, whatever the engine-mode preference says.
+#[derive(Clone, Copy)]
+pub struct SupervisedOnly;
+
+/// In context over a rig view that does not fill the window: the size of
+/// the box it is given (a dock panel), which the rig lays out by in place
+/// of the window's.
+#[derive(Clone, Copy)]
+pub struct PanelSize(pub Signal<(f64, f64)>);
+
 impl EngineMode {
     /// Desktop defaults to embedded; the web build can only ever be a remote.
     ///
@@ -369,6 +383,7 @@ fn RemoteEngineForm(generation: Signal<u32>) -> Element {
 /// once connected, and again when the menu picks the other.
 #[component]
 fn GuitarRigView(instrument: &'static str) -> Element {
+    let supervised_only = try_use_context::<SupervisedOnly>().is_some();
     // The gig shell, as on the iPad: the rig's own layout carries the gig
     // (its chart, its track, its set loaded) — one rig on every screen.
     #[cfg(all(feature = "gig", not(target_arch = "wasm32")))]
@@ -389,16 +404,23 @@ fn GuitarRigView(instrument: &'static str) -> Element {
     ))]
     {
         let screen = app_shell::ui::form::use_window_screen();
+        let panel = try_use_context::<PanelSize>();
         use_effect(move || {
-            let s = screen();
-            if s.height > 0.0 {
-                let a = s.width / s.height;
+            let (width, height) = match panel {
+                Some(PanelSize(boxed)) => boxed(),
+                None => {
+                    let s = screen();
+                    (s.width, s.height)
+                }
+            };
+            if height > 0.0 {
+                let a = width / height;
                 if (*aspect.peek() - a).abs() > 0.01 {
                     aspect.set(a);
                 }
                 let was = *size.peek();
-                if (was.0 - s.width).abs() > 1.0 || (was.1 - s.height).abs() > 1.0 {
-                    size.set((s.width, s.height));
+                if (was.0 - width).abs() > 1.0 || (was.1 - height).abs() > 1.0 {
+                    size.set((width, height));
                 }
             }
         });
@@ -415,7 +437,7 @@ fn GuitarRigView(instrument: &'static str) -> Element {
             // or auto-start. Bootstrap failure falls through to the remote
             // path rather than dead-ending — an engine may already be up.
             #[cfg(not(target_arch = "wasm32"))]
-            if EngineMode::current() == EngineMode::Embedded {
+            if !supervised_only && EngineMode::current() == EngineMode::Embedded {
                 if let Some(c) = embedded_clients().await {
                     attempts.set(0);
                     return (generation, c);

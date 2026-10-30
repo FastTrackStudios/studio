@@ -394,22 +394,21 @@ fn session() -> Screenset {
     )
 }
 
-/// The live rig: the rig in the middle, its chain and the chart beside.
+/// The live rig: the rig in the middle (it draws its own chain and
+/// footswitches), the chart beside it, the transport under it.
 fn signal() -> Screenset {
     use kind::*;
     use FormClass::*;
     let wide = |touch: bool, chart_w: f32, setlist: bool| {
         let mut l = Lay::new();
         let rig = l.one(RIG);
-        let chain = l.bare(FX_ROW);
-        let below = l.over_transport(chain, touch);
+        let main = l.over_transport(rig, touch);
         let chart = l.tabs(&[CHART, LYRICS]);
         let toolbar = l.bare(TOOLBAR);
-        let mut l = l
-            .center(rig)
-            .edge(Side::Top, TOOLBAR_H, toolbar)
-            .edge(Side::Right, chart_w, chart)
-            .edge(Side::Bottom, 104.0 + TRANSPORT_TOUCH_H, below);
+        let mut l =
+            l.center(main)
+                .edge(Side::Top, TOOLBAR_H, toolbar)
+                .edge(Side::Right, chart_w, chart);
         if setlist {
             let list = l.one(SETLIST);
             l = l.edge(Side::Left, 260.0, list);
@@ -420,37 +419,24 @@ fn signal() -> Screenset {
         let mut l = Lay::new();
         let rig = l.one(RIG);
         let chart = l.tabs(&[CHART, LYRICS]);
-        let main = Node::column(rig, chart, Share::Ratio(0.55));
-        let chain = l.bare(FX_ROW);
-        let below = l.over_transport(chain, true);
+        let main = Node::column(rig, chart, Share::Ratio(0.6));
+        let main = l.over_transport(main, true);
         let list = l.one(SETLIST);
         l.center(main)
-            .edge(Side::Bottom, 104.0 + TRANSPORT_TOUCH_H, below)
             .edge(Side::Left, 300.0, list)
             .collapsed(Side::Left)
             .done()
     };
-    let phone = |portrait: bool| {
+    let phone = || {
         let mut l = Lay::new();
         let rig = l.one(RIG);
-        let main = if portrait {
-            let chain = l.bare(FX_ROW);
-            Node::column(rig, chain, Share::Second(88.0))
-        } else {
-            rig
-        };
-        let main = l.over_transport(main, true);
+        let main = l.over_transport(rig, true);
         let chart = l.tabs(&[CHART, LYRICS]);
         let list = l.one(SETLIST);
-        let mut l = l
-            .center(main)
+        l.center(main)
             .edge(Side::Right, 0.0, chart)
-            .edge(Side::Left, 0.0, list);
-        if !portrait {
-            let chain = l.one(FX_ROW);
-            l = l.edge(Side::Bottom, 0.0, chain);
-        }
-        l.done()
+            .edge(Side::Left, 0.0, list)
+            .done()
     };
     set(
         id::SIGNAL,
@@ -460,8 +446,8 @@ fn signal() -> Screenset {
             (Desk, wide(false, 380.0, true)),
             (TabletLandscape, wide(true, 340.0, false)),
             (TabletPortrait, tablet_tall),
-            (PhoneLandscape, phone(false)),
-            (PhonePortrait, phone(true)),
+            (PhoneLandscape, phone()),
+            (PhonePortrait, phone()),
         ],
     )
 }

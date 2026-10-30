@@ -117,7 +117,7 @@ tone3000 = ["dep:signal-tone3000", "signal-tone3000?/ui", "dep:signal-nam", "dep
 # Blitz app (its `native` shell) as a library, with the session domain and
 # chart writing. Native only (the dep is in the cfg(not wasm) table, so this
 # is a no-op on the web build). iOS-clean: no TTS backend (see `tts`).
-session-app = ["dep:session-desktop"]
+session-app = ["dep:session-desktop", "dep:dock"]
 # Sync after sign-in (sync.rs): the rig books kept in step with the
 # account's other devices through Task (architect's crdt::docs). On by
 # default, and in every iOS build's feature list.
@@ -256,6 +256,9 @@ dioxus = { workspace = true, default-features = true, features = ["desktop", "la
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Session, the front screen's other door (feature `session-app`).
 session-desktop = { workspace = true, optional = true, features = ["native", "session-domain", "charts"] }
+# session-app: the live rig as a panel of the Session window's dock
+# (front.rs `rig_panel`).
+dock = { workspace = true, optional = true, features = ["host"] }
 # The FastTrackStudio account (STA-361): device-code sign-in and the one
 # session file Signal and Session share, with its sign-in UI.
 fts-account = { workspace = true, features = ["ui"] }

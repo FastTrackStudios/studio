@@ -18341,6 +18341,7 @@ dependencies = [
  "dioxus-native",
  "dioxus-native-dom",
  "dioxus-test",
+ "dock",
  "drums",
  "dsp",
  "ekit",

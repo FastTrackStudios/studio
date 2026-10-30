@@ -19,6 +19,12 @@ use dock::host::{Catalog, DockHost, Kind, use_dock_provider};
 use dock::screenset::{FormClass, Screensets};
 use session::modes::Mode;
 
+/// Panels the host app adds to the window's dock, or puts in place of one
+/// of its own by kind: Studio's live rig (`rig`), which Session cannot
+/// mount itself. Provided above [`Embedded`](super::Embedded).
+#[derive(Clone, Default)]
+pub struct HostPanels(pub Vec<Kind>);
+
 /// Where the screensets are kept.
 const PREF: &str = "dock.screensets.v1";
 
@@ -54,7 +60,8 @@ pub fn SongDock(session: session_ui::studio::StudioSession, class: FormClass) ->
     if *form.peek() != class {
         form.set(class);
     }
-    use_dock_provider(sets, form, catalog());
+    let host = try_use_context::<HostPanels>().unwrap_or_default();
+    use_dock_provider(sets, form, catalog(host));
     // Kept as they change: a recall, a save, a panel moved or resized.
     use_effect(move || {
         if let Ok(json) = sets.read().to_json() {
@@ -68,7 +75,7 @@ pub fn SongDock(session: session_ui::studio::StudioSession, class: FormClass) ->
     }
 }
 
-fn catalog() -> Catalog {
+fn catalog(host: HostPanels) -> Catalog {
     let k = |kind: &'static str,
              title: &'static str,
              short: &'static str,
@@ -82,7 +89,7 @@ fn catalog() -> Catalog {
         attach: None,
         render,
     };
-    Catalog::new(vec![
+    let mut kinds = vec![
         k(
             kind::ARRANGEMENT,
             "Arrangement",
@@ -146,7 +153,7 @@ fn catalog() -> Catalog {
             "▶",
             Place::Edge(Side::Bottom),
             |_| {
-                rsx! { Fill { session_ui::transport_bar::TransportBar { big: true } } }
+                rsx! { TransportPanel {} }
             },
         ),
         k(
@@ -218,7 +225,14 @@ fn catalog() -> Catalog {
         k(kind::RIG, "Rig", "RIG", Place::Center, |_| {
             rsx! { StandIn { name: "Rig", note: "the live rig mounts here in Studio" } }
         }),
-    ])
+    ];
+    for extra in host.0 {
+        match kinds.iter_mut().find(|k| k.kind == extra.kind) {
+            Some(own) => *own = extra,
+            None => kinds.push(extra),
+        }
+    }
+    Catalog::new(kinds)
 }
 
 /// A panel that places its content absolutely gets a sized, positioned box.
@@ -236,6 +250,23 @@ fn Fill(children: Element) -> Element {
 fn ArrangementPanel() -> Element {
     let mode: Signal<Mode> = use_context();
     rsx! { Fill { session_ui::mixer_panel::DawPanels { mode: Some(mode()) } } }
+}
+
+/// The transport: the wide bar, or on a phone the compact buttons the
+/// small-screen layout had (the wide bar's clock and pills do not fit).
+#[component]
+fn TransportPanel() -> Element {
+    let phone = (dock::host::use_dock().class)().is_phone();
+    if phone {
+        return rsx! {
+            div {
+                style: "flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; \
+                        padding:6px 8px; background:{dock::host::tokens::SHEET};",
+                session_ui::progress::TransportButtons { compact: true, height: 48 }
+            }
+        };
+    }
+    rsx! { Fill { session_ui::transport_bar::TransportBar { big: true } } }
 }
 
 #[component]
