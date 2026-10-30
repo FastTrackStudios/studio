@@ -131,6 +131,9 @@ num-traits = { workspace = true }
 facet = { workspace = true }
 editing = { workspace = true }
 architect-telemetry = { workspace = true }
+# Metrics through OpenTelemetry's global meter: how the audio callback keeps up (`audio_health`). The API
+# only, a no-op until the app installs a meter provider (`otel::init`).
+opentelemetry = { workspace = true, optional = true }
 facet-json = { workspace = true }
 # The web demo's stems: Ogg proxies decoded a window at a time (`web_audio`).
 fts-sample = { workspace = true, optional = true, features = ["engine-core"] }
@@ -176,7 +179,7 @@ vox = []
 signal = ["native", "dep:signal-fx"]
 # The desktop app: dioxus-native (Blitz) hosts for the panels, the
 # in-process engine with its audio device, threads, the plugin-UI graph.
-native = ["dep:realfft", "dep:architect-mcp", "dep:dirs", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:rayon", "dsp/hits", "dep:session-format", "session-format/store", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "session/library", "session/publish", "dep:blake3", "dep:auth-client", "dep:fts-account", "session/project-sync", "dep:live-proto", "dep:task-dial", "dep:reqwest", "vox"]
+native = ["dep:opentelemetry", "dep:realfft", "dep:architect-mcp", "dep:dirs", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:rayon", "dsp/hits", "dep:session-format", "session-format/store", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "session/library", "session/publish", "dep:blake3", "dep:auth-client", "dep:fts-account", "session/project-sync", "dep:live-proto", "dep:task-dial", "dep:reqwest", "vox"]
 # A show recorded as one Live set, split into its songs (src/show.rs,
 # the `show-split` bin): the Live-set reader and the .als → .RPP converter.
 show = ["native", "dep:ableton", "studio/convert-ableton"]
@@ -224,6 +227,8 @@ path = "src/bin/chain-probe.rs"
 required-features = ["native"]
 
 [dev-dependencies]
+# The metrics, read back through an in-memory exporter.
+opentelemetry_sdk = { workspace = true, features = ["metrics", "testing"] }
 builtin = { workspace = true, features = ["engine"] }
 # Temp project trees for the Patch List view's discovery tests, and the
 # scratch directory the golden scene renders (`tests/golden_scenes.rs`)

@@ -81,7 +81,26 @@ impl Args {
 ///
 /// The engine did not start, or its socket could not be bound.
 pub fn run(args: &Args) -> eyre::Result<()> {
+    // The engine's start, one unit of work: its audio, serving, and the set
+    // it opens (`set.open`, a `project.load` per song) — from launch to
+    // ready, in one trace.
+    let start = tracing::info_span!(
+        "engine.start",
+        engine.audio_ms = tracing::field::Empty,
+        engine.serve_ms = tracing::field::Empty,
+        engine.open_ms = tracing::field::Empty,
+        engine.opens = if args.open.is_some() {
+            "open"
+        } else if args.reopen {
+            "reopen"
+        } else {
+            "nothing"
+        },
+    );
+    let started = start.enter();
+    let mut stages = session_engine::stages::Stages::start();
     let engine = headless::start()?;
+    start.record("engine.audio_ms", stages.mark("engine.audio_ms"));
     let router = {
         let _inside = engine.runtime.enter();
         session_engine::studio_engine::view_host::router(&engine.daw)
@@ -116,11 +135,16 @@ pub fn run(args: &Args) -> eyre::Result<()> {
         engine.ws = found.ws.as_deref().unwrap_or("off"),
         "engine: serving"
     );
+    start.record("engine.serve_ms", stages.mark("engine.serve_ms"));
     if let Some(what) = &args.open {
         open_first(what, args.org.clone(), args.song.clone());
     } else if args.reopen {
         session_engine::studio_engine::link::reopen_last();
     }
+    start.record("engine.open_ms", stages.mark("engine.open_ms"));
+    // Started: the span ends here, not when the engine stops.
+    drop(started);
+    drop(start);
     engine.runtime.block_on(stopped());
     tracing::info!("engine: stopping");
     let _ = std::fs::remove_file(&socket);

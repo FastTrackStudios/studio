@@ -223,19 +223,27 @@ pub fn now() -> u64 {
 /// Keep `frame`, its `at` and `since` filled in here.
 pub fn record(mut frame: Frame) {
     let at = now();
-    let mut log = LOG
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let Some(log) = log.as_mut() else {
-        return;
-    };
-    frame.at = at;
-    frame.since = log.last.map_or(0, |l| at.saturating_sub(l));
-    log.last = Some(at);
-    if log.frames.len() == KEPT {
-        log.frames.pop_front();
+    {
+        let mut log = LOG
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(log) = log.as_mut() else {
+            return;
+        };
+        frame.at = at;
+        frame.since = log.last.map_or(0, |l| at.saturating_sub(l));
+        log.last = Some(at);
+        if log.frames.len() == KEPT {
+            log.frames.pop_front();
+        }
+        log.frames.push_back(frame);
     }
-    log.frames.push_back(frame);
+    // Outside the log's lock: the frame rate is observed from it.
+    #[cfg(feature = "native")]
+    {
+        metrics::frame(&frame);
+        slow::painted(&frame);
+    }
 }
 
 /// The frames painted since `from` (microseconds, as [`now`] says),
@@ -249,6 +257,184 @@ pub fn since(from: u64) -> Vec<Frame> {
         l.frames.iter().filter(|f| f.at >= from).copied().collect()
     })
 }
+
+/// The frames as OpenTelemetry metrics, through the global meter (a
+/// no-op until the app installs a provider):
+///
+/// - `ui.frame.duration` (ms): what each frame cost, as the shell timed
+///   it (resolve, encode, present) or, with no shell, what its paint did;
+///   `ui.frame.source` = `shell` | `paint` says which.
+/// - `ui.paint.duration` (ms): the arrangement's paint alone.
+/// - `ui.frame.over_budget`: frames slower than the 240 Hz budget
+///   ([`crate::fps::BUDGET_MS`]).
+/// - `ui.frame.interval` (ms): the gap between one paint and the next
+///   while drawing — the pacing a viewer sees, whatever kept the window
+///   from painting (a paint can be quick and the frame still late).
+/// - `ui.frame.missed`: frames that missed their deadline, by
+///   `ui.budget_hz` (120, 60): a gap past [`MISSED_AT`] of the budget.
+/// - `ui.frames_per_second`: observed when the meter collects, one over
+///   the median gap between paints over the last five seconds (as
+///   `SESSION_FRAMES` says it), 0 at rest.
+/// - `ui.frames_per_second.low`: the same five seconds' "1% low" — one
+///   over the slowest 1% of gaps: the stutter the median hides.
+///
+/// A frame that misses 120 Hz is also a trace (`slow`): `ui.frame.slow`,
+/// over the gap, with what the paint thread did in it.
+#[cfg(feature = "native")]
+pub(crate) mod metrics {
+    use std::sync::OnceLock;
+
+    use opentelemetry::KeyValue;
+    use opentelemetry::metrics::{Counter, Histogram, Meter};
+
+    use super::Frame;
+
+    /// Bucket bounds, ms: fine around the 240, 120 and 60 Hz budgets
+    /// (4.17, 8.33, 16.67), coarse past them.
+    const BOUNDS: [f64; 24] = [
+        0.5, 1.0, 2.0, 3.0, 3.5, 4.0, 4.17, 5.0, 6.0, 7.0, 8.0, 8.33, 10.0, 12.5, 15.0, 16.67,
+        20.0, 25.0, 33.33, 50.0, 75.0, 100.0, 200.0, 500.0,
+    ];
+
+    /// How far back the frame rate looks, microseconds.
+    const FPS_OVER: u64 = 5_000_000;
+
+    /// The rates a frame's deadline is counted against, Hz.
+    pub const DEADLINES: [u32; 2] = [120, 60];
+
+    /// A gap past this much of a deadline's budget missed it: a vsync
+    /// interval wanders a little either side of its budget.
+    pub const MISSED_AT: f64 = 1.25;
+
+    pub struct Instruments {
+        frame: Histogram<f64>,
+        paint: Histogram<f64>,
+        interval: Histogram<f64>,
+        over_budget: Counter<u64>,
+        missed: Counter<u64>,
+    }
+
+    /// The budget of a frame at `hz`, ms.
+    pub fn budget_ms(hz: u32) -> f64 {
+        1000.0 / f64::from(hz)
+    }
+
+    /// The gaps between paints while drawing (at rest is not a frame),
+    /// microseconds.
+    fn drawing_gaps(frames: &[Frame]) -> Vec<u64> {
+        frames
+            .iter()
+            .map(|f| f.since)
+            .filter(|&gap| gap > 0 && gap < super::AT_REST)
+            .collect()
+    }
+
+    /// One over the slowest 1% of `gaps` (microseconds), frames a second;
+    /// 0 with none.
+    pub fn low_fps(mut gaps: Vec<u64>) -> f64 {
+        if gaps.is_empty() {
+            return 0.0;
+        }
+        gaps.sort_unstable();
+        let at = (gaps.len() * 99 / 100).min(gaps.len() - 1);
+        gaps.get(at)
+            .map_or(0.0, |&gap| 1000.0 / super::ms(gap).max(f64::EPSILON))
+    }
+
+    impl Instruments {
+        /// The instruments, on `meter`; the frame rate observed from the
+        /// frame log whenever it collects.
+        pub fn new(meter: &Meter) -> Self {
+            meter
+                .f64_observable_gauge("ui.frames_per_second")
+                .with_unit("{frame}/s")
+                .with_description("Frames a second while drawing, over the last five seconds")
+                .with_callback(|observer| {
+                    let from = super::now().saturating_sub(FPS_OVER);
+                    observer.observe(super::Summary::of(&super::since(from)).fps, &[]);
+                })
+                .build();
+            meter
+                .f64_observable_gauge("ui.frames_per_second.low")
+                .with_unit("{frame}/s")
+                .with_description("The slowest 1% of the last five seconds' frames, as a rate")
+                .with_callback(|observer| {
+                    let from = super::now().saturating_sub(FPS_OVER);
+                    observer.observe(low_fps(drawing_gaps(&super::since(from))), &[]);
+                })
+                .build();
+            Self {
+                frame: meter
+                    .f64_histogram("ui.frame.duration")
+                    .with_unit("ms")
+                    .with_description("What each frame of the window cost")
+                    .with_boundaries(BOUNDS.to_vec())
+                    .build(),
+                paint: meter
+                    .f64_histogram("ui.paint.duration")
+                    .with_unit("ms")
+                    .with_description("What the arrangement's paint of each frame cost")
+                    .with_boundaries(BOUNDS.to_vec())
+                    .build(),
+                interval: meter
+                    .f64_histogram("ui.frame.interval")
+                    .with_unit("ms")
+                    .with_description("The gap between one paint and the next while drawing")
+                    .with_boundaries(BOUNDS.to_vec())
+                    .build(),
+                over_budget: meter
+                    .u64_counter("ui.frame.over_budget")
+                    .with_unit("{frame}")
+                    .with_description("Frames slower than the 240 Hz budget")
+                    .build(),
+                missed: meter
+                    .u64_counter("ui.frame.missed")
+                    .with_unit("{frame}")
+                    .with_description("Frames that missed their deadline, by the rate aimed for")
+                    .build(),
+            }
+        }
+
+        /// Record one paint's frame.
+        pub fn record(&self, frame: &Frame) {
+            let (source, micros) = if frame.shell > 0 {
+                ("shell", frame.shell)
+            } else {
+                ("paint", frame.paint)
+            };
+            let ms = super::ms(micros);
+            self.frame
+                .record(ms, &[KeyValue::new("ui.frame.source", source)]);
+            self.paint.record(super::ms(frame.paint), &[]);
+            if ms > crate::fps::BUDGET_MS {
+                self.over_budget.add(1, &[]);
+            }
+            // The pacing, while drawing: a gap past rest is the window idle.
+            if frame.since > 0 && frame.since < super::AT_REST {
+                let gap = super::ms(frame.since);
+                self.interval.record(gap, &[]);
+                for hz in DEADLINES {
+                    if gap > budget_ms(hz) * MISSED_AT {
+                        self.missed
+                            .add(1, &[KeyValue::new("ui.budget_hz", i64::from(hz))]);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Record one paint's frame on the global meter's instruments, made on
+    /// the first frame from the provider installed then: the app installs
+    /// its telemetry before it opens a window.
+    pub fn frame(frame: &Frame) {
+        static MADE: OnceLock<Instruments> = OnceLock::new();
+        MADE.get_or_init(|| Instruments::new(&opentelemetry::global::meter("session-ui")))
+            .record(frame);
+    }
+}
+
+#[cfg(feature = "native")]
+pub mod slow;
 
 #[cfg(feature = "native")]
 mod action {
@@ -315,3 +501,6 @@ mod action {
 
 #[cfg(feature = "native")]
 pub use action::register;
+
+#[cfg(all(test, feature = "native"))]
+mod tests;

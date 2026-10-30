@@ -186,6 +186,7 @@ impl StudioSession {
         let kinds_ms = stages.mark("read.kinds_ms");
         let (studio, rows) = planner.plan(&planner.raw);
         let plan_ms = stages.mark("read.plan_ms");
+        tracing::Span::current().record("song.tracks", studio.0.tracks.len());
         let previews = crate::midi::Previews::default();
         let items = || studio.0.items.values().flatten();
         // A song opened behind the one on screen joins its set first; its
@@ -253,6 +254,13 @@ impl StudioSession {
     /// The facade is not up, or the project is not in the engine or could
     /// not be read.
     #[cfg(feature = "native")]
+    // A read-back, its own unit of work: the facade calls it makes (and the
+    // engine's spans for them, over the link) are its children.
+    #[tracing::instrument(
+        name = "song.read_back",
+        skip_all,
+        fields(song.name = name, song.tracks = tracing::field::Empty)
+    )]
     pub async fn read_linked(project: &str, name: &str) -> eyre::Result<Self> {
         const SCENE: &str = "drum-mixing";
         let mut stages = crate::stages::Stages::start();
@@ -300,7 +308,12 @@ impl StudioSession {
         if let Some(rt) = crate::open::runtime() {
             let previews = previews.clone();
             let song = project.to_owned();
-            rt.spawn(async move { previews.fill_waves_linked(&song, audio).await });
+            // Behind the read, but still its work: its trace.
+            let waves = tracing::info_span!("song.waves", song.items = audio.len());
+            rt.spawn(tracing::Instrument::instrument(
+                async move { previews.fill_waves_linked(&song, audio).await },
+                waves,
+            ));
         }
         let previews_ms = stages.mark("read.previews_ms");
         tracing::info!(
@@ -339,6 +352,9 @@ impl StudioSession {
     /// read first, every song of a set waited seconds on them before it
     /// could be picked, and the reads held up the songs opening beside it.
     /// The window draws each as it lands (`Previews` counts them).
+    // A song's pictures, its own unit of work: the peaks reads it makes
+    // (`PeaksRpc/take_peaks`) land under it.
+    #[tracing::instrument(name = "song.pictures", skip_all, fields(song.project = project))]
     pub async fn fill_previews(&self, project: &str) {
         let Some(facade) = daw_control::Daw::try_get() else {
             return;
@@ -412,7 +428,13 @@ impl StudioSession {
     ) -> eyre::Result<(Self, String)> {
         // A song's opening, its own unit of work: where the time went,
         // stage by stage (`PERF_RECENT`).
-        let span = tracing::info_span!("song.open", song.tracks = tracing::field::Empty);
+        let span = tracing::info_span!(
+            "song.open",
+            song.tracks = tracing::field::Empty,
+            open.engine_ms = tracing::field::Empty,
+            open.prepare_ms = tracing::field::Empty,
+            open.read_ms = tracing::field::Empty,
+        );
         let _in = span.enter();
         let mut stages = crate::stages::Stages::start();
         let plan = crate::open::song_plan(path, prepare);
@@ -433,6 +455,9 @@ impl StudioSession {
         let session = Self::read_current(Some(plan.open.as_path()), prepare.chart.clone())?;
         let read_ms = stages.mark("open.read_ms");
         span.record("song.tracks", session.project.0.tracks.len());
+        span.record("open.engine_ms", engine_ms);
+        span.record("open.prepare_ms", prepare_ms);
+        span.record("open.read_ms", read_ms);
         // One line per song: where its opening went.
         tracing::info!(
             song.name = %opened.name,

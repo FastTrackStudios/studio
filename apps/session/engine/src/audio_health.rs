@@ -193,6 +193,7 @@ pub fn watch(stats: std::sync::Arc<EngineStats>, rate: u32) {
                     log(&health);
                     (last_line, since_line) = (Some(health.gist()), 0);
                 }
+                metrics::interval(&health);
                 if let Ok(mut last) = LAST.lock() {
                     *last = Some(health);
                 }
@@ -200,6 +201,164 @@ pub fn watch(stats: std::sync::Arc<EngineStats>, rate: u32) {
         });
     if let Err(e) = spawned {
         tracing::warn!(error = %e, "audio health logging not started");
+    }
+}
+
+/// Each interval as OpenTelemetry metrics, through the global meter (a
+/// no-op until the app installs a provider), from this reader thread —
+/// never from the audio callback:
+///
+/// - `audio.render.duration` (ms, gauge): the block's render, `audio.stat`
+///   = `mean` | `max` over the interval;
+/// - `audio.block.budget` (ms) and `audio.block.size` (frames), gauges;
+/// - `audio.load` (1, gauge): render over budget, `mean` | `max`;
+/// - `audio.blocks`, `audio.overruns` (blocks over budget), `audio.xruns`,
+///   counters;
+/// - the render ahead: `audio.render_ahead.depth` and `.aim` (ms) and
+///   `.load` (1), gauges; `.short` (blocks that found too little),
+///   `.restarts`, `.rewinds`, counters, and `.stale` (ms played from
+///   before an edit), a counter.
+pub mod metrics {
+    use std::sync::OnceLock;
+
+    use opentelemetry::KeyValue;
+    use opentelemetry::metrics::{Counter, Gauge, Meter};
+
+    use super::Health;
+
+    /// The instruments, made from one meter.
+    pub struct Instruments {
+        render: Gauge<f64>,
+        budget: Gauge<f64>,
+        size: Gauge<u64>,
+        load: Gauge<f64>,
+        blocks: Counter<u64>,
+        overruns: Counter<u64>,
+        xruns: Counter<u64>,
+        ahead_depth: Gauge<f64>,
+        ahead_aim: Gauge<f64>,
+        ahead_load: Gauge<f64>,
+        ahead_short: Counter<u64>,
+        ahead_restarts: Counter<u64>,
+        ahead_rewinds: Counter<u64>,
+        ahead_stale: Counter<f64>,
+    }
+
+    impl Instruments {
+        #[must_use]
+        pub fn new(meter: &Meter) -> Self {
+            let gauge = |name: &'static str, unit: &'static str, about: &'static str| {
+                meter
+                    .f64_gauge(name)
+                    .with_unit(unit)
+                    .with_description(about)
+                    .build()
+            };
+            let counter = |name: &'static str, unit: &'static str, about: &'static str| {
+                meter
+                    .u64_counter(name)
+                    .with_unit(unit)
+                    .with_description(about)
+                    .build()
+            };
+            Self {
+                render: gauge(
+                    "audio.render.duration",
+                    "ms",
+                    "Render time of an audio block, mean and max over the interval",
+                ),
+                budget: gauge(
+                    "audio.block.budget",
+                    "ms",
+                    "Time an audio block has to render in",
+                ),
+                size: meter
+                    .u64_gauge("audio.block.size")
+                    .with_unit("{frame}")
+                    .with_description("The device's block")
+                    .build(),
+                load: gauge("audio.load", "1", "Render time over the block's budget"),
+                blocks: counter("audio.blocks", "{block}", "Audio blocks rendered"),
+                overruns: counter(
+                    "audio.overruns",
+                    "{block}",
+                    "Blocks that took longer than their budget",
+                ),
+                xruns: counter(
+                    "audio.xruns",
+                    "{xrun}",
+                    "Blocks the device reported as xruns",
+                ),
+                ahead_depth: gauge(
+                    "audio.render_ahead.depth",
+                    "ms",
+                    "Audio rendered ahead of the playhead",
+                ),
+                ahead_aim: gauge(
+                    "audio.render_ahead.aim",
+                    "ms",
+                    "How far ahead the render ahead aims to be",
+                ),
+                ahead_load: gauge(
+                    "audio.render_ahead.load",
+                    "1",
+                    "The render ahead's time over the audio it rendered",
+                ),
+                ahead_short: counter(
+                    "audio.render_ahead.short",
+                    "{block}",
+                    "Blocks that found less rendered ahead than they needed",
+                ),
+                ahead_restarts: counter(
+                    "audio.render_ahead.restarts",
+                    "{restart}",
+                    "Times the render ahead started again",
+                ),
+                ahead_rewinds: counter(
+                    "audio.render_ahead.rewinds",
+                    "{rewind}",
+                    "Edits that took the render ahead back to the playhead",
+                ),
+                ahead_stale: meter
+                    .f64_counter("audio.render_ahead.stale")
+                    .with_unit("ms")
+                    .with_description("Time played from before an edit while its audio came")
+                    .build(),
+            }
+        }
+
+        /// Record one interval.
+        pub fn record(&self, h: &Health) {
+            let mean = [KeyValue::new("audio.stat", "mean")];
+            let max = [KeyValue::new("audio.stat", "max")];
+            self.render.record(h.mean_ms, &mean);
+            self.render.record(h.peak_ms, &max);
+            self.budget.record(h.budget_ms, &[]);
+            self.size.record(u64::from(h.frames), &[]);
+            if h.budget_ms > 0.0 {
+                self.load.record(h.mean_ms / h.budget_ms, &mean);
+                self.load.record(h.peak_ms / h.budget_ms, &max);
+            }
+            self.blocks.add(h.blocks, &[]);
+            self.overruns.add(h.over_budget, &[]);
+            self.xruns.add(h.xruns, &[]);
+            self.ahead_depth.record(h.ahead_ms, &[]);
+            self.ahead_aim.record(h.ahead_aim_ms, &[]);
+            self.ahead_load.record(h.ahead_load, &[]);
+            self.ahead_short.add(h.ahead_underruns, &[]);
+            self.ahead_restarts.add(h.ahead_restarts, &[]);
+            self.ahead_rewinds.add(h.ahead_rewinds, &[]);
+            self.ahead_stale.add(h.ahead_stale_ms, &[]);
+        }
+    }
+
+    /// Record one interval on the global meter's instruments, made on the
+    /// first interval from the provider installed then (the app installs
+    /// its telemetry before it opens the device).
+    pub fn interval(h: &Health) {
+        static MADE: OnceLock<Instruments> = OnceLock::new();
+        MADE.get_or_init(|| Instruments::new(&opentelemetry::global::meter("session-engine")))
+            .record(h);
     }
 }
 
@@ -261,3 +420,6 @@ mod action {
 
 #[cfg(feature = "native")]
 pub use action::register;
+
+#[cfg(test)]
+mod tests;

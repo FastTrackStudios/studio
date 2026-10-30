@@ -219,18 +219,59 @@ pub enum LyricsCommand {
     },
 }
 
-/// Diagnostics go to stderr through `tracing`, quiet unless asked:
-/// `RUST_LOG=info` prints each command's wide event (e.g. one
-/// `lyrics.fetch` span per song) as it closes. `default` is the filter
+/// Diagnostics through `tracing`, as the window has them: to stderr,
+/// quiet unless asked, and — with `OTEL_EXPORTER_OTLP_ENDPOINT` set —
+/// every span, log and metric over OTLP to a collector as `service`, where
+/// a request's wide event is read whole (`just dev` runs one). With no
+/// collector, `RUST_LOG=info` prints each command's wide event (one
+/// `lyrics.fetch` span per song) as it closes; with one, stderr keeps only
+/// warnings and errors — the rest is the collector's, and an engine
+/// answering a window would print a line per call. `default` is the filter
 /// when `RUST_LOG` is unset.
-pub fn init_tracing(default: &str) {
+pub fn init_tracing(service: &'static str, default: &str) {
+    use tracing_subscriber::Layer as _;
+    use tracing_subscriber::filter::LevelFilter;
+    use tracing_subscriber::layer::SubscriberExt as _;
+    use tracing_subscriber::util::SubscriberInitExt as _;
     use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default));
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_writer(std::io::stderr)
-        .with_span_events(FmtSpan::CLOSE)
-        .try_init();
+    let filter = || EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default));
+    if let Some(guard) = architect_telemetry::init(service) {
+        // Held for the process: a command runs to its end, then exits.
+        std::mem::forget(guard);
+    }
+    let otel = architect_telemetry::otel::init(service, default);
+    let (spans, console) = if otel.is_some() {
+        (FmtSpan::NONE, LevelFilter::WARN)
+    } else {
+        (FmtSpan::CLOSE, LevelFilter::TRACE)
+    };
+    let registry = tracing_subscriber::registry()
+        .with(filter())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stderr)
+                .with_span_events(spans)
+                .with_filter(console),
+        )
+        .with(architect_telemetry::tracing_layer());
+    let _ = match otel {
+        Some((guard, layers)) => {
+            std::mem::forget(guard);
+            registry.with(layers).try_init()
+        }
+        None => registry.try_init(),
+    };
+}
+
+/// The service a command reports its telemetry as: the engine apart from
+/// the rest of the CLI, as a collector shows them.
+#[must_use]
+pub const fn service_of(command: &Command) -> &'static str {
+    match command {
+        #[cfg(feature = "native")]
+        Command::Engine(_) => "studio-engine",
+        _ => "studio-cli",
+    }
 }
 
 #[derive(Subcommand)]
@@ -388,7 +429,10 @@ pub async fn run(command: Command) -> eyre::Result<ExitCode> {
 pub fn log_filter(command: &Command) -> Option<&'static str> {
     match command {
         #[cfg(feature = "native")]
-        Command::Engine(_) => Some("info,wgpu=warn,naga=warn,symphonia=warn,iroh=warn,vox=warn"),
+        // loro's spans are its internals: ~1500 per collab import.
+        Command::Engine(_) => Some(
+            "info,wgpu=warn,naga=warn,symphonia=warn,iroh=warn,vox=warn,loro=warn,loro_internal=warn",
+        ),
         // Opening songs to prepare them is the engine's own business: its
         // per-block complaints would bury the progress.
         Command::Ingest(_) => Some("error"),

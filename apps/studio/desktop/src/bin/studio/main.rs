@@ -61,11 +61,14 @@ enum Command {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let filter = match &cli.command {
-        Command::Session(command) => session_desktop::cli::log_filter(command),
-        _ => None,
+    let (service, filter) = match &cli.command {
+        Command::Session(command) => (
+            session_desktop::cli::service_of(command),
+            session_desktop::cli::log_filter(command),
+        ),
+        _ => ("studio-cli", None),
     };
-    session_desktop::cli::init_tracing(filter.unwrap_or("warn,signal_tone3000=info"));
+    session_desktop::cli::init_tracing(service, filter.unwrap_or("warn,signal_tone3000=info"));
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()

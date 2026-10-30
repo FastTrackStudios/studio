@@ -159,6 +159,9 @@ editor-crdt = { workspace = true, optional = true }
 futures-timer = { workspace = true, optional = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
+# Metrics through OpenTelemetry's global meter: the frame times (`frames`). The API
+# only, a no-op until the app installs a meter provider (`otel::init`).
+opentelemetry = { workspace = true, optional = true }
 
 # A sampling profiler for the headless benchmarks, behind the `profile`
 # feature — see below.
@@ -220,7 +223,7 @@ default = ["native"]
 signal = ["native", "session-engine/signal"]
 # The desktop app: dioxus-native (Blitz) hosts for the panels, the
 # in-process engine with its audio device, threads, the plugin-UI graph.
-native = ["session-engine/native", "dep:dioxus-native", "dep:zbus", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu-context-07", "dep:pollster", "dep:dirs", "dep:winit", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:patch-list", "dep:editor-view", "editor-view/native", "dep:editor-state", "dep:keyflow-editor-lang", "dep:futures-channel", "dsp/hits", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "dep:builtin", "builtin?/engine", "session/library", "session/project-sync"]
+native = ["dep:opentelemetry", "session-engine/native", "dep:dioxus-native", "dep:zbus", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu-context-07", "dep:pollster", "dep:dirs", "dep:winit", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:patch-list", "dep:editor-view", "editor-view/native", "dep:editor-state", "dep:keyflow-editor-lang", "dep:futures-channel", "dsp/hits", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "dep:builtin", "builtin?/engine", "session/library", "session/project-sync"]
 # A show recorded as one Live set, split into its songs (src/show.rs,
 # the `show-split` bin): the Live-set reader and the .als → .RPP converter.
 show = ["native", "studio/convert-ableton", "session-engine/show"]
@@ -267,6 +270,8 @@ path = "src/bin/blitz_shot.rs"
 required-features = ["native"]
 
 [dev-dependencies]
+# The metrics, read back through an in-memory exporter.
+opentelemetry_sdk = { workspace = true, features = ["metrics", "testing"] }
 builtin = { workspace = true, features = ["engine"] }
 # The app menu's test serves it over a socket pair, not a bus.
 zbus = { workspace = true, features = ["p2p"] }

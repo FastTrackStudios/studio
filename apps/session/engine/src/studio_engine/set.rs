@@ -515,9 +515,27 @@ pub fn open_with(first: Progress, work: OpenWork) -> Result<(), Busy> {
     if let Some(progress) = busy {
         return Err(Busy(progress));
     }
+    // The set's opening, one unit of work on its own thread, under whoever
+    // started it (`engine.start` when the engine reopens its set): each
+    // song's `project.load` lands under it.
+    let parent = tracing::Span::current();
     let spawned = std::thread::Builder::new()
         .name("set-open".into())
-        .spawn(move || finish_open(work(&said)));
+        .spawn(move || {
+            let set = tracing::info_span!(
+                parent: &parent,
+                "set.open",
+                set.songs = tracing::field::Empty,
+                set.opened = tracing::field::Empty,
+                set.join_ms = tracing::field::Empty,
+                set.first_fetch_ms = tracing::field::Empty,
+                set.ok = tracing::field::Empty,
+            );
+            let _set = set.enter();
+            let outcome = work(&said);
+            set.record("set.ok", outcome.is_ok());
+            finish_open(outcome);
+        });
     if let Err(e) = spawned {
         failed(&eyre::eyre!("no thread to open the set on: {e}"));
     }

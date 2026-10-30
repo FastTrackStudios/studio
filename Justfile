@@ -1699,6 +1699,16 @@ theme-parity PROJECT="features/dynamic-template/fixtures/golden/template.rpp" SI
     FTS_THEME=apps/session/ui/themes/fts-dark.frame FTS_BENCH_MIXER="{{OUT}}/themed.png" FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "{{PROJECT}}" 2>&1 | grep -E 'wrote|theme' || true
     ./target/release/theme_diff "{{OUT}}/native.png" "{{OUT}}/themed.png" "{{OUT}}/diff.png"
 
+# The whole dev loop in one herdr session (`herdr --session studio` to
+# watch): the engine (`studio engine --reopen`, restart it with Ctrl-C and
+# ↑ Enter) and the window under `dx serve` beside it, which only attaches —
+# a rebuilt window leaves the engine playing, a restarted engine is
+# re-attached to. Production Task by default; `just dev local` runs a dev
+# Task server too and points Studio at it. `--fresh` replaces a running one.
+# See scripts/dev-herdr.sh.
+dev *ARGS:
+    scripts/dev-herdr.sh {{ARGS}}
+
 # The studio window (Blitz + the painted arrangement) on a real session,
 # prepared first: organize it, build the song from its keyflow chart
 # (tempo, markers, section regions, Keyflow folder), and generate the

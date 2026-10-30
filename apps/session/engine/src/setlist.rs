@@ -507,8 +507,12 @@ impl Setlist {
         } else {
             crate::open::Media::All
         };
+        // Its stages on its `project.load` (`stream_set`'s).
+        let load = tracing::Span::current();
+        let mut stages = crate::stages::Stages::start();
         let prepare = crate::prepare::Prepare::for_song(&path);
         let (opened, plan) = crate::open::open_song_into_with(engine, &path, &prepare, media)?;
+        load.record("open.engine_ms", stages.mark("open.engine_ms"));
         let guid = opened.project_guid.clone();
         // A voice of the set's engine now: it can sound the moment it is
         // picked, or while another is on screen.
@@ -530,6 +534,7 @@ impl Setlist {
             .chart
             .as_ref()
             .and_then(|p| std::fs::read_to_string(p).ok());
+        load.record("open.media_ms", stages.mark("open.media_ms"));
         let mut session = crate::open::engine_runtime()?.block_on(StudioSession::read_project(
             &guid,
             &opened.name,
@@ -537,6 +542,8 @@ impl Setlist {
             chart_text.as_deref(),
             false,
         ))?;
+        load.record("open.read_ms", stages.mark("open.read_ms"));
+        load.record("song.tracks", session.project.0.tracks.len());
         session.chart_file = prepare.chart.clone();
         crate::collab::song_opened(&guid);
         // Its waveforms behind it: the song is in the set now, its
@@ -557,47 +564,77 @@ impl Setlist {
 
     fn open_with(openings: Vec<Opening>, audio: bool) -> eyre::Result<Self> {
         let count = openings.len();
+        // On the set's `set.open` (`studio_engine::set::open_with`), when
+        // this is one; each song its own `project.load` under it.
+        let set = tracing::Span::current();
+        set.record("set.songs", count);
         let mut songs = Vec::new();
-        for Opening {
-            path,
-            title,
-            streamed,
-        } in openings
-        {
-            let path = &path;
-            let prepare = crate::prepare::Prepare::for_song(path);
-            let media = if streamed.is_some() {
-                crate::open::Media::Deferred
-            } else {
-                crate::open::Media::All
-            };
-            match StudioSession::open_first_as(
-                path,
-                &prepare,
-                songs.is_empty().then_some(audio),
-                media,
-            ) {
-                Ok((session, guid)) => {
-                    if let Some(streamed) = streamed {
-                        crate::stream_set::stream(streamed, &guid);
-                    } else if let Some(folder) = path.parent() {
-                        // A song downloaded by its reference plays it from disk.
-                        crate::reference_play::hear_local(&guid, folder);
-                    }
-                    songs.push(Song::opened(path, title, guid, session));
-                }
-                Err(e) => tracing::error!(
-                    setlist.song = %path.display(),
-                    error = %e,
-                    "a song did not open; the set goes on without it"
-                ),
+        for (index, opening) in openings.into_iter().enumerate() {
+            if let Some(song) = Self::load(opening, index, songs.is_empty().then_some(audio)) {
+                songs.push(song);
             }
         }
+        set.record("set.opened", songs.len());
         let first = songs
             .first()
             .ok_or_else(|| eyre::eyre!("none of the {count} songs opened"))?;
         crate::open::switch_song(&first.project);
         Ok(Self::of(songs))
+    }
+
+    /// One song of a set, loaded: opened in the engine (`song.open`) and
+    /// its media attached — streamed, or played from disk — so it can play.
+    /// `first` is `Some(audio)` for the song that stands the engine up.
+    /// `None` when it did not open (the set goes on without it).
+    fn load(opening: Opening, index: usize, first: Option<bool>) -> Option<Song> {
+        let Opening {
+            path,
+            title,
+            streamed,
+        } = opening;
+        let load = tracing::info_span!(
+            "project.load",
+            song.index = index,
+            song.name = title.as_deref().unwrap_or_default(),
+            song.media = if streamed.is_some() {
+                "streamed"
+            } else {
+                "disk"
+            },
+            song.tracks = tracing::field::Empty,
+            song.items = tracing::field::Empty,
+        );
+        let _load = load.enter();
+        let prepare = crate::prepare::Prepare::for_song(&path);
+        let media = if streamed.is_some() {
+            crate::open::Media::Deferred
+        } else {
+            crate::open::Media::All
+        };
+        match StudioSession::open_first_as(&path, &prepare, first, media) {
+            Ok((session, guid)) => {
+                load.record("song.tracks", session.project.0.tracks.len());
+                load.record(
+                    "song.items",
+                    session.project.0.items.values().flatten().count(),
+                );
+                if let Some(streamed) = streamed {
+                    crate::stream_set::stream(streamed, &guid);
+                } else if let Some(folder) = path.parent() {
+                    // A song downloaded by its reference plays it from disk.
+                    crate::reference_play::hear_local(&guid, folder);
+                }
+                Some(Song::opened(&path, title, guid, session))
+            }
+            Err(e) => {
+                tracing::error!(
+                    setlist.song = %path.display(),
+                    error = %e,
+                    "a song did not open; the set goes on without it"
+                );
+                None
+            }
+        }
     }
 
     /// The engine's set as a window shows it (`frame`, from its link —
