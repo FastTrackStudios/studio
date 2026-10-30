@@ -14,6 +14,10 @@
 //! draws one band set today. All six bands of each kind are always present
 //! (at 0 they sit idle on the centre line); dragging a dot off the graph
 //! resets it rather than deleting it.
+//!
+//! Both curves are the FOCUSED stack stage's (`fx.stack.focus`): every stage
+//! carries its own pair, so the sidecar edits whichever reverb the editor is
+//! on.
 
 use std::sync::Arc;
 
@@ -23,7 +27,7 @@ use dioxus::prelude::*;
 use nice_plug::prelude::{Param, ParamPtr};
 use nice_plug_dioxus::prelude::{ParamContext, use_param_context};
 
-use crate::reverb::ui::params::ReverbParams;
+use crate::reverb::ui::params::{ReverbParams, ReverbStageParams};
 
 /// Which embedded EQ the view is editing.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -76,7 +80,7 @@ struct BandPtrs {
     q: ParamPtr,
 }
 
-fn band_ptrs(params: &ReverbParams, mode: EqViewMode, i: usize) -> BandPtrs {
+fn band_ptrs(params: &ReverbStageParams, mode: EqViewMode, i: usize) -> BandPtrs {
     match mode {
         EqViewMode::Post => {
             let b = &params.post_eq[i];
@@ -143,11 +147,13 @@ pub fn ReverbEqView(mode_is_decay: bool, frame: u64) -> Element {
         .expect("the editor was mounted without its ReverbUi");
     let params = ui.params.clone();
     let ctx = use_param_context();
+    let focused = crate::stack::host::use_visible_stage(params.as_ref());
+    let stage = params.stage(focused);
 
     let bands_vec: Vec<EqBand> = (0..6usize)
         .map(|i| match mode {
             EqViewMode::Post => {
-                let b = &params.post_eq[i];
+                let b = &stage.post_eq[i];
                 EqBand {
                     index: i,
                     used: true,
@@ -163,7 +169,7 @@ pub fn ReverbEqView(mode_is_decay: bool, frame: u64) -> Element {
                 }
             }
             EqViewMode::Decay => {
-                let b = &params.decay_eq[i];
+                let b = &stage.decay_eq[i];
                 EqBand {
                     index: i,
                     used: true,
@@ -221,7 +227,7 @@ pub fn ReverbEqView(mode_is_decay: bool, frame: u64) -> Element {
                     if idx >= 6 {
                         return;
                     }
-                    let ptrs = band_ptrs(&params_change, mode, idx);
+                    let ptrs = band_ptrs(params_change.stage(focused), mode, idx);
                     let (shape_idx, gain) = match mode {
                         EqViewMode::Post => (
                             post_shape_to_index(band.shape),
@@ -249,7 +255,7 @@ pub fn ReverbEqView(mode_is_decay: bool, frame: u64) -> Element {
                     if idx >= 6 {
                         return;
                     }
-                    let ptrs = band_ptrs(&params_remove, mode, idx);
+                    let ptrs = band_ptrs(params_remove.stage(focused), mode, idx);
                     unsafe {
                         write(&ctx_remove, ptrs.gain, ptrs.gain.preview_normalized(0.0));
                     }

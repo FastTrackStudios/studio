@@ -19,6 +19,13 @@
 //! [`dsp::saturate::digital::DigitalStage`] on the wet path for the digital
 //! family (there is no transfer curve that produces an alias, so quantisation
 //! and rate reduction cannot be a shaper).
+//!
+//! The shell is an FX stack (`fx.stack.every-shell`, docs/spec/fx/stack.md):
+//! a [`StagePool`] of [`MAX_STAGES`] complete saturators, each a
+//! [`SatStage`] — its own preamp pair, quantiser pair, emphasis pair,
+//! measured engines, mix and output — arranged into lanes by the params. The
+//! default is one stage on one lane, which the pool passes through at unity:
+//! it sounds exactly like the single-circuit plugin it replaces.
 
 // `plugin_core::prelude` re-exports nice-plug's, plus the Dioxus editor
 // pieces — one import rather than two that overlap.
@@ -31,16 +38,22 @@ use dsp::saturate::deluxe::Deluxe;
 use dsp::saturate::digital::DigitalStage;
 use dsp::saturate::emphasis::EmphasisEq;
 use dsp::saturate::preamp::ClassAPreamp;
-use dsp::saturate::ui::params::{SatParams, SatUiState};
+use dsp::saturate::profiles::Engine;
+use dsp::saturate::ui::params::{MAX_STAGES, SatParams, SatStageParams, SatUiState};
+use dsp::stack::{Stage, StagePool};
 
 const PLUGIN_NAME: &str = "FTS Saturate";
 
-// ── Plugin ────────────────────────────────────────────────────────────────
+// ── Stage adapter ─────────────────────────────────────────────────────────
 
-pub struct FtsSaturate {
-    params: Arc<SatParams>,
-    ui_state: Arc<SatUiState>,
-    editor_state: Arc<DioxusState>,
+/// One complete saturator — the whole pre-stack plugin — as a stack
+/// [`Stage`].
+///
+/// The pool runs in f64; the circuits run in f32, as they always have. The
+/// stage narrows at its input and widens at its output: the pool's input is
+/// the host's f32 buffer widened, so the narrowing is exact, and the
+/// arithmetic between is the pre-stack plugin's to the bit.
+struct SatStage {
     /// One stage per channel: the preamp's sag envelope, DC blocker and tilt
     /// filters are all per-channel state, so the two sides must not share.
     pre: [ClassAPreamp; 2],
@@ -57,66 +70,67 @@ pub struct FtsSaturate {
     /// thread.
     deluxe: Deluxe,
     bluebox: Bluebox,
-    /// The latency last reported to the host: Bluebox's oversampler delays
-    /// its wet path (and its dry, to match); the other engines are
-    /// zero-latency.
-    latency: u32,
+    /// What the last [`Self::sync`] resolved.
+    engine: Engine,
+    crushing: bool,
+    mix: f32,
+    /// Output gain, linear.
+    output: f32,
 }
 
-impl Default for FtsSaturate {
-    fn default() -> Self {
+impl SatStage {
+    fn new(sample_rate: f32) -> Self {
         Self {
-            params: Arc::new(SatParams::default()),
-            ui_state: Arc::new(SatUiState::default()),
-            // The editor sizes itself — see dsp::saturate::ui::control_view.
-            editor_state: DioxusState::new(|| {
-                (
-                    dsp::saturate::ui::control_view::EDITOR_W,
-                    dsp::saturate::ui::control_view::EDITOR_H,
-                )
-            })
-            .with_resize_hint(dsp::saturate::ui::control_view::resize_hint()),
-            pre: [ClassAPreamp::new(48_000.0), ClassAPreamp::new(48_000.0)],
+            pre: [
+                ClassAPreamp::new(sample_rate),
+                ClassAPreamp::new(sample_rate),
+            ],
             quantiser: [DigitalStage::new(), DigitalStage::new()],
-            emph: [EmphasisEq::new(48_000.0), EmphasisEq::new(48_000.0)],
-            deluxe: Deluxe::new(48_000.0),
-            bluebox: Bluebox::new(48_000.0),
-            latency: 0,
-        }
-    }
-}
-
-impl FtsSaturate {
-    /// The latency `engine` adds, in samples.
-    fn latency_of(&self, engine: dsp::saturate::profiles::Engine) -> u32 {
-        match engine {
-            dsp::saturate::profiles::Engine::Bluebox { .. } => {
-                u32::try_from(self.bluebox.latency()).unwrap_or(0)
-            }
-            _ => 0,
+            emph: [EmphasisEq::new(sample_rate), EmphasisEq::new(sample_rate)],
+            deluxe: Deluxe::new(f64::from(sample_rate)),
+            bluebox: Bluebox::new(f64::from(sample_rate)),
+            engine: Engine::Preamp,
+            crushing: false,
+            mix: 1.0,
+            output: 1.0,
         }
     }
 
-    /// Point both channels at the resolved profile.
+    /// Re-home every processor at `sample_rate` and clear its state. The
+    /// measured engines are rebuilt — allocation, so `activate` only.
+    fn prepare(&mut self, sample_rate: f32) {
+        for (pre, quantiser) in self.pre.iter_mut().zip(self.quantiser.iter_mut()) {
+            pre.set_sample_rate(sample_rate);
+            pre.reset();
+            quantiser.reset();
+        }
+        for emph in &mut self.emph {
+            emph.set_sample_rate(sample_rate);
+        }
+        self.deluxe = Deluxe::new(f64::from(sample_rate));
+        self.bluebox = Bluebox::new(f64::from(sample_rate));
+    }
+
+    /// Point both channels at the stage's resolved profile (no allocation).
     ///
     /// Resolved through the *persisted id* rather than the automatable index,
     /// so growing the rail never repoints an old session at a different
     /// circuit — same contract the reverb and the compressor keep.
-    fn sync_params(&mut self) -> (bool, dsp::saturate::profiles::Engine) {
-        let profile = self.params.resolved_profile();
+    fn sync(&mut self, p: &SatStageParams) {
+        let profile = p.resolved_profile();
         let controls = dsp::saturate::profiles::Controls {
-            drive: self.params.drive.value(),
-            bias: self.params.bias.value(),
-            sag: self.params.sag.value(),
-            tilt: self.params.tilt.value(),
-            character_a: self.params.character_a.value(),
-            character_b: self.params.character_b.value(),
-            mix: self.params.mix.value(),
+            drive: p.drive.value(),
+            bias: p.bias.value(),
+            sag: p.sag.value(),
+            tilt: p.tilt.value(),
+            character_a: p.character_a.value(),
+            character_b: p.character_b.value(),
+            mix: p.mix.value(),
         };
         // The emphasis bands, designed once per block (setters early-out on
         // unchanged values inside the biquad design's own cheapness — the
         // whole table is a handful of arithmetic).
-        let bands = std::array::from_fn(|i| self.params.emph[i].to_band());
+        let bands = std::array::from_fn(|i| p.emph[i].to_band());
         for emph in &mut self.emph {
             if *emph.bands() != bands {
                 emph.set_bands(&bands);
@@ -132,20 +146,138 @@ impl FtsSaturate {
         }
         // The measured models take the same knobs through their own mapping.
         match profile.engine {
-            dsp::saturate::profiles::Engine::Deluxe => self
+            Engine::Deluxe => self
                 .deluxe
                 .set(dsp::saturate::profiles::deluxe_params(&controls)),
-            dsp::saturate::profiles::Engine::Bluebox { sat_freq, alt_tube } => {
+            Engine::Bluebox { sat_freq, alt_tube } => {
                 self.bluebox.set(dsp::saturate::profiles::bluebox_params(
                     &controls, sat_freq, alt_tube,
                 ));
             }
-            dsp::saturate::profiles::Engine::Preamp => {}
+            Engine::Preamp => {}
         }
-        (
-            profile.voicing.digital && !self.quantiser[0].is_transparent(),
-            profile.engine,
-        )
+        self.crushing = profile.voicing.digital && !self.quantiser[0].is_transparent();
+        self.engine = profile.engine;
+        self.mix = p.mix.value();
+        self.output = 10.0f32.powf(p.output.value() / 20.0);
+    }
+}
+
+impl Stage for SatStage {
+    fn process(&mut self, l: &mut [f64], r: &mut [f64]) {
+        let output = self.output;
+        if self.engine != Engine::Preamp {
+            // A measured model is a whole stereo algorithm with its own mix
+            // law (handed over in `sync`); the emphasis pair still wraps
+            // what it distorts, and Output stays ours.
+            for (left, right) in l.iter_mut().zip(r.iter_mut()) {
+                let el = self.emph[0].pre(to_f32(*left));
+                let er = self.emph[1].pre(to_f32(*right));
+                let (wl, wr) = match self.engine {
+                    Engine::Deluxe => self.deluxe.process(f64::from(el), f64::from(er)),
+                    _ => self.bluebox.process(f64::from(el), f64::from(er)),
+                };
+                *left = f64::from(self.emph[0].post(to_f32(wl)) * output);
+                *right = f64::from(self.emph[1].post(to_f32(wr)) * output);
+            }
+            return;
+        }
+
+        let mix = self.mix;
+        for (left, right) in l.iter_mut().zip(r.iter_mut()) {
+            for (ch, sample) in [left, right].into_iter().enumerate() {
+                let dry = to_f32(*sample);
+                // Emphasis in, the stage, the quantiser, de-emphasis out,
+                // and only THEN the mix (`fx.sat.emphasis`): the EQ pair
+                // wraps the whole wet path so it shapes what distorts —
+                // including what the bitcrusher chews on — and is net-flat
+                // around it. A flat EQ short-circuits to identity, keeping
+                // the default path bit-exact.
+                let emphasized = self.emph[ch].pre(dry);
+                let mut wet = self.pre[ch].process_wet(ch, emphasized);
+                if self.crushing {
+                    wet = self.quantiser[ch].process(ch, wet);
+                }
+                wet = self.emph[ch].post(wet);
+                *sample = f64::from((wet - dry).mul_add(mix, dry) * output);
+            }
+        }
+    }
+
+    /// Bluebox's oversampler delays its wet path (and its dry, to match);
+    /// the other engines are zero-latency.
+    fn latency(&self) -> usize {
+        match self.engine {
+            Engine::Bluebox { .. } => self.bluebox.latency(),
+            _ => 0,
+        }
+    }
+
+    fn reset(&mut self) {
+        for (pre, quantiser) in self.pre.iter_mut().zip(self.quantiser.iter_mut()) {
+            pre.reset();
+            quantiser.reset();
+        }
+        for emph in &mut self.emph {
+            emph.reset();
+        }
+        self.deluxe.reset();
+        self.bluebox.reset();
+    }
+}
+
+// ── Plugin ────────────────────────────────────────────────────────────────
+
+pub struct FtsSaturate {
+    params: Arc<SatParams>,
+    ui_state: Arc<SatUiState>,
+    editor_state: Arc<DioxusState>,
+    /// The stack: a fixed pool of complete saturators, topology from params.
+    pool: StagePool<SatStage>,
+    /// f64 scratch the pool processes in place, sized in `activate`.
+    buf_l: Vec<f64>,
+    buf_r: Vec<f64>,
+    /// The latency last reported to the host — the slowest lane's
+    /// (`fx.stack.latency`).
+    latency: usize,
+}
+
+impl Default for FtsSaturate {
+    fn default() -> Self {
+        Self {
+            params: Arc::new(SatParams::default()),
+            ui_state: Arc::new(SatUiState::default()),
+            // The editor sizes itself — see dsp::saturate::ui::control_view.
+            editor_state: DioxusState::new(|| {
+                (
+                    dsp::saturate::ui::control_view::EDITOR_W,
+                    dsp::saturate::ui::control_view::EDITOR_H,
+                )
+            })
+            .with_resize_hint(dsp::saturate::ui::control_view::resize_hint()),
+            pool: StagePool::new((0..MAX_STAGES).map(|_| SatStage::new(48_000.0)).collect()),
+            buf_l: Vec::new(),
+            buf_r: Vec::new(),
+            latency: 0,
+        }
+    }
+}
+
+impl FtsSaturate {
+    /// Push every in-use stage's params into its processors, then the
+    /// topology into the pool (no allocation). A stage outside the stack is
+    /// left alone; it is synced the block it is added.
+    fn sync_params(&mut self) {
+        for i in 0..MAX_STAGES {
+            let sp = self.params.stage(i);
+            if !sp.place.in_use.value() {
+                continue;
+            }
+            if let Some(stage) = self.pool.stage_mut(i) {
+                stage.sync(sp);
+            }
+        }
+        dsp::stack::host::sync_pool(&mut self.pool, &*self.params);
     }
 }
 
@@ -188,35 +320,34 @@ impl Plugin for FtsSaturate {
         buffer_config: &BufferConfig,
         context: &mut impl ActivateContext<Self>,
     ) -> bool {
-        for (pre, quantiser) in self.pre.iter_mut().zip(self.quantiser.iter_mut()) {
-            pre.set_sample_rate(buffer_config.sample_rate);
-            pre.reset();
-            quantiser.reset();
+        // Every stage is prepared here, not just the ones in the stack: a
+        // stage's processors are small (filters, a few envelopes, a short
+        // oversampler), and adding one on the audio thread must not
+        // allocate.
+        let mut max_stage_latency = 0;
+        for i in 0..MAX_STAGES {
+            if let Some(stage) = self.pool.stage_mut(i) {
+                stage.prepare(buffer_config.sample_rate);
+                max_stage_latency = max_stage_latency.max(stage.bluebox.latency());
+            }
         }
-        for emph in &mut self.emph {
-            emph.set_sample_rate(buffer_config.sample_rate);
-        }
-        self.deluxe = Deluxe::new(f64::from(buffer_config.sample_rate));
-        self.bluebox = Bluebox::new(f64::from(buffer_config.sample_rate));
+        let max_block = buffer_config.max_buffer_size as usize;
+        // Worst case a lane could need compensating by: every stage serial
+        // on one lane, each a Bluebox.
+        self.pool.prepare(max_block, max_stage_latency * MAX_STAGES);
+        self.buf_l = vec![0.0; max_block];
+        self.buf_r = vec![0.0; max_block];
         // Land the settings before the first block, so the tilt filters and
         // the sag ballistics start on the real values rather than ramping
         // out of a default nobody chose.
-        let (_, engine) = self.sync_params();
-        self.latency = self.latency_of(engine);
-        context.set_latency_samples(self.latency);
+        self.sync_params();
+        self.latency = self.pool.latency();
+        context.set_latency_samples(u32::try_from(self.latency).unwrap_or(u32::MAX));
         true
     }
 
     fn reset(&mut self) {
-        for (pre, quantiser) in self.pre.iter_mut().zip(self.quantiser.iter_mut()) {
-            pre.reset();
-            quantiser.reset();
-        }
-        for emph in &mut self.emph {
-            emph.reset();
-        }
-        self.deluxe.reset();
-        self.bluebox.reset();
+        self.pool.reset();
     }
 
     fn process(
@@ -225,79 +356,55 @@ impl Plugin for FtsSaturate {
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        let (crushing, engine) = self.sync_params();
-        let latency = self.latency_of(engine);
+        self.sync_params();
+        let latency = self.pool.latency();
         if latency != self.latency {
             self.latency = latency;
-            context.set_latency_samples(latency);
+            context.set_latency_samples(u32::try_from(latency).unwrap_or(u32::MAX));
         }
-        let mix = self.params.mix.value();
-        let output = 10.0f32.powf(self.params.output.value() / 20.0);
 
+        let n = buffer.samples().min(self.buf_l.len());
         let mut input_peak = 0.0f32;
         let mut output_peak = 0.0f32;
 
-        if engine != dsp::saturate::profiles::Engine::Preamp {
-            // A measured model is a whole stereo algorithm with its own mix
-            // law (handed over in `sync_params`); the emphasis pair still
-            // wraps what it distorts, and Output stays ours.
-            for mut frame in buffer.iter_samples() {
-                let mut io = [0.0f32; 2];
-                for ((sample, slot), emph) in frame
-                    .iter_mut()
-                    .zip(io.iter_mut())
-                    .zip(self.emph.iter_mut())
-                {
-                    input_peak = input_peak.max(sample.abs());
-                    *slot = emph.pre(*sample);
-                }
-                let [l, r] = io;
-                let wet_pair: [f64; 2] = match engine {
-                    dsp::saturate::profiles::Engine::Deluxe => {
-                        self.deluxe.process(f64::from(l), f64::from(r))
-                    }
-                    _ => self.bluebox.process(f64::from(l), f64::from(r)),
-                }
-                .into();
-                for ((sample, wet), emph) in
-                    frame.iter_mut().zip(wet_pair).zip(self.emph.iter_mut())
-                {
-                    let out = emph.post(to_f32(wet)) * output;
-                    output_peak = output_peak.max(out.abs());
-                    *sample = out;
-                }
-            }
-            store_peak(&self.ui_state.input_db, input_peak);
-            store_peak(&self.ui_state.out_db, output_peak);
-            return ProcessStatus::Normal;
+        // Widen into the pool's f64 scratch (exact). A mono bus mirrors its
+        // one channel, so a stage's stereo engines see plain mono.
+        for (i, mut frame) in buffer.iter_samples().take(n).enumerate() {
+            let mut it = frame.iter_mut();
+            let (Some(l), r) = (it.next(), it.next()) else {
+                continue;
+            };
+            input_peak = input_peak.max(l.abs());
+            let left = *l;
+            let right = r.map_or(left, |s| {
+                input_peak = input_peak.max(s.abs());
+                *s
+            });
+            self.buf_l[i] = f64::from(left);
+            self.buf_r[i] = f64::from(right);
         }
 
-        for mut frame in buffer.iter_samples() {
-            for (c, sample) in frame.iter_mut().enumerate() {
-                let ch = c.min(1);
-                let dry = *sample;
-                input_peak = input_peak.max(dry.abs());
+        self.pool
+            .process(&mut self.buf_l[..n], &mut self.buf_r[..n]);
 
-                // Emphasis in, the stage, the quantiser, de-emphasis out,
-                // and only THEN the mix (`fx.sat.emphasis`): the EQ pair
-                // wraps the whole wet path so it shapes what distorts —
-                // including what the bitcrusher chews on — and is net-flat
-                // around it. A flat EQ short-circuits to identity, keeping
-                // the default path bit-exact.
-                let emphasized = self.emph[ch].pre(dry);
-                let mut wet = self.pre[ch].process_wet(ch, emphasized);
-                if crushing {
-                    wet = self.quantiser[ch].process(ch, wet);
-                }
-                wet = self.emph[ch].post(wet);
-                let out = (wet - dry).mul_add(mix, dry) * output;
-                output_peak = output_peak.max(out.abs());
-                *sample = out;
+        for (i, mut frame) in buffer.iter_samples().take(n).enumerate() {
+            let mut it = frame.iter_mut();
+            let (Some(l), r) = (it.next(), it.next()) else {
+                continue;
+            };
+            let left = to_f32(self.buf_l[i]);
+            output_peak = output_peak.max(left.abs());
+            *l = left;
+            if let Some(r) = r {
+                let right = to_f32(self.buf_r[i]);
+                output_peak = output_peak.max(right.abs());
+                *r = right;
             }
         }
 
         // Meter ballistics: instant attack, a slow fall the editor can
-        // read at whatever rate it happens to draw at.
+        // read at whatever rate it happens to draw at. Both are the stack's
+        // edges — what goes in, what comes out.
         store_peak(&self.ui_state.input_db, input_peak);
         store_peak(&self.ui_state.out_db, output_peak);
 

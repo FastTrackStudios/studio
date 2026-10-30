@@ -69,10 +69,11 @@ pub fn resize_hint() -> ResizeHint {
 use crate::eq::analyzer::AnalyzerSettings;
 use crate::eq::analyzer::ui::AnalyzerSettingsPanel;
 use crate::eq::ui::param_adapter::param_handle;
-use crate::eq::ui::params::{EqUiState, NUM_BANDS, SPECTRUM_BINS};
+use crate::eq::ui::params::{EqStageRef, EqUiState, NUM_BANDS, SPECTRUM_BINS};
 use crate::eq::ui::profile_view::{
     Api550aProfileView, Neve1073ProfileView, PultecProfileView, SslEProfileView, SslGProfileView,
 };
+use crate::stack::host::{FocusedStage, StackHandle, StackHost as _};
 
 /// A cheat-sheet [`TrackInfoProvider`](crate::eq::ui::cheatsheet::TrackInfoProvider)
 /// backed by the editor's shared state. In the plugin this surfaces the track
@@ -157,10 +158,25 @@ fn AppShell() -> Element {
     let shared = use_context::<SharedState>();
     let ui = shared.get::<EqUiState>().expect("EqUiState missing");
     let ctx = use_param_context();
-    let params = &ui.params;
+
+    // Which stack stage the editor is on (`fx.stack.focus`) — provided to
+    // every component below (faces, presets, strip), restored from the
+    // session. Everything this shell draws and writes is that stage: the
+    // graph's bands, the rack face, the presets.
+    let focus =
+        use_context_provider(|| Signal::new(FocusedStage(ui.params.resolved_focused_stage())));
+    // A stage removed under the editor (host undo, automation of `use`)
+    // must not leave the graph on a stage that is no longer in the stack.
+    let focused_stage = ui.params.visible_stage(focus.read().0);
+    // The audio thread publishes the focused stage's band rings and model
+    // response.
+    ui.focused_stage.store(focused_stage, Ordering::Relaxed);
+    let stage = EqStageRef::new(ui.params.clone(), focused_stage);
+    let params = &stage;
 
     // Presets. The side rail selects the model; the strip along the top
-    // selects the preset — the same split every FTS editor uses.
+    // selects the preset — the same split every FTS editor uses. A preset is
+    // one EQ, so it writes the focused stage.
     let mut preset_browser = use_signal(preset_browser::PresetBrowser::default);
     let preset_note = use_signal(String::new);
     let mut preset_open = use_signal(|| false);
@@ -250,9 +266,9 @@ fn AppShell() -> Element {
     let mut analyzer_settings: Signal<AnalyzerSettings> = use_signal(|| ui.analyzer.settings());
     let analyzer_for_settings = ui.clone();
     // The *resolved* model: the persisted id when the session has one, the
-    // index otherwise. See `FtsEqParams::model_id`.
+    // index otherwise. See `EqStageParams::model_id`.
     let current_model = crate::eq::ui::faces::resolved_model(params);
-    let current_form = crate::eq::ui::faces::resolved_form(params);
+    let current_form = crate::eq::ui::faces::resolved_form(params.root());
     let hardware_mode_active = current_model != 0;
     let model_response: Option<Vec<f32>> = hardware_mode_active.then(|| {
         (0..SPECTRUM_BINS)
@@ -406,9 +422,9 @@ fn AppShell() -> Element {
     let frame_counter = *app_tick.read();
 
     // The keyboard layer's own handles, taken before the rsx hands `ctx` and
-    // `ui.params` to the closures below.
+    // the focused stage to the closures below.
     let key_ctx = ctx.clone();
-    let key_params = ui.params.clone();
+    let key_params = params.clone();
 
     // One handler, hung on more than one element.
     //
@@ -420,7 +436,7 @@ fn AppShell() -> Element {
     // covers that subtree; between the two there is no path a key can take
     // that misses both.
     let key_ctx_up = ctx.clone();
-    let key_params_up = ui.params.clone();
+    let key_params_up = params.clone();
     // Focus is momentary: what goes down on `f` has to come back up.
     let on_key_up = use_callback(move |evt: KeyboardEvent| {
         let params = key_params_up.clone();
@@ -633,20 +649,43 @@ fn AppShell() -> Element {
                                 let forms = fts_audio_ui::EDITOR_FORMS;
                                 let index =
                                     forms.iter().position(|f| *f == current_form).unwrap_or(0);
-                                crate::eq::ui::faces::store_form(&params, forms[(index + 1) % forms.len()]);
+                                crate::eq::ui::faces::store_form(params.root(), forms[(index + 1) % forms.len()]);
                             }
                         },
                     }
                 },
-                on_select: {
+                on_select_mods: {
                     let ctx = ctx.clone();
                     let model_ptr = params.model.as_ptr();
                     let params_for_id = params.clone();
-                    move |category: usize| {
+                    move |(category, mods): (usize, fts_audio_ui::shell::RailModifiers)| {
                         // Clicking the active family cycles the models inside
                         // it — SSL E to SSL G — and any other family lands on
                         // its first model.
                         let next = crate::eq::ui::faces::rail_click_target(current_model, category);
+                        if mods.shift() {
+                            // Shift-click STACKS the model instead of
+                            // replacing it — serial after the focused stage,
+                            // or with Ctrl/Cmd on a new parallel lane
+                            // (`fx.stack.add`). A full pool or no free lane
+                            // is a no-op.
+                            let host = params_for_id.root().as_ref();
+                            let new_lane = mods.ctrl() || mods.meta();
+                            if let Some(lane) = crate::stack::host::add_target_lane(
+                                host,
+                                params_for_id.index(),
+                                new_lane,
+                            ) {
+                                let _ = crate::stack::host::add_stage(
+                                    host,
+                                    &ctx,
+                                    focus,
+                                    next.max(0) as usize,
+                                    lane,
+                                );
+                            }
+                            return;
+                        }
                         ctx.begin_set_raw(model_ptr);
                         ctx.set_normalized_raw(model_ptr, next as f32 / 5.0);
                         ctx.end_set_raw(model_ptr);
@@ -694,8 +733,9 @@ fn AppShell() -> Element {
             if let Some(design) = crate::eq::ui::faces::design_for_model(current_model) {
                 // A hardware model swaps the whole surface for that unit's
                 // front panel.
+                // Keyed by stage too: two stacked Pultecs are two panels.
                 crate::eq::ui::faces::rack::EqRackFace {
-                    key: "{current_model}",
+                    key: "{focused_stage}-{current_model}",
                     design: *design,
                     model: current_model,
                     frame: frame_counter,
@@ -776,7 +816,7 @@ fn AppShell() -> Element {
                         auto_range: auto_range,
                         on_db_range_change: {
                             let ctx = ctx.clone();
-                            let params = ui.params.clone();
+                            let params = params.clone();
                             move |db: f64| {
                                 // Map the requested range back to its index
                                 // and write it as an ordinary param gesture,
@@ -804,7 +844,7 @@ fn AppShell() -> Element {
                         selected_bands_out: selected_bands,
                         sweep_band: sweep_target,
                         on_sweep_move: {
-                            let params = ui.params.clone();
+                            let params = params.clone();
                             let ctx = ctx.clone();
                             move |(idx, hz): (usize, f32)| {
                                 if idx >= NUM_BANDS { return; }
@@ -824,7 +864,7 @@ fn AppShell() -> Element {
 
                         on_band_change: {
                             let ctx = ctx.clone();
-                            let params = ui.params.clone();
+                            let params = params.clone();
                             move |(idx, band): (usize, EqBand)| {
                                 if idx < NUM_BANDS {
                                     let bp = &params.bands[idx];
@@ -910,7 +950,7 @@ fn AppShell() -> Element {
 
                         on_band_add: {
                             let ctx = ctx.clone();
-                            let params = ui.params.clone();
+                            let params = params.clone();
                             move |band: EqBand| {
                                 let idx = band.index;
                                 if idx < NUM_BANDS {
@@ -954,7 +994,7 @@ fn AppShell() -> Element {
 
                         on_band_remove: {
                             let ctx = ctx.clone();
-                            let params = ui.params.clone();
+                            let params = params.clone();
                             move |idx: usize| {
                                 if idx < NUM_BANDS {
                                     let bp = &params.bands[idx];
@@ -1120,7 +1160,7 @@ fn AppShell() -> Element {
                                                         placeholder: "Band name — e.g. Honk, Air, Mud…",
                                                         value: name_sig(),
                                                         oninput: {
-                                                            let params = ui.params.clone();
+                                                            let params = params.clone();
                                                             let ctx_n = ctx.clone();
                                                             move |evt: FormEvent| {
                                                                 let v = evt.value();
@@ -1136,7 +1176,7 @@ fn AppShell() -> Element {
                                                         placeholder: "Notes — why this move? e.g. basketball honk cut on the kick…",
                                                         value: notes_sig(),
                                                         oninput: {
-                                                            let params = ui.params.clone();
+                                                            let params = params.clone();
                                                             let ctx_n = ctx.clone();
                                                             move |evt: FormEvent| {
                                                                 let v = evt.value();
@@ -1502,6 +1542,16 @@ fn AppShell() -> Element {
             }
             }
             } // end of the Main face
+
+            // The stack strip floats over the face (`fx.stack.strip`): one
+            // chip per stage, focus / bypass / remove. Mounted LAST: blitz
+            // hit-tests in document order, so an earlier sibling would lose
+            // its clicks to the graph or the rack face underneath. Renders
+            // nothing while the stack is one stage — the plain EQ.
+            crate::stack::host::StackStrip {
+                host: StackHandle(ui.params.clone()),
+                frame: frame_counter,
+            }
             }  // PluginShell
             ResizeHandle {
                 min_width: 600,
@@ -1552,7 +1602,8 @@ fn PultecControls() -> Element {
     let shared = use_context::<SharedState>();
     let ui = shared.get::<EqUiState>().expect("EqUiState missing");
     let ctx = use_param_context();
-    let params = &ui.params;
+    let stage = EqStageRef::focused(ui.params.clone());
+    let params = &stage;
 
     let low = params.pultec_low_freq.value().to_string();
     let mut low_sig = use_signal(|| low.clone());
@@ -1615,7 +1666,8 @@ fn ApiControls() -> Element {
     let shared = use_context::<SharedState>();
     let ui = shared.get::<EqUiState>().expect("EqUiState missing");
     let ctx = use_param_context();
-    let params = &ui.params;
+    let stage = EqStageRef::focused(ui.params.clone());
+    let params = &stage;
 
     let low = params.api_low_freq.value().to_string();
     let mid = params.api_mid_freq.value().to_string();
@@ -1654,7 +1706,8 @@ fn SslControls(e_series: bool) -> Element {
     let shared = use_context::<SharedState>();
     let ui = shared.get::<EqUiState>().expect("EqUiState missing");
     let ctx = use_param_context();
-    let params = &ui.params;
+    let stage = EqStageRef::focused(ui.params.clone());
+    let params = &stage;
     let title = if e_series {
         "SSL E-Series DSP"
     } else {
@@ -1731,7 +1784,8 @@ fn Neve1073Controls() -> Element {
     let shared = use_context::<SharedState>();
     let ui = shared.get::<EqUiState>().expect("EqUiState missing");
     let ctx = use_param_context();
-    let params = &ui.params;
+    let stage = EqStageRef::focused(ui.params.clone());
+    let params = &stage;
 
     let hpf_value = params.neve_hpf.value().to_string();
     let mut hpf_sig = use_signal(|| hpf_value.clone());

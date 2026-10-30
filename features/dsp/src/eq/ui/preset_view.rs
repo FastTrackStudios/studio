@@ -16,7 +16,7 @@ use nice_plug_dioxus::prelude::ParamContext;
 use preset_browser::{Preset, PresetBrowser};
 
 use crate::eq::ui::param_adapter::param_handle;
-use crate::eq::ui::params::{EqUiState, FtsEqParams, NUM_BANDS};
+use crate::eq::ui::params::{EqStageParams, EqStageRef, EqUiState, NUM_BANDS};
 
 /// Where the EQ's presets live.
 #[must_use]
@@ -47,7 +47,7 @@ pub fn load_library() -> (PresetBrowser, String) {
 ///
 /// `b{n}_used` is still not here and does not need to be: the plugin carries
 /// all 24 bands at all times and `on` is what decides whether one sounds.
-pub fn preset_handles(params: &FtsEqParams, ctx: &ParamContext) -> HashMap<String, ParamHandle> {
+pub fn preset_handles(params: &EqStageParams, ctx: &ParamContext) -> HashMap<String, ParamHandle> {
     let mut handles = HashMap::new();
     for (i, band) in params.bands.iter().enumerate().take(NUM_BANDS) {
         let n = i + 1;
@@ -144,7 +144,7 @@ fn band_key(index: usize, field: &str) -> String {
 /// library outlives a build, and a preset from a version with more bands must
 /// cost only the settings it names.
 fn band_text_slot<'a>(
-    params: &'a FtsEqParams,
+    params: &'a EqStageParams,
     index: usize,
     field: &str,
 ) -> Option<&'a parking_lot::RwLock<String>> {
@@ -168,10 +168,10 @@ fn band_text_slot<'a>(
 /// defaults gets there: an EQ nobody has labelled really does save with no
 /// text block at all.
 #[must_use]
-pub fn capture_band_text(params: &FtsEqParams) -> Vec<(String, String)> {
+pub fn capture_band_text(params: &EqStageParams) -> Vec<(String, String)> {
     // Asking the type for its own defaults rather than restating them here
     // keeps this right when they change. Save-time only, never the hot path.
-    let defaults = FtsEqParams::default();
+    let defaults = EqStageParams::default();
     let mut text = Vec::new();
     for i in 0..NUM_BANDS {
         for field in BAND_TEXT_FIELDS {
@@ -188,7 +188,7 @@ pub fn capture_band_text(params: &FtsEqParams) -> Vec<(String, String)> {
 }
 
 /// What one band's label reads as on a freshly constructed EQ.
-fn default_band_text(defaults: &FtsEqParams, index: usize, field: &str) -> String {
+fn default_band_text(defaults: &EqStageParams, index: usize, field: &str) -> String {
     band_text_slot(defaults, index, field).map_or_else(String::new, |slot| slot.read().clone())
 }
 
@@ -210,7 +210,7 @@ fn default_band_text(defaults: &FtsEqParams, index: usize, field: &str) -> Strin
 /// [`capture_band_text`] measures against the defaults: the two are inverses,
 /// so capturing an EQ and recalling it elsewhere reproduces it exactly —
 /// bands 1 and 2 reading "Low Shelf" / "High Shelf" again included.
-pub fn apply_band_text(params: &FtsEqParams, text: &[(String, String)]) {
+pub fn apply_band_text(params: &EqStageParams, text: &[(String, String)]) {
     if text.is_empty() {
         return;
     }
@@ -218,7 +218,7 @@ pub fn apply_band_text(params: &FtsEqParams, text: &[(String, String)]) {
         .iter()
         .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect();
-    let defaults = FtsEqParams::default();
+    let defaults = EqStageParams::default();
     for i in 0..NUM_BANDS {
         for field in BAND_TEXT_FIELDS {
             let Some(slot) = band_text_slot(params, i, field) else {
@@ -260,7 +260,7 @@ pub fn preset_handle_names() -> Vec<String> {
 /// to the persisted strings, which have no handle.
 pub fn apply(
     preset: &Preset,
-    params: &FtsEqParams,
+    params: &EqStageParams,
     handles: &HashMap<String, ParamHandle>,
     mut note: Signal<String>,
 ) {
@@ -290,12 +290,15 @@ pub fn EqPresetSidecar(
     // itself rather than the handle map. It is already in context — the
     // editor put it there — so it does not have to become a prop, which it
     // could not anyway: `Props` wants `PartialEq` and `FtsEqParams` is a tree
-    // of atomics and locks.
-    let params = use_context::<nice_plug_dioxus::SharedState>()
-        .get::<EqUiState>()
-        .expect("EqUiState missing")
-        .params
-        .clone();
+    // of atomics and locks. A preset is one EQ, so it lands on the focused
+    // stage (`fx.stack.focus`).
+    let params = EqStageRef::focused(
+        use_context::<nice_plug_dioxus::SharedState>()
+            .get::<EqUiState>()
+            .expect("EqUiState missing")
+            .params
+            .clone(),
+    );
 
     rsx! {
         div {

@@ -1,4 +1,4 @@
-//! The reverb's parameters, and the two pieces of editor state a session has
+//! The reverb's parameters, and the pieces of editor state a session has
 //! to remember.
 //!
 //! Lives here rather than in the plugin shell for the same reason the
@@ -6,22 +6,36 @@
 //! parameter so a host can automate the space; the profile *id* is persisted
 //! state so growing the list cannot repoint an old project at a different
 //! reverb.
+//!
+//! The tree is an FX stack (`fx.stack.params`, docs/spec/fx/stack.md): a pool
+//! of [`MAX_STAGES`] complete reverbs ([`ReverbStageParams`]), each with its
+//! own space, knobs, Post / Decay Rate EQs and impulse response, plus the
+//! lanes and the stack globals. Stage 1 is nested bare, so its ids and
+//! persist keys are the pre-stack plugin's and an old session loads into it
+//! unchanged; stage *n* is prefixed `s{n}_`.
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use crate::reverb::ir::PreparedIrPair;
 use atomic_float::AtomicF32;
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Sender, TrySendError};
 use nice_plug::prelude::*;
 use parking_lot::Mutex;
+
+/// How many stages the reverb stack can hold (`fx.stack.limits`).
+pub const MAX_STAGES: usize = 8;
 
 /// Live values the editor reads and the audio thread writes, plus the
 /// editor's side of IR loading.
 ///
 /// The meters are plain atomics rather than a channel: the editor samples them
 /// when it draws, and a frame that misses an update simply draws the next one.
+///
+/// IR loading is per stage — a stage is a complete reverb (`fx.stack.model`),
+/// and two convolution stages each convolve with their own impulse — so the
+/// IR fields are arrays indexed by stage (0-based).
 #[derive(Default)]
 pub struct ReverbUiState {
     /// The host's tempo, as the audio thread last saw it. Zero means the host
@@ -32,38 +46,51 @@ pub struct ReverbUiState {
     pub tail_db: AtomicF32,
     /// Input level in dB, so a face can show what is feeding it.
     pub input_db: AtomicF32,
-    /// Where finished impulse responses are posted.
+    /// The stage the editor is focused on (`fx.stack.focus`), written by the
+    /// editor. The two meters above are the stack's edges, so they do not
+    /// follow it; anything that meters a stage's own state reads it here.
+    pub focused_stage: AtomicUsize,
+    /// Where each stage's finished impulse responses are posted.
     ///
-    /// The plugin owns the other end and hands it over at construction. The
-    /// audio thread only ever *receives* on it, inside the chain, and swaps a
-    /// pointer — the decode, the resample and the FFT partitioning all happen
-    /// on a worker this state spawns.
-    pub ir_tx: Mutex<Option<Sender<PreparedIrPair>>>,
+    /// The plugin owns the other ends and hands them over at construction.
+    /// The audio thread only ever *receives* on them, inside each stage's
+    /// chain, and swaps a pointer — the decode, the resample and the FFT
+    /// partitioning all happen on a worker this state spawns.
+    pub ir_tx: [Mutex<Option<Sender<PreparedIrPair>>>; MAX_STAGES],
     /// Sample rate the IR has to be resampled to. Written by the plugin when
     /// the host tells it, read by the worker.
     pub sample_rate: AtomicF32,
-    /// What is loaded now — the file's display name, for the panel.
-    pub ir_loaded: Mutex<String>,
-    /// A decode is in flight. The panel says so rather than looking broken
-    /// for the second and a half a long IR takes.
-    pub ir_loading: AtomicBool,
-    /// The last failure, if the file could not be read.
-    pub ir_error: Mutex<Option<String>>,
+    /// What each stage has loaded now — the file's display name, for the
+    /// panel.
+    pub ir_loaded: [Mutex<String>; MAX_STAGES],
+    /// A decode is in flight for that stage. The panel says so rather than
+    /// looking broken for the second and a half a long IR takes.
+    pub ir_loading: [AtomicBool; MAX_STAGES],
+    /// The stage's last failure, if the file could not be read.
+    pub ir_error: [Mutex<Option<String>>; MAX_STAGES],
+    /// Bumped by every [`Self::load_ir`] on that stage. Workers finish in
+    /// whatever order their files take to decode, so each one carries the
+    /// number it started with and posts nothing once a newer load has begun
+    /// — otherwise a slow restore could land after the user's pick and
+    /// replace it, while the saved path still names the pick.
+    pub ir_generation: [AtomicU64; MAX_STAGES],
 }
 
 impl ReverbUiState {
-    /// Load an impulse response, off the GUI thread and nowhere near the
-    /// audio one.
+    /// Load an impulse response into stage `stage` (0-based), off the GUI
+    /// thread and nowhere near the audio one.
     ///
     /// Reading a file, resampling it and partitioning it for convolution is
     /// unbounded work — seconds, for a long IR — so it runs on a worker and
     /// arrives as finished partitions that the chain swaps in with a pointer
     /// move. Everything the panel shows while that happens (Loading…, the
     /// name, an error) is written here by the worker.
-    pub fn load_ir(self: &Arc<Self>, path: PathBuf) {
+    pub fn load_ir(self: &Arc<Self>, stage: usize, path: PathBuf) {
+        let stage = stage.min(MAX_STAGES - 1);
         let state = self.clone();
-        state.ir_loading.store(true, Ordering::Relaxed);
-        *state.ir_error.lock() = None;
+        let generation = state.ir_generation[stage].fetch_add(1, Ordering::Relaxed) + 1;
+        state.ir_loading[stage].store(true, Ordering::Relaxed);
+        *state.ir_error[stage].lock() = None;
         std::thread::spawn(move || {
             let name = path.file_stem().map_or_else(
                 || path.display().to_string(),
@@ -76,35 +103,48 @@ impl ReverbUiState {
                 48_000.0
             };
 
-            match crate::reverb::ir::IrAsset::load(&path, sample_rate) {
-                Ok(asset) => {
-                    // A mono file convolves to both sides; a stereo one keeps
-                    // its own image, which is most of why you record a space
-                    // in stereo in the first place.
-                    let left = asset.channels[0].clone();
-                    let right = asset
-                        .channels
-                        .get(1)
-                        .cloned()
-                        .unwrap_or_else(|| left.clone());
-                    let pair = PreparedIrPair::build(&left, &right);
-                    let sent = state
-                        .ir_tx
-                        .lock()
-                        .as_ref()
-                        .is_some_and(|tx| tx.send(pair).is_ok());
-                    if sent {
-                        *state.ir_loaded.lock() = name;
-                    } else {
-                        // No channel means the editor is running without a
-                        // plugin behind it (the headless harness), which is
-                        // worth saying rather than silently doing nothing.
-                        *state.ir_error.lock() = Some(format!("{name}: no engine attached"));
-                    }
-                }
-                Err(e) => *state.ir_error.lock() = Some(format!("{name}: {e}")),
+            let loaded = crate::reverb::ir::IrAsset::load(&path, sample_rate).map(|asset| {
+                // A mono file convolves to both sides; a stereo one keeps
+                // its own image, which is most of why you record a space
+                // in stereo in the first place.
+                let left = asset.channels[0].clone();
+                let right = asset
+                    .channels
+                    .get(1)
+                    .cloned()
+                    .unwrap_or_else(|| left.clone());
+                PreparedIrPair::build(&left, &right)
+            });
+
+            // The generation check and the send happen under the channel's
+            // lock, so a newer load that started after this check posts
+            // after this one and wins.
+            let tx = state.ir_tx[stage].lock();
+            if state.ir_generation[stage].load(Ordering::Relaxed) != generation {
+                // Superseded: the newer load owns the panel state too.
+                return;
             }
-            state.ir_loading.store(false, Ordering::Relaxed);
+            match loaded {
+                Ok(pair) => match tx.as_ref().map(|tx| tx.try_send(pair)) {
+                    Some(Ok(())) => *state.ir_loaded[stage].lock() = name,
+                    // The chain drains its queue every block, so a full one
+                    // means the stage is not running (not built yet) and
+                    // already has impulses waiting. Never block here: this
+                    // worker holds the lock the next load needs.
+                    Some(Err(TrySendError::Full(_))) => {
+                        *state.ir_error[stage].lock() = Some(format!("{name}: engine busy"));
+                    }
+                    // No channel (or a plugin that has gone) means the
+                    // editor is running without an engine behind it (the
+                    // headless harness), which is worth saying rather than
+                    // silently doing nothing.
+                    Some(Err(TrySendError::Disconnected(_))) | None => {
+                        *state.ir_error[stage].lock() = Some(format!("{name}: no engine attached"));
+                    }
+                },
+                Err(e) => *state.ir_error[stage].lock() = Some(format!("{name}: {e}")),
+            }
+            state.ir_loading[stage].store(false, Ordering::Relaxed);
         });
     }
 }
@@ -128,8 +168,13 @@ fn dirs_home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
+/// One stage of the stack (`fx.stack.model`): everything a single-space
+/// reverb has — the space, its knobs, its two embedded EQs, its impulse
+/// response — then its place in the stack. The id order up to `decay_div`
+/// is the pre-stack plugin's and must not change (hosts persist VST3 state
+/// by index).
 #[derive(Params)]
-pub struct ReverbParams {
+pub struct ReverbStageParams {
     /// Which of the seven families' profiles is active, as an index into
     /// [`crate::reverb::profiles::PROFILES`]. A parameter because the space is worth
     /// automating; see [`Self::profile_id`] for what a session actually saves.
@@ -246,10 +291,6 @@ pub struct ReverbParams {
     #[persist = "profile_id"]
     pub profile_id: parking_lot::RwLock<String>,
 
-    /// The editor's form factor, persisted by id.
-    #[persist = "editor_form"]
-    pub editor_form: parking_lot::RwLock<String>,
-
     // ── Appended (never reorder anything above) ────────────────────────
     /// The Post EQ (`fx.reverb.post-eq`): six bands on the final reverb
     /// sound, wet path only, wet gain auto-compensated. Ids `pshape_1`…
@@ -275,6 +316,57 @@ pub struct ReverbParams {
     /// The note value the tail lasts, while Decay Mode is Sync.
     #[id = "decay_div"]
     pub decay_div: IntParam,
+
+    /// Where this stage sits in the stack (`use`, `on`, `lane`). Last, so
+    /// the ids above keep their pre-stack order.
+    #[nested]
+    pub place: crate::stack::host::StagePlacement,
+}
+
+/// The full parameter tree: the stage pool, the lanes, and the stack
+/// globals (`fx.stack.params`).
+///
+/// Stage 1 is nested bare so its ids are the pre-stack plugin's, unchanged;
+/// stages 2–8 are prefixed `s2_`…`s8_`.
+#[derive(Params)]
+pub struct ReverbParams {
+    #[nested]
+    pub stage1: ReverbStageParams,
+    #[nested(id_prefix = "s2", group = "Stage 2")]
+    pub stage2: ReverbStageParams,
+    #[nested(id_prefix = "s3", group = "Stage 3")]
+    pub stage3: ReverbStageParams,
+    #[nested(id_prefix = "s4", group = "Stage 4")]
+    pub stage4: ReverbStageParams,
+    #[nested(id_prefix = "s5", group = "Stage 5")]
+    pub stage5: ReverbStageParams,
+    #[nested(id_prefix = "s6", group = "Stage 6")]
+    pub stage6: ReverbStageParams,
+    #[nested(id_prefix = "s7", group = "Stage 7")]
+    pub stage7: ReverbStageParams,
+    #[nested(id_prefix = "s8", group = "Stage 8")]
+    pub stage8: ReverbStageParams,
+
+    /// Per-lane gain / mute / solo, ids `lgain_1`…`lsolo_8`.
+    #[nested(array, group = "Lane")]
+    pub lanes: [crate::stack::host::LaneParams; MAX_STAGES],
+
+    /// Parallel sum law (`fx.stack.sum`).
+    #[id = "summode"]
+    pub sum_mode: IntParam,
+    /// Stack output trim.
+    #[id = "stktrim"]
+    pub output_trim_db: FloatParam,
+
+    /// The editor's form factor, persisted by id. One window, so one form —
+    /// not per stage.
+    #[persist = "editor_form"]
+    pub editor_form: parking_lot::RwLock<String>,
+
+    /// Which stage the editor is focused on (`fx.stack.focus`), 0-based —
+    /// UI state, persisted so the editor reopens where it was left.
+    #[persist = "focused_stage"]
+    pub focused_stage: parking_lot::RwLock<String>,
 }
 
 /// Decay Mode's choices, by index.
@@ -461,8 +553,17 @@ pub fn eq_default_freq(i: usize, count: usize) -> f32 {
     LOW_HZ * (HIGH_HZ / LOW_HZ).powf(t)
 }
 
-impl Default for ReverbParams {
+impl Default for ReverbStageParams {
     fn default() -> Self {
+        Self::new(true)
+    }
+}
+
+impl ReverbStageParams {
+    /// A stage's params. `first` = stage 1, which starts in the stack (the
+    /// plain plugin); the rest start unused until added (`fx.stack.add`).
+    #[must_use]
+    pub fn new(first: bool) -> Self {
         Self {
             profile: IntParam::new(
                 "Space",
@@ -601,7 +702,6 @@ impl Default for ReverbParams {
 
             ir_path: parking_lot::RwLock::new(String::new()),
             profile_id: parking_lot::RwLock::new(String::new()),
-            editor_form: parking_lot::RwLock::new(String::new()),
             post_eq: std::array::from_fn(|i| {
                 PostBandParams::new(eq_default_freq(i, crate::reverb::chain::POST_EQ_BANDS))
             }),
@@ -641,6 +741,7 @@ impl Default for ReverbParams {
             .with_unit(" s")
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
             decay_div: dsp_core::time::params::division_param("Decay Div", DECAY_DEFAULT_DIV),
+            place: crate::stack::host::StagePlacement::new(first, MAX_STAGES),
         }
     }
 }
@@ -660,7 +761,7 @@ pub const PREDELAY_DEFAULT_DIV: dsp_core::time::MusicalTime = dsp_core::time::Mu
     dsp_core::time::Flavour::Straight,
 );
 
-impl ReverbParams {
+impl ReverbStageParams {
     /// The tail the audio thread should ask the engine for, in seconds —
     /// `None` while Decay Mode is `%` (the position is used as it is). A
     /// synced tail reads its note against `tempo`; with none, the free time.
@@ -701,7 +802,7 @@ impl ReverbParams {
         }
         .resolve_ms_clamped(tempo, MIN_PREDELAY_MS, MAX_PREDELAY_MS)
     }
-    /// The profile index the editor should be showing.
+    /// This stage's profile index.
     ///
     /// The persisted id wins when this build still has it; otherwise the
     /// index, which is what a pre-id session has.
@@ -724,6 +825,53 @@ impl ReverbParams {
             .map_or("hall_concert", |p| p.id);
         *self.profile_id.write() = id.to_string();
     }
+}
+
+impl Default for ReverbParams {
+    fn default() -> Self {
+        Self {
+            stage1: ReverbStageParams::new(true),
+            stage2: ReverbStageParams::new(false),
+            stage3: ReverbStageParams::new(false),
+            stage4: ReverbStageParams::new(false),
+            stage5: ReverbStageParams::new(false),
+            stage6: ReverbStageParams::new(false),
+            stage7: ReverbStageParams::new(false),
+            stage8: ReverbStageParams::new(false),
+            lanes: std::array::from_fn(|_| crate::stack::host::LaneParams::default()),
+            sum_mode: crate::stack::host::sum_mode_param(),
+            output_trim_db: crate::stack::host::output_trim_param(),
+            editor_form: parking_lot::RwLock::new(String::new()),
+            focused_stage: parking_lot::RwLock::new(String::new()),
+        }
+    }
+}
+
+impl ReverbParams {
+    /// Stage `i` (0-based).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `i >= MAX_STAGES`.
+    #[must_use]
+    pub fn stage(&self, i: usize) -> &ReverbStageParams {
+        match i {
+            0 => &self.stage1,
+            1 => &self.stage2,
+            2 => &self.stage3,
+            3 => &self.stage4,
+            4 => &self.stage5,
+            5 => &self.stage6,
+            6 => &self.stage7,
+            7 => &self.stage8,
+            _ => panic!("stage {i} out of range"),
+        }
+    }
+
+    /// All stages, in pool order.
+    pub fn stages(&self) -> impl Iterator<Item = &ReverbStageParams> {
+        (0..MAX_STAGES).map(|i| self.stage(i))
+    }
 
     pub fn resolved_editor_form(&self) -> fts_audio_ui::EditorForm {
         fts_audio_ui::EditorForm::from_id(&self.editor_form.read()).unwrap_or_default()
@@ -731,5 +879,82 @@ impl ReverbParams {
 
     pub fn store_editor_form(&self, form: fts_audio_ui::EditorForm) {
         *self.editor_form.write() = form.id().to_string();
+    }
+}
+
+impl crate::stack::host::StackHost for ReverbParams {
+    fn max_stages(&self) -> usize {
+        MAX_STAGES
+    }
+
+    fn placement(&self, stage: usize) -> &crate::stack::host::StagePlacement {
+        &self.stage(stage).place
+    }
+
+    fn lane(&self, lane: usize) -> &crate::stack::host::LaneParams {
+        &self.lanes[lane]
+    }
+
+    fn sum_mode(&self) -> &IntParam {
+        &self.sum_mode
+    }
+
+    fn output_trim_db(&self) -> &FloatParam {
+        &self.output_trim_db
+    }
+
+    fn focused_cell(&self) -> &parking_lot::RwLock<String> {
+        &self.focused_stage
+    }
+
+    fn style_param(&self, stage: usize) -> &IntParam {
+        &self.stage(stage).profile
+    }
+
+    fn resolved_style(&self, stage: usize) -> usize {
+        self.stage(stage).resolved_profile_index()
+    }
+
+    fn store_style_id(&self, stage: usize, index: usize) {
+        self.stage(stage).store_profile_id(index);
+    }
+
+    fn style_badge(&self, index: usize) -> String {
+        crate::reverb::profiles::PROFILES.get(index).map_or_else(
+            || "RVB".to_string(),
+            |p| crate::reverb::ui::control_view::profile_badge(p.id),
+        )
+    }
+
+    fn style_name(&self, index: usize) -> String {
+        crate::reverb::profiles::PROFILES
+            .get(index)
+            .map_or_else(|| "—".to_string(), |p| p.name.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A load that a newer one has superseded posts nothing, whichever
+    /// finishes first: the stage ends up reporting the newer file.
+    #[test]
+    fn superseded_ir_load_posts_nothing() {
+        let state = Arc::new(ReverbUiState::default());
+        // Hold the publish lock so both workers queue up behind it.
+        let guard = state.ir_tx[0].lock();
+        state.load_ir(0, PathBuf::from("/nonexistent/sta560-old.wav"));
+        state.load_ir(0, PathBuf::from("/nonexistent/sta560-new.wav"));
+        drop(guard);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while state.ir_loading[0].load(Ordering::Relaxed) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        // Let a stale worker that lost the race for the lock run too.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let error = state.ir_error[0].lock().clone().unwrap_or_default();
+        assert!(error.contains("sta560-new"), "{error}");
+        assert!(!state.ir_loading[0].load(Ordering::Relaxed));
     }
 }

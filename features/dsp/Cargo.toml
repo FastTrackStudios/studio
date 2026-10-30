@@ -81,6 +81,7 @@ delay = [
     "pitch",
 ]
 delay-native = [
+    "stack-host",
     "delay",
     "dep:architect-ui",
     "dep:atomic_float",
@@ -158,6 +159,7 @@ eq-graph-paint = [
     "dep:peniko",
 ]
 eq-native = [
+    "stack-host",
     "eq",
     "eq-analyzer",
     "eq-analyzer-ui",
@@ -271,6 +273,7 @@ reverb = [
     "dep:thiserror",
 ]
 reverb-native = [
+    "stack-host",
     "reverb",
     "dep:architect-ui",
     "dep:atomic_float",
@@ -310,6 +313,7 @@ reverb-viz = [
 saturate = ["dep:dsp-core", "dep:libm"]
 saturate-analysis = ["saturate", "std"]
 saturate-native = [
+    "stack-host",
     "saturate",
     "dep:architect-ui",
     "dep:atomic_float",
@@ -353,6 +357,16 @@ separator = [
     "dep:tracing",
 ]
 stack = ["dep:libm"]
+# The stack's plugin-shell half (params, focus, strip) — `stack::host`.
+stack-host = [
+    "stack",
+    "std",
+    "dep:nice-plug",
+    "dep:nice-plug-dioxus",
+    "dep:plugin-core",
+    "plugin-core/editor",
+    "dep:parking_lot",
+]
 std = []
 stretch = ["std", "dep:dsp-core", "dep:realfft"]
 trigger = [

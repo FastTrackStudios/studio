@@ -4,6 +4,13 @@
 //! Same shell as the compressor, deliberately — the two plugins are the same
 //! instrument as far as your hands are concerned. Clicking the family you are
 //! already on cycles the spaces inside it.
+//!
+//! The editor shows one stage of the stack at a time — the focused one
+//! (`fx.stack.focus`). The rail replaces the focused stage's circuit;
+//! Shift-click stacks the circuit after it on its lane, Ctrl/Cmd+Shift-click
+//! on a new parallel lane (`fx.stack.add`). The stack strip, shown once there
+//! is more than one stage, focuses, bypasses and removes stages
+//! (`fx.stack.strip`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,6 +27,7 @@ use nice_plug_dioxus::prelude::use_param_context;
 use crate::saturate::ui::faces::SatFace;
 use crate::saturate::ui::param_adapter::param_handle;
 use crate::saturate::ui::params::{SatParams, SatUiState};
+use crate::stack::host::{FocusedStage, StackHandle, StackHost, add_stage, add_target_lane};
 
 pub use fts_audio_ui::shell::RAIL_W;
 
@@ -114,8 +122,20 @@ pub fn App() -> Element {
     app_tick += 1;
     let frame = *app_tick.read();
 
-    let profile_index = params.resolved_profile_index();
-    let profile = params.resolved_profile();
+    // Which stage the editor is on (`fx.stack.focus`) — provided to every
+    // component below (faces, the emphasis view, the strip), restored from
+    // the session.
+    let focus = use_context_provider(|| Signal::new(FocusedStage(params.resolved_focused_stage())));
+    // A stage removed under the editor (host undo, automation of `use`)
+    // must not leave the face on a stage that is no longer in the stack.
+    let focused = params.visible_stage(focus.read().0);
+    ui.state
+        .focused_stage
+        .store(focused, std::sync::atomic::Ordering::Relaxed);
+    let stage = params.stage(focused);
+
+    let profile_index = stage.resolved_profile_index();
+    let profile = stage.resolved_profile();
     let design = crate::saturate::ui::faces::design_for(profile.id);
     let form = params.resolved_editor_form();
 
@@ -125,17 +145,19 @@ pub fn App() -> Element {
     let mut emphasis_view = use_signal(|| false);
     let emphasis_on = *emphasis_view.read();
 
-    // Profile / form / EQ-strip change → ask the host to resize. A plain
-    // Cell rather than an effect: the profile lives in a plugin param, not a
-    // signal, so comparing here also catches the host automating it.
+    // Profile / form / EQ-strip / focus change → ask the host to resize. A
+    // plain Cell rather than an effect: the profile lives in a plugin param,
+    // not a signal, so comparing here also catches the host automating it.
     #[expect(clippy::type_complexity)]
-    let last: std::rc::Rc<std::cell::Cell<Option<(usize, fts_audio_ui::EditorForm, bool)>>> =
-        use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None)));
-    if last.get() != Some((profile_index, form, emphasis_on)) {
-        last.set(Some((profile_index, form, emphasis_on)));
-        // Keep the automatable index in step with the persisted id.
-        if params.profile.value().max(0) as usize != profile_index {
-            let ptr = params.profile.as_ptr();
+    let last: std::rc::Rc<
+        std::cell::Cell<Option<(usize, usize, fts_audio_ui::EditorForm, bool)>>,
+    > = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(None)));
+    if last.get() != Some((focused, profile_index, form, emphasis_on)) {
+        last.set(Some((focused, profile_index, form, emphasis_on)));
+        // Keep the focused stage's automatable index in step with its
+        // persisted id.
+        if stage.profile.value().max(0) as usize != profile_index {
+            let ptr = stage.profile.as_ptr();
             let count = crate::saturate::profiles::PROFILES.len();
             let normalized = if count > 1 {
                 profile_index as f32 / (count - 1) as f32
@@ -167,16 +189,16 @@ pub fn App() -> Element {
     };
     let face_w = (win_w - sidecar_w).max(240.0);
 
-    // Every control the faces can bind, by name.
+    // Every control the faces can bind, by name — the focused stage's.
     let handles: HashMap<String, ParamHandle> = [
-        ("drive", params.drive.as_ptr()),
-        ("bias", params.bias.as_ptr()),
-        ("sag", params.sag.as_ptr()),
-        ("tilt", params.tilt.as_ptr()),
-        ("mix", params.mix.as_ptr()),
-        ("output", params.output.as_ptr()),
-        ("character_a", params.character_a.as_ptr()),
-        ("character_b", params.character_b.as_ptr()),
+        ("drive", stage.drive.as_ptr()),
+        ("bias", stage.bias.as_ptr()),
+        ("sag", stage.sag.as_ptr()),
+        ("tilt", stage.tilt.as_ptr()),
+        ("mix", stage.mix.as_ptr()),
+        ("output", stage.output.as_ptr()),
+        ("character_a", stage.character_a.as_ptr()),
+        ("character_b", stage.character_b.as_ptr()),
     ]
     .into_iter()
     .map(|(name, ptr)| (name.to_string(), param_handle(ptr, ctx.clone())))
@@ -207,8 +229,10 @@ pub fn App() -> Element {
         })
         .collect();
 
-    let profile_handle = param_handle(params.profile.as_ptr(), ctx);
+    let profile_handle = param_handle(stage.profile.as_ptr(), ctx.clone());
+    let ctx_for_rail = ctx;
     let params_for_id = ui.params.clone();
+    let strip_host = StackHandle(ui.params.clone());
     let params_for_form = ui.params.clone();
     let profile_count = crate::saturate::profiles::PROFILES.len();
     let accent = design.accent.to_string();
@@ -233,8 +257,20 @@ pub fn App() -> Element {
                 items,
                 selected: active_category,
                 accent: accent,
-                on_select: move |category: usize| {
+                on_select_mods: move |(category, mods): (usize, fts_audio_ui::shell::RailModifiers)| {
                     let index = crate::saturate::profiles::rail_click_target(profile_index, category);
+                    if mods.shift() {
+                        // Shift-click STACKS the circuit instead of replacing
+                        // it: serial after the focused stage, or with
+                        // Ctrl/Cmd on a new parallel lane (`fx.stack.add`).
+                        let new_lane = mods.ctrl() || mods.meta();
+                        if let Some(lane) =
+                            add_target_lane(params_for_id.as_ref(), focused, new_lane)
+                        {
+                            add_stage(params_for_id.as_ref(), &ctx_for_rail, focus, index, lane);
+                        }
+                        return;
+                    }
                     let normalized = if profile_count > 1 {
                         index as f32 / (profile_count - 1) as f32
                     } else {
@@ -243,7 +279,8 @@ pub fn App() -> Element {
                     profile_handle.begin_edit();
                     profile_handle.set_normalized(normalized);
                     profile_handle.end_edit();
-                    params_for_id.store_profile_id(index);
+                    // What the session restores from.
+                    params_for_id.stage(focused).store_profile_id(index);
                 },
                 rail_footer: rsx! {
                     RailButton {
@@ -285,7 +322,7 @@ pub fn App() -> Element {
                         ),
                         for id in [profile.id] {
                             FaceInBox {
-                                key: "{id}",
+                                key: "{focused}-{id}",
                                 profile_id: id.to_string(),
                                 handles: handles.clone(),
                                 frame,
@@ -302,9 +339,9 @@ pub fn App() -> Element {
                                  border-left:1px solid var(--border, rgba(148,163,184,0.3)); \
                                  background:var(--background);"
                             ),
-                            for key in ["emphasis"] {
+                            for key in [focused] {
                                 crate::saturate::ui::emphasis_view::EmphasisView {
-                                    key: "{key}",
+                                    key: "emphasis-{key}",
                                     frame,
                                     handles: handles.clone(),
                                 }
@@ -312,6 +349,11 @@ pub fn App() -> Element {
                         }
                     }
                 }
+
+                // The stack strip (`fx.stack.strip`) floats over the face.
+                // Mounted LAST: blitz hit-tests in document order, so an
+                // earlier sibling would lose its clicks to the face.
+                crate::stack::host::StackStrip { host: strip_host, frame }
             }
             }
         }

@@ -9,10 +9,11 @@ This is what lets one EQ instance be "Pro-Q-style subtractive → Pultec
 boost", one compressor be "five flavours of drum-bus compression balanced
 together", one delay be "all the vocal delays, in parallel".
 
-Today `delay_dsp::DualDelay` / `reverb_dsp::DualReverb` (`DualRouting`:
-Single / Series12 / Series21 / Parallel / Split) are the two-stage special
-case of this, exposed only in `signal-fx`; the comp and saturate have one
-stage. This spec generalizes that to N stages, every kind, every shell
+`delay_dsp::DualDelay` / `reverb_dsp::DualReverb` (`DualRouting`:
+Single / Series12 / Series21 / Parallel / Split) were the two-stage special
+case of this, exposed only in `signal-fx`; they are gone, and their
+routings are now topologies of the same stack (`fx.stack.every-shell`).
+This spec generalizes that to N stages, every kind, every shell
 (CLAP/VST3 plugin, signal native block, and eventually the signal FX chain
 itself).
 
@@ -133,7 +134,12 @@ topology or a stage's latency-affecting setting updates the report.
 r[fx.stack.sum]
 Parallel lanes are summed with `sum_mode` (coherent 1/N default, power
 1/√N, raw) over the *active* (enabled, unmuted, or soloed) lanes, then the
-`output_trim`. Dry signal is never double-counted: a stage's own `mix`
+`output_trim`. A fourth law, *dry once* (`dry + Σ gain·(lane − dry)`), is
+the hardware dual-effect law for stages that blend their own dry; the
+signal native blocks use it for `Parallel`, and it is not a plugin
+`sum_mode` value. A lane may carry a pan: off centre the lane is summed to
+mono and placed with a linear law (±1 is total), which is how `Split`
+puts one lane on each side. Dry signal is never double-counted: a stage's own `mix`
 blends inside the stage; the lane sum is of lane outputs only.
 
 r[fx.stack.gain-comp]
@@ -149,8 +155,9 @@ The stack is implemented once per kind in the kind's facade/DSP crates
 (`*-dsp` / `*` facade + `*-ui`), and exposed identically by the CLAP/VST3
 shell in `apps/plugins/*` and the native block in `signal-fx` — the
 `DualRouting` special cases in `signal-fx` migrate onto the stack (Series12
-= one lane [A,B], Series21 = [B,A], Parallel = two lanes, Split = two lanes
-with per-lane L/R pan) and are removed.
+= one lane [A,B], Series21 = [B,A] by stage `order`, Parallel = two lanes
+summed dry-once, Split = two lanes with per-lane L/R pan) and are removed.
+The `routing` param stays as a preset that writes that topology.
 
 r[fx.stack.signal-chain]
 The same stack model (lanes of serial stages, per-lane gain/mute/solo,
