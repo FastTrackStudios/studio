@@ -19,7 +19,7 @@ fn font() -> &'static crate::text::Font {
 }
 
 /// Milliseconds since `at`.
-fn ms(at: std::time::Instant) -> f64 {
+fn ms(at: web_time::Instant) -> f64 {
     at.elapsed().as_secs_f64() * 1e3
 }
 
@@ -352,13 +352,13 @@ fn rebuild_after_a_hit_move_timings() {
         for edit in 0..5 {
             let _ = move_hits(&mut song, edit, (300 + edit * 80, 3), 0.005);
             let draw = Draw::new(&song.previews);
-            let at = std::time::Instant::now();
+            let at = web_time::Instant::now();
             let (project, rows) = planner.plan(&song.raw);
             let plan_ms = ms(at);
-            let at = std::time::Instant::now();
+            let at = web_time::Instant::now();
             let fresh = draw.build((&project, &rows));
             let build_ms = ms(at);
-            let at = std::time::Instant::now();
+            let at = web_time::Instant::now();
             let _ = planner.plan_strips(&song.raw);
             let strips_ms = ms(at);
             drop(fresh);
@@ -378,7 +378,7 @@ fn rebuild_after_a_hit_move_timings() {
         for edit in 5..10 {
             let moved = move_hits(&mut song, edit, (300 + edit * 80, 3), 0.005);
             let draw = Draw::new(&song.previews);
-            let at = std::time::Instant::now();
+            let at = web_time::Instant::now();
             let patched = crate::replan::patch_planned(
                 &mut planned,
                 &song.raw,
@@ -387,11 +387,11 @@ fn rebuild_after_a_hit_move_timings() {
             );
             let patch_ms = ms(at);
             assert_eq!(patched, crate::replan::Patched::Items);
-            let at = std::time::Instant::now();
+            let at = web_time::Instant::now();
             draw.rebuild(&mut scene, (&planned, &rows));
             let edited_ms = ms(at);
             read_again(&song.previews, &moved);
-            let at = std::time::Instant::now();
+            let at = web_time::Instant::now();
             draw.rebuild(&mut scene, (&planned, &rows));
             let arrived_ms = ms(at);
             tracing::info!(
