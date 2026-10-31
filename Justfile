@@ -127,15 +127,19 @@ studio-desktop: signal-tailwind
     cd apps/studio/desktop && PIPEWIRE_PROPS='{ application.name = FTS-Signal }' \
         dx serve --release --platform desktop
 
-# ONE build line for the app, shared by every recipe that runs it. The
-# profile is `release-fast` (release optimisation, incremental — see the
-# root Cargo.toml) and the features are the app bundle's. Building with a
-# different feature set, or `--release` here and `release-fast` there, makes
-# cargo recompile every shared crate for the other combination: that was the
-# difference between a 2-minute rebuild and a 15-minute one.
-signal_features := "signal-keys-rig"
-signal_build := "cargo build --profile release-fast -p studio-desktop --features " + signal_features
-signal_bin := "./target/release-fast/studio-desktop"
+# ONE build for the app, shared by every recipe that runs it and by the dev
+# loop (scripts/dev-herdr.sh, `just dev-test`): dx's `desktop-dev` profile
+# (the dev profile, Cargo.toml) for the host triple, as `dx serve` builds the
+# window, so the window, the engine, the tests and these recipes reuse one set
+# of compiled crates. Another profile, target or feature set makes cargo
+# recompile every shared crate for that combination. Release builds are for
+# shipping (scripts/desktop/*) and measuring, not for working.
+dev_host := `rustc -vV | sed -n 's/^host: //p'`
+dev_build := "--profile desktop-dev --target " + dev_host
+dev_out := "./target/" + dev_host + "/desktop-dev"
+signal_features := "cli,signal-keys-rig"
+signal_build := "cargo build " + dev_build + " -p studio-desktop --features " + signal_features
+signal_bin := dev_out + "/studio-desktop"
 
 # Build the Signal app (what `Signal.app` and the menu bar run)
 signal-app:
@@ -193,7 +197,7 @@ signal-web-stage: signal-tailwind
 # needs `libvulkan.so` on the library path; outside it, wgpu finds only the
 # GL backend and panics before drawing a frame.
 
-# The guitar rig — the Signal app, release-fast build
+# The guitar rig — the Signal app, the dev build
 # Studio on an iOS simulator — an iPad Pro 11" kept on the build disk
 # (never the system drive; SIM names another by udid): built
 # optimised, Info.plist and faces as TestFlight writes them, installed and
@@ -1490,7 +1494,7 @@ daw-scene SCENE="lead-vocal-fx" OUT="" SIZE="2560x1440":
 studio MODE="1" SIZE="5120x1440" SCENE="drum-mixing":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --profile release-fast -p session-ui --bin blitz_shot
+    cargo build {{dev_build}} -p session-ui --bin blitz_shot
     # Through `env`, not as a bare `VAR=x` prefix: bash decides what is
     # an assignment BEFORE it expands anything, so `${FPS:+FTS_BLITZ_FPS=1}`
     # in that position becomes a command name and the recipe dies with
@@ -1501,7 +1505,7 @@ studio MODE="1" SIZE="5120x1440" SCENE="drum-mixing":
     FTS_BLITZ_SIZE="{{SIZE}}" \
     FTS_BLITZ_SCENE="{{SCENE}}" \
     FTS_BLITZ_LOG=/tmp/fts-studio.log \
-    ./target/release-fast/blitz_shot "{{GOLDEN_DIR}}/template.rpp" /tmp/fts-studio.png
+    {{dev_out}}/blitz_shot "{{GOLDEN_DIR}}/template.rpp" /tmp/fts-studio.png
 
 # The studio, on the golden session.
 #
@@ -1583,7 +1587,7 @@ studio-bench GESTURE="pan" SIZE="5120x1440" FRAMES="120" DUMP="":
 drive SIZE="2560x1440" SCENE="drum-mixing" DISPLAY_NUM="99":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --profile release-fast -p session-ui --bin blitz_shot
+    cargo build {{dev_build}} -p session-ui --bin blitz_shot
     just drive-stop "{{DISPLAY_NUM}}"
     # A killed Xvfb leaves its lock behind and the next one refuses to
     # start — silently, as far as anything asking the display is
@@ -1611,7 +1615,7 @@ drive SIZE="2560x1440" SCENE="drum-mixing" DISPLAY_NUM="99":
         FTS_BLITZ_FPS=0 \
         FTS_PRESENT=immediate \
         FTS_BLITZ_LOG=/tmp/fts-drive.log \
-        ./target/release-fast/blitz_shot "{{GOLDEN_DIR}}/template.rpp" /tmp/fts-drive.png \
+        {{dev_out}}/blitz_shot "{{GOLDEN_DIR}}/template.rpp" /tmp/fts-drive.png \
         > /tmp/fts-drive.out 2>&1 < /dev/null &
     disown || true
     # Software rendering opens slowly; a minute is generous and a hang
@@ -1706,7 +1710,7 @@ daw-animate PROJECT="" SIZE="2560x1440":
 mixer-golden SIZE="2560x1440":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --profile release-fast -p session-desktop
+    cargo build {{dev_build}} -p session-desktop
     # A theme by name is themes/<name>/ or themes/fts-<name>.frame; anything
     # else is a path. `:` layers them.
     theme=""
@@ -1724,7 +1728,7 @@ mixer-golden SIZE="2560x1440":
     FTS_THEME="$theme" \
     FTS_WINDOW_SIZE="{{SIZE}}" \
     FTS_SESSION_PROJECT="$PWD/{{GOLDEN_DIR}}/template.rpp" \
-    ./target/release-fast/session-desktop
+    {{dev_out}}/session-desktop
 
 # How far the themed mixer is from the painters' one: regenerates the
 # fts-dark theme from the painters' own drawings (skin::export), shoots the
@@ -1756,20 +1760,19 @@ dev *ARGS:
 # (tempo, markers, section regions, Keyflow folder), and generate the
 # click and guide — the multitrack's own click/guide stems are kept,
 # muted, beside them. Leave CHART empty to open the session as it is.
-# The desktop app, as you run it while working on it: `release-fast`
-# (release's optimisation, incremental — see Cargo.toml). A one-line edit
-# rebuilds in ~15 s instead of ~60 s. `PROJECT` is a `.RPP` (its prepared
+# The desktop app, as you run it while working on it: the shared dev build
+# (`dev_build` above). `PROJECT` is a `.RPP` (its prepared
 # `.session` beside it opens instead, once there is one), a `.session`, or
 # a setlist (a folder of songs, or a `.setlist`); `MODE` opens in a mode:
 #   just app "../sessions/Worship Set.setlist" "" organize
 app PROJECT="" CHART="" MODE="":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --profile release-fast -p session-desktop
+    cargo build {{dev_build}} -p session-desktop
     # A bare binary started from a shell is not a foreground app on macOS
     # (it opens behind whatever is in front); wrapped in a bundle and
     # started with `open`, it comes forward like any app.
-    bundle="target/release-fast/Session Dev.app"
+    bundle="{{dev_out}}/Session Dev.app"
     mkdir -p "$bundle/Contents/MacOS"
     printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
         '<plist version="1.0"><dict>' \
@@ -1823,7 +1826,7 @@ app PROJECT="" CHART="" MODE="":
     # A new file, never an overwrite: macOS caches a binary's code signature
     # by file, and launching one rewritten in place fails (-10810).
     rm -f "$bundle/Contents/MacOS/session-desktop"
-    cp target/release-fast/session-desktop "$bundle/Contents/MacOS/session-desktop"
+    cp {{dev_out}}/session-desktop "$bundle/Contents/MacOS/session-desktop"
     # One signature across rebuilds. The linker's ad-hoc one names the
     # binary by a build hash, so every build is a new app to macOS and it
     # asks again for the removable drive; a real identity and a fixed
@@ -1846,7 +1849,7 @@ app PROJECT="" CHART="" MODE="":
 duo PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --profile release-fast -p session-desktop
+    cargo build {{dev_build}} -p session-desktop
     # The main screen's usable area, in points: below the menu bar, above
     # the Dock — NOT Finder's desktop bounds, which span every monitor.
     read -r X Y W H < <(swift -e 'import AppKit; let s = NSScreen.main!; let f = s.visibleFrame; print(Int(f.origin.x), Int(s.frame.height - f.maxY), Int(f.width), Int(f.height))' 2>/dev/null)
@@ -1875,7 +1878,7 @@ duo PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
 duo-task SETLIST PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --profile release-fast -p session-desktop
+    cargo build {{dev_build}} -p session-desktop
     read -r X Y W H < <(swift -e 'import AppKit; let s = NSScreen.main!; let f = s.visibleFrame; print(Int(f.origin.x), Int(s.frame.height - f.maxY), Int(f.width), Int(f.height))' 2>/dev/null)
     left=$((W * ${DUO_SPLIT:-44} / 100))
     right=$((W - left))
@@ -1896,20 +1899,20 @@ duo-task SETLIST PROJECT MODE="live" NAME_A="Cody" NAME_B="Alice":
 prepare +PROJECTS:
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --profile release-fast -p session-engine --bin prepare
-    for p in "$@"; do ./target/release-fast/prepare "$p"; done
+    cargo build {{dev_build}} -p session-engine --bin prepare
+    for p in "$@"; do {{dev_out}}/prepare "$p"; done
 
 studio-song PROJECT CHART="" SIZE="2560x1440":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --profile release-fast -p session-ui --bin blitz_shot
+    cargo build {{dev_build}} -p session-ui --bin blitz_shot
     prep=()
     if [[ -n "{{CHART}}" ]]; then
         prep=(FTS_BLITZ_ORGANIZE=1 "FTS_BLITZ_CHART={{CHART}}" FTS_BLITZ_GUIDE=1)
     fi
     env FTS_BLITZ_WINDOW=1 FTS_BLITZ_SIZE="{{SIZE}}" ${prep[@]+"${prep[@]}"} \
         RUST_LOG="${RUST_LOG:-warn,session_engine=info,session_ui=info}" \
-        ./target/release-fast/blitz_shot "{{PROJECT}}" /tmp/fts-studio.png
+        {{dev_out}}/blitz_shot "{{PROJECT}}" /tmp/fts-studio.png
 
 # Everything CI runs, in CI's order, with one command.
 #

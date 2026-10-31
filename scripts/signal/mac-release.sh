@@ -21,8 +21,9 @@ dist=target/mac-release
 rm -rf "$dist" && mkdir -p "$dist"
 
 CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-6}" cargo build --profile release-fast -p studio-desktop --features signal-keys-rig
-# No baked window size: on the laptop it opens filling the screen.
-scripts/signal/mac-app.sh >/dev/null
+# No baked window size: on the laptop it opens filling the screen. A release
+# build, not the dev one `just` makes: this is what ships.
+SIGNAL_BIN=target/release-fast/studio-desktop scripts/signal/mac-app.sh >/dev/null
 # ditto keeps the bundle's signature and resource forks intact.
 ditto -c -k --keepParent target/Signal.app "$dist/Signal-macos-arm64.zip"
 
