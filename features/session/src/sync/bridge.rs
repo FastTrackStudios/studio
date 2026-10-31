@@ -496,6 +496,26 @@ impl Bridge {
         }
     }
 
+    /// Bring the song back to `past` — the doc as it was at an earlier
+    /// step, read off a fork of it at that step's frontier — as one new
+    /// local step named `label`: written over what the doc holds now, so it
+    /// is undone like any step and nothing of the history is rewritten;
+    /// then the engine made to match. What a collaborator sent first is
+    /// applied first, so the step is written over the doc as it is.
+    ///
+    /// # Errors
+    /// When the doc cannot be written or the engine made to match.
+    pub async fn restore(&mut self, past: SessionModel, label: &str) -> eyre::Result<Vec<Change>> {
+        self.remote_changed().await?;
+        self.name_next(label);
+        tracing::info_span!("bridge.write_step")
+            .in_scope(|| self.doc.write_step(&self.shown, &past, ORIGIN_LOCAL, label))?;
+        self.quiet.clear();
+        // Its own write: nothing for the engine to be told of but `past`.
+        drop(self.take_touched());
+        self.make_match(past, &Touched::everything()).await
+    }
+
     /// The chart was edited locally.
     ///
     /// # Errors

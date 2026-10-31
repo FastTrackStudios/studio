@@ -1,13 +1,12 @@
 //! The checkpoint before a drum rewrite: one per action as the user ran
 //! it, none for a dry run or what a key runs over a selection, uniquely
-//! named, refused when it cannot be made — a real branch of the song's
-//! file, holding the song as it was — and only the automatic ones pruned.
+//! named, refused when it cannot be made — and only the automatic forks of
+//! older songs pruned. (A mark holding the song as it was, and going back
+//! to it: `history`'s tests.)
 
 use std::cell::Cell;
 
 use daw::standalone::Standalone;
-use session::sync::SessionDoc;
-use session_format::store::MAIN;
 
 use super::{BIG_STRETCH, Candidate, Reach, guarded, is_automatic, name_for, on_a_key, prune_plan};
 
@@ -64,7 +63,7 @@ fn an_action_run_by_another_runs_under_its_checkpoint() {
 }
 
 #[test]
-fn a_dry_run_forks_nothing_and_a_failed_fork_refuses() {
+fn a_dry_run_marks_nothing_and_a_failed_mark_refuses() {
     let small =
         guarded(Reach::Nothing, || Err("must not fork".to_owned())).expect("nothing to fork");
     assert_eq!(small.name(), None);
@@ -82,7 +81,7 @@ fn a_dry_run_forks_nothing_and_a_failed_fork_refuses() {
 /// runs (Q runs QUANTIZE): a keypress never waits on a save. After it,
 /// the next action forks its own.
 #[test]
-fn an_action_a_key_runs_forks_nothing_nor_does_what_it_runs() {
+fn an_action_a_key_runs_marks_nothing_nor_does_what_it_runs() {
     {
         let _key = on_a_key();
         let inner = guarded(Reach::Song, || Err("must not fork".to_owned()))
@@ -214,59 +213,15 @@ fn set_volume(daw: &Standalone, guid: &str, volume: f64) {
     });
 }
 
-fn kick_volume(doc: session::sync::loro::LoroDoc) -> Option<f64> {
-    SessionDoc::from_loro(doc)
-        .read()
-        .tracks
-        .iter()
-        .find(|t| t.name == "Kick")
-        .map(|t| t.volume)
-}
-
-/// The checkpoint is a branch of the song's own file, listed with its
-/// alternatives, holding the song as it was before the rewrite — with
-/// what was unsaved — and a second one in the same minute is another.
-#[test]
-fn a_checkpoint_is_a_branch_holding_the_song_as_it_was() {
-    let dir = tempfile::tempdir().expect("a temp dir");
-    let daw = Standalone::new();
-    seed_song(&daw, "net-song", 0.5);
-    let file = dir.path().join("Song.session");
-    crate::project_file::save(&daw, "net-song", &file, MAIN, "Save").expect("saved");
-    // Changed and not saved: the checkpoint holds it all the same.
-    set_volume(&daw, "net-song", 0.25);
-
-    let stamp = "2026-10-31 14:05";
-    let first = super::fork_before(&daw, "net-song", "DRUMS_REQUANTIZE", stamp).expect("forked");
-    assert_eq!(first, "Before DRUMS_REQUANTIZE 2026-10-31 14:05");
-    // The rewrite, then another in the same minute.
-    set_volume(&daw, "net-song", 0.9);
-    let second = super::fork_before(&daw, "net-song", "DRUMS_REQUANTIZE", stamp).expect("forked");
-    assert_eq!(second, "Before DRUMS_REQUANTIZE 2026-10-31 14:05 2");
-
-    let listed: Vec<String> = crate::projects::alternatives(&dir.path().join("Song"))
-        .into_iter()
-        .map(|a| a.name)
-        .collect();
-    assert!(
-        listed.contains(&first) && listed.contains(&second),
-        "listed with the song's versions: {listed:?}"
-    );
-    let held =
-        |name: &str| kick_volume(crate::project_file::doc_of(&file.join(name)).expect("it opens"));
-    assert_eq!(held(&first), Some(0.25), "the song as it was before");
-    assert_eq!(held(&second), Some(0.9), "the song before the second");
-}
-
 #[test]
 fn a_song_not_open_from_its_file_is_refused() {
     let daw = Standalone::new();
     seed_song(&daw, "fileless-song", 0.5);
-    let refused = super::fork_before(&daw, "fileless-song", "QUANTIZE", "2026-10-31 14:05");
+    let refused = super::mark_before("fileless-song", "QUANTIZE", "2026-10-31 14:05");
     assert!(
         refused
             .as_ref()
-            .is_err_and(|why| why.contains("project file")),
+            .is_err_and(|why: &String| why.contains("project file")),
         "{refused:?}"
     );
 }
