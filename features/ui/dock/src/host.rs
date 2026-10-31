@@ -26,7 +26,13 @@ use crate::dockspace::{
     Share, Shown, Side, SplitId, Stack, StackId,
 };
 use crate::hit;
+use crate::intent::DockIntent;
 use crate::screenset::{FormClass, ScreensetId, Screensets};
+
+/// Where an app sends the dock's intents ([`Dock::set_router`]): it runs
+/// each its own way (the Session window: as a named action) and hands it
+/// back to [`Dock::apply`].
+pub type Router = Rc<dyn Fn(DockIntent)>;
 
 /// The shell's colours (docs/design/unified-shell/spec.md §9, Signal Touch).
 pub mod tokens {
@@ -175,6 +181,8 @@ pub struct Dock {
     /// before: what the next press brings back. This window's alone, and
     /// forgotten on a recall.
     stashed: Signal<Vec<(Side, Shown)>>,
+    /// Where intents go ([`Dock::ask`]); none: applied here.
+    router: CopyValue<Option<Router>>,
 }
 
 /// The key held to arrange panels: while it is down, every panel shows
@@ -213,6 +221,7 @@ pub fn use_dock_provider(
         latched: Signal::new(false),
         key: CopyValue::new(ArrangeKey::default()),
         stashed: Signal::new(Vec::new()),
+        router: CopyValue::new(None),
     })
 }
 
@@ -232,6 +241,63 @@ pub fn use_panel() -> InstanceId {
 struct ThisPanel(InstanceId);
 
 impl Dock {
+    /// Send every intent to `router` from now on ([`Dock::ask`]): the app
+    /// carries each out its own way and hands it back to [`Dock::apply`].
+    pub fn set_router(&self, router: Router) {
+        let mut slot = self.router;
+        slot.set(Some(router));
+    }
+
+    /// What a control asks for: to the app's router when it has one,
+    /// else carried out here ([`Dock::apply`]).
+    pub fn ask(&self, intent: DockIntent) {
+        let router = self.router.read().clone();
+        match router {
+            Some(route) => route(intent),
+            None => self.apply(intent),
+        }
+    }
+
+    /// Carry out `intent` on the layout on screen (or the screensets, or
+    /// Arrange). What a router hands back.
+    pub fn apply(&self, intent: DockIntent) {
+        match intent {
+            DockIntent::Open { kind } => {
+                let Some(id) = self.open(&kind) else {
+                    return;
+                };
+                // On a phone, one opened in a dock shows as a sheet.
+                let docked = self
+                    .space()
+                    .locate(id)
+                    .is_some_and(|(a, _)| a != AreaRef::Center);
+                if (self.class)().is_phone() && docked {
+                    let mut sheet = self.sheet;
+                    sheet.set(Some(id));
+                }
+            }
+            DockIntent::Recall { set } => {
+                let mut sheet = self.sheet;
+                sheet.set(None);
+                self.recall(set);
+            }
+            DockIntent::Save => {
+                let class = *self.class.peek();
+                let mut sets = self.sets;
+                sets.write().save(class);
+            }
+            DockIntent::SaveAs { name } => {
+                let class = *self.class.peek();
+                let mut sets = self.sets;
+                sets.write().save_as(name, class);
+            }
+            DockIntent::Arrange => self.toggle_arrange(),
+            layout => {
+                let _ = self.edit(|d| layout.apply_to(d));
+            }
+        }
+    }
+
     /// The layout on screen.
     #[must_use]
     pub fn space(&self) -> Dockspace {
@@ -534,7 +600,7 @@ pub fn DockHost() -> Element {
                         let found = dock.sets.peek().in_slot(slot).map(|s| s.id);
                         if let Some(id) = found {
                             e.prevent_default();
-                            dock.recall(id);
+                            dock.ask(DockIntent::Recall { set: id });
                         }
                         return;
                     }
@@ -671,10 +737,10 @@ fn Rail(side: Side, root: Node) -> Element {
                                 background:{tokens::SHEET_2}; color:{tokens::INK}; font-size:10px; \
                                 font-weight:700;",
                         title: "{dock.title(p)}",
-                        onclick: move |_| dock.edit(|d| {
-                            d.set_shown(side, Shown::Open);
-                            let _ = d.activate(id);
-                        }),
+                        onclick: move |_| {
+                            dock.ask(DockIntent::EdgeShown { side, shown: Shown::Open });
+                            dock.ask(DockIntent::Show { panel: id });
+                        },
                         "{dock.short(p)}"
                     }
                 }
@@ -707,7 +773,7 @@ fn EdgeDivider(side: Side) -> Element {
                     }
                 });
             },
-            ondoubleclick: move |_| dock.edit(|d| d.set_shown(side, Shown::Collapsed)),
+            ondoubleclick: move |_| dock.ask(DockIntent::EdgeShown { side, shown: Shown::Collapsed }),
         }
     }
 }
@@ -773,7 +839,7 @@ fn SplitView(id: SplitId, axis: Axis, share: Share, first: Node, second: Node) -
                         Share::Ratio(_) => Share::Ratio(0.5),
                         other => other,
                     };
-                    let _ = dock.edit(|d| d.set_share(id, reset));
+                    dock.ask(DockIntent::Share { split: id, share: reset });
                 },
             }
             div { style: "{b} min-width:0; min-height:0; display:flex; position:relative; overflow:hidden;",
@@ -824,7 +890,7 @@ fn Grip(tabs: Vec<InstanceId>, active: InstanceId, chrome: Chrome, stack: StackI
     let space = dock.space();
     let mut grab = move |id: InstanceId, e: &PointerEvent| {
         let (x, y) = point(e);
-        let _ = dock.edit(|d| d.activate(id));
+        dock.ask(DockIntent::Show { panel: id });
         dock.drag.set(Some(Drag::Pressed { id, x, y }));
     };
     rsx! {
@@ -860,7 +926,7 @@ fn Grip(tabs: Vec<InstanceId>, active: InstanceId, chrome: Chrome, stack: StackI
                     onpointerdown: move |e| {
                         e.stop_propagation();
                         let next = if chrome == Chrome::Tabs { Chrome::Bare } else { Chrome::Tabs };
-                        let _ = dock.edit(|d| d.set_chrome(stack, next));
+                        dock.ask(DockIntent::Chrome { stack, chrome: next });
                     },
                     if chrome == Chrome::Tabs { "Hide tabs" } else { "Tabs" }
                 }
@@ -895,7 +961,7 @@ fn TabStrip(tabs: Vec<InstanceId>, active: InstanceId) -> Element {
                             style: tab_style(id == active),
                             onpointerdown: move |e| {
                                 let (x, y) = point(&e);
-                                let _ = dock.edit(|d| d.activate(id));
+                                dock.ask(DockIntent::Show { panel: id });
                                 dock.drag.set(Some(Drag::Pressed { id, x, y }));
                             },
                             oncontextmenu: move |e| {
@@ -905,7 +971,7 @@ fn TabStrip(tabs: Vec<InstanceId>, active: InstanceId) -> Element {
                             },
                             ondoubleclick: move |_| {
                                 dock.drag.set(None);
-                                let _ = dock.edit(|d| d.toggle_maximized(id));
+                                dock.ask(DockIntent::Maximize { panel: id });
                             },
                             "{dock.title(p)}"
                         }
@@ -991,7 +1057,7 @@ fn FloatView(float: crate::dockspace::Float) -> Element {
                     button {
                         style: "border:none; background:transparent; color:{tokens::INK_3}; min-width:24px;",
                         title: "Dock it",
-                        onclick: move |_| { let _ = dock.edit(|d| d.move_panel(p, Place::Center)); },
+                        onclick: move |_| dock.ask(DockIntent::Move { panel: p, place: Place::Center }),
                         "⇲"
                     }
                 }
@@ -1027,7 +1093,7 @@ fn Maximized(id: InstanceId) -> Element {
                 div { style: "flex:1; min-width:0; overflow:hidden; white-space:nowrap;", "{title}" }
                 button {
                     style: "border:none; background:transparent; color:{tokens::INK}; min-height:28px;",
-                    onclick: move |_| { let _ = dock.edit(|d| d.toggle_maximized(id)); },
+                    onclick: move |_| dock.ask(DockIntent::Maximize { panel: id }),
                     "Restore"
                 }
             }
@@ -1105,7 +1171,7 @@ fn PhoneBody(space: Dockspace, portrait: bool) -> Element {
                     style: "min-width:48px; min-height:48px; border-radius:10px; border:none; \
                             background:{arrange_bg}; color:{tokens::INK}; font-size:18px;",
                     title: "Move panels",
-                    onclick: move |_| dock.toggle_arrange(),
+                    onclick: move |_| dock.ask(DockIntent::Arrange),
                     "✥"
                 }
                 button {
@@ -1330,14 +1396,39 @@ async fn measure_for_drop(mut dock: Dock, id: InstanceId) {
     }
 }
 
+/// A drag let go: a panel dropped where it was over moves there; a
+/// divider, a dock's edge or a floating window, drawn as it was dragged,
+/// says where it ended — each one intent ([`Dock::ask`]).
 fn on_up(mut dock: Dock) {
     let drag = dock.drag.peek().clone();
     dock.drag.set(None);
-    if let Some(Drag::Panel {
-        id, at: Some(t), ..
-    }) = drag
-    {
-        let _ = dock.edit(|d| d.move_panel(id, t.place));
+    let space = dock.space();
+    let ended = match drag {
+        Some(Drag::Panel {
+            id, at: Some(t), ..
+        }) => Some(DockIntent::Move {
+            panel: id,
+            place: t.place,
+        }),
+        Some(Drag::Split { id, .. }) => space
+            .share_of(id)
+            .map(|share| DockIntent::Share { split: id, share }),
+        Some(Drag::Edge { side, .. }) => Some(DockIntent::EdgeSize {
+            side,
+            size: space.edges.get(side).size,
+        }),
+        Some(Drag::Float { id, .. } | Drag::FloatSize { id, .. }) => space
+            .floats
+            .iter()
+            .find(|f| f.id == id)
+            .map(|f| DockIntent::FloatBounds {
+                float: id,
+                bounds: f.bounds,
+            }),
+        _ => None,
+    };
+    if let Some(intent) = ended {
+        dock.ask(intent);
     }
 }
 
@@ -1412,60 +1503,33 @@ fn MenuRow(item: Item) -> Element {
     }
 }
 
-fn run(mut dock: Dock, action: Action) {
-    match action {
-        Action::Move(id, place) => {
-            let _ = dock.edit(|d| d.move_panel(id, place));
-        }
-        Action::Attach(id, host, side, px) => {
-            let _ = dock.edit(|d| d.attach(id, host, side, px));
-        }
-        Action::Duplicate(id) => {
-            let _ = dock.edit(|d| {
-                let panel = d.panel(id)?.clone();
-                let (_, stack) = d.locate(id)?;
-                let copy = Panel {
-                    id: InstanceId::new(),
-                    title: None,
-                    ..panel
-                };
-                let place = Place::Stack(
-                    stack,
-                    crate::dockspace::Zone::Split(Side::Right, Share::Ratio(0.5)),
-                );
-                d.add(copy, place).ok()
-            });
-        }
-        Action::Maximize(id) => {
-            let _ = dock.edit(|d| d.toggle_maximized(id));
-        }
-        Action::Collapse(side) => dock.edit(|d| d.set_shown(side, Shown::Collapsed)),
-        Action::Recall(id) => {
-            dock.sheet.set(None);
-            dock.recall(id);
-        }
-        Action::Show(id) => {
-            let _ = dock.edit(|d| d.activate(id));
-        }
-        Action::Chrome(stack, chrome) => {
-            let _ = dock.edit(|d| d.set_chrome(stack, chrome));
-        }
-        Action::Close(id) => {
-            let _ = dock.edit(|d| d.close(id));
-        }
-        Action::Open(kind) => {
-            if let Some(id) = dock.open(kind) {
-                if (dock.class)().is_phone()
-                    && dock
-                        .space()
-                        .locate(id)
-                        .is_some_and(|(a, _)| a != AreaRef::Center)
-                {
-                    dock.sheet.set(Some(id));
-                }
-            }
-        }
-    }
+fn run(dock: Dock, action: Action) {
+    let intent = match action {
+        Action::Move(panel, place) => DockIntent::Move { panel, place },
+        Action::Attach(panel, beside, side, px) => DockIntent::Attach {
+            panel,
+            beside,
+            side,
+            px,
+        },
+        Action::Duplicate(panel) => DockIntent::Duplicate {
+            panel,
+            copy: InstanceId::new(),
+        },
+        Action::Maximize(panel) => DockIntent::Maximize { panel },
+        Action::Collapse(side) => DockIntent::EdgeShown {
+            side,
+            shown: Shown::Collapsed,
+        },
+        Action::Recall(set) => DockIntent::Recall { set },
+        Action::Show(panel) => DockIntent::Show { panel },
+        Action::Chrome(stack, chrome) => DockIntent::Chrome { stack, chrome },
+        Action::Close(panel) => DockIntent::Close { panel },
+        Action::Open(kind) => DockIntent::Open {
+            kind: kind.to_owned(),
+        },
+    };
+    dock.ask(intent);
 }
 
 fn panel_items(dock: Dock, id: InstanceId) -> Vec<Item> {
@@ -1586,7 +1650,7 @@ pub fn ScreensetBar() -> Element {
                     button {
                         key: "{id:?}",
                         style: "{chip(active == Some(id))}",
-                        onclick: move |_| dock.recall(id),
+                        onclick: move |_| dock.ask(DockIntent::Recall { set: id }),
                         if active == Some(id) && dirty { "{label} •" } else { "{label}" }
                     }
                 }
@@ -1594,18 +1658,18 @@ pub fn ScreensetBar() -> Element {
             button {
                 style: "{chip(false)}",
                 disabled: !dirty,
-                onclick: move |_| { dock.sets.write().save(class); },
+                onclick: move |_| dock.ask(DockIntent::Save),
                 "Save"
             }
             button {
                 style: "{chip(false)}",
-                onclick: move |_| { dock.sets.write().save_as(format!("Screenset {}", count + 1), class); },
+                onclick: move |_| dock.ask(DockIntent::SaveAs { name: format!("Screenset {}", count + 1) }),
                 "Save as"
             }
             button {
                 style: "{chip((dock.latched)())}",
                 title: "Move panels: or hold W",
-                onclick: move |_| dock.toggle_arrange(),
+                onclick: move |_| dock.ask(DockIntent::Arrange),
                 "Arrange"
             }
             button {

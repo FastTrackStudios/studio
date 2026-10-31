@@ -126,6 +126,7 @@ action, and the list validates and survives hostile arguments.
 | `SESSION_CLOSEUP {track, panel, name} \| {close}` | window (both builds) | a rack panel over the whole window, or closed: the rack's zoom button, the close-up's tabs, Back, swipe and Esc |
 | `AUTOMATION_POINTS_EDIT`, `AUTOMATION_ITEMS_EDIT`, `AUTOMATION_LANE_SET` `{label?, edits}` | engine (both builds) | an automation lane's gesture, in the arrangement gestures' vocabulary (`envelope`, `item_curve`, `item_move`, `item_add`, `item_bounds`, `item_delete`, `lane_show`, `lane_mode`, `lane_height`) |
 | `NOTES_WRITE {item, content}` | engine | the Editor's take written back, one undo step (`notes_actions`) |
+| `SESSION_PANEL_MOVE`, `_OPEN`, `_CLOSE`, `_SHOW`, `_MAXIMIZE`, `_TABS`, `SESSION_DOCK_SPLIT`, `_EDGE`, `_FLOAT` `{intent}` | engine → window | a dock control's `dock::DockIntent`, carried out by the window's dock (`DockRequest::Intent`) |
 
 ## Inventory (2026-10-30)
 
@@ -140,9 +141,9 @@ exempt by rule 6.
 | Painted mixer / FX / automation / editor (`mixer_panel`, `mcp`, `fx_view`, `automation_*`, `tone`, `expression`, `editor_view`, `navigator`, `arrange_camera`, `ruler`, `device_audio`) | 13 → **25** → **~39** → **~51** → **~63** | 86 → **74** → **~60** → **~48** → **~36** | 13 |
 | Session UI rsx (`shell`, `transport_bar`, `toolbar`, `quantize_panel`, `collab_bar`, `record_view`, `versions`, `setup`, `compact`, `closeup`, `bar_step`, `studio`, `lyrics_panel`, `perf_meter`, `chart_*`, `browser`, `organize`, `navigator`, `instrument_rail`, `web_host`, `progress`, `performer`, `app_menu`) | 41 → **73** | 97 → **65** | 107 |
 | Desktop (`native/{dock,shell,start,library,publish,handoff,mod}.rs`, `session_view.rs`, `lib.rs`, `mixer_view.rs`) | 28 → **34** | 71 → **65** | 68 |
-| Dock crate (`features/ui/dock` host + components) | 0 | 50 | 30 |
+| Dock crate (`features/ui/dock` host + components) | 0 → **~29** | 50 → **~21** | 30 |
 | Studio welcome (`apps/studio/desktop/src/front.rs`) | 4 | 3 | 3 |
-| **total** | **87 → 146 → ~174 → ~188 → ~205 → ~217** | **~341 → ~282 → ~254 → ~240 → ~223 → ~211** | **222** |
+| **total** | **87 → 146 → ~174 → ~188 → ~205 → ~217 → ~246** | **~341 → ~282 → ~254 → ~240 → ~223 → ~211 → ~182** | **222** |
 
 Bold: after the first routing pass, then after pass 2's arrangement area
 (every item, ruler and dial gesture; the track knob's commit and the snap
@@ -318,9 +319,11 @@ engine (`RIG_BLOCKS`) is the fix.
 | native/shell.rs:371 | navigator button | `request_dock` | **routed**: `SESSION_PANEL {kind:"set"}` |
 | native/shell.rs:313; start.rs:202 | iOS play/pause; autoplay | `engine::transport` | **routed**: `SESSION_PLAY_STOP` |
 | native/shell.rs:587 | chart editor toggle | signal | NEW `SESSION_CHART_EDITOR` |
-| dock host.rs:528, 1443, 1589 | screenset recall (⌘1-9, menu, bar) | `dock.recall` | `SESSION_SCREENSET` |
-| dock host.rs:1597, 1602 | screenset save / save as | `sets.save*` | `SESSION_SCREENSET_SAVE{,_AS}` |
-| dock host.rs:674-1456 | panel show / move / attach / open / close / maximise / tabs / sheet; edge and split sizes | `Dock` methods; drags write the layout per move | NEW `SESSION_PANEL_{SHOW,MOVE,ATTACH,OPEN,CLOSE,MAXIMIZE,TABS,SHEET}`, `SESSION_DOCK_{EDGE,SPLIT}`; drags commit on release |
+| dock host.rs (⌘1-9, the panel menu, the screenset bar) | screenset recall | `dock.recall` | **routed**: `DockIntent::Recall` → `SESSION_SCREENSET` (by name) |
+| dock host.rs screenset bar | save / save as / Arrange | `sets.save*`, `toggle_arrange` | **routed**: `SESSION_SCREENSET_SAVE{,_AS}`, `SESSION_ARRANGE` |
+| dock host.rs tabs, grips, rails, the panel menu, floats, Restore, a drop | panel move / attach / open / duplicate / close / show / maximise / tabs | `Dock::edit` | **routed**: `SESSION_PANEL_{MOVE,OPEN,CLOSE,SHOW,MAXIMIZE,TABS}` |
+| dock host.rs dividers, edges, floats | split share, edge size / shown, float bounds | the layout written per move | **routed**: drawn live (rule 3), `SESSION_DOCK_{SPLIT,EDGE,FLOAT}` when the drag ends (`on_up`); a double-click at once |
+| dock host.rs phone sheet, menus | a docked panel as a sheet, the menus | signals | local (rule 6: a popover; its choices are intents) |
 | dock ui/components/* | the older tile dock (`features/session`, not this window) | `DockActions` callbacks | host-installed `DockActions` running the host's `DOCK_*` |
 | start.rs:838-876, 1232, 1693 | sign in / out | `acct.*` | NEW `ACCOUNT_SIGN_IN`, `ACCOUNT_SIGN_OUT` |
 | start.rs:990 | reconnect to REAPER | `set_mode(Remote)` + attach | NEW `SESSION_CONNECT {address}` |
@@ -334,9 +337,16 @@ engine (`RIG_BLOCKS`) is the fix.
 | lib.rs (older webview shell) 570-1417 | workspaces, setlist load/save, organize, record | direct | `SESSION_WORKSPACE`, `SESSION_OPEN`, `SETLIST_CREATE`, `ORGANIZE_PRESS`, `TRANSPORT_RECORD` |
 | apps/studio/desktop/src/mac_menu.rs:56-119; window.rs `dock_request`; keys.rs:575 | menu and pane keys | `request_dock` | `SESSION_PANEL` / `SESSION_SCREENSET*` |
 
-**The dock crate stays Session-free.** `features/ui/dock` gets a
-serialisable `DockIntent` and an optional router installed by the app
-(`use_dock_provider(.., router)`): each committing handler calls
-`dock.ask(intent)`; with a router, the app runs the matching action, which
-applies the intent back (`Dock::apply`, moved in from
-`native/dock.rs::apply`); without one, the dock applies it itself.
+**The dock crate stays Session-free.** `features/ui/dock` has a
+serialisable `DockIntent` (`intent.rs`: move, attach, open, duplicate,
+close, show, maximise, chrome, share, edge size and shown, float bounds,
+recall, save, save as, Arrange) whose layout changes apply to a
+`Dockspace` (`DockIntent::apply_to`). Every committing handler of the host
+calls `Dock::ask(intent)`; with a router installed (`Dock::set_router`) the
+intent goes to the app, else the dock applies it itself (`Dock::apply`).
+The Session window's router (`native/dock.rs::route`) runs each as its
+named action — a screenset's by name, the layout's through
+`session_engine::actions::dock_action` — whose `DockRequest::Intent`
+comes back to `Dock::apply` at once. The older tile dock
+(`dock::ui::components`, `features/session`'s) is not this window's and
+keeps its `DockActions` callbacks: debt.

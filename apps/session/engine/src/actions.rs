@@ -623,7 +623,7 @@ struct SaveAsArg {
 
 /// What the window's dock is asked to do (`session_desktop`'s dock reads
 /// these with [`take_dock_requests`]).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DockRequest {
     /// Recall the screenset with this number key or name.
     Recall(String),
@@ -637,6 +637,10 @@ pub enum DockRequest {
     TogglePanel(String),
     /// Hide every edge dock, or bring back the ones hidden.
     ToggleDocks,
+    /// A dock control's change of the layout (`dock::DockIntent`): a panel
+    /// moved, opened, closed, shown, maximised, a divider or a dock's edge
+    /// set, a floating window placed.
+    Intent(dock::DockIntent),
 }
 
 static DOCK_REQUESTS: Mutex<Vec<DockRequest>> = Mutex::new(Vec::new());
@@ -682,7 +686,143 @@ pub fn if_docked(request: DockRequest) -> bool {
     docked()
 }
 
+macro_rules! dock_action {
+    ($name:ident, $id:literal, $method:literal, $display:literal, $what:literal) => {
+        pub static $name: ActionMeta = meta(
+            $id,
+            $method,
+            $display,
+            concat!(
+                $what,
+                " `intent`: the dock's own words for it (`dock::DockIntent`, by panel, stack, split and window ids as SESSION_WINDOW gives them). The window's dock carries it out."
+            ),
+            "Dock",
+            "",
+        );
+    };
+}
+
+dock_action!(
+    PANEL_MOVE,
+    "SESSION_PANEL_MOVE",
+    "panel_move",
+    "Move a panel",
+    "Move a dock panel — a tab dropped onto a stack, an edge, the centre or a new floating window (`move`), or attached beside another (`attach`)."
+);
+dock_action!(
+    PANEL_OPEN,
+    "SESSION_PANEL_OPEN",
+    "panel_open",
+    "Open a panel",
+    "Open a new panel of a kind where the kind lives (`open`), or a copy of one beside it (`duplicate`). SESSION_PANEL toggles a kind instead."
+);
+dock_action!(
+    PANEL_CLOSE,
+    "SESSION_PANEL_CLOSE",
+    "panel_close",
+    "Close a panel",
+    "Close one dock panel (`close`)."
+);
+dock_action!(
+    PANEL_SHOW,
+    "SESSION_PANEL_SHOW",
+    "panel_show",
+    "Show a panel",
+    "Make a panel the one its stack shows (`show`): a tab pressed, a rail's button."
+);
+dock_action!(
+    PANEL_MAXIMIZE,
+    "SESSION_PANEL_MAXIMIZE",
+    "panel_maximize",
+    "Maximise a panel",
+    "A panel filling the window, or back (`maximize`): a tab double-clicked, Restore."
+);
+dock_action!(
+    PANEL_TABS,
+    "SESSION_PANEL_TABS",
+    "panel_tabs",
+    "Show a stack's tabs",
+    "Show or hide a stack's tab strip (`chrome`)."
+);
+dock_action!(
+    DOCK_SPLIT,
+    "SESSION_DOCK_SPLIT",
+    "dock_split",
+    "Set a divider",
+    "Where a divider between two panels sits (`share`): dragged and let go, or double-clicked back to halves."
+);
+dock_action!(
+    DOCK_EDGE,
+    "SESSION_DOCK_EDGE",
+    "dock_edge",
+    "Set an edge dock",
+    "An edge dock's thickness (`edge_size`), or whether it is open, collapsed to a rail or hidden (`edge_shown`)."
+);
+dock_action!(
+    DOCK_FLOAT,
+    "SESSION_DOCK_FLOAT",
+    "dock_float",
+    "Place a floating panel",
+    "Where a floating panel window is and how big (`float_bounds`): dragged or resized and let go."
+);
+
+/// The dock actions' one argument.
+#[derive(Facet)]
+struct DockIntentArg {
+    intent: dock::DockIntent,
+}
+
+/// The action a dock intent runs and its arguments (JSON) — for the layout's
+/// intents; `None` for a screenset's or Arrange's, which run
+/// `SESSION_SCREENSET*` / `SESSION_ARRANGE` by name.
+#[must_use]
+pub fn dock_action(intent: &dock::DockIntent) -> Option<(&'static str, String)> {
+    let id = dock_intent_id(intent)?;
+    let arg = DockIntentArg {
+        intent: intent.clone(),
+    };
+    facet_json::to_string(&arg).ok().map(|json| (id, json))
+}
+
+/// Which dock action names `intent`.
+fn dock_intent_id(intent: &dock::DockIntent) -> Option<&'static str> {
+    use dock::DockIntent as I;
+    Some(match intent {
+        I::Move { .. } | I::Attach { .. } => PANEL_MOVE.id,
+        I::Open { .. } | I::Duplicate { .. } => PANEL_OPEN.id,
+        I::Close { .. } => PANEL_CLOSE.id,
+        I::Show { .. } => PANEL_SHOW.id,
+        I::Maximize { .. } => PANEL_MAXIMIZE.id,
+        I::Chrome { .. } => PANEL_TABS.id,
+        I::Share { .. } => DOCK_SPLIT.id,
+        I::EdgeSize { .. } | I::EdgeShown { .. } => DOCK_EDGE.id,
+        I::FloatBounds { .. } => DOCK_FLOAT.id,
+        I::Recall { .. } | I::Save | I::SaveAs { .. } | I::Arrange => return None,
+    })
+}
+
 fn register_dock(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    for meta in [
+        &PANEL_MOVE,
+        &PANEL_OPEN,
+        &PANEL_CLOSE,
+        &PANEL_SHOW,
+        &PANEL_MAXIMIZE,
+        &PANEL_TABS,
+        &DOCK_SPLIT,
+        &DOCK_EDGE,
+        &DOCK_FLOAT,
+    ] {
+        list.register(meta, Effect::Mutating, move |a: DockIntentArg| {
+            if dock_intent_id(&a.intent) != Some(meta.id) {
+                return Err(format!("{} does not take that intent", meta.id));
+            }
+            let args = facet_json::to_string(&a).map_err(|e| e.to_string())?;
+            request_dock(DockRequest::Intent(a.intent));
+            also_in_the_window(meta.id, args);
+            Ok(())
+        })?;
+    }
     list.register(&SCREENSET, Effect::Mutating, |a: ScreensetArg| {
         let which = a.screenset.trim().to_owned();
         if which.is_empty() {
@@ -5256,6 +5396,15 @@ mod presses {
         "ARRANGE_TAKE_VOLUME",
         "ARRANGE_EDIT",
         "ITEMS_SELECT",
+        "SESSION_PANEL_MOVE",
+        "SESSION_PANEL_OPEN",
+        "SESSION_PANEL_CLOSE",
+        "SESSION_PANEL_SHOW",
+        "SESSION_PANEL_MAXIMIZE",
+        "SESSION_PANEL_TABS",
+        "SESSION_DOCK_SPLIT",
+        "SESSION_DOCK_EDGE",
+        "SESSION_DOCK_FLOAT",
         "AUTOMATION_POINTS_EDIT",
         "AUTOMATION_ITEMS_EDIT",
         "AUTOMATION_LANE_SET",

@@ -88,6 +88,14 @@ pub fn SongDock(session: session_ui::studio::StudioSession, class: FormClass) ->
     let host = try_use_context::<HostPanels>().unwrap_or_default();
     let scope = host.scope;
     let dock = use_dock_provider(sets, form, catalog(host));
+    // Every dock control runs a named action (`route`), which comes back
+    // here as a request and is carried out (`apply`): what `watch`, a guide
+    // and the CLI see is what a drag or a click did.
+    use_hook(move || {
+        dock.set_router(std::rc::Rc::new(move |intent| {
+            route(dock, sets, *form.peek(), intent);
+        }));
+    });
     // While it is up, the pane keys (`x`, `e`, `f`, `b`) and actions
     // toggle its panels.
     use_hook(|| session_engine::actions::set_docked(true));
@@ -257,6 +265,43 @@ fn BarIcon(kind: &'static str) -> Element {
     }
 }
 
+/// A dock control's intent run as its named action: a screenset's
+/// (`SESSION_SCREENSET`, by its name), a save, Arrange, or the layout's
+/// (`session_engine::actions::dock_action`: `SESSION_PANEL_MOVE`, …). Run
+/// in the window, the request it leaves is carried out at once.
+fn route(
+    dock: dock::host::Dock,
+    sets: Signal<Screensets>,
+    class: FormClass,
+    intent: dock::DockIntent,
+) {
+    use dock::DockIntent as I;
+    use session_engine::actions as a;
+    let pressed = match &intent {
+        I::Recall { set } => {
+            let name = sets
+                .peek()
+                .sets
+                .iter()
+                .find(|s| s.id == *set)
+                .map(|s| s.name.clone());
+            name.map(|n| (a::SCREENSET.id, serde_json::json!({ "screenset": n })))
+        }
+        I::Save => Some((a::SCREENSET_SAVE.id, serde_json::json!({}))),
+        I::SaveAs { name } => Some((a::SCREENSET_SAVE_AS.id, serde_json::json!({ "name": name }))),
+        I::Arrange => Some((a::ARRANGE.id, serde_json::Value::Null)),
+        layout => a::dock_action(layout)
+            .and_then(|(id, args)| serde_json::from_str(&args).ok().map(|args| (id, args))),
+    };
+    match pressed {
+        Some((id, args)) => press(id, &args),
+        None => tracing::warn!(dock.intent = ?intent, "a dock intent no action names"),
+    }
+    for request in session_engine::actions::take_dock_requests() {
+        apply(dock, sets, class, request);
+    }
+}
+
 /// Carries out one View action on the dock.
 fn apply(
     dock: dock::host::Dock,
@@ -293,6 +338,7 @@ fn apply(
         }
         DockRequest::Arrange => dock.toggle_arrange(),
         DockRequest::ToggleDocks => dock.toggle_docks(),
+        DockRequest::Intent(intent) => dock.apply(intent),
         DockRequest::TogglePanel(kind) => {
             let was_shown = dock.shows(&kind);
             let opened = dock.toggle_kind(&kind);
