@@ -153,7 +153,7 @@ runs in, `.#reaper-test` the REAPER suites, `.#stems` stem separation.
 just check                 # cargo check --workspace
 just test                  # the core test set: cargo nextest run -p <each of the Justfile's test_packages>
 just test-doc              # doctests (nextest cannot run them)
-just app [PROJECT]         # Session (session-desktop, release-fast)
+just app [PROJECT]         # Session (session-desktop, the shared dev build)
 just guitar / just keys    # the rig view (studio-desktop --guitar/--keys skip the welcome screen; FTS_STUDIO_OPEN=<path|setlist|rig> too)
 just signal-engine         # studio-desktop --engine: the headless rig engine (ws://:4040/vox)
 just reaper-test [FILTER]  # Session's #[reaper_test] suites in a real REAPER
@@ -245,8 +245,13 @@ fills up. The short version:
 - Dependencies build at opt-level 1, with an allowlist back at 3 for
   audio-thread crates. A dev run of a rig must never xrun: extend the
   allowlist, never raise `package."*"`.
-- `release-fast` is the incremental release profile the app recipes
-  share; build an app with one feature set, or cargo rebuilds everything.
+- **One build for working**: the window (`dx serve`), the engine, the
+  app recipes and `just dev-test` all build dx's `desktop-dev` profile (the
+  dev profile) for the host triple, into `target/<host>/desktop-dev`, with
+  studio-desktop's `cli,signal-keys-rig`. Another profile, `--target` or
+  feature set makes cargo recompile every shared crate. The app must be
+  fast in this build; `release-fast` and `--release` are for shipping and
+  measuring only.
 - Cargo never GCs `target/`: `just disk`, `just sweep`, `just sweep-all`,
   `just sweep-incremental`.
 - There is no `RUSTC_WRAPPER` (sccache breaks `dx`). Check `uptime` /

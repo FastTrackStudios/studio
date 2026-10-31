@@ -17,8 +17,8 @@
 # Safe to run again: a song already in the setlist is not added twice,
 # and its session files are re-put (unchanged ones are skipped). Env:
 #   TASK      the task binary            (default: ../task/target/debug/task)
-#   STUDIO    the studio binary          (default: target/release-fast/studio)
-#   REFERENCE the reference bouncer      (default: target/release-fast/reference)
+#   STUDIO    the studio binary          (default: the dev build, target/<host>/desktop-dev/studio)
+#   REFERENCE the reference bouncer      (default: the dev build, target/<host>/desktop-dev/reference)
 #   KIND      the collection kind        (default: songlist — keyflow's)
 #
 # Title and artist come from the chart's first line (`Washed - Elevation
@@ -57,8 +57,9 @@ run_task() {
 setlist="${1:?usage: library-import.sh <file.setlist> [--originals]}"
 originals="${2:-}"
 TASK="${TASK:-../task/target/debug/task}"
-STUDIO="${STUDIO:-target/release-fast/studio}"
-REFERENCE="${REFERENCE:-target/release-fast/reference}"
+host="$(rustc -vV | sed -n 's/^host: //p')"
+STUDIO="${STUDIO:-target/$host/desktop-dev/studio}"
+REFERENCE="${REFERENCE:-target/$host/desktop-dev/reference}"
 KIND="${KIND:-songlist}"
 base="$(cd "$(dirname "$setlist")" && pwd)"
 collection="$(basename "$setlist" .setlist)"

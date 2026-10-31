@@ -105,25 +105,33 @@ to 3 wholesale. Regenerate the list with `cargo tree` over the audio
 crates; note `package."*"` matches dependencies only, never workspace
 members.
 
-## `release-fast` — the profile for running the app while you work
+## One build for working: dx's `desktop-dev`, for the host triple
 
-The app, `blitz_shot` and `prepare` are run from release builds (a dev
-build renders and plays too slowly to use). The default release profile
-is non-incremental with 16 codegen units, so a one-line edit recompiles
-the changed crate whole at O3 and everything above it. `release-fast`
-(root `Cargo.toml`) inherits release and sets `incremental = true`,
-`codegen-units = 256`. Measured 2026-09-22 on the same edits, back to
-back, box under load (so trust the CPU column):
+Since 2026-10-31 everything run while working builds ONE way: the window
+(`dx serve`), the engine (`studio engine`), the app recipes (`just app`,
+`just guitar`, `blitz_shot`, `prepare`, …) and the tests (`just dev-test`).
 
-| edit in | `--release` | `release-fast` |
-|---|---|---|
-| `session-daw` | 60.6 s wall / 303 s CPU | 14.8 s / 6.5 s |
-| `daw-standalone` (via `../daw` path patch) | 90.6 s / 472 s | 21.3 s / 12 s |
+- **Profile `desktop-dev`**, declared in the root `Cargo.toml` as `inherits
+  = "dev"`: what `dx serve` builds the window as. The dev profile's package
+  overrides (the audio allowlist at opt-level 3) carry over.
+- **`--target <host>`**, as dx passes it: artifacts land in
+  `target/<host>/desktop-dev`. Without `--target` the same profile builds
+  into `target/<profile>` and shares nothing with dx.
+- **Features `cli,signal-keys-rig`** on studio-desktop. `just dev-test`
+  names studio-desktop with them so the crates under test unify their
+  features with the app's, and filters to the crates asked for.
 
-Cold build of `release-fast` once: ~8 min. `just app`, `just prepare`,
-`studio`, `drive`, `studio-song` use it; benchmarks, fixtures and
-shipping stay on `--release` (256 units inline a little less — measure
-performance on what ships).
+Measured: with dx's build warm, building the engine (`--bin studio`) this
+way compiled only the 102 workspace crates the CLI adds; every registry
+crate came from dx's build. Before, dx (`desktop-dev`), the engine
+(`release-fast`) and the agents' tests (`target/debug`, the test crate's own
+features) each recompiled the graph their own way, and a test build with
+nothing changed took 135 s.
+
+The app must be fast in this build — if it is slow here, the code is doing
+too much. `release-fast` (release, incremental, 256 units) and `--release`
+are for shipping (`scripts/desktop/*`, `scripts/signal/mac-release.sh`) and
+measuring performance on what ships, not for working.
 
 ## sccache — removed, and why it stays removed
 
