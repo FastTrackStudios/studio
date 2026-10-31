@@ -1511,6 +1511,7 @@ impl Editor {
             | Action::QuantizeDrums
             | Action::RevertDrums
             | Action::LevelDrums
+            | Action::ShowLanes
             | Action::CompCycle(_)
             | Action::CompBest
             | Action::CompKeep

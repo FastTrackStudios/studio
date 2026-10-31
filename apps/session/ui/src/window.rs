@@ -136,6 +136,8 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         Action::QuantizeDrums => (QUANTIZE_DRUMS.id, String::new()),
         Action::RevertDrums => (REVERT_DRUMS.id, String::new()),
         Action::LevelDrums => (LEVEL_DRUMS.id, String::new()),
+        // The lanes button's own action, on the selected track.
+        Action::ShowLanes => (crate::comp::SHOW_LANES.id, "{}".to_owned()),
         Action::CompCycle(by) if *by < 0 => (COMP_PREV.id, String::new()),
         Action::CompCycle(_) => (COMP_NEXT.id, String::new()),
         Action::CompBest => (COMP_BEST_KEY.id, String::new()),
@@ -286,7 +288,7 @@ static LEVEL_DRUMS: ActionMeta = meta(
     "Level drums",
     "In Edit mode, EDIT_LEVEL over the selection: each selected piece's strokes (every piece when only time is selected) brought toward one another, each drum's own ride; over a time selection, razor or folded rows only the strokes there, the curve elsewhere kept. The window says how it came out.",
     "Drums",
-    "Alt+L",
+    "Alt+Shift+Q",
 );
 
 static COMP_NEXT: ActionMeta = meta(
