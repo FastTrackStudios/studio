@@ -150,6 +150,45 @@ impl Rig {
     }
 }
 
+/// What a gesture changed on a block, `before` to `after`, as
+/// `RIG_BLOCK_SET` takes it on the rig of `track` — the block by its name,
+/// each moved parameter in `set`, and `bypassed`, `level_db`, `option`
+/// where they moved. `None` when nothing did.
+#[must_use]
+pub fn block_changes(track: &str, before: &Block, after: &Block) -> Option<serde_json::Value> {
+    let mut args = serde_json::Map::new();
+    let set: serde_json::Map<String, serde_json::Value> = after
+        .params
+        .iter()
+        .filter(|(name, value)| before.params.iter().all(|(n, v)| n != name || v != value))
+        .map(|(name, value)| (name.clone(), (*value).into()))
+        .collect();
+    if !set.is_empty() {
+        args.insert("set".to_owned(), set.into());
+    }
+    if before.bypassed != after.bypassed {
+        args.insert("bypassed".to_owned(), after.bypassed.into());
+    }
+    if before.output_level_db != after.output_level_db
+        && let Some(db) = after.output_level_db
+    {
+        args.insert("level_db".to_owned(), db.into());
+    }
+    if before.option != after.option
+        && let Some(option) = after
+            .option
+            .and_then(|o| num_traits::ToPrimitive::to_u32(&o.round()))
+    {
+        args.insert("option".to_owned(), option.into());
+    }
+    if args.is_empty() {
+        return None;
+    }
+    args.insert("track".to_owned(), track.into());
+    args.insert("block".to_owned(), after.name.clone().into());
+    Some(args.into())
+}
+
 /// The rigs this session's guitars play: the Blues profile's default
 /// patch (two amps, stereo) on the Rhythm part, Worship's Clean on the
 /// Lead — until a track records which rig it is.
@@ -821,4 +860,44 @@ pub fn pick_design(face: &FaceEntry, dark: bool, back: bool, tall: bool) -> Stri
         (true, true) => face.back_dark.clone().or_else(|| face.back.clone()),
     };
     pick.unwrap_or_else(|| face.face.clone())
+}
+
+#[cfg(test)]
+mod block_changes_tests {
+    use super::*;
+
+    fn block() -> Block {
+        Block {
+            name: "Plate".to_owned(),
+            kind: "reverb".to_owned(),
+            bypassed: false,
+            preset: String::new(),
+            asset: String::new(),
+            empty: false,
+            option: Some(1.0),
+            output_level_db: None,
+            params: vec![("decay".to_owned(), 0.4), ("mix".to_owned(), 0.3)],
+        }
+    }
+
+    /// Only what moved goes, the block by its name.
+    #[test]
+    fn a_gesture_commits_what_it_moved_on_its_block() {
+        let before = block();
+        assert_eq!(block_changes("{t}", &before, &before), None);
+        let mut after = before.clone();
+        after.params[0].1 = 0.6;
+        after.bypassed = true;
+        after.option = Some(2.0);
+        assert_eq!(
+            block_changes("{t}", &before, &after),
+            Some(serde_json::json!({
+                "track": "{t}",
+                "block": "Plate",
+                "set": { "decay": 0.6 },
+                "bypassed": true,
+                "option": 2,
+            }))
+        );
+    }
 }
