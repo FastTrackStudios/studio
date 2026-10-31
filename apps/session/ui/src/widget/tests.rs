@@ -243,3 +243,120 @@ fn an_edit_of_items_draws_them_without_planning_the_rows_again() {
         "drawn as a fresh recording"
     );
 }
+
+/// A mouse press or release at `(x, y)`, the main button, no modifier.
+fn mouse(x: f64, y: f64) -> blitz_traits::events::BlitzPointerEvent {
+    use blitz_traits::events::{
+        BlitzPointerEvent, BlitzPointerId, MouseEventButton, MouseEventButtons, Point,
+        PointerCoords, PointerDetails,
+    };
+    #[expect(clippy::cast_possible_truncation, reason = "a point in a test frame")]
+    let (x, y) = (x as f32, y as f32);
+    BlitzPointerEvent {
+        id: BlitzPointerId::Mouse,
+        is_primary: true,
+        coords: PointerCoords {
+            page_x: x,
+            page_y: y,
+            screen_x: x,
+            screen_y: y,
+            client_x: x,
+            client_y: y,
+        },
+        button: MouseEventButton::Main,
+        buttons: MouseEventButtons::Primary,
+        mods: Modifiers::empty(),
+        details: PointerDetails::default(),
+        element: Point { x, y },
+        active_pointers: std::sync::Arc::default(),
+    }
+}
+
+/// A point on the body of one of row `row`'s items — on the lane that
+/// plays, or `taken` on a take's — and that item's guid.
+fn on_an_item_of(widget: &ArrangementWidget, row: usize, taken: bool) -> ((f64, f64), String) {
+    let (w, h) = widget.size;
+    let mut y = ruler::ruler_h() + 4.0;
+    while y < h {
+        let mut x = widget.scene.tcp.width() + 20.0;
+        while x < w {
+            if let Some(crate::hit::Target::Item {
+                row: on,
+                index,
+                zone: crate::arrangement::ItemZone::Body,
+                ..
+            }) = widget.hit(x, y).map(|hit| hit.target)
+                && on == row
+                && widget.scene.on_active_lane(index) != taken
+                && let Some(item) = widget.scene.item(index)
+            {
+                return ((x, y), item.guid.clone());
+            }
+            x += 7.0;
+        }
+        y += 3.0;
+    }
+    panic!("no item of row {row} on screen");
+}
+
+/// The named actions the window queued for the engine.
+fn ran(widget: &ArrangementWidget) -> Vec<String> {
+    widget
+        .edits
+        .borrow()
+        .iter()
+        .filter_map(|edit| match edit {
+            crate::engine::Edit::Run(id, _) => Some(id.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A click on the shut kit's item selects it — the window's, and the
+/// engine's through `ITEMS_SELECT` — in or out of Edit mode (where the
+/// kit's rows also carry its hits), its lanes shut or shown, and on a
+/// take's lane (chosen from, never moved) as on the lane that plays.
+#[test]
+fn a_click_on_the_shut_kits_item_selects_it() {
+    for (editing, lanes, taken) in [
+        (false, false, false),
+        (true, false, false),
+        (true, true, false),
+        (true, true, true),
+        (false, true, true),
+    ] {
+        crate::folds::show_cuts(true);
+        let (song, mut widget) = window(30);
+        answering(&mut widget, &song);
+        widget.editing.set(editing);
+        let _ = widget.paint_scene(1600, 900, 1.0);
+        let kit = row_of(&widget, &song.drums);
+        if lanes {
+            widget.act(crate::pointer::RowSpot {
+                row: kit,
+                control: crate::row::Control::LaneShow,
+            });
+            let _ = widget.paint_scene(1600, 900, 1.0);
+        }
+        let ((x, y), guid) = on_an_item_of(&widget, kit, taken);
+        widget.event(&UiEvent::PointerDown(mouse(x, y)));
+        widget.event(&UiEvent::PointerUp(mouse(x, y)));
+        let case = format!("editing {editing}, lanes {lanes}, on a take {taken}");
+        assert!(
+            widget.editor.selected.contains(&guid),
+            "{case}: the item selected in the window"
+        );
+        assert!(
+            ran(&widget).iter().any(|id| id == "ITEMS_SELECT"),
+            "{case}: the engine told, as ITEMS_SELECT: {:?}",
+            ran(&widget)
+        );
+        if lanes {
+            // Shut again for the next case: lanes shown is remembered.
+            widget.act(crate::pointer::RowSpot {
+                row: kit,
+                control: crate::row::Control::LaneShow,
+            });
+        }
+    }
+}

@@ -170,6 +170,9 @@ pub struct Editor {
     pub razor: timeline::razor::RazorSet,
     /// A razor area being drawn or moved.
     razor_drag: Option<RazorDrag>,
+    /// A press on a take lane's item, which is chosen from and never
+    /// moved: the click it is, a selection made on release.
+    take_click: Option<ClickInstead>,
 }
 
 /// A razor area under the hand: the Editor's razor gesture
@@ -429,7 +432,10 @@ impl Editor {
                         | mousemap::Action::TrimRight
                 );
                 if edits_item && !scene.on_active_lane(index) {
-                    return false;
+                    // Still the click that selects it: refusing the drag
+                    // must not refuse the selection with it.
+                    self.take_click = Self::click_instead(hit, seconds, keys, scene);
+                    return self.take_click.is_some();
                 }
                 match action {
                     // A fade is not taken hold of while locked.
@@ -961,6 +967,10 @@ impl Editor {
                 }
                 None => false,
             };
+        }
+        if let Some(ClickInstead::Item { guid, add }) = self.take_click.take() {
+            self.select(&guid, !add, project, effects);
+            return true;
         }
         if let Some(press) = self.ruler_press.take() {
             // A drag across the bars is a time selection; a click is just

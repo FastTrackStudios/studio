@@ -208,6 +208,22 @@ const OPEN_PPS: f64 = 12.0;
 const LANDING_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// A swipe let go and comped, waiting for the engine's items for it.
+/// A T or Shift+T on its way through the engine (`COMP_CYCLE`): the comp
+/// drawn as it will be from the key's frame, until the engine's own is
+/// back. Holds the key's `window.action` span open, so the span runs from
+/// the key to the engine's comp on screen.
+struct CompPending {
+    shown: crate::arrangement::CompShown,
+    pressed: web_time::Instant,
+    /// The hit overlay's version when the engine answered, plus one;
+    /// zero until it has.
+    replied: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    /// When the engine's answer was first seen here.
+    replied_seen: Option<web_time::Instant>,
+    drawn: bool,
+    span: tracing::Span,
+}
+
 struct Landing {
     swipe: crate::swipe::Swipe,
     /// Its row's items as they were drawn when it was let go
@@ -688,6 +704,15 @@ pub struct ArrangementWidget {
     /// The stretches of the comp picked on its strip (Edit mode): what T
     /// and Shift+T comp from another take, seconds, in time order.
     comp_picked: Vec<(f64, f64)>,
+    /// The engine's rankings of the stretches last picked or comped: what
+    /// T steps through here, before the engine has comped
+    /// ([`crate::comp_predict`]).
+    comp_ranks: std::sync::Arc<std::sync::Mutex<crate::comp_predict::Rankings>>,
+    /// The stretches last asked to be ranked, so a pick asks once.
+    comp_asked: RefCell<Vec<(f64, f64)>>,
+    /// A T or Shift+T the engine is still comping: the comp drawn as it
+    /// will be, from the key's frame until the engine's comes back.
+    comp_pending: RefCell<Option<CompPending>>,
     /// Where the mouse was last, in the widget's coordinates: what the
     /// take under it is read at (mouse buttons 4 and 5).
     mouse_at: Option<(f64, f64)>,
@@ -905,6 +930,9 @@ impl ArrangementWidget {
             hit_selected: std::collections::HashSet::new(),
             hit_marquee: None,
             comp_picked: Vec::new(),
+            comp_ranks: std::sync::Arc::default(),
+            comp_asked: RefCell::new(Vec::new()),
+            comp_pending: RefCell::new(None),
             mouse_at: None,
             last_band: None,
             swipe: None,
@@ -1473,11 +1501,20 @@ impl ArrangementWidget {
                     } else {
                         Vec::new()
                     };
-                    self.comp_picked = if mods(e.mods).shift {
+                    let held = mods(e.mods);
+                    self.comp_picked = if held.shift {
                         joined(&self.comp_picked, &picked)
                     } else {
                         picked
                     };
+                    // A press that never became a marquee, off the comp
+                    // strip and off every flag: a click on the item under
+                    // it, which selects it as it would outside Edit mode.
+                    let click =
+                        (to.0 - from.0).abs() < FLAG_SLOP && (to.1 - from.1).abs() < FLAG_SLOP;
+                    if up && click && !self.on_comp_strip(from, from) {
+                        self.click_item(from, held.ctrl);
+                    }
                     return true;
                 }
                 let Some(drag) = self.hit_drag.take() else {
@@ -1569,6 +1606,10 @@ impl ArrangementWidget {
                         at: web_time::Instant::now(),
                         swipe,
                     });
+                } else {
+                    // Too short to comp: the click on the take's item.
+                    let at = (f64::from(e.coords.client_x), f64::from(e.coords.client_y));
+                    self.click_item(at, false);
                 }
                 true
             }
@@ -2350,6 +2391,137 @@ impl ArrangementWidget {
         }
     }
 
+    /// The comp as a press `by` over `asked` makes it, drawn from this
+    /// frame ([`CompPending`]) when the engine has ranked `asked`; a press
+    /// on top of one still comping steps on from it. What the engine's
+    /// answer is to be marked on.
+    fn predict_comp(
+        &self,
+        asked: &[(f64, f64)],
+        by: i32,
+    ) -> std::sync::Arc<std::sync::atomic::AtomicU64> {
+        let replied = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let comped = self
+            .comp_ranks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .step(asked, by);
+        let span = tracing::Span::current();
+        span.record("comp.predicted", !comped.is_empty());
+        if comped.is_empty() {
+            return replied;
+        }
+        let mut pending = self.comp_pending.borrow_mut();
+        let comps = match pending.as_ref() {
+            Some(p) => crate::comp_predict::splice(&p.shown.comps, &comped),
+            None => crate::hit_overlay::current()
+                .map(|o| crate::comp_predict::splice(&o.comps, &comped))
+                .unwrap_or_default(),
+        };
+        let takes = self.kit_rows().map(|kit| self.scene.takes(kit.start));
+        let marks = comped
+            .into_iter()
+            .map(|(from, to, take)| crate::arrangement::CompMark {
+                from,
+                to,
+                color: takes
+                    .and_then(|t| t.color_of(&take))
+                    .unwrap_or_else(|| crate::arrangement::take_color(&take)),
+                name: takes.and_then(|t| t.name_of(&take)).unwrap_or(take),
+            })
+            .collect();
+        *pending = Some(CompPending {
+            shown: crate::arrangement::CompShown { comps, marks },
+            pressed: web_time::Instant::now(),
+            replied: std::sync::Arc::clone(&replied),
+            replied_seen: None,
+            drawn: false,
+            span,
+        });
+        self.dirty.set(true);
+        replied
+    }
+
+    /// The stretches T would comp now, ranked by the engine ahead of the
+    /// key (`COMP_CANDIDATES`, which the engine keeps for its `COMP_CYCLE`),
+    /// once each time they change: a pick, a click, a time selection.
+    fn rank_ahead(&self) {
+        if !self.editing.get() {
+            return;
+        }
+        let asked: Vec<(f64, f64)> = self
+            .comp_scope()
+            .merged()
+            .iter()
+            .map(|s| (s.from, s.to))
+            .collect();
+        if asked.is_empty() || *self.comp_asked.borrow() == asked {
+            return;
+        }
+        self.comp_asked.replace(asked.clone());
+        if self
+            .comp_ranks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .knows(&asked)
+        {
+            return;
+        }
+        #[cfg(feature = "native")]
+        {
+            let Some(runtime) = crate::open::runtime() else {
+                return;
+            };
+            let ranks = std::sync::Arc::clone(&self.comp_ranks);
+            crate::open::traced_blocking(runtime, move || {
+                let args = serde_json::json!({
+                    "spans": asked.iter().map(|(from, to)| serde_json::json!({"from": from, "to": to})).collect::<Vec<_>>(),
+                });
+                let Ok(out) = crate::actions::run("COMP_CANDIDATES", args.to_string().as_bytes())
+                else {
+                    return;
+                };
+                if let Ok(reply) = serde_json::from_slice::<serde_json::Value>(&out) {
+                    ranks
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .learn(&asked, &reply);
+                }
+            });
+        }
+    }
+
+    /// The comp a T is still comping, as this frame draws it: its first
+    /// frame says how long after the key it came, and it is let go once
+    /// the engine's comp is here (the hit overlay read after its answer,
+    /// or two seconds after the answer at most), saying how long that took.
+    fn comp_shown(&self) -> Option<std::cell::Ref<'_, crate::arrangement::CompShown>> {
+        {
+            let mut pending = self.comp_pending.borrow_mut();
+            let p = pending.as_mut()?;
+            let ms = |since: web_time::Instant| since.elapsed().as_secs_f64() * 1_000.0;
+            if !p.drawn {
+                p.drawn = true;
+                p.span.record("ui.keypress_to_frame_ms", ms(p.pressed));
+            }
+            let replied = p.replied.load(std::sync::atomic::Ordering::Acquire);
+            if replied > 0 {
+                let seen = *p.replied_seen.get_or_insert_with(web_time::Instant::now);
+                if crate::hit_overlay::version() >= replied
+                    || seen.elapsed() > std::time::Duration::from_secs(2)
+                {
+                    p.span.record("ui.keypress_to_settled_ms", ms(p.pressed));
+                    *pending = None;
+                    return None;
+                }
+            }
+            // Drawn again next frame, until it is let go.
+            self.dirty.set(true);
+        }
+        std::cell::Ref::filter_map(self.comp_pending.borrow(), |p| p.as_ref().map(|p| &p.shown))
+            .ok()
+    }
+
     fn comp_cycle(&self, by: i32) -> bool {
         let scope = self.comp_scope();
         if scope.merged().is_empty() {
@@ -2365,13 +2537,31 @@ impl ArrangementWidget {
             let Some(runtime) = crate::open::runtime() else {
                 return false;
             };
+            let asked: Vec<(f64, f64)> = scope.merged().iter().map(|s| (s.from, s.to)).collect();
+            // On this frame, the take it will be; the engine comps it.
+            let replied = self.predict_comp(&asked, by);
+            let ranks = std::sync::Arc::clone(&self.comp_ranks);
             let said = std::sync::Arc::clone(&self.staged);
             crate::open::traced_blocking(runtime, move || {
                 let args = serde_json::json!({
-                    "spans": scope.merged().iter().map(|s| serde_json::json!({"from": s.from, "to": s.to})).collect::<Vec<_>>(),
+                    "spans": asked.iter().map(|(from, to)| serde_json::json!({"from": from, "to": to})).collect::<Vec<_>>(),
                     "by": by,
                 });
                 let out = crate::actions::run("COMP_CYCLE", args.to_string().as_bytes());
+                if let Ok(reply) = out
+                    .as_deref()
+                    .map(serde_json::from_slice::<serde_json::Value>)
+                    && let Ok(reply) = reply
+                {
+                    ranks
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .learn(&asked, &reply);
+                }
+                replied.store(
+                    crate::hit_overlay::version().saturating_add(1),
+                    std::sync::atomic::Ordering::Release,
+                );
                 let text = match &out {
                     Ok(_) if by < 0 => "comped from the take before",
                     Ok(_) => "comped from the next take",
@@ -2687,6 +2877,15 @@ impl ArrangementWidget {
         else {
             return;
         };
+        // What the action changed, read back as far as the engine says
+        // (`song_model::take_resync_scope`): its items, from the journal,
+        // unless it asked for the whole song. A whole read here held the
+        // window's thread half a second after every T.
+        #[cfg(feature = "native")]
+        self.resync_as(
+            crate::song_model::take_resync_scope().unwrap_or(crate::song_model::Resync::Items),
+        );
+        #[cfg(not(feature = "native"))]
         self.resync();
         self.notice = Some(crate::notice::Notice::new(said, None));
         self.dirty.set(true);
@@ -3686,6 +3885,22 @@ impl ArrangementWidget {
     }
 
     /// The item under a point, for the fade handles.
+    /// The item under `at` selected — alone, or toggled with `add` — as a
+    /// click on it does: in the window now, in the engine as `ITEMS_SELECT`.
+    fn click_item(&mut self, at: (f64, f64), add: bool) {
+        let Some(guid) = self
+            .item_under(at.0, at.1)
+            .and_then(|index| self.scene.item(index))
+            .map(|item| item.guid.clone())
+        else {
+            return;
+        };
+        let mut effects = Vec::new();
+        self.editor
+            .select(&guid, !add, &mut self.project, &mut effects);
+        self.settle(effects);
+    }
+
     fn item_under(&self, x: f64, y: f64) -> Option<usize> {
         match self.hit(x, y)?.target {
             crate::hit::Target::Item { index, .. } => Some(index),
@@ -3949,7 +4164,14 @@ impl ArrangementWidget {
             // engine or a model asked for — its own span: what it asks of
             // the engine lands under it, and a late frame names it.
             let kind = action_kind(&action);
-            let _span = tracing::info_span!("window.action", window.action = kind).entered();
+            let _span = tracing::info_span!(
+                "window.action",
+                window.action = kind,
+                comp.predicted = tracing::field::Empty,
+                ui.keypress_to_frame_ms = tracing::field::Empty,
+                ui.keypress_to_settled_ms = tracing::field::Empty,
+            )
+            .entered();
             if let crate::keys::Action::View(command) = action {
                 if let Some(request) = self.zoom_request(command) {
                     self.zooms.borrow_mut().push(request);
@@ -4805,6 +5027,10 @@ impl ArrangementWidget {
         let event = &scaled;
         self.read_pinned_at(event);
         self.handle(event);
+        // What was picked, clicked or swept: ranked ahead of a T.
+        if matches!(event, UiEvent::PointerUp(_)) {
+            self.rank_ahead();
+        }
         // Only this event is read there; the frame is drawn as scrolled.
         self.reading_pinned.set(None);
     }
@@ -4877,6 +5103,7 @@ impl ArrangementWidget {
                         lanes_at,
                         (kit, &rows),
                         (&hits, &self.hit_selected, &self.comp_picked),
+                        self.comp_shown().as_deref(),
                     );
                 }
                 // Not read yet since the window opened.

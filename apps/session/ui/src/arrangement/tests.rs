@@ -515,3 +515,47 @@ fn a_swipe_draws_its_stretch_on_the_comp_lane() {
         }
     }
 }
+
+/// Each comp span is outlined on the take lane holding its take, over its
+/// own time — never on the lane that plays or the COMP — and only the
+/// spans in sight.
+#[test]
+fn a_comp_span_is_outlined_on_its_takes_lane() {
+    let span = |start: f64, end: f64, take: &str| crate::hit_overlay::CompSpan {
+        start,
+        end,
+        take: take.to_owned(),
+    };
+    // Named as the kit's first mic calls its recordings.
+    let takes = crate::take_colors::TakeColors::of([
+        ("65-In-260906_1702.wav", 200.0),
+        ("65-In-260906_1754-01.wav", 200.0),
+    ]);
+    let (red, blue) = (
+        takes.index_of("260906_1702").expect("the first take"),
+        takes.index_of("260906_1754-01").expect("the second take"),
+    );
+    let comps = [
+        span(0.0, 4.0, "65-In-260906_1702"),
+        span(4.0, 9.5, "65-In-260906_1754-01"),
+        span(9.5, 30.0, "65-In-260906_1702"),
+        span(30.0, 40.0, "glued edit"),
+    ];
+    // EDIT is lane 0 (plays), COMP lane 1, the takes on 2 and 3; the
+    // comp holding the first take alone is still the COMP, not a source.
+    let lane_takes = [(1, red), (2, red), (3, blue)];
+    let heard = [Some(0), Some(1)];
+    let got: Vec<(u32, f64, f64)> =
+        comp_sources(&comps, (&takes, &lane_takes), heard, (3.0, 10.0)).collect();
+    assert_eq!(
+        got,
+        vec![(2, 0.0, 4.0), (3, 4.0, 9.5), (2, 9.5, 30.0)],
+        "each span in sight on its take's lane, whole"
+    );
+    assert!(
+        comp_sources(&comps, (&takes, &lane_takes), heard, (31.0, 35.0))
+            .next()
+            .is_none(),
+        "a span of no take outlines nothing"
+    );
+}
