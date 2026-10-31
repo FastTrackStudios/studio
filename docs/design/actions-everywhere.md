@@ -66,7 +66,8 @@ Why:
    - the arrangement's gestures (`arrange_actions`: `ARRANGE_*`,
      `ITEMS_SELECT`), which were facade edits already;
    - the window's view actions (`session_ui::view_actions`:
-     `SESSION_OPTION`, `SESSION_MIXER_FX`), added by the page's root
+     `SESSION_OPTION`, `SESSION_MIXER_FX`, `MIXER_VIEW`, `FX_VIEW`,
+     `SESSION_CLOSEUP`), added by the page's root
      (`press::register_page_actions`).
 
    A control runs one with `crate::press::press` (the desktop's list
@@ -120,6 +121,9 @@ action, and the list validates and survives hostile arguments.
 | `Edit::Run(id, args)` | window → engine | a control's action run by the window's edit worker in order with the edits around it (`Applier`) |
 | `RIG_BLOCK_SET {track, block, set?, bypassed?, level_db?, option?}` | engine (`signal`) | one block of a track's signal rig, by id or name: what the FX view's rig faces and bypass buttons commit |
 | `RIG_BLOCKS {track}` | engine (`signal`), read-only | the rig's blocks as they are: what `RIG_BLOCK_SET` changes |
+| `MIXER_VIEW {scene?, focus_selected?, take_focus_width?, audience?, scroll?, rack_scroll?, rack_fold?}` | window (both builds) | the painted mixer's rails, scroll and rack folds |
+| `FX_VIEW {fold?, scroll?, down?}` | window (both builds) | the FX view's group folds, a lane's scroll, the first lane shown |
+| `SESSION_CLOSEUP {track, panel, name} \| {close}` | window (both builds) | a rack panel over the whole window, or closed: the rack's zoom button, the close-up's tabs, Back, swipe and Esc |
 
 ## Inventory (2026-10-30)
 
@@ -131,12 +135,12 @@ exempt by rule 6.
 |---|---|---|---|
 | Arrangement: track panel (`widget.rs` `act`, rename) | 0 → **9** | 9 → **0** | 1 |
 | Arrangement: items, ruler, gestures (`arrange_edit.rs`, `widget.rs`) | 1 → **~29** | ~25 edit families → **0** | — |
-| Painted mixer / FX / automation / editor (`mixer_panel`, `mcp`, `fx_view`, `automation_*`, `tone`, `expression`, `editor_view`, `navigator`, `arrange_camera`, `ruler`, `device_audio`) | 13 → **25** → **~39** | 86 → **74** → **~60** | 13 |
+| Painted mixer / FX / automation / editor (`mixer_panel`, `mcp`, `fx_view`, `automation_*`, `tone`, `expression`, `editor_view`, `navigator`, `arrange_camera`, `ruler`, `device_audio`) | 13 → **25** → **~39** → **~51** | 86 → **74** → **~60** → **~48** | 13 |
 | Session UI rsx (`shell`, `transport_bar`, `toolbar`, `quantize_panel`, `collab_bar`, `record_view`, `versions`, `setup`, `compact`, `closeup`, `bar_step`, `studio`, `lyrics_panel`, `perf_meter`, `chart_*`, `browser`, `organize`, `navigator`, `instrument_rail`, `web_host`, `progress`, `performer`, `app_menu`) | 41 → **73** | 97 → **65** | 107 |
 | Desktop (`native/{dock,shell,start,library,publish,handoff,mod}.rs`, `session_view.rs`, `lib.rs`, `mixer_view.rs`) | 28 → **34** | 71 → **65** | 68 |
 | Dock crate (`features/ui/dock` host + components) | 0 | 50 | 30 |
 | Studio welcome (`apps/studio/desktop/src/front.rs`) | 4 | 3 | 3 |
-| **total** | **87 → 146 → ~174 → ~188** | **~341 → ~282 → ~254 → ~240** | **222** |
+| **total** | **87 → 146 → ~174 → ~188 → ~205** | **~341 → ~282 → ~254 → ~240 → ~223** | **222** |
 
 Bold: after the first routing pass, then after pass 2's arrangement area
 (every item, ruler and dial gesture; the track knob's commit and the snap
@@ -227,12 +231,14 @@ lanes (`automation_edit::press/drag/release`) are area 3.
 | mixer_panel.rs fold button | Folder | `folds::toggle` | **routed**: `SESSION_FOLD` |
 | mixer_panel.rs release / cancel | Fader / pan drag end | last `SetVolume/SetPan` | **routed**: `TRACK_SET {volume_db|pan}` (drag stays a live preview) |
 | fx_view.rs `turn_strip` / `release_strip` | strip fader/pan drag | `SetVolume/SetPan` per move, no commit | **routed**: live turn, `TRACK_SET` on release (`commit_turn`) |
-| mixer_panel.rs:1286-1311 | rails: scene, focus selected, take focus width, phase, audience | signal writes; `mode_phases::choose` | NEW `MIXER_VIEW {…}`; phase **routed** (`SESSION_PHASE`) |
-| mixer_panel.rs:506, 1851, 1924, 1964 | wheel / overview / rack scroll / fling | scroll cells | NEW `MIXER_VIEW {scroll}` at gesture end |
-| mixer_panel.rs:1475, 1484 | rack zoom grip, rack phase fold | `closeups.ask`, `folds.toggle` | NEW `SESSION_CLOSEUP`, `MIXER_VIEW {rack_fold}` |
+| mixer_panel.rs `rail_act` | rails: scene, focus selected, take focus width, phase, audience | signal writes; `mode_phases::choose` | **routed**: `MIXER_VIEW {scene, focus_selected, take_focus_width, audience}`; phase `SESSION_PHASE` |
+| mixer_panel.rs `released`, `carry_fling` | overview, pan, fling, rack scroll | scroll cells | **routed**: `MIXER_VIEW {scroll}` / `{rack_scroll}` when the gesture ends (a throw where it stops) |
+| mixer_panel.rs host wheel | wheel over the strips | scroll cell | local: a wheel has no end to commit at |
+| mixer_panel.rs `rack_pressed_at` | rack zoom grip, rack phase fold | `closeups.ask`, `folds.toggle` | **routed**: `SESSION_CLOSEUP`, `MIXER_VIEW {rack_fold}` |
 | tone.rs `Shared::edited` / `commit` (every rack edit: the mixer's racks, the FX view's devices, knobs, switches and unit faces, a close-up) | rack switches, grips, EQ dots, macros, faces | `Edit::SetFxParam/SetFxEnabled`, no undo step | **routed**: live edits inside one undo step, then `FX_SET` (each FX's parameters as they ended) and `FX_ENABLE` (an FX it switched on) on the racks' worker when the pointer lifts or is lost |
 | fx_view.rs `face_edits` / `press` (Rig) | rig block faces / bypass | the window's copy only — **never reached the engine** | **routed**: `RIG_BLOCK_SET` with what the gesture changed on the block (`rig::block_changes`) when the face lets go; a bypass click at once |
-| fx_view.rs:803-810, 908 | lane scroll / step, group fold | view state | NEW `FX_VIEW {…}` |
+| fx_view.rs `press`, `wheel` | group fold, step down the lanes | view state | **routed**: `FX_VIEW {fold}`, `FX_VIEW {down}` |
+| fx_view.rs `wheel` | a lane's sideways scroll | view state | local: a wheel has no end (`FX_VIEW {scroll}` sets it by name) |
 | automation_edit.rs:164, 186, 214 | hide lane, mode chip, lane height | `ShowEnvelope`, `SetEnvelopeMode`, `SetLaneHeight` | `AUTOMATION_SHOW`, `AUTOMATION_SET_MODE`, `AUTOMATION_SHOW {height}` |
 | automation_edit.rs:222-376 | items (make, move, trim, curve, delete), envelope points (add, drag, delete) | `*AutomationItem*`, `SetItemCurve`, `SetEnvelope` | `AUTOMATION_ITEM` (extend: `at`, `move_to`, bounds, `curve`), `AUTOMATION_WRITE` (extend: `replace`) |
 | automation_edit.rs (leveler), automation_menu.rs | leveler dials, rides, menu | — | routed (`VOCAL_LEVELER_SET`, `VOCAL_RELEVEL`, `AUTOMATION_*`) |
@@ -242,14 +248,12 @@ lanes (`automation_edit::press/drag/release`) are area 3.
 | ruler/mod.rs:130 | CHORDS lane toggle | atomic | NEW `SESSION_RULER {chords}` |
 | device_audio.rs | mic / speaker | host callback | NEW `SESSION_DEVICE_AUDIO` |
 
-**Still to route in the mixer and FX view (view state, rule 4):** the
-mixer's rails (scene, focus selected, take focus width, audience), its
-rack phase folds, rack zoom grip (`closeups.ask`), scroll (wheel,
-overview, pan, rack scroll, fling), and the FX view's lane scroll and
-step and group folds — `MIXER_VIEW {…}`, `FX_VIEW {…}`,
-`SESSION_CLOSEUP`. They are window actions, and `mixer_panel` and
-`fx_view` build for the browser too, so they wait for the browser's
-Action List (rule 7) rather than gain a browser fallback.
+**View state in the mixer and FX view is routed** (rule 4): each view
+action leaves what it asks in a numbered mailbox
+(`view_actions::{MIXER_ASKS, FX_ASKS, CLOSEUP_ASKS}`) that every mixer, FX
+view and close-up host takes up on its next frame, and the control that
+pressed it at once. So the CLI, a model or the page's list in the
+background change the view the same way a click does.
 
 **The FX view's rig is a fixture.** Its blocks come from a dump picked by
 the track's name (`rig::for_track`: Rhythm, Lead under Electric), not
@@ -294,7 +298,7 @@ engine (`RIG_BLOCKS`) is the fix.
 | record_view.rs:345-421 | take ★ / ✕ | DAW facade markers | `TAKES_RANK {by, at|near}` |
 | versions.rs:259, 282, 291 | open a version | `projects::open_next` + Back | `SESSION_OPEN {name}` |
 | collab_bar.rs:404-518 | share, join, together/apart, leave, lock | `collab::*` (an action only when linked) | `SESSION_TOGETHER_*` |
-| closeup.rs:192-267 | close-up tabs, close | signal | NEW `SESSION_CLOSEUP {track, which|none}` |
+| closeup.rs `CloseupLayer` | close-up tabs, Back, swipe, Esc | signal | **routed**: `SESSION_CLOSEUP` |
 | lyrics_panel.rs:526, 544 | lyrics view / layer | signals | NEW `SESSION_LYRICS` |
 | perf_meter.rs:246, 342 | sort, close | signal, `toggle` | `SESSION_PERF_METER {sort?}` |
 | chart_editor.rs:186, 329 | editor toggle, text apply | signal; file write (action only when linked) | `SESSION_PANEL {kind:"chart-editor"}`, `CHART_APPLY` |

@@ -57,7 +57,9 @@ impl Closeup {
 #[derive(Clone)]
 pub struct Closeups {
     pub current: Signal<Option<Closeup>>,
-    asks: Rc<RefCell<Option<Closeup>>>,
+    /// The last `SESSION_CLOSEUP` ask taken up
+    /// (`view_actions::CLOSEUP_ASKS`).
+    seen: Signal<u64>,
     /// The racks' settings: the mixer's strips and a close-up of one
     /// panel edit the same ones.
     pub tone: Rc<Shared>,
@@ -68,25 +70,68 @@ impl Closeups {
     pub fn new() -> Self {
         Self {
             current: Signal::new(None),
-            asks: Rc::default(),
+            seen: Signal::new(0),
             tone: Rc::default(),
         }
     }
 
-    /// A widget's ask for a close-up, carried to the layer by
-    /// [`Closeups::take_ask`].
-    pub fn ask(&self, closeup: Closeup) {
-        *self.asks.borrow_mut() = Some(closeup);
+    /// Show what `SESSION_CLOSEUP` asked, if it asked: called once a
+    /// frame by the host of a widget that can ask.
+    pub fn take_ask(&self) {
+        self.handle().take_actions();
     }
 
-    /// Show what a widget asked for, if it asked: called once a frame by
-    /// the host of a widget that can ask.
-    pub fn take_ask(&self) {
-        let asked = self.asks.borrow_mut().take();
-        if let Some(closeup) = asked {
-            let mut current = self.current;
-            current.set(Some(closeup));
+    /// The close-up's controls' handle: what its buttons hold.
+    #[must_use]
+    pub const fn handle(&self) -> CloseupHandle {
+        CloseupHandle {
+            current: self.current,
+            seen: self.seen,
         }
+    }
+}
+
+/// What the close-up's buttons run its actions through: `Copy`, so each
+/// button holds its own.
+#[derive(Clone, Copy)]
+pub struct CloseupHandle {
+    current: Signal<Option<Closeup>>,
+    seen: Signal<u64>,
+}
+
+impl CloseupHandle {
+    /// What `SESSION_CLOSEUP` asked since the last look: the last of it
+    /// shown, or closed.
+    fn take_actions(mut self) {
+        let was = *self.seen.peek();
+        if !crate::view_actions::pending(&crate::view_actions::CLOSEUP_ASKS, was) {
+            return;
+        }
+        let mut seen = was;
+        let asked = crate::view_actions::since(&crate::view_actions::CLOSEUP_ASKS, &mut seen);
+        self.seen.set(seen);
+        if let Some(last) = asked.into_iter().last() {
+            self.current.set(last);
+        }
+    }
+
+    /// Close it, through `SESSION_CLOSEUP`, and show that at once.
+    pub fn close(self) {
+        let _ = crate::press::press(
+            crate::view_actions::CLOSEUP.id,
+            &serde_json::json!({ "close": true }),
+        );
+        self.take_actions();
+    }
+
+    /// Show `closeup`, through `SESSION_CLOSEUP`, and show it at once.
+    pub fn show(self, closeup: &Closeup) {
+        let Closeup::Rack { guid, name, which } = closeup;
+        let _ = crate::press::press(
+            crate::view_actions::CLOSEUP.id,
+            &serde_json::json!({ "track": guid, "panel": which.slug(), "name": name }),
+        );
+        self.take_actions();
     }
 }
 
@@ -130,9 +175,8 @@ pub fn CloseupLayer(landscape: bool) -> Element {
                     == winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape)
                 && let Some(closeups) = &closeups
             {
-                let mut current = closeups.current;
-                if current.peek().is_some() {
-                    current.set(None);
+                if closeups.current.peek().is_some() {
+                    closeups.handle().close();
                 }
             }
         });
@@ -140,10 +184,12 @@ pub fn CloseupLayer(landscape: bool) -> Element {
     let Some(closeups) = closeups else {
         return rsx! {};
     };
-    let mut current = closeups.current;
+    let current = closeups.current;
     let Some(shown) = current() else {
         return rsx! {};
     };
+    let closer = closeups.handle();
+    let shower = closer;
     let subject = shown.subject().to_owned();
     // The close-ups beside this one: a rack's other panels, as tabs, so
     // going from its EQ to its compressor is one tap rather than out
@@ -189,7 +235,7 @@ pub fn CloseupLayer(landscape: bool) -> Element {
             button {
                 key: "{label}",
                 style: tab_style(on),
-                onclick: move |_| current.set(Some(to.clone())),
+                onclick: move |_| shower.show(&to),
                 "{label}"
             }
         }
@@ -213,7 +259,7 @@ pub fn CloseupLayer(landscape: bool) -> Element {
                 onpointermove: move |e| {
                     if let Some(from) = swipe() && e.data().client_coordinates().y - from > SWIPE_CLOSE {
                         swipe.set(None);
-                        current.set(None);
+                        closer.close();
                     }
                 },
                 onpointerup: move |_| swipe.set(None),
@@ -222,7 +268,7 @@ pub fn CloseupLayer(landscape: bool) -> Element {
                     style: "height:34px; display:flex; align-items:center; gap:6px; padding:0 12px 0 8px; \
                             border-radius:8px; border:1px solid #2a2c31; background:#1c1e22; \
                             color:#e5e7eb; font-family:inherit; font-size:14px; cursor:pointer;",
-                    onclick: move |_| current.set(None),
+                    onclick: move |_| closer.close(),
                     lucide_dioxus::ChevronLeft { size: 18, color: "currentColor" }
                     "Back"
                 }
@@ -267,7 +313,7 @@ pub fn CloseupLayer(landscape: bool) -> Element {
                     onpointermove: move |e| {
                         if let Some(from) = swipe() && e.data().client_coordinates().y - from > SWIPE_CLOSE {
                             swipe.set(None);
-                            current.set(None);
+                            closer.close();
                         }
                     },
                     onpointerup: move |_| swipe.set(None),

@@ -216,7 +216,7 @@ enum Target {
 /// What folds in a lane: a mix phase of a channel's chain, a section of
 /// a guitar's rig, or the effects on the returns it feeds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum Group {
+pub(crate) enum Group {
     Phase(MixPhase),
     Rig(crate::rig::Section),
     /// The returns a lane feeds: shut, each is its strip alone — the
@@ -224,7 +224,32 @@ enum Group {
     Returns,
 }
 
+/// The group `name` means, as `FX_VIEW` takes it: a phase slug, a rig
+/// section (`input`, `pre`, `core`, `mod`, `time`) or `returns`.
+pub(crate) fn group_named(name: &str) -> Option<Group> {
+    let name = name.trim();
+    if name.eq_ignore_ascii_case("returns") {
+        return Some(Group::Returns);
+    }
+    if let Some(section) = crate::rig::Section::ALL
+        .into_iter()
+        .find(|s| s.name().eq_ignore_ascii_case(name))
+    {
+        return Some(Group::Rig(section));
+    }
+    MixPhase::from_slug(name).map(Group::Phase)
+}
+
 impl Group {
+    /// Its name, as `FX_VIEW` takes it ([`group_named`]).
+    fn slug(self) -> String {
+        match self {
+            Self::Phase(phase) => phase.slug().to_owned(),
+            Self::Rig(section) => section.name().to_ascii_lowercase(),
+            Self::Returns => "returns".to_owned(),
+        }
+    }
+
     /// Shut until opened: a rig's Input and Pre, which are set once and
     /// left; everything else is open.
     const fn shut_by_default(self) -> bool {
@@ -416,6 +441,8 @@ struct DeviceRow {
     lanes: usize,
     /// How many tracks past the first the lanes start.
     down: usize,
+    /// The last `FX_VIEW` ask taken up (`view_actions::FX_ASKS`).
+    view_seen: u64,
     /// How far each lane is scrolled sideways, by track.
     scroll: std::collections::HashMap<String, f64>,
     /// Each lane's strip, by track.
@@ -489,6 +516,7 @@ impl DeviceRow {
             layout: crate::layout::Layout::from_env(),
             lanes,
             down: 0,
+            view_seen: 0,
             scroll: std::collections::HashMap::new(),
             strips: RefCell::new(std::collections::HashMap::new()),
             hits: RefCell::new(Hits::default()),
@@ -550,6 +578,35 @@ impl DeviceRow {
             for g in groups {
                 self.folds.insert((lane.clone(), g), g != group);
             }
+        }
+    }
+
+    /// `FX_VIEW` run with `view`, and taken up here at once.
+    fn press_view(&mut self, view: &crate::view_actions::FxView) {
+        let args = facet_json::to_string(view)
+            .ok()
+            .and_then(|j| serde_json::from_str(&j).ok());
+        if let Some(args) = args {
+            let _ = crate::press::press(crate::view_actions::FX_VIEW.id, &args);
+        }
+        self.take_view();
+    }
+
+    /// What `FX_VIEW` asked since the last look, shown.
+    fn take_view(&mut self) {
+        for view in crate::view_actions::since(&crate::view_actions::FX_ASKS, &mut self.view_seen) {
+            if let Some(fold) = view.fold
+                && let Some(group) = group_named(&fold.group)
+            {
+                self.fold(&fold.track, group, fold.solo, fold.every_lane);
+            }
+            if let Some(scroll) = view.scroll {
+                self.scroll.insert(scroll.track, scroll.at.max(0.0));
+            }
+            if let Some(down) = view.down {
+                self.down = usize::try_from(down).unwrap_or(usize::MAX);
+            }
+            self.dirty.set(true);
         }
     }
 
@@ -836,9 +893,15 @@ impl DeviceRow {
             }
         } else if dy < 0.0 {
             // Down through the tracks, a lane at a time.
-            self.down = self.down.saturating_add(1);
+            self.press_view(&crate::view_actions::FxView {
+                down: Some(u32::try_from(self.down.saturating_add(1)).unwrap_or(u32::MAX)),
+                ..Default::default()
+            });
         } else {
-            self.down = self.down.saturating_sub(1);
+            self.press_view(&crate::view_actions::FxView {
+                down: Some(u32::try_from(self.down.saturating_sub(1)).unwrap_or(u32::MAX)),
+                ..Default::default()
+            });
         }
     }
 
@@ -972,7 +1035,16 @@ impl DeviceRow {
             )
         };
         if let Some((guid, group)) = bar {
-            self.fold(&guid, group, e.mods.shift(), e.mods.alt());
+            // `FX_VIEW {fold}`, taken up here at once.
+            self.press_view(&crate::view_actions::FxView {
+                fold: Some(crate::view_actions::FxFold {
+                    track: guid,
+                    group: group.slug(),
+                    solo: e.mods.shift(),
+                    every_lane: e.mods.alt(),
+                }),
+                ..Default::default()
+            });
             return true;
         }
         if let Some(knob) = knob {
@@ -2073,6 +2145,7 @@ impl DeviceRow {
         scale: f64,
     ) -> Scene {
         self.follow();
+        self.take_view();
         self.dirty.set(false);
         let scale = scale.max(f64::EPSILON);
         let (w, h) = (f64::from(width) / scale, f64::from(height) / scale);
@@ -2407,7 +2480,10 @@ impl blitz_dom::node::Widget for DeviceRow {
     }
 
     fn needs_redraw(&self) -> bool {
-        self.dirty.get() || self.animating.get() || self.heard()
+        self.dirty.get()
+            || self.animating.get()
+            || self.heard()
+            || crate::view_actions::pending(&crate::view_actions::FX_ASKS, self.view_seen)
     }
 
     fn paint(

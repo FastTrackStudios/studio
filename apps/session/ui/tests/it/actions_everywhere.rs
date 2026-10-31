@@ -37,6 +37,10 @@ const PATTERNS: &[&str] = &[
     "options::RIPPLE.toggle(",
     "options::RAZOR.toggle(",
     "options::AUTO_CROSSFADE.toggle(",
+    "closeups.ask(",
+    "current.set(None)",
+    "rails.scene=",
+    "self.fold(&",
 ];
 
 /// `(file under src/, pattern, how many, why)`: what is allowed, and why.
@@ -101,6 +105,18 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         1,
         "the racks' worker: a gesture's live edits, then its FX_SET / \
          FX_ENABLE / RIG_BLOCK_SET commits (Edit::Run) in order after them",
+    ),
+    (
+        "mixer_panel.rs",
+        "rails.scene=",
+        1,
+        "MIXER_VIEW taken up (take_view)",
+    ),
+    (
+        "fx_view.rs",
+        "self.fold(&",
+        1,
+        "FX_VIEW taken up (take_view)",
     ),
     // Debt: still to route (the inventory in the design doc).
     ("studio.rs", "applier.send(", 1, "the arrangement's applier"),
