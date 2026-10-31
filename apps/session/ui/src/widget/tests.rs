@@ -20,6 +20,36 @@ fn window(slices: usize) -> (crate::test_song::Song, ArrangementWidget) {
     (song, widget)
 }
 
+/// The engine, for the lanes controls: `TRACK_SHOW_LANES` and
+/// `TRACK_LANE_STEP` answered by the engine's own work over the song
+/// (`comp::show_lanes`, `comp::lane_step`), as the Action List would run
+/// them. Any other action is refused.
+fn answering(widget: &mut ArrangementWidget, song: &crate::test_song::Song) {
+    let raw = song.raw.clone();
+    widget.press_answer = Some(Rc::new(move |id, args| {
+        let track = args.get("track")?.as_str()?;
+        match id {
+            "TRACK_SHOW_LANES" => {
+                let show = args.get("show").and_then(serde_json::Value::as_bool);
+                let (shown, tracks) = crate::comp::show_lanes(&raw.tracks, track, show).ok()?;
+                Some(serde_json::json!({ "shown": shown, "tracks": tracks }))
+            }
+            "TRACK_LANE_STEP" => {
+                let next = args.get("by")?.as_i64()? >= 0;
+                let items_of = |g: &str| raw.items.get(g).cloned().unwrap_or_default();
+                let out = crate::comp::lane_step(&raw.tracks, items_of, track, next).ok()?;
+                let tracks: Vec<serde_json::Value> = out
+                    .tracks
+                    .iter()
+                    .map(|t| serde_json::json!({ "guid": t.guid, "mask": t.mask }))
+                    .collect();
+                Some(serde_json::json!({ "lane": out.lane, "tracks": tracks }))
+            }
+            _ => None,
+        }
+    }));
+}
+
 fn row_of(widget: &ArrangementWidget, guid: &str) -> usize {
     widget
         .rows
@@ -31,6 +61,7 @@ fn row_of(widget: &ArrangementWidget, guid: &str) -> usize {
 #[test]
 fn the_lanes_button_on_a_shut_kit_shows_every_lane() {
     let (song, mut widget) = window(30);
+    answering(&mut widget, &song);
     let kit = row_of(&widget, &song.drums);
     assert_eq!(
         widget.scene.lane_stack(kit),
@@ -64,6 +95,7 @@ fn the_lanes_button_on_a_shut_kit_shows_every_lane() {
 #[test]
 fn the_lanes_button_on_a_track_shows_every_lane() {
     let (song, mut widget) = window(30);
+    answering(&mut widget, &song);
     crate::folds::toggle(&song.drums, false);
     let _ = widget.paint_scene(1600, 900, 1.0);
     let mic = row_of(&widget, &song.mics[0]);
@@ -90,6 +122,7 @@ fn folder(song: &crate::test_song::Song, name: &str) -> String {
 #[test]
 fn the_lanes_button_on_an_open_kit_shows_every_lane_of_its_shut_pieces() {
     let (song, mut widget) = window(30);
+    answering(&mut widget, &song);
     // The kit open, its pieces shut: a row a drum, each a fold.
     crate::folds::toggle(&song.drums, false);
     let pieces: Vec<String> = ["Kick", "Snare", "Toms", "Cymbals", "Rooms"]
@@ -133,6 +166,7 @@ fn the_lanes_button_on_an_open_kit_shows_every_lane_of_its_shut_pieces() {
 fn a_lane_stepped_on_a_shut_kit_folds_the_kit_from_that_lane() {
     crate::folds::show_cuts(true);
     let (song, mut widget) = window(30);
+    answering(&mut widget, &song);
     let kit = row_of(&widget, &song.drums);
     let drawn = |widget: &ArrangementWidget| {
         widget
