@@ -53,33 +53,35 @@ Why:
    focus, measuring layout.
 7. **The browser build runs actions too — no direct-edit fallbacks.**
    Decided 2026-10-30: like the desktop window, the page's controls run
-   named actions on its engine. No new browser-only fallback is added; the
-   ones already written are debt (below). Today the page cannot: it runs
-   its own engine in-process (`web_engine`, daw-standalone on wasm), and
-   `session_engine::actions` and `view_client` are `native` only, so it
-   has neither a list nor a link to one.
+   named actions. The page runs its own engine in-process (`web_engine`,
+   daw-standalone on wasm) with no link to a desktop engine, so it has its
+   own Action List: `session_engine::web_actions` (`web` only). On it:
 
-   The smallest piece that would give it one: build the Action List for
-   `web` with the actions whose work already runs there — the
-   arrangement's gestures first (`arrange_actions::carry_out` is
-   `engine::apply_reported` over the page's facade; only its
-   `view_host::changed` call is native) — and a web `actions::run` that
-   awaits `run_json_async` on the page's executor. `press` and the edit
-   worker's `Edit::Run` then work unchanged, and each fallback below goes
-   as its action joins that list.
+   - the actions both lists carry, one description and one argument shape
+     per id (`session_engine::shared_actions`): `TRACK_SET`, `TRACK_ARM`,
+     `SESSION_SELECT_TRACK`, `SESSION_FOLD`, `TRACK_SHOW_LANES`,
+     `SESSION_PHASE` — their decisions (which track a name means, which
+     folders a fold opens, which lanes show) shared, carried out through
+     the page's facade;
+   - the arrangement's gestures (`arrange_actions`: `ARRANGE_*`,
+     `ITEMS_SELECT`), which were facade edits already;
+   - the window's view actions (`session_ui::view_actions`:
+     `SESSION_OPTION`, `SESSION_MIXER_FX`), added by the page's root
+     (`press::register_page_actions`).
 
-### Browser fallbacks: debt to remove
+   A control runs one with `crate::press::press` (the desktop's list
+   through `window::press`, the page's in the background), or queues it
+   among its edits as `Edit::Run`, which the page's edit worker runs in
+   order with them. An action the page's list lacks is refused there and
+   said once (`control action refused`), never stood in for.
 
-| file | fallback | goes when the page's list has |
+### Browser: what the page's list still lacks
+
+| control | action it runs | on the page now |
 |---|---|---|
-| widget.rs `act` | track buttons send their preview `Edit` | `TRACK_SET`, `TRACK_ARM`, `SESSION_SELECT_TRACK` |
-| widget.rs `act` | lanes button sets `lanes::set_expanded` | `TRACK_SHOW_LANES` |
-| widget.rs `act` | folder button `folds::toggle` | `SESSION_FOLD` |
-| widget.rs rename | `Edit::Rename` | `TRACK_SET {name}` |
-| widget.rs `commit_edits` | a gesture's edits sent bracketed | `ARRANGE_*`, `ITEMS_SELECT` |
-| widget.rs `turn_released` | (none: the live turn only) | `TRACK_SET` |
-| arrange_edit.rs `ToggleSnap` | `options::SNAP.toggle()` | `SESSION_OPTION` |
-| mixer_panel.rs, shell.rs, fx_view.rs | `folds::toggle`, `mode_phases::choose`, `set_racks_shown`, strip `applier.send` | `SESSION_FOLD`, `SESSION_PHASE`, `SESSION_MIXER_FX`, `TRACK_SET` |
+| track panel lane arrows | `TRACK_LANE_STEP` | refused (it was a no-op there before) |
+| toolbar grouping | `SESSION_GROUPING` | the option flipped and `options::grouping_changed` (toolbar.rs) — debt |
+| everything not yet routed on the desktop either | — | as on the desktop |
 
 ## The guard
 

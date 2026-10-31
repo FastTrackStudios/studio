@@ -3388,12 +3388,9 @@ impl ArrangementWidget {
                 }
                 _ => None,
             };
-            #[cfg(feature = "native")]
             if let Some(args) = args {
                 self.commit("TRACK_SET", args.to_string());
             }
-            #[cfg(not(feature = "native"))]
-            let _ = args;
         }
         self.touch(turn, false);
     }
@@ -3536,24 +3533,10 @@ impl ArrangementWidget {
             // or only the one that plays again.
             C::LaneShow | C::LaneName => {
                 let show = !crate::lanes::opened(track);
-                let pressed = self.press_control(
+                let _ = self.press_control(
                     "TRACK_SHOW_LANES",
                     &serde_json::json!({ "track": guid, "show": show }),
                 );
-                #[cfg(feature = "native")]
-                let _ = pressed;
-                // The browser build has no Action List: the view, here.
-                #[cfg(not(feature = "native"))]
-                if pressed.is_none() {
-                    let under = crate::lanes::speaks_for(
-                        &self.tracks,
-                        track,
-                        self.scene.lane_tracks(spot.row),
-                    );
-                    let opened =
-                        crate::lanes::opened_with_folders(&self.project.tracks, track, &under);
-                    let _ = crate::lanes::set_expanded(&opened, Some(show));
-                }
                 return;
             }
             C::LanePrev | C::LaneNext => {
@@ -3594,13 +3577,10 @@ impl ArrangementWidget {
             C::Folder => {
                 // Shut, a click opens it; open, it shuts.
                 let open = crate::folds::shut(&self.rows, spot.row);
-                #[cfg(feature = "native")]
-                crate::window::press(
+                let _ = self.press_control(
                     "SESSION_FOLD",
                     &serde_json::json!({ "track": guid, "open": open }),
                 );
-                #[cfg(not(feature = "native"))]
-                crate::folds::toggle(&guid, !open);
                 return;
             }
             // What the track can automate, to show in lanes: a menu, whose
@@ -3625,32 +3605,19 @@ impl ArrangementWidget {
         // event arrives it agrees, and if the action refuses, the next
         // update corrects it.
         self.assume(&edit);
-        #[cfg(feature = "native")]
-        crate::window::press(id, &args);
-        // The browser build has no Action List: the edit goes as it is.
-        #[cfg(not(feature = "native"))]
-        {
-            let _ = (id, args);
-            self.edits.borrow_mut().push(edit);
-        }
+        let _ = self.press_control(id, &args);
     }
 
     /// A panel control's action run through the Action List
-    /// ([`crate::window::press`]); what it said. The browser build, which
-    /// has no list, does nothing.
+    /// ([`crate::press::press`]: the desktop's, or the page's); what it
+    /// said, where the answer is at hand.
     #[allow(clippy::unused_self)]
     fn press_control(&self, id: &str, args: &serde_json::Value) -> Option<serde_json::Value> {
         #[cfg(test)]
         if let Some(answer) = &self.press_answer {
             return answer(id, args);
         }
-        #[cfg(feature = "native")]
-        return crate::window::press(id, args);
-        #[cfg(not(feature = "native"))]
-        {
-            let _ = (id, args);
-            None
-        }
+        crate::press::press(id, args)
     }
 
     /// Where a point in the widget falls, as the window's hit test
@@ -4100,6 +4067,16 @@ impl ArrangementWidget {
                 }
                 continue;
             }
+            // The snap key, where no list ran it first (the page has no
+            // `window::through_list`): its action.
+            if action == crate::keys::Action::ToggleSnap {
+                let _ = self.press_control(
+                    crate::view_actions::OPTION.id,
+                    &serde_json::json!({ "option": "snap" }),
+                );
+                handled = true;
+                continue;
+            }
             // A paste is the window's own (no action names the key): it
             // commits as the gesture it is (`ARRANGE_COPY`).
             if action == crate::keys::Action::PasteItems {
@@ -4211,7 +4188,6 @@ impl ArrangementWidget {
     /// order with the edits queued before it ([`Self::commit`]); `label`
     /// the undo step they make.
     fn commit_edits(&self, label: Option<&str>, edits: Vec<crate::engine::Edit>) {
-        #[cfg(feature = "native")]
         match session_engine::arrange_actions::gesture(label, &edits) {
             Some((id, args)) => self.commit(id, args),
             // Not an arrangement edit (nothing a gesture makes today):
@@ -4225,23 +4201,13 @@ impl ArrangementWidget {
             }
             None => {}
         }
-        // The browser build has no Action List: the edits go as they are,
-        // bracketed as one undo step.
-        #[cfg(not(feature = "native"))]
-        {
-            let open = label.map(|l| crate::engine::Edit::BeginUndo(l.to_owned()));
-            let close = label.map(|l| crate::engine::Edit::EndUndo(l.to_owned()));
-            self.edits
-                .borrow_mut()
-                .extend(open.into_iter().chain(edits).chain(close));
-        }
     }
 
     /// A control's named action run on the engine in its place among the
     /// edits: after every edit queued before it (a drag's live edits, the
     /// undo step around them), before any after (`Edit::Run`, which the
-    /// edit worker runs through the Action List).
-    #[cfg(feature = "native")]
+    /// edit worker runs through the Action List: the desktop's, or the
+    /// page's).
     fn commit(&self, id: &str, args: String) {
         self.edits
             .borrow_mut()
@@ -4399,10 +4365,7 @@ impl ArrangementWidget {
                     self.scene.forget_panel();
                     // Named through `TRACK_SET`, as a model renames one.
                     let args = serde_json::json!({ "track": guid, "name": name });
-                    if self.press_control("TRACK_SET", &args).is_none() {
-                        #[cfg(not(feature = "native"))]
-                        self.edits.borrow_mut().push(edit);
-                    }
+                    let _ = self.press_control("TRACK_SET", &args);
                 }
             }
             Key::Escape => self.renaming = None,

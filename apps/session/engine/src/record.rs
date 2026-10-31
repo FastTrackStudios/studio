@@ -12,20 +12,13 @@
 //! The record button, the record key (`SESSION_TOGGLE_RECORD`, carried out
 //! by the window) and a model all come here: one path.
 
+pub use crate::shared_actions::TRACK_ARM;
+use crate::shared_actions::{ArmArg, ArmOut, input_of};
 use architect::action::{ActionList, Effect};
 use daw::service::{ProjectContext, TrackRef, Tracks};
 use daw_proto::RecordInput;
 use daw_proto::transport::service::Transport as TransportService;
 use facet::Facet;
-
-pub static TRACK_ARM: architect::action::ActionMeta = crate::actions::meta(
-    "TRACK_ARM",
-    "track_arm",
-    "Arm a track",
-    "Arm `track` (a path, name or GUID) to record, or disarm it: `on` true or false, toggled when left out. `input`: the hardware input it records, from 1 (`audio 1` in SESSION_TRACKS) — when arming a track that records nothing yet, input 1. Says what it is armed to now.",
-    "Record",
-    "",
-);
 
 pub static TRANSPORT_RECORD: architect::action::ActionMeta = crate::actions::meta(
     "TRANSPORT_RECORD",
@@ -35,24 +28,6 @@ pub static TRANSPORT_RECORD: architect::action::ActionMeta = crate::actions::met
     "Transport",
     "",
 );
-
-/// Which track, armed or not, to what.
-#[derive(Facet)]
-struct ArmArg {
-    track: String,
-    on: Option<bool>,
-    /// The hardware input, from 1.
-    input: Option<u32>,
-}
-
-/// What a track is armed to now.
-#[derive(Facet)]
-struct ArmOut {
-    track: String,
-    armed: bool,
-    /// The hardware input it records, from 1, when it records one.
-    input: Option<u32>,
-}
 
 /// Start or stop recording; toggled when `on` is left out.
 #[derive(Facet)]
@@ -81,14 +56,6 @@ struct TakeRow {
     source: String,
     position: f64,
     length: f64,
-}
-
-/// The hardware input `input` records, from 1, if it records one.
-const fn input_of(input: RecordInput) -> Option<u32> {
-    match input {
-        RecordInput::Audio { channel } => channel.checked_add(1),
-        RecordInput::None | RecordInput::Midi { .. } | RecordInput::Raw(_) => None,
-    }
 }
 
 fn arm(a: &ArmArg) -> Result<ArmOut, String> {

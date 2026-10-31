@@ -726,7 +726,7 @@ impl DeviceRow {
             crate::mcp::Control::Pan => serde_json::json!({ "track": guid, "pan": track.pan }),
             _ => return,
         };
-        let _ = crate::mcp::run(&crate::mcp::Press {
+        crate::mcp::run(&crate::mcp::Press {
             id: "TRACK_SET",
             args,
             preview: crate::engine::Edit::Done(0),
@@ -759,11 +759,7 @@ impl DeviceRow {
         };
         if let Some(press) = press {
             crate::mixer_panel::predict(&mut self.tracks, &press.preview);
-            if !crate::mcp::run(&press)
-                && let Some(applier) = &self.applier
-            {
-                applier.send(press.preview);
-            }
+            crate::mcp::run(&press);
         }
         true
     }

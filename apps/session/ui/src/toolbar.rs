@@ -246,17 +246,10 @@ pub fn MainToolbar(
         Toggle::Metronome => {
             if let Some(guid) = click.clone() {
                 // The click track muted or not, through `TRACK_SET`.
-                #[cfg(feature = "native")]
-                crate::window::press(
+                let _ = crate::press::press(
                     "TRACK_SET",
                     &serde_json::json!({ "track": guid, "mute": metronome() }),
                 );
-                // The browser build has no Action List.
-                #[cfg(not(feature = "native"))]
-                edits
-                    .0
-                    .borrow_mut()
-                    .push(crate::engine::Edit::ToggleMute(guid));
                 metronome.toggle();
             }
         }
@@ -277,10 +270,9 @@ pub fn MainToolbar(
                 match other.option_name() {
                     // `SESSION_OPTION` switches it (what `watch` and the
                     // CLI see); grouping is `SESSION_GROUPING`'s, below.
-                    #[cfg(feature = "native")]
                     Some(name) => {
-                        crate::window::press(
-                            "SESSION_OPTION",
+                        let _ = crate::press::press(
+                            crate::view_actions::OPTION.id,
                             &serde_json::json!({ "option": name, "on": now }),
                         );
                     }

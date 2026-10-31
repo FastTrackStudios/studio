@@ -1382,13 +1382,9 @@ impl Editor {
                 as_one_step("Delete items", from, effects);
                 effects.push(Effect::ReRecord);
             }
-            // Natively the key runs SESSION_OPTION through the list
-            // (`window::through_list`) and never comes here; the browser
-            // has no list.
-            Action::ToggleSnap => {
-                #[cfg(not(feature = "native"))]
-                crate::options::SNAP.toggle();
-            }
+            // The key runs SESSION_OPTION (`window::through_list`, or the
+            // widget's own on the page) and never comes here.
+            Action::ToggleSnap => {}
             Action::CopyItems => {
                 // The selected items, a folded row's standing for the
                 // mics under it, kept relative to the earliest.

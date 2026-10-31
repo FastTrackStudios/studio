@@ -49,48 +49,30 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         "the docks chord, in through_list",
     ),
     (
-        "window.rs",
+        "view_actions.rs",
         "set_racks_shown(",
         1,
         "SESSION_MIXER_FX's handler",
     ),
-    // The browser build has no Action List: its fallback beside the action.
-    (
-        "widget.rs",
-        "lanes::set_expanded(",
-        1,
-        "browser fallback of TRACK_SHOW_LANES",
-    ),
-    (
-        "widget.rs",
-        "folds::toggle(",
-        1,
-        "browser fallback of SESSION_FOLD",
-    ),
-    (
-        "mixer_panel.rs",
-        "folds::toggle(",
-        1,
-        "browser fallback of SESSION_FOLD",
-    ),
+    // Live previews (rule 3): what a continuous gesture sends while it
+    // moves, committed through its action when it ends.
     (
         "fx_view.rs",
         "applier.send(",
-        2,
-        "the strip fader's live turn (TRACK_SET on release, commit_turn); \
-         browser fallback of a strip click",
+        1,
+        "the strip fader's live turn (TRACK_SET on release, commit_turn)",
     ),
     (
         "mixer_panel.rs",
         "applier.send(",
         1,
-        "live drag preview and the browser fallback",
+        "the fader's live drag (TRACK_SET on release, commit_turn)",
     ),
     (
         "mixer_panel.rs",
         "from_mixer.borrow_mut().push(",
         1,
-        "live drag preview and the browser fallback",
+        "the fader's live drag (TRACK_SET on release, commit_turn)",
     ),
     // widget.rs: a gesture commits as its named action (`commit_edits` →
     // `ARRANGE_*` / `ITEMS_SELECT`, `turn_released` → `TRACK_SET`), pushed
@@ -99,25 +81,19 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
     (
         "widget.rs",
         "edits.borrow_mut().push(",
-        9,
+        7,
         "the commit lane itself (Edit::Run); an action's own work (visibility, \
          three Done barriers an engine action waits on); the track knob's live \
-         turn and its touch (TRACK_SET on release); two browser fallbacks",
+         turn and its touch (TRACK_SET on release)",
     ),
     (
         "widget.rs",
         "edits.borrow_mut().extend(",
-        7,
+        6,
         "an action's own work (a key's through the list, the engine's asked); \
-         commit_edits' browser fallback and its edits no action names (none \
-         today, warned); debt: the automation lanes' press, drag, release and \
-         cancel (AUTOMATION_ITEM / AUTOMATION_WRITE)",
-    ),
-    (
-        "arrange_edit.rs",
-        "options::SNAP.toggle(",
-        1,
-        "browser fallback of SESSION_OPTION (the key runs it)",
+         commit_edits' edits no action names (none today, warned); debt: the \
+         automation lanes' press, drag, release and cancel (AUTOMATION_ITEM / \
+         AUTOMATION_WRITE)",
     ),
     (
         "tone.rs",
@@ -137,8 +113,8 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
     (
         "mixer_panel.rs",
         "mode_phases::choose(",
-        2,
-        "the first sync of the shell's phase; browser fallback of SESSION_PHASE",
+        1,
+        "the first sync of the shell's phase",
     ),
     ("mixer_panel.rs", "set_racks_shown(", 1, "its definition"),
     (
@@ -146,18 +122,6 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         "folds::set_tops(",
         1,
         "fold every folder: SESSION_FOLD_TOPS",
-    ),
-    (
-        "shell.rs",
-        "mode_phases::choose(",
-        1,
-        "browser fallback of SESSION_PHASE",
-    ),
-    (
-        "shell.rs",
-        "set_racks_shown(",
-        1,
-        "browser fallback of SESSION_MIXER_FX",
     ),
     ("shell.rs", "options::LOCKING.set(", 1, "lock: SESSION_LOCK"),
     (

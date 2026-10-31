@@ -199,6 +199,8 @@ pub use session_engine::wave_detail;
 pub use session_engine::web_audio;
 #[cfg(feature = "web")]
 pub use session_engine::web_engine;
+pub mod press;
+pub mod view_actions;
 #[cfg(feature = "web")]
 pub mod web_host;
 pub mod which_key;
