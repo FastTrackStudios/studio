@@ -175,7 +175,10 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         Action::Redo => (crate::actions::REDO.id, String::new()),
         #[cfg(not(feature = "native"))]
         Action::Undo | Action::Redo => return None,
-        Action::ToggleSnap => (OPTION.id, r#"{"option":"snap"}"#.to_owned()),
+        Action::ToggleSnap => (
+            crate::view_actions::OPTION.id,
+            r#"{"option":"snap"}"#.to_owned(),
+        ),
         // The window's own: its clipboard is the arrangement's. A paste
         // commits as the gesture it is (`ARRANGE_COPY`, `settle`).
         Action::CopyItems | Action::PasteItems => return None,
@@ -507,22 +510,6 @@ static PERF_METER: ActionMeta = meta(
     "",
 );
 
-static MIXER_FX: ActionMeta = meta(
-    "SESSION_MIXER_FX",
-    "mixer_fx",
-    "Mixer FX racks",
-    "Show or hide the FX racks over the mixer's faders (`shown`: true or false; left out, the other way): hidden, the faders have the panel's whole height. Kept across launches.",
-    "View",
-    "",
-);
-
-/// Shown or hidden, or (left out) the other way.
-#[derive(Facet)]
-struct MixerFxArg {
-    #[facet(default)]
-    shown: Option<bool>,
-}
-
 static TOGGLE_EDITOR: ActionMeta = meta(
     "SESSION_TOGGLE_EDITOR",
     "toggle_editor",
@@ -655,35 +642,7 @@ enum Zoom {
 /// The scenes a scene action can name: the window's `&'static` slugs.
 const SCENES: &[&str] = &["overview", "overview-top"];
 
-static OPTION: ActionMeta = meta(
-    "SESSION_OPTION",
-    "option",
-    "Editing option",
-    "Turn one of the arrangement's editing options on or off — `option`: `snap` (to the grid), `grid` (its lines), `ripple` (later items follow an edit, per track), `razor` (the razor tool), `auto_crossfade` (overlapping items crossfade), `lock` (drags scroll and move nothing); `on` true or false, the other way when left out. The main toolbar's switches. Says whether it is on now.",
-    "Options",
-    "",
-);
-
-/// Which option, and on or off (left out: the other way).
-#[derive(Facet)]
-struct OptionArg {
-    option: String,
-    #[facet(default)]
-    on: Option<bool>,
-}
-
 fn register_window(list: &ActionList) -> Result<(), architect::action::ActionError> {
-    list.register(&OPTION, Effect::Mutating, |a: OptionArg| {
-        let (name, option) = crate::options::named(&a.option).ok_or_else(|| {
-            format!(
-                "no option {:?}: snap, grid, ripple, razor, auto_crossfade or lock (grouping is SESSION_GROUPING)",
-                a.option
-            )
-        })?;
-        let on = a.on.unwrap_or_else(|| !option.get());
-        option.set(on);
-        Ok::<_, String>(format!("{name}: {}", if on { "on" } else { "off" }))
-    })?;
     list.register(&WINDOW_STATE, Effect::ReadOnly, |(): ()| {
         let mode = crate::actions::shown_mode();
         Ok(WindowState {
@@ -698,18 +657,6 @@ fn register_window(list: &ActionList) -> Result<(), architect::action::ActionErr
     list.register(&QUANTIZE_PANEL, Effect::Mutating, |(): ()| {
         crate::quantize_panel::ask();
         Ok("the Quantize panel shown, or hidden if it was".to_owned())
-    })?;
-    list.register(&MIXER_FX, Effect::Mutating, |a: MixerFxArg| {
-        let on = a
-            .shown
-            .unwrap_or_else(|| !crate::mixer_panel::racks_shown());
-        crate::mixer_panel::set_racks_shown(on);
-        Ok(if on {
-            "the mixer's FX racks shown"
-        } else {
-            "the mixer's FX racks hidden"
-        }
-        .to_owned())
     })?;
     list.register(&PERF_METER, Effect::Mutating, |(): ()| {
         crate::perf_meter::toggle();
@@ -904,6 +851,7 @@ fn register_view(list: &ActionList) -> Result<(), architect::action::ActionError
 ///
 /// The first registration the list refuses (a duplicate id).
 pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    crate::view_actions::register(list)?;
     register_window(list)?;
     register_view(list)?;
     crate::frames::register(list)?;
