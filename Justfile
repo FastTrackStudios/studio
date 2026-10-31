@@ -823,8 +823,9 @@ test:
     pkgs=(); for p in {{test_packages}}; do pkgs+=(-p "$p"); done
     cargo nextest run "${pkgs[@]}"
 
-# Tests built the way the dev loop builds the app (scripts/dev-herdr.sh): the
-# dev profile with studio-desktop's `cli,signal-keys-rig`, so cargo unifies
+# Tests built the way the dev loop builds the app (scripts/dev-herdr.sh): dx's
+# `desktop-dev` profile for the host triple, with studio-desktop's
+# `cli,signal-keys-rig`, so cargo unifies
 # the named crates' features with the app's and the tests reuse the window's
 # and engine's artifacts instead of recompiling them another way.
 #   just dev-test session-engine session-ui -- comp
@@ -832,7 +833,9 @@ test:
 dev-test *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
-    pkgs=(-p studio-desktop --features studio-desktop/cli,studio-desktop/signal-keys-rig)
+    # As dx builds the window: `desktop-dev` for the host triple.
+    host="$(rustc -vV | sed -n 's/^host: //p')"
+    pkgs=(--cargo-profile desktop-dev --target "$host" -p studio-desktop --features studio-desktop/cli,studio-desktop/signal-keys-rig)
     rest=()
     only=""
     seen=0

@@ -1344,6 +1344,15 @@ opt-level = 3
 [profile.wasm-release.package.symphonia-codec-vorbis]
 opt-level = 3
 
+# dx's own profile: `dx serve` builds the window as `desktop-dev` with an
+# explicit `--target`, so its artifacts land in
+# target/<host>/desktop-dev. The dev loop builds the engine and the tests the
+# same way (scripts/dev-herdr.sh, `just dev-test`) so all three share one set
+# of compiled crates. Declared here so cargo knows it outside dx; it is the
+# dev profile, nothing else.
+[profile.desktop-dev]
+inherits = "dev"
+
 [profile.dev-dbg]
 inherits = "dev"
 debug = 2
