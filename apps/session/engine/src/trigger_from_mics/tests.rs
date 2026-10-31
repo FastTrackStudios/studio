@@ -1,6 +1,8 @@
 use daw_proto::{HitMark, TakeMarker};
 
-use super::{CLICK_PEAK, clicks, dead_trigger_hits, made_name};
+use super::{
+    CLICK_PEAK, Placed, clicks, dead_trigger_hits, made_name, merged, sure_hits, uncovered,
+};
 
 fn hit(piece: &str, at: f64, trigger: bool, mic: bool, confidence: f64, bleed: bool) -> TakeMarker {
     TakeMarker {
@@ -77,4 +79,52 @@ fn the_made_trigger_is_named_for_the_one_it_stands_for() {
         made_name("/elsewhere/Set In Stone/Media/46-Trig.wav"),
         "46-Trig (from mics).wav"
     );
+}
+
+/// The comp plays a take with no trigger (its toms recorded in another
+/// session) from 72.3 s for 18.7 s, in slices on the EDIT lane (35), and
+/// its whole take on the COMP lane (0): those, and only those, have no
+/// trigger item. A slice the trigger covers but for a seam's hair has one.
+#[test]
+fn the_mic_items_with_no_trigger_item_on_their_lane_are_found() {
+    let edit = Some(35);
+    let comp = Some(0);
+    let mic: Vec<Placed> = vec![
+        (edit, 60.0, 72.3),  // a take with its trigger
+        (edit, 72.3, 80.0),  // the take with none…
+        (edit, 80.0, 91.0),  // …in two slices
+        (comp, 72.3, 91.0),  // and on the comp lane
+        (edit, 91.0, 100.0), // a trigger again
+    ];
+    let trig: Vec<Placed> = vec![
+        (edit, 60.0, 72.3),
+        // On another lane: not the EDIT lane's trigger.
+        (Some(7), 72.3, 91.0),
+        (edit, 91.002, 100.0),
+    ];
+    assert_eq!(uncovered(&mic, &trig), [1, 2, 3]);
+    assert_eq!(merged(&[(72.3, 80.0), (80.0, 91.0)]), [(72.3, 91.0)]);
+    assert_eq!(
+        merged(&[(1.0, 2.0), (5.0, 5.85)]),
+        [(1.0, 2.0), (5.0, 5.85)],
+        "stretches apart stay apart"
+    );
+}
+
+/// A take with no trigger clicks at its mic's sure hits and at every hit
+/// a hand placed or checked; not at bleed, doubted hits or other drums'.
+#[test]
+fn a_take_with_no_trigger_clicks_at_its_sure_and_hand_placed_hits() {
+    let mut placed = hit("Tom 3", 9.0, false, false, 1.0, false);
+    if let Some(h) = placed.hit.as_mut() {
+        h.origin = daw_proto::MarkOrigin::Manual;
+    }
+    let markers = vec![
+        hit("Tom 3", 8.0, false, true, 0.8, false),
+        hit("Tom 3", 7.0, false, true, 0.6, true),
+        hit("Tom 3", 6.0, false, true, 0.2, false),
+        hit("Tom 2", 5.0, false, true, 0.9, false),
+        placed,
+    ];
+    assert_eq!(sure_hits(&markers, "Tom 3"), [8.0, 9.0]);
 }
