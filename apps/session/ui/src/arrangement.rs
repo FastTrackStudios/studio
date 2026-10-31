@@ -2354,7 +2354,7 @@ pub fn hits_overlay(
             font,
             (y0, y1),
             (&x_of, (from, to)),
-            (&overlay.comps, takes, picked),
+            (&overlay.comps, picked),
             (&overlay.kept, &overlay.takes.by_pass, font),
         );
         let foot = if comps_drawn {
@@ -2505,74 +2505,28 @@ pub fn comp_band(scene: &Arrangement, view: Viewport, oy: f64, row: usize) -> Op
     (y1 - y0 >= COMP_STRIP * 6.0).then_some((y1 - COMP_STRIP, y1))
 }
 
-/// Which take the comp plays where, along a row's foot: each take's span
-/// in its colour ([`take_color`], the mics' shared name of it), each seam
-/// between two takes a dark tick, the take's name over a span with room
-/// for it; the stretches `picked` (selected to comp, T / Shift+T) ringed
-/// in white, those `kept` (COMP_KEEP) barred in gold along its top.
+/// The comp's marks along a row's foot: the stretches `picked` (selected
+/// to comp, T / Shift+T) ringed in white, those `kept` (COMP_KEEP) barred
+/// in gold, each take's ranks and notes. Which take plays where is the
+/// items' own body colour, so the strip paints no take spans of its own.
 /// Whether the row had room for the strip.
 fn comp_strip(
     painter: &mut impl PaintScene,
     font: &crate::text::Font,
     (y0, y1): (f64, f64),
     (x_of, (from, to)): (&impl Fn(f64) -> f64, (f64, f64)),
-    (comps, takes, picked): (
-        &[crate::hit_overlay::CompSpan],
-        &crate::take_colors::TakeColors,
-        &[(f64, f64)],
-    ),
+    (comps, picked): (&[crate::hit_overlay::CompSpan], &[(f64, f64)]),
     (kept, ranked, _font): (
         &[(f64, f64)],
         &std::collections::HashMap<String, Vec<crate::hit_overlay::TakeMark>>,
         &crate::text::Font,
     ),
 ) -> bool {
-    /// The name's size, and the room a span needs to carry it, pixels.
-    const SIZE: f32 = 8.0;
-    const ROOM: f64 = 70.0;
     if comps.is_empty() || y1 - y0 < COMP_STRIP * 6.0 {
         return false;
     }
     let (top, base) = (y1 - COMP_STRIP, y1);
-    let seam_ink = Color::from_rgba8(0x10, 0x10, 0x12, 0xe0);
     let first = comps.partition_point(|c| c.end < from);
-    let mut last_take: Option<&str> = None;
-    for span in comps
-        .get(first..)
-        .unwrap_or_default()
-        .iter()
-        .take_while(|c| c.start <= to)
-    {
-        let (x0, x1) = (x_of(span.start), x_of(span.end).max(x_of(span.start) + 1.0));
-        let ink = takes
-            .color_of(&span.take)
-            .unwrap_or_else(|| take_color(&span.take));
-        painter.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            ink.multiply_alpha(0.85),
-            None,
-            &Rect::new(x0, top, x1, base),
-        );
-        // A seam: another take begins here.
-        if last_take.is_some_and(|t| t != span.take) {
-            painter.fill(
-                Fill::NonZero,
-                Affine::IDENTITY,
-                seam_ink,
-                None,
-                &Rect::new(x0 - 1.0, top - 2.0, x0 + 1.0, base),
-            );
-        }
-        last_take = Some(span.take.as_str());
-        if x1 - x0 >= ROOM {
-            let called = takes.name_of(&span.take).map_or_else(
-                || short_take(&span.take).to_owned(),
-                |color| format!("{color} · {}", short_take(&span.take)),
-            );
-            crate::tcp::glyphs(painter, font, ink, &called, x0 + 3.0, top - 2.0, SIZE);
-        }
-    }
     // A stretch kept as comped: a gold bar along the strip's top.
     let gold = Color::from_rgba8(0xf2, 0xc1, 0x4e, 0xff);
     for &(a, b) in kept.iter().filter(|(a, b)| *b >= from && *a <= to) {
@@ -2807,16 +2761,6 @@ pub fn take_marks_overlay<'a>(
             take_mark(painter, font, (left + 2.0, y0.max(top_of_lanes) + 7.0), m);
         }
     }
-}
-
-/// A take's name with the mic's number and name set aside
-/// (`65-In-260907_1321-01` → `260907_1321-01`): what every mic of the take
-/// shares, and what a comp's take is told by.
-fn short_take(name: &str) -> &str {
-    name.split_once('-')
-        .filter(|(n, _)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
-        .and_then(|(_, rest)| rest.split_once('-'))
-        .map_or(name, |(_, take)| take)
 }
 
 fn stretch_strip<'a>(
