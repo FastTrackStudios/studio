@@ -823,6 +823,45 @@ test:
     pkgs=(); for p in {{test_packages}}; do pkgs+=(-p "$p"); done
     cargo nextest run "${pkgs[@]}"
 
+# Tests built the way the dev loop builds the app (scripts/dev-herdr.sh): the
+# dev profile with studio-desktop's `cli,signal-keys-rig`, so cargo unifies
+# the named crates' features with the app's and the tests reuse the window's
+# and engine's artifacts instead of recompiling them another way.
+#   just dev-test session-engine session-ui -- comp
+[positional-arguments]
+dev-test *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pkgs=(-p studio-desktop --features studio-desktop/cli,studio-desktop/signal-keys-rig)
+    rest=()
+    only=""
+    seen=0
+    for a in "$@"; do
+        if [ "$a" = "--" ]; then seen=1; continue; fi
+        if [ "$seen" = 0 ]; then
+            pkgs+=(-p "$a")
+            only="${only:+$only | }package($a)"
+        else
+            rest+=("$a")
+        fi
+    done
+    # studio-desktop is named only for its features: run just the crates
+    # asked for. nextest ORs several -E, so a filter given is ANDed in.
+    args=()
+    i=0
+    while [ "$i" -lt "${#rest[@]}" ]; do
+        a="${rest[$i]}"
+        if [ "$a" = "-E" ] && [ -n "$only" ] && [ $((i + 1)) -lt "${#rest[@]}" ]; then
+            i=$((i + 1))
+            args+=(-E "($only) & (${rest[$i]})")
+            only=""
+        else
+            args+=("$a")
+        fi
+        i=$((i + 1))
+    done
+    cargo nextest run "${pkgs[@]}" ${only:+-E "$only"} "${args[@]}"
+
 # Doctests only — nextest can't run them (libtest owns doctests).
 test-doc:
     cargo test --workspace --doc
