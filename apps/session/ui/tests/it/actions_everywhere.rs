@@ -77,7 +77,8 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         "fx_view.rs",
         "applier.send(",
         2,
-        "browser fallback; live fader preview (debt: TRACK_SET on release)",
+        "the strip fader's live turn (TRACK_SET on release, commit_turn); \
+         browser fallback of a strip click",
     ),
     (
         "mixer_panel.rs",
@@ -118,13 +119,14 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         1,
         "browser fallback of SESSION_OPTION (the key runs it)",
     ),
-    // Debt: still to route (the inventory in the design doc).
     (
         "tone.rs",
         "applier.send(",
         1,
-        "the rack sink: FX_SET / FX_ENABLE",
+        "the racks' worker: a gesture's live edits, then its FX_SET / \
+         FX_ENABLE / RIG_BLOCK_SET commits (Edit::Run) in order after them",
     ),
+    // Debt: still to route (the inventory in the design doc).
     ("studio.rs", "applier.send(", 1, "the arrangement's applier"),
     (
         "mix_guide.rs",

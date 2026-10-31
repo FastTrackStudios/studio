@@ -108,7 +108,7 @@ signal-keys-rig = ["signal-guitar", "dep:keys"]
 signal-drums-rig = ["signal-guitar", "dep:drums"]
 # The e-kit in the app itself, as the drums.
 signal-ekit-rig = ["signal-guitar", "dep:ekit"]
-signal = ["signal-guitar", "guitar?/mcp", "signal-drums-rig", "signal-ekit-rig", "dep:signal-content-library", "dep:drums", "dep:keys", "dep:midi", "dep:synth", "synth?/ui", "dep:launcher", "dep:signal-synth-rig", "dep:sampler", "dep:signal-space", "dep:ekit", "tone3000", "dep:axum", "dep:tower-http"]
+signal = ["signal-guitar", "guitar?/mcp", "signal-drums-rig", "signal-ekit-rig", "dep:signal-content-library", "dep:drums", "dep:keys", "dep:midi", "dep:synth", "synth?/ui", "dep:launcher", "dep:signal-synth-rig", "dep:sampler", "dep:signal-space", "dep:ekit", "tone3000", "dep:axum", "dep:tower-http", "session-desktop?/signal"]
 # TONE3000 and the FastTrackStudio account in the app itself (the iPad's
 # embedded engine): search, download and import captures, signing in
 # through the account. Part of `signal`; the iOS build adds it on its own.

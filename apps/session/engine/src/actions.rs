@@ -5438,6 +5438,21 @@ mod presses {
         assert!(missing.is_empty(), "not on the list: {missing:?}");
     }
 
+    /// The FX view's rig blocks and racks commit through these.
+    #[test]
+    fn the_fx_views_commits_are_on_the_list() {
+        let ids: &[&str] = &[
+            "FX_SET",
+            "FX_ENABLE",
+            #[cfg(feature = "signal")]
+            "RIG_BLOCK_SET",
+            #[cfg(feature = "signal")]
+            "RIG_BLOCKS",
+        ];
+        let missing: Vec<&&str> = ids.iter().filter(|id| list().info(id).is_none()).collect();
+        assert!(missing.is_empty(), "not on the list: {missing:?}");
+    }
+
     #[test]
     fn every_transport_press_runs_an_action() {
         for command in [
