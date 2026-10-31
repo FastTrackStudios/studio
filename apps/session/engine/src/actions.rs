@@ -834,6 +834,7 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     crate::comp_keep::register(list)?;
     crate::comp_keep::register_main(list)?;
     crate::item_actions::register(list)?;
+    crate::arrange_actions::register(list)?;
     crate::take_rank::register(list)?;
     register_track_set(list)?;
     register_reference(list)?;
@@ -5342,7 +5343,23 @@ pub fn run(id: &str, args: &[u8]) -> Result<Vec<u8>, String> {
     if crate::view_client::is_linked() && !crate::window_queue::is_window_action(id) {
         return crate::view_client::run(id, args).map(String::into_bytes);
     }
-    let ran = list().run_json(id, args).map_err(|e| e.to_string());
+    let ran = match list().run_json(id, args) {
+        // An async action (the arrangement's gestures await the engine):
+        // awaited here, off any runtime — a window with no link (driving
+        // a REAPER) runs the engine's actions itself.
+        Err(architect::action::ActionError::Failed { message, .. })
+            if message.contains("run_json_async")
+                && tokio::runtime::Handle::try_current().is_err() =>
+        {
+            crate::open::runtime()
+                .ok_or_else(|| "no runtime to run it on".to_owned())
+                .and_then(|rt| {
+                    rt.block_on(list().run_json_async(id, args))
+                        .map_err(|e| e.to_string())
+                })
+        }
+        other => other.map_err(|e| e.to_string()),
+    };
     // The window's own, run here: said on the engine's list too, where
     // whoever watches the engine looks.
     if ran.is_ok() && crate::view_client::is_linked() {
@@ -5398,6 +5415,18 @@ mod presses {
         "SESSION_PANEL",
         "SESSION_ARRANGE",
         "SESSION_GROUPING",
+        "ARRANGE_MOVE",
+        "ARRANGE_TRIM",
+        "ARRANGE_SLIP",
+        "ARRANGE_FADE",
+        "ARRANGE_SPLIT",
+        "ARRANGE_COPY",
+        "ARRANGE_DELETE",
+        "ARRANGE_MARKERS",
+        "ARRANGE_ITEM_VOLUME",
+        "ARRANGE_TAKE_VOLUME",
+        "ARRANGE_EDIT",
+        "ITEMS_SELECT",
     ];
 
     #[test]

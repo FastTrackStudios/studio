@@ -61,7 +61,9 @@ Why:
 `apps/session/ui/tests/it/actions_everywhere.rs` scans `session-ui`'s
 sources (comments out, whitespace squeezed) for the patterns a bypass is
 made of — an `Edit` pushed to an edits queue or an applier
-(`edits.borrow_mut().push(`, `applier.send(`, `Effect::Send(`),
+(`edits.borrow_mut().push(`, `edits.borrow_mut().extend(`,
+`applier.send(`, `Effect::Send(` — the arrangement's planned edits are
+`Effect::Edit` now, committed as gestures),
 `lanes::set_expanded(`, `folds::toggle(`, `folds::set_tops(`,
 `transport_here(`, `request_dock(`, `mode_phases::choose(`,
 `set_racks_shown(`, `play_return::set(`, `options::X.toggle/set(` — and
@@ -87,6 +89,8 @@ action, and the list validates and survives hostile arguments.
 | `SESSION_STOP`, `SESSION_GO_TO_END`, `SESSION_LOOP`, `SESSION_SEEK {at}`, `SESSION_PLAY_FROM {at}` | engine | the transport's moves (`actions::transport_action`) |
 | `SESSION_OPTION {option, on?}` | window | snap, grid, ripple, razor, auto crossfade, lock |
 | `EngineView::ran_in_window` | link | a window action run in the window, said on the engine's list |
+| `ARRANGE_MOVE`, `ARRANGE_TRIM`, `ARRANGE_SLIP`, `ARRANGE_FADE`, `ARRANGE_SPLIT`, `ARRANGE_COPY`, `ARRANGE_DELETE`, `ARRANGE_MARKERS`, `ARRANGE_ITEM_VOLUME`, `ARRANGE_TAKE_VOLUME`, `ARRANGE_EDIT`, `ITEMS_SELECT` `{label?, edits}` | engine | an arrangement gesture's edits, in order, one undo step (`session_engine::arrange_actions`); which id is what the gesture did (`gesture_id`) |
+| `Edit::Run(id, args)` | window → engine | a control's action run by the window's edit worker in order with the edits around it (`Applier`) |
 
 ## Inventory (2026-10-30)
 
@@ -97,15 +101,17 @@ exempt by rule 6.
 | area | routed | bypass | local |
 |---|---|---|---|
 | Arrangement: track panel (`widget.rs` `act`, rename) | 0 → **9** | 9 → **0** | 1 |
-| Arrangement: items, ruler, gestures (`arrange_edit.rs`, `widget.rs`) | 1 (swipe) | ~25 edit families | — |
+| Arrangement: items, ruler, gestures (`arrange_edit.rs`, `widget.rs`) | 1 → **~29** | ~25 edit families → **0** | — |
 | Painted mixer / FX / automation / editor (`mixer_panel`, `mcp`, `fx_view`, `automation_*`, `tone`, `expression`, `editor_view`, `navigator`, `arrange_camera`, `ruler`, `device_audio`) | 13 → **25** | 86 → **74** | 13 |
 | Session UI rsx (`shell`, `transport_bar`, `toolbar`, `quantize_panel`, `collab_bar`, `record_view`, `versions`, `setup`, `compact`, `closeup`, `bar_step`, `studio`, `lyrics_panel`, `perf_meter`, `chart_*`, `browser`, `organize`, `navigator`, `instrument_rail`, `web_host`, `progress`, `performer`, `app_menu`) | 41 → **73** | 97 → **65** | 107 |
 | Desktop (`native/{dock,shell,start,library,publish,handoff,mod}.rs`, `session_view.rs`, `lib.rs`, `mixer_view.rs`) | 28 → **34** | 71 → **65** | 68 |
 | Dock crate (`features/ui/dock` host + components) | 0 | 50 | 30 |
 | Studio welcome (`apps/studio/desktop/src/front.rs`) | 4 | 3 | 3 |
-| **total** | **87 → 146** | **~341 → ~282** | **222** |
+| **total** | **87 → 146 → ~174** | **~341 → ~282 → ~254** | **222** |
 
-Bold: after the first routing pass. Routed in it:
+Bold: after the first routing pass, then after pass 2's arrangement area
+(every item, ruler and dial gesture; the track knob's commit and the snap
+key, which the first count had missed). Routed in the first pass:
 
 - **Track panel**: every control (table below).
 - **Strips** (`mcp::click`, mixer and FX view): mute, solo, arm, input
@@ -142,21 +148,47 @@ Bold: after the first routing pass. Routed in it:
 | widget.rs rename (Enter) | Rename | `Edit::Rename` | `TRACK_SET {name}` |
 | widget.rs `act` | Automation | opens a menu (its choices run `AUTOMATION_*`) | local |
 
-### Arrangement: items and ruler — to route
+### Arrangement: items and ruler — routed
 
-`arrange_edit.rs` turns drags into `Edit`s at gesture end: `MoveItem`,
-`TrimItem`, `SlipItem`, `SetFadeIn/Out`, `SplitItem`, `CopyItem`,
-`DeleteItem`, `SetItemLane`, `SelectItem/DeselectItem/…AllItems`,
-`SetSnapOffset`, `SetStretchMarkers`, `AddMarker/MoveMarker/RemoveMarker`,
-`AddRegion/SetRegionBounds/RemoveRegion`, `Select/AddToSelection`.
-`widget.rs`: `SetItemVolume` (item knob), `SetTakeVolume` (take curve),
-`SetVisibility` (visibility manager), `Touch`, `SetStretchMarkers`.
-Targets: `ITEMS_SET` (position, length, source_offset, lane, volume,
-fades — one undo step), `ITEM_SPLIT`, `ITEMS_DELETE`, `ITEM_ADD` (copy),
-`MARKER_INSERT`, `SECTION_INSERT`, `TRACK_REGION_*`, `TIME_SELECTION_SET`;
-NEW `ITEMS_SELECT {items, add}`, `MARKER_SET {id, at|name|remove}`,
-`ITEM_TAKE_VOLUME {item, points}`, `TRACK_VISIBLE {track, arrange, mixer}`.
-Each drag keeps its live preview and commits one action on release.
+A gesture is planned in the window (`arrange_edit`: snap, a folded row
+standing for its mics, ripple), drawn at once from the window's copy of
+the song, and **committed when it ends as one named action**:
+`ArrangementWidget::settle` splits its edits into gestures
+(`arrange_edit::gestures`: each undo bracket one, named by its label; a
+bare selection one), and `commit_edits` names each
+(`session_engine::arrange_actions::gesture`) and queues it as
+`Edit::Run(id, args)` — run by the window's edit worker through the
+Action List, in order with the edits before and after it, so a barrier an
+action waits on (`Edit::Done`) still lands after the work. The action's
+answer carries `made` (the engine's GUID for each piece a split or copy
+named), which the worker remembers as the view link's `apply` did.
+
+What an *action* asks of the arrangement — a key's, already run through
+the list (`SESSION_DELETE_ITEMS`, `SESSION_SPLIT`, …), or the engine's
+(`QUANTIZE`'s slip, restore, stretch, remove a range) — is that action's
+own work: `settle_for_action` sends it as it is, under that action.
+
+| control | was | now |
+|---|---|---|
+| item drag (body), lane change, joined marks carried | `MoveItem`, `SetItemLane`, `MoveMarker`/`SetRegionBounds` per edit | `ARRANGE_MOVE` |
+| item edge, stretch, edge snap offset | `TrimItem`, `SetStretchMarkers`, `SetSnapOffset` | `ARRANGE_TRIM` |
+| slip | `SlipItem` | `ARRANGE_SLIP` |
+| fade handles | `SetFadeIn/Out` | `ARRANGE_FADE` |
+| razor click, split at the pointer | `SplitItem` (+ snap offset) | `ARRANGE_SPLIT` |
+| modified drag (copy), paste (`Ctrl+V`, no action of its own) | `CopyItem` | `ARRANGE_COPY` |
+| razor area delete | `DeleteItem` | `ARRANGE_DELETE` |
+| razor carve, cuts that split and trim | mixed | `ARRANGE_EDIT` |
+| marker / region drag, mark made or removed with the pointer | `MoveMarker`, `SetRegionBounds`, `AddMarker`, … | `ARRANGE_MARKERS` |
+| item click, marquee, modified click | `SelectItem`, `DeselectAllItems`, … | `ITEMS_SELECT` |
+| item volume dial (drawn while turned) | `SetItemVolume` on release | `ARRANGE_ITEM_VOLUME` |
+| take volume curve: point made, dragged, Alt-deleted (drawn while dragged) | `BeginUndo`, `SetTakeVolume` per move, `EndUndo` | `ARRANGE_TAKE_VOLUME` on release and on a lost release |
+| track panel volume / pan knob | `SetVolume/SetPan` per move, no commit | live edits stay; `TRACK_SET` on release and on a lost release |
+| snap key (`grid::TOGGLE`, REAPER 1157) | `options::SNAP.toggle()`, no action | `SESSION_OPTION {option:"snap"}` |
+
+Not a gesture, so not here: `SetVisibility` is `SESSION_SHOW_GROUP` /
+`SESSION_HIDE_ALL`'s own work; `Edit::Done` is the barrier an engine
+action waits on; `Touch` rides the knob's live turn. The automation
+lanes (`automation_edit::press/drag/release`) are area 3.
 
 ### Painted mixer, FX view, automation, Editor
 
