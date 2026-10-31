@@ -1,18 +1,23 @@
 //! A named way back before the drums are rewritten across the song.
 //!
-//! An action that rewrites the kit over the whole song or a big stretch of
-//! it (`DRUMS_REQUANTIZE`, `QUANTIZE`, `DRUMS_REVERT`, `DRUMS_EDIT_LANES`,
-//! `DRUMS_TRIGGERS_FROM_MICS`, `COMP_BEST`, `EDIT_REVERT`) first forks a
-//! checkpoint of the song as it is — `Before DRUMS_REQUANTIZE 2026-10-31
-//! 14:05` — the way `SESSION_CHECKPOINT` does: a branch of the song's
-//! project file, listed with its alternatives (`SESSION_VERSIONS`) and
-//! opened as one. Undo is in memory and 200 steps deep; the checkpoint
-//! outlives both.
+//! The way back is a mark in the song's history (`crate::history`): the
+//! doc's frontier and a name, a few bytes in its project file, no branch.
+//! Loro keeps every version the song ever was; the mark names the one
+//! before the rewrite, and `SESSION_HISTORY_RESTORE` brings it back as a
+//! step of its own. (Until 2026-10-31 this forked a branch — what
+//! `SESSION_CHECKPOINT` makes on purpose — and those older automatic forks
+//! are what `SESSION_CHECKPOINTS_PRUNE` cleans up.)
 //!
-//! A branch is one row (its parent and the frontier it forked at: a few
-//! bytes) and shares the song's history up to there, so it is cheap; and a
-//! compaction keeps every operation, so it still finds its fork point
-//! after (`session-format`'s `a_checkpoint_shares_the_song_and_outlives_its_compaction`).
+//! An action that rewrites the drums (`DRUMS_REQUANTIZE`, `QUANTIZE`,
+//! `HITS_DETECT`, `COMP_MAIN`, … — the table in
+//! `docs/design/song-history.md`) first marks the song as it is —
+//! `Before DRUMS_REQUANTIZE 2026-10-31 14:05` — and says the mark in its
+//! result's `checkpoint`. `SESSION_HISTORY` lists it, and
+//! `SESSION_HISTORY_RESTORE` brings the song back to it, after a reopen
+//! too. Undo is in memory and 200 steps deep; the mark outlives both.
+//!
+//! A mark is one row: a name and the frontier, a few bytes. A compaction
+//! keeps every operation, so the version it names is still there after.
 //! When one cannot be made — the song not open from its project file, the
 //! file refusing the write — the action is refused, never run unprotected.
 //!
@@ -21,11 +26,13 @@
 //!
 //! Every rewrite is protected, whatever its size — except what a key or a
 //! drag runs over a selection (Q, Alt+Q, Backspace, T, Ctrl+T over a
-//! selection, a hit dragged): a checkpoint saves the song first, and a
-//! keypress must never wait on a save. Undo covers those ([`on_a_key`]).
+//! selection, a hit dragged): a mark first records what the engine holds
+//! that no step has yet — a read of the whole song, a step's cost — and a
+//! keypress must never wait on that. Undo covers those ([`on_a_key`]).
 //!
-//! Checkpoints pile up: `SESSION_CHECKPOINTS_PRUNE` lets go of the older
-//! automatic ones (`Before <ACTION> <date time>`), never one a user named.
+//! The automatic forks made before marks pile up in older songs:
+//! `SESSION_CHECKPOINTS_PRUNE` lets go of them (`Before <ACTION> <date
+//! time>` branches), never a version a user named.
 
 use std::cell::RefCell;
 
@@ -130,11 +137,11 @@ pub fn on_a_key() -> Net {
 /// not run.
 pub fn before(action: &str, reach: Reach) -> Result<Net, String> {
     guarded(reach, || {
-        let (daw, project) = crate::actions::song()?;
+        let (_, project) = crate::actions::song()?;
         let daw::service::ProjectContext::Project(guid) = project else {
             return Err("no song open".to_owned());
         };
-        fork_before(daw, &guid, action, &stamp())
+        mark_before(&guid, action, &stamp())
     })
     .map_err(|why| format!("{action} was not run: no checkpoint could be made before it — {why}"))
 }
@@ -164,40 +171,28 @@ fn guarded(reach: Reach, fork: impl FnOnce() -> Result<String, String>) -> Resul
     })
 }
 
-/// Fork `Before <action> <stamp>` from the song open as `guid`, as it is
-/// now, the song saved on the way. Says the name it got.
+/// Mark `Before <action> <stamp>` on the song open as `guid`, as it is
+/// now — what the engine holds unrecorded recorded first — in its history.
+/// Says the name it got.
+///
+/// No save comes first and none is needed: every step is appended to the
+/// song's file as it is recorded, and the mark records any the engine
+/// holds that no step has yet.
 ///
 /// # Errors
 ///
 /// The song is not open from its project file, or the file refused.
-pub fn fork_before(
-    daw: &daw::standalone::Standalone,
-    guid: &str,
-    action: &str,
-    stamp: &str,
-) -> Result<String, String> {
+pub fn mark_before(guid: &str, action: &str, stamp: &str) -> Result<String, String> {
     let began = web_time::Instant::now();
-    let path = crate::project_file::path_of(guid).ok_or(
-        "the song is not open from its project file (a .session): open or save it as one first",
-    )?;
-    let (file, _) = crate::project_file::save_target(&path);
-    let taken: Vec<String> = crate::project_file::branches(&file)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|b| b.name)
-        .collect();
-    let name = name_for(action, stamp, &taken);
-    crate::project_file::fork(daw, guid, &path, &name)?;
-    // The song was saved on the way: nothing unsaved now.
-    crate::projects::mark_saved(daw, guid);
+    let name = crate::project_file::mark(guid, action, |taken| name_for(action, stamp, taken))?;
     architect_telemetry::wide::set("checkpoint.name", name.clone());
     architect_telemetry::wide::set("checkpoint.ms", began.elapsed().as_secs_f64() * 1_000.0);
     Ok(name)
 }
 
-/// `Before <action> <stamp>`, or with ` 2`, ` 3`, … after it when a branch
-/// is already called that: a fork over a branch of the same name replaces
-/// it, and two rewrites in one minute must leave two ways back.
+/// `Before <action> <stamp>`, or with ` 2`, ` 3`, … after it when a mark
+/// is already called that: two rewrites in one minute leave two ways back,
+/// each gone back to by its own name.
 #[must_use]
 pub fn name_for(action: &str, stamp: &str, taken: &[String]) -> String {
     let base = format!("Before {action} {stamp}");
@@ -348,8 +343,8 @@ pub fn register(
                     open: b.name == open_branch,
                 })
                 .collect();
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
+            let now = web_time::SystemTime::now()
+                .duration_since(web_time::UNIX_EPOCH)
                 .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX));
             let mut plan = prune_plan(&candidates, (a.keep, a.older_than_days), now);
             if !a.dry_run && !plan.removed.is_empty() {
