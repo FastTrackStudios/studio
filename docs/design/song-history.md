@@ -1,6 +1,6 @@
 # Song history: ways back
 
-Status: 2026-10-31. The checkpoints before drum rewrites (part 1) are built. A
+Status: 2026-10-31. The checkpoints before drum rewrites and their pruning (part 1) are built. A
 history of named steps (part 2) is investigated here and not built.
 
 A song is one project file (`crates/daw/session-format/src/store`) holding
@@ -10,26 +10,39 @@ reopens. This note covers what lasts longer than undo.
 
 ## 1. A checkpoint before every drum rewrite
 
-`apps/session/engine/src/safety_net.rs`. An action that rewrites the kit
-across the song, or across a stretch of at least `BIG_STRETCH` (30 s summed
-over its spans), first forks a branch of the song as it is:
-`Before DRUMS_REQUANTIZE 2026-10-31 14:05` (local time). If that name is
-taken, ` 2`, ` 3`, … is added, because a fork onto an existing name
-replaces that branch. The action's result names the branch in its
-`checkpoint` field. For `QUANTIZE` and `DRUMS_REVERT`, which return a list
-of spans, the field is on the first span. The branch is listed with the
-song's versions (`SESSION_VERSIONS`, `SESSION_ALTERNATIVES`) and opens like
-any alternative.
+`apps/session/engine/src/safety_net.rs`. Every action that rewrites the
+drums forks a branch of the song as it is before it runs, whatever its
+size (`BIG_STRETCH` is 0): `Before DRUMS_REQUANTIZE 2026-10-31 14:05`
+(local time). If that name is taken, ` 2`, ` 3`, … is added, because a
+fork onto an existing name replaces that branch. The action's result
+names the branch in its `checkpoint` field. For `QUANTIZE`,
+`DRUMS_REVERT` and `DRUMS_LEVEL`, which return lists, the field is on the
+first entry. The branch is listed with the song's versions
+(`SESSION_VERSIONS`, `SESSION_ALTERNATIVES`) and opens like any
+alternative.
 
 | Action | When it forks |
 |---|---|
-| `DRUMS_REQUANTIZE` | always |
-| `DRUMS_EDIT_LANES` | not a dry run |
+| `DRUMS_REQUANTIZE`, `HITS_DETECT`, `DRUMS_REMOVE`, `DRUMS_REVERT` | always |
+| `QUANTIZE`, `DRUMS_EDIT_LANES`, `HITS_RENEW_IDS`, `DRUMS_LEVEL`, `DRUMS_SAMPLES`, `DRUMS_SAMPLES_ALIGN`, `COMP_MAIN`, `COMP_SEAMS` | not a dry run |
 | `DRUMS_TRIGGERS_FROM_MICS` | not a dry run, and something to make |
-| `QUANTIZE` (and `EDIT_QUANTIZE`, which runs it) | not a dry run, spans ≥ 30 s |
-| `DRUMS_REVERT` | spans ≥ 30 s |
-| `EDIT_REVERT` (Alt+Q, Backspace: `SESSION_REVERT_DRUMS`) | spans ≥ 30 s |
-| `COMP_BEST` | not a dry run, phrases ≥ 30 s |
+| `COMP_BEST` | the whole song (no `from`/`to`, `spans`, `sections`), not a dry run |
+| `EDIT_QUANTIZE` (Q), `EDIT_REVERT` (Alt+Q, Backspace), `EDIT_LEVEL`, `COMP_BEST` on a stretch (Ctrl+T), `COMP_CHOOSE` (T), `COMP_KEEP`, `HITS_STRETCH` (a hit dragged) | never |
+
+The last row is what a key or a drag runs over a selection. A checkpoint
+saves the song first, and a keypress must never wait on a save; undo
+covers those. `safety_net::on_a_key` marks such a run, so an action it
+runs (Q's `EDIT_QUANTIZE` runs `QUANTIZE`) forks nothing either.
+
+**Pruning.** Checkpoints pile up, so `SESSION_CHECKPOINTS_PRUNE` `{keep?,
+older_than_days?, dry_run}` lets go of the automatic ones past the
+newest `keep`, or older than `older_than_days`. Only names that match
+`Before <ACTION_ID> YYYY-MM-DD HH:MM[ n]` count as automatic. A version a
+user named, a live set's `Before joining …`, the version open and any
+version another was forked from are never let go. Pruning deletes the
+branch row and its own updates and snapshot, so it frees what the
+checkpoint held of its own (after a live-set join, a whole snapshot).
+It is not undoable.
 
 - **One checkpoint per action the user ran.** An action that another one
   runs (`DRUMS_REQUANTIZE` runs `QUANTIZE`) uses its caller's checkpoint.

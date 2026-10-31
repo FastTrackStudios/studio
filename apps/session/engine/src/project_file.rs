@@ -1021,6 +1021,32 @@ pub fn fork(
     Ok(file)
 }
 
+/// Let go of the branches `names` of the file the song `guid` is open
+/// from, through its own store: nothing of the song itself, nor of a
+/// branch not named.
+///
+/// # Errors
+/// The song is not open from its file, or the file refused.
+pub fn delete_branches(guid: &str, names: &[String]) -> Result<(), String> {
+    let guid = guid.to_owned();
+    let names = names.to_vec();
+    run(async move {
+        let songs = open_songs().lock().await;
+        let open = songs
+            .get(&guid)
+            .ok_or("the song is not open from its file")?;
+        let deleted = with_store(&open.store, |s| {
+            names
+                .iter()
+                .try_for_each(|name| s.delete_branch(name))
+                .and_then(|()| s.checkpoint())
+                .map_err(|e| e.to_string())
+        });
+        drop(songs);
+        deleted
+    })?
+}
+
 /// Every branch of the project file at `path`: the song, then its
 /// alternatives and checkpoints.
 ///

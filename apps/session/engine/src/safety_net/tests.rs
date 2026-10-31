@@ -1,7 +1,7 @@
 //! The checkpoint before a drum rewrite: one per action as the user ran
-//! it, only when it reaches far, uniquely named, refused when it cannot be
-//! made — and a real branch of the song's file, holding the song as it
-//! was.
+//! it, none for a dry run or what a key runs over a selection, uniquely
+//! named, refused when it cannot be made — a real branch of the song's
+//! file, holding the song as it was — and only the automatic ones pruned.
 
 use std::cell::Cell;
 
@@ -9,7 +9,7 @@ use daw::standalone::Standalone;
 use session::sync::SessionDoc;
 use session_format::store::MAIN;
 
-use super::{BIG_STRETCH, Reach, guarded, name_for};
+use super::{BIG_STRETCH, Candidate, Reach, guarded, is_automatic, name_for, on_a_key, prune_plan};
 
 #[test]
 fn a_name_already_taken_gets_the_next_number() {
@@ -29,14 +29,15 @@ fn a_name_already_taken_gets_the_next_number() {
 }
 
 #[test]
-fn only_the_whole_song_or_a_big_stretch_is_far() {
+fn every_rewrite_is_far_enough_but_a_dry_run() {
     let cases = [
         (Reach::Song, true),
         (Reach::Nothing, false),
+        (Reach::song_unless(true), false),
+        (Reach::song_unless(false), true),
         (Reach::of_spans([(10.0, 10.0 + BIG_STRETCH)]), true),
-        (Reach::of_spans([(0.0, 10.0), (50.0, 60.0)]), false),
+        (Reach::of_spans([(0.0, 0.5)]), true),
         (Reach::of_spans([(0.0, 20.0), (50.0, 70.0)]), true),
-        (Reach::of_spans([]), false),
     ];
     for (reach, far) in cases {
         assert_eq!(reach.is_big(), far, "{reach:?}");
@@ -63,9 +64,9 @@ fn an_action_run_by_another_runs_under_its_checkpoint() {
 }
 
 #[test]
-fn a_small_reach_forks_nothing_and_a_failed_fork_refuses() {
+fn a_dry_run_forks_nothing_and_a_failed_fork_refuses() {
     let small =
-        guarded(Reach::Seconds(4.0), || Err("must not fork".to_owned())).expect("nothing to fork");
+        guarded(Reach::Nothing, || Err("must not fork".to_owned())).expect("nothing to fork");
     assert_eq!(small.name(), None);
     let refused = guarded(Reach::Song, || Err("the file refused".to_owned()));
     assert_eq!(
@@ -75,6 +76,107 @@ fn a_small_reach_forks_nothing_and_a_failed_fork_refuses() {
     // A refusal holds nothing: the next action forks its own.
     let next = guarded(Reach::Song, || Ok("Before Y".to_owned())).expect("forked");
     assert_eq!(next.name().as_deref(), Some("Before Y"));
+}
+
+/// What a key runs over a selection forks nothing, nor does any action it
+/// runs (Q runs QUANTIZE): a keypress never waits on a save. After it,
+/// the next action forks its own.
+#[test]
+fn an_action_a_key_runs_forks_nothing_nor_does_what_it_runs() {
+    {
+        let _key = on_a_key();
+        let inner = guarded(Reach::Song, || Err("must not fork".to_owned()))
+            .expect("under the key: nothing to fork");
+        assert_eq!(inner.name(), None);
+    }
+    let next = guarded(Reach::Song, || Ok("Before Z".to_owned())).expect("forked");
+    assert_eq!(next.name().as_deref(), Some("Before Z"));
+}
+
+#[test]
+fn only_a_checkpoint_a_rewrite_made_is_automatic() {
+    for (name, automatic) in [
+        ("Before DRUMS_REQUANTIZE 2026-10-31 14:05", true),
+        ("Before QUANTIZE 2026-10-31 14:05 3", true),
+        ("Before HITS_DETECT 2026-01-02 09:00", true),
+        // Named by a user, or kept aside by a live set.
+        ("Before drum quantize", false),
+        ("Drum edit (chart, leveled)", false),
+        ("Before joining Sunday Night (2026-10-29)", false),
+        ("Before QUANTIZE today", false),
+        ("Before QUANTIZE 2026-10-31 14:05 mine", false),
+        ("main", false),
+    ] {
+        assert_eq!(is_automatic(name), automatic, "{name}");
+    }
+}
+
+/// Pruning keeps the newest `keep` automatic checkpoints and lets go of
+/// those older than `older_than_days`, never touching a named one, the
+/// one open, or one another version opens through.
+#[test]
+fn pruning_lets_go_of_old_automatic_checkpoints_only() {
+    const DAY: i64 = 86_400;
+    let now = 100 * DAY;
+    let auto = |n: u32, days_ago: i64| Candidate {
+        name: format!("Before QUANTIZE 2026-10-{:02} 10:00", n),
+        at: now - days_ago * DAY,
+        parent: false,
+        open: false,
+    };
+    let mut branches = vec![
+        Candidate {
+            name: "main".to_owned(),
+            at: 0,
+            parent: true,
+            open: false,
+        },
+        Candidate {
+            name: "Mix A".to_owned(),
+            at: 0,
+            parent: false,
+            open: false,
+        },
+        auto(1, 30),
+        auto(2, 20),
+        auto(3, 10),
+        auto(4, 1),
+    ];
+    let keep_two = prune_plan(&branches, (Some(2), None), now);
+    assert_eq!(
+        keep_two.removed,
+        [
+            "Before QUANTIZE 2026-10-02 10:00",
+            "Before QUANTIZE 2026-10-01 10:00"
+        ]
+    );
+    assert_eq!(keep_two.kept, 2);
+
+    let older = prune_plan(&branches, (None, Some(15.0)), now);
+    assert_eq!(
+        older.removed,
+        [
+            "Before QUANTIZE 2026-10-02 10:00",
+            "Before QUANTIZE 2026-10-01 10:00"
+        ]
+    );
+
+    // The oldest is open; the next was forked from: both left, and said.
+    branches[2].open = true;
+    branches[3].parent = true;
+    let guarded = prune_plan(&branches, (Some(0), None), now);
+    assert_eq!(
+        guarded.removed,
+        [
+            "Before QUANTIZE 2026-10-04 10:00",
+            "Before QUANTIZE 2026-10-03 10:00"
+        ]
+    );
+    assert_eq!(guarded.left.len(), 2, "{:?}", guarded.left);
+    assert!(
+        !guarded.removed.iter().any(|n| n == "Mix A" || n == "main"),
+        "a named version is never let go"
+    );
 }
 
 /// Song `guid` seeded into `daw` with one track, `Kick`, at `volume`.

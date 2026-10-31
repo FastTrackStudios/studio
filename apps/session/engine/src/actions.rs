@@ -924,6 +924,7 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     crate::audio_health::register(list)?;
     crate::perf_meter::register(list)?;
     crate::trigger_from_mics::register(list)?;
+    crate::safety_net::register(list)?;
     crate::comp_rank::register(list)?;
     crate::comp_song::register(list)?;
     crate::poi::register(list)?;
@@ -1132,7 +1133,7 @@ static LEVEL: ActionMeta = meta(
     "DRUMS_LEVEL",
     "drums_level",
     "Level the drums",
-    "Even each drum out before it is edited: every stroke (its hit marker's level) brought toward the drum's median — the kick most of the way, the snare a little less, the toms half — a few ms before its attack, held through its ring; ghosts, bleed and a flam's grace ride under the stroke before. Written as the take volume envelope of each drum's close mics on the comp (the same gain on every mic), replacing any earlier leveling: the envelope rides with the audio through every edit, so DRUMS_EDIT_LANES `reset` and the quantize after carry it. `pieces` (all when left out); `consistency` 0–100 % for every drum (100: every stroke brought to one level; each drum's own when left out — kick 75, snare 60, toms 50); `range_db`, the most a stroke moves (6 unless given; widen it with a high consistency); `whole_song`, toward the drum's level over the whole song rather than the playing around each stroke; `dry_run`. Says per drum the target, how many strokes went up and down, and the most.",
+    "Even each drum out before it is edited: every stroke (its hit marker's level) brought toward the drum's median — the kick most of the way, the snare a little less, the toms half — a few ms before its attack, held through its ring; ghosts, bleed and a flam's grace ride under the stroke before. Written as the take volume envelope of each drum's close mics on the comp (the same gain on every mic), replacing any earlier leveling: the envelope rides with the audio through every edit, so DRUMS_EDIT_LANES `reset` and the quantize after carry it. `pieces` (all when left out); `consistency` 0–100 % for every drum (100: every stroke brought to one level; each drum's own when left out — kick 75, snare 60, toms 50); `range_db`, the most a stroke moves (6 unless given; widen it with a high consistency); `whole_song`, toward the drum's level over the whole song rather than the playing around each stroke; `dry_run`. Says per drum the target, how many strokes went up and down, and the most. Unless a dry run, forks a checkpoint of the song first (`Before DRUMS_LEVEL <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Drums",
     "",
 );
@@ -1158,12 +1159,13 @@ fn register_level(list: &ActionList) -> Result<(), architect::action::ActionErro
             range_db: a.range_db,
             whole_song: a.whole_song.unwrap_or(false),
         };
-        crate::drum_level::level(
-            daw,
-            &project,
-            (&a.pieces, &[]),
-            (&knobs, a.dry_run.unwrap_or(false)),
-        )
+        let dry = a.dry_run.unwrap_or(false);
+        let net = crate::safety_net::before(LEVEL.id, crate::safety_net::Reach::song_unless(dry))?;
+        let mut leveled = crate::drum_level::level(daw, &project, (&a.pieces, &[]), (&knobs, dry))?;
+        if let Some(first) = leveled.first_mut() {
+            first.checkpoint = net.name();
+        }
+        Ok::<_, String>(leveled)
     })?;
     Ok(())
 }
@@ -2356,10 +2358,16 @@ static REMOVE: ActionMeta = meta(
     "DRUMS_REMOVE",
     "drums_remove",
     "Remove from the drums",
-    "Take `from`..`to` (seconds) out of the kit's edited takes (its EDIT lane, once it has one): cut at both ends, the stretch between deleted, a 2 ms fade on each edge. `tracks` (paths or GUIDs) names which — a Trig, to take a stray or doubled trigger spike out so it fires no gate and no sample; left out, the whole kit, for a hit that should not be there at all. One undo step. Look first: AUDIO_PEAKS on the Trig and its mics, and the drum MIDI (DRUMS_REFERENCE).",
+    "Take `from`..`to` (seconds) out of the kit's edited takes (its EDIT lane, once it has one): cut at both ends, the stretch between deleted, a 2 ms fade on each edge. `tracks` (paths or GUIDs) names which — a Trig, to take a stray or doubled trigger spike out so it fires no gate and no sample; left out, the whole kit, for a hit that should not be there at all. One undo step. Look first: AUDIO_PEAKS on the Trig and its mics, and the drum MIDI (DRUMS_REFERENCE). Forks a checkpoint of the song first (`Before DRUMS_REMOVE <date time>`, named in the result's `checkpoint`), and is refused if one cannot be made.",
     "Drums",
     "",
 );
+
+/// What taking it out did: the checkpoint forked first (`safety_net`).
+#[derive(Facet)]
+struct Removed {
+    checkpoint: Option<String>,
+}
 
 /// What to take out.
 #[derive(Facet)]
@@ -2384,13 +2392,16 @@ fn register_remove(list: &ActionList) -> Result<(), architect::action::ActionErr
             .flatten()
             .map(|t| resolve(daw, &project, t))
             .collect::<Result<Vec<String>, String>>()?;
+        let net = crate::safety_net::before(REMOVE.id, crate::safety_net::Reach::Song)?;
         let us = |s: f64| num_traits::ToPrimitive::to_i64(&(s * 1_000_000.0).round()).unwrap_or(0);
         crate::window_queue::ask(crate::window_queue::Asked::RemoveRange {
             tracks,
             from_us: us(a.from),
             to_us: us(a.to),
         });
-        Ok(())
+        Ok(Removed {
+            checkpoint: net.name(),
+        })
     })?;
     Ok(())
 }
@@ -2400,7 +2411,7 @@ static SAMPLES: ActionMeta = meta(
     "DRUMS_SAMPLES",
     "drums_samples",
     "Drum samples under the kit",
-    "Blend signal's sampled kit under the recorded drums, from the hits the triggers caught (the drum-edit detector, on the EDIT lane once there is one): each piece's hits written as notes on its Sample track (the kit's GM note, velocity from the hit's level) with an FTS Kit Mic there playing that piece's mics — its close mics on the track, its overheads and rooms on 3/4 and 5/6, sent into the recorded overheads and rooms. A piece's voices get the same notes, so each hit is one sample on all of them. Each Sample track's polarity is then set to pull with its close mic (DRUMS_SAMPLES_ALIGN). One undo step. `preset` (a `.signalpreset`; GGD Modern and Massive 2's Heavy Thwacky unless given), `dry_run`.",
+    "Blend signal's sampled kit under the recorded drums, from the hits the triggers caught (the drum-edit detector, on the EDIT lane once there is one): each piece's hits written as notes on its Sample track (the kit's GM note, velocity from the hit's level) with an FTS Kit Mic there playing that piece's mics — its close mics on the track, its overheads and rooms on 3/4 and 5/6, sent into the recorded overheads and rooms. A piece's voices get the same notes, so each hit is one sample on all of them. Each Sample track's polarity is then set to pull with its close mic (DRUMS_SAMPLES_ALIGN). One undo step. `preset` (a `.signalpreset`; GGD Modern and Massive 2's Heavy Thwacky unless given), `dry_run`. Unless a dry run, forks a checkpoint of the song first (`Before DRUMS_SAMPLES <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Drums",
     "",
 );
@@ -2420,6 +2431,8 @@ struct SamplesOut {
     tracks: Vec<String>,
     notes: u32,
     applied: bool,
+    /// The checkpoint forked first (`safety_net`); none for a dry run.
+    checkpoint: Option<String>,
 }
 
 /// The kit samples blend in unless told otherwise.
@@ -2464,7 +2477,7 @@ static SAMPLES_ALIGN: ActionMeta = meta(
     "DRUMS_SAMPLES_ALIGN",
     "drums_samples_align",
     "Line the drum samples up with the close mics",
-    "Measure each piece's sample against its close mic and set its Sample track's polarity to pull with the mic as the mix plays it. The kit's sample for the piece is struck once, as its Kit Mic plays it, and measured against the piece's clean hits on its first close mic (the recording the song plays most of). Per piece: `delay_ms`, how much later than its note the sample must start for its attack to land on the recorded one (negative: earlier; reported, not applied — the samples start at their attack); `inverted`, whether it pulls the opposite way to the recording as recorded; `agreement` 0..1, how alike the lined-up attacks are; `consistent` 0..1, the share of hits that alone say the same; `flip`, what the Sample track's polarity is set to (none: too unsure, left as it is). One undo step. `preset` as DRUMS_SAMPLES, `dry_run`.",
+    "Measure each piece's sample against its close mic and set its Sample track's polarity to pull with the mic as the mix plays it. The kit's sample for the piece is struck once, as its Kit Mic plays it, and measured against the piece's clean hits on its first close mic (the recording the song plays most of). Per piece: `delay_ms`, how much later than its note the sample must start for its attack to land on the recorded one (negative: earlier; reported, not applied — the samples start at their attack); `inverted`, whether it pulls the opposite way to the recording as recorded; `agreement` 0..1, how alike the lined-up attacks are; `consistent` 0..1, the share of hits that alone say the same; `flip`, what the Sample track's polarity is set to (none: too unsure, left as it is). One undo step. `preset` as DRUMS_SAMPLES, `dry_run`. Unless a dry run, forks a checkpoint of the song first (`Before DRUMS_SAMPLES_ALIGN <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Drums",
     "",
 );
@@ -2490,6 +2503,8 @@ struct AlignOut {
     pieces: Vec<AlignedPiece>,
     tracks: Vec<String>,
     applied: bool,
+    /// The checkpoint forked first (`safety_net`); none for a dry run.
+    checkpoint: Option<String>,
 }
 
 #[cfg(feature = "signal")]
@@ -2502,6 +2517,10 @@ fn register_samples_align(list: &ActionList) -> Result<(), architect::action::Ac
         }
         let measured = crate::drum_samples::measure(daw, &project, &preset);
         let dry = a.dry_run.unwrap_or(false);
+        let net = crate::safety_net::before(
+            SAMPLES_ALIGN.id,
+            crate::safety_net::Reach::song_unless(dry),
+        )?;
         let tracks = if dry {
             Vec::new()
         } else {
@@ -2531,6 +2550,7 @@ fn register_samples_align(list: &ActionList) -> Result<(), architect::action::Ac
             pieces,
             tracks,
             applied: !dry,
+            checkpoint: net.name(),
         })
     })?;
     Ok(())
@@ -2545,6 +2565,8 @@ fn register_samples(list: &ActionList) -> Result<(), architect::action::ActionEr
             return Err(format!("no kit preset at {}", preset.display()));
         }
         let dry = a.dry_run.unwrap_or(false);
+        let net =
+            crate::safety_net::before(SAMPLES.id, crate::safety_net::Reach::song_unless(dry))?;
         // A step of its own: undoing the next edit never takes the
         // samples' set-up with it.
         let label = "Set up the drum samples";
@@ -2560,6 +2582,7 @@ fn register_samples(list: &ActionList) -> Result<(), architect::action::ActionEr
             tracks: report.tracks,
             notes: u32::try_from(report.notes).unwrap_or(u32::MAX),
             applied: !dry,
+            checkpoint: net.name(),
         })
     })?;
     Ok(())
@@ -3759,7 +3782,7 @@ static QUANTIZE: ActionMeta = meta(
     "QUANTIZE",
     "quantize",
     "Quantize the drums",
-    "Quantize the kit from its hit markers (HITS_DETECT first): every drum track cut `lead_ms` before each hit and moved together so the HIT lands on its target — the item starts before the beat, the attack is on it — the seams crossfaded (`xfade_ms`). Over `sections` (by name, from the SECTIONS lane: `Verse 1`, `Chorus`) or `from`/`to` (seconds), each with these settings — so a verse and a chorus can each be quantized their own way. The edit zones (ZONES_LIST) are left as played — `fills: Include` edits them too (a fill that keeps a grid, on that grid: `grid: 12` for 8th triplets, 24 for 16th triplets), `Only` edits only them; the drum-edit settings (grid, strength, target, tolerance, lead, crossfade…) can be given for this call alone. `target: Pattern` places each hit by the section's own groove (DRUMS_GROOVE): a hit in a slot the section plays bar after bar goes to that slot's line, however far it drifted, and `by_groove` lists each sent to a line other than the nearest. `dry_run` says what it would do; `brief` leaves out the lists of moves and keeps three of each span's calls. After an edit, a check from the markers: hits lost, hits doubled (a double attack), and how far the moved hits landed from where they were sent. Over the whole song or 30 s or more, forks a checkpoint of the song first (`Before QUANTIZE <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
+    "Quantize the kit from its hit markers (HITS_DETECT first): every drum track cut `lead_ms` before each hit and moved together so the HIT lands on its target — the item starts before the beat, the attack is on it — the seams crossfaded (`xfade_ms`). Over `sections` (by name, from the SECTIONS lane: `Verse 1`, `Chorus`) or `from`/`to` (seconds), each with these settings — so a verse and a chorus can each be quantized their own way. The edit zones (ZONES_LIST) are left as played — `fills: Include` edits them too (a fill that keeps a grid, on that grid: `grid: 12` for 8th triplets, 24 for 16th triplets), `Only` edits only them; the drum-edit settings (grid, strength, target, tolerance, lead, crossfade…) can be given for this call alone. `target: Pattern` places each hit by the section's own groove (DRUMS_GROOVE): a hit in a slot the section plays bar after bar goes to that slot's line, however far it drifted, and `by_groove` lists each sent to a line other than the nearest. `dry_run` says what it would do; `brief` leaves out the lists of moves and keeps three of each span's calls. After an edit, a check from the markers: hits lost, hits doubled (a double attack), and how far the moved hits landed from where they were sent. Unless a dry run, forks a checkpoint of the song first (`Before QUANTIZE <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Drums",
     "",
 );
@@ -4571,7 +4594,7 @@ static REVERT: ActionMeta = meta(
     "DRUMS_REVERT",
     "drums_revert",
     "Put the drums back as played",
-    "Undo the drum edit over a stretch — `from`/`to` (seconds, as the song plays now) or `sections` — without undoing anything else: every hit there moved back to where it was played, the whole kit together, the seams crossfaded as a quantize closes them, so the stretch plays as recorded. The hit markers stay, to drag (HITS_PLACE) or quantize again. With `hold` (the default) a no-quantize zone goes over it, so a later quantize leaves it as played; delete the zone (ZONES_REMOVE) to let one in. Says the check, as QUANTIZE does. Over the whole song or 30 s or more, forks a checkpoint of the song first (`Before DRUMS_REVERT <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
+    "Undo the drum edit over a stretch — `from`/`to` (seconds, as the song plays now) or `sections` — without undoing anything else: every hit there moved back to where it was played, the whole kit together, the seams crossfaded as a quantize closes them, so the stretch plays as recorded. The hit markers stay, to drag (HITS_PLACE) or quantize again. With `hold` (the default) a no-quantize zone goes over it, so a later quantize leaves it as played; delete the zone (ZONES_REMOVE) to let one in. Says the check, as QUANTIZE does. Forks a checkpoint of the song first (`Before DRUMS_REVERT <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Drums",
     "",
 );
