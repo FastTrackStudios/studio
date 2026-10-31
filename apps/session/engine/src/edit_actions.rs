@@ -59,7 +59,7 @@ static REVERT: ActionMeta = crate::actions::meta(
     "EDIT_REVERT",
     "edit_revert",
     "Put the selection back as played",
-    "Put what is selected back as recorded — the selection, or the call's `tracks`, `spans` / `from`/`to` or `sections` — with the profile its tracks are edited with. Drums: every mic of the kit over each stretch made what it was recorded as (its EDIT lanes made its COMP lanes again there: every slip, stretch and hand placement gone), the hit markers kept. `keep_manual`: the hits a hand placed (HITS_PLACE) put back where it placed them — only the automated edit taken off; otherwise they are forgotten there. `hold` (on unless false): a no-quantize zone over it, so a later quantize leaves it. A stretch of time is needed: the whole song is not put back by accident.",
+    "Put what is selected back as recorded — the selection, or the call's `tracks`, `spans` / `from`/`to` or `sections` — with the profile its tracks are edited with. Drums: every mic of the kit over each stretch made what it was recorded as (its EDIT lanes made its COMP lanes again there: every slip, stretch and hand placement gone), the hit markers kept. `keep_manual`: the hits a hand placed (HITS_PLACE) put back where it placed them — only the automated edit taken off; otherwise they are forgotten there. `hold` (on unless false): a no-quantize zone over it, so a later quantize leaves it. A stretch of time is needed: the whole song is not put back by accident. Over the whole song or 30 s or more, forks a checkpoint of the song first (`Before EDIT_REVERT <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Edit",
     "",
 );
@@ -260,6 +260,9 @@ struct Reverted {
     /// Hand placements put back (`keep_manual`), and forgotten.
     placed_back: u32,
     forgotten: u32,
+    /// The checkpoint forked before a big stretch was put back
+    /// (`safety_net`).
+    checkpoint: Option<String>,
 }
 
 #[derive(Facet)]
@@ -399,6 +402,10 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                 .map(|h| h.id)
                 .collect();
             stages.mark("edit.read_ms");
+            let net = crate::safety_net::before(
+                REVERT.id,
+                crate::safety_net::Reach::of_spans(spans.iter().copied()),
+            )?;
             let mut restored = true;
             for &(from, to) in &spans {
                 let us = |t: f64| num_traits::ToPrimitive::to_i64(&(t * 1e6).round()).unwrap_or(0);
@@ -457,6 +464,7 @@ fn revert(a: RevertArg) -> Result<Reverted, String> {
                 restored,
                 placed_back,
                 forgotten,
+                checkpoint: net.name(),
             })
         }
     }

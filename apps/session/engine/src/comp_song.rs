@@ -571,7 +571,7 @@ static BEST: ActionMeta = crate::actions::meta(
     "COMP_BEST",
     "comp_best",
     "Comp the best takes",
-    "Comp the kit from its best takes over a stretch — `from`/`to`, `spans` or `sections`; none: the whole song — as one edit: each section cut into phrases of `phrase_bars` bars (4) — the stretches kept as comped (COMP_KEEP) left out; with a main take (COMP_MAIN) a phrase stays on it unless a take alike to it scores 0.25 better — every phrase ranked from the takes' hits against the part as written (COMP_CANDIDATES's ranking), and those whose best judged take is not the one playing comped from it — every mic from its own lane, the EDIT lane there the new comp as recorded — in one undo step. `dry_run` says what it would comp. What Ctrl+T does over the selection, or the whole song with none.",
+    "Comp the kit from its best takes over a stretch — `from`/`to`, `spans` or `sections`; none: the whole song — as one edit: each section cut into phrases of `phrase_bars` bars (4) — the stretches kept as comped (COMP_KEEP) left out; with a main take (COMP_MAIN) a phrase stays on it unless a take alike to it scores 0.25 better — every phrase ranked from the takes' hits against the part as written (COMP_CANDIDATES's ranking), and those whose best judged take is not the one playing comped from it — every mic from its own lane, the EDIT lane there the new comp as recorded — in one undo step. `dry_run` says what it would comp. What Ctrl+T does over the selection, or the whole song with none. Over the whole song or 30 s or more, forks a checkpoint of the song first (`Before COMP_BEST <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Edit",
     "",
 );
@@ -595,6 +595,9 @@ struct BestOut {
     phrases: u32,
     comped: Vec<ChoiceOut>,
     ops: u32,
+    /// The checkpoint forked before a big stretch was comped
+    /// (`safety_net`); none for a dry run.
+    checkpoint: Option<String>,
 }
 
 #[derive(Facet)]
@@ -617,7 +620,16 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         // What is kept as comped is not chosen again.
         let kept = crate::comp_keep::kept(song.daw(), &song.context());
         let phrases = crate::comp_keep::outside(&phrases, &kept);
-        let done = comp_best(&song, &phrases, a.dry_run.unwrap_or(false))?;
+        let dry = a.dry_run.unwrap_or(false);
+        let net = crate::safety_net::before(
+            BEST.id,
+            if dry {
+                crate::safety_net::Reach::Nothing
+            } else {
+                crate::safety_net::Reach::of_spans(phrases.iter().copied())
+            },
+        )?;
+        let done = comp_best(&song, &phrases, dry)?;
         let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
         Ok(BestOut {
             phrases: count(done.phrases),
@@ -632,6 +644,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                     score: c.score,
                 })
                 .collect(),
+            checkpoint: net.name(),
         })
     })?;
     Ok(())

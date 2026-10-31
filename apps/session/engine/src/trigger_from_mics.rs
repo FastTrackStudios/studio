@@ -89,7 +89,7 @@ static FROM_MICS: ActionMeta = crate::actions::meta(
     "DRUMS_TRIGGERS_FROM_MICS",
     "drums_triggers_from_mics",
     "Triggers from the mics",
-    "Where a take's trigger recorded nothing for its drum (none of the piece's hit markers on that recording were heard by the trigger, while its close mics heard some), make the trigger from the mics: a file in the song's own Media folder, `<name> (from mics).wav`, a 1 ms click at each hit the mics heard (confidence 0.5 or more, not bleed) — the hits the kit's MIDI was made from — and every take cut from the dead file plays it instead, its hit markers with it. The drum's gate is then keyed on the drum as played. Run after HITS_DETECT. `pieces` (all when left out); `dry_run` says what it would do. One undo step.",
+    "Where a take's trigger recorded nothing for its drum (none of the piece's hit markers on that recording were heard by the trigger, while its close mics heard some), make the trigger from the mics: a file in the song's own Media folder, `<name> (from mics).wav`, a 1 ms click at each hit the mics heard (confidence 0.5 or more, not bleed) — the hits the kit's MIDI was made from — and every take cut from the dead file plays it instead, its hit markers with it. The drum's gate is then keyed on the drum as played. Run after HITS_DETECT. `pieces` (all when left out); `dry_run` says what it would do. One undo step. Forks a checkpoint of the song first (`Before DRUMS_TRIGGERS_FROM_MICS <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Drums",
     "",
 );
@@ -123,6 +123,9 @@ struct FromMicsOut {
     /// Recordings whose trigger works, or with nothing heard to make one
     /// from — `piece: file`.
     left: Vec<String>,
+    /// The checkpoint forked before anything was made (`safety_net`);
+    /// none for a dry run or with nothing to make.
+    checkpoint: Option<String>,
 }
 
 /// A trigger recording as the takes cut from it name it, and those takes.
@@ -176,7 +179,24 @@ fn write_made(disk: &Path, media: &Path, hits: &[f64]) -> Result<PathBuf, String
     Ok(path)
 }
 
+/// `DRUMS_TRIGGERS_FROM_MICS`: what [`make`] would do, then — when it
+/// would make anything and this is not a dry run — a checkpoint, and it
+/// done.
 fn run(a: FromMicsArg) -> Result<FromMicsOut, String> {
+    let plan = make(&FromMicsArg {
+        pieces: a.pieces.clone(),
+        dry_run: true,
+    })?;
+    if a.dry_run || plan.made.is_empty() {
+        return Ok(plan);
+    }
+    let net = crate::safety_net::before(FROM_MICS.id, crate::safety_net::Reach::Song)?;
+    let mut out = make(&a)?;
+    out.checkpoint = net.name();
+    Ok(out)
+}
+
+fn make(a: &FromMicsArg) -> Result<FromMicsOut, String> {
     let song = crate::song::Song::current()?;
     let (daw, project) = (song.daw(), song.context());
     let (pieces, _) = crate::hits::kit(daw, &project);
@@ -188,6 +208,7 @@ fn run(a: FromMicsArg) -> Result<FromMicsOut, String> {
     let mut out = FromMicsOut {
         made: Vec::new(),
         left: Vec::new(),
+        checkpoint: None,
     };
     let label = "Triggers from the mics";
     if !a.dry_run {

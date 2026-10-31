@@ -998,7 +998,13 @@ pub fn fork(
         return Err(format!("{name:?} is not a name an alternative can have"));
     }
     let (file, branch) = save_target(path);
-    save(daw, project_guid, &file, &branch, &format!("Before {name}"))?;
+    // A checkpoint named for what it comes before already says so.
+    let label = if name.starts_with("Before ") {
+        name.to_owned()
+    } else {
+        format!("Before {name}")
+    };
+    save(daw, project_guid, &file, &branch, &label)?;
     let guid = project_guid.to_owned();
     let name = name.to_owned();
     run(async move {
