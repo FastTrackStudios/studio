@@ -116,6 +116,8 @@ action, and the list validates and survives hostile arguments.
 | `EngineView::ran_in_window` | link | a window action run in the window, said on the engine's list |
 | `ARRANGE_MOVE`, `ARRANGE_TRIM`, `ARRANGE_SLIP`, `ARRANGE_FADE`, `ARRANGE_SPLIT`, `ARRANGE_COPY`, `ARRANGE_DELETE`, `ARRANGE_MARKERS`, `ARRANGE_ITEM_VOLUME`, `ARRANGE_TAKE_VOLUME`, `ARRANGE_EDIT`, `ITEMS_SELECT` `{label?, edits}` | engine | an arrangement gesture's edits, in order, one undo step (`session_engine::arrange_actions`); which id is what the gesture did (`gesture_id`) |
 | `Edit::Run(id, args)` | window → engine | a control's action run by the window's edit worker in order with the edits around it (`Applier`) |
+| `RIG_BLOCK_SET {track, block, set?, bypassed?, level_db?, option?}` | engine (`signal`) | one block of a track's signal rig, by id or name: what the FX view's rig faces and bypass buttons commit |
+| `RIG_BLOCKS {track}` | engine (`signal`), read-only | the rig's blocks as they are: what `RIG_BLOCK_SET` changes |
 
 ## Inventory (2026-10-30)
 
@@ -127,12 +129,12 @@ exempt by rule 6.
 |---|---|---|---|
 | Arrangement: track panel (`widget.rs` `act`, rename) | 0 → **9** | 9 → **0** | 1 |
 | Arrangement: items, ruler, gestures (`arrange_edit.rs`, `widget.rs`) | 1 → **~29** | ~25 edit families → **0** | — |
-| Painted mixer / FX / automation / editor (`mixer_panel`, `mcp`, `fx_view`, `automation_*`, `tone`, `expression`, `editor_view`, `navigator`, `arrange_camera`, `ruler`, `device_audio`) | 13 → **25** | 86 → **74** | 13 |
+| Painted mixer / FX / automation / editor (`mixer_panel`, `mcp`, `fx_view`, `automation_*`, `tone`, `expression`, `editor_view`, `navigator`, `arrange_camera`, `ruler`, `device_audio`) | 13 → **25** → **~39** | 86 → **74** → **~60** | 13 |
 | Session UI rsx (`shell`, `transport_bar`, `toolbar`, `quantize_panel`, `collab_bar`, `record_view`, `versions`, `setup`, `compact`, `closeup`, `bar_step`, `studio`, `lyrics_panel`, `perf_meter`, `chart_*`, `browser`, `organize`, `navigator`, `instrument_rail`, `web_host`, `progress`, `performer`, `app_menu`) | 41 → **73** | 97 → **65** | 107 |
 | Desktop (`native/{dock,shell,start,library,publish,handoff,mod}.rs`, `session_view.rs`, `lib.rs`, `mixer_view.rs`) | 28 → **34** | 71 → **65** | 68 |
 | Dock crate (`features/ui/dock` host + components) | 0 | 50 | 30 |
 | Studio welcome (`apps/studio/desktop/src/front.rs`) | 4 | 3 | 3 |
-| **total** | **87 → 146 → ~174** | **~341 → ~282 → ~254** | **222** |
+| **total** | **87 → 146 → ~174 → ~188** | **~341 → ~282 → ~254 → ~240** | **222** |
 
 Bold: after the first routing pass, then after pass 2's arrangement area
 (every item, ruler and dial gesture; the track knob's commit and the snap
@@ -222,12 +224,12 @@ lanes (`automation_edit::press/drag/release`) are area 3.
 | mcp.rs `click` (mixer_panel, fx_view) | Mute / Solo / Arm / Monitor / Name / ground | `Edit::Toggle*`, `SetInputMonitor`, `Select` | **routed**: `TRACK_SET`, `TRACK_ARM`, `SESSION_SELECT_TRACK {add}` |
 | mixer_panel.rs fold button | Folder | `folds::toggle` | **routed**: `SESSION_FOLD` |
 | mixer_panel.rs release / cancel | Fader / pan drag end | last `SetVolume/SetPan` | **routed**: `TRACK_SET {volume_db|pan}` (drag stays a live preview) |
-| fx_view.rs:702 | strip fader/pan drag | `SetVolume/SetPan` per move, no commit, no touch | `TRACK_SET` on release |
+| fx_view.rs `turn_strip` / `release_strip` | strip fader/pan drag | `SetVolume/SetPan` per move, no commit | **routed**: live turn, `TRACK_SET` on release (`commit_turn`) |
 | mixer_panel.rs:1286-1311 | rails: scene, focus selected, take focus width, phase, audience | signal writes; `mode_phases::choose` | NEW `MIXER_VIEW {…}`; phase **routed** (`SESSION_PHASE`) |
 | mixer_panel.rs:506, 1851, 1924, 1964 | wheel / overview / rack scroll / fling | scroll cells | NEW `MIXER_VIEW {scroll}` at gesture end |
 | mixer_panel.rs:1475, 1484 | rack zoom grip, rack phase fold | `closeups.ask`, `folds.toggle` | NEW `SESSION_CLOSEUP`, `MIXER_VIEW {rack_fold}` |
-| tone.rs `Shared::edited` / `Store::flush` (sink of every rack edit: mixer_panel.rs:1489-1581, fx_view.rs:862-968, closeup.rs:410-419) | rack switches, grips, EQ dots, macros, faces | `Edit::SetFxParam/SetFxEnabled` | `FX_SET` / `FX_ENABLE` on gesture end |
-| fx_view.rs:838, 873 | rig block faces / bypass | the window's copy only — **never reaches the engine** | NEW `RIG_BLOCK_SET {track, block, param?, value?, bypassed?}` |
+| tone.rs `Shared::edited` / `commit` (every rack edit: the mixer's racks, the FX view's devices, knobs, switches and unit faces, a close-up) | rack switches, grips, EQ dots, macros, faces | `Edit::SetFxParam/SetFxEnabled`, no undo step | **routed**: live edits inside one undo step, then `FX_SET` (each FX's parameters as they ended) and `FX_ENABLE` (an FX it switched on) on the racks' worker when the pointer lifts or is lost |
+| fx_view.rs `face_edits` / `press` (Rig) | rig block faces / bypass | the window's copy only — **never reached the engine** | **routed**: `RIG_BLOCK_SET` with what the gesture changed on the block (`rig::block_changes`) when the face lets go; a bypass click at once |
 | fx_view.rs:803-810, 908 | lane scroll / step, group fold | view state | NEW `FX_VIEW {…}` |
 | automation_edit.rs:164, 186, 214 | hide lane, mode chip, lane height | `ShowEnvelope`, `SetEnvelopeMode`, `SetLaneHeight` | `AUTOMATION_SHOW`, `AUTOMATION_SET_MODE`, `AUTOMATION_SHOW {height}` |
 | automation_edit.rs:222-376 | items (make, move, trim, curve, delete), envelope points (add, drag, delete) | `*AutomationItem*`, `SetItemCurve`, `SetEnvelope` | `AUTOMATION_ITEM` (extend: `at`, `move_to`, bounds, `curve`), `AUTOMATION_WRITE` (extend: `replace`) |
@@ -237,6 +239,23 @@ lanes (`automation_edit::press/drag/release`) are area 3.
 | arrange_camera.rs:166-205 | wheel, pinch, hand pan, z-zoom | camera | `SESSION_VIEW` at gesture end |
 | ruler/mod.rs:130 | CHORDS lane toggle | atomic | NEW `SESSION_RULER {chords}` |
 | device_audio.rs | mic / speaker | host callback | NEW `SESSION_DEVICE_AUDIO` |
+
+**Still to route in the mixer and FX view (view state, rule 4):** the
+mixer's rails (scene, focus selected, take focus width, audience), its
+rack phase folds, rack zoom grip (`closeups.ask`), scroll (wheel,
+overview, pan, rack scroll, fling), and the FX view's lane scroll and
+step and group folds — `MIXER_VIEW {…}`, `FX_VIEW {…}`,
+`SESSION_CLOSEUP`. They are window actions, and `mixer_panel` and
+`fx_view` build for the browser too, so they wait for the browser's
+Action List (rule 7) rather than gain a browser fallback.
+
+**The FX view's rig is a fixture.** Its blocks come from a dump picked by
+the track's name (`rig::for_track`: Rhythm, Lead under Electric), not
+from the rig on the track, so `RIG_BLOCK_SET` names a block by that
+dump's name. Where the track's real rig has no block of that name the
+action refuses and says which it has — the edit is no longer silently
+lost, but it is not made either. Reading the FX view's rig from the
+engine (`RIG_BLOCKS`) is the fix.
 
 ### Session UI rsx — to route
 

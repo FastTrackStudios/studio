@@ -9865,6 +9865,13 @@ pub const PRESETS_H: f64 = 18.0;
 /// The racks' settings shared between everything that shows them — the
 /// mixer's strips, a close-up — with a generation that goes up on every
 /// edit, so each can tell its picture is stale.
+///
+/// An edit is a gesture (`docs/design/actions-everywhere.md`): while it
+/// moves, what moved goes to the processors live, inside one undo step
+/// ([`Self::edited`]); when it ends ([`Self::commit`]) it is committed as
+/// the actions a model would run — `FX_SET` with each FX's parameters as
+/// they ended, `FX_ENABLE` for one it switched on — in order after the
+/// live edits, and the step closed.
 #[derive(Default)]
 pub struct Shared {
     pub store: std::cell::RefCell<Store>,
@@ -9873,12 +9880,33 @@ pub struct Shared {
     /// engine (`crate::tone_bind`). Started the first time there is one.
     #[cfg(feature = "native")]
     applier: std::cell::OnceCell<Option<crate::engine::Applier>>,
+    /// What the gesture under way has moved, to commit when it ends.
+    #[cfg(feature = "native")]
+    gesture: std::cell::RefCell<Gesture>,
 }
+
+/// A rack gesture under way: the undo step its live edits are in, and
+/// each FX's parameters as they are now, by track.
+#[cfg(feature = "native")]
+#[derive(Default)]
+struct Gesture {
+    /// The undo step is open.
+    open: bool,
+    /// `(track, fx)` → each parameter's normalized value, and whether the
+    /// gesture switched the FX on.
+    moved:
+        std::collections::BTreeMap<(String, String), (std::collections::BTreeMap<u32, f64>, bool)>,
+}
+
+/// The undo step a rack gesture makes.
+#[cfg(feature = "native")]
+const RACK_STEP: &str = "Edit the rack";
 
 impl Shared {
     /// Say the settings moved — and send what moved to the processors
-    /// on the tracks ([`Store::flush`]). A store still held by its editor
-    /// keeps its changes for the next edit to send.
+    /// on the tracks, live ([`Store::flush`]), kept for [`Self::commit`].
+    /// A store still held by its editor keeps its changes for the next
+    /// edit to send.
     pub fn edited(&self) {
         self.generation.set(self.generation.get().wrapping_add(1));
         #[cfg(feature = "native")]
@@ -9890,10 +9918,87 @@ impl Shared {
             if edits.is_empty() {
                 return;
             }
-            if let Some(applier) = self.applier.get_or_init(crate::engine::Applier::start) {
-                for edit in edits {
-                    applier.send(edit);
+            let mut gesture = self.gesture.borrow_mut();
+            let open = !std::mem::replace(&mut gesture.open, true);
+            for edit in &edits {
+                match edit {
+                    crate::engine::Edit::SetFxParam(track, fx, index, value) => {
+                        let (params, _) = gesture
+                            .moved
+                            .entry((track.clone(), fx.clone()))
+                            .or_default();
+                        params.insert(*index, *value);
+                    }
+                    crate::engine::Edit::SetFxEnabled(track, fx, true) => {
+                        gesture
+                            .moved
+                            .entry((track.clone(), fx.clone()))
+                            .or_default()
+                            .1 = true;
+                    }
+                    _ => {}
                 }
+            }
+            drop(gesture);
+            let begin = open.then(|| crate::engine::Edit::BeginUndo(RACK_STEP.to_owned()));
+            self.send(begin.into_iter().chain(edits));
+        }
+    }
+
+    /// The gesture ended (let go, lost, a click done): what it moved
+    /// committed as `FX_SET` / `FX_ENABLE`, after its live edits, and its
+    /// undo step closed. Nothing moved, nothing happens.
+    pub fn commit(&self) {
+        #[cfg(feature = "native")]
+        {
+            // Anything the editor held back goes first.
+            self.edited();
+            let gesture = std::mem::take(&mut *self.gesture.borrow_mut());
+            if !gesture.open {
+                return;
+            }
+            let mut out = Vec::new();
+            for ((track, fx), (params, on)) in gesture.moved {
+                if !params.is_empty() {
+                    let set: serde_json::Map<String, serde_json::Value> = params
+                        .iter()
+                        .map(|(index, value)| (format!("#{index}"), format!("={value}").into()))
+                        .collect();
+                    let args = serde_json::json!({ "track": track, "fx": fx, "set": set });
+                    out.push(crate::engine::Edit::Run(
+                        "FX_SET".to_owned(),
+                        args.to_string(),
+                    ));
+                }
+                if on {
+                    let args = serde_json::json!({ "track": track, "fx": fx, "on": true });
+                    out.push(crate::engine::Edit::Run(
+                        "FX_ENABLE".to_owned(),
+                        args.to_string(),
+                    ));
+                }
+            }
+            out.push(crate::engine::Edit::EndUndo(RACK_STEP.to_owned()));
+            self.send(out);
+        }
+    }
+
+    /// A named action run on the engine in order with the racks' edits
+    /// (`Edit::Run`): what another control on the same surfaces commits —
+    /// a rig block (`RIG_BLOCK_SET`).
+    pub fn run(&self, id: &str, args: &serde_json::Value) {
+        #[cfg(feature = "native")]
+        self.send([crate::engine::Edit::Run(id.to_owned(), args.to_string())]);
+        #[cfg(not(feature = "native"))]
+        let _ = (id, args);
+    }
+
+    /// Edits to the engine, in order, on the racks' own worker.
+    #[cfg(feature = "native")]
+    fn send(&self, edits: impl IntoIterator<Item = crate::engine::Edit>) {
+        if let Some(applier) = self.applier.get_or_init(crate::engine::Applier::start) {
+            for edit in edits {
+                applier.send(edit);
             }
         }
     }

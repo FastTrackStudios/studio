@@ -2013,6 +2013,9 @@ impl MixerWidget {
             return;
         };
         let (_, hold) = self.holds.remove(i);
+        // A rack's grip, switch or dot let go: what it moved committed
+        // (`FX_SET`, `tone::Shared::commit`).
+        self.tone.commit();
         let up = self.spot_at(x, y);
         match hold {
             Hold::Turn(turn) => {
@@ -2092,6 +2095,7 @@ impl MixerWidget {
         if let Some(i) = self.hold_of(id) {
             let (_, hold) = self.holds.remove(i);
             self.flush_drag();
+            self.tone.commit();
             if let Hold::Turn(turn) = hold {
                 self.commit_turn(&turn);
             }

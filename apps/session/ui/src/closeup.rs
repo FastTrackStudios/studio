@@ -441,6 +441,9 @@ impl RackWidget {
             }
             UiEvent::PointerUp(e) | UiEvent::PointerCancel(e) => {
                 let held = self.hold.take_if(|(id, ..)| *id == e.id).is_some();
+                // What the press or the drag moved committed (`FX_SET`,
+                // `tone::Shared::commit`).
+                self.tone.commit();
                 if e.is_finger() {
                     self.hover = None;
                 }
