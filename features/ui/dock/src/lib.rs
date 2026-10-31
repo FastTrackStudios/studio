@@ -25,6 +25,7 @@ pub mod hit;
 #[cfg(feature = "host")]
 pub mod host;
 pub mod id;
+pub mod intent;
 pub mod layout;
 pub mod panel;
 pub mod persistence;
@@ -43,6 +44,7 @@ pub use diff::{LayoutDiff, LayoutOp};
 pub use drop_zone::DropZone;
 pub use history::LayoutHistory;
 pub use id::*;
+pub use intent::DockIntent;
 pub use layout::{DockLayout, DockZoneMode, FlatNode, LayoutRegion};
 pub use panel::PanelId;
 pub use persistence::{
