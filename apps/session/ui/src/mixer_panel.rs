@@ -814,6 +814,8 @@ struct MixerWidget {
     built_racks: bool,
     /// Whether the racks were shown at the last paint, built or not.
     racks_seen: Cell<bool>,
+    /// The last `MIXER_VIEW` ask taken up (`view_actions::MIXER_ASKS`).
+    view_seen: u64,
     /// The folds the rows were planned at ([`crate::folds::generation`]).
     folds_seen: u64,
     /// Whether the rows were last planned for Mix mode (`Links::mix`);
@@ -948,6 +950,7 @@ impl MixerWidget {
             built_open: None,
             built_racks: racks_shown(),
             racks_seen: Cell::new(racks_shown()),
+            view_seen: 0,
             folds_seen: crate::folds::generation(),
             mix_seen: None,
             rails: RailState::default(),
@@ -1279,21 +1282,43 @@ impl MixerWidget {
     fn rail_act(&mut self, act: crate::rails::Action) {
         use crate::rails::Action;
         use dynamic_template::scenes::Audience;
+        // A rail of the mixer's own view: `MIXER_VIEW`, taken up at once
+        // (and by any other mixer on its next frame).
+        let view = match act {
+            Action::Scene(slug) => Some(crate::view_actions::MixerView {
+                scene: Some(slug.to_owned()),
+                ..Default::default()
+            }),
+            Action::FocusSelected => Some(crate::view_actions::MixerView {
+                focus_selected: Some(!self.rails.settings.focus_selected),
+                ..Default::default()
+            }),
+            Action::TakeFocusWidth => Some(crate::view_actions::MixerView {
+                take_focus_width: Some(!self.rails.settings.take_focus_width),
+                ..Default::default()
+            }),
+            Action::Audience => Some(crate::view_actions::MixerView {
+                audience: Some(
+                    if self.rails.audience == Audience::Engineer {
+                        "player"
+                    } else {
+                        "engineer"
+                    }
+                    .to_owned(),
+                ),
+                ..Default::default()
+            }),
+            _ => None,
+        };
+        if let Some(view) = view {
+            self.press_view(&view);
+            return;
+        }
         match act {
-            // Another scene, or a switch the plan reads: the rows are
-            // planned again.
-            Action::Scene(slug) => {
-                self.rails.scene = Some(slug);
-                self.mix_seen = None;
-            }
-            Action::FocusSelected => {
-                self.rails.settings.focus_selected = !self.rails.settings.focus_selected;
-                self.mix_seen = None;
-            }
-            Action::TakeFocusWidth => {
-                self.rails.settings.take_focus_width = !self.rails.settings.take_focus_width;
-                self.mix_seen = None;
-            }
+            Action::Scene(_)
+            | Action::FocusSelected
+            | Action::TakeFocusWidth
+            | Action::Audience => {}
             // Every rack opens at that phase's section.
             Action::Phase(phase) => {
                 // The window's one choice of phase: the bottom bar's
@@ -1313,19 +1338,86 @@ impl MixerWidget {
                     analyser.invalidate();
                 }
             }
-            Action::Audience => {
-                self.rails.audience = if self.rails.audience == Audience::Engineer {
-                    Audience::Player
-                } else {
-                    Audience::Engineer
-                };
-            }
             // Not the mixer's: the mode is switched in the bottom bar, the
             // takes are the arrangement's.
             Action::Mode(_) | Action::FoldedTakes => {}
         }
         // Built again with what changed.
         self.mixer = None;
+    }
+
+    /// `MIXER_VIEW` run with `view`, and taken up here at once.
+    fn press_view(&mut self, view: &crate::view_actions::MixerView) {
+        let args = facet_json::to_string(view)
+            .ok()
+            .and_then(|j| serde_json::from_str(&j).ok());
+        if let Some(args) = args {
+            let _ = crate::press::press(crate::view_actions::MIXER_VIEW.id, &args);
+        }
+        self.take_view();
+    }
+
+    /// What `MIXER_VIEW` asked since the last look, shown.
+    fn take_view(&mut self) {
+        use dynamic_template::scenes::Audience;
+        for view in
+            crate::view_actions::since(&crate::view_actions::MIXER_ASKS, &mut self.view_seen)
+        {
+            if let Some(scene) = view.scene.as_deref().and_then(|wanted| {
+                dynamic_template::scenes::scenes()
+                    .iter()
+                    .find(|s| s.slug.as_str() == wanted)
+                    .map(|s| s.slug.as_str())
+            }) {
+                self.rails.scene = Some(scene);
+                self.mix_seen = None;
+            }
+            if let Some(on) = view.focus_selected {
+                self.rails.settings.focus_selected = on;
+                self.mix_seen = None;
+            }
+            if let Some(on) = view.take_focus_width {
+                self.rails.settings.take_focus_width = on;
+                self.mix_seen = None;
+            }
+            if let Some(audience) = view.audience.as_deref() {
+                self.rails.audience = if audience.eq_ignore_ascii_case("player") {
+                    Audience::Player
+                } else {
+                    Audience::Engineer
+                };
+            }
+            if let Some(at) = view.scroll {
+                let most = (self.content_w.get() - self.width.get()).max(0.0);
+                self.scroll.set(at.clamp(0.0, most));
+                self.fling = None;
+            }
+            if let Some(at) = view.rack_scroll {
+                self.rack_scroll = at.clamp(0.0, self.rack_span());
+            }
+            if let Some(fold) = view.rack_fold
+                && let Some(phase) = session::mix_phases::MixPhase::from_slug(&fold.phase)
+            {
+                self.folds.toggle(&fold.track, phase);
+                for analyser in self.spectra.values_mut() {
+                    analyser.invalidate();
+                }
+                self.invalidate_rack(&fold.track);
+            }
+            // Built again with what changed.
+            self.mixer = None;
+            self.dirty.set(true);
+        }
+    }
+
+    /// Where the strips are scrolled to, said (`MIXER_VIEW {scroll}`): a
+    /// scroll gesture ended.
+    fn commit_scroll(&mut self) {
+        let view = crate::view_actions::MixerView {
+            scroll: Some(self.scroll.get()),
+            ..Default::default()
+        };
+        self.press_view(&view);
     }
 
     fn content(&self, x: f64, y: f64) -> (f64, f64) {
@@ -1423,6 +1515,7 @@ impl MixerWidget {
         self.scroll.set(to);
         if stopped {
             self.fling = None;
+            self.commit_scroll();
         } else {
             self.dirty.set(true);
             self.redraw();
@@ -1498,22 +1591,31 @@ impl MixerWidget {
         self.rack_pressed = Some((row, grip, now));
         if grip.is_switch() {
             if let Grip::Zoom(which) = grip {
-                // The panel, full screen: asked of the shell, which the
-                // host carries out on its next frame.
-                if let (Some(closeups), Some(track)) = (&self.closeups, self.track_at(row)) {
-                    closeups.ask(crate::closeup::Closeup::Rack {
-                        guid: guid.clone(),
-                        name: track.name.clone(),
-                        which,
+                // The panel, full screen (`SESSION_CLOSEUP`): the shell
+                // shows it, here at once.
+                if let Some(track) = self.track_at(row) {
+                    let args = serde_json::json!({
+                        "track": guid,
+                        "panel": which.slug(),
+                        "name": track.name,
                     });
+                    let _ = crate::press::press(crate::view_actions::CLOSEUP.id, &args);
+                    if let Some(closeups) = &self.closeups {
+                        closeups.take_ask();
+                    }
                     self.redraw();
                 }
             } else if let Grip::Phase(phase) = grip {
-                // What the mixer is showing, not a setting of the track.
-                self.folds.toggle(&guid, phase);
-                for analyser in self.spectra.values_mut() {
-                    analyser.invalidate();
-                }
+                // What the mixer is showing, not a setting of the track:
+                // `MIXER_VIEW {rack_fold}`.
+                let view = crate::view_actions::MixerView {
+                    rack_fold: Some(crate::view_actions::RackFold {
+                        track: guid.clone(),
+                        phase: phase.slug().to_owned(),
+                    }),
+                    ..Default::default()
+                };
+                self.press_view(&view);
             } else if let Some(tone) = self.tone.store.borrow_mut().edit(&guid) {
                 crate::tone::toggle(tone, grip);
             }
@@ -2023,7 +2125,19 @@ impl MixerWidget {
             Hold::Pan { speed, .. } => {
                 let (vx, _) = speed.velocity();
                 self.fling = crate::touch::Fling::thrown((-vx, 0.0));
+                // Not thrown: it ends here (a throw ends where it stops).
+                if self.fling.is_none() {
+                    self.commit_scroll();
+                }
                 self.redraw();
+            }
+            Hold::Overview => self.commit_scroll(),
+            Hold::RackScroll { .. } => {
+                let view = crate::view_actions::MixerView {
+                    rack_scroll: Some(self.rack_scroll),
+                    ..Default::default()
+                };
+                self.press_view(&view);
             }
             Hold::Press {
                 spot: Some(spot), ..
@@ -2077,7 +2191,7 @@ impl MixerWidget {
                     self.dirty.set(true);
                 }
             }
-            Hold::Press { .. } | Hold::Overview | Hold::Rack { .. } | Hold::RackScroll { .. } => {}
+            Hold::Press { .. } | Hold::Rack { .. } => {}
         }
         self.pointer.release();
         self.pointer.hover(if finger { None } else { up });
@@ -2210,6 +2324,7 @@ impl MixerWidget {
     /// host draws into its canvas.
     pub fn paint_scene(&mut self, width: u32, height: u32, scale: f64) -> Scene {
         self.follow_phase();
+        self.take_view();
         self.dirty.set(false);
         self.racks_seen.set(racks_shown());
         self.flush_drag();
@@ -2496,6 +2611,8 @@ impl Widget for MixerWidget {
             || self.tone.generation() != self.tone_seen
             // The racks shown or hidden.
             || racks_shown() != self.racks_seen.get()
+            // A `MIXER_VIEW` asked of it.
+            || crate::view_actions::pending(&crate::view_actions::MIXER_ASKS, self.view_seen)
     }
 
     fn paint(
