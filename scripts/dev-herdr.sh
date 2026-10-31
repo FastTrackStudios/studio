@@ -258,8 +258,11 @@ fi
 # saved file recompiles each crate once for all three. Another profile or
 # feature set recompiles every shared crate.
 dev_features="cli,signal-keys-rig"
-cli="$repo/target/debug/studio"
-build_cli="cargo build -p studio-desktop --features $dev_features --bin studio"
+# dx builds as `desktop-dev` for the host triple (target/<host>/desktop-dev);
+# the engine is built to match, or the two never share an artifact.
+host="$(rustc -vV | sed -n 's/^host: //p')"
+cli="$repo/target/$host/desktop-dev/studio"
+build_cli="cargo build --profile desktop-dev --target $host -p studio-desktop --features $dev_features --bin studio"
 
 # ── Tab "telemetry", first: the collector is up before anything sends ──
 ws="$(h workspace create --label "$label" --cwd "$repo" --no-focus)"
