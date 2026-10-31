@@ -337,6 +337,25 @@ impl Node {
         }
     }
 
+    fn share_of(&self, id: SplitId) -> Option<Share> {
+        match self {
+            Self::Stack(_) => None,
+            Self::Split {
+                id: own,
+                share,
+                first,
+                second,
+                ..
+            } => {
+                if *own == id {
+                    Some(*share)
+                } else {
+                    first.share_of(id).or_else(|| second.share_of(id))
+                }
+            }
+        }
+    }
+
     fn share_mut(&mut self, id: SplitId) -> Option<&mut Share> {
         match self {
             Self::Stack(_) => None,
@@ -564,7 +583,8 @@ pub struct Float {
 }
 
 /// Where a panel goes.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Facet)]
+#[repr(u8)]
 pub enum Place {
     /// Into the centre: a tab of its first stack, or the centre itself
     /// when it is empty.
@@ -579,7 +599,8 @@ pub enum Place {
 }
 
 /// Where on a stack a dropped panel lands.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Facet)]
+#[repr(u8)]
 pub enum Zone {
     /// As another tab.
     Tab,
@@ -769,6 +790,12 @@ impl Dockspace {
     }
 
     /// Sets how the split `id` shares its length.
+    /// How split `id` is divided, wherever it is.
+    #[must_use]
+    pub fn share_of(&self, id: SplitId) -> Option<Share> {
+        self.areas().find_map(|(_, root)| root.share_of(id))
+    }
+
     pub fn set_share(&mut self, id: SplitId, share: Share) -> Result<(), DockError> {
         let slot = self
             .roots_mut()
