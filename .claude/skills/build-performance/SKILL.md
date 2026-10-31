@@ -117,6 +117,11 @@ Since 2026-10-31 everything run while working builds ONE way: the window
 - **`--target <host>`**, as dx passes it: artifacts land in
   `target/<host>/desktop-dev`. Without `--target` the same profile builds
   into `target/<profile>` and shares nothing with dx.
+- **`target/desktop-dev` is live too.** With `--target`, cargo builds the
+  HOST half of the graph — build scripts and proc-macros — into
+  `target/<profile>`, not under the triple. Its timestamps can look stale;
+  delete it and every crate that uses a proc-macro rebuilds (done once by
+  mistake on 2026-10-31). Clear it only together with the triple's dir.
 - **Features `cli,signal-keys-rig`** on studio-desktop. `just dev-test`
   names studio-desktop with them so the crates under test unify their
   features with the app's, and filters to the crates asked for.
