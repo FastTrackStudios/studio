@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Wrap the release-fast build in a macOS app bundle: `Signal.app`, the guitar
+# Wrap a build of the app in a macOS app bundle: `Signal.app`, the guitar
 # rig, launched from Finder / the Dock / Spotlight like any app.
 #
 #   scripts/signal/mac-app.sh                 build target/Signal.app
 #   scripts/signal/mac-app.sh --install       …and copy it to ~/Applications
+#   SIGNAL_BIN=target/release-fast/studio-desktop scripts/signal/mac-app.sh
+#                                      bundle another build (the default is
+#                                      the dev build `just` makes)
 #   SIGNAL_WINDOW_SIZE=1512x945 scripts/signal/mac-app.sh --install
 #                                      open at that size, not maximized
 #                                      (1512x945: a MacBook Pro 14"'s screen
@@ -17,8 +20,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-bin=target/release-fast/studio-desktop
-[ -x "$bin" ] || { echo "no $bin — run \`just app\` first" >&2; exit 1; }
+host="$(rustc -vV | sed -n 's/^host: //p')"
+bin="${SIGNAL_BIN:-target/$host/desktop-dev/studio-desktop}"
+[ -x "$bin" ] || { echo "no $bin — run \`just signal-build\` first" >&2; exit 1; }
 
 app=target/Signal.app
 rm -rf "$app"
@@ -53,7 +57,7 @@ if [ -d "$faces" ]; then
     mkdir -p "$app/Contents/Resources/faces"
     cp -R "$faces" "$app/Contents/Resources/faces/"
 else
-    echo "no $faces (run `just faces`) — the app will draw plain cards" >&2
+    echo "no $faces (run 'just faces') — the app will draw plain cards" >&2
 fi
 
 icon=apps/studio/desktop/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
