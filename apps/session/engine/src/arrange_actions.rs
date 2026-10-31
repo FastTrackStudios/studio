@@ -21,8 +21,9 @@
 //! split or a copy makes included (`into`, answered in `made`).
 
 use architect::action::{ActionList, ActionMeta, Effect};
-use daw_proto::automation::{EnvelopePoint, EnvelopeShape};
+use daw_proto::automation::{EnvelopePoint, EnvelopeRef, EnvelopeShape};
 use daw_proto::item::FadeShape;
+use daw_proto::primitives::AutomationMode;
 use daw_proto::primitives::PositionInSeconds;
 use facet::Facet;
 
@@ -96,6 +97,101 @@ pub enum ArrangeEdit {
         item: String,
         points: Vec<TakePoint>,
     },
+    /// `envelope` of `track`: every point of it (`time` seconds into the
+    /// song, `value` 0..1).
+    Envelope {
+        track: String,
+        envelope: EnvelopeRef,
+        points: Vec<TakePoint>,
+    },
+    /// Automation item `item` of `envelope`: its curve (its pool's, so
+    /// every instance's; `time` seconds into it).
+    ItemCurve {
+        track: String,
+        envelope: EnvelopeRef,
+        item: u32,
+        points: Vec<TakePoint>,
+    },
+    /// Automation item `item` moved to `at` seconds.
+    ItemMove {
+        track: String,
+        envelope: EnvelopeRef,
+        item: u32,
+        at: f64,
+    },
+    /// An automation item made at `at` for `length` seconds — in `pool`
+    /// (`-1`: a fresh one, its curve `points`).
+    ItemAdd {
+        track: String,
+        envelope: EnvelopeRef,
+        at: f64,
+        length: f64,
+        pool: i32,
+        points: Vec<TakePoint>,
+    },
+    /// Automation item `item`'s bounds: where it starts, how long, how far
+    /// into its source.
+    ItemBounds {
+        track: String,
+        envelope: EnvelopeRef,
+        item: u32,
+        at: f64,
+        length: f64,
+        offset: f64,
+    },
+    /// Automation item `item`, gone.
+    ItemDelete {
+        track: String,
+        envelope: EnvelopeRef,
+        item: u32,
+    },
+    /// `envelope`'s lane shown or hidden.
+    LaneShow {
+        track: String,
+        envelope: EnvelopeRef,
+        show: bool,
+    },
+    /// `envelope`'s automation mode.
+    LaneMode {
+        track: String,
+        envelope: EnvelopeRef,
+        mode: AutomationMode,
+    },
+    /// `envelope`'s lane height, pixels.
+    LaneHeight {
+        track: String,
+        envelope: EnvelopeRef,
+        pixels: u32,
+    },
+}
+
+/// Envelope points as the vocabulary says them.
+fn points_of(points: &[EnvelopePoint]) -> Vec<TakePoint> {
+    points
+        .iter()
+        .map(|p| TakePoint {
+            time: p.time.as_seconds(),
+            value: p.value,
+            shape: p.shape,
+            tension: p.tension,
+        })
+        .collect()
+}
+
+/// The vocabulary's points as the engine's.
+fn envelope_points(points: &[TakePoint]) -> Vec<EnvelopePoint> {
+    points
+        .iter()
+        .zip(0_u32..)
+        .map(|(p, index)| EnvelopePoint {
+            index,
+            time: PositionInSeconds::from_seconds(p.time),
+            value: p.value,
+            shape: p.shape,
+            tension: p.tension,
+            selected: false,
+        })
+        .collect()
 }
 
 /// A stretch marker: `at` in the take, `source` in its recording.
@@ -203,15 +299,60 @@ impl ArrangeEdit {
             Edit::RemoveRegion(_, id) => Self::RegionRemove { id: *id },
             Edit::SetTakeVolume(g, points) => Self::TakeVolume {
                 item: item(g),
-                points: points
-                    .iter()
-                    .map(|p| TakePoint {
-                        time: p.time.as_seconds(),
-                        value: p.value,
-                        shape: p.shape,
-                        tension: p.tension,
-                    })
-                    .collect(),
+                points: points_of(points),
+            },
+            Edit::SetEnvelope(t, e, points) => Self::Envelope {
+                track: t.clone(),
+                envelope: e.clone(),
+                points: points_of(points),
+            },
+            Edit::SetItemCurve(t, e, i, points) => Self::ItemCurve {
+                track: t.clone(),
+                envelope: e.clone(),
+                item: *i,
+                points: points_of(points),
+            },
+            Edit::MoveAutomationItem(t, e, i, at) => Self::ItemMove {
+                track: t.clone(),
+                envelope: e.clone(),
+                item: *i,
+                at: *at,
+            },
+            Edit::AddAutomationItem(t, e, (at, length, pool), points) => Self::ItemAdd {
+                track: t.clone(),
+                envelope: e.clone(),
+                at: *at,
+                length: *length,
+                pool: *pool,
+                points: points_of(points),
+            },
+            Edit::SetAutomationItemBounds(t, e, i, (at, length, offset)) => Self::ItemBounds {
+                track: t.clone(),
+                envelope: e.clone(),
+                item: *i,
+                at: *at,
+                length: *length,
+                offset: *offset,
+            },
+            Edit::DeleteAutomationItem(t, e, i) => Self::ItemDelete {
+                track: t.clone(),
+                envelope: e.clone(),
+                item: *i,
+            },
+            Edit::ShowEnvelope(t, e, show) => Self::LaneShow {
+                track: t.clone(),
+                envelope: e.clone(),
+                show: *show,
+            },
+            Edit::SetEnvelopeMode(t, e, mode) => Self::LaneMode {
+                track: t.clone(),
+                envelope: e.clone(),
+                mode: *mode,
+            },
+            Edit::SetLaneHeight(t, e, pixels) => Self::LaneHeight {
+                track: t.clone(),
+                envelope: e.clone(),
+                pixels: *pixels,
             },
             _ => return None,
         })
@@ -255,21 +396,77 @@ impl ArrangeEdit {
             Self::RegionAdd { from, to, lane } => Edit::AddRegion(none(), *from, *to, *lane),
             Self::RegionBounds { id, from, to } => Edit::SetRegionBounds(none(), *id, *from, *to),
             Self::RegionRemove { id } => Edit::RemoveRegion(none(), *id),
-            Self::TakeVolume { item, points } => Edit::SetTakeVolume(
-                item.clone(),
-                points
-                    .iter()
-                    .zip(0_u32..)
-                    .map(|(p, index)| EnvelopePoint {
-                        index,
-                        time: PositionInSeconds::from_seconds(p.time),
-                        value: p.value,
-                        shape: p.shape,
-                        tension: p.tension,
-                        selected: false,
-                    })
-                    .collect(),
+            Self::TakeVolume { item, points } => {
+                Edit::SetTakeVolume(item.clone(), envelope_points(points))
+            }
+            Self::Envelope {
+                track,
+                envelope,
+                points,
+            } => Edit::SetEnvelope(track.clone(), envelope.clone(), envelope_points(points)),
+            Self::ItemCurve {
+                track,
+                envelope,
+                item,
+                points,
+            } => Edit::SetItemCurve(
+                track.clone(),
+                envelope.clone(),
+                *item,
+                envelope_points(points),
             ),
+            Self::ItemMove {
+                track,
+                envelope,
+                item,
+                at,
+            } => Edit::MoveAutomationItem(track.clone(), envelope.clone(), *item, *at),
+            Self::ItemAdd {
+                track,
+                envelope,
+                at,
+                length,
+                pool,
+                points,
+            } => Edit::AddAutomationItem(
+                track.clone(),
+                envelope.clone(),
+                (*at, *length, *pool),
+                envelope_points(points),
+            ),
+            Self::ItemBounds {
+                track,
+                envelope,
+                item,
+                at,
+                length,
+                offset,
+            } => Edit::SetAutomationItemBounds(
+                track.clone(),
+                envelope.clone(),
+                *item,
+                (*at, *length, *offset),
+            ),
+            Self::ItemDelete {
+                track,
+                envelope,
+                item,
+            } => Edit::DeleteAutomationItem(track.clone(), envelope.clone(), *item),
+            Self::LaneShow {
+                track,
+                envelope,
+                show,
+            } => Edit::ShowEnvelope(track.clone(), envelope.clone(), *show),
+            Self::LaneMode {
+                track,
+                envelope,
+                mode,
+            } => Edit::SetEnvelopeMode(track.clone(), envelope.clone(), *mode),
+            Self::LaneHeight {
+                track,
+                envelope,
+                pixels,
+            } => Edit::SetLaneHeight(track.clone(), envelope.clone(), *pixels),
         }
     }
 
@@ -288,9 +485,22 @@ impl ArrangeEdit {
             Self::RegionAdd { from, to, .. } | Self::RegionBounds { from, to, .. } => {
                 all(&[*from, *to])
             }
-            Self::TakeVolume { points, .. } => {
+            Self::TakeVolume { points, .. }
+            | Self::Envelope { points, .. }
+            | Self::ItemCurve { points, .. } => {
                 points.iter().all(|p| all(&[p.time, p.value, p.tension]))
             }
+            Self::ItemMove { at, .. } => at.is_finite(),
+            Self::ItemAdd {
+                at, length, points, ..
+            } => all(&[*at, *length]) && points.iter().all(|p| all(&[p.time, p.value, p.tension])),
+            Self::ItemBounds {
+                at, length, offset, ..
+            } => all(&[*at, *length, *offset]),
+            Self::ItemDelete { .. }
+            | Self::LaneShow { .. }
+            | Self::LaneMode { .. }
+            | Self::LaneHeight { .. } => true,
             Self::Lane { .. }
             | Self::Delete { .. }
             | Self::Select { .. }
@@ -335,7 +545,7 @@ macro_rules! gesture {
             $display,
             concat!(
                 $what,
-                " `edits`: the gesture's edits, in order (each one of `move`, `trim`, `slip`, `fade_in`, `fade_out`, `lane`, `volume`, `stretch`, `snap_offset`, `split`, `copy`, `delete`, `select`, `deselect`, `select_all`, `deselect_all`, `marker_add`, `marker_move`, `marker_remove`, `region_add`, `region_bounds`, `region_remove`, `take_volume`; items by GUID, `into` the name the window gives the item a split or a copy makes); `label` names the undo step they make together. Says how many edits it made and, in `made`, the engine's GUID for each item named by `into`. To edit items by hand prefer ITEMS_SET, ITEM_SPLIT, ITEMS_DELETE."
+                " `edits`: the gesture's edits, in order (each one of `move`, `trim`, `slip`, `fade_in`, `fade_out`, `lane`, `volume`, `stretch`, `snap_offset`, `split`, `copy`, `delete`, `select`, `deselect`, `select_all`, `deselect_all`, `marker_add`, `marker_move`, `marker_remove`, `region_add`, `region_bounds`, `region_remove`, `take_volume`, and on an automation lane `envelope`, `item_curve`, `item_move`, `item_add`, `item_bounds`, `item_delete`, `lane_show`, `lane_mode`, `lane_height` (each with `track` and its `envelope`); items by GUID, `into` the name the window gives the item a split or a copy makes); `label` names the undo step they make together. Says how many edits it made and, in `made`, the engine's GUID for each item named by `into`. To edit items by hand prefer ITEMS_SET, ITEM_SPLIT, ITEMS_DELETE."
             ),
             "Arrange",
             "",
@@ -414,6 +624,27 @@ gesture!(
     "What a drag on an item's take volume curve commits: a point made, moved or deleted."
 );
 gesture!(
+    AUTOMATION_POINTS,
+    "AUTOMATION_POINTS_EDIT",
+    "automation_points_edit",
+    "Edit automation points",
+    "What a press or drag in an automation lane commits: a point drawn, dragged or deleted — the envelope's points as they ended."
+);
+gesture!(
+    AUTOMATION_ITEMS,
+    "AUTOMATION_ITEMS_EDIT",
+    "automation_items_edit",
+    "Edit automation items",
+    "What a gesture on automation items commits: one made (Shift-drag) or copied into a pool (Ctrl-drag), moved, its edges trimmed, its curve drawn, or deleted (Alt-click)."
+);
+gesture!(
+    AUTOMATION_LANE,
+    "AUTOMATION_LANE_SET",
+    "automation_lane_set",
+    "Set an automation lane",
+    "What an automation lane's header commits: the lane hidden, its mode chip stepped to the next mode, its height dragged."
+);
+gesture!(
     SELECT,
     "ITEMS_SELECT",
     "items_select",
@@ -429,7 +660,10 @@ gesture!(
 );
 
 /// Every gesture action.
-pub static GESTURES: [&ActionMeta; 12] = [
+pub static GESTURES: [&ActionMeta; 15] = [
+    &AUTOMATION_POINTS,
+    &AUTOMATION_ITEMS,
+    &AUTOMATION_LANE,
     &MOVE,
     &TRIM,
     &SLIP,
@@ -480,6 +714,13 @@ pub fn gesture_id(edits: &[ArrangeEdit]) -> &'static str {
             | E::RegionRemove { .. } => MARKERS.id,
             E::Volume { .. } => ITEM_VOLUME.id,
             E::TakeVolume { .. } => TAKE_VOLUME.id,
+            E::Envelope { .. } => AUTOMATION_POINTS.id,
+            E::ItemCurve { .. }
+            | E::ItemMove { .. }
+            | E::ItemAdd { .. }
+            | E::ItemBounds { .. }
+            | E::ItemDelete { .. } => AUTOMATION_ITEMS.id,
+            E::LaneShow { .. } | E::LaneMode { .. } | E::LaneHeight { .. } => AUTOMATION_LANE.id,
         };
         kinds.insert(kind);
     }
@@ -570,7 +811,29 @@ mod tests {
 
     fn every_kind() -> Vec<Edit> {
         let g = || "{item}".to_owned();
+        let t = || "{track}".to_owned();
+        let e = || EnvelopeRef::FxParam {
+            fx_guid: "{fx}".to_owned(),
+            param_index: 3,
+        };
+        let point = || EnvelopePoint {
+            index: 0,
+            time: PositionInSeconds::from_seconds(2.0),
+            value: 0.25,
+            shape: EnvelopeShape::Linear,
+            tension: 0.0,
+            selected: false,
+        };
         vec![
+            Edit::SetEnvelope(t(), e(), vec![point()]),
+            Edit::SetItemCurve(t(), e(), 1, vec![point()]),
+            Edit::MoveAutomationItem(t(), e(), 1, 8.0),
+            Edit::AddAutomationItem(t(), e(), (4.0, 2.0, -1), vec![point()]),
+            Edit::SetAutomationItemBounds(t(), e(), 1, (4.0, 3.0, 0.5)),
+            Edit::DeleteAutomationItem(t(), e(), 1),
+            Edit::ShowEnvelope(t(), e(), false),
+            Edit::SetEnvelopeMode(t(), e(), AutomationMode::Touch),
+            Edit::SetLaneHeight(t(), e(), 80),
             Edit::MoveItem(g(), 1.0),
             Edit::TrimItem(g(), 1.0, 2.0),
             Edit::SlipItem(g(), 0.5),
@@ -675,6 +938,25 @@ mod tests {
                 Edit::DeleteItem(g())
             ]),
             Some(EDIT.id)
+        );
+        let e = || EnvelopeRef::FxParam {
+            fx_guid: "{fx}".to_owned(),
+            param_index: 0,
+        };
+        assert_eq!(
+            of(vec![Edit::SetEnvelope(g(), e(), vec![])]),
+            Some(AUTOMATION_POINTS.id)
+        );
+        assert_eq!(
+            of(vec![
+                Edit::AddAutomationItem(g(), e(), (1.0, 1.0, -1), vec![]),
+                Edit::SetItemCurve(g(), e(), 0, vec![])
+            ]),
+            Some(AUTOMATION_ITEMS.id)
+        );
+        assert_eq!(
+            of(vec![Edit::SetLaneHeight(g(), e(), 60)]),
+            Some(AUTOMATION_LANE.id)
         );
         assert_eq!(of(vec![Edit::ToggleMute(g())]), None);
         assert_eq!(of(vec![]), None);

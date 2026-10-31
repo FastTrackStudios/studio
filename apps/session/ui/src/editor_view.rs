@@ -326,10 +326,10 @@ pub struct EditorView {
     loading: Option<Slot>,
     /// The last read found nothing to edit.
     failed: bool,
-    /// The saver: one task on the engine's runtime writing each saved
-    /// take back in the order it was saved, so a save never holds the
-    /// window and two saves never land out of order.
-    saver: Option<tokio::sync::mpsc::UnboundedSender<(String, Content)>>,
+    /// The saver: one thread committing each saved take (`NOTES_WRITE`)
+    /// in the order it was saved, so a save never holds the window and two
+    /// saves never land out of order.
+    saver: Option<std::sync::mpsc::Sender<(String, Content)>>,
     dirty: bool,
     /// The view on screen is the previous take's, kept up while the next
     /// one loads ([`Self::retarget`]).
@@ -477,20 +477,32 @@ fn saved() {
     }
 }
 
-/// Start the saver on the engine's runtime: each take sent is written
-/// back in turn. `None` with no engine.
+/// Start the saver: one thread committing each take sent as `NOTES_WRITE`
+/// (`session_engine::notes_actions`), in the order they were saved — where
+/// every action runs (`crate::actions::run`: on the engine, over its link).
 #[cfg(feature = "native")]
-fn saver() -> Option<tokio::sync::mpsc::UnboundedSender<(String, Content)>> {
-    let runtime = crate::open::runtime()?;
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(String, Content)>();
-    runtime.spawn(async move {
-        while let Some((item, content)) = rx.recv().await {
-            if !crate::expression::write_take(item.clone(), content).await {
-                tracing::warn!(editor.item = %item, "the editor's take could not be written back");
+fn saver() -> Option<std::sync::mpsc::Sender<(String, Content)>> {
+    let (tx, rx) = std::sync::mpsc::channel::<(String, Content)>();
+    std::thread::Builder::new()
+        .name("editor-saver".into())
+        .spawn(move || {
+            for (item, content) in rx {
+                let _span = tracing::info_span!("editor.save", editor.item = %item).entered();
+                let ran = crate::expression::notes_write_args(&item, content)
+                    .ok_or_else(|| "the take would not say itself".to_owned())
+                    .and_then(|args| {
+                        crate::actions::run(
+                            session_engine::notes_actions::NOTES_WRITE.id,
+                            args.as_bytes(),
+                        )
+                    });
+                if let Err(e) = ran {
+                    tracing::warn!(action.id = "NOTES_WRITE", error = %e, "the editor's take could not be written back");
+                }
+                SAVING.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
             }
-            SAVING.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
-        }
-    });
+        })
+        .ok()?;
     Some(tx)
 }
 
