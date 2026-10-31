@@ -24,6 +24,60 @@ use super::start::{
     ACCENT, BAR, BG, Chip, DIM, Heading, Load, Pill, RULE, TEXT, TOP, WARN, brief, off_thread,
 };
 
+/// A library edit run as its named action
+/// (`session_engine::library_actions`: `LIBRARY_LIST_CREATE`, …) — on the
+/// engine over the link, as every action runs — so `watch` and the CLI see
+/// it. Blocks: call it off the window's thread ([`off_thread`]). What the
+/// action said.
+fn library_action(id: &'static str, args: &serde_json::Value) -> eyre::Result<serde_json::Value> {
+    session_engine::actions::run(id, args.to_string().as_bytes())
+        .map(|said| serde_json::from_slice(&said).unwrap_or_default())
+        .map_err(|e| eyre::eyre!(e))
+}
+
+/// A list an action said (`library_actions::ListOut`), with `songs` its
+/// songs as the editor holds them.
+fn said_list(said: &serde_json::Value, songs: Vec<LibrarySong>) -> Option<LibrarySetlist> {
+    let text = |k: &str| {
+        said.get(k)
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+    };
+    let kind = match text("kind")?.as_str() {
+        "set" => ListKind::Set,
+        _ => ListKind::Songs,
+    };
+    Some(LibrarySetlist {
+        id: text("id")?,
+        title: text("title")?,
+        kind,
+        songs,
+    })
+}
+
+/// A song an action said (`library_actions::SongOut`).
+fn said_song(said: &serde_json::Value) -> Option<LibrarySong> {
+    let text = |k: &str| {
+        said.get(k)
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+    };
+    Some(LibrarySong {
+        slug: text("slug")?,
+        title: text("title")?,
+        key: text("key").unwrap_or_default(),
+        writers: said
+            .get("writers")
+            .and_then(serde_json::Value::as_array)
+            .map(|w| {
+                w.iter()
+                    .filter_map(|x| x.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default(),
+    })
+}
+
 /// Where the songs to add come from.
 #[derive(Clone, PartialEq)]
 enum From {
@@ -104,49 +158,45 @@ pub fn LibraryEditor(
     // The saver: one list at a time, its latest order, until none is due —
     // started by an edit, never two at once.
     let mut running = use_signal(|| false);
-    let save =
-        {
-            let library = library.clone();
-            move || {
-                if *running.peek() {
-                    return;
-                }
-                running.set(true);
-                let library = library.clone();
-                spawn(async move {
-                    loop {
-                        let due = changed
-                            .peek()
-                            .iter()
-                            .find(|(id, n)| saved.peek().get(*id) != Some(n))
-                            .map(|(id, n)| (id.clone(), *n));
-                        let Some((id, generation)) = due else { break };
-                        let order =
-                            lists.peek().iter().find(|l| l.id == id).map(|l| {
-                                l.songs.iter().map(|s| s.slug.clone()).collect::<Vec<_>>()
-                            });
-                        if let Some(order) = order {
-                            let library = library.clone();
-                            let list = id.clone();
-                            match off_thread(move || {
-                                with_library(&library, |l| async move {
-                                    l.set_songs(&list, &order).await
-                                })
-                            })
-                            .await
-                            {
-                                Some(Ok(())) => problem.set(None),
-                                Some(Err(e)) => problem.set(Some(brief(&e))),
-                                None => {}
-                            }
-                        }
-                        // Tried: a failure is said, and not retried in a loop.
-                        saved.write().insert(id, generation);
-                    }
-                    running.set(false);
-                });
+    let save = {
+        let library = library.clone();
+        move || {
+            if *running.peek() {
+                return;
             }
-        };
+            running.set(true);
+            let library = library.clone();
+            spawn(async move {
+                loop {
+                    let due = changed
+                        .peek()
+                        .iter()
+                        .find(|(id, n)| saved.peek().get(*id) != Some(n))
+                        .map(|(id, n)| (id.clone(), *n));
+                    let Some((id, generation)) = due else { break };
+                    let order = lists
+                        .peek()
+                        .iter()
+                        .find(|l| l.id == id)
+                        .map(|l| l.songs.iter().map(|s| s.slug.clone()).collect::<Vec<_>>());
+                    if let Some(order) = order {
+                        let args = serde_json::json!({
+                            "list": id, "songs": order, "org": library.org,
+                        });
+                        match off_thread(move || library_action("LIBRARY_LIST_SONGS", &args)).await
+                        {
+                            Some(Ok(_)) => problem.set(None),
+                            Some(Err(e)) => problem.set(Some(brief(&e))),
+                            None => {}
+                        }
+                    }
+                    // Tried: a failure is said, and not retried in a loop.
+                    saved.write().insert(id, generation);
+                }
+                running.set(false);
+            });
+        }
+    };
     let saving = changed
         .read()
         .iter()
@@ -171,16 +221,18 @@ pub fn LibraryEditor(
                 ListKind::Set => "New setlist",
                 ListKind::Songs => "New song list",
             };
-            let library = library.clone();
+            let args = serde_json::json!({
+                "kind": match kind { ListKind::Set => "set", ListKind::Songs => "songs" },
+                "title": title,
+                "org": library.org,
+            });
             spawn(async move {
-                match off_thread(move || {
-                    with_library(
-                        &library,
-                        |l| async move { l.create_list(title, kind).await },
-                    )
-                })
-                .await
-                {
+                let made = off_thread(move || library_action("LIBRARY_LIST_CREATE", &args)).await;
+                match made.map(|said| {
+                    said.and_then(|s| {
+                        said_list(&s, Vec::new()).ok_or_else(|| eyre::eyre!("no list said"))
+                    })
+                }) {
                     Some(Ok(list)) => {
                         let id = list.id.clone();
                         lists.write().push(list);
@@ -222,15 +274,10 @@ pub fn LibraryEditor(
             if let Some(list) = lists.write().iter_mut().find(|l| l.id == id) {
                 list.title.clone_from(&title);
             }
-            let library = library.clone();
+            let args = serde_json::json!({ "list": id, "title": title, "org": library.org });
             spawn(async move {
-                if let Some(Err(e)) = off_thread(move || {
-                    with_library(
-                        &library,
-                        |l| async move { l.rename_list(&id, &title).await },
-                    )
-                })
-                .await
+                if let Some(Err(e)) =
+                    off_thread(move || library_action("LIBRARY_LIST_RENAME", &args)).await
                 {
                     problem.set(Some(brief(&e)));
                 }
@@ -251,12 +298,10 @@ pub fn LibraryEditor(
             if from() == From::List(id.clone()) {
                 from.set(From::Everything);
             }
-            let library = library.clone();
+            let args = serde_json::json!({ "list": id, "org": library.org });
             spawn(async move {
-                if let Some(Err(e)) = off_thread(move || {
-                    with_library(&library, |l| async move { l.delete_list(&id).await })
-                })
-                .await
+                if let Some(Err(e)) =
+                    off_thread(move || library_action("LIBRARY_LIST_DELETE", &args)).await
                 {
                     problem.set(Some(brief(&e)));
                 }
@@ -274,15 +319,16 @@ pub fn LibraryEditor(
                 return;
             };
             let title = format!("{} (copy)", from_list.title);
-            let library = library.clone();
+            let args = serde_json::json!({ "list": id, "title": title, "org": library.org });
+            let songs = from_list.songs.clone();
             spawn(async move {
-                match off_thread(move || {
-                    with_library(&library, |l| async move {
-                        l.duplicate_list(&from_list, &title).await
+                let made =
+                    off_thread(move || library_action("LIBRARY_LIST_DUPLICATE", &args)).await;
+                match made.map(|said| {
+                    said.and_then(|s| {
+                        said_list(&s, songs).ok_or_else(|| eyre::eyre!("no list said"))
                     })
-                })
-                .await
-                {
+                }) {
                     Some(Ok(copy)) => {
                         let id = copy.id.clone();
                         let title = copy.title.clone();
@@ -307,17 +353,13 @@ pub fn LibraryEditor(
             if title.is_empty() {
                 return;
             }
-            let library = library.clone();
+            let args = serde_json::json!({ "title": title, "org": library.org });
             let mut edit = edit.clone();
             spawn(async move {
-                match off_thread(move || {
-                    with_library(
-                        &library,
-                        |l| async move { l.create_song(&title, "", &[]).await },
-                    )
-                })
-                .await
-                {
+                let made = off_thread(move || library_action("LIBRARY_SONG_SAVE", &args)).await;
+                match made.map(|said| {
+                    said.and_then(|s| said_song(&s).ok_or_else(|| eyre::eyre!("no song said")))
+                }) {
                     Some(Ok(song)) => {
                         if let Load::Ready(all) = &mut *songs.write() {
                             all.push((song.clone(), false));
@@ -851,30 +893,19 @@ pub fn SongEditor(
                 .map(str::to_owned)
                 .collect();
             let key_now = key().trim().to_owned();
-            let library = library.clone();
-            let was = song.clone();
+            let args = serde_json::json!({
+                "slug": song.as_ref().map(|s| s.slug.clone()),
+                "title": name,
+                "key": key_now,
+                "writers": list,
+                "org": library.org,
+            });
             busy.set(true);
             spawn(async move {
-                let outcome = off_thread(move || {
-                    with_library(&library, |l| async move {
-                        match was {
-                            Some(was) => {
-                                l.update_song(&LibrarySong {
-                                    title: name,
-                                    key: key_now,
-                                    writers: list,
-                                    ..was
-                                })
-                                .await
-                            }
-                            None => l.create_song(&name, &key_now, &list).await.map(drop),
-                        }
-                    })
-                })
-                .await;
+                let outcome = off_thread(move || library_action("LIBRARY_SONG_SAVE", &args)).await;
                 busy.set(false);
                 match outcome {
-                    Some(Ok(())) => on_done.call(()),
+                    Some(Ok(_)) => on_done.call(()),
                     Some(Err(e)) => problem.set(Some(brief(&e))),
                     None => {}
                 }
@@ -890,17 +921,14 @@ pub fn SongEditor(
                 deleting.set(true);
                 return;
             }
-            let library = library.clone();
+            let args = serde_json::json!({ "slug": song.slug, "org": library.org });
             busy.set(true);
             spawn(async move {
-                let slug = song.slug.clone();
-                let outcome = off_thread(move || {
-                    with_library(&library, |l| async move { l.delete_song(&slug).await })
-                })
-                .await;
+                let outcome =
+                    off_thread(move || library_action("LIBRARY_SONG_DELETE", &args)).await;
                 busy.set(false);
                 match outcome {
-                    Some(Ok(())) => on_done.call(()),
+                    Some(Ok(_)) => on_done.call(()),
                     Some(Err(e)) => problem.set(Some(brief(&e))),
                     None => {}
                 }

@@ -896,6 +896,7 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     crate::item_actions::register(list)?;
     crate::arrange_actions::register(list)?;
     crate::notes_actions::register(list)?;
+    crate::library_actions::register(list)?;
     crate::take_rank::register(list)?;
     register_track_set(list)?;
     register_reference(list)?;
@@ -5409,6 +5410,19 @@ mod presses {
         "AUTOMATION_ITEMS_EDIT",
         "AUTOMATION_LANE_SET",
         "NOTES_WRITE",
+        "SESSION_TOGETHER_LEAVE",
+        "SESSION_TOGETHER_TRANSPORT",
+        "SESSION_TOGETHER_LOCK",
+        "LIBRARY_LISTS",
+        "LIBRARY_LIST_CREATE",
+        "LIBRARY_LIST_RENAME",
+        "LIBRARY_LIST_DELETE",
+        "LIBRARY_LIST_DUPLICATE",
+        "LIBRARY_LIST_SONGS",
+        "LIBRARY_SONG_SAVE",
+        "LIBRARY_SONG_DELETE",
+        "LIBRARY_ORG",
+        "ACCOUNT_SIGN_OUT",
     ];
 
     #[test]

@@ -41,6 +41,12 @@ const PATTERNS: &[&str] = &[
     "current.set(None)",
     "rails.scene=",
     "self.fold(&",
+    "collab::leave(",
+    "collab::host_in_background(",
+    "collab::join_in_background(",
+    "collab::set_shared_transport(",
+    "collab::set_sync_locked(",
+    "projects::open_next(",
 ];
 
 /// `(file under src/, pattern, how many, why)`: what is allowed, and why.
