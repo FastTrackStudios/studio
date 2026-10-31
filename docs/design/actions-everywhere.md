@@ -51,10 +51,35 @@ Why:
    (its *choices* are actions), typing into a field before it commits, a
    drag's in-flight preview, window chrome (drag/maximise the OS window),
    focus, measuring layout.
-7. **The browser build has no Action List** (`session_engine::actions` is
-   `native` only). There, `press` is unavailable and a control sends its
-   preview `Edit` as before; every such fallback sits in a
-   `#[cfg(not(feature = "native"))]` beside the action it stands for.
+7. **The browser build runs actions too — no direct-edit fallbacks.**
+   Decided 2026-10-30: like the desktop window, the page's controls run
+   named actions on its engine. No new browser-only fallback is added; the
+   ones already written are debt (below). Today the page cannot: it runs
+   its own engine in-process (`web_engine`, daw-standalone on wasm), and
+   `session_engine::actions` and `view_client` are `native` only, so it
+   has neither a list nor a link to one.
+
+   The smallest piece that would give it one: build the Action List for
+   `web` with the actions whose work already runs there — the
+   arrangement's gestures first (`arrange_actions::carry_out` is
+   `engine::apply_reported` over the page's facade; only its
+   `view_host::changed` call is native) — and a web `actions::run` that
+   awaits `run_json_async` on the page's executor. `press` and the edit
+   worker's `Edit::Run` then work unchanged, and each fallback below goes
+   as its action joins that list.
+
+### Browser fallbacks: debt to remove
+
+| file | fallback | goes when the page's list has |
+|---|---|---|
+| widget.rs `act` | track buttons send their preview `Edit` | `TRACK_SET`, `TRACK_ARM`, `SESSION_SELECT_TRACK` |
+| widget.rs `act` | lanes button sets `lanes::set_expanded` | `TRACK_SHOW_LANES` |
+| widget.rs `act` | folder button `folds::toggle` | `SESSION_FOLD` |
+| widget.rs rename | `Edit::Rename` | `TRACK_SET {name}` |
+| widget.rs `commit_edits` | a gesture's edits sent bracketed | `ARRANGE_*`, `ITEMS_SELECT` |
+| widget.rs `turn_released` | (none: the live turn only) | `TRACK_SET` |
+| arrange_edit.rs `ToggleSnap` | `options::SNAP.toggle()` | `SESSION_OPTION` |
+| mixer_panel.rs, shell.rs, fx_view.rs | `folds::toggle`, `mode_phases::choose`, `set_racks_shown`, strip `applier.send` | `SESSION_FOLD`, `SESSION_PHASE`, `SESSION_MIXER_FX`, `TRACK_SET` |
 
 ## The guard
 
