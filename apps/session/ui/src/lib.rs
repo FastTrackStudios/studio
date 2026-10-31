@@ -38,6 +38,7 @@ pub mod collab_bar;
 pub mod collab_pointers;
 #[cfg(feature = "native")]
 pub use session_engine::comp;
+pub mod comp_predict;
 pub mod compact;
 pub mod cursor;
 pub use session_engine::edit_state;

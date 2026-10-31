@@ -947,6 +947,13 @@ impl Arrangement {
             .map(|(_, take)| *take)
     }
 
+    /// Each take lane of row `row` holding one take, and which (its
+    /// number in [`Self::takes`]); empty on a row not showing its lanes.
+    #[must_use]
+    pub fn lane_takes(&self, row: usize) -> &[(u32, usize)] {
+        self.lane_takes.get(row).map_or(&[], Vec::as_slice)
+    }
+
     /// How row `row` stacks its lanes, when it shows them all.
     #[must_use]
     pub fn lane_stack(&self, row: usize) -> Option<&crate::lane_stack::Stack> {
@@ -2283,14 +2290,15 @@ pub fn hits_overlay(
         &std::collections::HashSet<String, impl std::hash::BuildHasher>,
         &[(f64, f64)],
     ),
+    pending: Option<&CompShown>,
 ) {
     use crate::hit_overlay::Who;
+    // A T the engine is still comping: the comp as it will be.
+    let comps = pending.map_or(overlay.comps.as_slice(), |p| p.comps.as_slice());
     /// Hits nearer than this many pixels draw no flag, and fainter.
     const CLEAR: f64 = 6.0;
     let (ox, oy) = origin;
     let top = crate::ruler::ruler_h();
-    // The kit's takes, numbered on its top row: the comp strip's colours.
-    let takes = scene.takes(kit.start);
     let y_span = |row: usize| {
         let (y, h) = scene.row_box(row)?;
         let y0 = y.mul_add(view.zoom_y, oy).max(top);
@@ -2300,6 +2308,10 @@ pub fn hits_overlay(
     let x_of = |t: f64| t.mul_add(view.pps, ox);
     let pps = view.pps.max(f64::EPSILON);
     let (from, to) = ((view.panel_w - ox) / pps, (view.width - ox) / pps);
+    // On a row showing its lanes: where on each take the comp is cut from.
+    for row in kit.clone() {
+        comp_source_outlines(painter, scene, view, (oy, &x_of), row, (comps, (from, to)));
+    }
     if let (Some((y0, _)), Some((_, y1))) =
         (kit.clone().find_map(y_span), kit.rev().find_map(y_span))
     {
@@ -2349,12 +2361,15 @@ pub fn hits_overlay(
             .collect();
         // Along the very foot, which take the comp plays where; the
         // stretches just above it.
+        if let Some(pending) = pending {
+            comp_pending_marks(painter, font, (y0, y1), (&x_of, (from, to)), &pending.marks);
+        }
         let comps_drawn = comp_strip(
             painter,
             font,
             (y0, y1),
             (&x_of, (from, to)),
-            (&overlay.comps, picked),
+            (comps, picked),
             (&overlay.kept, &overlay.takes.by_pass, font),
         );
         let foot = if comps_drawn {
@@ -2479,6 +2494,145 @@ fn stretch_tint(rate: f64) -> Color {
 /// The comp strip's height, pixels: tall enough to pick a take's span
 /// on it.
 const COMP_STRIP: f64 = 10.0;
+
+/// The comp as a T or Shift+T makes it, drawn from the key's frame until
+/// the engine has comped ([`crate::comp_predict`]): the comp's spans, and
+/// each stretch comped with its take's colour and name.
+#[derive(Clone, Debug, Default)]
+pub struct CompShown {
+    pub comps: Vec<crate::hit_overlay::CompSpan>,
+    pub marks: Vec<CompMark>,
+}
+
+/// A stretch a T comps, as drawn before the engine has: where, and its
+/// take's colour and name.
+#[derive(Clone, Debug)]
+pub struct CompMark {
+    pub from: f64,
+    pub to: f64,
+    pub color: Color,
+    pub name: String,
+}
+
+/// Each stretch a T is comping, over a kit row's lane that plays
+/// (`y0..y1`): its new take's colour washed over it, edged, and named —
+/// the take the comp will be, on the key's frame.
+fn comp_pending_marks(
+    painter: &mut impl PaintScene,
+    font: &crate::text::Font,
+    (y0, y1): (f64, f64),
+    (x_of, (from, to)): (&impl Fn(f64) -> f64, (f64, f64)),
+    marks: &[CompMark],
+) {
+    let edge = vello::kurbo::Stroke::new(1.5);
+    for mark in marks.iter().filter(|m| m.to >= from && m.from <= to) {
+        let (x0, x1) = (x_of(mark.from).round(), x_of(mark.to).round());
+        if x1 - x0 < 1.0 {
+            continue;
+        }
+        let r = Rect::new(x0, y0, x1, y1);
+        painter.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            mark.color.multiply_alpha(0.35),
+            None,
+            &r,
+        );
+        painter.stroke(&edge, Affine::IDENTITY, mark.color, None, &r.inset(-0.75));
+        if x1 - x0 > 40.0 && y1 - y0 > 12.0 {
+            crate::tcp::glyphs(
+                painter,
+                font,
+                mark.color,
+                &mark.name,
+                x0 + 4.0,
+                y0 + 11.0,
+                9.0,
+            );
+        }
+    }
+}
+
+/// Which stretch of which take lane the comp plays, as REAPER rings its
+/// comp sources: each span of `comps` touching `from..=to`, on every lane
+/// of `lane_takes` holding the span's take (numbered by `takes`) but the
+/// lanes `heard` (the one that plays, the COMP) — `(lane, start, end)`.
+/// Borrows everything and allocates nothing: it runs every frame.
+pub fn comp_sources<'a>(
+    comps: &'a [crate::hit_overlay::CompSpan],
+    (takes, lane_takes): (&'a crate::take_colors::TakeColors, &'a [(u32, usize)]),
+    heard: [Option<u32>; 2],
+    (from, to): (f64, f64),
+) -> impl Iterator<Item = (u32, f64, f64)> + 'a {
+    let first = comps.partition_point(|c| c.end < from);
+    comps
+        .get(first..)
+        .unwrap_or_default()
+        .iter()
+        .take_while(move |c| c.start <= to)
+        .filter_map(|span| Some((span, takes.index_of(&span.take)?)))
+        .flat_map(move |(span, take)| {
+            lane_takes
+                .iter()
+                .filter(move |(lane, held)| *held == take && !heard.contains(&Some(*lane)))
+                .map(move |(lane, _)| (*lane, span.start, span.end))
+        })
+}
+
+/// Row `row`'s take lanes, when it shows them: a white ring round each
+/// stretch the comp plays from it ([`comp_sources`]), so the lanes say
+/// which piece of which take makes up each part of the comp.
+fn comp_source_outlines(
+    painter: &mut impl PaintScene,
+    scene: &Arrangement,
+    view: Viewport,
+    (oy, x_of): (f64, &impl Fn(f64) -> f64),
+    row: usize,
+    (comps, (from, to)): (&[crate::hit_overlay::CompSpan], (f64, f64)),
+) {
+    let (Some(stack), Some(lanes)) = (scene.lane_stack(row), scene.lanes_shown(row)) else {
+        return;
+    };
+    let lane_takes = scene.lane_takes(row);
+    if comps.is_empty() || lane_takes.is_empty() {
+        return;
+    }
+    let Some((y, h)) = scene.row_box(row) else {
+        return;
+    };
+    let top = crate::ruler::ruler_h();
+    let ring = vello::kurbo::Stroke::new(1.25);
+    let white = Color::from_rgba8(0xff, 0xff, 0xff, 0xf0);
+    let heard = [
+        crate::lanes::playing(lanes),
+        crate::arrange_edit::comp_lane(lanes),
+    ];
+    for (lane, start, end) in comp_sources(comps, (scene.takes(row), lane_takes), heard, (from, to))
+    {
+        let (b0, b1) = stack.band(lane);
+        let y0 = b0.mul_add(h, y).mul_add(view.zoom_y, oy);
+        let y1 = b1.mul_add(h, y).mul_add(view.zoom_y, oy);
+        if y1 <= top || y0 >= view.height || y1 - y0 < 3.0 {
+            continue;
+        }
+        // On the pixel grid, a half pixel in, so the line is crisp and
+        // sits inside the lane, clear of the seam under it.
+        let x0 = x_of(start).max(view.panel_w - 2.0).round() + 0.5;
+        let x1 = x_of(end).min(view.width + 2.0).round() - 0.5;
+        if x1 - x0 < 1.0 {
+            continue;
+        }
+        let r = Rect::new(x0, y0.round() + 1.5, x1, y1.round() - 1.5);
+        painter.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            white.multiply_alpha(0.05),
+            None,
+            &r,
+        );
+        painter.stroke(&ring, Affine::IDENTITY, white, None, &r);
+    }
+}
 
 /// Where a kit row's hits are drawn, top to bottom on screen (`oy`: the
 /// lanes' content top): the whole row, or — a row showing its lanes — the
