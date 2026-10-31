@@ -162,7 +162,7 @@ pub fn fork_before(
     crate::project_file::fork(daw, guid, &path, &name)?;
     // The song was saved on the way: nothing unsaved now.
     crate::projects::mark_saved(daw, guid);
-    architect_telemetry::wide::set("checkpoint.name", name.as_str());
+    architect_telemetry::wide::set("checkpoint.name", name.clone());
     architect_telemetry::wide::set("checkpoint.ms", began.elapsed().as_secs_f64() * 1_000.0);
     Ok(name)
 }
