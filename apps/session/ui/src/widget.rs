@@ -426,6 +426,10 @@ enum Committed {
     ForAction,
 }
 
+/// What a test answers for the engine when a control runs an action.
+#[cfg(test)]
+type PressAnswer = Rc<dyn Fn(&str, &serde_json::Value) -> Option<serde_json::Value>>;
+
 /// How far a knob turns through its whole range, in pixels.
 ///
 /// REAPER's own, so a full sweep takes about the same movement here as
@@ -730,6 +734,10 @@ pub struct ArrangementWidget {
     take_drag: Option<TakeDrag>,
     /// The item and the point of its take volume curve under the pointer.
     take_lit: Option<(usize, Option<usize>)>,
+    /// A test's engine: what a control's action answers, run by the test
+    /// instead of the Action List ([`Self::press_control`]).
+    #[cfg(test)]
+    press_answer: Option<PressAnswer>,
     /// The automation menu, open over the window
     /// ([`crate::automation_menu`]).
     #[cfg(feature = "native")]
@@ -907,6 +915,8 @@ impl ArrangementWidget {
             lane_lit: crate::automation_draw::Lit::default(),
             take_drag: None,
             take_lit: None,
+            #[cfg(test)]
+            press_answer: None,
             #[cfg(feature = "native")]
             menu: None,
             edits: Rc::new(RefCell::new(Vec::new())),
@@ -1997,7 +2007,7 @@ impl ArrangementWidget {
         }
     }
 
-    /// Alt+L, in Edit mode: level what is selected (`EDIT_LEVEL`) — for
+    /// Alt+Shift+Q, in Edit mode: level what is selected (`EDIT_LEVEL`) — for
     /// the drums each selected piece (every piece with only time
     /// selected), over the selection's stretches (the whole song with
     /// none), each drum's own ride — off the frame, as
@@ -3526,14 +3536,15 @@ impl ArrangementWidget {
             // or only the one that plays again.
             C::LaneShow | C::LaneName => {
                 let show = !crate::lanes::opened(track);
-                #[cfg(feature = "native")]
-                crate::window::press(
+                let pressed = self.press_control(
                     "TRACK_SHOW_LANES",
                     &serde_json::json!({ "track": guid, "show": show }),
                 );
+                #[cfg(feature = "native")]
+                let _ = pressed;
                 // The browser build has no Action List: the view, here.
                 #[cfg(not(feature = "native"))]
-                {
+                if pressed.is_none() {
                     let under = crate::lanes::speaks_for(
                         &self.tracks,
                         track,
@@ -3629,6 +3640,10 @@ impl ArrangementWidget {
     /// has no list, does nothing.
     #[allow(clippy::unused_self)]
     fn press_control(&self, id: &str, args: &serde_json::Value) -> Option<serde_json::Value> {
+        #[cfg(test)]
+        if let Some(answer) = &self.press_answer {
+            return answer(id, args);
+        }
         #[cfg(feature = "native")]
         return crate::window::press(id, args);
         #[cfg(not(feature = "native"))]

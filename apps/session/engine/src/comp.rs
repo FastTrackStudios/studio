@@ -461,9 +461,9 @@ pub static SHOW_LANES: architect::action::ActionMeta = crate::actions::meta(
     "TRACK_SHOW_LANES",
     "track_show_lanes",
     "Show a track's lanes",
-    "Show every lane of `track` (a path, name or GUID) stacked in its row — the takes, the comp and the edit side by side, to hear and comp from — or only the lane that plays: `show` true or false, toggled when left out. On a folder, its row (shut, each lane folded from the tracks under it) and every track under it with lanes. The window's view, not the song's. Says whether they show now.",
+    "Show every lane of `track` (a path, name or GUID; left out, the selected track — Alt+L) stacked in its row — the takes, the comp and the edit side by side, to hear and comp from — or only the lane that plays: `show` true or false, toggled when left out. On a folder, its row (shut, each lane folded from the tracks under it) and every track under it with lanes. The window's view, not the song's. Says whether they show now.",
     "View",
-    "",
+    "Alt+L",
 );
 
 pub static LANE_STEP: architect::action::ActionMeta = crate::actions::meta(
@@ -485,18 +485,18 @@ struct LaneStepArg {
 
 /// What each track plays now.
 #[derive(Facet)]
-struct LaneStepOut {
+pub struct LaneStepOut {
     /// The lane's name, as the panel shows it.
-    lane: String,
+    pub lane: String,
     /// Each track stepped and the play mask it has now (bit `n`, lane `n`).
-    tracks: Vec<LanePlays>,
+    pub tracks: Vec<LanePlays>,
 }
 
 /// One track's play mask.
 #[derive(Facet)]
-struct LanePlays {
-    guid: String,
-    mask: u64,
+pub struct LanePlays {
+    pub guid: String,
+    pub mask: u64,
 }
 
 /// Step the lane `guid` plays (and what it speaks for) forward (`next`) or
@@ -509,14 +509,35 @@ fn step_lane(
     next: bool,
 ) -> Result<LaneStepOut, String> {
     let all = Tracks::all(daw, project.clone());
+    let items_of = |g: &str| daw.get_items(project.clone(), TrackRef::Guid(g.to_owned()));
+    let out = lane_step(&all, items_of, guid, next)?;
+    for t in &out.tracks {
+        Tracks::set_lane_play_mask(daw, project.clone(), TrackRef::Guid(t.guid.clone()), t.mask)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(out)
+}
+
+/// `TRACK_LANE_STEP`'s decision over a song's tracks (`all`, each track's
+/// items from `items_of`): the lane `guid` steps to and each track's mask
+/// for it, nothing set.
+///
+/// # Errors
+/// No such track, or one lane to play.
+pub fn lane_step(
+    all: &[daw_proto::Track],
+    items_of: impl Fn(&str) -> Vec<daw_proto::Item>,
+    guid: &str,
+    next: bool,
+) -> Result<LaneStepOut, String> {
     let track = all
         .iter()
         .find(|t| t.guid == guid)
         .ok_or("the track went")?;
-    let shown = crate::lanes::shown_on(&all, track);
+    let shown = crate::lanes::shown_on(all, track);
     let speaks: Vec<&daw_proto::Track> = if shown.is_empty() { vec![track] } else { shown };
     let first = speaks.first().copied().ok_or("no lanes to step")?;
-    let items = daw.get_items(project.clone(), TrackRef::Guid(first.guid.clone()));
+    let items = items_of(&first.guid);
     let mask = crate::lanes::stepped(first, &items, next)
         .ok_or_else(|| format!("{} has one lane to play", first.name))?;
     let lane = crate::lanes::label(&daw_proto::Track {
@@ -525,8 +546,7 @@ fn step_lane(
     });
     let mut targets: Vec<String> = Vec::new();
     for t in &speaks {
-        for g in std::iter::once(t.guid.clone()).chain(crate::lanes::grouped_tracks(&all, &t.guid))
-        {
+        for g in std::iter::once(t.guid.clone()).chain(crate::lanes::grouped_tracks(all, &t.guid)) {
             if !targets.contains(&g) {
                 targets.push(g);
             }
@@ -540,8 +560,6 @@ fn step_lane(
         let Some(own) = crate::lanes::mask_named(t, &lane) else {
             continue;
         };
-        Tracks::set_lane_play_mask(daw, project.clone(), TrackRef::Guid(g.clone()), own)
-            .map_err(|e| e.to_string())?;
         tracks.push(LanePlays { guid: g, mask: own });
     }
     Ok(LaneStepOut { lane, tracks })
@@ -566,10 +584,39 @@ struct SwipeOut {
     tracks: Vec<String>,
 }
 
+/// `TRACK_SHOW_LANES`'s work over a song's tracks (`all`): every lane of
+/// `guid` shown (`show`; toggled when `None`) — on a folder, its row's and
+/// those of every track under it with lanes. Whether they show now, and
+/// the tracks it opened or shut, the row's own first.
+///
+/// # Errors
+/// No such track, or one lane and no track under it with more.
+pub fn show_lanes(
+    all: &[daw_proto::Track],
+    guid: &str,
+    show: Option<bool>,
+) -> Result<(bool, Vec<String>), String> {
+    let track = all
+        .iter()
+        .find(|t| t.guid == guid)
+        .ok_or("the track went")?;
+    let tracks = crate::lanes::opened_with_folders(all, track, &crate::lanes::shown_on(all, track));
+    if tracks.is_empty() {
+        return Err(format!(
+            "{} has one lane, and no track under it has more",
+            track.name
+        ));
+    }
+    let shown = crate::lanes::set_expanded(&tracks, show);
+    Ok((shown, tracks))
+}
+
 /// Which track's lanes.
 #[derive(Facet)]
 struct ShowArg {
-    track: String,
+    /// Left out: the selected track (what a key means).
+    #[facet(default)]
+    track: Option<String>,
     show: Option<bool>,
     /// The tracks to open or shut, as the engine settled them: what it
     /// tells the window, which has no song of its own to look them up in
@@ -620,21 +667,16 @@ pub fn register(
             return Ok(ShowOut { shown, tracks });
         }
         let (daw, project) = crate::actions::song()?;
-        let guid = crate::actions::resolve(daw, &project, &a.track)?;
-        let all = Tracks::all(daw, project);
-        let track = all
-            .iter()
-            .find(|t| t.guid == guid)
-            .ok_or("the track went")?;
-        let tracks =
-            crate::lanes::opened_with_folders(&all, track, &crate::lanes::shown_on(&all, track));
-        if tracks.is_empty() {
-            return Err(format!(
-                "{} has one lane, and no track under it has more",
-                track.name
-            ));
-        }
-        let shown = crate::lanes::set_expanded(&tracks, a.show);
+        let all = Tracks::all(daw, project.clone());
+        let guid = match a.track.as_deref() {
+            Some(track) => crate::actions::resolve(daw, &project, track)?,
+            None => all
+                .iter()
+                .find(|t| t.selected)
+                .map(|t| t.guid.clone())
+                .ok_or("no track given, and none selected")?,
+        };
+        let (shown, tracks) = show_lanes(&all, &guid, a.show)?;
         // The lanes a row shows are the window's: run in the engine, the
         // window is asked too, told the state settled here so the two
         // agree whichever ran it first.
