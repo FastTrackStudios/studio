@@ -727,6 +727,9 @@ pub struct ArrangementWidget {
     item_turn: Option<ItemTurn>,
     /// A drag in an automation lane ([`crate::automation_edit`]).
     lane_drag: Option<crate::automation_edit::LaneDrag>,
+    /// The automation drag's live edits, the latest per control: what it
+    /// commits when it ends ([`Self::lane_ended`]).
+    lane_live: Vec<crate::engine::Edit>,
     /// What in the automation lanes is under the pointer, lit.
     lane_lit: crate::automation_draw::Lit,
     /// A point of an item's take volume curve being dragged
@@ -912,6 +915,7 @@ impl ArrangementWidget {
             turning: None,
             item_turn: None,
             lane_drag: None,
+            lane_live: Vec::new(),
             lane_lit: crate::automation_draw::Lit::default(),
             take_drag: None,
             take_lit: None,
@@ -3372,6 +3376,47 @@ impl ArrangementWidget {
         true
     }
 
+    /// An automation drag's live edits (rule 3 of
+    /// `docs/design/actions-everywhere.md`): sent as they come — its undo
+    /// step opened, the lane following the hand — and each control's latest
+    /// kept for the commit.
+    fn lane_moved(&mut self, edits: Vec<crate::engine::Edit>) {
+        use crate::engine::Edit;
+        for edit in &edits {
+            if matches!(edit, Edit::BeginUndo(_) | Edit::EndUndo(_)) {
+                continue;
+            }
+            let same = |was: &Edit| {
+                std::mem::discriminant(was) == std::mem::discriminant(edit)
+                    && was.guid() == edit.guid()
+                    && was.lane() == edit.lane()
+            };
+            self.lane_live.retain(|was| !same(was));
+            self.lane_live.push(edit.clone());
+        }
+        self.edits.borrow_mut().extend(edits);
+    }
+
+    /// An automation drag let go over `over` (or lost): where it ended and
+    /// what the release makes (an item made or copied) committed as the
+    /// lane's named action (`AUTOMATION_POINTS_EDIT`, `AUTOMATION_ITEMS_EDIT`,
+    /// `AUTOMATION_LANE_SET`), then the undo step its press opened closed.
+    fn lane_ended(
+        &mut self,
+        drag: &crate::automation_edit::LaneDrag,
+        over: Option<&crate::automation_draw::Hit>,
+    ) {
+        let mut ended = crate::automation_edit::release(drag, over);
+        let closes = ended
+            .iter()
+            .position(|e| matches!(e, crate::engine::Edit::EndUndo(_)))
+            .map(|at| ended.remove(at));
+        let mut commit = std::mem::take(&mut self.lane_live);
+        commit.extend(ended);
+        self.commit_edits(None, commit);
+        self.edits.borrow_mut().extend(closes);
+    }
+
     /// A track knob's turn let go (or lost): where it ended committed as
     /// the action a model would run (`TRACK_SET`), in order after its live
     /// edits; then the touch let go, for the automation that records
@@ -5530,7 +5575,7 @@ impl ArrangementWidget {
                         return false;
                     };
                     let edits = crate::automation_edit::drag(drag, view, (x, y), &|t| snap.at(t));
-                    self.edits.borrow_mut().extend(edits);
+                    self.lane_moved(edits);
                     self.dirty.set(true);
                     return true;
                 }
@@ -5605,8 +5650,17 @@ impl ArrangementWidget {
                             ctrl: e.mods.contains(Modifiers::CONTROL),
                         },
                     );
+                    // A drag begun: its edits live, committed when it ends.
+                    // A press that is all it does: committed now.
+                    if drag.is_some() {
+                        self.lane_live.clear();
+                        self.lane_moved(edits);
+                    } else {
+                        for (label, gesture) in crate::arrange_edit::gestures(edits) {
+                            self.commit_edits(label.as_deref(), gesture);
+                        }
+                    }
                     self.lane_drag = drag;
-                    self.edits.borrow_mut().extend(edits);
                     self.lane_lit = self.lane_lit_at(x, y);
                     self.dirty.set(true);
                     return true;
@@ -5701,9 +5755,7 @@ impl ArrangementWidget {
                 }
                 if let Some(drag) = self.lane_drag.take() {
                     let over = self.lane_hit(x, y);
-                    self.edits
-                        .borrow_mut()
-                        .extend(crate::automation_edit::release(&drag, over.as_ref()));
+                    self.lane_ended(&drag, over.as_ref());
                     self.dirty.set(true);
                     return true;
                 }
@@ -5764,9 +5816,7 @@ impl ArrangementWidget {
             UiEvent::KeyUp(e) => self.released(e),
             UiEvent::PointerCancel(_) => {
                 if let Some(drag) = self.lane_drag.take() {
-                    self.edits
-                        .borrow_mut()
-                        .extend(crate::automation_edit::release(&drag, None));
+                    self.lane_ended(&drag, None);
                 }
                 // A lost release ends a drag where it got to.
                 self.take_released();
