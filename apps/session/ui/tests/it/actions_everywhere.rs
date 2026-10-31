@@ -93,11 +93,11 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
     (
         "widget.rs",
         "edits.borrow_mut().extend(",
-        6,
+        4,
         "an action's own work (a key's through the list, the engine's asked); \
-         commit_edits' edits no action names (none today, warned); debt: the \
-         automation lanes' press, drag, release and cancel (AUTOMATION_ITEM / \
-         AUTOMATION_WRITE)",
+         commit_edits' edits no action names (none today, warned); an \
+         automation drag's live edits (lane_moved) and the close of its undo \
+         step after its commit (lane_ended)",
     ),
     (
         "tone.rs",

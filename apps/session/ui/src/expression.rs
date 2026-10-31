@@ -1135,6 +1135,7 @@ pub async fn read_take(
 pub const TICKS_PER_QN: f64 = 960.0;
 
 /// The editor's take content (ticks) as the daw takes it (quarters).
+#[cfg(feature = "native")]
 fn to_quarters(
     mut content: daw::service::midi::MidiTakeContent,
 ) -> daw::service::midi::MidiTakeContent {
@@ -1158,44 +1159,20 @@ fn to_quarters(
     content
 }
 
-/// The undo step a write-back is, in the engine and so in the song's doc.
-pub const EDIT_NOTES: &str = "Edit notes";
-
-/// Write `content` back to an item's active take, replacing it, as one
-/// undo point. `false` when there is no engine or the write failed.
-pub fn save_take(item_guid: &str, content: daw::service::midi::MidiTakeContent) -> bool {
-    crate::open::runtime()
-        .is_some_and(|runtime| runtime.block_on(write_take(item_guid.to_owned(), content)))
-}
-
-/// [`save_take`], awaited: what the Editor view's saver runs.
-pub async fn write_take(item_guid: String, content: daw::service::midi::MidiTakeContent) -> bool {
-    let item_guid = item_guid.as_str();
-    let content = to_quarters(content);
-    {
-        let Some(daw) = daw::rpc::Daw::try_get() else {
-            return false;
-        };
-        let Ok(project) = daw.current_project().await else {
-            return false;
-        };
-        let Ok(Some(item)) = project.items().by_guid(item_guid).await else {
-            return false;
-        };
-        // One engine undo block, so one step in the song's doc (the
-        // block's end records it: `project_file::record_steps`). The
-        // replace deletes and adds every note; bare, it was no step at
-        // all, folded into whatever was recorded next.
-        let _ = project.begin_undo_block(EDIT_NOTES).await;
-        let written = item
-            .active_take()
-            .midi()
-            .write_take(content, daw::service::midi::WriteMode::Replace)
-            .await
-            .is_ok();
-        let _ = project.end_undo_block(EDIT_NOTES).await;
-        written
-    }
+/// The Editor's take as `NOTES_WRITE` takes it: item `item_guid`'s new
+/// contents, in quarter notes (`session_engine::notes_actions`). `None`
+/// when it will not say itself as JSON.
+#[cfg(feature = "native")]
+#[must_use]
+pub fn notes_write_args(
+    item_guid: &str,
+    content: daw::service::midi::MidiTakeContent,
+) -> Option<String> {
+    let arg = session_engine::notes_actions::NotesArg {
+        item: item_guid.to_owned(),
+        content: to_quarters(content),
+    };
+    facet_json::to_string(&arg).ok()
 }
 
 /// The editor's colours from the window's palette.
