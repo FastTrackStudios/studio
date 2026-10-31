@@ -219,6 +219,8 @@ pub mod reference_play;
 pub mod render_ahead;
 pub mod routes;
 #[cfg(feature = "native")]
+pub mod safety_net;
+#[cfg(feature = "native")]
 pub mod sample_align;
 #[cfg(feature = "native")]
 pub mod seams;

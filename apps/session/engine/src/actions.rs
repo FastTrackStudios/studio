@@ -1461,7 +1461,7 @@ static EDIT_LANES: ActionMeta = meta(
     "DRUMS_EDIT_LANES",
     "drums_edit_lanes",
     "Comp and edit lanes",
-    "Set the kit up to be edited, every drum track alike: its comping lane (the comp that plays) named COMP, and a new lane EDIT holding a copy of it, playing — so edits land on EDIT and COMP stays the comp they were made from (DRUMS_PLAY_LANE to hear either). The takes and their comp areas are untouched: EDIT is added after the last lane. A track already set up is left — unless `reset`, which starts the edit over: each EDIT lane's slices dropped and its COMP copied onto it again (one undo step). `dry_run` says what it would do.",
+    "Set the kit up to be edited, every drum track alike: its comping lane (the comp that plays) named COMP, and a new lane EDIT holding a copy of it, playing — so edits land on EDIT and COMP stays the comp they were made from (DRUMS_PLAY_LANE to hear either). The takes and their comp areas are untouched: EDIT is added after the last lane. A track already set up is left — unless `reset`, which starts the edit over: each EDIT lane's slices dropped and its COMP copied onto it again (one undo step). `dry_run` says what it would do. Forks a checkpoint of the song first (`Before DRUMS_EDIT_LANES <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Drums",
     "",
 );
@@ -1489,6 +1489,8 @@ struct LanesOut {
     /// `path: comp lane → EDIT lane (n items copied)`, or why it was left.
     tracks: Vec<String>,
     applied: bool,
+    /// The checkpoint forked before (`safety_net`); none for a dry run.
+    checkpoint: Option<String>,
 }
 
 /// A lane to play.
@@ -2669,6 +2671,14 @@ fn register_lanes(list: &ActionList) -> Result<(), architect::action::ActionErro
     list.register(&EDIT_LANES, Effect::Mutating, |a: LanesArg| {
         let (daw, project) = song()?;
         let dry = a.dry_run.unwrap_or(false);
+        let net = crate::safety_net::before(
+            EDIT_LANES.id,
+            if dry {
+                crate::safety_net::Reach::Nothing
+            } else {
+                crate::safety_net::Reach::Song
+            },
+        )?;
         let tracks = if a.reset == Some(true) {
             crate::drum_lanes::reset_edit(daw, &project, dry)?
         } else {
@@ -2677,6 +2687,7 @@ fn register_lanes(list: &ActionList) -> Result<(), architect::action::ActionErro
         Ok(LanesOut {
             tracks,
             applied: !dry,
+            checkpoint: net.name(),
         })
     })?;
     list.register(&PLAY_LANE, Effect::Mutating, |a: PlayLaneArg| {
@@ -3748,7 +3759,7 @@ static QUANTIZE: ActionMeta = meta(
     "QUANTIZE",
     "quantize",
     "Quantize the drums",
-    "Quantize the kit from its hit markers (HITS_DETECT first): every drum track cut `lead_ms` before each hit and moved together so the HIT lands on its target — the item starts before the beat, the attack is on it — the seams crossfaded (`xfade_ms`). Over `sections` (by name, from the SECTIONS lane: `Verse 1`, `Chorus`) or `from`/`to` (seconds), each with these settings — so a verse and a chorus can each be quantized their own way. The edit zones (ZONES_LIST) are left as played — `fills: Include` edits them too (a fill that keeps a grid, on that grid: `grid: 12` for 8th triplets, 24 for 16th triplets), `Only` edits only them; the drum-edit settings (grid, strength, target, tolerance, lead, crossfade…) can be given for this call alone. `target: Pattern` places each hit by the section's own groove (DRUMS_GROOVE): a hit in a slot the section plays bar after bar goes to that slot's line, however far it drifted, and `by_groove` lists each sent to a line other than the nearest. `dry_run` says what it would do; `brief` leaves out the lists of moves and keeps three of each span's calls. After an edit, a check from the markers: hits lost, hits doubled (a double attack), and how far the moved hits landed from where they were sent.",
+    "Quantize the kit from its hit markers (HITS_DETECT first): every drum track cut `lead_ms` before each hit and moved together so the HIT lands on its target — the item starts before the beat, the attack is on it — the seams crossfaded (`xfade_ms`). Over `sections` (by name, from the SECTIONS lane: `Verse 1`, `Chorus`) or `from`/`to` (seconds), each with these settings — so a verse and a chorus can each be quantized their own way. The edit zones (ZONES_LIST) are left as played — `fills: Include` edits them too (a fill that keeps a grid, on that grid: `grid: 12` for 8th triplets, 24 for 16th triplets), `Only` edits only them; the drum-edit settings (grid, strength, target, tolerance, lead, crossfade…) can be given for this call alone. `target: Pattern` places each hit by the section's own groove (DRUMS_GROOVE): a hit in a slot the section plays bar after bar goes to that slot's line, however far it drifted, and `by_groove` lists each sent to a line other than the nearest. `dry_run` says what it would do; `brief` leaves out the lists of moves and keeps three of each span's calls. After an edit, a check from the markers: hits lost, hits doubled (a double attack), and how far the moved hits landed from where they were sent. Over the whole song or 30 s or more, forks a checkpoint of the song first (`Before QUANTIZE <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Drums",
     "",
 );
@@ -3957,6 +3968,10 @@ pub struct QuantizeSpan {
     pub by_written: Vec<GrooveCall>,
     /// How the edit left the hits (none for a dry run).
     pub check: Option<crate::hits::Check>,
+    /// The checkpoint forked before the edit (`Before QUANTIZE …`,
+    /// `safety_net`), on the first span only: none for a dry run or a
+    /// stretch too small to need one.
+    pub checkpoint: Option<String>,
 }
 
 /// One hit the groove placed against the nearest line.
@@ -4343,6 +4358,7 @@ fn quantize_span(
                 (lo, hi),
             ),
             check: None,
+            checkpoint: None,
         },
         Planned { cuts, sent: pairs },
     ))
@@ -4555,7 +4571,7 @@ static REVERT: ActionMeta = meta(
     "DRUMS_REVERT",
     "drums_revert",
     "Put the drums back as played",
-    "Undo the drum edit over a stretch — `from`/`to` (seconds, as the song plays now) or `sections` — without undoing anything else: every hit there moved back to where it was played, the whole kit together, the seams crossfaded as a quantize closes them, so the stretch plays as recorded. The hit markers stay, to drag (HITS_PLACE) or quantize again. With `hold` (the default) a no-quantize zone goes over it, so a later quantize leaves it as played; delete the zone (ZONES_REMOVE) to let one in. Says the check, as QUANTIZE does.",
+    "Undo the drum edit over a stretch — `from`/`to` (seconds, as the song plays now) or `sections` — without undoing anything else: every hit there moved back to where it was played, the whole kit together, the seams crossfaded as a quantize closes them, so the stretch plays as recorded. The hit markers stay, to drag (HITS_PLACE) or quantize again. With `hold` (the default) a no-quantize zone goes over it, so a later quantize leaves it as played; delete the zone (ZONES_REMOVE) to let one in. Says the check, as QUANTIZE does. Over the whole song or 30 s or more, forks a checkpoint of the song first (`Before DRUMS_REVERT <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Drums",
     "",
 );
@@ -4616,7 +4632,12 @@ pub fn revert(a: RevertArg) -> Result<Vec<QuantizeSpan>, String> {
     let mut cuts: Vec<(i64, i64)> = Vec::new();
     let mut sent: Vec<(f64, Option<f64>)> = Vec::new();
     let mut whole = (f64::INFINITY, f64::NEG_INFINITY);
-    for (name, from, to) in spans(daw, &project, &a.sections, (a.from, a.to))? {
+    let stretches = spans(daw, &project, &a.sections, (a.from, a.to))?;
+    let net = crate::safety_net::before(
+        REVERT.id,
+        crate::safety_net::Reach::of_spans(stretches.iter().map(|(_, from, to)| (*from, *to))),
+    )?;
+    for (name, from, to) in stretches {
         let (lo, hi) = (
             from - edge(daw, &project, from),
             to - edge(daw, &project, to),
@@ -4654,7 +4675,11 @@ pub fn revert(a: RevertArg) -> Result<Vec<QuantizeSpan>, String> {
             by_groove: Vec::new(),
             by_written: Vec::new(),
             check: None,
+            checkpoint: None,
         });
+    }
+    if let Some(first) = out.first_mut() {
+        first.checkpoint = net.name();
     }
     if cuts.iter().any(|c| c.1 != 0) {
         apply_cuts(daw, &project, &settings, cuts)?;
@@ -4754,7 +4779,7 @@ static REQUANTIZE: ActionMeta = meta(
     "DRUMS_REQUANTIZE",
     "drums_requantize",
     "Start the drum edit over and quantize it",
-    "Clear every drum edit (the EDIT lanes copied from COMP again) and quantize the whole song fresh, as QUANTIZE does with `plan` (each step its sections or span and settings — the snare leading in a breakdown) — the plan kept with the song, so a call without one uses the last given (none: the whole song on the sticky settings). The parts', figures' and fills' grids and the zones are read as always. `keep_manual`: the hits a hand placed (HITS_PLACE) are put back where they were placed afterwards. Says the quantize's check and how many hand placements were put back.",
+    "Clear every drum edit (the EDIT lanes copied from COMP again) and quantize the whole song fresh, as QUANTIZE does with `plan` (each step its sections or span and settings — the snare leading in a breakdown) — the plan kept with the song, so a call without one uses the last given (none: the whole song on the sticky settings). The parts', figures' and fills' grids and the zones are read as always. `keep_manual`: the hits a hand placed (HITS_PLACE) are put back where they were placed afterwards. Says the quantize's check and how many hand placements were put back. Forks a checkpoint of the song first (`Before DRUMS_REQUANTIZE <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Drums",
     "",
 );
@@ -4778,6 +4803,9 @@ struct Requantized {
     problems: Vec<String>,
     /// Hand placements put back (`keep_manual`).
     placed_back: u32,
+    /// The checkpoint forked before it (`safety_net`): the song as it was,
+    /// to open (SESSION_OPEN) if the requantize is not wanted.
+    checkpoint: Option<String>,
 }
 
 /// Where the plan a whole-song quantize was last given is kept: on the
@@ -4788,6 +4816,8 @@ fn register_requantize(list: &ActionList) -> Result<(), architect::action::Actio
     list.register(&REQUANTIZE, Effect::Mutating, |a: RequantizeArg| {
         let (daw, project) = song()?;
         let folder = crate::track_regions::kit_folder(daw, &project).ok_or("no kit")?;
+        // Every drum edit is cleared: a way back first, or nothing done.
+        let net = crate::safety_net::before(REQUANTIZE.id, crate::safety_net::Reach::Song)?;
         let at = daw::service::TrackRef::Guid(folder);
         // The plan: the one given, kept; else the one kept.
         let plan = if a.plan.is_empty() {
@@ -4849,6 +4879,7 @@ fn register_requantize(list: &ActionList) -> Result<(), architect::action::Actio
                 })
                 .unwrap_or_default(),
             placed_back,
+            checkpoint: net.name(),
         })
     })?;
     Ok(())
@@ -4888,6 +4919,16 @@ pub fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
             })
             .collect::<Result<_, String>>()?
     };
+    let reach = if dry {
+        crate::safety_net::Reach::Nothing
+    } else {
+        crate::safety_net::Reach::of_spans(
+            steps
+                .iter()
+                .flat_map(|(_, spans, _)| spans.iter().map(|(_, from, to)| (*from, *to))),
+        )
+    };
+    let net = crate::safety_net::before(QUANTIZE.id, reach)?;
     let before = crate::hits::playback(daw, &project);
     let prepared = Prepared::read(daw, &project);
     stages.mark("edit.read_ms");
@@ -4927,6 +4968,9 @@ pub fn quantize(a: QuantizeArg) -> Result<Vec<QuantizeSpan>, String> {
         for span in &mut out {
             span.result.applied = true;
         }
+    }
+    if let Some(first) = out.first_mut() {
+        first.checkpoint = net.name();
     }
     if a.brief.unwrap_or(false) {
         for span in &mut out {
