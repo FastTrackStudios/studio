@@ -38,6 +38,9 @@ pub struct Leveled {
     pub most_db: f64,
     /// The takes whose volume curve was written.
     pub takes: u32,
+    /// The checkpoint forked before (`safety_net`), on the first drum
+    /// only; none for a dry run.
+    pub checkpoint: Option<String>,
 }
 
 /// One drum's hits on a take, as the leveler reads them: where in the

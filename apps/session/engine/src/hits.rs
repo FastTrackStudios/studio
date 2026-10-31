@@ -775,6 +775,9 @@ pub struct DetectReport {
     pub pieces: Vec<PieceReport>,
     /// Takes left out, and why.
     pub skipped: Vec<String>,
+    /// The checkpoint forked before the markers were replaced
+    /// (`safety_net`).
+    pub checkpoint: Option<String>,
 }
 
 /// One hit of a run, before it is written.
@@ -921,6 +924,8 @@ pub struct Renewed {
     /// Hand placements remembered under the new ids.
     pub placed: u32,
     pub applied: bool,
+    /// The checkpoint forked first (`safety_net`); none for a dry run.
+    pub checkpoint: Option<String>,
 }
 
 /// Give every hit marker of the kit its take's id (`…~tag`), in place:
@@ -3390,7 +3395,7 @@ static DETECT: ActionMeta = meta(
     "HITS_DETECT",
     "hits_detect",
     "Detect drum hits",
-    "Find every drum hit, once, and write it down as a hit marker on each of its piece's recordings (its mics and trigger, one id across them): the triggers fit each close mic's gate, a dead trigger is caught and its piece read from its mic alone with the other mics' bleed refused. Runs on the takes the song plays (comp or EDIT lanes; `all_takes` for every take kept). Replaces only unchecked detected hits (`auto`) in `from`/`to` (project seconds; the whole song when left out) on `pieces` (all when left out) — hits placed by hand or approved are kept. Settings (HITS_SETTINGS) can be given for this run alone. Says per piece how it was found, the trigger's verdict, the fitted gate, and the counts: both/trigger-only/mic-only/ghosts/flams/unsure (the ones to look at).",
+    "Find every drum hit, once, and write it down as a hit marker on each of its piece's recordings (its mics and trigger, one id across them): the triggers fit each close mic's gate, a dead trigger is caught and its piece read from its mic alone with the other mics' bleed refused. Runs on the takes the song plays (comp or EDIT lanes; `all_takes` for every take kept). Replaces only unchecked detected hits (`auto`) in `from`/`to` (project seconds; the whole song when left out) on `pieces` (all when left out) — hits placed by hand or approved are kept. Settings (HITS_SETTINGS) can be given for this run alone. Says per piece how it was found, the trigger's verdict, the fitted gate, and the counts: both/trigger-only/mic-only/ghosts/flams/unsure (the ones to look at). Forks a checkpoint of the song first (`Before HITS_DETECT <date time>`, named in the result's `checkpoint`), and is refused if one cannot be made.",
     "Drums",
     "",
 );
@@ -3455,7 +3460,7 @@ static RENEW_IDS: ActionMeta = meta(
     "HITS_RENEW_IDS",
     "hits_renew_ids",
     "Give the hits their takes' ids",
-    "Rename every hit marker of the kit to its take's own id (`…~tag`, a hash of the take's recordings), in place: nothing is found again, every hit stays where it is with who placed it, approvals and flags, and hand placements (HITS_PLACE) are remembered under the new ids. For a song detected before ids were per take: takes recorded from the same place (lanes of one song) shared ids, so a hit played in one counted as played in all, and moving or removing one by id reached every take's. HITS_DETECT gives per-take ids itself; run this once on an older song instead of detecting again. `dry_run` says what it would rename. One undo step.",
+    "Rename every hit marker of the kit to its take's own id (`…~tag`, a hash of the take's recordings), in place: nothing is found again, every hit stays where it is with who placed it, approvals and flags, and hand placements (HITS_PLACE) are remembered under the new ids. For a song detected before ids were per take: takes recorded from the same place (lanes of one song) shared ids, so a hit played in one counted as played in all, and moving or removing one by id reached every take's. HITS_DETECT gives per-take ids itself; run this once on an older song instead of detecting again. `dry_run` says what it would rename. One undo step. Unless a dry run, forks a checkpoint of the song first (`Before HITS_RENEW_IDS <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Drums",
     "",
 );
@@ -3617,7 +3622,9 @@ fn register_reads(list: &ActionList) -> Result<(), architect::action::ActionErro
     list.register(&DETECT, Effect::Mutating, |a: DetectArg| {
         let (daw, project) = song()?;
         let settings = settings().with(&a.settings);
-        detect(
+        // Every unchecked hit in the span is replaced.
+        let net = crate::safety_net::before(DETECT.id, crate::safety_net::Reach::Song)?;
+        let mut report = detect(
             daw,
             &project,
             (
@@ -3627,11 +3634,18 @@ fn register_reads(list: &ActionList) -> Result<(), architect::action::ActionErro
             &a.pieces,
             &settings,
             a.all_takes.unwrap_or(false),
-        )
+        )?;
+        report.checkpoint = net.name();
+        Ok::<_, String>(report)
     })?;
     list.register(&RENEW_IDS, Effect::Mutating, |a: RenewArg| {
         let (daw, project) = song()?;
-        renew_ids(daw, &project, a.dry_run.unwrap_or(false))
+        let dry = a.dry_run.unwrap_or(false);
+        let net =
+            crate::safety_net::before(RENEW_IDS.id, crate::safety_net::Reach::song_unless(dry))?;
+        let mut renewed = renew_ids(daw, &project, dry)?;
+        renewed.checkpoint = net.name();
+        Ok::<_, String>(renewed)
     })?;
     list.register(&LIST, Effect::ReadOnly, |a: ListArg| {
         let (daw, project) = song()?;
