@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 use daw::standalone::Standalone;
 use session::sync::engine::{Blobs, Direct, MediaRoot};
 use session::sync::{Bridge, SessionDoc};
-use session_format::store::{MAIN, Store};
+use session_format::store::{MAIN, Moment, MomentRef, Store};
 
 /// A project file's blobs, as the bridge keeps FX state — with the names
 /// already stored remembered, since every read of the engine offers each
@@ -566,8 +566,26 @@ async fn save_open(open: &mut Open, label: &str) -> Result<(), String> {
 
 /// Append what the doc holds past its last save to the song's branch.
 fn append(open: &mut Open, label: &str) -> Result<(), String> {
+    append_as(open, label, None)
+}
+
+/// [`append`], `action` the action that made the step, kept in the song's
+/// history ([`history`]) with its label and frontier.
+fn append_as(open: &mut Open, label: &str, action: Option<&str>) -> Result<(), String> {
     let doc = open.bridge.doc();
     if doc.version() != open.saved {
+        // Every step in the history, a synced song's too: a name, a time
+        // and the frontier to go back to, never folded away.
+        let frontiers = doc.loro().state_frontiers();
+        with_store(&open.store, |s| {
+            s.note(
+                &open.branch,
+                (session_format::store::MomentKind::Step, label, action),
+                &frontiers,
+            )
+            .map(drop)
+            .map_err(|e| e.to_string())
+        })?;
         // A synced song's doc appends its own commits (named by
         // `Open::name_next`); appending here too would write each twice.
         if open.synced.is_none() {
@@ -668,12 +686,19 @@ pub fn record_steps() {
     LISTENING.call_once(|| {
         // Each step with the span it finished in (the action that made
         // it): its recording is traced under that.
-        let (tx, rx) = std::sync::mpsc::channel::<(String, String, tracing::Span)>();
+        // And the action that made it, read here, on its thread.
+        type Finished = (String, String, tracing::Span, Option<String>);
+        let (tx, rx) = std::sync::mpsc::channel::<Finished>();
         let tx = Mutex::new(tx);
         daw::standalone::steps::listen(Arc::new(move |project, label| {
             if let Ok(tx) = tx.lock()
                 && tx
-                    .send((project.to_owned(), label.to_owned(), tracing::Span::current()))
+                    .send((
+                        project.to_owned(),
+                        label.to_owned(),
+                        tracing::Span::current(),
+                        crate::history::running_action(),
+                    ))
                     .is_ok()
             {
                 PENDING.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -683,16 +708,19 @@ pub fn record_steps() {
             .name("project-file-steps".into())
             .spawn(move || {
                 while let Ok(first) = rx.recv() {
-                    let mut steps: Vec<(String, Vec<String>, tracing::Span)> = Vec::new();
+                    type Gathered = (String, Vec<String>, tracing::Span, Option<String>);
+                    let mut steps: Vec<Gathered> = Vec::new();
                     let mut taken = 0_usize;
-                    for (project, label, made_in) in std::iter::once(first).chain(rx.try_iter()) {
+                    for (project, label, made_in, action) in
+                        std::iter::once(first).chain(rx.try_iter())
+                    {
                         taken = taken.saturating_add(1);
-                        match steps.iter_mut().find(|(p, _, _)| *p == project) {
-                            Some((_, labels, _)) => labels.push(label),
-                            None => steps.push((project, vec![label], made_in)),
+                        match steps.iter_mut().find(|(p, _, _, _)| *p == project) {
+                            Some((_, labels, _, _)) => labels.push(label),
+                            None => steps.push((project, vec![label], made_in, action)),
                         }
                     }
-                    for (project, labels, made_in) in steps {
+                    for (project, labels, made_in, action) in steps {
                         // The steps' recording, under the action that made
                         // the first of them (it may outlast it).
                         let step = tracing::info_span!(
@@ -718,7 +746,7 @@ pub fn record_steps() {
                             );
                         }
                         stages.mark("step.follow_ms");
-                        if let Err(why) = record(&project, &labels.join("; ")) {
+                        if let Err(why) = record(&project, &labels.join("; "), action.as_deref()) {
                             tracing::warn!(project.guid = %project, why, "an edit step was not recorded");
                         }
                         stages.mark("step.record_ms");
@@ -732,9 +760,10 @@ pub fn record_steps() {
 /// The engine finished the step `label` in the song `project_guid`: read
 /// it into the song's doc as one commit and append that to its file — if
 /// the song is open from one.
-fn record(project_guid: &str, label: &str) -> Result<(), String> {
+pub(crate) fn record(project_guid: &str, label: &str, action: Option<&str>) -> Result<(), String> {
     let guid = project_guid.to_owned();
     let label = label.to_owned();
+    let action = action.map(str::to_owned);
     // On the project file's runtime, still under the step's span.
     run(tracing::Instrument::in_current_span(async move {
         let mut songs = open_songs().lock().await;
@@ -748,9 +777,8 @@ fn record(project_guid: &str, label: &str) -> Result<(), String> {
         )
         .await
         {
-            Ok(true) => {
-                tracing::info_span!("project_file.append").in_scope(|| append(open, &label))
-            }
+            Ok(true) => tracing::info_span!("project_file.append")
+                .in_scope(|| append_as(open, &label, action.as_deref())),
             Ok(false) => Ok(()),
             Err(e) => Err(e.to_string()),
         };
@@ -1019,6 +1047,157 @@ pub fn fork(
         forked
     })??;
     Ok(file)
+}
+
+/// The song `guid`'s steps and marks, newest first — `limit` from
+/// `offset` — each with whether its version is still in the doc's history
+/// to go back to; and how many there are.
+///
+/// # Errors
+/// The song is not open from its file, or the file refused.
+pub fn history(guid: &str, page: (u32, u32)) -> Result<(Vec<(Moment, bool)>, u32), String> {
+    let guid = guid.to_owned();
+    run(async move {
+        let songs = open_songs().lock().await;
+        let open = songs
+            .get(&guid)
+            .ok_or("the song is not open from its file")?;
+        let (moments, total) = with_store(&open.store, |s| {
+            s.history(&open.branch, page).map_err(|e| e.to_string())
+        })?;
+        let vv = open.bridge.doc().loro().oplog_vv();
+        let out = moments
+            .into_iter()
+            .map(|m| {
+                let reachable = reachable(&vv, &m.frontiers);
+                (m, reachable)
+            })
+            .collect();
+        drop(songs);
+        Ok((out, total))
+    })?
+}
+
+/// Whether every op `frontiers` (encoded) names is in the history `vv`
+/// holds: a version of this doc's lineage, to go back to.
+fn reachable(vv: &session::sync::loro::VersionVector, frontiers: &[u8]) -> bool {
+    session::sync::loro::Frontiers::decode(frontiers)
+        .is_ok_and(|f| f.iter().all(|id| vv.includes_id(id)))
+}
+
+/// Set a mark on the song `guid` as it is now — its doc's frontier and a
+/// name, a few bytes in its file, no branch — named by `name_for` from the
+/// marks it has already. Whatever the engine holds that no step has
+/// recorded yet is recorded first, as a step named for the mark, so the
+/// mark holds the song as it is. Says the mark's name.
+///
+/// # Errors
+/// The song is not open from its file, or the engine would not be read,
+/// or the file refused.
+pub fn mark(
+    guid: &str,
+    action: &str,
+    name_for: impl FnOnce(&[String]) -> String + Send,
+) -> Result<String, String> {
+    let guid = guid.to_owned();
+    let action = action.to_owned();
+    run(async move {
+        let mut songs = open_songs().lock().await;
+        let open = songs
+            .get_mut(&guid)
+            .ok_or("the song is not open from its project file (a .session)")?;
+        let taken = with_store(&open.store, |s| {
+            s.mark_names(&open.branch).map_err(|e| e.to_string())
+        })?;
+        let name = name_for(&taken);
+        open.name_next(&name);
+        if open
+            .bridge
+            .local_step(&name)
+            .await
+            .map_err(|e| e.to_string())?
+        {
+            append_as(open, &name, Some(&action))?;
+        }
+        let frontiers = open.bridge.doc().loro().state_frontiers();
+        with_store(&open.store, |s| {
+            s.note(
+                &open.branch,
+                (
+                    session_format::store::MomentKind::Mark,
+                    &name,
+                    Some(&action),
+                ),
+                &frontiers,
+            )
+            .map_err(|e| e.to_string())
+        })?;
+        drop(songs);
+        Ok(name)
+    })?
+}
+
+/// Bring the song `guid` back to the step or mark `which` of its history
+/// (`SESSION_HISTORY_RESTORE`): the doc forked at its frontier and read, and
+/// that written over the song as one new step (`label` names it) — undone
+/// like any other, nothing of the history rewritten — the engine made to
+/// match and the step appended to the file. Says what it went back to.
+///
+/// # Errors
+/// No such step or mark, a version no longer in the doc's history (a live
+/// set joined since), or the engine would not be read or made to match.
+pub fn restore(guid: &str, which: MomentRef) -> Result<Moment, String> {
+    let guid = guid.to_owned();
+    run(async move {
+        let mut songs = open_songs().lock().await;
+        let open = songs
+            .get_mut(&guid)
+            .ok_or("the song is not open from its project file (a .session)")?;
+        let moment = with_store(&open.store, |s| {
+            s.moment(&open.branch, &which).map_err(|e| e.to_string())
+        })?
+        .ok_or_else(|| match &which {
+            MomentRef::Seq(seq) => {
+                format!("the song has no step {seq} (SESSION_HISTORY lists them)")
+            }
+            MomentRef::Mark(name) => {
+                format!("the song has no mark {name:?} (SESSION_HISTORY lists them)")
+            }
+        })?;
+        let doc = open.bridge.doc().loro().clone();
+        if !reachable(&doc.oplog_vv(), &moment.frontiers) {
+            return Err(format!(
+                "{:?} is of a version no longer in the song's history (it joined a live set since): open the version kept aside then",
+                moment.label
+            ));
+        }
+        let at =
+            session::sync::loro::Frontiers::decode(&moment.frontiers).map_err(|e| e.to_string())?;
+        let past = doc.fork_at(&at).map_err(|e| e.to_string())?;
+        let model = SessionDoc::from_loro(past).read();
+        // A step the recorder has not reached yet is recorded first, so
+        // the going back is a step of its own after it.
+        if PENDING.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+            open.name_next("Edits");
+            if open
+                .bridge
+                .local_step("Edits")
+                .await
+                .map_err(|e| e.to_string())?
+            {
+                append(open, "Edits")?;
+            }
+        }
+        let label = format!("Back to {}", moment.label);
+        open.name_next(&label);
+        open.bridge
+            .restore(model, &label)
+            .await
+            .map_err(|e| e.to_string())?;
+        append_as(open, &label, Some("SESSION_HISTORY_RESTORE"))?;
+        drop(songs);
+        Ok(moment)
+    })?
 }
 
 /// Let go of the branches `names` of the file the song `guid` is open
@@ -1429,6 +1608,9 @@ fn keep_aside(
         .unwrap_or_else(|| name.to_owned());
     store.fork(&kept, branch, own)?;
     store.rebase(&kept, own)?;
+    // Its steps and marks go with it: their frontiers are of its lineage,
+    // not the one `branch` starts over from.
+    store.move_history(branch, &kept)?;
     Ok(kept)
 }
 

@@ -162,6 +162,15 @@ pub fn run() {
             // Where each action's time went, kept to read back
             // (`PERF_RECENT`).
             .with(timing::Recorder::default())
+            // Which action each step of the song's history was made by
+            // (`SESSION_HISTORY`).
+            .with({
+                #[cfg(feature = "native")]
+                let layer = ::session_engine::history::ActionLayer;
+                #[cfg(not(feature = "native"))]
+                let layer = tracing_subscriber::layer::Identity::new();
+                layer
+            })
             .with(architect_telemetry::tracing_layer());
         match architect_telemetry::otel::init("session", LOG_DEFAULT) {
             Some((otel_guard, layers)) => {

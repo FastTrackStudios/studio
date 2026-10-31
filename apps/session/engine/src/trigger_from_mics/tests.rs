@@ -1,7 +1,7 @@
 use daw_proto::{HitMark, TakeMarker};
 
 use super::{
-    CLICK_PEAK, Placed, clicks, dead_trigger_hits, made_name, merged, sure_hits, uncovered,
+    CLICK_PEAK, Placed, clicks, dead_trigger_hits, fresh, made_name, merged, sure_hits, uncovered,
 };
 
 fn hit(piece: &str, at: f64, trigger: bool, mic: bool, confidence: f64, bleed: bool) -> TakeMarker {
@@ -127,4 +127,22 @@ fn a_take_with_no_trigger_clicks_at_its_sure_and_hand_placed_hits() {
         placed,
     ];
     assert_eq!(sure_hits(&markers, "Tom 3"), [8.0, 9.0]);
+}
+
+/// A made trigger never writes over one already there: an older version
+/// of the song, gone back to through its history, plays the one it was
+/// made with.
+#[test]
+fn a_made_trigger_never_writes_over_one_there() {
+    let dir = tempfile::tempdir().expect("a temp dir");
+    let name = "52-T3-260906_1705 (from mics).wav";
+    assert_eq!(fresh(dir.path(), name), dir.path().join(name));
+    std::fs::write(dir.path().join(name), b"older").expect("written");
+    let next = fresh(dir.path(), name);
+    assert_eq!(next, dir.path().join("52-T3-260906_1705 (from mics) 2.wav"));
+    std::fs::write(&next, b"old").expect("written");
+    assert_eq!(
+        fresh(dir.path(), name),
+        dir.path().join("52-T3-260906_1705 (from mics) 3.wav")
+    );
 }
