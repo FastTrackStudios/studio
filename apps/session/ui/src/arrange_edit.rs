@@ -3,7 +3,7 @@
 //! The window gets winit events; this gets what they meant — a hit,
 //! a time under the pointer, the keys held, a bound action — and
 //! answers with what changed here and what has to happen elsewhere
-//! ([`Effect`]: an edit for the engine, a re-record, a transport
+//! ([`Effect`]: an edit of the gesture, a re-record, a transport
 //! move). Nothing in here knows a window, which is what makes a
 //! gesture testable: a test builds a project, records it, presses on
 //! an item, moves, releases, and reads the effects — the same code the
@@ -31,8 +31,12 @@ pub use crate::stretch::*;
 /// What an interaction asks the window to do beyond the picture.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Effect {
-    /// To the engine.
-    Send(Edit),
+    /// An edit of the gesture. The window commits a gesture's edits as
+    /// one named action when it ends (`ArrangementWidget::settle`:
+    /// `session_engine::arrange_actions` — `ARRANGE_MOVE`, `ITEMS_SELECT`,
+    /// …), so `watch`, a guide and the CLI see what the hand did; never
+    /// sent to the engine one by one.
+    Edit(Edit),
     /// The recording is stale: what it holds changed.
     ReRecord,
     /// The transport, with a time where one is meant.
@@ -602,7 +606,7 @@ impl Editor {
                 }
                 MarkEdge::Marker { id } => Edit::MoveMarker(String::new(), id, to),
             };
-            effects.push(Effect::Send(edit));
+            effects.push(Effect::Edit(edit));
         }
     }
 
@@ -775,11 +779,11 @@ impl Editor {
             item.selected = real.contains(&item.guid) || chosen.contains(&item.guid);
         }
         let from = effects.len();
-        effects.push(Effect::Send(Edit::DeselectAllItems(String::new())));
+        effects.push(Effect::Edit(Edit::DeselectAllItems(String::new())));
         let mut ordered: Vec<&String> = real.iter().collect();
         ordered.sort();
         for guid in ordered {
-            effects.push(Effect::Send(Edit::SelectItem(guid.clone(), false)));
+            effects.push(Effect::Edit(Edit::SelectItem(guid.clone(), false)));
         }
         selection_as_one_step(from, effects);
     }
@@ -984,7 +988,7 @@ impl Editor {
                         // drag, rather than something invisible.
                         Edit::AddRegion(String::new(), at, at + press.bar, lane_of(row))
                     };
-                    effects.push(Effect::Send(edit));
+                    effects.push(Effect::Edit(edit));
                 }
                 (On::Lane { row }, Some((from, to))) => {
                     let edit = if row == MARKS_ROW {
@@ -995,17 +999,17 @@ impl Editor {
                     } else {
                         Edit::AddRegion(String::new(), from, to, lane_of(row))
                     };
-                    effects.push(Effect::Send(edit));
+                    effects.push(Effect::Edit(edit));
                 }
                 (On::Marker { id }, Some((to, _))) => {
-                    effects.push(Effect::Send(Edit::MoveMarker(String::new(), id, to)));
+                    effects.push(Effect::Edit(Edit::MoveMarker(String::new(), id, to)));
                     Self::carry_joined(&press.joined, to, effects);
                 }
                 (On::Region { id, zone }, Some((from, to))) => {
                     // Every zone sets both bounds, because REAPER's
                     // setter takes both — the zone decided which of
                     // them the drag was allowed to move.
-                    effects.push(Effect::Send(Edit::SetRegionBounds(
+                    effects.push(Effect::Edit(Edit::SetRegionBounds(
                         String::new(),
                         id,
                         from,
@@ -1171,7 +1175,7 @@ impl Editor {
                 item.fade_out_length =
                     daw_proto::primitives::Duration::from_seconds(drag.fades.fade_out);
             });
-            effects.push(Effect::Send(edit));
+            effects.push(Effect::Edit(edit));
             effects.push(Effect::ReRecord);
             return true;
         }
@@ -1270,7 +1274,7 @@ impl Editor {
                 item.selected = selected.contains(&item.guid);
             }
             for target in real {
-                effects.push(Effect::Send(Edit::DeselectItem(target)));
+                effects.push(Effect::Edit(Edit::DeselectItem(target)));
             }
             return;
         }
@@ -1281,7 +1285,7 @@ impl Editor {
         }
         let mut first = exclusive;
         for target in real {
-            effects.push(Effect::Send(Edit::SelectItem(target, first)));
+            effects.push(Effect::Edit(Edit::SelectItem(target, first)));
             // Only the first replaces the selection; the rest join it,
             // or the row would end up with one mic selected.
             first = false;
@@ -1340,10 +1344,10 @@ impl Editor {
                     use crate::ruler::On;
                     match on {
                         On::Marker { id } => {
-                            effects.push(Effect::Send(Edit::RemoveMarker(String::new(), id)));
+                            effects.push(Effect::Edit(Edit::RemoveMarker(String::new(), id)));
                         }
                         On::Region { id, .. } => {
-                            effects.push(Effect::Send(Edit::RemoveRegion(String::new(), id)));
+                            effects.push(Effect::Edit(Edit::RemoveRegion(String::new(), id)));
                         }
                         On::Lane { .. } | On::Bars => {}
                     }
@@ -1373,12 +1377,16 @@ impl Editor {
                 project.item_count = project.items.values().map(Vec::len).sum();
                 let from = effects.len();
                 for guid in real {
-                    effects.push(Effect::Send(Edit::DeleteItem(guid)));
+                    effects.push(Effect::Edit(Edit::DeleteItem(guid)));
                 }
                 as_one_step("Delete items", from, effects);
                 effects.push(Effect::ReRecord);
             }
+            // Natively the key runs SESSION_OPTION through the list
+            // (`window::through_list`) and never comes here; the browser
+            // has no list.
             Action::ToggleSnap => {
+                #[cfg(not(feature = "native"))]
                 crate::options::SNAP.toggle();
             }
             Action::CopyItems => {
@@ -1424,7 +1432,7 @@ impl Editor {
                     item.selected = true;
                     self.selected.add(item.guid.clone());
                 }
-                effects.push(Effect::Send(Edit::SelectAllItems(String::new())));
+                effects.push(Effect::Edit(Edit::SelectAllItems(String::new())));
             }
             Action::ClearSelection => {
                 self.cursor.selection = None;
@@ -1432,7 +1440,7 @@ impl Editor {
                 for item in project.items.values_mut().flatten() {
                     item.selected = false;
                 }
-                effects.push(Effect::Send(Edit::DeselectAllItems(String::new())));
+                effects.push(Effect::Edit(Edit::DeselectAllItems(String::new())));
             }
             Action::CursorBar(by) | Action::CursorBeat(by) => {
                 let step = if matches!(action, Action::CursorBar(_)) {
@@ -1470,7 +1478,7 @@ impl Editor {
                         t.selected = true;
                     }
                 }
-                effects.push(Effect::Send(if extend {
+                effects.push(Effect::Edit(if extend {
                     Edit::AddToSelection(guid)
                 } else {
                     Edit::Select(guid)
@@ -1659,7 +1667,7 @@ impl Editor {
                 continue;
             }
             for guid in &doomed {
-                effects.push(Effect::Send(Edit::DeleteItem(guid.clone())));
+                effects.push(Effect::Edit(Edit::DeleteItem(guid.clone())));
             }
             let gone: HashSet<&String> = doomed.iter().collect();
             for lane in project.items.values_mut() {
@@ -1693,7 +1701,7 @@ impl Editor {
         }
         let from = effects.len();
         for edit in splits {
-            effects.push(Effect::Send(edit));
+            effects.push(Effect::Edit(edit));
         }
         as_one_step("Split items", from, effects);
         effects.push(Effect::ReRecord);
@@ -1793,12 +1801,12 @@ impl Editor {
             };
             item.position = PositionInSeconds::from_seconds(w.position);
             item.length = Duration::from_seconds(w.length);
-            effects.push(Effect::Send(Edit::TrimItem(
+            effects.push(Effect::Edit(Edit::TrimItem(
                 guid.clone(),
                 w.position,
                 w.length,
             )));
-            effects.push(Effect::Send(Edit::SetStretchMarkers(
+            effects.push(Effect::Edit(Edit::SetStretchMarkers(
                 guid.clone(),
                 w.markers.clone(),
             )));
@@ -1848,9 +1856,9 @@ impl Editor {
                 .collect()
         };
         let mine = pieces(project);
-        effects.extend(cut(project, from, &mine).into_iter().map(Effect::Send));
+        effects.extend(cut(project, from, &mine).into_iter().map(Effect::Edit));
         let mine = pieces(project);
-        effects.extend(cut(project, to, &mine).into_iter().map(Effect::Send));
+        effects.extend(cut(project, to, &mine).into_iter().map(Effect::Edit));
         let mine = pieces(project);
         let shape = daw_proto::item::FadeShape::default();
         for lane in project.items.values_mut() {
@@ -1877,7 +1885,7 @@ impl Editor {
                 let inside = (mine.contains(&i.guid) && a >= from - 1e-6 && b <= to + 1e-6)
                     || tails.contains(&i.guid);
                 if inside {
-                    effects.push(Effect::Send(Edit::DeleteItem(i.guid.clone())));
+                    effects.push(Effect::Edit(Edit::DeleteItem(i.guid.clone())));
                 }
                 !inside
             });
@@ -1891,7 +1899,7 @@ impl Editor {
                 );
                 if (b - from).abs() < 1e-6 {
                     item.fade_out_length = Duration::from_seconds(REMOVE_FADE);
-                    effects.push(Effect::Send(Edit::SetFadeOut(
+                    effects.push(Effect::Edit(Edit::SetFadeOut(
                         item.guid.clone(),
                         REMOVE_FADE,
                         shape,
@@ -1899,7 +1907,7 @@ impl Editor {
                 }
                 if (a - to).abs() < 1e-6 {
                     item.fade_in_length = Duration::from_seconds(REMOVE_FADE);
-                    effects.push(Effect::Send(Edit::SetFadeIn(
+                    effects.push(Effect::Edit(Edit::SetFadeIn(
                         item.guid.clone(),
                         REMOVE_FADE,
                         shape,
@@ -2032,12 +2040,12 @@ fn slip_takes(
                 right.snap_offset = Duration::from_seconds(cut.pre_roll);
                 last.length = Duration::from_seconds(at - left_start);
                 last.fade_out_length = Duration::from_seconds(0.0);
-                effects.push(Effect::Send(Edit::SplitItem(
+                effects.push(Effect::Edit(Edit::SplitItem(
                     last.guid.clone(),
                     at,
                     right.guid.clone(),
                 )));
-                effects.push(Effect::Send(Edit::SetSnapOffset(
+                effects.push(Effect::Edit(Edit::SetSnapOffset(
                     right.guid.clone(),
                     cut.pre_roll,
                 )));
@@ -2091,14 +2099,14 @@ fn slip_takes(
             && item.snap_offset.as_seconds() <= 0.0
         {
             item.snap_offset = Duration::from_seconds(into);
-            effects.push(Effect::Send(Edit::SetSnapOffset(item.guid.clone(), into)));
+            effects.push(Effect::Edit(Edit::SetSnapOffset(item.guid.clone(), into)));
         }
         if let Some(shift) = shift_at(pos)
             && shift.abs() >= 1e-4
         {
             let landing = pos + shift;
             item.position = PositionInSeconds::from_seconds(landing);
-            effects.push(Effect::Send(Edit::MoveItem(item.guid.clone(), landing)));
+            effects.push(Effect::Edit(Edit::MoveItem(item.guid.clone(), landing)));
         }
     }
     // Every seam the moves touched, a slice either side of each.
@@ -2252,7 +2260,7 @@ impl Editor {
                     .filter(|item| on(item, comp))
                     .map(|item| item.guid.clone())
                     .collect();
-                effects.extend(cut(project, edge, &comped).into_iter().map(Effect::Send));
+                effects.extend(cut(project, edge, &comped).into_iter().map(Effect::Edit));
             }
             if let Some(lane) = project.items.get_mut(&guid) {
                 lane.retain(|item| {
@@ -2260,7 +2268,7 @@ impl Editor {
                         && item.position.as_seconds() >= from - 1e-6
                         && item.position.as_seconds() + item.length.as_seconds() <= to + 1e-6;
                     if inside {
-                        effects.push(Effect::Send(Edit::DeleteItem(item.guid.clone())));
+                        effects.push(Effect::Edit(Edit::DeleteItem(item.guid.clone())));
                     }
                     !inside
                 });
@@ -2297,7 +2305,7 @@ impl Editor {
                         Edit::SetFadeOut(piece.guid.clone(), JOIN, piece.fade_out_shape),
                     ]
                     .into_iter()
-                    .map(Effect::Send),
+                    .map(Effect::Edit),
                 );
                 if let Some(lane) = project.items.get_mut(&guid) {
                     lane.push(piece);
@@ -2433,12 +2441,12 @@ fn seams(
             && start - ends > over
             && let Some(markers) = draw_out(prev, start + fade)
         {
-            effects.push(Effect::Send(Edit::TrimItem(
+            effects.push(Effect::Edit(Edit::TrimItem(
                 prev.guid.clone(),
                 prev.position.as_seconds(),
                 prev.length.as_seconds(),
             )));
-            effects.push(Effect::Send(Edit::SetStretchMarkers(
+            effects.push(Effect::Edit(Edit::SetStretchMarkers(
                 prev.guid.clone(),
                 markers,
             )));
@@ -2493,9 +2501,9 @@ fn seams(
                 piece.length = Duration::from_seconds(length);
                 piece.start_offset = Duration::from_seconds(offset);
                 piece.snap_offset = Duration::from_seconds(snap);
-                effects.push(Effect::Send(Edit::TrimItem(piece.guid.clone(), at, length)));
-                effects.push(Effect::Send(Edit::SlipItem(piece.guid.clone(), offset)));
-                effects.push(Effect::Send(Edit::SetSnapOffset(piece.guid.clone(), snap)));
+                effects.push(Effect::Edit(Edit::TrimItem(piece.guid.clone(), at, length)));
+                effects.push(Effect::Edit(Edit::SlipItem(piece.guid.clone(), offset)));
+                effects.push(Effect::Edit(Edit::SetSnapOffset(piece.guid.clone(), snap)));
             }
             // What reaching back could not cover — a hit too soon after
             // the one before — the slice before covers, running on into
@@ -2521,7 +2529,7 @@ fn seams(
                 if more > 0.0 {
                     let length = prev.length.as_seconds() + more;
                     prev.length = Duration::from_seconds(length);
-                    effects.push(Effect::Send(Edit::TrimItem(
+                    effects.push(Effect::Edit(Edit::TrimItem(
                         prev.guid.clone(),
                         prev.position.as_seconds(),
                         length,
@@ -2544,12 +2552,12 @@ fn seams(
                     None
                 };
                 if let Some(markers) = drawn {
-                    effects.push(Effect::Send(Edit::TrimItem(
+                    effects.push(Effect::Edit(Edit::TrimItem(
                         prev.guid.clone(),
                         prev.position.as_seconds(),
                         prev.length.as_seconds(),
                     )));
-                    effects.push(Effect::Send(Edit::SetStretchMarkers(
+                    effects.push(Effect::Edit(Edit::SetStretchMarkers(
                         prev.guid.clone(),
                         markers,
                     )));
@@ -2558,7 +2566,7 @@ fn seams(
         }
         if k > 0 && fade > 0.0 {
             piece.fade_in_length = Duration::from_seconds(fade);
-            effects.push(Effect::Send(Edit::SetFadeIn(
+            effects.push(Effect::Edit(Edit::SetFadeIn(
                 piece.guid.clone(),
                 fade,
                 daw_proto::item::FadeShape::default(),
@@ -2581,7 +2589,7 @@ fn trim_overlaps(pieces: &mut [&mut daw_proto::Item], fade: f64, effects: &mut V
             let length = next + fade - start;
             if length > 0.0 && length < piece.length.as_seconds() - 1e-6 {
                 piece.length = Duration::from_seconds(length);
-                effects.push(Effect::Send(Edit::TrimItem(
+                effects.push(Effect::Edit(Edit::TrimItem(
                     piece.guid.clone(),
                     start,
                     length,
@@ -2589,7 +2597,7 @@ fn trim_overlaps(pieces: &mut [&mut daw_proto::Item], fade: f64, effects: &mut V
             }
             if fade > 0.0 {
                 piece.fade_out_length = Duration::from_seconds(fade);
-                effects.push(Effect::Send(Edit::SetFadeOut(
+                effects.push(Effect::Edit(Edit::SetFadeOut(
                     piece.guid.clone(),
                     fade,
                     daw_proto::item::FadeShape::default(),
@@ -2913,19 +2921,58 @@ fn selection_as_one_step(from: usize, effects: &mut Vec<Effect>) {
     bracket("Select items", from, effects, 2);
 }
 
+/// A run of edits as the gestures they make: each undo bracket
+/// (`BeginUndo` … `EndUndo`, the outermost — one nested in it is part of
+/// it) one gesture named by its label, and the edits between brackets one
+/// unnamed (a single selection, made as no undo step). In order; the
+/// brackets themselves dropped, since the action a gesture runs makes its
+/// own undo step.
+#[must_use]
+pub fn gestures(edits: Vec<Edit>) -> Vec<(Option<String>, Vec<Edit>)> {
+    let mut out = Vec::new();
+    let mut depth = 0_usize;
+    let mut label = None;
+    let mut current = Vec::new();
+    for edit in edits {
+        match edit {
+            Edit::BeginUndo(named) => {
+                if depth == 0 {
+                    if !current.is_empty() {
+                        out.push((None, std::mem::take(&mut current)));
+                    }
+                    label = Some(named);
+                }
+                depth = depth.saturating_add(1);
+            }
+            Edit::EndUndo(_) => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    out.push((label.take(), std::mem::take(&mut current)));
+                }
+            }
+            other => current.push(other),
+        }
+    }
+    if !current.is_empty() {
+        out.push((label.take(), current));
+    }
+    out.retain(|(_, edits)| !edits.is_empty());
+    out
+}
+
 /// Bracket the sends since `from` when there are at least `least`.
 fn bracket(label: &str, from: usize, effects: &mut Vec<Effect>, least: usize) {
     let sends = effects.get(from..).map_or(0, |added| {
         added
             .iter()
-            .filter(|effect| matches!(effect, Effect::Send(_)))
+            .filter(|effect| matches!(effect, Effect::Edit(_)))
             .count()
     });
     if sends < least {
         return;
     }
-    effects.insert(from, Effect::Send(Edit::BeginUndo(label.to_owned())));
-    effects.push(Effect::Send(Edit::EndUndo(label.to_owned())));
+    effects.insert(from, Effect::Edit(Edit::BeginUndo(label.to_owned())));
+    effects.push(Effect::Edit(Edit::EndUndo(label.to_owned())));
 }
 
 /// Slip an item's contents to `to`, on every real item it stands for.
@@ -2949,7 +2996,7 @@ fn spread_item_slip(project: &mut Project, guid: &str, to: f64, effects: &mut Ve
         // rather than whenever the session answers — the same bargain
         // every other edit here makes.
         item.start_offset = daw_proto::primitives::Duration::from_seconds(to);
-        effects.push(Effect::Send(Edit::SlipItem(item.guid.clone(), to)));
+        effects.push(Effect::Edit(Edit::SlipItem(item.guid.clone(), to)));
         made = true;
     }
     as_one_step("Slip item contents", from, effects);
@@ -3020,7 +3067,7 @@ fn copy_items_to(
     }
     project.item_count = project.items.values().map(Vec::len).sum();
     for edit in made {
-        effects.push(Effect::Send(edit));
+        effects.push(Effect::Edit(edit));
     }
     as_one_step(label, from, effects);
     true
@@ -3089,7 +3136,7 @@ fn spread_item_edit(
     let from = effects.len();
     for target in targets {
         edit_item(project, &target, &change);
-        effects.push(Effect::Send(make(&target)));
+        effects.push(Effect::Edit(make(&target)));
     }
     as_one_step("Edit item", from, effects);
     true
@@ -3208,5 +3255,40 @@ mod time_sweep_tests {
             assert_eq!(sweep.moved(1.05, PPS, grid), None);
             assert_eq!(sweep.released(), SweepEnd::Click(1.07));
         });
+    }
+}
+
+#[cfg(test)]
+mod gestures_tests {
+    use super::{Edit, gestures};
+
+    /// Each undo bracket one gesture, named; a bare selection between
+    /// brackets one of its own; a bracket nested in another part of it.
+    #[test]
+    fn a_run_of_edits_splits_into_the_gestures_it_makes() {
+        let g = || "{i}".to_owned();
+        let got = gestures(vec![
+            Edit::SelectItem(g(), true),
+            Edit::BeginUndo("Move items".into()),
+            Edit::MoveItem(g(), 1.0),
+            Edit::BeginUndo("Slip item contents".into()),
+            Edit::SlipItem(g(), 0.5),
+            Edit::EndUndo("Slip item contents".into()),
+            Edit::EndUndo("Move items".into()),
+            Edit::BeginUndo("Nothing".into()),
+            Edit::EndUndo("Nothing".into()),
+            Edit::DeleteItem(g()),
+        ]);
+        assert_eq!(
+            got,
+            vec![
+                (None, vec![Edit::SelectItem(g(), true)]),
+                (
+                    Some("Move items".into()),
+                    vec![Edit::MoveItem(g(), 1.0), Edit::SlipItem(g(), 0.5)]
+                ),
+                (None, vec![Edit::DeleteItem(g())]),
+            ]
+        );
     }
 }
