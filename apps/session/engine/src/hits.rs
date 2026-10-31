@@ -855,16 +855,176 @@ fn detect_take(
     )))
 }
 
+/// What a hit id ends with to say which take it is of: `~` and a short
+/// hash of the take's recordings.
+pub const TAKE_TAG: char = '~';
+
+/// A take's tag, from the files it was recorded into: takes recorded from
+/// the same place (lanes of one song) start at the same origin, so the
+/// origin alone does not tell their hits apart.
+fn take_tag<'a>(paths: impl IntoIterator<Item = &'a str>) -> String {
+    let mut paths: Vec<&str> = paths.into_iter().collect();
+    paths.sort_unstable();
+    paths.dedup();
+    let mut hasher = blake3::Hasher::new();
+    for path in paths {
+        hasher.update(path.as_bytes());
+        hasher.update(&[0]);
+    }
+    hasher.finalize().to_hex()[..6].to_owned()
+}
+
+impl KitTake {
+    /// Its tag ([`take_tag`]).
+    fn tag(&self) -> String {
+        take_tag(self.by_track.values().map(|r| r.path.as_str()))
+    }
+}
+
+/// `id` as a hit of the take tagged `tag`: whatever take it said before
+/// replaced.
+fn tagged(id: &str, tag: &str) -> String {
+    let base = id.split_once(TAKE_TAG).map_or(id, |(base, _)| base);
+    format!("{base}{TAKE_TAG}{tag}")
+}
+
+/// `markers` (one recording's) with every hit's id — and the hit it is a
+/// flam with — made its take's (`tag`), and what was renamed:
+/// `(old, new)`. Hits already of the take are left.
+fn renew_markers(markers: Vec<TakeMarker>, tag: &str) -> (Vec<TakeMarker>, Vec<(String, String)>) {
+    let mut renamed = Vec::new();
+    let markers = markers
+        .into_iter()
+        .map(|mut m| {
+            if let Some(h) = m.hit.as_mut() {
+                let id = tagged(&m.id, tag);
+                if id != m.id {
+                    renamed.push((std::mem::replace(&mut m.id, id.clone()), id));
+                }
+                if let Some(flam) = h.flam_with.as_mut() {
+                    *flam = tagged(flam, tag);
+                }
+            }
+            m
+        })
+        .collect();
+    (markers, renamed)
+}
+
+/// What giving the hits their takes' ids did, or would.
+#[derive(Facet, Debug, Default, PartialEq)]
+pub struct Renewed {
+    /// Takes, recordings and hit markers renamed.
+    pub takes: u32,
+    pub recordings: u32,
+    pub markers: u32,
+    /// Hand placements remembered under the new ids.
+    pub placed: u32,
+    pub applied: bool,
+}
+
+/// Give every hit marker of the kit its take's id (`…~tag`), in place:
+/// nothing found again, every hit kept where it is with all that is known
+/// of it (who placed it, approvals, flags), the hand placements
+/// remembered under the new ids. For a song detected before ids were per
+/// take, whose takes recorded from the same place share ids. `dry`: only
+/// say.
+///
+/// # Errors
+/// A recording's markers would not write.
+pub fn renew_ids(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    dry: bool,
+) -> Result<Renewed, String> {
+    let (pieces, extras) = kit(daw, project);
+    let tracks: Vec<&String> = pieces
+        .iter()
+        .flat_map(KitPiece::tracks)
+        .chain(&extras)
+        .collect();
+    let mut out = Renewed {
+        applied: !dry,
+        ..Renewed::default()
+    };
+    let mut new_ids: HashMap<String, BTreeSet<String>> = HashMap::new();
+    let label = "Give the hits their takes' ids";
+    if !dry {
+        Projects::begin_undo_block(daw, project.clone(), label);
+    }
+    let done = (|| -> Result<(), String> {
+        let mut written: HashSet<String> = HashSet::new();
+        for take in takes(daw, project, &tracks) {
+            let tag = take.tag();
+            let mut touched = false;
+            for r in take.by_track.values() {
+                // A recording's markers are kept once, whichever item plays it.
+                if !written.insert(r.path.clone()) {
+                    continue;
+                }
+                let at = ItemRef::Guid(r.item.clone());
+                let (markers, renamed) = renew_markers(
+                    daw.get_take_markers(project.clone(), at.clone(), TakeRef::Active),
+                    &tag,
+                );
+                if renamed.is_empty() {
+                    continue;
+                }
+                touched = true;
+                out.recordings = out.recordings.saturating_add(1);
+                out.markers = out
+                    .markers
+                    .saturating_add(u32::try_from(renamed.len()).unwrap_or(u32::MAX));
+                for (old, new) in renamed {
+                    new_ids.entry(old).or_default().insert(new);
+                }
+                if !dry {
+                    daw.set_take_markers(project.clone(), at, TakeRef::Active, markers)
+                        .map_err(|e| format!("{}: {e}", r.path))?;
+                }
+            }
+            if touched {
+                out.takes = out.takes.saturating_add(1);
+            }
+        }
+        // A hand placement names a hit by id: every take's hit of that id
+        // now, of which only the one that plays counts.
+        let placed: Vec<String> = placed(daw, project)
+            .into_iter()
+            .flat_map(|id| {
+                new_ids
+                    .get(&id)
+                    .map_or_else(|| vec![id.clone()], |n| n.iter().cloned().collect())
+            })
+            .collect();
+        out.placed = u32::try_from(placed.iter().filter(|id| id.contains(TAKE_TAG)).count())
+            .unwrap_or(u32::MAX);
+        if !dry && !new_ids.is_empty() {
+            set_placed(daw, project, placed)?;
+        }
+        Ok(())
+    })();
+    if !dry {
+        Projects::end_undo_block(daw, project.clone(), label, None);
+        crate::hit_overlay::refresh();
+        crate::song_model::request_resync();
+    }
+    done?;
+    Ok(out)
+}
+
 /// A piece's hits in one take as markers to write, those inside `span`
-/// (seconds into the take's recordings).
+/// (seconds into the take's recordings). Their ids are the take's own
+/// (`…@origin~tag`): one id across the take's mics and trigger, another in
+/// every other take.
 fn take_hits(
     piece: &str,
     f: &dsp::hits::Found,
-    (rate, origin): (f64, f64),
+    (rate, origin, tag): (f64, f64, &str),
     run: &str,
     span: (f64, f64),
 ) -> Vec<Found> {
-    let at_take = |id: &str| format!("{id}@{:.0}", origin * 1_000.0);
+    let at_take = |id: &str| format!("{id}@{:.0}{TAKE_TAG}{tag}", origin * 1_000.0);
     let ids: Vec<String> = (0..f.hits.len())
         .map(|n| format!("{run}.{}.{n:04}", slug(piece)))
         .collect();
@@ -1019,7 +1179,13 @@ pub fn detect(
             placed.push((
                 take.clone(),
                 i,
-                take_hits(&piece.name, &f, (rate, take.origin), &run, take_span),
+                take_hits(
+                    &piece.name,
+                    &f,
+                    (rate, take.origin, &take.tag()),
+                    &run,
+                    take_span,
+                ),
             ));
         }
     }
@@ -1312,7 +1478,9 @@ pub struct HitRow {
 }
 
 /// Every hit of `pieces` (all when empty), read off each piece's first
-/// mic's recordings, in time order.
+/// mic's recordings, in time order — each take's its own, told apart by
+/// recording and id (an id made before ids were per take may be another
+/// take's too).
 #[must_use]
 pub fn hits(
     daw: &daw::standalone::Standalone,
@@ -1320,11 +1488,11 @@ pub fn hits(
     only: &[String],
 ) -> Vec<HitRow> {
     let (pieces, _) = kit(daw, project);
-    let now: HashMap<String, f64> = playback(daw, project)
+    let now: HashMap<(String, String), f64> = playback(daw, project)
         .into_iter()
-        .map(|p| (p.id, p.time))
+        .map(|p| ((p.source, p.id), p.time))
         .collect();
-    let mut rows: BTreeMap<String, HitRow> = BTreeMap::new();
+    let mut rows: BTreeMap<(String, String), HitRow> = BTreeMap::new();
     for piece in pieces
         .iter()
         .filter(|p| only.is_empty() || only.iter().any(|o| o.eq_ignore_ascii_case(&p.name)))
@@ -1343,7 +1511,8 @@ pub fn hits(
                     continue;
                 }
                 let time = r.origin + m.source_position_seconds;
-                let plays = now.get(&m.id).copied();
+                let key = (r.path.clone(), m.id.clone());
+                let plays = now.get(&key).copied();
                 let (bar, beat, frac) =
                     crate::song_bars::musical(daw, project, plays.unwrap_or(time));
                 let mut flags = Vec::new();
@@ -1361,7 +1530,7 @@ pub fn hits(
                     }
                 }
                 rows.insert(
-                    m.id.clone(),
+                    key,
                     HitRow {
                         id: m.id,
                         piece: h.piece,
@@ -2410,6 +2579,25 @@ pub fn mark_placed(daw: &daw::standalone::Standalone, project: &ProjectContext, 
     }
 }
 
+/// Remember `ids` as the hits a hand placed, and no others.
+fn set_placed(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    mut ids: Vec<String>,
+) -> Result<(), String> {
+    let folder = crate::track_regions::kit_folder(daw, project).ok_or("no kit")?;
+    ids.sort();
+    ids.dedup();
+    Tracks::set_ext_state(
+        daw,
+        project.clone(),
+        TrackRef::Guid(folder),
+        PLACED_KEY,
+        &ids.join(","),
+    )
+    .map_err(|e| e.to_string())
+}
+
 /// Forget that a hand placed `ids`: they are where they were recorded
 /// again.
 pub fn forget_placed_ids(
@@ -2709,36 +2897,170 @@ pub struct AuditPiece {
 /// gesture's width.
 const STRAY_MARGIN: f64 = 0.05;
 
-/// How the edit as it stands plays every hit, in `span` (as recorded).
+/// How the edit as it stands plays every hit of the takes the comp plays,
+/// in `span` (as recorded).
 #[must_use]
 pub fn audit(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     span: (f64, f64),
 ) -> Vec<AuditPiece> {
-    let rows = hits(daw, project, &[]);
-    let mut plays: HashMap<String, usize> = HashMap::new();
+    let mut plays: HashMap<(String, String), usize> = HashMap::new();
     for p in playback(daw, project) {
-        let n = plays.entry(p.id).or_default();
+        let n = plays.entry((p.source, p.id)).or_default();
         *n = n.saturating_add(1);
     }
+    let heard = in_play(daw, project, span);
+    tally_audit(&heard, &plays, &|t| {
+        let (bar, beat, frac) = crate::song_bars::musical(daw, project, t);
+        (bar, f64::from(beat) + frac)
+    })
+}
+
+/// A hit of a take the comp plays where it was recorded: what the edit
+/// must play once.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Heard {
+    /// Its recording, and its id on it.
+    pub source: String,
+    pub id: String,
+    pub piece: String,
+    /// When it was played, project seconds, as recorded.
+    pub time: f64,
+    pub peak_db: f64,
+    /// A ghost or a bleed: not what a listener misses when it is cut.
+    pub soft: bool,
+}
+
+/// Every hit in `span` (as recorded) of the take each piece's comp plays
+/// there: on its first mic's comp lane (`COMP`, the comp the edit was made
+/// from), else what plays. A take kept on a lane the comp does not play
+/// is nobody's loss.
+fn in_play(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    span: (f64, f64),
+) -> Vec<Heard> {
+    let (pieces, _) = kit(daw, project);
+    let mut out = Vec::new();
+    for piece in &pieces {
+        let Some(mic) = piece.mics.first() else {
+            continue;
+        };
+        let Some(track) = Tracks::get(daw, project.clone(), TrackRef::Guid(mic.clone())) else {
+            continue;
+        };
+        let comped = comp_ranges(daw, project, &track);
+        for r in recordings(daw, project, mic) {
+            let Some(ranges) = comped.get(&r.path) else {
+                continue;
+            };
+            for m in daw.get_take_markers(
+                project.clone(),
+                ItemRef::Guid(r.item.clone()),
+                TakeRef::Active,
+            ) {
+                let Some(h) = m.hit else { continue };
+                let time = r.origin + m.source_position_seconds;
+                if h.piece != piece.name
+                    || time < span.0
+                    || time > span.1
+                    || !covers(ranges, m.source_position_seconds)
+                {
+                    continue;
+                }
+                out.push(Heard {
+                    source: r.path.clone(),
+                    id: m.id,
+                    piece: h.piece,
+                    time,
+                    peak_db: h.peak_db,
+                    soft: h.ghost || h.bleed,
+                });
+            }
+        }
+    }
+    out.sort_by(|a, b| a.time.total_cmp(&b.time));
+    out
+}
+
+/// What `track`'s comp plays of each recording: the stretches of source
+/// (seconds into the file) its comp lane's items are cut from — or, on a
+/// track without lanes or a comp lane, its playing items'.
+fn comp_ranges(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    track: &daw_proto::Track,
+) -> HashMap<String, Vec<(f64, f64)>> {
+    let lane = if track.lane_count > 0 {
+        crate::comp::comp_lane_of(daw, project, track)
+    } else {
+        None
+    };
+    let mut out: HashMap<String, Vec<(f64, f64)>> = HashMap::new();
+    for item in daw.get_items(project.clone(), TrackRef::Guid(track.guid.clone())) {
+        let comped = lane.map_or_else(
+            || daw_ui::studio::project::on_playing_lane(track, &item),
+            |lane| item.fixed_lane.unwrap_or(0) == lane,
+        );
+        if item.muted || !comped {
+            continue;
+        }
+        let Some(take) = daw.get_active_take(project.clone(), ItemRef::Guid(item.guid.clone()))
+        else {
+            continue;
+        };
+        let Some(path) = take.source_file_path else {
+            continue;
+        };
+        let rate = if take.play_rate > 0.0 {
+            take.play_rate
+        } else {
+            1.0
+        };
+        let from = take.start_offset.as_seconds();
+        out.entry(path)
+            .or_default()
+            .push((from, item.length.as_seconds().mul_add(rate, from)));
+    }
+    out
+}
+
+/// Whether `at` is inside one of `ranges` (from inclusive, to exclusive).
+fn covers(ranges: &[(f64, f64)], at: f64) -> bool {
+    ranges.iter().any(|&(from, to)| at >= from && at < to)
+}
+
+/// The audit of `heard` against `plays` — how many times each hit plays
+/// now, by recording and id — piece by piece; `musical` says where a time
+/// is as bar and beat.
+#[must_use]
+pub fn tally_audit(
+    heard: &[Heard],
+    plays: &HashMap<(String, String), usize>,
+    musical: &dyn Fn(f64) -> (i32, f64),
+) -> Vec<AuditPiece> {
     let mut out: BTreeMap<String, AuditPiece> = BTreeMap::new();
-    for h in rows.iter().filter(|h| h.time >= span.0 && h.time <= span.1) {
+    for h in heard {
         let line = out.entry(h.piece.clone()).or_insert_with(|| AuditPiece {
             piece: h.piece.clone(),
             ..AuditPiece::default()
         });
         line.hits = line.hits.saturating_add(1);
-        let flagged = h.flags.iter().any(|f| f == "ghost" || f == "bleed");
-        match plays.get(&h.id).copied().unwrap_or(0) {
+        let times = plays
+            .get(&(h.source.clone(), h.id.clone()))
+            .copied()
+            .unwrap_or(0);
+        match times {
             0 => {
                 line.lost = line.lost.saturating_add(1);
-                if !flagged {
+                if !h.soft {
                     line.lost_strokes = line.lost_strokes.saturating_add(1);
                     if line.problems.len() < 40 {
+                        let (bar, beat) = musical(h.time);
                         line.problems.push(format!(
-                            "lost: {} at {:.3} s (bar {} beat {:.2}), {:.1} dBFS",
-                            h.id, h.time, h.bar, h.beat, h.peak_db
+                            "lost: {} at {:.3} s (bar {bar} beat {beat:.2}), {:.1} dBFS",
+                            h.id, h.time, h.peak_db
                         ));
                     }
                 }
@@ -2747,9 +3069,10 @@ pub fn audit(
             n => {
                 line.doubled = line.doubled.saturating_add(1);
                 if line.problems.len() < 40 {
+                    let (bar, beat) = musical(h.time);
                     line.problems.push(format!(
-                        "plays {n} times: {} recorded at {:.3} s (bar {} beat {:.2})",
-                        h.id, h.time, h.bar, h.beat
+                        "plays {n} times: {} recorded at {:.3} s (bar {bar} beat {beat:.2})",
+                        h.id, h.time
                     ));
                 }
             }
@@ -3128,11 +3451,26 @@ static MARK: ActionMeta = meta(
     "",
 );
 
+static RENEW_IDS: ActionMeta = meta(
+    "HITS_RENEW_IDS",
+    "hits_renew_ids",
+    "Give the hits their takes' ids",
+    "Rename every hit marker of the kit to its take's own id (`…~tag`, a hash of the take's recordings), in place: nothing is found again, every hit stays where it is with who placed it, approvals and flags, and hand placements (HITS_PLACE) are remembered under the new ids. For a song detected before ids were per take: takes recorded from the same place (lanes of one song) shared ids, so a hit played in one counted as played in all, and moving or removing one by id reached every take's. HITS_DETECT gives per-take ids itself; run this once on an older song instead of detecting again. `dry_run` says what it would rename. One undo step.",
+    "Drums",
+    "",
+);
+
+/// Whether only to say.
+#[derive(Facet, Default)]
+struct RenewArg {
+    dry_run: Option<bool>,
+}
+
 static AUDIT: ActionMeta = meta(
     "HITS_AUDIT",
     "hits_audit",
     "Audit the drum edit",
-    "How the drum edit as it stands plays every hit (in `from`/`to`, as recorded): per piece, how many play once, how many play nowhere (cut away by the edit — and of them the strokes, not ghosts or bleed: what a listener misses), how many play twice (a double attack at a seam), and where. Read-only; run it after any edit.",
+    "How the drum edit as it stands plays every hit of the take the comp plays (each piece's COMP lane, else what plays; takes kept on other lanes are not counted), in `from`/`to` as recorded: per piece, how many play once, how many play nowhere (cut away by the edit — and of them the strokes, not ghosts or bleed: what a listener misses), how many play twice (a double attack at a seam), and where. Read-only; run it after any edit.",
     "Drums",
     "",
 );
@@ -3290,6 +3628,10 @@ fn register_reads(list: &ActionList) -> Result<(), architect::action::ActionErro
             &settings,
             a.all_takes.unwrap_or(false),
         )
+    })?;
+    list.register(&RENEW_IDS, Effect::Mutating, |a: RenewArg| {
+        let (daw, project) = song()?;
+        renew_ids(daw, &project, a.dry_run.unwrap_or(false))
     })?;
     list.register(&LIST, Effect::ReadOnly, |a: ListArg| {
         let (daw, project) = song()?;
@@ -3564,3 +3906,6 @@ fn register_edits(list: &ActionList) -> Result<(), architect::action::ActionErro
     })?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
