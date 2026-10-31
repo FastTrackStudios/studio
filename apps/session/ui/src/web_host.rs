@@ -572,6 +572,10 @@ pub fn WebDemo(
     guide: Option<String>,
 ) -> Element {
     use crate::web_engine::Progress;
+    // The page's controls run named actions: the window's own join the
+    // page's list before anything is drawn (`crate::press`).
+    #[cfg(not(feature = "native"))]
+    use_hook(crate::press::register_page_actions);
     // The views are drawn with WebGL2: without it, say what is needed
     // rather than open a set nothing can be drawn for. Asked once; the
     // answer does not change while the page is up.

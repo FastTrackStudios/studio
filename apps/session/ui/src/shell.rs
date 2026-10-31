@@ -839,17 +839,13 @@ pub fn PhaseSwitch(mode: Signal<Mode>) -> Element {
                         button {
                             style: mode_option(each == current),
                             onclick: move |_| {
-                                #[cfg(feature = "native")]
-                                crate::window::press(
+                                let _ = crate::press::press(
                                     "SESSION_PHASE",
                                     &serde_json::json!({
                                         "mode": mode().display_name(),
                                         "phase": each.slug,
                                     }),
                                 );
-                                // The browser build has no Action List.
-                                #[cfg(not(feature = "native"))]
-                                session::mode_phases::choose(mode(), each.slug);
                                 seen.set(session::mode_phases::version());
                                 picking.set(false);
                             },
@@ -1068,10 +1064,10 @@ pub(crate) fn RackSwitch() -> Element {
             style: bottom_button(on, true),
             onclick: move |_| {
                 // `SESSION_MIXER_FX` shows or hides them.
-                #[cfg(feature = "native")]
-                crate::window::press("SESSION_MIXER_FX", &serde_json::json!({ "shown": !on }));
-                #[cfg(not(feature = "native"))]
-                crate::mixer_panel::set_racks_shown(!on);
+                let _ = crate::press::press(
+                    crate::view_actions::MIXER_FX.id,
+                    &serde_json::json!({ "shown": !on }),
+                );
                 shown.set(!on);
             },
             lucide_dioxus::AudioLines { size: 19, color: ink(on) }

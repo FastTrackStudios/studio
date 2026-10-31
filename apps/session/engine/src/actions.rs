@@ -64,28 +64,10 @@ fn register_all(list: &ActionList) -> Result<(), architect::action::ActionError>
     crate::studio_engine::set_actions::register(list)
 }
 
-/// An action's description, as the list and its menus show it.
-pub const fn meta(
-    id: &'static str,
-    method_name: &'static str,
-    display_name: &'static str,
-    description: &'static str,
-    group: &'static str,
-    shortcut: &'static str,
-) -> ActionMeta {
-    ActionMeta {
-        id,
-        trait_name: "Session",
-        method_name,
-        display_name,
-        description,
-        category: "Session",
-        group,
-        shortcut,
-        toggleable: false,
-        undo: false,
-    }
-}
+pub use crate::shared_actions::meta;
+use crate::shared_actions::{
+    FOLD, FoldArg, PHASE, PhaseArg, SELECT_TRACK, SelectTrackArg, TRACK_SET, TrackSetArg,
+};
 
 pub static PLAY_STOP: ActionMeta = meta(
     "SESSION_PLAY_STOP",
@@ -248,14 +230,6 @@ static DRUM_FUNDAMENTAL: ActionMeta = meta(
     "Drums",
     "",
 );
-static TRACK_SET: ActionMeta = meta(
-    "TRACK_SET",
-    "track_set",
-    "Set track",
-    "Set any of a track's fader (`volume_db`), pan (-1 left … 1 right), `mute`, `solo`, `phase` (polarity inverted), `monitor` (input monitoring: `off`, `on`, or `auto` — on except while playing) or `name` — only the fields given change. What the track panel's and the mixer's buttons and faders run (arming is TRACK_ARM).",
-    "Mix",
-    "",
-);
 
 /// Which tracks.
 #[derive(Facet)]
@@ -384,21 +358,6 @@ enum DrumRange {
     Tom,
 }
 
-/// What to set on a track.
-#[derive(Facet)]
-struct TrackSetArg {
-    track: String,
-    volume_db: Option<f64>,
-    pan: Option<f64>,
-    mute: Option<bool>,
-    solo: Option<bool>,
-    /// Polarity inverted.
-    phase: Option<bool>,
-    /// Input monitoring: `off`, `on`, `auto` (on except while playing).
-    monitor: Option<String>,
-    name: Option<String>,
-}
-
 /// How many hits a page holds unless asked.
 const PAGE: u32 = 200;
 
@@ -518,52 +477,13 @@ fn register_sections(list: &ActionList) -> Result<(), architect::action::ActionE
     Ok(())
 }
 
-static PHASE: ActionMeta = meta(
-    "SESSION_PHASE",
-    "phase",
-    "Phase",
-    "Put a mode in one of its phases — Mix: rescue, balance, tone, polish, relational, depth, creative, overview; Organize: import, tempo-map. `mode` defaults to Edit.",
-    "View",
-    "",
-);
-
-/// Which phase.
-#[derive(Facet)]
-struct PhaseArg {
-    phase: String,
-    mode: Option<String>,
-}
-
 fn register_phase(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&PHASE, Effect::Mutating, |a: PhaseArg| {
-        let name = a.mode.as_deref().unwrap_or("Edit");
-        let mode = session::modes::Mode::ALL
-            .into_iter()
-            .find(|m| m.display_name().eq_ignore_ascii_case(name.trim()))
-            .ok_or_else(|| format!("no mode {name}"))?;
-        let phases = session::mode_phases::of(mode);
-        let phase = phases
-            .iter()
-            .find(|p| {
-                p.slug.eq_ignore_ascii_case(a.phase.trim())
-                    || p.name.eq_ignore_ascii_case(a.phase.trim())
-            })
-            .ok_or_else(|| {
-                format!(
-                    "{} has no phase {}: one of {:?}",
-                    mode.display_name(),
-                    a.phase,
-                    phases.iter().map(|p| p.slug).collect::<Vec<_>>()
-                )
-            })?;
-        session::mode_phases::choose(mode, phase.slug);
+        let (mode, slug) = crate::shared_actions::pick_phase(a.mode.as_deref(), &a.phase)?;
+        session::mode_phases::choose(mode, slug);
         also_in_the_window(
             PHASE.id,
-            format!(
-                r#"{{"phase":"{}","mode":"{}"}}"#,
-                phase.slug,
-                mode.display_name()
-            ),
+            format!(r#"{{"phase":"{}","mode":"{}"}}"#, slug, mode.display_name()),
         );
         Ok(())
     })?;
@@ -1547,27 +1467,6 @@ struct CheckSavedArg {
     dir: String,
 }
 
-static FOLD: ActionMeta = meta(
-    "SESSION_FOLD",
-    "session_fold",
-    "Open or shut a folder",
-    "Open (`open: true`) the folder `track` (its GUID, path or name) and every folder it is in, so its tracks show; or shut it (`open: false`). Returns the folders changed.",
-    "View",
-    "",
-);
-
-/// A folder to open or shut.
-#[derive(Facet)]
-struct FoldArg {
-    track: String,
-    open: bool,
-    /// The folders to open or shut, as the engine settled them: what it
-    /// tells a window in another process, which has no song to look them
-    /// up in.
-    #[facet(default)]
-    folders: Vec<String>,
-}
-
 #[cfg(feature = "native")]
 pub static UNDO: ActionMeta = meta(
     "SESSION_UNDO",
@@ -1732,24 +1631,6 @@ fn song_base(daw: &daw::standalone::Standalone, guid: &str) -> Result<std::path:
 }
 
 #[cfg(feature = "native")]
-static SELECT_TRACK: ActionMeta = meta(
-    "SESSION_SELECT_TRACK",
-    "session_select_track",
-    "Select a track",
-    "Select `track` (its GUID, its path — `Snare/Verb/Plate`, any tail of it — or its name) and nothing else: what the FX row, the mixer and the Editor follow. `add` true adds it to the selection instead, leaving the rest selected (a modified click on a track's name).",
-    "Session",
-    "",
-);
-
-/// Which track.
-#[cfg(feature = "native")]
-#[derive(Facet)]
-struct SelectTrackArg {
-    track: String,
-    /// Add it to the selection rather than select it alone.
-    #[facet(default)]
-    add: bool,
-}
 
 static JOBS: ActionMeta = meta(
     "SESSION_JOBS",
@@ -1992,29 +1873,13 @@ fn register_undo(list: &ActionList) -> Result<(), architect::action::ActionError
             return Ok(a.folders);
         }
         let (daw, project) = song()?;
-        let guid = resolve(daw, &project, &a.track)?;
         let tracks = daw::service::Tracks::all(daw, project);
-        let by_guid: std::collections::HashMap<&str, &daw_proto::Track> =
-            tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
-        // Opening a folder opens the ones it is in: a folder open inside a
-        // shut one shows nothing.
-        let mut opened = Vec::new();
-        let mut folders = Vec::new();
-        let mut at = by_guid.get(guid.as_str()).copied();
-        while let Some(track) = at {
-            if track.is_folder && (a.open || track.guid == guid) {
-                crate::folds::toggle(&track.guid, !a.open);
-                opened.push(track.name.clone());
-                folders.push(track.guid.clone());
-            }
-            if !a.open {
-                break;
-            }
-            at = track
-                .parent_guid
-                .as_deref()
-                .and_then(|p| by_guid.get(p).copied());
+        let guid = crate::shared_actions::resolve_in(&tracks, &a.track)?;
+        let changed = crate::shared_actions::folds_of(&tracks, &guid, a.open);
+        for (folder, _) in &changed {
+            crate::folds::toggle(folder, !a.open);
         }
+        let (folders, opened): (Vec<String>, Vec<String>) = changed.into_iter().unzip();
         // The folds are the window's view: run here, the window is asked
         // too, told the folders settled so the two agree.
         also_in_the_window(
@@ -2936,13 +2801,7 @@ fn register_track_set(list: &ActionList) -> Result<(), architect::action::Action
             Tracks::set_soloed(daw, project.clone(), at(), solo).map_err(failed)?;
         }
         if let Some(monitor) = a.monitor.as_deref() {
-            use daw_proto::track::InputMonitoringMode as M;
-            let mode = match monitor.to_ascii_lowercase().as_str() {
-                "off" => M::Off,
-                "on" | "normal" => M::Normal,
-                "auto" | "not_when_playing" => M::NotWhenPlaying,
-                other => return Err(format!("`monitor` is off, on or auto, not {other:?}")),
-            };
+            let mode = crate::shared_actions::monitor_mode(monitor)?;
             Tracks::set_input_monitor(daw, project.clone(), at(), mode).map_err(failed)?;
         }
         if let Some(phase) = a.phase {
@@ -2971,38 +2830,7 @@ pub fn resolve(
     project: &ProjectContext,
     what: &str,
 ) -> Result<String, String> {
-    let tracks = Tracks::all(daw, project.clone());
-    if let Some(t) = tracks.iter().find(|t| t.guid.eq_ignore_ascii_case(what)) {
-        return Ok(t.guid.clone());
-    }
-    let by_guid: std::collections::HashMap<&str, &daw_proto::Track> =
-        tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
-    let want = what.trim().trim_matches('/').to_lowercase();
-    let fits: Vec<(&daw_proto::Track, String)> = tracks
-        .iter()
-        .map(|t| (t, crate::gain_stage::path_of(t, &by_guid).join("/")))
-        .filter(|(_, path)| {
-            let path = path.to_lowercase();
-            path == want || path.ends_with(&format!("/{want}"))
-        })
-        .collect();
-    // A whole path is that track, however many others end the same way:
-    // `Drums` is the top-level folder, not `REFERENCES/…/Drums` too.
-    let exact: Vec<&(&daw_proto::Track, String)> = fits
-        .iter()
-        .filter(|(_, p)| p.to_lowercase() == want)
-        .collect();
-    if let [(only, _)] = exact.as_slice() {
-        return Ok(only.guid.clone());
-    }
-    match fits.as_slice() {
-        [(only, _)] => Ok(only.guid.clone()),
-        [] => Err(format!("no track {what} — list them with SESSION_TRACKS")),
-        many => Err(format!(
-            "{what} is more than one track: {:?} — give more of its path",
-            many.iter().map(|(_, p)| p.as_str()).collect::<Vec<_>>()
-        )),
-    }
+    crate::shared_actions::resolve_in(&Tracks::all(daw, project.clone()), what)
 }
 
 static EDIT_SETTINGS: ActionMeta = meta(
