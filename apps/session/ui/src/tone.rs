@@ -2308,6 +2308,51 @@ pub enum Which {
 }
 
 impl Which {
+    /// Every panel, in their order.
+    pub const ALL: [Self; 20] = [
+        Self::RescueEq,
+        Self::Gate,
+        Self::RescueComp,
+        Self::Eq,
+        Self::Comp,
+        Self::Sat,
+        Self::Mod,
+        Self::DeEss,
+        Self::PolishEq,
+        Self::Space,
+        Self::Delay,
+        Self::Reverb,
+        Self::DeEssIn,
+        Self::PreEq,
+        Self::PostEq,
+        Self::DecayEq,
+        Self::Knobs,
+        Self::Wide,
+        Self::Pitch,
+        Self::Presets,
+    ];
+
+    /// Its name as an action takes it: `rescue_eq`, `comp`, `de_ess_in`.
+    #[must_use]
+    pub fn slug(self) -> String {
+        let mut out = String::new();
+        for (i, c) in format!("{self:?}").chars().enumerate() {
+            if c.is_ascii_uppercase() && i > 0 {
+                out.push('_');
+            }
+            out.push(c.to_ascii_lowercase());
+        }
+        out
+    }
+
+    /// The panel named `slug` ([`Self::slug`]).
+    #[must_use]
+    pub fn from_slug(slug: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|w| w.slug().eq_ignore_ascii_case(slug.trim()))
+    }
+
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
