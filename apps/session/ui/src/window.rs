@@ -173,8 +173,10 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
         Action::Redo => (crate::actions::REDO.id, String::new()),
         #[cfg(not(feature = "native"))]
         Action::Undo | Action::Redo => return None,
-        // The window's own: its clipboard is the arrangement's.
-        Action::CopyItems | Action::PasteItems | Action::ToggleSnap => return None,
+        Action::ToggleSnap => (OPTION.id, r#"{"option":"snap"}"#.to_owned()),
+        // The window's own: its clipboard is the arrangement's. A paste
+        // commits as the gesture it is (`ARRANGE_COPY`, `settle`).
+        Action::CopyItems | Action::PasteItems => return None,
         Action::ToggleEditor => (TOGGLE_EDITOR.id, String::new()),
         Action::ToggleFx => (TOGGLE_FX.id, String::new()),
         Action::ToggleBrowser => (crate::browser::BROWSER.id, String::new()),

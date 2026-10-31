@@ -332,7 +332,7 @@ fn open(path: &std::path::Path, audio: bool) -> StudioSession {
         let sent = effects
             .iter()
             .filter_map(|e| match e {
-                session_ui::arrange_edit::Effect::Send(edit) => Some(edit),
+                session_ui::arrange_edit::Effect::Edit(edit) => Some(edit),
                 _ => None,
             })
             .filter(|edit| session_engine::engine::apply_now(edit))

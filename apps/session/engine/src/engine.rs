@@ -314,6 +314,14 @@ pub enum Edit {
     /// A track's fader or pan knob taken hold of (`true`) or let go: what
     /// Touch and Latch automation record by ([`Touched`]).
     Touch(String, Touched, bool),
+    /// A named action — its id and its arguments (JSON) — run on the
+    /// engine in order with the edits around it: how a control's gesture
+    /// commits (`docs/design/actions-everywhere.md`). The window's edit
+    /// worker runs it through the Action List ([`Applier`]), after every
+    /// edit queued before it and before any after it — a drag's live
+    /// edits, an undo bracket around them, a barrier an action waits on.
+    /// It never crosses the view link as an edit.
+    Run(String, String),
 }
 
 /// Which of a track's controls a [`Edit::Touch`] is about.
@@ -353,7 +361,7 @@ impl Edit {
     #[must_use]
     pub fn guid(&self) -> &str {
         match self {
-            Self::Done(_) => "",
+            Self::Done(_) | Self::Run(..) => "",
             Self::ToggleMute(g)
             | Self::ToggleSolo(g)
             | Self::ToggleArm(g)
@@ -1164,17 +1172,25 @@ impl Applier {
                 // Drain, coalesce, apply. Draining first is what makes
                 // the coalescing work: a hundred queued fader positions
                 // become one before any of them is sent.
+                //
+                // A named action (`Edit::Run`) is a wall: what came before
+                // it goes first, it runs, then what came after — nothing
+                // coalesces across it.
                 let mut queue = Queue::default();
                 while let Ok(first) = rx.recv() {
-                    queue.push(first);
+                    let mut arrived = vec![first];
                     while let Ok(more) = rx.try_recv() {
-                        queue.push(more);
+                        arrived.push(more);
                     }
-                    let mut batch = Vec::with_capacity(queue.len());
-                    while let Some(edit) = queue.pop() {
-                        batch.push(edit);
+                    for edit in arrived {
+                        if let Edit::Run(id, args) = edit {
+                            drain(runtime, &mut queue);
+                            run_in_order(&id, &args);
+                        } else {
+                            queue.push(edit);
+                        }
                     }
-                    send_batch(runtime, batch);
+                    drain(runtime, &mut queue);
                 }
             })
             .ok()?;
@@ -1186,6 +1202,44 @@ impl Applier {
     #[cfg(feature = "native")]
     pub fn send(&self, edit: Edit) {
         let _ = self.edits.send(edit);
+    }
+}
+
+/// Everything queued, carried out in order (see [`send_batch`]).
+#[cfg(feature = "native")]
+fn drain(runtime: &tokio::runtime::Runtime, queue: &mut Queue) {
+    if queue.is_empty() {
+        return;
+    }
+    let mut batch = Vec::with_capacity(queue.len());
+    while let Some(edit) = queue.pop() {
+        batch.push(edit);
+    }
+    send_batch(runtime, batch);
+}
+
+/// A control's action ([`Edit::Run`]), run where every action runs
+/// (`crate::actions::run`: on the engine over the link), in its place among
+/// the edits. The names the engine gave the items it made (`made`, as a
+/// gesture action says them) are remembered as [`send_batch`] remembers
+/// them. A refusal is said once, as a key's is.
+#[cfg(feature = "native")]
+fn run_in_order(id: &str, args: &str) {
+    let _span = tracing::info_span!("window.commit", window.commit_action = id).entered();
+    match crate::actions::run(id, args.as_bytes()) {
+        Ok(out) => {
+            let said: serde_json::Value = serde_json::from_slice(&out).unwrap_or_default();
+            let made = said.get("made").and_then(serde_json::Value::as_array);
+            for pair in made.into_iter().flatten() {
+                if let (Some(predicted), Some(real)) = (
+                    pair.get("predicted").and_then(serde_json::Value::as_str),
+                    pair.get("real").and_then(serde_json::Value::as_str),
+                ) {
+                    remember(predicted, real);
+                }
+            }
+        }
+        Err(e) => tracing::warn!(action.id = id, error = %e, "control action refused"),
     }
 }
 
@@ -1676,6 +1730,11 @@ async fn apply(edit: &Edit) {
             }
             return;
         }
+        // Run by the window's edit worker, never applied as an edit.
+        Edit::Run(id, _) => {
+            tracing::warn!(action.id = %id, "a named action reached the edit path unrun");
+            return;
+        }
         _ => {}
     }
     if edit.is_automation() {
@@ -1947,7 +2006,8 @@ async fn apply(edit: &Edit) {
         // Already handled above, where they needed no track either.
         | Edit::BeginUndo(_)
         | Edit::EndUndo(_)
-        | Edit::Done(_) => Ok(()),
+        | Edit::Done(_)
+        | Edit::Run(..) => Ok(()),
     };
     if let Err(error) = outcome {
         // One line, because a failed edit is a thing the user did that

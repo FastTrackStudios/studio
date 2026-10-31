@@ -22,6 +22,7 @@ const PATTERNS: &[&str] = &[
     "transport_here(",
     "request_dock(",
     "edits.borrow_mut().push(",
+    "edits.borrow_mut().extend(",
     "Effect::Send(",
     "mode_phases::choose(",
     "applier.send(",
@@ -90,21 +91,34 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         1,
         "live drag preview and the browser fallback",
     ),
-    // Debt: still to route (the inventory in the design doc).
+    // widget.rs: a gesture commits as its named action (`commit_edits` →
+    // `ARRANGE_*` / `ITEMS_SELECT`, `turn_released` → `TRACK_SET`), pushed
+    // as `Edit::Run` so it runs in order with the edits around it. What
+    // is left is no gesture of the hand's:
     (
         "widget.rs",
         "edits.borrow_mut().push(",
-        12,
-        "item knob, take curve, visibility, touch, gestures",
+        9,
+        "the commit lane itself (Edit::Run); an action's own work (visibility, \
+         three Done barriers an engine action waits on); the track knob's live \
+         turn and its touch (TRACK_SET on release); two browser fallbacks",
     ),
-    ("widget.rs", "Effect::Send(", 3, "arrangement gestures"),
+    (
+        "widget.rs",
+        "edits.borrow_mut().extend(",
+        7,
+        "an action's own work (a key's through the list, the engine's asked); \
+         commit_edits' browser fallback and its edits no action names (none \
+         today, warned); debt: the automation lanes' press, drag, release and \
+         cancel (AUTOMATION_ITEM / AUTOMATION_WRITE)",
+    ),
     (
         "arrange_edit.rs",
-        "Effect::Send(",
-        45,
-        "item, marker and region drags",
+        "options::SNAP.toggle(",
+        1,
+        "browser fallback of SESSION_OPTION (the key runs it)",
     ),
-    ("arrange_edit.rs", "options::SNAP.toggle(", 1, "snap key"),
+    // Debt: still to route (the inventory in the design doc).
     (
         "tone.rs",
         "applier.send(",
