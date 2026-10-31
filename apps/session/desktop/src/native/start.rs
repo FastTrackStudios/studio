@@ -258,6 +258,16 @@ pub(super) async fn off_thread<T: Send + 'static>(
 use session_engine::studio_engine::set::OpenWork;
 
 /// An error for a person: the whole chain, in a few words.
+/// Sign out of Task (`ACCOUNT_SIGN_OUT`), and the account sheet shows it
+/// (its own sign-out clears what the action cleared, and its state).
+fn sign_out(acct: fts_account::ui::AccountState) {
+    let _ = session_ui::window::press(
+        session_engine::library_actions::SIGN_OUT.id,
+        &serde_json::Value::Null,
+    );
+    acct.sign_out();
+}
+
 pub(super) fn brief(e: &eyre::Report) -> String {
     session_engine::task_set::brief(&format!("{e:#}"))
 }
@@ -1229,7 +1239,7 @@ fn Start() -> Element {
                         compact: true,
                         on_sign_in: open_account,
                         on_account: open_account,
-                        on_sign_out: move |()| acct.sign_out(),
+                        on_sign_out: move |()| sign_out(acct),
                     }
                 }
             }
@@ -1313,7 +1323,7 @@ fn Start() -> Element {
                             compact: false,
                             on_sign_in: open_account,
                             on_account: open_account,
-                            on_sign_out: move |()| acct.sign_out(),
+                            on_sign_out: move |()| sign_out(acct),
                         }
                     }
                 }
@@ -1663,6 +1673,11 @@ fn OrgSwitcher(
                             onclick: {
                                 let slug = slug.clone();
                                 move |_| {
+                                    // `LIBRARY_ORG`, and the switcher shows it.
+                                    let _ = session_ui::window::press(
+                                        session_engine::library_actions::ORG.id,
+                                        &serde_json::json!({ "org": slug }),
+                                    );
                                     org.set(Some(slug.clone()));
                                     open.set(false);
                                 }
@@ -2654,7 +2669,7 @@ pub fn WelcomeAccountMenu() -> Element {
             compact: true,
             on_sign_in: move |()| acct.open(),
             on_account: move |()| acct.open(),
-            on_sign_out: move |()| acct.sign_out(),
+            on_sign_out: move |()| sign_out(acct),
         }
     }
 }

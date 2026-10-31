@@ -91,28 +91,33 @@ pub fn Versions() -> Element {
     // A version picked to open, while asking whether to save this one.
     let mut switching = use_signal(|| None::<Version>);
     let back = try_use_context::<crate::shell::Back>();
-    // Out of the song and in again as `to`, saved first if asked.
-    let mut leave = move |to: Version| {
-        let Some(crate::shell::Back(back)) = back else {
-            said.set(Some((
-                false,
-                "this window cannot open another version".to_owned(),
-            )));
-            return;
-        };
-        crate::projects::open_next(to.path);
-        open.set(false);
-        switching.set(None);
-        back.call(());
-    };
+    // Out of the song and in again as `to`, saved first if asked: the
+    // engine opens it (`SESSION_OPEN {path}`, what the start screen's own
+    // opens run), and the window goes back to the start screen, which
+    // follows the open in.
     let switch = move |to: Version, save: bool| {
         spawn(async move {
+            let Some(crate::shell::Back(back)) = back else {
+                said.set(Some((
+                    false,
+                    "this window cannot open another version".to_owned(),
+                )));
+                return;
+            };
             if save && let Err(e) = run_behind("SESSION_SAVE", String::new()).await {
                 said.set(Some((false, format!("not saved, so not switched: {e}"))));
                 switching.set(None);
                 return;
             }
-            leave(to);
+            let args = serde_json::json!({ "path": to.path.display().to_string() });
+            if let Err(e) = run_behind("SESSION_OPEN", args.to_string()).await {
+                said.set(Some((false, format!("{} did not open: {e}", to.name))));
+                switching.set(None);
+                return;
+            }
+            open.set(false);
+            switching.set(None);
+            back.call(());
         });
     };
     let mut run = move |id: &'static str, args: String| {
