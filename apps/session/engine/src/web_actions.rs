@@ -230,5 +230,6 @@ fn register(list: &ActionList) -> Result<(), architect::action::ActionError> {
         session::mode_phases::choose(mode, slug);
         Ok(())
     })?;
+    crate::shared_actions::register_together(list)?;
     crate::arrange_actions::register(list)
 }

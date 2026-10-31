@@ -127,6 +127,8 @@ action, and the list validates and survives hostile arguments.
 | `AUTOMATION_POINTS_EDIT`, `AUTOMATION_ITEMS_EDIT`, `AUTOMATION_LANE_SET` `{label?, edits}` | engine (both builds) | an automation lane's gesture, in the arrangement gestures' vocabulary (`envelope`, `item_curve`, `item_move`, `item_add`, `item_bounds`, `item_delete`, `lane_show`, `lane_mode`, `lane_height`) |
 | `NOTES_WRITE {item, content}` | engine | the Editor's take written back, one undo step (`notes_actions`) |
 | `SESSION_PANEL_MOVE`, `_OPEN`, `_CLOSE`, `_SHOW`, `_MAXIMIZE`, `_TABS`, `SESSION_DOCK_SPLIT`, `_EDGE`, `_FLOAT` `{intent}` | engine → window | a dock control's `dock::DockIntent`, carried out by the window's dock (`DockRequest::Intent`) |
+| `LIBRARY_LISTS` (read-only), `LIBRARY_LIST_CREATE`, `_RENAME`, `_DELETE`, `_DUPLICATE`, `_SONGS`, `LIBRARY_SONG_SAVE`, `_DELETE`, `LIBRARY_ORG`, `ACCOUNT_SIGN_OUT` | engine | the Task library's lists and songs, as the person signed in on this machine (`library_actions`): the library editor's edits, the org switcher, sign out |
+| `SESSION_TOGETHER_LEAVE`, `_TRANSPORT`, `_LOCK` | engine (both builds) | moved into `shared_actions`, so the page's list has them |
 
 ## Inventory (2026-10-30)
 
@@ -139,11 +141,11 @@ exempt by rule 6.
 | Arrangement: track panel (`widget.rs` `act`, rename) | 0 → **9** | 9 → **0** | 1 |
 | Arrangement: items, ruler, gestures (`arrange_edit.rs`, `widget.rs`) | 1 → **~29** | ~25 edit families → **0** | — |
 | Painted mixer / FX / automation / editor (`mixer_panel`, `mcp`, `fx_view`, `automation_*`, `tone`, `expression`, `editor_view`, `navigator`, `arrange_camera`, `ruler`, `device_audio`) | 13 → **25** → **~39** → **~51** → **~63** | 86 → **74** → **~60** → **~48** → **~36** | 13 |
-| Session UI rsx (`shell`, `transport_bar`, `toolbar`, `quantize_panel`, `collab_bar`, `record_view`, `versions`, `setup`, `compact`, `closeup`, `bar_step`, `studio`, `lyrics_panel`, `perf_meter`, `chart_*`, `browser`, `organize`, `navigator`, `instrument_rail`, `web_host`, `progress`, `performer`, `app_menu`) | 41 → **73** | 97 → **65** | 107 |
-| Desktop (`native/{dock,shell,start,library,publish,handoff,mod}.rs`, `session_view.rs`, `lib.rs`, `mixer_view.rs`) | 28 → **34** | 71 → **65** | 68 |
+| Session UI rsx (`shell`, `transport_bar`, `toolbar`, `quantize_panel`, `collab_bar`, `record_view`, `versions`, `setup`, `compact`, `closeup`, `bar_step`, `studio`, `lyrics_panel`, `perf_meter`, `chart_*`, `browser`, `organize`, `navigator`, `instrument_rail`, `web_host`, `progress`, `performer`, `app_menu`) | 41 → **73** → **~81** | 97 → **65** → **~57** | 107 |
+| Desktop (`native/{dock,shell,start,library,publish,handoff,mod}.rs`, `session_view.rs`, `lib.rs`, `mixer_view.rs`) | 28 → **34** → **~47** | 71 → **65** → **~52** | 68 |
 | Dock crate (`features/ui/dock` host + components) | 0 → **~29** | 50 → **~21** | 30 |
 | Studio welcome (`apps/studio/desktop/src/front.rs`) | 4 | 3 | 3 |
-| **total** | **87 → 146 → ~174 → ~188 → ~205 → ~217 → ~246** | **~341 → ~282 → ~254 → ~240 → ~223 → ~211 → ~182** | **222** |
+| **total** | **87 → 146 → ~174 → ~188 → ~205 → ~217 → ~246 → ~267** | **~341 → ~282 → ~254 → ~240 → ~223 → ~211 → ~182 → ~161** | **222** |
 
 Bold: after the first routing pass, then after pass 2's arrangement area
 (every item, ruler and dial gesture; the track knob's commit and the snap
@@ -300,8 +302,8 @@ engine (`RIG_BLOCKS`) is the fix.
 | setup.rs:440; record_view.rs:213 | touch mode | signal | NEW `SESSION_TOUCH` |
 | setup.rs:89; compact.rs:417-635 | setup tab, phone views | signals | NEW `SESSION_SETUP_TAB`, `SESSION_PHONE_VIEW` |
 | record_view.rs:345-421 | take ★ / ✕ | DAW facade markers | `TAKES_RANK {by, at|near}` |
-| versions.rs:259, 282, 291 | open a version | `projects::open_next` + Back | `SESSION_OPEN {name}` |
-| collab_bar.rs:404-518 | share, join, together/apart, leave, lock | `collab::*` (an action only when linked) | `SESSION_TOGETHER_*` |
+| versions.rs `switch` | open a version (save first, or not) | `projects::open_next` + Back | **routed**: `SESSION_SAVE` then `SESSION_OPEN {path}`, then Back to the start screen, which follows the open |
+| collab_bar.rs `live` | share, join, together/apart, leave, lock | `collab::*` (an action only when linked) | **routed**: `SESSION_TOGETHER_*` always (`window::press_behind`); the page's leave, together/apart and lock on its own list |
 | closeup.rs `CloseupLayer` | close-up tabs, Back, swipe, Esc | signal | **routed**: `SESSION_CLOSEUP` |
 | lyrics_panel.rs:526, 544 | lyrics view / layer | signals | NEW `SESSION_LYRICS` |
 | perf_meter.rs:246, 342 | sort, close | signal, `toggle` | `SESSION_PERF_METER {sort?}` |
@@ -325,12 +327,14 @@ engine (`RIG_BLOCKS`) is the fix.
 | dock host.rs dividers, edges, floats | split share, edge size / shown, float bounds | the layout written per move | **routed**: drawn live (rule 3), `SESSION_DOCK_{SPLIT,EDGE,FLOAT}` when the drag ends (`on_up`); a double-click at once |
 | dock host.rs phone sheet, menus | a docked panel as a sheet, the menus | signals | local (rule 6: a popover; its choices are intents) |
 | dock ui/components/* | the older tile dock (`features/session`, not this window) | `DockActions` callbacks | host-installed `DockActions` running the host's `DOCK_*` |
-| start.rs:838-876, 1232, 1693 | sign in / out | `acct.*` | NEW `ACCOUNT_SIGN_IN`, `ACCOUNT_SIGN_OUT` |
+| start.rs `sign_out` (three places) | sign out | `acct.sign_out` | **routed**: `ACCOUNT_SIGN_OUT`, then the sheet shows it |
+| start.rs sign in | the device-code sign-in | `acct.begin` | debt: an interactive flow (a code to show); NEW `ACCOUNT_SIGN_IN` would start it and say the code |
+| start.rs open, new project, join a link or the demo, a library list's Play | open | `view_client::ask` | already routed: `SESSION_OPEN {path}`, `SESSION_NEW`, `SESSION_JOIN`, `SESSION_OPEN_SETLIST` |
 | start.rs:990 | reconnect to REAPER | `set_mode(Remote)` + attach | NEW `SESSION_CONNECT {address}` |
 | start.rs:996-1303 | start screen sections, editors | signals | NEW `SESSION_START_SECTION`, `SESSION_LIBRARY_EDITOR` |
 | start.rs:1100, 1134, 1889, 1898, 1162 | download / remove | `stream_set::*` | NEW `LIBRARY_DOWNLOAD`, `LIBRARY_REMOVE_DOWNLOAD` |
-| start.rs:1663 | org pick | signal + pref | NEW `LIBRARY_ORG` |
-| library.rs:424-988 | lists and songs in Task | `l.*` | NEW `LIBRARY_LIST_{CREATE,RENAME,DUPLICATE,DELETE,EDIT}`, `LIBRARY_SONG_{SAVE,DELETE}` |
+| start.rs `OrgSwitcher` | org pick | signal + pref | **routed**: `LIBRARY_ORG`, the switcher showing it |
+| library.rs | lists made, renamed, copied, deleted, their songs set (the saver); a song made from a search; the song editor's save and delete | `with_library` straight to Task | **routed**: `LIBRARY_LIST_{CREATE,RENAME,DELETE,DUPLICATE,SONGS}`, `LIBRARY_SONG_{SAVE,DELETE}` off the window's thread; the editor keeps its own copy at once |
 | handoff.rs:280; front.rs:342, 352; start.rs:757; front.rs:301 | leave the DAW, back to library, open a rig | `transport(Stop)`, `view.set` | stop **routed** (`SESSION_STOP`); NEW `STUDIO_VIEW {view, rig?}` |
 | session_view.rs:310-639 | REAPER connect, guide/metronome, output routing | direct | NEW `SESSION_REAPER_CONNECT`, `GUIDE_SET`, `AUDIO_ROUTING_SET` |
 | mixer_view.rs:72 | open setlist in REAPER | writes an RPP, spawns REAPER | NEW `SESSION_OPEN_IN_REAPER` |
@@ -350,3 +354,37 @@ named action — a screenset's by name, the layout's through
 comes back to `Dock::apply` at once. The older tile dock
 (`dock::ui::components`, `features/session`'s) is not this window's and
 keeps its `DockActions` callbacks: debt.
+
+## Debt left (2026-10-31, after pass 2)
+
+About 161 bypasses remain, against ~341 at the start. By kind:
+
+- **Window view state with no action yet** (rule 4): the shell's
+  bottom-bar views, pins, pane docking, lock (`SESSION_LOCK`), fold every
+  folder (`SESSION_FOLD_TOPS`), chart fit and page; the toolbar's follow,
+  compact track panel, grouping (flipped before `SESSION_GROUPING`) and
+  mixer toggle; setup's tabs, touch mode, stream quality, speaker and mic;
+  the phone views; lyrics view and layer; the perf meter's sort; the chart
+  editor's toggle; the camera's wheel, pinch and pan (`SESSION_VIEW` at
+  gesture end); the ruler's CHORDS lane; the start screen's sections and
+  the library editor's open and close; Studio's welcome views
+  (`STUDIO_VIEW`).
+- **Song or engine changes still made directly:** the stop behaviour
+  (`play_return::set` beside `SESSION_STOP_BEHAVIOUR`), Mix mode's guide
+  mute (`mix_guide.rs`, inside `SESSION_MODE`), the record view's take
+  ★/✕ (`TAKES_RANK`), the Organize toolbar (an action only when linked),
+  the chart editor's apply (`CHART_APPLY` only when linked), the Editor's
+  own menu and keys until it saves (`EDITOR_ACTION`), the REAPER-facing
+  desktop controls (`session_view.rs`: connect, guide, routing;
+  `mixer_view.rs`: open in REAPER), the older webview shell (`lib.rs`).
+- **The start screen:** sign in (an interactive device-code flow), the
+  REAPER bridge connect (`SESSION_CONNECT`), downloading a list and
+  removing a download (`LIBRARY_DOWNLOAD`, `LIBRARY_REMOVE_DOWNLOAD`).
+- **The FX view's rig is a fixture:** `RIG_BLOCK_SET` names the bundled
+  rig's blocks; drawing the FX view from `RIG_BLOCKS` is the fix.
+- **The older tile dock** (`dock::ui::components`, `features/session`):
+  its `DockActions` callbacks.
+- **The browser's list** lacks `TRACK_LANE_STEP` and `SESSION_GROUPING`.
+- **Live previews and local wheels, by design** (rules 3, 6): fader and
+  knob turns, drags, a wheel with no end to commit at.
+
