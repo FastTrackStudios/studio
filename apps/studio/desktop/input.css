@@ -1,4 +1,11 @@
-@import "tailwindcss";
+/* `source(none)`: only the @source globs below are scanned. Tailwind's
+ * automatic detection scans the working directory — this app's folder,
+ * which holds the output sheet itself, so each run read the class names of
+ * the previous one and the sheet depended on its own history (a fresh
+ * checkout's committed sheet produced a different one than the dev loop's
+ * regenerated copy). The output depends on the sources and the tailwindcss
+ * version alone: run `just signal-tailwind` in the dev shell. */
+@import "tailwindcss" source(none);
 @import "./fts-theme.css";
 
 /* Scan app source and UI crate dependencies for Tailwind class usage.
