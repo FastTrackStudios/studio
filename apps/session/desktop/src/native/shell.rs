@@ -369,10 +369,9 @@ pub fn Shell() -> Element {
                         // and who is here. Each is a panel too.
                         badges: rsx! { session_ui::collab_bar::CollabBar {} },
                         on_navigator: move |()| {
-                            session_engine::actions::request_dock(
-                                session_engine::actions::DockRequest::TogglePanel(
-                                    "set".to_owned(),
-                                ),
+                            let _ = session_ui::window::press(
+                                "SESSION_PANEL",
+                                &serde_json::json!({ "kind": "set" }),
                             );
                         },
                         width: width(),

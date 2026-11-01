@@ -88,6 +88,20 @@ impl Toggle {
         }
     }
 
+    /// The name `SESSION_OPTION` takes this switch by; `None` for grouping
+    /// (`SESSION_GROUPING`) and the window's own switches.
+    const fn option_name(self) -> Option<&'static str> {
+        match self {
+            Self::Compact | Self::Follow | Self::Metronome | Self::Mixer | Self::Grouping => None,
+            Self::AutoCrossfade => Some("auto_crossfade"),
+            Self::Ripple => Some("ripple"),
+            Self::Grid => Some("grid"),
+            Self::Snap => Some("snap"),
+            Self::Lock => Some("lock"),
+            Self::Razor => Some("razor"),
+        }
+    }
+
     const fn option(self) -> Option<&'static options::Option> {
         match self {
             // These are the window's, not the session's.
@@ -231,6 +245,14 @@ pub fn MainToolbar(
         }
         Toggle::Metronome => {
             if let Some(guid) = click.clone() {
+                // The click track muted or not, through `TRACK_SET`.
+                #[cfg(feature = "native")]
+                crate::window::press(
+                    "TRACK_SET",
+                    &serde_json::json!({ "track": guid, "mute": metronome() }),
+                );
+                // The browser build has no Action List.
+                #[cfg(not(feature = "native"))]
                 edits
                     .0
                     .borrow_mut()
@@ -251,7 +273,19 @@ pub fn MainToolbar(
         }
         other => {
             if let Some(option) = other.option() {
-                let now = option.toggle();
+                let now = !option.get();
+                match other.option_name() {
+                    // `SESSION_OPTION` switches it (what `watch` and the
+                    // CLI see); grouping is `SESSION_GROUPING`'s, below.
+                    #[cfg(feature = "native")]
+                    Some(name) => {
+                        crate::window::press(
+                            "SESSION_OPTION",
+                            &serde_json::json!({ "option": name, "on": now }),
+                        );
+                    }
+                    _ => option.set(now),
+                }
                 if other == Toggle::Grouping {
                     // Groups move in the engine, where the mix is; a page's
                     // engine is its own.

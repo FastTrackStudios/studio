@@ -862,24 +862,24 @@ pub fn transport(command: Move, seconds: f64) {
     if !matches!(command, Move::ToggleLoop | Move::ToggleRecord) {
         crate::collab::transport_pressed();
     }
-    // A window on an engine: play and record are the engine's actions
-    // (`SESSION_PLAY_STOP`, `TRANSPORT_RECORD`) — the engine holds a play
-    // for a song still streaming in and writes the takes a stop makes; the
-    // rest are the facade's.
+    // A press runs the transport's named action (`SESSION_PLAY_STOP`,
+    // `SESSION_SEEK`, `TRANSPORT_RECORD`, …) — on the engine over the link,
+    // or here — so `watch` and the CLI see it; behind the window, as it was
+    // fire and forget. The engine holds a play for a song still streaming
+    // in and writes the takes a stop makes.
     #[cfg(feature = "native")]
-    if crate::view_client::is_linked() {
-        match command {
-            Move::PlayStop => {
-                crate::actions::off_the_window(crate::actions::PLAY_STOP.id, String::new());
-                return;
-            }
-            Move::ToggleRecord => {
-                crate::actions::off_the_window(crate::record::TRANSPORT_RECORD.id, "{}".to_owned());
-                return;
-            }
-            _ => {}
+    {
+        // The jump is this window's to follow, wherever the engine is.
+        if matches!(
+            command,
+            Move::Seek | Move::Home | Move::End | Move::PlayFrom
+        ) {
+            JUMPS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
+        let (id, args) = crate::actions::transport_action(command, seconds);
+        crate::actions::off_the_window(id, args);
     }
+    #[cfg(not(feature = "native"))]
     transport_here(command, seconds);
 }
 

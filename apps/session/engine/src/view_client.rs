@@ -1004,6 +1004,28 @@ pub fn run(id: &str, args: &[u8]) -> Result<String, String> {
         })
 }
 
+/// Say on the engine's Action List that the window's own action `id` ran
+/// here (a key, a click), so the engine's `watch` sees it: sent behind the
+/// window, nothing waited for. Not linked, nothing to say it to.
+pub fn ran_in_window(id: &str, args: &[u8]) {
+    let (Some(link), Some(rt)) = (link(), runtime()) else {
+        return;
+    };
+    let call = ActionCall {
+        id: id.to_owned(),
+        args: String::from_utf8_lossy(args).into_owned(),
+    };
+    let view = link.view.clone();
+    rt.spawn(async move {
+        if tokio::time::timeout(CALL, view.ran_in_window(call))
+            .await
+            .is_err()
+        {
+            tracing::warn!("view link: saying a window action ran timed out");
+        }
+    });
+}
+
 /// The window's edits, carried out by the engine in order.
 pub async fn apply(song: String, edits: Vec<crate::engine::Edit>) -> Option<Applied> {
     let link = link()?;

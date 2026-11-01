@@ -1,0 +1,257 @@
+# Actions everywhere
+
+Every control in Studio's Session window — a button, a menu item, a key,
+the end of a drag — runs a **named action** on the engine's Action List.
+Nothing in the UI changes the song or the window's state by itself.
+
+Why:
+
+- **It is detectable.** The Action List's `watch` stream records
+  `Ran { id, ok }` for every action. Generated guides, tests and in-app
+  tours (`docs/design/guide-media.md`) advance on it. A click that pushes
+  an `Edit` or writes a signal shows up, at best, as an anonymous
+  `Changed { topic: "tracks" }`, and often as nothing.
+- **It is scriptable.** Anything a click does, `studio run <ID> '{…}'`
+  and MCP's `run` can do too: the CLI and MCP reach every id on the list
+  (`apps/session/desktop/src/cli/app.rs`, `architect_mcp`). An action's
+  description is its MCP and CLI documentation.
+
+## The rules
+
+1. **A handler names an action and runs it.** In the window that is
+   `crate::window::press(id, &args)` (`apps/session/ui/src/window.rs`),
+   the same path a key takes (`through_list` → `crate::actions::run`).
+   `press_behind` runs it on the key-actions thread when it reads the
+   whole song or waits on the engine. A strip control builds a
+   `crate::mcp::Press` and runs `crate::mcp::run`.
+2. **The action does the work.** The handler keeps no logic of its own
+   that the action lacks: what a lanes button opens
+   (`lanes::opened_with_folders`) or which lane a lane arrow plays
+   (`comp::step_lane`) lives in the engine, so the CLI does exactly what
+   the click does.
+3. **A preview may stay local.** A button may *assume* its result
+   (`ArrangementWidget::assume`, `mixer_panel::predict`) so it lights at
+   once. A continuous gesture (fader, pan, a drag, scroll, zoom) may send
+   live edits while it moves. **It commits through an action when it
+   ends** (`MixerPanel::commit_turn` → `TRACK_SET`).
+4. **View state is still an action.** Folds, lanes shown, panels,
+   screensets, modes, phases and options are window state. Their actions
+   are window actions (registered in `apps/session/ui/src/window.rs`) or
+   engine actions that forward to the window (`also_in_the_window` with
+   the settled state: `TRACK_SHOW_LANES {tracks}`, `SESSION_FOLD
+   {folders}`).
+5. **A window action run in the window is said on the engine's list.**
+   When the window drives an engine in another process
+   (`FTS_ENGINE=spawn|attach`), `actions::run` runs a window action
+   locally and then calls `view_client::ran_in_window`; the engine runs
+   its forwarded entry inside the `RAN_IN_WINDOW` task-local, which
+   answers without asking the window again. So the engine's `watch` sees
+   `Ran` for keys and clicks alike.
+6. **Only pure ephemera are exempt:** hover, a menu or popover opening
+   (its *choices* are actions), typing into a field before it commits, a
+   drag's in-flight preview, window chrome (drag/maximise the OS window),
+   focus, measuring layout.
+7. **The browser build has no Action List** (`session_engine::actions` is
+   `native` only). There, `press` is unavailable and a control sends its
+   preview `Edit` as before; every such fallback sits in a
+   `#[cfg(not(feature = "native"))]` beside the action it stands for.
+
+## The guard
+
+`apps/session/ui/tests/it/actions_everywhere.rs` scans `session-ui`'s
+sources (comments out, whitespace squeezed) for the patterns a bypass is
+made of — an `Edit` pushed to an edits queue or an applier
+(`edits.borrow_mut().push(`, `applier.send(`, `Effect::Send(`),
+`lanes::set_expanded(`, `folds::toggle(`, `folds::set_tops(`,
+`transport_here(`, `request_dock(`, `mode_phases::choose(`,
+`set_racks_shown(`, `play_return::set(`, `options::X.toggle/set(` — and
+fails on any count above its allowance **or below it** (so a routed
+handler must lower its entry). Each allowance is a file, a pattern, a
+count and why: an action's own handler, a browser fallback, or debt with
+the action it should become. `cargo nextest run -p session-ui --test it
+actions_everywhere`.
+
+`session-engine`'s `actions::presses` tests hold the other end: every id
+a control runs is on the list, every transport move maps to a registered
+action, and the list validates and survives hostile arguments.
+
+## New and extended actions
+
+| id | scope | what |
+|---|---|---|
+| `TRACK_SET` + `phase`, `monitor`, `name` | engine | the panel's and mixer's buttons, fader/pan commits, renames |
+| `SESSION_SELECT_TRACK` + `add` | engine | name / strip clicks, modified click adds |
+| `TRACK_LANE_STEP {track, by}` | engine | the panel's lane arrows (by name across a folder and its media-edit group) |
+| `TRACK_SHOW_LANES` | engine → window | now opens the folders between, as the button did |
+| `SESSION_FOLD {folders}` | engine → window | forwards the settled folders to a window in another process |
+| `SESSION_STOP`, `SESSION_GO_TO_END`, `SESSION_LOOP`, `SESSION_SEEK {at}`, `SESSION_PLAY_FROM {at}` | engine | the transport's moves (`actions::transport_action`) |
+| `SESSION_OPTION {option, on?}` | window | snap, grid, ripple, razor, auto crossfade, lock |
+| `EngineView::ran_in_window` | link | a window action run in the window, said on the engine's list |
+
+## Inventory (2026-10-30)
+
+Counted by hand and by sweep of every handler in scope. *routed* already
+runs a named action; *bypass* changes state without one; *local* is
+exempt by rule 6.
+
+| area | routed | bypass | local |
+|---|---|---|---|
+| Arrangement: track panel (`widget.rs` `act`, rename) | 0 → **9** | 9 → **0** | 1 |
+| Arrangement: items, ruler, gestures (`arrange_edit.rs`, `widget.rs`) | 1 (swipe) | ~25 edit families | — |
+| Painted mixer / FX / automation / editor (`mixer_panel`, `mcp`, `fx_view`, `automation_*`, `tone`, `expression`, `editor_view`, `navigator`, `arrange_camera`, `ruler`, `device_audio`) | 13 → **25** | 86 → **74** | 13 |
+| Session UI rsx (`shell`, `transport_bar`, `toolbar`, `quantize_panel`, `collab_bar`, `record_view`, `versions`, `setup`, `compact`, `closeup`, `bar_step`, `studio`, `lyrics_panel`, `perf_meter`, `chart_*`, `browser`, `organize`, `navigator`, `instrument_rail`, `web_host`, `progress`, `performer`, `app_menu`) | 41 → **73** | 97 → **65** | 107 |
+| Desktop (`native/{dock,shell,start,library,publish,handoff,mod}.rs`, `session_view.rs`, `lib.rs`, `mixer_view.rs`) | 28 → **34** | 71 → **65** | 68 |
+| Dock crate (`features/ui/dock` host + components) | 0 | 50 | 30 |
+| Studio welcome (`apps/studio/desktop/src/front.rs`) | 4 | 3 | 3 |
+| **total** | **87 → 146** | **~341 → ~282** | **222** |
+
+Bold: after the first routing pass. Routed in it:
+
+- **Track panel**: every control (table below).
+- **Strips** (`mcp::click`, mixer and FX view): mute, solo, arm, input
+  monitor, name, a strip's ground; the mixer's fold button; fader and
+  pan drags commit `TRACK_SET` on release and on a lost release; the mix
+  phase rail runs `SESSION_PHASE`.
+- **Transport, everywhere**: `engine::transport` — what every transport
+  button, the navigator's and progress bar's sections, the record view,
+  the performer view, the iOS lock screen, autoplay and leaving the DAW
+  call — now runs the move's named action (`transport_action`:
+  `SESSION_PLAY_STOP`, `SESSION_GO_TO_START`, `SESSION_STOP`,
+  `SESSION_GO_TO_END`, `SESSION_LOOP`, `SESSION_SEEK {at}`,
+  `SESSION_PLAY_FROM {at}`, `TRANSPORT_RECORD`) behind the window, linked
+  or not. Before, only play and record were actions, and only when linked.
+- **Shell**: the mode picker (`SESSION_MODE`), the phase picker
+  (`SESSION_PHASE`), the racks switch (`SESSION_MIXER_FX`).
+- **Toolbar**: the metronome (`TRACK_SET {mute}` on the click track);
+  snap, grid, ripple, razor, auto crossfade and lock (`SESSION_OPTION`).
+- **Dock**: the bottom bar's panel buttons (`SESSION_PANEL {kind}`), its
+  Arrange button (`SESSION_ARRANGE`), the top bar's navigator
+  (`SESSION_PANEL {kind:"set"}`).
+
+### Arrangement: track panel — routed
+
+| file:line | control | was | now |
+|---|---|---|---|
+| widget.rs `act` | Mute / Solo | `Edit::ToggleMute/Solo` | `TRACK_SET {mute|solo}` |
+| widget.rs `act` | Rec arm | `Edit::ToggleArm` | `TRACK_ARM {on}` |
+| widget.rs `act` | Phase | `Edit::SetPhase` | `TRACK_SET {phase}` |
+| widget.rs `act` | Lanes `+` / lane name | `lanes::set_expanded` (no event at all) | `TRACK_SHOW_LANES {track, show}` |
+| widget.rs `act` | Lane ◀ ▶ | `Edit::SetLanePlays` per track, logic in the widget | `TRACK_LANE_STEP {track, by}` |
+| widget.rs `act` | Name click | `Edit::Select` | `SESSION_SELECT_TRACK` |
+| widget.rs `act` | Folder | `folds::toggle` | `SESSION_FOLD {track, open}` |
+| widget.rs rename (Enter) | Rename | `Edit::Rename` | `TRACK_SET {name}` |
+| widget.rs `act` | Automation | opens a menu (its choices run `AUTOMATION_*`) | local |
+
+### Arrangement: items and ruler — to route
+
+`arrange_edit.rs` turns drags into `Edit`s at gesture end: `MoveItem`,
+`TrimItem`, `SlipItem`, `SetFadeIn/Out`, `SplitItem`, `CopyItem`,
+`DeleteItem`, `SetItemLane`, `SelectItem/DeselectItem/…AllItems`,
+`SetSnapOffset`, `SetStretchMarkers`, `AddMarker/MoveMarker/RemoveMarker`,
+`AddRegion/SetRegionBounds/RemoveRegion`, `Select/AddToSelection`.
+`widget.rs`: `SetItemVolume` (item knob), `SetTakeVolume` (take curve),
+`SetVisibility` (visibility manager), `Touch`, `SetStretchMarkers`.
+Targets: `ITEMS_SET` (position, length, source_offset, lane, volume,
+fades — one undo step), `ITEM_SPLIT`, `ITEMS_DELETE`, `ITEM_ADD` (copy),
+`MARKER_INSERT`, `SECTION_INSERT`, `TRACK_REGION_*`, `TIME_SELECTION_SET`;
+NEW `ITEMS_SELECT {items, add}`, `MARKER_SET {id, at|name|remove}`,
+`ITEM_TAKE_VOLUME {item, points}`, `TRACK_VISIBLE {track, arrange, mixer}`.
+Each drag keeps its live preview and commits one action on release.
+
+### Painted mixer, FX view, automation, Editor
+
+| file:line | control | does now | action |
+|---|---|---|---|
+| mcp.rs `click` (mixer_panel, fx_view) | Mute / Solo / Arm / Monitor / Name / ground | `Edit::Toggle*`, `SetInputMonitor`, `Select` | **routed**: `TRACK_SET`, `TRACK_ARM`, `SESSION_SELECT_TRACK {add}` |
+| mixer_panel.rs fold button | Folder | `folds::toggle` | **routed**: `SESSION_FOLD` |
+| mixer_panel.rs release / cancel | Fader / pan drag end | last `SetVolume/SetPan` | **routed**: `TRACK_SET {volume_db|pan}` (drag stays a live preview) |
+| fx_view.rs:702 | strip fader/pan drag | `SetVolume/SetPan` per move, no commit, no touch | `TRACK_SET` on release |
+| mixer_panel.rs:1286-1311 | rails: scene, focus selected, take focus width, phase, audience | signal writes; `mode_phases::choose` | NEW `MIXER_VIEW {…}`; phase **routed** (`SESSION_PHASE`) |
+| mixer_panel.rs:506, 1851, 1924, 1964 | wheel / overview / rack scroll / fling | scroll cells | NEW `MIXER_VIEW {scroll}` at gesture end |
+| mixer_panel.rs:1475, 1484 | rack zoom grip, rack phase fold | `closeups.ask`, `folds.toggle` | NEW `SESSION_CLOSEUP`, `MIXER_VIEW {rack_fold}` |
+| tone.rs `Shared::edited` / `Store::flush` (sink of every rack edit: mixer_panel.rs:1489-1581, fx_view.rs:862-968, closeup.rs:410-419) | rack switches, grips, EQ dots, macros, faces | `Edit::SetFxParam/SetFxEnabled` | `FX_SET` / `FX_ENABLE` on gesture end |
+| fx_view.rs:838, 873 | rig block faces / bypass | the window's copy only — **never reaches the engine** | NEW `RIG_BLOCK_SET {track, block, param?, value?, bypassed?}` |
+| fx_view.rs:803-810, 908 | lane scroll / step, group fold | view state | NEW `FX_VIEW {…}` |
+| automation_edit.rs:164, 186, 214 | hide lane, mode chip, lane height | `ShowEnvelope`, `SetEnvelopeMode`, `SetLaneHeight` | `AUTOMATION_SHOW`, `AUTOMATION_SET_MODE`, `AUTOMATION_SHOW {height}` |
+| automation_edit.rs:222-376 | items (make, move, trim, curve, delete), envelope points (add, drag, delete) | `*AutomationItem*`, `SetItemCurve`, `SetEnvelope` | `AUTOMATION_ITEM` (extend: `at`, `move_to`, bounds, `curve`), `AUTOMATION_WRITE` (extend: `replace`) |
+| automation_edit.rs (leveler), automation_menu.rs | leveler dials, rides, menu | — | routed (`VOCAL_LEVELER_SET`, `VOCAL_RELEVEL`, `AUTOMATION_*`) |
+| expression.rs, editor_view.rs:666 | Editor notes, velocity, menu, keys | edit the doc; `write_take` through the DAW facade | NEW `NOTES_WRITE {item, content}`, `EDITOR_ACTION {id, args}`, `TAKES_ALIGN` |
+| navigator.rs:54 | section click | `transport(Seek)` | NEW `SESSION_SEEK` |
+| arrange_camera.rs:166-205 | wheel, pinch, hand pan, z-zoom | camera | `SESSION_VIEW` at gesture end |
+| ruler/mod.rs:130 | CHORDS lane toggle | atomic | NEW `SESSION_RULER {chords}` |
+| device_audio.rs | mic / speaker | host callback | NEW `SESSION_DEVICE_AUDIO` |
+
+### Session UI rsx — to route
+
+| file:line | control | does now | action |
+|---|---|---|---|
+| transport_bar.rs:186, 283; performer.rs:228 | Go to start | `engine::transport(Home)` | **routed** (`engine::transport`): `SESSION_GO_TO_START` |
+| transport_bar.rs:197; progress.rs:193; performer.rs:192 | Play/stop | `transport(PlayStop)` (an action only when linked) | **routed**: `SESSION_PLAY_STOP` |
+| transport_bar.rs:230; progress.rs:195 | Record | `transport(ToggleRecord)` (an action only when linked) | **routed**: `TRANSPORT_RECORD` |
+| transport_bar.rs:232; progress.rs:194; performer.rs:212 | Loop | `transport(ToggleLoop)` | **routed**: `SESSION_LOOP` |
+| transport_bar.rs:235, 287; performer.rs:232 | Go to end | `transport(End)` | **routed**: `SESSION_GO_TO_END` |
+| progress.rs:150; navigator.rs:52; record_view.rs:115, 315; performer.rs:188 | Seek to a section / bar | `transport(Seek)` | **routed**: `SESSION_SEEK {at}` |
+| progress.rs:201, 211; performer.rs:196 | Section back / forward | Seek or song step | seeks **routed** (`SESSION_SEEK`); NEW `SESSION_SECTION_STEP {by}` would name the step |
+| transport_bar.rs:213 | Stop behaviour | `play_return::set` + action | move the set into `SESSION_STOP_BEHAVIOUR` |
+| shell.rs:769; compact.rs:557; record_view.rs:194 | Mode | `mode.set` | shell.rs **routed**; compact, record view: `SESSION_MODE` |
+| shell.rs:834 | Phase | `mode_phases::choose` | **routed**: `SESSION_PHASE` |
+| shell.rs:546 | bottom-bar views | `Pane::press` / `view.set` | `SESSION_TOGGLE_MIXER/FX/EDITOR`; NEW `SESSION_SHELL_VIEW {view}` |
+| shell.rs:577, 587, 904, 1183 | pins: transport, progress, inspector, navigator | `pins.*.toggle` | `SESSION_PANEL {kind}` (extend to the undocked shell's pins) |
+| shell.rs:914 | Quantize pin | `pins.quantize.toggle` | `SESSION_QUANTIZE_PANEL` |
+| shell.rs:613 | pane docked | `Pane::set_docked` | NEW `SESSION_PANE_DOCK {pane, docked}` |
+| shell.rs:941; toolbar.rs:263; compact.rs:574 | Lock | `lock.toggle`, `options::LOCKING` | NEW `SESSION_LOCK {on?}` |
+| toolbar.rs:252 | auto crossfade, ripple, grid, snap, razor | `options::*.toggle` | **routed**: `SESSION_OPTION {option, on}` |
+| toolbar.rs:241, 246 | follow, compact track panel | prefs | NEW `SESSION_FOLLOW`, `SESSION_COMPACT_TRACKS` |
+| toolbar.rs:255 | grouping | option flipped, then `SESSION_GROUPING` | let the action flip it |
+| toolbar.rs:232 | metronome | `Edit::ToggleMute(click)` | **routed**: `TRACK_SET {mute}` |
+| toolbar.rs:225 | mixer toggle | `MixerToggle::press` | `SESSION_TOGGLE_MIXER` |
+| shell.rs:1015 | fold every folder | `folds::set_tops` | NEW `SESSION_FOLD_TOPS {folded}` |
+| shell.rs:1052 | racks | `set_racks_shown` | **routed**: `SESSION_MIXER_FX` |
+| shell.rs:972-1000; chart_panel.rs:595, 739 | chart fit / page / follow | file / signal | NEW `SESSION_CHART_FIT`, `SESSION_CHART_PAGE` |
+| shell.rs:1399; setup.rs:191 | audio mode | `open::request_mode` | NEW `SESSION_AUDIO_MODE` |
+| setup.rs:261 | streaming quality | pref | `SESSION_STREAM_QUALITY` |
+| setup.rs:159, 168 | speaker / mic | host callback | NEW `SESSION_DEVICE_AUDIO` |
+| setup.rs:440; record_view.rs:213 | touch mode | signal | NEW `SESSION_TOUCH` |
+| setup.rs:89; compact.rs:417-635 | setup tab, phone views | signals | NEW `SESSION_SETUP_TAB`, `SESSION_PHONE_VIEW` |
+| record_view.rs:345-421 | take ★ / ✕ | DAW facade markers | `TAKES_RANK {by, at|near}` |
+| versions.rs:259, 282, 291 | open a version | `projects::open_next` + Back | `SESSION_OPEN {name}` |
+| collab_bar.rs:404-518 | share, join, together/apart, leave, lock | `collab::*` (an action only when linked) | `SESSION_TOGETHER_*` |
+| closeup.rs:192-267 | close-up tabs, close | signal | NEW `SESSION_CLOSEUP {track, which|none}` |
+| lyrics_panel.rs:526, 544 | lyrics view / layer | signals | NEW `SESSION_LYRICS` |
+| perf_meter.rs:246, 342 | sort, close | signal, `toggle` | `SESSION_PERF_METER {sort?}` |
+| chart_editor.rs:186, 329 | editor toggle, text apply | signal; file write (action only when linked) | `SESSION_PANEL {kind:"chart-editor"}`, `CHART_APPLY` |
+| organize.rs:82 | marker / section / time signature | REAPER commands (action only when linked) | `ORGANIZE_PRESS` |
+| web_host.rs:693, 956 | song pick, multitracks (browser) | direct | browser build: no list (rule 7) |
+| mix_guide.rs:58-91 | Mix mode mutes the guide (no handler) | `Edit::ToggleMute` | `TRACK_SET` from inside `SESSION_MODE` |
+
+### Desktop, dock and Studio's welcome — to route
+
+| file:line | control | does now | action |
+|---|---|---|---|
+| native/dock.rs:193 | bottom-bar panel buttons | `dock.toggle_kind` | **routed**: `SESSION_PANEL {kind}` |
+| native/dock.rs:229; dock host.rs:1108, 1608 | Arrange | `toggle_arrange` | native/dock.rs **routed**; dock host: `SESSION_ARRANGE` |
+| native/shell.rs:371 | navigator button | `request_dock` | **routed**: `SESSION_PANEL {kind:"set"}` |
+| native/shell.rs:313; start.rs:202 | iOS play/pause; autoplay | `engine::transport` | **routed**: `SESSION_PLAY_STOP` |
+| native/shell.rs:587 | chart editor toggle | signal | NEW `SESSION_CHART_EDITOR` |
+| dock host.rs:528, 1443, 1589 | screenset recall (⌘1-9, menu, bar) | `dock.recall` | `SESSION_SCREENSET` |
+| dock host.rs:1597, 1602 | screenset save / save as | `sets.save*` | `SESSION_SCREENSET_SAVE{,_AS}` |
+| dock host.rs:674-1456 | panel show / move / attach / open / close / maximise / tabs / sheet; edge and split sizes | `Dock` methods; drags write the layout per move | NEW `SESSION_PANEL_{SHOW,MOVE,ATTACH,OPEN,CLOSE,MAXIMIZE,TABS,SHEET}`, `SESSION_DOCK_{EDGE,SPLIT}`; drags commit on release |
+| dock ui/components/* | the older tile dock (`features/session`, not this window) | `DockActions` callbacks | host-installed `DockActions` running the host's `DOCK_*` |
+| start.rs:838-876, 1232, 1693 | sign in / out | `acct.*` | NEW `ACCOUNT_SIGN_IN`, `ACCOUNT_SIGN_OUT` |
+| start.rs:990 | reconnect to REAPER | `set_mode(Remote)` + attach | NEW `SESSION_CONNECT {address}` |
+| start.rs:996-1303 | start screen sections, editors | signals | NEW `SESSION_START_SECTION`, `SESSION_LIBRARY_EDITOR` |
+| start.rs:1100, 1134, 1889, 1898, 1162 | download / remove | `stream_set::*` | NEW `LIBRARY_DOWNLOAD`, `LIBRARY_REMOVE_DOWNLOAD` |
+| start.rs:1663 | org pick | signal + pref | NEW `LIBRARY_ORG` |
+| library.rs:424-988 | lists and songs in Task | `l.*` | NEW `LIBRARY_LIST_{CREATE,RENAME,DUPLICATE,DELETE,EDIT}`, `LIBRARY_SONG_{SAVE,DELETE}` |
+| handoff.rs:280; front.rs:342, 352; start.rs:757; front.rs:301 | leave the DAW, back to library, open a rig | `transport(Stop)`, `view.set` | stop **routed** (`SESSION_STOP`); NEW `STUDIO_VIEW {view, rig?}` |
+| session_view.rs:310-639 | REAPER connect, guide/metronome, output routing | direct | NEW `SESSION_REAPER_CONNECT`, `GUIDE_SET`, `AUDIO_ROUTING_SET` |
+| mixer_view.rs:72 | open setlist in REAPER | writes an RPP, spawns REAPER | NEW `SESSION_OPEN_IN_REAPER` |
+| lib.rs (older webview shell) 570-1417 | workspaces, setlist load/save, organize, record | direct | `SESSION_WORKSPACE`, `SESSION_OPEN`, `SETLIST_CREATE`, `ORGANIZE_PRESS`, `TRANSPORT_RECORD` |
+| apps/studio/desktop/src/mac_menu.rs:56-119; window.rs `dock_request`; keys.rs:575 | menu and pane keys | `request_dock` | `SESSION_PANEL` / `SESSION_SCREENSET*` |
+
+**The dock crate stays Session-free.** `features/ui/dock` gets a
+serialisable `DockIntent` and an optional router installed by the app
+(`use_dock_provider(.., router)`): each committing handler calls
+`dock.ask(intent)`; with a router, the app runs the matching action, which
+applies the intent back (`Dock::apply`, moved in from
+`native/dock.rs::apply`); without one, the dock applies it itself.

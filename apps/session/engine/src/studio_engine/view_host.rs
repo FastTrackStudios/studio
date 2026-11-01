@@ -471,6 +471,19 @@ fn forwarded_info(action: WindowAction) -> architect::action::ActionInfo {
     }
 }
 
+/// The window actions on the engine's list, each forwarded to the window.
+fn forwarded() -> &'static Mutex<std::collections::HashSet<String>> {
+    static IDS: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+    IDS.get_or_init(Mutex::default)
+}
+
+tokio::task_local! {
+    /// Set while the engine's list says a window action ran that the window
+    /// ran already ([`EngineView::ran_in_window`]): the forward answers at
+    /// once rather than asking the window to run it a second time.
+    static RAN_IN_WINDOW: ();
+}
+
 /// What the engine's list runs for the window action `id`: it asked of
 /// the window, and what the window answered.
 fn forward_to_window(id: String) -> architect::action::AsyncHandler {
@@ -478,6 +491,9 @@ fn forward_to_window(id: String) -> architect::action::AsyncHandler {
         let id = id.clone();
         let args = String::from_utf8_lossy(args).into_owned();
         Ok(Box::pin(async move {
+            if RAN_IN_WINDOW.try_with(|()| ()).is_ok() {
+                return Ok(b"\"ran in the window\"".to_vec());
+            }
             crate::window_queue::ask_window_action(id.clone(), args)
                 .await
                 .map(String::into_bytes)
@@ -584,6 +600,9 @@ impl EngineView for ViewHost {
             let id = action.id.clone();
             match list.register_forwarded(&forwarded_info(action), forward_to_window(id.clone())) {
                 Ok(()) => {
+                    if let Ok(mut ids) = forwarded().lock() {
+                        ids.insert(id.clone());
+                    }
                     let _ = list.set_enabled(&id, crate::window_queue::a_window_follows);
                     added += 1;
                 }
@@ -608,6 +627,18 @@ impl EngineView for ViewHost {
             Err(answer.json)
         };
         crate::window_queue::answered(answer.ticket, result);
+    }
+
+    async fn ran_in_window(&self, call: ActionCall) -> bool {
+        // Only a window action forwarded here: anything else would run.
+        if !forwarded().lock().is_ok_and(|ids| ids.contains(&call.id)) {
+            return false;
+        }
+        let list = crate::actions::list();
+        let ran = RAN_IN_WINDOW
+            .scope((), list.run_json_async(&call.id, call.args.as_bytes()))
+            .await;
+        ran.is_ok()
     }
 
     async fn waves(&self, ask: WavesAsk) -> Vec<WaveRead> {

@@ -466,6 +466,87 @@ pub static SHOW_LANES: architect::action::ActionMeta = crate::actions::meta(
     "",
 );
 
+pub static LANE_STEP: architect::action::ActionMeta = crate::actions::meta(
+    "TRACK_LANE_STEP",
+    "track_lane_step",
+    "Play the next lane",
+    "Play the next (`by` 1) or previous (`by` -1) lane of `track` (a path, name or GUID), round the ends — the track panel's lane arrows. The lane is chosen by name, so on a folder (`Drums`) every track under it with lanes plays the same lane, and while grouping is on so does each one's media-edit group. Says the lane each track plays now.",
+    "Edit",
+    "",
+);
+
+/// Which way to step whose lanes.
+#[derive(Facet)]
+struct LaneStepArg {
+    track: String,
+    /// 1 the next lane, -1 the previous.
+    by: i32,
+}
+
+/// What each track plays now.
+#[derive(Facet)]
+struct LaneStepOut {
+    /// The lane's name, as the panel shows it.
+    lane: String,
+    /// Each track stepped and the play mask it has now (bit `n`, lane `n`).
+    tracks: Vec<LanePlays>,
+}
+
+/// One track's play mask.
+#[derive(Facet)]
+struct LanePlays {
+    guid: String,
+    mask: u64,
+}
+
+/// Step the lane `guid` plays (and what it speaks for) forward (`next`) or
+/// back, by name across every track the step reaches: the lane's name and
+/// each track's new mask.
+fn step_lane(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    guid: &str,
+    next: bool,
+) -> Result<LaneStepOut, String> {
+    let all = Tracks::all(daw, project.clone());
+    let track = all
+        .iter()
+        .find(|t| t.guid == guid)
+        .ok_or("the track went")?;
+    let shown = crate::lanes::shown_on(&all, track);
+    let speaks: Vec<&daw_proto::Track> = if shown.is_empty() { vec![track] } else { shown };
+    let first = speaks.first().copied().ok_or("no lanes to step")?;
+    let items = daw.get_items(project.clone(), TrackRef::Guid(first.guid.clone()));
+    let mask = crate::lanes::stepped(first, &items, next)
+        .ok_or_else(|| format!("{} has one lane to play", first.name))?;
+    let lane = crate::lanes::label(&daw_proto::Track {
+        lane_play_mask: mask,
+        ..first.clone()
+    });
+    let mut targets: Vec<String> = Vec::new();
+    for t in &speaks {
+        for g in std::iter::once(t.guid.clone()).chain(crate::lanes::grouped_tracks(&all, &t.guid))
+        {
+            if !targets.contains(&g) {
+                targets.push(g);
+            }
+        }
+    }
+    let mut tracks = Vec::new();
+    for g in targets {
+        let Some(t) = all.iter().find(|t| t.guid == g) else {
+            continue;
+        };
+        let Some(own) = crate::lanes::mask_named(t, &lane) else {
+            continue;
+        };
+        Tracks::set_lane_play_mask(daw, project.clone(), TrackRef::Guid(g.clone()), own)
+            .map_err(|e| e.to_string())?;
+        tracks.push(LanePlays { guid: g, mask: own });
+    }
+    Ok(LaneStepOut { lane, tracks })
+}
+
 /// What to comp from, where.
 #[derive(Facet)]
 struct SwipeArg {
@@ -523,6 +604,15 @@ pub fn register(
         crate::actions::list().changed("lanes", "a lane was comped onto the comp");
         Ok(SwipeOut { tracks })
     })?;
+    list.register(&LANE_STEP, Effect::Mutating, |a: LaneStepArg| {
+        let (daw, project) = crate::actions::song()?;
+        let guid = crate::actions::resolve(daw, &project, &a.track)?;
+        let out = step_lane(daw, &project, &guid, a.by >= 0)?;
+        for t in &out.tracks {
+            crate::actions::list().changed("lanes", &t.guid);
+        }
+        Ok(out)
+    })?;
     list.register(&SHOW_LANES, Effect::Mutating, |a: ShowArg| {
         // Told by the engine which tracks it opened: set here as settled.
         if let Some(tracks) = a.tracks.filter(|t| !t.is_empty()) {
@@ -536,7 +626,8 @@ pub fn register(
             .iter()
             .find(|t| t.guid == guid)
             .ok_or("the track went")?;
-        let tracks = crate::lanes::opened_by(track, &crate::lanes::shown_on(&all, track));
+        let tracks =
+            crate::lanes::opened_with_folders(&all, track, &crate::lanes::shown_on(&all, track));
         if tracks.is_empty() {
             return Err(format!(
                 "{} has one lane, and no track under it has more",

@@ -767,7 +767,14 @@ pub fn Modes(mode: Signal<Mode>) -> Element {
                         button {
                             style: mode_option(mode() == each),
                             onclick: move |_| {
+                                // Shown at once; `SESSION_MODE` makes it so
+                                // (and is what `watch` and the CLI see).
                                 mode.set(each);
+                                #[cfg(feature = "native")]
+                                crate::window::press(
+                                    "SESSION_MODE",
+                                    &serde_json::json!({ "mode": each.display_name() }),
+                                );
                                 picking.set(false);
                             },
                             "{each.display_name()}"
@@ -832,6 +839,16 @@ pub fn PhaseSwitch(mode: Signal<Mode>) -> Element {
                         button {
                             style: mode_option(each == current),
                             onclick: move |_| {
+                                #[cfg(feature = "native")]
+                                crate::window::press(
+                                    "SESSION_PHASE",
+                                    &serde_json::json!({
+                                        "mode": mode().display_name(),
+                                        "phase": each.slug,
+                                    }),
+                                );
+                                // The browser build has no Action List.
+                                #[cfg(not(feature = "native"))]
                                 session::mode_phases::choose(mode(), each.slug);
                                 seen.set(session::mode_phases::version());
                                 picking.set(false);
@@ -1032,7 +1049,7 @@ pub(crate) fn FolderSwitch() -> Element {
 /// faders have the whole height. Follows `SESSION_MIXER_FX` too.
 #[component]
 pub(crate) fn RackSwitch() -> Element {
-    use crate::mixer_panel::{racks_shown, set_racks_shown};
+    use crate::mixer_panel::racks_shown;
     let mut shown = use_signal(racks_shown);
     // Switched on the Action List (a key, a model): followed here.
     use_future(move || async move {
@@ -1050,7 +1067,11 @@ pub(crate) fn RackSwitch() -> Element {
             title: if on { "Hide the FX racks: the faders get the whole height" } else { "Show the FX racks over the faders" },
             style: bottom_button(on, true),
             onclick: move |_| {
-                set_racks_shown(!on);
+                // `SESSION_MIXER_FX` shows or hides them.
+                #[cfg(feature = "native")]
+                crate::window::press("SESSION_MIXER_FX", &serde_json::json!({ "shown": !on }));
+                #[cfg(not(feature = "native"))]
+                crate::mixer_panel::set_racks_shown(!on);
                 shown.set(!on);
             },
             lucide_dioxus::AudioLines { size: 19, color: ink(on) }
