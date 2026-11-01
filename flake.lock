@@ -135,6 +135,31 @@
         "type": "github"
       }
     },
+    "kache": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "rust-overlay": [
+          "rust-overlay"
+        ],
+        "treefmt-nix": "treefmt-nix"
+      },
+      "locked": {
+        "lastModified": 1793202351,
+        "narHash": "sha256-MhASqG56lHJYWTVYTXZ2JSy8f0RIwdB0gcNrZrtRyP8=",
+        "owner": "kunobi-ninja",
+        "repo": "kache",
+        "rev": "4fdc7ccc8bf07bb19c364414a271be96f107a75b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "kunobi-ninja",
+        "ref": "v2.0.0-rc.3",
+        "repo": "kache",
+        "type": "github"
+      }
+    },
     "nix2container": {
       "inputs": {
         "nixpkgs": [
@@ -243,6 +268,7 @@
         "dioxus-flake": "dioxus-flake",
         "flake-parts": "flake-parts_2",
         "import-tree": "import-tree",
+        "kache": "kache",
         "nixpkgs": [
           "dioxus-flake",
           "nixpkgs"
@@ -290,6 +316,27 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "treefmt-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "kache",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1784369104,
+        "narHash": "sha256-47cxbcZODibHv3rELFQ9vZly0vUNkND/atn/U7HLeb0=",
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "rev": "df3c0640565d04a0261253cdd89fce78ec50168a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "treefmt-nix",
         "type": "github"
       }
     }

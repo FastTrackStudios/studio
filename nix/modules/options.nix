@@ -41,6 +41,10 @@
         type = lib.types.raw;
         description = "crane dummy source for buildDepsOnly with the workspace version normalised, so a release stamp does not rebuild the dependencies.";
       };
+      kacheArgs = lib.mkOption {
+        type = lib.types.raw;
+        description = "crane args that wrap rustc in kache and its shared store, for builds evaluated with FTS_NIX_KACHE set (--impure); empty otherwise.";
+      };
       buildRev = lib.mkOption {
         type = lib.types.str;
         description = "Git rev baked into deployable images (version.json / TASK_BUILD_REV).";

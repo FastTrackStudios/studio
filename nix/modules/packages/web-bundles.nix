@@ -5,7 +5,7 @@
 {
   perSystem = { pkgs, lib, config, ... }:
     let
-      inherit (config.fts) craneLib commonArgs depsDummySrc mkStaticSite;
+      inherit (config.fts) craneLib commonArgs depsDummySrc kacheArgs mkStaticSite;
 
       # Shared env for the dx web-bundle builds: arborium /
       # arborium-tree-sitter compile the tree-sitter C runtime +
@@ -73,7 +73,8 @@
       # The dx build runs from the app dir but writes to the
       # WORKSPACE-ROOT target/dx/<name>/release/web/public.
       mkDxWebBundle = { pname, appDir, dxName, preBuild ? "", dxArgs ? "", env ? { }, extraNativeBuildInputs ? [ ], cargoArtifacts ? null }:
-        craneLib.buildPackage (commonArgs // dxWebEnv // env // {
+        # kacheArgs: empty unless FTS_NIX_KACHE (crane.nix).
+        craneLib.buildPackage (commonArgs // dxWebEnv // env // kacheArgs // {
           inherit pname cargoArtifacts;
           version = "0.1.0";
           cargoExtraArgs = "--manifest-path ${appDir}/Cargo.toml";
@@ -126,7 +127,7 @@
         cargoExtraArgs = "--locked -p session-daw-web --target wasm32-unknown-unknown";
         env.RUSTFLAGS = sessionAppWebRustflags;
       };
-      session-app-web = craneLib.buildPackage (commonArgs // dxWebEnv // {
+      session-app-web = craneLib.buildPackage (commonArgs // dxWebEnv // kacheArgs // {
         pname = "session-app-web";
         RUSTFLAGS = sessionAppWebRustflags;
         version = "0.1.0";

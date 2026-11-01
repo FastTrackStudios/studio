@@ -29,6 +29,13 @@
     # + the dx web bundles). Same pin style the dissolved task flake used.
     crane.url = "github:ipetkov/crane";
 
+    # kache, the fleet's rustc wrapper, at the tag the fleet runs
+    # (nix-config modules/nix/kache-package.nix). Read only by the release
+    # image's opt-in cached build (`FTS_NIX_KACHE=1`, nix/modules/crane.nix).
+    kache.url = "github:kunobi-ninja/kache/v2.0.0-rc.3";
+    kache.inputs.nixpkgs.follows = "nixpkgs";
+    kache.inputs.rust-overlay.follows = "rust-overlay";
+
     # Dedicated, current-unstable nixpkgs used ONLY to source `dx`
     # (dioxus-cli) at the version the workspace Cargo.lock pins (0.7.9)
     # plus binaryen 129 — see nix/modules/dx.nix.
