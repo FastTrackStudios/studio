@@ -175,8 +175,12 @@ read -r -a tags <<<"$TAGS"
 dest="docker://ghcr.io/fasttrackstudios/studio-web"
 # The stamp left the tree dirty (no self.rev): the revision label is the
 # tagged commit, passed in (nix/modules/crane.nix `fts.buildRev`, read
-# only under --impure).
-streamer="$(FTS_BUILD_REV="$SHA" nix build --impure --accept-flake-config .#studio-web-image --no-link --print-out-paths)"
+# only under --impure). FTS_NIX_KACHE: the bundles compile through the
+# host's shared kache store, so a release restores what the last one
+# compiled (`fts.kacheArgs`; nix-config hosts/THEBATTLESHIP/
+# kache-nix-sandbox.nix). Those outputs depend on the store: never push
+# them to a binary cache.
+streamer="$(FTS_NIX_KACHE=1 FTS_BUILD_REV="$SHA" nix build --impure --accept-flake-config .#studio-web-image --no-link --print-out-paths)"
 "$streamer" | skopeo --insecure-policy copy docker-archive:/dev/stdin "$dest:${tags[0]}"
 for tag in "${tags[@]:1}"; do
   skopeo --insecure-policy copy "$dest:${tags[0]}" "$dest:$tag"

@@ -190,6 +190,104 @@
         buildInputs = with pkgs; [ openssl ];
       };
 
+      # kache inside the sandbox, opt-in: a build evaluated with
+      # FTS_NIX_KACHE set (under --impure; pure evaluation reads getEnv as
+      # "", so every other build is unchanged, hashes and all) wraps rustc
+      # in kache over THEBATTLESHIP's shared store, so the release image
+      # restores the crates the previous release compiled instead of
+      # compiling them all again. Its outputs are impure in the sense that
+      # matters: they depend on the store's contents, so nothing built this
+      # way may be pushed to a binary cache.
+      #
+      # The host binds the store and a target-dir scratch into the sandbox,
+      # both writable by group nixbld (nix-config
+      # hosts/THEBATTLESHIP/kache-nix-sandbox.nix). Without them (another
+      # host, the drive missing) the build goes on without kache.
+      #
+      # Only the derivations that compile everything themselves take these
+      # (web-bundles.nix: session-app-web and the dx bundles); the
+      # deps-only builds keep their pure hashes, so the copies already in
+      # the nix store still serve.
+      fts.kacheArgs =
+        let
+          store = "/run/media/Development/.kache";
+          builds = "/run/media/Development/.kache-nix-builds";
+          kache = inputs.kache.packages.${pkgs.stdenv.hostPlatform.system}.kache.overrideAttrs {
+            # As nix-config's: upstream's CI runs the ~2000 tests.
+            doCheck = false;
+          };
+          # The host's /etc/kache/config.toml is not in the sandbox: its
+          # settings for a shared store, plus no GC from here (the host's
+          # own daemon keeps the budget) and no remote.
+          config = pkgs.writeText "kache-nix-sandbox.toml" ''
+            [cache]
+            local_store = "${store}"
+            local_max_size = "930GiB"
+            local_only = true
+            auto_gc = false
+            seed_new_targets = false
+            auto_clean_orphaned_targets = false
+            auto_share_target_files = false
+            auto_clean_idle_targets_days = 0
+            auto_clean_unused_units_days = 0
+            clean_incremental = false
+            daemon_idle_timeout_secs = 30
+          '';
+        in
+        lib.optionalAttrs (builtins.getEnv "FTS_NIX_KACHE" != "") {
+          RUSTC_WRAPPER = "${kache}/bin/kache";
+          KACHE_CONFIG = "${config}";
+          KACHE_HOST_CONFIG = "";
+          # dx wraps every workspace crate in its own rustc wrapper (args
+          # captured for hot-patching), which kache passes through uncached;
+          # our dx skips it for a plain build with this set (dx.nix).
+          DX_NO_RUSTC_WRAPPER = "1";
+          preBuild = ''
+            if [ -w ${store} ] && [ -w ${store}/index.db ]; then
+              # Per build: kache's runtime dir (its daemon socket, logs) and
+              # the OUT_DIR alias root, which must belong to the building
+              # user. Both under $TMPDIR, /build in every build, so the
+              # alias path compiled into a few proc macros is the same each
+              # time.
+              export KACHE_RUNTIME_DIR="$TMPDIR/kache"
+              export KACHE_OUT_DIR_ALIAS_ROOT="$TMPDIR/kache-out"
+              mkdir -p "$KACHE_RUNTIME_DIR"
+              install -d -m 0700 "$KACHE_OUT_DIR_ALIAS_ROOT"
+              # The target dir on the store's filesystem, so a restore is a
+              # reflink; $TMPDIR is on /nix, where it would be a copy.
+              # CARGO_TARGET_DIR, because kache keys it as <TARGET> (cargo
+              # resolves a `target` symlink, so the per-build dir name
+              # would reach the keys); `target` stays, as a link to it, for
+              # the install phases. Killed builds' dirs are swept after a
+              # day.
+              if [ -w ${builds} ] && [ ! -e target ]; then
+                find ${builds} -mindepth 1 -maxdepth 1 -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+                ftsKacheTarget="$(mktemp -d ${builds}/"$pname".XXXXXX)"
+                exitHooks+=('rm -rf "$ftsKacheTarget"')
+                failureHooks+=('rm -rf "$ftsKacheTarget"')
+                export CARGO_TARGET_DIR="$ftsKacheTarget/target"
+                mkdir -p "$CARGO_TARGET_DIR"
+                ln -s "$CARGO_TARGET_DIR" target
+                # nixpkgs' cc/ld wrappers refuse to link a path outside the
+                # nix store and the build dir ("impure path … used in
+                # link"), and every build script links from here. In the
+                # sandbox nothing else is outside them to guard against.
+                export NIX_ENFORCE_PURITY=0
+              fi
+              echo "kache: on, store ${store}, target dir $(readlink -f target 2>/dev/null || echo target)"
+            else
+              echo "kache: ${store} is not writable in the sandbox; building without it"
+              unset RUSTC_WRAPPER
+            fi
+          '';
+          # The build's hits and misses, in its log.
+          postBuild = ''
+            if [ -n "''${RUSTC_WRAPPER:-}" ]; then
+              "$RUSTC_WRAPPER" stats --last-build 2>&1 | head -n 24 || true
+            fi
+          '';
+        };
+
       # Git rev baked into the deployable images so a running
       # deployment can say WHICH commit it serves (version.json /
       # TASK_BUILD_REV). Only the cheap wrapper layers depend on it —
