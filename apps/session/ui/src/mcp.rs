@@ -1821,20 +1821,10 @@ pub fn select(guid: &str, add: bool) -> Press {
     }
 }
 
-/// Run `press`'s action through the Action List
-/// ([`crate::window::press`]): whether it did. The browser build has no
-/// list, so it does not, and the caller sends the preview edit instead.
-pub fn run(press: &Press) -> bool {
-    #[cfg(feature = "native")]
-    {
-        crate::window::press(press.id, &press.args);
-        true
-    }
-    #[cfg(not(feature = "native"))]
-    {
-        let _ = press;
-        false
-    }
+/// Run `press`'s action through the Action List ([`crate::press::press`]:
+/// the desktop's, or the page's). Its preview is the caller's to show.
+pub fn run(press: &Press) {
+    let _ = crate::press::press(press.id, &press.args);
 }
 
 /// What a click on a strip control runs.

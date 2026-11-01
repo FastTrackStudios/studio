@@ -1304,9 +1304,7 @@ impl MixerWidget {
                         args: serde_json::json!({ "mode": "Mix", "phase": phase.slug() }),
                         preview: Edit::Done(0),
                     };
-                    if !crate::mcp::run(&press) {
-                        session::mode_phases::choose(session::modes::Mode::Mix, phase.slug());
-                    }
+                    crate::mcp::run(&press);
                     self.phase_seen = session::mode_phases::version();
                 }
                 self.rails.phase = phase;
@@ -1382,7 +1380,7 @@ impl MixerWidget {
             Control::Pan => serde_json::json!({ "track": track.guid, "pan": track.pan }),
             _ => return,
         };
-        let _ = crate::mcp::run(&crate::mcp::Press {
+        crate::mcp::run(&crate::mcp::Press {
             id: "TRACK_SET",
             args,
             preview: Edit::Done(0),
@@ -1402,9 +1400,7 @@ impl MixerWidget {
         predict(&mut self.tracks, &press.preview);
         predict(&mut self.targets, &press.preview);
         self.show_targets();
-        if !crate::mcp::run(&press) {
-            self.send(press.preview);
-        }
+        crate::mcp::run(&press);
     }
 
     /// Ask for another frame, where the host needs asking.
@@ -2046,9 +2042,7 @@ impl MixerWidget {
                         args: serde_json::json!({ "track": track.guid, "open": !open }),
                         preview: Edit::Done(0),
                     };
-                    if !crate::mcp::run(&press) {
-                        crate::folds::toggle(&track.guid, open);
-                    }
+                    crate::mcp::run(&press);
                     self.redraw();
                 } else if let Some(track) = self.track_at(spot.row).cloned() {
                     // The clip latch clears on a click while it is lit;

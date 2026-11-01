@@ -14,6 +14,8 @@
 //! On the engine, so the window's swipe, the Action List and a test are
 //! one path ([`SWIPE_COMP`]); the window reads the song back after.
 
+pub use crate::shared_actions::{SHOW_LANES, show_lanes};
+use crate::shared_actions::{ShowArg, ShowOut};
 use daw::service::{ItemRef, Items as _, ProjectContext, TakeRef, Takes as _, TrackRef, Tracks};
 use daw_proto::primitives::{Duration, PositionInSeconds};
 use facet::Facet;
@@ -457,15 +459,6 @@ pub static SWIPE_COMP: architect::action::ActionMeta = crate::actions::meta(
     "",
 );
 
-pub static SHOW_LANES: architect::action::ActionMeta = crate::actions::meta(
-    "TRACK_SHOW_LANES",
-    "track_show_lanes",
-    "Show a track's lanes",
-    "Show every lane of `track` (a path, name or GUID; left out, the selected track — Alt+L) stacked in its row — the takes, the comp and the edit side by side, to hear and comp from — or only the lane that plays: `show` true or false, toggled when left out. On a folder, its row (shut, each lane folded from the tracks under it) and every track under it with lanes. The window's view, not the song's. Says whether they show now.",
-    "View",
-    "Alt+L",
-);
-
 pub static LANE_STEP: architect::action::ActionMeta = crate::actions::meta(
     "TRACK_LANE_STEP",
     "track_lane_step",
@@ -581,54 +574,6 @@ struct SwipeArg {
 #[derive(Facet)]
 struct SwipeOut {
     /// `path: lane N over a–b s onto lane COMP (n pieces)`, each track.
-    tracks: Vec<String>,
-}
-
-/// `TRACK_SHOW_LANES`'s work over a song's tracks (`all`): every lane of
-/// `guid` shown (`show`; toggled when `None`) — on a folder, its row's and
-/// those of every track under it with lanes. Whether they show now, and
-/// the tracks it opened or shut, the row's own first.
-///
-/// # Errors
-/// No such track, or one lane and no track under it with more.
-pub fn show_lanes(
-    all: &[daw_proto::Track],
-    guid: &str,
-    show: Option<bool>,
-) -> Result<(bool, Vec<String>), String> {
-    let track = all
-        .iter()
-        .find(|t| t.guid == guid)
-        .ok_or("the track went")?;
-    let tracks = crate::lanes::opened_with_folders(all, track, &crate::lanes::shown_on(all, track));
-    if tracks.is_empty() {
-        return Err(format!(
-            "{} has one lane, and no track under it has more",
-            track.name
-        ));
-    }
-    let shown = crate::lanes::set_expanded(&tracks, show);
-    Ok((shown, tracks))
-}
-
-/// Which track's lanes.
-#[derive(Facet)]
-struct ShowArg {
-    /// Left out: the selected track (what a key means).
-    #[facet(default)]
-    track: Option<String>,
-    show: Option<bool>,
-    /// The tracks to open or shut, as the engine settled them: what it
-    /// tells the window, which has no song of its own to look them up in
-    /// when it drives an engine in another process.
-    tracks: Option<Vec<String>>,
-}
-
-/// Whether they show.
-#[derive(Facet)]
-struct ShowOut {
-    shown: bool,
-    /// The tracks it opened or shut, the row's own first.
     tracks: Vec<String>,
 }
 

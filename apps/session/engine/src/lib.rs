@@ -175,7 +175,7 @@ pub mod edit_actions;
 pub mod fundamental;
 pub mod gain_stage;
 pub use editing::groove;
-#[cfg(feature = "native")]
+#[cfg(any(feature = "native", feature = "web"))]
 pub mod arrange_actions;
 #[cfg(feature = "native")]
 pub mod audio_window;
@@ -223,6 +223,8 @@ pub mod section_colors;
 pub mod session_file;
 pub mod setlist;
 pub mod settings;
+#[cfg(any(feature = "native", feature = "web"))]
+pub mod shared_actions;
 #[cfg(feature = "native")]
 pub mod song;
 pub mod song_bars;
@@ -237,6 +239,8 @@ pub mod timeline_actions;
 #[cfg(feature = "native")]
 pub mod trigger_from_mics;
 pub mod wave_detail;
+#[cfg(all(feature = "web", not(feature = "native")))]
+pub mod web_actions;
 #[cfg(feature = "web")]
 pub mod web_audio;
 #[cfg(feature = "web")]

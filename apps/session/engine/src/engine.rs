@@ -1154,6 +1154,15 @@ impl Applier {
                     next
                 };
                 let Some(edit) = next else { break };
+                // A control's action, in its place among the edits: run
+                // on the page's list (`crate::web_actions`).
+                #[cfg(feature = "web")]
+                if let Edit::Run(id, args) = &edit {
+                    if let Err(e) = crate::web_actions::run(id, args.as_bytes()).await {
+                        tracing::warn!(action.id = %id, error = %e, "control action refused");
+                    }
+                    continue;
+                }
                 apply_reported(&edit).await;
             }
         });
