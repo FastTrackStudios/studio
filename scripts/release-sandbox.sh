@@ -123,6 +123,7 @@ name = "a-patch"
 version = "1.0.0"
 EOF
 printf '# Changelog\n\n## [0.1.2] - 2026-10-21\n\n- the last committed section\n' > "$W/CHANGELOG.md"
+printf '.release-version\n' > "$W/.gitignore"
 git -C "$W" init -q -b main; git -C "$W" add -A; git -C "$W" commit -qm "initial import"
 git -C "$W" tag -a v0.1.1 -m "studio 0.1.1"
 echo "// 0.1.2" >> "$W/crates/shared/lib.rs"; git -C "$W" add -A; git -C "$W" commit -qm "chore(release): v0.1.2 (#3)"
@@ -234,22 +235,20 @@ land "chore: tooling only (#76)" crates/shared/t.rs tooling '"shared" = "none"\n
 R notes > "$S/nn.md" 2>&1
 expect_out "draft with only a none change file: no user-visible changes" "$S/nn.md" '^No user-visible changes'
 
-echo "=== stamp: the release version into a build's checkout (uncommitted)"
+echo "=== stamp: the release version into a build's checkout (nothing tracked changes)"
 git switch -q --detach v26.10.1
 expect_ok "stamp v26.10.1" R stamp v26.10.1
-eq "  ...the workspace version" "$(R version)" 26.10.1
-eq "  ...studio-desktop in Cargo.lock" "$(grep -A1 '^name = "studio-desktop"$' Cargo.lock | tail -1)" 'version = "26.10.1"'
-eq "  ...session-desktop in Cargo.lock" "$(grep -A1 '^name = "session-desktop"$' Cargo.lock | tail -1)" 'version = "26.10.1"'
-eq "  ...shared (its own version) did not move" "$(grep -A1 '^name = "shared"$' Cargo.lock | tail -1)" 'version = "0.1.0"'
-eq "  ...serde (a registry crate) did not move" "$(grep -A1 '^name = "serde"$' Cargo.lock | tail -1)" 'version = "0.1.2"'
-eq "  ...the inventory member (named like a registry crate)" "$(grep -A2 '^name = "inventory"$' Cargo.lock | grep -A1 -v source | grep '^version' | paste -sd' ' -)" 'version = "0.3.0" version = "26.10.1"'
-eq "  ...its \"name version\" reference in a dependency list" "$(grep -c '^ "inventory 26.10.1",$' Cargo.lock)" 1
-eq "  ...but not the registry crate's" "$(grep -c '^ "inventory 0.3.0",$' Cargo.lock)" 1
-eq "  ...and no reference at the old version is left" "$(grep -c '"inventory 0.1.2"' Cargo.lock)" 0
-eq "  ...nor did the unused patch" "$(grep -A1 '^name = "a-patch"$' Cargo.lock | tail -1)" 'version = "1.0.0"'
-eq "  ...only Cargo.toml and Cargo.lock changed, uncommitted" "$(git status --porcelain | awk '{ print $2 }' | paste -sd' ' -)" "Cargo.lock Cargo.toml"
+eq "  ...the checkout's version" "$(R version)" 26.10.1
+eq "  ...recorded in .release-version" "$(cat .release-version)" 26.10.1
+eq "  ...Cargo.toml keeps the committed version" "$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml)" 0.1.2
+eq "  ...studio-desktop in Cargo.lock did not move" "$(grep -A1 '^name = "studio-desktop"$' Cargo.lock | tail -1)" 'version = "0.1.2"'
+eq "  ...nothing tracked changed" "$(git status --porcelain | paste -sd' ' -)" ""
 eq "  ...HEAD still carries the committed version" "$(R version HEAD)" 0.1.2
-expect_ok "stamp again: a no-op" R stamp 26.10.1
+: > "$S/genv"
+expect_ok "stamp in a GitHub job" env GITHUB_ENV="$S/genv" bash scripts/release.sh stamp v26.10.1
+eq "  ...exports FTS_RELEASE_VERSION to the job" "$(cat "$S/genv")" FTS_RELEASE_VERSION=26.10.1
+expect_ok "stamp again: idempotent" R stamp 26.10.1
+eq "  ...still 26.10.1" "$(R version)" 26.10.1
 expect_fail "stamp refuses a non-X.Y.Z" R stamp 26.10
 
 echo "=== the tag guards (every tag-triggered job, after stamp)"
@@ -270,15 +269,13 @@ export GITHUB_OUTPUT="$S/gho"; : > "$GITHUB_OUTPUT"
 expect_ok "ios-resolve studio v26.10.1 (stamped)" R ios-resolve studio v26.10.1
 expect_out "  marketing version output" "$GITHUB_OUTPUT" '^version=26\.10\.1$'
 for t in v26.10 26.10.1 v26.10.1-rc.1 V26.10.1 studio-v26.10.1; do expect_fail "ios-resolve refuses '$t'" R ios-resolve studio "$t"; done
-git checkout -q -- Cargo.toml Cargo.lock
+rm -f .release-version
 expect_fail "tag-guard: not stamped (the committed version)" env GITHUB_REF=refs/tags/v26.10.1 bash scripts/release.sh tag-guard
 grep -q "run 'release.sh stamp v26.10.1' first" "$S/last.out" && ok "  ...asking for the stamp" || bad "  ...message"
 expect_fail "ios-resolve: not stamped" R ios-resolve studio v26.10.1
-R stamp v26.10.1 2>/dev/null
-sedi 's/^version.workspace = true/version = "0.0.2"/' apps/studio/desktop/Cargo.toml
-expect_fail "ios-resolve: studio crate pinned off the workspace version" R ios-resolve studio v26.10.1
-expect_fail "tag-guard: the same" env GITHUB_REF=refs/tags/v26.10.1 bash scripts/release.sh tag-guard
-git checkout -q -- .
+R stamp v26.10.0 2>/dev/null
+expect_fail "ios-resolve: stamped with another tag's version" R ios-resolve studio v26.10.1
+grep -q "release version is '26.10.0' but the tag is v26.10.1" "$S/last.out" && ok "  ...for that reason" || bad "  ...refused for another reason"
 # a tag on a commit no release line has (the feature branch)
 git tag v26.10.9 "$STRAY"; git switch -q --detach v26.10.9; R stamp v26.10.9 2>/dev/null
 expect_fail "ios-resolve: a commit on neither main nor release/v*" R ios-resolve studio v26.10.9

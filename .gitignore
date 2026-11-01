@@ -276,3 +276,6 @@ features/dynamic-template/fixtures/golden/media/
 
 # FTS Mic's models, linked by `just assets` from the private mic-models repo
 /apps/plugins/mic/models
+
+# A release build's version (scripts/release.sh stamp): never committed.
+/.release-version

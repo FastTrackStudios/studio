@@ -43,20 +43,31 @@ hotfix: release/v26.10.4 (from the tag) ◀── cherry-pick -x PR ── CI pa
 ## One version, one app, and the version is the tag
 
 Signal and Session ship as one app, Studio, so there is one release: one
-version, one tag, one GitHub Release. The app crates (`apps/studio/desktop`,
-and `apps/session/desktop`, which Studio links) say `version.workspace =
-true`. Change-file notes end with `(signal)` or `(session)` so the notes
+version, one tag, one GitHub Release. Change-file notes end with `(signal)` or `(session)` so the notes
 say which side of Studio changed, or `(studio)` for the app as a whole.
 
 **Releases commit no version.** Every release build runs
-`scripts/release.sh stamp X.Y.Z` right after its checkout. It writes the
-tag's version into that checkout's `[workspace.package] version` and the
-workspace members' Cargo.lock entries, uncommitted, so
-`env!("CARGO_PKG_VERSION")`, the iOS marketing version, the desktop app
-version, the update check and the image's version label all see the
-release. **The version committed on `main` (26.10.3, the last release
-commit) is not the released version.** The latest `v*` tag is
-(`just release-plan` shows both).
+`scripts/release.sh stamp X.Y.Z` right after its checkout. It records the
+tag's version in the checkout's gitignored `.release-version` (what
+`release.sh version` and the guards read) and exports
+`FTS_RELEASE_VERSION=X.Y.Z` to the job's later steps. **It does not touch
+Cargo.toml or Cargo.lock**: a crate's Cargo version is in every rustc
+invocation of it, so writing the release there gave every workspace crate
+a new kache key and recompiled all ~90 of them on every release. The
+version reaches each artifact like this instead:
+
+| Where | From |
+| --- | --- |
+| the app's own version (`studio-desktop --version`, Settings' "Signal v…" / "Session v…", the update check, the MCP servers' `serverInfo`) | `fts-version` (`features/app/version`), the ONE crate that reads `FTS_RELEASE_VERSION` (its build script; unset, the committed version). Only studio-desktop's binaries depend on it; `main` hands it to the libraries at start (`app_shell::version::set`, read with `app_shell::version::current()`), so a release recompiles `fts-version` and the binaries, not Session or the rigs |
+| the macOS `.dmg`'s Info.plist, the AppImage's desktop entry and file names | written at bundle time from `release.sh version` (`scripts/desktop/{macos,linux}.sh`, which also export `FTS_RELEASE_VERSION` to their cargo build) |
+| the iOS marketing version | `MARKETING_VER` (the tag's, from `ios-resolve`) into Info.plist by `deploy-testflight.sh`, which exports it as `FTS_RELEASE_VERSION` for the in-app version |
+| the studio-web image's `version.json` and `org.opencontainers.image.version` label | `fts.buildTag` (nix/modules/crane.nix) from `FTS_RELEASE_VERSION` under `--impure`; only the cheap wrapper layers read it. The Signal web bundle gets it as its build env (`fts-version` again) |
+
+Never `env!("CARGO_PKG_VERSION")` for "the app's version": that is the
+crate's committed version. A build with no `FTS_RELEASE_VERSION` (any dev
+build) reports the committed version. **The version committed on `main`
+(26.10.3, the last release commit) is not the released version.** The
+latest `v*` tag is (`just release-plan` shows both).
 
 Versions are CalVer `YY.M.MICRO` (no leading zeros). The next version is
 computed, not chosen: take the highest `vX.Y.Z` tag (suffixed tags don't
@@ -160,8 +171,7 @@ green.
 **Tag guard** (`release.sh tag-guard` after `stamp`, in `Images` and the
 `release` publish; `ios-resolve` in `studio-ios` and `desktop`):
 
-- the tag is `vX.Y.Z`, and the stamped checkout and the iOS app crate carry
-  its version;
+- the tag is `vX.Y.Z`, and the checkout was stamped with its version;
 - the checkout is the tagged commit, on `main` or a `release/v*` line;
 - where the job has a token, `CI passed` is green on it. The test suite is
   not run again.
@@ -181,15 +191,15 @@ records (`app.fasttrackstudio.signal`, `.session`) get no new builds.
 - **TestFlight uploads only from the release tag**, never on a push, a PR
   or a fork. The tag starts `studio-ios`.
 - **Marketing version (CFBundleShortVersionString) = the tag's version**
-  (`v26.10.4` → `26.10.4`), stamped into the checkout, and the app crate
-  must resolve to it. The build number (CFBundleVersion) is the unix time
+  (`v26.10.4` → `26.10.4`), stamped into the checkout and handed to
+  `deploy-testflight.sh` as `MARKETING_VER`. The build number (CFBundleVersion) is the unix time
   of the upload.
 - **One GitHub Release** per tag (title `studio 26.10.4`, the notes from
   the change files). After the upload the workflow writes its marketing
   version, build number and run URL into the Release notes; a re-run
   editing at the same time re-reads and retries.
 - `studio-ios` refuses a tag that is not `^v[0-9]+\.[0-9]+\.[0-9]+$`, a
-  stamped crate or workspace version that differs, a commit on neither
+  stamped release version that differs, a commit on neither
   `main` nor `release/v*`, or a red `CI passed`. `workflow_dispatch` with
   `dry_run` stops after those checks.
 

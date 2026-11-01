@@ -169,9 +169,13 @@ fn main() {
     // headless (scripts/desktop/linux-smoke.sh), and it is how a user tells
     // which Studio they have.
     if std::env::args().nth(1).as_deref() == Some("--version") {
-        println!("studio-desktop {}", env!("CARGO_PKG_VERSION"));
+        println!("studio-desktop {}", fts_version::release_version());
         return;
     }
+    // The release version, for the libraries that show it (Session's
+    // Settings, the update check, the MCP servers): they read it at run
+    // time, so a release recompiles this binary, not them.
+    app_shell::version::set(fts_version::release_version());
     // iPhone: the page is the whole screen — no safe area at all. The rig's
     // phone pages keep clear of the one thing that matters, the camera
     // housing, themselves (`IslandLeft`); the bars reach the edges. (UIKit's
@@ -1219,7 +1223,7 @@ fn SettingsPanel() -> Element {
         div {
             style: "display: flex; flex-direction: column; align-items: flex-start; gap: 12px; \
                     padding: 12px; font-size: 12px;",
-            span { style: "color: #a1a1aa;", "Signal v{env!(\"CARGO_PKG_VERSION\")}" }
+            span { style: "color: #a1a1aa;", "Signal v{fts_version::release_version()}" }
             AccountBlockHost {}
             AccountSettings {}
             EnginesArea {}
@@ -1477,7 +1481,7 @@ fn AccountSettings() -> Element {
 fn UpdateCheck() -> Element {
     rsx! {
         app_shell::updates::UpdateSettings {
-            app: app_shell::updates::App::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            app: app_shell::updates::App::new(env!("CARGO_PKG_NAME"), fts_version::release_version()),
         }
     }
 }

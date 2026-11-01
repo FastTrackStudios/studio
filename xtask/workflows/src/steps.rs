@@ -134,17 +134,22 @@ pub fn checkout_full(git_ref: Option<&str>) -> Step {
     step.with("fetch-depth", 0)
 }
 
-/// The release version from the tag, into this checkout (scripts/release.sh
+/// The release version from the tag, into this job (scripts/release.sh
 /// `stamp`): the FIRST step after the checkout of every job that builds or
-/// judges a release. Releases commit no version; the tag is the version, so
-/// `env!("CARGO_PKG_VERSION")`, the iOS marketing version, the desktop app
-/// version and the update check see it only once it is written into the
-/// workspace version and Cargo.lock's member entries (uncommitted). `tag` is
-/// a workflow expression (`${{ env.TAG }}`, `${{ github.ref_name }}`).
+/// judges a release. Releases commit no version; the tag is the version. The
+/// stamp records it in the checkout's gitignored `.release-version` (what
+/// `release.sh version`, the tag guards and the bundle scripts read) and
+/// exports `FTS_RELEASE_VERSION` to the job's later steps, which only the
+/// `fts-version` crate reads: Cargo.toml and Cargo.lock stay as committed,
+/// so a release recompiles that crate and the app binaries, not every
+/// workspace crate. `tag` is a workflow expression (`${{ env.TAG }}`,
+/// `${{ github.ref_name }}`).
 ///
 /// A tag cut before the stamp existed (a re-run of v26.10.3 or older) carries
 /// its version in its commit, and its script has no `stamp`: then the step
 /// only says so, and the tag guard checks the committed version as before.
+/// (A tag from before this stamp, whose script still rewrites Cargo.toml,
+/// runs its own script: each tag builds with the tooling it was cut with.)
 pub fn stamp(tag: &str) -> Step {
     Step::run(
         "Stamp the release version from the tag",

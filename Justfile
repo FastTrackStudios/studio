@@ -2163,8 +2163,9 @@ rail-evidence:
 # (The REAPER suites are not in CI: run `just reaper-test` and `just reaper
 # daw-test` locally.) Production = the latest `v*` tag.
 
-# The version the tree carries ([workspace.package] in Cargo.toml): NOT the
-# released version, which is the latest v* tag (`just release-plan`).
+# The version the tree carries (a release build's stamped version, else
+# [workspace.package] in Cargo.toml): NOT the released version, which is
+# the latest v* tag (`just release-plan`).
 version:
     @bash scripts/release.sh version
 

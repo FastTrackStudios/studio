@@ -57,7 +57,8 @@ pub struct App {
     /// and the release asset is named (`<name>-<os>-<arch>`): the app's
     /// `env!("CARGO_PKG_NAME")`.
     pub name: &'static str,
-    /// The running version: the app's `env!("CARGO_PKG_VERSION")`.
+    /// The running version: [`crate::version::current`] (the release
+    /// version the binary was built as).
     pub version: &'static str,
 }
 
@@ -99,7 +100,7 @@ pub enum InstallBlock {
 
 impl App {
     /// The app built as this crate: `App::new(env!("CARGO_PKG_NAME"),
-    /// env!("CARGO_PKG_VERSION"))`.
+    /// app_shell::version::current())`.
     #[must_use]
     pub const fn new(name: &'static str, version: &'static str) -> Self {
         Self { name, version }

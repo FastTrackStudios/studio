@@ -1,0 +1,16 @@
+[package]
+name = "fts-version"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "The release version a shipped binary reports: FTS_RELEASE_VERSION at build time, else the workspace version. The one crate a release's version reaches, so a release recompiles it and the binaries, not the workspace"
+build = "build.rs"
+
+# Only binaries depend on this crate (studio-desktop). A library that needs
+# the app's version reads `app_shell::version::current()`, which the binary
+# sets at start: a library that depended on this crate would recompile on
+# every release, and so would everything above it.
+
+[lints]
+workspace = true

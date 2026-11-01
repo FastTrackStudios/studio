@@ -10,7 +10,7 @@
 //!   PRs --squash--> main           ships NOTHING
 //!   `just release` pushes vYY.M.MICRO on a green commit (of main, or of a
 //!   release/v* hotfix line) --> this workflow starts on the tag -->
-//!   resolve (hosted: the tag's version stamped in, tag shape, app crate
+//!   resolve (hosted: the tag's version stamped in, tag shape, stamped
 //!   version == tag version, commit on main or release/v*, `CI passed`
 //!   green, Release exists) --> testflight (airlock: build, sign, upload) --> record
 //!   (hosted: marketing version + build number written into the Release
@@ -162,8 +162,9 @@ df -h /Volumes/build-disk | tail -1
                 .with("ref", "${{ needs.resolve.outputs.sha }}")
                 .with("clean", false),
         )
-        // The tag's version into the build (the app's CARGO_PKG_VERSION, its
-        // update check); the next checkout overwrites it.
+        // The tag's version into the build: FTS_RELEASE_VERSION for this
+        // job, which fts-version reads (the app's own version, its update
+        // check); deploy-testflight.sh also takes it from MARKETING_VER.
         .step(stamp("${{ env.TAG }}"))
         // The guitar rig's release build refuses to compile without its
         // captures (features/rigs/guitar/build.rs). They are in the private

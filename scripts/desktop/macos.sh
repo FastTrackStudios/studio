@@ -12,7 +12,11 @@
 # .github/workflows/desktop.yml; a human can run it by hand.
 #
 # Env (all optional):
-#   VERSION     X.Y.Z, the release's version (default: [workspace.package])
+#   VERSION     X.Y.Z, the release's version (default: `release.sh version`:
+#               the stamped release version, else [workspace.package]).
+#               Written into Info.plist here and exported to the build as
+#               FTS_RELEASE_VERSION (fts-version: the app's own version),
+#               so no workspace crate recompiles for it.
 #   BUILD_NO    CFBundleVersion (default: unix time)
 #   OUT_DIR     where the .dmg lands (default: target/desktop)
 #   PROFILE     cargo profile (default: release-fast, what the iOS build uses,
@@ -43,6 +47,7 @@ cd "$ROOT"
 SCRIPT_DIR="$ROOT/scripts/desktop"
 VERSION="${VERSION:-$(bash scripts/release.sh version)}"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version '$VERSION' is not X.Y.Z" >&2; exit 2; }
+export FTS_RELEASE_VERSION="$VERSION"
 BUILD_NO="${BUILD_NO:-$(date +%s)}"
 OUT_DIR="${OUT_DIR:-$ROOT/target/desktop}"
 PROFILE="${PROFILE:-release-fast}"

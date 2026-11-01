@@ -19,6 +19,10 @@ set -euo pipefail
 # shipped. No default, and checked first: a TestFlight build is a release's,
 # and a missing version must not cost a whole build before it fails.
 : "${MARKETING_VER:?MARKETING_VER is required: the version of the release tag being shipped (e.g. 0.1.3)}"
+# The same version inside the app (Settings, the update check): fts-version
+# reads FTS_RELEASE_VERSION at build time, and only it, so the release
+# recompiles that crate and the app binary, not the workspace.
+export FTS_RELEASE_VERSION="$MARKETING_VER"
 
 # Telemetry for a build made here, by hand: CI bakes TASK_OTLP_ENDPOINT /
 # TASK_OTLP_TOKEN / TASK_SENTRY_DSN from the org's secrets
