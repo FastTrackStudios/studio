@@ -13,15 +13,23 @@
 # The self-hosted tests job does not use it: its warm target dir was built
 # with the repo config alone, and a rustflags change would rebuild it.
 
-# `[target.'cfg(all())']`, not `[build]`: every matching `target.*` table is
+# A `target.*` table, not `[build]`: every matching `target.*` table is
 # joined (so x86_64-linux keeps mold + x86-64-v3 from the repo config), while
 # `build.rustflags` is IGNORED as soon as any target table sets rustflags.
-# That is also why this repeats the repo's `[build]` frame-pointer flag:
-# without it the targets with no table of their own (wasm32) would lose it.
+# So the targets with no table of their own in the repo config (wasm32,
+# aarch64-darwin) would lose the repo's `[build]` frame-pointer flag — this
+# table gives it back to exactly those.
 #
-# TODO: add "-D", "warnings" here once the workspace is warning-clean, so CI
-# fails on a new warning without making developers' builds fail.
-[target.'cfg(all())']
+# NOT `cfg(all())`: on x86_64 linux/macOS that would join a SECOND
+# `-C force-frame-pointers=yes` after the repo table's, and kache hashes
+# `-C` flags in order without de-duplicating them, so every CI key would
+# differ from the same build on a developer's machine and the shared store
+# (hosts/THEBATTLESHIP/kache.nix in nix-config) would never hit across them.
+#
+# TODO: add "-D", "warnings" (to a `cfg(all())` table) once the workspace is
+# warning-clean, so CI fails on a new warning without making developers'
+# builds fail — accepting that CI's keys then differ from local ones.
+[target.'cfg(not(all(target_arch = "x86_64", any(target_os = "linux", target_os = "macos"))))']
 rustflags = ["-C", "force-frame-pointers=yes"]
 
 # [profile.dev] in Cargo.toml already says line-tables-only; pinned here too
