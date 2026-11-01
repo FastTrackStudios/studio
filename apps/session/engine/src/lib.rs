@@ -197,6 +197,8 @@ pub mod item_actions;
 #[cfg(feature = "native")]
 pub mod key_change;
 pub mod kit_gate;
+#[cfg(feature = "native")]
+pub mod library_actions;
 pub mod mix_chains;
 pub mod mix_export;
 #[cfg(feature = "native")]

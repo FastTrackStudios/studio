@@ -315,6 +315,80 @@ pub fn resolve_in(tracks: &[daw_proto::Track], what: &str) -> Result<String, Str
     }
 }
 
+pub static TOGETHER_LEAVE: ActionMeta = meta(
+    "SESSION_TOGETHER_LEAVE",
+    "session_together_leave",
+    "Leave the live session",
+    "Leave the live session (or stop sharing it). The songs keep everything edited together in their files.",
+    "Set",
+    "",
+);
+
+pub static TOGETHER_TRANSPORT: ActionMeta = meta(
+    "SESSION_TOGETHER_TRANSPORT",
+    "session_together_transport",
+    "Play together or apart",
+    "In a live session: `together` true plays one transport for everyone, from where this engine is; false lets everyone play on their own.",
+    "Set",
+    "",
+);
+
+pub static TOGETHER_LOCK: ActionMeta = meta(
+    "SESSION_TOGETHER_LOCK",
+    "session_together_lock",
+    "Lock this device",
+    "`locked` true: this device stops syncing — the others' edits wait, its own stay here. False unlocks it and merges both ways. Remembered on this device.",
+    "Set",
+    "",
+);
+
+/// Together or apart.
+#[derive(Facet)]
+pub struct TogetherArg {
+    pub together: bool,
+}
+
+/// Locked or not.
+#[derive(Facet)]
+pub struct LockArg {
+    pub locked: bool,
+}
+
+/// The live session's controls both lists carry: leave it, play together
+/// or apart, lock this device (`crate::collab`, the desktop's and the
+/// page's alike).
+///
+/// # Errors
+/// The first registration the list refuses (a duplicate id).
+pub fn register_together(
+    list: &architect::action::ActionList,
+) -> Result<(), architect::action::ActionError> {
+    use architect::action::Effect;
+    list.register(&TOGETHER_LEAVE, Effect::Mutating, |(): ()| {
+        crate::collab::leave();
+        Ok("left the live session".to_owned())
+    })?;
+    list.register(&TOGETHER_TRANSPORT, Effect::Mutating, |a: TogetherArg| {
+        crate::collab::set_shared_transport(a.together);
+        Ok(if a.together {
+            "playing together"
+        } else {
+            "playing apart"
+        }
+        .to_owned())
+    })?;
+    list.register(&TOGETHER_LOCK, Effect::Mutating, |a: LockArg| {
+        crate::collab::set_sync_locked(a.locked);
+        Ok(if a.locked {
+            "this device is locked"
+        } else {
+            "this device syncs"
+        }
+        .to_owned())
+    })?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

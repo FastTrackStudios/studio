@@ -112,75 +112,71 @@ mod live {
         }
     }
 
-    /// Ask the engine's action `id` with `args`, off the window's thread.
+    /// The live session's control `id` run with `args` — on the engine
+    /// over the link, or here where the window is the engine — behind the
+    /// window (`window::press_behind`): `watch` and the CLI see the press.
     fn ask(id: &'static str, args: serde_json::Value) {
-        std::thread::spawn(move || {
-            if let Err(e) = crate::studio_engine::link::run(id, args.to_string().as_bytes()) {
-                tracing::warn!(collab.action = id, collab.error = %e, "collab: the engine refused");
-            }
-        });
+        crate::window::press_behind(id, &args);
     }
 
     pub fn share(name: String) {
-        if elsewhere() {
-            ask(
-                "SESSION_TOGETHER_SHARE",
-                serde_json::json!({ "name": name }),
-            );
-        } else {
-            crate::collab::host_in_background(name);
-        }
+        ask(
+            "SESSION_TOGETHER_SHARE",
+            serde_json::json!({ "name": name }),
+        );
     }
 
     pub fn join(ticket: String, name: String) {
-        if elsewhere() {
-            ask(
-                "SESSION_TOGETHER_JOIN",
-                serde_json::json!({ "ticket": ticket, "name": name }),
-            );
-        } else {
-            crate::collab::join_in_background(ticket, name);
-        }
+        ask(
+            "SESSION_TOGETHER_JOIN",
+            serde_json::json!({ "ticket": ticket, "name": name }),
+        );
     }
 
     pub fn leave() {
-        if elsewhere() {
-            ask("SESSION_TOGETHER_LEAVE", serde_json::json!({}));
-        } else {
-            crate::collab::leave();
-        }
+        ask("SESSION_TOGETHER_LEAVE", serde_json::json!({}));
     }
 
     pub fn set_shared_transport(together: bool) {
-        if elsewhere() {
-            ask(
-                "SESSION_TOGETHER_TRANSPORT",
-                serde_json::json!({ "together": together }),
-            );
-        } else {
-            crate::collab::set_shared_transport(together);
-        }
+        ask(
+            "SESSION_TOGETHER_TRANSPORT",
+            serde_json::json!({ "together": together }),
+        );
     }
 
     pub fn set_sync_locked(locked: bool) {
-        if elsewhere() {
-            ask(
-                "SESSION_TOGETHER_LOCK",
-                serde_json::json!({ "locked": locked }),
-            );
-        } else {
-            crate::collab::set_sync_locked(locked);
-        }
+        ask(
+            "SESSION_TOGETHER_LOCK",
+            serde_json::json!({ "locked": locked }),
+        );
     }
 }
 
 /// A page's live session: its own (a page is its own engine).
 #[cfg(not(feature = "native"))]
 mod live {
-    pub use crate::collab::{
-        joining, last_error, leave, notices, set_shared_transport, set_sync_locked, status,
-        sync_locked,
-    };
+    pub use crate::collab::{joining, last_error, notices, status, sync_locked};
+
+    /// Leave the live session (`SESSION_TOGETHER_LEAVE`, the page's list).
+    pub fn leave() {
+        let _ = crate::press::press("SESSION_TOGETHER_LEAVE", &serde_json::json!({}));
+    }
+
+    /// Play together or apart (`SESSION_TOGETHER_TRANSPORT`).
+    pub fn set_shared_transport(together: bool) {
+        let _ = crate::press::press(
+            "SESSION_TOGETHER_TRANSPORT",
+            &serde_json::json!({ "together": together }),
+        );
+    }
+
+    /// Lock this device or not (`SESSION_TOGETHER_LOCK`).
+    pub fn set_sync_locked(locked: bool) {
+        let _ = crate::press::press(
+            "SESSION_TOGETHER_LOCK",
+            &serde_json::json!({ "locked": locked }),
+        );
+    }
 }
 
 /// Starts what a window keeps from its first moment — the live sessions,
