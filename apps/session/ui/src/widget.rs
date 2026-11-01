@@ -414,6 +414,18 @@ struct Turn {
     was: daw_proto::Track,
 }
 
+/// How the arrangement's edits reach the engine
+/// (`docs/design/actions-everywhere.md`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Committed {
+    /// A gesture of the hand's: committed as the named action of what it
+    /// did.
+    AsGesture,
+    /// An action's own work (a key's through the list, the engine's
+    /// asked of the window): sent as it is, under that action.
+    ForAction,
+}
+
 /// How far a knob turns through its whole range, in pixels.
 ///
 /// REAPER's own, so a full sweep takes about the same movement here as
@@ -2469,7 +2481,7 @@ impl ArrangementWidget {
             remove.edits = effects.len(),
             "drums: a stretch removed"
         );
-        self.settle(effects);
+        self.settle_for_action(effects);
         self.replan_rows();
         crate::hit_overlay::refresh();
         self.dirty.set(true);
@@ -2494,7 +2506,7 @@ impl ArrangementWidget {
         if effects.is_empty() {
             return false;
         }
-        self.settle(effects);
+        self.settle_for_action(effects);
         self.replan_rows();
         crate::hit_overlay::refresh();
         self.dirty.set(true);
@@ -2541,7 +2553,7 @@ impl ArrangementWidget {
         let warps: std::collections::HashMap<&str, &[(f64, f64)]> = effects
             .iter()
             .filter_map(|e| match e {
-                crate::arrange_edit::Effect::Send(crate::engine::Edit::SetStretchMarkers(
+                crate::arrange_edit::Effect::Edit(crate::engine::Edit::SetStretchMarkers(
                     guid,
                     markers,
                 )) => Some((guid.as_str(), markers.as_slice())),
@@ -2569,7 +2581,7 @@ impl ArrangementWidget {
         draw_slices(&self.previews, items.clone(), slices);
         span.record("slip.edits", effects.len());
         stages.mark("window.slip_ms");
-        self.settle(effects);
+        self.settle_for_action(effects);
         stages.mark("window.settle_ms");
         // The kit's row folded again from the slices, so every cut is on
         // it (in Edit mode; elsewhere the seams are joined).
@@ -3270,16 +3282,14 @@ impl ArrangementWidget {
             .scene
             .item(hit.index)
             .map_or(0.0, |item| item.x1 - item.x0);
-        let begin = Edit::BeginUndo(TAKE_LABEL.to_owned());
         let (points, index) = match hit.point {
             Some(k) if alt => {
                 let points = crate::automation::without_point(&curve.points, k);
                 crate::automation::set_take_curve(&hit.item, points.clone());
-                self.edits.borrow_mut().extend([
-                    begin,
-                    Edit::SetTakeVolume(hit.item, points),
-                    Edit::EndUndo(TAKE_LABEL.to_owned()),
-                ]);
+                self.commit_edits(
+                    Some(TAKE_LABEL),
+                    vec![Edit::SetTakeVolume(hit.item, points)],
+                );
                 self.dirty.set(true);
                 return true;
             }
@@ -3295,12 +3305,11 @@ impl ArrangementWidget {
                 (Some(points), k)
             }
         };
-        let mut edits = vec![begin];
+        // Drawn here as it is dragged; committed when it lets go
+        // ([`Self::take_released`]).
         if let Some(points) = points {
-            crate::automation::set_take_curve(&hit.item, points.clone());
-            edits.push(Edit::SetTakeVolume(hit.item.clone(), points));
+            crate::automation::set_take_curve(&hit.item, points);
         }
-        self.edits.borrow_mut().extend(edits);
         self.take_drag = Some(TakeDrag {
             item: hit.item,
             index,
@@ -3333,14 +3342,50 @@ impl ArrangementWidget {
             daw_proto::automation::EnvelopeShape::Linear,
         );
         drag.index = at;
-        crate::automation::set_take_curve(&drag.item, points.clone());
-        self.edits
-            .borrow_mut()
-            .push(crate::engine::Edit::SetTakeVolume(
-                drag.item.clone(),
-                points,
-            ));
+        crate::automation::set_take_curve(&drag.item, points);
         self.dirty.set(true);
+    }
+
+    /// A take volume drag let go (or lost): the curve as drawn committed,
+    /// one undo step (`ARRANGE_TAKE_VOLUME`).
+    fn take_released(&mut self) -> bool {
+        let Some(drag) = self.take_drag.take() else {
+            return false;
+        };
+        if let Some(curve) = crate::automation::take_curve(&drag.item) {
+            self.commit_edits(
+                Some(TAKE_LABEL),
+                vec![crate::engine::Edit::SetTakeVolume(drag.item, curve.points)],
+            );
+        }
+        self.dirty.set(true);
+        true
+    }
+
+    /// A track knob's turn let go (or lost): where it ended committed as
+    /// the action a model would run (`TRACK_SET`), in order after its live
+    /// edits; then the touch let go, for the automation that records
+    /// while it is held.
+    fn turn_released(&self, turn: &Turn) {
+        if let Some(track) = self.tracks.iter().find(|t| t.guid == turn.was.guid) {
+            let args = match turn.spot.control {
+                crate::row::Control::Volume => Some(serde_json::json!({
+                    "track": track.guid,
+                    "volume_db": 20.0 * track.volume.max(1e-9).log10(),
+                })),
+                crate::row::Control::Pan => {
+                    Some(serde_json::json!({ "track": track.guid, "pan": track.pan }))
+                }
+                _ => None,
+            };
+            #[cfg(feature = "native")]
+            if let Some(args) = args {
+                self.commit("TRACK_SET", args.to_string());
+            }
+            #[cfg(not(feature = "native"))]
+            let _ = args;
+        }
+        self.touch(turn, false);
     }
 
     /// The automation lane under a point, and what in it — nothing over
@@ -4022,7 +4067,7 @@ impl ArrangementWidget {
                     "Stretch a drum hit",
                     &mut effects,
                 );
-                self.settle(effects);
+                self.settle_for_action(effects);
                 self.edits
                     .borrow_mut()
                     .push(crate::engine::Edit::Done(*ticket));
@@ -4040,6 +4085,23 @@ impl ArrangementWidget {
                 }
                 continue;
             }
+            // A paste is the window's own (no action names the key): it
+            // commits as the gesture it is (`ARRANGE_COPY`).
+            if action == crate::keys::Action::PasteItems {
+                let mut pasted = Vec::new();
+                handled |= self.editor.key(
+                    action,
+                    &mut self.project,
+                    &self.scene,
+                    &self.rows,
+                    &mut tracks,
+                    &self.map,
+                    bpm,
+                    &mut pasted,
+                );
+                self.settle(pasted);
+                continue;
+            }
             handled |= self.editor.key(
                 action,
                 &mut self.project,
@@ -4052,8 +4114,23 @@ impl ArrangementWidget {
             );
         }
         self.tracks = tracks;
-        self.settle(effects);
+        self.settle_for_action(effects);
         handled
+    }
+
+    /// What a gesture of the hand's asked for, carried out: its edits
+    /// committed as the named action of what it did ([`Self::commit_edits`]:
+    /// `ARRANGE_MOVE`, `ITEMS_SELECT`, …), one a gesture.
+    fn settle(&mut self, effects: Vec<crate::arrange_edit::Effect>) {
+        self.carry_out(effects, Committed::AsGesture);
+    }
+
+    /// What an action asked of the arrangement, carried out: a key's, run
+    /// through the list (`window::through_list`), or the engine's, which
+    /// waits on a barrier after it (`Edit::Done`). Its edits are that
+    /// action's own work, sent as they are.
+    fn settle_for_action(&mut self, effects: Vec<crate::arrange_edit::Effect>) {
+        self.carry_out(effects, Committed::ForAction);
     }
 
     /// What the editor asked for, carried out.
@@ -4062,12 +4139,12 @@ impl ArrangementWidget {
     /// predicted rather than awaited: the recording is cut again from
     /// the widget's own project, so the picture is right on the next
     /// frame instead of whenever the engine gets round to it.
-    fn settle(&mut self, effects: Vec<crate::arrange_edit::Effect>) {
+    fn carry_out(&mut self, effects: Vec<crate::arrange_edit::Effect>, how: Committed) {
         use crate::arrange_edit::Effect;
         // What rows are planned from takes the edit too: planned again —
         // a mode changed, a folder opened — they show the edit, not the
         // takes before it.
-        if effects.iter().any(|e| matches!(e, Effect::Send(_)))
+        if effects.iter().any(|e| matches!(e, Effect::Edit(_)))
             && let Some((_, raw)) = self.replan.as_ref()
         {
             let mut raw = raw.borrow_mut();
@@ -4075,14 +4152,15 @@ impl ArrangementWidget {
             raw.item_count = self.project.item_count;
         }
         let mut recut = false;
+        let mut edits = Vec::new();
         for effect in effects {
             match effect {
-                Effect::Send(edit) => {
+                Effect::Edit(edit) => {
                     // A plain click on an item: the Editor follows it.
                     if let crate::engine::Edit::SelectItem(item, true) = &edit {
                         crate::editor_view::picked(item);
                     }
-                    self.edits.borrow_mut().push(edit);
+                    edits.push(edit);
                 }
                 Effect::ReRecord => recut = true,
                 // Straight to the engine, fire and forget, as the
@@ -4100,9 +4178,59 @@ impl ArrangementWidget {
                 }
             }
         }
+        match how {
+            Committed::ForAction => self.edits.borrow_mut().extend(edits),
+            Committed::AsGesture => {
+                for (label, gesture) in crate::arrange_edit::gestures(edits) {
+                    self.commit_edits(label.as_deref(), gesture);
+                }
+            }
+        }
         if recut {
             self.recut();
         }
+    }
+
+    /// A gesture's edits committed as the one named action of what it did
+    /// (`session_engine::arrange_actions::gesture`), run on the engine in
+    /// order with the edits queued before it ([`Self::commit`]); `label`
+    /// the undo step they make.
+    fn commit_edits(&self, label: Option<&str>, edits: Vec<crate::engine::Edit>) {
+        #[cfg(feature = "native")]
+        match session_engine::arrange_actions::gesture(label, &edits) {
+            Some((id, args)) => self.commit(id, args),
+            // Not an arrangement edit (nothing a gesture makes today):
+            // sent as it is, said once so it is found and named.
+            None if !edits.is_empty() => {
+                tracing::warn!(
+                    edit.count = edits.len(),
+                    "a gesture made edits no action names: sent unnamed"
+                );
+                self.edits.borrow_mut().extend(edits);
+            }
+            None => {}
+        }
+        // The browser build has no Action List: the edits go as they are,
+        // bracketed as one undo step.
+        #[cfg(not(feature = "native"))]
+        {
+            let open = label.map(|l| crate::engine::Edit::BeginUndo(l.to_owned()));
+            let close = label.map(|l| crate::engine::Edit::EndUndo(l.to_owned()));
+            self.edits
+                .borrow_mut()
+                .extend(open.into_iter().chain(edits).chain(close));
+        }
+    }
+
+    /// A control's named action run on the engine in its place among the
+    /// edits: after every edit queued before it (a drag's live edits, the
+    /// undo step around them), before any after (`Edit::Run`, which the
+    /// edit worker runs through the Action List).
+    #[cfg(feature = "native")]
+    fn commit(&self, id: &str, args: String) {
+        self.edits
+            .borrow_mut()
+            .push(crate::engine::Edit::Run(id.to_owned(), args));
     }
 
     /// Cut the whole recording again, from the widget's own project.
@@ -4305,8 +4433,8 @@ impl ArrangementWidget {
     }
 
     /// An item's volume set from its dial, `db`: in the widget's own
-    /// project, sent to the engine, and the picture cut again (the
-    /// waveform is drawn through it).
+    /// project, committed (`ARRANGE_ITEM_VOLUME`), and the picture cut
+    /// again (the waveform is drawn through it).
     fn set_item_volume(&mut self, index: usize, db: f64) {
         let Some(guid) = self.scene.item(index).map(|i| i.guid.clone()) else {
             return;
@@ -4317,9 +4445,11 @@ impl ArrangementWidget {
                 item.volume = volume;
             }
         }
-        self.edits
-            .borrow_mut()
-            .push(crate::engine::Edit::SetItemVolume(guid, volume));
+        // The dial's turn was drawn as it went; let go, it commits.
+        self.commit_edits(
+            Some("Edit item volume"),
+            vec![crate::engine::Edit::SetItemVolume(guid, volume)],
+        );
         self.recut();
     }
 
@@ -5588,11 +5718,7 @@ impl ArrangementWidget {
             }
             UiEvent::PointerUp(e) => {
                 let (x, y) = at(e);
-                if self.take_drag.take().is_some() {
-                    self.edits
-                        .borrow_mut()
-                        .push(crate::engine::Edit::EndUndo(TAKE_LABEL.to_owned()));
-                    self.dirty.set(true);
+                if self.take_released() {
                     return true;
                 }
                 if let Some(drag) = self.lane_drag.take() {
@@ -5612,7 +5738,7 @@ impl ArrangementWidget {
                     return true;
                 }
                 if let Some(turn) = self.turning.take() {
-                    self.touch(&turn, false);
+                    self.turn_released(&turn);
                     self.pointer.release();
                     self.pointer.hover(self.spot_at(x, y));
                     return true;
@@ -5664,8 +5790,12 @@ impl ArrangementWidget {
                         .borrow_mut()
                         .extend(crate::automation_edit::release(&drag, None));
                 }
+                // A lost release ends a drag where it got to.
+                self.take_released();
+                if let Some(turn) = self.turning.take() {
+                    self.turn_released(&turn);
+                }
                 self.holding = false;
-                self.turning = None;
                 self.pointer.release();
                 true
             }

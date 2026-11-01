@@ -176,6 +176,8 @@ pub mod fundamental;
 pub mod gain_stage;
 pub use editing::groove;
 #[cfg(feature = "native")]
+pub mod arrange_actions;
+#[cfg(feature = "native")]
 pub mod audio_window;
 #[cfg(feature = "native")]
 pub mod comp_keep;
