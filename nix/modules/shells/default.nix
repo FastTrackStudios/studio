@@ -74,19 +74,22 @@
       PLAYWRIGHT_BROWSERS_PATH = config.fts.pkgsDx.playwright-driver.browsers;
       PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
 
+      # dx's plain builds without its rustc wrapper (nix/modules/dx.nix's
+      # patch): kache caches the workspace crates dx builds, and they are
+      # the same artifacts plain cargo builds for the engine and the tests.
+      DX_NO_RUSTC_WRAPPER = "1";
+
       shellHook = ''
         [ -f .env ] && { set -a; source .env; set +a; }
 
-        # No RUSTC_WRAPPER. sccache used to be set here; it was removed
-        # because what it bought did not cover what it cost. Measured on
-        # this tree it gave 0% hits across worktrees (the target-dir path
-        # is part of sccache's Rust cache key, and SCCACHE_BASEDIR makes
-        # paths relative, not equal), so it never deduped the thing that
-        # actually costs disk — its only real win was making a `just
-        # sweep` cheap to recover from. Against that it breaks `dx`,
-        # which drives rustc through its own wrapper binary that sccache
-        # refuses ("Compiler not supported"), so every dx build and
-        # `dx serve` had to unset it by hand.
+        # No RUSTC_WRAPPER here: kache comes from the fleet, as
+        # `build.rustc-wrapper` in ~/.cargo/config.toml (Codys-Wright/
+        # nix-config modules/coding/lang/kache.nix), so every cargo goes
+        # through it, in this shell or not. sccache, which used to be set
+        # here, gave 0% hits across worktrees (the target dir was in its
+        # key) and refused dx's own rustc wrapper; kache keys without
+        # paths, and DX_NO_RUSTC_WRAPPER above takes dx's wrapper out of
+        # its way.
         # Append (not prepend): store-provided tools (dx, wasm-bindgen)
         # must win over stale cargo-installed copies; cargo/uv bins
         # (graphify) only need to be reachable.

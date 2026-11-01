@@ -40,8 +40,14 @@
           name = "dioxus-cli-${version}-vendor";
           hash = "sha256-znRYZFhWP5PzS6ftcShzNBvRqJXRjnM10OZ+KzUOOsg=";
         };
-        # 0.7.9-era patches/checks don't apply to the alpha.
-        patches = [ ];
+        # 0.7.9-era patches/checks don't apply to the alpha. Ours:
+        # DX_NO_RUSTC_WRAPPER=1 (set in the dev shell) skips dx's rustc
+        # workspace wrapper in plain builds — it only captures args for
+        # hot-patching, which a plain build never reads back — so kache
+        # (the fleet's RUSTC_WRAPPER) caches our workspace crates under dx
+        # too, and dx shares them with plain cargo (the engine, the tests).
+        # From DioxusLabs/dioxus a82361ef1, the crate's source rev.
+        patches = [ ./dx-no-rustc-wrapper.patch ];
         doCheck = false;
         doInstallCheck = false;
       });
