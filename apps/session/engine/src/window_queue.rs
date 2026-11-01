@@ -49,6 +49,10 @@ pub enum Action {
     /// Level what is selected (`EDIT_LEVEL`), in Edit mode: for the drums
     /// each selected piece's strokes brought toward one another.
     LevelDrums,
+    /// Show the selected track's lanes, or only the one that plays
+    /// (`TRACK_SHOW_LANES` with no track: the lanes button's action, on
+    /// the selection).
+    ShowLanes,
     /// Put the drums back as played over the selected folded rows' span
     /// or the time selection (`DRUMS_REVERT`): the edit undone there, the
     /// hit markers kept.
