@@ -5,7 +5,7 @@
 {
   perSystem = { pkgs, lib, config, ... }:
     let
-      inherit (config.fts) craneLib commonArgs mkStaticSite;
+      inherit (config.fts) craneLib commonArgs depsDummySrc mkStaticSite;
 
       # Shared env for the dx web-bundle builds: arborium /
       # arborium-tree-sitter compile the tree-sitter C runtime +
@@ -45,9 +45,11 @@
 
       # A bundle's dependencies, compiled once and kept. crane builds them
       # from the manifests and the lockfile alone (`buildDepsOnly`'s dummy
-      # source), so this derivation changes only when a dependency does:
-      # a release finds it in the runner's store instead of compiling every
-      # crate again, and the bundle compiles only the workspace's own.
+      # source, `fts.depsDummySrc`: the workspace version normalised, so
+      # the release stamp does not reach it), so this derivation changes
+      # only when a dependency does: a release finds it in the runner's
+      # store instead of compiling every crate again, and the bundle
+      # compiles only the workspace's own.
       # Its flags must be the bundle's (profile, target, features,
       # RUSTFLAGS, `--config` overrides): cargo reuses an artifact only
       # when its fingerprint matches, and rebuilds the rest (slower, never
@@ -56,6 +58,9 @@
         craneLib.buildDepsOnly (commonArgs // dxWebEnv // env // {
           inherit pname;
           version = "0.1.0";
+          # The dummy source replaces `src` (null, or crane warns).
+          src = null;
+          dummySrc = depsDummySrc;
           nativeBuildInputs = dxWebNativeInputs;
           CARGO_PROFILE = profile;
           inherit cargoExtraArgs;
