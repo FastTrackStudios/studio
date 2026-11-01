@@ -427,6 +427,10 @@ struct DeviceRow {
     hold: Option<(BlitzPointerId, Grip, Placed, (f64, f64))>,
     /// A frame face being played: its key, whose, which, and where.
     playing: Option<(BlitzPointerId, String, String, Target, Panel)>,
+    /// The rig block a face is playing, as it was when taken hold of: what
+    /// the gesture changed on it is committed when it lets go
+    /// (`RIG_BLOCK_SET`).
+    rig_held: Option<(String, usize, crate::rig::Block)>,
     /// A macro being turned, and where the pointer was.
     turning: Option<(BlitzPointerId, Turned, f64)>,
     hover: Option<(String, Which, Grip)>,
@@ -491,6 +495,7 @@ impl DeviceRow {
             folds: std::collections::HashMap::new(),
             hold: None,
             playing: None,
+            rig_held: None,
             turning: None,
             hover: None,
             dirty: Cell::new(true),
@@ -648,8 +653,9 @@ impl DeviceRow {
         })
     }
 
-    /// An edit from a strip: shown at once, and sent to the engine.
-    fn commit(&mut self, edit: crate::engine::Edit) {
+    /// A strip's turn, live: shown at once, and sent to the engine as it
+    /// moves (committed on release, [`Self::commit_turn`]).
+    fn preview(&mut self, edit: crate::engine::Edit) {
         crate::mixer_panel::predict(&mut self.tracks, &edit);
         if let Some(applier) = &self.applier {
             applier.send(edit);
@@ -701,9 +707,30 @@ impl DeviceRow {
         let fraction = crate::gesture::drag_fraction(y - from_y, *travel);
         let edit = crate::mcp::drag(*control, &was.guid, was, fraction);
         if let Some(edit) = edit {
-            self.commit(edit);
+            self.preview(edit);
         }
         true
+    }
+
+    /// A strip's fader or pan knob let go (or lost): where it ended
+    /// committed as the action a model would run (`TRACK_SET`).
+    fn commit_turn(&self, control: crate::mcp::Control, guid: &str) {
+        let Some(track) = self.tracks.iter().find(|t| t.guid == guid) else {
+            return;
+        };
+        let args = match control {
+            crate::mcp::Control::Volume => serde_json::json!({
+                "track": guid,
+                "volume_db": 20.0 * track.volume.max(1e-9).log10(),
+            }),
+            crate::mcp::Control::Pan => serde_json::json!({ "track": guid, "pan": track.pan }),
+            _ => return,
+        };
+        let _ = crate::mcp::run(&crate::mcp::Press {
+            id: "TRACK_SET",
+            args,
+            preview: crate::engine::Edit::Done(0),
+        });
     }
 
     /// A pointer let go of a strip: a button acts if it is let go over
@@ -712,8 +739,12 @@ impl DeviceRow {
         let Some((_, hold)) = self.strip_hold.take_if(|(id, _)| *id == e.id) else {
             return false;
         };
-        let StripHold::Press { guid, control, add } = hold else {
-            return true;
+        let (guid, control, add) = match hold {
+            StripHold::Turn { control, was, .. } => {
+                self.commit_turn(control, &was.guid);
+                return true;
+            }
+            StripHold::Press { guid, control, add } => (guid, control, add),
         };
         let (x, y) = (f64::from(e.coords.client_x), f64::from(e.coords.client_y));
         let Some((track, up, _)) = self.strip_at(x, y).filter(|(t, ..)| t.guid == guid) else {
@@ -815,6 +846,23 @@ impl DeviceRow {
         }
     }
 
+    /// A rig face let go: what the gesture changed on its block made on the
+    /// rig in the engine (`RIG_BLOCK_SET`), in order after the racks' edits.
+    fn commit_rig_block(&mut self) {
+        let Some((guid, index, before)) = self.rig_held.take() else {
+            return;
+        };
+        let args = self
+            .rigs
+            .borrow()
+            .get(&guid)
+            .and_then(|r| r.blocks.get(index))
+            .and_then(|after| crate::rig::block_changes(&guid, &before, after));
+        if let Some(args) = args {
+            self.tone.run("RIG_BLOCK_SET", &args);
+        }
+    }
+
     /// Hand what the face at `key` edited to its track's settings.
     fn face_edits(&mut self, key: &str, guid: &str, target: &Target) {
         let edits = {
@@ -867,14 +915,24 @@ impl DeviceRow {
                     }
                     self.tone.edited();
                 }
+                // The block's bypass: drawn here, and made on the rig in
+                // the engine (`RIG_BLOCK_SET`) — before, only the drawing.
                 Target::Rig(at, _) => {
-                    if let Some(block) = self
+                    let change = self
                         .rigs
                         .borrow_mut()
                         .get_mut(&guid)
                         .and_then(|r| r.blocks.get_mut(at))
-                    {
-                        block.bypassed = !block.bypassed;
+                        .map(|block| {
+                            block.bypassed = !block.bypassed;
+                            serde_json::json!({
+                                "track": guid,
+                                "block": block.name,
+                                "bypassed": block.bypassed,
+                            })
+                        });
+                    if let Some(args) = change {
+                        self.tone.run("RIG_BLOCK_SET", &args);
                     }
                 }
             }
@@ -888,6 +946,15 @@ impl DeviceRow {
             .find(|(.., at)| at.contains(x, y))
             .cloned();
         if let Some((key, guid, target, at)) = face {
+            self.rig_held = match &target {
+                Target::Rig(index, _) => self
+                    .rigs
+                    .borrow()
+                    .get(&guid)
+                    .and_then(|r| r.blocks.get(*index))
+                    .map(|block| (guid.clone(), *index, block.clone())),
+                Target::Unit(_) => None,
+            };
             if let Some(surface) = self.painters.borrow_mut().frame_mut(&key) {
                 surface.pointer_down(x - at.x, y - at.y, face_mods(e));
             }
@@ -1011,9 +1078,13 @@ impl DeviceRow {
                         surface.pointer_up();
                     }
                     self.face_edits(&key, &guid, &target);
+                    self.commit_rig_block();
                 }
                 let stripped = self.release_strip(e);
                 let turned = self.turning.take_if(|(id, ..)| *id == e.id).is_some();
+                // A rack's grip, knob, switch or bypass let go: what it
+                // moved committed (`FX_SET`, `tone::Shared::commit`).
+                self.tone.commit();
                 self.hold.take_if(|(id, ..)| *id == e.id).is_some() || turned || stripped
             }
             _ => false,

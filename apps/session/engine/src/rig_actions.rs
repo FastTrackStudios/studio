@@ -49,6 +49,131 @@ static RIG_BROWSE: architect::action::ActionMeta = crate::actions::meta(
     "",
 );
 
+pub static RIG_BLOCK_SET: architect::action::ActionMeta = crate::actions::meta(
+    "RIG_BLOCK_SET",
+    "rig_block_set",
+    "Set a rig block",
+    "Change one block of the signal rig on `track` — `block` its id or its name as the FX view shows it (`Vibroverb`, `Plate`): `set` maps each of its parameters (by name) to a value in the block's own units; `bypassed` switches it off (true) or on; `level_db` sets an amp or pedal's Output Level, kept with the gear; `option` picks which capture of its preset plays (by index). What the FX view's rig faces and bypass buttons commit when a gesture ends. Says the block as it is after.",
+    "Signal",
+    "",
+);
+
+static RIG_BLOCKS: architect::action::ActionMeta = crate::actions::meta(
+    "RIG_BLOCKS",
+    "rig_blocks",
+    "A rig's blocks",
+    "The blocks of the signal rig playing on `track`, in chain order: each one's id, name, whether it is bypassed, its parameters as they read, its Output Level and option — what RIG_BLOCK_SET changes. Read-only.",
+    "Signal",
+    "",
+);
+
+/// One block's changes.
+#[derive(Facet)]
+struct BlockSetArg {
+    track: String,
+    block: String,
+    #[facet(default)]
+    set: std::collections::HashMap<String, f64>,
+    bypassed: Option<bool>,
+    level_db: Option<f64>,
+    option: Option<u32>,
+}
+
+/// A rig block's parameter, as it reads.
+#[derive(Facet)]
+struct ParamOut {
+    name: String,
+    value: f64,
+}
+
+/// A rig block as it is.
+#[derive(Facet)]
+struct BlockOut {
+    id: String,
+    name: String,
+    bypassed: bool,
+    params: Vec<ParamOut>,
+    output_level_db: Option<f64>,
+    option: u32,
+}
+
+/// Make `arg`'s changes on its block of the rig playing on `guid`, and say
+/// the block after.
+fn set_block(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    guid: &str,
+    arg: &BlockSetArg,
+) -> Result<BlockOut, String> {
+    use signal_fx::signal_guitar::proto::rig::Rig as _;
+    let numbers = arg.set.values().chain(arg.level_db.iter());
+    if numbers.into_iter().any(|v| !v.is_finite()) {
+        return Err("a value is not a number".to_owned());
+    }
+    let playing = playing_on(daw, project, guid)?;
+    let chain = playing.service.chain();
+    let wanted = arg.block.trim();
+    let block = chain
+        .iter()
+        .find(|b| b.id == wanted)
+        .or_else(|| chain.iter().find(|b| b.name.eq_ignore_ascii_case(wanted)))
+        .ok_or_else(|| {
+            let names: Vec<&str> = chain.iter().map(|b| b.name.as_str()).collect();
+            format!("the rig has no block {wanted:?} ({})", names.join(", "))
+        })?;
+    let id = block.id.clone();
+    if let Some(bypassed) = arg.bypassed {
+        playing.service.set_block_bypass(id.clone(), bypassed);
+    }
+    let mut params: Vec<(&String, &f64)> = arg.set.iter().collect();
+    params.sort_by(|a, b| a.0.cmp(b.0));
+    for (param, value) in params {
+        #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+        let applied = playing
+            .service
+            .set_block_param(id.clone(), param.clone(), *value as f32);
+        if !applied.ok {
+            return Err(format!("{param}: {}", applied.message));
+        }
+    }
+    if let Some(db) = arg.level_db {
+        #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+        playing.service.set_block_level(id.clone(), db as f32, true);
+    }
+    if let Some(option) = arg.option {
+        let applied = playing.service.set_block_option(id.clone(), option);
+        if !applied.ok {
+            return Err(format!("option {option}: {}", applied.message));
+        }
+    }
+    playing
+        .service
+        .chain()
+        .into_iter()
+        .find(|b| b.id == id)
+        .map(block_out)
+        .ok_or_else(|| "the block went".to_owned())
+}
+
+/// A live block as an action says it.
+fn block_out(block: signal_fx::signal_guitar::proto::LiveBlock) -> BlockOut {
+    BlockOut {
+        id: block.id,
+        name: block.name,
+        bypassed: block.bypassed,
+        params: block
+            .params
+            .into_iter()
+            .map(|p| ParamOut {
+                name: p.name,
+                value: f64::from(p.value),
+            })
+            .collect(),
+        output_level_db: block.output_level_db.map(f64::from),
+        option: block.option,
+    }
+}
+
 /// Which track's rig.
 #[derive(Facet)]
 struct BrowseArg {
@@ -262,6 +387,25 @@ pub fn register(
         }
         crate::actions::list().changed("signal.tone", "a rig's tone was set");
         said(daw, &project, &guid)
+    })?;
+    list.register(&RIG_BLOCKS, Effect::ReadOnly, |a: BrowseArg| {
+        use signal_fx::signal_guitar::proto::rig::Rig as _;
+        let (daw, project) = crate::actions::song()?;
+        let guid = crate::actions::resolve(daw, &project, &a.track)?;
+        let playing = playing_on(daw, &project, &guid)?;
+        Ok(playing
+            .service
+            .chain()
+            .into_iter()
+            .map(block_out)
+            .collect::<Vec<_>>())
+    })?;
+    list.register(&RIG_BLOCK_SET, Effect::Mutating, |a: BlockSetArg| {
+        let (daw, project) = crate::actions::song()?;
+        let guid = crate::actions::resolve(daw, &project, &a.track)?;
+        let out = set_block(daw, &project, &guid, &a)?;
+        crate::actions::list().changed("signal.rig", &guid);
+        Ok(out)
     })?;
     list.register(&TONE_INSERT, Effect::Mutating, |a: InsertArg| {
         let (daw, project) = crate::actions::song()?;
