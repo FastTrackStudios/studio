@@ -197,6 +197,10 @@ pub struct Tcp {
     /// an item's own colour shows — which take it is — and in a mix that
     /// is noise: what reads there is which track it is.
     pub mixing: bool,
+    /// Comping: Record or Edit mode, where each item's body is the colour
+    /// of the take it was cut from — which take is where, to comp and edit
+    /// by. Mix and the modes after it draw the track's colour instead.
+    pub comping: bool,
 }
 
 impl Tcp {
@@ -204,11 +208,13 @@ impl Tcp {
         compact: false,
         recording: true,
         mixing: false,
+        comping: false,
     };
     pub const COMPACT: Self = Self {
         compact: true,
         recording: true,
         mixing: false,
+        comping: false,
     };
 
     /// The panel's width.

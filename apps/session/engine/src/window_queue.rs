@@ -147,7 +147,7 @@ pub enum Action {
     /// Show or hide the browser (`b`): what to load on the selected track.
     ToggleBrowser,
     /// Hide every edge dock of the window, or bring back the ones hidden
-    /// (Alt+D, the profile's 40279 "Toggle docker visibility").
+    /// (Shift+D, the profile's `FTS_TOGGLE_DOCKS`).
     ToggleDocks,
     /// The view a page of bars on, or back (`]`, `[`): `SESSION_STEP`.
     BarStep(i32),

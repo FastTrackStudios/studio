@@ -173,6 +173,12 @@ pub struct ArrangementPanel {
     /// touch mode's [`crate::touch::ARRANGE_ZOOM`], or 1. Shared with the
     /// widget, which draws at it.
     pub ui: Rc<Cell<f64>>,
+    /// The size the widget was last painted at, in the panel's units: when
+    /// it is not [`Self::units`]' size the rectangle is stale (a dock
+    /// opened or hidden below it) and is measured at once.
+    painted: Rc<Cell<(f64, f64)>>,
+    /// A measurement on its way, so a resize asks for one at a time.
+    measuring: Rc<Cell<bool>>,
     span_x: f64,
     span_y: Signal<f64>,
     pub which_shown: Signal<Option<crate::which_key::WhichKey>>,
@@ -345,6 +351,7 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
     ));
     crate::folds::show_cuts(editing.get());
     let ui = use_hook(|| Rc::new(Cell::new(crate::touch::arrange_zoom(touch, 0.0))));
+    let painted = use_hook(|| Rc::new(Cell::new((0.0_f64, 0.0_f64))));
     crate::ruler::set_slim(touch);
     let shape = use_signal(|| compact.get());
     // On by default: the view shows where the song is while it plays —
@@ -404,6 +411,7 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
         .with_touch(touch)
         .with_ui(Rc::clone(&ui))
         .with_redraw(crate::touch::redraw_hook())
+        .with_painted(Rc::clone(&painted))
         .with_fit_on_open(was.is_none());
         let built = match &mixer {
             Some(links) => built.with_mixer(crate::widget::MixerLinks {
@@ -428,6 +436,7 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
     let input = use_hook(|| Rc::new(RefCell::new(Input::default())));
     let mounted = use_hook(|| Rc::new(RefCell::new(None::<Rc<MountedData>>)));
     let measured = use_hook(|| Rc::new(Cell::new(None::<web_time::Instant>)));
+    let measuring = use_hook(|| Rc::new(Cell::new(false)));
     let click = session
         .project
         .tracks
@@ -441,6 +450,8 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
         zoom,
         rect,
         ui,
+        painted,
+        measuring,
         span_x: (session.project.length_secs * PPS).max(1.0),
         span_y,
         which_shown,
@@ -543,7 +554,15 @@ impl ArrangementPanel {
     pub fn units(&self) -> (f64, f64, f64, f64) {
         let r = *self.rect.peek();
         let ui = self.ui.get().max(f64::EPSILON);
-        (r.0 / ui, r.1 / ui, r.2 / ui, r.3 / ui)
+        // Not measured yet: as big as the widget was painted, which it
+        // knows from its first paint — the fit a song opens with is taken
+        // in on the second frame, not when a measurement comes back.
+        let (w, h) = if r.2 > 0.0 && r.3 > 0.0 {
+            (r.2 / ui, r.3 / ui)
+        } else {
+            self.painted.get()
+        };
+        (r.0 / ui, r.1 / ui, w, h)
     }
 
     /// The lanes' frame: the panel less the track column and the ruler on
@@ -788,13 +807,17 @@ impl ArrangementPanel {
                     ..now
                 },
                 crate::zoom::Request::Open { time, rows, floor } => {
-                    let raised = |(lo, hi): (f64, f64), least: f64| (lo.max(least).min(hi), hi);
-                    let at = crate::zoom::Frame {
-                        limits_x: raised(at.limits_x, floor.0),
-                        limits_y: raised(at.limits_y, floor.1),
-                        ..at
-                    };
-                    crate::zoom::frame(now, at, time, rows)
+                    let camera = opening_camera(
+                        ((fw, fh), (self.span_x, *self.span_y.peek())),
+                        now,
+                        (time, rows, floor),
+                    );
+                    crate::zoom::Target {
+                        zoom_x: camera.zoom.0,
+                        zoom_y: camera.zoom.1,
+                        scroll_x: camera.scroll,
+                        scroll_y: camera.down,
+                    }
                 }
                 crate::zoom::Request::Pinch { sx, sy, at, dx, dy } => {
                     let zoom_x = (zx * sx).clamp(x0, x1);
@@ -907,28 +930,61 @@ impl ArrangementPanel {
         self.send_edits();
         // Where this panel is, re-read a few times a second: a divider or a
         // window resize moves it without telling anything here.
+        // And at once when the widget was painted at another size than
+        // the one measured: a dock opened or hidden below it, with no
+        // frame to come that would re-measure it later.
         let stale = self
             .measured
             .get()
-            .is_none_or(|at| at.elapsed() > std::time::Duration::from_millis(200));
-        if stale && let Some(node) = self.mounted.borrow().clone() {
+            .is_none_or(|at| at.elapsed() > std::time::Duration::from_millis(200))
+            || self.resized();
+        if stale
+            && !self.measuring.get()
+            && let Some(node) = self.mounted.borrow().clone()
+        {
             self.measured.set(Some(web_time::Instant::now()));
-            let mut rect = self.rect;
-            let redraw = self.redraw.clone();
-            spawn(async move {
-                if let Ok(got) = node.get_client_rect().await {
-                    let next = (got.origin.x, got.origin.y, got.size.width, got.size.height);
-                    if next != *rect.peek() {
-                        rect.set(next);
-                        // What waited on it (the fit a song opens with)
-                        // is due now, not at the next touch.
-                        if let Some(redraw) = redraw {
-                            redraw();
-                        }
-                    }
-                }
-            });
+            self.measure(node);
         }
+    }
+
+    /// Read where the panel is from its node, and keep it in [`Self::rect`].
+    ///
+    /// Read NOW, between frames, where dioxus-native answers at once:
+    /// from a spawned task it is asked while the document is busy
+    /// rendering, refuses, and the rectangle stayed whatever it was — the
+    /// scrollbars left where a dock hidden since had put them. A host
+    /// that answers later (the browser) is asked again from a task.
+    fn measure(&self, node: Rc<MountedData>) {
+        let polled = {
+            let mut asked = std::pin::pin!(node.get_client_rect());
+            let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+            std::future::Future::poll(asked.as_mut(), &mut cx)
+        };
+        let (rect, redraw) = (self.rect, self.redraw.clone());
+        match polled {
+            std::task::Poll::Ready(Ok(got)) => take_rect(rect, redraw.as_ref(), &got),
+            // Busy: asked again on the next frame.
+            std::task::Poll::Ready(Err(_)) => self.measured.set(None),
+            std::task::Poll::Pending => {
+                self.measuring.set(true);
+                let measuring = Rc::clone(&self.measuring);
+                spawn(async move {
+                    let got = node.get_client_rect().await;
+                    measuring.set(false);
+                    if let Ok(got) = got {
+                        take_rect(rect, redraw.as_ref(), &got);
+                    }
+                });
+            }
+        }
+    }
+
+    /// Whether the widget was last painted at another size than the panel
+    /// was measured at (by more than rounding).
+    fn resized(&self) -> bool {
+        let (w, h) = self.painted.get();
+        let r = self.units();
+        w > 0.0 && h > 0.0 && ((w - r.2).abs() > 1.5 || (h - r.3).abs() > 1.5)
     }
 
     /// The track panel's shape, as the widget is drawing it.
@@ -1036,6 +1092,61 @@ const PAGE_ZOOM_SLACK: f64 = 0.02;
 /// one must not page the view at the next stop.
 const LANDING_FRAMES: u32 = 120;
 
+/// The view a song opens on, fitted: the camera over a lanes `frame` and
+/// session `span`, from `now`, filled with `time` across and `rows` down
+/// no further out than `floor` ([`crate::zoom::Request::Open`]).
+///
+/// One sum for the two who make it: the widget, on its first paint, so
+/// the first frame drawn is the fitted one; and the panel, taking the same
+/// request into its view a frame later — where it lands exactly where the
+/// widget already drew it.
+#[must_use]
+pub fn opening_camera(
+    (frame, span): ((f64, f64), (f64, f64)),
+    now: crate::zoom::Target,
+    (time, rows, floor): (Option<(f64, f64)>, Option<(f64, f64)>, (f64, f64)),
+) -> ArrangeCamera {
+    let mut camera = ArrangeCamera {
+        frame,
+        span,
+        zoom: (now.zoom_x, now.zoom_y),
+        scroll: now.scroll_x,
+        down: now.scroll_y,
+    };
+    let ((x0, x1), (y0, y1)) = camera.limits();
+    let raised = |(lo, hi): (f64, f64), least: f64| (lo.max(least).min(hi), hi);
+    let at = crate::zoom::Frame {
+        width: frame.0,
+        height: frame.1,
+        pps: PPS,
+        limits_x: raised((x0, x1), floor.0),
+        limits_y: raised((y0, y1), floor.1),
+    };
+    let to = crate::zoom::frame(now, at, time, rows);
+    camera.zoom = (to.zoom_x, to.zoom_y);
+    camera.scroll = to.scroll_x;
+    camera.down = to.scroll_y;
+    camera.clamp();
+    camera
+}
+
+/// Keep `got` as the panel's rectangle, and when it moved, ask for the
+/// frame what waited on it is due in (the fit a song opens with, the
+/// scrollbars at the panel's new edges).
+fn take_rect(
+    mut rect: Signal<(f64, f64, f64, f64)>,
+    redraw: Option<&Rc<dyn Fn()>>,
+    got: &dioxus::html::geometry::PixelsRect,
+) {
+    let next = (got.origin.x, got.origin.y, got.size.width, got.size.height);
+    if next != *rect.peek() {
+        rect.set(next);
+        if let Some(redraw) = redraw {
+            redraw();
+        }
+    }
+}
+
 /// What is drawn over the widget: the main toolbar, the which-key popup,
 /// and the two scrollbars. Ordinary DOM, the same under either host.
 #[component]
@@ -1084,6 +1195,9 @@ pub fn PanelChrome(panel: ArrangementPanel) -> Element {
             window: fw,
             left: tcp_w * ui,
             top: (r.3 - BAR).max(0.0) * ui,
+            // At the panel's foot, wherever that is now: the bottom dock
+            // opening, closing or resizing moves it with the panel.
+            bottom: Some(0.0),
             length: fw * ui,
             thick: BAR * ui,
             colors: colors.clone(),

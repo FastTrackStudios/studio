@@ -490,6 +490,10 @@ struct SwipeOut {
 struct ShowArg {
     track: String,
     show: Option<bool>,
+    /// The tracks to open or shut, as the engine settled them: what it
+    /// tells the window, which has no song of its own to look them up in
+    /// when it drives an engine in another process.
+    tracks: Option<Vec<String>>,
 }
 
 /// Whether they show.
@@ -520,6 +524,11 @@ pub fn register(
         Ok(SwipeOut { tracks })
     })?;
     list.register(&SHOW_LANES, Effect::Mutating, |a: ShowArg| {
+        // Told by the engine which tracks it opened: set here as settled.
+        if let Some(tracks) = a.tracks.filter(|t| !t.is_empty()) {
+            let shown = crate::lanes::set_expanded(&tracks, a.show);
+            return Ok(ShowOut { shown, tracks });
+        }
         let (daw, project) = crate::actions::song()?;
         let guid = crate::actions::resolve(daw, &project, &a.track)?;
         let all = Tracks::all(daw, project);
@@ -540,7 +549,7 @@ pub fn register(
         // agree whichever ran it first.
         crate::actions::also_in_the_window(
             SHOW_LANES.id,
-            format!(r#"{{"track":"{guid}","show":{shown}}}"#),
+            serde_json::json!({ "track": guid, "show": shown, "tracks": tracks }).to_string(),
         );
         Ok(ShowOut { shown, tracks })
     })?;

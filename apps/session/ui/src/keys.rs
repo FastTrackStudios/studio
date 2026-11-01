@@ -128,7 +128,9 @@ pub fn action_of(id: &str) -> Action {
         "FTS_EXPRESSION_EDITOR_OPEN" => Action::ToggleEditor,
         "FTS_TOGGLE_FX" => Action::ToggleFx,
         "FTS_BROWSER" => Action::ToggleBrowser,
-        "40279" => Action::ToggleDocks,
+        // Shift+D: the window's docks. REAPER's own "Toggle docker
+        // visibility" (40279, Alt+D) is REAPER's alone.
+        "FTS_TOGGLE_DOCKS" => Action::ToggleDocks,
         "FTS_STEP_NEXT" => Action::BarStep(1),
         "FTS_POI_NEXT" => Action::PoiStep(1),
         "FTS_POI_PREV" => Action::PoiStep(-1),
@@ -386,6 +388,7 @@ const BUILTIN: &str = r#"{
       "0": "40042",
       "s": "40757",
       "d": "40006",
+      "Shift+d": "FTS_TOGGLE_DOCKS",
       "e": "FTS_EXPRESSION_EDITOR_OPEN",
       "b": "FTS_BROWSER",
       "[": "FTS_STEP_PREV",

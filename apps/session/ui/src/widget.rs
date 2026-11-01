@@ -203,6 +203,20 @@ const OPEN_ROW_COMPACT: f64 = 28.0;
 /// song at 120 is two dozen pixels, an item a thing you can take hold of.
 const OPEN_PPS: f64 = 12.0;
 
+/// How long a swipe let go is drawn on the comp lane at most, waiting for
+/// the engine's items: past it the comp was refused, or never came back.
+const LANDING_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// A swipe let go and comped, waiting for the engine's items for it.
+struct Landing {
+    swipe: crate::swipe::Swipe,
+    /// Its row's items as they were drawn when it was let go
+    /// ([`crate::arrangement::Arrangement::row_print`]): changed, the
+    /// comp has landed.
+    was: u64,
+    at: web_time::Instant,
+}
+
 /// Where the view is, shared between the window and the widget.
 ///
 /// A plain cell rather than a signal. The paint happens inside Blitz's
@@ -505,6 +519,11 @@ pub struct ArrangementWidget {
     /// two paints is measured against the frame the picture was drawn
     /// in and not against whatever the window has become since.
     size: (f64, f64),
+    /// The size the last paint was given, shared with the panel: a dock
+    /// opened or hidden resizes this widget without telling the panel,
+    /// whose chrome (the scrollbars) and limits are sized to its
+    /// measured rectangle. A change re-measures it ([`Self::with_painted`]).
+    painted: Rc<Cell<(f64, f64)>>,
     /// What the pointer is on, and what it is doing to it.
     ///
     /// Cheap precisely because the panel is a recording: a control
@@ -662,6 +681,10 @@ pub struct ArrangementWidget {
     /// A swipe along a take's lane, on a row showing its lanes: the
     /// stretch comped onto the comp lane when let go ([`crate::swipe`]).
     swipe: Option<crate::swipe::Swipe>,
+    /// A swipe let go and comped, drawn on the comp lane until the
+    /// engine's items for it arrive ([`Landing`]): nothing flicks back
+    /// to the comp as it was in between.
+    landing: Option<Landing>,
     /// The scroll a pointer is read at while it is on a pinned row's head
     /// ([`crate::arrangement::Pin`]) — held from a press there until it
     /// lets go — so the head answers as the lanes it shows; `None` reads
@@ -816,6 +839,7 @@ impl ArrangementWidget {
             view,
             drawn: Rc::new(RefCell::new(Drawn::default())),
             size: (0.0, 0.0),
+            painted: Rc::new(Cell::new((0.0, 0.0))),
             pointer: crate::pointer::Pointer::default(),
             editor: crate::arrange_edit::Editor::default(),
             hovered_item: None,
@@ -861,6 +885,7 @@ impl ArrangementWidget {
             mouse_at: None,
             last_band: None,
             swipe: None,
+            landing: None,
             reading_pinned: Cell::new(None),
             held_from: Cell::new(None),
             last_strip: None,
@@ -974,6 +999,15 @@ impl ArrangementWidget {
     #[must_use]
     pub fn with_ui(mut self, ui: Rc<Cell<f64>>) -> Self {
         self.ui = ui;
+        self
+    }
+
+    /// Share the size each paint is given with the panel
+    /// ([`crate::panel::ArrangementPanel::units`] is measured again when it
+    /// differs).
+    #[must_use]
+    pub fn with_painted(mut self, painted: Rc<Cell<(f64, f64)>>) -> Self {
+        self.painted = painted;
         self
     }
 
@@ -1504,11 +1538,117 @@ impl ArrangementWidget {
                 swipe.to = self.seconds_at(f64::from(e.coords.client_x), view);
                 if let Some(args) = swipe.comp_args(view.pps) {
                     run_comp(args);
+                    self.landing = Some(Landing {
+                        was: self.scene.row_print(swipe.row),
+                        at: web_time::Instant::now(),
+                        swipe,
+                    });
                 }
                 true
             }
             UiEvent::PointerCancel(_) => self.swipe.take().is_some(),
             _ => false,
+        }
+    }
+
+    /// Fit the whole song and every row, as far as they fit readably, into
+    /// a widget `size` big: into the view this paint draws, and asked of
+    /// the panel ([`crate::zoom::Request::Open`]), which takes the same
+    /// fit into its own view next frame ([`crate::panel::opening_camera`]).
+    fn fit_opening(&mut self, size: (f64, f64)) {
+        self.size = size;
+        let framed = |command| match self.zoom_request(command) {
+            Some(crate::zoom::Request::Frame { time, rows, .. }) => (time, rows),
+            _ => (None, None),
+        };
+        let (_, rows) = framed(crate::zoom::Command::FitTracks);
+        let (time, _) = framed(crate::zoom::Command::Project);
+        let floor = self.opening_floor();
+        let tcp = crate::tcp::Tcp {
+            compact: self.compact.get(),
+            recording: self.recording.get(),
+            ..crate::tcp::Tcp::FULL
+        };
+        let frame = (
+            (size.0 - tcp.width() - crate::panel::BAR).max(1.0),
+            (size.1 - ruler::ruler_h() - crate::panel::BAR).max(1.0),
+        );
+        let span = (
+            (self.project.length_secs * crate::studio::PPS).max(1.0),
+            self.content_h.get(),
+        );
+        let was = *self.view.borrow();
+        let now = crate::zoom::Target {
+            zoom_x: was.zoom_x,
+            zoom_y: was.zoom_y,
+            scroll_x: was.scroll_x,
+            scroll_y: was.scroll_y,
+        };
+        let camera = crate::panel::opening_camera((frame, span), now, (time, rows, floor));
+        *self.view.borrow_mut() = View {
+            scroll_x: camera.scroll,
+            scroll_y: camera.down,
+            zoom_x: camera.zoom.0,
+            zoom_y: camera.zoom.1,
+            ..was
+        };
+        self.zooms
+            .borrow_mut()
+            .push(crate::zoom::Request::Open { time, rows, floor });
+    }
+
+    /// The swipe under way, or the one let go and still landing: its
+    /// stretch of its take's lane drawn where it is comped to, as it
+    /// will be ([`crate::arrangement::Arrangement::replay_swipe`]), under
+    /// `transform` (the lanes'); on the pinned row `only`, when drawing it.
+    fn paint_swiped(
+        &self,
+        out: &mut Scene,
+        view: crate::arrangement::Viewport,
+        transform: Affine,
+        only: Option<usize>,
+    ) {
+        let Some(swipe) = self
+            .swipe
+            .as_ref()
+            .or(self.landing.as_ref().map(|l| &l.swipe))
+            .filter(|s| only.is_none_or(|row| row == s.row))
+        else {
+            return;
+        };
+        let Some(onto) = self
+            .scene
+            .lanes_shown(swipe.row)
+            .and_then(crate::arrange_edit::comp_lane)
+        else {
+            return;
+        };
+        let surface = if swipe.row % 2 == 0 {
+            self.palette.row_a
+        } else {
+            self.palette.row_b
+        };
+        self.scene.replay_swipe(
+            out,
+            (view, transform),
+            (swipe.row, swipe.lane, onto),
+            swipe.span(),
+            surface,
+        );
+    }
+
+    /// A swipe let go is landed once the engine's items for the comp are
+    /// drawn (its row recorded again), or once it has waited long enough
+    /// that they never will be (refused); until then, a frame each frame,
+    /// which nothing else may ask for.
+    fn settle_landing(&mut self) {
+        let Some(landing) = &self.landing else { return };
+        let landed = self.scene.row_print(landing.swipe.row) != landing.was
+            || landing.at.elapsed() > LANDING_WAIT;
+        if landed {
+            self.landing = None;
+        } else if let Some(redraw) = &self.redraw {
+            redraw();
         }
     }
 
@@ -3951,6 +4091,9 @@ impl ArrangementWidget {
                 compact: self.compact.get(),
                 recording: self.recording.get(),
                 mixing: self.mixing.get(),
+                // Edit or Record, as the window's mode says (the panel
+                // sets `editing` from it every render).
+                comping: self.editing.get(),
             },
             &self.hidden,
         );
@@ -4418,6 +4561,7 @@ impl Widget for ArrangementWidget {
             // …or the window changed mode: the arm comes or goes.
             || self.scene.tcp.recording != self.recording.get()
             || self.scene.tcp.mixing != self.mixing.get()
+            || self.scene.tcp.comping != self.editing.get()
             // Other people's pointers glide and their play cursors move
             // with nothing happening here.
             || crate::ghosts::active()
@@ -4593,6 +4737,12 @@ impl ArrangementWidget {
             view,
             Affine::translate(lanes_at) * Affine::scale_non_uniform(view.pps, view.zoom_y),
         );
+        self.paint_swiped(
+            out,
+            view,
+            Affine::translate(lanes_at) * Affine::scale_non_uniform(view.pps, view.zoom_y),
+            Some(pin.row),
+        );
         ruler::grid(
             out,
             &self.palette,
@@ -4613,12 +4763,12 @@ impl ArrangementWidget {
             self.editor.ghost(),
         );
         self.paint_kit_hits(out, view, lanes_at);
-        crate::swipe::labels(out, &self.palette, &self.font, &self.scene, view);
         if let Some(swipe) = self.swipe.as_ref().filter(|s| s.row == pin.row) {
             crate::swipe::overlay(out, &self.palette, &self.scene, view, lanes_at, swipe);
         }
         let at = Affine::translate((0.0, below));
         self.scene.replay_panel(out, view, at);
+        crate::swipe::tcp_lanes(out, &self.palette, &self.font, &self.scene, view);
         match self.controls.as_ref() {
             Some((controls, _)) => {
                 controls.replay(out, &self.scene, view, at);
@@ -4796,6 +4946,12 @@ impl ArrangementWidget {
                 redraw();
             }
         }
+        // The song opened: fitted before its first frame is drawn, not a
+        // frame (or a measurement) later — the view never jumps.
+        if self.fit_on_open && css_w > 0 && css_h > 0 {
+            self.fit_on_open = false;
+            self.fit_opening((f64::from(css_w), f64::from(css_h)));
+        }
         let drawn = self.draw(css_w, css_h, scale);
         let scene = if (scale - 1.0).abs() < f64::EPSILON {
             drawn
@@ -4804,20 +4960,6 @@ impl ArrangementWidget {
             anyrender::PaintScene::append_scene(&mut scene, drawn, Affine::scale(scale));
             scene
         };
-        if std::mem::take(&mut self.fit_on_open) {
-            // The whole song and every row, as far as they fit readably.
-            let framed = |command| match self.zoom_request(command) {
-                Some(crate::zoom::Request::Frame { time, rows, .. }) => (time, rows),
-                _ => (None, None),
-            };
-            let (_, rows) = framed(crate::zoom::Command::FitTracks);
-            let (time, _) = framed(crate::zoom::Command::Project);
-            self.zooms.borrow_mut().push(crate::zoom::Request::Open {
-                time,
-                rows,
-                floor: self.opening_floor(),
-            });
-        }
         // Lanes left to draw finer: the frame after builds more of them.
         if self.scene.take_fine_behind() {
             self.dirty.set(true);
@@ -5493,6 +5635,7 @@ impl ArrangementWidget {
 
     fn draw(&mut self, width: u32, height: u32, _scale: f64) -> Scene {
         self.echoes();
+        self.settle_landing();
         // A rename open is a text field holding the keyboard: the window's
         // transport keys stand aside while it is (a space in a name).
         crate::keys::set_typing(self.renaming.is_some());
@@ -5537,6 +5680,7 @@ impl ArrangementWidget {
         } else if self.scene.tcp.compact != self.compact.get()
             || self.scene.tcp.recording != self.recording.get()
             || self.scene.tcp.mixing != self.mixing.get()
+            || self.scene.tcp.comping != self.editing.get()
         {
             self.recut();
         }
@@ -5545,6 +5689,13 @@ impl ArrangementWidget {
         self.view_drawn.set(Self::framing(&at_now));
         let view = self.viewport(f64::from(width), f64::from(height));
         self.size = (view.width, view.height);
+        // Resized under the panel (a dock opened, hidden or dragged): one
+        // more frame, in which the panel sees it and measures itself.
+        if self.painted.replace(self.size) != self.size
+            && let Some(redraw) = &self.redraw
+        {
+            redraw();
+        }
 
         // The panel is cut at a zoom, not scaled to one. Asking every
         // frame is free when the zoom has not moved, and on the frame
@@ -5597,6 +5748,13 @@ impl ArrangementWidget {
             lanes_from..out.commands.len()
         };
         spent.lanes = since(&mut mark);
+        self.paint_swiped(
+            &mut out,
+            view,
+            Affine::translate((self.scene.tcp.width() - view.scroll_x, below))
+                * Affine::scale_non_uniform(view.pps, view.zoom_y),
+            None,
+        );
         // An item being slipped, redrawn at the offset the drag has
         // reached. Immediately after the lanes and BEFORE the titles:
         // it covers the recorded item to hide the old waveform, and a
@@ -5729,9 +5887,7 @@ impl ArrangementWidget {
         // In Edit mode, the kit's hit markers, each on its own piece.
         self.detection_seen.set(crate::hit_overlay::version());
         self.paint_kit_hits(&mut out, view, lanes_at);
-        // The lanes' names on the rows showing them, and a swipe being made
-        // along a take's lane: the stretch to comp.
-        crate::swipe::labels(&mut out, &self.palette, &self.font, &self.scene, view);
+        // A swipe being made along a take's lane: the stretch to comp.
         if let Some(swipe) = &self.swipe {
             crate::swipe::overlay(&mut out, &self.palette, &self.scene, view, lanes_at, swipe);
         }
@@ -5758,6 +5914,8 @@ impl ArrangementWidget {
         let panel = self
             .scene
             .replay_panel(&mut out, view, Affine::translate((0.0, below)));
+        // Each lane's take, play and rank, in the panel beside its strip.
+        crate::swipe::tcp_lanes(&mut out, &self.palette, &self.font, &self.scene, view);
         // The lanes' headers, in the panel's column under each track.
         crate::automation_draw::headers(
             &mut out,
