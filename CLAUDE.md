@@ -143,7 +143,7 @@ working there.
 
 ## Build and test
 
-Dev shell: `nix develop` (or direnv `use flake`) — the Rust 1.94 pin with
+Dev shell: `nix develop` (or direnv `use flake`) — the Rust 1.99.1 pin with
 wasm (plus iOS on darwin, Android on Linux), `dx`, wasm-bindgen,
 tailwindcss, tracey, mold, and the native headers (alsa, pipewire, jack).
 It sources `.env` (gitignored) on entry. `nix develop .#ci` is what CI

@@ -148,8 +148,8 @@ jobs:
     timeout-minutes: 15
     steps:
     - uses: actions/checkout@v4
-    - name: Rust 1.94.0
-      uses: dtolnay/rust-toolchain@1.94.0
+    - name: Rust 1.99.1
+      uses: dtolnay/rust-toolchain@1.99.1
     - name: Restore cargo's dependencies
       id: deps
       uses: actions/cache/restore@v4
@@ -181,8 +181,8 @@ jobs:
       CARGO_INCREMENTAL: '0'
     steps:
     - uses: actions/checkout@v4
-    - name: Rust 1.94.0
-      uses: dtolnay/rust-toolchain@1.94.0
+    - name: Rust 1.99.1
+      uses: dtolnay/rust-toolchain@1.99.1
       with:
         components: rustfmt
     - name: mold

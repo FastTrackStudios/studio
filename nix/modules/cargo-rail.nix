@@ -7,13 +7,11 @@
 # carries 0.7.0, which predates the plan contract, so it is built here
 # from the release tag (same version and hashes as Task's module).
 #
-# Built with its OWN 1.98.1 toolchain, not fts.rustToolchain: rail's
-# rust-version is 1.98.1 and the workspace pin is 1.94, whose
-# rust-overlay (followed from the dioxus-flake hub) has nothing newer
-# than 1.94.1. The `rust-overlay-rail` input (flake.nix) supplies the
-# compiler for this one package; the workspace toolchain is untouched.
-# rail only reads the workspace (cargo metadata, git), so the compiler
-# that built it does not matter to its answers.
+# Built with the workspace toolchain (fts.rustToolchain, stable 1.99.1):
+# rail's rust-version is 1.98.1. Until the 1.99.1 bump the workspace pin
+# was 1.94 and rail had its own rust-overlay input for a newer compiler;
+# that input is gone. rail only reads the workspace (cargo metadata, git),
+# so the compiler that built it does not matter to its answers.
 #
 # The resolve-graph patch this module used to carry for 0.17.3 is gone:
 # upstream keys graph nodes by exact PackageId and builds edges from
@@ -25,15 +23,13 @@
 # setup` installs a global cargo wrapper) stays off: the runners keep a
 # warm target dir. `release` is inert in .config/rail.toml; releases go
 # through scripts/release.sh.
-{ inputs, ... }:
+{ ... }:
 {
-  perSystem = { pkgs, lib, ... }:
+  perSystem = { pkgs, lib, config, ... }:
     let
-      railRust = (pkgs.extend inputs.rust-overlay-rail.overlays.default)
-        .rust-bin.stable."1.98.1".default;
       rustPlatform = pkgs.makeRustPlatform {
-        cargo = railRust;
-        rustc = railRust;
+        cargo = config.fts.rustToolchain;
+        rustc = config.fts.rustToolchain;
       };
       cargo-rail = rustPlatform.buildRustPackage rec {
         pname = "cargo-rail";

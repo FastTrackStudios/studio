@@ -21,25 +21,28 @@
       );
       # A pinned nightly rustc used ONLY to compile phon-jit's copy-and-patch
       # stencils, which chain via `become` (explicit tail calls — a nightly
-      # feature). The rest of the workspace stays on the stable 1.94 pin; the
+      # feature). The rest of the workspace stays on the stable 1.99.1 pin; the
       # stencils interface with stable-compiled code purely as extracted machine
-      # code (symbols + relocations), so there is no ABI mixing. Pinned via the
-      # locked rust-overlay input, so it's reproducible. Darwin-only: the native
-      # stencil backend only compiles on macOS-aarch64 (elsewhere phon-jit uses
-      # the interpreter and never invokes rustc for stencils).
-      rustNightly = pkgs.rust-bin.selectLatestNightlyWith (t: t.minimal);
+      # code (symbols + relocations), so there is no ABI mixing. Pinned by
+      # date — the newest nightly of the rust-overlay locked before the 1.99.1
+      # bump — so moving the overlay for the stable pin does not move it; the
+      # stencils and the worklet build have no reason to follow stable.
+      # Darwin-only: the native stencil backend only compiles on macOS-aarch64
+      # (elsewhere phon-jit uses the interpreter and never invokes rustc for
+      # stencils).
+      nightlyDate = "2026-04-05";
+      rustNightly = pkgs.rust-bin.nightly.${nightlyDate}.minimal;
       # A nightly WITH rust-src + the wasm target, for the one build that
       # cannot be done on stable: the browser keys rig's shared-memory
       # worklet (W13). wasm threads need `-C target-feature=+atomics` AND a
       # std rebuilt with the same feature — `-Z build-std`, which is nightly
       # and needs rust-src. Everything else in the tree stays on the stable
-      # 1.94 pin; this toolchain is reached only through `cargo-nightly`
+      # 1.99.1 pin; this toolchain is reached only through `cargo-nightly`
       # (below), never by being first on PATH.
-      rustNightlyWasm = pkgs.rust-bin.selectLatestNightlyWith (t:
-        t.minimal.override {
-          extensions = [ "rust-src" ];
-          targets = [ "wasm32-unknown-unknown" ];
-        });
+      rustNightlyWasm = pkgs.rust-bin.nightly.${nightlyDate}.minimal.override {
+        extensions = [ "rust-src" ];
+        targets = [ "wasm32-unknown-unknown" ];
+      };
       # `cargo-nightly` — an explicit door to that toolchain. There is no
       # rustup in this shell, so `cargo +nightly` cannot work; recipes that
       # need it call this by name (see `just keys-worklet-wasm-threads`).
@@ -51,7 +54,7 @@
     {
       # Rust toolchain — the FTS-wide pin (same as the dissolved
       # signal/daw/session flakes), with wasm for the web remotes.
-      fts.rustToolchain = pkgs.rust-bin.stable."1.94.0".default.override {
+      fts.rustToolchain = pkgs.rust-bin.stable."1.99.1".default.override {
         extensions = [ "rust-src" "rust-analyzer" "clippy" "rustfmt" ];
         # wasm for the web remotes; on darwin also the iOS targets for the
         # iPhone app (device + simulator), and x86_64-apple-darwin so
@@ -113,7 +116,7 @@
         tailwindcss_4
         # `cargo-nightly` — the ONLY nightly door (wasm threads / build-std;
         # see the toolchain definition above). Named, not on PATH as `cargo`,
-        # so the stable 1.94 pin still governs every ordinary build.
+        # so the stable 1.99.1 pin still governs every ordinary build.
         cargoNightly
         # git — cargo shells out to it to fetch every git dependency, and this
         # tree has plenty (architect, task, nice-plug, baseview, the vendor
@@ -190,7 +193,7 @@
           # Override the common wasm CC with the DYLD-clean wrapper (darwin only).
           CC_wasm32_unknown_unknown = "${wasmCC}";
           # phon-jit's build script compiles its `become` tail-call stencils
-          # with this pinned nightly rustc (the workspace pin is stable 1.94,
+          # with this pinned nightly rustc (the workspace pin is stable 1.99.1,
           # which can't parse `become`). See libs/vendor/phon-jit/build.rs.
           PHON_JIT_NIGHTLY_RUSTC = "${rustNightly}/bin/rustc";
           # Rust defaults aarch64-apple-ios to iOS 10, whose runtime lacks

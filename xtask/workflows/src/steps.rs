@@ -7,7 +7,7 @@
 //! tools; now each tool comes from its own pinned release:
 //!
 //! - rustc: `dtolnay/rust-toolchain` at [`RUST`], the workspace pin
-//!   (nix/modules/toolchain.nix, `rust-bin.stable."1.94.0"`), with only the
+//!   (nix/modules/toolchain.nix, `rust-bin.stable."1.99.1"`), with only the
 //!   components and targets a job needs;
 //! - the native headers the ci shell provided (nix/modules/toolchain.nix
 //!   `fts.buildInputs` on Linux) as Ubuntu packages, [`APT_PACKAGES`],
@@ -25,7 +25,7 @@
 use crate::model::Step;
 
 /// The workspace toolchain pin. Keep in step with nix/modules/toolchain.nix.
-pub const RUST: &str = "1.94.0";
+pub const RUST: &str = "1.99.1";
 
 /// `just`, the version the nix ci shell carries (nixpkgs).
 const JUST: &str = "1.48.1";
