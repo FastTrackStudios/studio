@@ -268,7 +268,14 @@ Big binaries (test fixtures over 1 MB, research captures, the rigs' NAM
 captures and IRs) are not in git. They live in the private repos
 `studio-assets` and `rig-models`; `assets.txt` lists each file or
 directory and where it goes, and `just assets` clones those repos into
-`.assets/` and symlinks everything into place. A new large file goes into
+`.assets/` and symlinks everything into place (relative links). A new
+worktree gets them by itself: after `git worktree add`, prek's
+post-checkout hook (`just install-hooks`) runs `scripts/worktree-setup.sh`,
+which copy-on-write clones the main checkout's `.assets/` clones, links
+`.env` and generates the plugin faces in the background (`just
+worktree-setup` by hand). Keep worktrees outside the checkout: one inside
+it (`.claude/worktrees/*`) reads both `.cargo/config.toml` files, gets
+every rustflag twice and shares no kache keys. A new large file goes into
 one of those repos plus a line in `assets.txt` (and `.gitignore`), never
 into this repo.
 

@@ -160,6 +160,16 @@ stable, and how to diagnose a miss. What it means in this tree:
   (`apps/plugins/mic/build.rs`).
 - **Target dirs are named `target`** (or live outside the checkout): kache
   keeps any other in-checkout name in the key.
+- **A worktree builds what the main checkout builds** only with the same
+  untracked inputs: the rig captures (`guitar` embeds them) and a
+  committed Tailwind sheet that comes out the same everywhere
+  (`source(none)`, the dev shell's tailwindcss). prek's post-checkout hook
+  (`scripts/worktree-setup.sh`) gives a new worktree the assets as a
+  copy-on-write clone of the main checkout's, linked by relative links
+  (kache keys a watched folder by its links' target text), and the plugin
+  faces. Worktrees go outside the checkout: nested ones
+  (`.claude/worktrees/*`) read the parent's `.cargo/config.toml` too, and
+  cargo concatenates the two rustflags arrays.
 
 Measured 2026-10-31: a fresh worktree builds the engine in 21 s, 1,709 of
 1,709 crates restored (417 s cold). sccache, removed in August 2026, gave
