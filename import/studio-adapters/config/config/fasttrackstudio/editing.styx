@@ -15,8 +15,8 @@ bindings (
     {keys "<A-q>", action "FTS_REVERT_DRUMS", desc "Put the drums back as played (the edit undone, the hit markers kept)",
      mnemonic "Alt+Q to un-quantize",
      why "A fill the quantize made worse goes back to how it was played, its hit markers left to drag into place by hand."}
-    {keys "<A-l>", action "FTS_LEVEL_DRUMS", desc "Level what is selected (Edit mode): each drum's strokes brought together",
-     mnemonic "Alt+L for Level",
+    {keys "<A-S-q>", action "FTS_LEVEL_DRUMS", desc "Level what is selected (Edit mode): each drum's strokes brought together",
+     mnemonic "Alt+Shift+Q: the fourth of the Q keys, levelling what Q quantizes",
      why "Even strokes before the edit and the mix: select the kit, a piece or a stretch, and its strokes come together as clip gain, the rest of the curve kept."}
     {keys "<S-q>", action "FTS_QUANTIZE_PANEL", desc "The Quantize panel: a section on its grid, by its groove",
      mnemonic "Shift+Q for the Quantize settings",
