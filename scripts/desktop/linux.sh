@@ -26,7 +26,12 @@
 #     MAX_GLIBC, so a toolchain bump that raises the floor is noticed here.
 #
 # Env (all optional):
-#   VERSION     X.Y.Z (default: [workspace.package])
+#   VERSION     X.Y.Z (default: `release.sh version`: the stamped release
+#               version, else [workspace.package]). Exported to the build as
+#               FTS_RELEASE_VERSION, which only fts-version reads: the
+#               binary's --version and Settings say it, the desktop entry's
+#               X-AppImage-Version and the file name are written from it
+#               here, and no workspace crate recompiles for it.
 #   OUT_DIR     default target/desktop
 #   PROFILE     cargo profile (default release-fast)
 #   MAX_GLIBC   highest glibc symbol version accepted (default 2.42: what the Nix toolchain
@@ -45,6 +50,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 VERSION="${VERSION:-$(bash scripts/release.sh version)}"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version '$VERSION' is not X.Y.Z" >&2; exit 2; }
+export FTS_RELEASE_VERSION="$VERSION"
 OUT_DIR="${OUT_DIR:-$ROOT/target/desktop}"
 PROFILE="${PROFILE:-release-fast}"
 MAX_GLIBC="${MAX_GLIBC:-2.42}"

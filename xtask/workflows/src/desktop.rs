@@ -6,7 +6,7 @@
 //! ```text
 //!   `just release` pushes vX.Y.Z --> this, Images, studio-ios and the
 //!   release publish all start on the tag, in parallel --> resolve (hosted:
-//!   the tag's version stamped in, tag shape, the app crate's version == the
+//!   the tag's version stamped in, tag shape, the stamped version == the
 //!   tag's, commit on main or release/v*, `CI passed` green, Release exists) --> macos (airlock) and linux
 //!   (THEBATTLESHIP, `thebattleship-release`) build in parallel and upload
 //!   workflow artifacts --> publish (hosted) checks them and attaches them
@@ -76,12 +76,14 @@ workflow_dispatch:
 
 const NOT_VALIDATE: &str = "${{ inputs.mode != 'validate' }}";
 
-/// A release build takes the tag's version (scripts/release.sh `stamp`); a
-/// build-only run builds the ref with the version it commits.
+/// A release build takes the tag's version (scripts/release.sh `stamp`:
+/// FTS_RELEASE_VERSION for the build, the version the bundle scripts write
+/// into Info.plist and the AppImage); a build-only run builds the ref with
+/// the version it commits.
 const STAMPED: &str = "${{ env.MODE != 'build-only' }}";
 
 /// The same checks TestFlight makes (release.sh ios-resolve): the tag is
-/// vX.Y.Z, the stamped studio-desktop's version is the tag's, the commit is
+/// vX.Y.Z, the stamped release version is the tag's, the commit is
 /// on main or release/v*, `CI passed` is green. A
 /// build-only run checks none of that and builds the ref as it is.
 fn resolve() -> Result<Job> {

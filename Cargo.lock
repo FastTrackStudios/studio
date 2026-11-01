@@ -7212,6 +7212,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "fts-version"
+version = "26.10.3"
+
+[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16543,6 +16547,7 @@ name = "session-engine"
 version = "26.10.3"
 dependencies = [
  "ableton",
+ "app-shell",
  "architect",
  "architect-mcp",
  "architect-telemetry",
@@ -18359,6 +18364,7 @@ dependencies = [
  "fts-account",
  "fts-audio-ui",
  "fts-sample",
+ "fts-version",
  "futures-channel",
  "futures-timer",
  "futures-util",

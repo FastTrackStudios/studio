@@ -114,11 +114,14 @@
             noOrig;
       };
       # The dummy source every `buildDepsOnly` builds from, the same for
-      # every release. A release build stamps the tag's version into its
-      # checkout (scripts/release.sh stamp: `[workspace.package] version`
-      # and the workspace members' Cargo.lock entries), and crane's own
-      # dummy source keeps both, so each release had new dependency
-      # derivations and compiled every dependency again. Here the
+      # every release. Release builds used to stamp the tag's version into
+      # their checkout (`[workspace.package] version` and the workspace
+      # members' Cargo.lock entries), and crane's own dummy source keeps
+      # both, so each release had new dependency derivations and compiled
+      # every dependency again. The stamp no longer touches either file
+      # (scripts/release.sh stamp: the version reaches the build as
+      # FTS_RELEASE_VERSION); this stays so a bump of the committed
+      # version does not rebuild the dependencies either. Here the
       # workspace version reads 0.0.0 in both files, in the source and its
       # inputs alike (the Cargo.toml and the lock are rewritten at
       # evaluation, laundered of the flake source's context, as crane's
@@ -293,19 +296,24 @@
       # TASK_BUILD_REV). Only the cheap wrapper layers depend on it —
       # the expensive cargo/wasm derivations stay rev-free and cached.
       #
-      # A release build stamps the tag's version into its checkout
-      # (scripts/release.sh stamp), so the tree is dirty and self.rev is
-      # gone; those jobs pass the tagged commit as FTS_BUILD_REV with
-      # `--impure`. Pure evaluation reads getEnv as "", so every other build
-      # is unchanged.
+      # A release job passes the tagged commit as FTS_BUILD_REV with
+      # `--impure` (its stamp writes only the gitignored .release-version,
+      # so the tree stays clean and self.rev is there too; the env wins).
+      # Pure evaluation reads getEnv as "", so every other build is
+      # unchanged.
       fts.buildRev =
         let fromEnv = builtins.getEnv "FTS_BUILD_REV";
         in if fromEnv != "" then fromEnv else self.rev or self.dirtyRev or "unknown";
-      # The release the commit belongs to, as its tag (`v<workspace
-      # version>`, what the release flow tags), and when the commit was
-      # made (the flake's own lastModifiedDate, UTC) — both read from the
-      # source, so no extra derivation and no clock in the build.
-      fts.buildTag = "v" + (builtins.fromTOML (builtins.readFile (self + "/Cargo.toml"))).workspace.package.version;
+      # The release the commit belongs to, as its tag: `v<FTS_RELEASE_VERSION>`
+      # in a release job (scripts/release.sh stamp exports it; the image
+      # build is `--impure`), else `v<committed workspace version>`. Only the
+      # cheap wrapper layers read it (version.json, the image labels): no
+      # cargo derivation changes with the release. And when the commit was
+      # made (the flake's own lastModifiedDate, UTC): no clock in the build.
+      fts.buildTag =
+        let fromEnv = builtins.getEnv "FTS_RELEASE_VERSION";
+        in "v" + (if fromEnv != "" then lib.removePrefix "v" fromEnv
+                  else (builtins.fromTOML (builtins.readFile (self + "/Cargo.toml"))).workspace.package.version);
       fts.buildDate =
         let
           d = self.lastModifiedDate or "19700101000000";

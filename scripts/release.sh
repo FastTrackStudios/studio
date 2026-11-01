@@ -30,11 +30,17 @@
 # Production is the latest `v*` tag.
 #
 # THE VERSION IS THE TAG. Releases commit no version: every release build
-# runs `release.sh stamp X.Y.Z` first, which writes the tag's version into
-# its own checkout's `[workspace.package] version` and Cargo.lock's
-# workspace members (uncommitted), so every crate that says
-# `version.workspace = true` (the iOS app crate apps/studio/desktop
-# included) builds as the release. The version committed on main is
+# runs `release.sh stamp X.Y.Z` first, which records the tag's version in
+# its own checkout (`.release-version`, gitignored) and, in a GitHub job,
+# exports FTS_RELEASE_VERSION to the job's later steps. Cargo.toml and
+# Cargo.lock are NOT touched: a crate's Cargo version is in every rustc
+# invocation of it, so writing the release into `[workspace.package]
+# version` recompiled every workspace crate on every release. The version
+# reaches the build through FTS_RELEASE_VERSION alone, read by one crate,
+# `fts-version` (features/app/version), which only the app binaries depend
+# on: a release recompiles that crate and the binaries. The bundles take it
+# from the tag at bundle time (Info.plist, the AppImage's desktop entry, the
+# image's version.json and labels). The version committed on main is
 # whatever it last was (26.10.3, the last release commit): it is NOT the
 # released version. There are no per-app tags, branches or changelogs.
 #
@@ -69,10 +75,11 @@
 #   scripts/release.sh notes [TAG|REV]    the release notes of a tag, or the
 #                                          draft for REV (default origin/main)
 #   scripts/release.sh stamp X.Y.Z        CI, first step of every release build:
-#                                          write X.Y.Z into this checkout's
-#                                          [workspace.package] version and the
-#                                          workspace members' Cargo.lock
-#                                          entries (uncommitted)
+#                                          record X.Y.Z as this checkout's
+#                                          release version (.release-version)
+#                                          and export FTS_RELEASE_VERSION to
+#                                          the job ($GITHUB_ENV); Cargo.toml
+#                                          and Cargo.lock stay as committed
 #   scripts/release.sh image-tag TAG      the image tag of a release tag: the
 #                                          bare CalVer (v26.10.4 -> 26.10.4);
 #                                          refuses anything else
@@ -83,7 +90,7 @@
 #   scripts/release.sh ios-resolve APP TAG
 #                                         CI (studio-ios, desktop, after
 #                                          stamp): refuse a tag that is not
-#                                          vX.Y.Z, whose stamped app crate
+#                                          vX.Y.Z, whose stamped release
 #                                          version differs, or that is not on
 #                                          main or release/v* and green; print
 #                                          the marketing version
@@ -115,14 +122,29 @@ SCAN_MAX="${RELEASE_SCAN_MAX:-60}"
 die() { echo "release: $*" >&2; exit 1; }
 note() { echo "release: $*" >&2; }
 
+# The file `stamp` records a release build's version in (gitignored, never
+# committed): what `version` reports for the working tree once stamped.
+STAMP_FILE=".release-version"
+
 # `[workspace.package] version` of Cargo.toml at a revision (default: the
-# working tree, which a release build has stamped).
-version_at() {
+# working tree): the committed version, never a release's.
+committed_version_at() {
     local src
     if [ -n "${1:-}" ]; then src="$(git show "$1:Cargo.toml")"; else src="$(cat Cargo.toml)"; fi
     printf '%s\n' "$src" \
         | sed -n '/^\[workspace\.package\]/,/^\[/{s/^version *= *"\([^"]*\)".*/\1/p;}' \
         | head -1
+}
+
+# The version a revision carries: at REV, its committed version; with no
+# REV, the working tree's: the stamped release version when `stamp` ran
+# here, else the committed one.
+version_at() {
+    if [ -z "${1:-}" ] && [ -s "$STAMP_FILE" ]; then
+        head -1 "$STAMP_FILE"
+    else
+        committed_version_at "${1:-}"
+    fi
 }
 
 is_semver() { [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; }
@@ -175,31 +197,18 @@ next_version() {
 # ── the iOS app (Studio) ─────────────────────────────────────────────────
 # Studio (Signal and Session in one app, apps/studio/desktop) is the one iOS
 # app; Signal's and Session's own App Store records get no new builds. It is
-# built from the one `v<version>` tag. Its crate follows the workspace
-# version; the helpers below read that back so the tag guard and the
-# TestFlight gate can prove the stamped checkout carries the tag's version.
+# built from the one `v<version>` tag: its marketing version is the tag's
+# (deploy-testflight.sh writes MARKETING_VER into the Info.plist) and the
+# app reports it in-app through fts-version (FTS_RELEASE_VERSION, which
+# `stamp` exported). The tag guard and the TestFlight gate prove the
+# checkout was stamped with the tag's version.
 IOS_APPS="studio"
 
 ios_check() {
     case "${1:-}" in studio) ;; *) die "unknown iOS app '${1:-}' (studio)" ;; esac
 }
-ios_manifest() { case "$1" in studio) echo apps/studio/desktop/Cargo.toml ;; esac; }
 ios_title() { case "$1" in studio) echo Studio ;; esac; }
 ios_bundle_id() { echo "app.fasttrackstudio.$1"; }
-
-# The version an app crate resolves to at a revision (default: working
-# tree): the workspace version when it says `version.workspace = true`, else
-# its own literal `[package] version`. Empty when neither is there.
-crate_version_at() { # <app> [rev]
-    local f src pkg; f="$(ios_manifest "$1")"
-    if [ -n "${2:-}" ]; then src="$(git show "$2:$f" 2>/dev/null || true)"; else src="$(cat "$f" 2>/dev/null || true)"; fi
-    pkg="$(printf '%s\n' "$src" | sed -n '/^\[package\]/,/^\[/p')"
-    if grep -Eq '^version(\.workspace *= *true| *= *\{ *workspace *= *true *\})' <<<"$pkg"; then
-        version_at "${2:-}"
-    else
-        printf '%s\n' "$pkg" | sed -n 's/^version *= *"\([^"]*\)".*/\1/p' | head -1
-    fi
-}
 
 # Git dependencies whose locked commit moved in a range — behaviour can
 # arrive without a line of this repo's source changing (architect,
@@ -452,7 +461,7 @@ cmd_plan() {
     echo "next release:                v$next (CalVer YY.M.MICRO from the highest tag and this month)"
     echo "                             just release tags it on $MAIN_BRANCH's newest commit with a green '$BUILD_CHECK'"
     echo "                             (just release --dry-run names that commit)"
-    echo "committed version:           $(version_at "$ref") (not the released one: builds stamp the tag's)"
+    echo "committed version:           $(committed_version_at "$ref") (not the released one: builds stamp the tag's)"
     echo
     echo "── draft notes ($ref) ──"
     render_notes "$mtag" "$ref"
@@ -530,63 +539,25 @@ cmd_release() { # [--dry-run] [--yes] [SHA]
     note "pushed v$next at $(git rev-parse --short "$sha") on $line: Images, studio-ios, desktop and the Release start from the tag"
 }
 
-# Write <version> into the working tree's [workspace.package] version and
-# the workspace members' entries in Cargo.lock: the release build's own
-# checkout, never committed. Every crate with `version.workspace = true`
-# (the app crates included) then builds as the release, so
-# env!("CARGO_PKG_VERSION"), the iOS marketing version, the desktop app's
-# version and the update check all agree with the tag. A member is a
-# [[package]] with no `source` line whose version is the old workspace
-# version. Where a member shares its name with another crate in the graph,
-# Cargo names it in dependency lists as `"name <version>"`; those
-# references move too, or `cargo --locked` refuses the lockfile (Task hit
-# this with its inventory and notify crates). Nothing else in the lockfile
-# moves (no cargo re-lock, which would re-resolve registry picks).
-# Idempotent.
+# Record <version> as this checkout's release version: `.release-version`
+# (gitignored; `version` reads it back), and FTS_RELEASE_VERSION for the
+# rest of a GitHub job ($GITHUB_ENV). Nothing tracked changes: Cargo.toml
+# and Cargo.lock keep the committed version, so every workspace crate keeps
+# its kache key and a release recompiles only what reads the version:
+# `fts-version` (FTS_RELEASE_VERSION through its build script) and the app
+# binaries above it. A build outside a GitHub job exports it itself
+# (`export FTS_RELEASE_VERSION=X.Y.Z`); the bundle scripts do, from
+# `release.sh version`. Idempotent.
 cmd_stamp() { # <X.Y.Z | vX.Y.Z>
-    local v="${1:-}" cur lock
+    local v="${1:-}"
     v="${v#v}"
     is_semver "$v" || die "usage: release.sh stamp X.Y.Z (got '${1:-}')"
-    cur="$(version_at)"
-    [ -n "$cur" ] || die "Cargo.toml has no [workspace.package] version"
-    if [ "$cur" = "$v" ]; then
-        note "stamp: the checkout is already $v"
-        return 0
+    printf '%s\n' "$v" > "$STAMP_FILE"
+    [ "$(version_at)" = "$v" ] || die "stamp: failed to record $v in $STAMP_FILE"
+    if [ -n "${GITHUB_ENV:-}" ]; then
+        echo "FTS_RELEASE_VERSION=$v" >> "$GITHUB_ENV"
     fi
-    sed "/^\[workspace\.package\]/,/^\[/s/^version *= *\"$cur\"/version = \"$v\"/" Cargo.toml > Cargo.toml.stamp \
-        && mv Cargo.toml.stamp Cargo.toml
-    [ "$(version_at)" = "$v" ] || die "stamp: failed to rewrite [workspace.package] version"
-    lock="$(mktemp)"
-    # Two passes over Cargo.lock: the first collects the members' names, the
-    # second rewrites their versions and the `"<member> <old>"` references.
-    awk -v cur="$cur" -v nv="$v" '
-        function header(l) { return l ~ /^\[\[package\]\]$/ || l ~ /^\[\[patch\.unused\]\]$/ || l ~ /^\[metadata\]$/ }
-        function note_member() { if (pkg && name != "" && !src && ver == cur) member[name] = 1 }
-        function flush(   i, ref, sp) {
-            for (i = 1; i <= n; i++) {
-                if (pkg && !src && buf[i] == "version = \"" cur "\"") buf[i] = "version = \"" nv "\""
-                else if (buf[i] ~ /^ "[^" ]+ [^" ]+",?$/) {
-                    ref = buf[i]; sub(/^ "/, "", ref); sub(/",?$/, "", ref); sp = index(ref, " ")
-                    if ((substr(ref, 1, sp - 1) in member) && substr(ref, sp + 1) == cur) sub(cur "\"", nv "\"", buf[i])
-                }
-                print buf[i]
-            }
-            n = 0; src = 0; pkg = 0
-        }
-        FNR == NR {
-            if (header($0)) { note_member(); pkg = ($0 == "[[package]]"); name = ""; ver = ""; src = 0; next }
-            if ($0 ~ /^name = "/) { name = $0; sub(/^name = "/, "", name); sub(/"$/, "", name) }
-            else if ($0 ~ /^version = "/) { ver = $0; sub(/^version = "/, "", ver); sub(/"$/, "", ver) }
-            else if ($0 ~ /^source = /) src = 1
-            next
-        }
-        FNR == 1 { note_member(); n = 0; src = 0; pkg = 0 }
-        header($0) { flush(); pkg = ($0 == "[[package]]") }
-        { buf[++n] = $0; if ($0 ~ /^source = /) src = 1 }
-        END { flush() }
-    ' Cargo.lock Cargo.lock > "$lock" && cat "$lock" > Cargo.lock
-    rm -f "$lock"
-    note "stamp: $cur -> $v in Cargo.toml and Cargo.lock (uncommitted: the committed version is not the released one)"
+    note "stamp: release version $v ($STAMP_FILE${GITHUB_ENV:+, FTS_RELEASE_VERSION for this job}); Cargo.toml and Cargo.lock stay at $(committed_version_at)"
 }
 
 # The image tag of a release tag: the bare CalVer, which is what
@@ -667,7 +638,7 @@ cmd_release_only() { return 1; }
 # run again: that green check is the proof. Stops a stray `v*` tag (on a
 # feature branch, on a red commit) from reaching production.
 cmd_tag_guard() {
-    local ref="${GITHUB_REF:-}" tag v ok=1 a cv line
+    local ref="${GITHUB_REF:-}" tag v ok=1 line
     fail() { echo "::error::$*"; ok=0; }
     case "$ref" in
         refs/tags/v*) tag="${ref#refs/tags/}" ;;
@@ -676,10 +647,6 @@ cmd_tag_guard() {
     [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "tag $tag is not vX.Y.Z"
     v="$(version_at)"
     [ "$tag" = "v$v" ] || fail "tag $tag but this checkout's version is $v: run 'release.sh stamp $tag' first"
-    for a in $IOS_APPS; do
-        cv="$(crate_version_at "$a")"
-        [ "$cv" = "$v" ] || fail "$(ios_manifest "$a") resolves to version '${cv:-none}' but the tag is $tag (the app takes [workspace.package] version)"
-    done
     if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
         [ "$(git rev-parse "$tag^{commit}")" = "$(git rev-parse HEAD)" ] || fail "this checkout ($(git rev-parse --short HEAD)) is not $tag"
     fi
@@ -799,23 +766,20 @@ cmd_publish() { publish_release "$@"; }
 
 
 # CI, first job of studio-ios.yml and desktop.yml, in a checkout of the tag
-# that `stamp` has written the tag's version into. TestFlight ships exactly
-# the tag: refuse a tag that is not vX.Y.Z, an app crate (or workspace)
-# whose stamped version is not the tag's, a commit that is on neither main
-# nor a release/v* hotfix line. With GH_TOKEN set, `CI passed` must be
-# green on it too. Prints the marketing version.
+# that `stamp` has recorded the tag's version in. TestFlight ships exactly
+# the tag: refuse a tag that is not vX.Y.Z, a checkout whose stamped
+# release version is not the tag's, a commit that is on neither main nor a
+# release/v* hotfix line. With GH_TOKEN set, `CI passed` must be green on it
+# too. Prints the marketing version.
 cmd_ios_resolve() { # <app> <tag>
-    local app="${1:-}" tag="${2:-}" v cv wv sha re line
+    local app="${1:-}" tag="${2:-}" v wv sha re line
     ios_check "$app"
     re='^v[0-9]+\.[0-9]+\.[0-9]+$'
     [[ "$tag" =~ $re ]] || die "tag '$tag' does not match $re: TestFlight uploads only from a release tag"
     v="${tag#v}"
-    cv="$(crate_version_at "$app")"
-    [ "$cv" = "$v" ] \
-        || die "$(ios_manifest "$app") resolves to version '${cv:-none}' but the tag is $tag ($v): the marketing version is the tag's, so the stamped crate must carry it (release.sh stamp $tag first; the crate takes version.workspace = true)"
     wv="$(version_at)"
     [ "$wv" = "$v" ] \
-        || die "[workspace.package] version is '$wv' but the tag is $tag ($v): release.sh stamp $tag first"
+        || die "this checkout's release version is '$wv' but the tag is $tag ($v): the marketing version and the app's own (fts-version, FTS_RELEASE_VERSION) are the tag's, so release.sh stamp $tag first"
     sha="$(git rev-parse HEAD)"
     if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
         [ "$(git rev-parse "$tag^{commit}")" = "$sha" ] || die "this checkout ($sha) is not $tag"

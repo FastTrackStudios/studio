@@ -1468,11 +1468,13 @@ fn EnginesArea() -> Element {
 
 #[component]
 fn SettingsPanel() -> Element {
+    // The running app's (Studio's release version when Studio mounts this).
+    let version = app_shell::version::current();
     rsx! {
         div {
             style: "display: flex; flex-direction: column; align-items: flex-start; gap: 12px; \
                     padding: 12px; font-size: 12px;",
-            span { style: "color: #a1a1aa;", "Session v{env!(\"CARGO_PKG_VERSION\")}" }
+            span { style: "color: #a1a1aa;", "Session v{version}" }
             UpdateCheck {}
         }
     }
@@ -1485,7 +1487,7 @@ fn SettingsPanel() -> Element {
 fn UpdateCheck() -> Element {
     rsx! {
         app_shell::updates::UpdateSettings {
-            app: app_shell::updates::App::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            app: app_shell::updates::App::new(env!("CARGO_PKG_NAME"), app_shell::version::current()),
         }
     }
 }

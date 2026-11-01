@@ -363,6 +363,11 @@
           # assets`): the guitar crate's release check stands down
           # (features/rigs/guitar/build.rs).
           SIGNAL_RIG_NO_CAPTURES = "1";
+          # The release version its Settings shows (fts-version reads it,
+          # and only it): the stamp's FTS_RELEASE_VERSION under --impure,
+          # else the committed version (crane.nix `fts.buildTag`). A release
+          # recompiles fts-version and studio-desktop, nothing below them.
+          FTS_RELEASE_VERSION = lib.removePrefix "v" config.fts.buildTag;
         };
       };
 

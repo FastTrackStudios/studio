@@ -1,7 +1,8 @@
 [package]
 name = "studio-desktop"
-# One version for the whole studio: [workspace.package] version in the root
-# Cargo.toml (one release tag drives both iOS apps; docs/agents/release-workflow.md).
+# The committed workspace version. A release's version is the tag's, and
+# reaches the build as FTS_RELEASE_VERSION through `fts-version` alone
+# (docs/agents/release-workflow.md), so the crates' versions never change.
 version.workspace = true
 edition = "2024"
 license = "GPL-3.0-or-later"
@@ -187,6 +188,11 @@ utils.workspace = true
 futures-timer.workspace = true
 # `ui`: the shared studio shell the window is drawn in (app_shell::ui).
 app-shell = { workspace = true, features = ["ui"] }
+# The release version the binaries report (`--version`, Settings, the
+# update check). Only this crate's binaries take it: a release recompiles
+# fts-version and these, not the libraries (they read
+# app_shell::version::current(), which main sets).
+fts-version.workspace = true
 # The library: the front screen's home (songs, setlists, albums, projects,
 # rigs as parts; docs/design/library.md).
 library = { workspace = true, features = ["ui"] }

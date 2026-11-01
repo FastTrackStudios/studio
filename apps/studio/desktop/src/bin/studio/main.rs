@@ -60,6 +60,8 @@ enum Command {
 }
 
 fn main() -> ExitCode {
+    // The release version, for what reports it (the engine's MCP server).
+    app_shell::version::set(fts_version::release_version());
     let cli = Cli::parse();
     let (service, filter) = match &cli.command {
         Command::Session(command) => (

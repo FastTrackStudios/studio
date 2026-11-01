@@ -125,6 +125,9 @@ dawfile-reaper = { workspace = true, optional = true }
 builtin = { workspace = true, optional = true, features = ["engine"] }
 realfft = { workspace = true, optional = true }
 architect-mcp = { workspace = true, optional = true, features = ["http"] }
+# The running app's version for the MCP server's serverInfo
+# (app_shell::version::current(): the release version the binary set).
+app-shell = { workspace = true, optional = true }
 # signal's rigs, as built-in FX (`signal` feature).
 signal-fx = { workspace = true, optional = true }
 # The dock's intents (`DockIntent`), as the dock actions' arguments: its
@@ -185,7 +188,7 @@ vox = []
 signal = ["native", "dep:signal-fx"]
 # The desktop app: dioxus-native (Blitz) hosts for the panels, the
 # in-process engine with its audio device, threads, the plugin-UI graph.
-native = ["dep:dock", "dep:chrono", "dep:opentelemetry", "dep:realfft", "dep:architect-mcp", "dep:dirs", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:rayon", "dsp/hits", "dep:session-format", "session-format/store", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "session/library", "session/publish", "dep:blake3", "dep:auth-client", "dep:fts-account", "session/project-sync", "dep:live-proto", "dep:task-dial", "dep:reqwest", "vox"]
+native = ["dep:app-shell", "dep:dock", "dep:chrono", "dep:opentelemetry", "dep:realfft", "dep:architect-mcp", "dep:dirs", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:rayon", "dsp/hits", "dep:session-format", "session-format/store", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "session/library", "session/publish", "dep:blake3", "dep:auth-client", "dep:fts-account", "session/project-sync", "dep:live-proto", "dep:task-dial", "dep:reqwest", "vox"]
 # A show recorded as one Live set, split into its songs (src/show.rs,
 # the `show-split` bin): the Live-set reader and the .als → .RPP converter.
 show = ["native", "dep:ableton", "studio/convert-ableton"]

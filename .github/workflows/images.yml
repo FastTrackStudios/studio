@@ -122,9 +122,9 @@ jobs:
         printf '%s' "$GHCR_TOKEN" | skopeo login ghcr.io -u "$GHCR_USER" --password-stdin
         read -r -a tags <<<"$TAGS"
         dest="docker://ghcr.io/fasttrackstudios/studio-web"
-        # The stamp left the tree dirty (no self.rev): the revision label is the
-        # tagged commit, passed in (nix/modules/crane.nix `fts.buildRev`, read
-        # only under --impure). FTS_NIX_KACHE: the bundles compile through the
+        # The revision label is the tagged commit, passed in, and the version
+        # label the stamp's FTS_RELEASE_VERSION (nix/modules/crane.nix
+        # `fts.buildRev` / `fts.buildTag`, read only under --impure). FTS_NIX_KACHE: the bundles compile through the
         # host's shared kache store, so a release restores what the last one
         # compiled (`fts.kacheArgs`; nix-config hosts/THEBATTLESHIP/
         # kache-nix-sandbox.nix). Those outputs depend on the store: never push

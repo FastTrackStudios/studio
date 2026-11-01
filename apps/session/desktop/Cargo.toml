@@ -1,7 +1,9 @@
 [package]
 name = "session-desktop"
-# One version for the whole studio: [workspace.package] version in the root
-# Cargo.toml (one release tag drives both iOS apps; docs/agents/release-workflow.md).
+# The committed workspace version. The release version a shipped app shows
+# is read at run time (app_shell::version::current(), set by Studio's main
+# from fts-version), so a release does not recompile this crate
+# (docs/agents/release-workflow.md).
 version.workspace = true
 edition = "2024"
 license = "GPL-3.0-or-later"
