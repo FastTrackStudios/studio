@@ -254,8 +254,13 @@ fills up. The short version:
   measuring only.
 - Cargo never GCs `target/`: `just disk`, `just sweep`, `just sweep-all`,
   `just sweep-incremental`.
-- There is no `RUSTC_WRAPPER` (sccache breaks `dx`). Check `uptime` /
-  `pgrep -c rustc` before benchmarking.
+- **kache is the rustc wrapper**, set by the fleet in `~/.cargo/config.toml`
+  (never in this repo): a crate whose key is in the shared store is restored,
+  not compiled, so a new worktree or runner builds warm. Keep keys stable —
+  no `env!("CARGO_MANIFEST_DIR")` outside tests (`utils::paths::checkout_path`),
+  no absolute paths in build-script output, target dirs named `target`.
+  Load the `kache` skill when a build misses or code adds `env!`, generated
+  files or rustflags. Check `uptime` / `pgrep -c rustc` before benchmarking.
 
 ## Assets
 
