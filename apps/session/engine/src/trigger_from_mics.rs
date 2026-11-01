@@ -163,7 +163,7 @@ static FROM_MICS: ActionMeta = crate::actions::meta(
     "DRUMS_TRIGGERS_FROM_MICS",
     "drums_triggers_from_mics",
     "Triggers from the mics",
-    "Where a take's trigger recorded nothing for its drum (none of the piece's hit markers on that recording were heard by the trigger, while its close mics heard some), make the trigger from the mics: a file in the song's own Media folder, `<name> (from mics).wav`, a 1 ms click at each hit the mics heard (confidence 0.5 or more, not bleed) — the hits the kit's MIDI was made from — and every take cut from the dead file plays it instead, its hit markers with it. The drum's gate is then keyed on the drum as played. Where a take has no trigger at all (recorded in another session: its piece's `Trig` track has no item where the comp plays it), the trigger is made from that take's own mic hits (sure ones, and every hit placed or checked by hand), and the `Trig` track given an item for each of the mic's it has none for — on the comp lane and the lane edits are made on, slice for slice — so it plays where the mic plays; `filled` lists them, each with the stretches the song plays that take without a trigger (`dry_run` lists them and makes nothing). Run after HITS_DETECT. `pieces` (all when left out); `dry_run` says what it would do. One undo step. Forks a checkpoint of the song first (`Before DRUMS_TRIGGERS_FROM_MICS <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
+    "Where a take's trigger recorded nothing for its drum (none of the piece's hit markers on that recording were heard by the trigger, while its close mics heard some), make the trigger from the mics: a file in the song's own Media folder, `<name> (from mics).wav`, a 1 ms click at each hit the mics heard (confidence 0.5 or more, not bleed) — the hits the kit's MIDI was made from — and every take cut from the dead file plays it instead, its hit markers with it. The drum's gate is then keyed on the drum as played. Where a take has no trigger at all (recorded in another session: its piece's `Trig` track has no item where the comp plays it), the trigger is made from that take's own mic hits (sure ones, and every hit placed or checked by hand), and the `Trig` track given an item for each of the mic's it has none for — on the comp lane and the lane edits are made on, slice for slice — so it plays where the mic plays; `filled` lists them, each with the stretches the song plays that take without a trigger (`dry_run` lists them and makes nothing). Run after HITS_DETECT. `pieces` (all when left out); `dry_run` says what it would do. One undo step. Sets a mark on the song first, in its history (`Before DRUMS_TRIGGERS_FROM_MICS <date time>`, named in the result's `checkpoint`; SESSION_HISTORY_RESTORE `mark` goes back to it), and is refused if one cannot be made.",
     "Drums",
     "",
 );
@@ -252,22 +252,30 @@ fn recordings(
     out
 }
 
-/// Write the trigger for `hits` into `media` (the song's own folder) for
-/// `disk` (the dead recording): its rate, its length, one channel. Where
-/// it went.
-fn write_made(disk: &Path, media: &Path, hits: &[f64]) -> Result<PathBuf, String> {
+/// Where a file called `name` goes in `media` without writing over one
+/// there: `name`, else `<stem> 2.wav`, `<stem> 3.wav`, … — a file an edit
+/// wrote is never overwritten, so an older version of the song (gone back
+/// to through its history) still plays the one it was made with.
+#[must_use]
+pub fn fresh(media: &Path, name: &str) -> PathBuf {
+    let (stem, ext) = name.rsplit_once('.').unwrap_or((name, "wav"));
+    std::iter::once(media.join(name))
+        .chain((2_u32..).map(|n| media.join(format!("{stem} {n}.{ext}"))))
+        .find(|p| !p.exists())
+        .unwrap_or_else(|| media.join(name))
+}
+
+/// Write the trigger for `hits` to `to` (a [`fresh`] path in the song's
+/// own folder) for `disk` (the recording it stands for): its rate, its
+/// length, one channel.
+fn write_made(disk: &Path, to: &Path, hits: &[f64]) -> Result<(), String> {
     let pcm = fts_sample::mapped::PcmFile::open(disk).map_err(|e| e.to_string())?;
     let rate = pcm.sample_rate();
     let frames = pcm.frames();
-    let file = disk
-        .file_name()
-        .and_then(|f| f.to_str())
-        .ok_or("the recording has no name")?;
-    std::fs::create_dir_all(media).map_err(|e| e.to_string())?;
-    let path = media.join(made_name(file));
-    fts_sample::write_wav_f32(&path, rate, &[clicks(hits, frames, rate)])
-        .map_err(|e| e.to_string())?;
-    Ok(path)
+    if let Some(dir) = to.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    fts_sample::write_wav_f32(to, rate, &[clicks(hits, frames, rate)]).map_err(|e| e.to_string())
 }
 
 /// `DRUMS_TRIGGERS_FROM_MICS`: what [`make`] would do, then — when it
@@ -323,7 +331,7 @@ fn make(a: &FromMicsArg) -> Result<FromMicsOut, String> {
                     out.left.push(format!("{}: {}", piece.name, rec.source));
                     continue;
                 };
-                let to = media.join(made_name(&rec.source)).display().to_string();
+                let to = fresh(&media, &made_name(&rec.source)).display().to_string();
                 let made = Made {
                     piece: piece.name.clone(),
                     from: rec.source.clone(),
@@ -338,7 +346,7 @@ fn make(a: &FromMicsArg) -> Result<FromMicsOut, String> {
                 let disk = bay
                     .resolve_file_path(&rec.source)
                     .ok_or_else(|| format!("{} is not on this machine", rec.source))?;
-                write_made(&disk, &media, &hits)?;
+                write_made(&disk, Path::new(&to), &hits)?;
                 bay.replace_in_project(
                     project.clone(),
                     &rec.source,
@@ -483,7 +491,7 @@ fn fill(
                 )
             })
             .collect();
-        let to = media.join(made_name(&source)).display().to_string();
+        let to = fresh(media, &made_name(&source)).display().to_string();
         out.filled.push(Filled {
             piece: piece.name.clone(),
             from: source.clone(),
@@ -498,7 +506,7 @@ fn fill(
         let disk = bay
             .resolve_file_path(&source)
             .ok_or_else(|| format!("{source} is not on this machine"))?;
-        write_made(&disk, media, &hits)?;
+        write_made(&disk, Path::new(&to), &hits)?;
         // The take's hits are where they were, in a file of the same
         // length: its markers go with it.
         let _ = daw.write_project(song.id().as_str(), |p| {

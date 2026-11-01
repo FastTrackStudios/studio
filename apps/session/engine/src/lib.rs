@@ -184,6 +184,8 @@ pub mod comp_keep;
 #[cfg(feature = "native")]
 pub mod comp_song;
 #[cfg(feature = "native")]
+pub mod history;
+#[cfg(feature = "native")]
 pub mod hit_index;
 pub mod hit_overlay;
 #[cfg(feature = "native")]
