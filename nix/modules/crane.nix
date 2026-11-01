@@ -113,10 +113,67 @@
           else
             noOrig;
       };
+      # The dummy source every `buildDepsOnly` builds from, the same for
+      # every release. A release build stamps the tag's version into its
+      # checkout (scripts/release.sh stamp: `[workspace.package] version`
+      # and the workspace members' Cargo.lock entries), and crane's own
+      # dummy source keeps both, so each release had new dependency
+      # derivations and compiled every dependency again. Here the
+      # workspace version reads 0.0.0 in both files, in the source and its
+      # inputs alike (the Cargo.toml and the lock are rewritten at
+      # evaluation, laundered of the flake source's context, as crane's
+      # mkDummySrc does): only a change to a dependency, a manifest's
+      # dependency tables or a .cargo config makes a new one. The members
+      # are stubs here, so their version matters to nothing compiled; the
+      # package built on top (`cargoArtifacts`) uses the real, stamped
+      # source.
+      depsDummySrc =
+        let
+          normal = "0.0.0";
+          ws = (builtins.fromTOML (builtins.readFile ../../Cargo.toml)).workspace.package.version;
+          lockText = builtins.unsafeDiscardStringContext (builtins.readFile ../../Cargo.lock);
+          # What the stamp rewrites: every package without a source at the
+          # workspace version, and the `"<name> <version>"` references to it.
+          members = map (p: p.name)
+            (builtins.filter (p: !(p ? source) && p.version == ws) (builtins.fromTOML lockText).package);
+          refsFrom = map (n: ''"${n} ${ws}"'') members;
+          refsTo = map (n: ''"${n} ${normal}"'') members;
+          normaliseBlock = block:
+            let
+              isMember = lib.hasPrefix "[[package]]\n" block && !(lib.hasInfix "\nsource = " block);
+              own =
+                if isMember then
+                  lib.concatMapStringsSep "\n"
+                    (l: if l == ''version = "${ws}"'' then ''version = "${normal}"'' else l)
+                    (lib.splitString "\n" block)
+                else block;
+            in
+            if lib.hasInfix " ${ws}\"" own then builtins.replaceStrings refsFrom refsTo own else own;
+          normalLock = lib.concatMapStringsSep "\n\n" normaliseBlock (lib.splitString "\n\n" lockText);
+          root = toString ../..;
+        in
+        craneLib.mkDummySrc {
+          # The real lock stays out: the normalised one is copied in instead.
+          src = lib.cleanSourceWith {
+            src = ftsSrc;
+            filter = path: _type: !(baseNameOf path == "Cargo.lock" && dirOf path == root);
+          };
+          cargoLock = pkgs.writeText "Cargo.lock" normalLock;
+          # [workspace.package] is only in the root manifest; its version is
+          # dropped at evaluation and put back as 0.0.0.
+          cleanCargoTomlFilter = p:
+            craneLib.filters.cargoTomlDefault p && p != [ "workspace" "package" "version" ];
+          extraDummyScript = ''
+            sed -i '/^\[workspace\.package\]$/a version = "${normal}"' $out/Cargo.toml
+            grep -qx 'version = "${normal}"' $out/Cargo.toml \
+              || { echo "depsDummySrc: no [workspace.package] table in the dummy Cargo.toml" >&2; exit 1; }
+          '';
+        };
     in
     {
       fts.craneLib = craneLib;
       fts.src = ftsSrc;
+      fts.depsDummySrc = depsDummySrc;
 
       fts.commonArgs = {
         src = ftsSrc;
