@@ -13,7 +13,9 @@ jobs:
   publish:
     name: GitHub Release
     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-latest
+    runs-on:
+    - self-hosted
+    - thebattleship-release
     timeout-minutes: 5
     permissions:
       contents: write
@@ -26,6 +28,8 @@ jobs:
       with:
         ref: ${{ github.sha }}
         fetch-depth: 0
+    - name: Shared runner tools
+      uses: ./.github/actions/shared-tools
     - name: Stamp the release version from the tag
       env:
         STAMP_TAG: ${{ github.ref_name }}

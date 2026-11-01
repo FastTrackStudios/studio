@@ -52,7 +52,7 @@ workflow_dispatch:
     )
     // One group PER TAG, never cancelled: a release build runs to the end
     // (a shared group holds one pending run and would drop a queued
-    // release). The `studio-release` pool takes them in arrival order.
+    // release). The `thebattleship-release` pool takes them in arrival order.
     .concurrency("images-${{ inputs.tag || github.ref_name }}", false)
     .permissions(yaml("contents: read\n")?)
     .env("TAG", "${{ inputs.tag || github.ref_name }}")
@@ -117,44 +117,50 @@ echo "publishing $sha as: $tags"
 echo "### studio-web for $TAG: \`$tags\` from \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
 "####;
 
-/// THEBATTLESHIP's `studio-release` pool (Codys-Wright/nix-config
+/// THEBATTLESHIP's `thebattleship-release` pool (Codys-Wright/nix-config
 /// hosts/THEBATTLESHIP/github-runners.nix; x86_64 NixOS, the pool for
 /// release builds, never checks, as desktop.yml's AppImage): the image is
 /// Linux-only and a nix build, and the pool's nix store is warm. Only
 /// trusted code reaches it: a tag push, or a dispatch.
 fn publish() -> Result<Job> {
-    Ok(Job::new(RunsOn::Labels(&["self-hosted", "studio-release"]))
-        .name("Build + push to GHCR")
-        .needs(&["plan"])
-        .timeout(180)
-        .permissions(yaml("contents: read\npackages: write\n")?)
-        // Newer skopeo rejects some hosts' v1 registries.conf; the registry
-        // is named explicitly everywhere, so an empty (valid) config is enough.
-        .env("CONTAINERS_REGISTRIES_CONF", "/dev/null")
-        .step(
-            checkout()
-                .with("ref", "${{ needs.plan.outputs.sha }}")
-                .with("fetch-depth", 0)
-                .with("persist-credentials", false),
-        )
-        // The tag's version into the source the image is built from (the
-        // web bundles' CARGO_PKG_VERSION, the image's version label).
-        .step(stamp("${{ env.TAG }}"))
-        .step(
-            Step::run("Build and push studio-web", PUSH)
-                .env("TAGS", "${{ needs.plan.outputs.tags }}")
-                .env("SHA", "${{ needs.plan.outputs.sha }}")
-                .env("GHCR_USER", "${{ github.actor }}")
-                .env("GHCR_TOKEN", "${{ secrets.GITHUB_TOKEN }}"),
-        )
-        // An anonymous pull and the revision label: what the cluster gets.
-        // Fails (with the reason) if the package went private. Nothing
-        // waits on it.
-        .step(
-            Step::run("Pullable without credentials, from this commit?", PULLABLE)
-                .env("TAGS", "${{ needs.plan.outputs.tags }}")
-                .env("SHA", "${{ needs.plan.outputs.sha }}"),
-        ))
+    Ok(
+        Job::new(RunsOn::Labels(&["self-hosted", "thebattleship-release"]))
+            .name("Build + push to GHCR")
+            .needs(&["plan"])
+            .timeout(180)
+            .permissions(yaml("contents: read\npackages: write\n")?)
+            // Newer skopeo rejects some hosts' v1 registries.conf; the registry
+            // is named explicitly everywhere, so an empty (valid) config is enough.
+            .env("CONTAINERS_REGISTRIES_CONF", "/dev/null")
+            .step(
+                checkout()
+                    .with("ref", "${{ needs.plan.outputs.sha }}")
+                    .with("fetch-depth", 0)
+                    .with("persist-credentials", false),
+            )
+            // The tag's version into the source the image is built from (the
+            // web bundles' CARGO_PKG_VERSION, the image's version label).
+            .step(Step::uses(
+                "Shared runner tools",
+                "./.github/actions/shared-tools",
+            ))
+            .step(stamp("${{ env.TAG }}"))
+            .step(
+                Step::run("Build and push studio-web", PUSH)
+                    .env("TAGS", "${{ needs.plan.outputs.tags }}")
+                    .env("SHA", "${{ needs.plan.outputs.sha }}")
+                    .env("GHCR_USER", "${{ github.actor }}")
+                    .env("GHCR_TOKEN", "${{ secrets.GITHUB_TOKEN }}"),
+            )
+            // An anonymous pull and the revision label: what the cluster gets.
+            // Fails (with the reason) if the package went private. Nothing
+            // waits on it.
+            .step(
+                Step::run("Pullable without credentials, from this commit?", PULLABLE)
+                    .env("TAGS", "${{ needs.plan.outputs.tags }}")
+                    .env("SHA", "${{ needs.plan.outputs.sha }}"),
+            ),
+    )
 }
 
 /// streamLayeredImage builds an EXECUTABLE that streams a docker-archive to

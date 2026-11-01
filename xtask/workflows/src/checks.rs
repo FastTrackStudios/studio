@@ -30,14 +30,14 @@
 //! ```
 //!
 //! No nightly, no schedule. RUNNERS: the builds run on THEBATTLESHIP's
-//! `studio-main` pool (see [`POOL`]), whose target dirs stay warm from one
+//! `thebattleship` pool (see [`POOL`]), whose target dirs stay warm from one
 //! merge to the next; everything that builds nothing (or only the small
 //! workflows crate) runs on GitHub's free hosted runners (the repo is
 //! public). No rust-cache: the pool's cache is its own disk, and main's
 //! `deps-cache` entries are the only thing CI writes to the Actions cache.
 //!
 //! ```text
-//!   studio-main    rail plan, check (`cargo check --workspace`), wasm, tests
+//!   thebattleship  rail plan, check (`cargo check --workspace`), wasm, tests
 //!                  (the core test set), lint (advisory clippy)
 //!   ubuntu-latest  plan, gates, deps-cache and the `CI passed` aggregator
 //!   macos-latest   release tooling (the sandbox, macOS's own tools)
@@ -176,6 +176,14 @@ fn rail_plan() -> Result<Job> {
                 // The base search walks back up to 50 first-parent commits.
                 .with("fetch-depth", 64),
         )
+        .step(
+            Step::uses("Hosted hotfix setup", "./.github/actions/hosted-nix")
+                .cond("${{ runner.environment == 'github-hosted' }}"),
+        )
+        .step(
+            Step::uses("Shared runner tools", "./.github/actions/shared-tools")
+                .cond("${{ runner.environment == 'self-hosted' }}"),
+        )
         .step(ci_cargo_config())
         .step(target_dir("check"))
         .step(
@@ -189,7 +197,7 @@ fn rail_plan() -> Result<Job> {
 /// The plan, or the full set. Writes this commit's gates into the evidence
 /// store either way: they are what the next run checks before it takes this
 /// commit as a base.
-const RAIL_PLAN: &str = r#"store="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}/rail-evidence"
+const RAIL_PLAN: &str = r#"store="${CI_CACHE_DIR:?not a shared runner (no CI_CACHE_DIR)}/rail-evidence"
 mkdir -p "$store/$GITHUB_SHA"
 gates_out() {
   printf '%s\n' "$1" >> "$GITHUB_OUTPUT"
@@ -384,29 +392,67 @@ cargo rail change check --since \"${BASE_SHA}\"
     .env("BASE_SHA", "${{ github.event.pull_request.base.sha }}")
 }
 
-/// The pool a run's build jobs go to (Codys-Wright/nix-config
-/// hosts/THEBATTLESHIP/github-runners.nix: two pools of three instances,
-/// each pool sharing one warm cache, $STUDIO_CACHE_DIR). Every check runs on
-/// `studio-main`, a hotfix PR's included: the checks share one set of
-/// check/test/wasm target dirs instead of building them twice.
-/// `studio-release` is for release BUILDS only (the image, the AppImage:
-/// images.yml, desktop.yml), whose release-profile target dir has nothing in
-/// common with a check's. Only trusted code reaches the pool: CI
-/// runs no PR into main (pr.yml does, on free runners), and `plan` refuses a
-/// fork PR into a release line.
-const POOL: RunsOn = RunsOn::Labels(&["self-hosted", "studio-main"]);
+/// Shared THEBATTLESHIP slots accept normal builds from every repository.
+/// Release artifacts use the reserved `thebattleship-release` label.
+/// Main PRs retain their hosted fast checks, and fork hotfixes are refused
+/// by the existing plan gate before a build reaches the shared pool.
+const POOL: RunsOn = RunsOn::Label(
+    "${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('[\"self-hosted\",\"thebattleship\"]') }}",
+);
 
-/// The pool's shared cache holds one target dir per build kind (check mode,
-/// clippy, test codegen and wasm32 share no artifacts), so the jobs of a run
-/// build side by side, each warm whichever instance claims it; two jobs of
-/// the same kind wait on cargo's own lock. The pool's total is capped at
-/// 200 GB: over it, this kind's dir is emptied (its next build is cold).
+#[cfg(test)]
+mod runner_tests {
+    use anyhow::{Context, Result};
+    use serde_yaml::Value;
+
+    #[test]
+    fn public_hotfix_builds_have_hosted_setup_and_never_use_shared_tools() -> Result<()> {
+        let rendered = serde_yaml::to_value(super::workflow()?)?;
+        let jobs = rendered.get("jobs").context("workflow jobs")?;
+        for name in ["rail", "check", "lint", "wasm", "tests"] {
+            let job = jobs.get(name).context("build job")?;
+            let route = job
+                .get("runs-on")
+                .and_then(Value::as_str)
+                .context("runner expression")?;
+            assert!(
+                route.contains("github.event_name == 'pull_request'"),
+                "{name}"
+            );
+            assert!(route.contains("ubuntu-latest"), "{name}");
+            assert!(route.contains("thebattleship"), "{name}");
+            let steps = job
+                .get("steps")
+                .and_then(Value::as_sequence)
+                .context("job steps")?;
+            for (action, condition) in [
+                ("./.github/actions/hosted-nix", "github-hosted"),
+                ("./.github/actions/shared-tools", "self-hosted"),
+            ] {
+                let setup = steps
+                    .iter()
+                    .find(|step| step.get("uses").and_then(Value::as_str) == Some(action))
+                    .context("platform setup")?;
+                let guard = setup
+                    .get("if")
+                    .and_then(Value::as_str)
+                    .context("platform guard")?;
+                assert!(guard.contains(condition), "{name}: {action}");
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Each slot owns its Studio targets, separated by build kind. Kache
+/// restores reusable artifacts across slots and repositories without
+/// sharing mutable Cargo target directories. The cap applies to this slot.
 fn target_dir(kind: &str) -> Step {
     Step::run(
         &format!("Target dir ({kind}, pool capped at 200 GB)"),
         &format!(
-            r#"pool="${{STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}}"
-dir="$pool/{kind}"
+            r#"pool="${{CI_CACHE_DIR:?not a shared runner (no CI_CACHE_DIR)}}"
+dir="$pool/{kind}/$RUNNER_NAME/target"
 mkdir -p "$dir"
 echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
 used="$(du -s --block-size=1G "$pool" | cut -f1)"
@@ -432,6 +478,14 @@ fn pool_job(name: &str, kind: &str, timeout: u32) -> Job {
             .timeout(timeout),
     )
     .step(checkout().with("persist-credentials", false))
+    .step(
+        Step::uses("Hosted hotfix setup", "./.github/actions/hosted-nix")
+            .cond("${{ runner.environment == 'github-hosted' }}"),
+    )
+    .step(
+        Step::uses("Shared runner tools", "./.github/actions/shared-tools")
+            .cond("${{ runner.environment == 'self-hosted' }}"),
+    )
     .step(ci_cargo_config())
     .step(target_dir(kind))
 }
@@ -450,7 +504,12 @@ fn pool_job(name: &str, kind: &str, timeout: u32) -> Job {
 fn ci_cargo_config() -> Step {
     Step::run(
         "CI cargo config (the pool's cargo home)",
-        r#"home="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}/cargo-home"
+        r#"# Public hotfix PRs run on hosted VMs; the protected-ref jobs use the gate's cache.
+if [ -z "${CI_CACHE_DIR:-}" ]; then
+  export CI_CACHE_DIR="$RUNNER_TEMP/studio-ci"
+  echo "CI_CACHE_DIR=$CI_CACHE_DIR" >> "$GITHUB_ENV"
+fi
+home="$CI_CACHE_DIR/cargo-home"
 mkdir -p "$home"
 echo "CARGO_HOME=$home" >> "$GITHUB_ENV"
 # The old per-checkout copy, which cargo would still find from the checkout.
@@ -468,7 +527,7 @@ fn mark_green(job: &str) -> Step {
     Step::run(
         &format!("Mark {job} green for rail"),
         &format!(
-            "mkdir -p \"$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA\"\ntouch \"$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA/{job}.ok\"\n"
+            "mkdir -p \"$CI_CACHE_DIR/rail-evidence/$GITHUB_SHA\"\ntouch \"$CI_CACHE_DIR/rail-evidence/$GITHUB_SHA/{job}.ok\"\n"
         ),
     )
     .cond(MAIN_PUSH)
@@ -529,7 +588,7 @@ fn lint() -> Job {
 /// targets' inputs without building the whole workspace's tests. Measured
 /// cold on voyager: 5.6 min once, then incremental like the check.
 const CHECK: &str = r#"if [ "$RECORD" = true ]; then
-  ev="$STUDIO_CACHE_DIR/rail-evidence/$GITHUB_SHA"
+  ev="$CI_CACHE_DIR/rail-evidence/$GITHUB_SHA"
   mkdir -p "$ev"
   cargo rail plan evidence --work cargo.build --output "$ev/cargo.build.json" -- check --workspace
   cargo rail plan evidence --work cargo.test --output "$ev/cargo.test.json" -- check --workspace --all-targets
@@ -616,7 +675,7 @@ fn assets() -> Step {
     Step::run(
         "Assets (studio-assets, rig-models, mic-models)",
         &format!(
-            r#"store="${{STUDIO_CACHE_DIR:-${{CI_CACHE_DIR:-${{CACHE_DIRECTORY:-$HOME/.cache}}}}}}/assets"
+            r#"store="${{CI_CACHE_DIR:-${{CACHE_DIRECTORY:-$HOME/.cache}}}}/assets"
 mkdir -p "$store"
 [ -L .assets ] || [ -e .assets ] || ln -s "$store" .assets
 if [ -n "${{ASSETS_TOKEN}}" ]; then

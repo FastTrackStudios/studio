@@ -199,12 +199,14 @@ jobs:
     if: ${{ inputs.mode != 'validate' }}
     runs-on:
     - self-hosted
-    - studio-release
+    - thebattleship-release
     timeout-minutes: 120
     steps:
     - uses: actions/checkout@v4
       with:
         ref: ${{ needs.resolve.outputs.sha }}
+    - name: Shared runner tools
+      uses: ./.github/actions/shared-tools
     - name: Stamp the release version from the tag
       if: ${{ env.MODE != 'build-only' }}
       env:
@@ -218,8 +220,8 @@ jobs:
         fi
     - name: Own target dir, size-capped
       run: |
-        base="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"
-        dir="$base/desktop-linux"
+        base="${CI_CACHE_DIR:?not a shared runner (no CI_CACHE_DIR)}"
+        dir="$base/desktop-linux/$RUNNER_NAME/target"
         cap_gb="${TARGET_CAP_GB-150}"
         mkdir -p "$dir"
         used_gb="$(du -s --block-size=1G "$dir" | cut -f1)"

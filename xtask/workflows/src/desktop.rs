@@ -8,7 +8,7 @@
 //!   release publish all start on the tag, in parallel --> resolve (hosted:
 //!   the tag's version stamped in, tag shape, the app crate's version == the
 //!   tag's, commit on main or release/v*, `CI passed` green, Release exists) --> macos (airlock) and linux
-//!   (THEBATTLESHIP, `studio-release`) build in parallel and upload
+//!   (THEBATTLESHIP, `thebattleship-release`) build in parallel and upload
 //!   workflow artifacts --> publish (hosted) checks them and attaches them
 //!   to the Release.
 //! ```
@@ -233,16 +233,17 @@ ls -l target/desktop
         )
 }
 
-/// THEBATTLESHIP's `studio-release` pool (x86_64 NixOS; the pool for
+/// THEBATTLESHIP's `thebattleship-release` pool (x86_64 NixOS; the pool for
 /// release builds, never checks): the AppImage (scripts/desktop/linux.sh),
 /// smoke-tested headless.
 fn linux() -> Job {
-    Job::new(RunsOn::Labels(&["self-hosted", "studio-release"]))
+    Job::new(RunsOn::Labels(&["self-hosted", "thebattleship-release"]))
         .name("Linux AppImage")
         .needs(&["resolve"])
         .cond(NOT_VALIDATE)
         .timeout(120)
         .step(checkout().with("ref", "${{ needs.resolve.outputs.sha }}"))
+        .step(Step::uses("Shared runner tools", "./.github/actions/shared-tools"))
         .step(stamp("${{ env.TAG }}").cond(STAMPED))
         // Its OWN target dir in the release pool's shared cache, so whichever
         // instance claims the job builds warm, with a size cap (a release
@@ -251,8 +252,8 @@ fn linux() -> Job {
         // only `incremental/` is dropped.
         .step(Step::run(
             "Own target dir, size-capped",
-            r#"base="${STUDIO_CACHE_DIR:?not a studio pool runner (no STUDIO_CACHE_DIR)}"
-dir="$base/desktop-linux"
+            r#"base="${CI_CACHE_DIR:?not a shared runner (no CI_CACHE_DIR)}"
+dir="$base/desktop-linux/$RUNNER_NAME/target"
 cap_gb="${TARGET_CAP_GB-150}"
 mkdir -p "$dir"
 used_gb="$(du -s --block-size=1G "$dir" | cut -f1)"

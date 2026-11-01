@@ -18,7 +18,7 @@
 //!   workflow_dispatch      the same, by hand, with the tag as the ref.
 //! ```
 
-use crate::model::{Job, Step, UBUNTU, Workflow, yaml};
+use crate::model::{Job, RunsOn, Step, Workflow, yaml};
 use crate::steps::{checkout_full, stamp};
 use anyhow::Result;
 
@@ -38,23 +38,29 @@ workflow_dispatch:
 }
 
 fn publish() -> Result<Job> {
-    Ok(Job::new(UBUNTU)
-        .name("GitHub Release")
-        .cond("${{ startsWith(github.ref, 'refs/tags/v') }}")
-        .timeout(5)
-        .permissions(yaml("contents: write\nchecks: read\n")?)
-        .concurrency("release-publish", false)
-        .step(checkout_full(Some("${{ github.sha }}")))
-        .step(stamp("${{ github.ref_name }}"))
-        .step(
-            Step::run(
-                "The tag is a green commit on main or release/v*",
-                "bash scripts/release.sh tag-guard",
-            )
-            .env("GH_TOKEN", "${{ github.token }}"),
-        )
-        .step(
-            Step::run("Publish", "bash scripts/release.sh publish")
+    Ok(
+        Job::new(RunsOn::Labels(&["self-hosted", "thebattleship-release"]))
+            .name("GitHub Release")
+            .cond("${{ startsWith(github.ref, 'refs/tags/v') }}")
+            .timeout(5)
+            .permissions(yaml("contents: write\nchecks: read\n")?)
+            .concurrency("release-publish", false)
+            .step(checkout_full(Some("${{ github.sha }}")))
+            .step(Step::uses(
+                "Shared runner tools",
+                "./.github/actions/shared-tools",
+            ))
+            .step(stamp("${{ github.ref_name }}"))
+            .step(
+                Step::run(
+                    "The tag is a green commit on main or release/v*",
+                    "bash scripts/release.sh tag-guard",
+                )
                 .env("GH_TOKEN", "${{ github.token }}"),
-        ))
+            )
+            .step(
+                Step::run("Publish", "bash scripts/release.sh publish")
+                    .env("GH_TOKEN", "${{ github.token }}"),
+            ),
+    )
 }

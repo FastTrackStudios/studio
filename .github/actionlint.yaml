@@ -12,8 +12,8 @@ self-hosted-runner:
     # (studio-ios.yml) and the macOS .dmg (desktop.yml).
     - studio-release-mac
     - macos
-    # THEBATTLESHIP: CI's build jobs (checks.yml) on the studio-main pool,
+    # THEBATTLESHIP: CI's build jobs (checks.yml) on the shared pool,
     # every check, a release commit's included; the release builds (the
-    # Linux AppImage, desktop.yml) on the studio-release pool.
-    - studio-main
-    - studio-release
+    # Linux AppImage, desktop.yml) on the reserved release pool.
+    - thebattleship
+    - thebattleship-release
