@@ -9,7 +9,7 @@
 //! this tool exists to get right (the other half is the DSP).
 //!
 //! ```text
-//! EX="cargo +1.94.0 run --release -p signal-analyzer --example bigsky_match --"
+//! EX="cargo +1.99.1 run --release -p signal-analyzer --example bigsky_match --"
 //!
 //! $EX list                                   # BigSky's parameters, selectors spelled out
 //! $EX run                                    # Cloud at BigSky's defaults, all stimuli

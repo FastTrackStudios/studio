@@ -286,7 +286,7 @@ fn open_behind_all(
                     });
                     load.record("song.ok", opened.is_ok());
                     ARRIVING
-                        .fetch_update(
+                        .try_update(
                             std::sync::atomic::Ordering::AcqRel,
                             std::sync::atomic::Ordering::Acquire,
                             |n| n.checked_sub(1),

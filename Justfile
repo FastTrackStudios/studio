@@ -308,7 +308,7 @@ keys-worklet-wasm out='apps/studio/desktop/web-dist/worklet':
 #   --shared-memory --import-memory          one memory across instances
 #   -Z build-std                             std must be rebuilt with atomics
 #                                            (hence nightly — the rest of the
-#                                            tree stays on stable 1.94)
+#                                            tree stays on stable 1.99.1)
 #
 # The page creates the WebAssembly.Memory and hands it to the worklet and to
 # each decoder worker, so all three instantiate over the SAME heap. Serving

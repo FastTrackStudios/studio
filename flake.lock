@@ -249,11 +249,7 @@
         ],
         "nixpkgs-dx": "nixpkgs-dx",
         "processor-src": "processor-src",
-        "rust-overlay": [
-          "dioxus-flake",
-          "rust-overlay"
-        ],
-        "rust-overlay-rail": "rust-overlay-rail"
+        "rust-overlay": "rust-overlay_2"
       }
     },
     "rust-overlay": {
@@ -277,18 +273,18 @@
         "type": "github"
       }
     },
-    "rust-overlay-rail": {
+    "rust-overlay_2": {
       "inputs": {
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1792653800,
-        "narHash": "sha256-E8zFJilWlORqzIUJizyhZ/0WKBOizuM6s1nRSgPRomo=",
+        "lastModified": 1793434469,
+        "narHash": "sha256-+sgVNI2c67di+XIeMaz5KSei4T65kX68s5Nl0E5Gzbc=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "5f267b7f323a4d6df0b9c0e3eaa043cbe85386f2",
+        "rev": "6ecf534a7c16e7c969f26838fdd8c93597ae93f3",
         "type": "github"
       },
       "original": {

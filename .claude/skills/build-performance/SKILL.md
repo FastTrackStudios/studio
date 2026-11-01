@@ -224,4 +224,4 @@ Blitz/servo stack.
 - **sccache, in any form** — 0% across worktrees, and it breaks `dx`. The cache is kache (above).
   Removed Aug 2026; see above.
 - **`-Z threads=N` (parallel frontend), cranelift** — need nightly; the
-  workspace is pinned to stable 1.94.
+  workspace is pinned to stable 1.99.1.

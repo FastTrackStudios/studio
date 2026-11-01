@@ -65,7 +65,7 @@ pub fn level(channels: usize, sample_rate: f64) -> (LevelTap, LevelReader) {
 #[inline]
 fn raise(slot: &AtomicU32, v: f32) {
     let bits = v.max(0.0).to_bits();
-    let _ = slot.fetch_update(Ordering::AcqRel, Ordering::Relaxed, |cur| {
+    let _ = slot.try_update(Ordering::AcqRel, Ordering::Relaxed, |cur| {
         (cur == EMPTY || bits > cur).then_some(bits)
     });
 }
@@ -176,7 +176,7 @@ impl ScalarTap {
         let agg = self.agg;
         let _ = self
             .slot
-            .fetch_update(Ordering::AcqRel, Ordering::Relaxed, |cur| {
+            .try_update(Ordering::AcqRel, Ordering::Relaxed, |cur| {
                 if cur == EMPTY {
                     return Some(v.to_bits());
                 }
