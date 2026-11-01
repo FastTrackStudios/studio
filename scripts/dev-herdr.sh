@@ -253,10 +253,16 @@ if [ "$local_task" = 1 ] && curl -s -o /dev/null --max-time 2 http://127.0.0.1:9
     echo "dev: a Task server already answers on 127.0.0.1:9090; using it"
 fi
 
-# The `studio` CLI the engine runs: release-fast, the one feature set the
-# app's recipes share (another recompiles every shared crate).
-cli="$repo/target/release-fast/studio"
-build_cli="cargo build --profile release-fast -p studio-desktop --features cli,signal-keys-rig --bin studio"
+# The `studio` CLI the engine runs: the dev profile and the one feature set
+# the window (dx below), the engine and `just dev-test` all share, so a
+# saved file recompiles each crate once for all three. Another profile or
+# feature set recompiles every shared crate.
+dev_features="cli,signal-keys-rig"
+# dx builds as `desktop-dev` for the host triple (target/<host>/desktop-dev);
+# the engine is built to match, or the two never share an artifact.
+host="$(rustc -vV | sed -n 's/^host: //p')"
+cli="$repo/target/$host/desktop-dev/studio"
+build_cli="cargo build --profile desktop-dev --target $host -p studio-desktop --features $dev_features --bin studio"
 
 # ── Tab "telemetry", first: the collector is up before anything sends ──
 ws="$(h workspace create --label "$label" --cwd "$repo" --no-focus)"
@@ -377,7 +383,7 @@ fi
 h pane run "$engine_pane" "nix develop -c sh -c '$build_cli' && $env_line $cli engine --reopen"
 # The window waits for the engine; FTS_STUDIO_BIN makes any running engine
 # its own, so a rebuilt window never replaces it.
-h pane run "$ui_pane" "$env_line FTS_ENGINE=attach FTS_STUDIO_BIN=$cli nix develop -c sh -c 'just signal-tailwind >/dev/null 2>&1; exec dx serve --platform desktop -p studio-desktop --bin studio-desktop --features signal-keys-rig --hot-patch false --interactive false'"
+h pane run "$ui_pane" "$env_line FTS_ENGINE=attach FTS_STUDIO_BIN=$cli nix develop -c sh -c 'just signal-tailwind >/dev/null 2>&1; exec dx serve --platform desktop -p studio-desktop --bin studio-desktop --features $dev_features --hot-patch false --interactive false'"
 
 echo "dev: \"$label\" in herdr --session $session"
 echo "dev:   app: engine ($engine_pane), ui ($ui_pane)${task_pane:+, task ($task_pane)}${telemetry_pane:+, telemetry ($telemetry_pane)}"
