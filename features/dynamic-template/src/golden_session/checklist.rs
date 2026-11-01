@@ -901,7 +901,7 @@ pub fn ticks(golden: &Golden) -> Vec<(&'static str, bool)> {
 /// The doc the checklist lives in.
 #[must_use]
 pub fn doc_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/spec/session/maximal-template.md")
+    utils::paths::checkout_path("docs/spec/session/maximal-template.md")
 }
 
 /// The doc with its checklist section replaced by [`render`].

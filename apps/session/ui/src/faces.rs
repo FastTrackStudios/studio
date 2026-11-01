@@ -45,10 +45,7 @@ pub struct FrameFace {
 /// faces in this repo (`features/ui/plugin-faces/generated`, made by `just faces`).
 pub(crate) fn design_dir() -> std::path::PathBuf {
     std::env::var_os("FTS_FRAME_DIR").map_or_else(
-        || {
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../../features/ui/plugin-faces/generated")
-        },
+        || utils::paths::checkout_path("features/ui/plugin-faces/generated"),
         Into::into,
     )
 }

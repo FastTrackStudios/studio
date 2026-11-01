@@ -198,13 +198,12 @@ pub fn folder_depths(tracks: &[Track]) -> Vec<u32> {
 pub const ENVELOPE_LANE_MIN_H: f32 = 27.0;
 
 /// Where the checked-in keybind profiles live — `reaper-input`'s own
-/// config directory, a sibling crate in this same repo. Computed off
-/// this crate's manifest dir rather than a relative runtime path, since
-/// the working directory at launch is whatever the host app happened to
-/// start in, not this crate's source location.
+/// config directory, a sibling crate in this same repo. Found from the
+/// checkout the process runs from (`utils::paths::checkout_path`) rather
+/// than the working directory, which is whatever the host app happened to
+/// start in.
 fn profiles_root() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../adapters/reaper/reaper-input/config/config")
+    utils::paths::checkout_path("features/adapters/reaper/reaper-input/config/config")
 }
 
 /// Load one profile's keymap by slug — falls back to an empty (no

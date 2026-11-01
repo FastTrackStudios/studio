@@ -14,6 +14,8 @@ default = ["reaper"]
 reaper = ["studio/reaper", "dep:daw-reaper"]
 
 [dependencies]
+# `utils::paths::checkout_root`: the checkout found at run time, not baked in.
+utils.workspace = true
 anyhow = { workspace = true }
 architect = { workspace = true }
 color-palette = { workspace = true }
