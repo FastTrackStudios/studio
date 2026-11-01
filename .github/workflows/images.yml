@@ -83,7 +83,7 @@ jobs:
     needs: plan
     runs-on:
     - self-hosted
-    - studio-release
+    - thebattleship-release
     timeout-minutes: 180
     permissions:
       contents: read
@@ -96,6 +96,8 @@ jobs:
         ref: ${{ needs.plan.outputs.sha }}
         fetch-depth: 0
         persist-credentials: false
+    - name: Shared runner tools
+      uses: ./.github/actions/shared-tools
     - name: Stamp the release version from the tag
       env:
         STAMP_TAG: ${{ env.TAG }}
