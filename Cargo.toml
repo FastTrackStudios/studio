@@ -18,7 +18,6 @@ members = [
     "features/sync",
     "crates/frame",
     "features/adapters/web/worklet",
-    "features/patchbay",
     "features/midi",
     "features/editor",
     "features/session",
@@ -149,9 +148,6 @@ members = [
     "features/signal/content-library",
     "features/signal/content-client",
     "apps/plugins/sampler",
-    # ── patchbay ──
-    "features/patchbay/driver",
-    "apps/patchbay",
     # ── frame ──
     "crates/frame/tools/cli",
     "crates/frame/tools/mcp",
@@ -185,7 +181,6 @@ dock = { path = "features/ui/dock" }
 daw-sync = { path = "features/sync" }
 frame = { path = "crates/frame" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }
-patchbay = { path = "features/patchbay" }
 midi = { path = "features/midi" }
 editor = { path = "features/editor" }
 session = { path = "features/session" }
@@ -940,7 +935,7 @@ openwurli-dsp = { path = "features/rigs/keys/wurli" }
 signal-orchestra = { path = "features/rigs/orchestra" }
 signal-synth-rig = { path = "features/rigs/synth-rig" }
 
-# ── from patchbay's workspace (joined into studio) ──
+# ── Network sockets ──
 socket2 = { version = "0.6", features = ["all"] }
 
 

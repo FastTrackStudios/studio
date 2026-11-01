@@ -10,8 +10,8 @@ the apps built on it.
   sampled instruments, with tones and patches switched during a set. The
   rig runs headless and every screen — laptop, phone, tablet, browser — is
   a remote attached to it.
-- **Patchbay** — studio routing: PipeWire, Core Audio, Dante and digital
-  desks, wired and recalled from one window.
+- **[Patchbay](https://github.com/FastTrackStudios/patchbay)** — studio
+  routing, maintained and released in its own repository.
 - **Plugins** — the FTS effects (EQ, compressor, saturation, delay,
   reverb, modulation, gate, limiter, pitch, NAM amps and more) as CLAP and
   VST3.
@@ -56,7 +56,7 @@ from the App Store, then join the beta:
 ## Layout
 
 ```
-apps/      the applications — session/, signal/, patchbay/, plugins/, themer/
+apps/      the applications — session/, signal/, plugins/, themer/
 crates/    daw (the DAW core and its standalone engine), studio (the
            umbrella: REAPER adapter, project files, UI, CLI), frame
 features/  one crate per feature — the effects, the rigs, audio, MIDI,

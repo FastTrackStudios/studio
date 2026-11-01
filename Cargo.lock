@@ -7148,28 +7148,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fts-patchbay"
-version = "0.1.0"
-dependencies = [
- "architect",
- "architect-telemetry",
- "clap",
- "dioxus",
- "eyre",
- "include_dir",
- "libc",
- "patchbay",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "vox",
- "vox-core",
- "vox-websocket",
- "web-sys",
-]
-
-[[package]]
 name = "fts-plugin-xtask"
 version = "26.10.3"
 dependencies = [
@@ -8839,16 +8817,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "if-addrs"
-version = "0.13.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69b2eeee38fef3aa9b4cc5f1beea8a2444fc00e7377cafae396de3f5c2065e24"
-dependencies = [
- "libc",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "igd-next"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9041,27 +9009,6 @@ dependencies = [
  "quick-xml 0.26.0",
  "rgb",
  "str_stack",
-]
-
-[[package]]
-name = "inferno-net"
-version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/inferno-control?rev=d3b048941df55dae12c7b9f8c4b776681b8679d3#d3b048941df55dae12c7b9f8c4b776681b8679d3"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "futures",
- "hex",
- "mdns-sd",
- "network-interface",
- "rand 0.9.5",
- "serde",
- "socket2 0.6.5",
- "thiserror 2.0.20",
- "tokio",
- "toml 0.8.2",
- "tracing",
 ]
 
 [[package]]
@@ -10856,20 +10803,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
 
 [[package]]
-name = "mdns-sd"
-version = "0.13.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "328f4e1041f7cfeb3affccb814ddbe2f004856a2ce769c8bf22080d74c5204c6"
-dependencies = [
- "fastrand",
- "flume",
- "if-addrs",
- "log",
- "mio",
- "socket2 0.5.10",
-]
-
-[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11575,18 +11508,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "network-interface"
-version = "2.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ddcb8865ad3d9950f22f42ffa0ef0aecbfbf191867b3122413602b0a360b2a6"
-dependencies = [
- "cc",
- "libc",
- "thiserror 2.0.20",
- "winapi",
-]
-
-[[package]]
 name = "neural-amp-modeler"
 version = "0.1.0"
 source = "git+https://github.com/FastTrackStudios/neural-amp-modeler-rs?tag=v0.1.2#9b00e2463c12263e098edf40082dfb8ac0e0a2b9"
@@ -12166,7 +12087,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "478ae33fcac9df0a18db8302387c666b8ef08a3e2d62b510ca4fc278a384b6c0"
 dependencies = [
  "bitflags 2.13.1",
- "block2 0.6.2",
  "objc2 0.6.4",
  "objc2-foundation 0.3.2",
 ]
@@ -13199,59 +13119,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "tracing",
-]
-
-[[package]]
-name = "patchbay"
-version = "26.10.3"
-dependencies = [
- "architect",
- "architect-telemetry",
- "block2 0.6.2",
- "dioxus",
- "dirs",
- "dispatch2",
- "eyre",
- "facet",
- "facet-styx",
- "futures-util",
- "gloo-timers",
- "if-addrs",
- "inferno-net",
- "libc",
- "mdns-sd",
- "music-catalog 0.1.0 (git+https://github.com/FastTrackStudios/music-convention?tag=v0.1.3)",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
- "objc2-av-foundation",
- "objc2-core-audio",
- "objc2-core-audio-types",
- "objc2-core-foundation",
- "objc2-foundation 0.3.2",
- "parking_lot",
- "pipewire",
- "serde",
- "serde_json",
- "socket2 0.6.5",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "vox",
- "vox-core",
- "vox-types",
- "vox-websocket",
-]
-
-[[package]]
-name = "patchbay-driver"
-version = "26.10.3"
-dependencies = [
- "arc-swap",
- "once_cell",
- "parking_lot",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
 ]
 
 [[package]]
