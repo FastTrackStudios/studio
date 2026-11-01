@@ -7,6 +7,8 @@ authors.workspace = true
 description = "FastTrack Studio: the DAW and everything built on it — the REAPER adapter, project files, UI, control surfaces, the daw CLI and the integration-test harness"
 
 [dependencies]
+# `utils::paths::checkout_root`: the checkout found at run time, not baked in.
+utils.workspace = true
 # The DAW, re-exported whole (`pub use daw::*`).
 daw = { workspace = true }
 daw-proto = { workspace = true }

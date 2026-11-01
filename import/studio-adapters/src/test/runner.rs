@@ -1018,10 +1018,7 @@ pub fn find_fts_test() -> Option<String> {
     }
 
     // Stable devenv profile symlink
-    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent());
-    if let Some(root) = workspace_root {
+    if let Some(root) = utils::paths::checkout_root() {
         let devenv_fts = root.join(".devenv/profile/bin/fts-test");
         if devenv_fts.exists() {
             return Some(devenv_fts.to_string_lossy().into_owned());
