@@ -506,25 +506,42 @@ pub fn versions_over(
     versions
 }
 
-/// `from..to` with each end moved to just before the hits at it, every
-/// take's ([`crate::comp_song::clear_seam`]): a fill's end on the downbeat
-/// cut before both takes' attacks there, not between them.
-fn clear_of_hits(
-    daw: &daw::standalone::Standalone,
-    project: &ProjectContext,
-    (from, to): (f64, f64),
-) -> (f64, f64) {
-    let reach = crate::comp_song::SEAM_REACH;
-    let attacks = |at: f64| {
-        let mut all: Vec<f64> = versions_over(daw, project, (at - reach, at + reach))
+/// Every take's attacks around a stretch's two ends, read once: the takes
+/// (`versions_over`) cost a pass over the kit's items, whatever span they
+/// are asked for, so the seam search asks once for all it needs.
+struct Attacks(Vec<f64>);
+
+impl Attacks {
+    /// Every take's hits in `from..to`, by time.
+    fn over(
+        daw: &daw::standalone::Standalone,
+        project: &ProjectContext,
+        (from, to): (f64, f64),
+    ) -> Self {
+        let mut all: Vec<f64> = versions_over(daw, project, (from, to))
             .into_iter()
             .flat_map(|v| v.hits.into_iter().map(|h| h.1))
             .collect();
         all.sort_by(f64::total_cmp);
-        all
-    };
-    let start = crate::comp_song::clear_seam(from, &attacks(from));
-    let end = crate::comp_song::clear_seam(to, &attacks(to));
+        Self(all)
+    }
+
+    /// The attacks in `a..b`, as `versions_over` would have read them.
+    fn within(&self, (a, b): (f64, f64)) -> &[f64] {
+        let first = self.0.partition_point(|t| *t < a);
+        let last = self.0.partition_point(|t| *t < b);
+        self.0.get(first..last).unwrap_or_default()
+    }
+}
+
+/// `from..to` with each end moved to just before the hits at it, every
+/// take's ([`crate::comp_song::clear_seam`]): a fill's end on the downbeat
+/// cut before both takes' attacks there, not between them.
+fn clear_of_hits(attacks: &Attacks, (from, to): (f64, f64)) -> (f64, f64) {
+    let reach = crate::comp_song::SEAM_REACH;
+    let near = |at: f64| attacks.within((at - reach, at + reach));
+    let start = crate::comp_song::clear_seam(from, near(from));
+    let end = crate::comp_song::clear_seam(to, near(to));
     if end - start > crate::comp::GRAIN {
         (start, end)
     } else {
@@ -544,26 +561,35 @@ fn seamed(
     take: &crate::hits::TakeVersion,
     (from, to): (f64, f64),
 ) -> (f64, f64) {
+    use crate::comp_song::{SEAM_LEAD, SEAM_REACH};
     use crate::seams::SEARCH;
-    let (start, end) = clear_of_hits(daw, project, (from, to));
+    let mut stages = crate::stages::Stages::start();
+    // Wide enough for both: the ends cleared of hits, then a seam
+    // searched for either side of where they land.
+    let reach = SEAM_REACH + SEARCH + SEAM_LEAD;
+    let attacks = Attacks::over(daw, project, (from - reach, to + reach));
+    architect_telemetry::wide::set(
+        "comp.seam_attacks",
+        i64::try_from(attacks.0.len()).unwrap_or(i64::MAX),
+    );
+    stages.mark("comp.seams_read_ms");
+    let (start, end) = clear_of_hits(&attacks, (from, to));
     let Some(song) = crate::hit_index::song_of(project) else {
         return (start, end);
     };
-    let cuts = |(a, b): (f64, f64)| -> Vec<f64> {
-        versions_over(daw, project, (a, b))
-            .into_iter()
-            .flat_map(|v| {
-                v.hits
-                    .into_iter()
-                    .map(|h| h.1 - crate::comp_song::SEAM_LEAD)
-            })
-            .collect()
+    let cuts = |span: (f64, f64)| -> Vec<f64> {
+        attacks.within(span).iter().map(|t| t - SEAM_LEAD).collect()
     };
     let lead = crate::comp_song::SEAM_LEAD;
     let (into, out_of) = (
         crate::seams::pairs(daw, project, &take.lanes, true),
         crate::seams::pairs(daw, project, &take.lanes, false),
     );
+    architect_telemetry::wide::set(
+        "comp.seam_mics",
+        i64::try_from(into.len()).unwrap_or(i64::MAX),
+    );
+    stages.mark("comp.seams_pairs_ms");
     let (before, after) = (
         cuts((start - SEARCH, start + lead)),
         cuts((end, end + SEARCH + lead)),
@@ -576,6 +602,7 @@ fn seamed(
             )
         })
         .unwrap_or((None, None));
+    stages.mark("comp.seams_place_ms");
     let wide = |keys: [&'static str; 3], placed: Option<crate::seams::Placed>, was: f64| {
         if let Some(s) = placed {
             architect_telemetry::wide::set(keys[0], (s.at - was) * 1_000.0);
@@ -722,7 +749,9 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         Ok(crate::edit_actions::stretches(daw, &project, &a.on)?
             .into_iter()
             .map(|(from, to)| {
-                let (takes, versions) = ranking(daw, &project, (from, to));
+                // Kept as COMP_CYCLE keeps it: the window asks for the
+                // ranking as a stretch is picked, so its T steps at once.
+                let (takes, versions, _) = ranked_for(daw, &project, (from, to));
                 let unjudged = takes.iter().filter(|t| t.undetected).count();
                 Ranking {
                     from,
