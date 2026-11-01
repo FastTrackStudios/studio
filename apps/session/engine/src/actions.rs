@@ -755,6 +755,7 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     crate::comp_keep::register_main(list)?;
     crate::item_actions::register(list)?;
     crate::arrange_actions::register(list)?;
+    crate::notes_actions::register(list)?;
     crate::take_rank::register(list)?;
     register_track_set(list)?;
     register_reference(list)?;
@@ -5255,6 +5256,10 @@ mod presses {
         "ARRANGE_TAKE_VOLUME",
         "ARRANGE_EDIT",
         "ITEMS_SELECT",
+        "AUTOMATION_POINTS_EDIT",
+        "AUTOMATION_ITEMS_EDIT",
+        "AUTOMATION_LANE_SET",
+        "NOTES_WRITE",
     ];
 
     #[test]

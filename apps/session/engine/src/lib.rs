@@ -200,6 +200,8 @@ pub mod kit_gate;
 pub mod mix_chains;
 pub mod mix_export;
 #[cfg(feature = "native")]
+pub mod notes_actions;
+#[cfg(feature = "native")]
 pub mod perf;
 #[cfg(feature = "native")]
 pub mod perf_meter;

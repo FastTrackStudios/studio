@@ -124,6 +124,8 @@ action, and the list validates and survives hostile arguments.
 | `MIXER_VIEW {scene?, focus_selected?, take_focus_width?, audience?, scroll?, rack_scroll?, rack_fold?}` | window (both builds) | the painted mixer's rails, scroll and rack folds |
 | `FX_VIEW {fold?, scroll?, down?}` | window (both builds) | the FX view's group folds, a lane's scroll, the first lane shown |
 | `SESSION_CLOSEUP {track, panel, name} \| {close}` | window (both builds) | a rack panel over the whole window, or closed: the rack's zoom button, the close-up's tabs, Back, swipe and Esc |
+| `AUTOMATION_POINTS_EDIT`, `AUTOMATION_ITEMS_EDIT`, `AUTOMATION_LANE_SET` `{label?, edits}` | engine (both builds) | an automation lane's gesture, in the arrangement gestures' vocabulary (`envelope`, `item_curve`, `item_move`, `item_add`, `item_bounds`, `item_delete`, `lane_show`, `lane_mode`, `lane_height`) |
+| `NOTES_WRITE {item, content}` | engine | the Editor's take written back, one undo step (`notes_actions`) |
 
 ## Inventory (2026-10-30)
 
@@ -135,12 +137,12 @@ exempt by rule 6.
 |---|---|---|---|
 | Arrangement: track panel (`widget.rs` `act`, rename) | 0 → **9** | 9 → **0** | 1 |
 | Arrangement: items, ruler, gestures (`arrange_edit.rs`, `widget.rs`) | 1 → **~29** | ~25 edit families → **0** | — |
-| Painted mixer / FX / automation / editor (`mixer_panel`, `mcp`, `fx_view`, `automation_*`, `tone`, `expression`, `editor_view`, `navigator`, `arrange_camera`, `ruler`, `device_audio`) | 13 → **25** → **~39** → **~51** | 86 → **74** → **~60** → **~48** | 13 |
+| Painted mixer / FX / automation / editor (`mixer_panel`, `mcp`, `fx_view`, `automation_*`, `tone`, `expression`, `editor_view`, `navigator`, `arrange_camera`, `ruler`, `device_audio`) | 13 → **25** → **~39** → **~51** → **~63** | 86 → **74** → **~60** → **~48** → **~36** | 13 |
 | Session UI rsx (`shell`, `transport_bar`, `toolbar`, `quantize_panel`, `collab_bar`, `record_view`, `versions`, `setup`, `compact`, `closeup`, `bar_step`, `studio`, `lyrics_panel`, `perf_meter`, `chart_*`, `browser`, `organize`, `navigator`, `instrument_rail`, `web_host`, `progress`, `performer`, `app_menu`) | 41 → **73** | 97 → **65** | 107 |
 | Desktop (`native/{dock,shell,start,library,publish,handoff,mod}.rs`, `session_view.rs`, `lib.rs`, `mixer_view.rs`) | 28 → **34** | 71 → **65** | 68 |
 | Dock crate (`features/ui/dock` host + components) | 0 | 50 | 30 |
 | Studio welcome (`apps/studio/desktop/src/front.rs`) | 4 | 3 | 3 |
-| **total** | **87 → 146 → ~174 → ~188 → ~205** | **~341 → ~282 → ~254 → ~240 → ~223** | **222** |
+| **total** | **87 → 146 → ~174 → ~188 → ~205 → ~217** | **~341 → ~282 → ~254 → ~240 → ~223 → ~211** | **222** |
 
 Bold: after the first routing pass, then after pass 2's arrangement area
 (every item, ruler and dial gesture; the track knob's commit and the snap
@@ -239,10 +241,11 @@ lanes (`automation_edit::press/drag/release`) are area 3.
 | fx_view.rs `face_edits` / `press` (Rig) | rig block faces / bypass | the window's copy only — **never reached the engine** | **routed**: `RIG_BLOCK_SET` with what the gesture changed on the block (`rig::block_changes`) when the face lets go; a bypass click at once |
 | fx_view.rs `press`, `wheel` | group fold, step down the lanes | view state | **routed**: `FX_VIEW {fold}`, `FX_VIEW {down}` |
 | fx_view.rs `wheel` | a lane's sideways scroll | view state | local: a wheel has no end (`FX_VIEW {scroll}` sets it by name) |
-| automation_edit.rs:164, 186, 214 | hide lane, mode chip, lane height | `ShowEnvelope`, `SetEnvelopeMode`, `SetLaneHeight` | `AUTOMATION_SHOW`, `AUTOMATION_SET_MODE`, `AUTOMATION_SHOW {height}` |
-| automation_edit.rs:222-376 | items (make, move, trim, curve, delete), envelope points (add, drag, delete) | `*AutomationItem*`, `SetItemCurve`, `SetEnvelope` | `AUTOMATION_ITEM` (extend: `at`, `move_to`, bounds, `curve`), `AUTOMATION_WRITE` (extend: `replace`) |
+| automation_edit.rs `press` (widget) | hide lane, mode chip | `ShowEnvelope`, `SetEnvelopeMode` | **routed**: `AUTOMATION_LANE_SET` at once |
+| automation_edit.rs `press`/`drag`/`release` (widget `lane_moved`, `lane_ended`) | lane height; items (make, copy into a pool, move, trim, curve, delete); envelope points (add, drag, delete) | live edits, the undo step closed on release | **routed**: live edits stay (rule 3); on release or a lost release the latest of each control and what the release makes commit as `AUTOMATION_LANE_SET` / `AUTOMATION_ITEMS_EDIT` / `AUTOMATION_POINTS_EDIT` inside the drag's undo step; an Alt-click delete commits at once |
 | automation_edit.rs (leveler), automation_menu.rs | leveler dials, rides, menu | — | routed (`VOCAL_LEVELER_SET`, `VOCAL_RELEVEL`, `AUTOMATION_*`) |
-| expression.rs, editor_view.rs:666 | Editor notes, velocity, menu, keys | edit the doc; `write_take` through the DAW facade | NEW `NOTES_WRITE {item, content}`, `EDITOR_ACTION {id, args}`, `TAKES_ALIGN` |
+| editor_view.rs `save` / `saver` | the Editor's write-back (notes, velocity, its menu and keys edit its document, then save) | `write_take` through the DAW facade, no action | **routed**: `NOTES_WRITE` on the saver thread, in save order |
+| editor_view.rs menu and keys | the Editor's own commands on its document | local document edits | local until saved (the save commits them); NEW `EDITOR_ACTION {id, args}` would name each |
 | navigator.rs:54 | section click | `transport(Seek)` | NEW `SESSION_SEEK` |
 | arrange_camera.rs:166-205 | wheel, pinch, hand pan, z-zoom | camera | `SESSION_VIEW` at gesture end |
 | ruler/mod.rs:130 | CHORDS lane toggle | atomic | NEW `SESSION_RULER {chords}` |
