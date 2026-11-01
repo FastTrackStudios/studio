@@ -138,40 +138,33 @@ too much. `release-fast` (release, incremental, 256 units) and `--release`
 are for shipping (`scripts/desktop/*`, `scripts/signal/mac-release.sh`) and
 measuring performance on what ships, not for working.
 
-## sccache — removed, and why it stays removed
+## The build cache is kache (sccache stays gone)
 
-There is **no `RUSTC_WRAPPER`** in this tree. sccache was wired into the
-devshell until August 2026; it was removed. Don't reintroduce it without
-answering both points below.
+Every cargo goes through **kache**, the fleet's `build.rustc-wrapper`
+(`~/.cargo/config.toml`, from nix-config `modules/coding/lang/kache.nix`;
+the shared store on THEBATTLESHIP is `/run/media/Development/.kache`). The
+`kache` skill is the reference: how keys work, the rules that keep them
+stable, and how to diagnose a miss. What it means in this tree:
 
-Measured on this tree, before removal:
+- **Never set a `RUSTC_WRAPPER` here** — the fleet owns it.
+- **dx:** the dev shell sets `DX_NO_RUSTC_WRAPPER=1`, which our patched dx
+  (`nix/modules/dx-no-rustc-wrapper.patch`) reads to skip its own rustc
+  workspace wrapper in plain builds; kache passes any other wrapper chain
+  through uncached. Hot-patch builds stay uncached.
+- **Path-free code:** find the checkout at run time with
+  `utils::paths::checkout_path(rel)`, never `env!("CARGO_MANIFEST_DIR")`
+  outside tests — kache keys that by its absolute path, so every worktree
+  would recompile the crate and everything above it.
+- **Build scripts** write generated `include_*!` paths relative to the
+  generated file (`features/rigs/guitar/build.rs`) or copy into `OUT_DIR`
+  (`apps/plugins/mic/build.rs`).
+- **Target dirs are named `target`** (or live outside the checkout): kache
+  keeps any other in-checkout name in the key.
 
-| Scenario | Hit rate |
-|---|---|
-| Rebuild the **same path** after wiping `target/` | ~100% |
-| Build the **same code in a different worktree** | **0%** |
-
-**It never deduped worktrees.** The target-dir path is part of sccache's
-Rust cache key. `SCCACHE_BASEDIR` does not fix this — it makes paths
-*relative*, not *equal*, so `FastTrackStudio/target` and
-`herdr-worktrees/FastTrackStudio/target` still hash differently. Tested
-with basedir at the tree root and per-target-dir; both 0%. So the one
-thing that actually costs disk here was the one thing it did not help.
-
-All it bought was making a `target/` wipe cheap to recover from.
-
-**What it cost: every `dx` build.** dx drives rustc through its own
-wrapper binary, and sccache rejects it outright —
-
-```
-sccache: error: failed to execute compile
-sccache: caused by: Compiler not supported: "error: expected one of `!` or `[`, found keyword `if`"
-```
-
-so `dx build`, `dx serve` and `just ee-serve` all had to be run with
-`RUSTC_WRAPPER=` cleared by hand, and failed confusingly when they were
-not. A cache that breaks the UI dev loop to speed up a rare full wipe is
-the wrong trade.
+Measured 2026-10-31: a fresh worktree builds the engine in 21 s, 1,709 of
+1,709 crates restored (417 s cold). sccache, removed in August 2026, gave
+0% across worktrees because the target dir was in its key, and refused
+dx's wrapper outright.
 
 ## Disk: cargo never garbage-collects
 
@@ -228,7 +221,7 @@ Blitz/servo stack.
 
 - **Shared `CARGO_TARGET_DIR` across worktrees** — causes fingerprint
   clobbering with concurrent agent builds. Use worktree-local targets.
-- **sccache, in any form** — 0% across worktrees, and it breaks `dx`.
+- **sccache, in any form** — 0% across worktrees, and it breaks `dx`. The cache is kache (above).
   Removed Aug 2026; see above.
 - **`-Z threads=N` (parallel frontend), cranelift** — need nightly; the
   workspace is pinned to stable 1.94.

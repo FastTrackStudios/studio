@@ -4271,6 +4271,7 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+ "utils",
  "wasm-bindgen",
  "web-sys",
 ]
@@ -5675,6 +5676,7 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+ "utils",
  "vox",
 ]
 
@@ -7982,6 +7984,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "utils",
  "uuid",
  "vello 0.9.0",
  "vello_hybrid",
@@ -15766,6 +15769,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "utils",
  "uuid",
  "vox",
  "vox-types",
@@ -18319,6 +18323,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing-subscriber",
+ "utils",
  "vox",
  "vox-stream",
 ]

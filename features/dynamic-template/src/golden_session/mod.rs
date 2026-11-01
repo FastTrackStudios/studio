@@ -29,10 +29,10 @@ pub use kind::{read_kinds, Kind, TrackExt, GROUP_KEY, KIND_KEY};
 pub use rpp::{build, Built, Flat};
 pub use shape::{maximal, vocal_fx, Shape};
 
-/// The fixtures directory, resolved from this crate's manifest.
+/// The fixtures directory, in the checkout this runs from.
 #[must_use]
 pub fn fixtures_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/golden")
+    utils::paths::checkout_path("features/dynamic-template/fixtures/golden")
 }
 
 /// Every fixture this module builds, in the order they are written.

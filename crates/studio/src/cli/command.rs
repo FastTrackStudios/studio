@@ -1471,9 +1471,7 @@ enum ReaperConfigCommand {
 fn reaper_config_dir() -> std::path::PathBuf {
     std::env::var("FTS_REAPER_CONFIG_REPO")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| {
-            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../nix/reaper-config")
-        })
+        .unwrap_or_else(|_| utils::paths::checkout_path("nix/reaper-config"))
 }
 
 fn default_resources() -> std::path::PathBuf {

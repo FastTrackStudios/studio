@@ -63,10 +63,15 @@ fn main() {
                 if std::fs::copy(&src, &dst).is_err() {
                     continue;
                 }
+                // By its name: an `include_bytes!` in this `include!`d
+                // file resolves beside it, in OUT_DIR. An absolute path
+                // would make the file differ per checkout, and the
+                // compiler cache (kache, which hashes it) rebuild this
+                // crate and everything above it in every worktree.
                 let _ = writeln!(
                     table,
                     "    ({set:?}, include_bytes!({:?})),",
-                    dst.display().to_string()
+                    format!("{set}-{DEFAULT}")
                 );
             }
         }
