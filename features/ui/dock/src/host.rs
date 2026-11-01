@@ -171,6 +171,10 @@ pub struct Dock {
     /// Arrange is turned on (a touch screen has no key to hold).
     latched: Signal<bool>,
     key: CopyValue<ArrangeKey>,
+    /// The edge docks [`Dock::toggle_docks`] hid, and how each was shown
+    /// before: what the next press brings back. This window's alone, and
+    /// forgotten on a recall.
+    stashed: Signal<Vec<(Side, Shown)>>,
 }
 
 /// The key held to arrange panels: while it is down, every panel shows
@@ -208,6 +212,7 @@ pub fn use_dock_provider(
         held: Signal::new(false),
         latched: Signal::new(false),
         key: CopyValue::new(ArrangeKey::default()),
+        stashed: Signal::new(Vec::new()),
     })
 }
 
@@ -273,25 +278,97 @@ impl Dock {
         k.set(key);
     }
 
-    /// True when the layout on screen shows a panel of `kind`.
+    /// True when the layout on screen shows a panel of `kind` (not in a
+    /// hidden edge dock).
     #[must_use]
     pub fn shows(&self, kind: &str) -> bool {
-        self.space().of_kind(kind).next().is_some()
+        let space = self.space();
+        let shown = space.of_kind(kind).any(|p| space.on_screen(p.id));
+        shown
     }
 
     /// Opens a `kind` panel where the kind lives when none is shown, or
-    /// closes every one shown. True when it opened one.
+    /// closes every one shown. True when it opened one. One in a hidden
+    /// edge dock is shown again, its dock with it, and left out of what
+    /// [`Dock::toggle_docks`] brings back: it is back already.
     pub fn toggle_kind(&self, kind: &str) -> bool {
-        let shown: Vec<InstanceId> = self.space().of_kind(kind).map(|p| p.id).collect();
-        if shown.is_empty() {
-            return self.open(kind).is_some();
+        let space = self.space();
+        let (shown, hidden): (Vec<InstanceId>, Vec<InstanceId>) = space
+            .of_kind(kind)
+            .map(|p| p.id)
+            .partition(|id| space.on_screen(*id));
+        if !shown.is_empty() {
+            self.edit(|d| {
+                for id in shown {
+                    let _ = d.close(id);
+                }
+            });
+            return false;
+        }
+        let side = match hidden.first().copied() {
+            Some(id) => {
+                self.edit(|d| d.activate(id).ok());
+                space.edge_of(id)
+            }
+            None => {
+                let Some(id) = self.open(kind) else {
+                    return false;
+                };
+                self.space().edge_of(id)
+            }
+        };
+        if let Some(side) = side {
+            let mut stashed = self.stashed;
+            if stashed.peek().iter().any(|(s, _)| *s == side) {
+                stashed.write().retain(|(s, _)| *s != side);
+            }
+        }
+        true
+    }
+
+    /// Hides every edge dock with panels in it (the centre stays), or,
+    /// pressed again, brings back the ones it hid as they were — less any
+    /// a panel has been shown in since ([`Dock::toggle_kind`]). With
+    /// nothing hidden by it but docks hidden all the same (a layout saved
+    /// that way), it opens those.
+    pub fn toggle_docks(&self) {
+        let mut stashed = self.stashed;
+        let back = std::mem::take(&mut *stashed.write());
+        let space = self.space();
+        let filled = |side: Side| space.edges.get(side).root.is_some();
+        let sides = [Side::Left, Side::Right, Side::Top, Side::Bottom];
+        if !back.is_empty() {
+            self.edit(|d| {
+                for (side, was) in back {
+                    if d.edges.get(side).shown == Shown::Hidden {
+                        d.set_shown(side, was);
+                    }
+                }
+            });
+            return;
+        }
+        let showing: Vec<(Side, Shown)> = sides
+            .into_iter()
+            .filter(|side| filled(*side))
+            .map(|side| (side, space.edges.get(side).shown))
+            .filter(|(_, shown)| *shown != Shown::Hidden)
+            .collect();
+        if showing.is_empty() {
+            self.edit(|d| {
+                for side in sides {
+                    if d.edges.get(side).root.is_some() {
+                        d.set_shown(side, Shown::Open);
+                    }
+                }
+            });
+            return;
         }
         self.edit(|d| {
-            for id in shown {
-                let _ = d.close(id);
+            for (side, _) in &showing {
+                d.set_shown(*side, Shown::Hidden);
             }
         });
-        false
+        stashed.set(showing);
     }
 
     /// Shows the screensets-and-panels menu (what a phone's + opens).
@@ -302,6 +379,8 @@ impl Dock {
 
     /// Recalls screenset `id`.
     pub fn recall(&self, id: ScreensetId) {
+        let mut stashed = self.stashed;
+        stashed.set(Vec::new());
         let mut sets = self.sets;
         sets.write().recall(id);
     }

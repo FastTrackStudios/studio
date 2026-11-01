@@ -810,6 +810,10 @@ struct MixerWidget {
     /// The selected track the mixer was built with: another selection
     /// opens another strip, which is a rebuild.
     built_open: Option<String>,
+    /// Whether the racks were shown when it was built ([`racks_shown`]).
+    built_racks: bool,
+    /// Whether the racks were shown at the last paint, built or not.
+    racks_seen: Cell<bool>,
     /// The folds the rows were planned at ([`crate::folds::generation`]).
     folds_seen: u64,
     /// Whether the rows were last planned for Mix mode (`Links::mix`);
@@ -942,6 +946,8 @@ impl MixerWidget {
             rack_hover: None,
             rack_pressed: None,
             built_open: None,
+            built_racks: racks_shown(),
+            racks_seen: Cell::new(racks_shown()),
             folds_seen: crate::folds::generation(),
             mix_seen: None,
             rails: RailState::default(),
@@ -2054,6 +2060,31 @@ impl MixerWidget {
     }
 }
 
+/// Where the racks' choice is kept (`utils::prefs`): `shown` or `hidden`.
+const RACKS_PREF: &str = "mixer.fx-racks";
+
+/// The racks' choice, read from the prefs once.
+static RACKS: std::sync::LazyLock<std::sync::atomic::AtomicBool> = std::sync::LazyLock::new(|| {
+    std::sync::atomic::AtomicBool::new(
+        utils::prefs::get_raw(RACKS_PREF).as_deref() != Some("hidden"),
+    )
+});
+
+/// Whether the mixer shows its FX racks over the faders (shown unless
+/// hidden): hidden, no strip opens to a rack and the faders keep the
+/// panel's whole height — Mix mode's racks too.
+#[must_use]
+pub fn racks_shown() -> bool {
+    RACKS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Show or hide the mixer's FX racks, kept across launches. Every mixer
+/// takes it up on its next frame.
+pub fn set_racks_shown(on: bool) {
+    RACKS.store(on, std::sync::atomic::Ordering::Relaxed);
+    utils::prefs::set_raw(RACKS_PREF, if on { "shown" } else { "hidden" });
+}
+
 /// The panels a rack shows: the Tone phase's — EQ, compression and
 /// saturation, with the rest of the chain around them.
 fn rack_panels() -> &'static [crate::tone::Which] {
@@ -2142,6 +2173,7 @@ impl MixerWidget {
     pub fn paint_scene(&mut self, width: u32, height: u32, scale: f64) -> Scene {
         self.follow_phase();
         self.dirty.set(false);
+        self.racks_seen.set(racks_shown());
         self.flush_drag();
         self.catch_up();
         self.carry_fling();
@@ -2210,8 +2242,10 @@ impl MixerWidget {
         }
         let tone = Rc::clone(&self.tone);
         let store = tone.store.borrow();
-        // No rack in a filled mixer, nor in the inspector's slim strips.
-        let open = if self.links.fill || self.links.inspector {
+        // No rack in a filled mixer, nor in the inspector's slim strips,
+        // nor anywhere while the racks are hidden (`racks_shown`).
+        let racks = self.racks_seen.get();
+        let open = if self.links.fill || self.links.inspector || !racks {
             None
         } else {
             self.tracks
@@ -2226,9 +2260,11 @@ impl MixerWidget {
                 || m.live == (mixing || recording)
                 || m.recording != recording
                 || m.mixing != mixing
-        }) || open != self.built_open;
+        }) || open != self.built_open
+            || racks != self.built_racks;
         if stale {
             self.built_open.clone_from(&open);
+            self.built_racks = racks;
             // The theme may have changed, and with it the colours the
             // painters draw what it does not.
             self.palette = crate::skin::palette(&crate::arrangement::Palette::from_theme(
@@ -2270,7 +2306,9 @@ impl MixerWidget {
                 h,
                 self.layout,
                 // Mixing, every strip wide enough has its rack.
-                if mix {
+                if !racks {
+                    &[]
+                } else if mix {
                     crate::tone::panels_for(self.rails.phase)
                 } else if open.is_some() {
                     rack_panels()
@@ -2418,6 +2456,8 @@ impl Widget for MixerWidget {
             || self.simulated.is_some()
             || crate::folds::generation() != self.folds_seen
             || self.tone.generation() != self.tone_seen
+            // The racks shown or hidden.
+            || racks_shown() != self.racks_seen.get()
     }
 
     fn paint(

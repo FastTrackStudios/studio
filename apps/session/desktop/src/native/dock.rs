@@ -81,6 +81,21 @@ pub fn SongDock(session: session_ui::studio::StudioSession, class: FormClass) ->
     let host = try_use_context::<HostPanels>().unwrap_or_default();
     let scope = host.scope;
     let dock = use_dock_provider(sets, form, catalog(host));
+    // While it is up, the pane keys (`x`, `e`, `f`, `b`) and actions
+    // toggle its panels.
+    use_hook(|| session_engine::actions::set_docked(true));
+    use_drop(|| session_engine::actions::set_docked(false));
+    // The top bar's navigator button, lit while the set is shown: the
+    // navigator pin follows the dock's Set panel.
+    let pins = try_use_context::<session_ui::shell::Pins>();
+    use_effect(move || {
+        let shown = dock.shows(kind::SET);
+        if let Some(mut navigator) = pins.map(|p| p.navigator)
+            && *navigator.peek() != shown
+        {
+            navigator.set(shown);
+        }
+    });
     // The View actions (SESSION_SCREENSET, …: the menu bar, keys, a model
     // over MCP), taken up within a tenth of a second.
     use_future(move || async move {
@@ -127,15 +142,16 @@ const BAR_PANELS: [(&str, &str); 6] = [
 
 /// Along the foot of the window, the whole width (under the side docks
 /// too): the common panels a press away, lit while shown; the transport;
-/// the screensets and Arrange. What the old bottom bar held, for the
-/// screens with no menu bar (an iPad) as much as a desk.
+/// the shown panels' own switches (the arrangement's inspector, Quantize
+/// and lock; the mixer's folders and FX racks); what is running, the
+/// phase and the modes; the screensets and Arrange. What the old bottom
+/// bar held, for the screens with no menu bar (an iPad) as much as a desk.
 #[component]
 fn DockBar() -> Element {
     use dock::host::tokens::{INK, INK_3, PRIMARY, RULE, SHEET, SHEET_2};
     let dock = dock::host::use_dock();
     let touch = (dock.class)() != FormClass::Desk;
     let height = if touch { 64 } else { 56 };
-    let space = dock.space();
     let set_name = dock
         .sets
         .read()
@@ -143,6 +159,8 @@ fn DockBar() -> Element {
         .map(|s| s.name.clone())
         .unwrap_or_else(|| "Screensets".to_owned());
     let arranging = dock.arranging();
+    let mode = try_use_context::<Signal<Mode>>();
+    let (arrangement, mixer) = (dock.shows(kind::ARRANGEMENT), dock.shows(kind::MIXER));
     let button = move |on: bool| {
         format!(
             "flex:none; min-width:{w}px; height:{h}px; display:flex; flex-direction:column; \
@@ -166,11 +184,11 @@ fn DockBar() -> Element {
     rsx! {
         div {
             style: "flex:0 0 {height}px; height:{height}px; display:flex; align-items:center; gap:4px; \
-                    padding:0 8px; background:{SHEET}; border-top:1px solid {RULE}; min-width:0; overflow:hidden;",
+                    padding:0 8px; background:{SHEET}; border-top:1px solid {RULE}; min-width:0;",
             for (kind, label) in BAR_PANELS {
                 button {
                     key: "{kind}",
-                    style: "{button(space.of_kind(kind).next().is_some())}",
+                    style: "{button(dock.shows(kind))}",
                     title: "{label}",
                     onclick: move |_| {
                         dock.toggle_kind(kind);
@@ -182,6 +200,20 @@ fn DockBar() -> Element {
             div { style: "flex:none; width:1px; height:{height - 20}px; background:{RULE}; margin:0 4px;" }
             div { style: "position:relative; flex:1 1 0; min-width:0; height:100%; display:flex; align-items:center; overflow:hidden;",
                 session_ui::transport_bar::TransportBar { big: touch }
+            }
+            // The bottom bar's own parts, flat and the bar's full height
+            // as they are there; their pickers open upward, over the dock
+            // (so the bar does not clip).
+            div { style: "position:relative; flex:none; height:100%; display:flex; align-items:stretch;",
+                if arrangement || mixer {
+                    div { style: "flex:none; width:1px; margin:10px 4px; background:{RULE};" }
+                    session_ui::shell::PanelControls { arrangement, mixer }
+                }
+                session_ui::shell::Jobs {}
+                if let Some(mode) = mode {
+                    session_ui::shell::PhaseSwitch { mode }
+                    session_ui::shell::Modes { mode }
+                }
             }
             div { style: "flex:none; width:1px; height:{height - 20}px; background:{RULE}; margin:0 4px;" }
             button {
@@ -251,6 +283,7 @@ fn apply(
             sets.save_as(name, class);
         }
         DockRequest::Arrange => dock.toggle_arrange(),
+        DockRequest::ToggleDocks => dock.toggle_docks(),
         DockRequest::TogglePanel(kind) => {
             let was_shown = dock.shows(&kind);
             let opened = dock.toggle_kind(&kind);
