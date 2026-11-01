@@ -209,7 +209,7 @@ static MAIN: ActionMeta = crate::actions::meta(
     "COMP_MAIN",
     "comp_main",
     "Comp the kit from its main take",
-    "Make `take` (its pass, colour — `Teal` — or lane name, as COMP_CANDIDATES names takes) the kit's main take and comp it back in wherever the comp plays another — except the stretches kept (COMP_KEEP) and where it has no audio — every mic from its own lane, the EDIT lane there the new comp as recorded (quantize it again after), one undo step. From then on T / Shift+T hold the takes up to it and rank it first, and COMP_BEST leaves it only where a take alike to it plays clearly better. `take` left out: the main take set, else none. `dry_run` says the stretches it would comp. Says each stretch and what played there.",
+    "Make `take` (its pass, colour — `Teal` — or lane name, as COMP_CANDIDATES names takes) the kit's main take and comp it back in wherever the comp plays another — except the stretches kept (COMP_KEEP) and where it has no audio — every mic from its own lane, the EDIT lane there the new comp as recorded (quantize it again after), one undo step. From then on T / Shift+T hold the takes up to it and rank it first, and COMP_BEST leaves it only where a take alike to it plays clearly better. `take` left out: the main take set, else none. `dry_run` says the stretches it would comp. Says each stretch and what played there. Unless a dry run, forks a checkpoint of the song first (`Before COMP_MAIN <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Comp",
     "",
 );
@@ -235,6 +235,8 @@ struct MainOut {
     restored: Vec<Restored>,
     /// Stretches left on another take: kept, or the main take silent there.
     left: Vec<String>,
+    /// The checkpoint forked first (`safety_net`); none for a dry run.
+    checkpoint: Option<String>,
 }
 
 /// The stretches of the comp playing another take than `main`, each with
@@ -258,6 +260,10 @@ fn off_main(
 pub fn register_main(list: &ActionList) -> Result<(), architect::action::ActionError> {
     list.register(&MAIN, Effect::Mutating, |a: MainArg| {
         let (daw, project) = crate::actions::song()?;
+        let net = crate::safety_net::before(
+            MAIN.id,
+            crate::safety_net::Reach::song_unless(a.dry_run.unwrap_or(false)),
+        )?;
         let song_span = (f64::NEG_INFINITY, f64::INFINITY);
         let versions = crate::comp_rank::versions_over(daw, &project, song_span);
         let pass = match a.take.as_deref() {
@@ -320,6 +326,7 @@ pub fn register_main(list: &ActionList) -> Result<(), architect::action::ActionE
                 .map(|(from, to, was)| Restored { from, to, was })
                 .collect(),
             left,
+            checkpoint: net.name(),
         })
     })?;
     Ok(())

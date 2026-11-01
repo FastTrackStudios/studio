@@ -328,7 +328,7 @@ static SEAMS: architect::action::ActionMeta = crate::actions::meta(
     "COMP_SEAMS",
     "comp_seams",
     "Comp seams where they are heard least",
-    "Every seam of the kit's comp — where it switches from one take to another — and where it is heard least: just before an attack of any take within 0.4 s (never past the seams either side), the one that covers the switch best, every mic of the kit compared as the take before and the take after play there (how much the two disagree across the cut and how much the wash under it jumps, over how loud what follows is). Per seam: `at`, the takes `before`/`after`, `heard` there (about 1: as loud as what covers it), `best_at` and `heard_best`, and `moves`. Unless `dry_run`, each that is better elsewhere is moved there — the stretch between comped from the take that now plays it and the kit's edit made again over it — as one undo step. `from`/`to` (seconds) narrow it.",
+    "Every seam of the kit's comp — where it switches from one take to another — and where it is heard least: just before an attack of any take within 0.4 s (never past the seams either side), the one that covers the switch best, every mic of the kit compared as the take before and the take after play there (how much the two disagree across the cut and how much the wash under it jumps, over how loud what follows is). Per seam: `at`, the takes `before`/`after`, `heard` there (about 1: as loud as what covers it), `best_at` and `heard_best`, and `moves`. Unless `dry_run`, each that is better elsewhere is moved there — the stretch between comped from the take that now plays it and the kit's edit made again over it — as one undo step. `from`/`to` (seconds) narrow it. Unless a dry run, forks a checkpoint of the song first (`Before COMP_SEAMS <date time>`, named in the result's `checkpoint`; open it as an alternative to go back), and is refused if one cannot be made.",
     "Comp",
     "",
 );
@@ -358,6 +358,8 @@ struct SeamOut {
 struct SeamsOut {
     seams: Vec<SeamOut>,
     moved: u32,
+    /// The checkpoint forked first (`safety_net`); none for a dry run.
+    checkpoint: Option<String>,
 }
 
 pub fn register(
@@ -373,6 +375,10 @@ pub fn register(
                 a.to.unwrap_or(f64::INFINITY),
             );
             let seams = survey(daw, &project, span);
+            let net = crate::safety_net::before(
+                SEAMS.id,
+                crate::safety_net::Reach::song_unless(a.dry_run.unwrap_or(false)),
+            )?;
             let moved = if a.dry_run.unwrap_or(false) {
                 0
             } else {
@@ -395,6 +401,7 @@ pub fn register(
                     })
                     .collect(),
                 moved: u32::try_from(moved).unwrap_or(u32::MAX),
+                checkpoint: net.name(),
             })
         },
     )?;
