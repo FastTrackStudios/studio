@@ -3,4 +3,6 @@
 pub mod expr;
 
 #[cfg(feature = "theme")]
+pub mod host;
+#[cfg(feature = "theme")]
 pub mod runtime;

@@ -336,6 +336,11 @@ impl Theme {
         self.tokens.get(name)
     }
 
+    /// Every token and its value in this theme's mode, by name.
+    pub fn tokens(&self) -> impl Iterator<Item = (&str, &Value)> {
+        self.tokens.iter().map(|(n, v)| (n.as_str(), v))
+    }
+
     /// The size `role` was drawn at.
     #[must_use]
     pub fn authored_size(&self, role: &str) -> Option<(f64, f64)> {

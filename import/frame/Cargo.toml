@@ -51,6 +51,7 @@ anyrender_vello = "0.15"
 anyrender_svg = "0.15"
 architect = { git = "https://github.com/FastTrackStudios/architect", rev = "cbdc7c7d7149d40577688554c8b1ad652466f1dc" }
 architect-extensions = { git = "https://github.com/FastTrackStudios/architect", rev = "cbdc7c7d7149d40577688554c8b1ad652466f1dc" }
+architect-mcp = { git = "https://github.com/FastTrackStudios/architect", rev = "cbdc7c7d7149d40577688554c8b1ad652466f1dc" }
 architect-workspace = { git = "https://github.com/FastTrackStudios/architect", rev = "cbdc7c7d7149d40577688554c8b1ad652466f1dc" }
 base64 = "0.22.1"
 blake3 = { version = "1.8" }

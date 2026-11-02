@@ -138,6 +138,24 @@ impl Pixels {
             .collect()
     }
 
+    /// Encode as a PNG.
+    ///
+    /// # Errors
+    /// When the encoder fails.
+    pub fn png(&self) -> Result<Vec<u8>, String> {
+        use image::ImageEncoder;
+        let mut out = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut out)
+            .write_image(
+                &self.unpremultiplied(),
+                self.width,
+                self.height,
+                image::ExtendedColorType::Rgba8,
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(out)
+    }
+
     /// Write a PNG.
     ///
     /// # Errors
