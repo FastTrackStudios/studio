@@ -183,6 +183,8 @@ struct Source {
     stamp: Stamp,
     /// Unsaved edits, over their files.
     drafts: BTreeMap<PathBuf, Draft>,
+    /// File text used by the last successful file-based compile.
+    compiled: BTreeMap<PathBuf, String>,
     /// Every file's bytes when the theme was loaded: what revert restores.
     baseline: BTreeMap<PathBuf, Vec<u8>>,
     /// Why the files did not compile, last time they were compiled.
@@ -308,11 +310,13 @@ impl ThemeHost {
             mode,
             stamp,
             drafts: BTreeMap::new(),
+            compiled: BTreeMap::new(),
             baseline,
             errors: Vec::new(),
         };
         match compile(&next, &self.schema, None) {
-            Ok(theme) => {
+            Ok((theme, compiled)) => {
+                next.compiled = compiled;
                 *source = next;
                 self.set(Some(Arc::new(theme)));
                 Ok(())
@@ -365,7 +369,8 @@ impl ThemeHost {
     /// Compile what the files and drafts say now; use it when it compiled.
     fn apply(&self, source: &mut Source) -> Result<(), Vec<ThemeError>> {
         match compile(source, &self.schema, None) {
-            Ok(theme) => {
+            Ok((theme, compiled)) => {
+                source.compiled = compiled;
                 source.errors.clear();
                 self.set(Some(Arc::new(theme)));
                 Ok(())
@@ -384,6 +389,44 @@ impl ThemeHost {
     /// # Errors
     /// Every problem the edit has.
     pub fn edit(&self, file: &Path, markup: String) -> Result<(), Vec<ThemeError>> {
+        self.edit_inner(file, markup, None, None)
+    }
+
+    /// Stage a file edit only if the displayed theme still has `version`.
+    ///
+    /// # Errors
+    /// The version changed, the file is not a layer, or compilation failed.
+    pub fn edit_if_version(
+        &self,
+        file: &Path,
+        markup: String,
+        version: u64,
+    ) -> Result<(), Vec<ThemeError>> {
+        self.edit_inner(file, markup, Some(version), None)
+    }
+
+    /// Stage an edit only while the host version and the layer text match a
+    /// snapshot. The text includes any existing draft.
+    ///
+    /// # Errors
+    /// The version or layer changed, the file cannot be read, or compilation fails.
+    pub fn edit_if_unchanged(
+        &self,
+        file: &Path,
+        expected: &str,
+        markup: String,
+        version: u64,
+    ) -> Result<(), Vec<ThemeError>> {
+        self.edit_inner(file, markup, Some(version), Some(expected))
+    }
+
+    fn edit_inner(
+        &self,
+        file: &Path,
+        markup: String,
+        version: Option<u64>,
+        expected: Option<&str>,
+    ) -> Result<(), Vec<ThemeError>> {
         let mut source = self.lock();
         let Some(file) = source
             .stamp
@@ -397,18 +440,110 @@ impl ThemeHost {
                 "not one of the theme's files (THEME_INSPECT lists them)",
             )]);
         };
-        let edited = BTreeMap::from([(file.clone(), markup.clone())]);
-        let theme = compile(&source, &self.schema, Some(&edited)).inspect_err(|e| {
-            source.errors.clone_from(e);
-        })?;
         let original = match source.drafts.get(&file) {
             Some(draft) => draft.original.clone(),
             None => std::fs::read(&file)
                 .map_err(|e| vec![ThemeError::new(ErrorKind::Io, Some(&file), e.to_string())])?,
         };
+        if let Some(expected) = expected {
+            let current = source
+                .drafts
+                .get(&file)
+                .map(|draft| draft.markup.as_bytes())
+                .unwrap_or(&original);
+            if current != expected.as_bytes() {
+                return Err(vec![ThemeError::new(
+                    ErrorKind::Io,
+                    Some(&file),
+                    "layer changed since the editor opened",
+                )]);
+            }
+        }
+        let edited = BTreeMap::from([(file.clone(), markup.clone())]);
+        let (theme, compiled) = compile(&source, &self.schema, Some(&edited)).inspect_err(|e| {
+            source.errors.clone_from(e);
+        })?;
+        let theme = Arc::new(theme);
+        if let Some(version) = version {
+            if !self.set_if_version(version, theme) {
+                return Err(vec![ThemeError::new(
+                    ErrorKind::Request,
+                    Some(&file),
+                    "theme changed; reopen the editor",
+                )]);
+            }
+        } else {
+            self.set(Some(theme));
+        }
         source.drafts.insert(file, Draft { markup, original });
+        source.compiled = compiled;
         source.errors.clear();
-        self.set(Some(Arc::new(theme)));
+        Ok(())
+    }
+
+    /// Read one layer as currently edited (draft first), without saving it.
+    ///
+    /// # Errors
+    /// The path is not a current layer, or it cannot be read as UTF-8.
+    pub fn file_text(&self, file: &Path) -> Result<String, Vec<ThemeError>> {
+        let source = self.lock();
+        let Some(file) = source
+            .stamp
+            .iter()
+            .map(|(f, _)| f)
+            .find(|f| same_file(f, file))
+        else {
+            return Err(vec![ThemeError::new(
+                ErrorKind::Request,
+                Some(file),
+                "not one of the theme's files",
+            )]);
+        };
+        match source.drafts.get(file) {
+            Some(draft) => Ok(draft.markup.clone()),
+            None => std::fs::read_to_string(file)
+                .map_err(|e| vec![ThemeError::new(ErrorKind::Io, Some(file), e.to_string())]),
+        }
+    }
+
+    /// Text of every layer used in the last successful file-based compile.
+    ///
+    /// This is a snapshot, not a fresh disk read; unsaved drafts are included.
+    #[must_use]
+    pub fn compiled_files(&self) -> BTreeMap<PathBuf, String> {
+        self.lock().compiled.clone()
+    }
+
+    /// Save only one file's draft; unrelated drafts remain unsaved.
+    ///
+    /// # Errors
+    /// The file has no draft, changed on disk, or cannot be written.
+    pub fn save_file(&self, file: &Path) -> Result<(), Vec<ThemeError>> {
+        let mut source = self.lock();
+        let Some(path) = source.drafts.keys().find(|p| same_file(p, file)).cloned() else {
+            return Err(vec![ThemeError::new(
+                ErrorKind::Request,
+                Some(file),
+                "file has no draft",
+            )]);
+        };
+        let draft = &source.drafts[&path];
+        let now = std::fs::read(&path)
+            .map_err(|e| vec![ThemeError::new(ErrorKind::Io, Some(&path), e.to_string())])?;
+        if now != draft.original {
+            return Err(vec![ThemeError::new(
+                ErrorKind::Io,
+                Some(&path),
+                "file changed since the draft was started",
+            )]);
+        }
+        std::fs::write(&path, draft.markup.as_bytes())
+            .map_err(|e| vec![ThemeError::new(ErrorKind::Io, Some(&path), e.to_string())])?;
+        source.drafts.remove(&path);
+        let modified = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+        if let Some((_, stamp)) = source.stamp.iter_mut().find(|(f, _)| *f == path) {
+            *stamp = modified;
+        }
         Ok(())
     }
 
@@ -598,7 +733,7 @@ fn compile(
     source: &Source,
     schema: &Schema,
     edited: Option<&BTreeMap<PathBuf, String>>,
-) -> Result<Theme, Vec<ThemeError>> {
+) -> Result<(Theme, BTreeMap<PathBuf, String>), Vec<ThemeError>> {
     if source.stamp.is_empty() {
         return Err(vec![ThemeError::new(
             ErrorKind::NoFiles,
@@ -607,6 +742,7 @@ fn compile(
         )]);
     }
     let mut scenes = Vec::new();
+    let mut compiled = BTreeMap::new();
     let mut errors = Vec::new();
     for (file, _) in &source.stamp {
         let draft = edited
@@ -623,7 +759,10 @@ fn compile(
             },
         };
         match crate::document::text::parse(&text, BTreeMap::new()) {
-            Ok(scene) => scenes.push(scene),
+            Ok(scene) => {
+                scenes.push(scene);
+                compiled.insert(file.clone(), text);
+            }
             Err(e) => errors.push(ThemeError {
                 line: u32::try_from(e.line).ok(),
                 col: u32::try_from(e.col).ok(),
@@ -639,6 +778,7 @@ fn compile(
         schema.clone(),
         source.mode.as_deref(),
     )
+    .map(|theme| (theme, compiled))
     .map_err(|ds| ds.into_iter().map(ThemeError::compile).collect())
 }
 

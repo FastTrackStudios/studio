@@ -222,6 +222,53 @@ fn save_preserves_external_changes_and_drafts() {
 }
 
 #[test]
+fn save_one_draft_preserves_other_drafts_and_checks_version() {
+    let dir = theme_dir();
+    let host = loaded(&dir);
+    let tokens = dir.join("a-tokens.frame");
+    let strip = dir.join("b-strip.frame");
+    let tokens_edit = TOKENS.replace("#202020", "#303030");
+    let strip_edit = STRIP.replace("w=20 h=20", "w=10 h=20");
+    host.edit(&tokens, tokens_edit.clone()).unwrap();
+    let before = host.version();
+    host.edit_if_version(&strip, strip_edit.clone(), before)
+        .unwrap();
+    assert!(host.edit_if_version(&strip, STRIP.into(), before).is_err());
+    assert_eq!(host.file_text(&strip).unwrap(), strip_edit);
+    host.save_file(&strip).unwrap();
+    assert_eq!(std::fs::read_to_string(&strip).unwrap(), strip_edit);
+    assert_eq!(std::fs::read_to_string(&tokens).unwrap(), TOKENS);
+    assert_eq!(host.file_text(&tokens).unwrap(), tokens_edit);
+    assert!(
+        host.inspect()
+            .files
+            .iter()
+            .any(|f| f.path.ends_with("a-tokens.frame") && f.draft)
+    );
+    host.reload().unwrap();
+    assert!(host.current().unwrap().has_role("mcp.strip"));
+}
+
+#[test]
+fn snapshot_text_rejects_a_disk_change_before_staging() {
+    let dir = theme_dir();
+    let host = loaded(&dir);
+    let strip = dir.join("b-strip.frame");
+    let snapshot = host.compiled_files().remove(&strip).unwrap();
+    let version = host.version();
+    let external = STRIP.replace("w=20 h=20", "w=15 h=20");
+    rewrite(&strip, &external);
+    let edit = STRIP.replace("w=20 h=20", "w=10 h=20");
+    assert!(
+        host.edit_if_unchanged(&strip, &snapshot, edit, version)
+            .is_err()
+    );
+    assert_eq!(std::fs::read_to_string(&strip).unwrap(), external);
+    assert_eq!(host.version(), version);
+    assert!(host.inspect().files.iter().all(|f| !f.draft));
+}
+
+#[test]
 fn saving_one_file_does_not_hide_another_files_change() {
     let dir = theme_dir();
     let host = loaded(&dir);
