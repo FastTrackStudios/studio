@@ -1,5 +1,5 @@
 name: Shared runner tools
-description: Expose pinned GitHub CLI and Python on shared NixOS slots.
+description: Expose pinned GitHub CLI, Python and the devenv CLI on shared NixOS slots.
 runs:
   using: composite
   steps:
@@ -11,3 +11,5 @@ runs:
           dirname "$(command -v gh)" >> "$GITHUB_PATH"
           dirname "$(command -v python3)" >> "$GITHUB_PATH"
         '
+    - name: devenv CLI
+      uses: ./.github/actions/devenv

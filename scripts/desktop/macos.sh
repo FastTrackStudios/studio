@@ -56,13 +56,7 @@ BUNDLE_ID="app.fasttrackstudio.$app.mac"
 mkdir -p "$OUT_DIR"
 
 # ── Tools ───────────────────────────────────────────────────────────────────
-NIX="${NIX:-}"
-if [ -z "$NIX" ]; then
-    for c in /nix/var/nix/profiles/default/bin/nix /run/current-system/sw/bin/nix "$(command -v nix 2>/dev/null || true)"; do
-        [ -n "$c" ] && [ -x "$c" ] && { NIX="$c"; break; }
-    done
-fi
-[ -n "$NIX" ] || { echo "no nix on this host" >&2; exit 1; }
+command -v devenv >/dev/null || { echo "no devenv on this host" >&2; exit 1; }
 
 # ── The Developer ID identity ───────────────────────────────────────────────
 KEYCHAIN="${KEYCHAIN:-fts-build.keychain}"
@@ -92,8 +86,7 @@ if [ "${SKIP_BUILD:-}" = 1 ]; then
 else
     echo "=== cargo build --profile $PROFILE -p $crate $features ==="
     # shellcheck disable=SC2086
-    "$NIX" develop "$ROOT" --accept-flake-config -c \
-        cargo build --profile "$PROFILE" -p "$crate" $features
+    devenv shell -- cargo build --profile "$PROFILE" -p "$crate" $features
 fi
 [ -x "$BIN" ] || { echo "ERROR: the build produced no $BIN" >&2; exit 1; }
 file -b "$BIN" | grep -q 'Mach-O 64-bit executable arm64' \

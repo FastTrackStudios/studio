@@ -160,6 +160,8 @@ jobs:
           echo "linked $to -> $src/$from ($n captures)"
         done < assets.txt
         echo "rig-models at $(git -C "$src" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    - name: devenv CLI
+      uses: ./.github/actions/devenv
     - name: Build, sign, notarize, staple
       env:
         KEYCHAIN: fts-build.keychain
@@ -168,7 +170,6 @@ jobs:
       run: |
         set -euo pipefail
         export PATH="/nix/var/nix/profiles/default/bin:$PATH"
-        export NIX=/nix/var/nix/profiles/default/bin/nix
         BUILD_NO="$(date +%s)"
         export BUILD_NO
         rm -rf target/desktop

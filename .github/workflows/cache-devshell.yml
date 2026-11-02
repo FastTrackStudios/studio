@@ -23,7 +23,7 @@ jobs:
     - uses: ./.github/actions/hosted-nix
       with:
         cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        shell: ''
+        devenv-shell: 'false'
     - name: Build CI devshell closure
       run: |
         nix build --accept-flake-config --no-link --print-out-paths \

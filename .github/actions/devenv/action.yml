@@ -1,0 +1,29 @@
+# The devenv CLI at exactly 2.4.0 (devenv.yaml's require_version), on PATH for
+# the steps after it: cachix's v2.4.0 tag, built by nix. A host that already
+# has this version keeps it (the self-hosted pool, airlock); anything else,
+# including a hosted runner with no devenv, builds the tag's CLI.
+#
+# Called by hosted-nix (hosted runners), shared-tools (the pool) and the
+# macOS jobs on airlock, before the first step that enters the devenv shell.
+
+name: devenv CLI
+description: devenv 2.4.0 on PATH, from cachix's v2.4.0 tag unless the host has it.
+
+runs:
+  using: composite
+  steps:
+    - name: devenv 2.4.0 on PATH
+      shell: bash
+      run: |
+        set -euo pipefail
+        # nix-darwin keeps nix outside a runner's PATH.
+        for d in /nix/var/nix/profiles/default/bin /run/current-system/sw/bin; do
+          [ -d "$d" ] && PATH="$PATH:$d"
+        done
+        if command -v devenv >/dev/null && [[ "$(devenv --version)" == "devenv 2.4.0 "* ]]; then
+          devenv --version
+          exit 0
+        fi
+        out="$(nix build --accept-flake-config --no-link --print-out-paths github:cachix/devenv/v2.4.0#devenv)"
+        echo "$out/bin" >> "$GITHUB_PATH"
+        "$out/bin/devenv" --version

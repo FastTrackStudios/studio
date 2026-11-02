@@ -23,3 +23,8 @@ imports:
   - devenv-fleet/rust
   - devenv-fleet/dioxus
   - devenv-fleet/darwin
+# REAPER is unfree: the `reaper` profile (devenv.nix) needs it permitted. Only
+# that package; the default shell does not use it.
+nixpkgs:
+  permitted_unfree_packages:
+    - reaper
