@@ -35,6 +35,8 @@ use crate::arrangement::Palette;
 use crate::mcp::Control;
 
 pub mod canvas;
+#[cfg(test)]
+mod examples;
 pub mod export;
 
 /// The role a theme draws a mixer strip as.
