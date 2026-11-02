@@ -766,6 +766,14 @@ impl TranslateAccel for InputHandler {
                     // In REAPER context, insert text isn't used
                     handled = true;
                 }
+                // A held-letter tool key went down or up: the processor took
+                // the key, so REAPER must not act on it too. Nothing shows the
+                // held tool in REAPER yet.
+                InputCommand::Hold(_) | InputCommand::Unhold(_) => {
+                    handled = true;
+                }
+                // Pointer/wheel/MIDI gestures: never produced by a key event.
+                InputCommand::Gesture { .. } => {}
             }
         }
 

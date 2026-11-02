@@ -603,7 +603,7 @@ fn AddBindingDialog(
                             let state = state.clone();
                             move |e: KeyboardEvent| {
                                 let key = e.key();
-                                if matches!(key, Key::Shift | Key::Control | Key::Alt | Key::Meta) {
+                                if matches!(key, Key::Named(NamedKey::Shift) | Key::Named(NamedKey::Control) | Key::Named(NamedKey::Alt) | Key::Named(NamedKey::Meta)) {
                                     return;
                                 }
                                 let mods = e.modifiers();
@@ -913,31 +913,31 @@ fn delete_binding(keys: &str, _action_id: &str) {
 fn format_captured_key(key: &Key, mods: &Modifiers) -> String {
     let key_str = match key {
         Key::Character(c) => c.to_lowercase(),
-        Key::Escape => "Esc".into(),
-        Key::Enter => "Enter".into(),
-        Key::Tab => "Tab".into(),
-        Key::Backspace => "BS".into(),
-        Key::Delete => "Del".into(),
-        Key::ArrowUp => "Up".into(),
-        Key::ArrowDown => "Down".into(),
-        Key::ArrowLeft => "Left".into(),
-        Key::ArrowRight => "Right".into(),
-        Key::Home => "Home".into(),
-        Key::End => "End".into(),
-        Key::PageUp => "PgUp".into(),
-        Key::PageDown => "PgDn".into(),
-        Key::F1 => "F1".into(),
-        Key::F2 => "F2".into(),
-        Key::F3 => "F3".into(),
-        Key::F4 => "F4".into(),
-        Key::F5 => "F5".into(),
-        Key::F6 => "F6".into(),
-        Key::F7 => "F7".into(),
-        Key::F8 => "F8".into(),
-        Key::F9 => "F9".into(),
-        Key::F10 => "F10".into(),
-        Key::F11 => "F11".into(),
-        Key::F12 => "F12".into(),
+        Key::Named(NamedKey::Escape) => "Esc".into(),
+        Key::Named(NamedKey::Enter) => "Enter".into(),
+        Key::Named(NamedKey::Tab) => "Tab".into(),
+        Key::Named(NamedKey::Backspace) => "BS".into(),
+        Key::Named(NamedKey::Delete) => "Del".into(),
+        Key::Named(NamedKey::ArrowUp) => "Up".into(),
+        Key::Named(NamedKey::ArrowDown) => "Down".into(),
+        Key::Named(NamedKey::ArrowLeft) => "Left".into(),
+        Key::Named(NamedKey::ArrowRight) => "Right".into(),
+        Key::Named(NamedKey::Home) => "Home".into(),
+        Key::Named(NamedKey::End) => "End".into(),
+        Key::Named(NamedKey::PageUp) => "PgUp".into(),
+        Key::Named(NamedKey::PageDown) => "PgDn".into(),
+        Key::Named(NamedKey::F1) => "F1".into(),
+        Key::Named(NamedKey::F2) => "F2".into(),
+        Key::Named(NamedKey::F3) => "F3".into(),
+        Key::Named(NamedKey::F4) => "F4".into(),
+        Key::Named(NamedKey::F5) => "F5".into(),
+        Key::Named(NamedKey::F6) => "F6".into(),
+        Key::Named(NamedKey::F7) => "F7".into(),
+        Key::Named(NamedKey::F8) => "F8".into(),
+        Key::Named(NamedKey::F9) => "F9".into(),
+        Key::Named(NamedKey::F10) => "F10".into(),
+        Key::Named(NamedKey::F11) => "F11".into(),
+        Key::Named(NamedKey::F12) => "F12".into(),
         _ => return String::new(),
     };
 
