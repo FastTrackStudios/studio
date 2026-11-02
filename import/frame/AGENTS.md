@@ -14,4 +14,5 @@
 - Faces are generated (`just faces`), never committed.
 - Until Studio depends on Frame by tag (FastTrackStudios/studio#373), Studio commits that touch
   Frame are replayed here with `just catch-up <studio checkout>`.
+- figcraft comes from our fork by tag, only in `frame-doc` and `frame-editor` (`docs/figcraft-fork.md`, `NOTICE`).
 - The plan: FastTrackStudios/frame#2.
