@@ -168,11 +168,11 @@ else
     # hence the `cd $(dirname …)`. Keep in step with
     # apps/task/tailwind_build.rs, which pins the same cwd.
     # shellcheck disable=SC2016 # the single quotes are inside a double-quoted script
-    "$NIX" develop "$ROOT" -c bash -c \
+    (cd "$ROOT" && devenv shell -- bash -c \
         "$XCODE_ENV; export PATH=$BIN_IOS:\$PATH; \
          cd '$ROOT/$DX_APP_DIR'; \
          ${DX_TAILWIND:+(cd \"\$(dirname '$DX_TAILWIND')\" \&\& tailwindcss -i \"\$(basename '$DX_TAILWIND')\" -o '$ROOT/$DX_APP_DIR/assets/tailwind.css');} \
-         dx build --platform ios --device --release $DX_FEATURES" \
+         dx build --platform ios --device --release $DX_FEATURES") \
         > /tmp/fts-build.log 2>&1 || true
     tail -2 /tmp/fts-build.log
 fi
