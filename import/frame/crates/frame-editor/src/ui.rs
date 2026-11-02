@@ -143,6 +143,7 @@ pub fn FrameThemeEditor() -> Element {
                     }
                 }
                 p { "Save selected role to a source file (rewrites its markup and removes comments)" }
+                p { "Avoid editing the target file in another application while saving; simultaneous writes can overwrite changes." }
                 div { style: "display: flex; flex-wrap: wrap; gap: 4px;",
                     for file in files {
                         {

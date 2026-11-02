@@ -222,6 +222,24 @@ fn save_preserves_external_changes_and_drafts() {
 }
 
 #[test]
+fn save_one_draft_refuses_an_external_change_before_writing() {
+    let dir = theme_dir();
+    let host = loaded(&dir);
+    let strip = dir.join("b-strip.frame");
+    let edited = STRIP.replace("w=20 h=20", "w=10 h=20");
+    host.edit(&strip, edited.clone()).unwrap();
+    let external = STRIP.replace("w=20 h=20", "w=15 h=20");
+    rewrite(&strip, &external);
+
+    let errors = host
+        .save_file_if_version(&strip, host.version())
+        .unwrap_err();
+    assert!(errors[0].message.contains("changed since"));
+    assert_eq!(std::fs::read_to_string(&strip).unwrap(), external);
+    assert_eq!(host.file_text(&strip).unwrap(), edited);
+}
+
+#[test]
 fn save_one_draft_preserves_other_drafts_and_checks_version() {
     let dir = theme_dir();
     let host = loaded(&dir);
