@@ -6,23 +6,37 @@ on:
   pull_request:
   workflow_dispatch:
 
-# A PR's new push supersedes its old run; a push to main always finishes,
-# so every main commit says whether it is green.
+# WHO CANCELS WHOM:
+#
+#   pull request   one group per PR; a newer push cancels the older run.
+#   push           one group per branch, QUEUED, not cancelled: the running
+#                  run finishes, and of the pushes that land meanwhile only
+#                  the newest waits. A cancelled run leaves no green commit
+#                  on main behind it.
+#   dispatch       its own group (the run id): never cancelled.
 concurrency:
-  group: checks-${{ github.ref }}
+  group: checks-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'push' && github.ref || format('run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# No RUSTFLAGS / CARGO_TARGET_*_RUSTFLAGS here: either would replace the
-# rustflags tables in .cargo/config.toml, and with them the kache keys
-# Frame shares with Studio. `-D warnings` goes on clippy instead.
+# No RUSTFLAGS / CARGO_TARGET_*_RUSTFLAGS / RUSTC_WRAPPER here: either
+# rustflags variable would replace the tables in .cargo/config.toml, and with
+# them the kache keys Frame shares with Studio. `-D warnings` goes on clippy.
 env:
-  CARGO_TERM_COLOR: always
+  # Terse, stable logs: this is CI, not a terminal.
+  CARGO_TERM_COLOR: never
+  # A CI run is a fresh tree; incremental output only bloats the cache.
+  CARGO_INCREMENTAL: "0"
 
-# Pull requests run on GitHub-hosted runners (the repo is public, and the
-# THEBATTLESHIP pool refuses pull_request jobs from public repos); pushes to
-# main run on the pool, with kache. .github/actions/rust-env sets up either.
-# The toolchain and native libraries (Vulkan loader, mold) come from the
-# flake's `ci` shell.
+# WHERE EACH JOB RUNS. Pull requests run on GitHub-hosted ubuntu-latest: the
+# repo is public, and the THEBATTLESHIP pool refuses pull_request jobs from
+# public repos. Pushes run on THEBATTLESHIP's shared `thebattleship` pool,
+# whose target dir stays warm from one push to the next. The hosted and pool
+# composite actions set up either kind (.github/actions/hosted-devenv-rust,
+# .github/actions/battleship-devenv-rust).
+#
+# TOOLCHAIN. Every command runs as `devenv shell -- <command>` in the devenv.nix
+# shell: the fleet's rust 1.99.1 pin, mold, the native libraries and just. The
+# rustflags (frame pointers, mold) come from .cargo/config.toml only.
 jobs:
   lint:
     name: Lint (fmt + clippy + boundary)
@@ -32,19 +46,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: ./.github/actions/rust-env
+      - uses: ./.github/actions/hosted-devenv-rust
+        if: ${{ runner.environment == 'github-hosted' }}
+        with:
+          job: lint
+      - uses: ./.github/actions/battleship-devenv-rust
+        if: ${{ runner.environment == 'self-hosted' }}
         with:
           job: lint
       - name: fmt
-        run: nix develop --accept-flake-config .#ci --command cargo fmt --all -- --check
+        run: devenv shell -- cargo fmt --all -- --check
       - name: clippy
         if: ${{ !cancelled() }}
-        run: nix develop --accept-flake-config .#ci --command cargo clippy --workspace --all-targets -- -D warnings
+        run: devenv shell -- cargo clippy --workspace --all-targets -- -D warnings
       # `frame` (core) has no architect, vox, Dioxus or figcraft in its
       # normal dependency tree; the integration is frame-architect.
       - name: core boundary
         if: ${{ !cancelled() }}
-        run: nix develop --accept-flake-config .#ci --command just boundary
+        run: devenv shell -- just boundary
 
   check:
     name: Check
@@ -54,13 +73,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: ./.github/actions/rust-env
+      - uses: ./.github/actions/hosted-devenv-rust
+        if: ${{ runner.environment == 'github-hosted' }}
         with:
-          job: test
+          job: check
+      - uses: ./.github/actions/battleship-devenv-rust
+        if: ${{ runner.environment == 'self-hosted' }}
+        with:
+          job: check
       - name: just check
-        run: nix develop --accept-flake-config .#ci --command just check
+        run: devenv shell -- just check
       - name: just test
-        run: nix develop --accept-flake-config .#ci --command just test
+        run: devenv shell -- just test
 
   # An app pinning Frame by tag, as the README shows, built against this
   # commit: the snippet and its [patch] tables stay true.
@@ -72,11 +96,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: ./.github/actions/rust-env
+      - uses: ./.github/actions/hosted-devenv-rust
+        if: ${{ runner.environment == 'github-hosted' }}
+        with:
+          job: consumer
+      - uses: ./.github/actions/battleship-devenv-rust
+        if: ${{ runner.environment == 'self-hosted' }}
         with:
           job: consumer
       - name: just consumer
-        run: nix develop --accept-flake-config .#ci --command just consumer
+        run: devenv shell -- just consumer
 
   # The one status to require on main: it passes only when every job above
   # succeeded; a skipped or cancelled job fails it.
