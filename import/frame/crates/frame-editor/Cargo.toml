@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 frame-doc = { path = "../frame-doc" }
 figcraft-engine = { workspace = true }
+frame = { path = "../frame", features = ["theme"] }
 
 [dev-dependencies]
 frame = { path = "../frame" }
