@@ -592,6 +592,7 @@ fn draw_strip_controls(
         // scroll paint into the rails and the ones below paint over the
         // strip's own controls.
         scene.push_clip_layer(
+            vello::peniko::Fill::NonZero,
             Affine::IDENTITY,
             &vello::kurbo::Rect::new(left + box_.x0, box_.y0, left + box_.x1, box_.y1),
         );
@@ -645,6 +646,7 @@ fn draw_strip_controls(
     // its compressor is not.
     if let (Some(box_), Some(history), Some(tone)) = (strip.rack_rect(), history, settings) {
         scene.push_clip_layer(
+            vello::peniko::Fill::NonZero,
             Affine::IDENTITY,
             &vello::kurbo::Rect::new(left + box_.x0, box_.y0, left + box_.x1, box_.y1),
         );

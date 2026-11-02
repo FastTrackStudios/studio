@@ -2,7 +2,7 @@
 name = "dioxus-test"
 version = "0.1.0"
 edition = "2024"
-description = "Vendored DioxusLabs/dioxus-test on the workspace dioxus 0.8 git + blitz beta.1 pins. Headless component testing on blitz-dom."
+description = "Vendored DioxusLabs/dioxus-test on the workspace dioxus 0.8 git + blitz beta.4 pins. Headless component testing on blitz-dom."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus-test/"
 publish = false
@@ -17,15 +17,16 @@ blitz-dom = { workspace = true, features = ["autofocus", "custom-widget"] }
 # HTML parser provider so `dangerous_inner_html` works in tests exactly
 # as under dioxus-native (which registers the same provider).
 blitz-html = { workspace = true }
-dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", rev = "f717a8e184a522d078b70bb4b4d62a5f9a99ddfc" }
-dioxus-html = { git = "https://github.com/DioxusLabs/dioxus", rev = "f717a8e184a522d078b70bb4b4d62a5f9a99ddfc" }
+# dioxus-vdom is the old dioxus-core (renamed upstream on the 0.8 line).
+dioxus-core = { package = "dioxus-vdom", git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
+dioxus-html = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
 dioxus-native-dom = { workspace = true }
 test-that = { version = "0.5.2", default-features = false, features = ["regex", "num-traits"] }
 tokio = { workspace = true }
 tracing = { workspace = true }
 # ── FTS keyboard extension (src/keyboard.rs) ──────────────────────────
 blitz-traits = { workspace = true }
-keyboard-types = "0.7"
+keyboard-types = "0.8"
 smol_str = "0.3"
 # ── FTS screenshot extension (src/screenshot.rs) ──────────────────────
 # Rasterize the laid-out headless document to a PNG for visual inspection

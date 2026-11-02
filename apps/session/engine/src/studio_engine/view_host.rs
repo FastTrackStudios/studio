@@ -468,6 +468,8 @@ fn forwarded_info(action: WindowAction) -> architect::action::ActionInfo {
         result_schema: action.result_schema,
         enabled: true,
         disabled_reason: None,
+        // A window action carries no toggle state over the forward.
+        checked: None,
     }
 }
 

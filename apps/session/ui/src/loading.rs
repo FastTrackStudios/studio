@@ -146,9 +146,8 @@ impl std::error::Error for NoWebGl2 {}
 
 /// A renderer over a canvas's WebGL2 context: `context` asks the browser
 /// for it (`None` when there is none), `make` builds the renderer once it
-/// is there. The renderer itself would panic on a missing context
-/// (`vello_hybrid::WebGlRenderer::new` expects it), so it is only made
-/// once the context is known to exist.
+/// is there. The renderer is only made once the context is known to
+/// exist, so it is asked for with the options the page wants.
 ///
 /// # Errors
 ///

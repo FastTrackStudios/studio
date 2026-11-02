@@ -118,7 +118,7 @@ pub fn CompGraph(
     // eq_graph.rs (schedule_update works outside the runtime per its docs).
     let frame_tick: Signal<u64> = use_signal(|| 0);
     use_hook(|| {
-        let updater = dioxus_core::schedule_update();
+        let updater = dioxus_vdom::schedule_update();
         std::thread::spawn(move || {
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(33));

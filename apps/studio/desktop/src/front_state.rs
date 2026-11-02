@@ -226,7 +226,7 @@ fn day_of(iso: &str) -> String {
 pub fn play_song(index: usize) {
     // Forever, not the page's: the page closes as the guitar opens, and the
     // call must not go with it.
-    let _ = dioxus_core::spawn_forever(async move {
+    let _ = dioxus_vdom::spawn_forever(async move {
         #[cfg(target_os = "ios")]
         let rig = crate::rig_engine::engine().map(|e| e.rig.clone());
         #[cfg(not(target_os = "ios"))]
@@ -246,7 +246,7 @@ pub fn play_song(index: usize) {
 
 /// Put the guitar rig in Setlist mode (where sets are made).
 pub fn open_setlists() {
-    let _ = dioxus_core::spawn_forever(async move {
+    let _ = dioxus_vdom::spawn_forever(async move {
         #[cfg(target_os = "ios")]
         let rig = crate::rig_engine::engine().map(|e| e.rig.clone());
         #[cfg(not(target_os = "ios"))]

@@ -70,7 +70,7 @@ studio = { workspace = true }
 # localStorage in a browser.
 utils = { workspace = true }
 
-vello = "0.9"
+vello = "0.11"
 # Finding REAPER's resource path, for the toolbar icons it installs.
 dirs = { workspace = true, optional = true }
 timeline = { workspace = true, features = ["actions"] }

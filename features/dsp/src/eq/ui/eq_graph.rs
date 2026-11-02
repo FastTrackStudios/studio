@@ -15,7 +15,7 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use dioxus_elements::input_data::MouseButton;
+use dioxus_html::input_data::MouseButton;
 // The component is portable: dioxus, and the geometry the graph is drawn
 // in. The plugin's custom-widget host is native only (below).
 #[cfg(not(target_arch = "wasm32"))]
@@ -1778,7 +1778,7 @@ pub fn EqGraph(
                                         oninput: move |evt| commit(evt.value()),
                                         onkeydown: move |evt: KeyboardEvent| {
                                             match evt.key() {
-                                                Key::Enter | Key::Escape => {
+                                                Key::Named(NamedKey::Enter) | Key::Named(NamedKey::Escape) => {
                                                     close_label_editor();
                                                 }
                                                 // Everything else is text and

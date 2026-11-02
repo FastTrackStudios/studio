@@ -247,14 +247,14 @@ pub fn GigWorkspace(on_back: Option<EventHandler<()>>) -> Element {
             tabindex: 0,
             onkeydown: move |e: KeyboardEvent| match e.key() {
                 Key::Character(c) if c == " " => player().toggle(),
-                Key::ArrowLeft => player().seek((player().position() - 5.0).max(0.0)),
-                Key::ArrowRight => player().seek(player().position() + 5.0),
-                Key::ArrowUp => {
+                Key::Named(NamedKey::ArrowLeft) => player().seek((player().position() - 5.0).max(0.0)),
+                Key::Named(NamedKey::ArrowRight) => player().seek(player().position() + 5.0),
+                Key::Named(NamedKey::ArrowUp) => {
                     if let Some(i) = song_at().and_then(|i| i.checked_sub(1)) {
                         st.select(i);
                     }
                 }
-                Key::ArrowDown => {
+                Key::Named(NamedKey::ArrowDown) => {
                     let next = song_at().map_or(0, |i| i.saturating_add(1));
                     if next < st.song_count() {
                         st.select(next);

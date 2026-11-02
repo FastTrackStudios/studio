@@ -35,7 +35,7 @@ pub fn PanelContextMenuOverlay() -> Element {
             tabindex: "0",
             autofocus: true,
             onkeydown: move |e: KeyboardEvent| {
-                if matches!(e.key(), Key::Escape) {
+                if matches!(e.key(), Key::Named(NamedKey::Escape)) {
                     close_menu();
                 }
             },

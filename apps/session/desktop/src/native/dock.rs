@@ -244,7 +244,7 @@ fn DockBar() -> Element {
                 style: "{arrange_style}",
                 title: "Arrange panels (or hold W)",
                 onclick: move |_| press("SESSION_ARRANGE", &serde_json::Value::Null),
-                lucide_dioxus::Move { size: 18, color: if arranging { INK } else { INK_3 } }
+                lucide_dioxus::Grip { size: 18, color: if arranging { INK } else { INK_3 } }
                 "Arrange"
             }
         }

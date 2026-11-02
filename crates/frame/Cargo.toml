@@ -13,7 +13,10 @@ workspace = true
 [features]
 default = ["vox"]
 anyrender = ["dep:anyrender", "dep:anyrender_svg", "dep:anyrender_vello", "dep:image", "dep:peniko", "dep:pollster", "dep:skrifa", "dep:vello", "dep:winit", "svg_export"]
-anyrender-0-11 = ["dep:anyrender_0_11", "dep:anyrender_svg_0_12"]
+# Paint into a host's (Blitz's) anyrender scene. Since architect v0.10.0
+# frame and Blitz share one anyrender (0.14, the blitz fork), so this is
+# the same crate the `anyrender` feature renders with.
+anyrender-blitz = ["dep:anyrender", "dep:anyrender_svg"]
 codec = ["io"]
 cpu = ["dep:image", "dep:vello_cpu"]
 design = ["io", "render", "runtime"]
@@ -36,14 +39,9 @@ theme = ["render"]
 vox = ["architect/vox", "dep:vox", "rpc"]
 
 [dependencies]
-anyrender = { git = "https://github.com/DioxusLabs/anyrender.git", branch = "main", optional = true }
-# The host scene anyrender (0.11): the blitz fork the workspace patches
-# crates.io anyrender to, named directly — dx's metadata reader cannot
-# match a renamed dependency to a patched source.
-anyrender_0_11 = { workspace = true, optional = true }
-anyrender_svg_0_12 = { workspace = true, optional = true }
+anyrender = { workspace = true, optional = true }
 anyrender_svg = { workspace = true, optional = true }
-anyrender_vello = { git = "https://github.com/DioxusLabs/anyrender.git", branch = "main", optional = true }
+anyrender_vello = { workspace = true, optional = true }
 architect = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 blake3 = { workspace = true }
@@ -69,7 +67,7 @@ taffy = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 uuid = { workspace = true }
-vello = { version = "0.10.0", optional = true }
+vello = { workspace = true, optional = true }
 vello_cpu = { workspace = true, features = ["std", "u8_pipeline"], optional = true }
 vox = { workspace = true, optional = true }
 vox-core = { workspace = true, optional = true }
@@ -90,10 +88,10 @@ pollster = { workspace = true }
 proptest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-vello = { version = "0.10.0" }
+vello = { workspace = true }
 vox-core = { workspace = true }
 vox-websocket = { workspace = true }
-wgpu = { version = "29" }
+wgpu = { workspace = true }
 
 [[example]]
 name = "strips"

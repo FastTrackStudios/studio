@@ -664,7 +664,7 @@ pub fn WorkstationApp() -> Element {
             tabindex: 0,
             autofocus: true,
             onkeydown: move |e: KeyboardEvent| {
-                use dioxus::prelude::Key;
+                use dioxus::prelude::{Key, NamedKey};
                 match e.key() {
                     Key::Character(c) if c == " " => {
                         e.prevent_default();
@@ -691,7 +691,7 @@ pub fn WorkstationApp() -> Element {
                         let open = !mixer_open();
                         mixer_open.set(open);
                     }
-                    Key::Home => {
+                    Key::Named(NamedKey::Home) => {
                         playhead.set(0.0);
                         spawn(async move {
                             if let Some(daw) = daw::get()

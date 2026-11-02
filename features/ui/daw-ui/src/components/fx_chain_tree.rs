@@ -336,12 +336,12 @@ fn CreateContainerPrompt(props: CreateContainerPromptProps) -> Element {
                     name.set(evt.value().clone());
                 },
                 onkeydown: move |evt| {
-                    if evt.key() == Key::Enter {
+                    if evt.key() == Key::Named(NamedKey::Enter) {
                         let n = name.read().clone();
                         if !n.trim().is_empty() {
                             props.on_create.call(n);
                         }
-                    } else if evt.key() == Key::Escape {
+                    } else if evt.key() == Key::Named(NamedKey::Escape) {
                         props.on_cancel.call(());
                     }
                 },
@@ -390,12 +390,12 @@ fn RenamePrompt(props: RenamePromptProps) -> Element {
                     name.set(evt.value().clone());
                 },
                 onkeydown: move |evt| {
-                    if evt.key() == Key::Enter {
+                    if evt.key() == Key::Named(NamedKey::Enter) {
                         let n = name.read().clone();
                         if !n.trim().is_empty() {
                             props.on_rename.call(n);
                         }
-                    } else if evt.key() == Key::Escape {
+                    } else if evt.key() == Key::Named(NamedKey::Escape) {
                         props.on_cancel.call(());
                     }
                 },

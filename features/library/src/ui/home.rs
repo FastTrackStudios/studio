@@ -2,7 +2,7 @@
 //! changed and who changed it, and the conversations still open.
 
 use dioxus::prelude::*;
-use lucide_dioxus::{FolderOpen, ListMusic, MessageSquare, Music, Pause, Play};
+use lucide_dioxus::{AudioLines, FolderOpen, ListMusic, MessageSquare, Pause, Play};
 
 use super::kit::*;
 use super::{Open, Route, Viewport, open, use_library, use_nav, use_wide};
@@ -411,7 +411,7 @@ fn ChangedRow(
                     font-family: {FONT}; text-align: left;",
             onclick: move |_| nav.go(route),
             match kind {
-                "song" => rsx! { Music { size: 20, color: INK_3 } },
+                "song" => rsx! { AudioLines { size: 20, color: INK_3 } },
                 "session" => rsx! { FolderOpen { size: 20, color: INK_3 } },
                 _ => rsx! { ListMusic { size: 20, color: INK_3 } },
             }

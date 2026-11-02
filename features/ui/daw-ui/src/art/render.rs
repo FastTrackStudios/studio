@@ -142,10 +142,7 @@ pub fn render_for(
 /// The primitives are SVG and the strip is HTML composing them, so this is
 /// deliberately untyped about which — it is the same dioxus-ssr call either
 /// way, and tests want both.
-pub fn render_svg<P: dioxus::dioxus_core::Properties>(
-    component: fn(P) -> Element,
-    props: P,
-) -> String {
+pub fn render_svg<P: dioxus::core::Properties>(component: fn(P) -> Element, props: P) -> String {
     let mut dom = VirtualDom::new_with_props(component, props);
     dom.rebuild_in_place();
     dioxus_ssr::render(&dom)

@@ -83,7 +83,7 @@ pub(crate) fn Conversation(about: Anchor, #[props(default)] exact: bool) -> Elem
                                 color: {INK}; font-family: {FONT}; font-size: 14px; padding: 0;",
                         oninput: move |e| draft.set(e.value()),
                         onkeydown: move |e| {
-                            if e.key() == Key::Enter {
+                            if e.key() == Key::Named(NamedKey::Enter) {
                                 send_key();
                             }
                             // A plain key is the field's (a `?` in a comment

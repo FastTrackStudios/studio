@@ -179,6 +179,8 @@ pub fn Arrangement() -> Element {
                         (f64::from(*x) * WHEEL_LINE, f64::from(*y) * WHEEL_LINE)
                     }
                     winit::event::MouseScrollDelta::PixelDelta(at) => css_delta(&*win, at.x, at.y),
+                    // winit's delta is non-exhaustive: nothing else scrolls.
+                    _ => (0.0, 0.0),
                 };
                 panel.handle(PanelEvent::Wheel { dx, dy });
             }

@@ -340,11 +340,10 @@ impl Canvas for Tally {
     fn pop(&mut self) {}
 }
 
-#[cfg(feature = "anyrender-0-11")]
-mod anyrender_0_11_impl {
-    //! Paint into any anyrender 0.11 `PaintScene` — session's recorded
+#[cfg(feature = "anyrender-blitz")]
+mod anyrender_host_impl {
+    //! Paint into any anyrender `PaintScene` — session's recorded
     //! `anyrender::Scene` included.
-    use anyrender_0_11 as anyrender;
     use kurbo::{Affine, BezPath, Stroke};
     use peniko::{BlendMode, Brush, Fill};
 
@@ -377,11 +376,18 @@ mod anyrender_0_11_impl {
             self.0.stroke(style, transform, paint(brush), None, shape);
         }
         fn push_clip(&mut self, transform: Affine, shape: &BezPath) {
-            self.0.push_clip_layer(transform, shape);
+            self.0.push_clip_layer(Fill::NonZero, transform, shape);
         }
         fn push_opacity(&mut self, transform: Affine, alpha: f32, shape: &BezPath) {
-            self.0
-                .push_layer(BlendMode::default(), alpha, transform, shape, None, None);
+            self.0.push_layer(
+                Fill::NonZero,
+                BlendMode::default(),
+                alpha,
+                transform,
+                shape,
+                None,
+                None,
+            );
         }
         fn pop(&mut self) {
             self.0.pop_layer();
@@ -389,5 +395,5 @@ mod anyrender_0_11_impl {
     }
 }
 
-#[cfg(feature = "anyrender-0-11")]
-pub use anyrender_0_11_impl::AnyRender;
+#[cfg(feature = "anyrender-blitz")]
+pub use anyrender_host_impl::AnyRender;

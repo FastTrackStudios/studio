@@ -7,8 +7,8 @@ pub use crate::drum::HitGesture;
 use crate::mouse::{Context as MouseContext, Gesture as MouseGesture};
 use crate::ui::{canvas, theme};
 use dioxus::prelude::*;
-use dioxus_elements::input_data::MouseButton;
-use keyboard_types::{Key, Modifiers};
+use dioxus_html::input_data::MouseButton;
+use keyboard_types::{Key, Modifiers, NamedKey};
 
 /// One slip/stretch drag: which hit is being slid, and where the
 /// pointer is.
@@ -513,7 +513,7 @@ pub fn StackView(
                     e.stop_propagation();
                     return;
                 }
-                if e.key() == Key::Escape {
+                if e.key() == Key::Named(NamedKey::Escape) {
                     if let Some(previous) = zoom_from.take() {
                         editor.write().tool = previous;
                     }
@@ -564,21 +564,21 @@ pub fn StackView(
                 let shift = e.modifiers().contains(Modifiers::SHIFT);
                 match e.key() {
                     // r[impl drums.manual.nudge]
-                    Key::ArrowLeft | Key::ArrowRight if on_hit.is_some() => {
+                    Key::Named(NamedKey::ArrowLeft) | Key::Named(NamedKey::ArrowRight) if on_hit.is_some() => {
                         // The division with Shift for the fine step:
                         // 1 ms, the sample-accurate trim.
                         let step = if shift { 0.001 } else { grid_secs };
                         if step <= 0.0 {
                             return;
                         }
-                        let delta = if e.key() == Key::ArrowLeft { -step } else { step };
+                        let delta = if e.key() == Key::Named(NamedKey::ArrowLeft) { -step } else { step };
                         emit_move(&sel, delta, false);
                         let mut sel = sel;
                         sel.hit_secs += delta;
                         selected.set(Some(sel));
                     }
                     // r[impl drums.manual.add-remove]
-                    Key::Delete | Key::Backspace => {
+                    Key::Named(NamedKey::Delete) | Key::Named(NamedKey::Backspace) => {
                         if let Some(h) = &on_hit {
                             h.call(HitGesture::Remove {
                                 lane: sel.lane_name.clone(),

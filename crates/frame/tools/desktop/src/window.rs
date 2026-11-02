@@ -457,7 +457,7 @@ impl App {
                 .create_view(&wgpu::TextureViewDescriptor::default()),
         );
         device.queue.submit([encoder.finish()]);
-        texture.present();
+        device.queue.present(texture);
         let _ = device.device.poll(wgpu::PollType::Poll);
         if let Some(stats) = &mut self.stats {
             stats.add(started.elapsed(), Instant::now());

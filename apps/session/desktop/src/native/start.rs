@@ -25,9 +25,9 @@ use std::path::PathBuf;
 use dioxus::prelude::*;
 use fts_account::ui::Phase;
 use lucide_dioxus::{
-    Check, ChevronRight, ChevronsUpDown, CircleAlert, CircleCheck, CloudDownload, FileMusic,
-    HardDriveDownload, House, Library, LibraryBig, Link, ListMusic, LogOut, Music, Pencil, Play,
-    Plus, Radio, Search, Trash2, X,
+    AudioLines, Check, ChevronRight, ChevronsUpDown, CircleAlert, CircleCheck, CloudDownload,
+    FileMusic, HardDriveDownload, House, Library, LibraryBig, Link, ListMusic, LogOut, Pencil,
+    Play, Plus, Radio, Search, Trash, X,
 };
 use session_engine::setlist::Setlist;
 use session_engine::song_stream::Offline;
@@ -1071,7 +1071,7 @@ fn Start() -> Element {
                                 if kind_of(&path) == "Setlist" {
                                     ListMusic { size: 34, color: ART_INK }
                                 } else {
-                                    Music { size: 34, color: ART_INK }
+                                    AudioLines { size: 34, color: ART_INK }
                                 }
                             }
                         }
@@ -1370,7 +1370,7 @@ fn SectionIcon(section: Section, color: &'static str) -> Element {
         Section::Home => rsx! { House { size, color } },
         Section::Setlists => rsx! { ListMusic { size, color } },
         Section::Lists => rsx! { Library { size, color } },
-        Section::Songs => rsx! { Music { size, color } },
+        Section::Songs => rsx! { AudioLines { size, color } },
         Section::Downloads => rsx! { HardDriveDownload { size, color } },
     }
 }
@@ -1977,7 +1977,7 @@ fn SongsList(
                             div {
                                 style: "flex:none; width:40px; height:40px; border-radius:10px; display:flex; align-items:center; \
                                         justify-content:center; background:#1c1f25; font-size:13px; font-weight:700; color:{TEXT};",
-                                if song.key.is_empty() { Music { size: 18, color: DIM } } else { "{song.key}" }
+                                if song.key.is_empty() { AudioLines { size: 18, color: DIM } } else { "{song.key}" }
                             }
                             div {
                                 style: "flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;",
@@ -2056,7 +2056,7 @@ fn LocalRow(
                     Pill { label: "Remove", primary: false, on_press: move |()| { asking.set(false); on_remove.call(()); } }
                     Pill { label: "Keep", primary: false, on_press: move |()| asking.set(false) }
                 } else {
-                    Act { title: "Remove from this device", on_press: move |()| asking.set(true), Trash2 { size: 17, color: DIM } }
+                    Act { title: "Remove from this device", on_press: move |()| asking.set(true), Trash { size: 17, color: DIM } }
                 }
             }
             Act { title: "Open", on_press: on_open, ChevronRight { size: 18, color: DIM } }

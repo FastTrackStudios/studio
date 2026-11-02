@@ -376,6 +376,7 @@ pub fn roll_scene(
     // keyboard.
     let roll_at = Affine::translate((canvas::GUTTER_W, canvas::RULER_H));
     scene.push_clip_layer(
+        Fill::NonZero,
         roll_at,
         &Rect::new(
             0.0,
@@ -1137,7 +1138,7 @@ fn keyboard(scene: &mut Scene, look: &Look, ed: &Editor, h: f64, labels: &mut La
     // Clipped as well as sized, so the half row at the top and bottom is
     // cut the way the rows themselves are.
     let band = Rect::new(0.0, 0.0, canvas::GUTTER_W, ed.viewport.h);
-    scene.push_clip_layer(at, &band);
+    scene.push_clip_layer(Fill::NonZero, at, &band);
     let keys = canvas::keyboard(ed);
 
     // A pitch gutter is a *keyboard*; every other row space is a list of

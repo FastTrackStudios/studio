@@ -605,7 +605,7 @@ until a runtime layout solver exists (Phase E).
   curves reading a feed, motion — painted over the top every frame while `animating()`.
 
 It paints *into the host's scene*: `Canvas` is anyrender's `PaintScene` shape in kurbo 0.13 /
-peniko 0.6. `AnyRender` (feature `anyrender-0-11`) wraps session's anyrender 0.11 `Scene`;
+peniko 0.6. `AnyRender` (feature `anyrender-blitz`) wraps session's anyrender `Scene`;
 `Recording` is frame's replayable list; `cpu::Rasterizer` (vello_cpu) rasterises for a
 bitmap host. Text is drawn as glyph outlines so it replays anywhere.
 
@@ -911,7 +911,7 @@ graph); a board only draws them.
 
 **Phase H: embeds.** `crates/frame-embed` (built 2026-09-29, §4.9).
 - Done: the `Embed` form and tiers; `Embed` (reflow per box, record + live passes, pointer
-  routing, `Derived` values, rebuild on layout params); `Canvas` into anyrender 0.11, a
+  routing, `Derived` values, rebuild on layout params); `Canvas` into anyrender, a
   `Recording` or vello_cpu; session's Tone rack as `ToneRack` / `TonePanel` (EQ, gate,
   compressor, saturator, de-esser, delay, reverb; phase containers and folds); a featured-param
   embed for any catalog; `DocumentView` for authored `embed:*` pages; the nice-plug

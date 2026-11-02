@@ -41,7 +41,7 @@ pub fn use_frame_clock(active: bool, period: std::time::Duration) {
     }
     let active = active && animating();
     let clock = use_hook(|| {
-        let updater = dioxus::dioxus_core::schedule_update();
+        let updater = dioxus::core::schedule_update();
         let running = Arc::new(AtomicBool::new(true));
         let ticking = Arc::new(AtomicBool::new(active));
         let (alive, on) = (Arc::clone(&running), Arc::clone(&ticking));

@@ -4961,7 +4961,7 @@ pub fn submit_command(
         // therefore never carry a layer, since a range could cut
         // between a push and its pop.
         RenderCommand::PushClipLayer(clip) => {
-            painter.push_clip_layer(compose(transform, clip.transform), &clip.clip);
+            painter.push_clip_layer(clip.fill, compose(transform, clip.transform), &clip.clip);
             true
         }
         RenderCommand::PopLayer => {

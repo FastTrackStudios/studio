@@ -705,6 +705,8 @@ pub fn Chart(
                         zoom_by(at.y / 40.0);
                     }
                     winit::event::MouseScrollDelta::PixelDelta(at) => pan_by(at.x, at.y),
+                    // winit's delta is non-exhaustive: nothing else scrolls.
+                    _ => {}
                 }
             }
             winit::event::WindowEvent::RedrawRequested => {

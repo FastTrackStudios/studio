@@ -66,9 +66,10 @@ pub fn submit(
             run.glyphs.iter().copied(),
         ),
         RenderCommand::PushClipLayer(clip) => {
-            painter.push_clip_layer(compose(at, clip.transform), &clip.clip)
+            painter.push_clip_layer(clip.fill, compose(at, clip.transform), &clip.clip)
         }
         RenderCommand::PushLayer(layer) => painter.push_layer(
+            layer.fill,
             layer.blend,
             layer.alpha,
             compose(at, layer.transform),

@@ -83,7 +83,7 @@ pub fn DockRoot(window_id: Option<WindowId>) -> Element {
             class: "h-full w-full {drag_class} relative",
             tabindex: "0",
             onkeydown: move |e: KeyboardEvent| {
-                if matches!(e.key(), Key::Escape) && DOCK_DRAG_STATE.read().is_dragging() {
+                if matches!(e.key(), Key::Named(NamedKey::Escape)) && DOCK_DRAG_STATE.read().is_dragging() {
                     *DOCK_DRAG_DROPPED.write() = false;
                     crate::ui::drag_ghost::animate_cancel_back();
                     DOCK_DRAG_STATE.write().end();

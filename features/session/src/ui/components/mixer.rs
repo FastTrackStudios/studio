@@ -31,7 +31,7 @@
 
 use crate::ui::prelude::*;
 use daw_proto::Track;
-use lucide_dioxus::{AlarmClock, Drum, Guitar, Mic, Music2, Piano};
+use lucide_dioxus::{AlarmClock, AudioLines, Drum, Guitar, Mic, Piano};
 use std::collections::HashMap;
 
 /// dB scale ticks drawn beside each fader (top → bottom). The fader taper
@@ -153,7 +153,7 @@ fn instrument_icon(name: &str) -> Element {
         Inst::Vocals => rsx! { Mic { size: sz, color: "currentColor" } },
         Inst::Click => rsx! { AlarmClock { size: sz, color: "currentColor" } },
         Inst::Reference | Inst::Tracks | Inst::Strings | Inst::Other => {
-            rsx! { Music2 { size: sz, color: "currentColor" } }
+            rsx! { AudioLines { size: sz, color: "currentColor" } }
         }
     }
 }

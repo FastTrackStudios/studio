@@ -579,7 +579,11 @@ pub fn paint_mod_in(scene: &mut Scene, tone: &Tone, at: Panel) {
     let mut picture = Scene::new();
     dsp::modulation::ui::viz::paint_mod(&mut picture, &mod_view(tone), at.width, at.height);
     let place = Affine::translate((at.x, at.y));
-    scene.push_clip_layer(place, &Rect::new(0.0, 0.0, at.width, at.height));
+    scene.push_clip_layer(
+        vello::peniko::Fill::NonZero,
+        place,
+        &Rect::new(0.0, 0.0, at.width, at.height),
+    );
     scene.append_scene(picture, place);
     scene.pop_layer();
 }
@@ -1026,7 +1030,7 @@ impl Painters {
         if matches!(live.gpu, Gpu::Untried) {
             let handle = ctx
                 .renderer_specific_context()
-                .and_then(|any| any.downcast::<wgpu_context_07::DeviceHandle>().ok());
+                .and_then(|any| any.downcast::<wgpu_context::DeviceHandle>().ok());
             live.gpu = match handle {
                 Some(h) => match live.surface.attach_gpu(h.device.clone(), h.queue.clone()) {
                     Ok(()) => {

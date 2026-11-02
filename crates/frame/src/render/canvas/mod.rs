@@ -1,7 +1,7 @@
 //! frame's paint primitives, painted into whatever a host draws with.
 //!
-//! - [`canvas`]: the [`Canvas`] seam — an anyrender 0.11 `PaintScene`
-//!   (feature `anyrender-0-11`, session's mixer), frame's replayable
+//! - [`canvas`]: the [`Canvas`] seam — an anyrender `PaintScene`
+//!   (feature `anyrender-blitz`, session's mixer), frame's replayable
 //!   [`Recording`], or anything else with the same handful of calls.
 //! - [`paint`]: `render`'s [`PaintPrimitive`](crate::render::PaintPrimitive)s →
 //!   a canvas.
@@ -14,7 +14,7 @@ pub mod canvas;
 pub mod paint;
 pub mod text;
 
-#[cfg(feature = "anyrender-0-11")]
+#[cfg(feature = "anyrender-blitz")]
 pub use canvas::AnyRender;
 pub use canvas::{Canvas, CanvasExt, Cmd, Recording, Tally, TextAlign, TextRun};
 pub use paint::{node_of, paint_filtered, paint_primitives};

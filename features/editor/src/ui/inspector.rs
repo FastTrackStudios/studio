@@ -301,7 +301,7 @@ pub fn Inspector(
                                 // syllable would put the editor away
                                 // mid-word.
                                 e.stop_propagation();
-                                if e.key() == Key::Enter
+                                if e.key() == Key::Named(NamedKey::Enter)
                                     && let Some(id) = selected_id
                                 {
                                     let text = draft_lyric.read().clone();
