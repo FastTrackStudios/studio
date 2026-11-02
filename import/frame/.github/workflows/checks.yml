@@ -1,0 +1,70 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A PR's new push supersedes its old run; a push to main always finishes,
+# so every main commit says whether it is green.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# No RUSTFLAGS / CARGO_TARGET_*_RUSTFLAGS here: either would replace the
+# rustflags tables in .cargo/config.toml, and with them the kache keys
+# Frame shares with Studio. `-D warnings` goes on clippy instead.
+env:
+  CARGO_TERM_COLOR: always
+
+# Every job runs on the THEBATTLESHIP pool (the repo is private). The
+# runners set RUSTC_WRAPPER=kache over the host's shared store and give each
+# instance a CI_CACHE_DIR; the toolchain and native libraries (Vulkan loader
+# for the wgpu renders, mold) come from the flake's `ci` shell.
+jobs:
+  lint:
+    name: Lint (fmt + clippy)
+    runs-on: [self-hosted, thebattleship]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Target dir
+        run: echo "CARGO_TARGET_DIR=${CI_CACHE_DIR:?}/frame/lint/target" >> "$GITHUB_ENV"
+      - name: fmt
+        run: nix develop --accept-flake-config .#ci --command cargo fmt --all -- --check
+      - name: clippy
+        if: ${{ !cancelled() }}
+        run: nix develop --accept-flake-config .#ci --command cargo clippy --workspace --all-targets -- -D warnings
+
+  check:
+    name: Check
+    runs-on: [self-hosted, thebattleship]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Target dir
+        run: echo "CARGO_TARGET_DIR=${CI_CACHE_DIR:?}/frame/test/target" >> "$GITHUB_ENV"
+      - name: just check
+        run: nix develop --accept-flake-config .#ci --command just check
+      - name: just test
+        run: nix develop --accept-flake-config .#ci --command just test
+
+  # The one status to require on main: it passes only when every job above
+  # succeeded; a skipped or cancelled job fails it.
+  ci:
+    name: ci
+    if: ${{ always() }}
+    needs: [lint, check]
+    runs-on: [self-hosted, thebattleship]
+    steps:
+      - name: all checks passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "lint/check: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || exit 1; done

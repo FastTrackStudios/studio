@@ -1,0 +1,4 @@
+# The fleet's pin; the nix dev shell (flake.nix) provides the same 1.99.1.
+[toolchain]
+channel = "1.99.1"
+components = ["rust-src", "rust-analyzer", "clippy", "rustfmt"]

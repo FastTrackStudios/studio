@@ -5,7 +5,7 @@ This harness provides a deterministic pixel diff check between two PNG files.
 ## Command
 
 ```bash
-cargo run -p frame-ui --features anyrender --bin visual_diff -- \
+cargo run -p frame-cli --features anyrender --bin visual_diff -- \
   /path/to/actual.png /path/to/expected.png 2.0
 ```
 

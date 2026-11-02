@@ -100,17 +100,17 @@ This is the current required set. Only these 10 scenarios are in scope for now.
 - Core 10 default:
 
 ```bash
-tools/run_parity_scenarios.sh --threshold 0.0
+xtask/scripts/run_parity_scenarios.sh --threshold 0.0
 ```
 
 - Single scenario focus:
 
 ```bash
-tools/run_parity_scenarios.sh --scenario paint.gradient-matrix --threshold 0.0
+xtask/scripts/run_parity_scenarios.sh --scenario paint.gradient-matrix --threshold 0.0
 ```
 
 - Full matrix later (when expanded):
 
 ```bash
-tools/run_parity_scenarios.sh --all --threshold 0.0
+xtask/scripts/run_parity_scenarios.sh --all --threshold 0.0
 ```

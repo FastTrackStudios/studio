@@ -25,32 +25,32 @@ fn run() -> Result<(), String> {
     match task.as_str() {
         "parity_test" | "partiy_test" => run_script(
             &workspace_root,
-            workspace_root.join("tools/run_parity_render_and_diff.sh"),
+            workspace_root.join("xtask/scripts/run_parity_render_and_diff.sh"),
             &passthrough,
         ),
         "parity_render" => run_script(
             &workspace_root,
-            workspace_root.join("tools/render_parity_actuals.sh"),
+            workspace_root.join("xtask/scripts/render_parity_actuals.sh"),
             &passthrough,
         ),
         "parity_diff" => run_script(
             &workspace_root,
-            workspace_root.join("tools/run_parity_scenarios.sh"),
+            workspace_root.join("xtask/scripts/run_parity_scenarios.sh"),
             &passthrough,
         ),
         "parity_svg" => run_script(
             &workspace_root,
-            workspace_root.join("tools/run_svg_parity_scenarios.sh"),
+            workspace_root.join("xtask/scripts/run_svg_parity_scenarios.sh"),
             &passthrough,
         ),
         "parity_svg_analyze" => run_script(
             &workspace_root,
-            workspace_root.join("tools/analyze_svg_canonical_precision.sh"),
+            workspace_root.join("xtask/scripts/analyze_svg_canonical_precision.sh"),
             &passthrough,
         ),
         "parity_svg_hash" => run_script(
             &workspace_root,
-            workspace_root.join("tools/check_svg_hash_baselines.sh"),
+            workspace_root.join("xtask/scripts/check_svg_hash_baselines.sh"),
             &passthrough,
         ),
         "svg_to_png" => cmd_svg_to_png(&passthrough),
@@ -65,6 +65,7 @@ fn run() -> Result<(), String> {
 
 fn workspace_root() -> Result<PathBuf, String> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // xtask → the repo root.
     manifest_dir
         .parent()
         .map(Path::to_path_buf)
@@ -79,7 +80,10 @@ fn run_script(root: &Path, script: PathBuf, args: &[String]) -> Result<(), Strin
     let status = Command::new(&script)
         .args(args)
         .current_dir(root)
-        .env("CARGO", env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()))
+        .env(
+            "CARGO",
+            env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()),
+        )
         .status()
         .map_err(|e| format!("failed to run {}: {e}", script.display()))?;
 
@@ -109,11 +113,7 @@ fn cmd_svg_to_png(args: &[String]) -> Result<(), String> {
         match args[i].as_str() {
             "--out" | "-o" => {
                 i += 1;
-                output = Some(
-                    args.get(i)
-                        .ok_or("--out requires a value")?
-                        .clone(),
-                );
+                output = Some(args.get(i).ok_or("--out requires a value")?.clone());
             }
             "--width" => {
                 i += 1;
@@ -147,7 +147,12 @@ fn cmd_svg_to_png(args: &[String]) -> Result<(), String> {
     let input = input.ok_or("usage: cargo xtask svg_to_png <input.svg> --out <output.png>")?;
     let output = output.ok_or("--out <path.png> is required")?;
 
-    svg_to_png(Path::new(&input), Path::new(&output), width_override, height_override)?;
+    svg_to_png(
+        Path::new(&input),
+        Path::new(&output),
+        width_override,
+        height_override,
+    )?;
     eprintln!("wrote {output}");
     Ok(())
 }
@@ -162,8 +167,8 @@ fn svg_to_png(
         std::fs::read(svg_path).map_err(|e| format!("read {}: {e}", svg_path.display()))?;
 
     let opt = resvg::usvg::Options::default();
-    let tree = resvg::usvg::Tree::from_data(&svg_data, &opt)
-        .map_err(|e| format!("parse SVG: {e}"))?;
+    let tree =
+        resvg::usvg::Tree::from_data(&svg_data, &opt).map_err(|e| format!("parse SVG: {e}"))?;
 
     let svg_size = tree.size();
     let (px_w, px_h) = match (width, height) {
@@ -207,7 +212,7 @@ fn svg_to_png(
 // ---------------------------------------------------------------------------
 
 fn cmd_parity_svg_png(workspace_root: &Path, args: &[String]) -> Result<(), String> {
-    let scenarios_dir = workspace_root.join("tests/frame/parity/scenarios");
+    let scenarios_dir = workspace_root.join("crates/frame/render/tests/parity/scenarios");
     let core10_path = scenarios_dir.join("core10.txt");
 
     let mut scenario_filter: Option<String> = None;
@@ -220,11 +225,7 @@ fn cmd_parity_svg_png(workspace_root: &Path, args: &[String]) -> Result<(), Stri
         match args[i].as_str() {
             "--scenario" | "-s" => {
                 i += 1;
-                scenario_filter = Some(
-                    args.get(i)
-                        .ok_or("--scenario requires a value")?
-                        .clone(),
-                );
+                scenario_filter = Some(args.get(i).ok_or("--scenario requires a value")?.clone());
             }
             "--all" => run_all = true,
             "--core10" => run_core10 = true,
@@ -350,18 +351,20 @@ fn resolve_scenarios(
     }
 
     // Default: core10
-    let text = std::fs::read_to_string(core10_path)
-        .map_err(|e| format!("read core10.txt: {e}"))?;
-    Ok(text.lines().filter(|l| !l.trim().is_empty()).map(String::from).collect())
+    let text = std::fs::read_to_string(core10_path).map_err(|e| format!("read core10.txt: {e}"))?;
+    Ok(text
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(String::from)
+        .collect())
 }
 
 fn list_scenario_dirs(dir: &Path) -> Result<Vec<String>, String> {
     let mut names = Vec::new();
-    let entries =
-        std::fs::read_dir(dir).map_err(|e| format!("read {}: {e}", dir.display()))?;
+    let entries = std::fs::read_dir(dir).map_err(|e| format!("read {}: {e}", dir.display()))?;
     for entry in entries {
         let entry = entry.map_err(|e| format!("readdir: {e}"))?;
-        if entry.file_type().map_or(false, |t| t.is_dir()) {
+        if entry.file_type().is_ok_and(|t| t.is_dir()) {
             if let Some(name) = entry.file_name().to_str() {
                 // skip hidden dirs and the manifest template
                 if !name.starts_with('.') {
@@ -421,7 +424,8 @@ fn pixel_diff(a_path: &Path, b_path: &Path, threshold_percent: f64) -> Result<Di
     // If dimensions differ, resize a to match b (b is the reference)
     let (a_img, b_img, w, h) = if (aw, ah) != (bw, bh) {
         // Use the reference (b) dimensions
-        let resized = image::imageops::resize(&a_img, bw, bh, image::imageops::FilterType::Lanczos3);
+        let resized =
+            image::imageops::resize(&a_img, bw, bh, image::imageops::FilterType::Lanczos3);
         (resized, b_img, bw, bh)
     } else {
         (a_img, b_img, aw, ah)
