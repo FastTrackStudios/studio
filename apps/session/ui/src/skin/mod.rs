@@ -211,6 +211,28 @@ pub struct Shown<'a> {
 
 static SCHEMA: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(schema);
 
+// The schema is fixed across theme reloads; resolve its names just once.
+static SLOT_BY_NAME: std::sync::LazyLock<std::collections::HashMap<&'static str, usize>> =
+    std::sync::LazyLock::new(|| {
+        SCHEMA
+            .names()
+            .enumerate()
+            .map(|(slot, name)| (name, slot))
+            .collect()
+    });
+
+macro_rules! set_field {
+    ($values:expr, $name:literal, $value:expr $(,)?) => {{
+        static SLOT: std::sync::OnceLock<Option<usize>> = std::sync::OnceLock::new();
+        if let Some(at) = SLOT
+            .get_or_init(|| SLOT_BY_NAME.get($name).copied())
+            .and_then(|slot| $values.get_mut(slot))
+        {
+            *at = $value;
+        }
+    }};
+}
+
 /// One folder step's values, for [`STEP`]: the colour of the folder it
 /// stands for and how many folders out it is (1, the strip's own).
 #[must_use]
@@ -314,46 +336,39 @@ pub fn row_fields(palette: &Palette, track: &Track, shown: RowShown<'_>) -> Stri
             ..Shown::default()
         },
     );
-    let mut set = |name: &str, v: Value| {
-        if let Some(at) = SCHEMA
-            .slot(name)
-            .and_then(|s| usize::try_from(s).ok())
-            .and_then(|s| out.0.get_mut(s))
-        {
-            *at = v;
-        }
-    };
-    set("row.indent", Value::Num(indent));
+    set_field!(out.0, "row.indent", Value::Num(indent));
     let named = |c: Option<crate::row::Control>| Value::text(c.map_or("", row_name));
-    set("ui.hover", named(shown.hover));
-    set("ui.pressed", named(shown.pressed));
-    set("ui.recording", Value::Bool(!shown.idle));
+    set_field!(out.0, "ui.hover", named(shown.hover));
+    set_field!(out.0, "ui.pressed", named(shown.pressed));
+    set_field!(out.0, "ui.recording", Value::Bool(!shown.idle));
     let Some(font) = shown.font else {
         return out;
     };
     let rail = crate::tcp::rail_layout(font, track, indent, 0.0, shown.height);
-    set("row.has_number", Value::Bool(rail.number.is_some()));
+    set_field!(out.0, "row.has_number", Value::Bool(rail.number.is_some()));
     if let Some(number) = rail.number {
-        set("row.number", Value::text(&number.text));
-        set("row.number_size", Value::Num(f64::from(number.size)));
-        set("row.number_x", Value::Num(number.x));
-        set("row.number_baseline", Value::Num(number.baseline));
+        set_field!(out.0, "row.number", Value::text(&number.text));
+        set_field!(out.0, "row.number_size", Value::Num(f64::from(number.size)));
+        set_field!(out.0, "row.number_x", Value::Num(number.x));
+        set_field!(out.0, "row.number_baseline", Value::Num(number.baseline));
     }
-    set("row.icon", Value::Bool(rail.icon.is_some()));
+    set_field!(out.0, "row.icon", Value::Bool(rail.icon.is_some()));
     if let Some(icon) = rail.icon {
-        set("row.icon_x", Value::Num(icon.x0));
-        set("row.icon_y", Value::Num(icon.y0));
-        set("row.icon_size", Value::Num(icon.width()));
+        set_field!(out.0, "row.icon_x", Value::Num(icon.x0));
+        set_field!(out.0, "row.icon_y", Value::Num(icon.y0));
+        set_field!(out.0, "row.icon_size", Value::Num(icon.width()));
     }
     let (_, field_h) = crate::tcp::band(0.0, shown.height, crate::tcp::Density::at(shown.height));
     let size = tcp.name_size(field_h);
     let name_w = (tcp.volume_x() - tcp.name_x() - indent).max(0.0);
-    set(
+    set_field!(
+        out.0,
         "row.name",
         Value::text(&font.elide(&track.name, size, name_w)),
     );
-    set("row.name_size", Value::Num(f64::from(size)));
-    set(
+    set_field!(out.0, "row.name_size", Value::Num(f64::from(size)));
+    set_field!(
+        out.0,
         "row.input",
         Value::text(&font.elide(&crate::tcp::record_input(track), 11.0, 180.0)),
     );
@@ -364,13 +379,6 @@ pub fn row_fields(palette: &Palette, track: &Track, shown: RowShown<'_>) -> Stri
 #[must_use]
 pub fn fields(palette: &Palette, track: &Track, shown: Shown<'_>) -> StripFields {
     let mut values = vec![Value::Missing; SCHEMA.names().count()];
-    let mut set = |name: &str, v: Value| {
-        if let Some(slot) = SCHEMA.slot(name).and_then(|s| usize::try_from(s).ok())
-            && let Some(at) = values.get_mut(slot)
-        {
-            *at = v;
-        }
-    };
     let color = |c: vello::peniko::Color| {
         let [r, g, b, a] = c.to_rgba8().to_u8_array();
         Value::Color(Rgba::from_rgba8(r, g, b, a))
@@ -379,46 +387,73 @@ pub fn fields(palette: &Palette, track: &Track, shown: Shown<'_>) -> StripFields
     let level = shown.level.unwrap_or_default();
     let named = |c: Option<Control>| c.map_or(Value::text(""), |c| Value::text(name(c)));
 
-    set("track.name", Value::text(&track.name));
+    set_field!(values, "track.name", Value::text(&track.name));
     let (label, label_size) = shown.label.unwrap_or((&track.name, 11.0));
-    set("track.label", Value::text(label));
-    set("track.label_size", Value::Num(f64::from(label_size)));
-    set("track.number", Value::Num(f64::from(track.index) + 1.0));
-    set(
+    set_field!(values, "track.label", Value::text(label));
+    set_field!(
+        values,
+        "track.label_size",
+        Value::Num(f64::from(label_size))
+    );
+    set_field!(
+        values,
+        "track.number",
+        Value::Num(f64::from(track.index) + 1.0)
+    );
+    set_field!(
+        values,
         "track.color",
         color(crate::tcp::track_color(palette, track)),
     );
-    set("track.has_color", Value::Bool(track.color.is_some()));
-    set("track.selected", Value::Bool(track.selected));
-    set("track.folder", Value::Bool(track.is_folder));
-    set("track.collapsed", Value::Bool(shown.collapsed));
-    set("track.depth", Value::Num(crate::num::coord(shown.depth)));
+    set_field!(
+        values,
+        "track.has_color",
+        Value::Bool(track.color.is_some())
+    );
+    set_field!(values, "track.selected", Value::Bool(track.selected));
+    set_field!(values, "track.folder", Value::Bool(track.is_folder));
+    set_field!(values, "track.collapsed", Value::Bool(shown.collapsed));
+    set_field!(
+        values,
+        "track.depth",
+        Value::Num(crate::num::coord(shown.depth))
+    );
     let input = crate::tcp::record_input(track);
     let input = match shown.font {
         // As the painters elide it: to the field, less its caret.
         Some(font) => font.elide(&input, 10.0, (shown.width - 12.0).min(75.0) - 14.0),
         None => input,
     };
-    set("track.input", Value::text(&input));
-    set(
+    set_field!(values, "track.input", Value::text(&input));
+    set_field!(
+        values,
         "track.ground",
         color(crate::mcp::strip_ground(palette, track)),
     );
     let edge = crate::mcp::strip_edge(palette, track);
-    set("track.has_edge", Value::Bool(edge.is_some()));
-    set("track.edge", edge.map_or(Value::Missing, color));
-    set("track.tint", color(crate::tcp::row_tint(palette, track)));
-    set("track.band", color(crate::tcp::folder_band(palette, track)));
-    set("track.parent_send", Value::Bool(track.parent_send));
-    set("ui.rack", Value::Bool(shown.rack));
-    set("mixer.h", Value::Num(shown.mixer_h));
-    set("ui.mixing", Value::Bool(shown.mixing));
-    set("ui.recording", Value::Bool(shown.recording));
+    set_field!(values, "track.has_edge", Value::Bool(edge.is_some()));
+    set_field!(values, "track.edge", edge.map_or(Value::Missing, color));
+    set_field!(
+        values,
+        "track.tint",
+        color(crate::tcp::row_tint(palette, track))
+    );
+    set_field!(
+        values,
+        "track.band",
+        color(crate::tcp::folder_band(palette, track))
+    );
+    set_field!(values, "track.parent_send", Value::Bool(track.parent_send));
+    set_field!(values, "ui.rack", Value::Bool(shown.rack));
+    set_field!(values, "mixer.h", Value::Num(shown.mixer_h));
+    set_field!(values, "ui.mixing", Value::Bool(shown.mixing));
+    set_field!(values, "ui.recording", Value::Bool(shown.recording));
 
-    set("track.mute", Value::Bool(track.muted));
-    set("track.solo", Value::Bool(track.soloed));
-    set("track.armed", Value::Bool(track.armed));
-    set(
+    set_field!(values, "track.mute", Value::Bool(track.muted));
+    set_field!(values, "track.solo", Value::Bool(track.soloed));
+    set_field!(values, "track.armed", Value::Bool(track.armed));
+    set_field!(
+        values,
         "track.monitor",
         Value::Num(match track.input_monitor {
             daw_proto::InputMonitoringMode::Off => 0.0,
@@ -426,33 +461,51 @@ pub fn fields(palette: &Palette, track: &Track, shown: Shown<'_>) -> StripFields
             daw_proto::InputMonitoringMode::NotWhenPlaying => 2.0,
         }),
     );
-    set("track.phase", Value::Bool(track.phase_inverted));
-    set(
+    set_field!(values, "track.phase", Value::Bool(track.phase_inverted));
+    set_field!(
+        values,
         "track.fader",
         Value::Num(crate::tcp::volume_fraction(track.volume)),
     );
-    set("track.volume", Value::Num(track.volume));
-    set("track.pan", Value::Num(track.pan.clamp(-1.0, 1.0)));
-    set("track.fx", Value::Num(f64::from(track.fx_count)));
-    set("track.sends", Value::Num(f64::from(track.send_count)));
-    set("track.receives", Value::Num(f64::from(track.receive_count)));
+    set_field!(values, "track.volume", Value::Num(track.volume));
+    set_field!(values, "track.pan", Value::Num(track.pan.clamp(-1.0, 1.0)));
+    set_field!(values, "track.fx", Value::Num(f64::from(track.fx_count)));
+    set_field!(
+        values,
+        "track.sends",
+        Value::Num(f64::from(track.send_count))
+    );
+    set_field!(
+        values,
+        "track.receives",
+        Value::Num(f64::from(track.receive_count))
+    );
     let (left, right) = (fraction(level.peak_left), fraction(level.peak_right));
-    set("meter.left", Value::Num(left));
-    set("meter.right", Value::Num(right));
-    set("meter.peak", Value::Num(left.max(right)));
-    set("meter.hold_left", Value::Num(fraction(level.hold_left)));
-    set("meter.hold_right", Value::Num(fraction(level.hold_right)));
-    set("meter.clip", Value::Bool(shown.clipped));
-    set("ui.hover", named(shown.hover));
-    set("ui.pressed", named(shown.pressed));
+    set_field!(values, "meter.left", Value::Num(left));
+    set_field!(values, "meter.right", Value::Num(right));
+    set_field!(values, "meter.peak", Value::Num(left.max(right)));
+    set_field!(
+        values,
+        "meter.hold_left",
+        Value::Num(fraction(level.hold_left))
+    );
+    set_field!(
+        values,
+        "meter.hold_right",
+        Value::Num(fraction(level.hold_right))
+    );
+    set_field!(values, "meter.clip", Value::Bool(shown.clipped));
+    set_field!(values, "ui.hover", named(shown.hover));
+    set_field!(values, "ui.pressed", named(shown.pressed));
     let readout = crate::overlay::volume_label(track.volume);
     if let Some(font) = shown.font {
-        set(
+        set_field!(
+            values,
             "track.volume_label_w",
             Value::Num(font.width(&readout, 9.0) + 6.0),
         );
     }
-    set("track.volume_label", Value::text(&readout));
+    set_field!(values, "track.volume_label", Value::text(&readout));
     StripFields(values)
 }
 
@@ -620,11 +673,7 @@ pub fn palette(base: &Palette) -> Palette {
 pub fn values(set: &[(&str, Value)]) -> StripFields {
     let mut values = vec![Value::Missing; SCHEMA.names().count()];
     for (name, v) in set {
-        if let Some(at) = SCHEMA
-            .slot(name)
-            .and_then(|s| usize::try_from(s).ok())
-            .and_then(|s| values.get_mut(s))
-        {
+        if let Some(at) = SLOT_BY_NAME.get(name).and_then(|&s| values.get_mut(s)) {
             *at = v.clone();
         }
     }
