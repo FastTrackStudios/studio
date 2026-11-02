@@ -7,7 +7,7 @@
 
 use kurbo::{Affine, BezPath, Rect, Stroke};
 use peniko::{Brush, Color, Fill};
-use vello_cpu::{RenderContext, RenderMode, Resources};
+use vello_cpu::{PixmapMut, RasterizerSettings, RenderContext, RenderMode, Resources};
 
 use crate::embed::canvas::Canvas;
 
@@ -279,12 +279,15 @@ impl Rasterizer {
         draw(&mut canvas, Affine::scale(scale));
         canvas.ctx.flush();
         let mut rgba = vec![0u8; usize::from(w) * usize::from(h) * 4];
-        canvas.ctx.render_to_buffer(
+        // vello_cpu 0.3 renders into a pixmap view over the buffer.
+        let target = PixmapMut::new(w, h, &mut rgba).expect("buffer is w × h × 4 bytes");
+        canvas.ctx.render_with(
+            target,
             &mut self.resources,
-            &mut rgba,
-            w,
-            h,
-            RenderMode::OptimizeSpeed,
+            RasterizerSettings {
+                render_mode: RenderMode::OptimizeSpeed,
+                ..RasterizerSettings::default()
+            },
         );
         Pixels {
             width: u32::from(w),

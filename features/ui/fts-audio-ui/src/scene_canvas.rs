@@ -46,7 +46,7 @@ use dioxus::prelude::*;
 use kurbo::Affine;
 use peniko::{ImageBrush, ImageData};
 use wasm_bindgen::JsCast;
-use wgpu_context_07::{
+use wgpu_context::{
     DeviceHandle, SurfaceRenderer, SurfaceRendererConfiguration, TextureConfiguration, WGPUContext,
 };
 
@@ -489,8 +489,13 @@ fn bring_up(
         },
         // vello writes a storage texture, which a canvas's own is not; the
         // surface renderer blits from this one.
+        // wgpu_context 0.10 names the intermediate's format (vello's
+        // Rgba8Unorm) and an alpha conversion for the blit; a straight
+        // copy, as before.
         Some(TextureConfiguration {
             usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            alpha_conversion: None,
         }),
         handle,
     )
