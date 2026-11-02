@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use frame::document::proto::{Node, NodeKind, Scene, Size};
+use frame::theme::host::ThemeHost;
 use frame::theme::runtime::Schema;
 use frame_editor::doc::{frame_id, scene_to_doc};
 use frame_editor::engine::Session;
@@ -29,16 +30,40 @@ fn edited_geometry_compiles_and_failure_keeps_the_published_theme() {
         .unwrap();
     let mut session = Session::with_document(doc);
     let schema = Schema::new();
-    let mut published = theme::compile(session.doc().unwrap(), &schema, None).unwrap();
-    assert_eq!(published.authored_size("strip"), Some((40.0, 20.0)));
+    let host = ThemeHost::new(schema);
+    theme::publish(session.doc().unwrap(), &host, None).unwrap();
+    assert_eq!(
+        host.current().unwrap().authored_size("strip"),
+        Some((40.0, 20.0))
+    );
+    let fields = host.fields(&[]);
+    let first = host.capture("strip", None, 1.0, &fields).unwrap();
+    assert_eq!((first.pixels.width, first.pixels.height), (40, 20));
 
-    session.doc_mut().unwrap().node_mut(id).unwrap().width = 80.0;
-    published = theme::compile(session.doc().unwrap(), &schema, None).unwrap();
-    assert_eq!(published.authored_size("strip"), Some((80.0, 20.0)));
-    let before = published.clone();
+    session
+        .execute(
+            "transform.resize",
+            &serde_json::json!({"ids": [id], "width": 80.0, "height": 20.0}),
+        )
+        .unwrap();
+    theme::publish(session.doc().unwrap(), &host, None).unwrap();
+    let before = host.current().unwrap();
+    let version = host.version();
+    assert_eq!(before.authored_size("strip"), Some((80.0, 20.0)));
+    let edited = host.capture("strip", None, 1.0, &fields).unwrap();
+    assert_eq!((edited.pixels.width, edited.pixels.height), (80, 20));
     assert!(matches!(
-        theme::compile(session.doc().unwrap(), &schema, Some("missing")),
+        theme::publish(session.doc().unwrap(), &host, Some("missing")),
         Err(CompileError::Theme(_))
     ));
-    assert!(Arc::ptr_eq(&published, &before));
+    assert!(Arc::ptr_eq(&host.current().unwrap(), &before));
+    assert_eq!(host.version(), version);
+
+    // A compile started before a newer host publication cannot replace it.
+    let stale = theme::compile(session.doc().unwrap(), host.schema(), None).unwrap();
+    host.set(Some(before.clone()));
+    let newer_version = host.version();
+    assert!(!host.set_if_version(version, stale));
+    assert_eq!(host.version(), newer_version);
+    assert!(Arc::ptr_eq(&host.current().unwrap(), &before));
 }

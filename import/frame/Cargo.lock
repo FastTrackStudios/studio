@@ -417,6 +417,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "042f9d025c80b2e625b4f0f10eda56a652444ef916025e855a292937bb8a949a"
 
 [[package]]
+name = "archery"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33ca55ee147b1926dbea904f50fe4902494e97bc742205abbbf10c709e43815f"
+
+[[package]]
 name = "architect"
 version = "0.1.0"
 source = "git+https://github.com/FastTrackStudios/architect?rev=cbdc7c7d7149d40577688554c8b1ad652466f1dc#cbdc7c7d7149d40577688554c8b1ad652466f1dc"
@@ -745,7 +751,7 @@ dependencies = [
  "flate2",
  "foldhash 0.1.5",
  "foldhash 0.2.0",
- "fontique",
+ "fontique 0.12.0",
  "foreign-types 0.3.2",
  "foreign-types-shared 0.1.1",
  "form_urlencoded",
@@ -932,7 +938,7 @@ dependencies = [
  "serde_json",
  "serde_qs",
  "serde_spanned 0.6.9",
- "sha1",
+ "sha1 0.10.7",
  "sha2 0.10.9",
  "sha2 0.11.1",
  "signal-hook-mio",
@@ -1055,6 +1061,9 @@ name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "arref"
@@ -1379,7 +1388,7 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
- "sha1",
+ "sha1 0.10.7",
  "sync_wrapper",
  "tokio",
  "tokio-tungstenite",
@@ -2505,6 +2514,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "core-text"
+version = "22.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "333dab512ce710ca2d08574c373d246dbeac8b22769e47da4c0e72730ce442b7"
+dependencies = [
+ "core-foundation 0.10.1",
+ "core-graphics 0.25.0",
+ "foreign-types 0.5.0",
+]
+
+[[package]]
 name = "core_detect"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2541,6 +2561,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ca28b0ae3115b884660db4118d803791fd6756b6e88f39c0f3f7859060d7566"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "craft-docpath"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=e11f9d9aebea5f6b8e74643c1ea1ed172ba5f545#e11f9d9aebea5f6b8e74643c1ea1ed172ba5f545"
+
+[[package]]
+name = "craft-font-catalog"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=e11f9d9aebea5f6b8e74643c1ea1ed172ba5f545#e11f9d9aebea5f6b8e74643c1ea1ed172ba5f545"
+dependencies = [
+ "fontique 0.11.1",
+ "skrifa 0.47.0",
+ "thiserror 2.0.20",
+ "windows-registry",
 ]
 
 [[package]]
@@ -3009,6 +3045,12 @@ dependencies = [
  "syn 2.0.119",
  "unicode-xid",
 ]
+
+[[package]]
+name = "deunicode"
+version = "1.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abd57806937c9cc163efc8ea3910e00a62e2aeb0b8119f1793a978088f8f6b04"
 
 [[package]]
 name = "diff"
@@ -4493,6 +4535,188 @@ dependencies = [
 ]
 
 [[package]]
+name = "figcraft-collab"
+version = "0.14.0"
+source = "git+https://github.com/FastTrackStudios/figcraft?tag=fts-v0.14.0-1#b89392a07ed96b6cec0a9e463b82cb9a920ef207"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "figcraft-doc",
+ "flate2",
+ "imbl",
+ "postcard",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "figcraft-color"
+version = "0.14.0"
+source = "git+https://github.com/FastTrackStudios/figcraft?tag=fts-v0.14.0-1#b89392a07ed96b6cec0a9e463b82cb9a920ef207"
+dependencies = [
+ "kurbo 0.13.1",
+ "serde",
+]
+
+[[package]]
+name = "figcraft-doc"
+version = "0.14.0"
+source = "git+https://github.com/FastTrackStudios/figcraft?tag=fts-v0.14.0-1#b89392a07ed96b6cec0a9e463b82cb9a920ef207"
+dependencies = [
+ "figcraft-color",
+ "figcraft-geom",
+ "imbl",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "figcraft-engine"
+version = "0.14.0"
+source = "git+https://github.com/FastTrackStudios/figcraft?tag=fts-v0.14.0-1#b89392a07ed96b6cec0a9e463b82cb9a920ef207"
+dependencies = [
+ "base64 0.22.1",
+ "craft-docpath",
+ "deunicode",
+ "figcraft-collab",
+ "figcraft-color",
+ "figcraft-doc",
+ "figcraft-format",
+ "figcraft-geom",
+ "figcraft-layout",
+ "figcraft-pathops",
+ "figcraft-plugin",
+ "figcraft-render",
+ "figcraft-svg",
+ "figcraft-text",
+ "log",
+ "regex",
+ "same-file",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "web-time",
+]
+
+[[package]]
+name = "figcraft-format"
+version = "0.14.0"
+source = "git+https://github.com/FastTrackStudios/figcraft?tag=fts-v0.14.0-1#b89392a07ed96b6cec0a9e463b82cb9a920ef207"
+dependencies = [
+ "figcraft-doc",
+ "figcraft-layout",
+ "figcraft-pathops",
+ "flate2",
+ "image",
+ "ruzstd 0.9.1",
+ "serde",
+ "serde_json",
+ "sha1 0.11.0",
+ "sha2 0.10.9",
+ "zip",
+]
+
+[[package]]
+name = "figcraft-geom"
+version = "0.14.0"
+source = "git+https://github.com/FastTrackStudios/figcraft?tag=fts-v0.14.0-1#b89392a07ed96b6cec0a9e463b82cb9a920ef207"
+dependencies = [
+ "kurbo 0.13.1",
+ "serde",
+]
+
+[[package]]
+name = "figcraft-layout"
+version = "0.14.0"
+source = "git+https://github.com/FastTrackStudios/figcraft?tag=fts-v0.14.0-1#b89392a07ed96b6cec0a9e463b82cb9a920ef207"
+dependencies = [
+ "figcraft-doc",
+ "figcraft-geom",
+]
+
+[[package]]
+name = "figcraft-pathops"
+version = "0.14.0"
+source = "git+https://github.com/FastTrackStudios/figcraft?tag=fts-v0.14.0-1#b89392a07ed96b6cec0a9e463b82cb9a920ef207"
+dependencies = [
+ "figcraft-doc",
+ "figcraft-geom",
+ "linesweeper",
+]
+
+[[package]]
+name = "figcraft-plugin"
+version = "0.14.0"
+source = "git+https://github.com/FastTrackStudios/figcraft?tag=fts-v0.14.0-1#b89392a07ed96b6cec0a9e463b82cb9a920ef207"
+dependencies = [
+ "figcraft-color",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "figcraft-render"
+version = "0.14.0"
+source = "git+https://github.com/FastTrackStudios/figcraft?tag=fts-v0.14.0-1#b89392a07ed96b6cec0a9e463b82cb9a920ef207"
+dependencies = [
+ "crc32fast",
+ "figcraft-color",
+ "figcraft-doc",
+ "figcraft-format",
+ "figcraft-geom",
+ "figcraft-pathops",
+ "figcraft-text",
+ "image",
+ "log",
+ "moxcms",
+ "png 0.18.1",
+ "rayon",
+ "tiny-skia 0.12.0",
+]
+
+[[package]]
+name = "figcraft-svg"
+version = "0.14.0"
+source = "git+https://github.com/FastTrackStudios/figcraft?tag=fts-v0.14.0-1#b89392a07ed96b6cec0a9e463b82cb9a920ef207"
+dependencies = [
+ "base64 0.22.1",
+ "figcraft-color",
+ "figcraft-doc",
+ "figcraft-geom",
+ "figcraft-pathops",
+ "figcraft-render",
+ "figcraft-text",
+ "flate2",
+ "thiserror 2.0.20",
+ "usvg 0.48.1",
+]
+
+[[package]]
+name = "figcraft-text"
+version = "0.14.0"
+source = "git+https://github.com/FastTrackStudios/figcraft?tag=fts-v0.14.0-1#b89392a07ed96b6cec0a9e463b82cb9a920ef207"
+dependencies = [
+ "core-text",
+ "craft-font-catalog",
+ "figcraft-doc",
+ "figcraft-geom",
+ "harfrust 0.13.3",
+ "icu_segmenter",
+ "log",
+ "objc2 0.6.5",
+ "png 0.18.1",
+ "skrifa 0.47.0",
+ "unicode-bidi",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "figma-api"
 version = "0.31.4"
 source = "git+https://github.com/gridaco/figma-api-rust.git#e284c687b55fe7a31352de69fe668b1a3392b607"
@@ -4676,6 +4900,28 @@ dependencies = [
 
 [[package]]
 name = "fontique"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6688bc1294fe7117d788937b6c53480169b29c566954af490830d4c09da9516a"
+dependencies = [
+ "hashbrown 0.17.1",
+ "linebender_resource_handle",
+ "memmap2",
+ "objc2 0.6.5",
+ "objc2-core-foundation",
+ "objc2-core-text",
+ "objc2-foundation 0.3.2",
+ "parlance",
+ "read-fonts 0.41.0",
+ "roxmltree 0.21.2",
+ "smallvec 1.16.4",
+ "windows",
+ "windows-core",
+ "yeslogic-fontconfig-sys",
+]
+
+[[package]]
+name = "fontique"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbf1df16263783918b7da396077521f92b729ef7c429444dfcf03581f1448b77"
@@ -4843,6 +5089,35 @@ dependencies = [
  "tokio",
  "vello",
  "winit 0.30.13",
+]
+
+[[package]]
+name = "frame-doc"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "figcraft-collab",
+ "figcraft-color",
+ "figcraft-doc",
+ "figcraft-geom",
+ "figcraft-layout",
+ "figcraft-pathops",
+ "figcraft-text",
+ "frame",
+ "plugin-faces",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
+name = "frame-editor"
+version = "0.1.0"
+dependencies = [
+ "figcraft-engine",
+ "frame",
+ "frame-doc",
+ "serde_json",
 ]
 
 [[package]]
@@ -5637,6 +5912,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "harfrust"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "948d0741125ba89cd3e1c23e5642415b6ade7e1d29d67ba25fb925b533e989d6"
+dependencies = [
+ "bitflags 2.13.2",
+ "bytemuck",
+ "once_cell",
+ "read-fonts 0.43.3",
+ "smallvec 1.16.4",
+]
+
+[[package]]
 name = "hash32"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5726,7 +6014,7 @@ dependencies = [
  "http",
  "httpdate",
  "mime",
- "sha1",
+ "sha1 0.10.7",
 ]
 
 [[package]]
@@ -6237,7 +6525,7 @@ checksum = "d0acd33ff0285af998aaf9b57342af478078f53492322fafc47450e09397e0e9"
 dependencies = [
  "bitmaps",
  "rand_core 0.6.4",
- "rand_xoshiro",
+ "rand_xoshiro 0.6.0",
  "serde",
  "sized-chunks",
  "typenum",
@@ -6289,6 +6577,28 @@ name = "imagesize"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65b27460c2c92b037f3f94c538ed9a3342f3fdf923606781629ccb35f82d042a"
+
+[[package]]
+name = "imbl"
+version = "7.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46bad832b9b463ed9398b8506488cc2e3b897a9d44f13af115f382aac71f4fec"
+dependencies = [
+ "archery",
+ "equivalent",
+ "imbl-sized-chunks",
+ "rand_core 0.9.5",
+ "rand_xoshiro 0.7.0",
+ "serde_core",
+ "version_check",
+ "wide",
+]
+
+[[package]]
+name = "imbl-sized-chunks"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a0813be332553f857953298749fa19549e8b61b80589757c29b4e2a804fa9c6"
 
 [[package]]
 name = "imgref"
@@ -6716,6 +7026,7 @@ dependencies = [
  "arrayvec",
  "euclid",
  "polycool",
+ "serde",
  "smallvec 1.16.4",
 ]
 
@@ -6972,6 +7283,19 @@ name = "linebender_resource_handle"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4a5ff6bcca6c4867b1c4fd4ef63e4db7436ef363e0ad7531d1558856bae64f4"
+
+[[package]]
+name = "linesweeper"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c19728333c060c6569a53c9a0e56c4be0df52cb4e6e07a8fbe16084cecce769"
+dependencies = [
+ "arrayvec",
+ "kurbo 0.13.1",
+ "polycool",
+ "rustc-hash 2.1.3",
+ "smallvec 1.16.4",
+]
 
 [[package]]
 name = "linux-raw-sys"
@@ -8401,7 +8725,7 @@ checksum = "2e5a6c098c7a3b6547378093f5cc30bc54fd361ce711e05293a5cc589562739b"
 dependencies = [
  "flate2",
  "memchr",
- "ruzstd",
+ "ruzstd 0.8.3",
 ]
 
 [[package]]
@@ -8710,7 +9034,7 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61bd0c0c1737f0b3d3726dc06b225083af213b61913e4fbae1670613a106c6ce"
 dependencies = [
- "fontique",
+ "fontique 0.12.0",
  "hashbrown 0.17.1",
  "linebender_resource_handle",
  "parlance",
@@ -8740,8 +9064,8 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b74c0d373e462e504ad4436710a39f099e18e848e1ee711f70cd2dcd5a69b290"
 dependencies = [
- "fontique",
- "harfrust",
+ "fontique 0.12.0",
+ "harfrust 0.12.0",
  "hashbrown 0.17.1",
  "icu_locale_core",
  "icu_normalizer",
@@ -9780,6 +10104,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_xoshiro"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f703f4665700daf5512dcca5f43afa6af89f09db47fb56be587f80636bda2d41"
+dependencies = [
+ "rand_core 0.9.5",
+]
+
+[[package]]
 name = "range-alloc"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9912,6 +10245,28 @@ name = "read-fonts"
 version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "046a7d674daf459825b32f5062056d6882db0d2f5a479fbd76ccfc870ac18709"
+dependencies = [
+ "bytemuck",
+ "font-types 0.12.7",
+ "once_cell",
+]
+
+[[package]]
+name = "read-fonts"
+version = "0.43.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "005c8acf251756c478b0bf402885bfd88a1476020c4c7e6060edc1aa68da38ea"
+dependencies = [
+ "bytemuck",
+ "font-types 0.12.7",
+ "once_cell",
+]
+
+[[package]]
+name = "read-fonts"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5a0cf4bb6cbce4c29756270d189a5e400ac05e91192161d83a0bcb6e68492e8"
 dependencies = [
  "bytemuck",
  "font-types 0.12.7",
@@ -10442,6 +10797,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruzstd"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69e4ce4a039f42bf25920b95667e4d789e98749ab11bbb8d2c2936f788421bb5"
+
+[[package]]
 name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10945,6 +11306,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aacc4cc499359472b4abe1bf11d0b12e688af9a805fa5e3016f9a386dc2d0214"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.1",
+ "digest 0.11.3",
+]
+
+[[package]]
 name = "sha1_smol"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11132,6 +11504,16 @@ checksum = "819ab7d62b1d3e72d9d9dea5650bac30424f9111364bb94928dbf5ecad1baa68"
 dependencies = [
  "bytemuck",
  "read-fonts 0.41.0",
+]
+
+[[package]]
+name = "skrifa"
+version = "0.47.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "526e654b303ff4ad73a5a40b25de2b3ce3d039c5e3b6da5f89ae6e57004cb40f"
+dependencies = [
+ "bytemuck",
+ "read-fonts 0.44.0",
 ]
 
 [[package]]
@@ -11490,7 +11872,7 @@ dependencies = [
  "rsa",
  "rust_decimal",
  "serde",
- "sha1",
+ "sha1 0.10.7",
  "sha2 0.10.9",
  "smallvec 1.16.4",
  "sqlx-core",
@@ -12419,6 +12801,7 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "log",
+ "png 0.18.1",
  "tiny-skia-path 0.12.0",
 ]
 
@@ -12881,7 +13264,7 @@ dependencies = [
  "rand 0.9.5",
  "rustls",
  "rustls-pki-types",
- "sha1",
+ "sha1 0.10.7",
  "thiserror 2.0.20",
 ]
 
@@ -13093,7 +13476,7 @@ dependencies = [
  "data-url",
  "flate2",
  "fontdb 0.24.0",
- "harfrust",
+ "harfrust 0.12.0",
  "imagesize 0.15.0",
  "kurbo 0.13.1",
  "log",

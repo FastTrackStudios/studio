@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use frame::theme::host::ThemeHost;
 use frame::theme::runtime::{Diagnostic, Schema, Theme};
 use frame_doc::doc::Document;
 
@@ -14,6 +15,8 @@ use frame_doc::doc::Document;
 pub enum CompileError {
     Document(frame_doc::Error),
     Theme(Vec<Diagnostic>),
+    /// The host changed while this document was compiling.
+    Superseded,
 }
 
 /// Compile the current edited document against the host's schema and mode.
@@ -33,4 +36,27 @@ pub fn compile(
     Theme::compile(Arc::new(scene), schema.clone(), mode)
         .map(Arc::new)
         .map_err(CompileError::Theme)
+}
+
+/// Compile an edited document and publish it to the host on success.
+///
+/// The host retains its current theme and version when compilation fails.
+/// This performs a full compile; callers must schedule it off rendering and
+/// audio threads. A newer host publication supersedes an in-flight compile.
+/// Publishing does not modify the host's file drafts or save the document.
+///
+/// # Errors
+/// The document cannot be converted or the theme is invalid.
+pub fn publish(
+    document: &Document,
+    host: &ThemeHost,
+    mode: Option<&str>,
+) -> Result<(), CompileError> {
+    let version = host.version();
+    let theme = compile(document, host.schema(), mode)?;
+    if host.set_if_version(version, theme) {
+        Ok(())
+    } else {
+        Err(CompileError::Superseded)
+    }
 }

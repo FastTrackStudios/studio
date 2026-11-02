@@ -15,5 +15,5 @@ figcraft-engine = { workspace = true }
 frame = { path = "../frame", features = ["theme"] }
 
 [dev-dependencies]
-frame = { path = "../frame" }
+frame = { path = "../frame", features = ["embed"] }
 serde_json = { workspace = true }

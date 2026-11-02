@@ -247,8 +247,21 @@ impl ThemeHost {
 
     /// Draw with `theme` (or none) from now on, whatever the files say.
     pub fn set(&self, theme: Option<Arc<Theme>>) {
-        *self.theme.write().unwrap_or_else(PoisonError::into_inner) = theme;
+        let mut current = self.theme.write().unwrap_or_else(PoisonError::into_inner);
+        *current = theme;
         self.version.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// Publish only if no theme has been published since `expected_version`.
+    /// Returns false when a newer publication has superseded the caller.
+    pub fn set_if_version(&self, expected_version: u64, theme: Arc<Theme>) -> bool {
+        let mut current = self.theme.write().unwrap_or_else(PoisonError::into_inner);
+        if self.version.load(Ordering::Acquire) != expected_version {
+            return false;
+        }
+        *current = Some(theme);
+        self.version.fetch_add(1, Ordering::AcqRel);
+        true
     }
 
     /// Why the last compile failed — of the files, or of an edit to them;
