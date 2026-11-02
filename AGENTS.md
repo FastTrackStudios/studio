@@ -99,6 +99,12 @@ working there.
   `.frame` documents rendered by `crates/frame`. `just faces` generates the
   plugin faces into `features/ui/plugin-faces/generated` (not kept in git; the apps
   read them at runtime).
+- **Studio's views are themed by Frame roles.** The arrangement, track
+  panel, mixer and editor draw named roles (`tcp.row`, `mcp.strip`,
+  `editor.*`, …) from the `.frame` theme `FTS_THEME` loads, and fall back to
+  the painters without one. `docs/frame-theme-contract.md` lists every role,
+  field, slot and `@` target and whether it is implemented. A change that
+  adds, renames or removes one updates that file in the same change.
 
 ## Crate rules
 

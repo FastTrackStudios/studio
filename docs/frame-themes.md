@@ -3,6 +3,8 @@
 Status: the mixer strip and the track panel's rows are themed (checked
 against the code 2026-11-02). Spans this repo and
 [frame](https://github.com/FastTrackStudios/frame).
+The per-element list of roles, fields, slots and their status is
+[frame-theme-contract.md](frame-theme-contract.md).
 
 ## Where it stands
 
