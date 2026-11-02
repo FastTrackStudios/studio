@@ -312,7 +312,7 @@ from zero.
 | GDTF / MVR specs | Open standard | **Yes** — files come from GDTF Share (account required) |
 | Eos / MA3 show files, libraries, UI | Proprietary | **No.** Interop by open formats only (MVR/GDTF, sACN, OSC, MSC, timecode). Clean-room only — same rule as the GPL reference macro in `features/fx/tune`. |
 
-FTS's GPL-3 licence is a **one-way door** (per the root CLAUDE.md) and points the
+FTS's GPL-3 licence is a **one-way door** (per the root AGENTS.md) and points the
 right way here: everything worth borrowing is more permissive than GPL.
 
 ---
@@ -498,4 +498,4 @@ and uniquely able to do something neither Eos nor MA can" is achievable.
 - [ETC community: GDTF + MVR feature requests](https://community.etcconnect.com/control_consoles/eos-family-consoles/i/feature-requests/gdtf-mvr)
 - Rust: [Mizer](https://github.com/maxjoehnk/Mizer) · [radiant](https://github.com/BaukeWestendorp/radiant) · [zeevonk](https://github.com/BaukeWestendorp/zeevonk) · [demex](https://github.com/matteolutz/demex) · [rigger](https://github.com/BaukeWestendorp/rigger) · [gdtf-rs](https://github.com/cpdt/gdtf-rs) · [RustLight/sacn](https://github.com/RustLight/sacn) · [artnet_protocol](https://github.com/Trangar/artnet_protocol) · [rust_dmx](https://crates.io/crates/rust_dmx) · [tiny-artnet](https://github.com/D1plo1d/tiny-artnet)
 - [Open Fixture Library](https://github.com/OpenLightingProject/open-fixture-library) (MIT)
-- Repo evidence: `crates/session/proto/src/song.rs`, `features/song/src/model.rs`, `features/guide/`, `features/control-surfaces/daw-csi/`, root `CLAUDE.md` (signal domain rules, platform targets, licence).
+- Repo evidence: `crates/session/proto/src/song.rs`, `features/song/src/model.rs`, `features/guide/`, `features/control-surfaces/daw-csi/`, root `AGENTS.md` (signal domain rules, platform targets, licence).

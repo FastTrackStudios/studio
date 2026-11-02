@@ -20,7 +20,7 @@
  * Build-time only: input.css @imports this, tailwind compiles the pair
  * to assets/tailwind-signal.css, and rig_view.rs inlines that string.
  * No `document::Stylesheet { href: … }` is involved, so this respects
- * the signal-UI inline-styles rule in CLAUDE.md.
+ * the signal-UI inline-styles rule in AGENTS.md.
  */
 
 /* The canonical tokens, from architect-ui (a git dep: `features/ui/.architect-ui`

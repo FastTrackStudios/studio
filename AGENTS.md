@@ -398,13 +398,19 @@ first). The rules are not optional:
   Branch from `origin/main` (`feat/sta-123-slug`), open the PR into `main`
   with a conventional title and `.github/pull_request_template.md` filled
   in, add a change file for every crate you change (`cargo rail change add
-  <crates> --bump <none|patch|minor|major> -m "<note> (signal|session)"`),
-  squash-merge. There is no `dev` branch. Releases are CalVer tags pushed
+  <crates> --bump <none|patch|minor|major> -m "<note> (signal|session)"`).
+  A lone PR squash-merges; a stack merges with merge commits titled with
+  each PR's title and body, so `main`'s first-parent history is one
+  conventional commit per PR (read history and bisect with
+  `--first-parent`). Don't wait on CI: once your local checks pass, push,
+  mark the PR ready and report; the orchestrator merges in batches
+  (`merge_batch.sh`), checks `main`'s CI once per batch and fixes forward.
+  There is no `dev` branch. Releases are CalVer tags pushed
   by `just release` (main's newest commit with a green `CI passed`, or
   `just release <sha>`); the tag alone starts the release builds, each of
   which stamps the tag's version into its checkout, so the version
   committed on main is not the released one. The notes come from the
-  change files added since the previous tag. Never edit the workspace
+  change files added since the previous tag, never from commits. Never edit the workspace
   version; `CHANGELOG.md` ends at 26.10.3.
 - Issues: GitHub Issues on `FastTrackStudios/studio` via `gh` — see
   `docs/agents/issue-tracker.md`; the triage labels (`needs-triage`,

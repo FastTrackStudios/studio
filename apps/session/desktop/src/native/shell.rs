@@ -7,7 +7,7 @@
 //! so it is visible whatever the view.
 //!
 //! Inline styles throughout: Blitz and external style sheets do not mix
-//! (see the repo's CLAUDE.md). The compiled Tailwind the performance panels
+//! (see the repo's AGENTS.md). The compiled Tailwind the performance panels
 //! were written against goes in once, as a plain `<style>` element.
 
 use dioxus::prelude::*;

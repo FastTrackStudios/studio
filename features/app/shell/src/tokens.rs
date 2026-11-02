@@ -1,6 +1,6 @@
 //! The studio shell's tokens: the touch prototype's `styles.css`
 //! (`prototypes/touch`), one value per name. Inline-style fragments, since
-//! Blitz takes no stylesheet (CLAUDE.md); a colour is changed here or
+//! Blitz takes no stylesheet (AGENTS.md); a colour is changed here or
 //! nowhere. Pure constants and helpers, so this module needs no feature:
 //! the iPad rig frame (`signal-rig-shell`, which re-exports it as
 //! `signal_rig_shell::tokens`) and the desktop frame (`ui`) draw from the

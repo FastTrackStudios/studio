@@ -100,7 +100,7 @@ prepares it — see `native::launch` in `apps/session/desktop/src/native/mod.rs`
   multi-window `DockWorkspace`. Add `PanelId`s for ProgressBar / Editor /
   Chart / Lyrics — **not started**.
 - **Dock UI**: a Blitz renderer for it, inline styles only (Blitz and CSS
-  files — see the repo's root CLAUDE.md). `dock-dioxus` stays for the
+  files — see the repo's root AGENTS.md). `dock-dioxus` stays for the
   WRY/web consumers until they move. **Not started.**
 - **Panels are components** with no props (context in via `use_context`,
   provided at the root from `StudioSession`), so one panel renders in any

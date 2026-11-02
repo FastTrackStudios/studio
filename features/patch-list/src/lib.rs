@@ -29,7 +29,7 @@ pub use validate::{Error as ValidationError, Plan, Planned, PlannedBus, validate
 /// Exported rather than left as a file for consumers to reach for: the
 /// render fixture and its test live in `session-daw`, and an
 /// `include_str!` across a crate boundary is a path cargo's dependency
-/// graph cannot see (CLAUDE.md, Rules). The bytes come from the crate
+/// graph cannot see (AGENTS.md, Rules). The bytes come from the crate
 /// that owns them, the way `architect_ui::THEME_CSS` does.
 pub const FIXTURE_ALBUM: &str = include_str!("../fixtures/album/patch-list.styx");
 

@@ -2150,8 +2150,8 @@ rail-evidence:
 # ── Releases ─────────────────────────────────────────────────────────────
 #
 # Tag-from-main (docs/agents/release-workflow.md). `main` is the only
-# long-lived branch: every PR squash-merges into it with a cargo-rail
-# change file (`cargo rail change add <crates> --bump
+# long-lived branch: every PR merges into it (a lone PR squashes, a stack
+# merges with merge commits) with a cargo-rail change file (`cargo rail change add <crates> --bump
 # <none|patch|minor|major> -m "<note>"`), and a merge runs CI and ships
 # nothing. A release is a TAG: `just release` tags the next CalVer
 # `vYY.M.MICRO` on main's newest commit whose `CI passed` is green, and the

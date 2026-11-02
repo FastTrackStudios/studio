@@ -117,7 +117,7 @@ narrow set of paint utilities (`fill-*`, `stroke-*`, `opacity-*`) — and
 only if authored as literal colours, not `var(--color-…)`, and not
 `oklch()` (see below).
 
-## Blitz: is the CLAUDE.md prohibition still true?
+## Blitz: is the AGENTS.md prohibition still true?
 
 It is **half true, and the half that is true is the important half.**
 
@@ -177,7 +177,7 @@ source.
 So the infrastructure the effort needs is not new work. It exists, it is
 CI-gated, and `daw-ui` is already in its scan path.
 
-**Verdict on CLAUDE.md:** the sentence *"inline styles only — Blitz does
+**Verdict on AGENTS.md:** the sentence *"inline styles only — Blitz does
 not load external CSS files reliably"* is stale as written and should be
 re-stated as two separate rules:
 
@@ -318,7 +318,7 @@ fill duplication becomes a real maintenance cost.
 
 ## Follow-ups this raises
 
-1. **Rewrite the CLAUDE.md rule** into the three-clause form above. As
+1. **Rewrite the AGENTS.md rule** into the three-clause form above. As
    written it forbids a pattern (`document::Style` + `include_str!`) that
    three shipping crates already use, and does not mention the SVG
    boundary, which is the rule that actually matters.

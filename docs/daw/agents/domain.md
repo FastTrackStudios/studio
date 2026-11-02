@@ -16,7 +16,7 @@ At the time of writing none of them exist yet. That is the expected state, not a
 
 This is a **multi-context** repo: one root map, one `CONTEXT.md` per domain.
 
-The contexts are the directories already described in the root `CLAUDE.md` — domain cores under `crates/`, capabilities under `features/`, libraries under `libs/`, products under `apps/`. A context is a thing with its own vocabulary, not every crate: `signal` is one context, not eleven, even though it is eleven crates.
+The contexts are the directories already described in the root `AGENTS.md` — domain cores under `crates/`, capabilities under `features/`, libraries under `libs/`, products under `apps/`. A context is a thing with its own vocabulary, not every crate: `signal` is one context, not eleven, even though it is eleven crates.
 
 ```
 /
@@ -34,11 +34,11 @@ The contexts are the directories already described in the root `CLAUDE.md` — d
     └── fx/CONTEXT.md
 ```
 
-### Relationship to the per-domain `CLAUDE.md` files
+### Relationship to the per-domain `AGENTS.md` files
 
-Several domains already carry a `CLAUDE.md` holding their rules, and the root `CLAUDE.md` says to read it before working in that domain. Those are **instructions to agents**; a `CONTEXT.md` is a **glossary of the domain's language**. They sit side by side and answer different questions — "how do I work here" against "what do these words mean here".
+Several domains already carry an `AGENTS.md` holding their rules, and the root `AGENTS.md` says to read it before working in that domain. Those are **instructions to agents**; a `CONTEXT.md` is a **glossary of the domain's language**. They sit side by side and answer different questions — "how do I work here" against "what do these words mean here".
 
-Where a domain has both, read both. Where its `CLAUDE.md` already defines a term, don't restate it in `CONTEXT.md` with different words; move it or point at it.
+Where a domain has both, read both. Where its `AGENTS.md` already defines a term, don't restate it in `CONTEXT.md` with different words; move it or point at it.
 
 ## Use the glossary's vocabulary
 
