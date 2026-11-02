@@ -1,0 +1,35 @@
+# `frame-surface`, a process extension (architect's extensions, kind
+# `process`): its one view is of the `frame.surface` kind, a Frame
+# document's knob and meter (surfaces/knob-meter.frame) drawn by this
+# process; its actions set and read them. `frame-surface --manifest`
+# prints this file, for a host that runs the program as a development
+# copy.
+id = "frame.surface"
+name = "Frame surface"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "A knob and a meter from a Frame document, drawn by Frame in a process of its own."
+authors = ["FastTrackStudio"]
+
+[entry]
+path = "frame-surface"
+
+[[actions]]
+id = "FRAME_SURFACE_SET"
+name = "Frame surface: set"
+description = "Moves the knob and the meter: `knob` and `meter`, each 0 to 1; either may be left out."
+effect = "mutating"
+params = '{"type":"object","properties":{"knob":{"type":"number","minimum":0,"maximum":1},"meter":{"type":"number","minimum":0,"maximum":1}}}'
+
+[[actions]]
+id = "FRAME_SURFACE_STATE"
+name = "Frame surface: state"
+description = "Where the knob and the meter are, each 0 to 1."
+effect = "read_only"
+
+[[views]]
+id = "surface"
+title = "Frame surface"
+icon = "gauge"
+kind = "frame.surface"
