@@ -5,7 +5,138 @@ use frame::theme::host::ThemeHost;
 use frame::theme::runtime::Schema;
 use frame_editor::doc::{frame_id, scene_to_doc};
 use frame_editor::engine::Session;
+use frame_editor::live::{LiveEditor, OpenError, PreviewEvent};
 use frame_editor::theme::{self, CompileError};
+
+fn event(editor: &LiveEditor) -> PreviewEvent {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        if let Some(event) = editor.try_event() {
+            return event;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "preview worker timed out"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
+#[test]
+fn opening_the_host_preserves_layered_drafts_mode_and_rejects_newer_reload() {
+    let dir = std::env::temp_dir().join(format!("frame-editor-snapshot-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let base = dir.join("base.frame");
+    let overlay = dir.join("overlay.frame");
+    std::fs::write(&base, r##"<Document><Variables modes="dark light"><Var name="ground" dark="#202020" light="#eeeeee" /></Variables><Page name="base"><Frame name="root" w=20 h=20 bind:fill="$ground" /></Page></Document>"##).unwrap();
+    std::fs::write(&overlay, r##"<Document><Page name="overlay"><Frame name="root" w=20 h=20 fill="#202020" /></Page></Document>"##).unwrap();
+    let host = Arc::new(ThemeHost::new(Schema::new()));
+    host.load(vec![base, overlay.clone()], Some("light".into()))
+        .unwrap();
+    host.edit(&overlay, r##"<Document><Page name="overlay"><Frame name="root" w=20 h=20 fill="#d04040" /></Page></Document>"##.into()).unwrap();
+    let mut opening = LiveEditor::open_async(host.clone());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut editor = loop {
+        if let Some(result) = opening.try_finish() {
+            break result.unwrap();
+        }
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    };
+    editor.request_preview(None).unwrap();
+    event(&editor).result.unwrap();
+    let theme = host.current().unwrap();
+    assert_eq!(theme.mode(), "light");
+    assert!(theme.has_role("base") && theme.has_role("overlay"));
+    let fields = host.fields(&[]);
+    assert_eq!(
+        host.capture("overlay", None, 1.0, &fields)
+            .unwrap()
+            .pixels
+            .at(10, 10),
+        [0xd0, 0x40, 0x40, 0xff]
+    );
+    host.reload().unwrap();
+    let after_reload = host.current().unwrap();
+    editor.request_preview(None).unwrap();
+    assert!(matches!(
+        event(&editor).result,
+        Err(CompileError::Superseded)
+    ));
+    assert!(Arc::ptr_eq(&after_reload, &host.current().unwrap()));
+}
+
+#[test]
+fn opening_without_a_theme_reports_the_error() {
+    let host = Arc::new(ThemeHost::new(Schema::new()));
+    let mut opening = LiveEditor::open_async(host);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        if let Some(result) = opening.try_finish() {
+            assert!(matches!(result, Err(OpenError::NoTheme)));
+            break;
+        }
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
+#[test]
+fn editor_command_updates_host_on_worker_and_failure_keeps_it() {
+    let mut scene = Scene::new("strip");
+    scene.variables.modes.push("dark".into());
+    let page = scene.pages()[0];
+    let mut root = Node::new(NodeKind::Frame, "root");
+    root.size = Size {
+        width: 40.0,
+        height: 20.0,
+    };
+    root.parent = Some(page);
+    let root_id = root.id;
+    scene.nodes.get_mut(&page).unwrap().children.push(root_id);
+    scene.nodes.insert(root_id, root);
+    let doc = scene_to_doc(&scene).unwrap();
+    let id = doc
+        .pages
+        .iter()
+        .flat_map(|p| doc.subtree(*p))
+        .find(|id| frame_id(doc.node(*id).unwrap()) == Some(root_id.0))
+        .unwrap();
+    let host = Arc::new(ThemeHost::new(Schema::new()));
+    let mut editor = LiveEditor::new(doc, host.clone());
+    let initial = editor.request_preview(None).unwrap();
+    let completed = event(&editor);
+    assert_eq!(completed.request, initial);
+    completed.result.unwrap();
+
+    editor
+        .execute(
+            "transform.resize",
+            &serde_json::json!({"ids": [id], "width": 80.0, "height": 20.0}),
+            None,
+        )
+        .unwrap();
+    event(&editor).result.unwrap();
+    let fields = host.fields(&[]);
+    let shot = host.capture("strip", None, 1.0, &fields).unwrap();
+    assert_eq!((shot.pixels.width, shot.pixels.height), (80, 20));
+    editor
+        .execute(
+            "node.set",
+            &serde_json::json!({"id": id, "props": {"fill": "#d04040"}}),
+            None,
+        )
+        .unwrap();
+    event(&editor).result.unwrap();
+    let shot = host.capture("strip", None, 1.0, &fields).unwrap();
+    assert_eq!(shot.pixels.at(10, 10), [0xd0, 0x40, 0x40, 0xff]);
+    let before = host.current().unwrap();
+    let version = host.version();
+    editor.request_preview(Some("missing")).unwrap();
+    assert!(matches!(event(&editor).result, Err(CompileError::Theme(_))));
+    assert!(Arc::ptr_eq(&before, &host.current().unwrap()));
+    assert_eq!(version, host.version());
+}
 
 #[test]
 fn edited_geometry_compiles_and_failure_keeps_the_published_theme() {

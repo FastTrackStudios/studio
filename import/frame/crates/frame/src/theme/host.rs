@@ -238,6 +238,15 @@ impl ThemeHost {
             .clone()
     }
 
+    /// The displayed theme and its publication version from one read lock.
+    #[must_use]
+    pub fn snapshot(&self) -> Option<(Arc<Theme>, u64)> {
+        let current = self.theme.read().unwrap_or_else(PoisonError::into_inner);
+        current
+            .as_ref()
+            .map(|theme| (theme.clone(), self.version.load(Ordering::Acquire)))
+    }
+
     /// Bumped whenever [`Self::current`] changes: what a recording compares
     /// to know it is stale.
     #[must_use]

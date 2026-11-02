@@ -173,6 +173,12 @@ impl fmt::Debug for Theme {
 }
 
 impl Theme {
+    /// The merged source used to compile this exact theme, including drafts.
+    #[must_use]
+    pub fn source(&self) -> Arc<Scene> {
+        self.source.clone()
+    }
+
     /// Parse markup and compile it.
     ///
     /// # Errors

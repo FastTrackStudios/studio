@@ -5114,10 +5114,13 @@ dependencies = [
 name = "frame-editor"
 version = "0.1.0"
 dependencies = [
+ "dioxus",
  "figcraft-engine",
+ "fontique 0.12.0",
  "frame",
  "frame-doc",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
