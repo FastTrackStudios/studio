@@ -168,8 +168,8 @@ fn key_screen(b: &mut Builder<'_>, s: NodeId, sw: f64, sh: f64, k: f64) {
     }
     let cw = kw / cells;
     for i in 0..25 {
-        let semis = i - 12;
-        let sharp = matches!((semis as i32).rem_euclid(12), 2 | 4 | 7 | 9 | 11);
+        let semis: i32 = i - 12;
+        let sharp = matches!(semis.rem_euclid(12), 2 | 4 | 7 | 9 | 11);
         let fill = if sharp { "#1d1f24" } else { "#2c2f36" };
         b.add(
             strip,

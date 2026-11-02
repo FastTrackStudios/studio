@@ -1358,14 +1358,7 @@ pub fn cry_baby() -> Face {
                 );
             }
             // The shade it falls into as it tips away.
-            let shade = draw::rect(
-                "shade",
-                0.0,
-                0.0,
-                gw,
-                gh,
-                draw::solid(if toe { "#000000" } else { "#000000" }),
-            );
+            let shade = draw::rect("shade", 0.0, 0.0, gw, gh, draw::solid("#000000"));
             let shade = b.add(g, draw::with_opacity(shade, 0.0));
             let tip = if toe {
                 pos.clone()

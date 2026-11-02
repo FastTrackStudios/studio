@@ -20,8 +20,8 @@
 //! [`Publisher::poll`].
 //!
 //! ```
-//! use crate::feed::dsp::{Aggregate, Publisher, history, scalar, spectrum};
-//! use crate::feed::proto::{FeedInfo, FeedKind, FeedRequest};
+//! use frame::feed::dsp::{Aggregate, Publisher, history, scalar, spectrum};
+//! use frame::feed::proto::{FeedInfo, FeedKind, FeedRequest};
 //!
 //! let sr = 48_000.0;
 //! // Made once, when the block is built:

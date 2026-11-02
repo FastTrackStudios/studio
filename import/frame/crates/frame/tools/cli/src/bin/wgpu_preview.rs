@@ -158,7 +158,7 @@ impl Snapshot {
             &Rect::new(0.0, 0.0, width, height),
         );
 
-        let labels = vec![
+        let labels = [
             format!("Frame Time: {:.2} ms", self.frame_time_ms),
             format!("Frame Time (min): {:.2} ms", self.frame_time_min_ms),
             format!("Frame Time (max): {:.2} ms", self.frame_time_max_ms),
@@ -220,7 +220,7 @@ impl Snapshot {
             let s = Affine::scale_non_uniform(1.0, -h);
             let color = match *sample {
                 ..=16_667 => Color::from_rgb8(100, 143, 255),
-                ..=33_334 => Color::from_rgb8(255, 176, 0),
+                16_668..=33_334 => Color::from_rgb8(255, 176, 0),
                 _ => Color::from_rgb8(220, 38, 127),
             };
             scene.fill(
@@ -583,10 +583,10 @@ impl ApplicationHandler for App {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let position = Point::new(position.x, position.y);
-                if self.mouse_down {
-                    if let Some(prior) = self.prior_position {
-                        self.transform = self.transform.then_translate(position - prior);
-                    }
+                if self.mouse_down
+                    && let Some(prior) = self.prior_position
+                {
+                    self.transform = self.transform.then_translate(position - prior);
                 }
                 self.prior_position = Some(position);
             }

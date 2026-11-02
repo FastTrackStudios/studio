@@ -165,7 +165,7 @@ impl PaintTarget for vello::Scene {
             .font_size(run.font_size)
             .hint(false)
             .normalized_coords(run.normalized_coords)
-            .brush(run.brush.clone())
+            .brush(run.brush)
             .brush_alpha(run.brush_alpha)
             .transform(run.transform)
             .glyph_transform(run.glyph_transform);

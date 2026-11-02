@@ -15,6 +15,9 @@ use crate::document::proto::model::{
 /// One property assignment on one node.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
 #[repr(u8)]
+// Ops are built and applied once per edit; boxing the large variants
+// is a performance call for the runtime work (frame#18), not a lint fix.
+#[allow(clippy::large_enum_variant)]
 pub enum Prop {
     Name(String),
     Kind(NodeKind),
@@ -43,6 +46,9 @@ pub enum Prop {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Facet)]
 #[repr(u8)]
+// Ops are built and applied once per edit; boxing the large variants
+// is a performance call for the runtime work (frame#18), not a lint fix.
+#[allow(clippy::large_enum_variant)]
 pub enum Op {
     /// Insert `node` (its `children` are ignored) under `parent` at `index`
     /// (clamped; `u32::MAX` = append).

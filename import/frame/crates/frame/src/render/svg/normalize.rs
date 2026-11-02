@@ -247,15 +247,15 @@ fn normalize_rect_line(line: &str) -> Option<String> {
             attrs.push(format!(r#"stroke-width="{val}""#));
         }
     }
-    if let Some(linecap) = linecap {
-        if linecap != "butt" {
-            attrs.push(format!(r#"stroke-linecap="{linecap}""#));
-        }
+    if let Some(linecap) = linecap
+        && linecap != "butt"
+    {
+        attrs.push(format!(r#"stroke-linecap="{linecap}""#));
     }
-    if let Some(linejoin) = linejoin {
-        if linejoin != "miter" {
-            attrs.push(format!(r#"stroke-linejoin="{linejoin}""#));
-        }
+    if let Some(linejoin) = linejoin
+        && linejoin != "miter"
+    {
+        attrs.push(format!(r#"stroke-linejoin="{linejoin}""#));
     }
     if let Some(payload) = figma_gradient_fill {
         attrs.push(format!(r#"data-figma-gradient-fill="{payload}""#));
@@ -665,11 +665,11 @@ fn translate_and_compact_path_data(
 
         match cmd {
             'M' => {
-                if nums.len() < 2 || nums.len() % 2 != 0 {
+                if nums.len() < 2 || !nums.len().is_multiple_of(2) {
                     return None;
                 }
                 let mut vals = Vec::with_capacity(nums.len());
-                for (i, pair) in nums.chunks_exact(2).enumerate() {
+                for (i, pair) in nums.as_chunks::<2>().0.iter().enumerate() {
                     let x = pair[0] + tx;
                     let y = pair[1] + ty;
                     vals.push(x);
@@ -684,10 +684,10 @@ fn translate_and_compact_path_data(
                 emit('M', &vals, &mut out, &mut first);
             }
             'L' => {
-                if nums.len() % 2 != 0 {
+                if !nums.len().is_multiple_of(2) {
                     return None;
                 }
-                for pair in nums.chunks_exact(2) {
+                for pair in nums.as_chunks::<2>().0 {
                     let x = pair[0] + tx;
                     let y = pair[1] + ty;
                     if compact_paths && y == curr_y {
@@ -702,11 +702,11 @@ fn translate_and_compact_path_data(
                 }
             }
             'C' => {
-                if nums.len() % 6 != 0 {
+                if !nums.len().is_multiple_of(6) {
                     return None;
                 }
                 let mut vals = Vec::with_capacity(nums.len());
-                for seg in nums.chunks_exact(6) {
+                for seg in nums.as_chunks::<6>().0 {
                     vals.push(seg[0] + tx);
                     vals.push(seg[1] + ty);
                     vals.push(seg[2] + tx);
@@ -721,11 +721,11 @@ fn translate_and_compact_path_data(
                 emit('C', &vals, &mut out, &mut first);
             }
             'Q' | 'S' => {
-                if nums.len() % 4 != 0 {
+                if !nums.len().is_multiple_of(4) {
                     return None;
                 }
                 let mut vals = Vec::with_capacity(nums.len());
-                for seg in nums.chunks_exact(4) {
+                for seg in nums.as_chunks::<4>().0 {
                     vals.push(seg[0] + tx);
                     vals.push(seg[1] + ty);
                     let x = seg[2] + tx;
@@ -738,11 +738,11 @@ fn translate_and_compact_path_data(
                 emit(cmd, &vals, &mut out, &mut first);
             }
             'T' => {
-                if nums.len() % 2 != 0 {
+                if !nums.len().is_multiple_of(2) {
                     return None;
                 }
                 let mut vals = Vec::with_capacity(nums.len());
-                for seg in nums.chunks_exact(2) {
+                for seg in nums.as_chunks::<2>().0 {
                     let x = seg[0] + tx;
                     let y = seg[1] + ty;
                     vals.push(x);
@@ -753,11 +753,11 @@ fn translate_and_compact_path_data(
                 emit('T', &vals, &mut out, &mut first);
             }
             'A' => {
-                if nums.len() % 7 != 0 {
+                if !nums.len().is_multiple_of(7) {
                     return None;
                 }
                 let mut vals = Vec::with_capacity(nums.len());
-                for seg in nums.chunks_exact(7) {
+                for seg in nums.as_chunks::<7>().0 {
                     vals.push(seg[0]);
                     vals.push(seg[1]);
                     vals.push(seg[2]);

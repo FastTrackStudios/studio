@@ -261,9 +261,6 @@ pub fn face() -> Face {
     }
 }
 
-/// The unit's size (a 1U front).
-pub const SIZE: (f64, f64) = (W, H);
-
 /// The ratio lamps' order, for a host mapping them to its own ratios.
 pub const RATIO_NAMES: &[&str] = RATIOS;
 

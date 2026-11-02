@@ -290,6 +290,8 @@ impl Passes {
 
     /// Whether `id` was compiled by this or a clone of it.
     #[cfg(test)]
+    // Test helper whose tests were cut in Studio (FastTrackStudios/studio#203).
+    #[allow(dead_code)]
     pub fn has_compiled(&self, id: &str) -> bool {
         self.compiled
             .lock()

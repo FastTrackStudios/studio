@@ -205,7 +205,7 @@ fn flower(b: &mut Builder<'_>, parent: NodeId, (cx, cy): (f64, f64), big: f64) {
                 .pivot(0.5, 0.5),
         );
         // Each ring unfurls with a turn, alternate rings the other way.
-        let sign = if k % 2 == 0 { 1.0 } else { -1.0 };
+        let sign = if k.is_multiple_of(2) { 1.0 } else { -1.0 };
         motion::add(
             b,
             ring,

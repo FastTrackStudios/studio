@@ -954,8 +954,6 @@ pub fn gate_pane(back: bool) -> Face {
     f
 }
 
-/// Both faces.
-#[must_use]
 /// The FX row's box on an iPad: the gate made for it.
 pub const ROW: (f64, f64) = (860.0, 254.0);
 

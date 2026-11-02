@@ -1273,10 +1273,10 @@ fn lane_back(
     }
 }
 
-/// Every modulation face.
-#[must_use]
 // ── Flanger, Phaser, Rotary ──────────────────────────────────────────────
 
+/// Every modulation face.
+#[must_use]
 pub fn faces() -> Vec<Face> {
     let p = kit::Tier::Phone;
     let pane = kit::Tier::Ipad;

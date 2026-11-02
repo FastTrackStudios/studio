@@ -101,6 +101,8 @@ fn field(b: &mut Builder<'_>, f: NodeId, fw: f64, fh: f64) {
     // The note, in the middle; the two takes, out to the sides by the
     // width, late by the delay, drifting with the detune.
     source(b, f, "note", (cx, cy), "#f4f2fa", "0");
+    // 3.14 is a drift phase picked by eye, not π.
+    #[allow(clippy::approx_constant)]
     for (side, drift) in [(-1.0, 0.0), (1.0, 3.14)] {
         let t = source(
             b,

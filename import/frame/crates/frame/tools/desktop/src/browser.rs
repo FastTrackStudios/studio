@@ -76,6 +76,8 @@ impl Browser {
     }
 
     #[cfg(test)]
+    // Test helper whose tests were cut in Studio (FastTrackStudios/studio#203).
+    #[allow(dead_code)]
     #[must_use]
     pub fn len(&self) -> usize {
         self.items.len()

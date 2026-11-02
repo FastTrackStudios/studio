@@ -466,6 +466,8 @@ impl Offscreen {
     /// Render `scene` with a deferred check ([`render_deferred`]) and
     /// poll it until the GPU answers: whether it overflowed.
     #[cfg(test)]
+    // Test helper whose tests were cut in Studio (FastTrackStudios/studio#203).
+    #[allow(dead_code)]
     pub(crate) fn deferred_overflow(
         &mut self,
         scene: &vello::Scene,

@@ -607,8 +607,6 @@ fn d_(f: Face) -> Face {
     }
 }
 
-/// Every face in the set.
-#[must_use]
 /// The compressor's scope at the FX row's size (a landscape phone's 750 ×
 /// 254 box): the Pre Comp block, the whole row its own — the same picture
 /// its block in the routing grid wears, its curve and its gain reduction.
@@ -730,20 +728,19 @@ pub fn faces() -> Vec<Face> {
         plugin: PLUGIN,
         ..crate::rig_blues::prefx::spring_at(crate::rig_time::kit::Tier::Phone)
     });
-    for t in [crate::rig_time::kit::Tier::Ipad] {
-        v.push(Face {
-            plugin: PLUGIN,
-            ..crate::rig_blues::prefx::aqua_at(t)
-        });
-        v.push(Face {
-            plugin: PLUGIN,
-            ..crate::rig_blues::prefx::spring_at(t)
-        });
-        v.push(Face {
-            plugin: PLUGIN,
-            ..crate::rig_blues::premod::premod_at(t)
-        });
-    }
+    let t = crate::rig_time::kit::Tier::Ipad;
+    v.push(Face {
+        plugin: PLUGIN,
+        ..crate::rig_blues::prefx::aqua_at(t)
+    });
+    v.push(Face {
+        plugin: PLUGIN,
+        ..crate::rig_blues::prefx::spring_at(t)
+    });
+    v.push(Face {
+        plugin: PLUGIN,
+        ..crate::rig_blues::premod::premod_at(t)
+    });
     v.push(trio());
     v.push(post_comp());
     v.push(post_comp_phone(false));

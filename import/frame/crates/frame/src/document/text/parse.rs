@@ -733,10 +733,7 @@ impl<'a> Builder<'a> {
         };
 
         let kind = self.kind(el, &at)?;
-        let id = match at.id("id")? {
-            Some(id) => id,
-            None => NodeId::new(),
-        };
+        let id = at.id("id")?.unwrap_or_default();
         if let Some(prev) = self.seen.get(&id) {
             let (l, c) = crate::document::text::error::line_col(self.src, *prev);
             let pos = at.get("id").map_or(el.pos, |a| a.value_pos);

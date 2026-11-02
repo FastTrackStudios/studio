@@ -130,7 +130,7 @@ pub fn paint_primitives_into_scene_with<S: PaintTarget>(
                 scene.push_layer(
                     Fill::NonZero,
                     peniko::BlendMode {
-                        mix: to_peniko_mix(&blend),
+                        mix: to_peniko_mix(blend),
                         compose: peniko::Compose::SrcOver,
                     },
                     opacity as f32,
@@ -563,13 +563,11 @@ pub fn paint_primitives_into_scene_with<S: PaintTarget>(
                         blur_color_hint.as_ref(),
                     );
                 }
-                if !has_layer_blur {
-                    if let Some(svg_text) = decoded_svg_text.as_deref() {
-                        let svg_fit = cached_svg_fit_transform(svg_text, width, height);
-                        let svg_transform = path_origin_transform * svg_fit;
-                        if scene.draw_svg(svg_text, svg_transform) {
-                            had_any_path = true;
-                        }
+                if !has_layer_blur && let Some(svg_text) = decoded_svg_text.as_deref() {
+                    let svg_fit = cached_svg_fit_transform(svg_text, width, height);
+                    let svg_transform = path_origin_transform * svg_fit;
+                    if scene.draw_svg(svg_text, svg_transform) {
+                        had_any_path = true;
                     }
                 } // !has_layer_blur for SVG
 
@@ -593,7 +591,7 @@ pub fn paint_primitives_into_scene_with<S: PaintTarget>(
                                 fill_path_shape(
                                     scene,
                                     path_transform,
-                                    &*path,
+                                    &path,
                                     lx,
                                     ly,
                                     width,
@@ -608,24 +606,24 @@ pub fn paint_primitives_into_scene_with<S: PaintTarget>(
                         }
                     }
 
-                    if let Some(stroke) = stroke.as_ref() {
-                        if stroke.width > 0.0 {
-                            // Path space is node-local, as for the fills.
-                            let (brush, brush_transform) =
-                                stroke_brush(stroke, 0.0, 0.0, width, height);
-                            for path_data in stroke_paths {
-                                if let Some(path) = cached_bez_path(path_data) {
-                                    // Figma strokeGeometry is already the outlined stroke shape.
-                                    // Fill it directly to avoid double-stroking artifacts.
-                                    scene.fill(
-                                        peniko::Fill::NonZero,
-                                        path_transform,
-                                        &brush,
-                                        brush_transform,
-                                        &*path,
-                                    );
-                                    had_any_path = true;
-                                }
+                    if let Some(stroke) = stroke.as_ref()
+                        && stroke.width > 0.0
+                    {
+                        // Path space is node-local, as for the fills.
+                        let (brush, brush_transform) =
+                            stroke_brush(stroke, 0.0, 0.0, width, height);
+                        for path_data in stroke_paths {
+                            if let Some(path) = cached_bez_path(path_data) {
+                                // Figma strokeGeometry is already the outlined stroke shape.
+                                // Fill it directly to avoid double-stroking artifacts.
+                                scene.fill(
+                                    peniko::Fill::NonZero,
+                                    path_transform,
+                                    &brush,
+                                    brush_transform,
+                                    &*path,
+                                );
+                                had_any_path = true;
                             }
                         }
                     }
@@ -652,19 +650,18 @@ pub fn paint_primitives_into_scene_with<S: PaintTarget>(
                             scene.pop_layer();
                         }
                     }
-                    if let Some(stroke) = stroke.as_ref() {
-                        if stroke.width > 0.0 {
-                            let stroke_style = to_kurbo_stroke(stroke, 1.0);
-                            let (brush, brush_transform) =
-                                stroke_brush(stroke, lx, ly, width, height);
-                            scene.stroke(
-                                &stroke_style,
-                                base_transform,
-                                &brush,
-                                brush_transform,
-                                &rect,
-                            );
-                        }
+                    if let Some(stroke) = stroke.as_ref()
+                        && stroke.width > 0.0
+                    {
+                        let stroke_style = to_kurbo_stroke(stroke, 1.0);
+                        let (brush, brush_transform) = stroke_brush(stroke, lx, ly, width, height);
+                        scene.stroke(
+                            &stroke_style,
+                            base_transform,
+                            &brush,
+                            brush_transform,
+                            &rect,
+                        );
                     }
                 }
                 for effect in effects {
@@ -1636,18 +1633,18 @@ pub fn paint_primitives_into_scene_with<S: PaintTarget>(
             }
         }
         // Stroke blur: single blurred rect with stroke color
-        if let Some(stroke) = stroke {
-            if stroke.width > 0.0 {
-                let stroke_rect = stroke_aligned_rect(rect, Some(stroke));
-                let stroke_radius = stroke_aligned_corner_radius(corner_radius, Some(stroke));
-                scene.draw_blurred_rounded_rect(
-                    scene_transform,
-                    stroke_rect,
-                    to_peniko(stroke.color.clone()),
-                    stroke_radius,
-                    sigma,
-                );
-            }
+        if let Some(stroke) = stroke
+            && stroke.width > 0.0
+        {
+            let stroke_rect = stroke_aligned_rect(rect, Some(stroke));
+            let stroke_radius = stroke_aligned_corner_radius(corner_radius, Some(stroke));
+            scene.draw_blurred_rounded_rect(
+                scene_transform,
+                stroke_rect,
+                to_peniko(stroke.color.clone()),
+                stroke_radius,
+                sigma,
+            );
         }
     }
 
@@ -1671,25 +1668,25 @@ pub fn paint_primitives_into_scene_with<S: PaintTarget>(
             if let Some(fill_paint) = fill.cloned().map(|f| f.with_opacity(weight)) {
                 for path_data in fill_paths {
                     if let Some(path) = cached_bez_path(path_data) {
-                        fill_path_shape(scene, shifted, &*path, x, y, width, height, &fill_paint);
+                        fill_path_shape(scene, shifted, &path, x, y, width, height, &fill_paint);
                     }
                 }
             }
-            if let Some(stroke) = stroke {
-                if stroke.width > 0.0 {
-                    let mut stroke_blur = stroke.clone();
-                    stroke_blur.color.a = (stroke_blur.color.a * weight).clamp(0.0, 1.0);
-                    let stroke_style = to_kurbo_stroke(&stroke_blur, stroke_scale);
-                    for path_data in stroke_paths {
-                        if let Some(path) = cached_bez_path(path_data) {
-                            scene.stroke(
-                                &stroke_style,
-                                shifted,
-                                to_peniko(stroke_blur.color.clone()),
-                                None,
-                                &*path,
-                            );
-                        }
+            if let Some(stroke) = stroke
+                && stroke.width > 0.0
+            {
+                let mut stroke_blur = stroke.clone();
+                stroke_blur.color.a = (stroke_blur.color.a * weight).clamp(0.0, 1.0);
+                let stroke_style = to_kurbo_stroke(&stroke_blur, stroke_scale);
+                for path_data in stroke_paths {
+                    if let Some(path) = cached_bez_path(path_data) {
+                        scene.stroke(
+                            &stroke_style,
+                            shifted,
+                            to_peniko(stroke_blur.color.clone()),
+                            None,
+                            &*path,
+                        );
                     }
                 }
             }
@@ -2396,7 +2393,7 @@ pub fn paint_primitives_into_scene_with<S: PaintTarget>(
                                 fill_path_shape(
                                     scene,
                                     path_transform,
-                                    &*path,
+                                    &path,
                                     lx,
                                     ly,
                                     width,

@@ -80,10 +80,10 @@ impl FrameDocument {
     }
 
     pub fn from_source_bytes(bytes: &[u8]) -> Result<Self, FrameDocumentError> {
-        if let Ok(text) = std::str::from_utf8(bytes) {
-            if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
-                return Self::from_source_value(value);
-            }
+        if let Ok(text) = std::str::from_utf8(bytes)
+            && let Ok(value) = serde_json::from_str::<serde_json::Value>(text)
+        {
+            return Self::from_source_value(value);
         }
         Self::from_fig_zip_bytes(bytes)
     }
@@ -93,10 +93,10 @@ impl FrameDocument {
     pub fn from_source_value(value: serde_json::Value) -> Result<Self, FrameDocumentError> {
         if let Some(obj) = value.as_object() {
             // FTS export: "schema" starting with "fts.figma.export"
-            if let Some(schema) = obj.get("schema").and_then(|v| v.as_str()) {
-                if schema.starts_with("fts.figma.export") {
-                    return Self::from_fts_export_value(value);
-                }
+            if let Some(schema) = obj.get("schema").and_then(|v| v.as_str())
+                && schema.starts_with("fts.figma.export")
+            {
+                return Self::from_fts_export_value(value);
             }
             // Grida bridge: "pages" array + "source" as string
             if obj.contains_key("pages") && obj.get("source").and_then(|v| v.as_str()).is_some() {
@@ -144,11 +144,6 @@ impl FrameDocument {
 }
 
 impl FrameDocument {
-    fn from_fts_export_json(json: &str) -> Result<Self, FrameDocumentError> {
-        let export: FtsExportDocument = serde_json::from_str(json)?;
-        Self::build_from_fts_export(export)
-    }
-
     fn from_fts_export_value(value: serde_json::Value) -> Result<Self, FrameDocumentError> {
         let export: FtsExportDocument = serde_json::from_value(value)?;
         Self::build_from_fts_export(export)
@@ -246,11 +241,6 @@ impl FrameDocument {
             component_sets: std::collections::HashMap::new(),
             styles: std::collections::HashMap::new(),
         })
-    }
-
-    fn from_grida_bridge_json(json: &str) -> Result<Self, FrameDocumentError> {
-        let bridge: GridaBridgeDocument = serde_json::from_str(json)?;
-        Self::build_from_grida_bridge(bridge)
     }
 
     fn from_grida_bridge_value(value: serde_json::Value) -> Result<Self, FrameDocumentError> {
@@ -503,10 +493,10 @@ fn flatten_synthetic_subtree(
 }
 
 fn ensure_object_field(target: &mut serde_json::Value, key: &str, default: serde_json::Value) {
-    if let Some(obj) = target.as_object_mut() {
-        if obj.get(key).is_none() {
-            obj.insert(key.to_string(), default);
-        }
+    if let Some(obj) = target.as_object_mut()
+        && obj.get(key).is_none()
+    {
+        obj.insert(key.to_string(), default);
     }
 }
 
@@ -609,30 +599,28 @@ fn hydrate_node_assets_recursive(
             .cloned()
             .unwrap_or_default();
 
-        if exports_obj.get("svgBase64").is_none() {
-            if let Some(asset_id) = svg_asset_id {
-                if let Some(asset) = assets.get(asset_id) {
-                    if asset.encoding == "base64" && !asset.data.is_empty() {
-                        exports_obj.insert(
-                            "svgBase64".to_string(),
-                            serde_json::Value::String(asset.data.clone()),
-                        );
-                    }
-                }
-            }
+        if exports_obj.get("svgBase64").is_none()
+            && let Some(asset_id) = svg_asset_id
+            && let Some(asset) = assets.get(asset_id)
+            && asset.encoding == "base64"
+            && !asset.data.is_empty()
+        {
+            exports_obj.insert(
+                "svgBase64".to_string(),
+                serde_json::Value::String(asset.data.clone()),
+            );
         }
 
-        if exports_obj.get("pngBase64").is_none() {
-            if let Some(asset_id) = png_asset_id {
-                if let Some(asset) = assets.get(asset_id) {
-                    if asset.encoding == "base64" && !asset.data.is_empty() {
-                        exports_obj.insert(
-                            "pngBase64".to_string(),
-                            serde_json::Value::String(asset.data.clone()),
-                        );
-                    }
-                }
-            }
+        if exports_obj.get("pngBase64").is_none()
+            && let Some(asset_id) = png_asset_id
+            && let Some(asset) = assets.get(asset_id)
+            && asset.encoding == "base64"
+            && !asset.data.is_empty()
+        {
+            exports_obj.insert(
+                "pngBase64".to_string(),
+                serde_json::Value::String(asset.data.clone()),
+            );
         }
 
         if !exports_obj.is_empty() {

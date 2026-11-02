@@ -15,10 +15,10 @@ pub(super) fn cached_bez_path(path_data: &str) -> Option<Arc<kurbo::BezPath>> {
     path_data.hash(&mut hasher);
     let key = hasher.finish();
 
-    if let Ok(cache) = CACHE.lock() {
-        if let Some(cached) = cache.get(&key) {
-            return Some(Arc::clone(cached));
-        }
+    if let Ok(cache) = CACHE.lock()
+        && let Some(cached) = cache.get(&key)
+    {
+        return Some(Arc::clone(cached));
     }
 
     let path = kurbo::BezPath::from_svg(path_data).ok()?;
@@ -46,10 +46,10 @@ pub(super) fn cached_svg_decode(svg_base64: &str) -> Option<Arc<String>> {
     svg_base64.hash(&mut hasher);
     let key = hasher.finish();
 
-    if let Ok(cache) = CACHE.lock() {
-        if let Some(cached) = cache.get(&key) {
-            return Some(Arc::clone(cached));
-        }
+    if let Ok(cache) = CACHE.lock()
+        && let Some(cached) = cache.get(&key)
+    {
+        return Some(Arc::clone(cached));
     }
 
     let bytes = base64::engine::general_purpose::STANDARD
@@ -79,10 +79,10 @@ pub(super) fn cached_svg_tree(svg_text: &str) -> Option<Arc<anyrender_svg::usvg:
     svg_text.hash(&mut hasher);
     let key = hasher.finish();
 
-    if let Ok(cache) = CACHE.lock() {
-        if let Some(cached) = cache.get(&key) {
-            return Some(Arc::clone(cached));
-        }
+    if let Ok(cache) = CACHE.lock()
+        && let Some(cached) = cache.get(&key)
+    {
+        return Some(Arc::clone(cached));
     }
 
     let opt = anyrender_svg::usvg::Options::default();
@@ -115,10 +115,10 @@ pub(super) fn cached_svg_fit_transform(
     target_height.to_bits().hash(&mut hasher);
     let key = hasher.finish();
 
-    if let Ok(cache) = CACHE.lock() {
-        if let Some(cached) = cache.get(&key) {
-            return *cached;
-        }
+    if let Ok(cache) = CACHE.lock()
+        && let Some(cached) = cache.get(&key)
+    {
+        return *cached;
     }
 
     let transform = compute_svg_fit_transform(svg_text, target_width, target_height);

@@ -855,9 +855,7 @@ fn insert_ops(
                     parent,
                     index: next,
                 });
-                if next != u32::MAX {
-                    next += 1;
-                }
+                next = next.saturating_add(1);
             }
         }
     }
@@ -1068,7 +1066,7 @@ fn resolve(scene: &Scene, r: &str) -> Result<NodeId> {
     }
 }
 
-struct Args<'a>(&'a Value);
+pub(crate) struct Args<'a>(&'a Value);
 
 impl Args<'_> {
     fn opt_str(&self, k: &str) -> Result<Option<&str>> {

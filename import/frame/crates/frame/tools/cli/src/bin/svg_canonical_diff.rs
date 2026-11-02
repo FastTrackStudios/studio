@@ -257,10 +257,10 @@ fn canonicalize_path_data(input: &str, precision: usize) -> Option<String> {
 
         match upper {
             'M' => {
-                if nums.len() < 2 || nums.len() % 2 != 0 {
+                if nums.len() < 2 || !nums.len().is_multiple_of(2) {
                     return None;
                 }
-                for (pair_idx, pair) in nums.chunks_exact(2).enumerate() {
+                for (pair_idx, pair) in nums.as_chunks::<2>().0.iter().enumerate() {
                     let mut x = pair[0];
                     let mut y = pair[1];
                     if rel {
@@ -279,10 +279,10 @@ fn canonicalize_path_data(input: &str, precision: usize) -> Option<String> {
                 }
             }
             'L' => {
-                if nums.len() % 2 != 0 {
+                if !nums.len().is_multiple_of(2) {
                     return None;
                 }
-                for pair in nums.chunks_exact(2) {
+                for pair in nums.as_chunks::<2>().0 {
                     let mut x = pair[0];
                     let mut y = pair[1];
                     if rel {
@@ -309,10 +309,10 @@ fn canonicalize_path_data(input: &str, precision: usize) -> Option<String> {
                 }
             }
             'C' => {
-                if nums.len() % 6 != 0 {
+                if !nums.len().is_multiple_of(6) {
                     return None;
                 }
-                for seg in nums.chunks_exact(6) {
+                for seg in nums.as_chunks::<6>().0 {
                     let mut vals = [seg[0], seg[1], seg[2], seg[3], seg[4], seg[5]];
                     if rel {
                         vals[0] += curr_x;
@@ -328,10 +328,10 @@ fn canonicalize_path_data(input: &str, precision: usize) -> Option<String> {
                 }
             }
             'S' => {
-                if nums.len() % 4 != 0 {
+                if !nums.len().is_multiple_of(4) {
                     return None;
                 }
-                for seg in nums.chunks_exact(4) {
+                for seg in nums.as_chunks::<4>().0 {
                     let mut vals = [seg[0], seg[1], seg[2], seg[3]];
                     if rel {
                         vals[0] += curr_x;
@@ -345,10 +345,10 @@ fn canonicalize_path_data(input: &str, precision: usize) -> Option<String> {
                 }
             }
             'Q' => {
-                if nums.len() % 4 != 0 {
+                if !nums.len().is_multiple_of(4) {
                     return None;
                 }
-                for seg in nums.chunks_exact(4) {
+                for seg in nums.as_chunks::<4>().0 {
                     let mut vals = [seg[0], seg[1], seg[2], seg[3]];
                     if rel {
                         vals[0] += curr_x;
@@ -362,10 +362,10 @@ fn canonicalize_path_data(input: &str, precision: usize) -> Option<String> {
                 }
             }
             'T' => {
-                if nums.len() % 2 != 0 {
+                if !nums.len().is_multiple_of(2) {
                     return None;
                 }
-                for seg in nums.chunks_exact(2) {
+                for seg in nums.as_chunks::<2>().0 {
                     let mut x = seg[0];
                     let mut y = seg[1];
                     if rel {
@@ -378,10 +378,10 @@ fn canonicalize_path_data(input: &str, precision: usize) -> Option<String> {
                 }
             }
             'A' => {
-                if nums.len() % 7 != 0 {
+                if !nums.len().is_multiple_of(7) {
                     return None;
                 }
-                for seg in nums.chunks_exact(7) {
+                for seg in nums.as_chunks::<7>().0 {
                     let mut vals = [seg[0], seg[1], seg[2], seg[3], seg[4], seg[5], seg[6]];
                     if rel {
                         vals[5] += curr_x;

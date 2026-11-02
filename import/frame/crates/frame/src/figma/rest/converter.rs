@@ -40,12 +40,12 @@ pub fn import_get_file(file: &models::GetFile) -> Result<FrameDocument, ImportEr
 /// JSON Figma API responses are supported. Binary `.fig` payloads currently
 /// return `UnsupportedBinaryFig` from frame-proto.
 pub fn import_figma_bytes(bytes: &[u8]) -> Result<FrameDocument, ImportError> {
-    if let Ok(text) = std::str::from_utf8(bytes) {
-        if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(text) {
-            let mut _rewrites = 0;
-            normalize_layout_compat_value(&mut value, &mut _rewrites);
-            return Ok(FrameDocument::from_source_value(value)?);
-        }
+    if let Ok(text) = std::str::from_utf8(bytes)
+        && let Ok(mut value) = serde_json::from_str::<serde_json::Value>(text)
+    {
+        let mut _rewrites = 0;
+        normalize_layout_compat_value(&mut value, &mut _rewrites);
+        return Ok(FrameDocument::from_source_value(value)?);
     }
     Ok(FrameDocument::from_source_bytes(bytes)?)
 }
@@ -55,21 +55,21 @@ pub fn import_figma_bytes(bytes: &[u8]) -> Result<FrameDocument, ImportError> {
 pub fn import_figma_bytes_with_diagnostics(
     bytes: &[u8],
 ) -> Result<(FrameDocument, ImportDiagnostics), ImportError> {
-    if let Ok(text) = std::str::from_utf8(bytes) {
-        if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(text) {
-            let mut normalized_aliases = 0;
-            normalize_layout_compat_value(&mut value, &mut normalized_aliases);
-            let diagnostics = ImportDiagnostics {
-                source_schema: value
-                    .get("schema")
-                    .and_then(|s| s.as_str())
-                    .map(ToString::to_string),
-                normalized_aliases,
-                unsupported_node_keys: collect_unsupported_node_keys(&value),
-            };
-            let doc = FrameDocument::from_source_value(value)?;
-            return Ok((doc, diagnostics));
-        }
+    if let Ok(text) = std::str::from_utf8(bytes)
+        && let Ok(mut value) = serde_json::from_str::<serde_json::Value>(text)
+    {
+        let mut normalized_aliases = 0;
+        normalize_layout_compat_value(&mut value, &mut normalized_aliases);
+        let diagnostics = ImportDiagnostics {
+            source_schema: value
+                .get("schema")
+                .and_then(|s| s.as_str())
+                .map(ToString::to_string),
+            normalized_aliases,
+            unsupported_node_keys: collect_unsupported_node_keys(&value),
+        };
+        let doc = FrameDocument::from_source_value(value)?;
+        return Ok((doc, diagnostics));
     }
     let doc = FrameDocument::from_source_bytes(bytes)?;
     Ok((doc, ImportDiagnostics::default()))
