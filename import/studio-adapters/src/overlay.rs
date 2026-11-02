@@ -476,7 +476,7 @@ impl Drop for DioxusOverlay {
 fn query_root_content_size(doc: &DioxusDocument) -> Option<(f64, f64)> {
     let inner = doc.inner();
     let root = inner.root_element();
-    let layout = &root.final_layout;
+    let layout = root.final_layout();
     let w = layout.size.width;
     let h = layout.size.height;
     if w > 0.0 && h > 0.0 {

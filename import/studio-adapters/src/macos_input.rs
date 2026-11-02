@@ -190,7 +190,7 @@ extern "C" fn insert_text(this: &Object, _sel: Sel, text: id, _range: NSRange) {
 /// events we don't care about (modifier-only, etc.).
 fn ns_key_event_to_blitz(event: id, pressed: bool) -> Option<blitz_traits::events::UiEvent> {
     use blitz_traits::events::{BlitzKeyEvent, KeyState, UiEvent};
-    use keyboard_types::{Code, Key, Location, Modifiers};
+    use keyboard_types::{Code, Key, Location, Modifiers, NamedKey};
 
     unsafe {
         let keycode: u16 = msg_send![event, keyCode];
@@ -199,11 +199,11 @@ fn ns_key_event_to_blitz(event: id, pressed: bool) -> Option<blitz_traits::event
         let chars: id = msg_send![event, charactersIgnoringModifiers];
 
         let key = if chars.is_null() {
-            Key::Unidentified
+            Key::Named(NamedKey::Unidentified)
         } else {
             let utf8: *const i8 = msg_send![chars, UTF8String];
             if utf8.is_null() {
-                Key::Unidentified
+                Key::Named(NamedKey::Unidentified)
             } else {
                 let s = std::ffi::CStr::from_ptr(utf8).to_string_lossy();
                 mac_key_from_str(&s).unwrap_or_else(|| Key::Character(s.into_owned()))
@@ -469,10 +469,10 @@ extern "C" fn scroll_wheel(this: &Object, _sel: Sel, event: id) {
 fn mac_key_from_str(s: &str) -> Option<keyboard_types::Key> {
     use keyboard_types::Key;
     match s {
-        "\u{7F}" | "\u{8}" => Some(Key::Backspace),
-        "\t" => Some(Key::Tab),
-        "\r" | "\n" => Some(Key::Enter),
-        "\u{1B}" => Some(Key::Escape),
+        "\u{7F}" | "\u{8}" => Some(Key::Named(NamedKey::Backspace)),
+        "\t" => Some(Key::Named(NamedKey::Tab)),
+        "\r" | "\n" => Some(Key::Named(NamedKey::Enter)),
+        "\u{1B}" => Some(Key::Named(NamedKey::Escape)),
         _ => None,
     }
 }

@@ -424,7 +424,7 @@ impl EmbeddedView {
                 && el
                     .attrs()
                     .iter()
-                    .any(|a| a.name.local.as_ref() == attr && a.value == value)
+                    .any(|a| &*a.name.local == attr && a.value == value)
             {
                 let rect = doc.get_client_bounding_rect(id)?;
                 return Some((rect.width, rect.height));

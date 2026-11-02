@@ -1511,26 +1511,26 @@ fn forward_mouse_event(hwnd: raw::HWND, event: blitz_traits::events::UiEvent) {
 
 /// Map SWELL virtual key codes to keyboard_types::Key.
 fn swell_vk_to_key(vk: u32) -> keyboard_types::Key {
-    use keyboard_types::Key;
+    use keyboard_types::{Key, NamedKey};
     match vk {
-        0x08 => Key::Backspace,
-        0x09 => Key::Tab,
-        0x0D => Key::Enter,
-        0x1B => Key::Escape,
+        0x08 => Key::Named(NamedKey::Backspace),
+        0x09 => Key::Named(NamedKey::Tab),
+        0x0D => Key::Named(NamedKey::Enter),
+        0x1B => Key::Named(NamedKey::Escape),
         0x20 => Key::Character(" ".to_string()),
-        0x25 => Key::ArrowLeft,
-        0x26 => Key::ArrowUp,
-        0x27 => Key::ArrowRight,
-        0x28 => Key::ArrowDown,
-        0x2E => Key::Delete,
-        0x24 => Key::Home,
-        0x23 => Key::End,
-        0x21 => Key::PageUp,
-        0x22 => Key::PageDown,
-        0x70..=0x7B => Key::F1, // F1-F12 (simplified)
+        0x25 => Key::Named(NamedKey::ArrowLeft),
+        0x26 => Key::Named(NamedKey::ArrowUp),
+        0x27 => Key::Named(NamedKey::ArrowRight),
+        0x28 => Key::Named(NamedKey::ArrowDown),
+        0x2E => Key::Named(NamedKey::Delete),
+        0x24 => Key::Named(NamedKey::Home),
+        0x23 => Key::Named(NamedKey::End),
+        0x21 => Key::Named(NamedKey::PageUp),
+        0x22 => Key::Named(NamedKey::PageDown),
+        0x70..=0x7B => Key::Named(NamedKey::F1), // F1-F12 (simplified)
         0x30..=0x39 => Key::Character(char::from_u32(vk).unwrap_or('0').to_string()),
         0x41..=0x5A => Key::Character(char::from_u32(vk + 32).unwrap_or('a').to_string()),
-        _ => Key::Unidentified,
+        _ => Key::Named(NamedKey::Unidentified),
     }
 }
 
