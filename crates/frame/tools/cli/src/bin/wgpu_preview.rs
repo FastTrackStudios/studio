@@ -661,7 +661,7 @@ impl ApplicationHandler for App {
                         .create_view(&wgpu::TextureViewDescriptor::default()),
                 );
                 device_handle.queue.submit([encoder.finish()]);
-                surface_texture.present();
+                device_handle.queue.present(surface_texture);
                 let _ = device_handle.device.poll(wgpu::PollType::Poll);
 
                 let now = Instant::now();

@@ -110,7 +110,7 @@ pub fn DragProvider(children: Element) -> Element {
                         return;
                     }
                     match evt.key() {
-                        Key::Enter => {
+                        Key::Named(NamedKey::Enter) => {
                             // Submit: parse and apply value
                             if let Some(param_ptr) = state.param_ptr {
                                 if !state.text.is_empty() {
@@ -126,10 +126,10 @@ pub fn DragProvider(children: Element) -> Element {
                             text_edit.set(TextEditState::default());
                             revision += 1;
                         }
-                        Key::Escape => {
+                        Key::Named(NamedKey::Escape) => {
                             text_edit.set(TextEditState::default());
                         }
-                        Key::Backspace => {
+                        Key::Named(NamedKey::Backspace) => {
                             let mut s = state;
                             s.text.pop();
                             text_edit.set(s);

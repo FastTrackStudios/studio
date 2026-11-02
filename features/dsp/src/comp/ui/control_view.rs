@@ -149,7 +149,7 @@ fn AppShell() -> Element {
     // schedule_update on this scope — same driver as eq-ui's control view.
     let mut app_tick: Signal<u64> = use_signal(|| 0);
     use_hook(|| {
-        let updater = dioxus_core::schedule_update();
+        let updater = dioxus_vdom::schedule_update();
         std::thread::spawn(move || {
             loop {
                 // ~30 Hz — plenty for meter ballistics; keeps the headless

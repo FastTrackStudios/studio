@@ -218,7 +218,7 @@ fn AppShell() -> Element {
     // (we tried 4ms and 8ms; both stalled the loop).
     let mut app_tick: Signal<u64> = use_signal(|| 0);
     use_hook(|| {
-        let updater = dioxus_core::schedule_update();
+        let updater = dioxus_vdom::schedule_update();
         std::thread::spawn(move || {
             loop {
                 // 120 Hz (~8.33 ms) for smoother metering/params on high-refresh

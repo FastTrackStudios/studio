@@ -81,6 +81,7 @@ pub fn keymap_config_from_defs(
         keymap_context,
         mouse: HashMap::new(),
         scroll,
+        ..KeymapConfig::default()
     }
 }
 

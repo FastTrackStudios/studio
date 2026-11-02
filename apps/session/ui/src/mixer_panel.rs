@@ -501,6 +501,8 @@ pub fn Mixer() -> Element {
                 winit::event::MouseScrollDelta::PixelDelta(at) => {
                     crate::studio::css_delta(&*window, at.x, at.y)
                 }
+                // winit's delta is non-exhaustive: nothing else scrolls.
+                _ => (0.0, 0.0),
             };
             let most = (content_w.get() - r.2).max(0.0);
             scrolling.set((scrolling.get() - dx - dy).clamp(0.0, most));

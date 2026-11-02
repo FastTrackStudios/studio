@@ -21,7 +21,7 @@
 use crate::drag::{begin_drag_axis, DragAxis, DragState};
 use crate::param::ParamHandle;
 use dioxus::prelude::*;
-use dioxus_elements::input_data::MouseButton;
+use dioxus_html::input_data::MouseButton;
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -196,35 +196,35 @@ pub fn key(evt: &KeyboardEvent, handle: &ParamHandle) -> KeyOutcome {
     let mods = evt.modifiers();
     let step = wheel_step(mods) as f32;
     let outcome = match evt.key() {
-        Key::ArrowUp | Key::ArrowRight => {
+        Key::Named(NamedKey::ArrowUp) | Key::Named(NamedKey::ArrowRight) => {
             nudge(handle, 1.0, step);
             KeyOutcome::Edited
         }
-        Key::ArrowDown | Key::ArrowLeft => {
+        Key::Named(NamedKey::ArrowDown) | Key::Named(NamedKey::ArrowLeft) => {
             nudge(handle, -1.0, step);
             KeyOutcome::Edited
         }
-        Key::PageUp => {
+        Key::Named(NamedKey::PageUp) => {
             nudge(handle, 1.0, PAGE_STEP as f32);
             KeyOutcome::Edited
         }
-        Key::PageDown => {
+        Key::Named(NamedKey::PageDown) => {
             nudge(handle, -1.0, PAGE_STEP as f32);
             KeyOutcome::Edited
         }
-        Key::Home => {
+        Key::Named(NamedKey::Home) => {
             handle.set_as_gesture(0.0);
             KeyOutcome::Edited
         }
-        Key::End => {
+        Key::Named(NamedKey::End) => {
             handle.set_as_gesture(1.0);
             KeyOutcome::Edited
         }
-        Key::Backspace | Key::Delete => {
+        Key::Named(NamedKey::Backspace) | Key::Named(NamedKey::Delete) => {
             handle.reset_to_default();
             KeyOutcome::Edited
         }
-        Key::Enter => KeyOutcome::OpenTextEntry,
+        Key::Named(NamedKey::Enter) => KeyOutcome::OpenTextEntry,
         _ => KeyOutcome::Unhandled,
     };
     if outcome != KeyOutcome::Unhandled {

@@ -13,7 +13,7 @@
 
 use std::time::{Duration, SystemTime};
 
-use dioxus::dioxus_core::Task;
+use dioxus::core::Task;
 use dioxus::prelude::*;
 
 use crate::copy::{self, Platform};
@@ -476,7 +476,7 @@ pub fn AccountSheet(
                     background: #00000099; display: flex; justify-content: center; align-items: flex-start; \
                     padding-top: 16px; font-family: {FONT};",
             onkeydown: move |e: KeyboardEvent| {
-                if e.key() == Key::Escape { state.close(); }
+                if e.key() == Key::Named(NamedKey::Escape) { state.close(); }
             },
             div {
                 role: "dialog",

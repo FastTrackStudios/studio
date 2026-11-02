@@ -400,7 +400,7 @@ impl<'vdom> EventLoopDriver for ElementCondition<'vdom> {
 }
 
 impl<'vdom> Waitable for ElementCondition<'vdom> {
-    type Output = usize;
+    type Output = blitz_dom::NodeId;
 
     fn check(&self) -> ControlFlow<Self::Output> {
         if let Some(element) = self.data.get_element(&self.selector) {

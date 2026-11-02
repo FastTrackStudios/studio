@@ -110,11 +110,13 @@ impl Labeller {
         let mut runs = Vec::new();
         let mut ascent = 0.0f64;
         for line in layout.lines() {
-            ascent = ascent.max(line.metrics().ascent as f64);
             for item in line.items() {
                 let parley::PositionedLayoutItem::GlyphRun(run) = item else {
                     continue;
                 };
+                // parley 0.12 keeps the ascent on each run's font
+                // metrics, not the line's: the line's is the tallest run's.
+                ascent = ascent.max(f64::from(run.run().font_metrics().ascent));
                 let font = run.run().font().clone();
                 runs.push(Run {
                     font,

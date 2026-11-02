@@ -564,7 +564,7 @@ fn CommentsPanel() -> Element {
                                     color: {INK}; font-family: {FONT}; font-size: 14px;",
                             oninput: move |e| draft.set(e.value()),
                             onkeydown: move |e| {
-                                if e.key() == Key::Enter { send_key(); }
+                                if e.key() == Key::Named(NamedKey::Enter) { send_key(); }
                                 if !super::command::command_held(&e) { e.stop_propagation(); }
                             },
                         }

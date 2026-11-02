@@ -5,7 +5,7 @@
 use dioxus::prelude::*;
 use lucide_dioxus::{
     ChevronDown, ChevronUp, Guitar, Headphones, MessageSquare, Mic, Piano, Play, Plus, Share2,
-    Trash2,
+    Trash,
 };
 use uuid::Uuid;
 
@@ -365,7 +365,7 @@ fn EditOrder(id: SetlistId, rows: Vec<Line>) -> Element {
                                 ChevronDown { size: 20, color: down_ink } }
                             button { class: "lp", "aria-label": "Remove", style: "{icon_button}",
                                 onclick: move |_| edit(Edit::RemoveEntry { setlist: id, entry }),
-                                Trash2 { size: 18, color: VOID } }
+                                Trash { size: 18, color: VOID } }
                         }
                     }
                 }

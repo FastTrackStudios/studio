@@ -19,7 +19,7 @@
 
 use dioxus::prelude::*;
 use lucide_dioxus::{
-    AudioWaveform, CornerDownLeft, Disc3, FolderKanban, Guitar, ListMusic, Music, Search,
+    AudioLines, AudioWaveform, CornerDownLeft, Disc3, FolderKanban, Guitar, ListMusic, Search,
 };
 
 use super::kit::*;
@@ -501,11 +501,11 @@ impl Menus {
 /// A page's key, as the menus read it.
 fn menu_key_of(e: &KeyboardEvent) -> Option<MenuKey> {
     Some(match e.key() {
-        Key::Escape => MenuKey::Escape,
-        Key::ArrowUp => MenuKey::Up,
-        Key::ArrowDown => MenuKey::Down,
-        Key::Enter => MenuKey::Enter,
-        Key::Backspace => MenuKey::Backspace,
+        Key::Named(NamedKey::Escape) => MenuKey::Escape,
+        Key::Named(NamedKey::ArrowUp) => MenuKey::Up,
+        Key::Named(NamedKey::ArrowDown) => MenuKey::Down,
+        Key::Named(NamedKey::Enter) => MenuKey::Enter,
+        Key::Named(NamedKey::Backspace) => MenuKey::Backspace,
         Key::Character(c) => MenuKey::Char(c),
         _ => return None,
     })
@@ -699,7 +699,7 @@ fn kind_icon(group: &str) -> Element {
     match group {
         "Project" => rsx! { FolderKanban { size: 18, color: INK_3 } },
         "Setlist" | "This setlist" => rsx! { ListMusic { size: 18, color: INK_3 } },
-        "Song" | "This song" => rsx! { Music { size: 18, color: INK_3 } },
+        "Song" | "This song" => rsx! { AudioLines { size: 18, color: INK_3 } },
         "Session" | "This session" => rsx! { AudioWaveform { size: 18, color: INK_3 } },
         "Part" => rsx! { Guitar { size: 18, color: INK_3 } },
         "Album" => rsx! { Disc3 { size: 18, color: INK_3 } },

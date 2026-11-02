@@ -11,7 +11,7 @@ use crate::gesture;
 use crate::param::ParamHandle;
 use crate::theme::*;
 use dioxus::prelude::*;
-use dioxus_elements::input_data::MouseButton;
+use dioxus_html::input_data::MouseButton;
 
 /// Plain-value variant — emits normalized `(x, y)` via callback.
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -94,6 +94,7 @@ fn build_shared() -> Result<Arc<SharedGpu>, GpuError> {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: None,
         force_fallback_adapter: false,
+        apply_limit_buckets: false,
     }))?;
     let features = adapter.features() & Features::empty();
     let limits = adapter.limits();
@@ -251,6 +252,7 @@ impl GpuState {
             desired_maximum_frame_latency: 2,
             alpha_mode,
             view_formats: vec![],
+            color_space: wgpu::SurfaceColorSpace::Auto,
         };
         surface.configure(&device, &surface_config);
 
@@ -325,6 +327,7 @@ impl GpuState {
             desired_maximum_frame_latency: 2,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: vec![],
+            color_space: wgpu::SurfaceColorSpace::Auto,
         };
 
         tracing::info!(width, height, "Offscreen GPU state created");
@@ -420,7 +423,8 @@ impl GpuState {
         self.texture_blitter
             .blit(&self.device, &self.queue, &intermediate_view, &surface_view);
 
-        surface_texture.present();
+        // wgpu 30: presenting goes through the queue, after the submit.
+        self.queue.present(surface_texture);
         Ok(())
     }
 
@@ -526,7 +530,11 @@ impl GpuState {
         out.clear();
         out.reserve(tight_stride * height as usize);
         {
-            let mapped = slice.get_mapped_range();
+            // wgpu 30: a mapped range is a `Result`; the map above
+            // succeeded, so this only fails on a range bug here.
+            let mapped = slice
+                .get_mapped_range()
+                .expect("readback buffer is mapped for its whole range");
             for y in 0..height as usize {
                 let start = y * row_pitch as usize;
                 out.extend_from_slice(&mapped[start..start + tight_stride]);

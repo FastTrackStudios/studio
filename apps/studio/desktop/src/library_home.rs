@@ -198,7 +198,7 @@ mod ways_in {
                                 onfocus: move |_| { library::ui::set_field_focused(true); keys.focus(); },
                                 onblur: move |_| { library::ui::set_field_focused(false); keys.blur(); },
                                 onkeydown: move |e| {
-                                    if e.key() == Key::Enter {
+                                    if e.key() == Key::Named(NamedKey::Enter) {
                                         join(link());
                                     }
                                     // The field's keys are its own: `?`

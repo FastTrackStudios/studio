@@ -611,7 +611,7 @@ pub fn DockHost() -> Element {
             },
             onkeyup: move |e| {
                 let key = *dock.key.read();
-                if e.code() == key.code || (key.shift && e.key() == Key::Shift) {
+                if e.code() == key.code || (key.shift && e.key() == Key::Named(NamedKey::Shift)) {
                     dock.set_arranging(false);
                 }
             },

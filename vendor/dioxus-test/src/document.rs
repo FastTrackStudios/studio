@@ -206,14 +206,14 @@ impl DocumentTester {
     /// If no such element already exists on the DOM, then this returns an error.
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub(crate) fn get_element(&self, query: &SelectorList) -> Option<usize> {
+    pub(crate) fn get_element(&self, query: &SelectorList) -> Option<blitz_dom::NodeId> {
         self.document.borrow().inner().query_selector_raw(query)
     }
 
     /// Immediately returns all already elements in the DOM satisfying the given query.
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub(crate) fn get_elements(&self, query: &SelectorList) -> Vec<usize> {
+    pub(crate) fn get_elements(&self, query: &SelectorList) -> Vec<blitz_dom::NodeId> {
         self.document
             .borrow()
             .inner()
@@ -293,7 +293,7 @@ impl DocumentTester {
         AllElementsCondition::new(self, rendered_query, selector)
     }
 
-    pub(crate) fn build_resolved_element(&self, id: usize) -> ResolvedElement {
+    pub(crate) fn build_resolved_element(&self, id: blitz_dom::NodeId) -> ResolvedElement {
         ResolvedElement {
             document: self.document.clone(),
             node_id: NodeId::Node(id),

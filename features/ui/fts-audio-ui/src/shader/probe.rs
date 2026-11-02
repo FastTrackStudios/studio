@@ -80,6 +80,7 @@ impl Probe {
             power_preference: wgpu::PowerPreference::default(),
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         }))
         .ok()?;
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
@@ -265,7 +266,9 @@ impl Probe {
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
         let _ = rx.recv();
 
-        let mapped = slice.get_mapped_range();
+        let mapped = slice
+            .get_mapped_range()
+            .expect("readback buffer is mapped for its whole range");
         let mut rgba = Vec::with_capacity((unpadded * height) as usize);
         for row in 0..height {
             let start = (row * padded) as usize;

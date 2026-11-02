@@ -33,7 +33,7 @@ mod pipewire_capture {
 }
 
 use dioxus_native::launch_cfg;
-use dioxus_native::prelude::{document, rsx};
+use dioxus_native::prelude::{dioxus_vdom, document, rsx};
 use dsp::eq::ui::params::{EqUiState, FtsEqParams, NUM_BANDS, SPECTRUM_BINS};
 use nice_plug::context::gui::{GuiContext, GuiContextInner};
 use nice_plug::prelude::*;

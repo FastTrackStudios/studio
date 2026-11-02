@@ -25,7 +25,8 @@ mod talk;
 use app_shell::ui::{Insets, Screen};
 use dioxus::prelude::*;
 use lucide_dioxus::{
-    AudioWaveform, ChevronLeft, FolderKanban, Guitar, House, ListMusic, Music, Search, Users, X,
+    AudioLines, AudioWaveform, ChevronLeft, FolderKanban, Guitar, House, ListMusic, Search, Users,
+    X,
 };
 
 use crate::model::{
@@ -554,7 +555,7 @@ fn SearchField(wide: bool) -> Element {
                             background: transparent; color: {INK}; font-family: {FONT}; font-size: 14px;",
                     oninput: move |e| nav.query.set(e.value()),
                     onkeydown: move |e| {
-                        if e.key() == Key::Escape {
+                        if e.key() == Key::Named(NamedKey::Escape) {
                             nav.query.set(String::new());
                         }
                         // A plain key is the field's; ⌘ ones go on to the
@@ -603,7 +604,7 @@ fn Sidebar() -> Element {
             NavItem { to: Route::Setlists, here, label: "Setlists", count: count(l.setlists.len()), dot: false,
                 icon: rsx! { ListMusic { size: 20, color: if here == Route::Setlists { INK } else { INK_2 } } } }
             NavItem { to: Route::Songs, here, label: "Songs", count: count(l.songs.len()), dot: false,
-                icon: rsx! { Music { size: 20, color: if here == Route::Songs { INK } else { INK_2 } } } }
+                icon: rsx! { AudioLines { size: 20, color: if here == Route::Songs { INK } else { INK_2 } } } }
             NavItem { to: Route::Sessions, here, label: "Sessions", count: count(l.sessions.len()), dot: false,
                 icon: rsx! { AudioWaveform { size: 20, color: if here == Route::Sessions { INK } else { INK_2 } } } }
             NavItem { to: Route::Rigs, here, label: "Rigs", count: count(l.rigs.iter().filter(|r| r.owner == l.me).count()), dot: false,
@@ -638,7 +639,7 @@ fn TabBar() -> Element {
             TabItem { to: Route::Home, label: "Home", colour: tab(Route::Home), icon: rsx! { House { size: 22, color: tab(Route::Home) } } }
             TabItem { to: Route::Projects, label: "Projects", colour: tab(Route::Projects), icon: rsx! { FolderKanban { size: 22, color: tab(Route::Projects) } } }
             TabItem { to: Route::Setlists, label: "Setlists", colour: tab(Route::Setlists), icon: rsx! { ListMusic { size: 22, color: tab(Route::Setlists) } } }
-            TabItem { to: Route::Songs, label: "Songs", colour: tab(Route::Songs), icon: rsx! { Music { size: 22, color: tab(Route::Songs) } } }
+            TabItem { to: Route::Songs, label: "Songs", colour: tab(Route::Songs), icon: rsx! { AudioLines { size: 22, color: tab(Route::Songs) } } }
         }
     }
 }

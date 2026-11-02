@@ -13,7 +13,7 @@ use blitz_traits::events::{
     BlitzKeyEvent, BlitzPointerEvent, BlitzPointerId, KeyState, MouseEventButton,
     MouseEventButtons, Point, PointerCoords, PointerDetails, UiEvent,
 };
-use keyboard_types::{Code, Key, Location, Modifiers};
+use keyboard_types::{Code, Key, Location, Modifiers, NamedKey};
 use smol_str::SmolStr;
 
 use crate::{DocumentTester, ResolvedElement};
@@ -129,7 +129,7 @@ impl DocumentTester {
     pub fn type_text(&self, text: &str) {
         for ch in text.chars() {
             let key = if ch == '\n' {
-                Key::Enter
+                Key::Named(NamedKey::Enter)
             } else {
                 Key::Character(ch.to_string())
             };
@@ -138,7 +138,7 @@ impl DocumentTester {
     }
 
     /// The blitz-dom node id that currently holds focus (test diagnostics).
-    pub fn blitz_focus(&self) -> Option<usize> {
+    pub fn blitz_focus(&self) -> Option<blitz_dom::NodeId> {
         self.document
             .borrow_mut()
             .inner_mut()

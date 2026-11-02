@@ -85,26 +85,18 @@ struct Target {
 /// `None` if it boxed something this build cannot read.
 ///
 /// `RenderContext::renderer_specific_context` hands back a `Box<dyn Any>`, so
-/// the type has to be guessed exactly — and there is more than one right
-/// answer. `anyrender_vello` boxes `wgpu_context::DeviceHandle`, and the
-/// `wgpu_context` major depends on which `anyrender_vello` the host linked:
-/// 0.11 (nice-plug's baseview path, for the plugins) brings 0.6, 0.12 (the
-/// Blitz desktop path) brings 0.7. To `Any` those are unrelated types, and
-/// the same binary can contain both.
-///
-/// Guessing only one of them is the failure this function exists to prevent:
-/// the downcast fails, the panel keeps its vector fallback, and nothing
-/// anywhere reports an error — the picture is simply less good than it should
-/// be, for months, which is exactly what happened.
+/// the type has to be guessed exactly. `anyrender_vello` boxes
+/// `wgpu_context::DeviceHandle`; since the move to architect v0.10.0's stack
+/// the Blitz desktop path and nice-plug's baseview path (the plugins) link
+/// the same `anyrender_vello` (0.15), so there is one `wgpu_context` (0.10)
+/// to try. (Before, they linked two majors, unrelated types to `Any`, and
+/// guessing only one of them left a panel on its vector fallback with no
+/// error anywhere.)
 ///
 /// `vello::util::DeviceHandle` is tried too: vello declares its own, and a
 /// host that hands that one over is not wrong to.
 fn device_and_queue(ctx: Box<dyn std::any::Any>) -> Option<(wgpu::Device, wgpu::Queue)> {
-    let ctx = match ctx.downcast::<wgpu_context_07::DeviceHandle>() {
-        Ok(h) => return Some((h.device.clone(), h.queue.clone())),
-        Err(ctx) => ctx,
-    };
-    let ctx = match ctx.downcast::<wgpu_context_06::DeviceHandle>() {
+    let ctx = match ctx.downcast::<wgpu_context::DeviceHandle>() {
         Ok(h) => return Some((h.device.clone(), h.queue.clone())),
         Err(ctx) => ctx,
     };

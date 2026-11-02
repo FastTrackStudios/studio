@@ -9,7 +9,7 @@
 
 use crate::Editor;
 use dioxus::prelude::*;
-use dioxus_elements::input_data::MouseButton;
+use dioxus_html::input_data::MouseButton;
 
 use crate::ui::{canvas, paint, roll_widget, text, theme};
 

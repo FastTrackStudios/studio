@@ -503,7 +503,7 @@ pub fn LibraryEditor(
                                             onkeydown: {
                                                 let mut rename = rename.clone();
                                                 move |e: KeyboardEvent| {
-                                                    if e.key() == Key::Enter {
+                                                    if e.key() == Key::Named(NamedKey::Enter) {
                                                         rename(renaming().unwrap_or_default());
                                                     }
                                                 }

@@ -4600,6 +4600,7 @@ impl ArrangementWidget {
         // named keys are variants of it rather than of a `NamedKey`
         // beside it.
         use blitz_traits::events::Key;
+        use dioxus::prelude::NamedKey;
         // Studio's palette (or open-by-name) is up over the window: what
         // is typed is its query, not an edit.
         if crate::keys::overlay() {
@@ -4612,7 +4613,7 @@ impl ArrangementWidget {
             return self.acted(event);
         };
         match &event.key {
-            Key::Enter => {
+            Key::Named(NamedKey::Enter) => {
                 let Some(rename) = self.renaming.take() else {
                     return false;
                 };
@@ -4635,13 +4636,13 @@ impl ArrangementWidget {
                     let _ = self.press_control("TRACK_SET", &args);
                 }
             }
-            Key::Escape => self.renaming = None,
-            Key::Backspace => rename.backspace(),
-            Key::Delete => rename.delete(),
-            Key::ArrowLeft => rename.left(),
-            Key::ArrowRight => rename.right(),
-            Key::Home => rename.home(),
-            Key::End => rename.end(),
+            Key::Named(NamedKey::Escape) => self.renaming = None,
+            Key::Named(NamedKey::Backspace) => rename.backspace(),
+            Key::Named(NamedKey::Delete) => rename.delete(),
+            Key::Named(NamedKey::ArrowLeft) => rename.left(),
+            Key::Named(NamedKey::ArrowRight) => rename.right(),
+            Key::Named(NamedKey::Home) => rename.home(),
+            Key::Named(NamedKey::End) => rename.end(),
             Key::Character(text) => {
                 for c in text.chars() {
                     rename.insert(c);
@@ -5143,7 +5144,12 @@ impl ArrangementWidget {
         let below = ruler::ruler_h() - view.scroll_y;
         let lanes_at = (self.scene.tcp.width() - view.scroll_x, below);
         let band = vello::kurbo::Rect::new(0.0, pin.band.0, view.width.max(0.0), pin.band.1);
-        anyrender::PaintScene::push_clip_layer(out, Affine::IDENTITY, &band);
+        anyrender::PaintScene::push_clip_layer(
+            out,
+            vello::peniko::Fill::NonZero,
+            Affine::IDENTITY,
+            &band,
+        );
         anyrender::PaintScene::fill(
             out,
             vello::peniko::Fill::NonZero,
@@ -6501,7 +6507,12 @@ impl ArrangementWidget {
             view.width.max(0.0),
             view.height.max(ruler::ruler_h()),
         );
-        anyrender::PaintScene::push_clip_layer(&mut out, Affine::IDENTITY, &under_ruler);
+        anyrender::PaintScene::push_clip_layer(
+            &mut out,
+            vello::peniko::Fill::NonZero,
+            Affine::IDENTITY,
+            &under_ruler,
+        );
         let controls = match self.controls.as_ref() {
             Some((controls, _)) => {
                 let counts = controls.replay(&mut out, &self.scene, view, at);

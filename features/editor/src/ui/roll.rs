@@ -26,7 +26,7 @@ use crate::Editor;
 use crate::memagic;
 use crate::tools::Mods;
 use dioxus::prelude::*;
-use dioxus_elements::input_data::MouseButton;
+use dioxus_html::input_data::MouseButton;
 use keyboard_types::Modifiers;
 
 use crate::ui::interaction::{self, Drag};

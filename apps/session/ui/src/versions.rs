@@ -171,7 +171,7 @@ pub fn Versions() -> Element {
                 },
                 div {
                     style: "position:relative; display:flex;",
-                    lucide_dioxus::History { size: 18, color: ink }
+                    lucide_dioxus::RotateCcwClock { size: 18, color: ink }
                     if let Some(color) = dot {
                         div {
                             style: "position:absolute; top:-2px; right:-3px; width:7px; height:7px; \
@@ -231,7 +231,7 @@ pub fn Versions() -> Element {
                             value: "{name}",
                             oninput: move |event| name.set(event.value()),
                             onkeydown: move |event| {
-                                if event.key() == Key::Enter {
+                                if event.key() == Key::Named(NamedKey::Enter) {
                                     checkpoint();
                                 }
                             },

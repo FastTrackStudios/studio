@@ -66,6 +66,7 @@ impl Headless {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         }))
         .map_err(|e| {
             eyre!("no wgpu adapter ({e}): this benchmark needs a real GPU to mean anything")

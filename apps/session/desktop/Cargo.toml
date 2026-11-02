@@ -203,7 +203,7 @@ session-engine = { workspace = true, optional = true, features = ["native"] }
 uuid = { workspace = true, optional = true }
 # The shared FastTrackStudio account and its sign-in UI (STA-361).
 fts-account = { workspace = true, features = ["ui"] }
-winit = { version = "0.31.0-beta.2", optional = true }
+winit = { version = "0.31.0-beta.4", optional = true }
 # Where the native app remembers the last session it opened
 # (`native::choose`).
 dirs = { workspace = true, optional = true }

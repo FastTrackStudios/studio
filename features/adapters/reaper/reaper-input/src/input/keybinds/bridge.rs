@@ -335,6 +335,7 @@ pub fn preset_to_keymap_config(
         keymap_context,
         mouse: HashMap::new(), // Mouse modifiers handled separately by REAPER's native system
         scroll,
+        ..KeymapConfig::default()
     }
 }
 

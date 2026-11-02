@@ -136,7 +136,7 @@ pub fn SessionShell(
 
 /// Handle global keyboard shortcuts.
 fn handle_hotkey(evt: &KeyboardEvent) {
-    use dioxus::prelude::Key;
+    use dioxus::prelude::{Key, NamedKey};
 
     match evt.key() {
         Key::Character(ref c) if c == " " => {
@@ -146,28 +146,28 @@ fn handle_hotkey(evt: &KeyboardEvent) {
                 let _ = Session::get().setlist().toggle_playback().await;
             });
         }
-        Key::ArrowLeft => {
+        Key::Named(NamedKey::ArrowLeft) => {
             // Left arrow → previous section
             evt.prevent_default();
             spawn(async move {
                 let _ = Session::get().setlist().previous_section().await;
             });
         }
-        Key::ArrowRight => {
+        Key::Named(NamedKey::ArrowRight) => {
             // Right arrow → next section
             evt.prevent_default();
             spawn(async move {
                 let _ = Session::get().setlist().next_section().await;
             });
         }
-        Key::ArrowUp => {
+        Key::Named(NamedKey::ArrowUp) => {
             // Up arrow → previous song
             evt.prevent_default();
             spawn(async move {
                 let _ = Session::get().setlist().previous_song().await;
             });
         }
-        Key::ArrowDown => {
+        Key::Named(NamedKey::ArrowDown) => {
             // Down arrow → next song
             evt.prevent_default();
             spawn(async move {

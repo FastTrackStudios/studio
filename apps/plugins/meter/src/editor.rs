@@ -69,7 +69,7 @@ pub fn App() -> Element {
     // the DOM so blitz keeps redrawing (painters + readouts refresh).
     let mut app_tick: Signal<u64> = use_signal(|| 0);
     use_hook(|| {
-        let updater = dioxus_core::schedule_update();
+        let updater = dioxus_vdom::schedule_update();
         std::thread::spawn(move || {
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(100));

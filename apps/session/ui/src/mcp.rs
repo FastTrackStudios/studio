@@ -1437,6 +1437,7 @@ fn record_rack(
         // strip's own controls. A whole strip is replayed as one span,
         // so the layer's push and pop are never split by the culling.
         scene.push_clip_layer(
+            Fill::NonZero,
             Affine::IDENTITY,
             &Rect::new(rack_box.x0 + x, rack_box.y0, rack_box.x1 + x, rack_box.y1),
         );

@@ -458,7 +458,7 @@ signal-plugin-host = {workspace = true, features = ["clap-host", "vst3-host"]}
 symphonia = { workspace = true, features = ["default", "wav", "pcm"] }
 test-that = { workspace = true, features = ["regex", "num-traits"] }
 tokio = {workspace = true, features = ["macros", "rt"]}
-wgpu = {version = "29"}
+wgpu = {version = "30"}
 dsp = {path = ".", features = ["align", "reverb", "eq", "analyzer", "comp", "comp-native", "comp-profiles", "comp-ui", "comp-viz", "delay", "delay-native", "delay-profiles", "delay-ui", "delay-viz", "eq-graph", "eq-graph-paint", "eq-native", "eq-ui", "gate", "hits", "level", "mic", "mic-ui", "modulation", "modulation-native", "modulation-profiles", "modulation-ui", "modulation-viz", "multiband", "pitch", "reverb-native", "reverb-profiles", "reverb-ui", "reverb-viz", "saturate", "saturate-native", "saturate-profiles", "saturate-ui", "saturate-viz", "stack", "separator", "stretch", "trigger", "trigger-native", "tune"]}
 
 [target."cfg(not(target_arch = \"wasm32\"))".dependencies]

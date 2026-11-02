@@ -2132,7 +2132,12 @@ impl DeviceRow {
             self.draw_chain(&mut moving, hits, (&track, &returns), lane, start - scroll);
         }
         let clip = hits.clip;
-        anyrender::PaintScene::push_clip_layer(scene, Affine::IDENTITY, &clip);
+        anyrender::PaintScene::push_clip_layer(
+            scene,
+            vello::peniko::Fill::NonZero,
+            Affine::IDENTITY,
+            &clip,
+        );
         anyrender::PaintScene::append_scene(scene, moving, Affine::IDENTITY);
         anyrender::PaintScene::pop_layer(scene);
     }
@@ -2223,6 +2228,7 @@ impl DeviceRow {
             if alpha < 1.0 {
                 anyrender::PaintScene::push_layer(
                     &mut drawn,
+                    vello::peniko::Fill::NonZero,
                     vello::peniko::Mix::Normal,
                     alpha,
                     Affine::IDENTITY,
@@ -2231,7 +2237,12 @@ impl DeviceRow {
                     None,
                 );
             } else {
-                anyrender::PaintScene::push_clip_layer(&mut drawn, Affine::IDENTITY, &clip);
+                anyrender::PaintScene::push_clip_layer(
+                    &mut drawn,
+                    vello::peniko::Fill::NonZero,
+                    Affine::IDENTITY,
+                    &clip,
+                );
             }
             anyrender::PaintScene::append_scene(&mut drawn, painted, place);
             anyrender::PaintScene::pop_layer(&mut drawn);

@@ -1302,6 +1302,7 @@ fn themed_stack_lanes(ed: &Editor, font: Option<&crate::text::Font>) -> Option<a
     let mut scene = anyrender::Scene::new();
     // Under the ruler only: a lane scrolled up past it is hidden there.
     scene.push_clip_layer(
+        vello::peniko::Fill::NonZero,
         Affine::IDENTITY,
         &vello::kurbo::Rect::new(0.0, ruler_h, canvas::GUTTER_W, ruler_h + ed.viewport.h),
     );
@@ -1376,6 +1377,7 @@ fn themed_roll_chrome(
         );
     }
     scene.push_clip_layer(
+        vello::peniko::Fill::NonZero,
         Affine::translate((0.0, ruler_h)),
         &vello::kurbo::Rect::new(0.0, 0.0, gutter, band_h),
     );
@@ -1426,6 +1428,7 @@ fn themed_roll_chrome(
         );
     }
     scene.push_clip_layer(
+        vello::peniko::Fill::NonZero,
         Affine::IDENTITY,
         &vello::kurbo::Rect::new(gutter, 0.0, w, ruler_h),
     );

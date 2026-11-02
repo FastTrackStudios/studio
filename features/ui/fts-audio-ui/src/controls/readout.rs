@@ -131,16 +131,16 @@ pub fn ValueReadout(
                 // it does work — cannot double the character.
                 onkeydown: move |evt: KeyboardEvent| {
                     match evt.key() {
-                        Key::Enter | Key::Tab => {
+                        Key::Named(NamedKey::Enter) | Key::Named(NamedKey::Tab) => {
                             evt.prevent_default();
                             let text = draft.read().clone();
                             commit_key(&text);
                         }
-                        Key::Escape => {
+                        Key::Named(NamedKey::Escape) => {
                             evt.prevent_default();
                             close();
                         }
-                        Key::Backspace => {
+                        Key::Named(NamedKey::Backspace) => {
                             evt.prevent_default();
                             // On the pristine (selected) value, backspace
                             // clears everything, like deleting a selection.

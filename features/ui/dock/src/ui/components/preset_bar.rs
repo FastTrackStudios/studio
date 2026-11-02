@@ -180,7 +180,7 @@ fn SavePresetDialog(
                 onkeypress: {
                     let name = name.clone();
                     move |e: KeyboardEvent| {
-                        if e.key() == Key::Enter {
+                        if e.key() == Key::Named(NamedKey::Enter) {
                             on_save.call(name.clone());
                         }
                     }

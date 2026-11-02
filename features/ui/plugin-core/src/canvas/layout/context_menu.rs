@@ -6,7 +6,7 @@
 use crate::canvas::theme::use_theme;
 use nice_plug_dioxus::prelude::*;
 
-use dioxus_elements::input_data::MouseButton;
+use dioxus_html::input_data::MouseButton;
 
 /// A single item in a context menu.
 #[derive(Clone, Copy, PartialEq)]

@@ -27,7 +27,7 @@
 
       dxWebNativeInputs = commonArgs.nativeBuildInputs ++ [
         config.fts.dx.cli          # dx 0.7.9 (nixpkgs-dx)
-        config.fts.dx.wasmBindgen  # 0.2.126, matches the lock
+        config.fts.dx.wasmBindgen  # 0.2.127, matches the lock
         config.fts.dx.binaryen     # wasm-opt 129 — what dx 0.7.9 pins
       ] ++ (with pkgs; [
         tailwindcss_4

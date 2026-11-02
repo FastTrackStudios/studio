@@ -81,11 +81,11 @@ impl PartialEq for ElementSlot {
     }
 }
 
-/// vello_hybrid's WebGL2 renderer over one canvas.
+/// vello_gpu's (vello_hybrid's successor) WebGL2 renderer over one canvas.
 struct Gpu {
-    renderer: vello_hybrid::WebGlRenderer,
-    resources: vello_hybrid::Resources,
-    scene: vello_hybrid::Scene,
+    renderer: vello_gpu::WebGlRenderer,
+    resources: vello_gpu::Resources,
+    scene: vello_gpu::Scene,
     images: rustc_hash::FxHashMap<u64, vello_common::paint::ImageId>,
     size: (u32, u32),
 }
@@ -99,20 +99,24 @@ impl Gpu {
         width: u32,
         height: u32,
     ) -> Result<Self, crate::loading::NoWebGl2> {
-        let renderer = crate::loading::init_renderer(
+        // vello_gpu hands back the image/glyph atlases (`Resources`) with
+        // the renderer, and reports a missing context as an error rather
+        // than a panic; both ways of having none read as no WebGL2.
+        let (renderer, resources) = crate::loading::init_renderer(
             || webgl2_context(canvas),
-            |_context| vello_hybrid::WebGlRenderer::new(canvas),
-        )?;
+            |_context| vello_gpu::WebGlRenderer::new(canvas).ok(),
+        )?
+        .ok_or(crate::loading::NoWebGl2)?;
         Ok(Self {
             renderer,
-            resources: vello_hybrid::Resources::new(),
+            resources,
             scene: Self::scene_at(width, height),
             images: rustc_hash::FxHashMap::default(),
             size: (width, height),
         })
     }
 
-    fn scene_at(width: u32, height: u32) -> vello_hybrid::Scene {
+    fn scene_at(width: u32, height: u32) -> vello_gpu::Scene {
         #[expect(
             clippy::cast_possible_truncation,
             reason = "a canvas is well under 65k px"
@@ -121,7 +125,7 @@ impl Gpu {
             width.min(u32::from(u16::MAX)) as u16,
             height.min(u32::from(u16::MAX)) as u16,
         );
-        vello_hybrid::Scene::new_with(w, h, vello_hybrid::RenderSettings::default())
+        vello_gpu::Scene::new(w, h)
     }
 
     fn resize(&mut self, width: u32, height: u32) {
@@ -143,14 +147,21 @@ impl Gpu {
                 anyrender_vello_hybrid::WebGlScenePainter::new(&mut self.scene, images);
             painter.append_scene(scene, Affine::scale(dpr));
         }
-        let size = vello_hybrid::RenderSize {
-            width: self.size.0,
-            height: self.size.1,
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a canvas is well under 65k px"
+        )]
+        let size = vello_gpu::RenderSize {
+            width: self.size.0.min(u32::from(u16::MAX)) as u16,
+            height: self.size.1.min(u32::from(u16::MAX)) as u16,
         };
-        if let Err(e) = self
-            .renderer
-            .render(&self.scene, &mut self.resources, &size)
-        {
+        if let Err(e) = self.renderer.render(
+            &self.scene,
+            &mut self.resources,
+            &size,
+            &vello_gpu::WebGlTextureBindings::new(),
+            vello_common::peniko::Color::TRANSPARENT,
+        ) {
             tracing::error!(error = ?e, "canvas render failed");
         }
         self.scene.reset();
@@ -261,7 +272,7 @@ fn pointer(e: &PointerData) -> BlitzPointerEvent {
 /// and Blitz are on different `keyboard-types` versions).
 fn key(e: &KeyboardData, state: KeyState) -> BlitzKeyEvent {
     BlitzKeyEvent {
-        key: Key::from_str(&e.key().to_string()).unwrap_or(Key::Unidentified),
+        key: Key::from_str(&e.key().to_string()).unwrap_or(Key::Named(NamedKey::Unidentified)),
         code: Code::from_str(&e.code().to_string()).unwrap_or(Code::Unidentified),
         modifiers: modifiers(e.modifiers()),
         location: Location::Standard,
@@ -391,7 +402,7 @@ pub fn WidgetCanvas(
                 to_panel(PanelEvent::Modifiers(mods(e.modifiers())));
                 // The page must not scroll on space or the arrows, nor take
                 // a shortcut the session means.
-                if !matches!(e.key(), dioxus::prelude::Key::Tab) {
+                if !matches!(e.key(), dioxus::prelude::Key::Named(dioxus::prelude::NamedKey::Tab)) {
                     e.prevent_default();
                 }
                 w4.0.borrow_mut().event(&UiEvent::KeyDown(key(&e, KeyState::Pressed)));
@@ -429,8 +440,8 @@ fn start_painting(
     let painted = Cell::new(false);
     // What the canvas shows now: a frame painting the same is not drawn.
     let mut shown: Option<Drawn> = None;
-    let runtime = dioxus::dioxus_core::Runtime::current();
-    let scope = dioxus::dioxus_core::current_scope_id();
+    let runtime = dioxus::core::Runtime::current();
+    let scope = dioxus::core::current_scope_id();
     let gpu = Rc::new(RefCell::new(None::<Gpu>));
     let tick: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
     let again = Rc::clone(&tick);

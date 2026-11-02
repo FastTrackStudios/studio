@@ -2,7 +2,7 @@
 //! the chosen space, as tables a finger can work.
 
 use dioxus::prelude::*;
-use lucide_dioxus::{AudioWaveform, FolderKanban, Guitar, ListMusic, Mic, Music, Piano, Plus};
+use lucide_dioxus::{AudioLines, AudioWaveform, FolderKanban, Guitar, ListMusic, Mic, Piano, Plus};
 
 use super::home::Page;
 use super::kit::*;
@@ -403,7 +403,7 @@ pub(crate) fn Results() -> Element {
                         match kind {
                             "Projects" => rsx! { FolderKanban { size: 20, color: INK_3 } },
                             "Setlists" => rsx! { ListMusic { size: 20, color: INK_3 } },
-                            "Songs" => rsx! { Music { size: 20, color: INK_3 } },
+                            "Songs" => rsx! { AudioLines { size: 20, color: INK_3 } },
                             _ => rsx! { AudioWaveform { size: 20, color: INK_3 } },
                         }
                         Named { title, detail }

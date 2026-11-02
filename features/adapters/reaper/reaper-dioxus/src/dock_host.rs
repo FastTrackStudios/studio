@@ -87,7 +87,9 @@ fn build_key_event(key: String) -> blitz_traits::events::BlitzKeyEvent {
     let parsed = key
         .parse::<keyboard_types::Key>()
         .ok()
-        .unwrap_or(keyboard_types::Key::Unidentified);
+        .unwrap_or(keyboard_types::Key::Named(
+            keyboard_types::NamedKey::Unidentified,
+        ));
     blitz_traits::events::BlitzKeyEvent {
         key: parsed,
         code: keyboard_types::Code::Unidentified,
