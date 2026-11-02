@@ -6,6 +6,7 @@ use std::thread;
 use figcraft_engine::{EngineError, Session};
 use frame::theme::host::ThemeHost;
 use frame_doc::doc::Document;
+use frame_doc::doc::NodeId;
 use serde_json::Value;
 
 use crate::theme::{self, CompileError};
@@ -192,6 +193,30 @@ impl LiveEditor {
             self.request_preview(mode)?;
         }
         Ok(result)
+    }
+
+    /// Set a node's literal fill, replacing its theme fill binding if present.
+    /// The fill and binding change form one engine command and undo step.
+    ///
+    /// # Errors
+    /// The node data is malformed or the editor rejects the fill or command.
+    pub fn set_fill(&mut self, id: NodeId, fill: &str) -> Result<(), EngineError> {
+        let data = frame_doc::effective(self.session.doc()?, id);
+        if !data.errors.is_empty() {
+            return Err(EngineError::Other(format!(
+                "invalid Frame data: {:?}",
+                data.errors
+            )));
+        }
+        let binds: Vec<_> = data.bind.into_iter().filter(|b| b.prop != "fill").collect();
+        let binding = if binds.is_empty() {
+            Value::Null
+        } else {
+            serde_json::json!(binds)
+        };
+        let args = serde_json::json!({"id": id, "props": {"fill": fill, "pluginData": {(frame_doc::keys::BIND): binding}}});
+        self.execute("node.set", &args, None)?;
+        Ok(())
     }
 
     /// Mutate through pointer tools or other engine APIs, then call

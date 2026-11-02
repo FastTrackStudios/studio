@@ -83,6 +83,45 @@ fn opening_without_a_theme_reports_the_error() {
 }
 
 #[test]
+fn setting_a_bound_fill_updates_the_visible_pixel() {
+    let scene = frame::document::text::parse(r##"<Document><Variables><Var name="base" value="#202020" /></Variables><Page name="tcp.row"><Frame name="Row" w=20 h=20><Rectangle name="Field" w=20 h=20 bind:fill="$base" /></Frame></Page></Document>"##, Default::default()).unwrap();
+    let doc = scene_to_doc(&scene).unwrap();
+    let field = doc
+        .pages
+        .iter()
+        .flat_map(|p| doc.subtree(*p))
+        .find(|id| doc.node(*id).is_some_and(|n| n.name == "Field"))
+        .unwrap();
+    let host = Arc::new(ThemeHost::new(Schema::new()));
+    let mut editor = LiveEditor::new(doc, host.clone());
+    editor.request_preview(None).unwrap();
+    event(&editor).result.unwrap();
+    let fields = host.fields(&[]);
+    assert_eq!(
+        host.capture("tcp.row", None, 1.0, &fields)
+            .unwrap()
+            .pixels
+            .at(10, 10),
+        [0x20, 0x20, 0x20, 0xff]
+    );
+    editor.set_fill(field, "#ff00ff").unwrap();
+    event(&editor).result.unwrap();
+    assert_eq!(
+        host.capture("tcp.row", None, 1.0, &fields)
+            .unwrap()
+            .pixels
+            .at(10, 10),
+        [0xff, 0, 0xff, 0xff]
+    );
+    assert!(
+        frame_editor::doc::effective(editor.session().doc().unwrap(), field)
+            .bind
+            .iter()
+            .all(|b| b.prop != "fill")
+    );
+}
+
+#[test]
 fn editor_command_updates_host_on_worker_and_failure_keeps_it() {
     let mut scene = Scene::new("strip");
     scene.variables.modes.push("dark".into());

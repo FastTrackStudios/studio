@@ -10,11 +10,12 @@ use std::time::Duration;
 use crate::live::LiveEditor;
 use crate::theme::CompileError;
 use dioxus::prelude::*;
+use frame_doc::doc::NodeId;
 
 /// The UI-thread-owned controller supplied by the embedding host.
 pub type EditorContext = Rc<RefCell<LiveEditor>>;
 
-/// Edit the size of the first role's root. Successful changes reach the
+/// Edit a role's selected node. Successful changes reach the
 /// shared ThemeHost on the controller's worker; diagnostics stay in the view.
 #[component]
 pub fn FrameThemeEditor() -> Element {
@@ -22,6 +23,8 @@ pub fn FrameThemeEditor() -> Element {
     let mut revision = use_signal(|| 0_u64);
     let mut status = use_signal(|| String::new());
     let mut fill = use_signal(String::new);
+    let mut role = use_signal(|| None::<NodeId>);
+    let mut selected = use_signal(|| None::<NodeId>);
     let polling = editor.clone();
     use_future(move || {
         let editor = polling.clone();
@@ -45,18 +48,49 @@ pub fn FrameThemeEditor() -> Element {
     });
     let _ = revision();
     let color_editor = editor.clone();
-    let root = {
+    let (roles, nodes, root) = {
         let editor = editor.borrow();
-        editor.session().doc().ok().and_then(|doc| {
-            let page = doc.pages.first().and_then(|id| doc.node(*id))?;
-            let id = *page.children.first()?;
-            let node = doc.node(id)?;
-            Some((id, node.name.clone(), node.width, node.height))
-        })
+        if let Ok(doc) = editor.session().doc() {
+            let roles: Vec<_> = doc
+                .pages
+                .iter()
+                .filter_map(|id| doc.node(*id).map(|n| (*id, n.name.clone())))
+                .collect();
+            let page = role()
+                .filter(|id| doc.pages.contains(id))
+                .or_else(|| doc.pages.first().copied());
+            let nodes: Vec<_> = page
+                .into_iter()
+                .flat_map(|p| doc.subtree(p).into_iter().skip(1))
+                .filter_map(|id| doc.node(id).map(|n| (id, n.name.clone())))
+                .collect();
+            let chosen = selected()
+                .filter(|id| nodes.iter().any(|(node, _)| node == id))
+                .or_else(|| nodes.first().map(|(id, _)| *id));
+            let root = chosen.and_then(|id| {
+                doc.node(id)
+                    .map(|n| (id, n.name.clone(), n.width, n.height))
+            });
+            (roles, nodes, root)
+        } else {
+            (Vec::new(), Vec::new(), None)
+        }
     };
     rsx! {
         div {
             h2 { "Theme properties" }
+            p { "Role" }
+            div { style: "display: flex; flex-wrap: wrap; gap: 4px;",
+                for (id, name) in roles {
+                    button { key: "role-{id}", onclick: move |_| { role.set(Some(id)); selected.set(None); }, "{name}" }
+                }
+            }
+            p { "Layer" }
+            div { style: "display: flex; flex-wrap: wrap; gap: 4px; max-height: 180px; overflow-y: auto;",
+                for (id, name) in nodes {
+                    button { key: "node-{id}", onclick: move |_| selected.set(Some(id)), "{name}" }
+                }
+            }
             if let Some((id, name, width, height)) = root {
                 p { "{name}: {width:.0} × {height:.0}" }
                 button {
@@ -71,7 +105,7 @@ pub fn FrameThemeEditor() -> Element {
                 }
                 div {
                     label {
-                        "Fill color"
+                        "Set fill (replaces fill binding)"
                         input {
                             r#type: "text",
                             placeholder: "#rrggbb",
@@ -83,8 +117,7 @@ pub fn FrameThemeEditor() -> Element {
                     button {
                         onclick: move |_| {
                             let value = fill().trim().to_owned();
-                            let args = serde_json::json!({"id": id, "props": {"fill": value}});
-                            match color_editor.borrow_mut().execute("node.set", &args, None) {
+                            match color_editor.borrow_mut().set_fill(id, &value) {
                                 Ok(_) => { revision += 1; status.set("Updating preview…".to_owned()); },
                                 Err(e) => status.set(format!("Edit failed: {e}")),
                             }
