@@ -35,7 +35,7 @@ fn save_a_role_preserves_layers_drafts_and_detects_disk_conflict() {
     std::fs::create_dir_all(&dir).unwrap();
     let base = dir.join("base.frame");
     let target = dir.join("tcp.frame");
-    let base_text = r##"<Document><Variables><Var name="base" value="#202020" /></Variables><Page name="other"><Frame name="Other" w=20 h=20 fill="#000000" /></Page></Document>"##;
+    let base_text = r##"<Document><Variables><Var name="base" value="#202020" /></Variables><Page name="other"><Frame name="Other" w=20 h=20 fill="#000000"><Text name="Label" w=54 h=12 size=9 text="1" /></Frame></Page></Document>"##;
     let target_text = r##"<Document><Page name="tcp.row"><Frame name="Row" w=20 h=20><Rectangle name="Field" w=20 h=20 bind:fill="$base" /></Frame></Page></Document>"##;
     std::fs::write(&base, base_text).unwrap();
     std::fs::write(&target, target_text).unwrap();

@@ -61,8 +61,12 @@ impl SaveSnapshot {
         if host.version() != version {
             return Err(SaveError::HostChanged);
         }
+        // Compare like representations: document conversion can normalize scene
+        // data even before a user makes an edit.
+        let document = frame_doc::scene_to_doc(&theme.source()).map_err(SaveError::Document)?;
+        let scene = frame_doc::doc_to_scene(&document).map_err(SaveError::Document)?;
         Ok(Self {
-            scene: theme.source(),
+            scene: Arc::new(scene),
             files,
             order,
             version,

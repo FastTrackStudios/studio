@@ -390,13 +390,23 @@ impl LiveEditor {
 
 fn prepare(host: &ThemeHost) -> Result<Prepared, OpenError> {
     let (theme, version) = host.snapshot().ok_or(OpenError::NoTheme)?;
-    let document = frame_doc::scene_to_doc(&theme.source()).map_err(OpenError::Document)?;
-    let save_snapshot = Arc::new(SaveSnapshot::capture(host).map_err(OpenError::SaveSnapshot)?);
+    let mut document = frame_doc::scene_to_doc(&theme.source()).map_err(OpenError::Document)?;
+    // Settle imported dirty nodes before the baseline; otherwise the first edit
+    // also normalizes unrelated text and appears to change other roles.
+    let before = document.clone();
+    figcraft_engine::normalize(&mut document, &before);
+    let session = Session::with_document(document);
+    let document = session
+        .ds()
+        .map_err(|_| OpenError::SaveSnapshot(SaveError::NoSnapshot))?;
+    let save_snapshot = Arc::new(
+        SaveSnapshot::refresh(host, document.document_itself()).map_err(OpenError::SaveSnapshot)?,
+    );
     if save_snapshot.version() != version {
         return Err(OpenError::Superseded);
     }
     Ok(Prepared {
-        session: Session::with_document(document),
+        session,
         version,
         mode: Some(theme.mode().to_owned()),
         save_snapshot,
