@@ -267,11 +267,13 @@ fn worker(queue: Shared, host: Arc<ThemeHost>, sender: mpsc::Sender<PreviewEvent
         }
         let result = if state.latest != job.request {
             Err(CompileError::Superseded)
+        } else if host.version() != job.host_version {
+            Err(CompileError::HostChanged)
         } else {
             compiled.and_then(|theme| {
                 host.set_if_version(job.host_version, theme)
                     .then_some(())
-                    .ok_or(CompileError::Superseded)
+                    .ok_or(CompileError::HostChanged)
             })
         };
         if result.is_ok() {

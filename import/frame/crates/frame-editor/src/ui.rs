@@ -30,7 +30,8 @@ pub fn FrameThemeEditor() -> Element {
                 while let Some(event) = editor.borrow().try_event() {
                     match event.result {
                         Ok(()) => status.set("Preview updated".to_owned()),
-                        Err(CompileError::Superseded) => status.set("Preview superseded by a newer edit or theme; reopen if it stays unchanged".to_owned()),
+                        Err(CompileError::Superseded) => {},
+                        Err(CompileError::HostChanged) => status.set("The theme changed outside this editor. Reopen the editor to continue previewing.".to_owned()),
                         Err(e) => status.set(format!("Preview failed: {e:?}")),
                     }
                 }

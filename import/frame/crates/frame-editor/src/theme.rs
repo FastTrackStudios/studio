@@ -17,6 +17,8 @@ pub enum CompileError {
     Theme(Vec<Diagnostic>),
     /// The host changed while this document was compiling.
     Superseded,
+    /// The live editor's host changed outside this editor; reopen it.
+    HostChanged,
 }
 
 /// Compile the current edited document against the host's schema and mode.

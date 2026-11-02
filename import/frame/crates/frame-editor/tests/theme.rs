@@ -58,10 +58,10 @@ fn opening_the_host_preserves_layered_drafts_mode_and_rejects_newer_reload() {
     );
     host.reload().unwrap();
     let after_reload = host.current().unwrap();
-    editor.request_preview(None).unwrap();
+    editor.request_preview(Some("missing")).unwrap();
     assert!(matches!(
         event(&editor).result,
-        Err(CompileError::Superseded)
+        Err(CompileError::HostChanged)
     ));
     assert!(Arc::ptr_eq(&after_reload, &host.current().unwrap()));
 }
