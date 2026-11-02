@@ -597,7 +597,7 @@ pub static PANEL: ActionMeta = meta(
     "SESSION_PANEL",
     "panel",
     "Show or Hide a Panel",
-    "Open a panel of `kind` where that kind lives when the window shows none, or close every one it shows: arrangement, mixer, editor, fx-row, transport, progress, chart, chart-editor, lyrics, set, setlist, browser, inspector, versions, collab, rig, switches, navigator, now, gig-chart, tones.",
+    "Open a panel of `kind` where that kind lives when the window shows none, or close every one it shows: arrangement, mixer, editor, theme-editor, fx-row, transport, progress, chart, chart-editor, lyrics, set, setlist, browser, inspector, versions, collab, rig, switches, navigator, now, gig-chart, tones.",
     "View",
     "",
 );

@@ -170,6 +170,8 @@ pub mod setup;
 pub mod shell;
 pub mod simulate;
 pub mod skin;
+#[cfg(feature = "native")]
+pub mod theme_editor;
 pub use session_engine::song_model;
 pub use session_engine::stages;
 pub use session_engine::stretch;

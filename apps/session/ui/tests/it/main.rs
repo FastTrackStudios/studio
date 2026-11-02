@@ -2,3 +2,5 @@
 
 mod actions_everywhere;
 mod window_attach;
+
+mod theme_reload;

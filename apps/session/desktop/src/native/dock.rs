@@ -365,6 +365,15 @@ fn catalog(host: HostPanels) -> Catalog {
     };
     let mut kinds = vec![
         k(
+            "theme-editor",
+            "Theme editor",
+            "THM",
+            Place::Edge(Side::Right),
+            |_| {
+                rsx! { Fill { session_ui::theme_editor::ThemeEditorPanel {} } }
+            },
+        ),
+        k(
             kind::ARRANGEMENT,
             "Arrangement",
             "ARR",

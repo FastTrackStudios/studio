@@ -1,0 +1,38 @@
+<Document>
+  <!-- Workbench: a dense, flat, bevelled workbench grey. Inspired by
+       REAPER's utilitarian default look; original artwork and values,
+       not a copy of any REAPER theme. Layer it over console:
+       FTS_THEME=themes/console:themes/workbench -->
+  <Variables modes="dark">
+    <Var name="text" value="#e2e4e7" />
+    <Var name="text.dim" value="#a9adb3" />
+    <Var name="text.faint" value="#7b8087" />
+    <Var name="accent" value="#4fc3a1" />
+    <Var name="mute" value="#d9534f" />
+    <Var name="solo" value="#e8c547" />
+    <Var name="rec" value="#e2463c" />
+    <Var name="meter.safe" value="#3ccf6e" />
+    <Var name="meter.warn" value="#e8c547" />
+    <Var name="meter.danger" value="#e2463c" />
+    <Var name="field" value="#1f2124" />
+    <Var name="combo" value="#1f2124" />
+    <Var name="hardware" value="#454950" />
+    <Var name="hardware.edge" value="#1a1b1d" />
+    <Var name="hardware.mark" value="#d6d8db" />
+    <Var name="surface" value="#2f3236" />
+    <Var name="surface.sunken" value="#232528" />
+    <Var name="border" value="#1a1b1d" />
+    <Var name="plate" value="#00000040" />
+    <Var name="sheen" value="#ffffff1c" />
+    <Var name="pan" value="#7fb4e8" />
+    <Var name="monitor.tape" value="#e89a3c" />
+    <Var name="rail.ground" value="#2a2c30" />
+    <Var name="rail.rule" value="#1a1b1d" />
+    <Var name="rail.button" value="#3a3d42" />
+    <Var name="rack.well" value="#232528" />
+    <Var name="wb.bevel.light" value="#ffffff21" />
+    <Var name="wb.bevel.dark" value="#00000059" />
+    <Var name="wb.cap" value="#c9ccd1" />
+    <Var name="wb.cap.line" value="#2f3236" />
+  </Variables>
+</Document>

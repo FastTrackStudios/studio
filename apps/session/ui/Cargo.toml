@@ -98,7 +98,8 @@ fts-audio-ui = { workspace = true }
 # The delay's style families and the reverb's rendered impulse — the
 # Depth panels draw the machine, not a picture of its knob.
 # Their painted pictures, for the FX view's devices.
-frame = { workspace = true, features = ["anyrender-blitz", "live", "theme"] }
+frame = { workspace = true, features = ["host-scene", "live", "theme"] }
+frame-editor = { workspace = true, optional = true }
 
 # `standalone-rpp` = the standalone backend plus the `.rpp` loader and
 # source decoding — what makes a real project openable with no REAPER in
@@ -213,6 +214,7 @@ facet-json = { workspace = true }
 # The global app menu (`app_menu`): served on the session bus, which is
 # Linux's. Behind `native`.
 [target.'cfg(target_os = "linux")'.dependencies]
+fontique.workspace = true
 zbus = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -225,7 +227,7 @@ default = ["native"]
 signal = ["native", "session-engine/signal"]
 # The desktop app: dioxus-native (Blitz) hosts for the panels, the
 # in-process engine with its audio device, threads, the plugin-UI graph.
-native = ["dep:opentelemetry", "session-engine/native", "dep:dioxus-native", "dep:zbus", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu_context", "dep:pollster", "dep:dirs", "dep:winit", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:patch-list", "dep:editor-view", "editor-view/native", "dep:editor-state", "dep:keyflow-editor-lang", "dep:futures-channel", "dsp/hits", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "dep:builtin", "builtin?/engine", "session/library", "session/project-sync"]
+native = ["dep:frame-editor", "dep:opentelemetry", "session-engine/native", "dep:dioxus-native", "dep:zbus", "dep:anyrender_vello", "dep:wgpu", "dep:wgpu_context", "dep:pollster", "dep:dirs", "dep:winit", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:patch-list", "dep:editor-view", "editor-view/native", "dep:editor-state", "dep:keyflow-editor-lang", "dep:futures-channel", "dsp/hits", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:editor-crdt", "dep:futures-timer", "dep:builtin", "builtin?/engine", "session/library", "session/project-sync"]
 # A show recorded as one Live set, split into its songs (src/show.rs,
 # the `show-split` bin): the Live-set reader and the .als → .RPP converter.
 show = ["native", "studio/convert-ableton", "session-engine/show"]

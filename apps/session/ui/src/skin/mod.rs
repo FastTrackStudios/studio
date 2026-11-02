@@ -4,7 +4,7 @@
 //! `mcp.strip` page is one channel strip: its tokens are the colours, its
 //! bindings read the track ([`schema`]), its `@name` nodes are the
 //! controls a click lands on ([`control`]), and the controls it places are
-//! components. See `docs/frame-themes.md`.
+//! components. See `frame:docs/frame-themes.md` (FastTrackStudios/frame).
 //!
 //! **Layered**: `FTS_THEME` is a list of paths (`:`-separated, the base
 //! first), each a file or a folder of them, every one over the ones before
@@ -21,14 +21,20 @@
 //! part of the strip, below it.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, PoisonError, RwLock};
+#[cfg(not(test))]
+use std::sync::OnceLock;
+#[cfg(all(not(test), feature = "native", not(target_arch = "wasm32")))]
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 // A file's mtime is std's `SystemTime`; the clock is `web_time`'s, which a
 // browser has.
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
+#[cfg(test)]
+use std::time::SystemTime;
 use web_time::Instant;
 
 use daw_proto::Track;
+use frame::theme::host::{Reload, ThemeHost};
 use frame::theme::runtime::{Fields, Rgba, Schema, Theme, Value};
 
 use crate::arrangement::Palette;
@@ -36,6 +42,9 @@ use crate::mcp::Control;
 
 pub mod canvas;
 pub mod export;
+
+#[cfg(test)]
+mod examples;
 
 /// The role a theme draws a mixer strip as.
 pub const STRIP: &str = "mcp.strip";
@@ -486,41 +495,48 @@ pub fn control(name: &str) -> Option<Control> {
 
 // ── the loaded theme ──────────────────────────────────────────────────
 
-struct Loaded {
-    /// The layers as given, base first: files and folders.
-    paths: Vec<PathBuf>,
-    mode: Option<String>,
-    /// Every file they came to and when it last changed.
-    stamp: Vec<(PathBuf, Option<SystemTime>)>,
-    checked: Instant,
-    /// The last error reported, so a broken file is reported once.
-    reported: Option<String>,
-}
-
 #[cfg(not(test))]
-static THEME: RwLock<Option<Arc<Theme>>> = RwLock::new(None);
+static HOST: OnceLock<Arc<ThemeHost>> = OnceLock::new();
+#[cfg(not(test))]
+static CHECKED: Mutex<Option<Instant>> = Mutex::new(None);
+#[cfg(all(not(test), feature = "native", not(target_arch = "wasm32")))]
+static POLL_WORKER: OnceLock<Option<std::sync::mpsc::SyncSender<()>>> = OnceLock::new();
+#[cfg(all(not(test), feature = "native", not(target_arch = "wasm32")))]
+static WATCHING: AtomicBool = AtomicBool::new(false);
 
-// Each test its own: a test that sets a theme must not reach the
-// painters' tests running beside it.
+// Each test has its own theme and polling clock.
 #[cfg(test)]
 thread_local! {
-    static THEME: RwLock<Option<Arc<Theme>>> = const { RwLock::new(None) };
-}
-static VERSION: AtomicU64 = AtomicU64::new(0);
-#[cfg(not(test))]
-static SOURCE: Mutex<Option<Loaded>> = Mutex::new(None);
-
-#[cfg(test)]
-thread_local! {
-    static SOURCE: Mutex<Option<Loaded>> = const { Mutex::new(None) };
+    static HOST: Arc<ThemeHost> = Arc::new(ThemeHost::new(schema()));
+    static CHECKED: Mutex<Option<Instant>> = const { Mutex::new(None) };
 }
 
-/// The files being watched, for `f` to look at or change.
-fn with_source<R>(f: impl FnOnce(&mut Option<Loaded>) -> R) -> R {
+fn with_host<R>(f: impl FnOnce(&ThemeHost) -> R) -> R {
     #[cfg(not(test))]
-    return f(&mut SOURCE.lock().unwrap_or_else(PoisonError::into_inner));
+    return f(HOST.get_or_init(|| Arc::new(ThemeHost::new(schema()))));
     #[cfg(test)]
-    SOURCE.with(|s| f(&mut s.lock().unwrap_or_else(PoisonError::into_inner)))
+    HOST.with(|host| f(host))
+}
+
+/// The shared host used by Studio's themed views and editor.
+#[cfg(feature = "native")]
+#[must_use]
+pub fn host() -> Arc<ThemeHost> {
+    #[cfg(not(test))]
+    return HOST
+        .get_or_init(|| Arc::new(ThemeHost::new(schema())))
+        .clone();
+    #[cfg(test)]
+    HOST.with(Arc::clone)
+}
+
+fn poll_due(checked: &Mutex<Option<Instant>>, now: Instant) -> bool {
+    let mut checked = checked.lock().unwrap_or_else(PoisonError::into_inner);
+    if checked.is_some_and(|last| now.duration_since(last) < POLL) {
+        return false;
+    }
+    *checked = Some(now);
+    true
 }
 
 /// The theme the mixer draws with, when there is one with a strip.
@@ -533,10 +549,7 @@ pub fn current() -> Option<Arc<Theme>> {
 /// for its own role (the rails) and draws itself when there is none.
 #[must_use]
 pub fn loaded() -> Option<Arc<Theme>> {
-    #[cfg(not(test))]
-    return THEME.read().unwrap_or_else(PoisonError::into_inner).clone();
-    #[cfg(test)]
-    THEME.with(|t| t.read().unwrap_or_else(PoisonError::into_inner).clone())
+    with_host(ThemeHost::current)
 }
 
 /// `base` recoloured by the loaded theme: every colour the painters draw
@@ -622,18 +635,12 @@ pub fn values(set: &[(&str, Value)]) -> StripFields {
 /// know it is stale.
 #[must_use]
 pub fn version() -> u64 {
-    VERSION.load(Ordering::Acquire)
+    with_host(ThemeHost::version)
 }
 
 /// Use `theme` (or none) from now on.
 pub fn set(theme: Option<Arc<Theme>>) {
-    #[cfg(not(test))]
-    {
-        *THEME.write().unwrap_or_else(PoisonError::into_inner) = theme;
-    }
-    #[cfg(test)]
-    THEME.with(|t| *t.write().unwrap_or_else(PoisonError::into_inner) = theme);
-    VERSION.fetch_add(1, Ordering::AcqRel);
+    with_host(|host| host.set(theme));
 }
 
 /// Load the theme layered from `paths` (base first; files, or folders of
@@ -642,17 +649,9 @@ pub fn set(theme: Option<Arc<Theme>>) {
 /// # Errors
 /// Why it did not compile; the previous theme stays.
 pub fn load(paths: Vec<PathBuf>, mode: Option<String>) -> Result<(), String> {
-    let stamp = stamp(&paths);
-    let result = compile(&stamp, mode.as_deref());
-    let loaded = Loaded {
-        paths,
-        mode,
-        stamp,
-        checked: Instant::now(),
-        reported: result.as_ref().err().cloned(),
-    };
-    with_source(|source| *source = Some(loaded));
-    result.map(|theme| set(Some(Arc::new(theme))))
+    #[cfg(all(not(test), feature = "native", not(target_arch = "wasm32")))]
+    WATCHING.store(true, Ordering::Release);
+    with_host(|host| host.load(paths, mode)).map_err(|errors| errors_text(&errors))
 }
 
 /// Load `FTS_THEME`, once, if it is set.
@@ -671,36 +670,80 @@ pub fn from_env() {
 
 /// Recompile the theme if any of its files changed since the last look,
 /// or a folder gained or lost one (looked at no more than every
-/// [`POLL`]). True when [`current`] changed.
+/// [`POLL`]). Native builds poll on a worker; the version signals a change.
 pub fn poll() -> bool {
-    let fresh = with_source(|source| {
-        let loaded = source.as_mut()?;
-        if loaded.checked.elapsed() < POLL {
-            return None;
+    #[cfg(all(not(test), feature = "native", not(target_arch = "wasm32")))]
+    if !WATCHING.load(Ordering::Acquire) {
+        return false;
+    }
+    #[cfg(not(test))]
+    let due = poll_due(&CHECKED, Instant::now());
+    #[cfg(test)]
+    let due = CHECKED.with(|checked| poll_due(checked, Instant::now()));
+    if !due {
+        return false;
+    }
+    #[cfg(all(not(test), feature = "native", not(target_arch = "wasm32")))]
+    {
+        if let Some(worker) = POLL_WORKER.get_or_init(start_poll_worker) {
+            let _ = worker.try_send(());
         }
-        loaded.checked = Instant::now();
-        let now = stamp(&loaded.paths);
-        if now == loaded.stamp {
-            return None;
-        }
-        loaded.stamp = now;
-        match compile(&loaded.stamp, loaded.mode.as_deref()) {
-            Ok(theme) => {
-                loaded.reported = None;
-                Some(theme)
-            }
-            Err(why) => {
-                if loaded.reported.as_deref() != Some(why.as_str()) {
-                    tracing::warn!(theme.error = %why, "theme did not reload; keeping the last good one");
-                    loaded.reported = Some(why);
-                }
-                None
-            }
-        }
-    });
-    fresh.map(|theme| set(Some(Arc::new(theme)))).is_some()
+        false
+    }
+    #[cfg(any(test, not(feature = "native"), target_arch = "wasm32"))]
+    poll_host()
 }
 
+#[cfg(all(not(test), feature = "native", not(target_arch = "wasm32")))]
+fn start_poll_worker() -> Option<std::sync::mpsc::SyncSender<()>> {
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    std::thread::Builder::new()
+        .name("theme-reload".into())
+        .spawn(move || {
+            while receiver.recv().is_ok() {
+                poll_host();
+            }
+        })
+        .ok()?;
+    Some(sender)
+}
+
+fn poll_host() -> bool {
+    match with_host(ThemeHost::poll) {
+        Some(Reload::Applied) => true,
+        Some(Reload::Kept(errors)) => {
+            let why = errors_text(&errors);
+            tracing::warn!(theme.error = %why, "theme did not reload; keeping the last good one");
+            false
+        }
+        None => false,
+    }
+}
+
+fn errors_text(errors: &[frame::theme::host::ThemeError]) -> String {
+    errors
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// Compile an editor document and publish it if the theme has not changed.
+///
+/// Call on a worker thread: conversion and compilation process the whole
+/// document. Publication is in memory and does not save the document.
+///
+/// # Errors
+/// The document is invalid, or a newer theme superseded this compilation.
+#[cfg(feature = "native")]
+pub fn publish_editor_document(
+    document: &frame_editor::doc::doc::Document,
+    mode: Option<&str>,
+) -> Result<(), frame_editor::theme::CompileError> {
+    with_host(|host| frame_editor::theme::publish(document, host, mode))
+}
+
+#[cfg(test)]
 /// Whether `path` is a frame document: `.frame`, or the older `.fm`.
 fn is_theme_file(path: &std::path::Path) -> bool {
     path.extension()
@@ -710,6 +753,7 @@ fn is_theme_file(path: &std::path::Path) -> bool {
 
 /// The files `paths` come to, in layering order — a folder's by name — each
 /// with when it last changed.
+#[cfg(test)]
 fn stamp(paths: &[PathBuf]) -> Vec<(PathBuf, Option<SystemTime>)> {
     let mut files = Vec::new();
     for path in paths {
@@ -736,6 +780,7 @@ fn stamp(paths: &[PathBuf]) -> Vec<(PathBuf, Option<SystemTime>)> {
         .collect()
 }
 
+#[cfg(test)]
 fn compile(files: &[(PathBuf, Option<SystemTime>)], mode: Option<&str>) -> Result<Theme, String> {
     if files.is_empty() {
         return Err("no theme files".into());
