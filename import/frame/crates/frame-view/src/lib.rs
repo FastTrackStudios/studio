@@ -9,12 +9,16 @@
 //! the process extension whose view is of this kind ([`MANIFEST`]), and
 //! declares [`spec`]'s row itself.
 //!
-//! This is the minimal provider #224 describes: a surface painted through
-//! Frame's [`Canvas`](frame::embed::Canvas) seam into SVG ([`svg`]) and
-//! shown as a Dioxus view ([`view`]), so it draws wherever a Dioxus view
-//! does, a remote one included. The GPU kind (a Blitz paint source, Frame's
-//! own vello scene) replaces the painter, not the kind.
+//! The surface is a Frame document's ([`surface`]): loaded from a `.frame`
+//! file and reloaded when it is saved ([`shown`]), its params and feeds
+//! the ones its controls bind, moved by a host's actions and by its own
+//! knobs. It is painted through Frame's [`Canvas`](frame::embed::Canvas)
+//! seam into SVG ([`svg`]) and shown as a Dioxus view ([`view`]), so it
+//! draws wherever a Dioxus view does, a remote one included. The GPU kind
+//! (a Blitz paint source, Frame's own vello scene) replaces the painter,
+//! not the kind.
 
+pub mod shown;
 pub mod surface;
 pub mod svg;
 pub mod view;

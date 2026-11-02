@@ -1,70 +1,75 @@
-//! The kind's view: a [`KnobMeter`] as an inline `<svg>` in a Dioxus
-//! component, redrawn whenever [`set`] moves it — from its own buttons or
-//! from an action (`FRAME_SURFACE_SET`).
-
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::LazyLock;
+//! The kind's view: the surface [`shown`] shows, as an inline `<svg>` in a
+//! Dioxus component, redrawn at each change — its knobs dragged, an action
+//! (`FRAME_SURFACE_PARAM_SET`, `FRAME_SURFACE_FEED`), a save to its
+//! document.
 
 use dioxus::prelude::*;
-use tokio::sync::watch;
+use frame::embed::{Button, Modifiers, Pointer};
 
-use crate::surface::{KnobMeter, State};
+use crate::shown;
 use crate::svg::{Node, Svg};
-
-/// How wide the surface is drawn, px.
-pub const WIDTH: f64 = 212.0;
-
-static STATE: LazyLock<watch::Sender<State>> =
-    LazyLock::new(|| watch::Sender::new(State::default()));
-
-/// Moves the surface in every view of it.
-pub fn set(state: State) {
-    STATE.send_replace(State {
-        knob: state.knob.clamp(0.0, 1.0),
-        meter: state.meter.clamp(0.0, 1.0),
-    });
-}
-
-/// Where the surface is.
-#[must_use]
-pub fn state() -> State {
-    *STATE.borrow()
-}
 
 /// The kind's name, as the pane shows it.
 pub const TITLE: &str = "Frame surface";
 
-/// The view: the surface, what it reads, and a knob's two buttons.
+/// How far a param's buttons move it.
+const STEP: f64 = 0.1;
+
+const BUTTON: &str = "padding: 4px 10px; border-radius: 6px; border: 1px solid #3f3f46; \
+                      background: #27272a; color: #e4e4e7; font-size: 13px;";
+
+/// The view: the surface, its document, and each param and feed with what
+/// it reads; a param's two buttons move it a step.
 #[component]
 pub fn FrameSurface() -> Element {
-    let surface = use_hook(|| KnobMeter::new(WIDTH).map(|s| Rc::new(RefCell::new(s))));
-    let mut now = use_signal(state);
     let mut revision = use_signal(|| 0_u64);
     use_future(move || async move {
-        let mut rx = STATE.subscribe();
+        let mut rx = shown::changes();
         while rx.changed().await.is_ok() {
-            let s = *rx.borrow_and_update();
-            now.set(s);
-            revision += 1;
+            let r = *rx.borrow_and_update();
+            revision.set(r);
         }
     });
-    let s = now();
-    let svg = match &surface {
-        Ok(surface) => {
-            let mut surface = surface.borrow_mut();
-            surface.set(s);
-            Ok(surface.svg())
+    let rev = revision();
+    let svg = shown::paint();
+    let state = shown::state();
+    let document = state["document"]
+        .as_str()
+        .map_or_else(|| "built in".to_owned(), str::to_owned);
+    let error = state["error"].as_str().map(str::to_owned);
+    let params: Vec<(String, String, f64)> = state["params"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|p| {
+            (
+                p["addr"].as_str().unwrap_or_default().to_owned(),
+                p["name"].as_str().unwrap_or_default().to_owned(),
+                p["value"].as_f64().unwrap_or_default(),
+            )
+        })
+        .collect();
+    let feeds: Vec<(String, f64)> = state["feeds"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|f| {
+            (
+                f["name"].as_str().unwrap_or_default().to_owned(),
+                f["values"][0].as_f64().unwrap_or_default(),
+            )
+        })
+        .collect();
+    let step = |addr: String, by: f64| {
+        move |_| {
+            if let Some(v) = shown::param(&addr) {
+                let _ = shown::set_param(&addr, v + by);
+            }
         }
-        Err(e) => Err(e.clone()),
     };
-    let db = -60.0 + s.meter * 66.0;
-    let step = move |by: f64| {
-        let s = state();
-        set(State {
-            knob: s.knob + by,
-            ..s
-        });
+    let at = |e: &PointerEvent| {
+        let p = e.element_coordinates();
+        (p.x, p.y)
     };
     rsx! {
         div { style: "display: flex; flex-direction: column; gap: 12px; padding: 20px; \
@@ -74,38 +79,51 @@ pub fn FrameSurface() -> Element {
                 div { style: "font-size: 12px; color: #a1a1aa; font-family: monospace;", "{crate::KIND}" }
             }
             div { style: "max-width: 420px; font-size: 13px; line-height: 1.5; color: #a1a1aa;",
-                "A knob and a meter from a Frame document, laid out and painted by Frame in a process of its own."
+                "A Frame document, laid out and painted by Frame in a process of its own. Drag the knob; a save to the document reloads it."
             }
-            // The surface, and beside it what it reads and its knob's buttons.
+            div { style: "font-size: 12px; color: #a1a1aa; font-family: monospace;",
+                "{document}"
+            }
+            if let Some(e) = error {
+                div { style: "max-width: 420px; color: #f87171; font-size: 12px;", "{e}" }
+            }
+            // The surface, and beside it each param and feed.
             div { style: "display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start;",
                 match svg {
                     Ok(svg) => rsx! {
-                        for rev in std::iter::once(revision()) {
-                            SvgView { key: "{rev}", svg: svg.clone() }
+                        div {
+                            style: "touch-action: none;",
+                            onpointerdown: move |e| {
+                                let (x, y) = at(&e);
+                                shown::pointer(Pointer::Down { x, y, button: Button::Left, mods: Modifiers::default() });
+                            },
+                            onpointermove: move |e| {
+                                let (x, y) = at(&e);
+                                shown::pointer(Pointer::Move { x, y });
+                            },
+                            onpointerup: move |e| {
+                                let (x, y) = at(&e);
+                                shown::pointer(Pointer::Up { x, y, button: Button::Left });
+                            },
+                            onpointerleave: move |_| shown::pointer(Pointer::Leave),
+                            SvgView { key: "{rev}", svg }
                         }
                     },
                     Err(e) => rsx! {
                         div { style: "color: #f87171; font-size: 13px;", "The surface did not load: {e}" }
                     },
                 }
-                div { style: "display: flex; flex-direction: column; gap: 8px;",
-                    div { style: "font-size: 13px; font-variant-numeric: tabular-nums;",
-                        {format!("Drive {:.0}%", s.knob * 100.0)}
+                div { style: "display: flex; flex-direction: column; gap: 8px; \
+                              font-size: 13px; font-variant-numeric: tabular-nums;",
+                    for (addr, name, value) in params {
+                        div { key: "{addr}", style: "display: flex; align-items: center; gap: 6px;",
+                            button { style: BUTTON, onclick: step(addr.clone(), -STEP), "−" }
+                            button { style: BUTTON, onclick: step(addr.clone(), STEP), "+" }
+                            {format!("{name} {:.0}%", value * 100.0)}
+                        }
                     }
-                    div { style: "font-size: 13px; font-variant-numeric: tabular-nums;",
-                        {format!("Level {db:.1} dB")}
-                    }
-                    button {
-                        style: "padding: 6px 14px; border-radius: 6px; border: 1px solid #3f3f46; \
-                                background: #27272a; color: #e4e4e7; font-size: 13px;",
-                        onclick: move |_| step(0.1),
-                        "Turn up"
-                    }
-                    button {
-                        style: "padding: 6px 14px; border-radius: 6px; border: 1px solid #3f3f46; \
-                                background: #27272a; color: #e4e4e7; font-size: 13px;",
-                        onclick: move |_| step(-0.1),
-                        "Turn down"
+                    for (name, db) in feeds {
+                        div { key: "{name}", {format!("{name} {db:.1} dB")} }
                     }
                 }
             }
