@@ -272,6 +272,7 @@ path = "src/bin/blitz_shot.rs"
 required-features = ["native"]
 
 [dev-dependencies]
+session-engine = { workspace = true, features = ["test-isolation"] }
 # The metrics, read back through an in-memory exporter.
 opentelemetry_sdk = { workspace = true, features = ["metrics", "testing"] }
 builtin = { workspace = true, features = ["engine"] }

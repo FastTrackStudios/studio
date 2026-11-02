@@ -168,7 +168,7 @@ fn name_or_number(track: &daw_proto::Track, lane: u32) -> String {
 /// The tracks that show all their lanes; the rest show only the one that
 /// plays. The window's own, as its folds are (`crate::folds`): which lanes
 /// a person is looking at, not the song's.
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-isolation")))]
 fn expanded_set() -> std::sync::MutexGuard<'static, std::collections::HashSet<String>> {
     static EXPANDED: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<String>>> =
         std::sync::LazyLock::new(Default::default);
@@ -179,13 +179,13 @@ fn expanded_set() -> std::sync::MutexGuard<'static, std::collections::HashSet<St
 
 // Under test, each thread's own: a test opening lanes must not open the
 // rows another test is planning beside it.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-isolation"))]
 thread_local! {
     static EXPANDED: &'static std::sync::Mutex<std::collections::HashSet<String>> =
         Box::leak(Box::default());
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-isolation"))]
 fn expanded_set() -> std::sync::MutexGuard<'static, std::collections::HashSet<String>> {
     EXPANDED
         .with(|set| *set)
