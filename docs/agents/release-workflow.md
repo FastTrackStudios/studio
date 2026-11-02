@@ -11,12 +11,23 @@ In short:
 
 - **`main` is the only long-lived branch.** Branch from `origin/main`
   (`feat/sta-123-slug`, `fix/gh-42-slug`, `chore/no-issue-slug`), open a PR
-  into `main`, squash-merge it. There is no `dev`, no promotion PR and no
-  back-merge.
+  into `main`. A lone PR squash-merges; a stack merges with merge commits
+  titled with each PR's title and body (`merge_commit_title=PR_TITLE`,
+  `merge_commit_message=PR_BODY`), so the PRs above a merged layer stay
+  mergeable without a rebase and `main`'s first-parent history is one
+  conventional commit per PR. Read history and bisect with
+  `--first-parent` (`git log --first-parent`, `git bisect start
+  --first-parent`). There is no `dev`, no promotion PR and no back-merge.
+- **Don't wait on CI per change.** Once your local checks pass, push, mark
+  the PR ready and report. The orchestrator merges in batches with
+  `merge_batch.sh` (no CI wait between merges; it holds back only a PR
+  with an already-failed check or a real conflict), then checks `main`'s
+  `CI passed` once per batch and fixes forward with one PR.
 - **Every PR that changes a crate carries a change file**:
   `cargo rail change add <crates> --bump <none|patch|minor|major> -m
   "<note>"` writes `.changes/<slug>.md` (see `.changes/README`). CI fails a
-  PR whose changed crates have none. That is unchanged.
+  PR whose changed crates have none. **Release notes come from these
+  files, never from commits.**
 - **A merge to `main` runs CI and nothing else.** It ships nothing.
 - **A release is a `vYY.M.MICRO` tag**, pushed by `just release` on a green
   commit. The tag ships everything, from the tag alone and in parallel:
@@ -28,8 +39,8 @@ In short:
   locally (`just reaper-test`, `just reaper daw-test`).
 
 ```
-feat/sta-1-x ─PR (fast checks, change file)─squash─▶ main ── CI (CI passed) after every merge
-fix/sta-2-y  ─┘                                       │
+feat/sta-1-x ─PR (fast checks, change file)─squash (lone PR)─────▶ main ── CI (CI passed), checked once per merge batch
+stack a◀b◀c  ─merge commits, titled with each PR title─┘                                       │
                        just release ─▶ tag v26.10.4 on main's newest green commit
                                           │ (the tag alone, in parallel:)
                                           ├─ Images: ghcr.io/…/studio-web:26.10.4 ─▶ image-updater ─▶ Argo CD
