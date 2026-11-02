@@ -475,6 +475,8 @@ fn format_mouse_pattern(button: MouseButton, action: MouseAction, mods: Modifier
         MouseAction::Release => "Release",
         MouseAction::Click => "Click",
         MouseAction::DoubleClick => "DblClick",
+        MouseAction::Drag => "Drag",
+        MouseAction::LongPress => "LongPress",
     });
     s
 }
