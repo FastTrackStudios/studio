@@ -112,7 +112,8 @@ pub fn run(args: &Args) -> eyre::Result<()> {
     };
     engine.runtime.spawn(serve_socket(listener, router.clone()));
     if let Some(addr) = &args.listen {
-        let host = architect::host::EngineHost::new(router, addr.clone());
+        // Ungated as before: no PermissionsGate on this engine yet (FastTrackStudios/studio#362).
+        let host = architect::host::EngineHost::ungated(router, addr.clone());
         let addr = addr.clone();
         engine.runtime.spawn(async move {
             if let Err(e) = host.serve().await {

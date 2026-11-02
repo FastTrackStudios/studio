@@ -131,7 +131,8 @@ fn placeholder_page() -> Router {
 /// Serve `router` over `/vox` (+ `/health` and a placeholder `/`) on an
 /// already-bound listener, until the listener fails.
 pub async fn serve_ws(listener: tokio::net::TcpListener, router: LayerRouter) -> eyre::Result<()> {
-    let app = EngineHost::new(router, String::new())
+    // Ungated as before: no PermissionsGate on this engine yet (FastTrackStudios/studio#362).
+    let app = EngineHost::ungated(router, String::new())
         .plugin(placeholder_page())
         .into_app();
     axum::serve(listener, app)
@@ -182,7 +183,9 @@ pub async fn run(args: &EngineArgs) -> eyre::Result<()> {
     let serves_daw = crate::session_engine::engine().is_some();
     let port = args.port.unwrap_or(DEFAULT_PORT);
 
-    let mut host = EngineHost::new(router, format!("0.0.0.0:{port}")).plugin(placeholder_page());
+    // Ungated as before: no PermissionsGate on this engine yet (FastTrackStudios/studio#362).
+    let mut host =
+        EngineHost::ungated(router, format!("0.0.0.0:{port}")).plugin(placeholder_page());
     // The connect string is the endpoint id, which the key alone settles —
     // so it is known (and logged) before the host binds the endpoint.
     let mut connect = None;

@@ -381,7 +381,8 @@ async fn async_main() {
     // Serve the router over axum (`/vox` + `/health`) and iroh p2p, with the
     // browser remote as the HTTP fallback — all of it in `architect::host`.
     let config_dir = sampler::rig_prefs::signal_config_dir();
-    let mut engine_host = EngineHost::new(router, bind_addr());
+    // Ungated as before: no PermissionsGate on this engine yet (FastTrackStudios/studio#362).
+    let mut engine_host = EngineHost::ungated(router, bind_addr());
     if let Some(routes) = watch_routes {
         engine_host = engine_host.extend(routes);
         tracing::info!("watch bridge mounted at /watch/v1");
