@@ -1,6 +1,7 @@
 # Frame themes: the arrangement, TCP and mixer as runtime-swappable frame documents
 
-Status: the mixer strip is themed (2026-10-02). Spans this repo and
+Status: the mixer strip and the track panel's rows are themed (checked
+against the code 2026-11-02). Spans this repo and
 [frame](https://github.com/FastTrackStudios/frame).
 
 ## Where it stands
@@ -19,8 +20,20 @@ Status: the mixer strip is themed (2026-10-02). Spans this repo and
   - `themes/fts-dark.frame` is REAPER's layout, still generated from the
     painters (`skin::export`) because it is the reference the native strip
     is held to, pixel for pixel.
-- **Still native:** the rails, the Tone rack, the strip's edge, selection and
-  folder steps, the Live-mode strips, the TCP and the arrangement.
+- **The track panel's rows** draw from the theme's `tcp.row` role
+  (`themes/console/tcp.frame`, `skin::ROW` in `apps/session/ui/src/skin/mod.rs`):
+  `record_panel` records each row through `Theme::record_with`, with the host
+  filling the `%` slots, and `row_spot_at` hit-tests through the same plan
+  (`apps/session/ui/src/arrangement.rs:1250-1291`, `:1118-1128`). That holds
+  for the full panel only: the compact panel (`tcp.compact`) is still the
+  painters' (`arrangement.rs:1250`, `:1120`). Without a `tcp.row` role in the
+  theme the painters draw the row.
+- **Still native:** the arrangement's lanes, items and ruler (there are no
+  `arrange.*` roles: `themes/console/` has none, and `arrange.` appears in
+  `apps/session/ui/src` only as the palette's field names, e.g.
+  `arrangement.rs:146`), the compact track panel, and the
+  strip's edge, selection and folder steps when a theme has no `mcp.rackback`
+  or `mcp.step` (`skin/mod.rs:46,51`).
 
 ## Goal
 
@@ -131,14 +144,27 @@ Change classes:
 | static field (name, colour) | re-record that one instance |
 | mode switch | re-resolve tokens, re-record |
 | size crossing a bucket | re-solve that bucket's layout (cached) |
-| theme swap / hot reload | compile off-thread, swap one `Arc`, re-record everything |
+| theme swap / hot reload | compile, swap one `Arc`, re-record everything. *Today the compile runs inline on the UI thread* (`skin::poll`, below); off-thread is a target |
 
 ### Swapping
 
-`ThemeHandle` is an atomically swapped `Arc<CompiledTheme>` with a version
-number. Every widget compares the version in `needs_redraw`/record and
-re-records when it changed. A compile error leaves the previous theme in
-place and shows frame's error banner.
+Today the theme is a process-wide `Arc<Theme>` with a `VERSION` counter that
+`skin::load` and `skin::set` bump (`apps/session/ui/src/skin/mod.rs:509,628-637`; `load` reaches `set` at `:655`).
+Widgets compare `skin::version()` and re-record when it moved
+(e.g. `editor_view.rs:523,970`).
+
+Hot reload is polling, not an OS watcher: `skin::poll` is called from the
+mixer and arrangement widgets (`mixer_panel.rs:2603`, `widget.rs:6105`),
+looks at the files' mtimes at most every 250 ms (`POLL`, `skin/mod.rs:54`)
+and, when one changed, **compiles inline on the UI thread** (`poll` at
+`skin/mod.rs:675-705` calls `compile`, `:739`). There is no off-thread compile today.
+
+A compile error leaves the previous theme in place and is reported once
+through `tracing::warn!` ("theme did not reload; keeping the last good one",
+`skin/mod.rs:692-697`). **There is no error banner**: nothing in
+`apps/session/ui/src` shows the error on screen (`banner` there is only
+`patch_list.rs`'s stale-session banner). Surfacing the error in the UI is
+not built.
 
 ## The gate
 
@@ -150,9 +176,11 @@ against the native painter and **must not be worse**:
 - `just daw-studio`: arrangement + editor + mixer against 240 Hz
 
 The threshold is p50 and p99 within noise of native (two runs each,
-interleaved, with machine load noted; this box runs other agents). A theme
-swap must compile off the UI thread and cost the UI thread no more than one
-full re-record.
+interleaved, with machine load noted; this box runs other agents). The
+target is that a theme swap compiles off the UI thread and costs the UI
+thread no more than one full re-record. That is not met today, because
+`skin::poll` compiles inline (see [Swapping](#swapping)), and no stored
+p50/p99 baseline exists to compare against.
 
 A second gate covers correctness: the `fts-dark` frame theme must match the
 native painter pixel for pixel. `blitz_shot` / the bench's image renderer
@@ -174,7 +202,9 @@ provides the native image, and frame's visual-diff harness compares the two.
      feature flag.
    - Hit-testing from the theme's geometry.
    - Must pass the golden diff and the `daw-animate` gate.
-3. **TCP rows and folder bands.** Gate: `daw-bench`.
+3. **TCP rows and folder bands.** Gate: `daw-bench`. The full panel's rows
+   are themed (`tcp.row`, see above; the folder band is the row's
+   `track.band` field, `skin/mod.rs:402`); the compact panel is not.
 4. **Arrangement chrome:** lanes, items, ruler and markers, with host plot
    slots for peaks and notes. Gate: `daw-bench` and `daw-studio`.
 5. **Runtime switching:** a theme picker, a themes directory, hot reload,
