@@ -1,0 +1,46 @@
+# The build environment for one checks job on THEBATTLESHIP (self-hosted
+# NixOS, the `thebattleship` pool). The hosted twin is
+# .github/actions/hosted-devenv-rust.
+#
+# - devenv comes from the host when the runner has it (`command -v devenv`).
+#   Only when it is missing is devenv 2.4.0 installed from the upstream tag,
+#   the version devenv.yaml requires.
+# - The target dir goes under the pool's CI_CACHE_DIR, keyed by job, so the
+#   job's builds stay warm from one push to the next.
+#
+# kache is the host's (RUSTC_WRAPPER on the runner units, passed through the
+# devenv shell). Nothing sets RUSTFLAGS, RUSTC_WRAPPER or sccache here.
+
+name: THEBATTLESHIP devenv + warm target
+description: Install devenv if the runner lacks it, and point cargo at this job's warm target dir.
+
+inputs:
+  job:
+    description: The job's name; keys its target dir under CI_CACHE_DIR.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: devenv (only when missing)
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v devenv >/dev/null 2>&1; then
+          echo "devenv on PATH: $(devenv --version)"
+        else
+          out="$(nix build --no-link --print-out-paths github:cachix/devenv/v2.4.0#devenv)"
+          echo "$out/bin" >> "$GITHUB_PATH"
+          echo "devenv installed: $("$out/bin/devenv" --version) ($out)"
+        fi
+    - name: Target dir (pool)
+      shell: bash
+      env:
+        JOB: ${{ inputs.job }}
+      run: |
+        set -euo pipefail
+        [ -n "${CI_CACHE_DIR:-}" ] || { echo "::error::no CI_CACHE_DIR: not a shared THEBATTLESHIP runner"; exit 1; }
+        dir="$CI_CACHE_DIR/frame/$JOB/target"
+        mkdir -p "$dir"
+        echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
+        echo "$JOB: target $dir"
