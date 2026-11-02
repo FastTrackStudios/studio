@@ -21,7 +21,7 @@ pub fn FrameThemeEditor() -> Element {
     let editor = use_context::<EditorContext>();
     let mut revision = use_signal(|| 0_u64);
     let mut status = use_signal(|| String::new());
-    let mut fill = use_signal(|| "#808080".to_owned());
+    let mut fill = use_signal(String::new);
     let polling = editor.clone();
     use_future(move || {
         let editor = polling.clone();
@@ -69,20 +69,27 @@ pub fn FrameThemeEditor() -> Element {
                     },
                     "Widen by 10 px"
                 }
-                label {
-                    "Fill "
-                    input {
-                        r#type: "color",
-                        value: "{fill}",
-                        oninput: move |e| {
-                            let value = e.value();
-                            fill.set(value.clone());
+                div {
+                    label {
+                        "Fill color"
+                        input {
+                            r#type: "text",
+                            placeholder: "#rrggbb",
+                            style: "width: 110px; margin: 0 8px; padding: 4px;",
+                            value: "{fill}",
+                            oninput: move |e| fill.set(e.value()),
+                        }
+                    }
+                    button {
+                        onclick: move |_| {
+                            let value = fill().trim().to_owned();
                             let args = serde_json::json!({"id": id, "props": {"fill": value}});
                             match color_editor.borrow_mut().execute("node.set", &args, None) {
                                 Ok(_) => { revision += 1; status.set("Updating preview…".to_owned()); },
                                 Err(e) => status.set(format!("Edit failed: {e}")),
                             }
-                        }
+                        },
+                        "Apply fill"
                     }
                 }
             } else {
