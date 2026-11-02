@@ -327,6 +327,31 @@ fn instances_inherit_and_override() {
         .create(inst, FcKind::Frame, "Knob", 0.0, 0.0, 50.0, 50.0)
         .unwrap();
     doc.node_mut(mirror).unwrap().source = Some(layer);
+    let slot = doc
+        .create(layer, FcKind::Frame, "Needle", 0.0, 0.0, 10.0, 10.0)
+        .unwrap();
+    set_data(
+        &mut doc,
+        slot,
+        keys::SLOT,
+        Some(
+            serde_json::to_string(&vec![SlotMark {
+                role: SlotRole::Needle,
+                at: 0,
+                of: None,
+            }])
+            .unwrap(),
+        ),
+    )
+    .unwrap();
+    let mirror_slot = doc
+        .create(mirror, FcKind::Frame, "Needle", 0.0, 0.0, 10.0, 10.0)
+        .unwrap();
+    doc.node_mut(mirror_slot).unwrap().source = Some(slot);
+    assert_eq!(
+        slots_of(&doc, mirror),
+        vec![(SlotRole::Needle, SlotTarget::Node(mirror_slot))]
+    );
     assert_eq!(
         effective(&doc, mirror).binding,
         Some(Binding::param("gain"))

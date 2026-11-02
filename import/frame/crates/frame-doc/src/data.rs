@@ -355,31 +355,23 @@ pub fn slot_index(doc: &Document) -> BTreeMap<NodeId, Vec<(SlotRole, SlotTarget)
             by_uuid.entry(u).or_insert(*id);
         }
     }
-    let has_control = |id: NodeId| {
-        doc.node(id)
-            .is_some_and(|n| n.plugin_data.contains_key(keys::CONTROL))
-    };
+    let data: BTreeMap<_, _> = order.iter().map(|id| (*id, effective(doc, *id))).collect();
+    let has_control = |id: NodeId| data.get(&id).is_some_and(|d| d.control.is_some());
     let mut lists: BTreeMap<NodeId, Vec<(u32, usize, SlotRole, SlotTarget)>> = BTreeMap::new();
     for (i, id) in order.iter().enumerate() {
-        let Some(n) = doc.node(*id) else { continue };
-        if let Some(s) = n.plugin_data.get(keys::SLOT_EXTERN)
-            && let Ok(ext) = serde_json::from_str::<Vec<ExternSlot>>(s)
-        {
+        let Some(d) = data.get(id) else { continue };
+        if !d.slots_extern.is_empty() {
             let l = lists.entry(*id).or_default();
             l.extend(
-                ext.into_iter()
+                d.slots_extern
+                    .iter()
+                    .copied()
                     .map(|e| (e.at, i, e.role, SlotTarget::Extern(e.node))),
             );
         }
-        let Some(s) = n.plugin_data.get(keys::SLOT) else {
-            continue;
-        };
-        let Ok(marks) = serde_json::from_str::<Vec<SlotMark>>(s) else {
-            continue;
-        };
         let up = || std::iter::once(*id).chain(doc.ancestors(*id));
         let nearest = up().find(|a| has_control(*a));
-        for m in marks {
+        for m in &d.slots {
             let owner = match m.of {
                 // The named control: one this node sits in first (a pasted copy's), else any.
                 Some(u) => up()
