@@ -4460,7 +4460,7 @@ impl Arrangement {
             * Affine::translate((0.0, -s0));
         let moved = transform * into;
         let clip = transform.transform_rect_bbox(Rect::new(left, d0, right, d1));
-        painter.push_clip_layer(Affine::IDENTITY, &clip);
+        painter.push_clip_layer(Fill::NonZero, Affine::IDENTITY, &clip);
         painter.fill(Fill::NonZero, Affine::IDENTITY, surface, None, &clip);
         let inside = |shape: &BezPath, at: Affine| {
             let b = at.transform_rect_bbox(shape.bounding_box());

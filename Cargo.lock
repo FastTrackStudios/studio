@@ -4220,6 +4220,7 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+ "utils",
  "wasm-bindgen",
  "web-sys",
 ]
@@ -5659,6 +5660,7 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+ "utils",
  "vox",
 ]
 
@@ -7197,6 +7199,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "fts-version"
+version = "26.10.3"
+
+[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7975,6 +7981,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "utils",
  "uuid",
  "vello",
  "vello_gpu",
@@ -16094,6 +16101,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "utils",
  "uuid",
  "vox",
  "vox-types",
@@ -16873,12 +16881,14 @@ name = "session-engine"
 version = "26.10.3"
 dependencies = [
  "ableton",
+ "app-shell",
  "architect",
  "architect-mcp",
  "architect-telemetry",
  "auth-client",
  "blake3",
  "builtin",
+ "chrono",
  "crdt",
  "daw",
  "daw-control",
@@ -16889,6 +16899,7 @@ dependencies = [
  "dawfile-reaper",
  "dioxus",
  "dirs 6.0.0",
+ "dock",
  "dsp",
  "dsp-core",
  "dynamic-template",
@@ -18710,6 +18721,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing-subscriber",
+ "utils",
  "vox",
  "vox-stream",
 ]
@@ -18745,6 +18757,7 @@ dependencies = [
  "fts-account",
  "fts-audio-ui",
  "fts-sample",
+ "fts-version",
  "futures-channel",
  "futures-timer",
  "futures-util",
