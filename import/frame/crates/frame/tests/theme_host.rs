@@ -280,6 +280,32 @@ fn drawing_never_waits_for_a_compile_on_another_thread() {
 }
 
 #[test]
+fn only_one_competing_publication_for_a_version_succeeds() {
+    let dir = theme_dir();
+    let host = Arc::new(loaded(&dir));
+    let theme = host.current().unwrap();
+    let version = host.version();
+    let barrier = Arc::new(std::sync::Barrier::new(3));
+    let workers: Vec<_> = (0..2)
+        .map(|_| {
+            let (host, theme, barrier) = (host.clone(), theme.clone(), barrier.clone());
+            std::thread::spawn(move || {
+                barrier.wait();
+                host.set_if_version(version, theme)
+            })
+        })
+        .collect();
+    barrier.wait();
+    let successes = workers
+        .into_iter()
+        .map(|w| w.join().unwrap())
+        .filter(|won| *won)
+        .count();
+    assert_eq!(successes, 1);
+    assert_eq!(host.version(), version + 1);
+}
+
+#[test]
 fn a_failed_load_keeps_watching_the_good_theme_and_a_broken_start_is_watched() {
     let dir = theme_dir();
     let host = loaded(&dir);
