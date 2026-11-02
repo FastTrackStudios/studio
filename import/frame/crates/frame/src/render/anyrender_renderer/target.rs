@@ -7,8 +7,8 @@
 //! every output.
 //!
 //! - `vello::Scene` (always): frame's own renderer and the effects stage.
-//! - A host's anyrender 0.11 scene (frame-live's `vectors`, feature
-//!   `anyrender-0-11`): Blitz's, drawn by whatever renderer the host runs —
+//! - A host's anyrender scene (frame-live's `vectors`, feature
+//!   `host-scene`): Blitz's, drawn by whatever renderer the host runs —
 //!   vello-hybrid on the iOS simulator, which has no indirect execution for
 //!   Vello's compute stages.
 

@@ -33,18 +33,20 @@ authors = ["FastTrack Studios"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/FastTrackStudios/frame"
 
-# The versions Studio pinned at the cut (studio@fc6b1954), so Frame builds
-# with exactly what it built with there.
+# architect v0.10.0's pins (its Cargo.toml and lock): vox rc.7, facet rc.7,
+# vello 0.11, wgpu 30, anyrender 0.14 / anyrender_vello 0.15, Blitz and
+# nice-plug at fts-upstream-2026-11. A Frame consumer repeats the [patch]
+# tables below.
 [workspace.dependencies]
-anyrender_0_11 = { package = "anyrender", git = "https://github.com/FastTrackStudios/blitz", tag = "fts-pointer-2026-10" }
-anyrender_svg = { git = "https://github.com/DioxusLabs/anyrender.git", branch = "main" }
-anyrender_svg_0_12 = { version = "0.12", package = "anyrender_svg" }
-architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.31" }
+anyrender = "0.14"
+anyrender_vello = "0.15"
+anyrender_svg = "0.15"
+architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.10.0" }
 base64 = "0.22.1"
 blake3 = { version = "1.8" }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std", "wasmbind"] }
-crdt = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.31" }
-facet = { version = "0.50.0-rc.5", features = ["reflect", "chrono", "uuid"] }
+crdt = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.10.0" }
+facet = { version = "0.50.0-rc.7", features = ["reflect", "chrono", "uuid"] }
 facet-json = { version = "0.50.0-rc.7" }
 facet-styx = { version = "5.0.0-rc.7" }
 figma-api = { git = "https://github.com/gridaco/figma-api-rust.git" }
@@ -52,7 +54,7 @@ fixed = "1.28"
 image = { version = "0.25", default-features = false, features = ["png"] }
 kurbo = "0.13"
 miniz_oxide = "0.8"
-nice-plug-core = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
+nice-plug-core = { git = "https://github.com/FastTrackStudios/nice-plug.git", tag = "fts-upstream-2026-11" }
 peniko = "0.6"
 pollster = "0.4.0"
 proptest = "1"
@@ -67,22 +69,26 @@ thiserror = "2.0"
 tokio = { version = "1.48", features = ["full"] }
 uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
 vello_cpu = { version = "0.0.9", default-features = false }
-vox = { version = "0.10.0-rc.5", default-features = false, features = ["runtime"] }
-vox-core = { version = "0.10.0-rc.5" }
+vox = { version = "0.10.0-rc.7", default-features = false, features = ["runtime"] }
+vox-core = { version = "0.10.0-rc.7" }
 vox-websocket = { version = "0.10.0-rc.5" }
 winit = "0.30"
+vello = "0.11"
+wgpu = "30"
 zip = { version = "2", default-features = false }
 
-# Studio's patch tables, the entries that reach Frame's graph.
+# architect v0.10.0's patch tables (FastTrackStudios/vendor at v0.7.1 where
+# architect has v0.7.0), the entries that reach Frame's graph.
 [patch.crates-io]
-anyrender = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-pointer-2026-10" }
-wgpu-hal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
-raw-window-metal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
+anyrender = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-upstream-2026-11" }
+anyrender_vello = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+wgpu-hal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+raw-window-metal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
 styx-format = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.1.0" }
-vox-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.3.0" }
-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.1" }
-facet-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.1" }
+phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
 phon-jit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.2.3" }
+facet-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
+vox-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.3.0" }
 
 [workspace.lints.rust]
 # Flipped from "allow" 2026-07-28 (task cleanup): the blanket allows are

@@ -59,7 +59,7 @@ change at runtime.
 
 **Frame** already has these parts for one surface at a time:
 
-- `frame-embed` paints into an anyrender 0.11 scene in two passes, `record`
+- `frame-embed` paints into an anyrender scene in two passes, `record`
   and `live`. It uses session's width tiers and has a frame version of the
   Tone rack.
 - `surface-runtime` routes pointer gestures and runs meter ballistics.
@@ -167,8 +167,7 @@ provides the native image, and frame's visual-diff harness compares the two.
    - Add a `Skin` seam in session-daw that the current painters implement as
      `NativeSkin`, with no change in output or bench numbers.
 1. **Frame core** (in frame): variables and modes, components and instances
-   with props, host binding, compile-to-plan, and plan replay into anyrender
-   0.11. Frame-side micro-benches.
+   with props, host binding, compile-to-plan, and plan replay into anyrender. Frame-side micro-benches.
 2. **The mixer strip.**
    - `fts-dark` `mcp.strip` and `mcp.master` as frame components, behind a
      feature flag.

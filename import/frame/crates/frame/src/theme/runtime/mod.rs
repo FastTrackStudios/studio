@@ -75,5 +75,5 @@ pub use schema::Schema;
 pub use crate::render::canvas::{Canvas, Font, Recording, TextAlign, TextRun};
 pub use crate::theme::expr::{Rgba, Value};
 
-#[cfg(feature = "anyrender-0-11")]
+#[cfg(feature = "host-scene")]
 pub use crate::render::canvas::AnyRender;

@@ -12,8 +12,10 @@ workspace = true
 
 [features]
 default = ["vox"]
+# A host's anyrender `PaintScene` (Blitz's) as a paint target: the
+# anyrender crate alone, the same 0.14 Blitz and architect use.
+host-scene = ["dep:anyrender"]
 anyrender = ["dep:anyrender", "dep:anyrender_svg", "dep:anyrender_vello", "dep:image", "dep:peniko", "dep:pollster", "dep:skrifa", "dep:vello", "dep:winit", "svg_export"]
-anyrender-0-11 = ["dep:anyrender_0_11", "dep:anyrender_svg_0_12"]
 codec = ["io"]
 cpu = ["dep:image", "dep:vello_cpu"]
 design = ["io", "render", "runtime"]
@@ -36,14 +38,9 @@ theme = ["render"]
 vox = ["architect/vox", "dep:vox", "rpc"]
 
 [dependencies]
-anyrender = { git = "https://github.com/DioxusLabs/anyrender.git", branch = "main", optional = true }
-# The host scene anyrender (0.11): the blitz fork the workspace patches
-# crates.io anyrender to, named directly — dx's metadata reader cannot
-# match a renamed dependency to a patched source.
-anyrender_0_11 = { workspace = true, optional = true }
-anyrender_svg_0_12 = { workspace = true, optional = true }
+anyrender = { workspace = true, optional = true }
 anyrender_svg = { workspace = true, optional = true }
-anyrender_vello = { git = "https://github.com/DioxusLabs/anyrender.git", branch = "main", optional = true }
+anyrender_vello = { workspace = true, optional = true }
 architect = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 blake3 = { workspace = true }
@@ -69,7 +66,7 @@ taffy = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 uuid = { workspace = true }
-vello = { version = "0.10.0", optional = true }
+vello = { workspace = true, optional = true }
 vello_cpu = { workspace = true, features = ["std", "u8_pipeline"], optional = true }
 vox = { workspace = true, optional = true }
 vox-core = { workspace = true, optional = true }
@@ -80,7 +77,7 @@ zip = { workspace = true, features = ["deflate"], optional = true }
 [dev-dependencies]
 # Its own tests and examples, with the features they need (see their
 # required-features): a plain `cargo test` of the workspace builds them all.
-frame = { path = ".", features = ["anyrender", "cpu", "design", "dsp", "embed", "figma", "io", "library", "live", "render", "runtime", "surface-runtime-rpc", "theme"] }
+frame = { path = ".", features = ["anyrender", "cpu", "design", "dsp", "embed", "figma", "host-scene", "io", "library", "live", "nice-plug", "render", "runtime", "surface-runtime-rpc", "theme"] }
 architect = { workspace = true, features = ["vox", "local"] }
 facet = { workspace = true }
 facet-json = { workspace = true }
@@ -90,10 +87,10 @@ pollster = { workspace = true }
 proptest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-vello = { version = "0.10.0" }
+vello = { workspace = true }
 vox-core = { workspace = true }
 vox-websocket = { workspace = true }
-wgpu = { version = "29" }
+wgpu = { workspace = true }
 
 [[example]]
 name = "strips"

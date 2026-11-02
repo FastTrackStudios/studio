@@ -10,7 +10,7 @@
 //!   two paint passes (params, recorded once; feeds and motion, live),
 //!   pointer routing in strip-local coordinates.
 //! - [`Canvas`]: what it paints into — the host's own scene. An anyrender
-//!   0.11 `PaintScene` (feature `anyrender-0-11`, session's mixer), frame's
+//!   `PaintScene` (feature `host-scene`, session's mixer), frame's
 //!   replayable [`Recording`], or the CPU rasteriser ([`cpu`], REAPER's
 //!   LICE bitmap, tests).
 //! - [`tone`]: session's Tone rack (EQ, gate, compressor, saturator,
@@ -50,7 +50,7 @@ pub mod tone;
 // The painting seam, shared with the theme runtime.
 pub use crate::render::canvas::{canvas, paint, text};
 
-#[cfg(feature = "anyrender-0-11")]
+#[cfg(feature = "host-scene")]
 pub use canvas::AnyRender;
 pub use canvas::{Canvas, CanvasExt, Recording, Tally};
 pub use embed::{

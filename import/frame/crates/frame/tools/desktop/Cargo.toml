@@ -15,7 +15,7 @@ frame = { path = "../..", features = ["anyrender", "design", "io", "library", "r
 serde_json = { workspace = true }
 kurbo = { workspace = true }
 peniko = { workspace = true }
-vello = { version = "0.10.0" }  # frame's own version (not the workspace's)
+vello = { workspace = true }
 winit = { workspace = true }
 pollster = { workspace = true }
 image = { version = "0.25" }  # frame's own version (not the workspace's)

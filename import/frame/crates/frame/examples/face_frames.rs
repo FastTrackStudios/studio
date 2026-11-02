@@ -43,7 +43,9 @@ fn read(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::Texture) -> 
     let slice = buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| {});
     let _ = device.poll(wgpu::PollType::wait_indefinitely());
-    let mapped = slice.get_mapped_range();
+    let mapped = slice
+        .get_mapped_range()
+        .expect("the buffer is mapped: the poll above waited for it");
     let mut rgba = vec![0_u8; (unpadded * rows) as usize];
     for row in 0..rows as usize {
         rgba[row * unpadded as usize..(row + 1) * unpadded as usize].copy_from_slice(

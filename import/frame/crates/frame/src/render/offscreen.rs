@@ -346,7 +346,10 @@ impl Readback {
                 return Some(Err("map_async channel disconnected".into()));
             }
         }
-        let mapped = self.buffer.slice(..).get_mapped_range();
+        let mapped = match self.buffer.slice(..).get_mapped_range() {
+            Ok(mapped) => mapped,
+            Err(e) => return Some(Err(format!("get_mapped_range failed: {e}"))),
+        };
         let (unpadded, padded) = (self.unpadded as usize, self.padded as usize);
         let mut rgba = vec![0_u8; unpadded * self.rows as usize];
         for row in 0..self.rows as usize {

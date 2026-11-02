@@ -15,7 +15,7 @@
 //! hand. A host with an engine feeds the engine's values in with
 //! [`LiveSurface::apply_values`].
 
-#[cfg(feature = "anyrender-0-11")]
+#[cfg(feature = "host-scene")]
 mod vectors;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -764,13 +764,13 @@ impl LiveSurface {
 
     /// Paint the surface's vectors at `width × height` physical px
     /// (`scale` physical px per element px) into `scene`, a host's anyrender
-    /// 0.11 scene — the path for a host whose renderer gives no Vello GPU to
+    /// scene — the path for a host whose renderer gives no Vello GPU to
     /// [`render`](Self::render) with (vello-hybrid on the iOS simulator,
     /// whose Metal has no indirect execution). The same frame as `render`,
     /// painted by the same painter; the GPU effects stage is left out (a
     /// glow is drawn as a soft copy, as frame's fallback mode draws it).
-    #[cfg(feature = "anyrender-0-11")]
-    pub fn paint_vectors<S: anyrender_0_11::PaintScene>(
+    #[cfg(feature = "host-scene")]
+    pub fn paint_vectors<S: anyrender::PaintScene>(
         &mut self,
         scene: &mut S,
         width: u32,
@@ -802,7 +802,7 @@ impl LiveSurface {
             ty: physical.ty / scale,
         };
         let doc = self.rt.frame(t);
-        let mut target = vectors::AnyRender011(scene);
+        let mut target = vectors::HostScene(scene);
         let bounds = kurbo::Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
         crate::render::PaintTarget::fill(
             &mut target,
@@ -835,8 +835,8 @@ impl LiveSurface {
     /// drawn over a host's own picture, as one block of its grid, its
     /// transparent margin showing what is under it. The same frame as
     /// [`paint_vectors`](Self::paint_vectors), by the same painter.
-    #[cfg(feature = "anyrender-0-11")]
-    pub fn paint_vectors_at<S: anyrender_0_11::PaintScene>(
+    #[cfg(feature = "host-scene")]
+    pub fn paint_vectors_at<S: anyrender::PaintScene>(
         &mut self,
         scene: &mut S,
         width: f64,
@@ -854,7 +854,7 @@ impl LiveSurface {
         let view = View::fit(self.content, width.max(1.0), height.max(1.0));
         self.view = view;
         let doc = self.rt.frame(t);
-        let mut target = vectors::AnyRender011(scene);
+        let mut target = vectors::HostScene(scene);
         let prims = crate::render::build_scene_primitives_with(
             &doc,
             self.page,
