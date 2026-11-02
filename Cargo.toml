@@ -185,8 +185,8 @@ plugin-core = { path = "features/ui/plugin-core" }
 dock = { path = "features/ui/dock" }
 daw-sync = { path = "features/sync" }
 # Local-first integration checkpoint: pin the shared Frame editor revision.
-frame = { git = "https://github.com/FastTrackStudios/frame", rev = "e5d870be779c2e6f77e0a6e1b16abd91486d279a" }
-frame-editor = { git = "https://github.com/FastTrackStudios/frame", rev = "e5d870be779c2e6f77e0a6e1b16abd91486d279a", features = ["ui"] }
+frame = { git = "https://github.com/FastTrackStudios/frame", rev = "d1d27e2bf16047115f7462abfcd22c8e9560a47e" }
+frame-editor = { git = "https://github.com/FastTrackStudios/frame", rev = "d1d27e2bf16047115f7462abfcd22c8e9560a47e", features = ["ui"] }
 fontique = { version = "0.12", features = ["fontconfig-dlopen"] }
 web-audio-worklet = { path = "features/adapters/web/worklet" }
 patchbay = { path = "features/patchbay" }

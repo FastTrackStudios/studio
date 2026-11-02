@@ -28,7 +28,7 @@ pub fn ThemeEditorPanel() -> Element {
     });
     rsx! {
         div { style: "display:flex; flex-direction:column; min-width:0; min-height:0; padding:12px; overflow-y:scroll;",
-            p { "Preview changes are in memory. Theme files are not saved." }
+            p { "Preview changes are in memory until you save a role." }
             if let Some(why) = error.read().as_ref() {
                 p { role: "status", "Could not open the theme editor: {why}" }
             } else if editor.read().is_some() {

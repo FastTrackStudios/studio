@@ -7199,7 +7199,7 @@ dependencies = [
 [[package]]
 name = "frame"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/frame?rev=e5d870be779c2e6f77e0a6e1b16abd91486d279a#e5d870be779c2e6f77e0a6e1b16abd91486d279a"
+source = "git+https://github.com/FastTrackStudios/frame?rev=d1d27e2bf16047115f7462abfcd22c8e9560a47e#d1d27e2bf16047115f7462abfcd22c8e9560a47e"
 dependencies = [
  "anyrender",
  "anyrender_svg",
@@ -7313,7 +7313,7 @@ dependencies = [
 [[package]]
 name = "frame-doc"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/frame?rev=e5d870be779c2e6f77e0a6e1b16abd91486d279a#e5d870be779c2e6f77e0a6e1b16abd91486d279a"
+source = "git+https://github.com/FastTrackStudios/frame?rev=d1d27e2bf16047115f7462abfcd22c8e9560a47e#d1d27e2bf16047115f7462abfcd22c8e9560a47e"
 dependencies = [
  "blake3",
  "figcraft-collab",
@@ -7332,7 +7332,7 @@ dependencies = [
 [[package]]
 name = "frame-editor"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/frame?rev=e5d870be779c2e6f77e0a6e1b16abd91486d279a#e5d870be779c2e6f77e0a6e1b16abd91486d279a"
+source = "git+https://github.com/FastTrackStudios/frame?rev=d1d27e2bf16047115f7462abfcd22c8e9560a47e#d1d27e2bf16047115f7462abfcd22c8e9560a47e"
 dependencies = [
  "dioxus",
  "figcraft-engine",
