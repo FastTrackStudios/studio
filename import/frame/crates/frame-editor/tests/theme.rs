@@ -57,6 +57,7 @@ fn opening_the_host_preserves_layered_drafts_mode_and_rejects_newer_reload() {
         [0xd0, 0x40, 0x40, 0xff]
     );
     host.reload().unwrap();
+    assert!(editor.host_changed());
     let after_reload = host.current().unwrap();
     editor.request_preview(Some("missing")).unwrap();
     assert!(matches!(

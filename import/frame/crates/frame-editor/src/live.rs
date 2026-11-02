@@ -38,6 +38,7 @@ type Shared = Arc<(Mutex<Queue>, Condvar)>;
 /// The caller supplies the document and host; no file is loaded or saved here.
 pub struct LiveEditor {
     session: Session,
+    host: Arc<ThemeHost>,
     queue: Shared,
     events: mpsc::Receiver<PreviewEvent>,
     sender: mpsc::Sender<PreviewEvent>,
@@ -161,6 +162,7 @@ impl LiveEditor {
         thread::spawn(move || worker(worker_queue, worker_host, worker_sender));
         Self {
             session,
+            host,
             queue,
             events,
             sender,
@@ -230,6 +232,17 @@ impl LiveEditor {
     /// Return the next completed preview without waiting for the worker.
     pub fn try_event(&self) -> Option<PreviewEvent> {
         self.events.try_recv().ok()
+    }
+
+    /// Whether another publisher replaced the theme this editor opened.
+    #[must_use]
+    pub fn host_changed(&self) -> bool {
+        let state = self
+            .queue
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.base_version != self.host.version()
     }
 }
 

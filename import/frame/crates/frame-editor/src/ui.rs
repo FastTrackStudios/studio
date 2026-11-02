@@ -35,6 +35,10 @@ pub fn FrameThemeEditor() -> Element {
                         Err(e) => status.set(format!("Preview failed: {e:?}")),
                     }
                 }
+                let changed = "The theme changed outside this editor. Reopen the editor to continue previewing.";
+                if editor.borrow().host_changed() && status.peek().as_str() != changed {
+                    status.set(changed.to_owned());
+                }
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
         }
