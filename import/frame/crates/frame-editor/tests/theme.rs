@@ -67,3 +67,47 @@ fn edited_geometry_compiles_and_failure_keeps_the_published_theme() {
     assert_eq!(host.version(), newer_version);
     assert!(Arc::ptr_eq(&host.current().unwrap(), &before));
 }
+
+#[test]
+#[ignore = "manual dense-document timing"]
+fn dense_document_compile_timing() {
+    let mut scene = Scene::new("dense");
+    let page = scene.pages()[0];
+    let mut root = Node::new(NodeKind::Frame, "root");
+    root.size = Size {
+        width: 1000.0,
+        height: 1000.0,
+    };
+    root.parent = Some(page);
+    let root_id = root.id;
+    scene.nodes.get_mut(&page).unwrap().children.push(root_id);
+    scene.nodes.insert(root_id, root);
+    for i in 0..2000 {
+        let mut node = Node::new(NodeKind::Rectangle, format!("node-{i}"));
+        node.size = Size {
+            width: 10.0,
+            height: 10.0,
+        };
+        node.parent = Some(root_id);
+        scene
+            .nodes
+            .get_mut(&root_id)
+            .unwrap()
+            .children
+            .push(node.id);
+        scene.nodes.insert(node.id, node);
+    }
+    let doc = scene_to_doc(&scene).unwrap();
+    let host = ThemeHost::new(Schema::new());
+    let mut times = Vec::new();
+    for _ in 0..5 {
+        let start = std::time::Instant::now();
+        theme::publish(&doc, &host, None).unwrap();
+        times.push(start.elapsed());
+    }
+    times.sort();
+    eprintln!(
+        "2000 nodes, full conversion + compile + publication: median {:?}, max {:?}",
+        times[2], times[4]
+    );
+}
