@@ -7,6 +7,7 @@ pub use figcraft_engine as engine;
 pub use frame_doc as doc;
 
 pub mod live;
+pub mod save;
 pub mod theme;
 #[cfg(feature = "ui")]
 pub mod ui;

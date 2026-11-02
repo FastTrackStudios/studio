@@ -23,6 +23,7 @@ pub fn FrameThemeEditor() -> Element {
     let mut revision = use_signal(|| 0_u64);
     let mut status = use_signal(|| String::new());
     let mut fill = use_signal(String::new);
+    let mut target = use_signal(String::new);
     let mut role = use_signal(|| None::<NodeId>);
     let mut selected = use_signal(|| None::<NodeId>);
     let polling = editor.clone();
@@ -32,10 +33,16 @@ pub fn FrameThemeEditor() -> Element {
             loop {
                 while let Some(event) = editor.borrow().try_event() {
                     match event.result {
-                        Ok(()) => status.set("Preview updated".to_owned()),
+                        Ok(()) => status.set("Preview updated (unsaved)".to_owned()),
                         Err(CompileError::Superseded) => {},
                         Err(CompileError::HostChanged) => status.set("The theme changed outside this editor. Reopen the editor to continue previewing.".to_owned()),
                         Err(e) => status.set(format!("Preview failed: {e:?}")),
+                    }
+                }
+                if let Some(result) = editor.borrow_mut().try_save_event() {
+                    match result {
+                        Ok(()) => status.set("Role saved".to_owned()),
+                        Err(e) => status.set(format!("Save failed: {e:?}")),
                     }
                 }
                 let changed = "The theme changed outside this editor. Reopen the editor to continue previewing.";
@@ -48,6 +55,7 @@ pub fn FrameThemeEditor() -> Element {
     });
     let _ = revision();
     let color_editor = editor.clone();
+    let save_editor = editor.clone();
     let (roles, nodes, root) = {
         let editor = editor.borrow();
         if let Ok(doc) = editor.session().doc() {
@@ -76,6 +84,15 @@ pub fn FrameThemeEditor() -> Element {
             (Vec::new(), Vec::new(), None)
         }
     };
+    let role_name = role()
+        .and_then(|id| {
+            roles
+                .iter()
+                .find(|(page, _)| *page == id)
+                .map(|(_, name)| name.clone())
+        })
+        .or_else(|| roles.first().map(|(_, name)| name.clone()));
+    let files = editor.borrow().layer_files();
     rsx! {
         div {
             h2 { "Theme properties" }
@@ -123,6 +140,27 @@ pub fn FrameThemeEditor() -> Element {
                             }
                         },
                         "Apply fill"
+                    }
+                }
+                p { "Save selected role to a source file (rewrites its markup and removes comments)" }
+                div { style: "display: flex; flex-wrap: wrap; gap: 4px;",
+                    for file in files {
+                        {
+                            let path = file.display().to_string();
+                            rsx! { button { key: "{path}", onclick: move |_| target.set(path.clone()), "{file.display()}" } }
+                        }
+                    }
+                }
+                label { "Target file" input { r#type: "text", value: "{target}", oninput: move |e| target.set(e.value()) } }
+                if let Some(role_name) = role_name {
+                    button {
+                        onclick: move |_| {
+                            match save_editor.borrow_mut().request_save(role_name.clone(), target().into()) {
+                                Ok(()) => status.set("Saving…".to_owned()),
+                                Err(e) => status.set(format!("Save failed: {e:?}")),
+                            }
+                        },
+                        "Save role"
                     }
                 }
             } else {

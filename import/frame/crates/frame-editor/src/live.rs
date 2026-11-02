@@ -1,5 +1,6 @@
 //! UI-owned editor session with a coalescing theme compilation worker.
 
+use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::thread;
 
@@ -9,6 +10,7 @@ use frame_doc::doc::Document;
 use frame_doc::doc::NodeId;
 use serde_json::Value;
 
+use crate::save::{SaveError, SaveSnapshot};
 use crate::theme::{self, CompileError};
 
 /// Completion of a requested preview. Poll this from the UI thread.
@@ -31,6 +33,8 @@ struct Queue {
     base_version: u64,
     pending: Option<Job>,
     closed: bool,
+    active: bool,
+    saving: bool,
 }
 
 type Shared = Arc<(Mutex<Queue>, Condvar)>;
@@ -44,6 +48,8 @@ pub struct LiveEditor {
     events: mpsc::Receiver<PreviewEvent>,
     sender: mpsc::Sender<PreviewEvent>,
     mode: Option<String>,
+    save_snapshot: Option<Arc<SaveSnapshot>>,
+    save_receiver: Option<mpsc::Receiver<SaveDone>>,
 }
 
 /// Opening a snapshot failed before the editor was created.
@@ -55,12 +61,20 @@ pub enum OpenError {
     Superseded,
     /// The opening worker exited without returning a result.
     WorkerStopped,
+    SaveSnapshot(SaveError),
 }
 
 struct Prepared {
     session: Session,
     version: u64,
     mode: Option<String>,
+    save_snapshot: Arc<SaveSnapshot>,
+}
+
+struct SaveDone {
+    result: Result<(), SaveError>,
+    snapshot: Option<SaveSnapshot>,
+    version: Option<u64>,
 }
 
 /// A background opening request. Poll on the UI thread without blocking.
@@ -87,6 +101,7 @@ impl OpeningEditor {
                 self.host.clone(),
                 prepared.version,
                 prepared.mode,
+                Some(prepared.save_snapshot),
             ))
         }))
     }
@@ -117,6 +132,7 @@ impl LiveEditor {
             host,
             prepared.version,
             prepared.mode,
+            Some(prepared.save_snapshot),
         ))
     }
 
@@ -141,7 +157,7 @@ impl LiveEditor {
         version: u64,
         mode: Option<String>,
     ) -> Self {
-        Self::with_session(Session::with_document(document), host, version, mode)
+        Self::with_session(Session::with_document(document), host, version, mode, None)
     }
 
     fn with_session(
@@ -149,6 +165,7 @@ impl LiveEditor {
         host: Arc<ThemeHost>,
         version: u64,
         mode: Option<String>,
+        save_snapshot: Option<Arc<SaveSnapshot>>,
     ) -> Self {
         let queue = Arc::new((
             Mutex::new(Queue {
@@ -168,6 +185,8 @@ impl LiveEditor {
             events,
             sender,
             mode,
+            save_snapshot,
+            save_receiver: None,
         }
     }
 
@@ -187,6 +206,15 @@ impl LiveEditor {
         args: &Value,
         mode: Option<&str>,
     ) -> Result<Value, EngineError> {
+        if self
+            .queue
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .saving
+        {
+            return Err(EngineError::Other("save is in progress".to_owned()));
+        }
         let before = self.session.ds()?.revision;
         let result = self.session.execute(id, args)?;
         if self.session.ds()?.revision != before {
@@ -236,6 +264,9 @@ impl LiveEditor {
         let mut queue = lock
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if queue.saving {
+            return Err(EngineError::Other("save is in progress".to_owned()));
+        }
         queue.latest += 1;
         let request = queue.latest;
         let job = Job {
@@ -259,6 +290,15 @@ impl LiveEditor {
         self.events.try_recv().ok()
     }
 
+    /// Source files available as explicit save targets, in layer order.
+    #[must_use]
+    pub fn layer_files(&self) -> Vec<PathBuf> {
+        self.save_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.files().to_vec())
+            .unwrap_or_default()
+    }
+
     /// Whether another publisher replaced the theme this editor opened.
     #[must_use]
     pub fn host_changed(&self) -> bool {
@@ -269,15 +309,97 @@ impl LiveEditor {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.base_version != self.host.version()
     }
+
+    /// Save the selected role to an existing source file on a worker. Edits
+    /// and preview requests must be idle; the UI must poll `try_save_event`.
+    ///
+    /// # Errors
+    /// The editor is busy, has no source snapshot, or its document is unavailable.
+    pub fn request_save(&mut self, role: String, target: PathBuf) -> Result<(), SaveError> {
+        let snapshot = self.save_snapshot.clone().ok_or(SaveError::NoSnapshot)?;
+        let document = self
+            .session
+            .ds()
+            .map_err(|_| SaveError::NoSnapshot)?
+            .document_itself()
+            .clone();
+        let mut queue = self
+            .queue
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if queue.saving || queue.active || queue.pending.is_some() {
+            return Err(SaveError::Busy);
+        }
+        if self.host.version() != queue.base_version {
+            return Err(SaveError::HostChanged);
+        }
+        queue.saving = true;
+        let version = queue.base_version;
+        let host = self.host.clone();
+        let (sender, receiver) = mpsc::channel();
+        self.save_receiver = Some(receiver);
+        thread::spawn(move || {
+            let result = snapshot.save_role(&host, &document, &role, &target, version);
+            let staged = match &result {
+                Ok(()) => Some(version.wrapping_add(1)),
+                Err(SaveError::Write { staged_version, .. }) => Some(*staged_version),
+                _ => None,
+            };
+            let fresh = staged.and_then(|v| {
+                (host.version() == v)
+                    .then(|| SaveSnapshot::refresh(&host, &document).ok())
+                    .flatten()
+            });
+            let _ = sender.send(SaveDone {
+                result,
+                snapshot: fresh,
+                version: staged,
+            });
+        });
+        Ok(())
+    }
+
+    /// Return the save outcome once without blocking the UI.
+    pub fn try_save_event(&mut self) -> Option<Result<(), SaveError>> {
+        let done = match self.save_receiver.as_ref()?.try_recv() {
+            Ok(done) => done,
+            Err(mpsc::TryRecvError::Empty) => return None,
+            Err(mpsc::TryRecvError::Disconnected) => SaveDone {
+                result: Err(SaveError::WorkerStopped),
+                snapshot: None,
+                version: None,
+            },
+        };
+        self.save_receiver = None;
+        let mut queue = self
+            .queue
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(version) = done.version {
+            queue.base_version = version;
+        }
+        queue.saving = false;
+        if let Some(snapshot) = done.snapshot {
+            self.save_snapshot = Some(Arc::new(snapshot));
+        }
+        Some(done.result)
+    }
 }
 
 fn prepare(host: &ThemeHost) -> Result<Prepared, OpenError> {
     let (theme, version) = host.snapshot().ok_or(OpenError::NoTheme)?;
     let document = frame_doc::scene_to_doc(&theme.source()).map_err(OpenError::Document)?;
+    let save_snapshot = Arc::new(SaveSnapshot::capture(host).map_err(OpenError::SaveSnapshot)?);
+    if save_snapshot.version() != version {
+        return Err(OpenError::Superseded);
+    }
     Ok(Prepared {
         session: Session::with_document(document),
         version,
         mode: Some(theme.mode().to_owned()),
+        save_snapshot,
     })
 }
 
@@ -303,6 +425,7 @@ fn worker(queue: Shared, host: Arc<ThemeHost>, sender: mpsc::Sender<PreviewEvent
         if state.closed {
             return;
         }
+        state.active = false;
         let result = if state.latest != job.request {
             Err(CompileError::Superseded)
         } else if host.version() != job.host_version {
@@ -337,6 +460,8 @@ fn next_job(queue: &Shared) -> Option<Job> {
     if state.closed {
         None
     } else {
-        state.pending.take()
+        let job = state.pending.take();
+        state.active = job.is_some();
+        job
     }
 }

@@ -519,7 +519,26 @@ impl ThemeHost {
     /// # Errors
     /// The file has no draft, changed on disk, or cannot be written.
     pub fn save_file(&self, file: &Path) -> Result<(), Vec<ThemeError>> {
+        self.save_file_inner(file, None)
+    }
+
+    /// Save a draft only while the displayed theme has `version`.
+    ///
+    /// # Errors
+    /// The version changed, the file has no draft, changed on disk, or cannot be written.
+    pub fn save_file_if_version(&self, file: &Path, version: u64) -> Result<(), Vec<ThemeError>> {
+        self.save_file_inner(file, Some(version))
+    }
+
+    fn save_file_inner(&self, file: &Path, version: Option<u64>) -> Result<(), Vec<ThemeError>> {
         let mut source = self.lock();
+        if version.is_some_and(|version| self.version() != version) {
+            return Err(vec![ThemeError::new(
+                ErrorKind::Request,
+                Some(file),
+                "theme changed; reopen the editor",
+            )]);
+        }
         let Some(path) = source.drafts.keys().find(|p| same_file(p, file)).cloned() else {
             return Err(vec![ThemeError::new(
                 ErrorKind::Request,
