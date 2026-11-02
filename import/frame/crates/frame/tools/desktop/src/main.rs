@@ -8,7 +8,7 @@
 //! frame --library ws://127.0.0.1:4050/vox [--surface ID | --browse] [--engine …] [--install-dir DIR]
 //! ```
 //! Runs a control surface live against the in-process mock engine
-//! (`frame::surface::memory::Memory::demo()`): moving meters, knobs/faders/buttons
+//! (`frame_architect::memory::Memory::demo()`): moving meters, knobs/faders/buttons
 //! driven by mouse and keyboard. With no file it plays the surface
 //! generated from the demo catalog (`--theme` picks its look). With a
 //! markup or bundle file it hot-reloads on save — edit the `.frame` (by hand
@@ -286,8 +286,8 @@ fn sibling_catalogs(dir: &std::path::Path) -> Vec<PathBuf> {
 fn mock_engine(
     extra: &[PathBuf],
     served: Vec<frame::surface::proto::Catalog>,
-) -> Result<frame::surface::memory::Memory, String> {
-    let mut catalog = frame::surface::memory::demo_catalog();
+) -> Result<frame_architect::memory::Memory, String> {
+    let mut catalog = frame::surface::demo::demo_catalog();
     let mut all = Vec::new();
     for path in extra {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -314,7 +314,7 @@ fn mock_engine(
         catalog.streams.extend(c.streams);
         catalog.collections.extend(c.collections);
     }
-    Ok(frame::surface::memory::Memory::new(catalog))
+    Ok(frame_architect::memory::Memory::new(catalog))
 }
 
 /// Every frame document in `dir`, sorted by name.
@@ -382,7 +382,7 @@ pub fn start(args: &Args) -> Result<Started, String> {
         // Only offer surfaces whose bindings all resolve on this engine.
         lib.set_fits(
             &catalog.id,
-            frame::library::link::Signature::of_catalog(&catalog),
+            frame_architect::library::link::Signature::of_catalog(&catalog),
         );
     }
     let loaded = match &mut library {

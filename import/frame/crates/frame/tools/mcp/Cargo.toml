@@ -11,12 +11,13 @@ name = "frame-mcp"
 path = "src/main.rs"
 
 [dependencies]
-frame = { path = "../..", features = ["design", "io", "library", "remote", "runtime"] }
+frame = { path = "../..", features = ["design", "io", "runtime"] }
+frame-architect = { path = "../../../frame-architect", features = ["library", "remote"] }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
-frame = { path = "../..", features = ["library"] }
+frame-architect = { path = "../../../frame-architect", features = ["library"] }
 architect = { workspace = true, features = ["vox", "local"] }
 
 [lints]

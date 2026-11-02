@@ -11,7 +11,8 @@ name = "frame"
 path = "src/main.rs"
 
 [dependencies]
-frame = { path = "../..", features = ["anyrender", "design", "io", "library", "remote", "render", "runtime"] }
+frame = { path = "../..", features = ["anyrender", "design", "io", "render", "runtime"] }
+frame-architect = { path = "../../../frame-architect", features = ["library", "remote"] }
 serde_json = { workspace = true }
 kurbo = { workspace = true }
 peniko = { workspace = true }
@@ -24,7 +25,7 @@ tokio = { workspace = true }
 architect = { workspace = true, features = ["platform"] }
 
 [dev-dependencies]
-frame = { path = "../..", features = ["library"] }
+frame-architect = { path = "../../../frame-architect", features = ["library"] }
 architect = { workspace = true, features = ["platform", "vox", "local"] }
 
 [lints]

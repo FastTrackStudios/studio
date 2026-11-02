@@ -152,7 +152,7 @@ fn run() -> Result<(), String> {
         c
     };
 
-    let mut catalog = frame::surface::memory::demo_catalog();
+    let mut catalog = frame::surface::demo::demo_catalog();
     // A gain-reduction stream for the meters that read one.
     catalog.streams.push(frame::surface::proto::StreamInfo {
         id: EntryId::new("comp/gr"),

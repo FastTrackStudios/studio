@@ -8,7 +8,8 @@
 
 use frame::surface::proto::{EditPhase, ParamAddr};
 use frame::surface::runtime::EngineCall;
-use frame::surface::runtime::sync::{Engine, connect_ws};
+use frame::surface::runtime::sync::Engine;
+use frame_architect::remote::connect_ws;
 
 fn main() {
     let mut url = "ws://127.0.0.1:4040/vox".to_string();

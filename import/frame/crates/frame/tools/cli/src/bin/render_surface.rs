@@ -207,7 +207,7 @@ fn run() -> Result<(), String> {
             let text = std::fs::read_to_string(path).map_err(|e| format!("reading {path}: {e}"))?;
             serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))?
         }
-        None => frame::surface::memory::demo_catalog(),
+        None => frame::surface::demo::demo_catalog(),
     };
     let surface = match &markup {
         Some(path) => {

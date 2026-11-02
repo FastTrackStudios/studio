@@ -6,18 +6,24 @@ pixel parity with Figma, and a runtime for fully mapped, AI-designable
 control surfaces and plugin faces (see
 [docs/control-surface-roadmap.md](docs/control-surface-roadmap.md)).
 
-Frame is built on [architect](https://github.com/FastTrackStudios/architect).
+Frame's core, `frame`, depends on no architect, vox or Dioxus crate (CI
+checks it), so a plugin GUI or any host can link it alone.
+`frame-architect` connects it to [architect](https://github.com/FastTrackStudios/architect)
+apps: the `SurfaceEngine` vox service, the mock engine, remote engines and
+surface libraries.
 
 ```
-crates/frame                 the `frame` crate; its layers are features:
+crates/frame                 the core crate; its layers are features:
   src/document               model + ops (proto), Loro replica, .frame bundle, markup, io
   src/render                 Scene → paint → Vello / SVG; effects stage (WGSL)
   src/surface                catalog, controls, bindings, engine contract, runtime, kit
   src/motion, feed, theme    animation, typed feeds, host views drawn from documents
   src/design                 lint + the tool session (the AI authoring surface)
-  src/figma, library         Figma import; surface libraries
+  src/figma                  Figma import
   src/live, embed            hosts: a texture on the host's wgpu device; strips
   render/tests/parity        the Figma parity scenarios
+crates/frame-architect       on architect: SurfaceEngine over vox, the mock engine,
+                             remote engines (feature remote), libraries (feature library)
   tools/cli                  frame-cli: render_surface, export_markup, parity/diagnostics
   tools/desktop              `frame`: the live surface player (hot reload, mock engine)
   tools/mcp                  frame-mcp: an MCP server to design surfaces with a model
@@ -31,7 +37,7 @@ docs                         design notes, parity specs and reports
 
 ```sh
 nix develop          # the toolchain (1.99.1), GUI libraries, Vulkan loader, mold
-just check           # what CI checks
+just check           # what CI checks (with fmt, clippy and `just boundary`)
 just test
 just parity          # the Figma parity suite (needs a GPU)
 just faces           # generate the plugin faces into examples/plugin-faces/generated

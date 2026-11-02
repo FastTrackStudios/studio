@@ -81,20 +81,20 @@ impl std::fmt::Display for SurfaceError {
 
 impl std::error::Error for SurfaceError {}
 
-#[cfg(feature = "rpc")]
 pub mod engine {
-    //! The engine service. `SurfaceEngine` → `SurfaceEngineClient` /
-    //! `SurfaceEngineService` / `surface_engine_serve`, plus the stream
-    //! sibling (`SurfaceEngineStreamClient`, `SurfaceEngineStreamService`,
-    //! the `SurfaceEngineStreamSource` backend contract).
+    //! An engine, as a surface sees it: a plain trait, with no transport.
+    //!
+    //! `frame-architect` serves any `SurfaceEngine` over vox (its
+    //! `#[architect::rpc]` trait of the same name, implemented for every
+    //! engine here) and adds the push streams (`param_changes`, `telemetry`).
     use super::{
-        Catalog, EditPhase, EntryId, FeedInfo, FeedRequest, ParamAddr, ParamValue, StreamFrame,
-        SurfaceError, TextValue,
+        Catalog, EditPhase, EntryId, FeedInfo, FeedRequest, ParamAddr, ParamValue, SurfaceError,
+        TextValue,
     };
 
     /// An engine, as a surface sees it. Backends implement it synchronously
-    /// (like signal's rig services); remote callers get the async client.
-    #[architect::rpc]
+    /// (like signal's rig services); remote callers get `frame-architect`'s
+    /// async client.
     pub trait SurfaceEngine {
         /// What this engine exposes.
         fn catalog(&self) -> Catalog;
@@ -141,15 +141,7 @@ pub mod engine {
             let _ = text;
             Err(SurfaceError::NotText(addr.0))
         }
-        /// Parameter changes from anywhere (other surfaces, MIDI, automation).
-        #[subscribe]
-        fn param_changes(&self) -> ParamValue;
-        /// Feed frames (meters, spectrum, traces, scopes, envelopes, tuner)
-        /// at each feed's rate, shaped as last requested.
-        #[subscribe]
-        fn telemetry(&self) -> StreamFrame;
     }
 }
 
-#[cfg(feature = "rpc")]
-pub use engine::*;
+pub use engine::SurfaceEngine;

@@ -3,8 +3,8 @@
 use std::sync::{Arc, Mutex};
 
 use frame::document::proto::{PaintKind, Scene};
-use frame::library::fs::Previewer;
 use frame::render::offscreen::Offscreen;
+use frame_architect::library::fs::Previewer;
 
 /// Thumbnail width, px.
 const WIDTH: f64 = 480.0;

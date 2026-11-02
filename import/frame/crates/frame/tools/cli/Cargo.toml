@@ -7,7 +7,8 @@ license.workspace = true
 publish = false
 
 [dependencies]
-frame = { path = "../..", features = ["figma", "io", "remote", "render", "runtime"] }
+frame = { path = "../..", features = ["figma", "io", "render", "runtime"] }
+frame-architect = { path = "../../../frame-architect", features = ["remote"] }
 tokio = { workspace = true }
 architect = { workspace = true, features = ["vox"] }
 serde = { workspace = true }

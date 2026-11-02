@@ -1,6 +1,6 @@
 //! [`Content`] ⇄ [`Scene`]: markup text (plus its assets) or a `.frame` bundle.
 
-use crate::document::proto::{Asset, Scene};
+use frame::document::proto::{Asset, Scene};
 
 use crate::library::proto::{Content, Format};
 
@@ -9,7 +9,7 @@ impl Content {
     #[must_use]
     pub fn markup(scene: &Scene) -> Self {
         Self::markup_with(
-            crate::document::text::print(scene),
+            frame::document::text::print(scene),
             scene.assets.values().cloned(),
         )
     }
@@ -39,9 +39,9 @@ impl Content {
     /// # Errors
     /// When the bundle can't be written (an asset without bytes).
     pub fn frame(scene: &Scene, title: &str) -> Result<Self, String> {
-        let bytes = crate::document::bundle::to_bytes(
+        let bytes = frame::document::bundle::to_bytes(
             scene,
-            &crate::document::bundle::Manifest::new(title),
+            &frame::document::bundle::Manifest::new(title),
         )
         .map_err(|e| e.to_string())?;
         Ok(Self {
@@ -66,9 +66,9 @@ impl Content {
                     .iter()
                     .map(|a| (a.id.clone(), a.clone()))
                     .collect();
-                crate::document::text::parse(text, assets).map_err(|e| e.to_string())
+                frame::document::text::parse(text, assets).map_err(|e| e.to_string())
             }
-            Format::Frame => crate::document::bundle::from_bytes(&self.bytes)
+            Format::Frame => frame::document::bundle::from_bytes(&self.bytes)
                 .map(|(_, doc)| doc.scene())
                 .map_err(|e| e.to_string()),
         }
@@ -78,7 +78,7 @@ impl Content {
     #[must_use]
     pub fn title(&self) -> Option<String> {
         match self.format {
-            Format::Frame => crate::document::bundle::from_bytes(&self.bytes)
+            Format::Frame => frame::document::bundle::from_bytes(&self.bytes)
                 .ok()
                 .map(|(m, _)| m.title),
             Format::Markup => None,

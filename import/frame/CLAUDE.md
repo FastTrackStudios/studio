@@ -1,8 +1,11 @@
 # frame: agent instructions
 
-- One crate, `frame` (`crates/frame`), with its layers behind features (`io`, `render`, `runtime`,
-  `live`, `embed`, `figma`, `design`, `library`, `theme`, `nice-plug`, …). Its tools are in
-  `crates/frame/tools`, the plugin faces in `examples/plugin-faces`, the parity harness in `xtask`.
+- The core crate, `frame` (`crates/frame`), has its layers behind features (`io`, `render`,
+  `runtime`, `live`, `embed`, `figma`, `design`, `theme`, `nice-plug`, `host-scene`, …) and no
+  architect, vox, Dioxus or figcraft dependency (`just boundary`, in CI). Anything that needs
+  architect goes in `crates/frame-architect` (the `SurfaceEngine` vox service, the mock engine,
+  `remote`, `library`). The tools are in `crates/frame/tools`, the plugin faces in
+  `examples/plugin-faces`, the parity harness in `xtask`.
 - Build inside `nix develop` and through the `just` recipes (`just check`, `just test`,
   `just parity`). Don't set `RUSTFLAGS` or `CARGO_TARGET_DIR`: the rustflags tables in
   `.cargo/config.toml` are Studio's on purpose, so kache shares builds across the fleet's repos.

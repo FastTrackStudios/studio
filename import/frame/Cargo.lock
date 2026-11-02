@@ -220,33 +220,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "architect-devices"
-version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/architect?tag=v0.10.0#068614c209b71b16c68613eaa2e784e3a87267d1"
-dependencies = [
- "architect",
- "architect-orgs",
- "architect-permissions",
- "facet",
- "facet-json",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "architect-orgs"
-version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/architect?tag=v0.10.0#068614c209b71b16c68613eaa2e784e3a87267d1"
-dependencies = [
- "facet",
- "facet-json",
- "futures-util",
- "uuid",
-]
-
-[[package]]
 name = "architect-permissions"
 version = "0.1.0"
 source = "git+https://github.com/FastTrackStudios/architect?tag=v0.10.0#068614c209b71b16c68613eaa2e784e3a87267d1"
@@ -330,17 +303,6 @@ dependencies = [
  "event-listener-strategy",
  "futures-core",
  "pin-project-lite",
-]
-
-[[package]]
-name = "async-trait"
-version = "0.1.92"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.4",
 ]
 
 [[package]]
@@ -872,39 +834,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8498c871161e1742aaa9d52551b2d6ebdd4c3d45a3be423e3728f33b955be550"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "crdt"
-version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/architect?tag=v0.10.0#068614c209b71b16c68613eaa2e784e3a87267d1"
-dependencies = [
- "architect",
- "architect-devices",
- "architect-orgs",
- "architect-permissions",
- "async-trait",
- "chrono",
- "crc32fast",
- "crdt-derive",
- "loro",
- "loro-internal",
- "sha2",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "uuid",
- "wasm-bindgen-futures",
-]
-
-[[package]]
-name = "crdt-derive"
-version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/architect?tag=v0.10.0#068614c209b71b16c68613eaa2e784e3a87267d1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]
@@ -1715,11 +1644,9 @@ dependencies = [
  "anyrender",
  "anyrender_svg",
  "anyrender_vello",
- "architect",
  "base64 0.22.1",
  "blake3",
  "chrono",
- "crdt",
  "facet",
  "facet-json",
  "facet-styx",
@@ -1728,6 +1655,7 @@ dependencies = [
  "frame",
  "image",
  "kurbo 0.13.1",
+ "loro",
  "miniz_oxide 0.8.9",
  "nice-plug-core",
  "peniko",
@@ -1741,16 +1669,31 @@ dependencies = [
  "svg",
  "taffy",
  "thiserror 2.0.20",
- "tokio",
  "uuid",
  "vello",
  "vello_cpu",
- "vox",
- "vox-core",
- "vox-websocket",
  "wgpu",
  "winit",
  "zip",
+]
+
+[[package]]
+name = "frame-architect"
+version = "0.1.0"
+dependencies = [
+ "architect",
+ "blake3",
+ "facet",
+ "frame",
+ "frame-architect",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "uuid",
+ "vox",
+ "vox-core",
+ "vox-websocket",
 ]
 
 [[package]]
@@ -1759,6 +1702,7 @@ version = "0.1.0"
 dependencies = [
  "architect",
  "frame",
+ "frame-architect",
  "image",
  "kurbo 0.13.1",
  "peniko",
@@ -1778,6 +1722,7 @@ version = "0.1.0"
 dependencies = [
  "architect",
  "frame",
+ "frame-architect",
  "image",
  "kurbo 0.13.1",
  "peniko",
@@ -1794,6 +1739,7 @@ version = "0.1.0"
 dependencies = [
  "architect",
  "frame",
+ "frame-architect",
  "image",
  "kurbo 0.13.1",
  "peniko",
@@ -1807,6 +1753,7 @@ version = "0.1.0"
 dependencies = [
  "architect",
  "frame",
+ "frame-architect",
  "serde_json",
  "tokio",
 ]
@@ -5103,17 +5050,6 @@ name = "sha1_smol"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
-
-[[package]]
-name = "sha2"
-version = "0.10.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
-dependencies = [
- "cfg-if",
- "cpufeatures 0.2.17",
- "digest",
-]
 
 [[package]]
 name = "sharded-slab"

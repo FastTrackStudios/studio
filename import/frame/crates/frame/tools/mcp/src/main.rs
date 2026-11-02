@@ -29,8 +29,8 @@ use std::io::{BufRead, Write};
 use std::path::PathBuf;
 
 use frame::design::session::{Session, tools};
-use frame::surface::proto::{Catalog, SurfaceEngineClient};
-use frame::surface::runtime::sync;
+use frame::surface::proto::Catalog;
+use frame_architect::SurfaceEngineClient;
 use serde_json::{Value, json};
 
 const REFERENCE: &str = include_str!("../../../src/document/text/REFERENCE.md");
@@ -48,7 +48,7 @@ const USAGE: &str = "usage: frame-mcp [--file surface.frame] [--engine ws://HOST
 
 /// Where edits are published (`--library`).
 struct Publish {
-    client: frame::library::link::Blocking,
+    client: frame_architect::library::link::Blocking,
     /// The surface id; `None` until the library assigns one.
     id: Option<String>,
 }
@@ -57,15 +57,16 @@ impl Publish {
     /// Publish the session's document as the next version.
     fn publish(&mut self, session: &Session) -> Result<String, String> {
         let scene = session.scene();
-        let meta = frame::library::link::PublishMeta {
+        let meta = frame_architect::library::link::PublishMeta {
             id: self.id.clone().unwrap_or_default(),
-            name: frame::library::link::scene_name(scene).unwrap_or_default(),
+            name: frame_architect::library::link::scene_name(scene).unwrap_or_default(),
             author: std::env::var("USER").unwrap_or_default(),
-            ..frame::library::link::PublishMeta::default()
+            ..frame_architect::library::link::PublishMeta::default()
         };
-        let p = self
-            .client
-            .publish(&frame::library::link::Content::markup(scene), &meta)?;
+        let p = self.client.publish(
+            &frame_architect::library::link::Content::markup(scene),
+            &meta,
+        )?;
         self.id = Some(p.id.clone());
         Ok(format!("{}@{}", p.id, p.version))
     }
@@ -118,7 +119,7 @@ impl CatalogSource for LiveEngine {
             {
                 return (Some(client), Ok(catalog));
             }
-            match sync::connect_ws(&url, rig.as_deref()).await {
+            match frame_architect::remote::connect_ws(&url, rig.as_deref()).await {
                 Ok(client) => match client.catalog().await {
                     Ok(catalog) => (Some(client), Ok(catalog)),
                     Err(e) => (None, Err(e.to_string())),
@@ -170,7 +171,10 @@ fn main() {
         eprintln!("frame-mcp: --surface needs --library\n{USAGE}");
         std::process::exit(2);
     }
-    let mut publish = match library.as_deref().map(frame::library::link::Blocking::new) {
+    let mut publish = match library
+        .as_deref()
+        .map(frame_architect::library::link::Blocking::new)
+    {
         None => None,
         Some(Ok(client)) => {
             let id = surface.clone().or_else(|| {
@@ -199,7 +203,7 @@ fn main() {
         }
     };
     let catalog = match &mut engine {
-        None => frame::surface::memory::demo_catalog(),
+        None => frame::surface::demo::demo_catalog(),
         Some(e) => match e.fetch() {
             Ok(c) => {
                 eprintln!(

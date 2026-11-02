@@ -11,7 +11,8 @@ name = "frame-library-server"
 path = "src/main.rs"
 
 [dependencies]
-frame = { path = "../..", features = ["anyrender", "io", "library", "render"] }
+frame = { path = "../..", features = ["anyrender", "io", "render"] }
+frame-architect = { path = "../../../frame-architect", features = ["library"] }
 architect = { workspace = true, features = ["vox"] }
 tokio = { workspace = true }
 serde_json = { workspace = true }

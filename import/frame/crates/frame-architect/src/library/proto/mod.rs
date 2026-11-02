@@ -24,9 +24,9 @@
 
 use std::collections::BTreeSet;
 
-use crate::document::proto::{Asset, Scene};
-use crate::surface::proto::{Binding, Catalog, Control, ControlKind, InputSource, Source};
 use facet::Facet;
+use frame::document::proto::{Asset, Scene};
+use frame::surface::proto::{Binding, Catalog, Control, ControlKind, InputSource, Source};
 use serde::{Deserialize, Serialize};
 
 /// A surface's id in a library: its path under the library root without
@@ -123,7 +123,7 @@ impl Signature {
 /// enclosing template, or the template its context popover / menu names.
 fn repeat_of(
     scene: &Scene,
-    id: crate::document::proto::NodeId,
+    id: frame::document::proto::NodeId,
     control: &Control,
 ) -> Option<(u32, u32)> {
     let range = |c: &Control| match &c.kind {
@@ -145,7 +145,7 @@ fn repeat_of(
         ) = n.control.as_ref().map(|c| &c.kind)
         {
             return scene
-                .node(crate::document::proto::NodeId(*t))
+                .node(frame::document::proto::NodeId(*t))
                 .and_then(|t| t.control.as_ref())
                 .and_then(range);
         }
@@ -426,7 +426,5 @@ pub mod store {
 
 pub use store::*;
 
-#[cfg(feature = "codec")]
 mod codec;
-#[cfg(feature = "codec")]
 pub use codec::*;

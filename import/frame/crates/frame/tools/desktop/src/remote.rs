@@ -15,7 +15,8 @@ use std::time::{Duration, Instant};
 use architect::Backoff;
 use frame::surface::proto::{Catalog, ParamValue};
 use frame::surface::runtime::EngineCall;
-use frame::surface::runtime::sync::{self, Engine, EngineError, Incoming, PumpEnd, Telemetry};
+use frame::surface::runtime::sync::{Engine, EngineError};
+use frame_architect::remote::{self as sync, Incoming, PumpEnd, Telemetry};
 use tokio::sync::mpsc as tmpsc;
 
 /// What the UI thread receives.

@@ -10,12 +10,12 @@ use std::time::Duration;
 
 use frame::design::lint::{Config, Severity};
 use frame::document::proto::Scene;
-use frame::library::link::{
+use frame::surface::proto::Catalog;
+use frame::surface::runtime::Surface;
+use frame_architect::library::link::{
     Blocking, Event, Follow, ListQuery, PublishMeta, Published, Surface as Stored, SurfaceMeta,
     SurfaceUpdate,
 };
-use frame::surface::proto::Catalog;
-use frame::surface::runtime::Surface;
 
 /// How long startup waits for the library.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -260,13 +260,13 @@ pub fn install(stored: &Stored, dir: &Path) -> Result<PathBuf, String> {
         std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
     }
     match stored.content.format {
-        frame::library::link::Format::Markup => {
+        frame_architect::library::link::Format::Markup => {
             let text = std::str::from_utf8(&stored.content.bytes)
                 .map_err(|e| format!("{}: not UTF-8: {e}", path.display()))?;
             frame::document::io::write_markup(&path, text, &stored.content.assets)
                 .map_err(|e| e.to_string())?;
         }
-        frame::library::link::Format::Frame => {
+        frame_architect::library::link::Format::Frame => {
             std::fs::write(&path, &stored.content.bytes)
                 .map_err(|e| format!("{}: {e}", path.display()))?;
             frame::document::io::prune_assets(&path).map_err(|e| e.to_string())?;

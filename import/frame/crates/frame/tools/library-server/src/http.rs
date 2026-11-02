@@ -8,7 +8,7 @@
 
 use std::borrow::Cow;
 
-use frame::library::fs::{FsLibrary, ListQuery, SurfaceStore as _};
+use frame_architect::library::fs::{FsLibrary, ListQuery, SurfaceStore as _};
 use serde_json::json;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
@@ -119,7 +119,7 @@ pub fn respond(lib: &FsLibrary, request: &str) -> Response {
             Ok(s) => {
                 let ext = s.content.format.extension();
                 let name = id.rsplit('/').next().unwrap_or(id);
-                let mime = if s.content.format == frame::library::link::Format::Markup {
+                let mime = if s.content.format == frame_architect::library::link::Format::Markup {
                     "text/plain; charset=utf-8"
                 } else {
                     "application/zip"

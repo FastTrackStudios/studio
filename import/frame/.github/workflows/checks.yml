@@ -18,37 +18,45 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
-# Every job runs on the THEBATTLESHIP pool (the repo is private). The
-# runners set RUSTC_WRAPPER=kache over the host's shared store and give each
-# instance a CI_CACHE_DIR; the toolchain and native libraries (Vulkan loader
-# for the wgpu renders, mold) come from the flake's `ci` shell.
+# Pull requests run on GitHub-hosted runners (the repo is public, and the
+# THEBATTLESHIP pool refuses pull_request jobs from public repos); pushes to
+# main run on the pool, with kache. .github/actions/rust-env sets up either.
+# The toolchain and native libraries (Vulkan loader, mold) come from the
+# flake's `ci` shell.
 jobs:
   lint:
-    name: Lint (fmt + clippy)
-    runs-on: [self-hosted, thebattleship]
-    timeout-minutes: 60
+    name: Lint (fmt + clippy + boundary)
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Target dir
-        run: echo "CARGO_TARGET_DIR=${CI_CACHE_DIR:?}/frame/lint/target" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/rust-env
+        with:
+          job: lint
       - name: fmt
         run: nix develop --accept-flake-config .#ci --command cargo fmt --all -- --check
       - name: clippy
         if: ${{ !cancelled() }}
         run: nix develop --accept-flake-config .#ci --command cargo clippy --workspace --all-targets -- -D warnings
+      # `frame` (core) has no architect, vox, Dioxus or figcraft in its
+      # normal dependency tree; the integration is frame-architect.
+      - name: core boundary
+        if: ${{ !cancelled() }}
+        run: nix develop --accept-flake-config .#ci --command just boundary
 
   check:
     name: Check
-    runs-on: [self-hosted, thebattleship]
-    timeout-minutes: 60
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Target dir
-        run: echo "CARGO_TARGET_DIR=${CI_CACHE_DIR:?}/frame/test/target" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/rust-env
+        with:
+          job: test
       - name: just check
         run: nix develop --accept-flake-config .#ci --command just check
       - name: just test
@@ -60,7 +68,7 @@ jobs:
     name: ci
     if: ${{ always() }}
     needs: [lint, check]
-    runs-on: [self-hosted, thebattleship]
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
     steps:
       - name: all checks passed
         env:

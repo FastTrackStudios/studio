@@ -9,6 +9,7 @@
 resolver = "2"
 members = [
     "crates/frame",
+    "crates/frame-architect",
     "crates/frame/tools/cli",
     "crates/frame/tools/desktop",
     "crates/frame/tools/library-server",
@@ -18,6 +19,8 @@ members = [
 ]
 default-members = [
     "crates/frame",
+    "crates/frame-architect",
+    "crates/frame-architect",
     "crates/frame/tools/cli",
     "crates/frame/tools/desktop",
     "crates/frame/tools/library-server",
@@ -53,6 +56,7 @@ figma-api = { git = "https://github.com/gridaco/figma-api-rust.git" }
 fixed = "1.28"
 image = { version = "0.25", default-features = false, features = ["png"] }
 kurbo = "0.13"
+loro = "1.16"
 miniz_oxide = "0.8"
 nice-plug-core = { git = "https://github.com/FastTrackStudios/nice-plug.git", tag = "fts-upstream-2026-11" }
 peniko = "0.6"

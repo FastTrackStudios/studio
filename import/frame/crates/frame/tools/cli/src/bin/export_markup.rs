@@ -35,7 +35,7 @@ fn run() -> Result<(), String> {
     }
     let out = out.ok_or("--out <file.frame> is required")?;
 
-    let catalog = frame::surface::memory::demo_catalog();
+    let catalog = frame::surface::demo::demo_catalog();
     let surface = surface_for_catalog(
         &catalog,
         &Options {

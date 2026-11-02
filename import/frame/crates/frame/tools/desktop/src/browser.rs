@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use frame::document::proto::{Asset, NodeId, Scene};
-use frame::library::link::{Signature, SurfaceMeta};
 use frame::surface::runtime::Bounds;
+use frame_architect::library::link::{Signature, SurfaceMeta};
 
 /// Grid geometry, scene px.
 const COLS: usize = 4;

@@ -9,9 +9,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use frame::document::proto::{NodeId, Scene};
-use frame::library::link::{Signature, Surface as Stored};
 use frame::surface::proto::Catalog;
 use frame::surface::runtime::{Bounds, Surface};
+use frame_architect::library::link::{Signature, Surface as Stored};
 
 use crate::browser::{self, Browser, Nav};
 use crate::library::{self, Change, Live};

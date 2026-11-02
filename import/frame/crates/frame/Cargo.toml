@@ -11,47 +11,38 @@ description = "Frame: the design and control-surface engine — documents, surfa
 workspace = true
 
 [features]
-default = ["vox"]
+default = []
 # A host's anyrender `PaintScene` (Blitz's) as a paint target: the
 # anyrender crate alone, the same 0.14 Blitz and architect use.
 host-scene = ["dep:anyrender"]
 anyrender = ["dep:anyrender", "dep:anyrender_svg", "dep:anyrender_vello", "dep:image", "dep:peniko", "dep:pollster", "dep:skrifa", "dep:vello", "dep:winit", "svg_export"]
-codec = ["io"]
 cpu = ["dep:image", "dep:vello_cpu"]
 design = ["io", "render", "runtime"]
 dsp = []
 embed = ["cpu", "dep:peniko", "dep:skrifa", "render", "runtime"]
 figma = ["dep:base64", "dep:figma-api", "dep:zip"]
-io = ["dep:chrono", "dep:crdt", "dep:facet-styx", "dep:zip"]
-library = ["architect/local", "architect/platform", "architect/vox", "codec", "dep:architect", "dep:tokio", "dep:vox-core", "dep:vox-websocket", "io", "library-proto-vox"]
-library-proto-vox = ["architect/vox", "dep:vox", "vox"]
+io = ["dep:chrono", "dep:facet-styx", "dep:loro", "dep:zip"]
 live = ["anyrender", "dep:peniko", "dep:vello", "io", "render", "runtime"]
 nice-plug = ["cpu", "dep:nice-plug-core"]
-remote = ["architect/vox", "dep:architect", "dep:tokio", "dep:vox-core", "dep:vox-websocket", "surface-runtime-vox"]
 render = ["dep:base64", "dep:peniko", "dep:roxmltree", "dep:skrifa", "dep:taffy", "image/gif", "image/jpeg", "image/webp"]
-rpc = ["dep:architect"]
-runtime = ["architect/local", "architect/vox", "dep:architect", "dep:miniz_oxide", "surface-runtime-vox"]
-surface-runtime-rpc = ["rpc"]
-surface-runtime-vox = ["surface-runtime-rpc", "vox"]
+runtime = ["dep:miniz_oxide"]
 svg_export = ["dep:fixed", "dep:rust_decimal", "dep:svg"]
 theme = ["render"]
-vox = ["architect/vox", "dep:vox", "rpc"]
 
 [dependencies]
 anyrender = { workspace = true, optional = true }
 anyrender_svg = { workspace = true, optional = true }
 anyrender_vello = { workspace = true, optional = true }
-architect = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 blake3 = { workspace = true }
 chrono = { workspace = true, features = ["clock", "serde", "std", "wasmbind"], optional = true }
-crdt = { workspace = true, optional = true }
 facet = { workspace = true }
 facet-styx = { workspace = true, optional = true }
 figma-api = { workspace = true, optional = true }
 fixed = { workspace = true, optional = true }
 image = { workspace = true, features = ["png"], optional = true }
 kurbo = { workspace = true }
+loro = { workspace = true, optional = true }
 miniz_oxide = { workspace = true, optional = true }
 nice-plug-core = { workspace = true, optional = true }
 peniko = { workspace = true, optional = true }
@@ -64,21 +55,16 @@ skrifa = { version = "0.26", optional = true }
 svg = { workspace = true, optional = true }
 taffy = { workspace = true, optional = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, optional = true }
 uuid = { workspace = true }
 vello = { workspace = true, optional = true }
 vello_cpu = { workspace = true, features = ["std", "u8_pipeline"], optional = true }
-vox = { workspace = true, optional = true }
-vox-core = { workspace = true, optional = true }
-vox-websocket = { workspace = true, optional = true }
 winit = { workspace = true, optional = true }
 zip = { workspace = true, features = ["deflate"], optional = true }
 
 [dev-dependencies]
 # Its own tests and examples, with the features they need (see their
 # required-features): a plain `cargo test` of the workspace builds them all.
-frame = { path = ".", features = ["anyrender", "cpu", "design", "dsp", "embed", "figma", "host-scene", "io", "library", "live", "nice-plug", "render", "runtime", "surface-runtime-rpc", "theme"] }
-architect = { workspace = true, features = ["vox", "local"] }
+frame = { path = ".", features = ["anyrender", "cpu", "design", "dsp", "embed", "figma", "host-scene", "io", "live", "nice-plug", "render", "runtime", "theme"] }
 facet = { workspace = true }
 facet-json = { workspace = true }
 kurbo = { workspace = true }
@@ -86,10 +72,7 @@ peniko = { workspace = true }
 pollster = { workspace = true }
 proptest = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
 vello = { workspace = true }
-vox-core = { workspace = true }
-vox-websocket = { workspace = true }
 wgpu = { workspace = true }
 
 [[example]]
@@ -111,3 +94,8 @@ name = "face_frames"
 path = "examples/face_frames.rs"
 required-features = ["live"]
 
+
+[[test]]
+name = "loro_scene"
+path = "tests/loro_scene.rs"
+required-features = ["figma", "io"]

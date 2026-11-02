@@ -1,0 +1,44 @@
+[package]
+name = "frame-architect"
+description = "Frame on architect: the SurfaceEngine vox service, the mock engine, remote engines and surface libraries"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["vox"]
+# The vox transport of the #[architect::rpc] services: the macro gates its
+# generated clients, services and stream sources on the calling crate's
+# `vox` feature.
+vox = []
+# Engines over a WebSocket: the vox client as a runtime Engine, connect/serve.
+remote = ["dep:tokio", "dep:vox-core", "dep:vox-websocket", "frame/runtime"]
+# Shared surface libraries: protocol, filesystem store, live link.
+library = ["architect/local", "architect/platform", "dep:tokio", "dep:vox-core", "dep:vox-websocket", "frame/io"]
+
+[dependencies]
+frame = { path = "../frame", default-features = false, features = ["runtime"] }
+architect = { workspace = true, features = ["vox", "local"] }
+vox = { workspace = true }
+facet = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+blake3 = { workspace = true }
+uuid = { workspace = true }
+tokio = { workspace = true, optional = true }
+vox-core = { workspace = true, optional = true }
+vox-websocket = { workspace = true, optional = true }
+
+[dev-dependencies]
+frame-architect = { path = ".", features = ["library", "remote"] }
+frame = { path = "../frame", features = ["figma", "io", "runtime"] }
+tokio = { workspace = true }
+
+[[test]]
+name = "remote"
+required-features = ["remote"]

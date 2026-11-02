@@ -149,7 +149,7 @@ fn main() {
     }
 
     // The generic embed at REAPER's sizes.
-    let catalog = frame::surface::memory::demo_catalog();
+    let catalog = frame::surface::demo::demo_catalog();
     let mut shots = Vec::new();
     for (w, h) in [(60.0, 120.0), (96.0, 200.0), (160.0, 300.0), (300.0, 40.0)] {
         let host = if h < w {

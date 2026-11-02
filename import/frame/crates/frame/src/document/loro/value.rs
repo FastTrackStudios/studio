@@ -16,7 +16,7 @@
 //! direction maps `Binary` to an array of byte numbers and a `Container`
 //! reference to its id string — neither is produced by [`to_loro`].
 
-use crdt::loro::LoroValue;
+use loro::LoroValue;
 use serde_json::{Map, Number, Value};
 
 /// JSON → Loro.

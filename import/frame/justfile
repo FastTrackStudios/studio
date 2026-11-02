@@ -15,6 +15,10 @@ test:
 fmt:
     cargo fmt --all
 
+# `frame` (core) depends on no architect, vox, Dioxus or figcraft crate.
+boundary:
+    scripts/check-core-boundary.sh
+
 # The plugin faces (examples/plugin-faces), generated, not kept in git.
 #   just faces            # all of them
 #   just faces comp_fet   # one set

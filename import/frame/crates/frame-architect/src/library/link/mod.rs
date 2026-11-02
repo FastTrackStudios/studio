@@ -15,9 +15,9 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 pub use crate::library::proto::*;
-use crate::surface::proto::Catalog;
 use architect::Backoff;
 use architect::vox::{self, SelfRef};
+use frame::surface::proto::Catalog;
 use tokio::sync::mpsc as tmpsc;
 
 /// Connect to a library's call side (`list`, `get`, `publish`, `catalogs`).

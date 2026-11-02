@@ -7,10 +7,11 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use frame::document::proto::{NodeId, PaintKind, Scene};
-use frame::surface::memory::Memory;
 use frame::surface::proto::{Catalog, ControlKind, ParamAddr, ParamValue, Source as Binding};
-use frame::surface::runtime::sync::{Engine, EngineError, Incoming};
+use frame::surface::runtime::sync::{Engine, EngineError};
 use frame::surface::runtime::{Bounds, EngineCall, Input, Key, Modifiers, Runtime, Surface, sync};
+use frame_architect::memory::Memory;
+use frame_architect::remote::Incoming;
 
 use crate::input::Clicks;
 use crate::remote::{Event, Remote};

@@ -21,7 +21,7 @@
 //! "assets" LoroMap    asset id → { mime, size, bytes? (Binary) }
 //! ```
 //!
-//! Each meta value is the [`LoroValue`](crdt::loro::LoroValue) image of the
+//! Each meta value is the [`LoroValue`](loro::LoroValue) image of the
 //! field's serde JSON form (see [`value`]), written whole: a prop is the
 //! unit of last-writer-wins, so concurrent edits to *different* props of
 //! one node merge, and edits to the *same* prop resolve to one of them.
@@ -54,8 +54,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::document::proto::{Asset, AssetId, Node, NodeId, Op, OpError, Prop, Scene};
-use crdt::CrdtDoc;
-use crdt::loro::{
+use loro::{
     ExportMode, Frontiers, LoroDoc, LoroError, LoroMap, LoroTree, LoroValue, Subscription, TreeID,
     ValueOrContainer, VersionVector,
 };
@@ -96,7 +95,7 @@ pub enum Error {
 /// One replica of a scene. Cheap reads (a cached materialization that is
 /// refreshed whenever the doc's version moves), `&self` edits.
 pub struct LoroScene {
-    doc: CrdtDoc,
+    doc: LoroDoc,
     storage: AssetStorage,
     state: Mutex<State>,
 }
@@ -111,16 +110,17 @@ struct State {
 
 impl LoroScene {
     /// Wrap a doc (empty, or holding a scene written by any replica), with
-    /// external asset storage.
+    /// external asset storage. A host on architect passes its `CrdtDoc`'s
+    /// `loro().clone()`: a reference clone, so both edit one document.
     #[must_use]
-    pub fn new(doc: CrdtDoc) -> Self {
+    pub fn new(doc: LoroDoc) -> Self {
         Self::with_storage(doc, AssetStorage::External)
     }
 
     /// [`Self::new`] with an explicit [`AssetStorage`].
     #[must_use]
-    pub fn with_storage(doc: CrdtDoc, storage: AssetStorage) -> Self {
-        doc.loro().get_tree(NODES).enable_fractional_index(0);
+    pub fn with_storage(doc: LoroDoc, storage: AssetStorage) -> Self {
+        doc.get_tree(NODES).enable_fractional_index(0);
         let state = State {
             frontiers: None,
             scene: empty_scene(),
@@ -143,7 +143,7 @@ impl LoroScene {
     /// [`Self::from_scene`] with an explicit [`AssetStorage`].
     #[must_use]
     pub fn from_scene_with(scene: &Scene, storage: AssetStorage) -> Self {
-        let this = Self::with_storage(CrdtDoc::ephemeral(), storage);
+        let this = Self::with_storage(LoroDoc::new(), storage);
         // A fresh doc accepts every write below; a failure here is a bug.
         this.write_scene(scene)
             .expect("writing a scene into a fresh doc");
@@ -157,14 +157,14 @@ impl LoroScene {
     /// # Errors
     /// The bytes aren't a Loro export.
     pub fn from_snapshot(bytes: &[u8], storage: AssetStorage) -> Result<Self, LoroError> {
-        let this = Self::with_storage(CrdtDoc::ephemeral(), storage);
+        let this = Self::with_storage(LoroDoc::new(), storage);
         this.import(bytes)?;
         Ok(this)
     }
 
     /// The underlying doc (sync transport, persistence, time travel).
     #[must_use]
-    pub fn doc(&self) -> &CrdtDoc {
+    pub fn doc(&self) -> &LoroDoc {
         &self.doc
     }
 
@@ -216,7 +216,7 @@ impl LoroScene {
     /// # Errors
     /// The bytes aren't a Loro export (or don't apply to this doc).
     pub fn import(&self, bytes: &[u8]) -> Result<(), LoroError> {
-        self.doc.loro().import(bytes)?;
+        self.doc.import(bytes)?;
         Ok(())
     }
 
@@ -228,7 +228,6 @@ impl LoroScene {
     #[must_use]
     pub fn export_snapshot(&self) -> Vec<u8> {
         self.doc
-            .loro()
             .export(ExportMode::Snapshot)
             .expect("snapshot export")
     }
@@ -240,7 +239,6 @@ impl LoroScene {
     #[must_use]
     pub fn export_updates(&self, since: &VersionVector) -> Vec<u8> {
         self.doc
-            .loro()
             .export(ExportMode::updates(since))
             .expect("updates export")
     }
@@ -248,13 +246,13 @@ impl LoroScene {
     /// This replica's version vector (what to send a peer to get a delta).
     #[must_use]
     pub fn version(&self) -> VersionVector {
-        self.doc.loro().oplog_vv()
+        self.doc.oplog_vv()
     }
 
     /// Call `f` after every change to the doc — local commits and imports.
     /// Keep the returned subscription alive for as long as you listen.
     pub fn subscribe(&self, f: impl Fn() + Send + Sync + 'static) -> Subscription {
-        self.doc.loro().subscribe_root(Arc::new(move |_| f()))
+        self.doc.subscribe_root(Arc::new(move |_| f()))
     }
 
     /// Store asset bytes in the local blob store (external storage) and
@@ -272,7 +270,7 @@ impl LoroScene {
     /// this replica holds its bytes.
     #[must_use]
     pub fn asset_entries(&self) -> Vec<(AssetId, String)> {
-        let assets = self.doc.loro().get_map(ASSETS);
+        let assets = self.doc.get_map(ASSETS);
         let mut out = Vec::new();
         assets.for_each(|k, v| {
             if let ValueOrContainer::Value(LoroValue::Map(m)) = v {
@@ -308,9 +306,9 @@ impl LoroScene {
     /// The state, rematerialized if the doc moved since it was built.
     fn lock_fresh(&self) -> MutexGuard<'_, State> {
         let mut st = self.lock();
-        let now = self.doc.loro().state_frontiers();
+        let now = self.doc.state_frontiers();
         if st.frontiers.as_ref() != Some(&now) {
-            let (scene, index) = materialize(self.doc.loro(), &st.blobs);
+            let (scene, index) = materialize(&self.doc, &st.blobs);
             st.scene = scene;
             st.index = index;
             st.frontiers = Some(now);
@@ -320,7 +318,7 @@ impl LoroScene {
 
     /// Write validated ops (already applied to `st.scene`) and commit once.
     fn write_ops(&self, st: &mut State, ops: &[Op]) -> Result<(), Error> {
-        let doc = self.doc.loro();
+        let doc = &self.doc;
         let result = ops.iter().try_for_each(|op| self.write_op(doc, st, op));
         doc.commit();
         match result {
@@ -405,7 +403,7 @@ impl LoroScene {
 
     /// Write a whole scene into this (empty) replica, as one commit.
     fn write_scene(&self, scene: &Scene) -> Result<(), LoroError> {
-        let doc = self.doc.loro();
+        let doc = &self.doc;
         let tree = doc.get_tree(NODES);
         let mut st = self.lock();
         doc.get_map(SCENE).insert("root", scene.root.to_string())?;

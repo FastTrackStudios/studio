@@ -31,11 +31,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, SystemTime};
 
-use crate::document::proto::Scene;
 pub use crate::library::proto::*;
-use crate::surface::proto::Catalog;
 use architect::dispatch::CurrentThreadDispatcher;
 use architect::{HasDispatcher, PubSub};
+use frame::document::proto::Scene;
+use frame::surface::proto::Catalog;
 use serde::{Deserialize, Serialize};
 
 /// Renders a scene's thumbnail as PNG bytes (`None` = can't).
@@ -89,7 +89,7 @@ impl Sidecar {
 
 struct Entry {
     path: PathBuf,
-    /// [`crate::document::io::fingerprint`]: the file and its assets sidecar.
+    /// [`frame::document::io::fingerprint`]: the file and its assets sidecar.
     stamp: Option<u64>,
     hash: u64,
     meta: SurfaceMeta,
@@ -198,7 +198,7 @@ impl FsLibrary {
     /// An asset some surface carries (for downloads). Ids are content
     /// hashes, so any surface's copy is the asset.
     #[must_use]
-    pub fn asset(&self, id: &str) -> Option<crate::document::proto::Asset> {
+    pub fn asset(&self, id: &str) -> Option<frame::document::proto::Asset> {
         lock(&self.inner.state)
             .entries
             .values()
@@ -297,7 +297,7 @@ impl FsLibrary {
             out.index.push(IndexChange { id, meta: None });
         }
         for (id, path) in found {
-            let st = crate::document::io::fingerprint(&path);
+            let st = frame::document::io::fingerprint(&path);
             let entry = state.entries.get_mut(&id);
             if let Some(e) = &entry
                 && e.path == path
@@ -498,9 +498,9 @@ fn is_catalog(p: &Path) -> bool {
 /// A surface file's format: a `.frame` is a bundle when its content is a
 /// zip, markup otherwise; a `.fm` is markup.
 fn format_of(path: &Path) -> Option<Format> {
-    crate::document::io::is_frame_document(path).then(|| {
-        match crate::document::io::Format::of(path) {
-            Some(crate::document::io::Format::Bundle) => Format::Frame,
+    frame::document::io::is_frame_document(path).then(|| {
+        match frame::document::io::Format::of(path) {
+            Some(frame::document::io::Format::Bundle) => Format::Frame,
             _ => Format::Markup,
         }
     })
@@ -508,7 +508,7 @@ fn format_of(path: &Path) -> Option<Format> {
 
 /// Whether `path` is a legacy `.fm` file.
 fn is_legacy(path: &Path) -> bool {
-    path.extension().and_then(|e| e.to_str()) == Some(crate::document::io::LEGACY_EXTENSION)
+    path.extension().and_then(|e| e.to_str()) == Some(frame::document::io::LEGACY_EXTENSION)
 }
 
 /// A surface file's content: a bundle's bytes, or markup text plus the
@@ -520,7 +520,7 @@ fn read_content(path: &Path, format: Format) -> Option<Content> {
             bytes,
             assets: Vec::new(),
         }),
-        Format::Markup => match crate::document::io::read_markup(path) {
+        Format::Markup => match frame::document::io::read_markup(path) {
             Ok(m) => Some(Content::markup_with(m.text, m.assets.into_values())),
             Err(e) => {
                 eprintln!("library-fs: skipping {e}");
@@ -563,7 +563,7 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
             continue;
         }
         if p.is_dir() {
-            if name != "target" && name != "node_modules" && !crate::document::io::is_assets_dir(&p)
+            if name != "target" && name != "node_modules" && !frame::document::io::is_assets_dir(&p)
             {
                 walk(&p, depth + 1, out);
             }
@@ -711,13 +711,13 @@ impl SurfaceStore for FsLibrary {
                 Format::Markup => {
                     let text = std::str::from_utf8(&content.bytes)
                         .map_err(|e| LibraryError::BadContent(e.to_string()))?;
-                    crate::document::io::write_markup(&path, text, &content.assets)
+                    frame::document::io::write_markup(&path, text, &content.assets)
                         .map_err(|e| LibraryError::Io(e.to_string()))?;
                 }
                 Format::Frame => {
                     write_atomic(&path, &content.bytes).map_err(io)?;
                     // A markup file's assets sidecar doesn't belong to a bundle.
-                    crate::document::io::prune_assets(&path)
+                    frame::document::io::prune_assets(&path)
                         .map_err(|e| LibraryError::Io(e.to_string()))?;
                 }
             }
@@ -749,7 +749,7 @@ impl SurfaceStore for FsLibrary {
         if let Some(o) = &old
             && o.path != path
         {
-            let _ = crate::document::io::remove_surface(&o.path);
+            let _ = frame::document::io::remove_surface(&o.path);
         }
         let engines: Vec<(String, Signature)> = state
             .catalogs
@@ -757,7 +757,7 @@ impl SurfaceStore for FsLibrary {
             .map(|(_, c)| (c.id.clone(), Signature::of_catalog(c)))
             .collect();
         let (st, h) = (
-            crate::document::io::fingerprint(&path),
+            frame::document::io::fingerprint(&path),
             content_hash(&content),
         );
         let mut entry = self.build(
