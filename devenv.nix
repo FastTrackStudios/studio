@@ -5,7 +5,7 @@
 # linkers, and kache as RUSTC_WRAPPER when kache is on PATH. This file adds
 # what the workspace links against, runs and records. It is the flake's
 # devShell (nix/modules/shells/default.nix, toolchain.nix) without what the
-# fleet provides. CI still enters the flake's `.#ci` shell.
+# fleet provides. CI enters this same shell: `devenv shell -- <cmd>`.
 { pkgs, lib, inputs, ... }:
 let
   # The nixpkgs-dx pin the fleet's dioxus module builds dx from. Playwright
@@ -95,6 +95,15 @@ let
     libsoup_3
     xdotool
   ]);
+
+  # The REAPER the integration suites run against: the wrapped build `nix run
+  # .#fts-reaper` uses (nix/modules/packages/reaper.nix). libxml2_13 is the
+  # soname SWELL dlopens; an unwrapped REAPER fails with a GDK assertion about
+  # a missing display, which reads as a broken Xvfb.
+  reaper = pkgs.callPackage ./nix/vendor/reaper-flake/wrapper/reaper/pkgs/reaper.nix {
+    jackLibrary = pkgs.pipewire.jack;
+    libxml2 = pkgs.libxml2_13;
+  };
 in
 {
   packages = with pkgs; [
@@ -200,6 +209,16 @@ in
     # shell only. Never devenv's dotenv: that copies .env into the store.
     if [ -f "$DEVENV_ROOT/.env" ]; then set -a; . "$DEVENV_ROOT/.env"; set +a; fi
 
+    # The CI shell's software Vulkan: CI has no GPU, so wgpu takes lavapipe as
+    # its adapter and the frame tests run. Only on CI; a dev shell keeps the
+    # machine's GPU.
+    ${lib.optionalString pkgs.stdenv.isLinux ''
+      if [ -n "''${CI:-}" ]; then
+        export VK_DRIVER_FILES="${pkgs.mesa}/share/vulkan/icd.d/lvp_icd.${pkgs.stdenv.hostPlatform.uname.processor}.json"
+        export LP_NUM_THREADS=2
+      fi
+    ''}
+
     # Store-provided tools (dx, wasm-bindgen) must win over stale cargo-installed
     # copies, so cargo's and uv's bins are appended, not prepended.
     export PATH="$PATH:$HOME/.cargo/bin:$HOME/.local/bin"
@@ -216,6 +235,17 @@ in
       fi
     fi
   '';
+
+  # `devenv --profile reaper shell`: the REAPER integration suites
+  # (`#[reaper_test]`, `just reaper-test`). What the flake's `.#reaper-test`
+  # shell adds to the default env, which already has Xvfb, xvfb-run, xdotool,
+  # PipeWire's JACK shim and cargo-nextest.
+  profiles.reaper.module.packages = lib.optionals pkgs.stdenv.isLinux [
+    reaper
+    pkgs.openbox      # a bare Xvfb leaves REAPER's restored dialogs unmanaged
+    pkgs.imagemagick  # `import` and `identify`: screenshots, window lookup
+    pkgs.xwininfo     # the window geometry daw::test::VirtualDisplay reads
+  ];
 
   fleet.banner = ''
     FastTrackStudio dev shell
