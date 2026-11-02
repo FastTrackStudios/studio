@@ -46,6 +46,9 @@ name = "shellcheck"
 language = "system"
 entry = "shellcheck"
 types = ["shell"]
+# .envrc is direnv's file, loaded by direnv (`eval "$(devenv direnvrc)"`), with
+# no shebang: shellcheck cannot tell its shell (SC2148).
+exclude = "^\\.envrc$"
 stages = ["pre-commit"]
 
 [[repos.hooks]]
