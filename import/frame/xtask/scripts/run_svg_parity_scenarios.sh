@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Usage:
-#   xtask/frame/scripts/run_svg_parity_scenarios.sh \
+#   xtask/scripts/run_svg_parity_scenarios.sh \
 #     [--root crates/frame/render/tests/parity] \
 #     [--all] \
 #     [--core10] \

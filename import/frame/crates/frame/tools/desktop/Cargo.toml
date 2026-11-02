@@ -3,6 +3,7 @@ name = "frame-desktop"
 description = "Frame desktop player: runs a control surface live against an engine, hot-reloading its markup."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 publish = false
 
 [[bin]]

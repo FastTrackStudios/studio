@@ -3,6 +3,7 @@ name = "frame-library-server"
 description = "Serves a folder of surfaces as a live library: vox over WebSocket, plus HTTP downloads and previews."
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 publish = false
 
 [[bin]]

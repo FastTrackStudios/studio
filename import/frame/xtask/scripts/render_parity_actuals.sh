@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Usage:
-#   xtask/frame/scripts/render_parity_actuals.sh [--root crates/frame/render/tests/parity] [--all] [--scenario <id>] [--core10]
+#   xtask/scripts/render_parity_actuals.sh [--root crates/frame/render/tests/parity] [--all] [--scenario <id>] [--core10]
 
 ROOT="crates/frame/render/tests/parity"
 SCENARIO_FILTER=""

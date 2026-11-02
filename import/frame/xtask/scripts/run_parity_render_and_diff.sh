@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Usage:
-#   xtask/frame/scripts/run_parity_render_and_diff.sh [--root crates/frame/render/tests/parity] [--all] [--core10] [--scenario <id>] [--threshold <percent>] [--require-pass] [--require-svg-pass]
+#   xtask/scripts/run_parity_render_and_diff.sh [--root crates/frame/render/tests/parity] [--all] [--core10] [--scenario <id>] [--threshold <percent>] [--require-pass] [--require-svg-pass]
 
 ROOT="crates/frame/render/tests/parity"
 SCENARIO_FILTER=""
@@ -64,10 +64,10 @@ if [[ "$REQUIRE_PASS" == "true" ]]; then
   SUMMARY_ARGS+=(--require-pass)
 fi
 
-xtask/frame/scripts/render_parity_actuals.sh "${RENDER_ARGS[@]}"
-xtask/frame/scripts/run_parity_scenarios.sh "${SUMMARY_ARGS[@]}"
+xtask/scripts/render_parity_actuals.sh "${RENDER_ARGS[@]}"
+xtask/scripts/run_parity_scenarios.sh "${SUMMARY_ARGS[@]}"
 if [[ "$REQUIRE_SVG_PASS" == "true" ]]; then
-  xtask/frame/scripts/run_svg_parity_scenarios.sh "${RENDER_ARGS[@]}" --require-pass
+  xtask/scripts/run_svg_parity_scenarios.sh "${RENDER_ARGS[@]}" --require-pass
 else
-  xtask/frame/scripts/run_svg_parity_scenarios.sh "${RENDER_ARGS[@]}"
+  xtask/scripts/run_svg_parity_scenarios.sh "${RENDER_ARGS[@]}"
 fi

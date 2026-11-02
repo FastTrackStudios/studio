@@ -1,0 +1,126 @@
+# Frame: the design and control-surface engine. One crate, `frame`
+# (crates/frame), with its layers behind features; its tools in
+# crates/frame/tools; the hardware plugin faces in examples/plugin-faces.
+#
+# Frame lived inside Studio (FastTrackStudios/studio, crates/frame) from
+# 2026-10-12 until it moved back here; its history runs through both.
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/frame",
+    "crates/frame/tools/cli",
+    "crates/frame/tools/desktop",
+    "crates/frame/tools/library-server",
+    "crates/frame/tools/mcp",
+    "examples/plugin-faces",
+    "xtask",
+]
+default-members = [
+    "crates/frame",
+    "crates/frame/tools/cli",
+    "crates/frame/tools/desktop",
+    "crates/frame/tools/library-server",
+    "crates/frame/tools/mcp",
+    "examples/plugin-faces",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.87"
+authors = ["FastTrack Studios"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/FastTrackStudios/frame"
+
+# The versions Studio pinned at the cut (studio@fc6b1954), so Frame builds
+# with exactly what it built with there.
+[workspace.dependencies]
+anyrender_0_11 = { package = "anyrender", git = "https://github.com/FastTrackStudios/blitz", tag = "fts-pointer-2026-10" }
+anyrender_svg = { git = "https://github.com/DioxusLabs/anyrender.git", branch = "main" }
+anyrender_svg_0_12 = { version = "0.12", package = "anyrender_svg" }
+architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.31" }
+base64 = "0.22.1"
+blake3 = { version = "1.8" }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "wasmbind"] }
+crdt = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.9.31" }
+facet = { version = "0.50.0-rc.5", features = ["reflect", "chrono", "uuid"] }
+facet-json = { version = "0.50.0-rc.7" }
+facet-styx = { version = "5.0.0-rc.7" }
+figma-api = { git = "https://github.com/gridaco/figma-api-rust.git" }
+fixed = "1.28"
+image = { version = "0.25", default-features = false, features = ["png"] }
+kurbo = "0.13"
+miniz_oxide = "0.8"
+nice-plug-core = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
+peniko = "0.6"
+pollster = "0.4.0"
+proptest = "1"
+resvg = "0.45"
+roxmltree = "0.20"
+rust_decimal = "1.39"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+svg = "0.18"
+taffy = { version = "0.7", default-features = false, features = ["std", "flexbox", "taffy_tree"] }
+thiserror = "2.0"
+tokio = { version = "1.48", features = ["full"] }
+uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
+vello_cpu = { version = "0.0.9", default-features = false }
+vox = { version = "0.10.0-rc.5", default-features = false, features = ["runtime"] }
+vox-core = { version = "0.10.0-rc.5" }
+vox-websocket = { version = "0.10.0-rc.5" }
+winit = "0.30"
+zip = { version = "2", default-features = false }
+
+# Studio's patch tables, the entries that reach Frame's graph.
+[patch.crates-io]
+anyrender = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-pointer-2026-10" }
+wgpu-hal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
+raw-window-metal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" }
+styx-format = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.1.0" }
+vox-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.3.0" }
+phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.1" }
+facet-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.1" }
+phon-jit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.2.3" }
+
+[workspace.lints.rust]
+# Flipped from "allow" 2026-07-28 (task cleanup): the blanket allows are
+# WHY ~30k lines of dead code accumulated silently. The task tree is
+# warning-clean under these; legacy crates in other domains carry a
+# crate-level `#![allow(dead_code, unused)]` marked "Lint debt" until
+# their own burn-down.
+dead_code = "warn"
+unused = "warn"
+unused_unsafe = "warn"
+# architect's attribute macros (`#[architect::error]`, `wire`, `entity`)
+# emit `#[cfg_attr(feature = "fake", ...)]` into the calling crate; declare
+# the name so those crates don't warn. Same line as architect's own
+# workspace.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("fake"))'] }
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "allow"
+private_intra_doc_links = "allow"
+redundant_explicit_links = "allow"
+
+# clippy's default lints, enforced (`clippy -- -D warnings` in CI). Studio
+# denied pedantic and nursery on paper but ran clippy as advisory, so Frame
+# never met them; tighten here a lint at a time, with the fixes.
+[workspace.lints.clippy]
+too_many_arguments = "allow"
+module_inception = "allow"
+type_complexity = "allow"
+
+[profile.dev]
+debug = "line-tables-only"
+
+# The renderer and its fonts/geometry stacks are unusably slow unoptimised;
+# Frame's own crates stay at opt-level 0 so they rebuild fast.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release-fast]
+inherits = "release"
+lto = false
+codegen-units = 16

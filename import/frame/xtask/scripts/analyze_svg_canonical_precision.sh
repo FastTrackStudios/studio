@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Usage:
-#   xtask/frame/scripts/analyze_svg_canonical_precision.sh [--root crates/frame/render/tests/parity] [--scenario <id>] [--all]
+#   xtask/scripts/analyze_svg_canonical_precision.sh [--root crates/frame/render/tests/parity] [--scenario <id>] [--all]
 
 ROOT="crates/frame/render/tests/parity"
 SCENARIO_FILTER=""
