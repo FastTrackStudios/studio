@@ -24,7 +24,7 @@
 //! screen are needed before they are sung ([`SWITCH_EARLY`],
 //! [`LINE_EARLY`]).
 //!
-//! Inline styles throughout (see the repo's CLAUDE.md on Blitz).
+//! Inline styles throughout (see the repo's AGENTS.md on Blitz).
 
 use std::rc::Rc;
 use std::time::Duration;

@@ -39,7 +39,7 @@ use peniko::{Color, Fill, FontData};
 // moment this crate moved repos, and would break again for any consumer
 // that is not sitting in that exact directory layout. `include_bytes!` is
 // invisible to cargo's dependency graph, so nothing warns; it just fails to
-// compile. Same trap the root CLAUDE.md calls out for `include_str!`.
+// compile. Same trap the root AGENTS.md calls out for `include_str!`.
 const FONT: &[u8] = include_bytes!("../../assets/DejaVuSans.ttf");
 
 /// One shaped run: a font, and where each glyph sits relative to the

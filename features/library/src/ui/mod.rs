@@ -4,7 +4,7 @@
 //! the page in landscape, a rail of icons upright, and touch targets of
 //! 48 everywhere.
 //!
-//! The root takes no props (CLAUDE.md): the app provides the library
+//! The root takes no props (AGENTS.md): the app provides the library
 //! ([`LibraryData`]), the window's size ([`Viewport`]) and what a press
 //! that leaves the library does ([`Opener`]) as context; whatever it does
 //! not provide falls back to the fixture, an iPad landscape window, and

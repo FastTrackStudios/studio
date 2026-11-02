@@ -3,7 +3,7 @@
  * One stylesheet, inlined into the bundle by `document::Style` in main.rs
  * rather than linked: Blitz (the desktop/plugin renderer these components
  * may later be shared with) does not load external CSS reliably, and the
- * signal UI rule in CLAUDE.md is inline-or-embedded only.
+ * signal UI rule in AGENTS.md is inline-or-embedded only.
  *
  * Every demo animation lives at the bottom under "rig demos". They are
  * CSS keyframes on purpose — see the module docs in src/demos/mod.rs.

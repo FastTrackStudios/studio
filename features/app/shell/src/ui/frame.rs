@@ -3,7 +3,7 @@
 //! regions the caller doesn't fill itself) a [`PanelRegistry`].
 //!
 //! Blitz-first: inline styles only, no `position: fixed`, no CSS
-//! transitions (CLAUDE.md, "Blitz's gaps"). A frame can nest inside another
+//! transitions (AGENTS.md, "Blitz's gaps"). A frame can nest inside another
 //! frame's main area: an app frame carries the app bar and the app-level
 //! flyouts, and a workspace mounts its own frame (own scope, own registry)
 //! for its sidebars and drawers.

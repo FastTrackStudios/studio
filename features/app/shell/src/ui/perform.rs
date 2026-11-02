@@ -13,7 +13,7 @@
 //! Touch rules (spec §8): every control is a real `button` with a label;
 //! nothing waits on a timer; nothing scrolls; 48 px is the floor and the
 //! dock's cells are 60. Inline styles only, and no `position: fixed`,
-//! `overflow: auto` or `text-overflow` (Blitz's gaps, CLAUDE.md): long
+//! `overflow: auto` or `text-overflow` (Blitz's gaps, AGENTS.md): long
 //! titles are cut to a character budget instead ([`budget`]).
 
 use dioxus::prelude::*;

@@ -24,7 +24,7 @@ Path shorthand used below:
 |---|---|
 | `SDK.h` | `/home/cody/.cargo/git/checkouts/reaper-rs-ea00aff97ae2f1e5/3a9e706/main/low/lib/reaper/reaper_plugin_functions.h` (pinned by `Cargo.lock` here and in `../daw/Cargo.lock`: `reaper-low … #3a9e70638dc67adc1aaf21a54fcf72ae752eeb21`) |
 | `ActionList.txt` | `/home/cody/fts-dev/ActionList.txt` (REAPER's own action-list export, `Section<TAB>Id<TAB>Name`) |
-| `daw/` | `../daw/` (sibling checkout, see root `CLAUDE.md`) |
+| `daw/` | `../daw/` (sibling checkout, see root `AGENTS.md`) |
 | `standalone/` | `crates/daw/standalone/src/` |
 | `legacy-offline.rs` | `/run/media/Development/FastTrackStudio-legacy/sample-collector/crates/sc-capture/src/offline.rs` |
 

@@ -37,7 +37,7 @@ blitz rev in the root `Cargo.toml`.
 | `onchange` on inputs | `change` event not supported | `oninput`, and commit on `onblur` / Enter (`onkeydown`). |
 | drag & drop events (`ondragstart`, `ondrop`…) | not supported | pointer events: `onpointerdown` → track `onpointermove` → `onpointerup` (single primary pointer only). |
 | clipboard events, `resize`/`load` window events, Resize/Intersection/Mutation observers | not supported | read sizes from props/state; do not wait on load. |
-| `@import` of a stylesheet, `document::Stylesheet { href }`, Tailwind `asset!()` | not loaded reliably in plugin/embedded contexts | inline `style: "..."` or `document::Style { {CSS_STR} }` with `include_str!` (see CLAUDE.md "GUI rendering"). |
+| `@import` of a stylesheet, `document::Stylesheet { href }`, Tailwind `asset!()` | not loaded reliably in plugin/embedded contexts | inline `style: "..."` or `document::Style { {CSS_STR} }` with `include_str!` (see AGENTS.md "GUI rendering"). |
 | `cursor: url(...)` | custom cursors not supported | keyword cursors (`pointer`, `grab`, `ew-resize`…) work. |
 | `text-transform: capitalize` | not supported | `uppercase`/`lowercase` work; capitalise in Rust. |
 | `opacity` on a container expecting overflow to show | **opacity clips its node** regardless of `overflow` | put the opacity on the inner element, not the one whose children overhang. |

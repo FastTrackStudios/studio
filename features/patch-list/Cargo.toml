@@ -33,7 +33,7 @@ dynamic-template = { workspace = true, features = ["reaper"] }
 # `daw` facade: apply needs the trait surface, not a backend.
 daw-proto = { workspace = true }
 # The apply span's wide-event fields (`patch.applied`, `patch.unpatched`,
-# `patch.unused`) — logging-best-practices skill, CLAUDE.md.
+# `patch.unused`) — logging-best-practices skill, AGENTS.md.
 architect-telemetry = { workspace = true }
 # The applied copy's timestamp.
 chrono = { workspace = true }

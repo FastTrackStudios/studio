@@ -70,7 +70,7 @@ In Rust here:
   return what happened (`Result`, a count, an outcome enum) and the top
   records it. Never `println!`/`eprintln!`/`dbg!` anywhere.
 - Realtime code: `process()` is already honest by necessity (no
-  allocation, locks or I/O — see the processing-core rules in CLAUDE.md).
+  allocation, locks or I/O — see the processing-core rules in AGENTS.md).
   Keep it that way when you split it.
 
 ## Principle 2 — Empathetic signatures

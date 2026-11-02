@@ -22,7 +22,7 @@
 //!   and `signal-drums-ui` render through Blitz for the desktop and plugin
 //!   builds. The browser remote is the third context they are supposed to
 //!   serve, which is the whole point of the detachable-GUI rule in
-//!   CLAUDE.md.
+//!   AGENTS.md.
 //!
 //! Until then each page states the rig, what it will stream, and links
 //! back to the demo on the landing page.

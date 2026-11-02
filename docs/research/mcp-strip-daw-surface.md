@@ -187,7 +187,7 @@ live FX or send state.
 
 ## Appendix: every `#[subscribe]` stream in `daw-proto`
 
-The root `CLAUDE.md` says five subscriptions were converted. There are **seven**
+The root `AGENTS.md` says five subscriptions were converted. There are **seven**
 today, all argless and all filtered client-side, which is the architect idiom:
 
 | Service | Stream | Line |
