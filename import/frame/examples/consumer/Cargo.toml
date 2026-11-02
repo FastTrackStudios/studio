@@ -1,0 +1,31 @@
+# A consumer of Frame, outside Frame's workspace: the README's snippet, as a
+# crate CI builds. It pins Frame by tag the way an app does, with Frame's
+# [patch] tables repeated (scripts/check-consumer.sh keeps them in step and
+# builds it against the commit under test).
+
+[package]
+name = "frame-consumer"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+frame = { git = "https://github.com/FastTrackStudios/frame", tag = "v0.1.0", features = ["io", "render", "runtime"] }
+frame-architect = { git = "https://github.com/FastTrackStudios/frame", tag = "v0.1.0", features = ["remote"] }
+
+# Frame's [patch] tables (architect v0.10.0's), repeated: a dependency's
+# patches don't apply to the app that uses it.
+[patch.crates-io]
+anyrender = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-upstream-2026-11" }
+anyrender_vello = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+wgpu-hal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+raw-window-metal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+styx-format = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.1.0" }
+phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
+phon-jit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.2.3" }
+facet-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
+vox-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.3.0" }
+
+# Its own workspace, not a member of Frame's.
+[workspace]

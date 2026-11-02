@@ -19,6 +19,10 @@ fmt:
 boundary:
     scripts/check-core-boundary.sh
 
+# The README's consumer snippet (examples/consumer), built against this commit.
+consumer:
+    scripts/check-consumer.sh
+
 # The plugin faces (examples/plugin-faces), generated, not kept in git.
 #   just faces            # all of them
 #   just faces comp_fet   # one set

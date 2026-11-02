@@ -49,6 +49,34 @@ The faces are generated, not kept in git (`just faces`, about 130 MB). The
 parity scenarios, `regression.tough-1176-blue-face` included, are in
 `crates/frame/render/tests/parity/scenarios`.
 
+## Using Frame
+
+Pin Frame by tag, repeat its `[patch]` tables (a dependency's patches don't
+reach the app that uses it), and start a new app's `Cargo.lock` from Frame's:
+a fresh resolve can pick crates newer than the pins build with. `examples/consumer` is this snippet as a
+crate, and CI builds it against every commit (`just consumer`).
+
+```toml
+[dependencies]
+frame = { git = "https://github.com/FastTrackStudios/frame", tag = "v0.1.0", features = ["io", "render", "runtime"] }
+# On architect: the SurfaceEngine vox service, the mock engine, remote engines, libraries.
+frame-architect = { git = "https://github.com/FastTrackStudios/frame", tag = "v0.1.0", features = ["remote"] }
+
+# Frame's [patch.crates-io], copied from its Cargo.toml at that tag.
+```
+
+Frame's architect, vox and Dioxus pins match one architect tag (now
+v0.10.0), so an app on that architect tag shares one version of each.
+
+## Releases
+
+Semver, like architect: `vX.Y.Z` tags on a green `main`, trunk-based, no
+release branches or commits. Before 1.0, a minor bump may break the API;
+the PR and the tag's notes say how. When architect cuts a tag, Frame moves
+with the fleet: from an architect checkout,
+`just fleet-bump vX.Y.Z ../frame` repoints Frame's architect crates, then
+Frame copies that tag's other pins and `[patch]` tables in the same PR.
+
 ## History
 
 Frame lived in [Studio](https://github.com/FastTrackStudios/studio) from

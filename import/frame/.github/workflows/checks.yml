@@ -62,17 +62,33 @@ jobs:
       - name: just test
         run: nix develop --accept-flake-config .#ci --command just test
 
+  # An app pinning Frame by tag, as the README shows, built against this
+  # commit: the snippet and its [patch] tables stay true.
+  consumer:
+    name: Consumer
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust-env
+        with:
+          job: consumer
+      - name: just consumer
+        run: nix develop --accept-flake-config .#ci --command just consumer
+
   # The one status to require on main: it passes only when every job above
   # succeeded; a skipped or cancelled job fails it.
   ci:
     name: ci
     if: ${{ always() }}
-    needs: [lint, check]
+    needs: [lint, check, consumer]
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
     steps:
       - name: all checks passed
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          echo "lint/check: $RESULTS"
+          echo "lint/check/consumer: $RESULTS"
           for r in $RESULTS; do [ "$r" = success ] || exit 1; done
