@@ -1,0 +1,18 @@
+Frame
+Copyright (c) FastTrack Studios.
+
+Third-party material
+
+figcraft (https://github.com/storytold/figcraft), the editing engine behind `frame-doc` and
+`frame-editor`. Copyright (c) 2026 ArtCraft Team and the FigCraft contributors. Licensed under the
+MIT License or the Apache License, Version 2.0, at your option; Frame uses it under Apache-2.0.
+Frame depends on FastTrackStudios' fork (https://github.com/FastTrackStudios/figcraft, branch `fts`,
+pinned by tag), whose changed files carry a "Modified by FastTrackStudios" line (Apache-2.0
+section 4(b)); the patch list is the fork's FORK.md. The ArtCraft name and logos are trademarks of
+the ArtCraft Team and are not covered by that licence.
+
+craft-libs (https://github.com/storytold/craft-libs), which figcraft's text crate depends on
+(`craft-font-catalog`). Copyright (c) the ArtCraft Team and contributors; see its repository for
+its licence.
+
+Rust crate dependencies keep their own licences.

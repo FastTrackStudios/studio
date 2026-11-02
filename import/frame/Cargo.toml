@@ -13,6 +13,8 @@ members = [
     "crates/frame",
     "crates/frame-architect",
     "crates/frame-view",
+    "crates/frame-doc",
+    "crates/frame-editor",
     "crates/frame/tools/cli",
     "crates/frame/tools/desktop",
     "crates/frame/tools/library-server",
@@ -24,6 +26,8 @@ default-members = [
     "crates/frame",
     "crates/frame-architect",
     "crates/frame-view",
+    "crates/frame-doc",
+    "crates/frame-editor",
     "crates/frame/tools/cli",
     "crates/frame/tools/desktop",
     "crates/frame/tools/library-server",
@@ -61,6 +65,16 @@ dioxus = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b7060
 facet = { version = "0.50.0-rc.7", features = ["reflect", "chrono", "uuid"] }
 facet-json = { version = "0.50.0-rc.7" }
 facet-styx = { version = "5.0.0-rc.7" }
+# figcraft, the editing engine (FastTrackStudios fork, pinned by tag). Only frame-doc and frame-editor use it.
+figcraft-collab = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-color = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-doc = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-geom = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-layout = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-pathops = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+figcraft-text = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1" }
+# The editing engine, slim: no PDF, wasm plugins, font downloads or VectorDrawable (FORK.md on the fork's `fts` branch).
+figcraft-engine = { git = "https://github.com/FastTrackStudios/figcraft", tag = "fts-v0.14.0-1", default-features = false }
 figma-api = { git = "https://github.com/gridaco/figma-api-rust.git" }
 fixed = "1.28"
 image = { version = "0.25", default-features = false, features = ["png"] }

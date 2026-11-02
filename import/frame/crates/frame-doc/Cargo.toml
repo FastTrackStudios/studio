@@ -1,0 +1,19 @@
+[package]
+name = "frame-doc"
+description = "Frame's document layer on figcraft: the editing model (figcraft-doc) and its property-level changes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+figcraft-collab = { workspace = true }
+figcraft-color = { workspace = true }
+figcraft-doc = { workspace = true }
+figcraft-geom = { workspace = true }
+figcraft-layout = { workspace = true }
+figcraft-pathops = { workspace = true }
+figcraft-text = { workspace = true }
