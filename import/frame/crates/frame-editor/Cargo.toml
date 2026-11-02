@@ -12,3 +12,7 @@ workspace = true
 [dependencies]
 frame-doc = { path = "../frame-doc" }
 figcraft-engine = { workspace = true }
+
+[dev-dependencies]
+frame = { path = "../frame" }
+serde_json = { workspace = true }

@@ -10,6 +10,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+blake3 = { workspace = true }
 figcraft-collab = { workspace = true }
 figcraft-color = { workspace = true }
 figcraft-doc = { workspace = true }
@@ -17,3 +18,12 @@ figcraft-geom = { workspace = true }
 figcraft-layout = { workspace = true }
 figcraft-pathops = { workspace = true }
 figcraft-text = { workspace = true }
+frame = { path = "../frame" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+# The round-trip test: the parity scenarios (Figma exports) and the plugin faces.
+frame = { path = "../frame", features = ["figma"] }
+plugin-faces = { path = "../../examples/plugin-faces" }
