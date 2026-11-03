@@ -15,8 +15,8 @@ pub const TITLE: &str = "Frame surface";
 /// How far a param's buttons move it.
 const STEP: f64 = 0.1;
 
-const BUTTON: &str = "padding: 4px 10px; border-radius: 6px; border: 1px solid #3f3f46; \
-                      background: #27272a; color: #e4e4e7; font-size: 13px;";
+const BUTTON: &str = "padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border, #3f3f46); \
+                      background: var(--secondary, #27272a); color: var(--secondary-foreground, #e4e4e7); font-size: 13px;";
 
 /// The view: the surface, its document, and each param and feed with what
 /// it reads; a param's two buttons move it a step.
@@ -73,19 +73,19 @@ pub fn FrameSurface() -> Element {
     };
     rsx! {
         div { style: "display: flex; flex-direction: column; gap: 12px; padding: 20px; \
-                      font-family: -apple-system, system-ui, sans-serif; color: #e4e4e7;",
+                      font-family: -apple-system, system-ui, sans-serif; color: var(--foreground, #e4e4e7);",
             div { style: "display: flex; align-items: baseline; gap: 8px;",
                 div { style: "font-size: 15px; font-weight: 650;", "{TITLE}" }
-                div { style: "font-size: 12px; color: #a1a1aa; font-family: monospace;", "{crate::KIND}" }
+                div { style: "font-size: 12px; color: var(--muted-foreground, #a1a1aa); font-family: monospace;", "{crate::KIND}" }
             }
-            div { style: "max-width: 420px; font-size: 13px; line-height: 1.5; color: #a1a1aa;",
+            div { style: "max-width: 420px; font-size: 13px; line-height: 1.5; color: var(--muted-foreground, #a1a1aa);",
                 "A Frame document, laid out and painted by Frame in a process of its own. Drag the knob; a save to the document reloads it."
             }
-            div { style: "font-size: 12px; color: #a1a1aa; font-family: monospace;",
+            div { style: "font-size: 12px; color: var(--muted-foreground, #a1a1aa); font-family: monospace;",
                 "{document}"
             }
             if let Some(e) = error {
-                div { style: "max-width: 420px; color: #f87171; font-size: 12px;", "{e}" }
+                div { style: "max-width: 420px; color: var(--destructive, #f87171); font-size: 12px;", "{e}" }
             }
             // The surface, and beside it each param and feed.
             div { style: "display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start;",
@@ -110,7 +110,7 @@ pub fn FrameSurface() -> Element {
                         }
                     },
                     Err(e) => rsx! {
-                        div { style: "color: #f87171; font-size: 13px;", "The surface did not load: {e}" }
+                        div { style: "color: var(--destructive, #f87171); font-size: 13px;", "The surface did not load: {e}" }
                     },
                 }
                 div { style: "display: flex; flex-direction: column; gap: 8px; \
