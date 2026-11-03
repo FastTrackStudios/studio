@@ -690,6 +690,7 @@ pub fn version() -> u64 {
 /// Use `theme` (or none) from now on.
 pub fn set(theme: Option<Arc<Theme>>) {
     with_host(|host| host.set(theme));
+    changed();
 }
 
 /// Load the theme layered from `paths` (base first; files, or folders of
@@ -699,7 +700,10 @@ pub fn set(theme: Option<Arc<Theme>>) {
 /// Why it did not compile; the previous theme stays.
 pub fn load(paths: Vec<PathBuf>, mode: Option<String>) -> Result<(), String> {
     #[cfg(all(not(test), feature = "native", not(target_arch = "wasm32")))]
-    WATCHING.store(true, Ordering::Release);
+    {
+        WATCHING.store(true, Ordering::Release);
+        start_watch();
+    }
     with_host(|host| host.load(paths, mode)).map_err(|errors| errors_text(&errors))
 }
 
@@ -757,9 +761,69 @@ fn start_poll_worker() -> Option<std::sync::mpsc::SyncSender<()>> {
     Some(sender)
 }
 
+/// Called after a reload is applied, from the thread that applied it: the
+/// windows ask for a frame, so a theme saved while nothing moves still shows
+/// (an idle Blitz window paints only after an event).
+type Changed = Arc<dyn Fn() + Send + Sync>;
+static ON_CHANGE: Mutex<Vec<Changed>> = Mutex::new(Vec::new());
+
+/// Calls `f` each time a new theme is applied (a file saved, a layer
+/// published), on the thread that applied it.
+pub fn on_change(f: impl Fn() + Send + Sync + 'static) {
+    ON_CHANGE
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .push(Arc::new(f));
+}
+
+fn changed() {
+    let hooks = ON_CHANGE
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    for f in hooks {
+        f();
+    }
+}
+
+/// The window's half of [`on_change`]: a new theme asks this window for a
+/// frame. Call once, in a component under the window.
+pub fn use_redraw_on_change() {
+    #[cfg(feature = "native")]
+    dioxus::prelude::use_hook(|| {
+        if let Some(window) =
+            dioxus::prelude::try_consume_context::<Arc<dyn winit::window::Window>>()
+        {
+            on_change(move || window.request_redraw());
+        }
+    });
+}
+
+/// Watches the theme's files while nothing else asks: every [`POLL`], on a
+/// thread of its own, so a saved file is seen with the window idle.
+#[cfg(all(not(test), feature = "native", not(target_arch = "wasm32")))]
+fn start_watch() {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        let _ = std::thread::Builder::new()
+            .name("theme-watch".into())
+            .spawn(|| {
+                loop {
+                    std::thread::sleep(POLL);
+                    if poll_due(&CHECKED, Instant::now()) {
+                        poll_host();
+                    }
+                }
+            });
+    });
+}
+
 fn poll_host() -> bool {
     match with_host(ThemeHost::poll) {
-        Some(Reload::Applied) => true,
+        Some(Reload::Applied) => {
+            changed();
+            true
+        }
         Some(Reload::Kept(errors)) => {
             let why = errors_text(&errors);
             tracing::warn!(theme.error = %why, "theme did not reload; keeping the last good one");

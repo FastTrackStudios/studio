@@ -432,6 +432,8 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
     let rect = use_signal(|| was.map_or((0.0, 0.0, 0.0, 0.0), |at| at.rect));
     let settled = use_hook(|| Rc::new(Cell::new(was.is_some())));
     let redraw = use_hook(crate::touch::redraw_hook);
+    // A theme saved while the window is idle still shows.
+    crate::skin::use_redraw_on_change();
     let span_y = use_signal(|| content_h.get());
     let input = use_hook(|| Rc::new(RefCell::new(Input::default())));
     let mounted = use_hook(|| Rc::new(RefCell::new(None::<Rc<MountedData>>)));
