@@ -16,7 +16,6 @@ members = [
     "features/ui/plugin-core",
     "features/ui/dock",
     "features/sync",
-    "crates/frame",
     "features/adapters/web/worklet",
     "features/patchbay",
     "features/midi",
@@ -153,13 +152,8 @@ members = [
     # ── patchbay ──
     "features/patchbay/driver",
     "apps/patchbay",
-    # ── frame ──
-    "crates/frame/tools/cli",
-    "crates/frame/tools/mcp",
-    "crates/frame/tools/desktop",
-    "crates/frame/tools/library-server",
+    # ── the plugin faces (frame documents; Frame itself is a git dep) ──
     "features/ui/plugin-faces",
-    "xtask/frame",
     "features/adapters/protools",
     "features/adapters/ableton",
     "features/adapters/logic",
