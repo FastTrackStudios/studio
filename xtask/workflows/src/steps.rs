@@ -20,7 +20,7 @@
 //!
 //! The SELF-HOSTED jobs (CI's Check, Tests and Wasm on THEBATTLESHIP's studio
 //! pools; the release builds on `thebattleship-release`) keep nix: there it is the host's own package manager, not
-//! an install step (their commands run in the repo's `.#ci` dev shell).
+//! an install step (their commands run in the repo's devenv shell).
 
 use crate::model::Step;
 

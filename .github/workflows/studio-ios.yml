@@ -151,6 +151,8 @@ jobs:
         build_no="$(date +%s)"
         echo "build_no=$build_no" >> "$GITHUB_OUTPUT"
         echo "Studio $TAG: marketing version ${{ needs.resolve.outputs.version }}, build $build_no"
+    - name: devenv CLI
+      uses: ./.github/actions/devenv
     - name: Build, sign, and upload Studio to TestFlight
       env:
         KEYCHAIN: fts-build.keychain
