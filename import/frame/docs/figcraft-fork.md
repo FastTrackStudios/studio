@@ -13,24 +13,12 @@ core never does (`just boundary`).
 
 ## Linux consumers using fontique 0.12
 
-The editor's figcraft dependency brings in `craft-font-catalog` and fontique 0.11 with
-`fontconfig-dlopen`. Both fontique 0.11 and 0.12 use `yeslogic-fontconfig-sys`, whose features
-Cargo unifies across those versions. A Linux consumer using fontique 0.12 with linked fontconfig
-symbols must align it to `fontconfig-dlopen` when the editor is in the same dependency graph.
-Studio verified this configuration by compiling its combined Frame/Editor graph and running its
-four theme examples:
-
-```toml
-# Workspace dependencies
-fontique = { version = "0.12", features = ["fontconfig-dlopen"] }
-
-# In the Linux UI crate's target-specific dependencies
-[target.'cfg(target_os = "linux")'.dependencies]
-fontique.workspace = true
-```
-
-This adjustment applies to consumers that combine these dependencies; Frame's core remains free
-of figcraft. Other consumers should check their own resolved feature graph before applying it.
+figcraft brings in `craft-font-catalog` and fontique 0.11 with `fontconfig-dlopen`. Both fontique
+0.11 and 0.12 use `yeslogic-fontconfig-sys`, whose features Cargo unifies across those versions, so
+the fontique 0.12 that every Blitz/parley consumer links must be built with `fontconfig-dlopen`
+too, or it fails to compile against the dlopen form of the sys crate. `crates/frame-doc/Cargo.toml`
+does this on Linux, where figcraft enters the graph, so a consumer of `frame-doc` or `frame-editor`
+needs nothing of its own.
 
 ## Bumping to a new upstream release
 
