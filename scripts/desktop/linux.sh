@@ -58,12 +58,11 @@ ARCH=x86_64
 mkdir -p "$OUT_DIR"
 OUT="$OUT_DIR/$title-$VERSION-linux-$ARCH.AppImage"
 
-# Re-run inside the CI dev shell (the one checks.yml builds the workspace in),
+# Re-run inside the devenv shell (the one checks.yml builds the workspace in),
 # then with the packaging tools added from the same nixpkgs the flake is
 # locked to (not whatever `nixpkgs` is today).
 if [ -z "${DESKTOP_IN_SHELL:-}" ]; then
-    exec nix develop --accept-flake-config "$ROOT#ci" \
-        --command env DESKTOP_IN_SHELL=1 bash "$0" "$@"
+    exec devenv shell -- env DESKTOP_IN_SHELL=1 bash "$0" "$@"
 fi
 if [ -z "${DESKTOP_IN_TOOLS:-}" ]; then
     rev="$(python3 -c "import json;print(json.load(open('flake.lock'))['nodes']['nixpkgs']['locked']['rev'])" 2>/dev/null || true)"

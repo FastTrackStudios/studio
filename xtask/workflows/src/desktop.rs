@@ -195,12 +195,12 @@ fi
             "Rig captures (rig-models) linked into the tree",
             &rig_models("/Volumes/build-disk/development/rig-models", true),
         ))
+        .step(Step::uses("devenv CLI", "./.github/actions/devenv"))
         .step(
             Step::run(
                 "Build, sign, notarize, staple",
                 r#"set -euo pipefail
 export PATH="/nix/var/nix/profiles/default/bin:$PATH"
-export NIX=/nix/var/nix/profiles/default/bin/nix
 BUILD_NO="$(date +%s)"
 export BUILD_NO
 rm -rf target/desktop

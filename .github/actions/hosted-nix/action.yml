@@ -1,16 +1,16 @@
-# Setup for a job on a GitHub-HOSTED runner (ubuntu-latest) that needs nix:
-# free the image's disk, install nix, trust fasttrackstudio.cachix.org, and
-# (optionally) realise a dev shell up front so its download shows as its own
-# step.
+# Setup for a job on a GitHub-HOSTED runner (ubuntu-latest) that needs nix or
+# the devenv shell: free the image's disk, install nix, trust
+# fasttrackstudio.cachix.org, install the devenv CLI, and (optionally) realise
+# the devenv shell up front so its download shows as its own step.
 #
-# Only cache-devshell.yml uses it now. The hosted checks.yml jobs stopped
-# using nix (October 2026): they install the pinned rustc, apt headers and
-# release binaries directly (xtask/workflows/src/steps.rs), which is faster
-# than pulling the ~1.5 GiB (7.7 GiB unpacked) ci shell. The self-hosted
-# jobs (tests, deploy) never used this: nix lives on those hosts already.
+# Used by cache-devshell.yml and by the hosted hotfix setup in checks.yml,
+# whose jobs enter the devenv shell. Most hosted checks.yml jobs install the
+# pinned rustc, apt headers and release binaries directly instead
+# (xtask/workflows/src/steps.rs). The self-hosted jobs never use this: nix and
+# devenv live on those hosts already (shared-tools).
 
 name: hosted nix
-description: Free disk, install nix + the fasttrackstudio cachix, realise the ci dev shell.
+description: Free disk, install nix + the fasttrackstudio cachix and devenv, realise the devenv shell.
 
 inputs:
   cachix-auth-token:
@@ -20,10 +20,10 @@ inputs:
       passes one.
     required: false
     default: ""
-  shell:
-    description: The dev shell to realise (empty = none).
+  devenv-shell:
+    description: Realise the devenv shell up front ("true") or not ("false").
     required: false
-    default: ci
+    default: "true"
 
 runs:
   using: composite
@@ -53,9 +53,10 @@ runs:
         name: fasttrackstudio
         authToken: ${{ inputs.cachix-auth-token }}
         skipPush: ${{ inputs.cachix-auth-token == '' }}
-    - name: Realise the ${{ inputs.shell }} dev shell
-      if: ${{ inputs.shell != '' }}
+    - name: devenv CLI
+      if: ${{ inputs.devenv-shell == 'true' }}
+      uses: ./.github/actions/devenv
+    - name: Realise the devenv shell
+      if: ${{ inputs.devenv-shell == 'true' }}
       shell: bash
-      env:
-        SHELL_NAME: ${{ inputs.shell }}
-      run: nix develop --accept-flake-config ".#${SHELL_NAME}" -c true
+      run: devenv shell -- true

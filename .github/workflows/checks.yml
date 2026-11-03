@@ -100,7 +100,7 @@ jobs:
         EVENT: ${{ github.event_name }}
         REF: ${{ github.ref }}
       run: |
-        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
+        devenv shell -- bash -euo pipefail -s <<'EOF'
         store="${CI_CACHE_DIR:?not a shared runner (no CI_CACHE_DIR)}/rail-evidence"
         mkdir -p "$store/$GITHUB_SHA"
         gates_out() {
@@ -320,7 +320,7 @@ jobs:
       env:
         RECORD: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       run: |
-        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
+        devenv shell -- bash -euo pipefail -s <<'EOF'
         if [ "$RECORD" = true ]; then
           ev="$CI_CACHE_DIR/rail-evidence/$GITHUB_SHA"
           mkdir -p "$ev"
@@ -385,7 +385,7 @@ jobs:
     - name: cargo clippy (advisory, does not block)
       continue-on-error: true
       run: |
-        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
+        devenv shell -- bash -euo pipefail -s <<'EOF'
         cargo clippy --workspace --no-deps --all-targets --keep-going \
           --message-format=json -- --cap-lints warn \
           | python3 .github/scripts/clippy-report.py
@@ -439,13 +439,13 @@ jobs:
         echo "target dir: $dir; pool $(du -sh "$pool" | cut -f1) of 200 GB; $(df -h "$pool" | awk 'NR==2 {print $4}') free on the disk"
     - name: wasm check (web bundles)
       run: |
-        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
+        devenv shell -- bash -euo pipefail -s <<'EOF'
         just web-wasm-check
         EOF
     - name: wasm check (Signal browser remote)
       if: ${{ !cancelled() }}
       run: |
-        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
+        devenv shell -- bash -euo pipefail -s <<'EOF'
         just signal-wasm-check
         EOF
     - name: Mark wasm green for rail
@@ -521,10 +521,10 @@ jobs:
           export GIT_CONFIG_COUNT=1
           export GIT_CONFIG_KEY_0="url.https://x-access-token:${ASSETS_TOKEN}@github.com/.insteadOf"
           export GIT_CONFIG_VALUE_0="https://github.com/"
-          nix develop --accept-flake-config .#ci --command just assets
+          devenv shell -- just assets
         elif [ -d "$store/studio-assets/.git" ] && [ -d "$store/rig-models/.git" ] && [ -d "$store/mic-models/.git" ]; then
           echo "no asset credential on this run (only main's full runs fetch): linking the clones this runner holds"
-          ASSETS_OFFLINE=1 nix develop --accept-flake-config .#ci --command just assets
+          ASSETS_OFFLINE=1 devenv shell -- just assets
         else
           echo "::warning::no asset clones on this runner yet and no credential to fetch them (a main run fetches them): tests that need assets will fail"
         fi
@@ -534,7 +534,7 @@ jobs:
         TEST_LOG: ${{ runner.temp }}/nextest-ci.log
         TEST_FILTER: ${{ needs.rail.outputs.test_filter }}
       run: |
-        nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'
+        devenv shell -- bash -euo pipefail -s <<'EOF'
         pkgs=()
         for p in $(just --evaluate test_packages); do pkgs+=(-p "$p"); done
         echo "packages: ${pkgs[*]}"

@@ -191,6 +191,7 @@ echo "Studio $TAG: marketing version ${{ needs.resolve.outputs.version }}, build
             )
             .id("stamp"),
         )
+        .step(Step::uses("devenv CLI", "./.github/actions/devenv"))
         .step(upload())
         .step(
             Step::run(

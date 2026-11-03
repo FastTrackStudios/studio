@@ -1,7 +1,7 @@
 //! `cache-devshell` — seed fasttrackstudio.cachix.org with the dev shell
 //! closures (the rust pin, the dx trio, cargo-rail, tracey, the native deps),
-//! so a DEVELOPER's `nix develop` (and the self-hosted NixOS runners' `nix
-//! develop .#ci`) substitutes them instead of building.
+//! so a DEVELOPER's `nix develop` substitutes them instead of building. CI
+//! enters the devenv shell now, which this does not seed.
 //!
 //! No CI job depends on it any more: the GitHub-hosted checks jobs stopped
 //! using nix (they install a pinned rustup toolchain, apt headers and release
@@ -48,7 +48,7 @@ push:
                     // With a token, cachix-action also pushes whatever this
                     // job builds.
                     .with("cachix-auth-token", "${{ secrets.CACHIX_AUTH_TOKEN }}")
-                    .with("shell", ""),
+                    .with("devenv-shell", "false"),
             )
             .step(Step::run(
                 "Build CI devshell closure",

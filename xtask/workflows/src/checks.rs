@@ -142,7 +142,7 @@ esac
 /// hotfix PR, a dispatch, a main push with no usable base — is the full
 /// set.
 ///
-/// ON THE POOL, in the `.#ci` shell with the CI cargo config, because rail's
+/// ON THE POOL, in the devenv shell with the CI cargo config, because rail's
 /// evidence is bound to the toolchain, the Cargo configuration and the
 /// platform that recorded it: `Check` records it there
 /// ([`check`]), so only a plan made there can use it.
@@ -467,7 +467,7 @@ echo "target dir: $dir; pool $(du -sh "$pool" | cut -f1) of 200 GB; $(df -h "$po
 }
 
 /// A build job on the pool: the checkout, the CI cargo config, the target
-/// dir. Every command runs in the repo's `.#ci` dev shell (the runners are
+/// dir. Every command runs in the repo's devenv shell (the runners are
 /// NixOS: the toolchain, the native headers, just, nextest and the wasm32 C
 /// toolchain all come from it).
 fn pool_job(name: &str, kind: &str, timeout: u32) -> Job {
@@ -537,11 +537,10 @@ fn mark_green(job: &str) -> Step {
 const MAIN_PUSH: &str =
     "${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}";
 
-/// `script`, run in the dev shell.
+/// `script`, run in the devenv shell (devenv.nix, the same shell a developer
+/// gets from `devenv shell`).
 fn in_shell(script: &str) -> String {
-    format!(
-        "nix develop --accept-flake-config .#ci --command bash -euo pipefail -s <<'EOF'\n{script}EOF\n"
-    )
+    format!("devenv shell -- bash -euo pipefail -s <<'EOF'\n{script}EOF\n")
 }
 
 /// When a run checks the workspace at all ([`check`] and [`lint`]).
@@ -690,7 +689,7 @@ else
   echo "::warning::no asset clones on this runner yet and no credential to fetch them (a main run fetches them): tests that need assets will fail"
 fi
 "#,
-            fetch = "nix develop --accept-flake-config .#ci --command just assets"
+            fetch = "devenv shell -- just assets"
         ),
     )
     .env("ASSETS_TOKEN", "${{ steps.assets-token.outputs.token }}")
