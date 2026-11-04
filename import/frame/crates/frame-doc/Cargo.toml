@@ -10,6 +10,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+blake3 = { workspace = true }
 figcraft-collab = { workspace = true }
 figcraft-color = { workspace = true }
 figcraft-doc = { workspace = true }
@@ -17,3 +18,21 @@ figcraft-geom = { workspace = true }
 figcraft-layout = { workspace = true }
 figcraft-pathops = { workspace = true }
 figcraft-text = { workspace = true }
+frame = { path = "../frame" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+# The round-trip test: the parity scenarios (Figma exports) and the plugin faces.
+frame = { path = "../frame", features = ["figma"] }
+plugin-faces = { path = "../../examples/plugin-faces" }
+
+# figcraft's font catalog turns on `yeslogic-fontconfig-sys/dlopen` (through
+# fontique 0.11). Cargo unifies that feature with the fontique 0.12 every
+# Blitz/parley consumer links, and fontique 0.12 built without its own
+# `fontconfig-dlopen` then fails to find the linked symbols. Aligning it here,
+# where figcraft enters the graph, saves every consumer the workaround
+# (docs/figcraft-fork.md).
+[target.'cfg(target_os = "linux")'.dependencies]
+fontique = { version = "0.12", default-features = false, features = ["fontconfig-dlopen"] }

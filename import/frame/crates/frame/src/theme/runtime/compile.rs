@@ -173,6 +173,12 @@ impl fmt::Debug for Theme {
 }
 
 impl Theme {
+    /// The merged source used to compile this exact theme, including drafts.
+    #[must_use]
+    pub fn source(&self) -> Arc<Scene> {
+        self.source.clone()
+    }
+
     /// Parse markup and compile it.
     ///
     /// # Errors
@@ -334,6 +340,11 @@ impl Theme {
     #[must_use]
     pub fn token(&self, name: &str) -> Option<&Value> {
         self.tokens.get(name)
+    }
+
+    /// Every token and its value in this theme's mode, by name.
+    pub fn tokens(&self) -> impl Iterator<Item = (&str, &Value)> {
+        self.tokens.iter().map(|(n, v)| (n.as_str(), v))
     }
 
     /// The size `role` was drawn at.

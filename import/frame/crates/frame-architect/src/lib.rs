@@ -7,6 +7,8 @@
 //!   `Engine`, and the telemetry pump.
 //! - [`library`] (feature `library`): shared surface libraries — the
 //!   protocol, the filesystem store and the live link.
+//! - [`theme`] (feature `theme`): a host's theme on the Action List —
+//!   inspect, apply, edit, reload, errors, save, revert, capture.
 
 pub mod engine;
 #[cfg(feature = "library")]
@@ -14,5 +16,7 @@ pub mod library;
 pub mod memory;
 #[cfg(feature = "remote")]
 pub mod remote;
+#[cfg(feature = "theme")]
+pub mod theme;
 
 pub use engine::*;

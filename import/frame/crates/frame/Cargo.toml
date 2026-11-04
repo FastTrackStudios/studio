@@ -99,3 +99,13 @@ required-features = ["live"]
 name = "loro_scene"
 path = "tests/loro_scene.rs"
 required-features = ["figma", "io"]
+
+[[test]]
+name = "theme_host"
+path = "tests/theme_host.rs"
+required-features = ["embed", "theme"]
+
+[[example]]
+name = "theme_host_bench"
+path = "examples/theme_host_bench.rs"
+required-features = ["theme"]

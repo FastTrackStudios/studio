@@ -11,6 +11,15 @@ core never does (`just boundary`).
 - The fork's patch list and policy are its `FORK.md`. Nothing goes upstream without Cody's yes.
 - Licence: Apache-2.0 for figcraft; `NOTICE` names it and storytold/craft-libs.
 
+## Linux consumers using fontique 0.12
+
+figcraft brings in `craft-font-catalog` and fontique 0.11 with `fontconfig-dlopen`. Both fontique
+0.11 and 0.12 use `yeslogic-fontconfig-sys`, whose features Cargo unifies across those versions, so
+the fontique 0.12 that every Blitz/parley consumer links must be built with `fontconfig-dlopen`
+too, or it fails to compile against the dlopen form of the sys crate. `crates/frame-doc/Cargo.toml`
+does this on Linux, where figcraft enters the graph, so a consumer of `frame-doc` or `frame-editor`
+needs nothing of its own.
+
 ## Bumping to a new upstream release
 
 The fork rebases onto upstream **release tags**, never `main` (upstream ships ~120 commits a day),

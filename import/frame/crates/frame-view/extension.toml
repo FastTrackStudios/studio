@@ -1,0 +1,51 @@
+# `frame-surface`, a process extension (architect's extensions, kind
+# `process`): its one view is of the `frame.surface` kind, a Frame
+# document's surface drawn by this process (the built-in knob and meter,
+# surfaces/knob-meter.frame, until a document is loaded); its actions load
+# the document and move and read its params and feeds, so an app's Action
+# List, its MCP server and its CLI drive it. `frame-surface --manifest`
+# prints this file, for a host that runs the program as a development
+# copy.
+id = "frame.surface"
+name = "Frame surface"
+version = "0.2.0"
+kind = "process"
+api = "0.1"
+description = "A Frame document's surface, drawn by Frame in a process of its own: its params and feeds moved by actions, a save to the document reloading it."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "frame-surface"
+
+[[actions]]
+id = "FRAME_SURFACE_LOAD"
+name = "Frame surface: load a document"
+description = "Shows the Frame document at `path` (a .frame file) and watches it: a save reloads it, its params and feeds kept where they were. Its params are its param-bound controls (0 to 1), its feeds its feed-bound ones (dB)."
+effect = "mutating"
+params = '{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}'
+
+[[actions]]
+id = "FRAME_SURFACE_PARAM_SET"
+name = "Frame surface: set a param"
+description = "Moves the surface's param `addr` (its control's binding, e.g. surface/drive) to `value`, 0 to 1."
+effect = "mutating"
+params = '{"type":"object","properties":{"addr":{"type":"string"},"value":{"type":"number","minimum":0,"maximum":1}},"required":["addr","value"]}'
+
+[[actions]]
+id = "FRAME_SURFACE_FEED"
+name = "Frame surface: push a feed reading"
+description = "A reading of the surface's feed `id` (e.g. level): `values`, dB, one per channel (-60 is an empty meter, +6 a full one)."
+effect = "mutating"
+params = '{"type":"object","properties":{"id":{"type":"string"},"values":{"type":"array","items":{"type":"number"}}},"required":["id","values"]}'
+
+[[actions]]
+id = "FRAME_SURFACE_STATE"
+name = "Frame surface: state"
+description = "What the surface shows: `document` (its file, null for the built-in one), `loads`, `error` (why the last save did not take), `params` ({addr, name, value 0..1}) and `feeds` ({id, name, values dB})."
+effect = "read_only"
+
+[[views]]
+id = "surface"
+title = "Frame surface"
+icon = "gauge"
+kind = "frame.surface"

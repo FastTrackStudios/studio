@@ -14,11 +14,19 @@ license = "MIT OR Apache-2.0"
 frame = { git = "https://github.com/FastTrackStudios/frame", tag = "v0.1.0", features = ["io", "render", "runtime"] }
 frame-architect = { git = "https://github.com/FastTrackStudios/frame", tag = "v0.1.0", features = ["remote"] }
 
-# Frame's [patch] tables (architect v0.10.0's), repeated: a dependency's
+# Frame's [patch] tables (architect's), repeated: a dependency's
 # patches don't apply to the app that uses it.
 [patch.crates-io]
+blitz-dom = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-upstream-2026-11" }
+blitz-traits = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-upstream-2026-11" }
+blitz-paint = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-upstream-2026-11" }
+blitz-shell = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-upstream-2026-11" }
+blitz-net = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-upstream-2026-11" }
+blitz-html = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-upstream-2026-11" }
 anyrender = { git = "https://github.com/FastTrackStudios/blitz", tag = "fts-upstream-2026-11" }
 anyrender_vello = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+anyrender_vello_hybrid = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+winit-uikit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
 wgpu-hal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
 raw-window-metal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
 styx-format = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.1.0" }
@@ -26,6 +34,11 @@ phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
 phon-jit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.2.3" }
 facet-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
 vox-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.3.0" }
+
+[patch."https://github.com/DioxusLabs/dioxus"]
+dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+dioxus-native-dom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+dioxus-vdom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
 
 # Its own workspace, not a member of Frame's.
 [workspace]

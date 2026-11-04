@@ -9,6 +9,20 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[features]
+ui = ["dep:dioxus", "dep:tokio", "dep:fontique"]
+
 [dependencies]
 frame-doc = { path = "../frame-doc" }
 figcraft-engine = { workspace = true }
+frame = { path = "../frame", features = ["theme"] }
+serde_json = { workspace = true }
+dioxus = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+fontique = { version = "0.12", features = ["fontconfig-dlopen"], optional = true }
+
+[dev-dependencies]
+frame = { path = "../frame", features = ["embed"] }
+serde_json = { workspace = true }
