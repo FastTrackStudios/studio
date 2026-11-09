@@ -1,0 +1,33 @@
+[package]
+name = "setlists"
+description = "Song libraries and setlists as notes of an Architect vault: libraries of songs by category, each song with its charts (engraved with the lyric lane), arrangements, lyrics, session and media; setlists of songs from any library."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+# Engrave a song's `.kf` to its Master Rhythm pages and PDF.
+engrave = ["dep:keyflow", "dep:engraver", "dep:resvg"]
+# `studio setlist import|engrave`: songs brought into a library from their files.
+cli = ["engrave", "dep:clap"]
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+keyflow = { workspace = true, optional = true, features = ["text", "engraver"] }
+# Its PDF writer (the facade turns the engraver on without `pdf`).
+engraver = { workspace = true, optional = true, features = ["pdf"] }
+# The pages as PNGs, as `kf png` draws them.
+resvg = { workspace = true, optional = true }
+clap = { workspace = true, optional = true, features = ["env"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

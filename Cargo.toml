@@ -59,6 +59,7 @@ members = [
     "features/adapters/reaper/session-extension",
     "features/adapters/reaper/session-extension/xtask",
     "features/song",
+    "features/setlists",
     # ── daw ──
     "features/audio/sample",
     "crates/daw/actions",
@@ -315,6 +316,9 @@ daw-standalone = { path = "crates/daw/standalone" }
 # session_proto::Song). Keyflow-agnostic: charts are stored as references
 # (relative paths / attachment ids), never embedded keyflow::Chart types.
 song = { path = "features/song" }
+# Song libraries and setlists as notes of an Architect vault project, shared
+# by an Architect share link (studio#386).
+setlists = { path = "features/setlists" }
 
 # ── keyflow domain — its own repo since the 2026-08 split ─────────────
 # (FastTrackStudios/keyflow: the chart language, its formats, the LSP and
