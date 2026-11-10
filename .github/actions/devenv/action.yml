@@ -1,5 +1,5 @@
 # The devenv CLI at exactly 2.4.0 (devenv.yaml's require_version), on PATH for
-# the steps after it: cachix's v2.4.0 tag, built by nix. A host that already
+# the steps after it: cachix's v2.4.0 tag (fetched over git), built by nix. A host that already
 # has this version keeps it (the self-hosted pool, airlock); anything else,
 # including a hosted runner with no devenv, builds the tag's CLI.
 #
@@ -24,6 +24,9 @@ runs:
           devenv --version
           exit 0
         fi
-        out="$(nix build --accept-flake-config --no-link --print-out-paths github:cachix/devenv/v2.4.0#devenv)"
+        # Over git, not `github:`: a `github:` ref is resolved through the
+        # GitHub API with no token, which rate-limits a shared runner (HTTP
+        # 403, every main run's Rail plan since 2026-11-02).
+        out="$(nix build --accept-flake-config --no-link --print-out-paths 'git+https://github.com/cachix/devenv?ref=refs/tags/v2.4.0&shallow=1#devenv')"
         echo "$out/bin" >> "$GITHUB_PATH"
         "$out/bin/devenv" --version
