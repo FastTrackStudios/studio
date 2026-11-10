@@ -47,6 +47,7 @@ cli = [
     "dep:fts-sample",
     "dep:keyflow",
     "dep:setlists",
+    "dep:productions",
     "dep:libc",
     "dep:serde",
     "dep:serde_json",
@@ -153,6 +154,9 @@ session = { workspace = true, optional = true }
 keyflow = { workspace = true, optional = true }
 # `studio setlist …`: song libraries and setlists in a vault, shared by link.
 setlists = { workspace = true, optional = true, features = ["cli"] }
+# `studio productions …`: the Ableton sets, Pro Tools sessions, REAPER and
+# Logic projects a studio has, as project notes with a stage (studio#396).
+productions = { workspace = true, optional = true, features = ["cli"] }
 # Ordered-collection wire contract (song Library / Setlist / …). Only the
 # wasm build uses it (the /{org}/{collection} browser dials the task-server's
 # per-org CollectionService), so the actual optional dep lives in the wasm
