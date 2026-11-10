@@ -108,7 +108,16 @@ pub struct Job {
     pub needs: Vec<String>,
     #[serde(rename = "if", skip_serializing_if = "Option::is_none")]
     pub cond: Option<String>,
-    pub runs_on: RunsOn,
+    /// A reusable workflow this job calls (`owner/repo/.github/workflows/x.yml@ref`):
+    /// such a job has `with` and `secrets`, and no `runs-on` or steps.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uses: Option<String>,
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    pub with: IndexMap<String, Value>,
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    pub secrets: IndexMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runs_on: Option<RunsOn>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_minutes: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -125,6 +134,7 @@ pub struct Job {
     pub outputs: IndexMap<String, String>,
     #[serde(skip_serializing_if = "IndexMap::is_empty")]
     pub env: IndexMap<String, String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub steps: Vec<Step>,
 }
 
@@ -139,10 +149,22 @@ fn one_or_many<S: Serializer>(needs: &[String], s: S) -> Result<S::Ok, S::Error>
 impl Job {
     pub fn new(runs_on: RunsOn) -> Self {
         Self {
+            runs_on: Some(runs_on),
+            ..Self::calling("")
+        }
+    }
+
+    /// A job that calls reusable workflow `workflow` (`with` its inputs,
+    /// `secret` its secrets).
+    pub fn calling(workflow: &str) -> Self {
+        Self {
             name: None,
             needs: Vec::new(),
             cond: None,
-            runs_on,
+            uses: (!workflow.is_empty()).then(|| workflow.to_owned()),
+            with: IndexMap::new(),
+            secrets: IndexMap::new(),
+            runs_on: None,
             timeout_minutes: None,
             continue_on_error: None,
             permissions: None,
@@ -157,6 +179,18 @@ impl Job {
 
     pub fn name(mut self, name: &str) -> Self {
         self.name = Some(name.to_owned());
+        self
+    }
+
+    /// A called workflow's input.
+    pub fn with(mut self, key: &str, value: impl Into<Value>) -> Self {
+        self.with.insert(key.to_owned(), value.into());
+        self
+    }
+
+    /// A called workflow's secret, passed by name.
+    pub fn secret(mut self, key: &str, value: &str) -> Self {
+        self.secrets.insert(key.to_owned(), value.to_owned());
         self
     }
 

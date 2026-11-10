@@ -13,7 +13,11 @@ description = "Song libraries and setlists: libraries of songs by category, each
 authors = ["FastTrackStudios"]
 
 [entry]
-path = "studio-setlists"
+# The program: bin/<target-triple>/studio-setlists in the released
+# archive (unpacked to bin/ for this platform); for a development copy,
+# put a build there (`cargo build -p setlists --features extension --bin
+# studio-setlists`).
+path = "bin/studio-setlists"
 
 [source]
 git = "https://github.com/FastTrackStudios/studio"

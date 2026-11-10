@@ -1,0 +1,34 @@
+# Generated from xtask::workflows::setlists_extension (xtask/workflows/src/setlists_extension.rs)
+# Rebuild with `just workflows`; do not edit by hand (`just workflows-check` fails CI on drift).
+# The reasons for every job and step are comments in that Rust source.
+name: setlists-extension
+on:
+  push:
+    tags:
+    - v*
+  workflow_dispatch: null
+permissions:
+  contents: read
+jobs:
+  extension:
+    name: Setlists extension
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    uses: FastTrackStudios/architect/.github/workflows/extension-release.yml@main
+    with:
+      package: features/setlists
+      build: |
+        if [ "$(uname)" = Linux ]; then
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends mold pkg-config libssl-dev libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev libdbus-1-dev libfontconfig1-dev libwayland-dev libxdo-dev
+        fi
+        cargo build --release --locked --target "$TARGET" -p setlists --features extension --bin studio-setlists
+      binary: target/$TARGET/release/studio-setlists
+      platforms: '["x86_64-unknown-linux-gnu","aarch64-apple-darwin"]'
+      runners: '{"x86_64-unknown-linux-gnu":"ubuntu-24.04","aarch64-apple-darwin":"macos-15"}'
+      architect-ref: main
+      registry: FastTrackStudios/architect
+      registry-dir: extensions
+    secrets:
+      EXT_SIGNING_KEY: ${{ secrets.FTS_RELEASE_MINISIGN_KEY }}
+    permissions:
+      contents: write
