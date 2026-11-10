@@ -1,0 +1,153 @@
+# Studio's productions, an Architect extension (src/ext.rs): the Ableton
+# sets, Pro Tools sessions, REAPER and Logic projects a studio has, as
+# project notes with a stage. One Rust value
+# (`productions::ext::Productions`) runs it two ways: an Architect build
+# that wants it compiles it in, and the Architect app installs it and
+# runs its program (src/main.rs, this manifest's [entry]). It reads DAW
+# files from disk and never writes one; it reaches notes only through the
+# app's actions.
+id = "studio-productions"
+name = "Productions"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "Keeps track of the music projects that live in other DAWs: Ableton sets, Pro Tools sessions, REAPER and Logic projects found by a scan and kept as project notes with a stage, key, tempo, client and due date; status bases; an Ableton show set's songs as a setlist; open in its DAW."
+authors = ["FastTrackStudios"]
+
+[entry]
+# The program: bin/<target-triple>/studio-productions in a released
+# archive (unpacked to bin/ for this platform); for a development copy,
+# put a build there (`cargo build -p productions --features extension
+# --bin studio-productions`).
+path = "bin/studio-productions"
+
+[source]
+git = "https://github.com/FastTrackStudios/studio"
+rev = "main"
+path = "features/productions"
+
+# Its API for others: method `m` is its action STUDIO_PRODUCTIONS_<M>.
+[provides]
+"studio.productions" = "0.1.0"
+
+# VAULT_*: the project, song and setlist notes and the `.base` files.
+# BASES_*: every production in one query (BASES_ROWS), and whether a
+# default base is there (BASES_READ).
+[capabilities]
+actions = ["VAULT_", "BASES_"]
+effect = "mutating"
+
+[[actions]]
+id = "STUDIO_PRODUCTIONS_SCAN"
+name = "Productions: scan a folder"
+description = "Walks `path` (absolute, or inside the vault; none: the whole vault) for Ableton sets (.als), Pro Tools sessions (.ptx, .ptf, .pts), REAPER projects (.rpp) and Logic projects (.logicx); an Ableton Project folder or a Pro Tools session folder is one production. Makes one project note each (Projects/<name>/project.md) or updates it: tempo, key, length, track count, plugins, missing media and last-saved are read again, stage, client and due date are never touched. An Ableton show set also gets its songs as a setlist. Writes the default bases (Productions/*.base) that are not there, unless `bases` is false. Never writes a DAW file."
+group = "Productions"
+effect = "mutating"
+params = '{"type":"object","properties":{"path":{"type":"string"},"bases":{"type":"boolean"}}}'
+
+[[actions]]
+id = "STUDIO_PRODUCTIONS_LIST"
+name = "Productions: list"
+description = "Every production of the vault (project notes of type ableton-set, protools-session, reaper-session or logic-project), or those at `stage`, of `client`, or of project type `type`: title, stage, client, due, key, tempo, length, tracks, plugins, missing media, last saved, file."
+group = "Productions"
+effect = "read_only"
+params = '{"type":"object","properties":{"stage":{"type":"string","enum":["writing","tracking","editing","mixing","mastering","delivered"]},"client":{"type":"string"},"type":{"type":"string"}}}'
+
+[[actions]]
+id = "STUDIO_PRODUCTIONS_SET_STAGE"
+name = "Productions: set the stage"
+description = "Sets production `project` (its title, its folder's name or its note's path) to `stage`: writing, tracking, editing, mixing, mastering or delivered. A property edit of its note, so it syncs as any note does."
+group = "Productions"
+effect = "mutating"
+params = '{"type":"object","properties":{"project":{"type":"string"},"stage":{"type":"string","enum":["writing","tracking","editing","mixing","mastering","delivered"]}},"required":["project","stage"]}'
+
+[[actions]]
+id = "STUDIO_PRODUCTIONS_OPEN"
+name = "Productions: open in its DAW"
+description = "Opens production `project`'s file with the platform's open command (open, xdg-open, start), which starts the DAW registered for it. `dry_run` answers the command and starts nothing."
+group = "Productions"
+effect = "mutating"
+params = '{"type":"object","properties":{"project":{"type":"string"},"dry_run":{"type":"boolean"}},"required":["project"]}'
+
+[[actions]]
+id = "STUDIO_PRODUCTIONS_BASES"
+name = "Productions: write the default bases"
+description = "Writes the default bases that are not there to Productions/: By stage (a board), By client, By due date, Changed this week, Missing media. One that is there is left as it is."
+group = "Productions"
+effect = "mutating"
+
+# Project types on Architect's built-in `project` kind (its state, start,
+# due, members). A production's due date is the kind's own `due`. Each
+# type lists what its adapter reads (src/read.rs); what it cannot read is
+# left out, or is a person's to fill in (a Pro Tools session's key).
+
+[[project_types]]
+id = "ableton-set"
+name = "Ableton set"
+icon = "audio-waveform"
+description = "An Ableton Live set, or an Ableton Project folder: one production. A show set's songs are listed as a setlist."
+properties = [
+    { key = "stage", name = "Stage", kind = "select", choices = ["writing", "tracking", "editing", "mixing", "mastering", "delivered"], default = "\"writing\"" },
+    { key = "client", name = "Client", kind = "link" },
+    { key = "key", name = "Key", kind = "text" },
+    { key = "tempo", name = "Tempo", kind = "number" },
+    { key = "length", name = "Length (seconds)", kind = "number" },
+    { key = "tracks", name = "Tracks", kind = "number" },
+    { key = "plugins", name = "Plugins", kind = "list" },
+    { key = "missingMedia", name = "Missing media", kind = "list" },
+    { key = "lastSaved", name = "Last saved", kind = "date" },
+    { key = "file", name = "File", kind = "text" },
+    { key = "show", name = "A show", kind = "toggle" },
+    { key = "setlist", name = "Setlist", kind = "link" },
+]
+
+[[project_types]]
+id = "protools-session"
+name = "Pro Tools session"
+icon = "audio-lines"
+description = "A Pro Tools session, or its session folder: one production. A session stores no key; fill it in."
+properties = [
+    { key = "stage", name = "Stage", kind = "select", choices = ["writing", "tracking", "editing", "mixing", "mastering", "delivered"], default = "\"writing\"" },
+    { key = "client", name = "Client", kind = "link" },
+    { key = "key", name = "Key", kind = "text" },
+    { key = "tempo", name = "Tempo", kind = "number" },
+    { key = "length", name = "Length (seconds)", kind = "number" },
+    { key = "tracks", name = "Tracks", kind = "number" },
+    { key = "plugins", name = "Plugins", kind = "list" },
+    { key = "missingMedia", name = "Missing media", kind = "list" },
+    { key = "lastSaved", name = "Last saved", kind = "date" },
+    { key = "file", name = "File", kind = "text" },
+]
+
+[[project_types]]
+id = "reaper-session"
+name = "REAPER session"
+icon = "disc-3"
+description = "A REAPER project (.rpp). A project stores no key; fill it in."
+properties = [
+    { key = "stage", name = "Stage", kind = "select", choices = ["writing", "tracking", "editing", "mixing", "mastering", "delivered"], default = "\"writing\"" },
+    { key = "client", name = "Client", kind = "link" },
+    { key = "key", name = "Key", kind = "text" },
+    { key = "tempo", name = "Tempo", kind = "number" },
+    { key = "length", name = "Length (seconds)", kind = "number" },
+    { key = "tracks", name = "Tracks", kind = "number" },
+    { key = "plugins", name = "Plugins", kind = "list" },
+    { key = "missingMedia", name = "Missing media", kind = "list" },
+    { key = "lastSaved", name = "Last saved", kind = "date" },
+    { key = "file", name = "File", kind = "text" },
+]
+
+[[project_types]]
+id = "logic-project"
+name = "Logic project"
+icon = "music-4"
+description = "A Logic Pro project (.logicx). Its length, plugins and missing media are not read."
+properties = [
+    { key = "stage", name = "Stage", kind = "select", choices = ["writing", "tracking", "editing", "mixing", "mastering", "delivered"], default = "\"writing\"" },
+    { key = "client", name = "Client", kind = "link" },
+    { key = "key", name = "Key", kind = "text" },
+    { key = "tempo", name = "Tempo", kind = "number" },
+    { key = "tracks", name = "Tracks", kind = "number" },
+    { key = "lastSaved", name = "Last saved", kind = "date" },
+    { key = "file", name = "File", kind = "text" },
+]
