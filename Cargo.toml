@@ -494,6 +494,17 @@ crdt-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0
 crdt-seaorm = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.11.2" }
 # The Dioxus primitive library (was libs/ui/fts-ui, renamed on the split).
 architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.11.2" }
+# Architect extensions: Studio's features are linked extensions, compiled
+# into Studio's app and served as process extensions the Architect app
+# installs (features/setlists; studio#386).
+architect-extensions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.11.2" }
+architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.11.2" }
+architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.11.2" }
+# The app side an extension's tests run against: the vault's and Bases'
+# actions over a folder, and the settings registry a Host is given.
+architect-vault = { package = "vault", git = "https://github.com/FastTrackStudios/architect", tag = "v0.11.2" }
+architect-bases = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.11.2" }
+architect-settings = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.11.2" }
 # The keymap engine (studio's former `features/input`, studio#61).
 architect-input = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.11.2" }
 # The launcher engine, vendored into architect in v0.2.0 (was
