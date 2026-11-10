@@ -16156,6 +16156,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "productions"
+version = "26.10.3"
+dependencies = [
+ "ableton",
+ "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.11.2)",
+ "architect-bases",
+ "architect-extensions",
+ "architect-settings",
+ "chrono",
+ "clap",
+ "dawfile-reaper",
+ "futures",
+ "futures-channel",
+ "logic",
+ "protools",
+ "serde_json",
+ "serde_yaml",
+ "setlists",
+ "tempfile",
+ "vault",
+]
+
+[[package]]
 name = "profiling"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18722,6 +18745,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "objc2-media-player",
  "objc2-ui-kit 0.3.2",
+ "productions",
  "rfd",
  "serde",
  "serde_json",

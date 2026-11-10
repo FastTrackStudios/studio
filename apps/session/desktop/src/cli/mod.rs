@@ -105,6 +105,10 @@ pub enum Command {
     /// songs (their charts engraved), make and reorder setlists, share
     /// one by link (`/s/<code>/` on the node holding the vault).
     Setlist(setlists::cli::Cli),
+    /// Productions in other DAWs: find the Ableton sets, Pro Tools
+    /// sessions, REAPER and Logic projects under a folder and keep each
+    /// as a project note of an Architect vault, with a stage.
+    Productions(productions::cli::Cli),
     /// Write Ogg Vorbis proxies of a session's media: `Media/Bass.wav` →
     /// `Media/Proxies/Bass.ogg`, beside what they stand in for, so they
     /// sync with the session. What a browser or a phone plays from.
@@ -382,6 +386,10 @@ pub async fn run(command: Command) -> eyre::Result<ExitCode> {
         }
         Command::Library(command) => library(command).await,
         Command::Setlist(cli) => {
+            println!("{}", cli.run().map_err(|e| eyre::eyre!(e))?);
+            Ok(())
+        }
+        Command::Productions(cli) => {
             println!("{}", cli.run().map_err(|e| eyre::eyre!(e))?);
             Ok(())
         }

@@ -1,0 +1,64 @@
+[package]
+name = "productions"
+description = "Productions in other DAWs, an Architect extension: Ableton sets, Pro Tools sessions, REAPER and Logic projects found on disk and kept as project notes with a stage; an Ableton show set's songs as a setlist. Linked into an Architect build, or run as a process extension in the Architect app."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+# The extension as a process (extension.toml's [entry]): what the
+# Architect app runs when it installs it.
+name = "studio-productions"
+path = "src/main.rs"
+required-features = ["extension"]
+
+[features]
+default = []
+# The extension: its actions, over the app's actions (never the vault's
+# files).
+extension = ["dep:architect-extensions", "dep:futures-channel"]
+# `studio productions scan|list|stage|open`: the same actions over a vault
+# folder opened with Architect's own vault and Bases actions.
+cli = [
+    "extension",
+    "dep:clap",
+    "dep:futures",
+    "dep:architect",
+    "dep:architect-vault",
+    "dep:architect-bases",
+]
+
+[dependencies]
+# What reads the foreign files. Nothing here writes one.
+ableton = { workspace = true }
+protools = { workspace = true }
+logic = { workspace = true }
+dawfile-reaper = { workspace = true }
+# A show set's songs in the note shape setlists keeps (its public API only).
+setlists = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+architect-extensions = { workspace = true, optional = true, features = ["guest"] }
+futures-channel = { workspace = true, optional = true }
+clap = { workspace = true, optional = true, features = ["env"] }
+futures = { workspace = true, optional = true }
+architect = { workspace = true, optional = true, features = ["action-list"] }
+architect-vault = { workspace = true, optional = true, features = ["actions"] }
+architect-bases = { workspace = true, optional = true, features = ["actions"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+futures = { workspace = true }
+# The app side of tests/extension.rs: a vault's and Bases' actions, the host.
+architect = { workspace = true, features = ["action-list"] }
+architect-extensions = { workspace = true, features = ["host", "linked", "process"] }
+architect-settings = { workspace = true }
+architect-bases = { workspace = true, features = ["actions"] }
+architect-vault = { workspace = true, features = ["actions"] }
+
+[lints]
+workspace = true
