@@ -12,12 +12,12 @@
 //!   any library in running order, an arrangement included
 //!   (`Song#Acoustic`; [`setlist`]), shared by an Architect share link.
 //!
-//! **Architect does the rest.** The extension (the next layer) fills the
-//! navigator's two-stage sidebar:
+//! **Architect does the rest.** The extension ([`ext`], feature
+//! `extension`) fills the navigator's two-stage sidebar ([`nav`]):
 //! setlists, or libraries and their categories, on the left; their songs
 //! on the right; each song a scope tab in its "Song" screenset. It
 //! reaches notes and share links only through the app's actions
-//! (`host`), so the same code is compiled into an Architect build
+//! ([`host`]), so the same code is compiled into an Architect build
 //! (Studio's app, a deployment's own web build) or installed into the
 //! Architect app as a process. Bases group a library by category; the
 //! shell brings sign-in, orgs, ⌘K and settings.
@@ -36,6 +36,13 @@ pub mod vault;
 
 #[cfg(feature = "engrave")]
 pub mod chart;
+
+#[cfg(feature = "extension")]
+pub mod ext;
+#[cfg(feature = "extension")]
+pub mod host;
+#[cfg(feature = "extension")]
+pub mod nav;
 
 #[cfg(feature = "cli")]
 pub mod cli;

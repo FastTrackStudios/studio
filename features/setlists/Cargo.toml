@@ -1,6 +1,6 @@
 [package]
 name = "setlists"
-description = "Song libraries and setlists as notes of an Architect vault: libraries of songs by category, each song with its charts (engraved with the lyric lane), arrangements, lyrics, session and media; setlists of songs from any library."
+description = "Song libraries and setlists, an Architect extension: libraries of songs by category (each song with its charts, arrangements, lyrics, session and media), setlists from any library in the navigator, a setlist shared by an Architect share link. Linked into Studio, or run as a process extension in the Architect app."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,8 +8,18 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[[bin]]
+# The extension as a process (extension.toml's [entry]): what the
+# Architect app runs when it installs it.
+name = "studio-setlists"
+path = "src/main.rs"
+required-features = ["extension"]
+
 [features]
 default = []
+# The extension: its navigator providers, views and actions, over the
+# app's actions (never the disk).
+extension = ["dep:architect-extensions", "dep:architect-navigator-api", "dep:architect-workspace", "dep:dioxus", "dep:serde_json"]
 # Engrave a song's `.kf` to its Master Rhythm pages and PDF.
 engrave = ["dep:keyflow", "dep:engraver", "dep:resvg"]
 # `studio setlist import|engrave`: songs brought into a library from their files.
@@ -24,10 +34,23 @@ keyflow = { workspace = true, optional = true, features = ["text", "engraver"] }
 engraver = { workspace = true, optional = true, features = ["pdf"] }
 # The pages as PNGs, as `kf png` draws them.
 resvg = { workspace = true, optional = true }
+architect-extensions = { workspace = true, optional = true, features = ["guest"] }
+architect-navigator-api = { workspace = true, optional = true }
+architect-workspace = { workspace = true, optional = true, features = ["ui"] }
+dioxus = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 clap = { workspace = true, optional = true, features = ["env"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+futures = { workspace = true }
+facet = { workspace = true }
+# The app side of tests/extension.rs: a vault's and Bases' actions, the host.
+architect = { workspace = true, features = ["action-list"] }
+architect-extensions = { workspace = true, features = ["host", "linked", "process"] }
+architect-settings = { workspace = true }
+architect-bases = { workspace = true, features = ["actions"] }
+architect-vault = { workspace = true, features = ["actions"] }
 
 [lints]
 workspace = true

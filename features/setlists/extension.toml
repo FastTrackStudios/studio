@@ -1,0 +1,153 @@
+# Studio's song libraries and setlists, an Architect extension
+# (src/ext.rs). One Rust value (`setlists::ext::Setlists`) runs it two
+# ways: an Architect build that wants it compiles it in (Studio's app, a
+# deployment's own web build), and the Architect app installs it from the
+# store and runs its program (src/main.rs, this manifest's [entry]).
+# It reaches notes and share links only through the app's actions.
+id = "studio-setlists"
+name = "Setlists"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "Song libraries and setlists: libraries of songs by category, each song with its charts, arrangements, lyrics, session and media; setlists from any library in the navigator, each song a scope tab; a setlist shared by link."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "studio-setlists"
+
+[source]
+git = "https://github.com/FastTrackStudios/studio"
+rev = "main"
+path = "features/setlists"
+
+# Its API for others: method `m` is its action STUDIO_SETLISTS_<M>.
+[provides]
+"studio.setlists" = "0.1.0"
+
+[capabilities]
+actions = ["VAULT_", "BASES_", "SHARE_CREATE", "EXT_VIEW_OPEN"]
+effect = "mutating"
+
+[[actions]]
+id = "STUDIO_SETLISTS_LIST"
+name = "Setlists: list"
+description = "Every setlist of the vault (notes of type setlist, in Setlists/): its title, date, share code, and its songs in order with their library and key, tempo and meter."
+group = "Setlists"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_SETLISTS_CREATE"
+name = "New setlist"
+description = "Makes setlist `title` (Setlists/<title>.md) of `songs` in order, each `[Library/]Song[#Arrangement]`; `library` names the library of the songs that name none (a bare title is found in whichever library has it, when only one does); `date` optional."
+group = "Setlists"
+effect = "mutating"
+params = '{"type":"object","properties":{"title":{"type":"string"},"songs":{"type":"array","items":{"type":"string"}},"library":{"type":"string"},"date":{"type":"string"}},"required":["title"]}'
+
+[[actions]]
+id = "STUDIO_SETLISTS_ADD"
+name = "Setlists: add a song"
+description = "Adds `song` (`[Library/]Song[#Arrangement]`) to setlist `setlist`, at position `at` (1-based; none: the end)."
+group = "Setlists"
+effect = "mutating"
+params = '{"type":"object","properties":{"setlist":{"type":"string"},"song":{"type":"string"},"library":{"type":"string"},"at":{"type":"integer"}},"required":["setlist","song"]}'
+
+[[actions]]
+id = "STUDIO_SETLISTS_REMOVE"
+name = "Setlists: take a song out"
+description = "Takes `song` (its title, `Song (Arrangement)`, or its 1-based position) out of setlist `setlist`."
+group = "Setlists"
+effect = "mutating"
+params = '{"type":"object","properties":{"setlist":{"type":"string"},"song":{"type":"string"}},"required":["setlist","song"]}'
+
+[[actions]]
+id = "STUDIO_SETLISTS_MOVE"
+name = "Setlists: move a song"
+description = "Moves `song` (its title, or its 1-based position) to position `to` (1-based) of setlist `setlist`."
+group = "Setlists"
+effect = "mutating"
+params = '{"type":"object","properties":{"setlist":{"type":"string"},"song":{"type":"string"},"to":{"type":"integer"}},"required":["setlist","song","to"]}'
+
+[[actions]]
+id = "STUDIO_SETLISTS_SHARE"
+name = "Share a setlist"
+description = "Shares setlist `setlist` by an Architect share link (SHARE_CREATE on the current org's node): its note and its songs' (each with its chart pages, lyrics and session), for `audience` link (default), public, org or invited:<emails>. Answers the link."
+group = "Setlists"
+effect = "mutating"
+params = '{"type":"object","properties":{"setlist":{"type":"string"},"audience":{"type":"string"}},"required":["setlist"]}'
+
+[[actions]]
+id = "STUDIO_SETLISTS_SONGS"
+name = "Songs: list"
+description = "The songs of every library (notes of type song under Libraries/), or of `library`, or of `category` in it: categories, arrangements, key, tempo and meter."
+group = "Setlists"
+effect = "read_only"
+params = '{"type":"object","properties":{"library":{"type":"string"},"category":{"type":"string"}}}'
+
+[[actions]]
+id = "STUDIO_SETLISTS_LIBRARIES"
+name = "Libraries: list"
+description = "The song libraries (Libraries/<name>/), each with its categories and how many songs are in each."
+group = "Setlists"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_SETLISTS_NAV_SNAPSHOT"
+name = "Setlists: the navigator's tree"
+description = "Its navigator provider's snapshot: each setlist, and its songs in order as items that open as scope tabs."
+group = "Setlists"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_SETLISTS_LIBRARIES_NAV_SNAPSHOT"
+name = "Libraries: the navigator's tree"
+description = "Its navigator provider's snapshot: each library and its categories, their songs as items that open as scope tabs."
+group = "Setlists"
+effect = "read_only"
+
+[[views]]
+id = "song"
+title = "Song"
+icon = "music"
+
+[[views]]
+id = "setlist"
+title = "Setlists"
+icon = "list-music"
+
+# The two-stage sidebar: setlists (or libraries and their categories) on
+# the left, their songs on the right.
+[[navigator_providers]]
+id = "setlists"
+title = "Setlists"
+icon = "list-music"
+views = ["song", "setlist"]
+actions = "STUDIO_SETLISTS_NAV"
+
+[[navigator_providers]]
+id = "libraries"
+title = "Libraries"
+icon = "library"
+views = ["song"]
+actions = "STUDIO_SETLISTS_LIBRARIES_NAV"
+
+# A song opens in the "Song" screenset.
+[[deck_templates]]
+context = "song"
+screenset = "Song"
+layout = "song.json"
+
+# A song's scope tab: wide, its title over its key and tempo.
+[[tab_kinds]]
+id = "song"
+title = "Song"
+scope = true
+width = "wide"
+icon = "music"
+subtitle = "{key} · {tempo} bpm"
+
+# A setlist's view, a tab of its own kind.
+[[tab_kinds]]
+id = "setlist"
+title = "Setlist"
+icon = "list-music"
+views = ["setlist"]
