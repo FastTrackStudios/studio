@@ -43,7 +43,8 @@ const ARCHITECT_REF: &str = "main";
 const PLATFORMS: &str = r#"["x86_64-unknown-linux-gnu","aarch64-apple-darwin"]"#;
 
 /// GitHub-hosted runners, one per platform.
-const RUNNERS: &str = r#"{"x86_64-unknown-linux-gnu":"ubuntu-24.04","aarch64-apple-darwin":"macos-15"}"#;
+const RUNNERS: &str =
+    r#"{"x86_64-unknown-linux-gnu":"ubuntu-24.04","aarch64-apple-darwin":"macos-15"}"#;
 
 /// The build, once per platform, `TARGET` set.
 const BUILD: &str = "\
