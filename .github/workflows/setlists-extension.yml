@@ -5,12 +5,14 @@ name: setlists-extension
 on:
   push:
     tags:
-    - setlists-v*
+    - v*
+  workflow_dispatch: null
 permissions:
   contents: read
 jobs:
   extension:
     name: Setlists extension
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     uses: FastTrackStudios/architect/.github/workflows/extension-release.yml@main
     with:
       package: features/setlists

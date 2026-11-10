@@ -1,23 +1,29 @@
 //! `setlists-extension` — Studio's setlists Architect extension
 //! (`features/setlists`, id `studio-setlists`) released to the
-//! FastTrackStudios extension store.
+//! FastTrackStudios extension store with Studio's own releases.
 //!
 //! ```text
-//!   push tag setlists-v*   architect's reusable extension-release.yml:
-//!                          plan (reads features/setlists/extension.toml),
-//!                          build the `studio-setlists` program per
-//!                          platform, pack one .archext, sign it in this
-//!                          repository's release-signing environment with
+//!   push tag v*            architect's reusable extension-release.yml:
+//!                          plan (reads features/setlists/extension.toml);
+//!                          when the store already lists that version,
+//!                          nothing more (seconds). Otherwise: build the
+//!                          `studio-setlists` program per platform, pack
+//!                          one .archext, sign it in release-signing with
 //!                          the org release key (the key every Architect
 //!                          app trusts), attach it to the tag's GitHub
-//!                          Release, and write the store's index entry
-//!                          (extensions/index.toml in architect).
+//!                          Release (release.yml's), and write the store's
+//!                          index entry (extensions/index.toml in
+//!                          architect).
+//!   workflow_dispatch      the same again, run on a v* tag (`gh workflow
+//!                          run setlists-extension.yml --ref v26.11.0`):
+//!                          a retry. On a branch it does nothing (the
+//!                          signing key admits tags only).
 //! ```
 //!
-//! The Release must exist before the run signs (`gh release create
-//! setlists-vX.Y.Z` with the tag; its notes' first line is the index's
-//! changelog line). No FTS_REGISTRY_TOKEN here: the index step prints the
-//! entry and the store's pull request is opened from it by hand.
+//! So shipping a new version of the extension is a version bump in its
+//! extension.toml, released with the next v* tag; no tags of its own. No
+//! FTS_REGISTRY_TOKEN here: the index step prints the entry and the
+//! store's pull request is opened from it by hand.
 //!
 //! Hosted runners, not the NixOS pool: a program linked on NixOS loads
 //! its libc from /nix/store and runs nowhere else. Ubuntu needs the GTK,
@@ -56,7 +62,8 @@ pub fn workflow() -> Result<Workflow> {
         yaml(
             r#"
 push:
-  tags: ["setlists-v*"]
+  tags: ["v*"]
+workflow_dispatch:
 "#,
         )?,
     )
@@ -69,6 +76,7 @@ fn extension() -> Result<Job> {
         "FastTrackStudios/architect/.github/workflows/extension-release.yml@{ARCHITECT_REF}"
     ))
     .name("Setlists extension")
+    .cond("${{ startsWith(github.ref, 'refs/tags/v') }}")
     // The sign job uploads to the Release.
     .permissions(yaml("contents: write\n")?)
     .with("package", "features/setlists")
