@@ -321,9 +321,8 @@ song = { path = "features/song" }
 # tree-sitter grammar, and Engraver.) One tag pin shared by every entry so
 # the whole domain moves together.
 #
-# Pinned to FastTrackStudios/keyflow#52's head (architect v0.11.2 by tag,
-# version 0.4.0: the engraved rhythm charts and the timed lyric lane)
-# until it merges and is tagged v0.4.0; then repin every entry to the tag.
+# v0.4.0: the engraved rhythm charts and the timed lyric lane; architect
+# v0.11.2 by tag (a rev of the same commit would be a second source).
 #
 # `keyflow` and `engraver` are the facades — depend on those. The rest are
 # listed only because in-tree consumers still name them directly; new code
@@ -335,17 +334,17 @@ song = { path = "features/song" }
 # `chordpro`, `midi`, `orchestra`, `sync`, …), `engraver` (layout +
 # render, `score` included) and the `keyflow` facade. `keyflow-lang`
 # defaults OFF here; consumers name the formats they use.
-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "bde25689b2ff3bede37ed64d92fdc0562d4cc636" }
-keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", rev = "bde25689b2ff3bede37ed64d92fdc0562d4cc636" }
-keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", rev = "bde25689b2ff3bede37ed64d92fdc0562d4cc636", default-features = false }
-keyflow-annotate = { git = "https://github.com/FastTrackStudios/keyflow", rev = "bde25689b2ff3bede37ed64d92fdc0562d4cc636" }
-keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", rev = "bde25689b2ff3bede37ed64d92fdc0562d4cc636" }
-keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", rev = "bde25689b2ff3bede37ed64d92fdc0562d4cc636" }
-keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", rev = "bde25689b2ff3bede37ed64d92fdc0562d4cc636" }
-tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "bde25689b2ff3bede37ed64d92fdc0562d4cc636" }
+keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.4.0" }
+keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.4.0" }
+keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.4.0", default-features = false }
+keyflow-annotate = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.4.0" }
+keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.4.0" }
+keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.4.0" }
+keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.4.0" }
+tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.4.0" }
 # Engraver — defaults OFF at the root (the full `engraver` feature drags
 # wgpu/vello + PDF export); consumers opt into `svg`/`wgpu`/`engraver`.
-engraver = { git = "https://github.com/FastTrackStudios/keyflow", rev = "bde25689b2ff3bede37ed64d92fdc0562d4cc636", default-features = false }
+engraver = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.4.0", default-features = false }
 
 # ── signal domain (wave 4) ────────────────────────────────────────────
 # `signal` is the facade — the only public API surface for the signal
@@ -822,7 +821,7 @@ editor-crdt = { git = "https://github.com/FastTrackStudios/editor", rev = "81451
 # folded into it at keyflow v0.2.8). Defaults off: no `.kf` fence
 # renderer, so no engraver. Renamed because task's older `editor-keyflow`
 # (below, for the site) has the same package name.
-keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", rev = "bde25689b2ff3bede37ed64d92fdc0562d4cc636", default-features = false }
+keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.4.0", default-features = false }
 editor-keyflow = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 editor-keyflow-lang = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 view-knowledge-graph = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
