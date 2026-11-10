@@ -57,6 +57,11 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
                          Architect vault project, charts engraved beside
                          them, a setlist shared by an Architect share link
                          (`studio setlist …`; studio#386)
+            productions/ the Ableton sets, Pro Tools sessions, REAPER and
+                         Logic projects a studio has, found by a scan and
+                         kept as project notes of an Architect vault with
+                         a stage; an Ableton show set's songs as a setlist
+                         (`studio productions …`; studio#396)
             session/, song/, sampler/, plugin-host/, audio/, midi/, input/,
             sync/, chords/, formats/, patchbay/, control-surfaces/,
             dynamic-template/, patch-list/, preset-browser/, …
