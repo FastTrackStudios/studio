@@ -24,6 +24,7 @@ mod images;
 mod model;
 mod pr;
 mod release;
+mod setlists_extension;
 mod steps;
 mod studio_ios;
 
@@ -48,6 +49,7 @@ const WORKFLOWS: &[(&str, Build)] = &[
     ("desktop", desktop::workflow),
     ("images", images::workflow),
     ("release", release::workflow),
+    ("setlists-extension", setlists_extension::workflow),
     ("studio-ios", studio_ios::workflow),
 ];
 
