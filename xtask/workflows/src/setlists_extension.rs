@@ -37,7 +37,7 @@ use anyhow::Result;
 
 /// Architect's reusable workflow and the ref whose `cargo xtask ext-*`
 /// pack and sign: one pin.
-const ARCHITECT_REF: &str = "main";
+const ARCHITECT_REF: &str = "b224c39cba2bd21cb17d451436df5aa3f3400875";
 
 /// The platforms the program is built for.
 const PLATFORMS: &str = r#"["x86_64-unknown-linux-gnu","aarch64-apple-darwin"]"#;
