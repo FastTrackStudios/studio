@@ -46,6 +46,7 @@ cli = [
     "dep:eyre",
     "dep:fts-sample",
     "dep:keyflow",
+    "dep:setlists",
     "dep:libc",
     "dep:serde",
     "dep:serde_json",
@@ -150,6 +151,8 @@ fts-audio-ui = { workspace = true }
 # are native-only and live in the cfg(not wasm) table below.
 session = { workspace = true, optional = true }
 keyflow = { workspace = true, optional = true }
+# `studio setlist …`: song libraries and setlists in a vault, shared by link.
+setlists = { workspace = true, optional = true, features = ["cli"] }
 # Ordered-collection wire contract (song Library / Setlist / …). Only the
 # wasm build uses it (the /{org}/{collection} browser dials the task-server's
 # per-org CollectionService), so the actual optional dep lives in the wasm

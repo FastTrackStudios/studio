@@ -53,6 +53,10 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
             editing/     editing a recorded performance — quantize, groove,
                          leveling — with a profile per material, drums
                          first (docs/design/editing.md)
+            setlists/    song libraries and setlists as notes of an
+                         Architect vault project, charts engraved beside
+                         them, a setlist shared by an Architect share link
+                         (`studio setlist …`; studio#386)
             session/, song/, sampler/, plugin-host/, audio/, midi/, input/,
             sync/, chords/, formats/, patchbay/, control-surfaces/,
             dynamic-template/, patch-list/, preset-browser/, …
