@@ -24,7 +24,7 @@ jobs:
         cargo build --release --locked --target "$TARGET" -p setlists --features extension --bin studio-setlists
       binary: target/$TARGET/release/studio-setlists
       platforms: '["x86_64-unknown-linux-gnu","aarch64-apple-darwin"]'
-      runners: '{"x86_64-unknown-linux-gnu":"ubuntu-24.04","aarch64-apple-darwin":"macos-14"}'
+      runners: '{"x86_64-unknown-linux-gnu":"ubuntu-24.04","aarch64-apple-darwin":"macos-15"}'
       architect-ref: feat/ext-store-release
       registry: FastTrackStudios/architect
       registry-dir: extensions
