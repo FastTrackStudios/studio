@@ -833,7 +833,7 @@ check:
 # build and run exactly these; building the workspace's ~200 crates with no
 # tests left would only link empty harnesses. Add a crate here when it gains
 # tests worth running on every change.
-test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp dioxus-test dock"
+test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp dioxus-test dock studio-architect"
 
 # Run the core test set (test_packages above).
 test:
@@ -2146,6 +2146,26 @@ rail-evidence:
     cargo rail plan evidence --work cargo.build -o "$dir/cargo.build.json" -- check --workspace
     echo "rail evidence: $dir"
 
+
+# ── Studio Architect (apps/architect, docs/architect-distribution.md) ────
+# Studio's distribution of Architect: the Architect app with Studio's
+# extensions compiled in. Its node is what a hosted Architect runs.
+
+# The headless node for this machine (release profile; PROFILE=dev for a quick one).
+studio-architect-node:
+    bash scripts/studio-architect.sh node
+
+# The web bundle (Architect's web app + this distribution.json) into OUT.
+studio-architect-web OUT:
+    bash scripts/studio-architect.sh web {{OUT}}
+
+# `cargo check` of the node, as the PR job runs it.
+studio-architect-check:
+    bash scripts/studio-architect.sh check
+
+# The release's tarballs (node + web, with .sha256) into DIR.
+studio-architect-release TAG DIR:
+    bash scripts/studio-architect.sh release {{TAG}} {{DIR}}
 
 # ── Releases ─────────────────────────────────────────────────────────────
 #
