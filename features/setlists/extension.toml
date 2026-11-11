@@ -35,25 +35,25 @@ effect = "mutating"
 [[actions]]
 id = "STUDIO_SETLISTS_LIST"
 name = "Setlists: list"
-description = "Every setlist of the vault (notes of type setlist, in Setlists/): its title, date, share code, and its songs in order with their library and key, tempo and meter."
+description = "Every setlist of the vault (notes of type setlist, in Setlists/): its title, date, share code, and its songs in order with their library and key, tempo and meter; a setlist with named sets lists them too (`sets`, each with its songs)."
 group = "Setlists"
 effect = "read_only"
 
 [[actions]]
 id = "STUDIO_SETLISTS_CREATE"
 name = "New setlist"
-description = "Makes setlist `title` (Setlists/<title>.md) of `songs` in order, each `[Library/]Song[#Arrangement]`; `library` names the library of the songs that name none (a bare title is found in whichever library has it, when only one does); `date` optional."
+description = "Makes setlist `title` (Setlists/<title>.md) of `songs` in order, each `[Library/]Song[#Arrangement]`; `library` names the library of the songs that name none (a bare title is found in whichever library has it, when only one does); `date` optional; `section` puts the songs in a named set (more sets: STUDIO_SETLISTS_ADD with `section`). Its page lists each set's songs to play, as the setlist is now."
 group = "Setlists"
 effect = "mutating"
-params = '{"type":"object","properties":{"title":{"type":"string"},"songs":{"type":"array","items":{"type":"string"}},"library":{"type":"string"},"date":{"type":"string"}},"required":["title"]}'
+params = '{"type":"object","properties":{"title":{"type":"string"},"songs":{"type":"array","items":{"type":"string"}},"library":{"type":"string"},"date":{"type":"string"},"section":{"type":"string"}},"required":["title"]}'
 
 [[actions]]
 id = "STUDIO_SETLISTS_ADD"
 name = "Setlists: add a song"
-description = "Adds `song` (`[Library/]Song[#Arrangement]`) to setlist `setlist`, at position `at` (1-based; none: the end)."
+description = "Adds `song` (`[Library/]Song[#Arrangement]`) to setlist `setlist`, at position `at` (1-based; none: the end): of set `section` when given (a set it has not got yet is made at the end), else of the whole running order."
 group = "Setlists"
 effect = "mutating"
-params = '{"type":"object","properties":{"setlist":{"type":"string"},"song":{"type":"string"},"library":{"type":"string"},"at":{"type":"integer"}},"required":["setlist","song"]}'
+params = '{"type":"object","properties":{"setlist":{"type":"string"},"song":{"type":"string"},"library":{"type":"string"},"at":{"type":"integer"},"section":{"type":"string"}},"required":["setlist","song"]}'
 
 [[actions]]
 id = "STUDIO_SETLISTS_REMOVE"
@@ -66,10 +66,10 @@ params = '{"type":"object","properties":{"setlist":{"type":"string"},"song":{"ty
 [[actions]]
 id = "STUDIO_SETLISTS_MOVE"
 name = "Setlists: move a song"
-description = "Moves `song` (its title, or its 1-based position) to position `to` (1-based) of setlist `setlist`."
+description = "Moves `song` (its title, or its 1-based position) to position `to` (1-based) of setlist `setlist`: of set `section` when given (made at the end if it has none), else of the whole running order, joining the set it lands in."
 group = "Setlists"
 effect = "mutating"
-params = '{"type":"object","properties":{"setlist":{"type":"string"},"song":{"type":"string"},"to":{"type":"integer"}},"required":["setlist","song","to"]}'
+params = '{"type":"object","properties":{"setlist":{"type":"string"},"song":{"type":"string"},"to":{"type":"integer"},"section":{"type":"string"}},"required":["setlist","song","to"]}'
 
 [[actions]]
 id = "STUDIO_SETLISTS_SHARE"

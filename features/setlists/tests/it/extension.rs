@@ -109,7 +109,9 @@ fn song(
     };
     let lib = Library::named(lib);
     vault.ensure_library(&lib).unwrap();
-    vault.write_song(&lib, &s, &[]).unwrap();
+    vault
+        .write_song(&lib, &s, &setlists::song::SongPage::default())
+        .unwrap();
 }
 
 /// Runs `f` until it is true (the vault's index follows its files).
@@ -264,5 +266,71 @@ fn libraries_setlists_and_a_share_through_the_app() {
         std::fs::read_to_string(dir.join("Setlists/Christmas Eve.md"))
             .unwrap()
             .contains("share: hzhbdfiz7gaxwv78")
+    });
+
+    // A setlist in named sets: made with one, grown by another; a move
+    // into a set by name. Its page lists each set under a heading.
+    run(
+        &list,
+        "STUDIO_SETLISTS_CREATE",
+        json!({"title": "Tree Lighting", "songs": ["Old Hundredth"], "section": "Presidents Songs"}),
+    );
+    let page = std::fs::read_to_string(dir.join("Setlists/Tree Lighting.md")).unwrap();
+    assert!(page.contains("sets:\n- name: Presidents Songs\n"), "{page}");
+    assert!(
+        page.contains("## Presidents Songs\n\n```studio-setlist downloads\n1 | Old Hundredth |"),
+        "{page}"
+    );
+    until("the second setlist", || {
+        run(&list, "STUDIO_SETLISTS_LIST", json!({}))
+            .as_array()
+            .is_some_and(|a| a.len() == 2)
+    });
+    for song in ["Sleigh Ride", "Silent Night"] {
+        run(
+            &list,
+            "STUDIO_SETLISTS_ADD",
+            json!({"setlist": "Tree Lighting", "song": song, "section": "Tree Lighting Concert Set"}),
+        );
+    }
+    run(
+        &list,
+        "STUDIO_SETLISTS_MOVE",
+        json!({"setlist": "Tree Lighting", "song": "Silent Night", "to": 1, "section": "Presidents Songs"}),
+    );
+    let sets = |list: &ActionList| -> Vec<(String, Vec<String>)> {
+        run(list, "STUDIO_SETLISTS_LIST", json!({}))
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["title"] == "Tree Lighting")
+            .and_then(|s| s["sets"].as_array().cloned())
+            .unwrap_or_default()
+            .iter()
+            .map(|s| {
+                (
+                    s["set"].as_str().unwrap_or_default().to_owned(),
+                    s["songs"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|x| x["song"].as_str().unwrap().to_owned())
+                        .collect(),
+                )
+            })
+            .collect()
+    };
+    until("the sets", || {
+        sets(&list)
+            == [
+                (
+                    "Presidents Songs".to_owned(),
+                    vec!["Silent Night".to_owned(), "Old Hundredth".to_owned()],
+                ),
+                (
+                    "Tree Lighting Concert Set".to_owned(),
+                    vec!["Sleigh Ride".to_owned()],
+                ),
+            ]
     });
 }

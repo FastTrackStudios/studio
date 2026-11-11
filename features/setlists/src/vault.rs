@@ -13,8 +13,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::layout::{LIBRARIES, Library};
-use crate::lyrics::Block;
-use crate::song::Song;
+use crate::song::{Song, SongPage};
 use crate::{Error, Result, check_name};
 
 /// The type a library's own note has.
@@ -176,12 +175,9 @@ impl Vault {
     /// # Errors
     ///
     /// Its title is not a usable name, or it could not be written.
-    pub fn write_song(&self, lib: &Library, song: &Song, lyrics: &[Block]) -> Result<()> {
+    pub fn write_song(&self, lib: &Library, song: &Song, page: &SongPage) -> Result<()> {
         check_name(&song.title)?;
-        self.write(
-            &lib.song_note(&song.title),
-            song.note(lib, lyrics).as_bytes(),
-        )
+        self.write(&lib.song_note(&song.title), song.note(lib, page).as_bytes())
     }
 }
 
@@ -201,7 +197,7 @@ mod tests {
                 categories: cats.into_iter().map(str::to_owned).collect(),
                 ..Song::default()
             };
-            vault.write_song(&lib, &song, &[]).unwrap();
+            vault.write_song(&lib, &song, &SongPage::default()).unwrap();
         }
         assert_eq!(vault.libraries(), vec![lib.clone()]);
         let songs = vault.songs(&lib);

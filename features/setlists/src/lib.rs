@@ -26,6 +26,14 @@
 //! lane, into its pages and PDF ([`chart`], feature `engrave`), and
 //! bringing a song's files from outside the vault into its folder
 //! ([`vault`], `studio setlist import`; [`cli`], feature `cli`).
+//!
+//! **The share page** (layer 0 of a share link: the page, no engine) is
+//! Architect's site of the setlist's notes, with Studio's blocks drawn
+//! into it ([`share`], feature `share`): each song's chart as an SVG whose
+//! bars follow the song's recording ([`follow`]), its lyrics as timed
+//! lines (its LRC, else its chart's lyric lane: one source a song), each
+//! set's songs as rows that play, the link's queue playing the setlist
+//! through.
 
 pub mod frontmatter;
 pub mod layout;
@@ -36,6 +44,10 @@ pub mod vault;
 
 #[cfg(feature = "engrave")]
 pub mod chart;
+#[cfg(feature = "engrave")]
+pub mod follow;
+#[cfg(feature = "share")]
+pub mod share;
 
 #[cfg(feature = "extension")]
 pub mod ext;

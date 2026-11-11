@@ -86,7 +86,16 @@ fn a_song_keeps_everything_of_its_own() {
     assert!(folder.join("Media/Click.wav").exists());
 
     let note = vault.read(&lib.song_note("Old Hundredth")).unwrap();
-    assert!(note.contains("### Verse 1\n\nPraise God from whom all blessings flow\\\npraise him all creatures here below"), "{note}");
+    // Its lyrics, timed from its chart's lane (it has no LRC).
+    assert!(
+        note.contains("## Lyrics\n\n```lrc\n[ti:Old Hundredth]\n[00:00.00]Praise God from whom all blessings flow\n[00:10.00]praise him all creatures here below\n[00:20.00]Praise him above\n"),
+        "{note}"
+    );
+    // Its chart, drawn on its page to follow its recording.
+    assert!(
+        note.contains("```kf media=Media/Click.wav\nOld Hundredth - Traditional\n"),
+        "{note}"
+    );
     assert!(
         note.contains("## Arrangements\n\n### Acoustic\n\n**D · 66 bpm · 3/4**"),
         "{note}"
