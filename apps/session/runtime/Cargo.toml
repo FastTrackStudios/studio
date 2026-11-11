@@ -21,7 +21,9 @@ description = "Session's host-neutral runtime: where a song's files come from, h
 # a project file read from a folder (`folder`).
 daw = { workspace = true, features = ["standalone-decode", "standalone-session-file"] }
 daw-proto = { workspace = true }
-daw-standalone = { workspace = true }
+# `stream-ogg`: a proxy streamed as it arrives; `reapeaks`: its waveform
+# cache (`song_stream`).
+daw-standalone = { workspace = true, features = ["stream-ogg", "reapeaks"] }
 # The guide engine the Click / Count / Guide MIDI tracks play through
 # (`guide_instrument`).
 session = { workspace = true }
@@ -29,6 +31,13 @@ eyre = { workspace = true }
 # A clock that also runs in a browser (`open_core`'s load timings).
 web-time = { workspace = true }
 tracing = { workspace = true }
+# The host's clock on native fetch retries (`song_stream::fetch_proxy`);
+# already in the tree through `daw`.
+architect = { workspace = true }
+# A streamed proxy's bytes and page index (`song_stream`).
+fts-sample = { workspace = true, features = ["engine-core"] }
+# A song's documents fetched side by side (`song_stream::mirror`).
+futures-util = { workspace = true }
 # A Task share link's listing (`source::ShareSource`).
 reqwest = { workspace = true }
 serde_json = { workspace = true }
@@ -38,13 +47,14 @@ builtin = { workspace = true, optional = true, features = ["engine"] }
 signal-fx = { workspace = true, optional = true }
 
 # The browser's audio out (`web_audio`).
-fts-sample = { workspace = true, optional = true, features = ["engine-core"] }
 web-sys = { workspace = true, optional = true, features = [
     "Window", "Document", "Event", "EventTarget", "AddEventListenerOptions",
     "AudioContext", "AudioContextOptions", "BaseAudioContext", "AudioContextState",
     "AudioWorklet", "AudioWorkletNode", "AudioWorkletNodeOptions",
     "AudioNode", "AudioDestinationNode", "MessagePort", "MessageEvent",
     "Blob", "BlobPropertyBag", "Url", "Worklet", "WorkletOptions",
+    # A streamed song's proxies kept in the browser's cache (`song_stream`).
+    "CacheStorage", "Cache", "Response",
 ] }
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
@@ -57,8 +67,15 @@ default = []
 builtin = ["dep:builtin"]
 # signal's rigs too.
 signal = ["builtin", "dep:signal-fx"]
+# A source's chart written into the song's library folder
+# (`song_stream`'s mirror, on disk): `session::library`.
+library = ["session/library"]
 # The browser: the page's audio loop and its AudioWorklet (`web_audio`).
-web = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers", "dep:fts-sample", "daw-standalone/stream-ogg", "daw-standalone/reapeaks"]
+web = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers"]
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }

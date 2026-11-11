@@ -4,6 +4,9 @@
 //!
 //! - [`source`] — where a streamed song's files come from (`SongSource`),
 //!   and a Task share link as one.
+//! - [`song_stream`] — a song streamed from a source: its small files
+//!   mirrored, its proxies fetched in the order they will be heard, on the
+//!   host's runtime ([`song_stream::Spawn`]).
 //! - [`listen`] — how a song is heard, and the cap on it the embedding host
 //!   passes in ([`listen::Listen`]): Reference Mode alone, or the stems too.
 //! - [`folder`] — a song's files on disk or in memory, read one way.
@@ -24,6 +27,7 @@ pub mod listen;
 pub mod open_core;
 pub mod reference;
 pub mod section_colors;
+pub mod song_stream;
 pub mod source;
 #[cfg(feature = "web")]
 pub mod web_audio;
