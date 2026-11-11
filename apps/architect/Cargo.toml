@@ -1,0 +1,39 @@
+[package]
+name = "studio-architect"
+description = "Studio's distribution of Architect: the Architect app with Studio's extensions compiled in (setlists and its share-page chart renderer, productions), under a name, bundle id and config folder of its own. Its node (`studio-architect serve`, built without `gui`) is what a hosted Architect runs, so share links draw Studio's charts; built and released by scripts/studio-architect.sh (docs/architect-distribution.md)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "studio-architect"
+path = "src/main.rs"
+
+[features]
+# The window, as the Architect app has it. Off (`--no-default-features`),
+# the binary is the headless node alone: no Blitz, wgpu or wayland in it.
+default = ["gui"]
+gui = ["architect-desktop/gui"]
+
+[dependencies]
+# `vox` (the node's services) and no window, from the workspace entry.
+architect-desktop = { workspace = true }
+# Song libraries and setlists, linked in (`setlists::ext::Setlists`), and
+# `share`: the renderer that draws a song's chart as Keyflow's follow SVG
+# on a share link (`setlists::share::blocks`, studio#406).
+setlists = { workspace = true, features = ["extension", "share"] }
+# Productions in other DAWs, linked in (`productions::ext::Productions`).
+productions = { workspace = true, features = ["extension"] }
+
+[dev-dependencies]
+# tests/node.rs: a real node on loopback, serving a setlist's share link.
+tokio = { workspace = true }
+tempfile = { workspace = true }
+architect-spaces = { workspace = true, features = ["server"] }
+
+[lints]
+workspace = true
