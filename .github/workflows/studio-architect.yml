@@ -6,8 +6,6 @@ on:
   push:
     tags:
     - v*
-    branches:
-    - feat/studio-architect-distribution
   workflow_dispatch:
     inputs:
       tag:
@@ -29,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 env:
   TAG: ${{ inputs.tag || github.ref_name }}
-  MODE: ${{ inputs.mode || (github.ref_type == 'branch' && 'build-only') || 'publish' }}
+  MODE: ${{ inputs.mode || 'publish' }}
 jobs:
   resolve:
     name: Resolve the tag
@@ -193,7 +191,7 @@ jobs:
     needs:
     - resolve
     - build
-    if: ${{ github.ref_type != 'branch' && inputs.mode != 'build-only' && needs.build.result == 'success' }}
+    if: ${{ inputs.mode != 'build-only' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
