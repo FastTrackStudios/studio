@@ -26,6 +26,13 @@
 //! reference for its stems the moment they have arrived where it is
 //! ([`hear_stems`]). Asked for ([`load_multitracks`]), the song on screen's
 //! come at once. Proxies only: a page has no disk for the originals.
+//!
+//! **The cap.** The host that embeds the page says how deep a listener
+//! may go ([`open_with`], a [`Listen`]): capped at [`Listen::Reference`]
+//! (a share link that offers Reference Mode only) no stem is fetched or
+//! decoded — the references alone come in, the multitracks are not
+//! offered, and the project still shows every track and item. [`open`] is
+//! [`Listen::Full`]: as above.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -35,6 +42,7 @@ use std::sync::atomic::AtomicBool;
 use daw_standalone::audio_engine::media_fetch::StreamedTake;
 
 use crate::song_model::StudioSession;
+use crate::song_stream::Listen;
 
 /// The engine, as the page's panels reach it.
 #[derive(Clone)]
@@ -199,6 +207,21 @@ thread_local! {
     static MULTITRACKS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static NOTICES: std::cell::RefCell<Option<tokio::sync::mpsc::UnboundedSender<Notice>>> =
         const { std::cell::RefCell::new(None) };
+    /// How deep the host lets this page's listener go ([`open_with`]).
+    static LISTEN: std::cell::Cell<Listen> = const { std::cell::Cell::new(Listen::Full) };
+}
+
+/// How deep the host lets this page's listener go ([`open_with`]).
+#[must_use]
+pub fn listen() -> Listen {
+    LISTEN.with(std::cell::Cell::get)
+}
+
+/// Whether the page may offer the multitracks ([`load_multitracks`]):
+/// not when the host capped it at [`Listen::Reference`].
+#[must_use]
+pub fn multitracks_offered() -> bool {
+    listen().hears_stems()
 }
 
 thread_local! {
@@ -306,6 +329,9 @@ fn chose_multitracks() -> bool {
 /// Hear every song by its stems from now on, the one on screen first — the
 /// answer to [`Notice::Blocked`].
 pub fn load_multitracks() {
+    if !multitracks_offered() {
+        return;
+    }
     MULTITRACKS.with(|m| m.set(true));
     if let Some(storage) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) {
         let _ = storage.set_item(MULTITRACKS_KEY, "1");
@@ -447,6 +473,22 @@ pub async fn open(
     guide: Option<&str>,
     progress: impl Fn(Progress),
 ) -> eyre::Result<(EngineRef, crate::setlist::Setlist)> {
+    open_with(source, guide, Listen::Full, progress).await
+}
+
+/// [`open`], capped at `listen` by the host that embeds the page (a share
+/// link's layer): at [`Listen::Reference`] no stem is ever fetched.
+///
+/// # Errors
+///
+/// As [`open`].
+pub async fn open_with(
+    source: &WebSource,
+    guide: Option<&str>,
+    listen: Listen,
+    progress: impl Fn(Progress),
+) -> eyre::Result<(EngineRef, crate::setlist::Setlist)> {
+    LISTEN.with(|l| l.set(listen));
     // How long each step took, for the events that say the set is up.
     let began = web_time::Instant::now();
     let ms = move || u64::try_from(began.elapsed().as_millis()).unwrap_or(u64::MAX);
@@ -536,7 +578,7 @@ pub async fn open(
     progress(Progress::Opening {
         title: first_title.clone(),
     });
-    MULTITRACKS.with(|m| m.set(chose_multitracks()));
+    MULTITRACKS.with(|m| m.set(chose_multitracks() && listen.hears_stems()));
     if crate::stream_quality::current() == crate::stream_quality::Quality::Full {
         tracing::info!(
             stream.quality = "full",
@@ -696,7 +738,8 @@ async fn fetch_song(want: &Wanted) -> eyre::Result<Fetched> {
                 Arc::new(ShareSource::new(link)?),
                 Keep::Memory(Memory::new()),
             )
-            .await?;
+            .await?
+            .with_listen(listen());
             Ok(Fetched {
                 folder: Arc::clone(&song.folder),
                 path: song.project.clone(),
@@ -1026,7 +1069,7 @@ fn warm_around(web: &mut Web, project: &str) {
         .filter_map(|p| Some((p.clone(), web.songs.get(p)?.streamed.clone()?)))
         .collect();
     let by_reference: Vec<bool> = songs.iter().map(|(_, s)| s.has_reference()).collect();
-    let steps = crate::song_stream::warm_order(&by_reference);
+    let steps = crate::song_stream::warm_order(&by_reference, listen());
     let warmed = Rc::clone(&web.warmed);
     wasm_bindgen_futures::spawn_local(async move {
         for step in steps {
@@ -1079,6 +1122,9 @@ const STEMS_READY_WITHIN: std::time::Duration = std::time::Duration::from_secs(2
 /// already. Called with [`WEB`] borrowed: the page is told by the caller.
 fn hear_stems(web: &Web, project: &str, asked: bool) {
     use std::sync::atomic::Ordering;
+    if !listen().hears_stems() {
+        return;
+    }
     let Some(song) = web.songs.get(project) else {
         return;
     };
@@ -1242,15 +1288,18 @@ fn stream_song(
         stream.media = media.len(),
         stream.attached = takes.len(),
         stream.by_reference = by_reference,
+        stream.listen = ?song.listen(),
         "audio: streaming the song's proxies"
     );
     let takes = Arc::new(std::sync::Mutex::new(takes));
     if by_reference {
         *kept.held.borrow_mut() = Some(takes);
-    } else {
+    } else if song.listen().hears_stems() {
         // Fetching for as long as the page lives.
         song.fetch(takes, playhead, Arc::new(AtomicBool::new(false)));
     }
+    // Capped at Reference with no reference: nothing of the song is
+    // fetched; what plays is live (the guide).
 }
 
 /// A root-relative path as a URL path: each segment encoded.

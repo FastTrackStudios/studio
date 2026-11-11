@@ -52,6 +52,7 @@ members = [
     "apps/session/desktop",
     "apps/session/daw-web",
     "apps/session/engine",
+    "apps/session/runtime",
     "apps/session/ui",
     "apps/session/web",
     "features/adapters/reaper/dynamic-template-extension",
@@ -944,6 +945,8 @@ session-desktop = { path = "apps/session/desktop", default-features = false }
 # Session's engine, and its window (a view of it): features chosen by each
 # dependent (`native` on a desktop, `web` in a page).
 session-engine = { path = "apps/session/engine", default-features = false }
+# Its host-neutral runtime: no window, no shell, no Dioxus (studio#400).
+session-runtime = { path = "apps/session/runtime" }
 session-ui = { path = "apps/session/ui", default-features = false }
 signal-daw-bridge = { path = "features/signal/daw-bridge" }
 signal-rig-host = { path = "features/rigs/host" }

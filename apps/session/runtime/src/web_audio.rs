@@ -2,7 +2,7 @@
 //! an AudioWorklet.
 //!
 //! The engine is the one the panels already drive (daw-standalone,
-//! in-process, see [`crate::web_engine`]), so a fader or a mute is heard
+//! in-process, see `session_engine::web_engine`), so a fader or a mute is heard
 //! the moment the engine takes it. What a browser adds is three things:
 //!
 //! - **Stems** stream from their Ogg Vorbis proxies ([`add_stem`]): each

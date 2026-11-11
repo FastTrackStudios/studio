@@ -26,13 +26,13 @@ pub mod comp_rank;
 pub mod drum_group;
 pub mod edit_state;
 pub mod engine;
-pub mod folder;
+pub use session_runtime::folder;
 pub mod folds;
 #[cfg(feature = "native")]
 pub mod fx_actions;
 #[cfg(feature = "native")]
 pub mod grow;
-pub mod guide_instrument;
+pub use session_runtime::guide_instrument;
 #[cfg(feature = "native")]
 pub mod ingest;
 #[cfg(feature = "native")]
@@ -250,7 +250,7 @@ pub mod wave_detail;
 #[cfg(all(feature = "web", not(feature = "native")))]
 pub mod web_actions;
 #[cfg(feature = "web")]
-pub mod web_audio;
+pub use session_runtime::web_audio;
 #[cfg(feature = "web")]
 pub mod web_engine;
 pub mod window_queue;

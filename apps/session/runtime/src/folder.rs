@@ -1,7 +1,7 @@
 //! Where a song's files are read from when it opens: this machine's disk,
 //! or memory — a browser's copy of a song that arrived from a share link.
 //!
-//! Opening a song is one path ([`crate::open_core`]): which file opens,
+//! Opening a song is one path (`session_engine::open_core`): which file opens,
 //! whether it is prepared, its project text, its chart and lyrics. That
 //! path reads through a [`Folder`], so a song opens the same way from
 //! either, and only where the bytes sit differs. Paths are ordinary

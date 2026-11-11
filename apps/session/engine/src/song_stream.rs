@@ -31,94 +31,10 @@ use daw::standalone::sync::Standalone;
 use crate::folder::{Folder, Memory};
 use fts_sample::ogg_index::OggIndex;
 use fts_sample::sparse::SparseBytes;
-
-/// Where a song's files come from.
-#[cfg(not(target_arch = "wasm32"))]
-pub trait SongSource: Send + Sync + 'static {
-    /// A name for its cache folder.
-    fn label(&self) -> String;
-    /// Every file of the song folder with its size, the project first.
-    fn list(&self) -> Pending<eyre::Result<Listing>>;
-    /// The bytes `range` of `path`.
-    fn read(&self, path: String, range: std::ops::Range<u64>) -> Pending<Result<Vec<u8>, String>>;
-    /// The song's chart, when the source keeps it apart from the folder
-    /// (the library's) — it replaces the folder's `.kf`.
-    fn chart(&self) -> Pending<eyre::Result<Option<String>>> {
-        Box::pin(async { Ok(None) })
-    }
-    /// Many whole documents in one request, when the source has one: each
-    /// path with its bytes, or `None` for a path to fetch on its own.
-    /// `None` altogether when it has no such request (or it failed) — the
-    /// caller reads them one by one.
-    fn read_many(&self, paths: Vec<String>) -> Pending<Option<Vec<(String, Option<Vec<u8>>)>>> {
-        let _ = paths;
-        Box::pin(async { None })
-    }
-    /// The whole of `path` written to the file `into`, in one request,
-    /// adding each piece's length to `got` as it lands — when the source
-    /// can stream a whole file. `None` when it cannot: a download then
-    /// reads the file by ranges.
-    fn fetch_whole(
-        &self,
-        path: String,
-        into: PathBuf,
-        got: Arc<std::sync::atomic::AtomicU64>,
-    ) -> Pending<Option<eyre::Result<()>>> {
-        let _ = (path, into, got);
-        Box::pin(async { None })
-    }
-}
-
-/// Where a song's files come from (see the native definition: here a
-/// request is a JS promise, and not `Send`).
-#[cfg(target_arch = "wasm32")]
-pub trait SongSource: 'static {
-    /// A name for its cache folder.
-    fn label(&self) -> String;
-    /// Every file of the song folder with its size, the project first.
-    fn list(&self) -> Pending<eyre::Result<Listing>>;
-    /// The bytes `range` of `path`.
-    fn read(&self, path: String, range: std::ops::Range<u64>) -> Pending<Result<Vec<u8>, String>>;
-    /// The song's chart, when the source keeps it apart from the folder
-    /// (the library's) — it replaces the folder's `.kf`.
-    fn chart(&self) -> Pending<eyre::Result<Option<String>>> {
-        Box::pin(async { Ok(None) })
-    }
-    /// Many whole documents in one request, when the source has one: each
-    /// path with its bytes, or `None` for a path to fetch on its own.
-    /// `None` altogether when it has no such request (or it failed) — the
-    /// caller reads them one by one.
-    fn read_many(&self, paths: Vec<String>) -> Pending<Option<Vec<(String, Option<Vec<u8>>)>>> {
-        let _ = paths;
-        Box::pin(async { None })
-    }
-}
-
-/// A song folder's files, and the version they are at when the source
-/// says (a share link's commit): the same version is the same bytes at
-/// every path, so what was fetched at it is kept and not fetched again.
-#[derive(Clone, Debug, Default)]
-pub struct Listing {
-    /// Each file and its size, the project first.
-    pub entries: Vec<(String, u64)>,
-    pub version: Option<String>,
-}
-
-impl From<Vec<(String, u64)>> for Listing {
-    fn from(entries: Vec<(String, u64)>) -> Self {
-        Self {
-            entries,
-            version: None,
-        }
-    }
-}
-
-/// A source's answer, later.
-#[cfg(not(target_arch = "wasm32"))]
-pub type Pending<T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send>>;
-/// A source's answer, later.
-#[cfg(target_arch = "wasm32")]
-pub type Pending<T> = std::pin::Pin<Box<dyn std::future::Future<Output = T>>>;
+pub use session_runtime::listen::{Heard, Listen, WarmStep, warm_order};
+pub use session_runtime::source::{
+    Listing, Pending, ShareSource, SongSource, batch_records, project_first,
+};
 
 /// The engine this window drives: its project's song folder.
 #[cfg(feature = "native")]
@@ -297,202 +213,6 @@ impl SongSource for TaskSource {
                 }
                 .await,
             )
-        })
-    }
-}
-
-/// A Task share link to a song's session
-/// (`https://task…/org/<org>/share/<token>`, `?pw=` when it has one).
-pub struct ShareSource {
-    link: reqwest::Url,
-    password: Option<String>,
-    http: reqwest::Client,
-}
-
-impl ShareSource {
-    /// The session `link` shares.
-    ///
-    /// # Errors
-    ///
-    /// `link` is not a URL.
-    pub fn new(link: &str) -> eyre::Result<Self> {
-        let mut link = reqwest::Url::parse(link.trim().trim_end_matches('/'))?;
-        let password = link
-            .query_pairs()
-            .find(|(k, _)| k == "pw")
-            .map(|(_, v)| v.into_owned());
-        link.set_query(None);
-        Ok(Self {
-            link,
-            password,
-            http: reqwest::Client::new(),
-        })
-    }
-
-    /// The link's route `route` (`list`, `doc`, `rendition/audio`) for the
-    /// song-folder path `path`, each segment escaped.
-    fn url(&self, route: &str, path: &str) -> reqwest::Url {
-        let mut url = self.link.clone();
-        if let Ok(mut segments) = url.path_segments_mut() {
-            segments
-                .extend(route.split('/'))
-                .extend(path.split('/').filter(|s| !s.is_empty()));
-        }
-        if let Some(pw) = &self.password {
-            url.query_pairs_mut().append_pair("pw", pw);
-        }
-        url
-    }
-
-    /// The link's token, for the cache folder's name — never the password.
-    fn token(&self) -> String {
-        self.link
-            .path_segments()
-            .and_then(Iterator::last)
-            .unwrap_or_default()
-            .to_owned()
-    }
-}
-
-/// A `docs` batch's records — `u8 status | u32le path length | path |
-/// u32le length | bytes`, one per path (Task's
-/// `share_documents_batch_handler`) — or `None` if the body is not one.
-fn batch_records(mut body: &[u8]) -> Option<Vec<(String, u8, Vec<u8>)>> {
-    fn take<'b>(body: &mut &'b [u8], n: usize) -> Option<&'b [u8]> {
-        let (head, rest) = body.split_at_checked(n)?;
-        *body = rest;
-        Some(head)
-    }
-    fn len(body: &mut &[u8]) -> Option<usize> {
-        let bytes: [u8; 4] = take(body, 4)?.try_into().ok()?;
-        usize::try_from(u32::from_le_bytes(bytes)).ok()
-    }
-    let mut out = Vec::new();
-    while !body.is_empty() {
-        let status = take(&mut body, 1)?[0];
-        let path_len = len(&mut body)?;
-        let path = String::from_utf8(take(&mut body, path_len)?.to_vec()).ok()?;
-        let bytes_len = len(&mut body)?;
-        let bytes = take(&mut body, bytes_len)?.to_vec();
-        out.push((path, status, bytes));
-    }
-    Some(out)
-}
-
-/// The media path whose audio rendition is the proxy at `proxy`
-/// (`Media/Proxies/Bass.ogg` → `Media/Bass.ogg`: a link streams the
-/// committed proxy beside a take by the take's stem), when it is one.
-fn rendition_of(proxy: &str) -> Option<String> {
-    let (dir, name) = proxy.rsplit_once('/')?;
-    let parent = dir.strip_suffix("Proxies")?.trim_end_matches('/');
-    let name = name.strip_suffix(".ogg")?;
-    Some(if parent.is_empty() {
-        format!("{name}.ogg")
-    } else {
-        format!("{parent}/{name}.ogg")
-    })
-}
-
-/// A song folder's listing, sorted, its project first — what [`mirror`]
-/// opens: the top-level project file (`Song.session`), else the top-level
-/// `.RPP`. Sorted by path alone, a song named after `Media/` listed its
-/// peaks first and opened them as the song.
-fn project_first(entries: &mut Vec<(String, u64)>) {
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
-    let top_level = |ext: &str| {
-        entries
-            .iter()
-            .position(|(p, _)| !p.contains('/') && p.to_lowercase().ends_with(ext))
-    };
-    if let Some(at) = top_level(".session").or_else(|| top_level(".rpp")) {
-        let project = entries.remove(at);
-        entries.insert(0, project);
-    }
-}
-
-impl SongSource for ShareSource {
-    fn label(&self) -> String {
-        format!("share-{}", self.token())
-    }
-
-    fn list(&self) -> Pending<eyre::Result<Listing>> {
-        let request = self.http.get(self.url("list", ""));
-        Box::pin(async move {
-            let listed: serde_json::Value =
-                request.send().await?.error_for_status()?.json().await?;
-            let mut entries: Vec<(String, u64)> = listed["entries"]
-                .as_array()
-                .ok_or_else(|| eyre::eyre!("the link lists no entries"))?
-                .iter()
-                .filter_map(|e| {
-                    Some((
-                        e["path"].as_str()?.to_owned(),
-                        e["size"].as_u64().unwrap_or(0),
-                    ))
-                })
-                .collect();
-            project_first(&mut entries);
-            Ok(Listing {
-                entries,
-                version: listed["commit"].as_str().map(str::to_owned),
-            })
-        })
-    }
-
-    /// The link's `docs` batch: one POST for a whole song folder's small
-    /// files (a Task that has no such route answers 404/405, and the
-    /// caller reads them one by one).
-    fn read_many(&self, paths: Vec<String>) -> Pending<Option<Vec<(String, Option<Vec<u8>>)>>> {
-        let request = self
-            .http
-            .post(self.url("docs", ""))
-            // Plain text: a browser sends it without asking first.
-            .header(reqwest::header::CONTENT_TYPE, "text/plain")
-            .body(paths.join("\n"));
-        Box::pin(async move {
-            let response = request.send().await.ok()?.error_for_status().ok()?;
-            let body = response.bytes().await.ok()?;
-            let records = batch_records(&body)?;
-            Some(
-                records
-                    .into_iter()
-                    .map(|(path, status, bytes)| (path, (status == 0).then_some(bytes)))
-                    .collect(),
-            )
-        })
-    }
-
-    fn read(&self, path: String, range: std::ops::Range<u64>) -> Pending<Result<Vec<u8>, String>> {
-        let ranged = rendition_of(&path).map(|media| self.url("rendition/audio", &media));
-        let request = match &ranged {
-            Some(url) => self.http.get(url.clone()).header(
-                reqwest::header::RANGE,
-                format!("bytes={}-{}", range.start, range.end.saturating_sub(1)),
-            ),
-            // A document comes whole (it is small); the range is cut here.
-            None => self.http.get(self.url("doc", &path)),
-        };
-        let partial = ranged.is_some();
-        Box::pin(async move {
-            let what = |e: &dyn std::fmt::Display| format!("{path} {range:?}: {e}");
-            let response = request
-                .send()
-                .await
-                .and_then(reqwest::Response::error_for_status)
-                .map_err(|e| what(&e))?;
-            let served_range = response.status() == reqwest::StatusCode::PARTIAL_CONTENT;
-            let bytes = response.bytes().await.map_err(|e| what(&e))?;
-            if partial && served_range {
-                return Ok(bytes.to_vec());
-            }
-            let from = usize::try_from(range.start).unwrap_or(usize::MAX);
-            let to = usize::try_from(range.end)
-                .unwrap_or(usize::MAX)
-                .min(bytes.len());
-            bytes
-                .get(from..to)
-                .map(<[u8]>::to_vec)
-                .ok_or_else(|| what(&"shorter than asked"))
         })
     }
 }
@@ -681,6 +401,9 @@ pub struct StreamedSong {
     /// ([`Self::build_missing_peaks`]).
     #[cfg(feature = "web")]
     unbuildable: Mutex<std::collections::HashSet<String>>,
+    /// How deep the host lets a listener go ([`Listen`]): capped at
+    /// Reference, no stem of the song is fetched ([`Self::media`]).
+    listen: Listen,
 }
 
 fn safe_name(text: &str) -> String {
@@ -1276,6 +999,7 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
         opened: Mutex::default(),
         #[cfg(feature = "web")]
         unbuildable: Mutex::default(),
+        listen: Listen::default(),
     })
 }
 
@@ -1581,6 +1305,9 @@ impl StreamedSong {
     pub async fn fetch_original(&self, original: &Original) -> eyre::Result<()> {
         /// Tries before the file is given up on for this run.
         const TRIES: u32 = 3;
+        if !self.listen.hears_stems() {
+            eyre::bail!("capped at Reference: no recording of the song is fetched");
+        }
         if !matches!(self.keep, Keep::Disk(_)) {
             eyre::bail!("a song kept in memory keeps no originals");
         }
@@ -1635,6 +1362,51 @@ impl StreamedSong {
             },
             feeder,
         ))
+    }
+
+    /// The song capped at `listen`, the host's to set (a share link's
+    /// layer). [`Listen::Full`] — what [`mirror`] gives — is as before
+    /// the cap existed.
+    #[must_use]
+    pub const fn with_listen(mut self, listen: Listen) -> Self {
+        self.listen = listen;
+        self
+    }
+
+    /// How deep the host lets a listener go into the song.
+    #[must_use]
+    pub const fn listen(&self) -> Listen {
+        self.listen
+    }
+
+    /// What the song's proxies are fetched through: its source — refusing
+    /// every stem when the song is capped at [`Listen::Reference`], so no
+    /// fetcher, warming or waveform build brings one in, whoever asks.
+    #[must_use]
+    pub fn media(&self) -> Arc<dyn RangeFetch> {
+        let refused = if self.listen.hears_stems() {
+            std::collections::HashSet::new()
+        } else {
+            self.paths_of(Heard::Stems)
+                .into_iter()
+                .map(str::to_owned)
+                .collect()
+        };
+        Arc::new(SourceFetch {
+            source: Arc::clone(&self.source),
+            refused,
+        })
+    }
+
+    /// The proxy paths warming the song for `heard` brings in: none for
+    /// what its cap does not allow.
+    #[must_use]
+    pub fn warm_paths(&self, heard: Heard) -> std::collections::HashSet<&str> {
+        if self.listen.allows(heard) {
+            self.paths_of(heard)
+        } else {
+            std::collections::HashSet::new()
+        }
     }
 
     /// The proxy paths a song is heard by in `heard`.
@@ -1713,6 +1485,13 @@ impl StreamedSong {
     /// left that can be.
     #[cfg(feature = "web")]
     pub async fn build_missing_peaks(&self, block: u32, most: usize) -> usize {
+        // Capped at Reference, a stem's proxy is not fetched for its
+        // waveform either: its take draws from the share's cache or not at
+        // all.
+        if !self.listen.hears_stems() {
+            return 0;
+        }
+        let media = self.media();
         let mut built = 0usize;
         for (original, takes) in self.attached_by_original() {
             if built >= most {
@@ -1729,7 +1508,7 @@ impl StreamedSong {
             let Some((path, size)) = self.proxies.get(&stem).cloned() else {
                 continue;
             };
-            let bytes = match self.source.read(path.clone(), 0..size).await {
+            let bytes = match media.fetch(&path, 0..size).await {
                 Ok(bytes) => bytes,
                 Err(e) => {
                     tracing::warn!(media = %path, error = %e, "song-stream: a proxy for its waveform did not arrive");
@@ -1799,7 +1578,7 @@ impl StreamedSong {
         playhead: Arc<dyn Fn() -> f64 + Send + Sync>,
         stop: Arc<AtomicBool>,
     ) {
-        let fetch: Arc<dyn RangeFetch> = Arc::new(SourceFetch(Arc::clone(&self.source)));
+        let fetch = self.media();
         // In a browser, through its cache: what the window let go comes
         // back from there, and a reload streams nothing twice. (Filling the
         // cache ahead of playing is [`Self::warm`], the page's to run.)
@@ -1832,8 +1611,8 @@ impl StreamedSong {
     /// after the one on screen), until done or `stop`.
     #[cfg(target_arch = "wasm32")]
     pub async fn warm(&self, heard: Heard, blocks: Option<u64>, stop: Arc<AtomicBool>) {
-        let fetch: Arc<dyn RangeFetch> = Arc::new(SourceFetch(Arc::clone(&self.source)));
-        let wanted = self.paths_of(heard);
+        let fetch = self.media();
+        let wanted = self.warm_paths(heard);
         let mut files = self.versions();
         files.retain(|path, _| wanted.contains(path.as_str()));
         CachedFetch::new(fetch, &self.source.label(), files)
@@ -1856,15 +1635,6 @@ impl StreamedSong {
             })
             .collect()
     }
-}
-
-/// What a song is heard by: its reference's preview, its reference, or
-/// its stems.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Heard {
-    Preview,
-    Reference,
-    Stems,
 }
 
 /// A take attached to a stream that is not heard yet
@@ -1901,117 +1671,6 @@ impl Original {
         {
             false
         }
-    }
-}
-
-/// One step of what a page brings in behind the song on screen
-/// ([`warm_order`]): a song (by its place counted from the one on screen)
-/// heard by something, or that song switched to its stems.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WarmStep {
-    /// Bring all of what song `song` is heard by in.
-    Warm { song: usize, heard: Heard },
-    /// Start the song's stems coming in to take over from its reference
-    /// where it is playing.
-    HearStems { song: usize },
-}
-
-/// The order a page brings a set in behind the song on screen, `songs[0]`
-/// (the rest in set order from it; `true` for a song with a reference):
-/// every song's preview, so the whole set is playable almost at once; the
-/// song on screen's reference, then its stems — taking over from the
-/// reference once they are where it is; every other song's reference; then
-/// every other song's stems. Proxies only, always: the originals are not
-/// streamed to a page.
-#[must_use]
-pub fn warm_order(songs: &[bool]) -> Vec<WarmStep> {
-    let by_reference = |song: &usize| songs.get(*song).copied().unwrap_or(false);
-    let rest = 1..songs.len();
-    let mut steps: Vec<WarmStep> = (0..songs.len())
-        .filter(by_reference)
-        .map(|song| WarmStep::Warm {
-            song,
-            heard: Heard::Preview,
-        })
-        .collect();
-    if !songs.is_empty() {
-        if by_reference(&0) {
-            steps.push(WarmStep::Warm {
-                song: 0,
-                heard: Heard::Reference,
-            });
-            steps.push(WarmStep::HearStems { song: 0 });
-        }
-        steps.push(WarmStep::Warm {
-            song: 0,
-            heard: Heard::Stems,
-        });
-    }
-    steps.extend(
-        rest.clone()
-            .filter(by_reference)
-            .map(|song| WarmStep::Warm {
-                song,
-                heard: Heard::Reference,
-            }),
-    );
-    steps.extend(rest.map(|song| WarmStep::Warm {
-        song,
-        heard: Heard::Stems,
-    }));
-    steps
-}
-
-#[cfg(test)]
-mod warm_tests {
-    use super::{Heard, WarmStep, warm_order};
-
-    #[test]
-    fn a_page_brings_every_preview_then_the_song_on_screen_then_the_rest() {
-        use WarmStep::{HearStems, Warm};
-        // On screen with a reference; then one without; then one with.
-        assert_eq!(
-            warm_order(&[true, false, true]),
-            [
-                Warm {
-                    song: 0,
-                    heard: Heard::Preview
-                },
-                Warm {
-                    song: 2,
-                    heard: Heard::Preview
-                },
-                Warm {
-                    song: 0,
-                    heard: Heard::Reference
-                },
-                HearStems { song: 0 },
-                Warm {
-                    song: 0,
-                    heard: Heard::Stems
-                },
-                Warm {
-                    song: 2,
-                    heard: Heard::Reference
-                },
-                Warm {
-                    song: 1,
-                    heard: Heard::Stems
-                },
-                Warm {
-                    song: 2,
-                    heard: Heard::Stems
-                },
-            ]
-        );
-        assert_eq!(
-            warm_order(&[false]),
-            [Warm {
-                song: 0,
-                heard: Heard::Stems
-            }]
-        );
-        assert_eq!(warm_order(&[]), Vec::<WarmStep>::new());
     }
 }
 
@@ -2212,12 +1871,20 @@ pub fn arrived(takes: &Mutex<Vec<StreamedTake>>) -> usize {
         .unwrap_or(0)
 }
 
-/// Bytes from a song's source.
-struct SourceFetch(Arc<dyn SongSource>);
+/// Bytes from a song's source, but none of the paths it refuses (a song
+/// capped at Reference: its stems).
+struct SourceFetch {
+    source: Arc<dyn SongSource>,
+    refused: std::collections::HashSet<String>,
+}
 
 impl RangeFetch for SourceFetch {
     fn fetch(&self, path: &str, range: std::ops::Range<u64>) -> Fetching {
-        self.0.read(path.to_owned(), range)
+        if self.refused.contains(path) {
+            let refused = format!("{path}: capped at Reference, its stems are not fetched");
+            return Box::pin(async move { Err(refused) });
+        }
+        self.source.read(path.to_owned(), range)
     }
 }
 
@@ -2227,5 +1894,129 @@ pub struct FetchGuard(pub Arc<AtomicBool>);
 impl Drop for FetchGuard {
     fn drop(&mut self) {
         self.0.store(true, Ordering::Relaxed);
+    }
+}
+
+/// The listening cap, counted at the source: what a song capped at
+/// Reference asks its source for, against what a full one does.
+#[cfg(test)]
+#[cfg(feature = "native")]
+mod cap_tests {
+    use std::sync::{Arc, Mutex};
+
+    use super::{Keep, Listen, Listing, Pending, SongSource, WarmStep, mirror, warm_order};
+
+    /// A song's source that answers every read (with zeros) and counts it.
+    struct Counting {
+        files: Vec<(String, u64)>,
+        reads: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl SongSource for Counting {
+        fn label(&self) -> String {
+            "counting".to_owned()
+        }
+
+        fn list(&self) -> Pending<eyre::Result<Listing>> {
+            let entries = self.files.clone();
+            Box::pin(async move { Ok(entries.into()) })
+        }
+
+        fn read(
+            &self,
+            path: String,
+            range: std::ops::Range<u64>,
+        ) -> Pending<Result<Vec<u8>, String>> {
+            self.reads.lock().expect("reads").push(path);
+            let len = usize::try_from(range.end.saturating_sub(range.start)).unwrap_or(0);
+            Box::pin(async move { Ok(vec![0; len]) })
+        }
+    }
+
+    /// The stems' proxies, and the recording one is cut from.
+    const STEMS: [&str; 2] = ["Media/Proxies/Kick.ogg", "Media/Proxies/Bass.ogg"];
+    const ORIGINAL: &str = "Media/Kick.wav";
+    const REFERENCE: [&str; 2] = [
+        "Media/Proxies/Reference.ogg",
+        "Media/Proxies/Reference Preview.ogg",
+    ];
+
+    /// A prepared song's folder: its project, its stems' proxies and the
+    /// reference's, each with its page index, and one original.
+    fn files() -> Vec<(String, u64)> {
+        let mut files = vec![("Song.RPP".to_owned(), 64), (ORIGINAL.to_owned(), 4096)];
+        for proxy in STEMS.iter().chain(&REFERENCE) {
+            files.push(((*proxy).to_owned(), 1024));
+            files.push((format!("{proxy}.idx"), 16));
+        }
+        files
+    }
+
+    /// Open the song from the counting source under `listen` and do what a
+    /// page does after: warm it in [`warm_order`], fetch every proxy it
+    /// attaches as it plays (the stems held behind the reference too, as
+    /// [`super::StreamedSong::fetch`] is handed them), and ask for its
+    /// original (full resolution). Returns every path the source was read
+    /// for.
+    fn opened_and_played(listen: Listen) -> Vec<String> {
+        let reads = Arc::new(Mutex::new(Vec::new()));
+        let source = Arc::new(Counting {
+            files: files(),
+            reads: Arc::clone(&reads),
+        });
+        let cache = tempfile::tempdir().expect("tempdir");
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("runtime");
+        runtime.block_on(async {
+            let song = mirror(source, Keep::Disk(cache.path().to_path_buf()))
+                .await
+                .expect("mirrored")
+                .with_listen(listen);
+            assert!(song.has_reference());
+            let media = song.media();
+            for step in warm_order(&[song.has_reference()], listen) {
+                if let WarmStep::Warm { heard, .. } = step {
+                    for path in song.warm_paths(heard) {
+                        let _ = media.fetch(path, 0..16).await;
+                    }
+                }
+            }
+            for path in STEMS.iter().chain(&REFERENCE) {
+                let _ = media.fetch(path, 0..16).await;
+            }
+            if let Some(original) = song.original_of(ORIGINAL) {
+                let _ = song.fetch_original(&original).await;
+            }
+        });
+        reads.lock().expect("reads").clone()
+    }
+
+    #[test]
+    fn capped_at_reference_opening_a_song_fetches_no_stem() {
+        let reads = opened_and_played(Listen::Reference);
+        for stem in STEMS.iter().chain([&ORIGINAL]) {
+            assert!(
+                !reads.iter().any(|r| r == stem),
+                "{stem} was fetched: {reads:?}"
+            );
+        }
+        for reference in REFERENCE {
+            assert!(
+                reads.iter().any(|r| r == reference),
+                "{reference} did not come: {reads:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn full_still_warms_and_fetches_the_stems() {
+        let reads = opened_and_played(Listen::Full);
+        for wanted in STEMS.iter().chain(&REFERENCE).chain([&ORIGINAL]) {
+            assert!(
+                reads.iter().any(|r| r == wanted),
+                "{wanted} was not fetched: {reads:?}"
+            );
+        }
     }
 }
