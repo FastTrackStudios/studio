@@ -226,7 +226,7 @@ pub mod safety_net;
 pub mod sample_align;
 #[cfg(feature = "native")]
 pub mod seams;
-pub mod section_colors;
+pub use session_runtime::section_colors;
 #[cfg(feature = "native")]
 pub mod session_file;
 pub mod setlist;
