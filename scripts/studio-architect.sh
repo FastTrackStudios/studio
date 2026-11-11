@@ -89,7 +89,7 @@ architect_src() {
         if [ ! -d "$src/.git" ]; then
             rm -rf "$src"
             mkdir -p "$cache"
-            git clone --quiet --depth 1 --branch "$tag" https://github.com/FastTrackStudios/architect "$src" >&2
+            git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$tag" https://github.com/FastTrackStudios/architect "$src" >&2
         fi
     fi
     local at
