@@ -107,8 +107,9 @@ asset="Studio-${version}-${asset_suffix}"
 say "Installing Studio ${version} (${os} ${arch})"
 
 # ── Download and verify ─────────────────────────────────────────────────────
-# Each release carries one SHA256SUMS over its installers, attached after
-# them, so a release that has it has the installers too.
+# Each release carries one SHA256SUMS over every asset it has (signed with
+# the org key, SHA256SUMS.minisig), written again each time a release build
+# attaches its files: an installer it does not list is not uploaded yet.
 rc=0
 fetch "${base_url}/v${version}/SHA256SUMS" "$work/SHA256SUMS" || rc=$?
 if [ "$rc" -eq 44 ]; then
@@ -117,7 +118,7 @@ elif [ "$rc" -ne 0 ]; then
   fail "could not download the release checksums"
 fi
 expected="$(grep " \*\{0,1\}${asset}\$" "$work/SHA256SUMS" | cut -d' ' -f1)"
-[ -n "$expected" ] || fail "${asset} is not listed in release v${version}'s SHA256SUMS"
+[ -n "$expected" ] || fail "${asset} is not in release v${version} yet (the desktop builds may still be uploading; try again in a few minutes)"
 say "Downloading ${asset}..."
 fetch "${base_url}/v${version}/${asset}" "$work/${asset}" || fail "could not download ${asset}"
 actual="$(checksum "$work/${asset}")"

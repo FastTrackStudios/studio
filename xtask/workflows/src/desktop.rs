@@ -71,22 +71,28 @@ workflow_dispatch:
     .job("resolve", resolve()?)
     .job("macos", macos())
     .job("linux", linux())
-    .job("publish", publish()?))
+    .job("publish", publish()?)
+    // SHA256SUMS over the whole Release, signed (sums.rs): after the
+    // installers are on it.
+    .jobs(crate::sums::jobs(
+        &["publish"],
+        "inputs.mode != 'validate' && inputs.mode != 'build-only' && needs.publish.result == 'success'",
+    )?))
 }
 
-const NOT_VALIDATE: &str = "${{ inputs.mode != 'validate' }}";
+pub const NOT_VALIDATE: &str = "${{ inputs.mode != 'validate' }}";
 
 /// A release build takes the tag's version (scripts/release.sh `stamp`:
 /// FTS_RELEASE_VERSION for the build, the version the bundle scripts write
 /// into Info.plist and the AppImage); a build-only run builds the ref with
 /// the version it commits.
-const STAMPED: &str = "${{ env.MODE != 'build-only' }}";
+pub const STAMPED: &str = "${{ env.MODE != 'build-only' }}";
 
 /// The same checks TestFlight makes (release.sh ios-resolve): the tag is
 /// vX.Y.Z, the stamped release version is the tag's, the commit is
 /// on main or release/v*, `CI passed` is green. A
 /// build-only run checks none of that and builds the ref as it is.
-fn resolve() -> Result<Job> {
+pub fn resolve() -> Result<Job> {
     Ok(Job::new(UBUNTU)
         .name("Resolve the tag")
         // Never a fork: its tag is not this repo's release.
@@ -352,12 +358,11 @@ fi
 bash "$smoke" "target/desktop/Studio-$VERSION-linux-x86_64.AppImage" "$VERSION"
 "#;
 
-/// The only job with a write token: checks both installers are there (named
-/// with the release's version), attaches them, then attaches one SHA256SUMS
-/// over both, which scripts/install.sh checks a download against (T3 Code's
-/// layout). SHA256SUMS goes up last, so a release that has it has the
-/// installers too. GitHub's own `digest` for each asset must match the file
-/// uploaded.
+/// Checks both installers are there (named with the release's version) and
+/// attaches them. GitHub's own `digest` for each asset must match the file
+/// uploaded: the `sums` job after it (sums.rs) writes the Release's one
+/// SHA256SUMS from those digests, which scripts/install.sh checks a
+/// download against (T3 Code's layout), and signs it.
 fn publish() -> Result<Job> {
     Ok(Job::new(UBUNTU)
         .name("Attach to the GitHub Release")
@@ -381,12 +386,10 @@ cd installers
 ls -l
 test -f "Studio-$VERSION-macos-arm64.dmg"
 test -f "Studio-$VERSION-linux-x86_64.AppImage"
-sha256sum ./*.dmg ./*.AppImage | sed 's| \./| |' > SHA256SUMS
-cat SHA256SUMS
 gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber ./*.dmg ./*.AppImage
-gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber SHA256SUMS
-# GitHub's digest for each uploaded asset must be the file's own sha256.
-for f in ./*.dmg ./*.AppImage ./SHA256SUMS; do
+# GitHub's digest for each uploaded asset must be the file's own sha256:
+# the sums job writes SHA256SUMS from those digests.
+for f in ./*.dmg ./*.AppImage; do
   name="$(basename "$f")"
   want="sha256:$(sha256sum "$f" | cut -d' ' -f1)"
   got="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq ".assets[] | select(.name == \"$name\") | .digest")"
