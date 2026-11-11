@@ -51,4 +51,6 @@ builds them as an Architect site, and Studio draws its own blocks into it
   may ask for a tap to go on (FastTrackStudios/architect#546).
 - A node draws Studio's blocks only with `setlists::share::blocks()`
   linked in (`Distribution::block`); installed as a process extension, the
-  fences show as text (FastTrackStudios/architect#547).
+  fences show as text (FastTrackStudios/architect#547). Studio Architect
+  (`apps/architect`, docs/architect-distribution.md) is the node with them
+  linked in.

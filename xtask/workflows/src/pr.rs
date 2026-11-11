@@ -17,6 +17,11 @@
 //! gh workflow run checks.yml --ref <branch>     (posts Local CI when green)
 //! ```
 //!
+//! One job here compiles: `studio-architect`, `cargo check` of Studio's
+//! distribution of Architect's node for x86_64 Linux (apps/architect, the
+//! release's `studio-architect` workflow builds it), and only when the PR
+//! reaches it. Not required.
+//!
 //! Its own workflow, not a job of `CI`: a PR shows `PR checks` and `Local
 //! CI`, not a row of skipped CI jobs (Task, 2026-10).
 
@@ -40,7 +45,8 @@ pub fn workflow() -> Result<Workflow> {
             yaml("pull_request:\n  types: [opened, synchronize, reopened, ready_for_review]\n")?,
         )
         .concurrency("pr-${{ github.event.pull_request.number }}", true)
-        .job("pr-checks", pr_checks()?),
+        .job("pr-checks", pr_checks()?)
+        .job("studio-architect", studio_architect()?),
     )
 }
 
@@ -77,4 +83,68 @@ fn pr_checks() -> Result<Job> {
         )
         .step(Step::run("Manifests + lockfile", LOCKFILE).cond(NOT_CANCELLED))
         .step(Step::run("rail config", "cargo rail config validate --strict").cond(NOT_CANCELLED)))
+}
+
+/// The PR's changed files reach the node: a crate of this repo in its
+/// tree (`cargo tree`, normal, build and its own dev edges), the manifest,
+/// the lockfile, the toolchain, the cargo config or its build script.
+const REACH: &str = r#"set -euo pipefail
+changed="$(git diff --name-only HEAD^1 HEAD)"
+dirs="$(cargo tree --locked -p studio-architect --no-default-features -e normal,build,dev --prefix none -f '{p}' \
+  | sed -n "s|.* (\($GITHUB_WORKSPACE/[^)]*\))\$|\1|p" | sed "s|^$GITHUB_WORKSPACE/||" | sort -u)"
+reach=false
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  case "$f" in
+    Cargo.toml|Cargo.lock|rust-toolchain.toml|.cargo/*|scripts/studio-architect.sh) reach=true ;;
+  esac
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    case "$f" in "$d"/*) reach=true ;; esac
+  done <<<"$dirs"
+done <<<"$changed"
+echo "reach=$reach" >> "$GITHUB_OUTPUT"
+echo "studio-architect: $(wc -l <<<"$dirs") crates of this repo in the node's tree; this PR reaches it: $reach"
+"#;
+
+/// Studio's distribution of Architect still builds for the hosted node:
+/// `cargo check --all-targets` of its node for x86_64 Linux, exactly as the
+/// release builds it (scripts/studio-architect.sh: `--no-default-features`,
+/// `--cfg no_workspace_hack`). A free hosted runner with no target cache
+/// (PRs never write the Actions cache): a cold check, 6m39s on its first
+/// run (PR #407), so it runs only for a PR that reaches the node
+/// ([`REACH`]) and nothing waits on it (main requires `PR checks` only).
+fn studio_architect() -> Result<Job> {
+    const REACHED: &str = "${{ steps.reach.outputs.reach == 'true' }}";
+    let setup = hosted_setup(
+        "",
+        "",
+        // As checks.rs's hosted Gates job, which compiles on ubuntu-latest:
+        // mold alone (.cargo/config.toml links x86_64 Linux with it) and the
+        // CI cargo config. Not the apt header set: the node's tree has no
+        // crate that needs a native header, and with the cached package set
+        // gcc found no `ld` (PR #407, run 43119996719).
+        Tools {
+            mold: true,
+            free_disk: true,
+            ci_cargo_config: true,
+            ..Tools::default()
+        },
+    );
+    Ok(Job::new(UBUNTU)
+        .name("Studio Architect node (cargo check, Linux)")
+        .timeout(45)
+        .permissions(yaml("contents: read\n")?)
+        .step(checkout().with("fetch-depth", 2))
+        .step(cargo_deps_restore())
+        // The image's rustup reads rust-toolchain.toml: the workspace pin.
+        .step(Step::run("Does this PR reach the node?", REACH).id("reach"))
+        .steps(setup.into_iter().map(|s| s.cond(REACHED)))
+        .step(
+            Step::run(
+                "cargo check the node",
+                "bash scripts/studio-architect.sh check",
+            )
+            .cond(REACHED),
+        ))
 }

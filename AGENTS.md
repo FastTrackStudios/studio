@@ -27,6 +27,10 @@ apps/       studio/desktop                     Studio, THE app (desktop + iOS, o
                                                DAW view, a view of the engine), the
                                                site, the DAW in a browser
             signal/{mobile,web}                Signal: Android, the site
+            architect/                         Studio Architect: the Architect app with
+                                               Studio's extensions compiled in; its node
+                                               is the hosted Architect
+                                               (docs/architect-distribution.md)
             patchbay/                          fts-patchbay: app, agent CLI, browser remote
             plugins/*                          the CLAP/VST3 plugins (`<name>-plugin`),
                                                verify/ (bundle load checks)

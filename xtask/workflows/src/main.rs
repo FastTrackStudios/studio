@@ -26,7 +26,9 @@ mod pr;
 mod release;
 mod setlists_extension;
 mod steps;
+mod studio_architect;
 mod studio_ios;
+mod sums;
 
 use anyhow::{Context, Result, bail};
 use model::Workflow;
@@ -50,6 +52,7 @@ const WORKFLOWS: &[(&str, Build)] = &[
     ("images", images::workflow),
     ("release", release::workflow),
     ("setlists-extension", setlists_extension::workflow),
+    ("studio-architect", studio_architect::workflow),
     ("studio-ios", studio_ios::workflow),
 ];
 

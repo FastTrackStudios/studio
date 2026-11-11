@@ -63,6 +63,14 @@ impl Workflow {
         self.jobs.insert(id.to_owned(), job);
         self
     }
+
+    /// Several jobs at once, each with its id.
+    pub fn jobs(mut self, jobs: impl IntoIterator<Item = (&'static str, Job)>) -> Self {
+        for (id, job) in jobs {
+            self.jobs.insert(id.to_owned(), job);
+        }
+        self
+    }
 }
 
 #[derive(Serialize)]
@@ -216,6 +224,12 @@ impl Job {
 
     pub fn concurrency(mut self, group: &str, cancel_in_progress: bool) -> Self {
         self.concurrency = Some(Concurrency::new(group, cancel_in_progress));
+        self
+    }
+
+    /// The GitHub environment it runs in (its secrets, its protection rules).
+    pub fn environment(mut self, name: &str) -> Self {
+        self.environment = Some(Value::String(name.to_owned()));
         self
     }
 
