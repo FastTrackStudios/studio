@@ -26,6 +26,8 @@ daw-standalone = { workspace = true }
 # (`guide_instrument`).
 session = { workspace = true }
 eyre = { workspace = true }
+# A clock that also runs in a browser (`open_core`'s load timings).
+web-time = { workspace = true }
 tracing = { workspace = true }
 # A Task share link's listing (`source::ShareSource`).
 reqwest = { workspace = true }
@@ -48,7 +50,6 @@ wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
 js-sys = { workspace = true, optional = true }
 gloo-timers = { workspace = true, optional = true }
-web-time = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -57,7 +58,7 @@ builtin = ["dep:builtin"]
 # signal's rigs too.
 signal = ["builtin", "dep:signal-fx"]
 # The browser: the page's audio loop and its AudioWorklet (`web_audio`).
-web = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers", "dep:web-time", "dep:fts-sample", "daw-standalone/stream-ogg"]
+web = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers", "dep:fts-sample", "daw-standalone/stream-ogg", "daw-standalone/reapeaks"]
 
 [lints]
 workspace = true
