@@ -119,9 +119,15 @@ fn studio_architect() -> Result<Job> {
     let setup = hosted_setup(
         "",
         "",
+        // As checks.rs's hosted Gates job, which compiles on ubuntu-latest:
+        // mold alone (.cargo/config.toml links x86_64 Linux with it) and the
+        // CI cargo config. Not the apt header set: the node's tree has no
+        // crate that needs a native header, and with the cached package set
+        // gcc found no `ld` (PR #407, run 43119996719).
         Tools {
-            apt: true,
+            mold: true,
             free_disk: true,
+            ci_cargo_config: true,
             ..Tools::default()
         },
     );
