@@ -111,9 +111,9 @@ echo "studio-architect: $(wc -l <<<"$dirs") crates of this repo in the node's tr
 /// `cargo check --all-targets` of its node for x86_64 Linux, exactly as the
 /// release builds it (scripts/studio-architect.sh: `--no-default-features`,
 /// `--cfg no_workspace_hack`). A free hosted runner with no target cache
-/// (PRs never write the Actions cache): a cold check, about 15-25 minutes,
-/// so it runs only for a PR that reaches the node ([`REACH`]) and nothing
-/// waits on it (main requires `PR checks` only).
+/// (PRs never write the Actions cache): a cold check, 6m39s on its first
+/// run (PR #407), so it runs only for a PR that reaches the node
+/// ([`REACH`]) and nothing waits on it (main requires `PR checks` only).
 fn studio_architect() -> Result<Job> {
     const REACHED: &str = "${{ steps.reach.outputs.reach == 'true' }}";
     let setup = hosted_setup(

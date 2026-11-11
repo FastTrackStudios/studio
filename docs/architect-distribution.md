@@ -124,13 +124,28 @@ download with
 `sha256sum -c --ignore-missing SHA256SUMS`.
 
 The build job's summary lists the node's `DT_NEEDED` and interpreter,
-which is what `autoPatchelf` has to satisfy on NixOS.
+which is what `autoPatchelf` has to satisfy on NixOS. On the first build
+(2026-11-11, x86_64, 103 MiB binary, a 36.9 MB tarball):
+
+```
+NEEDED   libstdc++.so.6  libgcc_s.so.1  libm.so.6  libc.so.6  ld-linux-x86-64.so.2
+needs    GLIBC_2.39, GLIBCXX_3.4.29, GCC_12.0.0
+interp   /nix/store/…-glibc-2.42-84/lib/ld-linux-x86-64.so.2
+RUNPATH  /nix/store/…-devenv-shell-env/lib:/nix/store/…-glibc-2.42-84/lib:/nix/store/…-gcc-15.3.0-lib/lib
+```
+
+The interpreter and `RUNPATH` are the build shell's store paths: wrap it
+with `autoPatchelfHook` and `stdenv.cc.cc.lib` (libstdc++, libgcc_s) and
+glibc. `libstdc++` is Luau's (`mlua-sys`, through Architect's
+`architect-scripting`).
 
 A PR that reaches the node (a crate of this repo in its tree, the
 manifest, the lockfile or the toolchain) gets the `studio-architect` job in
 `PR`: `cargo check --all-targets` of the Linux node on a free hosted
-runner. It is a cold check of roughly 15-25 minutes, it is not required,
-and PRs that don't reach the node skip it after `cargo tree`.
+runner, set up as the hosted Gates job is (`mold` and the CI cargo
+config, no apt header set). It is a cold check (6m39s on its first run),
+it is not required, and PRs that don't reach the node skip it after
+`cargo tree`.
 
 ## How it relates to the rest of Studio
 
