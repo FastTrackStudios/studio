@@ -329,10 +329,8 @@ productions = { path = "features/productions" }
 # tree-sitter grammar, and Engraver.) One tag pin shared by every entry so
 # the whole domain moves together.
 #
-# TEMP: keyflow#61's head by rev (keyflow on architect v0.12.0) until
-# keyflow tags it v0.5.0; then swap every `rev = "<sha>"` marked TEMP for
-# `tag = "v0.5.0"`. Architect v0.12.0 by tag, as here (a rev of the same
-# commit would be a second source).
+# keyflow v0.5.0 is on Architect v0.12.0 by tag, as here (a rev of the
+# same commit would be a second source).
 #
 # `keyflow` and `engraver` are the facades — depend on those. The rest are
 # listed only because in-tree consumers still name them directly; new code
@@ -344,17 +342,17 @@ productions = { path = "features/productions" }
 # `chordpro`, `midi`, `orchestra`, `sync`, …), `engraver` (layout +
 # render, `score` included) and the `keyflow` facade. `keyflow-lang`
 # defaults OFF here; consumers name the formats they use.
-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "28a80e95be159780e5a710c3d3735700b3c3be68" }  # TEMP: until keyflow's next tag (v0.5.0)
-keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", rev = "28a80e95be159780e5a710c3d3735700b3c3be68" }  # TEMP: until keyflow's next tag (v0.5.0)
-keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", rev = "28a80e95be159780e5a710c3d3735700b3c3be68", default-features = false }  # TEMP: until keyflow's next tag (v0.5.0)
-keyflow-annotate = { git = "https://github.com/FastTrackStudios/keyflow", rev = "28a80e95be159780e5a710c3d3735700b3c3be68" }  # TEMP: until keyflow's next tag (v0.5.0)
-keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", rev = "28a80e95be159780e5a710c3d3735700b3c3be68" }  # TEMP: until keyflow's next tag (v0.5.0)
-keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", rev = "28a80e95be159780e5a710c3d3735700b3c3be68" }  # TEMP: until keyflow's next tag (v0.5.0)
-keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", rev = "28a80e95be159780e5a710c3d3735700b3c3be68" }  # TEMP: until keyflow's next tag (v0.5.0)
-tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "28a80e95be159780e5a710c3d3735700b3c3be68" }  # TEMP: until keyflow's next tag (v0.5.0)
+keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.0" }
+keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.0" }
+keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.0", default-features = false }
+keyflow-annotate = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.0" }
+keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.0" }
+keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.0" }
+keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.0" }
+tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.0" }
 # Engraver — defaults OFF at the root (the full `engraver` feature drags
 # wgpu/vello + PDF export); consumers opt into `svg`/`wgpu`/`engraver`.
-engraver = { git = "https://github.com/FastTrackStudios/keyflow", rev = "28a80e95be159780e5a710c3d3735700b3c3be68", default-features = false }  # TEMP: until keyflow's next tag (v0.5.0)
+engraver = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.0", default-features = false }
 
 # ── signal domain (wave 4) ────────────────────────────────────────────
 # `signal` is the facade — the only public API surface for the signal
@@ -843,7 +841,7 @@ editor-crdt = { git = "https://github.com/FastTrackStudios/editor", rev = "6817d
 # folded into it at keyflow v0.2.8). Defaults off: no `.kf` fence
 # renderer, so no engraver. Renamed because task's older `editor-keyflow`
 # (below, for the site) has the same package name.
-keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", rev = "28a80e95be159780e5a710c3d3735700b3c3be68", default-features = false }  # TEMP: until keyflow's next tag (v0.5.0)
+keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.0", default-features = false }
 editor-keyflow = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 editor-keyflow-lang = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 view-knowledge-graph = { git = "https://github.com/FastTrackStudios/task", branch = "main" }

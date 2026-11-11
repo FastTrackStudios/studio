@@ -413,7 +413,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -424,7 +424,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3835,7 +3835,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6332,7 +6332,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6402,7 +6402,7 @@ checksum = "ad5208a115eaba24916f7456929832e310a81518c641f93fee4f89aa93aa3675"
 dependencies = [
  "cfg-if",
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6836,7 +6836,7 @@ dependencies = [
 [[package]]
 name = "editor-keyflow"
 version = "0.5.0"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=28a80e95be159780e5a710c3d3735700b3c3be68#28a80e95be159780e5a710c3d3735700b3c3be68"
+source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.0#498ade0500ee2e85ae5845c34175cf3acbb87ba3"
 dependencies = [
  "editor-state",
  "keyflow-lang",
@@ -6969,7 +6969,7 @@ checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 [[package]]
 name = "engraver"
 version = "0.5.0"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=28a80e95be159780e5a710c3d3735700b3c3be68#28a80e95be159780e5a710c3d3735700b3c3be68"
+source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.0#498ade0500ee2e85ae5845c34175cf3acbb87ba3"
 dependencies = [
  "anyrender",
  "bitflags 2.13.2",
@@ -7196,7 +7196,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9749,7 +9749,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.5",
  "system-configuration",
  "tokio",
  "tower-layer",
@@ -10662,7 +10662,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -11009,7 +11009,7 @@ dependencies = [
 [[package]]
 name = "keyflow"
 version = "0.5.0"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=28a80e95be159780e5a710c3d3735700b3c3be68#28a80e95be159780e5a710c3d3735700b3c3be68"
+source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.0#498ade0500ee2e85ae5845c34175cf3acbb87ba3"
 dependencies = [
  "color-eyre",
  "colored",
@@ -11028,12 +11028,12 @@ dependencies = [
 [[package]]
 name = "keyflow-annotate"
 version = "0.5.0"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=28a80e95be159780e5a710c3d3735700b3c3be68#28a80e95be159780e5a710c3d3735700b3c3be68"
+source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.0#498ade0500ee2e85ae5845c34175cf3acbb87ba3"
 
 [[package]]
 name = "keyflow-daw-analysis"
 version = "0.5.0"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=28a80e95be159780e5a710c3d3735700b3c3be68#28a80e95be159780e5a710c3d3735700b3c3be68"
+source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.0#498ade0500ee2e85ae5845c34175cf3acbb87ba3"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.0)",
  "daw",
@@ -11047,7 +11047,7 @@ dependencies = [
 [[package]]
 name = "keyflow-lang"
 version = "0.5.0"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=28a80e95be159780e5a710c3d3735700b3c3be68#28a80e95be159780e5a710c3d3735700b3c3be68"
+source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.0#498ade0500ee2e85ae5845c34175cf3acbb87ba3"
 dependencies = [
  "facet",
  "facet-json",
@@ -11065,7 +11065,7 @@ dependencies = [
 [[package]]
 name = "keyflow-proto"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=28a80e95be159780e5a710c3d3735700b3c3be68#28a80e95be159780e5a710c3d3735700b3c3be68"
+source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.0#498ade0500ee2e85ae5845c34175cf3acbb87ba3"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.0)",
  "color-palette 0.1.0 (git+https://github.com/FastTrackStudios/music-convention?tag=v0.1.0)",
@@ -12825,7 +12825,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "png 0.18.1",
  "thiserror 2.0.20",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -13511,7 +13511,7 @@ dependencies = [
  "pin-project-lite",
  "rustc-hash 2.1.3",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.5",
  "thiserror 2.0.20",
  "tokio",
  "tokio-stream",
@@ -13554,7 +13554,7 @@ checksum = "b56d621ed2c1773b5356ab39cc68c819f8d0103f7493d8661c4a5f5f8ea55f40"
 dependencies = [
  "cfg_aliases",
  "libc",
- "socket2 0.5.10",
+ "socket2 0.6.5",
  "tracing",
  "windows-sys 0.61.2",
 ]
@@ -13605,7 +13605,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -16295,7 +16295,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -16308,7 +16308,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -16457,7 +16457,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.3",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.5",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
@@ -16496,9 +16496,9 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.5",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -17731,7 +17731,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -17799,7 +17799,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -20037,7 +20037,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -21600,7 +21600,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -21629,7 +21629,7 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8c27177b12a6399ffc08b98f76f7c9a1f4fe9fc967c784c5a071fa8d93cf7e1"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -22616,7 +22616,7 @@ dependencies = [
  "once_cell",
  "png 0.18.1",
  "thiserror 2.0.20",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -22945,7 +22945,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -24992,7 +24992,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -26011,7 +26011,7 @@ dependencies = [
  "as-raw-xcb-connection",
  "gethostname",
  "libc",
- "libloading 0.9.0",
+ "libloading 0.8.9",
  "once_cell",
  "rustix 1.1.6",
  "x11rb-protocol 0.14.0",
