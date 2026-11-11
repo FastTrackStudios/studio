@@ -101,7 +101,12 @@ pub fn notes(title: &str, songs: &[ShowSong], project: &str) -> Show {
     Show {
         songs: known
             .iter()
-            .map(|(at, song)| note(library.song_note(&at.title), &song.note(&library, &[])))
+            .map(|(at, song)| {
+                note(
+                    library.song_note(&at.title),
+                    &song.note(&library, &setlists::song::SongPage::default()),
+                )
+            })
             .collect(),
         setlist,
         links,

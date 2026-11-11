@@ -1,20 +1,23 @@
-//! A song's chart engraved: its Master Rhythm pages (one PNG each, as
-//! `kf png` draws them) and PDF (`kf pdf`), the timed lyric lane
-//! included. And a song brought into a library from its files.
+//! A song's chart engraved, and a song brought into a library.
+//!
+//! The engraving is its Master Rhythm pages (one PNG each, as `kf png`
+//! draws them) and PDF (`kf pdf`), the timed lyric lane included: what
+//! players download and print.
 //!
 //! The pages are raster, not SVG: an SVG page that shows anywhere as an
-//! image has to carry its fonts, about 4 MB a page.
+//! image has to carry its fonts, about 4 MB a page. What a share page
+//! shows is the chart drawn to follow playback ([`crate::follow`]).
 
 use std::path::Path;
 use std::sync::OnceLock;
 
 use keyflow::engraver::api::pipeline::ChartPipeline;
-use keyflow::engraver::layout::chart::{ChartLayoutConfig, LayoutMode};
+use keyflow::engraver::layout::chart::{ChartLayoutConfig, ChartLayoutResult, LayoutMode};
 use keyflow::engraver::style::MStyle;
 
 use crate::layout::{ARRANGEMENTS, Library};
 use crate::lyrics::{self, Block};
-use crate::song::{Arrangement, Chart as SongChart, Song};
+use crate::song::{Arrangement, Chart as SongChart, Song, SongPage};
 use crate::vault::Vault;
 use crate::{Error, Result, check_name};
 
@@ -43,6 +46,23 @@ fn pipeline() -> Result<&'static ChartPipeline> {
         .map_err(|e| Error::Engrave(e.clone()))
 }
 
+/// Chart `chart` laid out as it is printed: A4 pages, the Master Rhythm
+/// preset. The pipeline it was laid out with comes along.
+///
+/// # Errors
+///
+/// The engraver's fonts did not load.
+pub(crate) fn layout(
+    chart: &keyflow::Chart,
+) -> Result<(&'static ChartPipeline, ChartLayoutResult)> {
+    let pipeline = pipeline()?;
+    let config = ChartLayoutConfig::master_rhythm().with_page_offsets(true);
+    Ok((
+        pipeline,
+        pipeline.layout_with_config(chart, &LayoutMode::paginated_a4(), &config),
+    ))
+}
+
 /// Engrave chart `source`: A4 pages, the Master Rhythm preset.
 ///
 /// # Errors
@@ -50,13 +70,11 @@ fn pipeline() -> Result<&'static ChartPipeline> {
 /// It does not parse, or the engraver could not write its PDF.
 pub fn engrave(source: &str) -> Result<Engraved> {
     let chart = keyflow::parse(source).map_err(|e| Error::Engrave(e.to_string()))?;
-    let pipeline = pipeline()?;
-    let config = ChartLayoutConfig::master_rhythm().with_page_offsets(true);
-    let layout = pipeline.layout_with_config(&chart, &LayoutMode::paginated_a4(), &config);
+    let (pipeline, layout) = layout(&chart)?;
     let pages = pipeline
         .export_svg_pages_linked(&layout)
         .iter()
-        .map(|svg| raster(pipeline, svg))
+        .map(|svg| raster(svg))
         .collect::<Result<Vec<_>>>()?;
     let pdf = pipeline.export_pdf(&layout).map_err(Error::Engrave)?;
     let meta = &chart.metadata;
@@ -78,22 +96,45 @@ pub fn engrave(source: &str) -> Result<Engraved> {
     })
 }
 
+/// The engraver's own fonts, for drawing its pages without it: as pixels
+/// (the PNG pages) or as outlines (the share page's chart, [`crate::follow`]).
+///
+/// # Errors
+///
+/// The engraver's fonts did not load.
+pub(crate) fn fontdb() -> Result<std::sync::Arc<resvg::usvg::fontdb::Database>> {
+    static FONTS: OnceLock<std::sync::Arc<resvg::usvg::fontdb::Database>> = OnceLock::new();
+    let pipeline = pipeline()?;
+    Ok(std::sync::Arc::clone(FONTS.get_or_init(|| {
+        let mut db = resvg::usvg::fontdb::Database::new();
+        for (label, bytes) in pipeline.fonts().embeddable_fonts_for_raster() {
+            db.load_font_data(bytes.to_vec());
+            // The generic families the engraving names (a rehearsal mark's
+            // `sans-serif`) are the face the engraver files under them:
+            // fontdb maps a generic family by name only.
+            let family = db
+                .faces()
+                .last()
+                .and_then(|f| f.families.first())
+                .map(|(name, _)| name.clone());
+            match (label, family) {
+                ("sans-serif", Some(name)) => db.set_sans_serif_family(name),
+                ("serif", Some(name)) => db.set_serif_family(name),
+                _ => {}
+            }
+        }
+        std::sync::Arc::new(db)
+    })))
+}
+
 /// How many pixels a point is on a page: A4 at 2× is 1190 px wide.
 const SCALE: f32 = 2.0;
 
 /// An engraved page as a PNG, drawn with the engraver's own fonts.
-fn raster(pipeline: &ChartPipeline, svg: &str) -> Result<Vec<u8>> {
+fn raster(svg: &str) -> Result<Vec<u8>> {
     use resvg::{tiny_skia, usvg};
-    static FONTS: OnceLock<std::sync::Arc<usvg::fontdb::Database>> = OnceLock::new();
-    let fontdb = FONTS.get_or_init(|| {
-        let mut db = usvg::fontdb::Database::new();
-        for (_, bytes) in pipeline.fonts().embeddable_fonts_for_raster() {
-            db.load_font_data(bytes.to_vec());
-        }
-        std::sync::Arc::new(db)
-    });
     let opts = usvg::Options {
-        fontdb: std::sync::Arc::clone(fontdb),
+        fontdb: fontdb()?,
         ..usvg::Options::default()
     };
     let tree = usvg::Tree::from_str(svg, &opts).map_err(|e| Error::Engrave(e.to_string()))?;
@@ -249,8 +290,8 @@ pub fn import_song(
             song.media.push(rel);
         }
     }
-    let lyrics = song_lyrics(vault, lib, &song);
-    vault.write_song(lib, &song, &lyrics)?;
+    let page = song_page(vault, lib, &song);
+    vault.write_song(lib, &song, &page)?;
     Ok(song)
 }
 
@@ -275,8 +316,8 @@ pub fn reengrave(vault: &Vault, lib: &Library, title: &str) -> Result<Song> {
         };
         write_engraving(vault, lib, title, &dir, &stem, chart, engrave(&text)?)?;
     }
-    let lyrics = song_lyrics(vault, lib, &song);
-    vault.write_song(lib, &song, &lyrics)?;
+    let page = song_page(vault, lib, &song);
+    vault.write_song(lib, &song, &page)?;
     Ok(song)
 }
 
@@ -311,28 +352,49 @@ fn write_engraving(
     Ok(())
 }
 
-/// The song's lyrics: its chart's lanes, else its LRC's lines.
-fn song_lyrics(vault: &Vault, lib: &Library, song: &Song) -> Vec<Block> {
+/// What the song's page shows from its files: its charts' sources (drawn
+/// as charts that follow playback), its timed lyrics from its chart when it
+/// has no LRC, and its lyrics as text (its chart's lanes, else its LRC's
+/// lines).
+fn song_page(vault: &Vault, lib: &Library, song: &Song) -> SongPage {
     let file = |name: &Option<String>| {
         name.as_ref()
             .and_then(|n| vault.read(&lib.song_file(&song.title, n)).ok())
     };
-    let from_chart = file(&song.chart.source)
-        .map(|c| lyrics::from_chart(&c))
-        .unwrap_or_default();
-    if !from_chart.is_empty() {
-        return from_chart;
+    let chart = file(&song.chart.source);
+    let arrangements = song
+        .arrangements
+        .iter()
+        .filter_map(|a| Some((a.name.clone(), file(&a.chart.source)?)))
+        .collect();
+    let chart_lrc = if song.lrc.is_some() {
+        None
+    } else {
+        chart
+            .as_deref()
+            .and_then(|c| crate::follow::chart_lrc(c).ok().flatten())
+    };
+    let from_chart = chart.as_deref().map(lyrics::from_chart).unwrap_or_default();
+    let lyrics = if from_chart.is_empty() {
+        file(&song.lrc)
+            .map(|l| lyrics::from_lrc(&l))
+            .filter(|lines| !lines.is_empty())
+            .map(|lines| {
+                vec![Block {
+                    section: String::new(),
+                    lines,
+                }]
+            })
+            .unwrap_or_default()
+    } else {
+        from_chart
+    };
+    SongPage {
+        lyrics,
+        chart,
+        arrangements,
+        chart_lrc,
     }
-    file(&song.lrc)
-        .map(|l| lyrics::from_lrc(&l))
-        .filter(|lines| !lines.is_empty())
-        .map(|lines| {
-            vec![Block {
-                section: String::new(),
-                lines,
-            }]
-        })
-        .unwrap_or_default()
 }
 
 fn stem(path: &Path) -> Option<String> {

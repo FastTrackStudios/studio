@@ -510,6 +510,9 @@ architect-workspace = { git = "https://github.com/FastTrackStudios/architect", t
 architect-vault = { package = "vault", git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.0" }
 architect-bases = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.0" }
 architect-settings = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.0" }
+# Sites: a vault drawn as pages, the share page a setlist is read on; its
+# block renderers and sanitiser (features/setlists `share`).
+architect-sites = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.0" }
 # The keymap engine (studio's former `features/input`, studio#61).
 architect-input = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.0" }
 # The launcher engine, vendored into architect in v0.2.0 (was

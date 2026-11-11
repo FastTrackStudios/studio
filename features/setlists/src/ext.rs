@@ -46,7 +46,8 @@ impl Extension for Setlists {
                 let song = text(&a, "song")?;
                 let to = usize::try_from(a.get("to").and_then(Value::as_u64).ok_or("give `to`")?)
                     .map_err(|e| e.to_string())?;
-                edit(&a, move |s| s.move_song(&song, to)).await
+                let section = opt(&a, "section");
+                edit(&a, move |s| s.move_song(&song, to, section.as_deref())).await
             })
             .action("STUDIO_SETLISTS_SHARE", share)
             .action("STUDIO_SETLISTS_SONGS", song_list)
@@ -100,21 +101,43 @@ fn resolve(spec: &str, library: Option<&str>, songs: &[SongRow]) -> Result<SongR
     }
 }
 
+fn known<'a>(songs: &'a [SongRow], at: &SongRef) -> Option<&'a SongRow> {
+    songs
+        .iter()
+        .find(|r| r.at.library == at.library && r.at.title == at.title)
+}
+
 fn setlist_json(s: &SetlistRow, songs: &[SongRow]) -> Value {
-    json!({
+    let set = s.setlist();
+    let song = |at: &SongRef| {
+        json!({
+            "song": at.label(),
+            "library": at.library,
+            "summary": known(songs, at).map(SongRow::summary),
+        })
+    };
+    let mut out = json!({
         "title": s.title,
         "path": s.path,
         "date": s.date,
         "share": s.share,
-        "songs": s.songs.iter().map(|at| {
-            let known = songs.iter().find(|r| r.at.library == at.library && r.at.title == at.title);
-            json!({
-                "song": at.label(),
-                "library": at.library,
-                "summary": known.map(SongRow::summary),
-            })
-        }).collect::<Vec<_>>(),
-    })
+        "songs": s.songs.iter().map(song).collect::<Vec<_>>(),
+    });
+    if let (false, Some(fields)) = (set.sets.is_empty(), out.as_object_mut()) {
+        fields.insert(
+            "sets".to_owned(),
+            json!(
+                set.sections()
+                    .iter()
+                    .map(|x| json!({
+                        "set": x.name,
+                        "songs": x.songs.iter().map(song).collect::<Vec<_>>(),
+                    }))
+                    .collect::<Vec<_>>()
+            ),
+        );
+    }
+    out
 }
 
 async fn list() -> Result<Value, String> {
@@ -126,15 +149,6 @@ async fn list() -> Result<Value, String> {
             .map(|s| setlist_json(s, &songs))
             .collect::<Vec<_>>()
     ))
-}
-
-fn links(songs: &[SongRef]) -> Value {
-    json!(
-        songs
-            .iter()
-            .map(|s| frontmatter::wikilink(&s.link_target(), &s.label()))
-            .collect::<Vec<_>>()
-    )
 }
 
 async fn create(a: Value) -> Result<Value, String> {
@@ -156,17 +170,28 @@ async fn create(a: Value) -> Result<Value, String> {
         .iter()
         .map(|s| resolve(s, library.as_deref(), &all))
         .collect::<Result<Vec<_>, _>>()?;
+    let mut set = Setlist::new(&title, Vec::new());
+    set.date = opt(&a, "date");
+    let section = opt(&a, "section");
+    for song in &songs {
+        set.add(song.clone(), None, section.as_deref())
+            .map_err(|e| e.to_string())?;
+    }
     let mut props = serde_json::Map::new();
     props.insert("type".to_owned(), json!(crate::setlist::KIND));
     props.insert("title".to_owned(), json!(title));
-    props.insert("songs".to_owned(), links(&songs));
-    if let Some(date) = opt(&a, "date") {
+    props.insert("songs".to_owned(), set.songs_property());
+    if let Some(sets) = set.sets_property() {
+        props.insert("sets".to_owned(), sets);
+    }
+    if let Some(date) = &set.date {
         props.insert("date".to_owned(), json!(date));
     }
     let path = setlist_note(&title);
+    let body = set.page(|at| known(&all, at).map(SongRow::info));
     host::run(
         "VAULT_CREATE",
-        json!({ "path": path, "properties": Value::Object(props).to_string(), "body": format!("# {title}\n") }),
+        json!({ "path": path, "properties": Value::Object(props).to_string(), "body": body }),
     )
     .await?;
     Ok(
@@ -185,23 +210,45 @@ async fn find(args: &Value) -> Result<SetlistRow, String> {
 }
 
 /// Change setlist `args.setlist`'s songs with `f`, written back as its
-/// `songs` property.
+/// `songs` and `sets` properties.
+///
+/// Its page (the note's body, written when it was made) keeps the running
+/// order it was made with: the app has no action that rewrites a note's
+/// body (FastTrackStudios/architect#492).
 async fn edit(
     args: &Value,
     f: impl FnOnce(&mut Setlist) -> crate::Result<()>,
 ) -> Result<Value, String> {
     let row = find(args).await?;
-    let mut set = Setlist::new(&row.title, row.songs.clone());
+    let mut set = row.setlist();
     f(&mut set).map_err(|e| e.to_string())?;
     host::run(
         "VAULT_SET_PROPERTY",
-        json!({ "path": row.path, "key": "songs", "value": links(&set.songs).to_string() }),
+        json!({ "path": row.path, "key": "songs", "value": set.songs_property().to_string() }),
     )
     .await?;
+    match set.sets_property() {
+        Some(sets) => {
+            host::run(
+                "VAULT_SET_PROPERTY",
+                json!({ "path": row.path, "key": "sets", "value": sets.to_string() }),
+            )
+            .await?;
+        }
+        None if !row.sets.is_empty() => {
+            host::run(
+                "VAULT_REMOVE_PROPERTY",
+                json!({ "path": row.path, "key": "sets" }),
+            )
+            .await?;
+        }
+        None => {}
+    }
     let songs = host::songs().await.unwrap_or_default();
     Ok(setlist_json(
         &SetlistRow {
             songs: set.songs,
+            sets: set.sets,
             ..row
         },
         &songs,
@@ -216,7 +263,8 @@ async fn add(a: Value) -> Result<Value, String> {
         .and_then(Value::as_u64)
         .filter(|n| *n > 0)
         .map(|n| usize::try_from(n).unwrap_or(usize::MAX));
-    edit(&a, move |s| s.add(at, position)).await
+    let section = opt(&a, "section");
+    edit(&a, move |s| s.add(at, position, section.as_deref())).await
 }
 
 /// Share the setlist with Architect's share links: the setlist's note

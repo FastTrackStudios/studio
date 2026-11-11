@@ -19,11 +19,15 @@ required-features = ["extension"]
 default = []
 # The extension: its navigator providers, views and actions, over the
 # app's actions (never the disk).
-extension = ["dep:architect-extensions", "dep:architect-navigator-api", "dep:architect-workspace", "dep:dioxus", "dep:serde_json"]
+extension = ["dep:architect-extensions", "dep:architect-navigator-api", "dep:architect-workspace", "dep:dioxus"]
 # Engrave a song's `.kf` to its Master Rhythm pages and PDF.
 engrave = ["dep:keyflow", "dep:engraver", "dep:resvg"]
 # `studio setlist import|engrave`: songs brought into a library from their files.
 cli = ["engrave", "dep:clap"]
+# The share page: a song's chart drawn as Keyflow's follow SVG (its bars
+# timed, so Architect's page player marks the bar being played), as the
+# block renderer a node draws a setlist's share link with.
+share = ["engrave", "dep:architect-sites"]
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
@@ -34,11 +38,12 @@ keyflow = { workspace = true, optional = true, features = ["text", "engraver"] }
 engraver = { workspace = true, optional = true, features = ["pdf"] }
 # The pages as PNGs, as `kf png` draws them.
 resvg = { workspace = true, optional = true }
+architect-sites = { workspace = true, optional = true }
 architect-extensions = { workspace = true, optional = true, features = ["guest"] }
 architect-navigator-api = { workspace = true, optional = true }
 architect-workspace = { workspace = true, optional = true, features = ["ui"] }
 dioxus = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
 clap = { workspace = true, optional = true, features = ["env"] }
 
 [dev-dependencies]

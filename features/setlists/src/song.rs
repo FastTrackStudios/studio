@@ -11,6 +11,94 @@ use crate::lyrics::Block;
 
 pub const KIND: &str = "song";
 
+/// The fence a chart is drawn from on a song's page.
+///
+/// Its body is the Keyflow source, its info the recording it follows
+/// (`kf media=Media/Take%201.ogg`, relative to the song's folder,
+/// `%`-escaped). Studio's share renderer
+/// draws it as a chart whose bars follow the playhead
+/// (`setlists::share`); where nothing draws it, it reads as the chart's
+/// text.
+pub const CHART_FENCE: &str = "kf";
+
+/// What a song's page shows that its properties do not: read from its
+/// files when its note is written.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SongPage {
+    /// Its lyrics as text, for a song with no timed lyrics.
+    pub lyrics: Vec<Block>,
+    /// Its own chart's source: drawn as a chart that follows playback.
+    pub chart: Option<String>,
+    /// Each arrangement's chart source, by the arrangement's name.
+    pub arrangements: Vec<(String, String)>,
+    /// LRC made from its chart's timed lyric lane, for a song with no LRC
+    /// of its own (one source of timed lyrics a song: its LRC, else its
+    /// chart's lane).
+    pub chart_lrc: Option<String>,
+}
+
+/// Whether `name` is audio or video a page plays, by its extension (what
+/// Architect's sites draw as a player).
+#[must_use]
+pub fn is_playable(name: &str) -> bool {
+    let ext = name
+        .rsplit_once('.')
+        .map(|(_, e)| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    matches!(
+        ext.as_str(),
+        "mp3"
+            | "m4a"
+            | "aac"
+            | "wav"
+            | "ogg"
+            | "oga"
+            | "opus"
+            | "flac"
+            | "mp4"
+            | "m4v"
+            | "webm"
+            | "mov"
+    )
+}
+
+/// `path` with `%` and whitespace escaped, to sit in a fence's info.
+#[must_use]
+pub fn escape_info(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    for c in path.chars() {
+        match c {
+            '%' => out.push_str("%25"),
+            ' ' => out.push_str("%20"),
+            '\t' => out.push_str("%09"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// [`escape_info`] undone.
+#[must_use]
+pub fn unescape_info(text: &str) -> String {
+    text.replace("%20", " ")
+        .replace("%09", "\t")
+        .replace("%25", "%")
+}
+
+/// A fenced block of `body` with `info`, its fence longer than any run of
+/// backticks in it.
+fn fence(info: &str, body: &str) -> String {
+    let mut longest = 0_usize;
+    let mut run = 0_usize;
+    for c in body.chars() {
+        run = if c == '`' { run.saturating_add(1) } else { 0 };
+        longest = longest.max(run);
+    }
+    let ticks = "`".repeat(longest.saturating_add(1).max(3));
+    let body = body.trim_end_matches('\n');
+    format!("{ticks}{info}\n{body}\n{ticks}\n\n")
+}
+
 /// How a chart is drawn: the song's own, or an arrangement's.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Chart {
@@ -129,6 +217,16 @@ impl Song {
         self.chart.summary()
     }
 
+    /// The recording its page plays and its chart follows: its first
+    /// audio or video file, relative to its folder.
+    #[must_use]
+    pub fn recording(&self) -> Option<&str> {
+        self.media
+            .iter()
+            .map(String::as_str)
+            .find(|m| is_playable(m))
+    }
+
     /// The chart of `arrangement` (None: its own); None when it has no
     /// such arrangement.
     #[must_use]
@@ -142,10 +240,11 @@ impl Song {
     }
 
     /// Its note in `lib`: the properties, then its page: the summary and
-    /// downloads, its chart's pages, its lyrics, its arrangements (a
-    /// heading each, which a setlist links to), its media.
+    /// downloads, its recording, its chart (a fence that follows playback,
+    /// [`CHART_FENCE`]), its lyrics (timed when it has them), its
+    /// arrangements (a heading each, which a setlist links to), its media.
     #[must_use]
-    pub fn note(&self, lib: &Library, lyrics: &[Block]) -> String {
+    pub fn note(&self, lib: &Library, page: &SongPage) -> String {
         let file = |name: &str| lib.song_file(&self.title, name);
         let link = |name: &Option<String>| name.as_deref().map(|n| wikilink(&file(n), base(n)));
         let fields = Fields {
@@ -191,10 +290,29 @@ impl Song {
                 .collect(),
             library: Some(wikilink(lib.note().trim_end_matches(".md"), &lib.name)),
         };
-        frontmatter::write(&fields, &self.body(lib, lyrics))
+        frontmatter::write(&fields, &self.body(lib, page))
     }
 
-    fn body(&self, lib: &Library, lyrics: &[Block]) -> String {
+    /// Its chart on its page: the source as a fence that follows its
+    /// recording, else (no source read) its engraved pages as images.
+    fn chart_block(&self, out: &mut String, chart: &Chart, source: Option<&str>, lib: &Library) {
+        match source {
+            Some(source) => {
+                let mut info = CHART_FENCE.to_owned();
+                if let Some(recording) = self.recording() {
+                    let _ = write!(info, " media={}", escape_info(recording));
+                }
+                out.push_str(&fence(&info, source));
+            }
+            None => {
+                for page in &chart.pages {
+                    let _ = writeln!(out, "![[{}]]\n", lib.song_file(&self.title, page));
+                }
+            }
+        }
+    }
+
+    fn body(&self, lib: &Library, page: &SongPage) -> String {
         let file = |name: &str| lib.song_file(&self.title, name);
         let mut out = format!("# {}\n\n", self.title);
         if let Some(artist) = &self.artist {
@@ -217,12 +335,18 @@ impl Song {
         if !downloads.is_empty() {
             let _ = writeln!(out, "**Downloads:** {}\n", downloads.join(" · "));
         }
-        for page in &self.chart.pages {
-            let _ = writeln!(out, "![[{}]]\n", file(page));
+        if let Some(recording) = self.recording() {
+            let _ = writeln!(out, "![[{}]]\n", file(recording));
         }
-        if !lyrics.is_empty() {
+        self.chart_block(&mut out, &self.chart, page.chart.as_deref(), lib);
+        if let Some(lrc) = &self.lrc {
+            let _ = writeln!(out, "## Lyrics\n\n![[{}]]\n", file(lrc));
+        } else if let Some(lrc) = &page.chart_lrc {
             out.push_str("## Lyrics\n\n");
-            for block in lyrics {
+            out.push_str(&fence("lrc", lrc));
+        } else if !page.lyrics.is_empty() {
+            out.push_str("## Lyrics\n\n");
+            for block in &page.lyrics {
                 if !block.section.is_empty() {
                     let _ = writeln!(out, "### {}\n", block.section);
                 }
@@ -242,9 +366,12 @@ impl Song {
                 if !downloads.is_empty() {
                     let _ = writeln!(out, "**Downloads:** {}\n", downloads.join(" · "));
                 }
-                for page in &a.chart.pages {
-                    let _ = writeln!(out, "![[{}]]\n", file(page));
-                }
+                let source = page
+                    .arrangements
+                    .iter()
+                    .find(|(name, _)| *name == a.name)
+                    .map(|(_, source)| source.as_str());
+                self.chart_block(&mut out, &a.chart, source, lib);
             }
         }
         if !self.media.is_empty() {
@@ -375,7 +502,7 @@ mod tests {
     #[test]
     fn a_song_note_reads_back_as_the_song() {
         let lib = Library::named("Christmas");
-        let note = song().note(&lib, &[]);
+        let note = song().note(&lib, &SongPage::default());
         assert!(note.starts_with("---\ntype: song\n"), "{note}");
         assert!(
             note.contains("![[Libraries/Christmas/Silent Night/Silent Night.chart-1.png]]"),

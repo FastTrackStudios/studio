@@ -71,7 +71,8 @@ fn song_item(id: String, container: &str, at: &SongRef, song: Option<&SongRow>) 
     item
 }
 
-/// The setlists snapshot, from the rows read.
+/// The setlists snapshot, from the rows read: each setlist, its named
+/// sets under it; its songs in running order, each in its set.
 #[must_use]
 pub fn setlists_snapshot(sets: &[SetlistRow], songs: &[SongRow]) -> Snapshot {
     let mut snap = Snapshot::new("Setlists").ordered();
@@ -80,12 +81,30 @@ pub fn setlists_snapshot(sets: &[SetlistRow], songs: &[SongRow]) -> Snapshot {
         if set.share.is_some() {
             node.shared = true;
         }
+        let setlist = set.setlist();
+        let sections = setlist.sections();
+        let container = |i: usize| match sections.get(i).and_then(|s| s.name) {
+            Some(_) => format!("{}#set{}", set.path, i.saturating_add(1)),
+            None => set.path.clone(),
+        };
+        for (i, section) in sections.iter().enumerate() {
+            if let Some(name) = section.name {
+                node = node.child(Node::new(container(i), name).icon("list"));
+            }
+        }
         snap = snap.node(node);
-        for (n, at) in (1_u32..).zip(&set.songs) {
-            let known = songs
-                .iter()
-                .find(|s| s.at.library == at.library && s.at.title == at.title);
-            snap = snap.item(song_item(format!("{}|{n}", set.path), &set.path, at, known));
+        for (i, section) in sections.iter().enumerate() {
+            for (n, at) in (section.start.saturating_add(1)..).zip(section.songs) {
+                let known = songs
+                    .iter()
+                    .find(|s| s.at.library == at.library && s.at.title == at.title);
+                snap = snap.item(song_item(
+                    format!("{}|{n}", set.path),
+                    &container(i),
+                    at,
+                    known,
+                ));
+            }
         }
     }
     snap
@@ -168,6 +187,7 @@ mod tests {
             artist: None,
             categories: cats.iter().map(|c| (*c).to_owned()).collect(),
             arrangements: Vec::new(),
+            recording: None,
         }
     }
 
@@ -185,6 +205,7 @@ mod tests {
                 SongRef::new("Hymns", "Old Hundredth", None),
                 SongRef::new("Christmas", "Silent Night", Some("Acoustic")),
             ],
+            sets: Vec::new(),
             share: Some("abc".to_owned()),
         }];
         let snap = setlists_snapshot(&sets, &songs);
@@ -206,6 +227,61 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn a_setlist_shows_its_sets_with_their_songs() {
+        let songs = [
+            song("C", "A", &[]),
+            song("C", "B", &[]),
+            song("C", "D", &[]),
+        ];
+        let sets = [SetlistRow {
+            path: "Setlists/Concert.md".to_owned(),
+            title: "Concert".to_owned(),
+            date: None,
+            songs: ["A", "B", "D"]
+                .iter()
+                .map(|t| SongRef::new("C", t, None))
+                .collect(),
+            sets: vec![
+                crate::setlist::Set {
+                    name: Some("Presidents Songs".to_owned()),
+                    len: 1,
+                },
+                crate::setlist::Set {
+                    name: Some("Tree Lighting Concert Set".to_owned()),
+                    len: 2,
+                },
+            ],
+            share: None,
+        }];
+        let snap = setlists_snapshot(&sets, &songs);
+        let kids: Vec<(&str, &str)> = snap.tree[0]
+            .children
+            .iter()
+            .map(|c| (c.id.as_str(), c.title.as_str()))
+            .collect();
+        assert_eq!(
+            kids,
+            [
+                ("Setlists/Concert.md#set1", "Presidents Songs"),
+                ("Setlists/Concert.md#set2", "Tree Lighting Concert Set")
+            ]
+        );
+        let placed: Vec<(&str, &str)> = snap
+            .items
+            .iter()
+            .map(|i| (i.container.as_str(), i.title.as_str()))
+            .collect();
+        assert_eq!(
+            placed,
+            [
+                ("Setlists/Concert.md#set1", "A"),
+                ("Setlists/Concert.md#set2", "B"),
+                ("Setlists/Concert.md#set2", "D")
+            ]
+        );
     }
 
     #[test]

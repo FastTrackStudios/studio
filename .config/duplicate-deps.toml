@@ -14,6 +14,10 @@
 # workspace, vault and Bases crates (features/setlists), which carry their own
 # generations of the font, HTML, phf and rand stacks; one architect source,
 # so these come with it.
+#
+# 2026-11-11 (studio#398): features/setlists' `share` links architect-sites
+# (the share page's block renderer and sanitiser), whose markdown is
+# pulldown-cmark 0.13; task's ssg (session-web, signal-web) is on 0.10.
 
 [allowed]
 aes = 2  # 0.8.4, 0.9.2
@@ -137,6 +141,8 @@ proc-macro-error = 2  # 0.4.12, 1.0.4
 proc-macro-error-attr = 2  # 0.4.12, 1.0.4
 prost = 3  # 0.11.9, 0.13.5, 0.14.4
 prost-derive = 3  # 0.11.9, 0.13.5, 0.14.4
+pulldown-cmark = 2  # 0.10.3, 0.13.6
+pulldown-cmark-escape = 2  # 0.10.1, 0.11.0
 quick-error = 2  # 1.2.3, 2.0.1
 quick-xml = 3  # 0.26.0, 0.37.5, 0.41.0
 r-efi = 2  # 5.3.0, 6.0.0

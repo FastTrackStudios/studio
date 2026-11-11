@@ -11,6 +11,7 @@ use architect_extensions::linked::Handle;
 use serde_json::{Map, Value, json};
 
 use crate::layout::SongRef;
+use crate::setlist::{Set, Setlist, SongInfo};
 
 static HANDLE: Mutex<Option<Handle>> = Mutex::new(None);
 
@@ -115,10 +116,10 @@ pub fn rows_of(out: &Value) -> Vec<Row> {
 }
 
 /// The base every song is in.
-pub const SONGS_BASE: &str = "filters:\n  and:\n    - type == \"song\"\nviews:\n  - type: table\n    name: Songs\n    order:\n      - file.name\n      - title\n      - key\n      - tempo\n      - meter\n      - categories\n      - artist\n      - arrangements\n";
+pub const SONGS_BASE: &str = "filters:\n  and:\n    - type == \"song\"\nviews:\n  - type: table\n    name: Songs\n    order:\n      - file.name\n      - title\n      - key\n      - tempo\n      - meter\n      - categories\n      - artist\n      - arrangements\n      - media\n";
 
 /// The base every setlist is in.
-pub const SETLISTS_BASE: &str = "filters:\n  and:\n    - type == \"setlist\"\nviews:\n  - type: table\n    name: Setlists\n    order:\n      - file.name\n      - title\n      - date\n      - songs\n      - share\n";
+pub const SETLISTS_BASE: &str = "filters:\n  and:\n    - type == \"setlist\"\nviews:\n  - type: table\n    name: Setlists\n    order:\n      - file.name\n      - title\n      - date\n      - songs\n      - sets\n      - share\n";
 
 /// The rows of a base written as YAML.
 ///
@@ -142,6 +143,8 @@ pub struct SongRow {
     pub categories: Vec<String>,
     /// Its arrangements' names.
     pub arrangements: Vec<String>,
+    /// Its recording (its first audio or video), by vault path.
+    pub recording: Option<String>,
 }
 
 impl SongRow {
@@ -157,8 +160,14 @@ impl SongRow {
                 .collect(),
             _ => Vec::new(),
         };
+        let recording = row
+            .list("media")
+            .iter()
+            .map(|l| crate::frontmatter::link_target(l).to_owned())
+            .find(|m| crate::song::is_playable(m));
         Some(Self {
             path: row.path.clone(),
+            recording,
             key: row.text("key"),
             tempo: row.text("tempo"),
             meter: row.text("meter"),
@@ -182,6 +191,15 @@ impl SongRow {
         .collect::<Vec<_>>()
         .join(" · ")
     }
+
+    /// What a setlist's page says of it.
+    #[must_use]
+    pub fn info(&self) -> SongInfo {
+        SongInfo {
+            summary: self.summary(),
+            recording: self.recording.clone(),
+        }
+    }
 }
 
 /// Every song of the vault's libraries.
@@ -203,23 +221,74 @@ pub struct SetlistRow {
     pub path: String,
     pub title: String,
     pub date: Option<String>,
+    /// Its songs in running order.
     pub songs: Vec<SongRef>,
+    /// Its sets over `songs` (none: it has none).
+    pub sets: Vec<Set>,
     pub share: Option<String>,
 }
 
 impl SetlistRow {
     #[must_use]
     pub fn of(row: &Row) -> Self {
+        let refs = |links: &[String]| -> Vec<SongRef> {
+            links
+                .iter()
+                .filter_map(|l| SongRef::from_link_target(crate::frontmatter::link_target(l)))
+                .collect()
+        };
+        let sets: Vec<(Option<String>, Vec<SongRef>)> = match row.values.get("sets") {
+            Some(Value::Array(sets)) => sets
+                .iter()
+                .map(|set| {
+                    let name = set
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .filter(|n| !n.is_empty())
+                        .map(str::to_owned);
+                    let links: Vec<String> = set
+                        .get("songs")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|v| v.as_str().map(str::to_owned))
+                        .collect();
+                    (name, refs(&links))
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        let mut setlist = Setlist::new("", refs(&row.list("songs")));
+        if !sets.is_empty() {
+            setlist.songs = sets.iter().flat_map(|(_, s)| s.iter().cloned()).collect();
+            setlist.sets = sets
+                .into_iter()
+                .map(|(name, songs)| Set {
+                    name,
+                    len: songs.len(),
+                })
+                .collect();
+        }
         Self {
             path: row.path.clone(),
             title: row.text("title").unwrap_or_else(|| row.name.clone()),
             date: row.text("date"),
-            songs: row
-                .list("songs")
-                .iter()
-                .filter_map(|l| SongRef::from_link_target(crate::frontmatter::link_target(l)))
-                .collect(),
+            songs: setlist.songs,
+            sets: setlist.sets,
             share: row.text("share"),
+        }
+    }
+
+    /// As a [`Setlist`].
+    #[must_use]
+    pub fn setlist(&self) -> Setlist {
+        Setlist {
+            title: self.title.clone(),
+            date: self.date.clone(),
+            songs: self.songs.clone(),
+            sets: self.sets.clone(),
+            share: self.share.clone(),
         }
     }
 }
@@ -267,5 +336,38 @@ mod tests {
             [SongRef::new("Christmas", "Silent Night", Some("Acoustic"))]
         );
         assert_eq!(set.share, None);
+        assert_eq!(set.sets.len(), 0);
+    }
+
+    #[test]
+    fn sets_read_from_their_property() {
+        let out = json!({"rows": {"groups": [{"rows": [
+            {"path": "Setlists/Concert.md", "name": "Concert",
+             "values": {"note.songs": ["[[Libraries/C/A/A|A]]", "[[Libraries/C/B/B|B]]"],
+                        "note.sets": [
+                            {"name": "Presidents Songs", "songs": ["[[Libraries/C/A/A|A]]"]},
+                            {"name": "Tree Lighting Concert Set", "songs": ["[[Libraries/C/B/B|B]]"]}
+                        ]}},
+            {"path": "Libraries/C/A/A.md", "name": "A",
+             "values": {"note.media": ["[[Libraries/C/A/Media/notes.pdf|notes.pdf]]", "[[Libraries/C/A/Media/A.ogg|A.ogg]]"]}}
+        ]}]}});
+        let rows = rows_of(&out);
+        let set = SetlistRow::of(&rows[0]).setlist();
+        let names: Vec<_> = set
+            .sections()
+            .iter()
+            .map(|s| (s.name.map(str::to_owned), s.songs.len()))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                (Some("Presidents Songs".to_owned()), 1),
+                (Some("Tree Lighting Concert Set".to_owned()), 1)
+            ]
+        );
+        assert_eq!(
+            SongRow::of(&rows[1]).unwrap().recording.as_deref(),
+            Some("Libraries/C/A/Media/A.ogg")
+        );
     }
 }
