@@ -687,7 +687,8 @@ fn DemoView(
         while let Some(notice) = notices.recv().await {
             match notice {
                 Notice::Listening(now) => listening.set(now),
-                Notice::Blocked => asking.set(true),
+                // Offered only where the host lets the multitracks be heard.
+                Notice::Blocked => asking.set(crate::web_engine::multitracks_offered()),
             }
         }
     });
@@ -916,7 +917,9 @@ fn ListeningBadge(listening: crate::web_engine::Listening, asking: Signal<bool>)
                     font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;",
             onmousedown: move |event| event.stop_propagation(),
             onclick: move |_| {
-                if matches!(listening, Listening::Reference { .. }) {
+                if matches!(listening, Listening::Reference { .. })
+                    && crate::web_engine::multitracks_offered()
+                {
                     asking.set(true);
                 }
             },

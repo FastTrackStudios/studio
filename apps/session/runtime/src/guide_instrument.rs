@@ -334,14 +334,14 @@ pub fn install(daw: &daw_standalone::Standalone, library: Library) {
     // — is the engine's own, no plugin file loaded.
     // And signal's rigs, with the `signal` feature: the bass rig's NAM
     // amp and cab, the drum kit's sampled voices.
-    #[cfg(feature = "native")]
+    #[cfg(feature = "builtin")]
     let factory: Arc<dyn FxFactory> = Arc::new(builtin::engine::Chain(vec![
         Arc::new(builtin::engine::BuiltinFx),
         #[cfg(feature = "signal")]
         Arc::new(signal_fx::SignalFx),
         guide,
     ]));
-    #[cfg(not(feature = "native"))]
+    #[cfg(not(feature = "builtin"))]
     let factory = guide;
     daw.set_fx_factory(factory);
 }

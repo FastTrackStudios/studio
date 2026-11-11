@@ -1,0 +1,63 @@
+[package]
+name = "session-runtime"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "Session's host-neutral runtime: where a song's files come from, how deep a listener may go, its reference, the guide instrument and the browser's audio out — no window, no shell, no Dioxus"
+
+# What this is, and what it is not.
+#
+# The part of Session's engine every run mode needs — the native app, the
+# web bundle (`session-daw-web`), and later an Architect-hosted extension —
+# moved out of `session-engine` (which re-exports it from the old paths).
+# Nothing here draws, and nothing reaches the app's shell, its window or
+# its tokio runtime: the embedding host passes in what it decides (the
+# listening cap, `Listen`). See FastTrackStudios/studio#400 and
+# FastTrackStudios/architect#528.
+
+[dependencies]
+# `decode`: the streamed sources a reference plays from; `session-file`:
+# a project file read from a folder (`folder`).
+daw = { workspace = true, features = ["standalone-decode", "standalone-session-file"] }
+daw-proto = { workspace = true }
+daw-standalone = { workspace = true }
+# The guide engine the Click / Count / Guide MIDI tracks play through
+# (`guide_instrument`).
+session = { workspace = true }
+eyre = { workspace = true }
+tracing = { workspace = true }
+# A Task share link's listing (`source::ShareSource`).
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+# The FTS processors as built-in FX beside the guide (`builtin`), and
+# signal's rigs (`signal`): the desktop's factory chain.
+builtin = { workspace = true, optional = true, features = ["engine"] }
+signal-fx = { workspace = true, optional = true }
+
+# The browser's audio out (`web_audio`).
+fts-sample = { workspace = true, optional = true, features = ["engine-core"] }
+web-sys = { workspace = true, optional = true, features = [
+    "Window", "Document", "Event", "EventTarget", "AddEventListenerOptions",
+    "AudioContext", "AudioContextOptions", "BaseAudioContext", "AudioContextState",
+    "AudioWorklet", "AudioWorkletNode", "AudioWorkletNodeOptions",
+    "AudioNode", "AudioDestinationNode", "MessagePort", "MessageEvent",
+    "Blob", "BlobPropertyBag", "Url", "Worklet", "WorkletOptions",
+] }
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+gloo-timers = { workspace = true, optional = true }
+web-time = { workspace = true, optional = true }
+
+[features]
+default = []
+# The FTS processors built in beside the guide (`guide_instrument::install`).
+builtin = ["dep:builtin"]
+# signal's rigs too.
+signal = ["builtin", "dep:signal-fx"]
+# The browser: the page's audio loop and its AudioWorklet (`web_audio`).
+web = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:gloo-timers", "dep:web-time", "dep:fts-sample", "daw-standalone/stream-ogg"]
+
+[lints]
+workspace = true

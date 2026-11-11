@@ -70,10 +70,15 @@ fn walk(dir: &Path, out: &mut Vec<String>) {
 
 #[test]
 fn the_library_reads_a_clock_the_browser_has() {
-    // The engine and the window both run in the page (`session-daw-web`).
+    // The engine, its runtime and the window all run in the page
+    // (`session-daw-web`).
     let here = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut found = Vec::new();
-    for src in [here.join("src"), here.join("../ui/src")] {
+    for src in [
+        here.join("src"),
+        here.join("../ui/src"),
+        here.join("../runtime/src"),
+    ] {
         walk(&src, &mut found);
     }
     assert!(
