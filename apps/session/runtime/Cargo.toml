@@ -61,6 +61,12 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 js-sys = { workspace = true, optional = true }
 gloo-timers = { workspace = true, optional = true }
 
+# Natively, the DAW's audio engine: the post-render hook a song's reference
+# is mixed in by (`reference_play`). A browser mixes it in its own loop
+# (`web_audio`).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+daw-standalone = { workspace = true, features = ["audio"] }
+
 [features]
 default = []
 # The FTS processors built in beside the guide (`guide_instrument::install`).
@@ -78,4 +84,8 @@ workspace = true
 
 [dev-dependencies]
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+# The reference-mode test: a reference encoded in memory, and the set's
+# block loop driven with no device (`render_set_block`).
+fts-sample = { workspace = true, features = ["engine-native"] }
+daw = { workspace = true, features = ["standalone-audio"] }

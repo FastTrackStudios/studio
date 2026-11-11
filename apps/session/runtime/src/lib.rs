@@ -16,6 +16,8 @@
 //! - [`section_colors`] — a song's sections in keyflow's colours.
 //! - [`reference`] — a song's reference: what it leaves out and how it is
 //!   mixed over the render.
+//! - [`reference_play`] (native) — a song heard by its reference: the
+//!   audio engine's post-render hook that mixes it in.
 //! - [`guide_instrument`] — the click, count and cues, played live.
 //! - [`web_audio`] (`web`) — the page's audio loop and its `AudioWorklet`.
 //!
@@ -26,6 +28,8 @@ pub mod guide_instrument;
 pub mod listen;
 pub mod open_core;
 pub mod reference;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod reference_play;
 pub mod section_colors;
 pub mod song_stream;
 pub mod source;
