@@ -32,6 +32,9 @@ productions = { workspace = true, features = ["extension"] }
 # (`studio_views::ext::StudioViews`, studio#409).
 studio-views = { workspace = true, features = ["extension"] }
 
+# Its island (#445): `SiteIsland`, the node serves it.
+architect-sites = { workspace = true }
+
 [dev-dependencies]
 # tests/node.rs: a real node on loopback, serving a setlist's share link.
 tokio = { workspace = true }

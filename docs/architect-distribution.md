@@ -134,9 +134,10 @@ it is ready at 8.7 s, with the chart, which is the longer wait, as the node
 serves both uncompressed: FastTrackStudios/architect#602), and stay where it
 cannot run (Safari, which has no JS Promise Integration yet).
 
-Wiring it into this distribution (`Distribution::island`, the folder
-shipped beside the binary as `studio-island/`) needs the Architect release
-with #601.
+The distribution reads it from `studio-island/` beside the binary
+(`studio_architect::island`, `Distribution::island`); `scripts/studio-architect.sh
+release` puts `just island`'s folder there, and a release without it ships the
+node without the island. Needs the Architect release with #601.
 
 ## Release artefacts
 
