@@ -558,11 +558,24 @@ impl SampleEngine {
             // Held-sustain note-off (spec §6): immediate note_off + overlapping
             // fade (~`$tukcw=200` ms). This line's voices only, so a unison
             // note held by another divisi line keeps sounding.
-            let sus_off = ms_to_frames(
-                self.patch.spec.performance.sustain_noteoff_ms,
-                self.sample_rate,
-            )
-            .max(release_frames);
+            let held_ms = self.note_on_frame.get(&note).map_or(1000.0, |&f| {
+                frames_to_ms(self.frames_rendered.saturating_sub(f), self.sample_rate)
+            });
+            let by_held = self
+                .patch
+                .spec
+                .articulation(&self.articulation)
+                .map(|a| a.release_ms_by_held.clone())
+                .unwrap_or_default();
+            let sus_off = if by_held.is_empty() {
+                ms_to_frames(
+                    self.patch.spec.performance.sustain_noteoff_ms,
+                    self.sample_rate,
+                )
+                .max(release_frames)
+            } else {
+                ms_to_frames_f(crate::spec::lerp_table(&by_held, held_ms), self.sample_rate)
+            };
             self.voices.note_off_line(cur_line, note, Some(sus_off));
             return;
         }
@@ -748,10 +761,33 @@ impl SampleEngine {
         // Honour the forced-RR pin like every other RR-bearing trigger —
         // document mode pins a stable per-note slot here so playback never
         // consults the mutable counter (position-independent determinism).
-        let rr = self.forced_rr.map_or(self.zone_rr_counter, |f| f as usize);
-        self.zone_rr_counter = self.zone_rr_counter.wrapping_add(1);
-
         let nv_artic = self.articulation.clone();
+        let per_note = self
+            .patch
+            .spec
+            .articulation(&nv_artic)
+            .is_some_and(|a| a.rr_per_note);
+        let rr = if let (true, None) = (per_note, self.forced_rr) {
+            // Note-class = the zone root this key plays from.
+            let class = self
+                .patch
+                .spec
+                .zones
+                .iter()
+                .find(|z| {
+                    z.articulation.eq_ignore_ascii_case(&nv_artic)
+                        && (z.key_min..=z.key_max).contains(&note)
+                })
+                .map_or(note, |z| z.root_key);
+            let c = &mut self.note_rr[usize::from(class & 127)];
+            let rr = usize::from(*c);
+            *c = c.wrapping_add(1);
+            rr
+        } else {
+            let rr = self.forced_rr.map_or(self.zone_rr_counter, |f| f as usize);
+            self.zone_rr_counter = self.zone_rr_counter.wrapping_add(1);
+            rr
+        };
 
         // CC2 picks the non-vib vs vib balance (equal-power) — in pure playback
         // too: the CC2 vibrato crossfade IS CSS (pure = exact CSS; the old
@@ -793,14 +829,19 @@ impl SampleEngine {
         // the hammer and most of the note's identity — measured on The
         // Grandeur as a first non-zero sample 1940 frames (40 ms) after
         // note-on against 1 frame in the source recording.
-        let fresh_vz = if !self.legato_sustain && !self.in_transition && self.cs_family() {
-            self.patch
-                .spec
-                .legato_cfg()
-                .velocity_range(self.last_velocity)
-        } else {
-            0
-        };
+        // The loud-first-note body swap is the SUSTAIN path's (KSP `$ocjln=0`):
+        // marcato and the other unpaired articulations start their body at
+        // full level from sample 0 (null test, CSS marcato at velocity 120).
+        let sustain_family = vib_id.as_ref().is_some_and(|v| *v != nv_id);
+        let fresh_vz =
+            if !self.legato_sustain && !self.in_transition && sustain_family && self.cs_family() {
+                self.patch
+                    .spec
+                    .legato_cfg()
+                    .velocity_range(self.last_velocity)
+            } else {
+                0
+            };
         if fresh_vz >= 2 {
             let cfg = self.patch.spec.legato_cfg();
             let mute_ms = cfg
@@ -822,7 +863,10 @@ impl SampleEngine {
         if nv_scale > 0.0 || self.cc_driven_layers() {
             self.spawn_sustain_layers(&nv_id, false, nv_scale, &direction, note, rr);
         }
-        if let Some(vib_id) = vib_id {
+        // An articulation with no vibrato pair resolves to ITSELF on both
+        // sides; spawning the "vibrato side" too played every layer twice
+        // (+6 dB — null test, CSS marcato).
+        if let Some(vib_id) = vib_id.filter(|v| *v != nv_id) {
             // A layer at gain 0 costs a full voice render every block and can
             // never be heard. CSS still needs it: CC2 can sweep the vibrato
             // side up under a held note, and `update_sustain_gains` can only
@@ -1641,7 +1685,16 @@ impl SampleEngine {
         // CSS's recorded releases are a subtle bow-off tail UNDER the note's
         // decay — but these samples are normalised loud, so at unity (×makeup)
         // they spike louder than the note itself ("note-off noise"). Trim them.
-        if let Some(idx) = self.find_layer_zone(&rel_id, "", &dynamic, note, rr) {
+        // With decoded group curves the layer is chosen below, per curve — the
+        // legacy single-layer pick must not gate it (it found no zone for
+        // CSS marcato's mf/f/fff releases and skipped the release entirely).
+        let has_curves = self
+            .patch
+            .spec
+            .articulation(&rel_id)
+            .is_some_and(|a| !a.group_curves.is_empty());
+        let legacy = self.find_layer_zone(&rel_id, "", &dynamic, note, rr);
+        if let Some(idx) = legacy.or(has_curves.then_some(usize::MAX)) {
             // DECODED release level (§11): base −6.0 dB ($jljyh/$ofpdo) × the
             // linear held-time curve %ru5pa — a further −6 dB at 10 ms held,
             // fading to 0 dB extra by ≥ 1 s. Short taps get quiet bow-offs;
@@ -2357,7 +2410,12 @@ impl SampleEngine {
         });
         // Everything but the controller-driven `gain_scale`: what CC
         // re-levelling must keep (`Voice::level`).
-        let level = 10.0f32.powf(gain_db / 20.0)
+        let artic_level_db = self
+            .patch
+            .spec
+            .articulation(&self.patch.spec.zones[idx].articulation)
+            .map_or(0.0, |a| a.level_db);
+        let level = 10.0f32.powf((gain_db + artic_level_db) / 20.0)
             * makeup
             * db_to_gain(piano_db)
             * vel_law
@@ -2592,7 +2650,13 @@ impl SampleEngine {
                 voice = voice.with_flex_env2(env2);
             }
             if is_sustain_layer {
-                voice = voice.with_release_curve(self.patch.spec.performance.release_curve_k);
+                let k = self
+                    .patch
+                    .spec
+                    .articulation(&flex_artic)
+                    .and_then(|a| a.release_curve_k)
+                    .unwrap_or(self.patch.spec.performance.release_curve_k);
+                voice = voice.with_release_curve(k);
             }
             let loop_xfade =
                 ms_to_frames(self.patch.spec.performance.loop_xfade_ms, self.sample_rate);
@@ -3062,6 +3126,7 @@ impl SampleEngine {
                 self.rr.borrow_mut().reset_to(value as usize);
                 self.zone_rr_counter = value as usize;
                 self.zone_rr_last_slots.clear();
+                self.note_rr = [0; 128];
                 // KSP SetRR: the first-note body-variant counter too
                 // (`$2ekvq := CC59 mod 18`).
                 let n = self.patch.spec.legato_cfg().first_note_variants.len();

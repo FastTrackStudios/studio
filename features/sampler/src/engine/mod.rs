@@ -1014,6 +1014,9 @@ pub struct SampleEngine {
     /// Inside a Kontakt-model legato transition: the body being spawned is the
     /// DESTINATION body, not a first note (no first-note variant/mute logic).
     pub(crate) in_transition: bool,
+    /// Per-note-class round-robin counters (`ArticulationSpec::rr_per_note`),
+    /// keyed by zone root key.
+    pub(crate) note_rr: [u8; 128],
     /// Gain for the release sample being spawned right now, replacing the
     /// held-time law (the in-phrase release's flat level).
     pub(crate) release_gain_override: Option<f32>,
@@ -1299,6 +1302,7 @@ impl SampleEngine {
             variant_counter: variant_init,
             spawn_variant: None,
             in_transition: false,
+            note_rr: [0; 128],
             release_gain_override: None,
             spawn_extra_start: 0,
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,

@@ -516,12 +516,27 @@ articulations (
     {
         id            Marcato
         label         Marcato
-        kind          @Short
+        // A held, CC1-crossfaded body like the sustains (Kontakt's `marcato
+        // mod` groups) — not a velocity-picked short. Null-tested: a first
+        // marcato note at CC1=127 is fff RR1 at full level from sample 0.
+        kind          @Sustain
         dynamics      (mf f fff)
         rr            2
-        dyn_ctrl      velocity   // shipped CSS: velocity selects the dynamic layer
+        rr_per_note   true   // RR alternates 1/2 per note-class (%fbn4o)
+        // Body fade at note-off by held time (KSP $ftqcv; measured 500 ms,
+        // k 2.0, after a 2 s note).
+        release_ms_by_held ((75 80) (175 500))
+        release_curve_k 2.0
+        dyn_ctrl      cc1
         release_artic Marcrel
         notes         full
+        vibrato_pair  ""
+        // Kontakt group curves (marcato mod mf/f/fff).
+        group_curves (
+            { dynamic mf, cc 1, points (0 0.08445944 0.5 1 -0.1689189 0.7972441 0 0 1 0 0) }
+            { dynamic f, cc 1, points (0 0 0.3503937 0 0.06756757 0.8228347 1 0 1 0 -0.16891891) }
+            { dynamic fff, cc 1, points (0 0 0.6003937 0 0.11824326 1 1 0) }
+        )
     }
     {
         id       Sfz
@@ -631,10 +646,24 @@ articulations (
         id       Marcrel
         label    "Marcato Release"
         kind     @Release
+        level_db -6.02   // measured: marcato releases play 6 dB under their zone volume
+        // Same release-group envelopes as NVrel/Vsusrel (groups.json): the
+        // decoded ENV_FLEX tail × the AHD (250 ms attack, 25 s decay).
+        amp_env ( {time_ms 1.0, level 0.986, curve 0.125}
+                  {time_ms 4007.0, level 1.0, curve 0.9}
+                  {time_ms 1250.0, level 0.0, curve 0.7} )
+        amp_env2 ( {time_ms 250.0, level 1.0, curve 0.675}
+                   {time_ms 25000.0, level 0.25, curve 0.808} )
         dynamics (mf f fff)
         rr       1
         dyn_ctrl cc1
         notes    full
+        // Kontakt release-group curves (CC36 = last CC1).
+        group_curves (
+            { dynamic mf, cc 36, points (0 0.08445944 0.5 1 -0.1689189 0.7972441 0 0 1 0 0) }
+            { dynamic f, cc 36, points (0 0 0.3503937 0 0.06756757 0.8228347 1 0 1 0 -0.16891891) }
+            { dynamic fff, cc 36, points (0 0 0.6003937 0 0.11824324 1 1 0) }
+        )
     }
     {
         id       HTrel

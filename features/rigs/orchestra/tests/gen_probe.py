@@ -73,6 +73,38 @@ def main():
         rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", key, cat, desc))
         t = start + win
 
+    if "--marcato" in sys.argv:
+        # Marcato (CC58 66 = overlay off) — CC1=127, CC2 has no say here.
+        # Single notes (soft/hard) and connected pairs at slow gaps (no run
+        # mode, which only engages within 175 ms).
+        for vel in (40, 120):
+            for key in (67, 72):
+                unit("MARC-1", f"marcato key{key} v{vel}", key, vel, 127, 0, 2.0, cc58=66)
+
+        def mphrase(desc, a, b, vel, ioi):
+            nonlocal t
+            m.cc(t, 58, 66)
+            m.cc(t, 1, 127)
+            start = t + 1.5
+            m.note(start, ioi + 0.05, a, vel)
+            m.note(start + ioi, 2.0, b, vel)
+            win = ioi + 2.0 + 2.5
+            rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", b, "MARC-LEG", desc))
+            t = start + win
+
+        for vel in (40, 120):
+            for ioi in (0.3, 0.5, 1.0):
+                mphrase(f"MC v{vel} 67->69 ioi{int(ioi*1000)}", 67, 69, vel, ioi)
+            for a, b in ((67, 72), (69, 66), (67, 81)):
+                mphrase(f"MC v{vel} {a}->{b} ioi500", a, b, vel, 0.5)
+        m.write(sys.argv[1])
+        with open(sys.argv[2], "w") as f:
+            f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
+            for r in rows:
+                f.write("\t".join(map(str, r)) + "\n")
+        print(f"{len(rows)} units, {t:.1f} s")
+        return
+
     if "--tunes" in sys.argv:
         # One single-voice note (nonvib ff, CC1=127, CC2=0, velocity 40) per
         # playable key: Kontakt's effective playback rate per zone, to find

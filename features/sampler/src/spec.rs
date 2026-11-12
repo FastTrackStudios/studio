@@ -705,6 +705,26 @@ pub struct KontaktTransitionSpec {
     pub phrase_dip_curve: Vec<EnvSegmentSpec>,
 }
 
+/// Piecewise-linear `(x, y)` table lookup, clamped at both ends.
+#[must_use]
+pub fn lerp_table(pts: &[[f32; 2]], x: f32) -> f32 {
+    let Some(first) = pts.first() else { return 0.0 };
+    if x <= first[0] {
+        return first[1];
+    }
+    for w in pts.windows(2) {
+        let ([x0, y0], [x1, y1]) = (w[0], w[1]);
+        if x <= x1 {
+            return if x1 > x0 {
+                y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+            } else {
+                y1
+            };
+        }
+    }
+    pts[pts.len() - 1][1]
+}
+
 /// CSS transition-envelope CC values (KSP 7186-7425) for one transition.
 #[must_use]
 pub fn css_transition_ccs(expressive: bool, zone: u8, ioi_ms: f32) -> (f32, f32) {
@@ -1581,6 +1601,24 @@ pub struct ArticulationSpec {
     /// its ENV_FLEX. CSS release groups: 250 ms attack, 25 s decay to 0.25.
     #[facet(default)]
     pub amp_env2: Vec<EnvSegmentSpec>,
+    /// Round-robin counted per NOTE-CLASS (notes sharing a sample zone share
+    /// a counter), not globally — CSS marcato alternates RR 1/2 per class
+    /// (`%fbn4o`, null-tested). CC59 resets every class counter.
+    #[facet(default)]
+    pub rr_per_note: bool,
+    /// This articulation's body fade at note-off, by how long the note was
+    /// held: `(held_ms, release_ms)` pairs, linear between, clamped at the
+    /// ends. Empty = the instrument's `performance.release_ms`. CSS marcato:
+    /// 80 ms (held < 75 ms) → 500 ms (held > 175 ms) (KSP 21723-21751).
+    #[facet(default)]
+    pub release_ms_by_held: Vec<[f32; 2]>,
+    /// Curvature of this articulation's note-off fade (see
+    /// `PerformanceSpec::release_curve_k`); `None` = the instrument's.
+    pub release_curve_k: Option<f32>,
+    /// Level offset (dB) on every voice of this articulation — e.g. CSS
+    /// marcato releases sound 6 dB under their zone volume (null-tested).
+    #[facet(default)]
+    pub level_db: f32,
     /// Whether the envelope freezes at its hold level while the note is held
     /// (sustains) or plays through one-shot (shorts, releases, transitions).
     /// `None` = held for Sustain/Looped/Trill kinds, one-shot otherwise.

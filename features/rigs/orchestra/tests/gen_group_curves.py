@@ -33,7 +33,7 @@ def main():
             # Release groups scale their flex-envelope LEVELS by CC36
             # (`CC_TIME1` → fm7_level1/2, the same curve on both): a volume
             # curve in effect. Emit it once, as cc 36.
-            if m["source"] == "CC_TIME1" and m["target"] == "fm7_level1" and m["curve"]:
+            if m["source"] == "CC_TIME1" and m["cc"] == 36 and m["target"] == "fm7_level1" and m["curve"]:
                 pts = " ".join(f"{v:.8g}" for v in m["curve"])
                 print(f"            {{ dynamic {d}, cc 36, points ({pts}) }}")
                 continue

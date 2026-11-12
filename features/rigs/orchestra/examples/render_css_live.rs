@@ -172,6 +172,9 @@ fn main() -> eyre::Result<()> {
                     e.frame as f64 / f64::from(SR)
                 );
             }
+            if let sampler::engine::trace::TraceKind::NoteOff { note } = &e.kind {
+                println!("{:9.4}s NOTEOFF    {note}", e.frame as f64 / f64::from(SR));
+            }
             if let sampler::engine::trace::TraceKind::VoiceEnd { voice_id } = &e.kind {
                 println!(
                     "{:9.4}s END        voice {voice_id}",
