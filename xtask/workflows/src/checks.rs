@@ -43,10 +43,10 @@
 //!                  vendor: every git fetch as nix makes it)
 //!   ubuntu-latest  plan, gates, deps-cache and the `CI passed` aggregator
 //!   macos-latest   release tooling (the sandbox, macOS's own tools)
-//!   airlock        Apple builds (`studio-release-mac`: the macOS app's
-//!                  `cargo check`, the iOS app's linking `cargo build`), so a
-//!                  tag's .dmg and TestFlight builds compile before the tag
-//!                  (studio#444)
+//!   airlock        Apple builds (`studio-release-mac`: the macOS app linked
+//!                  and refused if it links anything from /nix/store, the
+//!                  iOS app's linking `cargo build`), so a tag's .dmg and
+//!                  TestFlight builds build before the tag (studio#444)
 //! ```
 //!
 //! One job per BUILD KIND, as Task's lint/tests/wasm: check mode, clippy's
@@ -367,18 +367,20 @@ nix build --no-link --accept-flake-config "$flake#packages.$system.session-app-w
 
 /// REQUIRED (through `CI passed`): what a tag's Apple builds compile, on the
 /// runner that builds them (airlock's `studio-release-mac`, its own warm
-/// checkout and dev target): `cargo check` of the macOS app (the .dmg's,
-/// scripts/desktop/macos.sh) and a `cargo build` of the iOS app with
+/// checkout and dev target): a `cargo build` of the macOS app (the .dmg's,
+/// scripts/desktop/macos.sh), linked as the .dmg links it and held to its
+/// no-/nix/store guard, and a `cargo build` of the iOS app with
 /// TestFlight's features, which links (deploy-testflight.sh). v26.11.0 and
 /// v26.11.1 shipped neither: a macOS-only compile error and an iOS-only
-/// link error that no Linux check could see (studio#444).
+/// link error that no Linux check could see; v26.11.2 shipped no .dmg for
+/// a macOS link of nixpkgs' zlib (studio#444).
 fn apple() -> Job {
     Job::new(RunsOn::Labels(&[
         "self-hosted",
         "macos",
         "studio-release-mac",
     ]))
-    .name("Apple builds (macOS check, iOS build)")
+    .name("Apple builds (macOS build, iOS build)")
     .needs(&["plan", "rail"])
     .cond(CHECK_PLANNED)
     .timeout(120)
@@ -389,14 +391,23 @@ fn apple() -> Job {
     )
     .step(Step::uses("devenv CLI", "./.github/actions/devenv"))
     .step(Step::run(
-        "macOS: cargo check -p studio-desktop (the .dmg's app)",
-        &in_shell("cargo check -p studio-desktop\n"),
+        "macOS: cargo build -p studio-desktop (the .dmg's app, linked), nothing from /nix/store",
+        &in_shell(MACOS),
     ))
     .step(Step::run(
         "iOS: cargo build -p studio-desktop (TestFlight's features, linked)",
         &in_shell(IOS),
     ))
 }
+
+/// The .dmg's app linked as scripts/desktop/macos.sh links it (zlib from the
+/// macOS SDK: `macos-libs.sh config`), then its guard on a copy: a binary
+/// that links anything from /nix/store fails here, not at the tag (v26.11.2
+/// shipped no .dmg for nixpkgs' libz.dylib; studio#444).
+const MACOS: &str = r#"cargo build -p studio-desktop --config "$(bash scripts/desktop/macos-libs.sh config)"
+cp "${CARGO_TARGET_DIR:-target}/debug/studio-desktop" "$RUNNER_TEMP/studio-desktop"
+bash scripts/desktop/macos-libs.sh guard "$RUNNER_TEMP/studio-desktop"
+"#;
 
 /// iOS needs Xcode's own xcrun first on PATH and the nix SDK variables
 /// unset (the airlock-ios skill); the devenv shell's iOS linker wrappers do
