@@ -27,9 +27,16 @@ builds them as an Architect site, and Studio draws its own blocks into it
   page stacked in one SVG, a transparent `kf-bar` rect per bar played with
   its time (`data-at`, seconds, on the chart's own clock: `\downbeat`, its
   tempo, tempo changes and meters; Keyflow's `bar_times`), tied to the
-  song's recording (`data-media`). Architect's page player marks the bar at
-  the playhead, keeps it in view and seeks on a click. The text is drawn as
-  outlines: a block cannot load the engraver's fonts on a share page.
+  song's recording (`data-media`). It follows **beat by beat** with
+  Session's cursor (Keyflow's `CursorConfig::playback()`): a wash over the
+  bar and a line at the beat, where Keyflow's `ChartCursor` puts the
+  playhead, a `kf-beat` rect per beat played timed on the same clock (the
+  bar's time split as the layout splits the bar). Architect's page player
+  marks the bar and the beat at the playhead, keeps them in view and seeks
+  on a click on a bar. The text is drawn as outlines: a block cannot load
+  the engraver's fonts on a share page. A glyph drawn more than once is
+  defined once and placed with `<use>` (This Christmas: 11.1 MB of page to
+  2.4 MB, 300 KB gzipped).
   The PNG pages and the PDF stay as downloads.
 - **Its lyrics: one source a song.** A song with an LRC shows the LRC
   (`![[Song.lrc]]`, drawn by Architect as timed lines). A song with no LRC
