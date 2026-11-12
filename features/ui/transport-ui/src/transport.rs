@@ -83,6 +83,12 @@ pub fn TransportControlBar(
     /// next?" until the second tap or the arm runs out.
     #[props(default)]
     forward_armed: bool,
+    /// With `wide_play`: one segmented control, not cells apart: no gaps,
+    /// hairline dividers, one rounded outline round them all (a share
+    /// page's transport, studio#445). Off (the default), the cells stand
+    /// apart as the performer screen draws them.
+    #[props(default)]
+    joined: bool,
 ) -> Element {
     let playing = is_playing;
     let looping = is_looping;
@@ -131,6 +137,12 @@ pub fn TransportControlBar(
             (_, false) => {
                 "border:none; border-left:1px solid #2a2c31; border-radius:0;".to_string()
             }
+            // Joined: the hairlines are the gaps between the cells; Loop on
+            // rings inside its cell.
+            (Look::On, true) if joined => {
+                "border:none; border-radius:0; box-shadow:inset 0 0 0 2px #f59e0b;".to_string()
+            }
+            (_, true) if joined => "border:none; border-radius:0;".to_string(),
             // Loop on: an amber ring, and the words say it.
             (Look::On, true) => "border:2px solid #f59e0b; border-radius:8px;".to_string(),
             (_, true) => "border:1px solid #2b2b31; border-radius:8px;".to_string(),
@@ -147,7 +159,10 @@ pub fn TransportControlBar(
     } else {
         ""
     };
-    let gap = if wide_play {
+    let gap = if wide_play && joined {
+        // One control: 1 px of the outline's colour between the cells.
+        "gap:1px; background:#2b2b31; border:1px solid #2b2b31; border-radius:12px; box-sizing:border-box;"
+    } else if wide_play {
         "gap:8px; background:transparent;"
     } else {
         "background:#0b0c0e;"

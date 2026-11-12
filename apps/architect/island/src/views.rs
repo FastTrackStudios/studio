@@ -64,17 +64,6 @@ const WHOLE_SONG: &str = "#94a3b8";
 /// its arguments.
 pub type Ask = Callback<(String, Value)>;
 
-/// `m:ss` of `seconds`.
-fn clock(seconds: f64) -> String {
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::as_conversions
-    )]
-    let whole = seconds.max(0.0).floor() as u64;
-    format!("{}:{:02}", whole / 60, whole % 60)
-}
-
 /// The song's sections as the bar draws them: a part of its length each.
 /// A song without sections is one unnamed section the whole length, so
 /// the bar still shows how much has played (the bar darkens what has not,
@@ -107,7 +96,7 @@ fn sections(p: &Playhead) -> Vec<ProgressSection> {
 }
 
 /// The top of the now-playing view: Session's progress bar (sections as
-/// played, the playhead, a tap on a section seeks to it), and the time.
+/// played, the playhead, a tap on a section seeks to it).
 #[component]
 pub fn Progress(p: Playhead, ask: Ask) -> Element {
     let progress = if p.duration > 0.0 {
@@ -116,9 +105,10 @@ pub fn Progress(p: Playhead, ask: Ask) -> Element {
         0.0
     };
     let starts: Vec<f64> = p.sections.iter().map(|s| s.1).collect();
-    let left = (p.duration - p.time).max(0.0);
+    // The bar alone: no time under it (a share page's view spends its
+    // height on the chart).
     rsx! {
-        div { class: "studio-island-progress", style: "display:flex; flex-direction:column; gap:4px; width:100%;",
+        div { class: "studio-island-progress", style: "display:flex; flex-direction:column; width:100%;",
             SongProgressBar {
                 progress,
                 sections: sections(&p),
@@ -129,21 +119,18 @@ pub fn Progress(p: Playhead, ask: Ask) -> Element {
                     }
                 },
             }
-            div { style: "display:flex; justify-content:space-between; font-size:12px; opacity:0.7; font-variant-numeric:tabular-nums;",
-                span { "{clock(p.time)}" }
-                span { "-{clock(left)}" }
-            }
         }
     }
 }
 
-/// Under the chart: Session's transport (previous / play / pause / next),
-/// what a recording on a page can do: no record, no loop.
+/// Under the chart: Session's transport (previous / play / pause / next)
+/// as one joined control, what a recording on a page can do: no record,
+/// no loop.
 #[component]
 pub fn Transport(p: Playhead, ask: Ask) -> Element {
     let playing = p.playing;
     rsx! {
-        div { class: "studio-island-transport", style: "height:3.5rem; width:100%;",
+        div { class: "studio-island-transport", style: "height:3.25rem; width:100%;",
             TransportControlBar {
                 is_playing: playing,
                 is_looping: false,
@@ -154,6 +141,7 @@ pub fn Transport(p: Playhead, ask: Ask) -> Element {
                 icons_only: true,
                 wide_play: true,
                 skip_song: true,
+                joined: true,
                 on_play_pause: move |()| ask.call(((if playing { "PLAYHEAD_PAUSE" } else { "PLAYHEAD_PLAY" }).to_owned(), Value::Null)),
                 on_back: move |()| ask.call(("PLAYHEAD_PREVIOUS".to_owned(), Value::Null)),
                 on_forward: move |()| ask.call(("PLAYHEAD_NEXT".to_owned(), Value::Null)),
