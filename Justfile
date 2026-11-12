@@ -2335,14 +2335,18 @@ island-web out:
     set -euo pipefail
     meta=$(cargo metadata --format-version 1)
     target=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])' <<<"$meta")
-    CARGO_TARGET_DIR="$target" CARGO_PROFILE_WASM_RELEASE_STRIP=true \
+    # The dev shell's own cargo, wasm-bindgen (pinned with the crate) and
+    # wasm-opt (binaryen), never whatever else is on the PATH.
+    devenv shell -- env CARGO_TARGET_DIR="$target" CARGO_PROFILE_WASM_RELEASE_STRIP=true \
         cargo build --profile wasm-release -p studio-island --target wasm32-unknown-unknown
     raw=$(mktemp -d)
     trap 'rm -rf "$raw"' EXIT
-    wasm-bindgen --target web --no-typescript --out-name web-studio-island --out-dir "$raw" \
+    devenv shell -- wasm-bindgen --target web --no-typescript --out-name web-studio-island --out-dir "$raw" \
         "$target/wasm32-unknown-unknown/wasm-release/studio_island.wasm"
+    # Flattened, only what the glue reaches, and refused if it names
+    # WebRTC, a WebSocket, storage or cookies.
     python3 scripts/island-web-flatten.py "$raw" "{{out}}"
-    wasm-opt -Oz --mvp-features --enable-bulk-memory --enable-mutable-globals \
+    devenv shell -- wasm-opt -Oz --mvp-features --enable-bulk-memory --enable-mutable-globals \
         --enable-nontrapping-float-to-int --enable-reference-types --enable-sign-ext --enable-multivalue \
         "{{out}}/web-studio-island_bg.wasm" -o "{{out}}/web-studio-island_bg.wasm"
 

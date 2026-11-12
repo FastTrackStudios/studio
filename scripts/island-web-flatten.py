@@ -36,4 +36,30 @@ for m in modules:
 for n in name.values():
     if not re.fullmatch(r"web-[A-Za-z0-9._-]+\.(js|wasm)", n):
         sys.exit(f"{n} is not a web view file name (web-*.js, web-*.wasm)")
-print("\n".join(sorted(name.values())))
+
+# Only what the glue reaches: a snippet wasm-bindgen wrote out but no module
+# imports (Dioxus's devtools console forwarder, a WebSocket) is not shipped.
+written = {n for n in name.values()}
+glue = [n for n in written if n.endswith(".js") and not n.startswith("web-snippet-")]
+reached, todo = set(glue), list(glue)
+local = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)["']\./([A-Za-z0-9._-]+\.js)["']""")
+while todo:
+    text = open(os.path.join(out, todo.pop()), encoding="utf-8").read()
+    for dep in local.findall(text):
+        if dep not in reached:
+            reached.add(dep)
+            todo.append(dep)
+for n in sorted(written):
+    if n.endswith(".js") and n not in reached:
+        os.remove(os.path.join(out, n))
+        written.discard(n)
+
+# What a share page's web view must never carry: network past its policy,
+# storage, cookies. A bundle that names them is not shipped.
+forbidden = re.compile(r"RTCPeerConnection|webkitRTCPeerConnection|\bWebSocket\b|\bEventSource\b|localStorage|sessionStorage|indexedDB|document\.cookie|sendBeacon")
+for n in sorted(written):
+    if n.endswith(".js"):
+        found = forbidden.search(open(os.path.join(out, n), encoding="utf-8").read())
+        if found:
+            sys.exit(f"{n} uses {found.group(0)}: a web view bundle may not")
+print("\n".join(sorted(written)))
