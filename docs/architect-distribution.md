@@ -95,6 +95,34 @@ too, but it runs cargo from the Architect checkout, so Architect's
 toolchain file and cargo config would apply to Studio's workspace. The
 script builds from this checkout instead and keeps `dist`'s flags.
 
+## The island (#445)
+
+A share link's now-playing view draws Session's own progress bar (at the top:
+sections as played, the playhead, a tap on a section seeks there) and its
+transport (under the chart: previous, play / pause, next) when the node
+ships Studio's island: `apps/architect/island`, a WASI component built from
+`features/ui/transport-ui`, the crate Session draws them from. Architect's
+node runs it in the page's extension sandbox, a document of its own with
+its own CSP, so the share page's policy is unchanged
+(FastTrackStudios/architect#601, `architect_sites::island`). It is given
+where the song is and the song's sections (`data-sections` on the chart's
+now-playing view, Keyflow's section marks and colours on the chart's clock)
+and may ask only to seek, play, pause, or go to the previous or next song.
+Its theme variables come from the share page's own theme.
+
+`just island` builds it (in the `wasi` devenv profile: `wasm32-wasip2` and
+node) into `target/studio-island/`: Architect's `build-web` folder and its
+stylesheet (`apps/architect/island/island.css`, Tailwind for the
+components' classes). Release build: 1.7 MB, 415 KB gzipped (304 KB
+brotli), plus Architect's web runtime, 48 KB gzipped. The page loads it
+only when the view first opens; Architect's own bar and controls show
+until its first frame, and stay where it cannot run (Safari, which has no
+JS Promise Integration yet).
+
+Wiring it into this distribution (`Distribution::island`, the folder
+shipped beside the binary as `studio-island/`) needs the Architect release
+with #601.
+
 ## Release artefacts
 
 The `studio-architect` workflow (`xtask/workflows/src/studio_architect.rs`)

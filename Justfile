@@ -2266,6 +2266,28 @@ studio-web-preview:
 studio-web-config-test:
     bash scripts/studio-web/write-config-test.sh
 
+# Studio's island (#445): Session's progress bar and transport as a WASI
+# component for a share link's now-playing view. Built in the `wasi` profile
+# (wasm32-wasip2, node) into target/studio-island/: Architect's `build-web`
+# folder (the component transpiled by jco, its lock) and its stylesheet
+# (apps/architect/island/island.css, compiled by tailwind). Architect's web
+# tools come from the architect checkout cargo resolved, copied into target/.
+island:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    devenv --profile wasi shell -- cargo build --release -p studio-island --target wasm32-wasip2
+    ext=$(cargo metadata --format-version 1 --offline \
+        | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="architect-extensions"))')
+    tools=target/architect-web
+    rm -rf "$tools" && mkdir -p "$tools" && cp -r "$ext/web/." "$tools/"
+    devenv --profile wasi shell -- bash -c "cd $tools && npm ci --no-audit --no-fund >/dev/null"
+    out=target/studio-island
+    devenv --profile wasi shell -- node "$tools/cli/cli.mjs" build-web \
+        target/wasm32-wasip2/release/studio_island.wasm "$out" --manifest apps/architect/island/extension.toml
+    just _lumen-link
+    tailwindcss -i apps/architect/island/island.css -o "$out/island.css" --minify
+    ls -la "$out"
+
 # Serve the built web DAW on http://localhost:8765.
 web-daw-serve:
     cd apps/session/daw-web/dist && python3 -m http.server 8765

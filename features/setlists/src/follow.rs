@@ -114,8 +114,57 @@ pub struct FollowChart {
     pub bars: Vec<BarTime>,
     /// Every beat in playing order, as timed in `svg`.
     pub beats: Vec<BeatMark>,
+    /// Every section as played, in playing order: what a progress bar
+    /// draws (Studio's island, #445).
+    pub sections: Vec<PlayedSection>,
     /// How many pages it has.
     pub pages: usize,
+}
+
+/// A section as played: its label as the chart writes it (`VS 1`,
+/// `PRE-CH`), its start and end on the chart's clock, the colour of its
+/// rehearsal mark (Keyflow's `get_section_theme`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlayedSection {
+    pub name: String,
+    pub start: f64,
+    pub end: f64,
+    /// `#rrggbb`.
+    pub color: String,
+}
+
+/// The sections of `chart` as its `bars` play them: each run of bars of
+/// one section and pass.
+fn played_sections(chart: &keyflow::Chart, bars: &[BarTime]) -> Vec<PlayedSection> {
+    use keyflow::engraver::layout::chart::section_layout::{
+        chart_section_timeline, get_section_theme,
+    };
+    let timeline = chart_section_timeline(chart);
+    let mut out: Vec<PlayedSection> = Vec::new();
+    let mut last: Option<(usize, u32)> = None;
+    for bar in bars {
+        let key = (bar.section, bar.pass);
+        if last == Some(key) {
+            if let Some(open) = out.last_mut() {
+                open.end = bar.end;
+            }
+            continue;
+        }
+        last = Some(key);
+        let Some(span) = timeline.get(bar.section) else {
+            continue;
+        };
+        let rgba = get_section_theme(&span.section_type)
+            .background_color
+            .to_rgba8();
+        out.push(PlayedSection {
+            name: span.label.clone(),
+            start: bar.start,
+            end: bar.end,
+            color: format!("#{:02x}{:02x}{:02x}", rgba.r, rgba.g, rgba.b),
+        });
+    }
+    out
 }
 
 /// The chart's clock: bar 1 at its `\downbeat` (0 without one).
@@ -216,10 +265,12 @@ pub fn follow_chart(source: &str, media: Option<&str>) -> Result<FollowChart> {
         );
     }
     svg.push_str("</g></g></svg>");
+    let sections = played_sections(&chart, &bars);
     Ok(FollowChart {
         svg,
         bars,
         beats,
+        sections,
         pages: pages.len(),
     })
 }
@@ -917,6 +968,28 @@ mod tests {
         let drawn = follow_chart(WALTZ, Some("rec.mp4")).unwrap();
         assert_eq!(drawn.svg.matches("data-follow-playhead").count(), 2);
         assert_eq!(drawn.svg.matches("data-media=\"rec.mp4\"").count(), 2);
+    }
+
+    #[test]
+    fn its_sections_as_played_carry_their_marks_colour() {
+        let drawn = follow_chart(WALTZ, None).unwrap();
+        let names: Vec<&str> = drawn.sections.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names.len(), 2, "{names:?}");
+        let (verse, chorus) = (&drawn.sections[0], &drawn.sections[1]);
+        // 90 bpm in 3/4: a bar is 2 s, the verse 8 bars from 0.5 s.
+        assert!(
+            (verse.start - 0.5).abs() < 1e-9 && (verse.end - 16.5).abs() < 1e-9,
+            "{verse:?}"
+        );
+        assert!(
+            (chorus.start - verse.end).abs() < 1e-9 && (chorus.end - 24.5).abs() < 1e-9,
+            "{chorus:?}"
+        );
+        assert!(verse.color.starts_with('#') && verse.color.len() == 7);
+        assert_ne!(
+            verse.color, chorus.color,
+            "a verse's mark is not a chorus's"
+        );
     }
 
     #[test]

@@ -1,0 +1,10 @@
+/* Studio's island's stylesheet (studio#445): Tailwind for the classes of
+ * Session's progress bar and transport (features/ui/transport-ui) and the
+ * island, nothing else. `just island` compiles it into the island's
+ * folder; the page's runtime puts it, sanitised (`cleanSheet`), in each
+ * view's shadow root. Its theme variables are not defined here: they
+ * inherit from the share page's own (its light or dark Architect theme). */
+@import "tailwindcss" source(none);
+@import "../../../features/ui/.architect-ui/assets/fts-theme.css";
+@source "../../../features/ui/transport-ui/src/**/*.rs";
+@source "./src/**/*.rs";

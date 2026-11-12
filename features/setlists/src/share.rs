@@ -117,6 +117,18 @@ fn chart(block: &Block<'_>) -> Result<Drawn, String> {
     // The song's now-playing view (Architect's `[data-now-playing]`): what
     // a setlist's player shows while its recording plays.
     let mut view = String::from("<div class=\"studio-now\" data-now-playing=\"\"");
+    // Its sections as played, for a progress bar over it (Studio's
+    // island, #445): `[{name, start, end, color}]`, seconds.
+    let sections: Vec<serde_json::Value> = chart
+        .sections
+        .iter()
+        .map(|p| serde_json::json!({ "name": p.name, "start": p.start, "end": p.end, "color": p.color }))
+        .collect();
+    let _ = write!(
+        view,
+        " data-sections=\"{}\"",
+        escape(&serde_json::Value::Array(sections).to_string())
+    );
     if let Some(media) = &media {
         let _ = write!(view, " data-media=\"{}\"", escape(media));
     }
