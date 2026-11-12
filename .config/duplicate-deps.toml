@@ -10,6 +10,26 @@
 #
 # Regenerate after an intended change: python3 scripts/check-duplicate-deps.py --write
 #
+# 2026-11-10 (studio#386): Studio links architect's extension host,
+# workspace, vault and Bases crates (features/setlists), which carry their own
+# generations of the font, HTML, phf and rand stacks; one architect source,
+# so these come with it.
+#
+# 2026-11-11 (studio#398): features/setlists' `share` links architect-sites
+# (the share page's block renderer and sanitiser), whose markdown is
+# pulldown-cmark 0.13; task's ssg (session-web, signal-web) is on 0.10.
+#
+# 2026-11-11 (apps/architect): Studio Architect links the Architect app
+# itself (architect-desktop, architect-app), which brings its own
+# generations: muda 0.19 and keyboard-types 0.7 (architect-commands),
+# security-framework 2 (keyring, architect-accounts), quick-xml 0.42 (s3s,
+# architect-files), num-bigint 0.5, base64 0.21 and compact_str 0.10 (oxc,
+# architect-pages), itertools 0.15 (object_store), atoi 2 (sqlx, through
+# architect's workspace-hack), zbus/zvariant 4 (in the lockfile, no edge
+# cargo tree shows on these targets), and architect's links-proto 0.1
+# beside Studio's own crate of that name. One architect source (v0.12.3),
+# so they come with it.
+#
 # 2026-11-12 (studio#445): studio-island (apps/architect/island) is a WASI
 # component built on architect-extension-wasi, which is on wit-bindgen 0.63
 # (and its prettyplease 0.3); std's wasip2 crate pins wit-bindgen 0.57. Both
