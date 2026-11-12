@@ -6,16 +6,18 @@ use studio_views::{
 };
 
 #[test]
-fn the_owners_six_in_the_bars_order_and_no_others() {
+fn the_owners_six_in_the_ipad_bars_order_and_words_and_no_others() {
+    // The iPad bar's order and words for the four it has (Chart, Arrange,
+    // Mixer, Editor), the song's two other panels after the Chart.
     let labels: Vec<&str> = studio_views::all().map(|v| v.label).collect();
     assert_eq!(
         labels,
         [
-            "Arrangement",
-            "Mixer",
             "Chart",
             "Chart Editor",
-            "Progress Bar",
+            "Progress",
+            "Arrange",
+            "Mixer",
             "Editor"
         ]
     );
@@ -33,12 +35,12 @@ fn the_owners_six_in_the_bars_order_and_no_others() {
 
 #[test]
 fn a_view_that_is_not_there_says_why() {
-    for label in ["Arrangement", "Mixer", "Editor"] {
+    for label in ["Arrange", "Mixer", "Editor"] {
         let v = VIEWS.iter().find(|v| v.label == label).unwrap();
         assert_eq!(v.opens, Opens::Missing(NEEDS_ENGINE), "{label}");
         assert_eq!(v.view_kind(), None);
     }
-    for label in ["Chart", "Chart Editor", "Progress Bar"] {
+    for label in ["Chart", "Chart Editor", "Progress"] {
         let v = VIEWS.iter().find(|v| v.label == label).unwrap();
         assert_eq!(v.opens, Opens::Missing(WITH_SONG_WORKSPACE), "{label}");
     }
@@ -47,11 +49,11 @@ fn a_view_that_is_not_there_says_why() {
     assert_eq!(
         issues,
         [
-            "studio#433",
-            "studio#434",
             "studio#435",
             "studio#436",
             "studio#437",
+            "studio#433",
+            "studio#434",
             "studio#438"
         ]
     );
@@ -75,7 +77,7 @@ fn the_focused_views_button_is_lit_and_only_it() {
             },
             issue: "",
         },
-        VIEWS[0],
+        VIEWS[3],
     ];
     let states = checked_among(&views, "studio-views/mixer");
     assert_eq!(

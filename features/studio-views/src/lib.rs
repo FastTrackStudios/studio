@@ -4,9 +4,12 @@
 //! The owner's list (2026-11-11): the Arrangement (with its track control
 //! panel), the Mixer, the Chart (engraved), the Chart Editor (the Keyflow
 //! source), the Progress Bar and the Editor (the MIDI editor). Each is a
-//! button of the Views toolbar at the bottom of the window, as the Studio
-//! iPad app's bottom bar has them (`extension.toml`'s `[[toolbars]]`); these
-//! six and no others. A button is an action ([`StudioView::action`]): it
+//! button of the Views toolbar at the bottom of the window, in the order,
+//! with the words, the Studio iPad app's bottom bar has them
+//! (`extension.toml`'s `[[toolbars]]`); these six and no others. Two views
+//! have toolbars of their own: the Arrangement's tools on its left
+//! ([`ARRANGEMENT_TOOLS`]) and the Chart Editor's options at its bottom
+//! ([`CHART_OPTIONS`], [`chart`]). A button is an action ([`StudioView::action`]): it
 //! opens or focuses its view as a pane of the workspace and is lit while
 //! that view is focused ([`checked`]); one whose view is not there yet
 //! stays on the bar and refuses with the reason ([`Opens::Missing`]). None
@@ -14,6 +17,7 @@
 //!
 //! The model is pure: `ext` (feature `extension`) runs it against the app.
 
+pub mod chart;
 #[cfg(feature = "extension")]
 pub mod ext;
 
@@ -71,21 +75,12 @@ pub const WITH_SONG_WORKSPACE: &str = "is a panel of the song workspace (studio#
      of its own yet.";
 
 /// The owner's six, in the bar's order.
+///
+/// The Studio iPad app's bottom bar's order (`session_ui::shell::BottomBar`:
+/// Perform, Chart, Lyrics, Arrange, Mixer, FX, Editor) for the four it has,
+/// with its words under them ("Arrange"); the song's two other panels after
+/// the Chart.
 pub const VIEWS: [StudioView; 6] = [
-    StudioView {
-        action: "STUDIO_VIEWS_ARRANGEMENT",
-        label: "Arrangement",
-        icon: "layout-dashboard",
-        opens: Opens::Missing(NEEDS_ENGINE),
-        issue: "studio#433",
-    },
-    StudioView {
-        action: "STUDIO_VIEWS_MIXER",
-        label: "Mixer",
-        icon: "sliders-horizontal",
-        opens: Opens::Missing(NEEDS_ENGINE),
-        issue: "studio#434",
-    },
     StudioView {
         action: "STUDIO_VIEWS_CHART",
         label: "Chart",
@@ -102,10 +97,24 @@ pub const VIEWS: [StudioView; 6] = [
     },
     StudioView {
         action: "STUDIO_VIEWS_PROGRESS",
-        label: "Progress Bar",
+        label: "Progress",
         icon: "clock",
         opens: Opens::Missing(WITH_SONG_WORKSPACE),
         issue: "studio#437",
+    },
+    StudioView {
+        action: "STUDIO_VIEWS_ARRANGEMENT",
+        label: "Arrange",
+        icon: "layout-dashboard",
+        opens: Opens::Missing(NEEDS_ENGINE),
+        issue: "studio#433",
+    },
+    StudioView {
+        action: "STUDIO_VIEWS_MIXER",
+        label: "Mixer",
+        icon: "sliders-horizontal",
+        opens: Opens::Missing(NEEDS_ENGINE),
+        issue: "studio#434",
     },
     StudioView {
         action: "STUDIO_VIEWS_EDITOR",
@@ -113,6 +122,85 @@ pub const VIEWS: [StudioView; 6] = [
         icon: "music",
         opens: Opens::Missing(NEEDS_ENGINE),
         issue: "studio#438",
+    },
+];
+
+/// A tool of a view's own toolbar: an action and its label.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Tool {
+    pub action: &'static str,
+    pub label: &'static str,
+}
+
+/// The Arrangement's tools: its toolbar on its left side.
+///
+/// `extension.toml`'s `arrangement`: what Session's arrangement rail
+/// carries (`session_ui::rails::profile`, `Surface::Arrange`), the mix
+/// phases (`session::mix_phases::MixPhase::ALL`, in order), then the
+/// arrangement's switch, Takes. The scenes the rail also lists are the
+/// current mode's for the instrument in front: not a fixed list, so not
+/// buttons here (a widget of the Arrangement view's, once it is one).
+pub const ARRANGEMENT_TOOLS: [Tool; 9] = [
+    Tool {
+        action: "STUDIO_VIEWS_PHASE_RESCUE",
+        label: "Rescue",
+    },
+    Tool {
+        action: "STUDIO_VIEWS_PHASE_BALANCE",
+        label: "Balance",
+    },
+    Tool {
+        action: "STUDIO_VIEWS_PHASE_TONE",
+        label: "Tone",
+    },
+    Tool {
+        action: "STUDIO_VIEWS_PHASE_POLISH",
+        label: "Polish",
+    },
+    Tool {
+        action: "STUDIO_VIEWS_PHASE_RELATIONAL",
+        label: "Relational",
+    },
+    Tool {
+        action: "STUDIO_VIEWS_PHASE_DEPTH",
+        label: "Depth",
+    },
+    Tool {
+        action: "STUDIO_VIEWS_PHASE_CREATIVE",
+        label: "Creative",
+    },
+    Tool {
+        action: "STUDIO_VIEWS_PHASE_OVERVIEW",
+        label: "Overview",
+    },
+    Tool {
+        action: "STUDIO_VIEWS_FOLDED_TAKES",
+        label: "Takes",
+    },
+];
+
+/// The Chart Editor's options, its toolbar at its bottom
+/// (`extension.toml`'s `chart-editor`): Keyflow's transposer ([`chart`]).
+pub const CHART_OPTIONS: [Tool; 5] = [
+    Tool {
+        action: "STUDIO_VIEWS_CHART_TRANSPOSE_DOWN",
+        label: "−1",
+    },
+    Tool {
+        action: "STUDIO_VIEWS_CHART_TRANSPOSE_UP",
+        label: "+1",
+    },
+    Tool {
+        action: "STUDIO_VIEWS_CHART_NOTATION_LETTERS",
+        label: "Letters",
+    },
+    Tool {
+        action: "STUDIO_VIEWS_CHART_NOTATION_NASHVILLE",
+        label: "Nashville",
+    },
+    Tool {
+        action: "STUDIO_VIEWS_CHART_NOTATION_ROMAN",
+        label: "Roman",
     },
 ];
 

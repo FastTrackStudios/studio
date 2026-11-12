@@ -42,7 +42,52 @@ impl Extension for StudioViews {
         for view in all() {
             ext.action(view.action, move |_| open(view));
         }
-        ext.action("STUDIO_VIEWS_FOLLOW", |_| follow());
+        ext.action("STUDIO_VIEWS_FOLLOW", |_| follow())
+            .action("STUDIO_VIEWS_PHASE", |a| async move {
+                let phase = a
+                    .get("phase")
+                    .and_then(Value::as_str)
+                    .unwrap_or("?")
+                    .to_owned();
+                refuse(
+                    "Arrangement",
+                    &format!(
+                        "mix phase {phase}: the Arrangement {} ({})",
+                        crate::NEEDS_ENGINE,
+                        ARRANGEMENT_ISSUE
+                    ),
+                )
+                .await
+            })
+            .action("STUDIO_VIEWS_FOLDED_TAKES", |_| async {
+                refuse(
+                    "Arrangement",
+                    &format!(
+                        "Takes: the Arrangement {} ({})",
+                        crate::NEEDS_ENGINE,
+                        ARRANGEMENT_ISSUE
+                    ),
+                )
+                .await
+            })
+            .action("STUDIO_VIEWS_CHART_TRANSPOSE", |a| async move {
+                let by = a
+                    .get("by")
+                    .and_then(Value::as_i64)
+                    .and_then(|n| i8::try_from(n).ok())
+                    .ok_or("give `by`, semitones (-11..=11)")?;
+                let source = chart_source(&a).await?;
+                Ok(json!({ "source": crate::chart::transpose(&source, by)? }))
+            })
+            .action("STUDIO_VIEWS_CHART_NOTATION", |a| async move {
+                let notation = a
+                    .get("notation")
+                    .and_then(Value::as_str)
+                    .and_then(crate::chart::Notation::parse)
+                    .ok_or("give `notation`: letters, nashville or roman")?;
+                let source = chart_source(&a).await?;
+                Ok(json!({ "source": crate::chart::renotate(&source, notation) }))
+            });
     }
 }
 
@@ -58,17 +103,7 @@ async fn open(view: &'static StudioView) -> Result<Value, String> {
             Opens::Missing(why) => format!("{} {why} ({})", view.label, view.issue),
             Opens::View { .. } => format!("{} cannot open", view.label),
         };
-        // Said to the person too: a toolbar button's failed action is not
-        // shown by the app (and it cannot be drawn disabled with why: an
-        // extension cannot disable its own action).
-        let _ = h
-            .host(HostRequest::Notify {
-                text: why.clone(),
-                kind: Some("warning".to_owned()),
-                title: Some(view.label.to_owned()),
-            })
-            .await;
-        return Err(why);
+        return refuse(view.label, &why).await;
     };
     h.host(HostRequest::Run {
         action: "EXT_VIEW_OPEN".to_owned(),
@@ -80,6 +115,43 @@ async fn open(view: &'static StudioView) -> Result<Value, String> {
     let kind = format!("{extension}/{id}");
     write_checked(&h, &kind);
     Ok(json!({ "opened": kind }))
+}
+
+/// The issue that makes the Arrangement a view.
+const ARRANGEMENT_ISSUE: &str = "studio#433";
+
+/// The chart a Chart Editor option rewrites: `source` when given (a script,
+/// an agent, ⌘K with arguments), else the Chart Editor's, which is not a
+/// view yet.
+async fn chart_source(args: &Value) -> Result<String, String> {
+    if let Some(source) = args.get("source").and_then(Value::as_str) {
+        return Ok(source.to_owned());
+    }
+    let issue = crate::by_action("STUDIO_VIEWS_CHART_EDITOR").map_or("", |v| v.issue);
+    refuse(
+        "Chart Editor",
+        &format!(
+            "no Chart Editor is open: it {} ({issue}). Give `source` to rewrite a chart's text.",
+            crate::WITH_SONG_WORKSPACE
+        ),
+    )
+    .await
+    .map(|_| String::new())
+}
+
+/// Refuse with `why`, said to the person too (a toolbar's failed action is
+/// shown by no one, FastTrackStudios/architect#584).
+async fn refuse(title: &str, why: &str) -> Result<Value, String> {
+    if let Ok(h) = handle() {
+        let _ = h
+            .host(HostRequest::Notify {
+                text: why.to_owned(),
+                kind: Some("warning".to_owned()),
+                title: Some(title.to_owned()),
+            })
+            .await;
+    }
+    Err(why.to_owned())
 }
 
 /// Light the button of the view the workspace has focused.

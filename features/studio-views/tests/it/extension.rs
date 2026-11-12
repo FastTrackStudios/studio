@@ -43,7 +43,7 @@ struct App {
     focus: Focus,
     opened: Arc<Mutex<Vec<String>>>,
     _ext: Extensions,
-    _tmp: tempfile::TempDir,
+    tmp: tempfile::TempDir,
 }
 
 fn app() -> App {
@@ -75,7 +75,7 @@ fn app() -> App {
         focus,
         opened,
         _ext: ext,
-        _tmp: tmp,
+        tmp,
     }
 }
 
@@ -147,6 +147,74 @@ fn the_views_toolbar_is_at_the_bottom_every_item_an_action_it_has() {
     }
 }
 
+/// A toolbar of the extension's, by id.
+fn toolbar(app: &App, id: &str) -> architect_extensions::toolbar::ToolbarDecl {
+    app.host
+        .contributions()
+        .toolbars()
+        .into_iter()
+        .find(|b| b.owner == "studio-views" && b.item.id == id)
+        .unwrap_or_else(|| panic!("no toolbar {id}"))
+        .item
+}
+
+#[test]
+fn the_arrangements_tools_and_the_chart_editors_options_belong_to_their_views() {
+    let app = app();
+    let tools = toolbar(&app, "arrangement");
+    assert_eq!(
+        tools.place(),
+        Some(ToolbarPlace::View("studio-views/arrangement".to_owned()))
+    );
+    let want: Vec<&str> = studio_views::ARRANGEMENT_TOOLS
+        .iter()
+        .map(|t| t.action)
+        .collect();
+    assert_eq!(tools.actions(), want);
+    let options = toolbar(&app, "chart-editor");
+    assert_eq!(
+        options.place(),
+        Some(ToolbarPlace::View("studio-views/chart-editor".to_owned()))
+    );
+    let want: Vec<&str> = studio_views::CHART_OPTIONS
+        .iter()
+        .map(|t| t.action)
+        .collect();
+    assert_eq!(options.actions(), want);
+    // Every one an action it has.
+    for a in tools.actions().iter().chain(options.actions().iter()) {
+        assert!(app.list.info(a).is_some(), "{a} is not an action");
+    }
+}
+
+#[test]
+fn an_arrangement_tool_refuses_until_the_arrangement_is_a_view() {
+    let app = app();
+    let why = app.run("STUDIO_VIEWS_PHASE_TONE").unwrap_err();
+    assert!(why.contains("mix phase tone"), "{why}");
+    assert!(why.contains("(studio#433)"), "{why}");
+    let why = app.run("STUDIO_VIEWS_FOLDED_TAKES").unwrap_err();
+    assert!(why.contains("Takes"), "{why}");
+}
+
+#[test]
+fn a_chart_option_rewrites_a_charts_source_with_keyflow() {
+    let app = app();
+    let source = "Song\n#D 100bpm 4/4\n\nVS 4\nD G A D\n";
+    let out = block_on(app.list.run_json_async(
+        "STUDIO_VIEWS_CHART_TRANSPOSE",
+        json!({ "by": 2, "source": source }).to_string().as_bytes(),
+    ))
+    .unwrap();
+    let out: Value = serde_json::from_slice(&out).unwrap();
+    let text = out["source"].as_str().unwrap();
+    assert!(text.contains("#E"), "{text}");
+    assert!(text.contains("E A B E"), "{text}");
+    // The toolbar's button (no source): no Chart Editor yet.
+    let why = app.run("STUDIO_VIEWS_CHART_TRANSPOSE_UP").unwrap_err();
+    assert!(why.contains("(studio#436)"), "{why}");
+}
+
 #[test]
 fn a_view_that_is_not_there_refuses_with_why() {
     let app = app();
@@ -171,4 +239,40 @@ fn the_toggles_follow_the_focus() {
     app.focus.set("toolbar:studio-views/views");
     let out = app.run("STUDIO_VIEWS_FOLLOW").unwrap();
     assert_eq!(out["lit"], "unchanged");
+}
+
+#[test]
+fn a_person_overrides_the_views_toolbar_with_a_file_of_their_own() {
+    let app = app();
+    let dir = app.tmp.path().join("toolbars");
+    std::fs::create_dir_all(&dir).unwrap();
+    // The person's copy: the bar on the left, the Mixer first, two buttons.
+    std::fs::write(
+        dir.join("views.toml"),
+        "id = \"studio-views/views\"\ntitle = \"Views\"\nwhere = \"dock:left\"\n\n\
+         [[items]]\naction = \"STUDIO_VIEWS_MIXER\"\n\n[[items]]\naction = \"STUDIO_VIEWS_CHART\"\n",
+    )
+    .unwrap();
+    let bars = app.host.toolbars();
+    bars.set_dir(&dir);
+    bars.reload();
+    let views = bars
+        .get(app.host.contributions(), "studio-views/views")
+        .unwrap();
+    assert!(views.file.is_some(), "the person's file is in force");
+    assert_eq!(
+        views.decl.place(),
+        Some(ToolbarPlace::Dock("left".to_owned()))
+    );
+    assert_eq!(
+        views.decl.actions(),
+        ["STUDIO_VIEWS_MIXER", "STUDIO_VIEWS_CHART"]
+    );
+    // Taken away: the extension's again.
+    bars.reset("studio-views/views").unwrap();
+    let views = bars
+        .get(app.host.contributions(), "studio-views/views")
+        .unwrap();
+    assert!(views.file.is_none());
+    assert_eq!(views.decl.items.len(), studio_views::VIEWS.len());
 }

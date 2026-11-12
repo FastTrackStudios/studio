@@ -1,18 +1,23 @@
-# Studio's views in Architect (src/lib.rs, studio#409): the Views
-# toolbar at the bottom of the window, as the Studio iPad app's bottom bar
-# has it. Each button is an action of this extension: it opens or focuses
-# its view as a pane of the workspace and is lit while that view is
+# Studio's views in Architect (src/lib.rs, studio#409). Three toolbars,
+# where the owner placed them:
+#   - `views`: the Views toolbar at the bottom of the window, as the Studio
+#     iPad app's bottom bar has its views;
+#   - `arrangement`: the Arrangement's tools, on its left side;
+#   - `chart-editor`: the Chart Editor's options, at its bottom.
+# A view's button opens or focuses its view and is lit while that view is
 # focused (a toggle; STUDIO_VIEWS_FOLLOW writes its state on every
 # workspace.changed). A view that is not there yet keeps its button and
-# refuses with the reason. One Rust value (`studio_views::ext::StudioViews`)
-# runs it two ways: compiled into Studio Architect (the `studio` bundle),
-# and as the program the Architect app runs (src/main.rs, [entry]).
+# refuses with the reason and its issue. A person edits or overrides any of
+# them with `toolbars/<name>.toml` (`studio-views/views`, …), as any
+# extension's. One Rust value (`studio_views::ext::StudioViews`) runs it two
+# ways: compiled into Studio Architect (the `studio` bundle), and as the
+# program the Architect app runs (src/main.rs, [entry]).
 id = "studio-views"
 name = "Studio"
 version = "0.1.0"
 kind = "process"
 api = "0.1"
-description = "Studio's views and the toolbar that opens them: Arrangement, Mixer, Chart, Chart Editor, Progress Bar and Editor, as the buttons of a bar at the bottom of the window, each lit while its view is focused."
+description = "Studio's views and their toolbars: Chart, Chart Editor, Progress, Arrange, Mixer and Editor on a bar at the bottom of the window, each lit while its view is focused; the Arrangement's tools at its left; the Chart Editor's transpose and notation at its bottom."
 authors = ["FastTrackStudios"]
 
 [entry]
@@ -29,32 +34,16 @@ path = "features/studio-views"
 
 [capabilities]
 # Opening a view; which view is focused, to light its button; a
-# notification saying why a view is not there.
+# notification saying why a view or a tool is not there.
 actions = ["EXT_VIEW_OPEN"]
 effect = "mutating"
 reads = ["selection"]
 ui = ["notify"]
 
 [[actions]]
-id = "STUDIO_VIEWS_ARRANGEMENT"
-name = "Show Arrangement"
-description = "The Arrangement, with its track control panel: opened or focused as a pane. Needs Studio's engine (the Full layer); until it runs here, it refuses and says so."
-group = "Views"
-effect = "mutating"
-toggle = true
-
-[[actions]]
-id = "STUDIO_VIEWS_MIXER"
-name = "Show Mixer"
-description = "The Mixer: opened or focused as a pane. Needs Studio's engine (the Full layer); until it runs here, it refuses and says so."
-group = "Views"
-effect = "mutating"
-toggle = true
-
-[[actions]]
 id = "STUDIO_VIEWS_CHART"
 name = "Show Chart"
-description = "The song's engraved chart: opened or focused as a pane. A panel of the song workspace (studio#408) until it is a view of its own; until then it refuses and says so."
+description = "The song's engraved chart, opened or focused as a pane. A panel of the song workspace (studio#408) until it is a view of its own (studio#435); until then it refuses and says so."
 group = "Views"
 effect = "mutating"
 toggle = true
@@ -62,15 +51,31 @@ toggle = true
 [[actions]]
 id = "STUDIO_VIEWS_CHART_EDITOR"
 name = "Show Chart Editor"
-description = "The chart's Keyflow source in the editor: opened or focused as a pane. A panel of the song workspace (studio#408) until it is a view of its own; until then it refuses and says so."
+description = "The chart's Keyflow source in the editor, opened or focused as a pane. A panel of the song workspace (studio#408) until it is a view of its own (studio#436); until then it refuses and says so."
 group = "Views"
 effect = "mutating"
 toggle = true
 
 [[actions]]
 id = "STUDIO_VIEWS_PROGRESS"
-name = "Show Progress Bar"
-description = "The song's progress bar: its sections and the playhead. A panel of the song workspace (studio#408) until it is a view of its own; until then it refuses and says so."
+name = "Show Progress"
+description = "The song's progress bar: its sections and the playhead. A panel of the song workspace (studio#408) until it is a view of its own (studio#437); until then it refuses and says so."
+group = "Views"
+effect = "mutating"
+toggle = true
+
+[[actions]]
+id = "STUDIO_VIEWS_ARRANGEMENT"
+name = "Show Arrange"
+description = "The Arrangement with its track control panel, opened or focused as a pane. Needs Studio's engine (the Full layer) (studio#433); until then it refuses and says so."
+group = "Views"
+effect = "mutating"
+toggle = true
+
+[[actions]]
+id = "STUDIO_VIEWS_MIXER"
+name = "Show Mixer"
+description = "The Mixer, opened or focused as a pane. Needs Studio's engine (the Full layer) (studio#434); until then it refuses and says so."
 group = "Views"
 effect = "mutating"
 toggle = true
@@ -78,7 +83,7 @@ toggle = true
 [[actions]]
 id = "STUDIO_VIEWS_EDITOR"
 name = "Show Editor"
-description = "The MIDI editor: opened or focused as a pane. Needs Studio's engine (the Full layer); until it runs here, it refuses and says so."
+description = "The MIDI editor, opened or focused as a pane. Needs Studio's engine (the Full layer) (studio#438); until then it refuses and says so."
 group = "Views"
 effect = "mutating"
 toggle = true
@@ -90,22 +95,162 @@ description = "Lights the Views toolbar's button of the view the workspace has f
 group = "Views"
 effect = "read_only"
 
+# The Arrangement's tools: Session's arrangement rail (session_ui::rails).
+
+[[actions]]
+id = "STUDIO_VIEWS_PHASE"
+name = "Arrangement: mix phase"
+description = "Moves the song to mix phase `phase` (rescue, balance, tone, polish, relational, depth, creative, overview), as the Arrangement's rail does. Needs Studio's engine and the Arrangement view (studio#433); until then it refuses and says so."
+group = "Arrangement"
+effect = "mutating"
+params = '{"type":"object","properties":{"phase":{"type":"string"}},"required":["phase"]}'
+
+[[actions]]
+id = "STUDIO_VIEWS_PHASE_RESCUE"
+name = "Mix phase: Rescue"
+description = "The Arrangement's Rescue phase (STUDIO_VIEWS_PHASE)."
+group = "Arrangement"
+effect = "mutating"
+toggle = true
+preset = { action = "STUDIO_VIEWS_PHASE", args = '{"phase":"rescue"}' }
+
+[[actions]]
+id = "STUDIO_VIEWS_PHASE_BALANCE"
+name = "Mix phase: Balance"
+description = "The Arrangement's Balance phase (STUDIO_VIEWS_PHASE)."
+group = "Arrangement"
+effect = "mutating"
+toggle = true
+preset = { action = "STUDIO_VIEWS_PHASE", args = '{"phase":"balance"}' }
+
+[[actions]]
+id = "STUDIO_VIEWS_PHASE_TONE"
+name = "Mix phase: Tone"
+description = "The Arrangement's Tone phase (STUDIO_VIEWS_PHASE)."
+group = "Arrangement"
+effect = "mutating"
+toggle = true
+preset = { action = "STUDIO_VIEWS_PHASE", args = '{"phase":"tone"}' }
+
+[[actions]]
+id = "STUDIO_VIEWS_PHASE_POLISH"
+name = "Mix phase: Polish"
+description = "The Arrangement's Polish phase (STUDIO_VIEWS_PHASE)."
+group = "Arrangement"
+effect = "mutating"
+toggle = true
+preset = { action = "STUDIO_VIEWS_PHASE", args = '{"phase":"polish"}' }
+
+[[actions]]
+id = "STUDIO_VIEWS_PHASE_RELATIONAL"
+name = "Mix phase: Relational"
+description = "The Arrangement's Relational phase (STUDIO_VIEWS_PHASE)."
+group = "Arrangement"
+effect = "mutating"
+toggle = true
+preset = { action = "STUDIO_VIEWS_PHASE", args = '{"phase":"relational"}' }
+
+[[actions]]
+id = "STUDIO_VIEWS_PHASE_DEPTH"
+name = "Mix phase: Depth"
+description = "The Arrangement's Depth phase (STUDIO_VIEWS_PHASE)."
+group = "Arrangement"
+effect = "mutating"
+toggle = true
+preset = { action = "STUDIO_VIEWS_PHASE", args = '{"phase":"depth"}' }
+
+[[actions]]
+id = "STUDIO_VIEWS_PHASE_CREATIVE"
+name = "Mix phase: Creative"
+description = "The Arrangement's Creative phase (STUDIO_VIEWS_PHASE)."
+group = "Arrangement"
+effect = "mutating"
+toggle = true
+preset = { action = "STUDIO_VIEWS_PHASE", args = '{"phase":"creative"}' }
+
+[[actions]]
+id = "STUDIO_VIEWS_PHASE_OVERVIEW"
+name = "Mix phase: Overview"
+description = "The Arrangement's Overview phase (STUDIO_VIEWS_PHASE)."
+group = "Arrangement"
+effect = "mutating"
+toggle = true
+preset = { action = "STUDIO_VIEWS_PHASE", args = '{"phase":"overview"}' }
+
+[[actions]]
+id = "STUDIO_VIEWS_FOLDED_TAKES"
+name = "Arrangement: Takes"
+description = "Whether a shut folder shows its children's takes on its own row, as the Arrangement's switch does. Needs Studio's engine and the Arrangement view (studio#433); until then it refuses and says so."
+group = "Arrangement"
+effect = "mutating"
+toggle = true
+
+# The Chart Editor's options: Keyflow's transposer (src/chart.rs).
+
+[[actions]]
+id = "STUDIO_VIEWS_CHART_TRANSPOSE"
+name = "Chart: transpose"
+description = "Transposes a chart `by` semitones (down when negative) with Keyflow's transposer: its key line and every chord, the rest byte for byte. On `source` (a chart's Keyflow text) when given, answering the new text; else on the Chart Editor's chart, once it is a view (studio#436)."
+group = "Chart"
+effect = "mutating"
+params = '{"type":"object","properties":{"by":{"type":"integer"},"source":{"type":"string"}},"required":["by"]}'
+
+[[actions]]
+id = "STUDIO_VIEWS_CHART_TRANSPOSE_DOWN"
+name = "Chart: transpose down a semitone"
+description = "STUDIO_VIEWS_CHART_TRANSPOSE by -1."
+group = "Chart"
+effect = "mutating"
+preset = { action = "STUDIO_VIEWS_CHART_TRANSPOSE", args = '{"by":-1}' }
+
+[[actions]]
+id = "STUDIO_VIEWS_CHART_TRANSPOSE_UP"
+name = "Chart: transpose up a semitone"
+description = "STUDIO_VIEWS_CHART_TRANSPOSE by 1."
+group = "Chart"
+effect = "mutating"
+preset = { action = "STUDIO_VIEWS_CHART_TRANSPOSE", args = '{"by":1}' }
+
+[[actions]]
+id = "STUDIO_VIEWS_CHART_NOTATION"
+name = "Chart: chord notation"
+description = "Writes a chart's chords in `notation` (letters, nashville, roman) in its own key, with Keyflow's transposer. On `source` when given, answering the new text; else on the Chart Editor's chart, once it is a view (studio#436)."
+group = "Chart"
+effect = "mutating"
+params = '{"type":"object","properties":{"notation":{"type":"string"},"source":{"type":"string"}},"required":["notation"]}'
+
+[[actions]]
+id = "STUDIO_VIEWS_CHART_NOTATION_LETTERS"
+name = "Chart: chords as Letters"
+description = "STUDIO_VIEWS_CHART_NOTATION as letters."
+group = "Chart"
+effect = "mutating"
+preset = { action = "STUDIO_VIEWS_CHART_NOTATION", args = '{"notation":"letters"}' }
+
+[[actions]]
+id = "STUDIO_VIEWS_CHART_NOTATION_NASHVILLE"
+name = "Chart: chords as Nashville"
+description = "STUDIO_VIEWS_CHART_NOTATION as nashville."
+group = "Chart"
+effect = "mutating"
+preset = { action = "STUDIO_VIEWS_CHART_NOTATION", args = '{"notation":"nashville"}' }
+
+[[actions]]
+id = "STUDIO_VIEWS_CHART_NOTATION_ROMAN"
+name = "Chart: chords as Roman"
+description = "STUDIO_VIEWS_CHART_NOTATION as roman."
+group = "Chart"
+effect = "mutating"
+preset = { action = "STUDIO_VIEWS_CHART_NOTATION", args = '{"notation":"roman"}' }
+
 # The Views toolbar: the bottom of the window (the owner's placement,
-# studio#409): the owner's six, and no others.
+# studio#409), the owner's six and no others, in the iPad bar's order and
+# words. `dock:bottom` is the main area's bottom dock until Architect has a
+# strip across the window's bottom (FastTrackStudios/architect#587).
 [[toolbars]]
 id = "views"
 title = "Views"
 where = "dock:bottom"
-
-[[toolbars.items]]
-action = "STUDIO_VIEWS_ARRANGEMENT"
-icon = "layout-dashboard"
-label = "Arrangement"
-
-[[toolbars.items]]
-action = "STUDIO_VIEWS_MIXER"
-icon = "sliders-horizontal"
-label = "Mixer"
 
 [[toolbars.items]]
 action = "STUDIO_VIEWS_CHART"
@@ -120,12 +265,62 @@ label = "Chart Editor"
 [[toolbars.items]]
 action = "STUDIO_VIEWS_PROGRESS"
 icon = "clock"
-label = "Progress Bar"
+label = "Progress"
+
+[[toolbars.items]]
+action = "STUDIO_VIEWS_ARRANGEMENT"
+icon = "layout-dashboard"
+label = "Arrange"
+
+[[toolbars.items]]
+action = "STUDIO_VIEWS_MIXER"
+icon = "sliders-horizontal"
+label = "Mixer"
 
 [[toolbars.items]]
 action = "STUDIO_VIEWS_EDITOR"
 icon = "music"
 label = "Editor"
+
+# The Arrangement's tools: on the left side of the Arrangement view, shown
+# only with it. Architect places a view's toolbar in its panes' header
+# only, so it is there until a view's toolbar can sit on its left edge
+# (FastTrackStudios/architect#585); and the Arrangement is not a view yet
+# (studio#433), so for now it shows nowhere.
+[[toolbars]]
+id = "arrangement"
+title = "Arrangement tools"
+where = "view:studio-views/arrangement"
+
+[[toolbars.items]]
+kind = "group"
+label = "Phase"
+items = [{ action = "STUDIO_VIEWS_PHASE_RESCUE", label = "Rescue" }, { action = "STUDIO_VIEWS_PHASE_BALANCE", label = "Balance" }, { action = "STUDIO_VIEWS_PHASE_TONE", label = "Tone" }, { action = "STUDIO_VIEWS_PHASE_POLISH", label = "Polish" }, { action = "STUDIO_VIEWS_PHASE_RELATIONAL", label = "Relational" }, { action = "STUDIO_VIEWS_PHASE_DEPTH", label = "Depth" }, { action = "STUDIO_VIEWS_PHASE_CREATIVE", label = "Creative" }, { action = "STUDIO_VIEWS_PHASE_OVERVIEW", label = "Overview" }]
+
+[[toolbars.items]]
+kind = "separator"
+
+[[toolbars.items]]
+action = "STUDIO_VIEWS_FOLDED_TAKES"
+label = "Takes"
+
+# The Chart Editor's options: at the bottom of the Chart Editor view, shown
+# only with it. In its panes' header until a view's toolbar can sit on its
+# bottom edge (FastTrackStudios/architect#585); the Chart Editor is not a
+# view yet (studio#436), so for now it shows nowhere.
+[[toolbars]]
+id = "chart-editor"
+title = "Chart options"
+where = "view:studio-views/chart-editor"
+
+[[toolbars.items]]
+kind = "group"
+label = "Transpose"
+items = [{ action = "STUDIO_VIEWS_CHART_TRANSPOSE_DOWN", label = "−1" }, { action = "STUDIO_VIEWS_CHART_TRANSPOSE_UP", label = "+1" }]
+
+[[toolbars.items]]
+label = "Chords"
+menu = [{ action = "STUDIO_VIEWS_CHART_NOTATION_LETTERS", label = "Letters" }, { action = "STUDIO_VIEWS_CHART_NOTATION_NASHVILLE", label = "Nashville" }, { action = "STUDIO_VIEWS_CHART_NOTATION_ROMAN", label = "Roman" }]
 
 # Which button is lit follows the workspace's focus.
 [[hooks]]
