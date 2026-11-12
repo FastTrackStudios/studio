@@ -122,7 +122,8 @@ impl SongInfo {
 /// `<n> | <label> | <note>[#<arrangement>] | <summary> | <recording> |
 /// <artist> | <length>`, its note and recording by vault path, its length
 /// in seconds; the last four possibly empty (a line written before the
-/// last two were has five fields).
+/// last two were has five fields). A `|` or `\` in a field is written
+/// `\|`, `\\`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {
     /// Its 1-based place in the running order.
@@ -157,13 +158,35 @@ impl Line {
         while fields.last().is_some_and(String::is_empty) {
             fields.pop();
         }
-        fields.join(" | ")
+        fields
+            .iter()
+            .map(|f| f.replace('\\', "\\\\").replace('|', "\\|"))
+            .collect::<Vec<_>>()
+            .join(" | ")
+    }
+
+    /// `line`'s fields: split at each `|` not escaped (`\|`), each
+    /// unescaped and trimmed.
+    fn fields(line: &str) -> Vec<String> {
+        let mut fields = Vec::new();
+        let mut field = String::new();
+        let mut chars = line.chars();
+        while let Some(c) = chars.next() {
+            match c {
+                '\\' => field.push(chars.next().unwrap_or('\\')),
+                '|' => fields.push(std::mem::take(&mut field).trim().to_owned()),
+                c => field.push(c),
+            }
+        }
+        fields.push(field.trim().to_owned());
+        fields
     }
 
     /// A line of the fence; None for one that is not a song's.
     #[must_use]
     pub fn parse(line: &str) -> Option<Self> {
-        let mut parts = line.split('|').map(str::trim);
+        let fields = Self::fields(line);
+        let mut parts = fields.iter().map(String::as_str);
         let number = parts.next()?.parse().ok()?;
         let label = parts.next()?.to_owned();
         let target = parts.next()?;
@@ -707,6 +730,18 @@ mod tests {
             length: Some(186.5),
         };
         assert_eq!(Line::parse(&line.write()), Some(line));
+        // A `|` or a `\` in a field stays in its field.
+        let piped = Line {
+            number: 1,
+            label: "Medley | Joy \\ Noel".to_owned(),
+            note: "Libraries/H/Medley/Medley.md".to_owned(),
+            arrangement: None,
+            summary: "D · 100 bpm · 2/4".to_owned(),
+            recording: Some("Libraries/H/Medley/Media/Medley.mp4".to_owned()),
+            artist: Some("Simon | Garfunkel".to_owned()),
+            length: Some(201.5),
+        };
+        assert_eq!(Line::parse(&piped.write()), Some(piped));
         // A line written before the artist and the length were.
         let old = Line::parse(
             "2 | Joy | Libraries/H/Joy/Joy.md | D · 100 bpm · 2/4 | Libraries/H/Joy/Media/Joy.wav",

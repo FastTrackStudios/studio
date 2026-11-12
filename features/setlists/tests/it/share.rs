@@ -345,6 +345,14 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
         "the first set's Play plays it all"
     );
     assert!(html.contains("</svg>Play this set</button>"));
+    // The playing row is marked on an Architect that marks only the line
+    // (v0.12.2): its sheet kept, under the block's box.
+    let block = studio_blocks(&html)[0];
+    assert!(
+        block.contains("[data-track] [data-at][aria-current=time] { color:#6366f1 }"),
+        "{}",
+        &block[..block.find("</style>").unwrap_or(0).min(600)]
+    );
     // The link's files page and archive, once, after the last set: the
     // node's routes of the link, which serve only its audience's files.
     assert_eq!(

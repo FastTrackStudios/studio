@@ -137,6 +137,12 @@ fn header_media(source: &str) -> Option<String> {
 /// The play icon of a playlist's Play (Architect's player draws its own).
 const PLAY_ICON: &str = "<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path d=\"M7 4.5v15L20 12z\" fill=\"currentColor\"/></svg>";
 
+/// The playing row's look where the page's player marks only the line it
+/// follows (`aria-current="time"`, Architect v0.12.2): a block keeps a
+/// sheet only inside an `<svg>`, put under its own box, so the sheet rides
+/// in an empty one. Architect's playlist player marks the row itself.
+const PLAYING_ROW: &str = "<svg width=\"0\" height=\"0\" aria-hidden=\"true\" style=\"display:block;width:0;height:0;overflow:hidden\"><style>[data-track] [data-at][aria-current=time]{color:#6366f1}[data-track] [data-at][aria-current=time] [data-track-title]{font-weight:700}</style></svg>";
+
 /// `m:ss` of `seconds`.
 fn length(seconds: f64) -> String {
     let whole = seconds.max(0.0).round();
@@ -155,6 +161,7 @@ fn set(block: &Block<'_>) -> String {
     let page = block.page;
     let first_set = lines.first().is_some_and(|l| l.number == 1);
     let mut html = String::from("<div class=\"studio-setlist\" data-playlist=\"\">");
+    html.push_str(PLAYING_ROW);
     if let Some(first) = lines.iter().find_map(|l| l.recording.as_deref()) {
         let (label, style) = if first_set {
             (

@@ -57,10 +57,12 @@ builds them as an Architect site, and Studio draws its own blocks into it
   one line is the song's start, so an Architect before playlists (v0.12.2)
   plays a tapped row from the setlist's page as it did.
 - **A song's length** is its recording's (`length` on its note, seconds,
-  read from the file's header at import and re-engrave: an MP4's `mvhd`, a
-  WAV's `data`; `src/media.rs`), and a set's line carries it and the artist
-  (`… | <recording> | <artist> | <length>`). A setlist page written before
-  shows its rows without them until it is written again.
+  read from the file's header at import and re-engrave: MP4, WAV, AIFF,
+  FLAC, Ogg Vorbis/Opus, MP3; `src/media.rs`), and a set's line carries it
+  and the artist (`… | <recording> | <artist> | <length>`, a `|` in a field
+  written `\|`). A setlist page written before shows its rows without them
+  until it is written again, and nothing writes it again when a song
+  changes yet (#451, beside FastTrackStudios/architect#492).
 - **Playing through** is the playlist on its page, and elsewhere the link's
   queue: every song's recording in running order; when one ends the next
   starts (on its own page, with Follow on).
