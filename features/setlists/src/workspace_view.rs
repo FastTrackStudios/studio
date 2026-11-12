@@ -643,11 +643,10 @@ pub fn SongWorkspace(
     let mut saving = use_signal(|| {
         matches!(loaded.chart.from, ChartFrom::File).then(|| Saving::new(loaded.chart.text.clone()))
     });
-    // The text the person said to save with no bars.
-    let mut confirmed = use_signal(|| None::<String>);
-    let mut asking = use_signal(|| None::<String>);
-    // A write the app refused (outside the folders the extension reaches).
-    let mut refused = use_signal(|| false);
+    // A save refused, the way on being to read the `.kf` again: `Some(true)`
+    // it could not be read (the app may need the vault's folder), `Some(false)`
+    // it changed since it was read.
+    let mut stale = use_signal(|| None::<bool>);
     let mut state = use_signal(|| editor_state::EditorState::new(loaded.source()));
     let mut editor_open = use_signal(|| None::<bool>);
     let (size, mut node) = use_measured();
@@ -698,9 +697,7 @@ pub fn SongWorkspace(
                     access,
                     &mut saving,
                     &mut status,
-                    &mut asking,
-                    &mut refused,
-                    &mut confirmed,
+                    &mut stale,
                 )
                 .await;
             }
@@ -727,8 +724,10 @@ pub fn SongWorkspace(
     // vault's folder first), or to leave the note's read-only copy. The
     // editor then holds what the file holds, and saving starts from it.
     let file = loaded.chart.file.clone();
+    let unsaved_to = loaded.chart.file.clone();
     let reread = use_callback(move |ask: bool| {
         let Some(file) = file.clone() else { return };
+        let unsaved_to = unsaved_to.clone().unwrap_or_default();
         spawn(async move {
             let mut read = crate::host::read_vault_file(&file).await;
             if read.is_err() && ask && crate::host::allow_vault().await.is_ok() {
@@ -738,20 +737,43 @@ pub fn SongWorkspace(
             let next = access.peek().clone().reread(read);
             match next.editable() {
                 Ok(()) => {
-                    refused.set(false);
-                    asking.set(None);
-                    if !was_editable || saving.peek().as_ref().is_none_or(|s| s.base() != next.text)
+                    stale.set(None);
+                    let current = state.peek().doc.to_string();
+                    let prev = saving.peek().clone();
+                    // An edit not saved (the file changed under it) is
+                    // kept: written to the extension's folder before the
+                    // editor takes the file's text, and said where.
+                    let mut kept = None;
+                    if was_editable
+                        && current != next.text
+                        && prev.as_ref().is_some_and(|s| s.base() != current)
                     {
+                        let path = crate::workspace::unsaved_path(&unsaved_to, opened, now_secs());
+                        if crate::host::write_own_file(&path, &current).await.is_ok() {
+                            kept = Some(path);
+                        }
+                    }
+                    if !was_editable || current != next.text {
                         // The file's text, not the copy (nor an edit made
                         // against another version): the editor starts from it.
                         state.set(editor_state::EditorState::new(&next.text));
                     }
-                    saving.set(Some(Saving::new(next.text.clone())));
-                    note(
-                        &mut status,
-                        ChartTextStatus::Done,
-                        format!("read {} again", base(&file)),
+                    // Saving starts from the file; the file as opened stays
+                    // the one backed up.
+                    saving.set(Some(prev.map_or_else(
+                        || Saving::new(next.text.clone()),
+                        |s| s.reread(next.text.clone()),
+                    )));
+                    let said = kept.map_or_else(
+                        || format!("read {} again", base(&file)),
+                        |path| {
+                            format!(
+                                "read {} again; your unsaved edit is kept in the extension's folder: {path}",
+                                base(&file)
+                            )
+                        },
                     );
+                    note(&mut status, ChartTextStatus::Done, said);
                 }
                 Err(why) => note(&mut status, ChartTextStatus::Warn, why),
             }
@@ -780,6 +802,7 @@ pub fn SongWorkspace(
     let (status_kind, message) = status();
     let editable = access.read().editable().is_ok();
     let read_only = matches!(access.read().from, ChartFrom::NoteCopy { .. });
+    let asking = saving.read().as_ref().is_some_and(|s| s.asking().is_some());
     let end = song
         .as_ref()
         .map(|s| s.0.span().1)
@@ -824,26 +847,34 @@ pub fn SongWorkspace(
                         "Shared: its page shows the chart as imported"
                     }
                 }
-                if let Some(text) = asking() {
+                if asking {
                     button {
                         style: "{button} border-color:{p.danger}; color:{p.danger};",
                         "data-confirm": "empty-chart",
-                        title: "Save this chart, with no bars, over the saved one",
+                        title: "Save the chart as it is now, with no bars, over the saved one",
+                        // The editor's text as it is now, never a copy taken
+                        // when the question was asked: if it changed since,
+                        // the question no longer stands and nothing is saved.
                         onclick: move |_| {
-                            confirmed.set(Some(text.clone()));
-                            asking.set(None);
-                            let _ = worker.send(text.clone());
+                            let current = state.peek().doc.to_string();
+                            let yes = saving.write().as_mut().is_some_and(|s| s.confirm(&current));
+                            if yes {
+                                let _ = worker.send(current);
+                            } else {
+                                note(&mut status, ChartTextStatus::Idle,
+                                    "the chart changed since: nothing to save anyway".to_owned());
+                            }
                         },
                         "Save anyway"
                     }
                 }
-                if read_only || refused() {
+                if read_only || stale().is_some() {
                     button {
                         style: "{button}",
                         "data-reread": "kf",
-                        title: "Read the song's .kf again (asking for the vault's folder if the app needs it) before anything is written",
+                        title: "Read the song's .kf again (asking for the vault's folder if the app needs it) before anything is written; an edit not saved is kept in the extension's folder",
                         onclick: move |_| reread.call(true),
-                        if read_only { "Read the .kf again" } else { "Allow saving" }
+                        if stale() == Some(true) && !read_only { "Allow saving" } else { "Read the .kf again" }
                     }
                 }
                 button {
@@ -933,9 +964,7 @@ async fn save(
     access: Signal<ChartAccess>,
     saving: &mut Signal<Option<Saving>>,
     status: &mut Signal<(ChartTextStatus, String)>,
-    asking: &mut Signal<Option<String>>,
-    refused: &mut Signal<bool>,
-    confirmed: &mut Signal<Option<String>>,
+    stale: &mut Signal<Option<bool>>,
 ) {
     let chart = access.peek().clone();
     if let Err(why) = chart.editable() {
@@ -953,6 +982,8 @@ async fn save(
     let Some(mut save) = saving.peek().clone() else {
         return;
     };
+    // A question about another text (and a yes to it) no longer stands.
+    save.now_saving(text);
     if save.base() == text {
         // What the file holds (its first engraving): nothing to write.
         save.knows_bars(bars);
@@ -962,18 +993,37 @@ async fn save(
     }
     // Read again before anything is written.
     let on_disk = crate::host::read_vault_file(&file).await;
-    let yes = confirmed.peek().as_deref() == Some(text);
-    match save.decide(on_disk.as_deref().map_err(String::as_str), text, bars, yes) {
+    let decision = save.decide(on_disk.as_deref().map_err(String::as_str), text, bars);
+    // The question (or its end) is kept with the rest of the saving state.
+    saving.set(Some(save.clone()));
+    match decision {
         Write::Unchanged => note(status, ChartTextStatus::Done, "engraved".to_owned()),
-        Write::Refuse(why) => {
-            refused.set(on_disk.is_err());
+        Write::Refuse { why, reread } => {
+            stale.set(reread.then_some(on_disk.is_err()));
             note(status, ChartTextStatus::Warn, why);
         }
-        Write::Confirm(question) => {
-            asking.set(Some(text.to_owned()));
-            note(status, ChartTextStatus::Warn, question);
-        }
+        Write::Confirm(question) => note(status, ChartTextStatus::Warn, question),
         Write::Save { backup } => {
+            // Never through a symbolic link: the host's `write_file`
+            // follows it, wherever it points (FastTrackStudios/architect#592).
+            match crate::host::link_on_path(&file).await {
+                Ok(None) => {}
+                Ok(Some(link)) => {
+                    note(
+                        status,
+                        ChartTextStatus::Warn,
+                        format!(
+                            "not saved: {link} is a symbolic link, and a write would follow it \
+                             wherever it points (outside the vault, maybe)"
+                        ),
+                    );
+                    return;
+                }
+                Err(why) => {
+                    note(status, ChartTextStatus::Warn, format!("not saved: {why}"));
+                    return;
+                }
+            }
             if backup {
                 let path = crate::workspace::backup_path(&file, opened);
                 if let Err(why) = crate::host::write_own_file(&path, save.base()).await {
@@ -989,8 +1039,7 @@ async fn save(
                 Ok(()) => {
                     save.saved(text.to_owned(), bars);
                     saving.set(Some(save));
-                    confirmed.set(None);
-                    refused.set(false);
+                    stale.set(None);
                     note(
                         status,
                         ChartTextStatus::Done,
@@ -998,7 +1047,7 @@ async fn save(
                     );
                 }
                 Err(why) => {
-                    refused.set(true);
+                    stale.set(Some(true));
                     note(
                         status,
                         ChartTextStatus::Warn,
@@ -1008,6 +1057,13 @@ async fn save(
             }
         }
     }
+}
+
+/// Seconds since the epoch, now.
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
 }
 
 /// A vault path's file name.

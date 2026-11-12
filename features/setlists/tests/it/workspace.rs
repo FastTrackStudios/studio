@@ -271,7 +271,7 @@ fn an_old_copy_of_the_chart_never_overwrites_the_saved_kf() {
     assert_eq!(opened.from, ChartFrom::File);
     let mut saving = Saving::new(opened.text);
     assert_eq!(
-        saving.decide(Ok(&old), &edited, 40, false),
+        saving.decide(Ok(&old), &edited, 40),
         Write::Save { backup: true }
     );
     saving.saved(edited.clone(), 40);
@@ -316,27 +316,27 @@ fn a_save_reads_the_kf_again_and_never_writes_over_a_change() {
     // Changed on disk since it was read (another edit, elsewhere): refused.
     let elsewhere = JOY.replace("Isaac Watts", "I. Watts");
     assert!(matches!(
-        saving.decide(Ok(&elsewhere), &edit, 40, false),
-        Write::Refuse(why) if why.contains("changed")
+        saving.decide(Ok(&elsewhere), &edit, 40),
+        Write::Refuse { why, reread: true } if why.contains("changed")
     ));
     // Unreadable now: refused.
     assert!(matches!(
-        saving.decide(Err("permission denied"), &edit, 40, false),
-        Write::Refuse(why) if why.contains("permission denied")
+        saving.decide(Err("permission denied"), &edit, 40),
+        Write::Refuse { why, reread: true } if why.contains("permission denied")
     ));
     // As it was: saved, backed up the first time only.
     assert_eq!(
-        saving.decide(Ok(JOY), &edit, 40, false),
+        saving.decide(Ok(JOY), &edit, 40),
         Write::Save { backup: true }
     );
     saving.saved(edit.clone(), 40);
     let again = edit.replace("104bpm", "108bpm");
     assert_eq!(
-        saving.decide(Ok(&edit), &again, 40, false),
+        saving.decide(Ok(&edit), &again, 40),
         Write::Save { backup: false }
     );
     // What it holds already: nothing to write.
-    assert_eq!(saving.decide(Ok(&edit), &edit, 40, false), Write::Unchanged);
+    assert_eq!(saving.decide(Ok(&edit), &edit, 40), Write::Unchanged);
 }
 
 #[test]
@@ -348,11 +348,14 @@ fn a_chart_cut_to_no_bars_is_not_saved_over_bars_without_a_yes() {
     let mut saving = Saving::new(JOY.to_owned());
     saving.knows_bars(40);
     assert!(matches!(
-        saving.decide(Ok(JOY), header, 0, false),
+        saving.decide(Ok(JOY), header, 0),
         Write::Confirm(q) if q.contains("no bars") && q.contains("40")
     ));
+    assert_eq!(saving.asking(), Some(header));
+    // The person says yes with the editor still holding it.
+    assert!(saving.confirm(header));
     assert_eq!(
-        saving.decide(Ok(JOY), header, 0, true),
+        saving.decide(Ok(JOY), header, 0),
         Write::Save { backup: true }
     );
 }
@@ -376,4 +379,172 @@ fn a_song_that_names_no_kf_edits_its_notes_copy_and_never_saves() {
     assert_eq!(chart.from, ChartFrom::NoteOnly);
     assert!(chart.editable().is_ok());
     assert_eq!(chart.file, None);
+}
+
+/// The fake `.kf` a sequence of saves writes, as the workspace's save path
+/// does: read it, decide, back up the first time, write.
+struct Disk {
+    kf: String,
+    backups: Vec<(String, String)>,
+}
+
+impl Disk {
+    fn save(&mut self, saving: &mut setlists::workspace::Saving, text: &str, bars: usize) {
+        use setlists::workspace::{Write, backup_path};
+        saving.now_saving(text);
+        if saving.base() == text {
+            return;
+        }
+        let on_disk = self.kf.clone();
+        if let Write::Save { backup } = saving.decide(Ok(&on_disk), text, bars) {
+            if backup {
+                let path = backup_path("Libraries/Christmas/Joy/Joy.kf", 7);
+                assert!(
+                    !self.backups.iter().any(|(p, _)| *p == path),
+                    "the backup of the file as opened is written over"
+                );
+                self.backups.push((path, saving.base().to_owned()));
+            }
+            text.clone_into(&mut self.kf);
+            saving.saved(text.to_owned(), bars);
+        }
+    }
+}
+
+/// The re-check's sequence (studio#430): cut the chart to its header (the
+/// question comes, nothing is written), put the bars back (saved), then
+/// "Save anyway", still on screen. It must not write the header.
+#[test]
+fn a_stale_save_anyway_never_writes_no_bars_over_a_good_chart() {
+    use setlists::workspace::Saving;
+    let header = "Joy to the World - Isaac Watts\n100bpm 2/4 #D\n";
+    let edited = JOY.replace("100bpm", "104bpm");
+    let mut disk = Disk {
+        kf: JOY.to_owned(),
+        backups: Vec::new(),
+    };
+    let mut saving = Saving::new(JOY.to_owned());
+    saving.knows_bars(40);
+
+    // Cut to its header: asked, not written.
+    disk.save(&mut saving, header, 0);
+    assert_eq!(disk.kf, JOY);
+    assert_eq!(saving.asking(), Some(header));
+
+    // The bars back (an edit with bars): the question goes, it is saved.
+    disk.save(&mut saving, &edited, 40);
+    assert_eq!(disk.kf, edited);
+    assert_eq!(saving.asking(), None);
+
+    // "Save anyway", still on screen, with the editor holding the full
+    // chart: it counts for nothing, and nothing changes on disk.
+    assert!(!saving.confirm(&edited));
+    disk.save(&mut saving, &edited, 40);
+    assert_eq!(disk.kf.as_bytes(), edited.as_bytes());
+    // Nor does an old copy of the question say yes to the header later.
+    assert!(!saving.confirm(header));
+    disk.save(&mut saving, header, 0);
+    assert_eq!(disk.kf.as_bytes(), edited.as_bytes());
+}
+
+/// The question goes too when the text comes back to what the file holds
+/// (the early return before deciding).
+#[test]
+fn putting_the_chart_back_as_it_was_drops_the_question() {
+    use setlists::workspace::{Saving, Write};
+    let header = "Joy to the World - Isaac Watts\n100bpm 2/4 #D\n";
+    let mut saving = Saving::new(JOY.to_owned());
+    saving.knows_bars(40);
+    assert!(matches!(
+        saving.decide(Ok(JOY), header, 0),
+        Write::Confirm(_)
+    ));
+    saving.now_saving(JOY);
+    assert_eq!(saving.asking(), None);
+    assert!(!saving.confirm(header));
+}
+
+#[test]
+fn a_kf_changed_on_disk_is_read_again_and_the_unsaved_edit_kept() {
+    use setlists::workspace::{Saving, Write, unsaved_path};
+    let mut saving = Saving::new(JOY.to_owned());
+    let mine = JOY.replace("100bpm", "104bpm");
+    let theirs = JOY.replace("Isaac Watts", "I. Watts");
+    // Refused, and the way on is reading it again (the button shows).
+    assert!(matches!(
+        saving.decide(Ok(&theirs), &mine, 40),
+        Write::Refuse { reread: true, .. }
+    ));
+    // Read again: saving starts from theirs; mine is kept beside the
+    // backups, in the extension's folder, not the vault.
+    let saving = saving.reread(theirs.clone());
+    assert_eq!(saving.base(), theirs);
+    assert_eq!(
+        unsaved_path("Libraries/Christmas/Joy/Joy.kf", 7, 9),
+        "backups/Libraries/Christmas/Joy/Joy.7.unsaved-9.kf"
+    );
+}
+
+#[test]
+fn a_reread_never_backs_the_file_up_again_over_the_original() {
+    use setlists::workspace::{Saving, Write};
+    let mut saving = Saving::new(JOY.to_owned());
+    let edit = JOY.replace("100bpm", "104bpm");
+    assert_eq!(
+        saving.decide(Ok(JOY), &edit, 40),
+        Write::Save { backup: true }
+    );
+    saving.saved(edit.clone(), 40);
+    // Read again (after a refusal, or "Allow saving"): the next save does
+    // not back up the edited file over the original's backup.
+    let mut saving = saving.reread(edit.clone());
+    let again = edit.replace("104bpm", "108bpm");
+    assert_eq!(
+        saving.decide(Ok(&edit), &again, 40),
+        Write::Save { backup: false }
+    );
+    // A session that never saved before its re-read still backs up once.
+    let mut fresh = Saving::new(JOY.to_owned()).reread(JOY.to_owned());
+    assert_eq!(
+        fresh.decide(Ok(JOY), &edit, 40),
+        Write::Save { backup: true }
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_kf_reached_through_a_symbolic_link_is_found() {
+    use setlists::workspace::first_link;
+    let dir = tempfile::tempdir().unwrap();
+    let vault = dir.path().join("vault");
+    let outside = dir.path().join("outside");
+    std::fs::create_dir_all(vault.join("Libraries/Christmas/Joy")).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("Joy.kf"), JOY).unwrap();
+    // The file a link out of the vault.
+    std::os::unix::fs::symlink(
+        outside.join("Joy.kf"),
+        vault.join("Libraries/Christmas/Joy/Joy.kf"),
+    )
+    .unwrap();
+    assert_eq!(
+        first_link(&vault, "Libraries/Christmas/Joy/Joy.kf")
+            .unwrap()
+            .as_deref(),
+        Some("Libraries/Christmas/Joy/Joy.kf")
+    );
+    // A folder on the way a link.
+    std::os::unix::fs::symlink(&outside, vault.join("Libraries/Linked")).unwrap();
+    assert_eq!(
+        first_link(&vault, "Libraries/Linked/Joy.kf")
+            .unwrap()
+            .as_deref(),
+        Some("Libraries/Linked")
+    );
+    // A plain file: none.
+    std::fs::write(vault.join("Libraries/Christmas/Plain.kf"), JOY).unwrap();
+    assert_eq!(
+        first_link(&vault, "Libraries/Christmas/Plain.kf").unwrap(),
+        None
+    );
 }

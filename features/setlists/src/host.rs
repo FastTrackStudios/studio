@@ -401,6 +401,32 @@ pub async fn write_own_file(path: &str, text: &str) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
+/// The first symbolic link on vault path `path`, if there is one.
+///
+/// The file, or a folder on the way to it: the host's `write_file` follows links
+/// (FastTrackStudios/architect#592), so the workspace never writes through
+/// one. Looked at on disk, read-only, with the file's metadata alone; a
+/// build with no disk (the web) answers None.
+///
+/// # Errors
+///
+/// The vault has no folder, or a part of the path could not be looked at.
+pub async fn link_on_path(path: &str) -> Result<Option<String>, String> {
+    if path.split('/').any(|p| p == "..") {
+        return Err(format!("{path}: not a vault path"));
+    }
+    let root = vault_root().await?;
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        crate::workspace::first_link(std::path::Path::new(&root), path).map_err(|e| e.to_string())
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = root;
+        Ok(None)
+    }
+}
+
 /// Asks the person to pick the vault's folder, so its files may be read
 /// and written for the rest of the run (a vault outside the folders the
 /// manifest names).

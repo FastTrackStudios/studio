@@ -561,8 +561,11 @@ impl ChartAccess {
 /// made elsewhere, or a file the workspace could not read, is never
 /// overwritten. A text that engraves to no bars is not written over one
 /// that had bars without the person's yes (a select-all-and-retype pauses
-/// with the header alone). The file as it was when the song was opened is
-/// backed up once, before the first write.
+/// with the header alone): the question is held ([`Self::asking`]) only
+/// while that text is the one being saved, and a yes ([`Self::confirm`])
+/// counts only for the editor's text as it is now. The file as it was when
+/// the song was opened is backed up once, before the first write, and
+/// never again in that session (a re-read keeps that: [`Self::reread`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Saving {
     /// The `.kf`'s text as last read or written.
@@ -570,6 +573,10 @@ pub struct Saving {
     /// How many bars `base` engraves to (None: not yet known).
     base_bars: Option<usize>,
     backed_up: bool,
+    /// The text with no bars waiting for the person's yes.
+    asking: Option<String>,
+    /// The text the person said yes to.
+    confirmed: Option<String>,
 }
 
 /// What to do with an edit.
@@ -579,8 +586,9 @@ pub enum Write {
     Save { backup: bool },
     /// It is what the file holds: nothing to write.
     Unchanged,
-    /// Not now, and why: the file changed or cannot be read.
-    Refuse(String),
+    /// Not now, and why; `reread`: reading the `.kf` again is the way on
+    /// (it changed, or could not be read).
+    Refuse { why: String, reread: bool },
     /// Only with the person's yes, and what to ask.
     Confirm(String),
 }
@@ -593,6 +601,19 @@ impl Saving {
             base,
             base_bars: None,
             backed_up: false,
+            asking: None,
+            confirmed: None,
+        }
+    }
+
+    /// The `.kf` read again (`base`): saving starts from it; the file as
+    /// opened stays the one backed up (never backed up again this
+    /// session), and any question or yes is dropped.
+    #[must_use]
+    pub fn reread(&self, base: String) -> Self {
+        Self {
+            backed_up: self.backed_up,
+            ..Self::new(base)
         }
     }
 
@@ -607,34 +628,68 @@ impl Saving {
         self.base_bars = Some(bars);
     }
 
-    /// What to do with `text` (engraving to `bars` bars), the file now
-    /// holding `on_disk`; `confirmed`: the person said yes to a chart with
-    /// no bars.
+    /// The text with no bars waiting for the person's yes, if one is.
     #[must_use]
+    pub fn asking(&self) -> Option<&str> {
+        self.asking.as_deref()
+    }
+
+    /// `text` is the one being saved now: a question about another text
+    /// (and a yes to it) no longer stands.
+    pub fn now_saving(&mut self, text: &str) {
+        if self.asking.as_deref() != Some(text) {
+            self.asking = None;
+        }
+        if self.confirmed.as_deref() != Some(text) {
+            self.confirmed = None;
+        }
+    }
+
+    /// The person said yes ("Save anyway") with the editor holding
+    /// `current`: it counts only when `current` is the text asked about.
+    /// Whether it did (the caller saves `current` then).
+    pub fn confirm(&mut self, current: &str) -> bool {
+        if self.asking.as_deref() == Some(current) {
+            self.asking = None;
+            self.confirmed = Some(current.to_owned());
+            true
+        } else {
+            self.asking = None;
+            false
+        }
+    }
+
+    /// What to do with `text` (engraving to `bars` bars), the file now
+    /// holding `on_disk`.
     pub fn decide(
-        &self,
+        &mut self,
         on_disk: std::result::Result<&str, &str>,
         text: &str,
         bars: usize,
-        confirmed: bool,
     ) -> Write {
+        self.now_saving(text);
         let on_disk = match on_disk {
             Ok(t) => t,
             Err(why) => {
-                return Write::Refuse(format!("not saved: the .kf cannot be read now ({why})"));
+                return Write::Refuse {
+                    why: format!("not saved: the .kf cannot be read now ({why})"),
+                    reread: true,
+                };
             }
         };
         if on_disk != self.base {
-            return Write::Refuse(
-                "not saved: the .kf changed since it was read (another edit, elsewhere); \
-                 read it again"
+            return Write::Refuse {
+                why: "not saved: the .kf changed since it was read (another program, a sync)"
                     .to_owned(),
-            );
+                reread: true,
+            };
         }
         if text == self.base {
             return Write::Unchanged;
         }
-        if bars == 0 && self.base_bars.is_some_and(|b| b > 0) && !confirmed {
+        let yes = self.confirmed.as_deref() == Some(text);
+        if bars == 0 && self.base_bars.is_some_and(|b| b > 0) && !yes {
+            self.asking = Some(text.to_owned());
             return Write::Confirm(format!(
                 "not saved: this chart has no bars, the saved one has {}. Save it anyway?",
                 self.base_bars.unwrap_or_default()
@@ -650,6 +705,8 @@ impl Saving {
         self.base = text;
         self.base_bars = Some(bars);
         self.backed_up = true;
+        self.asking = None;
+        self.confirmed = None;
     }
 }
 
@@ -664,6 +721,42 @@ pub fn backup_path(file: &str, opened: u64) -> String {
     let file = file.trim_start_matches('/');
     let (stem, ext) = file.rsplit_once('.').unwrap_or((file, "kf"));
     format!("backups/{stem}.{opened}.{ext}")
+}
+
+/// Where an edit that was not saved is kept when the `.kf` is read again
+/// over it (it changed under the edit): beside the backups, in the
+/// extension's own folder, never the vault.
+#[must_use]
+pub fn unsaved_path(file: &str, opened: u64, now: u64) -> String {
+    let file = file.trim_start_matches('/');
+    let (stem, ext) = file.rsplit_once('.').unwrap_or((file, "kf"));
+    format!("backups/{stem}.{opened}.unsaved-{now}.{ext}")
+}
+
+/// The first symbolic link on vault path `path` under the vault's folder.
+///
+/// Under `root`, the file itself or a folder on the way to it, as a vault path:
+/// a write there would land wherever it points. None when there is none
+/// (or the path does not exist yet past some point).
+///
+/// # Errors
+///
+/// A part of the path could not be looked at.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn first_link(root: &std::path::Path, path: &str) -> std::io::Result<Option<String>> {
+    let mut at = root.to_path_buf();
+    let mut seen = Vec::new();
+    for part in path.split('/').filter(|p| !p.is_empty() && *p != ".") {
+        at.push(part);
+        seen.push(part);
+        match std::fs::symlink_metadata(&at) {
+            Ok(meta) if meta.file_type().is_symlink() => return Ok(Some(seen.join("/"))),
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(None)
 }
 
 /// A song engraved for its workspace, shared by the panes that read it.
