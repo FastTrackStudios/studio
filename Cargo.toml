@@ -15,6 +15,7 @@ members = [
     "features/editing",
     "features/ui/plugin-core",
     "features/ui/dock",
+    "features/ui/transport-ui",
     "features/sync",
     "crates/frame",
     "features/adapters/web/worklet",
@@ -188,6 +189,7 @@ timeline = { path = "features/timeline" }
 editing = { path = "features/editing" }
 plugin-core = { path = "features/ui/plugin-core" }
 dock = { path = "features/ui/dock" }
+transport-ui = { path = "features/ui/transport-ui" }
 daw-sync = { path = "features/sync" }
 frame = { path = "crates/frame" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }

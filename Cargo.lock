@@ -20325,6 +20325,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "transport-ui",
  "utils",
  "uuid",
  "vox",
@@ -24366,6 +24367,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1a814d25437963577f6221d33a2aaa60bfb44acc3330cdc7c334644e9832022"
 dependencies = [
  "futures-core",
+]
+
+[[package]]
+name = "transport-ui"
+version = "26.10.3"
+dependencies = [
+ "dioxus",
+ "lucide-dioxus",
 ]
 
 [[package]]
