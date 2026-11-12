@@ -91,17 +91,61 @@ fn registrations() -> &'static RwLock<Vec<Arc<dyn DeviceFamily>>> {
     REGISTERED.get_or_init(|| RwLock::new(Vec::new()))
 }
 
+/// Whether this host runs device families at all. A phone or a tablet
+/// does not: Patchbay there controls the engines on other machines, has
+/// no audio graph or driver of its own and scans the LAN for nothing
+/// (`patchbay-ios`, studio#466). There the families register nothing and
+/// the engine assembles none ([`assemble`]); their views still register,
+/// so a phone looking at another machine's engine draws its consoles.
+pub(crate) const FAMILIES_HERE: bool = !cfg!(target_os = "ios");
+
 /// Add `family` to every engine this process starts from now on.
 ///
 /// A family extension calls this from its `build`. It replaces a built-in
 /// family, or an earlier registration, of the same kind; the one it
 /// replaced is returned. An engine already running keeps the families it
-/// started with.
+/// started with. On a host that runs no device families (iOS,
+/// `FAMILIES_HERE`) it registers nothing.
 pub fn register(family: Arc<dyn DeviceFamily>) -> Option<Arc<dyn DeviceFamily>> {
+    register_on(family, FAMILIES_HERE)
+}
+
+/// [`register`], with whether this host runs families given (a test can
+/// be the phone).
+fn register_on(
+    family: Arc<dyn DeviceFamily>,
+    families_here: bool,
+) -> Option<Arc<dyn DeviceFamily>> {
+    if !families_here {
+        tracing::debug!(
+            kind = family.kind(),
+            "patchbay: no device families on this host; the family is not registered"
+        );
+        return None;
+    }
     let mut list = registrations()
         .write()
         .unwrap_or_else(PoisonError::into_inner);
     replace_or_push(&mut list, family)
+}
+
+/// The families an engine runs: the built-ins, then every registration
+/// (one of the same kind replaces the built-in); none at all on a host
+/// that runs no families. Where the engine's families are assembled, so
+/// the gate holds for every family, built in or an extension.
+pub(crate) fn assemble(
+    builtin: Families,
+    registered: Vec<Arc<dyn DeviceFamily>>,
+    families_here: bool,
+) -> Families {
+    if !families_here {
+        return Families::new();
+    }
+    let mut families = builtin;
+    for family in registered {
+        let _ = families.register(family);
+    }
+    families
 }
 
 /// [`register`] `family` and its views, for one kind, in one call.
@@ -109,6 +153,7 @@ pub fn register(family: Arc<dyn DeviceFamily>) -> Option<Arc<dyn DeviceFamily>> 
 /// What a family extension with views of its own calls, before the
 /// engine and the window start: the views go to the window's registry
 /// ([`crate::ui::register_family_views`]), the family to the engine's.
+/// On a host that runs no families (iOS) only the views register.
 ///
 /// # Panics
 /// In debug builds, when `views` is for another kind than `family`.
@@ -272,5 +317,74 @@ mod tests {
         assert_eq!(out.len(), 2, "{out:?}");
         assert!(out[0].contains("'loner' has no views"), "{out:?}");
         assert!(out[1].contains("views for 'orphan'"), "{out:?}");
+    }
+}
+
+/// The iOS gate, with the host given: CI builds no iOS target, so the
+/// phone is `families_here = false` here.
+#[cfg(test)]
+mod gate_tests {
+    use super::*;
+
+    struct Probe(&'static str);
+
+    impl DeviceFamily for Probe {
+        fn kind(&self) -> &'static str {
+            self.0
+        }
+
+        fn info(&self) -> FamilyInfo {
+            FamilyInfo::linked(self.0, self.0, &[], true)
+        }
+
+        fn defaults(&self) -> Vec<DeviceConfig> {
+            vec![DeviceConfig::new(self.0, self.0)]
+        }
+
+        fn connect(&self, _config: DeviceConfig, _ctx: ConnectCtx) -> ConnectFuture {
+            Box::pin(async { Err(ConnectError::NotFound("a probe".to_owned())) })
+        }
+    }
+
+    fn kinds(families: &Families) -> Vec<&'static str> {
+        families.kinds()
+    }
+
+    #[test]
+    fn a_phone_registers_no_family() {
+        assert!(register_on(Arc::new(Probe("gate-phone")), false).is_none());
+        assert!(registered().iter().all(|f| f.kind() != "gate-phone"));
+        // A host that runs families does register it.
+        assert!(register_on(Arc::new(Probe("gate-host")), true).is_none());
+        assert!(registered().iter().any(|f| f.kind() == "gate-host"));
+    }
+
+    #[test]
+    fn a_phone_assembles_no_families_built_in_or_registered() {
+        let builtin = || {
+            Families::new()
+                .with(Probe("builtin-a"))
+                .with(Probe("builtin-b"))
+        };
+        let registered: Vec<Arc<dyn DeviceFamily>> =
+            vec![Arc::new(Probe("extension")), Arc::new(Probe("builtin-b"))];
+        let phone = assemble(builtin(), registered.clone(), false);
+        assert!(kinds(&phone).is_empty(), "{:?}", kinds(&phone));
+        assert!(
+            phone.defaults().is_empty(),
+            "a phone would look for devices"
+        );
+        // Elsewhere: the built-ins, a registration of a built-in's kind in
+        // its place, then the new kind.
+        let host = assemble(builtin(), registered, true);
+        assert_eq!(kinds(&host), ["builtin-a", "builtin-b", "extension"]);
+    }
+
+    /// On iOS itself, the constant is the gate (a test that runs only
+    /// where it can).
+    #[cfg(target_os = "ios")]
+    #[test]
+    fn ios_runs_no_families() {
+        assert!(!FAMILIES_HERE);
     }
 }

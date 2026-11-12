@@ -32,7 +32,7 @@ use crate::server::store::GraphStore;
 /// `PipeWire`, no Core Audio routing, no driver) and scans the LAN for no
 /// console or interface. Patchbay there is a controller of the engines on
 /// other machines (`patchbay-ios`, studio#466). The same gate keeps out
-/// every registered family (`crate::family::families_here`).
+/// every registered family (`crate::family::assemble`).
 pub(crate) fn builtin(graph: Arc<RwLock<GraphStore>>) -> Families {
     if cfg!(target_os = "ios") {
         drop(graph);

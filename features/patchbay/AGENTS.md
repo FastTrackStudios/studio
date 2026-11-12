@@ -68,7 +68,10 @@ extension per device family, packaged as its own distribution
   the engine starts (read once, at start). The Yamaha TF is the first:
   `features/patchbay/yamaha-tf` (`patchbay-yamaha-tf`), registered by its
   extension's `build` and by each `fts-patchbay` binary's `main`. A
-  family's views draw with `ui::kit`. `patchbay families` / `PATCHBAY_FAMILIES` lists what an engine
+  family's views draw with `ui::kit`. On iOS no family runs:
+  `family::register` registers nothing and `family::assemble` (where the
+  engine's families are put together) gives none, so every family
+  extension inherits the phone's gate; their views still register. `patchbay families` / `PATCHBAY_FAMILIES` lists what an engine
   has. Adding a family is a registration, not an edit to the hub. The
   system-audio family holds no PipeWire connection of its own: it gets a
   clone of the same `Arc<RwLock<GraphStore>>` the `patchbay-pw` thread

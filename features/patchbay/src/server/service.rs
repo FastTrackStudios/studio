@@ -134,10 +134,11 @@ impl PatchbayBackend {
         // The built-in families, then every family registered in this
         // process (a family extension's), which replaces a built-in of
         // its kind.
-        let mut families = crate::server::devices::registry::builtin(store.clone());
-        for family in crate::family::registered() {
-            let _ = families.register(family);
-        }
+        let families = crate::family::assemble(
+            crate::server::devices::registry::builtin(store.clone()),
+            crate::family::registered(),
+            crate::family::FAMILIES_HERE,
+        );
         // Where the window is in this process too, its views and the
         // engine's families should name the same kinds.
         #[cfg(feature = "ui")]
