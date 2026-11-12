@@ -16,6 +16,7 @@ members = [
     "features/ui/plugin-core",
     "features/ui/dock",
     "features/ui/transport-ui",
+    "features/ui/lyrics-ui",
     "apps/architect/island",
     "features/sync",
     "crates/frame",
@@ -191,6 +192,7 @@ editing = { path = "features/editing" }
 plugin-core = { path = "features/ui/plugin-core" }
 dock = { path = "features/ui/dock" }
 transport-ui = { path = "features/ui/transport-ui" }
+lyrics-ui = { path = "features/ui/lyrics-ui", default-features = false }
 daw-sync = { path = "features/sync" }
 frame = { path = "crates/frame" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }

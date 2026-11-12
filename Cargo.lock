@@ -13137,6 +13137,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "lyrics-ui"
+version = "26.10.3"
+dependencies = [
+ "dioxus",
+ "futures-channel",
+ "futures-util",
+ "gloo-timers 0.3.0",
+ "keyflow",
+ "wasm-bindgen-futures",
+ "web-time",
+]
+
+[[package]]
 name = "lz4_flex"
 version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -20336,6 +20349,7 @@ dependencies = [
  "links-proto 26.10.1",
  "loro",
  "lucide-dioxus",
+ "lyrics-ui",
  "monarchy",
  "music-catalog 0.1.0 (git+https://github.com/FastTrackStudios/music-convention?tag=v0.1.3)",
  "num-traits",
@@ -22540,6 +22554,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "js-sys",
+ "lyrics-ui",
  "serde_json",
  "transport-ui",
  "wasm-bindgen",

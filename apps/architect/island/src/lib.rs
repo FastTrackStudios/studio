@@ -3,7 +3,9 @@
 //! link's now-playing view.
 //!
 //! Its two views are mounted by the page's player at the top of the view
-//! (`progress`) and under the chart (`transport`). Each is given, as its
+//! (`progress`) and under the chart (`transport`); its web bundle has a
+//! third, the Lyrics tab's (`lyrics`: Session's lyrics panel, fixed to its
+//! Confidence Monitor, given the song's timed lines too). Each is given, as its
 //! props, where the song is: `time`, `playing`, `duration`, `title`, and
 //! its `sections` (`[{name, start, end, color}]`, seconds). It asks the
 //! page only `PLAYHEAD_SEEK` (`{t}`), `PLAYHEAD_PLAY`, `PLAYHEAD_PAUSE`,
@@ -25,6 +27,9 @@ pub mod views;
 
 #[cfg(target_os = "wasi")]
 mod wasi;
+
+#[cfg(target_os = "unknown")]
+mod lyrics;
 
 #[cfg(target_os = "unknown")]
 mod web;

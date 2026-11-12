@@ -27,6 +27,7 @@ serde_json = { workspace = true }
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 dioxus = { workspace = true, features = ["web", "launch"] }
 transport-ui = { workspace = true }
+lyrics-ui = { workspace = true, features = ["view"] }
 serde_json = { workspace = true }
 wasm-bindgen = { workspace = true }
 js-sys = { workspace = true }
