@@ -34,7 +34,7 @@ for z in tsv:
         ztune.setdefault(n, float(z['tune']))
 cache = {}
 def files(typ):
-    fs = sorted(glob.glob(os.path.join(root, 'Mix', '1st Violins', 'Short', typ, '*_G3_*.wav')))
+    fs = sorted(glob.glob(os.path.join(root, 'Mix', '1st Violins', '*', typ, '*_G3_*.wav')))
     for f in fs:
         if f not in cache: cache[f] = load(f)
     return fs

@@ -1743,6 +1743,12 @@ pub struct ArticulationSpec {
     /// engine's own rotation.
     #[facet(default)]
     pub rr_sequence: Vec<u8>,
+    /// Per velocity band, `(compare, store)`: which band's last-RR memory the
+    /// no-repeat rule reads and which it writes. Empty = each band its own.
+    /// CSS pizzicato reads an unwritten table in bands 2 and 4 and writes
+    /// band 1's (KSP 15139-15241, kept as shipped).
+    #[facet(default)]
+    pub rr_last_slots: Vec<[u8; 2]>,
     /// Random detune: a uniform integer −n..=n cents per note, unless the
     /// same key was played within `random_tune_gate_ms` (then 0). CSS
     /// shorts: 5 cents, 500 ms.

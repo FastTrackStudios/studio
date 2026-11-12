@@ -94,8 +94,14 @@ def main():
             rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", keys[0], cat, desc))
             t = start + win
 
-        for name, cc58, vels in (("Spiccato", 11, (40, 100, 120)), ("Staccatissimo", 16, (40, 100, 120)),
-                                 ("Staccato", 21, (40, 100, 120)), ("Sfz", 26, (60, 100, 120))):
+        types = (("Spiccato", 11, (40, 100, 120)), ("Staccatissimo", 16, (40, 100, 120)),
+                 ("Staccato", 21, (40, 100, 120)), ("Sfz", 26, (60, 100, 120)))
+        if "--pizz" in sys.argv:
+            # Pizzicato family: the type knob (CC1) <11 / 11-117 / >117.
+            cc1_for.update({31: 5, 36: 60, 41: 127})
+            types = (("Pizzicato", 31, (30, 60, 90, 120)), ("Bartokpizz", 36, (40, 100)),
+                     ("Clegno", 41, (30, 70, 110)))
+        for name, cc58, vels in types:
             for vel in vels:
                 burst(name, f"{name} key67 v{vel} x6", [67] * 6, vel, 0.3, cc58)
             burst(name, f"{name} alt67/68 v100 x6", [67, 68] * 3, 100, 0.2, cc58)

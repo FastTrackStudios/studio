@@ -351,6 +351,12 @@ articulations (
         rr       4
         dyn_ctrl velocity   // shipped CSS: velocity selects the dynamic layer (see dynamics{} note)
         notes    full
+        // Decoded (%fuiq3 / %a3xuw, 3 bands).
+        vel_thresholds (50 80)
+        vel_layer_db   (-12 -8 -7)
+        rr_sequence    (1 2 3 4 2 1 4 3 1 4 3 2 1 4 2 3)   // %okqzw
+        random_tune_cents   5
+        random_tune_gate_ms 500
     }
 
     // ── Legato / Transitions ─────────────────────────────────────────────────
@@ -621,9 +627,13 @@ articulations (
         dyn_ctrl velocity   // shipped CSS: velocity selects the dynamic layer
         notes    full
         aliases  (Pizz)   // 1v uses "Pizzicato"; 2v/Va/Ce/Ba use "Pizz"
-        // Decoded KSP velocity layers (%g1qri / %bcez1, g25wo=4, ktuur=0 → 3 bands).
-        vel_thresholds (50 90 127)
-        vel_layer_db   (-17 -12 -10 0)
+        // Decoded KSP velocity layers (%mjhzg / %hu3zk, 4 bands).
+        vel_thresholds (45 75 105)
+        vel_layer_db   (-8 -10 -18 -9)
+        rr_sequence    (1 2 3 4 2 1 4 3 1 4 3 2 1 4 2 3)   // %okqzw
+        rr_last_slots  ((0 0) (1 0) (2 2) (3 0))          // as shipped: bands 2/4 never skip
+        random_tune_cents   5
+        random_tune_gate_ms 500
     }
     {
         id       Bartokpizz
@@ -633,6 +643,12 @@ articulations (
         rr       2
         dyn_ctrl velocity   // shipped CSS: velocity selects the dynamic layer
         notes    short       // confirmed from NKC: A2–G4 (23 notes)
+        // Decoded (%kgcee / %eehua, 2 bands); RR alternates per note-class (%qciz0).
+        vel_thresholds (80)
+        vel_layer_db   (-12 -6)
+        rr_per_note    true
+        random_tune_cents   5
+        random_tune_gate_ms 500
     }
 
     // ── Release Samples ──────────────────────────────────────────────────────
