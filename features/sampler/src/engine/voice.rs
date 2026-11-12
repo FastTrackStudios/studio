@@ -2520,11 +2520,20 @@ impl VoicePool {
     /// out-of-bounds) fold into buffer 0. **No allocation** — caller owns
     /// the `Vec<Vec<f32>>` storage.
     pub fn render_multi(&mut self, outputs: &mut [Vec<f32>]) {
+        let frames = outputs.first().map_or(0, |b| b.len() / 2);
+        self.render_multi_range(outputs, 0, frames);
+    }
+
+    /// [`render_multi`](Self::render_multi) into frames `start..start + frames`
+    /// of every buffer — so the engine can split a block at a sample-exact
+    /// event (a legato transition firing mid-block).
+    pub fn render_multi_range(&mut self, outputs: &mut [Vec<f32>], start: usize, frames: usize) {
         if outputs.is_empty() {
             return;
         }
         let nmics = outputs.len();
-        let len = outputs[0].len();
+        let (a, b) = (start * 2, (start + frames) * 2);
+        let len = b - a;
         for v in &mut self.voices {
             // Solo filter: muted voices render into a discard buffer so their
             // lifecycle (and every soloed note's timing) is unchanged.
@@ -2545,7 +2554,7 @@ impl VoicePool {
                 Some(i) if (i as usize) < nmics => i as usize,
                 _ => 0,
             };
-            v.render_block(&mut outputs[idx]);
+            v.render_block(&mut outputs[idx][a..b]);
         }
         self.voices.retain(|v| !v.is_done());
     }
@@ -2559,11 +2568,25 @@ impl VoicePool {
     /// to the same bus the per-buffer accumulation — and therefore the audio,
     /// bit for bit — is identical to the unsplit render.
     pub fn render_matrix(&mut self, outputs: &mut [Vec<f32>], nmics: usize, route: [usize; 2]) {
+        let frames = outputs.first().map_or(0, |b| b.len() / 2);
+        self.render_matrix_range(outputs, nmics, route, 0, frames);
+    }
+
+    /// [`render_matrix`](Self::render_matrix) into frames `start..start + frames`.
+    pub fn render_matrix_range(
+        &mut self,
+        outputs: &mut [Vec<f32>],
+        nmics: usize,
+        route: [usize; 2],
+        start: usize,
+        frames: usize,
+    ) {
         if outputs.is_empty() || nmics == 0 {
             return;
         }
         let nbuses = outputs.len() / nmics;
-        let len = outputs[0].len();
+        let (a, b) = (start * 2, (start + frames) * 2);
+        let len = b - a;
         for v in &mut self.voices {
             if self
                 .solo_notes
@@ -2587,7 +2610,7 @@ impl VoicePool {
                 Some(i) if (i as usize) < nmics => i as usize,
                 _ => 0,
             };
-            v.render_block(&mut outputs[bus * nmics + mic]);
+            v.render_block(&mut outputs[bus * nmics + mic][a..b]);
         }
         self.voices.retain(|v| !v.is_done());
     }

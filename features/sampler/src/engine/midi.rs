@@ -526,6 +526,15 @@ impl SampleEngine {
                 // passage's legato lead-in outruns the note length). Document
                 // note-offs only end phrases.
                 if self.play_mode != PlayMode::Lookahead {
+                    // A transition away from this note is already counting
+                    // down (the overlap delay outlasts the key-up): Kontakt
+                    // fires that ONE transition on schedule and leaves the old
+                    // body untouched until then — starting another here fired
+                    // it twice (null test, 80 ms legato).
+                    if matches!(self.line().state, LegatoState::Pending { from_note, .. } if from_note == note)
+                    {
+                        return;
+                    }
                     if let Some(&prev) = self.line().order.last() {
                         // Fall back at a medium transition speed.
                         let fallback_vel = self.patch.spec.legato_cfg().fallback_velocity;

@@ -52,7 +52,7 @@ def od_ms(mode, zone, ioi):
     if ioi < a:
         return top
     if ioi < b:
-        return top + (-top * (ioi - a)) // (b - a)
+        return top + int(-top * (ioi - a) / (b - a))  # KSP integer division truncates toward zero
     return 0
 
 
@@ -91,6 +91,9 @@ def main():
     search = "--search" in argv
     if search:
         argv.remove("--search")
+    if "--dump" in argv:
+        i = argv.index("--dump")
+        del argv[i : i + 2]
     kon_p, man_p, root, unit = argv[0], argv[1], argv[2], int(argv[3])
     kon = load(kon_p)
     row = [r for r in csv.DictReader(open(man_p), delimiter="\t") if int(r["idx"]) == unit][0]
@@ -169,15 +172,23 @@ def main():
     print(f"unit {unit}: {row['description']}  zone {zone}  OD {od} ms  LT {lt_name if LT is not None else '-'} off {lt_off:.0f} ms  B off {b_off:.0f} ms")
     print("   t ms  " + "  ".join(f"{n:>7}" for n in names) + "   residual")
     tot_e = tot_s = 0.0
+    resid = [] if "--dump" in sys.argv else None
     for w0 in span:
         n = np.arange(w0, w0 + W)
         g, e, s = fit(n, od, lt_off)
+        if resid is not None:
+            cols = columns(n, od, lt_off)
+            M = np.stack([c.ravel() for c in cols], 1)
+            resid.append((kon[n].ravel() - M @ g).reshape(-1, 2))
         tot_e += e
         tot_s += s
         if s < 1e-14:
             continue
         print(f"{(w0 - on0) / SR * 1000:7.0f}  " + "  ".join(f"{x / FULL:7.3f}" for x in g) + f"   {db(e / s):6.1f}")
     print(f"whole-window residual {db(tot_e / tot_s):.1f} dB")
+    if resid is not None:
+        # The unexplained part, from 50 ms before t0, for residual hunts.
+        np.save(sys.argv[sys.argv.index("--dump") + 1], np.concatenate(resid))
 
 
 if __name__ == "__main__":

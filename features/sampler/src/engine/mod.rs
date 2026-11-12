@@ -445,7 +445,7 @@ enum LegatoState {
 /// AFTER the new note-on, delayed by its velocity zone. Entry:
 /// `note_on` → (`live_divisi_note_on` |) `note_on_line`'s sounding-line arm
 /// → `start_legato_transition` → a
-/// `LegatoState::Pending` countdown drained by `advance_legato_countdowns`.
+/// `LegatoState::Pending` countdown drained by `render_split`.
 /// `note_off` may synthesise a fallback transition. Every reactive fire
 /// bumps `reactive_legato_fires`. **This path is what the deployed live rig
 /// (CLAP no-schedule branch, strings-TUI keyboard) plays on — do not break
@@ -2110,12 +2110,9 @@ impl SampleEngine {
     /// Also advances the legato countdown and fires legato samples when due.
     pub fn render(&mut self, output: &mut [f32]) {
         let block_frames = output.len() / 2;
-
-        // Advance every line's legato countdown.
-        self.advance_legato_countdowns(block_frames);
-
-        self.voices.render(output);
-        self.frames_rendered += block_frames as u64;
+        self.render_split(block_frames, |voices, start, n| {
+            voices.render(&mut output[start * 2..(start + n) * 2]);
+        });
         self.drain_emitted_markers();
         self.sweep_traced_voice_ends();
 
@@ -2139,12 +2136,9 @@ impl SampleEngine {
     /// desired. No allocation occurs.
     pub fn render_multi(&mut self, outputs: &mut [Vec<f32>]) {
         let block_frames = outputs.first().map_or(0, |b| b.len() / 2);
-
-        // Advance every line's legato countdown.
-        self.advance_legato_countdowns(block_frames);
-
-        self.voices.render_multi(outputs);
-        self.frames_rendered += block_frames as u64;
+        self.render_split(block_frames, |voices, start, n| {
+            voices.render_multi_range(outputs, start, n);
+        });
         self.drain_emitted_markers();
         self.sweep_traced_voice_ends();
 
@@ -2186,10 +2180,9 @@ impl SampleEngine {
         route_shorts: usize,
     ) {
         let block_frames = outputs.first().map_or(0, |b| b.len() / 2);
-        self.advance_legato_countdowns(block_frames);
-        self.voices
-            .render_matrix(outputs, nmics, [route_longs, route_shorts]);
-        self.frames_rendered += block_frames as u64;
+        self.render_split(block_frames, |voices, start, n| {
+            voices.render_matrix_range(outputs, nmics, [route_longs, route_shorts], start, n);
+        });
 
         if self.cc11_volume != 1.0 {
             for buf in outputs.iter_mut() {
@@ -2205,25 +2198,56 @@ impl SampleEngine {
         }
     }
 
-    /// Advance every line's reactive legato countdown by one block, firing
-    /// transitions that elapse (at the head of the block, matching the
-    /// pre-line engine's timing). Lines are visited in ascending [`LineId`]
-    /// order — deterministic when several fire in the same block.
-    fn advance_legato_countdowns(&mut self, block_frames: usize) {
-        for li in 0..self.lines.len() {
-            let fire = match &mut self.lines[li].state {
-                LegatoState::Pending {
+    /// Render `block_frames` through `part(voices, start, n)` in pieces, firing
+    /// each reactive legato countdown on the EXACT frame it elapses (the block
+    /// is split there). Firing at the head of the block put transitions up to
+    /// one block early — 1.3 ms at 64 frames, which a null test against
+    /// Kontakt hears as a phase error on every voice of the transition.
+    fn render_split(
+        &mut self,
+        block_frames: usize,
+        mut part: impl FnMut(&mut VoicePool, usize, usize),
+    ) {
+        let mut done = 0;
+        self.fire_due_legato();
+        while done < block_frames {
+            let next = self
+                .lines
+                .iter()
+                .filter_map(|l| match l.state {
+                    LegatoState::Pending {
+                        frames_remaining, ..
+                    } => Some(frames_remaining),
+                    LegatoState::Idle => None,
+                })
+                .min()
+                .map_or(block_frames - done, |f| f.clamp(1, block_frames - done));
+            part(&mut self.voices, done, next);
+            self.frames_rendered += next as u64;
+            for l in &mut self.lines {
+                if let LegatoState::Pending {
                     frames_remaining, ..
-                } => {
-                    if *frames_remaining <= block_frames {
-                        true
-                    } else {
-                        *frames_remaining -= block_frames;
-                        false
-                    }
+                } = &mut l.state
+                {
+                    *frames_remaining = frames_remaining.saturating_sub(next);
                 }
-                LegatoState::Idle => false,
-            };
+            }
+            done += next;
+            self.fire_due_legato();
+        }
+    }
+
+    /// Fire every countdown that has reached zero. Lines are visited in
+    /// ascending [`LineId`] order — deterministic when several fire together.
+    fn fire_due_legato(&mut self) {
+        for li in 0..self.lines.len() {
+            let fire = matches!(
+                self.lines[li].state,
+                LegatoState::Pending {
+                    frames_remaining: 0,
+                    ..
+                }
+            );
             if fire {
                 if let LegatoState::Pending {
                     from_note,
