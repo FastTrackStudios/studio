@@ -1,0 +1,29 @@
+# Studio's island (studio#445): Session's progress bar and transport on a
+# share link's now-playing view, a WASI component built for wasm32-wasip2
+# (`just island`) and linked into Studio Architect's node
+# (`Distribution::island`). It is given where the song is and may ask the
+# page only to seek, play, pause, or go to the previous or next song.
+id = "studio.transport"
+name = "Studio transport"
+version = "0.1.0"
+kind = "wasm"
+api = "0.1"
+description = "Session's song progress bar and transport controls on a share link's now-playing view."
+authors = ["FastTrackStudios"]
+
+[wasm]
+component = "studio_island.wasm"
+
+[capabilities]
+actions = ["PLAYHEAD_SEEK", "PLAYHEAD_PLAY", "PLAYHEAD_PAUSE", "PLAYHEAD_NEXT", "PLAYHEAD_PREVIOUS"]
+effect = "read_only"
+
+[[views]]
+id = "progress"
+title = "Progress"
+icon = "music"
+
+[[views]]
+id = "transport"
+title = "Transport"
+icon = "play"

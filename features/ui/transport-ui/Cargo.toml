@@ -1,0 +1,16 @@
+[package]
+name = "transport-ui"
+description = "Session's song progress bar (sections as played, the playhead, a tap to seek) and its transport controls: Dioxus only, so the desktop, the web and a WASI component (Studio's share-page island, studio#445) draw the same view from one source."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+dioxus = { workspace = true }
+lucide-dioxus = { workspace = true }
+
+[lints]
+workspace = true

@@ -15,6 +15,8 @@ members = [
     "features/editing",
     "features/ui/plugin-core",
     "features/ui/dock",
+    "features/ui/transport-ui",
+    "apps/architect/island",
     "features/sync",
     "crates/frame",
     "features/adapters/web/worklet",
@@ -188,6 +190,7 @@ timeline = { path = "features/timeline" }
 editing = { path = "features/editing" }
 plugin-core = { path = "features/ui/plugin-core" }
 dock = { path = "features/ui/dock" }
+transport-ui = { path = "features/ui/transport-ui" }
 daw-sync = { path = "features/sync" }
 frame = { path = "crates/frame" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }
@@ -506,6 +509,8 @@ architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v
 # into Studio's app and served as process extensions the Architect app
 # installs (features/setlists; studio#386).
 architect-extensions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.3" }
+# A WASI component's guest side (Studio's island, apps/architect/island).
+architect-extension-wasi = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.3" }
 architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.3" }
 architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.3" }
 # The app's theme as data (`use_resolved`): what a Studio view in Architect

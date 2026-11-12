@@ -247,6 +247,16 @@ in
   # (`#[reaper_test]`, `just reaper-test`). What the flake's `.#reaper-test`
   # shell adds to the default env, which already has Xvfb, xvfb-run, xdotool,
   # PipeWire's JACK shim and cargo-nextest.
+  # `devenv --profile wasi shell`: the fleet toolchain plus `wasm32-wasip2`,
+  # what Studio's island builds for (apps/architect/island, `just island`,
+  # #445), and node for Architect's `build-web` (its JSPI needs the current
+  # release). A profile, as Architect's: an extra target changes the rustc
+  # store path, so kache shares nothing with the default shell's builds.
+  profiles.wasi.module = {
+    fleet.rust.extraTargets = [ "wasm32-wasip2" ];
+    packages = [ pkgs.nodejs_latest ];
+  };
+
   profiles.reaper.module.packages = lib.optionals pkgs.stdenv.isLinux [
     reaper
     pkgs.openbox      # a bare Xvfb leaves REAPER's restored dialogs unmanaged

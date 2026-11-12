@@ -30,7 +30,7 @@ tts = ["dep:chatterbox-rs", "dep:ort", "ort/load-dynamic"]
 # lyrics panel (`components::lyrics`, ticking on a thread natively and on
 # the browser's timer on a page), the mixer, … — props only, so Session's
 # window and the setlists extension's song workspace mount the same ones.
-ui = ["dep:architect-ui", "dep:dock", "dock?/ui", "dep:lucide-dioxus", "web", "dep:futures-util", "dep:futures-channel", "dep:web-time", "dep:wasm-bindgen-futures", "dep:gloo-timers"]
+ui = ["dep:architect-ui", "dep:dock", "dock?/ui", "dep:lucide-dioxus", "dep:transport-ui", "web", "dep:futures-util", "dep:futures-channel", "dep:web-time", "dep:wasm-bindgen-futures", "dep:gloo-timers"]
 # The chart's text editor (`components::chart_text`): Keyflow source in
 # the editor (`editor-view`), coloured and checked as it is typed — what
 # Session's chart editor and the song workspace's both draw.
@@ -44,6 +44,8 @@ web-time = { workspace = true, optional = true }
 editor-view = { workspace = true, optional = true }
 editor-state = { workspace = true, optional = true }
 keyflow-editor-lang = { workspace = true, optional = true }
+# The progress bar and transport (`ui`): one source with Studio's share-page island.
+transport-ui = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 architect = { workspace = true, features = ["local", "platform", "vox"] }
 architect-ui = { workspace = true, optional = true }
