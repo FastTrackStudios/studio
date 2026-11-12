@@ -37,7 +37,8 @@ mod units;
 
 pub use crate::proto;
 pub use boot::{
-    DEFAULT_ADDR, Engine, EngineError, EngineMode, EngineOptions, MakePermissions, dial,
+    DEFAULT_ADDR, Engine, EngineError, EngineMode, EngineOptions, IfTaken, MakePermissions, dial,
+    runtime, spawn,
 };
 pub use service::PatchbayBackend;
 
