@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 use architect_desktop::Distribution;
 use architect_desktop::node::{self, Running, config::Config};
 use architect_spaces::share::{code_from, share_note_path};
-use architect_spaces::{Audience, Share, ShareAccess, ShareScope, share_note};
+use architect_spaces::{Audience, Listen, Share, ShareAccess, ShareScope, share_note};
 use setlists::chart::{SongFiles, import_song};
 use setlists::layout::{Library, SongRef, setlist_note};
 use setlists::setlist::Setlist;
@@ -147,6 +147,8 @@ fn shared_setlist(root: &Path, files: &Path) -> String {
         created_by: "studio-architect-test".to_owned(),
         domain: None,
         audiences: Vec::new(),
+        // What SHARE_CREATE gives a new link (architect v0.12.2, #528).
+        listen: Listen::Reference,
     };
     let path = root.join(share_note_path(&code));
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
