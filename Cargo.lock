@@ -16408,6 +16408,7 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
  "parking_lot",
+ "patchbay",
  "pipewire",
  "serde",
  "serde_json",
