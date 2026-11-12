@@ -1672,6 +1672,6 @@ editor-crdt = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6
 #   `[patch."https://www.github.com/…"]` table in this file is a TOML
 #   duplicate-key error (docs/agents/release-workflow.md).
 [patch."https://www.github.com/FastTrackStudios/architect"]
-architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
