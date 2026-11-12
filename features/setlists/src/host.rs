@@ -380,6 +380,27 @@ pub async fn write_vault_file(path: &str, text: &str) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
+/// Writes `text` to `path` in the extension's own folder (the host's
+/// `write_file` with a relative path: the app's data folder for it, not
+/// the vault, so nothing written there is synced as a vault file).
+///
+/// # Errors
+///
+/// The host refused it, or keeps no folder for extensions.
+pub async fn write_own_file(path: &str, text: &str) -> Result<(), String> {
+    if path.starts_with('/') || path.split('/').any(|p| p == "..") {
+        return Err(format!("{path}: not a path in the extension's folder"));
+    }
+    let h = handle().ok_or("the setlists extension is not running")?;
+    h.host(HostRequest::WriteFile {
+        path: path.to_owned(),
+        text: text.to_owned(),
+    })
+    .await
+    .map(drop)
+    .map_err(|e| e.to_string())
+}
+
 /// Asks the person to pick the vault's folder, so its files may be read
 /// and written for the rest of the run (a vault outside the folders the
 /// manifest names).

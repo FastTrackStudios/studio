@@ -14,7 +14,7 @@ use crate::host::{self, SetlistRow, SongRow};
 use crate::layout::{SongRef, setlist_note};
 use crate::nav::{self, LibrariesNav, SetlistsNav};
 use crate::setlist::Setlist;
-use crate::workspace::{Loaded, chart_fence, lyrics_source};
+use crate::workspace::{ChartAccess, Loaded, chart_fence, lyrics_source};
 use crate::{check_name, frontmatter};
 
 /// The extension.
@@ -411,22 +411,52 @@ async fn load(path: &str, title: &str, props: &[(String, String)]) -> Loaded {
         .unwrap_or_default()
         .to_owned();
     let chart_file = property("chart");
-    let source = match &chart_file {
-        Some(file) => host::read_vault_file(file).await.ok(),
+    // The `.kf` when it reads; else the note's copy, read-only (it is never
+    // written over the `.kf`: an old copy would overwrite a saved edit).
+    let read = match &chart_file {
+        Some(file) => Some(host::read_vault_file(file).await),
         None => None,
     };
-    let source = source.or_else(|| chart_fence(&body)).unwrap_or_default();
+    let chart = ChartAccess::open(chart_file, read, chart_fence(&body));
     let lrc = match property("lyrics").filter(|f| f.to_ascii_lowercase().ends_with(".lrc")) {
         Some(file) => host::read_vault_file(&file).await.ok(),
         None => None,
     };
-    let lyrics = lyrics_source(lrc.as_deref(), Some(&source));
+    let lyrics = lyrics_source(lrc.as_deref(), Some(&chart.text));
+    let recording = note
+        .as_ref()
+        .and_then(|n| n.get("properties"))
+        .and_then(|p| p.get("media"))
+        .and_then(Value::as_array)
+        .and_then(|media| {
+            media
+                .iter()
+                .filter_map(Value::as_str)
+                .map(|l| frontmatter::link_target(l).to_owned())
+                .find(|m| crate::song::is_playable(m))
+        });
+    // The share links of the setlists the song is in.
+    let shared = match SongRef::from_link_target(path.trim_end_matches(".md")) {
+        Some(at) => host::setlists()
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|s| {
+                s.songs
+                    .iter()
+                    .any(|x| x.library == at.library && x.title == at.title)
+            })
+            .filter_map(|s| s.share)
+            .collect(),
+        None => Vec::new(),
+    };
     Loaded {
         title: property("title").unwrap_or_else(|| title.to_owned()),
         artist: property("artist"),
-        source,
-        chart_file,
+        chart,
         lyrics,
+        recording,
+        shared,
     }
 }
 

@@ -20693,6 +20693,7 @@ dependencies = [
  "architect-navigator-api",
  "architect-settings",
  "architect-sites",
+ "architect-theme",
  "architect-workspace",
  "base64 0.22.1",
  "blitz-dom",

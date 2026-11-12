@@ -20,7 +20,8 @@
 //! page at a time with the bar at the playhead marked: Session's chart
 //! panel is a Blitz widget painting into the window's own scene and
 //! listening to the window's events, which a process extension's view
-//! (drawn remotely) cannot carry; pages as images and bars as boxes can.
+//! (drawn remotely) cannot carry, and a linked one has no API for
+//! (FastTrackStudios/architect#591); pages as images and bars as boxes can.
 //!
 //! Everything follows one [`Clock`]; a click on a section, a bar or a
 //! lyric line seeks it. Each pause in typing re-engraves the chart on a
@@ -39,12 +40,13 @@ use session::ui::components::lyrics::{
 use session::ui::components::progress::{ProgressSection, SongProgressBar};
 
 use crate::follow::{PlacedBar, cursor_colors};
-use crate::workspace::{Arrangement, Clock, Form, Loaded, LyricsSource, Pane, Song, lyrics_source};
+use crate::workspace::{
+    Arrangement, ChartAccess, ChartFrom, Clock, Form, Loaded, LyricsSource, Pane, Saving, Song,
+    Write, lyrics_source,
+};
 
 const RULE: &str = "#2a2c31";
-const TEXT: &str = "#e5e7eb";
 const DIM: &str = "#8b9099";
-const ACCENT: &str = "#3aa0ff";
 
 /// How long typing pauses before the chart is engraved again.
 const PAUSE: Duration = Duration::from_millis(350);
@@ -309,7 +311,19 @@ pub fn ChartPages(
     now: f64,
     on_seek: EventHandler<f64>,
     #[props(default)] across: bool,
+    /// The app's colours (the pane around the page; the page stays paper).
+    #[props(default)]
+    palette: Option<Palette>,
 ) -> Element {
+    let desk = palette
+        .as_ref()
+        .map_or_else(|| "#1a1b1e".to_owned(), |p| p.desk.clone());
+    let ink_2 = palette
+        .as_ref()
+        .map_or_else(|| DIM.to_owned(), |p| p.ink_2.clone());
+    let button = palette
+        .as_ref()
+        .map_or_else(|| SMALL_BUTTON.to_owned(), Palette::button);
     let Engraved(song, sources) = song;
     let mut held = use_signal(|| None::<usize>);
     let (size, mut node) = use_measured();
@@ -339,10 +353,14 @@ pub fn ChartPages(
         format!("width:{fw:.1}px; height:{fh:.1}px;")
     };
     let outer = if across {
-        "position:relative; width:100%; display:flex; flex-direction:column; background:#1a1b1e;"
+        format!(
+            "position:relative; width:100%; display:flex; flex-direction:column; background:{desk};"
+        )
     } else {
-        "position:absolute; top:0; left:0; width:100%; height:100%; display:flex; \
-         flex-direction:column; align-items:center; background:#1a1b1e;"
+        format!(
+            "position:absolute; top:0; left:0; width:100%; height:100%; display:flex; \
+             flex-direction:column; align-items:center; background:{desk};"
+        )
     };
     rsx! {
         div {
@@ -390,21 +408,21 @@ pub fn ChartPages(
             // The pages: turn by hand, or follow the song.
             div {
                 style: "flex:none; display:flex; align-items:center; justify-content:center; gap:8px; \
-                        height:28px; font-size:11px; color:{DIM};",
+                        height:28px; font-size:11px; color:{ink_2};",
                 button {
-                    style: "{SMALL_BUTTON}",
+                    style: "{button}",
                     onclick: move |_| held.set(Some(page.saturating_sub(1))),
                     "\u{2039}"
                 }
                 span { "Page {page + 1} of {count}" }
                 button {
-                    style: "{SMALL_BUTTON}",
+                    style: "{button}",
                     onclick: move |_| held.set(Some(page.saturating_add(1).min(last))),
                     "\u{203A}"
                 }
                 if held().is_some() {
                     button {
-                        style: "{SMALL_BUTTON}",
+                        style: "{button}",
                         onclick: move |_| held.set(None),
                         "Follow"
                     }
@@ -460,11 +478,119 @@ fn Progress(song: Option<Engraved>, now: f64, on_seek: EventHandler<f64>, labels
     }
 }
 
+/// The workspace's colours: the app's theme tokens.
+///
+/// Each is the token's CSS variable (what a process view's sub-document has
+/// at `:root`), falling back to the theme Architect resolves here (the
+/// built-in default where there is no store above: a process view drawn
+/// remotely).
+#[derive(Clone, PartialEq, Eq)]
+pub struct Palette {
+    desk: String,
+    sheet: String,
+    ink: String,
+    ink_2: String,
+    rule: String,
+    pill: String,
+    brand: String,
+    brand_ink: String,
+    danger: String,
+    /// The sheet is light: the editor's syntax colours for it.
+    light: bool,
+}
+
+impl Palette {
+    fn of(r: &architect_theme::Resolved) -> Self {
+        let v = |token: &str| format!("var(--{token}, {})", r.value(token));
+        Self {
+            desk: v("desk"),
+            sheet: v("sheet"),
+            ink: v("ink"),
+            ink_2: v("ink-2"),
+            rule: v("rule"),
+            pill: v("pill"),
+            brand: v("brand"),
+            brand_ink: v("brand-ink"),
+            danger: v("danger"),
+            light: r.color("sheet").luminance() > 0.5,
+        }
+    }
+
+    /// The editor's custom properties, from the theme, on its pane only.
+    fn editor_vars(&self) -> String {
+        format!(
+            "--background: {}; --foreground: {}; --muted: {}; --muted-foreground: {}; \
+             --border: {}; --primary: {};",
+            self.sheet, self.ink, self.pill, self.ink_2, self.rule, self.brand
+        )
+    }
+
+    fn button(&self) -> String {
+        format!(
+            "display:flex; align-items:center; justify-content:center; gap:4px; height:22px; \
+             min-width:22px; padding:0 8px; border-radius:5px; border:1px solid {}; \
+             background:{}; color:{}; font-size:12px; cursor:pointer;",
+            self.rule, self.pill, self.ink
+        )
+    }
+}
+
+/// `lyrics` as the panel shows them, against `song`'s parts when it is
+/// engraved; without a chart, the whole song as one part, so the lines
+/// still show and follow.
+fn words_of(
+    lyrics: Option<&LyricsSource>,
+    song: Option<&Song>,
+    title: &str,
+    artist: Option<&str>,
+) -> Words {
+    let (lines, regions) = song.map_or_else(
+        || {
+            let mut lines = lyrics.map(|s| s.lyrics(f64::MAX)).unwrap_or_default();
+            let end = lines.lines.last().map_or(0.0, |l| l.start + LAST_LINE_HOLD);
+            if let Some(last) = lines.lines.last_mut() {
+                last.end = end;
+            }
+            let whole = ColoredSpan {
+                span: session::lyrics::SectionSpan {
+                    name: "Song".to_owned(),
+                    start: 0.0,
+                    end,
+                },
+                color: None,
+            };
+            (lines, vec![whole])
+        },
+        |song| {
+            (
+                lyrics.map(|s| song.lyrics(s)).unwrap_or_default(),
+                song.spans()
+                    .into_iter()
+                    .map(|(span, color)| ColoredSpan {
+                        span,
+                        color: Some(color),
+                    })
+                    .collect(),
+            )
+        },
+    );
+    Words::new(lines, regions, title.to_owned(), artist.map(str::to_owned))
+}
+
+/// How long the last lyric line is held without a chart to end it.
+const LAST_LINE_HOLD: f64 = 6.0;
+
+/// What a reply to an edit leaves the workspace saying.
+fn note(status: &mut Signal<(ChartTextStatus, String)>, kind: ChartTextStatus, text: String) {
+    status.set((kind, text));
+}
+
 /// The workspace over a song loaded from its note: the progress, the
 /// chart's text and the lyrics, and the chart, following one clock.
 ///
 /// `form` and `at` fix the form and the position (a picture of it); left
 /// out, the form follows the pane's width and the song starts at 0.
+#[allow(clippy::too_many_lines)]
 #[component]
 pub fn SongWorkspace(
     loaded: Loaded,
@@ -472,23 +598,58 @@ pub fn SongWorkspace(
     #[props(default)] at: Option<f64>,
 ) -> Element {
     use_context_provider(|| LyricsChoice::of(LyricsMode::Performer));
+    let palette = Palette::of(&architect_theme::use_resolved());
     let origin = use_hook(web_time::Instant::now);
+    let opened = use_hook(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs())
+    });
     let wall = move || origin.elapsed().as_secs_f64();
+    // Until a chart is engraved (or with none), the song ends with its
+    // lyrics.
+    let lyrics_end = loaded.lyrics.as_ref().and_then(|l| {
+        l.lyrics(f64::MAX)
+            .lines
+            .last()
+            .map(|line| line.start + LAST_LINE_HOLD)
+    });
     let mut clock = use_signal(|| {
-        let mut c = Clock::new(None);
+        let mut c = Clock::new(lyrics_end);
         c.seek(at.unwrap_or(0.0), 0.0);
         c
     });
     let mut now = use_signal(|| at.unwrap_or(0.0));
     let mut engraved = use_signal(|| None::<Engraved>);
-    let mut words = use_signal(|| None::<Words>);
-    let mut status = use_signal(|| (ChartTextStatus::Idle, "engraving…".to_owned()));
+    let mut chart_error = use_signal(|| None::<String>);
+    // The lyrics, with or without a chart: they never wait on it.
+    let mut words = use_signal(|| {
+        loaded
+            .lyrics
+            .as_ref()
+            .map(|l| words_of(Some(l), None, &loaded.title, loaded.artist.as_deref()))
+    });
+    // Where the chart came from, and so whether it may be edited and saved.
+    let mut access = use_signal(|| loaded.chart.clone());
+    let first_status = match loaded.chart.editable() {
+        Err(why) => (ChartTextStatus::Warn, why),
+        Ok(()) if loaded.chart.text.trim().is_empty() => {
+            (ChartTextStatus::Idle, "this song has no chart".to_owned())
+        }
+        Ok(()) => (ChartTextStatus::Idle, "engraving…".to_owned()),
+    };
+    let mut status = use_signal(|| first_status);
+    // Saving over the `.kf`: only for a chart read from it.
+    let mut saving = use_signal(|| {
+        matches!(loaded.chart.from, ChartFrom::File).then(|| Saving::new(loaded.chart.text.clone()))
+    });
+    // The text the person said to save with no bars.
+    let mut confirmed = use_signal(|| None::<String>);
+    let mut asking = use_signal(|| None::<String>);
+    // A write the app refused (outside the folders the extension reaches).
     let mut refused = use_signal(|| false);
-    let state = use_signal(|| editor_state::EditorState::new(&loaded.source));
+    let mut state = use_signal(|| editor_state::EditorState::new(loaded.source()));
     let mut editor_open = use_signal(|| None::<bool>);
-    // What was last saved (or read): an engraving of anything else is an
-    // edit, saved back to the song.
-    let mut saved = use_signal(|| loaded.source.clone());
     let (size, mut node) = use_measured();
     let form = form.unwrap_or_else(|| Form::of(size().0));
 
@@ -496,82 +657,106 @@ pub fn SongWorkspace(
         Some(LyricsSource::Lrc(text)) => Some(text.clone()),
         _ => None,
     };
-    let chart_file = loaded.chart_file.clone();
     let (title, artist) = (loaded.title.clone(), loaded.artist.clone());
     let replies = use_coroutine(move |mut rx: UnboundedReceiver<Reply>| {
         let lrc = lrc.clone();
-        let chart_file = chart_file.clone();
         let (title, artist) = (title.clone(), artist.clone());
         async move {
             while let Some(reply) = rx.next().await {
                 let (song, pages, lane) = match reply.result {
                     Ok(done) => done,
                     Err(why) => {
-                        status.set((ChartTextStatus::Warn, format!("not engraved: {why}")));
+                        if engraved.peek().is_none() {
+                            chart_error.set(Some(why.clone()));
+                        }
+                        note(
+                            &mut status,
+                            ChartTextStatus::Warn,
+                            format!("not engraved: {why}"),
+                        );
                         continue;
                     }
                 };
+                chart_error.set(None);
                 let (_, end) = song.span();
                 clock.write().set_end(Some(end));
                 // One lyrics source: the LRC, else the chart's lane (as
                 // edited).
                 let source = lyrics_source(lrc.as_deref(), None)
                     .or_else(|| lane.map(LyricsSource::ChartLane));
-                let regions = song
-                    .spans()
-                    .into_iter()
-                    .map(|(span, color)| ColoredSpan {
-                        span,
-                        color: Some(color),
-                    })
-                    .collect();
-                let lyrics = source.map(|s| song.lyrics(&s)).unwrap_or_default();
-                words.set(Some(Words::new(
-                    lyrics,
-                    regions,
-                    title.clone(),
-                    artist.clone(),
-                )));
+                words.set(
+                    source
+                        .as_ref()
+                        .map(|s| words_of(Some(s), Some(&song), &title, artist.as_deref())),
+                );
+                let bars = song.chart.bars.len();
                 engraved.set(Some(Engraved(Arc::new(song), Arc::new(pages))));
-                if *saved.peek() == reply.text {
-                    status.set((ChartTextStatus::Done, "engraved".to_owned()));
-                    continue;
-                }
-                let Some(file) = chart_file.clone() else {
-                    status.set((
-                        ChartTextStatus::Warn,
-                        "engraved — the song has no .kf to save to".to_owned(),
-                    ));
-                    continue;
-                };
-                match crate::host::write_vault_file(&file, &reply.text).await {
-                    Ok(()) => {
-                        saved.set(reply.text);
-                        refused.set(false);
-                        status.set((ChartTextStatus::Done, format!("saved to {}", base(&file))));
-                    }
-                    Err(why) => {
-                        refused.set(true);
-                        status.set((ChartTextStatus::Warn, format!("engraved, not saved: {why}")));
-                    }
-                }
+                save(
+                    &reply.text,
+                    bars,
+                    opened,
+                    access,
+                    &mut saving,
+                    &mut status,
+                    &mut asking,
+                    &mut refused,
+                    &mut confirmed,
+                )
+                .await;
             }
         }
     });
     let worker = use_hook(|| {
         let tx = start(replies.tx());
-        let _ = tx.send(loaded.source.clone());
+        if !loaded.source().trim().is_empty() {
+            let _ = tx.send(loaded.source().to_owned());
+        }
         tx
     });
-    let again = worker.clone();
     // Each change of text goes to the engraver, which waits for the pause.
-    let mut last = use_signal(|| loaded.source.clone());
+    let mut last = use_signal(|| loaded.source().to_owned());
+    let sending = worker.clone();
     use_effect(move || {
         let text = state.read().doc.to_string();
         if *last.peek() != text {
             last.set(text.clone());
-            let _ = worker.send(text);
+            let _ = sending.send(text);
         }
+    });
+    // Read the `.kf` again: after the app refused it (asking for the
+    // vault's folder first), or to leave the note's read-only copy. The
+    // editor then holds what the file holds, and saving starts from it.
+    let file = loaded.chart.file.clone();
+    let reread = use_callback(move |ask: bool| {
+        let Some(file) = file.clone() else { return };
+        spawn(async move {
+            let mut read = crate::host::read_vault_file(&file).await;
+            if read.is_err() && ask && crate::host::allow_vault().await.is_ok() {
+                read = crate::host::read_vault_file(&file).await;
+            }
+            let was_editable = access.peek().editable().is_ok();
+            let next = access.peek().clone().reread(read);
+            match next.editable() {
+                Ok(()) => {
+                    refused.set(false);
+                    asking.set(None);
+                    if !was_editable || saving.peek().as_ref().is_none_or(|s| s.base() != next.text)
+                    {
+                        // The file's text, not the copy (nor an edit made
+                        // against another version): the editor starts from it.
+                        state.set(editor_state::EditorState::new(&next.text));
+                    }
+                    saving.set(Some(Saving::new(next.text.clone())));
+                    note(
+                        &mut status,
+                        ChartTextStatus::Done,
+                        format!("read {} again", base(&file)),
+                    );
+                }
+                Err(why) => note(&mut status, ChartTextStatus::Warn, why),
+            }
+            access.set(next);
+        });
     });
     // The play position, read while it plays.
     use_future(move || async move {
@@ -593,57 +778,76 @@ pub fn SongWorkspace(
     let arrangement = Arrangement::of(form, editor_shown);
     let song = engraved();
     let (status_kind, message) = status();
-    let end = song.as_ref().map_or(0.0, |s| s.0.span().1);
+    let editable = access.read().editable().is_ok();
+    let read_only = matches!(access.read().from, ChartFrom::NoteCopy { .. });
+    let end = song
+        .as_ref()
+        .map(|s| s.0.span().1)
+        .or(lyrics_end)
+        .unwrap_or_default();
     let back_to = song.as_ref().map(|s| s.0.back_from(t)).unwrap_or_default();
     let on_to = song.as_ref().and_then(|s| s.0.forward_from(t));
+    let button = palette.button();
+    let p = palette.clone();
 
     let progress = rsx! {
         div { style: "display:flex; flex-direction:column; gap:6px;",
             div {
-                style: "display:flex; align-items:center; gap:8px; height:28px; color:{TEXT}; font-size:13px;",
-                button { style: "{SMALL_BUTTON}", title: "Back a section",
+                style: "display:flex; align-items:center; gap:8px; height:28px; color:{p.ink}; font-size:13px;",
+                button { style: "{button}", title: "Back a section",
                     onclick: move |_| seek.call(back_to),
-                    lucide_dioxus::SkipBack { size: 14, color: TEXT } }
+                    lucide_dioxus::SkipBack { size: 14, color: "currentColor" } }
                 button {
-                    style: "{SMALL_BUTTON} min-width:56px; background:{ACCENT}; color:#0b0c0e; border-color:{ACCENT}; font-weight:700;",
+                    style: "{button} min-width:56px; background:{p.brand}; color:{p.brand_ink}; border-color:{p.brand}; font-weight:700;",
                     "data-transport": if playing { "playing" } else { "paused" },
                     onclick: move |_| {
                         clock.write().toggle(wall());
                     },
                     if playing {
-                        lucide_dioxus::Pause { size: 14, color: "#0b0c0e" }
+                        lucide_dioxus::Pause { size: 14, color: "currentColor" }
                     } else {
-                        lucide_dioxus::Play { size: 14, color: "#0b0c0e" }
+                        lucide_dioxus::Play { size: 14, color: "currentColor" }
                     }
                 }
-                button { style: "{SMALL_BUTTON}", title: "On a section",
+                button { style: "{button}", title: "On a section",
                     onclick: move |_| if let Some(to) = on_to { seek.call(to) },
-                    lucide_dioxus::SkipForward { size: 14, color: TEXT } }
-                span { style: "color:{DIM}; font-variant-numeric:tabular-nums;",
+                    lucide_dioxus::SkipForward { size: 14, color: "currentColor" } }
+                span { style: "color:{p.ink_2}; font-variant-numeric:tabular-nums;",
                     "{clock_text(t)} / {clock_text(end)}" }
                 span { style: "flex:1; min-width:0; overflow:hidden; white-space:nowrap; font-weight:700; padding-left:6px;",
                     "{loaded.title}" }
-                if refused() {
+                if !loaded.shared.is_empty() {
+                    span {
+                        "data-shared": "{loaded.shared.len()}",
+                        title: "A share page draws the chart the song's note carries, written when the song was imported: an edit here reaches the .kf, not that copy, until the app can rewrite a note's body (FastTrackStudios/architect#492).",
+                        style: "flex:none; font-size:11px; color:{p.ink_2}; border:1px solid {p.rule}; border-radius:5px; padding:1px 6px;",
+                        "Shared: its page shows the chart as imported"
+                    }
+                }
+                if let Some(text) = asking() {
                     button {
-                        style: "{SMALL_BUTTON}",
-                        title: "Pick this vault's folder so charts can be saved in it",
+                        style: "{button} border-color:{p.danger}; color:{p.danger};",
+                        "data-confirm": "empty-chart",
+                        title: "Save this chart, with no bars, over the saved one",
                         onclick: move |_| {
-                            let again = again.clone();
-                            spawn(async move {
-                                if crate::host::allow_vault().await.is_ok() {
-                                    refused.set(false);
-                                    // Saved on the next engraving.
-                                    saved.set(String::new());
-                                    let text = state.peek().doc.to_string();
-                                    let _ = again.send(text);
-                                }
-                            });
+                            confirmed.set(Some(text.clone()));
+                            asking.set(None);
+                            let _ = worker.send(text.clone());
                         },
-                        "Allow saving"
+                        "Save anyway"
+                    }
+                }
+                if read_only || refused() {
+                    button {
+                        style: "{button}",
+                        "data-reread": "kf",
+                        title: "Read the song's .kf again (asking for the vault's folder if the app needs it) before anything is written",
+                        onclick: move |_| reread.call(true),
+                        if read_only { "Read the .kf again" } else { "Allow saving" }
                     }
                 }
                 button {
-                    style: "{SMALL_BUTTON}",
+                    style: "{button}",
                     "data-toggle": "editor",
                     title: if editor_shown { "Hide the chart's text" } else { "Edit the chart as text" },
                     onclick: move |_| editor_open.set(Some(!editor_shown)),
@@ -654,19 +858,39 @@ pub fn SongWorkspace(
         }
     };
     let editor = rsx! {
-        ChartText { state, message, status: status_kind }
+        ChartText {
+            state,
+            message,
+            status: status_kind,
+            editable,
+            vars: palette.editor_vars(),
+            light: palette.light,
+        }
+    };
+    let empty_chart = if loaded.source().trim().is_empty() {
+        Some("This song has no chart.".to_owned())
+    } else {
+        chart_error().map(|why| format!("The chart does not engrave: {why}"))
     };
     let chart = song.map_or_else(
         || rsx! {
             div { style: "position:absolute; top:0; left:0; width:100%; height:100%; display:flex; \
-                          align-items:center; justify-content:center; color:{DIM}; font-size:12px; background:#1a1b1e; \
-                          min-height:200px;",
-                "Engraving the chart…" }
+                          align-items:center; justify-content:center; padding:16px; box-sizing:border-box; \
+                          text-align:center; color:{p.ink_2}; font-size:12px; background:{p.desk}; min-height:200px;",
+                "data-chart-empty": if empty_chart.is_some() { "true" } else { "false" },
+                {empty_chart.clone().unwrap_or_else(|| "Engraving the chart…".to_owned())}
+            }
         },
-        |song| rsx! { ChartPages { song, now: t, on_seek: seek, across: form == Form::Narrow } },
+        |song| rsx! { ChartPages { song, now: t, on_seek: seek, across: form == Form::Narrow, palette: Some(palette.clone()) } },
     );
     let lyrics = words().map_or_else(
-        || rsx! {},
+        || rsx! {
+            div { style: "position:absolute; top:0; left:0; width:100%; height:100%; display:flex; \
+                          align-items:center; justify-content:center; padding:16px; box-sizing:border-box; \
+                          text-align:center; color:{p.ink_2}; font-size:12px; background:{p.sheet};",
+                "No timed lyrics for this song: give it an LRC, or its chart a timed lyric lane ([lyrics lrc])."
+            }
+        },
         |words| rsx! {
             LyricsView {
                 words,
@@ -682,10 +906,106 @@ pub fn SongWorkspace(
     rsx! {
         div {
             "data-studio-song": "{loaded.title}",
-            style: "position:absolute; top:0; left:0; right:0; bottom:0; background:#0e0f12; color:{TEXT}; \
+            style: "position:absolute; top:0; left:0; right:0; bottom:0; background:{p.desk}; color:{p.ink}; \
                     font-family:system-ui, sans-serif;",
             onmounted: move |e| node.set(Some(e.data())),
             WorkspaceLayout { arrangement, progress, editor, chart, lyrics }
+        }
+    }
+}
+
+/// Save an engraved edit `text` (of `bars` bars) to the `.kf`.
+///
+/// As
+/// [`Saving::decide`] says: never the note's copy, never over a file that
+/// changed or could not be read again, never a chart with no bars over one
+/// with bars without the person's yes; the file as opened backed up first,
+/// once, in the extension's own folder. The write is the host's
+/// `write_file`, which truncates and then writes: not atomic
+/// (FastTrackStudios/architect#590), hence the backup.
+// Its future holds the workspace's signals: it runs on the view's own
+// executor (the coroutine), never sent to another thread.
+#[allow(clippy::too_many_arguments, clippy::future_not_send)]
+async fn save(
+    text: &str,
+    bars: usize,
+    opened: u64,
+    access: Signal<ChartAccess>,
+    saving: &mut Signal<Option<Saving>>,
+    status: &mut Signal<(ChartTextStatus, String)>,
+    asking: &mut Signal<Option<String>>,
+    refused: &mut Signal<bool>,
+    confirmed: &mut Signal<Option<String>>,
+) {
+    let chart = access.peek().clone();
+    if let Err(why) = chart.editable() {
+        note(status, ChartTextStatus::Warn, why);
+        return;
+    }
+    let (Some(file), ChartFrom::File) = (chart.file.clone(), &chart.from) else {
+        note(
+            status,
+            ChartTextStatus::Warn,
+            "engraved — the song has no .kf to save to".to_owned(),
+        );
+        return;
+    };
+    let Some(mut save) = saving.peek().clone() else {
+        return;
+    };
+    if save.base() == text {
+        // What the file holds (its first engraving): nothing to write.
+        save.knows_bars(bars);
+        saving.set(Some(save));
+        note(status, ChartTextStatus::Done, "engraved".to_owned());
+        return;
+    }
+    // Read again before anything is written.
+    let on_disk = crate::host::read_vault_file(&file).await;
+    let yes = confirmed.peek().as_deref() == Some(text);
+    match save.decide(on_disk.as_deref().map_err(String::as_str), text, bars, yes) {
+        Write::Unchanged => note(status, ChartTextStatus::Done, "engraved".to_owned()),
+        Write::Refuse(why) => {
+            refused.set(on_disk.is_err());
+            note(status, ChartTextStatus::Warn, why);
+        }
+        Write::Confirm(question) => {
+            asking.set(Some(text.to_owned()));
+            note(status, ChartTextStatus::Warn, question);
+        }
+        Write::Save { backup } => {
+            if backup {
+                let path = crate::workspace::backup_path(&file, opened);
+                if let Err(why) = crate::host::write_own_file(&path, save.base()).await {
+                    note(
+                        status,
+                        ChartTextStatus::Warn,
+                        format!("not saved: the .kf could not be backed up first ({why})"),
+                    );
+                    return;
+                }
+            }
+            match crate::host::write_vault_file(&file, text).await {
+                Ok(()) => {
+                    save.saved(text.to_owned(), bars);
+                    saving.set(Some(save));
+                    confirmed.set(None);
+                    refused.set(false);
+                    note(
+                        status,
+                        ChartTextStatus::Done,
+                        format!("saved to {}", base(&file)),
+                    );
+                }
+                Err(why) => {
+                    refused.set(true);
+                    note(
+                        status,
+                        ChartTextStatus::Warn,
+                        format!("engraved, not saved: {why}"),
+                    );
+                }
+            }
         }
     }
 }

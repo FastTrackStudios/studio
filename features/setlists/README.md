@@ -55,8 +55,30 @@ A song note opens (`SongView`, `src/ext.rs`) as Session's Overview
   saves the `.kf` back to the song through the host's `write_file` (the
   vault's actions write notes only). A vault under the home folder is in
   reach (`capabilities.folders`); one elsewhere asks for its folder once a
-  run ("Allow saving"). The chart is read from the `.kf`, else from the
-  ```` ```kf ```` fence on the song's page.
+  run ("Allow saving").
+- **The `.kf` is the source of truth** (`workspace::ChartAccess`). When it
+  cannot be read, the editor shows the copy in the song's note (the
+  ```` ```kf ```` fence, written at import and never updated on save)
+  **read-only**, saying why, with "Read the .kf again"; that text is never
+  written over the `.kf`. A song naming no `.kf` edits its note's copy and
+  never saves.
+- **Every save reads the `.kf` again first** (`workspace::Saving`): written
+  only while it still holds what the workspace last read or wrote there,
+  never a chart with no bars over one with bars without "Save anyway". The
+  file as it was opened is backed up once per session before the first
+  write, in the extension's own folder (`backups/<vault path>.<opened>.kf`,
+  the host's `write_file` with a relative path), not in the vault, so a
+  backup is never synced as a song's file. The write itself truncates then
+  writes (FastTrackStudios/architect#590).
+- **A shared song**: its share page draws the chart its note carries, which
+  a save does not update (FastTrackStudios/architect#492); the workspace
+  says so while the song is in a shared setlist.
+- **Lyrics never wait on the chart**: a song with an LRC and no chart (or a
+  chart that does not engrave) shows its lyrics, the chart pane saying why
+  it is empty.
+- **Colours** are the app's theme tokens (`var(--sheet)`, `--ink`, `--rule`,
+  `--brand`, … over `architect_theme::use_resolved`), the editor's on its
+  pane only. The lyrics stay Session's stage display, dark in any theme.
 - **On a phone** (narrower than 720 px): the progress, the chart and the
   lyrics stacked, the editor behind "Edit chart".
 - **Linked or a process**: the same view both ways. Compiled into Studio

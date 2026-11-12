@@ -255,3 +255,125 @@ fn each_line_is_in_the_part_it_is_sung_in() {
         );
     }
 }
+
+/// The reviewer's sequence (studio#430): save an edit; the `.kf` cannot be
+/// read; reopen the song; access comes back. The old copy in the note
+/// must never be written over the saved edit.
+#[test]
+fn an_old_copy_of_the_chart_never_overwrites_the_saved_kf() {
+    use setlists::workspace::{ChartAccess, ChartFrom, Saving, Write};
+    let file = "Libraries/Christmas/Joy/Joy.kf".to_owned();
+    let old = JOY.to_owned(); // the note's ```kf copy, written at import
+    let edited = JOY.replace("Joy to the World", "Joy to the World (edited)");
+
+    // Opened from the `.kf`, an edit saved to it.
+    let opened = ChartAccess::open(Some(file.clone()), Some(Ok(old.clone())), Some(old.clone()));
+    assert_eq!(opened.from, ChartFrom::File);
+    let mut saving = Saving::new(opened.text);
+    assert_eq!(
+        saving.decide(Ok(&old), &edited, 40, false),
+        Write::Save { backup: true }
+    );
+    saving.saved(edited.clone(), 40);
+
+    // Reopened while the `.kf` cannot be read: the note's (old) copy,
+    // read-only, saying why.
+    let reopened = ChartAccess::open(
+        Some(file.clone()),
+        Some(Err("permission denied".to_owned())),
+        Some(old.clone()),
+    );
+    assert_eq!(reopened.text, old);
+    let why = reopened.editable().unwrap_err();
+    assert!(
+        why.contains("read-only") && why.contains("permission denied"),
+        "{why}"
+    );
+
+    // Access comes back: the `.kf` is read again before anything can be
+    // written, and the editor holds the saved edit, not the old copy.
+    let back = reopened.reread(Ok(edited.clone()));
+    assert_eq!(back.from, ChartFrom::File);
+    assert_eq!(back.text, edited);
+    assert!(back.editable().is_ok());
+    // Read again and still unreadable: still read-only.
+    let still = ChartAccess::open(
+        Some(file),
+        Some(Err("denied".to_owned())),
+        Some(old.clone()),
+    )
+    .reread(Err("denied again".to_owned()));
+    assert!(still.editable().is_err());
+    assert_eq!(still.text, old);
+}
+
+#[test]
+fn a_save_reads_the_kf_again_and_never_writes_over_a_change() {
+    use setlists::workspace::{Saving, Write};
+    let mut saving = Saving::new(JOY.to_owned());
+    saving.knows_bars(40);
+    let edit = JOY.replace("100bpm", "104bpm");
+    // Changed on disk since it was read (another edit, elsewhere): refused.
+    let elsewhere = JOY.replace("Isaac Watts", "I. Watts");
+    assert!(matches!(
+        saving.decide(Ok(&elsewhere), &edit, 40, false),
+        Write::Refuse(why) if why.contains("changed")
+    ));
+    // Unreadable now: refused.
+    assert!(matches!(
+        saving.decide(Err("permission denied"), &edit, 40, false),
+        Write::Refuse(why) if why.contains("permission denied")
+    ));
+    // As it was: saved, backed up the first time only.
+    assert_eq!(
+        saving.decide(Ok(JOY), &edit, 40, false),
+        Write::Save { backup: true }
+    );
+    saving.saved(edit.clone(), 40);
+    let again = edit.replace("104bpm", "108bpm");
+    assert_eq!(
+        saving.decide(Ok(&edit), &again, 40, false),
+        Write::Save { backup: false }
+    );
+    // What it holds already: nothing to write.
+    assert_eq!(saving.decide(Ok(&edit), &edit, 40, false), Write::Unchanged);
+}
+
+#[test]
+fn a_chart_cut_to_no_bars_is_not_saved_over_bars_without_a_yes() {
+    use setlists::workspace::{Saving, Write};
+    let header = "Joy to the World - Isaac Watts\n100bpm 2/4 #D\n";
+    // Keyflow accepts it: a chart with no bars.
+    assert_eq!(Song::engrave(header).map_or(0, |s| s.chart.bars.len()), 0);
+    let mut saving = Saving::new(JOY.to_owned());
+    saving.knows_bars(40);
+    assert!(matches!(
+        saving.decide(Ok(JOY), header, 0, false),
+        Write::Confirm(q) if q.contains("no bars") && q.contains("40")
+    ));
+    assert_eq!(
+        saving.decide(Ok(JOY), header, 0, true),
+        Write::Save { backup: true }
+    );
+}
+
+#[test]
+fn the_backup_is_in_the_extensions_folder_not_the_vault() {
+    use setlists::workspace::backup_path;
+    assert_eq!(
+        backup_path("Libraries/Christmas/Joy/Joy.kf", 1_794_000_000),
+        "backups/Libraries/Christmas/Joy/Joy.1794000000.kf"
+    );
+    // Relative: the host's `write_file` puts it in the extension's own
+    // folder.
+    assert!(!backup_path("/Libraries/X/X.kf", 1).starts_with('/'));
+}
+
+#[test]
+fn a_song_that_names_no_kf_edits_its_notes_copy_and_never_saves() {
+    use setlists::workspace::{ChartAccess, ChartFrom};
+    let chart = ChartAccess::open(None, None, Some(JOY.to_owned()));
+    assert_eq!(chart.from, ChartFrom::NoteOnly);
+    assert!(chart.editable().is_ok());
+    assert_eq!(chart.file, None);
+}

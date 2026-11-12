@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use dioxus::prelude::*;
 use dioxus_test::DocumentTester;
-use setlists::workspace::{Form, Loaded, lyrics_source};
+use setlists::workspace::{ChartAccess, Form, Loaded, lyrics_source};
 use setlists::workspace_view::SongWorkspace;
 
 const JOY: &str = include_str!("../fixtures/joy.kf");
@@ -24,20 +24,25 @@ const JOY: &str = include_str!("../fixtures/joy.kf");
 struct Shown {
     form: Form,
     at: f64,
+    loaded: Loaded,
+}
+
+/// Joy to the World, its chart read with no `.kf` to save to.
+fn joy() -> Loaded {
+    Loaded {
+        title: "Joy to the World".to_owned(),
+        artist: Some("Isaac Watts".to_owned()),
+        lyrics: lyrics_source(None, Some(JOY)),
+        chart: ChartAccess::open(None, None, Some(JOY.to_owned())),
+        ..Loaded::default()
+    }
 }
 
 #[allow(non_snake_case)]
 fn Workspace(props: Shown) -> Element {
-    let loaded = Loaded {
-        title: "Joy to the World".to_owned(),
-        artist: Some("Isaac Watts".to_owned()),
-        lyrics: lyrics_source(None, Some(JOY)),
-        source: JOY.to_owned(),
-        chart_file: None,
-    };
     rsx! {
         div { style: "position:absolute; top:0; left:0; width:100%; height:100%;",
-            SongWorkspace { loaded, form: props.form, at: props.at }
+            SongWorkspace { loaded: props.loaded, form: props.form, at: props.at }
         }
     }
 }
@@ -46,24 +51,44 @@ fn Workspace(props: Shown) -> Element {
 /// own, a pause after it opens) and its lyrics have measured their pane
 /// (they draw nothing at no size).
 fn open(form: Form, at: f64, size: (u32, u32)) -> DocumentTester {
-    let doc =
-        DocumentTester::from_virtual_dom(VirtualDom::new_with_props(Workspace, Shown { form, at }))
-            .with_window_size(size.0, size.1)
-            .build();
+    let doc = mount(joy(), form, at, size);
+    settle(&doc, |doc| {
+        doc.query("[data-chart-page]").immediately().is_ok() && lyric_lines(doc) > 0
+    });
+    doc
+}
+
+/// `loaded`'s workspace, mounted.
+fn mount(loaded: Loaded, form: Form, at: f64, size: (u32, u32)) -> DocumentTester {
+    DocumentTester::from_virtual_dom(VirtualDom::new_with_props(
+        Workspace,
+        Shown { form, at, loaded },
+    ))
+    .with_window_size(size.0, size.1)
+    .build()
+}
+
+/// Rounds until `done` (the engraver answers on a thread of its own, a
+/// pause after it is asked; the lyrics measure their pane).
+fn settle(doc: &DocumentTester, done: impl Fn(&DocumentTester) -> bool) {
     for _ in 0..400 {
         doc.drain();
         doc.relayout();
-        let lyrics = doc
-            .query_all("[data-at]")
-            .immediately()
-            .iter()
-            .any(|l| l.attribute("data-bar").is_none());
-        if doc.query("[data-chart-page]").immediately().is_ok() && lyrics {
-            return doc;
+        if done(doc) {
+            return;
         }
         std::thread::sleep(Duration::from_millis(10));
     }
-    panic!("the chart was never engraved");
+    panic!("the workspace never settled");
+}
+
+/// How many lyric lines the prompter shows.
+fn lyric_lines(doc: &DocumentTester) -> usize {
+    doc.query_all("[data-at]")
+        .immediately()
+        .iter()
+        .filter(|l| l.attribute("data-bar").is_none())
+        .count()
 }
 
 fn panes(doc: &DocumentTester) -> Vec<String> {
@@ -167,4 +192,71 @@ fn the_bar_and_the_line_at_the_playhead_are_marked_and_a_click_seeks() {
     doc.drain();
     doc.drain();
     assert_eq!(marked_bar(&doc).as_deref(), Some("1"));
+}
+
+/// Silent Night's LRC.
+const SILENT_NIGHT_LRC: &str =
+    "[ti:Silent Night]\n[00:00.50]Silent night, holy night\n[00:05.50]All is calm, all is bright\n";
+
+#[test]
+fn the_notes_copy_of_an_unreadable_kf_is_read_only_and_says_why() {
+    let loaded = Loaded {
+        title: "Joy to the World".to_owned(),
+        lyrics: lyrics_source(None, Some(JOY)),
+        chart: ChartAccess::open(
+            Some("Libraries/Christmas/Joy/Joy.kf".to_owned()),
+            Some(Err("permission denied".to_owned())),
+            Some(JOY.to_owned()),
+        ),
+        ..Loaded::default()
+    };
+    let doc = mount(loaded, Form::Wide, 1.0, (1600, 1000));
+    settle(&doc, |doc| {
+        doc.query("[data-chart-page]").immediately().is_ok()
+    });
+    let pane = doc.query("[data-chart-text]").immediately().unwrap();
+    assert_eq!(
+        pane.attribute("data-chart-text").as_deref(),
+        Some("read-only")
+    );
+    let said = pane.inner_html();
+    assert!(said.contains("read-only"), "{said}");
+    assert!(said.contains("permission denied"), "{said}");
+    // The way back: read the `.kf` again.
+    let button = doc.query("[data-reread]").immediately().unwrap();
+    assert!(button.inner_html().contains("Read the .kf again"));
+}
+
+#[test]
+fn a_song_with_an_lrc_and_no_chart_shows_its_lyrics() {
+    let loaded = Loaded {
+        title: "Silent Night".to_owned(),
+        lyrics: lyrics_source(Some(SILENT_NIGHT_LRC), None),
+        ..Loaded::default()
+    };
+    let doc = mount(loaded, Form::Wide, 1.0, (1600, 1000));
+    settle(&doc, |doc| lyric_lines(doc) > 0);
+    assert_eq!(lyric_lines(&doc), 2);
+    let pane = doc.query("[data-chart-empty]").immediately().unwrap();
+    assert_eq!(pane.attribute("data-chart-empty").as_deref(), Some("true"));
+    assert!(pane.inner_html().contains("no chart"));
+}
+
+#[test]
+fn a_chart_that_does_not_engrave_leaves_the_lyrics_up() {
+    let loaded = Loaded {
+        title: "Silent Night".to_owned(),
+        lyrics: lyrics_source(Some(SILENT_NIGHT_LRC), None),
+        chart: ChartAccess::open(None, None, Some("\\downbeat = x\nVS 4\nD\n".to_owned())),
+        ..Loaded::default()
+    };
+    let doc = mount(loaded, Form::Wide, 1.0, (1600, 1000));
+    settle(&doc, |doc| {
+        lyric_lines(doc) > 0
+            && doc
+                .query("[data-chart-empty=\"true\"]")
+                .immediately()
+                .is_ok_and(|p| p.inner_html().contains("does not engrave"))
+    });
+    assert_eq!(lyric_lines(&doc), 2);
 }

@@ -508,6 +508,9 @@ architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v
 architect-extensions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.2" }
 architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.2" }
 architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.2" }
+# The app's theme as data (`use_resolved`): what a Studio view in Architect
+# colours itself from.
+architect-theme = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.2" }
 # The app side an extension's tests run against: the vault's and Bases'
 # actions over a folder, and the settings registry a Host is given.
 architect-vault = { package = "vault", git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.2" }

@@ -21,7 +21,7 @@ use blitz_dom::{Document as _, DocumentConfig};
 use blitz_traits::shell::{ColorScheme, Viewport};
 use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
-use setlists::workspace::{Form, Loaded, lyrics_source};
+use setlists::workspace::{ChartAccess, Form, Loaded, lyrics_source};
 use setlists::workspace_view::SongWorkspace;
 
 fn main() {
@@ -44,17 +44,29 @@ fn main() {
         } else {
             (1600, 1000)
         });
-    let source = args.get(4).map_or_else(
-        || include_str!("../tests/fixtures/joy.kf").to_owned(),
-        |p| std::fs::read_to_string(p).unwrap(),
-    );
+    // `none`: a song with no chart.
+    let source = match args.get(4).map(String::as_str) {
+        None => include_str!("../tests/fixtures/joy.kf").to_owned(),
+        Some("none") => String::new(),
+        Some(p) => std::fs::read_to_string(p).unwrap(),
+    };
     let lrc = args.get(5).map(|p| std::fs::read_to_string(p).unwrap());
+    // `FTS_WS_READONLY=1`: the note's copy of a `.kf` that could not be read.
+    let chart = if std::env::var_os("FTS_WS_READONLY").is_some() {
+        ChartAccess::open(
+            Some("Libraries/Christmas/Joy/Joy.kf".to_owned()),
+            Some(Err("permission denied".to_owned())),
+            Some(source.clone()),
+        )
+    } else {
+        ChartAccess::open(None, None, Some(source.clone()))
+    };
     let loaded = Loaded {
         title: "Joy to the World".to_owned(),
         artist: Some("Isaac Watts".to_owned()),
         lyrics: lyrics_source(lrc.as_deref(), Some(&source)),
-        source,
-        chart_file: None,
+        chart,
+        ..Loaded::default()
     };
 
     let vdom = VirtualDom::new_with_props(Still, StillProps { loaded, form, at });

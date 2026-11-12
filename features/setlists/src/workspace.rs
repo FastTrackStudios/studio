@@ -436,12 +436,234 @@ impl Arrangement {
 pub struct Loaded {
     pub title: String,
     pub artist: Option<String>,
-    /// The chart's source, and the vault path of its `.kf` (where an edit
-    /// is saved), when it has one.
-    pub source: String,
-    pub chart_file: Option<String>,
+    /// The chart's source, where it came from, and whether it may be
+    /// edited and saved ([`ChartAccess`]).
+    pub chart: ChartAccess,
     /// Its one lyrics source.
     pub lyrics: Option<LyricsSource>,
+    /// Its recording (its first audio or video, a vault path): what the
+    /// workspace's clock plays once the app can play media for a view
+    /// (FastTrackStudios/architect#589).
+    pub recording: Option<String>,
+    /// The share links of the setlists it is in: its share page draws the
+    /// chart its note carries, which an edit does not update
+    /// (FastTrackStudios/architect#492).
+    pub shared: Vec<String>,
+}
+
+impl Loaded {
+    /// The chart's source as it opened.
+    #[must_use]
+    pub fn source(&self) -> &str {
+        &self.chart.text
+    }
+}
+
+/// Where a song's chart came from, and so what may be done with it.
+///
+/// The source of truth is the song's `.kf`. The note's ```` ```kf ```` fence
+/// is a copy written when the song was imported and never updated on save:
+/// text read from it is shown, never written over the `.kf` (an old copy
+/// would overwrite a saved edit).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChartAccess {
+    /// The text the editor starts with.
+    pub text: String,
+    /// The `.kf` (a vault path), when the song names one.
+    pub file: Option<String>,
+    pub from: ChartFrom,
+}
+
+/// Where [`ChartAccess::text`] came from.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ChartFrom {
+    /// The song's `.kf`, read just now: editable; edits are saved to it.
+    File,
+    /// The note's copy, because the `.kf` could not be read (`why`):
+    /// read-only until the `.kf` is read again.
+    NoteCopy { why: String },
+    /// The note's copy, the song naming no `.kf`: editable, never saved.
+    #[default]
+    NoteOnly,
+}
+
+impl ChartAccess {
+    /// A song's chart, opened: its `.kf` (`file`, its read `read`) when it
+    /// names one, else (or when that read failed) the note's copy `fence`.
+    #[must_use]
+    pub fn open(
+        file: Option<String>,
+        read: Option<std::result::Result<String, String>>,
+        fence: Option<String>,
+    ) -> Self {
+        match (file, read) {
+            (Some(file), Some(Ok(text))) => Self {
+                text,
+                file: Some(file),
+                from: ChartFrom::File,
+            },
+            (Some(file), read) => Self {
+                text: fence.unwrap_or_default(),
+                file: Some(file),
+                from: ChartFrom::NoteCopy {
+                    why: read
+                        .and_then(std::result::Result::err)
+                        .unwrap_or_else(|| "it could not be read".to_owned()),
+                },
+            },
+            (None, _) => Self {
+                text: fence.unwrap_or_default(),
+                file: None,
+                from: ChartFrom::NoteOnly,
+            },
+        }
+    }
+
+    /// Whether the editor may change the text, and why not.
+    ///
+    /// # Errors
+    ///
+    /// The text is the note's copy of a `.kf` that could not be read.
+    pub fn editable(&self) -> std::result::Result<(), String> {
+        match &self.from {
+            ChartFrom::NoteCopy { why } => Err(format!(
+                "read-only: this is the copy in the song's note, not its .kf ({why}); \
+                 read the .kf again before editing"
+            )),
+            ChartFrom::File | ChartFrom::NoteOnly => Ok(()),
+        }
+    }
+
+    /// The `.kf` read again (`read`): editable from its text when it
+    /// read, still read-only when it did not. The text the editor shows
+    /// next is [`Self::text`].
+    #[must_use]
+    pub fn reread(self, read: std::result::Result<String, String>) -> Self {
+        let file = self.file.clone();
+        match (file, read) {
+            (Some(file), Ok(text)) => Self {
+                text,
+                file: Some(file),
+                from: ChartFrom::File,
+            },
+            (Some(_), Err(why)) => Self {
+                from: ChartFrom::NoteCopy { why },
+                ..self
+            },
+            (None, _) => self,
+        }
+    }
+}
+/// What saving an edit to the `.kf` may do, decided before every write.
+///
+/// The `.kf` is read again before each write: written only while it still
+/// holds what the workspace last read or wrote there (`base`), so an edit
+/// made elsewhere, or a file the workspace could not read, is never
+/// overwritten. A text that engraves to no bars is not written over one
+/// that had bars without the person's yes (a select-all-and-retype pauses
+/// with the header alone). The file as it was when the song was opened is
+/// backed up once, before the first write.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Saving {
+    /// The `.kf`'s text as last read or written.
+    base: String,
+    /// How many bars `base` engraves to (None: not yet known).
+    base_bars: Option<usize>,
+    backed_up: bool,
+}
+
+/// What to do with an edit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Write {
+    /// Write it (backing the file up first when [`Write::Save::backup`]).
+    Save { backup: bool },
+    /// It is what the file holds: nothing to write.
+    Unchanged,
+    /// Not now, and why: the file changed or cannot be read.
+    Refuse(String),
+    /// Only with the person's yes, and what to ask.
+    Confirm(String),
+}
+
+impl Saving {
+    /// Saving over a `.kf` that held `base` when it was read.
+    #[must_use]
+    pub const fn new(base: String) -> Self {
+        Self {
+            base,
+            base_bars: None,
+            backed_up: false,
+        }
+    }
+
+    /// The text the file is known to hold.
+    #[must_use]
+    pub fn base(&self) -> &str {
+        &self.base
+    }
+
+    /// `base` engraves to `bars` bars.
+    pub const fn knows_bars(&mut self, bars: usize) {
+        self.base_bars = Some(bars);
+    }
+
+    /// What to do with `text` (engraving to `bars` bars), the file now
+    /// holding `on_disk`; `confirmed`: the person said yes to a chart with
+    /// no bars.
+    #[must_use]
+    pub fn decide(
+        &self,
+        on_disk: std::result::Result<&str, &str>,
+        text: &str,
+        bars: usize,
+        confirmed: bool,
+    ) -> Write {
+        let on_disk = match on_disk {
+            Ok(t) => t,
+            Err(why) => {
+                return Write::Refuse(format!("not saved: the .kf cannot be read now ({why})"));
+            }
+        };
+        if on_disk != self.base {
+            return Write::Refuse(
+                "not saved: the .kf changed since it was read (another edit, elsewhere); \
+                 read it again"
+                    .to_owned(),
+            );
+        }
+        if text == self.base {
+            return Write::Unchanged;
+        }
+        if bars == 0 && self.base_bars.is_some_and(|b| b > 0) && !confirmed {
+            return Write::Confirm(format!(
+                "not saved: this chart has no bars, the saved one has {}. Save it anyway?",
+                self.base_bars.unwrap_or_default()
+            ));
+        }
+        Write::Save {
+            backup: !self.backed_up,
+        }
+    }
+
+    /// `text` (of `bars` bars) was written.
+    pub fn saved(&mut self, text: String, bars: usize) {
+        self.base = text;
+        self.base_bars = Some(bars);
+        self.backed_up = true;
+    }
+}
+
+/// Where the `.kf` at vault path `file` is backed up.
+///
+/// Before the first save of a session opened at `opened` (seconds since
+/// the epoch): in the extension's own folder (the host's `write_file` with
+/// a relative path), not in the vault, so a backup is never synced as a
+/// note's file.
+#[must_use]
+pub fn backup_path(file: &str, opened: u64) -> String {
+    let file = file.trim_start_matches('/');
+    let (stem, ext) = file.rsplit_once('.').unwrap_or((file, "kf"));
+    format!("backups/{stem}.{opened}.{ext}")
 }
 
 /// A song engraved for its workspace, shared by the panes that read it.

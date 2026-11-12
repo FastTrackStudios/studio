@@ -21,7 +21,7 @@ default = []
 # app's actions (never the disk), and a song's workspace (`workspace`)
 # drawn with Session's panels (`session`'s `ui` components: the progress
 # bar, the lyrics, the chart's text editor).
-extension = ["workspace", "dep:architect-extensions", "dep:architect-navigator-api", "dep:architect-workspace", "dep:dioxus", "session/chart-editor", "dep:editor-state", "dep:editor-view", "dep:base64", "dep:lucide-dioxus", "dep:web-time", "dep:futures-util", "dep:futures-channel", "dep:futures-timer", "dep:wasm-bindgen-futures", "dep:gloo-timers"]
+extension = ["workspace", "dep:architect-extensions", "dep:architect-navigator-api", "dep:architect-workspace", "dep:architect-theme", "dep:dioxus", "session/chart-editor", "dep:editor-state", "dep:editor-view", "dep:base64", "dep:lucide-dioxus", "dep:web-time", "dep:futures-util", "dep:futures-channel", "dep:futures-timer", "dep:wasm-bindgen-futures", "dep:gloo-timers"]
 # A song's workspace, the model (`setlists::workspace`): the chart engraved
 # page by page and timed on its own clock, its parts, its one lyrics
 # source, the play clock and where the panes go.
@@ -52,6 +52,8 @@ architect-sites = { workspace = true, optional = true }
 architect-extensions = { workspace = true, optional = true, features = ["guest"] }
 architect-navigator-api = { workspace = true, optional = true }
 architect-workspace = { workspace = true, optional = true, features = ["ui"] }
+# The app's theme (the song workspace's colours).
+architect-theme = { workspace = true, optional = true, features = ["dioxus"] }
 dioxus = { workspace = true, optional = true }
 serde_json = { workspace = true }
 # The song workspace's panels, Session's (`ui::components`), and its
