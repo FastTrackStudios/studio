@@ -221,18 +221,22 @@ Humans (desktop app, browser remote) and agents (`patchbay device … --json`)
 use the same surface: `PatchbayService` in `patchbay-proto`.
 
 ```
-crates/proto/src/devices.rs             wire types: DeviceSummary, DeviceView, ParamView,
+features/patchbay/src/                 (paths below are relative to this)
+  proto/devices.rs                      wire types: DeviceSummary, DeviceView, ParamView,
                                         DeviceParamValue/Kind, DeviceEventWire, DeviceConfig,
-                                        DeviceSettingSnapshot, DeviceRestoreReport
-features/patchbay/src/family.rs        the family contract: DeviceFamily, Families, ConnectCtx, ConnectError
-crates/patchbay/src/devices/registry.rs the built-in families (one DeviceFamily per kind), in default-list order
-crates/patchbay/src/devices/cache.rs    last-found address of auto-discovered devices (<config>.state.json)
-crates/patchbay/src/devices/system_audio.rs  the host audio system as a read-only device
-crates/patchbay/src/devices/hub.rs      DeviceHub: supervision, events, calls, snapshots
-crates/patchbay/src/devices/wire.rs     patchbay-device ↔ proto conversion
-crates/patchbay/src/plan/devices.rs     pure snapshot capture + restore planner
-app/src/cli_device.rs                   `patchbay device …`
-features/ui/src/devices.rs                the Devices tab
+                                        DeviceSettingSnapshot, DeviceRestoreReport, FamilyInfo
+  family.rs                             the family contract: DeviceFamily, Families, ConnectCtx,
+                                        ConnectError, register
+  server/devices/registry.rs            the built-in families (one DeviceFamily per kind), in
+                                        default-list order
+  server/devices/cache.rs               DiscoveryCache: last-found address of auto-discovered
+                                        devices (<config>.state.json)
+  server/devices/system_audio.rs        the host audio system as a read-only device
+  server/devices/hub.rs                 DeviceHub: supervision, events, calls, snapshots
+  server/devices/wire.rs                patchbay-device ↔ proto conversion
+  server/plan/devices.rs                pure snapshot capture + restore planner
+  ui/devices/                           the device views (generic view, consoles)
+apps/patchbay/src/cli_device.rs         `patchbay device …`
 ```
 
 - **Defaults.** With no `devices` section the hub starts four entries,
@@ -291,12 +295,20 @@ features/ui/src/devices.rs                the Devices tab
    `kind`, its `info` (label, platforms, whether it discovers), its
    `defaults` for a config with no `devices` section, and
    `connect(DeviceConfig, ConnectCtx)` returning
-   `ConnectError::NotFound` / `::Failed`. Register it in the hub's
-   `Families` (the built-ins are in `server/devices/registry.rs`; a family
-   extension registers its own, studio#410). The hub, RPC, CLI, UI and
-   snapshots then work without further changes, and `patchbay families`
-   lists it. `server/devices/family_tests.rs` drives the hub through a
-   fake family: the pattern for a family's own tests.
+   `ConnectError::NotFound` / `::Failed`. Register it with
+   `patchbay::family::register(Arc::new(MyFamily))` before the engine
+   starts (a family extension does it from its `build`; the engine reads
+   the registrations once, at start, after the built-ins in
+   `server/devices/registry.rs`, and one of the same kind replaces the
+   built-in). `ConnectCtx::cache()` is the shared `DiscoveryCache`:
+   `get` the address discovery last found, `remember` a new one, `forget`
+   one that stopped answering. The hub catches a panic in `info`,
+   `defaults`, `connect` or the adapter's `subscribe`/`info`: the family
+   shows as unavailable, or the connect as failed and retried. The hub,
+   RPC, CLI, UI and snapshots then work without further changes, and
+   `patchbay families` lists it. `server/devices/family_tests.rs` drives the hub through a
+   fake family, `tests/family.rs` registers one from outside the crate:
+   the patterns for a family's own tests.
 2. Keep modules private and expose a small `pub use` surface from `lib.rs`:
    the adapter type, discovery, a typed ops handle and a raw escape hatch.
 3. Split the code into layers the same way: **protocol** (pure, unit-tested

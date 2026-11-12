@@ -301,12 +301,12 @@ async fn find_tf(cfg: &DeviceConfig, cache: &DiscoveryCache) -> Result<SocketAdd
         return Ok(addr);
     }
     if let Some(mac) = cache
-        .get_mac(&cfg.name)
+        .mac(&cfg.name)
         .and_then(|m| crate::yamaha::parse_mac(&m))
         && let Some(found) = crate::yamaha::find_by_mac(mac, &scan).await
     {
         tracing::info!(addr = %found.addr, "yamaha-tf: console moved; re-found by MAC");
-        cache.set(&cfg.name, &found.addr.to_string());
+        cache.remember(&cfg.name, &found.addr.to_string());
         return Ok(found.addr);
     }
     if !sweep_due(&cfg.name) {
@@ -369,9 +369,9 @@ async fn find_tf(cfg: &DeviceConfig, cache: &DiscoveryCache) -> Result<SocketAdd
     })?;
     tracing::info!(addr = %first.addr, product = %first.product, "yamaha-tf: console found");
     LAST_SCAN_NOTE.lock().remove(&cfg.name);
-    cache.set(&cfg.name, &first.addr.to_string());
+    cache.remember(&cfg.name, &first.addr.to_string());
     if let Some(mac) = first.mac {
-        cache.set_mac(&cfg.name, &crate::yamaha::format_mac(mac));
+        cache.remember_mac(&cfg.name, &crate::yamaha::format_mac(mac));
     }
     Ok(first.addr)
 }
@@ -411,7 +411,7 @@ fn yamaha_tf(cfg: DeviceConfig, ctx: ConnectCtx) -> ConnectFuture {
                 // and let the next attempt discover rather than retrying
                 // an address the console has left.
                 if raw.is_empty() && cached_miss(&cfg.name) {
-                    ctx.cache.forget_addr(&cfg.name);
+                    ctx.cache.forget(&cfg.name);
                 }
                 return Err(ConnectError::Failed(format!("{addr}: {e}")));
             }

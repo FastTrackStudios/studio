@@ -210,7 +210,7 @@ async fn the_hub_runs_a_registered_family() {
     let families = Families::new().with(FakeFamily(Arc::clone(&desk)));
     let hub = DeviceHub::start_with(
         presets,
-        families,
+        &families,
         &ConnectCtx::new(Arc::new(DiscoveryCache::memory())),
     );
     let events = hub.events().subscribe(64);
@@ -231,7 +231,8 @@ async fn the_hub_runs_a_registered_family() {
     .await;
     assert_eq!(state(&hub, "ghost").1, "nothing answered");
     assert_eq!(state(&hub, "down").1, "refused");
-    assert_eq!(hub.families().kinds(), ["fake-desk"]);
+    let kinds: Vec<String> = hub.family_infos().into_iter().map(|i| i.kind).collect();
+    assert_eq!(kinds, ["fake-desk"]);
 
     let id = DeviceId::from_parts("fake", "desk", "1").to_string();
     let view = hub.view(&id).await.unwrap();
@@ -280,6 +281,189 @@ async fn the_hub_runs_a_registered_family() {
     .await;
     until("the desk back online", || {
         state(&hub, "desk").0 == DeviceLinkState::Online
+    })
+    .await;
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Where [`PanickyAdapter`] panics.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Boom {
+    Subscribe,
+    Info,
+}
+
+/// A connected device whose `subscribe` or `info` panics.
+struct PanickyAdapter(Arc<Desk>, Boom);
+
+impl DeviceAdapter for PanickyAdapter {
+    fn info(&self) -> DeviceInfo {
+        assert!(self.1 != Boom::Info, "the device's info panicked");
+        self.0.snap.lock().info.clone()
+    }
+
+    async fn snapshot(&self) -> Result<DeviceSnapshot, DeviceError> {
+        Ok(self.0.snap.lock().clone())
+    }
+
+    async fn apply_param(
+        &self,
+        _path: &str,
+        _value: ParamValue,
+        _guard: WriteGuard,
+    ) -> Result<(), DeviceError> {
+        Ok(())
+    }
+
+    async fn set_route(
+        &self,
+        _output: ChannelRef,
+        _source: Option<ChannelRef>,
+    ) -> Result<(), DeviceError> {
+        Ok(())
+    }
+
+    fn subscribe(&self) -> broadcast::Receiver<DeviceEvent> {
+        assert!(self.1 != Boom::Subscribe, "the device's subscribe panicked");
+        self.0.events.subscribe()
+    }
+}
+
+/// A family that panics everywhere it can, by device name: `connect`
+/// itself, the future it returns, the adapter's `subscribe` and `info`.
+/// `flaky` panics on its first connect and connects on the next.
+struct PanickyFamily {
+    desk: Arc<Desk>,
+    tries: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl DeviceFamily for PanickyFamily {
+    fn kind(&self) -> &'static str {
+        "panicky"
+    }
+
+    fn info(&self) -> FamilyInfo {
+        FamilyInfo {
+            kind: self.kind().to_owned(),
+            label: "Panicky".to_owned(),
+            platforms: Vec::new(),
+            available: true,
+            unavailable: String::new(),
+            origin: "linked".to_owned(),
+            discovers: false,
+        }
+    }
+
+    fn connect(&self, config: DeviceConfig, _ctx: ConnectCtx) -> ConnectFuture {
+        let desk = Arc::clone(&self.desk);
+        match config.name.as_str() {
+            "in-connect" => panic!("connect panicked before its future"),
+            "flaky" => {
+                let first = self.tries.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0;
+                Box::pin(async move {
+                    assert!(!first, "the first connect panicked");
+                    let adapter: Adapter = Arc::new(FakeAdapter(desk));
+                    Ok(adapter)
+                })
+            }
+            name => {
+                let name = name.to_owned();
+                Box::pin(async move {
+                    let adapter: Adapter = match name.as_str() {
+                        "in-future" => panic!("the connect future panicked"),
+                        "in-subscribe" => Arc::new(PanickyAdapter(desk, Boom::Subscribe)),
+                        _ => Arc::new(PanickyAdapter(desk, Boom::Info)),
+                    };
+                    Ok(adapter)
+                })
+            }
+        }
+    }
+}
+
+/// A family whose `info` and `defaults` panic.
+struct BrokenFamily;
+
+impl DeviceFamily for BrokenFamily {
+    fn kind(&self) -> &'static str {
+        "broken"
+    }
+
+    fn info(&self) -> FamilyInfo {
+        panic!("info panicked")
+    }
+
+    fn defaults(&self) -> Vec<DeviceConfig> {
+        panic!("defaults panicked")
+    }
+
+    fn connect(&self, _config: DeviceConfig, _ctx: ConnectCtx) -> ConnectFuture {
+        Box::pin(async { Err(ConnectError::Failed("never asked".to_owned())) })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_family_that_panics_takes_down_only_its_own_device() {
+    let dir = std::env::temp_dir().join(format!("patchbay-panic-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let config = dir.join("patchbay.styx");
+    let names = [
+        "in-connect",
+        "in-future",
+        "in-subscribe",
+        "in-info",
+        "flaky",
+    ];
+    let entries: Vec<String> = names
+        .iter()
+        .map(|n| format!("{{name {n}, kind panicky}}"))
+        .chain(["{name desk, kind fake-desk}".to_owned()])
+        .collect();
+    std::fs::write(&config, format!("devices ({})\n", entries.join(" "))).unwrap();
+    let presets = Arc::new(PresetStore::open_at(config));
+    assert_eq!(presets.device_configs().len(), 6, "the config did not load");
+    let families = Families::new()
+        .with(BrokenFamily)
+        .with(PanickyFamily {
+            desk: Desk::new(),
+            tries: Arc::default(),
+        })
+        .with(FakeFamily(Desk::new()));
+
+    // Starting asks every family's info and defaults: a panic there is
+    // reported, never the hub's end.
+    let hub = DeviceHub::start_with(
+        presets,
+        &families,
+        &ConnectCtx::new(Arc::new(DiscoveryCache::memory())),
+    );
+    let infos = hub.family_infos();
+    let broken = infos.iter().find(|i| i.kind == "broken").unwrap();
+    assert!(!broken.available);
+    assert!(broken.unavailable.contains("info panicked"), "{broken:?}");
+    assert!(infos.iter().any(|i| i.kind == "panicky" && i.available));
+
+    // Each panic is a failed connect, retried; the other devices connect.
+    until("the healthy desk online", || {
+        state(&hub, "desk").0 == DeviceLinkState::Online
+    })
+    .await;
+    for (name, why) in [
+        ("in-connect", "connect panicked before its future"),
+        ("in-future", "the connect future panicked"),
+        ("in-subscribe", "the device's subscribe panicked"),
+        ("in-info", "the device's info panicked"),
+    ] {
+        until(name, || {
+            let (link, error) = state(&hub, name);
+            link == DeviceLinkState::Offline && error.contains(why)
+        })
+        .await;
+    }
+    // A panic is retried like any failure: the next try connects.
+    until("the flaky device online on its retry", || {
+        state(&hub, "flaky").0 == DeviceLinkState::Online
     })
     .await;
 

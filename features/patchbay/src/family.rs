@@ -8,17 +8,19 @@
 //! reconnects, events, the RPC, the CLI, the generic device view,
 //! snapshots) is the hub's, generic over [`DynDeviceAdapter`].
 //!
-//! The hub runs over a [`Families`] registry. The built-in families are
-//! registered by the server today; each becomes an extension of its own
-//! in #410's stack, registering itself the same way.
+//! The hub runs over a [`Families`] registry: the built-in families, then
+//! every family [`register`]ed in this process (a family extension
+//! registers itself from its `build`), which replaces a built-in of the
+//! same kind. Register before the engine starts: the engine reads the
+//! registrations once, when it starts.
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock, PoisonError, RwLock};
 
 use crate::device::DynDeviceAdapter;
 use crate::proto::{DeviceConfig, FamilyInfo};
-use crate::server::DiscoveryCache;
+pub use crate::server::DiscoveryCache;
 
 /// A connected device, type-erased.
 pub type Adapter = Arc<dyn DynDeviceAdapter>;
@@ -26,13 +28,16 @@ pub type Adapter = Arc<dyn DynDeviceAdapter>;
 /// What [`DeviceFamily::connect`] returns.
 pub type ConnectFuture = Pin<Box<dyn Future<Output = Result<Adapter, ConnectError>> + Send>>;
 
-/// Why a connect attempt failed. Connects fail soft: they return this,
-/// never panic, and never block the other devices.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Why a connect attempt failed. Connects fail soft: they return this
+/// and never block the other devices. (A connect that panics is caught by
+/// the hub and counts as [`ConnectError::Failed`].)
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ConnectError {
     /// Discovery ran and found nothing (`device list` says *not found*).
+    #[error("not found: {0}")]
     NotFound(String),
     /// Found, or pinned, but the connection failed (*offline*).
+    #[error("failed: {0}")]
     Failed(String),
 }
 
@@ -60,6 +65,60 @@ impl ConnectCtx {
     pub(crate) const fn new(cache: Arc<DiscoveryCache>) -> Self {
         Self { cache }
     }
+
+    /// Where auto-discovered devices were last found, by config name: read
+    /// it to connect straight away, [`DiscoveryCache::remember`] what
+    /// discovery found, [`DiscoveryCache::forget`] an address that stopped
+    /// answering.
+    #[must_use]
+    pub fn cache(&self) -> &DiscoveryCache {
+        &self.cache
+    }
+}
+
+fn registrations() -> &'static RwLock<Vec<Arc<dyn DeviceFamily>>> {
+    static REGISTERED: OnceLock<RwLock<Vec<Arc<dyn DeviceFamily>>>> = OnceLock::new();
+    REGISTERED.get_or_init(|| RwLock::new(Vec::new()))
+}
+
+/// Add `family` to every engine this process starts from now on.
+///
+/// A family extension calls this from its `build`. It replaces a built-in
+/// family, or an earlier registration, of the same kind; the one it
+/// replaced is returned. An engine already running keeps the families it
+/// started with.
+pub fn register(family: Arc<dyn DeviceFamily>) -> Option<Arc<dyn DeviceFamily>> {
+    let mut list = registrations()
+        .write()
+        .unwrap_or_else(PoisonError::into_inner);
+    replace_or_push(&mut list, family)
+}
+
+/// The families [`register`]ed in this process, in order.
+#[must_use]
+pub fn registered() -> Vec<Arc<dyn DeviceFamily>> {
+    registrations()
+        .read()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
+}
+
+/// Put `family` in place of the one of its kind in `list` (warning, and
+/// returning the one replaced), or at the end.
+fn replace_or_push(
+    list: &mut Vec<Arc<dyn DeviceFamily>>,
+    family: Arc<dyn DeviceFamily>,
+) -> Option<Arc<dyn DeviceFamily>> {
+    let kind = family.kind();
+    if let Some(slot) = list.iter_mut().find(|f| f.kind() == kind) {
+        tracing::warn!(
+            kind,
+            "patchbay: a device family replaces the one registered for its kind"
+        );
+        return Some(std::mem::replace(slot, family));
+    }
+    list.push(family);
+    None
 }
 
 /// One family of devices.
@@ -97,20 +156,23 @@ impl Families {
     }
 
     /// Add `family`; one already registered for its kind is replaced, in
-    /// place.
+    /// place (with a warning).
     #[must_use]
     pub fn with(mut self, family: impl DeviceFamily) -> Self {
-        self.register(Arc::new(family));
+        let _ = self.register(Arc::new(family));
         self
     }
 
-    /// Add `family`; one already registered for its kind is replaced, in
-    /// place.
-    pub fn register(&mut self, family: Arc<dyn DeviceFamily>) {
-        match self.list.iter_mut().find(|f| f.kind() == family.kind()) {
-            Some(slot) => *slot = family,
-            None => self.list.push(family),
-        }
+    /// Add `family`. One already registered for its kind is replaced, in
+    /// place, with a warning, and returned.
+    pub fn register(&mut self, family: Arc<dyn DeviceFamily>) -> Option<Arc<dyn DeviceFamily>> {
+        replace_or_push(&mut self.list, family)
+    }
+
+    /// Every family, in order.
+    #[must_use]
+    pub fn all(&self) -> &[Arc<dyn DeviceFamily>] {
+        &self.list
     }
 
     /// The family for config kind `kind`.

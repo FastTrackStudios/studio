@@ -6,6 +6,7 @@
 //! `PipeWire`: a device being offline only ever fails device calls, and
 //! the hub runs the same on macOS (no `PipeWire` engine) as on Linux.
 
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -13,10 +14,12 @@ use crate::device::{DeviceEvent, DeviceInfo, WriteGuard};
 use crate::proto::{
     DeviceChannel, DeviceConfig, DeviceCrosspoint, DeviceEventKind, DeviceEventWire,
     DeviceLinkState, DeviceParamValue, DeviceRestoreReport, DeviceRestoreStatus,
-    DeviceSettingSnapshot, DeviceSnapshotInfo, DeviceSummary, DeviceView, ParamView, PatchbayError,
-    path_in_prefix,
+    DeviceSettingSnapshot, DeviceSnapshotInfo, DeviceSummary, DeviceView, FamilyInfo, ParamView,
+    PatchbayError, path_in_prefix,
 };
+use futures_util::FutureExt as _;
 use parking_lot::Mutex;
+use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 
 use super::cache::DiscoveryCache;
@@ -116,7 +119,7 @@ pub(crate) struct DeviceHub {
     slots: Vec<Arc<Slot>>,
     events: architect::PubSub<DeviceEventWire>,
     presets: Arc<PresetStore>,
-    families: Families,
+    infos: Vec<FamilyInfo>,
 }
 
 /// `PATCHBAY_DEVICES=off` (or `0`/`false`) disables the device layer.
@@ -136,7 +139,7 @@ impl DeviceHub {
     ///
     /// Needs a tokio runtime to supervise; without one (a sync caller)
     /// the devices are listed but stay offline.
-    pub(crate) fn start(presets: Arc<PresetStore>, families: Families) -> Self {
+    pub(crate) fn start(presets: Arc<PresetStore>, families: &Families) -> Self {
         Self::start_with(
             presets,
             families,
@@ -148,15 +151,23 @@ impl DeviceHub {
     /// discovery cache).
     pub(crate) fn start_with(
         presets: Arc<PresetStore>,
-        families: Families,
+        families: &Families,
         ctx: &ConnectCtx,
     ) -> Self {
         let events = architect::PubSub::sliding(4096);
+        // Each family's info and defaults, asked once and guarded: a
+        // family that panics there is reported, never takes the engine
+        // down.
+        let infos: Vec<FamilyInfo> = families.all().iter().map(guarded_info).collect();
         let configs = if devices_disabled_by_env() {
             Vec::new()
         } else {
             let c = presets.device_configs();
-            if c.is_empty() { families.defaults() } else { c }
+            if c.is_empty() {
+                families.all().iter().flat_map(guarded_defaults).collect()
+            } else {
+                c
+            }
         };
         let runtime = tokio::runtime::Handle::try_current().ok();
         let mut slots = Vec::new();
@@ -176,7 +187,10 @@ impl DeviceHub {
                     DeviceLinkState::Offline,
                     "no async runtime to supervise the device".to_owned(),
                 ),
-                (false, Some(k), Some(_)) if k.info().discovers && config.addr.is_empty() => {
+                (false, Some(k), Some(_))
+                    if config.addr.is_empty()
+                        && infos.iter().any(|i| i.kind == k.kind() && i.discovers) =>
+                {
                     (DeviceLinkState::Searching, String::new())
                 }
                 (false, Some(_), Some(_)) => (DeviceLinkState::Connecting, String::new()),
@@ -210,13 +224,13 @@ impl DeviceHub {
             slots,
             events,
             presets,
-            families,
+            infos,
         }
     }
 
-    /// The families this hub connects devices with, in order.
-    pub(crate) const fn families(&self) -> &Families {
-        &self.families
+    /// What each family is, in order: asked once, when the hub started.
+    pub(crate) fn family_infos(&self) -> Vec<FamilyInfo> {
+        self.infos.clone()
     }
 
     pub(crate) const fn events(&self) -> &architect::PubSub<DeviceEventWire> {
@@ -474,6 +488,67 @@ fn publish(events: &architect::PubSub<DeviceEventWire>, device: &str, event: Dev
     });
 }
 
+/// What a family's code panicked with, as text.
+fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_owned())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "a panic".to_owned())
+}
+
+/// A family's info, or one that says it panicked.
+fn guarded_info(family: &Arc<dyn DeviceFamily>) -> FamilyInfo {
+    std::panic::catch_unwind(AssertUnwindSafe(|| family.info())).unwrap_or_else(|panic| {
+        let why = panic_text(&*panic);
+        tracing::warn!(kind = family.kind(), panic = %why, "patchbay: a device family's info() panicked");
+        FamilyInfo {
+            kind: family.kind().to_owned(),
+            label: family.kind().to_owned(),
+            platforms: Vec::new(),
+            available: false,
+            unavailable: format!("its info() panicked: {why}"),
+            origin: String::new(),
+            discovers: false,
+        }
+    })
+}
+
+/// A family's default devices, or none when asking panicked.
+fn guarded_defaults(family: &Arc<dyn DeviceFamily>) -> Vec<DeviceConfig> {
+    std::panic::catch_unwind(AssertUnwindSafe(|| family.defaults())).unwrap_or_else(|panic| {
+        tracing::warn!(kind = family.kind(), panic = %panic_text(&*panic), "patchbay: a device family's defaults() panicked");
+        Vec::new()
+    })
+}
+
+/// Connect one device and take what the hub needs from the adapter (its
+/// events, its info), with every call into the family's code guarded: a
+/// panic in `connect`, or in the adapter's `subscribe` or `info`, is a
+/// failed connect like any other, retried with the same backoff.
+async fn connect_guarded(
+    family: &dyn DeviceFamily,
+    config: &DeviceConfig,
+    ctx: &ConnectCtx,
+) -> Result<(Adapter, broadcast::Receiver<DeviceEvent>, DeviceInfo), ConnectError> {
+    let connect = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        family.connect(config.clone(), ctx.clone())
+    }))
+    .map_err(|panic| ConnectError::Failed(format!("connect panicked: {}", panic_text(&*panic))))?;
+    let adapter = AssertUnwindSafe(connect)
+        .catch_unwind()
+        .await
+        .map_err(|panic| {
+            ConnectError::Failed(format!("connect panicked: {}", panic_text(&*panic)))
+        })??;
+    // Subscribe before announcing so nothing slips between.
+    std::panic::catch_unwind(AssertUnwindSafe(|| (adapter.subscribe(), adapter.info())))
+        .map(|(rx, info)| (adapter, rx, info))
+        .map_err(|panic| {
+            ConnectError::Failed(format!("the device panicked: {}", panic_text(&*panic)))
+        })
+}
+
 /// State after a failed connect attempt: discovery finding nothing is
 /// *not found* — unless the device was reached before, then it's
 /// *offline* (it went away).
@@ -494,12 +569,9 @@ async fn supervise(
 ) {
     let mut backoff = BACKOFF_MIN;
     loop {
-        match family.connect(slot.config.clone(), ctx.clone()).await {
-            Ok(adapter) => {
+        match connect_guarded(&*family, &slot.config, &ctx).await {
+            Ok((adapter, mut rx, info)) => {
                 let up_since = std::time::Instant::now();
-                // Subscribe before announcing so nothing slips between.
-                let mut rx = adapter.subscribe();
-                let info = adapter.info();
                 let id = info.id.to_string();
                 {
                     let mut st = slot.state.lock();
