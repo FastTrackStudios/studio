@@ -62,6 +62,7 @@ members = [
     "features/song",
     "features/setlists",
     "features/productions",
+    "features/studio-views",
     "apps/architect",
     # ── daw ──
     "features/audio/sample",
@@ -325,6 +326,7 @@ setlists = { path = "features/setlists" }
 # Productions in other DAWs (Ableton sets, Pro Tools sessions, REAPER and
 # Logic projects) as project notes with a stage, found by a scan (studio#396).
 productions = { path = "features/productions" }
+studio-views = { path = "features/studio-views" }
 
 # ── keyflow domain — its own repo since the 2026-08 split ─────────────
 # (FastTrackStudios/keyflow: the chart language, its formats, the LSP and

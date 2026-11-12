@@ -22335,6 +22335,7 @@ dependencies = [
  "architect-spaces",
  "productions",
  "setlists",
+ "studio-views",
  "tempfile",
  "tokio",
 ]
@@ -22421,6 +22422,19 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "studio-views"
+version = "26.10.3"
+dependencies = [
+ "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.0)",
+ "architect-extensions",
+ "architect-settings",
+ "futures",
+ "keyflow",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

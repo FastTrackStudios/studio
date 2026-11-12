@@ -28,6 +28,9 @@ architect-desktop = { workspace = true }
 setlists = { workspace = true, features = ["extension", "share"] }
 # Productions in other DAWs, linked in (`productions::ext::Productions`).
 productions = { workspace = true, features = ["extension"] }
+# Studio's views and the Views toolbar that opens them, linked in
+# (`studio_views::ext::StudioViews`, studio#409).
+studio-views = { workspace = true, features = ["extension"] }
 
 [dev-dependencies]
 # tests/node.rs: a real node on loopback, serving a setlist's share link.
