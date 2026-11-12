@@ -2395,6 +2395,14 @@ impl VoicePool {
                 _ => continue,
             }
             .max(1);
+            // Kontakt's fade_out starts from the voice's CURRENT level and
+            // replaces any fade-in still running (null test: a zone-3 first
+            // note mid fade-in, ×0.23, fades linearly to 0 from there). Freeze
+            // the gain ramp and any staged fade-in where they are.
+            v.target_gain = v.gain;
+            v.gain_ramp_frames = 0;
+            v.stage1_run = 0;
+            v.stage2_frames = 0;
             v.release_frames = fade;
             v.release_k_active = 0.0;
             v.state = VoiceState::Releasing {
