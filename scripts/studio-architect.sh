@@ -36,6 +36,11 @@
 #   STUDIO_ARCHITECT_CACHE   where the Architect checkout and its target dir
 #                            live (default <target dir>/studio-architect)
 #   ARCHITECT_SRC            an Architect checkout at the pinned commit
+#   STUDIO_ARCHITECT_CARGO_CONFIG
+#                            a cargo config file given to the node's build
+#                            in place of --locked: the local stack's [patch]
+#                            of a local Architect or Keyflow
+#                            (scripts/local-stack.sh). `release` refuses it.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
@@ -52,7 +57,12 @@ target_dir() {
 }
 
 node_args() {
-    printf '%s\n' --locked -p studio-architect --bin studio-architect --no-default-features \
+    if [ -n "${STUDIO_ARCHITECT_CARGO_CONFIG:-}" ]; then
+        printf '%s\n' --config "$STUDIO_ARCHITECT_CARGO_CONFIG"
+    else
+        printf '%s\n' --locked
+    fi
+    printf '%s\n' -p studio-architect --bin studio-architect --no-default-features \
         --config "target.$(host).rustflags=[\"--cfg\",\"no_workspace_hack\"]"
 }
 
@@ -123,6 +133,8 @@ web() {
 # (architect-node-<tag>-x86_64-linux.tar.gz, architect-web-<v>.tar.gz).
 release() {
     local tag="${1:?usage: studio-architect.sh release TAG DIR}" dir="${2:?usage: studio-architect.sh release TAG DIR}"
+    [ -z "${STUDIO_ARCHITECT_CARGO_CONFIG:-}" ] \
+        || { echo "studio-architect: a release builds what Cargo.lock pins, not STUDIO_ARCHITECT_CARGO_CONFIG" >&2; exit 1; }
     mkdir -p "$dir"
     dir="$(cd "$dir" && pwd)"
     local arch os

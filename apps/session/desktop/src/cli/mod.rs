@@ -230,7 +230,7 @@ pub enum LyricsCommand {
 /// Diagnostics through `tracing`, as the window has them: to stderr,
 /// quiet unless asked, and — with `OTEL_EXPORTER_OTLP_ENDPOINT` set —
 /// every span, log and metric over OTLP to a collector as `service`, where
-/// a request's wide event is read whole (`just dev` runs one). With no
+/// a request's wide event is read whole (`just daw-dev` runs one). With no
 /// collector, `RUST_LOG=info` prints each command's wide event (one
 /// `lyrics.fetch` span per song) as it closes; with one, stderr keeps only
 /// warnings and errors — the rest is the collector's, and an engine

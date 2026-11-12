@@ -27,7 +27,7 @@
 #   trace ID               one trace as a tree
 #   act ID [JSON]          run one action, show its result and its trace
 #
-# Needs the dev loop (`just dev`): the engine's Action List on :47811 and the
+# Needs the dev loop (`just daw-dev`): the engine's Action List on :47811 and the
 # feed (target/dev-telemetry/feed.jsonl, FTS_FEED). For `gui`: a loft-dev
 # session with a Studio window in it, attached to the same engine, named
 # by FTS_WINDOW_NAME=drumlab, maximized (`loft-input bind mod+f`), and a

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The whole Studio dev loop in one herdr workspace, "Studio Dev" (`just dev`):
+# The whole Studio dev loop in one herdr workspace, "Studio Dev" (`just daw-dev`):
 #
 # Tab "app":
 #   engine     `studio engine --reopen`, a process of its own. Ctrl-C and ↑
