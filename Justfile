@@ -2276,14 +2276,15 @@ studio-web-config-test:
 # (jco and its transpiler, pinned by that folder's package-lock.json) at
 # build time. The component is built as `wasm-release`, its name section
 # stripped. <target> is cargo's target directory (`cargo metadata`), so a
-# CARGO_TARGET_DIR outside the checkout is honoured.
+# CARGO_TARGET_DIR outside the checkout is honoured. It writes BUILT_FROM
+# (this commit), which the release checks.
 island: island-check
     #!/usr/bin/env bash
     set -euo pipefail
-    CARGO_PROFILE_WASM_RELEASE_STRIP=true devenv --profile wasi shell -- \
-        cargo build --profile wasm-release -p studio-island --target wasm32-wasip2
     meta=$(cargo metadata --format-version 1)
     target=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])' <<<"$meta")
+    devenv --profile wasi shell -- env CARGO_TARGET_DIR="$target" CARGO_PROFILE_WASM_RELEASE_STRIP=true \
+        cargo build --profile wasm-release -p studio-island --target wasm32-wasip2
     ext=$(python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="architect-extensions"))' <<<"$meta")
     tools="$target/architect-web"
     rm -rf "$tools" && mkdir -p "$tools" && cp -r "$ext/web/." "$tools/"
@@ -2294,6 +2295,9 @@ island: island-check
         "$target/wasm32-wasip2/wasm-release/studio_island.wasm" "$out" --manifest apps/architect/island/extension.toml
     just _lumen-link
     tailwindcss -i apps/architect/island/island.css -o "$out/island.css" --minify
+    # The commit it was built from: the release ships it only at that commit
+    # (scripts/studio-architect.sh release).
+    git rev-parse HEAD > "$out/BUILT_FROM"
     ls -la "$out"
 
 # The island's clippy, for the target it is built for (wasm32-wasip2: on the
