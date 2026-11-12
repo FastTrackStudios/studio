@@ -135,6 +135,9 @@ pub fn main() -> ExitCode {
     // Start or join this machine's engine before the window opens, so a
     // failure is an exit code rather than an empty window.
     patchbay::home::configure(engine_options);
+    // A WebView is a browser: preferences in `localStorage`, the system
+    // scheme followed, the page's chrome painted.
+    patchbay::home::configure_page(crate::page::browser);
     match patchbay::home::engine_blocking() {
         Ok(engine) => tracing::info!(mode = ?engine.mode(), "patchbay engine ready"),
         Err(e) => {

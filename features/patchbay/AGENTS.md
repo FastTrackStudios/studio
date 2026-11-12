@@ -47,6 +47,31 @@ extension per device family, packaged as its own distribution
   `report::collect_health`) live in the crate, so the CLI and the actions
   answer with the same JSON.
 
+## One UI for every renderer
+
+The same components draw in Architect's window (Blitz), the desktop
+WebView and the browser remote (dioxus-web). Load the `blitz-design`
+skill before UI work.
+
+- **No page APIs in `src/ui`.** What only the page can do (saved
+  preferences, the system colour scheme, the page's chrome, a coarse
+  pointer) comes from the shell as `ui::Page` (`Shell::page`). Browser
+  shells give `apps/patchbay/src/page.rs` (JavaScript, `localStorage`);
+  Architect's window gives `home::native_page` (prefs in `ui.json` beside
+  the engine config). No `document::eval` in `src/ui`.
+- **Controls Blitz can draw.** `ui::ui::Choice` instead of `<select>`,
+  `ui::ui::Slider` instead of `<input type=range>` (`on_input` live,
+  `on_commit` on release), `ui::ui::TextField` (commit on Enter/blur)
+  instead of `onchange`. Blitz has no `<select>`, no range input and no
+  `change` event.
+- **Blitz's CSS gaps** (`overflow: auto`, `position: fixed/sticky`,
+  viewport units) are covered by `ui/theme/native.css`, loaded only when
+  the page is native, so browsers keep the main sheets as they are.
+- **Look at it in Blitz**: `cargo run -p fts-patchbay --features native
+  --example blitz_shot -- DIR W H` draws each view into `DIR/<view>.png`
+  (`--live ws://…/vox` reads a running engine, never starts one;
+  `--window` opens a fixed-size Blitz window to click through).
+
 ## Key rules
 
 - **Headless core (STRICT)**: the engine never touches dioxus. GUIs are

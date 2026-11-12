@@ -45,6 +45,14 @@ pub use service::PatchbayBackend;
 pub use net::record_bound;
 pub use peers::start as start_peer_discovery;
 
+/// Where a UI drawn without a browser keeps its preferences (appearance,
+/// where you were): beside the engine's config, so `PATCHBAY_CONFIG`
+/// moves both.
+#[must_use]
+pub fn ui_prefs_path() -> std::path::PathBuf {
+    presets::config_path().with_file_name("ui.json")
+}
+
 /// The listen address saved in the config, if any.
 ///
 /// Read before the engine starts, so the shell knows where to bind

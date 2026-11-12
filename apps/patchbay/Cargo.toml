@@ -55,6 +55,22 @@ serde_json = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 include_dir = { workspace = true, optional = true }
 
+[dev-dependencies]
+# examples/blitz_shot.rs: the views drawn by Blitz, as Architect's window
+# draws them, into pictures.
+anyrender = { workspace = true }
+anyrender_vello = { workspace = true }
+blitz-dom = { workspace = true }
+blitz-paint = { workspace = true }
+blitz-traits = { workspace = true }
+dioxus-native = { workspace = true }
+dioxus-native-dom = { workspace = true }
+image = { workspace = true }
+
+[[example]]
+name = "blitz_shot"
+required-features = ["native"]
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { workspace = true, features = ["Window", "Location"], optional = true }
 
