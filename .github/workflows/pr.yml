@@ -116,11 +116,14 @@ jobs:
         echo "reach=$reach" >> "$GITHUB_OUTPUT"
         echo "studio-architect: $(wc -l <<<"$dirs") crates of this repo in the node's tree; this PR reaches it: $reach"
         # Studio's island's sheet: its source, the classes it is compiled for, the
-        # check, and the lockfile (which pins the sanitiser it is checked against).
+        # check, the lockfile (which pins the sanitiser it is checked against), and
+        # Tailwind's version (the dev shell's, devenv.nix/devenv.lock; CI's pin in
+        # xtask/workflows/src/steps.rs): a Tailwind bump that breaks the sheet
+        # fails here, not at release.
         island=false
         while IFS= read -r f; do
           case "$f" in
-            Cargo.toml|Cargo.lock|apps/architect/island/*|features/ui/transport-ui/*|scripts/island-sheet*) island=true ;;
+            Cargo.toml|Cargo.lock|devenv.nix|devenv.lock|devenv.yaml|xtask/workflows/src/steps.rs|apps/architect/island/*|features/ui/transport-ui/*|scripts/island-sheet*) island=true ;;
           esac
         done <<<"$changed"
         echo "island=$island" >> "$GITHUB_OUTPUT"

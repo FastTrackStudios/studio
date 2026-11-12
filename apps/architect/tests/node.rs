@@ -373,26 +373,32 @@ async fn setlist_page_on(dist: &Distribution) -> String {
 /// A built island folder as `build-web` writes it: its files and a lock
 /// naming each with its digest, and the stylesheet beside them.
 fn island_folder(dir: &Path) {
-    use base64::Engine as _;
-    use sha2::Digest as _;
-    let files: [(&str, &[u8]); 3] = [
+    let files: [(&str, &[u8]); 4] = [
         ("architect.json", br#"{"module":"studio_island.js"}"#),
         ("studio_island.js", b"export const instantiate = () => {};"),
         ("studio_island.core.wasm", b"\0asm\x01\0\0\0"),
+        // The sheet, locked as build-web locks it (`just island` writes it
+        // into the folder before the lock).
+        ("island.css", b".studio-island-progress{display:flex}"),
     ];
-    let mut lock = serde_json::Map::new();
     for (name, bytes) in files {
         std::fs::write(dir.join(name), bytes).unwrap();
+    }
+    relock(dir, &files.map(|(name, _)| name));
+}
+
+/// Writes `dir`'s lock over `names` as they are on disk now.
+fn relock(dir: &Path, names: &[&str]) {
+    use base64::Engine as _;
+    use sha2::Digest as _;
+    let mut lock = serde_json::Map::new();
+    for name in names {
+        let bytes = std::fs::read(dir.join(name)).unwrap();
         let digest = base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(bytes));
-        lock.insert(name.to_owned(), format!("sha256-{digest}").into());
+        lock.insert((*name).to_owned(), format!("sha256-{digest}").into());
     }
     let lock = serde_json::json!({ "lockfileVersion": 1, "files": lock });
     std::fs::write(dir.join("architect.lock.json"), lock.to_string()).unwrap();
-    std::fs::write(
-        dir.join("island.css"),
-        b".studio-island-progress{display:flex}",
-    )
-    .unwrap();
 }
 
 #[test]
@@ -404,10 +410,98 @@ fn a_folder_matching_its_lock_is_the_island() {
     assert!(island.integrity().unwrap().starts_with("sha256-"));
     assert!(island.stylesheet_integrity().is_some());
     assert!(island.file("studio_island.js").is_some());
-    // Only what the lock names, the lock and the sheet are served.
+    assert!(island.file("island.css").is_some());
+    // Only what the lock names (the sheet among them) and the lock are served.
     std::fs::write(dir.path().join("stray.js"), "alert(1)").unwrap();
+    std::fs::write(dir.path().join("BUILT_FROM"), "abc").unwrap();
     let island = studio_architect::island::at(dir.path()).unwrap();
     assert!(island.file("stray.js").is_none());
+    assert!(island.file("BUILT_FROM").is_none());
+}
+
+#[test]
+fn a_sheet_not_as_built_is_refused_with_the_island() {
+    use studio_architect::island::{IslandError, at};
+    // Altered after the build: its digest is the lock's no longer.
+    let altered = tempfile::tempdir().unwrap();
+    island_folder(altered.path());
+    std::fs::write(
+        altered.path().join("island.css"),
+        ".a{background:url(/_ext/x)}",
+    )
+    .unwrap();
+    assert!(matches!(at(altered.path()), Err(IslandError::Altered(f)) if f == "island.css"));
+
+    // A lock that does not name the sheet (a build before the sheet was
+    // locked): the sheet would be served unverified, so nothing is.
+    let unlocked = tempfile::tempdir().unwrap();
+    island_folder(unlocked.path());
+    relock(
+        unlocked.path(),
+        &[
+            "architect.json",
+            "studio_island.js",
+            "studio_island.core.wasm",
+        ],
+    );
+    assert!(matches!(at(unlocked.path()), Err(IslandError::Unlocked)));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_link_in_the_island_folder_is_refused_never_followed() {
+    use std::os::unix::fs::symlink;
+    use studio_architect::island::{IslandError, at};
+    let outside = tempfile::tempdir().unwrap();
+    let secret = outside.path().join("secret.txt");
+    std::fs::write(&secret, "a file the node can read").unwrap();
+
+    // The sheet as a link to another file: refused, even relocked over it
+    // (its digest would then match what the link points at).
+    let sheet = tempfile::tempdir().unwrap();
+    island_folder(sheet.path());
+    std::fs::remove_file(sheet.path().join("island.css")).unwrap();
+    symlink(&secret, sheet.path().join("island.css")).unwrap();
+    relock(
+        sheet.path(),
+        &[
+            "architect.json",
+            "studio_island.js",
+            "studio_island.core.wasm",
+            "island.css",
+        ],
+    );
+    assert!(matches!(at(sheet.path()), Err(IslandError::NotAFile(f)) if f == "island.css"));
+
+    // A locked file as a link to an identical copy: refused too (a link is
+    // never followed, whatever it points at).
+    let copy = tempfile::tempdir().unwrap();
+    island_folder(copy.path());
+    let twin = outside.path().join("studio_island.js");
+    std::fs::copy(copy.path().join("studio_island.js"), &twin).unwrap();
+    std::fs::remove_file(copy.path().join("studio_island.js")).unwrap();
+    symlink(&twin, copy.path().join("studio_island.js")).unwrap();
+    assert!(matches!(at(copy.path()), Err(IslandError::NotAFile(f)) if f == "studio_island.js"));
+
+    // The lock as a link, and a folder named where a file is locked.
+    let lock = tempfile::tempdir().unwrap();
+    island_folder(lock.path());
+    let elsewhere = outside.path().join("lock.json");
+    std::fs::rename(lock.path().join("architect.lock.json"), &elsewhere).unwrap();
+    symlink(&elsewhere, lock.path().join("architect.lock.json")).unwrap();
+    assert!(matches!(at(lock.path()), Err(IslandError::NotAFile(_))));
+    let folder = tempfile::tempdir().unwrap();
+    island_folder(folder.path());
+    std::fs::remove_file(folder.path().join("studio_island.js")).unwrap();
+    std::fs::create_dir(folder.path().join("studio_island.js")).unwrap();
+    assert!(matches!(at(folder.path()), Err(IslandError::NotAFile(_))));
+
+    // The island folder itself as a link to a good folder.
+    let real = tempfile::tempdir().unwrap();
+    island_folder(real.path());
+    let link = outside.path().join("studio-island");
+    symlink(real.path(), &link).unwrap();
+    assert!(matches!(at(&link), Err(IslandError::NotAFile(_))));
 }
 
 #[test]
@@ -435,7 +529,14 @@ fn a_folder_that_does_not_match_its_lock_is_refused_whole() {
     island_folder(outside.path());
     std::fs::write(
         outside.path().join("architect.lock.json"),
-        r#"{"files":{"../../etc/passwd":"sha256-x"}}"#,
+        r#"{"files":{"../../etc/passwd":"sha256-x","island.css":"sha256-x"}}"#,
+    )
+    .unwrap();
+    assert!(matches!(at(outside.path()), Err(IslandError::Path(_))));
+    // build-web's output is flat: a name with a folder in it is refused too.
+    std::fs::write(
+        outside.path().join("architect.lock.json"),
+        r#"{"files":{"island.css":"sha256-x","sub/x.js":"sha256-x"}}"#,
     )
     .unwrap();
     assert!(matches!(at(outside.path()), Err(IslandError::Path(_))));

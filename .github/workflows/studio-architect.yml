@@ -167,7 +167,8 @@ jobs:
         "$bin" distribution > "$tmp/distribution.json"
         island="$tmp/studio-architect-node-$name-x86_64-linux/studio-island"
         test -f "$island/architect.lock.json"
-        test "$(cat "$island/BUILT_FROM")" = "$(git rev-parse HEAD)"
+        test "$(cat "$island/BUILT_FROM")" = "$(git describe --always --dirty --abbrev=40)"
+        python3 -c 'import json,sys; sys.exit(0 if "island.css" in json.load(open(sys.argv[1]))["files"] else "island.css is not in the lock")' "$island/architect.lock.json"
         {
           echo "### Studio Architect $TAG"
           echo '```'

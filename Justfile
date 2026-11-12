@@ -2276,11 +2276,16 @@ studio-web-config-test:
 # (jco and its transpiler, pinned by that folder's package-lock.json) at
 # build time. The component is built as `wasm-release`, its name section
 # stripped. <target> is cargo's target directory (`cargo metadata`), so a
-# CARGO_TARGET_DIR outside the checkout is honoured. It writes BUILT_FROM
-# (this commit), which the release checks.
+# CARGO_TARGET_DIR outside the checkout is honoured. The sheet is locked
+# with the component (a second build-web run), and BUILT_FROM records
+# `git describe --always --dirty` of the tree it was built from, which the
+# release checks.
 island: island-check
     #!/usr/bin/env bash
     set -euo pipefail
+    # What it is built from, taken before the build: the commit, and
+    # `-dirty` when the tree has changes git tracks (the release refuses that).
+    built=$(git describe --always --dirty --abbrev=40)
     meta=$(cargo metadata --format-version 1)
     target=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])' <<<"$meta")
     devenv --profile wasi shell -- env CARGO_TARGET_DIR="$target" CARGO_PROFILE_WASM_RELEASE_STRIP=true \
@@ -2291,16 +2296,24 @@ island: island-check
     devenv --profile wasi shell -- bash -c "cd '$tools' && npm ci --no-audit --no-fund >/dev/null"
     out="$target/studio-island"
     rm -rf "$out"
-    devenv --profile wasi shell -- node "$tools/cli/cli.mjs" build-web \
-        "$target/wasm32-wasip2/wasm-release/studio_island.wasm" "$out" --manifest apps/architect/island/extension.toml
+    web() {
+        devenv --profile wasi shell -- node "$tools/cli/cli.mjs" build-web \
+            "$target/wasm32-wasip2/wasm-release/studio_island.wasm" "$out" --manifest apps/architect/island/extension.toml
+    }
+    web
     just _lumen-link
     tailwindcss -i apps/architect/island/island.css -o "$out/island.css" --minify
     # The sheet as the page will hold it: refused by Architect's cleanSheet,
     # the island would draw unstyled, so the build fails instead.
     bash scripts/island-sheet.sh "$out/island.css"
-    # The commit it was built from: the release ships it only at that commit
-    # (scripts/studio-architect.sh release).
-    git rev-parse HEAD > "$out/BUILT_FROM"
+    # Locked with the rest: build-web locks every file in its folder, so a
+    # second run puts the sheet's digest in architect.lock.json, which the
+    # node checks it against (apps/architect/src/island.rs).
+    web
+    python3 -c 'import json,sys; sys.exit(0 if "island.css" in json.load(open(sys.argv[1]))["files"] else "island.css is not in the lock")' "$out/architect.lock.json"
+    # What it was built from: the release ships it only from that same
+    # clean commit (scripts/studio-architect.sh release). Not locked, not served.
+    printf '%s\n' "$built" > "$out/BUILT_FROM"
     ls -la "$out"
 
 # The island's clippy, for the target it is built for (wasm32-wasip2: on the

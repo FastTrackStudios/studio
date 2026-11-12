@@ -136,16 +136,26 @@ cannot run (Safari, which has no JS Promise Integration yet).
 
 The distribution reads it from `studio-island/` beside the node's own
 executable (`studio_architect::island`, `Distribution::island`) and checks
-it against its lock first (`studio_architect::island::at`): every file
-`architect.lock.json` names must be there with the digest the lock gives
-(sha256, base64), and no name may leave the folder. A folder that does not
-match is refused whole, with one warning (`island.outcome = "refused"`):
-the node serves no island, and the now-playing view keeps Architect's own
-bar and controls, as on a node shipped without the folder. Only the lock's
-files, the lock and `island.css` are served. `just island` writes
-`BUILT_FROM` (the commit it was built from) beside them, and
-`scripts/studio-architect.sh release` refuses to package a folder that is
-missing or was built from another commit. The release job builds it just
+it against its lock first (`studio_architect::island::at`). The lock is
+written at build time and names every file a page loads with its digest
+(sha256, base64), the stylesheet among them: `just island` writes
+`island.css` into the folder and runs `build-web` again, which locks every
+file in its folder. Every file the lock names must be there, a plain
+name directly in the folder, with the digest the lock gives; the lock
+must name the sheet; and the folder, the lock and every file it names
+must be a regular file (the folder a directory) of its own, checked with
+`symlink_metadata` and again on the opened file: a symlink is refused,
+never followed, even to an identical copy, as is a directory or a special
+file. A folder that does not match is refused whole, with one warning
+(`island.outcome = "refused"`): the node serves no island, and the
+now-playing view keeps Architect's own bar and controls, as on a node
+shipped without the folder. Only the lock's files and the lock are
+served. `just island` writes `BUILT_FROM` beside them (`git describe
+--always --dirty` of the tree it was built from, taken before the build;
+not locked, not served), and `scripts/studio-architect.sh release`
+refuses to package a folder that is missing, was built from another tree,
+or from a tree with uncommitted changes, and refuses to release from one.
+The release job builds it just
 before, in the same target dir (`xtask/workflows/src/studio_architect.rs`,
 step "Studio's island": the `wasi` profile's `wasm32-wasip2` target and
 node >= 26, checked first).
@@ -192,7 +202,9 @@ A `makeWrapper` wrapper keeps the real ELF in `$out/bin` (as
 `.studio-architect-wrapped`), so the folder stays beside it; a binary
 moved to `libexec/` takes the folder with it. The folder holds no ELF, so
 autoPatchelfHook leaves it alone, and nothing in it may be changed after
-the build: a file that does not match the lock refuses the whole island.
+the build: a file that does not match the lock refuses the whole island,
+and so does a symlink anywhere in it (copy the files; do not link them
+into the store path).
 
 To check it on the server, curl a share page of a setlist with recordings
 and the island's lock:
