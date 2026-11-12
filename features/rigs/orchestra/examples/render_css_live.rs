@@ -81,20 +81,26 @@ fn parse_smf(d: &[u8]) -> Vec<(f64, u8, u8, u8)> {
     out
 }
 
+/// 32-bit integer PCM: a −190 dB floor, so a null test against Kontakt is
+/// limited by the engine, never by the file (16-bit capped it near −98 dB).
 fn write_wav(path: &str, samples: &[f32]) -> eyre::Result<()> {
     let spec = hound::WavSpec {
         channels: 2,
         sample_rate: SR,
-        bits_per_sample: 16,
+        bits_per_sample: 32,
         sample_format: hound::SampleFormat::Int,
     };
     let mut w = hound::WavWriter::create(path, spec)?;
     for &s in samples {
-        w.write_sample((s.clamp(-1.0, 1.0) * 32767.0) as i16)?;
+        w.write_sample((f64::from(s.clamp(-1.0, 1.0)) * f64::from(i32::MAX)) as i32)?;
     }
     w.finalize()?;
     Ok(())
 }
+
+/// Host block size: the engine renders in plugin-sized blocks, as it would
+/// under a DAW, so block-quantised behaviour shows up here too.
+const BLOCK: usize = 128;
 
 fn main() -> eyre::Result<()> {
     let inp = std::env::args()
@@ -119,25 +125,26 @@ fn main() -> eyre::Result<()> {
         signal_orchestra::CSS_CONFIG,
     )
     .map_err(|e| eyre::eyre!(e))?;
+    let trace = std::env::args().any(|a| a == "--trace");
+    rig.set_trace_enabled(ID, trace);
 
-    let render = |rig: &SamplerRig, out: &mut Vec<f32>, secs: f64| -> eyre::Result<()> {
-        let frames = (secs * f64::from(SR)).round().max(0.0) as usize;
-        if frames == 0 {
-            return Ok(());
+    // Render up to an ABSOLUTE frame in host-sized blocks. Each event lands on
+    // round(sec * SR) exactly: no per-gap rounding that drifts across a file.
+    let render_to = |rig: &SamplerRig, out: &mut Vec<f32>, frame: usize| -> eyre::Result<()> {
+        let mut buf = vec![0.0f32; BLOCK * 2];
+        while out.len() / 2 < frame {
+            let n = (frame - out.len() / 2).min(BLOCK);
+            buf[..n * 2].fill(0.0);
+            rig.render_offline(&mut buf[..n * 2])?;
+            out.extend_from_slice(&buf[..n * 2]);
         }
-        let mut buf = vec![0.0f32; frames * 2];
-        rig.render_offline(&mut buf)?;
-        out.extend_from_slice(&buf);
         Ok(())
     };
+    let frame_of = |sec: f64| (sec * f64::from(SR)).round().max(0.0) as usize;
 
     let mut audio: Vec<f32> = Vec::new();
-    let mut cursor = 0.0f64;
     for (sec, status, d1, d2) in &events {
-        if *sec > cursor {
-            render(&rig, &mut audio, sec - cursor)?;
-            cursor = *sec;
-        }
+        render_to(&rig, &mut audio, frame_of(*sec))?;
         match status & 0xF0 {
             0xB0 => rig.cc(ID, *d1, *d2),
             0x90 if *d2 > 0 => {
@@ -148,8 +155,48 @@ fn main() -> eyre::Result<()> {
             _ => {}
         }
     }
-    render(&rig, &mut audio, 8.0)?; // tail
+    let end = audio.len() / 2 + frame_of(8.0); // tail
+    render_to(&rig, &mut audio, end)?;
 
+    if trace {
+        // Every voice the engine started: what plays, from where, how loud.
+        for e in &rig.render_trace(ID).events {
+            if let sampler::engine::trace::TraceKind::Transition {
+                from,
+                to,
+                portamento,
+            } = &e.kind
+            {
+                println!(
+                    "{:9.4}s TRANSITION {from} -> {to} portamento {portamento}",
+                    e.frame as f64 / f64::from(SR)
+                );
+            }
+            if let sampler::engine::trace::TraceKind::VoiceEnd { voice_id } = &e.kind {
+                println!(
+                    "{:9.4}s END        voice {voice_id}",
+                    e.frame as f64 / f64::from(SR)
+                );
+            }
+            if let sampler::engine::trace::TraceKind::VoiceSpawn(v) = &e.kind {
+                print!("[v{}] ", v.voice_id);
+                println!(
+                    "{:9.4}s {:12} {:44} note {:3} root {:3} rate {:.6} gain {:.4} dyn {:4} start {:6} loop {}..{}",
+                    e.frame as f64 / f64::from(SR),
+                    v.voice_kind,
+                    v.file,
+                    v.note,
+                    v.root_key,
+                    v.rate,
+                    v.gain,
+                    v.dynamic,
+                    v.start_frame,
+                    v.loop_start,
+                    v.loop_end
+                );
+            }
+        }
+    }
     write_wav(&outp, &audio)?;
     println!(
         "wrote {outp}  ({:.1}s, {} events)",
