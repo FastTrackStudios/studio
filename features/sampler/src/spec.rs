@@ -835,6 +835,80 @@ pub struct OverlaySpec {
     pub cc1_scale: Vec<u8>,
 }
 
+/// A section's decoded numbers over the shared library config (CSS: each
+/// section's NKI ships its own velocity tables, RR counts, group CC curves
+/// and envelopes). Written by `features/rigs/orchestra/tests/css_section_spec.py`
+/// as `section.styx` beside the section's `library.styx`; `load_merged`
+/// applies it by articulation id, field by field.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct SectionOverlay {
+    #[facet(default)]
+    pub articulations: Vec<ArticulationOverlay>,
+}
+
+/// The overridable fields of one articulation (see [`SectionOverlay`]).
+#[derive(Debug, Clone, Facet)]
+pub struct ArticulationOverlay {
+    pub id: String,
+    pub dynamics: Option<Vec<String>>,
+    pub rr: Option<usize>,
+    pub vel_thresholds: Option<Vec<u8>>,
+    pub vel_layer_db: Option<Vec<f32>>,
+    pub rr_sequence: Option<Vec<u8>>,
+    pub rr_per_note: Option<bool>,
+    pub group_curves: Option<Vec<GroupCurveSpec>>,
+    pub amp_env: Option<Vec<EnvSegmentSpec>>,
+}
+
+impl SectionOverlay {
+    /// Parse a `section.styx`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or parsed.
+    pub fn from_file(path: &Path) -> Result<Self, SamplerError> {
+        let text = std::fs::read_to_string(path).map_err(SamplerError::Io)?;
+        facet_styx::from_str(&text).map_err(|e| SamplerError::SpecParse(e.to_string()))
+    }
+
+    /// Apply to `spec`'s articulations (unknown ids are ignored).
+    pub fn apply(&self, spec: &mut LibrarySpec) {
+        for o in &self.articulations {
+            let Some(a) = spec
+                .articulations
+                .iter_mut()
+                .find(|a| a.id.eq_ignore_ascii_case(&o.id))
+            else {
+                continue;
+            };
+            if let Some(v) = &o.dynamics {
+                a.dynamics.clone_from(v);
+            }
+            if let Some(v) = o.rr {
+                a.rr = v;
+            }
+            if let Some(v) = &o.vel_thresholds {
+                a.vel_thresholds.clone_from(v);
+            }
+            if let Some(v) = &o.vel_layer_db {
+                a.vel_layer_db.clone_from(v);
+            }
+            if let Some(v) = &o.rr_sequence {
+                a.rr_sequence.clone_from(v);
+            }
+            if let Some(v) = o.rr_per_note {
+                a.rr_per_note = v;
+            }
+            if let Some(v) = &o.group_curves {
+                a.group_curves.clone_from(v);
+            }
+            if let Some(v) = &o.amp_env {
+                a.amp_env.clone_from(v);
+            }
+        }
+    }
+}
+
 /// See [`PerformanceSpec::trill_pair`].
 #[derive(Debug, Clone, Facet)]
 pub struct TrillPairSpec {

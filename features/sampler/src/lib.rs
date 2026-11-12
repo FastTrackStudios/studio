@@ -529,6 +529,14 @@ impl PlayerPatch {
         // Kontakt). Dropping it here left the engine's 2-semitone default.
         patch.spec.live_legato_interval_max = cfg.live_legato_interval_max;
         patch.spec.live_chord_window_ms = cfg.live_chord_window_ms;
+        // A section's own decoded numbers (`section.styx` beside its zones).
+        if let Some(overlay) = zones_path
+            .parent()
+            .map(|d| d.join("section.styx"))
+            .filter(|p| p.exists())
+        {
+            crate::spec::SectionOverlay::from_file(&overlay)?.apply(&mut patch.spec);
+        }
         Ok(patch)
     }
 

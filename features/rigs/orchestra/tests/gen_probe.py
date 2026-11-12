@@ -99,6 +99,17 @@ def main():
             rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", b, cat, desc))
             t = start + win
 
+        if "--rebow" in sys.argv:
+            # Zone-2/3 tremolo transitions: the random re-bow attack voice.
+            for vel in (80, 80, 120, 120):
+                phrase("Tremolo", f"Tremolo 67->69 ioi500 v{vel}", 67, 69, vel, 0.5, 56)
+            m.write(sys.argv[1])
+            with open(sys.argv[2], "w") as f:
+                f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
+                for r in rows:
+                    f.write("\t".join(map(str, r)) + "\n")
+            print(f"{len(rows)} units, {t:.1f} s")
+            return
         for name, cc58 in (("Tremolo", 56), ("Harm", 51)):
             single(name, f"{name} key67 v40", [67], 40, cc58)
             single(name, f"{name} key72 v40", [72], 40, cc58)
