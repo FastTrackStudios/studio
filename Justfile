@@ -2301,6 +2301,11 @@ island: island-check
             "$target/wasm32-wasip2/wasm-release/studio_island.wasm" "$out" --manifest apps/architect/island/extension.toml
     }
     web
+    # The same views as a web bundle (`web-*` files of the folder): what a
+    # share page in a browser without JS Promise Integration (Safari before
+    # 27, every browser on iOS before it) draws them with, in Architect's
+    # web view frame (`SiteIsland::web`).
+    just island-web "$out"
     just _lumen-link
     tailwindcss -i apps/architect/island/island.css -o "$out/island.css" --minify
     # The sheet as the page will hold it: refused by Architect's cleanSheet,
@@ -2316,10 +2321,37 @@ island: island-check
     printf '%s\n' "$built" > "$out/BUILT_FROM"
     ls -la "$out"
 
-# The island's clippy, for the target it is built for (wasm32-wasip2: on the
-# host the crate is empty, so a host clippy checks nothing). Warnings fail.
+# The island's views as a web bundle into <out> (Architect's web view,
+# `SiteIsland::web`): built for wasm32-unknown-unknown, wasm-bindgen's
+# `--target web` glue (the CLI pinned with the crate, =0.2.127), its
+# snippets flattened to `web-snippet-<n>.js` (one folder, as the frame
+# loads it: scripts/island-web-flatten.py), and its wasm optimized by
+# wasm-opt allowing only the features Safari 15 has (bulk memory, mutable
+# globals, non-trapping float-to-int, reference types, sign extension,
+# multi-value): a module that needs another fails the build here, not on a
+# phone.
+island-web out:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    meta=$(cargo metadata --format-version 1)
+    target=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])' <<<"$meta")
+    CARGO_TARGET_DIR="$target" CARGO_PROFILE_WASM_RELEASE_STRIP=true \
+        cargo build --profile wasm-release -p studio-island --target wasm32-unknown-unknown
+    raw=$(mktemp -d)
+    trap 'rm -rf "$raw"' EXIT
+    wasm-bindgen --target web --no-typescript --out-name web-studio-island --out-dir "$raw" \
+        "$target/wasm32-unknown-unknown/wasm-release/studio_island.wasm"
+    python3 scripts/island-web-flatten.py "$raw" "{{out}}"
+    wasm-opt -Oz --mvp-features --enable-bulk-memory --enable-mutable-globals \
+        --enable-nontrapping-float-to-int --enable-reference-types --enable-sign-ext --enable-multivalue \
+        "{{out}}/web-studio-island_bg.wasm" -o "{{out}}/web-studio-island_bg.wasm"
+
+# The island's clippy, for the targets it is built for (wasm32-wasip2, and
+# wasm32-unknown-unknown for its web bundle: on the host the crate is
+# empty, so a host clippy checks nothing). Warnings fail.
 island-check:
     devenv --profile wasi shell -- cargo clippy -p studio-island --target wasm32-wasip2 -- -D warnings
+    cargo clippy -p studio-island --target wasm32-unknown-unknown -- -D warnings
 
 # Serve the built web DAW on http://localhost:8765.
 web-daw-serve:

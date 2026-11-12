@@ -12,11 +12,26 @@ publish = false
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+# The component (wasm32-wasip2): drawn by Architect's web runtime, which
+# needs JS Promise Integration.
+[target.'cfg(all(target_arch = "wasm32", target_os = "wasi"))'.dependencies]
 architect-extension-wasi = { workspace = true }
 dioxus = { workspace = true }
 transport-ui = { workspace = true }
 serde_json = { workspace = true }
+
+# The same views as a web bundle (wasm32-unknown-unknown, wasm-bindgen's
+# `--target web`: `just island-web`), for a share page's web view frame
+# (Architect's `SiteIsland::web`): any browser, Safari before 27 and iOS
+# included. Given where the song is by the frame's `architectPage`.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+dioxus = { workspace = true, features = ["web", "launch"] }
+transport-ui = { workspace = true }
+serde_json = { workspace = true }
+wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
+futures-channel = { workspace = true }
+futures-util = { workspace = true }
 
 [lints]
 workspace = true
