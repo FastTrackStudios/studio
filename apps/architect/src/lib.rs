@@ -44,6 +44,7 @@ pub fn studio() -> Bundle {
     Bundle::new("studio", "Studio")
         .member(&setlists::ext::Setlists)
         .member(&productions::ext::Productions)
+        .member(&studio_views::ext::StudioViews)
 }
 
 /// Studio Architect: the Architect app, renamed, with [`studio`] compiled

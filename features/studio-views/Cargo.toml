@@ -1,0 +1,39 @@
+[package]
+name = "studio-views"
+description = "Studio's views in Architect, an Architect extension: the toolbars that open them (the Views bar at the bottom of the window, as the Studio iPad app has it), each button an action that opens or focuses its view and is lit while it is focused, and a button for a view that needs Studio's engine shown and refusing with the reason. Linked into Studio Architect, or run as a process extension in the Architect app."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+# The extension as a process (extension.toml's [entry]): what the
+# Architect app runs when it installs it.
+name = "studio-views"
+path = "src/main.rs"
+required-features = ["extension"]
+
+[features]
+default = []
+# The extension: its actions and toolbars, over the app's actions.
+extension = ["dep:architect-extensions"]
+
+[dependencies]
+serde_json = { workspace = true }
+architect-extensions = { workspace = true, optional = true, features = ["guest"] }
+
+[dev-dependencies]
+futures = { workspace = true }
+# The app side of tests/it: the host, the app's action list.
+architect = { workspace = true, features = ["action-list"] }
+architect-extensions = { workspace = true, features = ["host", "linked", "process"] }
+architect-settings = { workspace = true }
+tempfile = { workspace = true }
+# The views a button opens today (the setlists extension's), linked beside
+# it as Studio Architect links them.
+setlists = { workspace = true, features = ["extension"] }
+
+[lints]
+workspace = true
