@@ -650,7 +650,7 @@ jobs:
         # fetches too).
         nix build --no-link --accept-flake-config "$flake#packages.$system.session-app-web.cargoVendorDir"
   apple:
-    name: Apple builds (macOS check, iOS build)
+    name: Apple builds (macOS build, iOS build)
     needs:
     - plan
     - rail
@@ -667,10 +667,12 @@ jobs:
         persist-credentials: false
     - name: devenv CLI
       uses: ./.github/actions/devenv
-    - name: 'macOS: cargo check -p studio-desktop (the .dmg''s app)'
+    - name: 'macOS: cargo build -p studio-desktop (the .dmg''s app, linked), nothing from /nix/store'
       run: |
         devenv shell -- bash -euo pipefail -s <<'EOF'
-        cargo check -p studio-desktop
+        cargo build -p studio-desktop --config "$(bash scripts/desktop/macos-libs.sh config)"
+        cp "${CARGO_TARGET_DIR:-target}/debug/studio-desktop" "$RUNNER_TEMP/studio-desktop"
+        bash scripts/desktop/macos-libs.sh guard "$RUNNER_TEMP/studio-desktop"
         EOF
     - name: 'iOS: cargo build -p studio-desktop (TestFlight''s features, linked)'
       run: |

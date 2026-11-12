@@ -84,9 +84,11 @@ BIN="$ROOT/target/$PROFILE/$bin"
 if [ "${SKIP_BUILD:-}" = 1 ]; then
     echo "=== SKIP_BUILD=1: reusing $BIN ==="
 else
-    echo "=== cargo build --profile $PROFILE -p $crate $features ==="
+    # zlib from the macOS SDK, not the dev shell's (macos-libs.sh).
+    libs="$(bash "$SCRIPT_DIR/macos-libs.sh" config)"
+    echo "=== cargo build --profile $PROFILE -p $crate $features --config $libs ==="
     # shellcheck disable=SC2086
-    devenv shell -- cargo build --profile "$PROFILE" -p "$crate" $features
+    devenv shell -- cargo build --profile "$PROFILE" -p "$crate" $features --config "$libs"
 fi
 [ -x "$BIN" ] || { echo "ERROR: the build produced no $BIN" >&2; exit 1; }
 file -b "$BIN" | grep -q 'Mach-O 64-bit executable arm64' \
@@ -100,22 +102,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$bin"
 chmod +x "$APP/Contents/MacOS/$bin"
 
-# Only what every Mac has: the dev shell links its own libiconv, and a
-# /nix/store path exists on no other Mac (the hardened runtime also refuses a
-# library of another team). libiconv and libz are part of macOS, so those are
-# repointed at /usr/lib; anything else from the store fails here, not at launch.
-for lib in $(otool -L "$APP/Contents/MacOS/$bin" | awk 'NR>1 && $1 ~ /^\/nix\/store\// {print $1}'); do
-    case "$lib" in
-        */libiconv.2.dylib) install_name_tool -change "$lib" /usr/lib/libiconv.2.dylib "$APP/Contents/MacOS/$bin" ;;
-        */libz.1.dylib) install_name_tool -change "$lib" /usr/lib/libz.1.dylib "$APP/Contents/MacOS/$bin" ;;
-        *) ;;
-    esac
-done
-if otool -L "$APP/Contents/MacOS/$bin" | awk 'NR>1' | grep -q '/nix/store/'; then
-    echo "ERROR: $bin links libraries from /nix/store:" >&2
-    otool -L "$APP/Contents/MacOS/$bin" | grep '/nix/store/' >&2
-    exit 1
-fi
+# Only what every Mac has: nothing from /nix/store (macos-libs.sh guard).
+bash "$SCRIPT_DIR/macos-libs.sh" guard "$APP/Contents/MacOS/$bin"
 
 if [ -f "$icon" ]; then
     iconset="$STAGE/$title.iconset"

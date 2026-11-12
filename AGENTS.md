@@ -204,8 +204,9 @@ nothing). `main` requires only `PR checks`; `Local CI` (the pre-push
 hook's status) is an indicator, not a gate. **`CI`**
 (`checks.yml`: `Gates`, `Rail plan`, `Check` + advisory clippy, `Wasm`,
 `Tests`, `Web image evaluates` (the studio-web image's nix evaluation and
-crate vendoring) and `Apple builds` (on airlock: `cargo check` of the macOS
-app, a linking `cargo build` of the iOS app; studio#444), aggregated as
+crate vendoring) and `Apple builds` (on airlock: the macOS app linked and held
+to the .dmg's no-/nix/store guard, a linking `cargo build` of the iOS app;
+studio#444), aggregated as
 **`CI passed`**, which `just release` requires) runs after every merge to `main`,
 NARROWED by `cargo rail plan` to what the merge reaches since the newest
 green commit with rail evidence (`Check` records that evidence on the pool
