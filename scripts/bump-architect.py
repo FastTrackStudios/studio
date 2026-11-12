@@ -279,9 +279,19 @@ def lock_packages(text: str) -> dict[tuple[str, str], str]:
     return out
 
 
+CRATES_IO = {"registry+https://github.com/rust-lang/crates.io-index", "sparse+https://index.crates.io/"}
+
+
 def git_repos(packages: dict[tuple[str, str], str]) -> set[str]:
-    return {re.sub(r"^git\+https://(www\.)?", "", src).split("?")[0].split("#")[0].lower()
-            for src in packages.values() if src.startswith("git+")}
+    """Every non-crates.io source of a lock (scripts/lock-sources.sh's rule):
+    git of any scheme or host spelling, or another registry."""
+    out = set()
+    for src in packages.values():
+        if not src or src in CRATES_IO:
+            continue
+        s = re.split(r"[?#]", src)[0].replace("://www.", "://")
+        out.add(re.sub(r"\.git$", "", s).lower())
+    return out
 
 
 def lock_architect_sources() -> dict[str, list[str]]:
@@ -441,7 +451,7 @@ def main() -> int:
         after_pkgs = lock_packages((ROOT / "Cargo.lock").read_text())
         new_repos = git_repos(after_pkgs) - git_repos(before_pkgs)
         if new_repos:
-            problems.append("Cargo.lock gained git source repositories it did not have: "
+            problems.append("Cargo.lock gained sources other than crates.io it did not have: "
                             + ", ".join(sorted(new_repos)) + " (unreviewed code: a person looks first)")
         # One architect source: the new tag on the plain URL (and sources the
         # bump never pinned, task@main's own); never one on www.

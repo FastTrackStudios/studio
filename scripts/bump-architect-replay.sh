@@ -106,15 +106,15 @@ www_case() {
     for s in "${scripts[@]}"; do cp "$root/scripts/$s" "$scratch/scripts/$s"; done
     grep -q '^\[patch."https://www.github.com/FastTrackStudios/architect"\]' "$scratch/Cargo.toml" \
         || { echo "FAIL www: HEAD has no www [patch] table" >&2; fail=1; return; }
-    main_sources="$(git -C "$root" show origin/main:Cargo.lock | grep -o 'git+https://[a-z.]*github.com/FastTrackStudios/architect?tag=v[0-9.]*' | sort -u)"
+    main_sources="$(git -C "$root" show HEAD:Cargo.lock | grep -o 'git+https://[a-z.]*github.com/FastTrackStudios/architect?tag=v[0-9.]*' | sort -u)"
     # The base: keyflow on its www commit (pinned by rev, as no release has it yet).
     sed -i -E "s|(git = \"https://github.com/FastTrackStudios/keyflow\"), tag = \"v[0-9.]+\"|\1, rev = \"$KEYFLOW_WWW\"|" "$scratch/Cargo.toml"
     (cd "$scratch" && cargo metadata --format-version 1 >/dev/null 2>"$scratch.log") || { echo "FAIL www: the base does not resolve" >&2; cat "$scratch.log" >&2; fail=1; return; }
     before="$(grep -o 'git+https://[a-z.]*github.com/FastTrackStudios/architect?tag=v[0-9.]*' "$scratch/Cargo.lock" | sort -u)"
     if [ "$before" = "$main_sources" ]; then
-        echo "ok   www base: keyflow on www, the architect sources are main's, unchanged (kache keys the same)"
+        echo "ok   www base: keyflow on www, the architect sources are the tree's own, unchanged (kache keys the same)"
     else
-        echo "FAIL www base: architect sources differ from main's:" >&2; diff <(echo "$main_sources") <(echo "$before") >&2; fail=1
+        echo "FAIL www base: architect sources differ from the tree's own:" >&2; diff <(echo "$main_sources") <(echo "$before") >&2; fail=1
     fi
     if (cd "$scratch" && python3 scripts/check-duplicate-deps.py >/dev/null); then
         echo "ok   www base: check-duplicate-deps passes"
