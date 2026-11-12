@@ -20,7 +20,8 @@
 //! One job here compiles: `studio-architect`, `cargo check` of Studio's
 //! distribution of Architect's node for x86_64 Linux (apps/architect, the
 //! release's `studio-architect` workflow builds it), and only when the PR
-//! reaches it. Not required.
+//! reaches it; and, when the PR reaches Studio's island's sheet, compiles
+//! that sheet and puts it through Architect's `cleanSheet`. Not required.
 //!
 //! Its own workflow, not a job of `CI`: a PR shows `PR checks` and `Local
 //! CI`, not a row of skipped CI jobs (Task, 2026-10).
@@ -105,6 +106,19 @@ while IFS= read -r f; do
 done <<<"$changed"
 echo "reach=$reach" >> "$GITHUB_OUTPUT"
 echo "studio-architect: $(wc -l <<<"$dirs") crates of this repo in the node's tree; this PR reaches it: $reach"
+# Studio's island's sheet: its source, the classes it is compiled for, the
+# check, the lockfile (which pins the sanitiser it is checked against), and
+# Tailwind's version (the dev shell's, devenv.nix/devenv.lock; CI's pin in
+# xtask/workflows/src/steps.rs): a Tailwind bump that breaks the sheet
+# fails here, not at release.
+island=false
+while IFS= read -r f; do
+  case "$f" in
+    Cargo.toml|Cargo.lock|devenv.nix|devenv.lock|devenv.yaml|xtask/workflows/src/steps.rs|apps/architect/island/*|features/ui/transport-ui/*|scripts/island-sheet*) island=true ;;
+  esac
+done <<<"$changed"
+echo "island=$island" >> "$GITHUB_OUTPUT"
+echo "studio-architect: this PR reaches the island's sheet: $island"
 "#;
 
 /// Studio's distribution of Architect still builds for the hosted node:
@@ -116,6 +130,9 @@ echo "studio-architect: $(wc -l <<<"$dirs") crates of this repo in the node's tr
 /// ([`REACH`]) and nothing waits on it (main requires `PR checks` only).
 fn studio_architect() -> Result<Job> {
     const REACHED: &str = "${{ steps.reach.outputs.reach == 'true' }}";
+    const ISLAND: &str = "${{ steps.reach.outputs.island == 'true' }}";
+    const EITHER: &str =
+        "${{ steps.reach.outputs.reach == 'true' || steps.reach.outputs.island == 'true' }}";
     let setup = hosted_setup(
         "",
         "",
@@ -128,6 +145,7 @@ fn studio_architect() -> Result<Job> {
             mold: true,
             free_disk: true,
             ci_cargo_config: true,
+            tailwind: true,
             ..Tools::default()
         },
     );
@@ -139,12 +157,22 @@ fn studio_architect() -> Result<Job> {
         .step(cargo_deps_restore())
         // The image's rustup reads rust-toolchain.toml: the workspace pin.
         .step(Step::run("Does this PR reach the node?", REACH).id("reach"))
-        .steps(setup.into_iter().map(|s| s.cond(REACHED)))
+        .steps(setup.into_iter().map(|s| s.cond(EITHER)))
         .step(
             Step::run(
                 "cargo check the node",
                 "bash scripts/studio-architect.sh check",
             )
             .cond(REACHED),
+        )
+        // The island's sheet as a share page will hold it: compiled, then
+        // put through the pinned Architect's `cleanSheet` (studio#445).
+        // Refused, the island would draw unstyled; here the PR fails.
+        .step(
+            Step::run(
+                "The island's sheet passes Architect's cleanSheet",
+                "bash scripts/island-sheet.sh",
+            )
+            .cond(ISLAND),
         ))
 }

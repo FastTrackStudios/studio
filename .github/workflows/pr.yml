@@ -115,8 +115,21 @@ jobs:
         done <<<"$changed"
         echo "reach=$reach" >> "$GITHUB_OUTPUT"
         echo "studio-architect: $(wc -l <<<"$dirs") crates of this repo in the node's tree; this PR reaches it: $reach"
+        # Studio's island's sheet: its source, the classes it is compiled for, the
+        # check, the lockfile (which pins the sanitiser it is checked against), and
+        # Tailwind's version (the dev shell's, devenv.nix/devenv.lock; CI's pin in
+        # xtask/workflows/src/steps.rs): a Tailwind bump that breaks the sheet
+        # fails here, not at release.
+        island=false
+        while IFS= read -r f; do
+          case "$f" in
+            Cargo.toml|Cargo.lock|devenv.nix|devenv.lock|devenv.yaml|xtask/workflows/src/steps.rs|apps/architect/island/*|features/ui/transport-ui/*|scripts/island-sheet*) island=true ;;
+          esac
+        done <<<"$changed"
+        echo "island=$island" >> "$GITHUB_OUTPUT"
+        echo "studio-architect: this PR reaches the island's sheet: $island"
     - name: Free disk (background)
-      if: ${{ steps.reach.outputs.reach == 'true' }}
+      if: ${{ steps.reach.outputs.reach == 'true' || steps.reach.outputs.island == 'true' }}
       run: |
         df -h / | tail -n 1
         nohup sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
@@ -125,17 +138,30 @@ jobs:
           /usr/local/share/boost /opt/microsoft /opt/google \
           </dev/null >/dev/null 2>&1 &
     - name: Rust 1.99.1
-      if: ${{ steps.reach.outputs.reach == 'true' }}
+      if: ${{ steps.reach.outputs.reach == 'true' || steps.reach.outputs.island == 'true' }}
       uses: dtolnay/rust-toolchain@1.99.1
     - name: mold
-      if: ${{ steps.reach.outputs.reach == 'true' }}
+      if: ${{ steps.reach.outputs.reach == 'true' || steps.reach.outputs.island == 'true' }}
       run: |
         sudo apt-get install -y --no-install-recommends mold
+    - name: tailwindcss 4.3.3
+      if: ${{ steps.reach.outputs.reach == 'true' || steps.reach.outputs.island == 'true' }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$HOME/.local/bin"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        curl -fsSL --retry 3 -o "$RUNNER_TEMP/tailwindcss" "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64"
+        echo "dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a  $RUNNER_TEMP/tailwindcss" | sha256sum -c -
+        install -m 755 "$RUNNER_TEMP/tailwindcss" "$HOME/.local/bin/tailwindcss"
+        "$HOME/.local/bin/tailwindcss" --help | head -n 1
     - name: CI cargo config
-      if: ${{ steps.reach.outputs.reach == 'true' }}
+      if: ${{ steps.reach.outputs.reach == 'true' || steps.reach.outputs.island == 'true' }}
       run: |
         mkdir -p ../.cargo
         cp .cargo/ci-config.toml ../.cargo/config.toml
     - name: cargo check the node
       if: ${{ steps.reach.outputs.reach == 'true' }}
       run: bash scripts/studio-architect.sh check
+    - name: The island's sheet passes Architect's cleanSheet
+      if: ${{ steps.reach.outputs.island == 'true' }}
+      run: bash scripts/island-sheet.sh

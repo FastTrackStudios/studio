@@ -32,6 +32,16 @@ productions = { workspace = true, features = ["extension"] }
 # (`studio_views::ext::StudioViews`, studio#409).
 studio-views = { workspace = true, features = ["extension"] }
 
+# Its island (#445): `SiteIsland`, the node serves it; its folder is
+# checked against its lock (sha256, base64) before it is (src/island.rs).
+architect-sites = { workspace = true }
+base64 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
 [dev-dependencies]
 # tests/node.rs: a real node on loopback, serving a setlist's share link.
 tokio = { workspace = true }

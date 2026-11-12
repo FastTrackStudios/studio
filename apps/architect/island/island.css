@@ -12,3 +12,14 @@
 @import "../../../features/ui/.architect-ui/assets/fts-theme.css";
 @source "../../../features/ui/transport-ui/src/**/*.rs";
 @source "./src/**/*.rs";
+/* What a view's sheet may hold (Architect v0.12.4 `cleanSheet`): no var()
+ * in an animation or a transition (it could hide `infinite`), and an
+ * animation that ends. `inline` writes the theme value into the utility,
+ * so `animate-pulse` is a plain animation of ten runs. The `transition-*`
+ * utilities (`transition-property` and a var() duration) are not
+ * generated: `duration-*` sets a plain `transition-duration`, and
+ * `transition-property` is `all` by default, so they still ease. */
+@theme inline {
+  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) 10;
+}
+@source not inline("transition-all transition-transform transition");

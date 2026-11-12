@@ -114,6 +114,15 @@ const GPU_APT_PACKAGES: &[&str] = &["mesa-vulkan-drivers"];
 /// that runs the tests without nix.
 const NEXTEST: &str = "0.9.132";
 
+/// Tailwind's standalone CLI, the version the dev shell carries (nixpkgs),
+/// for a hosted job that compiles a sheet (pr.rs: Studio's island's sheet,
+/// checked against Architect's `cleanSheet`). The sha256 is the release's
+/// `sha256sums.txt` line for `tailwindcss-linux-x64`.
+const TAILWIND: Pinned = Pinned {
+    version: "4.3.3",
+    sha256: "dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a",
+};
+
 /// Bump to throw away the apt cache (cache-apt-pkgs-action keys on the
 /// package list and this).
 const APT_CACHE_VERSION: &str = "1";
@@ -183,6 +192,8 @@ pub struct Tools {
     /// .cargo/config.toml links every x86_64-linux build with it, so even
     /// `cargo run -p xtask-workflows` needs it.
     pub mold: bool,
+    /// Tailwind's standalone CLI ([`TAILWIND`]).
+    pub tailwind: bool,
 }
 
 /// Everything a hosted job needs before its first cargo command.
@@ -216,6 +227,9 @@ pub fn hosted_setup(components: &str, targets: &str, tools: Tools) -> Vec<Step> 
     }
     if tools.actionlint {
         steps.push(install_actionlint());
+    }
+    if tools.tailwind {
+        steps.push(install_tailwind());
     }
     if tools.ci_cargo_config {
         steps.push(ci_cargo_config());
@@ -314,6 +328,21 @@ tar -xzf \"$RUNNER_TEMP/actionlint.tar.gz\" -C \"$HOME/.local/bin\" actionlint
 ",
     );
     Step::run(&format!("actionlint {version}"), &script)
+}
+
+fn install_tailwind() -> Step {
+    let Pinned { version, sha256 } = TAILWIND;
+    let url = format!(
+        "https://github.com/tailwindlabs/tailwindcss/releases/download/v{version}/tailwindcss-linux-x64"
+    );
+    let mut script = fetch(&url, "tailwindcss", sha256);
+    script.push_str(
+        "\
+install -m 755 \"$RUNNER_TEMP/tailwindcss\" \"$HOME/.local/bin/tailwindcss\"
+\"$HOME/.local/bin/tailwindcss\" --help | head -n 1
+",
+    );
+    Step::run(&format!("tailwindcss {version}"), &script)
 }
 
 /// CI-only cargo settings (.cargo/ci-config.toml, the Zed trick). Copied to

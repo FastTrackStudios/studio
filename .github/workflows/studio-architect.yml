@@ -137,6 +137,17 @@ jobs:
         fi
         echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
         echo "STUDIO_ARCHITECT_CACHE=$base/studio-architect/$RUNNER_NAME" >> "$GITHUB_ENV"
+    - name: Studio's island (wasm32-wasip2, node >= 26)
+      run: |
+        set -euo pipefail
+        # The wasi profile's shell expands these, not this one.
+        # shellcheck disable=SC2016
+        devenv --profile wasi shell -- bash -c '
+          test -d "$(rustc --print sysroot)/lib/rustlib/wasm32-wasip2" || { echo "::error::no wasm32-wasip2 target in the wasi profile"; exit 1; }
+          node -e "process.exit(Number(process.versions.node.split(\".\")[0]) >= 26 ? 0 : 1)" || { echo "::error::node $(node --version) is older than 26"; exit 1; }
+          echo "rustc $(rustc --version), node $(node --version)"
+        '
+        devenv shell -- just island
     - name: Build the node and the web bundle
       run: |
         set -euo pipefail
@@ -154,6 +165,10 @@ jobs:
         bin="$tmp/studio-architect-node-$name-x86_64-linux/studio-architect"
         "$bin" serve --help > /dev/null
         "$bin" distribution > "$tmp/distribution.json"
+        island="$tmp/studio-architect-node-$name-x86_64-linux/studio-island"
+        test -f "$island/architect.lock.json"
+        test "$(cat "$island/BUILT_FROM")" = "$(git describe --always --dirty --abbrev=40)"
+        python3 -c 'import json,sys; sys.exit(0 if "island.css" in json.load(open(sys.argv[1]))["files"] else "island.css is not in the lock")' "$island/architect.lock.json"
         {
           echo "### Studio Architect $TAG"
           echo '```'

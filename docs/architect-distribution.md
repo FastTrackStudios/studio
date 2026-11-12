@@ -134,9 +134,92 @@ it is ready at 8.7 s, with the chart, which is the longer wait, as the node
 serves both uncompressed: FastTrackStudios/architect#602), and stay where it
 cannot run (Safari, which has no JS Promise Integration yet).
 
-Wiring it into this distribution (`Distribution::island`, the folder
-shipped beside the binary as `studio-island/`) needs the Architect release
-with #601.
+The distribution reads it from `studio-island/` beside the node's own
+executable (`studio_architect::island`, `Distribution::island`) and checks
+it against its lock first (`studio_architect::island::at`). The lock is
+written at build time and names every file a page loads with its digest
+(sha256, base64), the stylesheet among them: `just island` writes
+`island.css` into the folder and runs `build-web` again, which locks every
+file in its folder. Every file the lock names must be there, a plain
+name directly in the folder, with the digest the lock gives; the lock
+must name the sheet; and the folder, the lock and every file it names
+must be a regular file (the folder a directory) of its own, checked with
+`symlink_metadata` and again on the opened file: a symlink is refused,
+never followed, even to an identical copy, as is a directory or a special
+file. A folder that does not match is refused whole, with one warning
+(`island.outcome = "refused"`): the node serves no island, and the
+now-playing view keeps Architect's own bar and controls, as on a node
+shipped without the folder. Only the lock's files and the lock are
+served. `just island` writes `BUILT_FROM` beside them (`git describe
+--always --dirty` of the tree it was built from, taken before the build;
+not locked, not served), and `scripts/studio-architect.sh release`
+refuses to package a folder that is missing, was built from another tree,
+or from a tree with uncommitted changes, and refuses to release from one.
+The release job builds it just
+before, in the same target dir (`xtask/workflows/src/studio_architect.rs`,
+step "Studio's island": the `wasi` profile's `wasm32-wasip2` target and
+node >= 26, checked first).
+
+**Its sheet must pass Architect's `cleanSheet`** (v0.12.4: no `var()` in
+an animation or a transition, animations that end; the page refuses the
+whole sheet otherwise, and the island draws unstyled). `island.css` keeps
+Tailwind inside that: `@theme inline` writes `animate-pulse` as a plain
+animation of ten runs, and the `transition-*` utilities (a `var()`
+duration) are not generated (`@source not inline`): `duration-*` sets a
+plain `transition-duration`, and `transition-property` is `all` by
+default, so the bar still eases. `scripts/island-sheet.sh` puts the
+compiled sheet through the `cleanSheet` of the architect checkout
+Cargo.lock pins, with the island's prefix, and fails on a refusal:
+`just island` runs it on the sheet it built, and the PR workflow's
+`studio-architect` job compiles and checks it whenever a PR touches the
+sheet, `transport-ui`, the island or the lockfile.
+
+What the island stays inside (Architect v0.12.4): at most 8 intents a
+second in bursts of 16 (it seeks on a tap, never on a drag), animations
+that end, a view at most 4096 px tall in a slot of its own height (the
+progress bar's view is 64 px in its 73 px slot and the transport's 56 px
+in 65 px, at 390 px wide, neither clipped), and it is stopped 30 s after
+its view closes and loaded again on the next open (0.28 s to its first
+frame again on a local node, Architect's own bar showing for 0.24 s of
+it).
+
+### Serving it from the hosted node
+
+Install the node's tarball as it is laid out: the folder `studio-island/`
+**next to the real `studio-architect` executable**. The node finds the
+folder from its own executable's path (`std::env::current_exe()`, which
+resolves symlinks), so with a Nix package:
+
+```text
+$out/bin/studio-architect            the ELF (autoPatchelfHook patches it)
+$out/bin/studio-island/              the tarball's folder, copied as is:
+    architect.json  architect.lock.json  island.css  BUILT_FROM
+    studio_island.js  studio_island.core.wasm  studio_island.core2.wasm
+    studio_island.core3.wasm  studio_island.conditional-host-import-{0,1,2}.wasm
+```
+
+A `makeWrapper` wrapper keeps the real ELF in `$out/bin` (as
+`.studio-architect-wrapped`), so the folder stays beside it; a binary
+moved to `libexec/` takes the folder with it. The folder holds no ELF, so
+autoPatchelfHook leaves it alone, and nothing in it may be changed after
+the build: a file that does not match the lock refuses the whole island,
+and so does a symlink anywhere in it (copy the files; do not link them
+into the store path).
+
+To check it on the server, curl a share page of a setlist with recordings
+and the island's lock:
+
+```sh
+curl -s https://<node>/s/<code>/setlists/<setlist>/ \
+  | grep -o '<script type="application/json" id="site-islands">[^<]*'
+# {"islands":[{"folder":"/_ext/island/studio.transport.<hash>/","id":"studio.transport",…}],…}
+curl -sI https://<node>/_ext/island/studio.transport.<hash>/architect.lock.json
+# HTTP/1.1 200 OK, content-type: application/json, cache-control: public, max-age=31536000, immutable
+```
+
+`"islands":[]` means the node has no island: no folder beside the binary,
+or one that does not match its lock (the node's log then has one warning,
+`island.outcome = "refused"`).
 
 ## Release artefacts
 
@@ -148,7 +231,7 @@ tag's one GitHub Release:
 
 | asset | what |
 | --- | --- |
-| `studio-architect-node-<tag>-x86_64-linux.tar.gz` (+ `.sha256`) | `studio-architect-node-<tag>-x86_64-linux/studio-architect`, the node |
+| `studio-architect-node-<tag>-x86_64-linux.tar.gz` (+ `.sha256`) | `studio-architect-node-<tag>-x86_64-linux/`: `studio-architect`, the node, and `studio-island/` beside it, its island (`architect.json`, `architect.lock.json`, `studio_island.js`, the `studio_island.*.wasm` the lock names, `island.css`, `BUILT_FROM`). Install the folder next to the node's real binary (not a wrapper or a symlink's folder): the node finds it from its own executable's path |
 | `studio-architect-web-<tag>.tar.gz` (+ `.sha256`) | `studio-architect-web-<tag>/`: the landing page, `docs/`, `app/` with `distribution.json` |
 | `SHA256SUMS` (+ `SHA256SUMS.minisig`) | every asset of the release, signed with the org key |
 

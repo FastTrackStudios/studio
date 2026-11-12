@@ -9,6 +9,9 @@
 #   scripts/studio-architect.sh check           `cargo check` of the node (PR CI)
 #   scripts/studio-architect.sh release TAG DIR the release's tarballs into DIR:
 #       studio-architect-node-TAG-<arch>-<os>.tar.gz (+ .sha256)
+#           studio-architect                the node
+#           studio-island/                  its island (#445), from `just island`
+#                                           at this commit (required)
 #       studio-architect-web-TAG.tar.gz              (+ .sha256)
 #
 # The node is `--no-default-features` (no window: no Blitz, wgpu or
@@ -131,6 +134,45 @@ release() {
     rm -rf "${dir:?}/$name"
     mkdir -p "$dir/$name"
     cp "$bin" "$dir/$name/studio-architect"
+    # Studio's island (#445) beside the binary, where the distribution reads
+    # it (studio_architect::ISLAND_FOLDER): `just island`'s folder, which the
+    # release job builds just before this, into the same target dir. A
+    # release without it, or with one built from another commit, fails: a
+    # stale island would ship code this tag does not hold.
+    local island
+    island="$(target_dir)/studio-island"
+    local head
+    head="$(git describe --always --dirty --abbrev=40)"
+    if [ ! -f "$island/architect.lock.json" ]; then
+        echo "studio-architect: no $island (run \`just island\`)" >&2
+        exit 1
+    fi
+    case "$head" in
+        *-dirty)
+            echo "studio-architect: the tree has uncommitted changes ($head): a release ships only what a commit holds" >&2
+            exit 1
+            ;;
+    esac
+    local built
+    built="$(cat "$island/BUILT_FROM" 2>/dev/null || echo 'an unknown tree')"
+    if [ "$built" != "$head" ]; then
+        echo "studio-architect: $island was built from $built, not $head: run \`just island\` on a clean tree" >&2
+        exit 1
+    fi
+    mkdir -p "$dir/$name/studio-island"
+    # What the node serves (the lock's files, the sheet among them, and the
+    # lock) and the stamp; nothing else build-web left there.
+    python3 - "$island" "$dir/$name/studio-island" <<'PY'
+import json, shutil, sys, os
+src, dst = sys.argv[1], sys.argv[2]
+names = list(json.load(open(os.path.join(src, "architect.lock.json")))["files"])
+for n in names + ["architect.lock.json", "BUILT_FROM"]:
+    path = os.path.join(src, n)
+    # As the node reads it: a regular file of its own, never a link.
+    if "/" in n or os.path.islink(path) or not os.path.isfile(path):
+        sys.exit(f"studio-architect: {path} is not a regular file (a link, a folder or missing): the node would refuse the island")
+    shutil.copy2(path, os.path.join(dst, n))
+PY
     tar -C "$dir" -czf "$dir/$name.tar.gz" "$name"
     rm -rf "${dir:?}/$name"
     local web="studio-architect-web-$tag"
