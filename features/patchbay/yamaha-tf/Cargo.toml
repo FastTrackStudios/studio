@@ -40,6 +40,8 @@ tracing = { workspace = true, optional = true }
 # (tests/extension.rs): on in every test build, so `cargo nextest run -p
 # patchbay-yamaha-tf` (the core test set) runs them.
 patchbay-yamaha-tf = { path = ".", features = ["extension"] }
+# tests/family.rs: `ConnectCtx::in_memory()`, the family's connect without an engine.
+patchbay = { workspace = true, features = ["test-util"] }
 architect = { workspace = true, features = ["action-list"] }
 architect-extensions = { workspace = true, features = ["host", "linked", "process"] }
 architect-settings = { workspace = true }

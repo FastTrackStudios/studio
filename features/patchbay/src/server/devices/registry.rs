@@ -44,6 +44,25 @@ pub(crate) fn builtin(graph: Arc<RwLock<GraphStore>>) -> Families {
         .with(Dante)
 }
 
+/// The device families that are extensions of their own, as
+/// `(kind, label, extension id)`: what to tell someone whose config names
+/// one this process doesn't have. Each family that leaves the core adds
+/// its line (studio#410).
+const EXTENSION_FAMILIES: &[(&str, &str, &str)] =
+    &[("yamaha-tf", "Yamaha TF", "patchbay-yamaha-tf")];
+
+/// Why a configured device has no family to connect it: an extension
+/// family that isn't installed in this process, or a kind nobody knows.
+pub(crate) fn no_family(kind: &str, known: &[&str]) -> String {
+    EXTENSION_FAMILIES
+        .iter()
+        .find(|(k, _, _)| *k == kind)
+        .map_or_else(
+            || format!("unknown device kind '{kind}' (known: {})", known.join(", ")),
+            |(_, label, id)| format!("the {label} extension ({id}) is not installed in this app"),
+        )
+}
+
 /// A linked family's [`FamilyInfo`].
 fn linked(kind: &str, label: &str, platforms: &[&str], discovers: bool) -> FamilyInfo {
     FamilyInfo::linked(kind, label, platforms, discovers)
@@ -271,7 +290,7 @@ mod tests {
     /// them). The Yamaha TF's `tf1` is its extension's now, and comes
     /// after these when it is registered (`patchbay-yamaha-tf`'s tests).
     #[test]
-    fn the_default_device_list_is_unchanged() {
+    fn the_builtin_default_devices_keep_their_order() {
         let d: Vec<(String, String)> = families()
             .defaults()
             .into_iter()
@@ -283,6 +302,31 @@ mod tests {
             ("dante", "dante"),
         ];
         assert_eq!(d, want.map(|(n, k)| (n.to_owned(), k.to_owned())).to_vec());
+    }
+
+    #[test]
+    fn a_kind_from_an_extension_that_isnt_installed_says_so() {
+        let known = families().kinds();
+        assert_eq!(
+            no_family("yamaha-tf", &known),
+            "the Yamaha TF extension (patchbay-yamaha-tf) is not installed in this app"
+        );
+        assert_eq!(
+            no_family("theremin", &known),
+            "unknown device kind 'theremin' (known: system-audio, antelope-galaxy32, dante)"
+        );
+    }
+
+    /// The built-ins all bring views: an engine with only them warns of
+    /// nothing at start.
+    #[cfg(feature = "ui")]
+    #[test]
+    fn the_builtins_have_views() {
+        let kinds = families().kinds();
+        let views = crate::ui::family_view_kinds();
+        for k in &kinds {
+            assert!(views.contains(k), "the built-in family '{k}' has no views");
+        }
     }
 
     #[test]

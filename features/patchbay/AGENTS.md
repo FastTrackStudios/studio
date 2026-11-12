@@ -94,7 +94,9 @@ skill before UI work.
 - **Family views by kind** (`ui::families`): the Route and Mix pages and
   the device console draw the view the selected device's family
   registered (`FamilyViews { route, mix, console }`), each mounted as a
-  component of its own (`families::mount`, never called as a function);
+  component of its own, never called as a function (`families::mount`
+  for a page, `families::mount_console` for a console, whose identity is
+  the console function, so a re-registered kind gets fresh hooks);
   a kind with none gets the generic device view. How the shell presents
   a device comes from there too: `label` (rail), `what` (context
   switcher), `icon`, `reads_device`, `route_note`. Never match on a kind

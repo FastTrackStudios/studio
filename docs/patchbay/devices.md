@@ -306,8 +306,11 @@ apps/patchbay/src/cli_device.rs         `patchbay device …`
    `defaults` for a config with no `devices` section, and
    `connect(DeviceConfig, ConnectCtx)` returning
    `ConnectError::NotFound` / `::Failed`. Register it with
-   `patchbay::family::register(Arc::new(MyFamily))` before the engine
-   starts (a family extension does it from its `build`; the engine reads
+   `patchbay::family::register(Arc::new(MyFamily))`, or with its views
+   in one call, `register_with_views(family, views)` (one kind, both
+   registries; the engine warns at start about a family with no views or
+   views with no family), before the engine starts (a family extension
+   does it from its `build`; the engine reads
    the registrations once, at start, after the built-ins in
    `server/devices/registry.rs`, and one of the same kind replaces the
    built-in). `ConnectCtx::cache()` is the shared `DiscoveryCache`:
@@ -316,9 +319,16 @@ apps/patchbay/src/cli_device.rs         `patchbay device …`
    `defaults`, `connect` or the adapter's `subscribe`/`info`: the family
    shows as unavailable, or the connect as failed and retried. The hub,
    RPC, CLI, UI and snapshots then work without further changes, and
-   `patchbay families` lists it. `server/devices/family_tests.rs` drives the hub through a
-   fake family, `tests/family.rs` registers one from outside the crate:
-   the patterns for a family's own tests.
+   `patchbay families` lists it. A family's views draw with
+   `patchbay::ui::kit` and build their info with `FamilyInfo::linked`.
+   Tests: `ConnectCtx::in_memory()` (feature `test-util`) runs `connect`
+   without an engine (`patchbay-yamaha-tf`'s `tests/family.rs`);
+   `server/devices/family_tests.rs` drives the hub through a fake family;
+   `tests/family.rs` registers one from outside the crate. A config that
+   names the kind of an extension family this app doesn't link says so
+   ("the Yamaha TF extension (patchbay-yamaha-tf) is not installed");
+   add the family to `registry::EXTENSION_FAMILIES` when it leaves the
+   core.
 2. Keep modules private and expose a small `pub use` surface from `lib.rs`:
    the adapter type, discovery, a typed ops handle and a raw escape hatch.
 3. Split the code into layers the same way: **protocol** (pure, unit-tested

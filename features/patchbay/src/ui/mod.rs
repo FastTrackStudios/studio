@@ -39,6 +39,8 @@ pub mod kit {
     pub use super::devices::strip::{ChannelStrip, ParamFacts};
     pub use super::ui::EmptyState;
 }
+#[cfg(feature = "server")]
+pub(crate) use families::kinds as family_view_kinds;
 pub use families::{FamilyViews, register as register_family_views};
 pub use hosts::{Dialer, EngineLink, Shell};
 pub use page::{Page, PageFuture};

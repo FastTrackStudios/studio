@@ -8,7 +8,7 @@
 //! reconnects, events, the RPC, the CLI, the generic device view,
 //! snapshots) is the hub's, generic over [`DynDeviceAdapter`].
 //!
-//! The hub runs over a [`Families`] registry: the built-in families, then
+//! The hub runs over a `Families` registry: the built-in families, then
 //! every family [`register`]ed in this process (a family extension
 //! registers itself from its `build`), which replaces a built-in of the
 //! same kind. Register before the engine starts: the engine reads the
@@ -20,7 +20,7 @@ use std::sync::{Arc, OnceLock, PoisonError, RwLock};
 
 use crate::device::DynDeviceAdapter;
 use crate::proto::{DeviceConfig, FamilyInfo};
-pub use crate::server::DiscoveryCache;
+pub use crate::server::devices::cache::DiscoveryCache;
 
 /// A connected device, type-erased.
 pub type Adapter = Arc<dyn DynDeviceAdapter>;
@@ -64,6 +64,16 @@ impl ConnectCtx {
     #[must_use]
     pub(crate) const fn new(cache: Arc<DiscoveryCache>) -> Self {
         Self { cache }
+    }
+
+    /// A context over an empty, in-memory discovery cache: what a family's
+    /// own tests hand its `connect`, without starting an engine (feature
+    /// `test-util`). Seed it with [`DiscoveryCache::remember`] to test the
+    /// cached-address path.
+    #[cfg(feature = "test-util")]
+    #[must_use]
+    pub fn in_memory() -> Self {
+        Self::new(Arc::new(DiscoveryCache::memory()))
     }
 
     /// Where auto-discovered devices were last found, by config name: read
@@ -116,9 +126,32 @@ pub fn register_with_views(
     register(family)
 }
 
+/// What doesn't line up between the engine's families and the window's
+/// views, as one line each: a family with no views of its own (its
+/// devices draw with the generic view, fine if meant: register its views
+/// with [`register_with_views`] otherwise), and views for a kind no family
+/// connects (never drawn).
+#[cfg(feature = "ui")]
+pub(crate) fn views_mismatch(families: &[&str], views: &[&str]) -> Vec<String> {
+    let mut out: Vec<String> = families
+        .iter()
+        .filter(|k| !views.contains(k))
+        .map(|k| {
+            format!("family '{k}' has no views: its devices draw with the generic device view")
+        })
+        .collect();
+    out.extend(
+        views
+            .iter()
+            .filter(|k| !families.contains(k))
+            .map(|k| format!("views for '{k}', which no family connects: they are never drawn")),
+    );
+    out
+}
+
 /// The families [`register`]ed in this process, in order.
 #[must_use]
-pub fn registered() -> Vec<Arc<dyn DeviceFamily>> {
+pub(crate) fn registered() -> Vec<Arc<dyn DeviceFamily>> {
     registrations()
         .read()
         .unwrap_or_else(PoisonError::into_inner)
@@ -166,58 +199,78 @@ pub trait DeviceFamily: Send + Sync + 'static {
 /// The families the hub runs over, in registration order (which is the
 /// order of the default device list).
 #[derive(Clone, Default)]
-pub struct Families {
+pub(crate) struct Families {
     list: Vec<Arc<dyn DeviceFamily>>,
 }
 
 impl Families {
     /// No families.
     #[must_use]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Add `family`; one already registered for its kind is replaced, in
     /// place (with a warning).
     #[must_use]
-    pub fn with(mut self, family: impl DeviceFamily) -> Self {
+    pub(crate) fn with(mut self, family: impl DeviceFamily) -> Self {
         let _ = self.register(Arc::new(family));
         self
     }
 
     /// Add `family`. One already registered for its kind is replaced, in
     /// place, with a warning, and returned.
-    pub fn register(&mut self, family: Arc<dyn DeviceFamily>) -> Option<Arc<dyn DeviceFamily>> {
+    pub(crate) fn register(
+        &mut self,
+        family: Arc<dyn DeviceFamily>,
+    ) -> Option<Arc<dyn DeviceFamily>> {
         replace_or_push(&mut self.list, family)
     }
 
     /// Every family, in order.
     #[must_use]
-    pub fn all(&self) -> &[Arc<dyn DeviceFamily>] {
+    pub(crate) fn all(&self) -> &[Arc<dyn DeviceFamily>] {
         &self.list
     }
 
     /// The family for config kind `kind`.
     #[must_use]
-    pub fn find(&self, kind: &str) -> Option<&Arc<dyn DeviceFamily>> {
+    pub(crate) fn find(&self, kind: &str) -> Option<&Arc<dyn DeviceFamily>> {
         self.list.iter().find(|f| f.kind() == kind)
     }
 
     /// Every registered kind, in order.
     #[must_use]
-    pub fn kinds(&self) -> Vec<&'static str> {
+    pub(crate) fn kinds(&self) -> Vec<&'static str> {
         self.list.iter().map(|f| f.kind()).collect()
     }
 
     /// The default device list: each family's defaults, in order.
+    #[cfg(test)]
     #[must_use]
-    pub fn defaults(&self) -> Vec<DeviceConfig> {
+    pub(crate) fn defaults(&self) -> Vec<DeviceConfig> {
         self.list.iter().flat_map(|f| f.defaults()).collect()
     }
 
-    /// What each family is, in order (`patchbay families`).
+    /// What each family is, in order, unguarded: tests only (the hub asks
+    /// each family once, guarded, `DeviceHub::family_infos`).
+    #[cfg(test)]
     #[must_use]
-    pub fn infos(&self) -> Vec<FamilyInfo> {
+    pub(crate) fn infos(&self) -> Vec<FamilyInfo> {
         self.list.iter().map(|f| f.info()).collect()
+    }
+}
+
+#[cfg(all(test, feature = "ui"))]
+mod tests {
+    use super::views_mismatch;
+
+    #[test]
+    fn families_and_views_that_dont_line_up_are_named() {
+        assert!(views_mismatch(&["dante", "yamaha-tf"], &["yamaha-tf", "dante"]).is_empty());
+        let out = views_mismatch(&["dante", "loner"], &["dante", "orphan"]);
+        assert_eq!(out.len(), 2, "{out:?}");
+        assert!(out[0].contains("'loner' has no views"), "{out:?}");
+        assert!(out[1].contains("views for 'orphan'"), "{out:?}");
     }
 }
