@@ -102,7 +102,9 @@ fn main() {
         }
     };
     let _ = CLIENTS.set(clients);
-    let _guard = runtime.enter();
+    // The views run with no tokio runtime on their thread, as in
+    // Architect's window: entering one here would hide a view that needs
+    // it (a tokio timer did, until it panicked in the distribution).
 
     let wanted = std::env::var("PATCHBAY_SHOT_VIEWS").unwrap_or_default();
     if window {
