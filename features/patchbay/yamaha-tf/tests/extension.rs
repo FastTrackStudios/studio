@@ -70,8 +70,8 @@ fn the_tf_extension_adds_the_family_and_its_console_reads_through_the_core() {
     ext.install_contribution_actions().unwrap();
     let _ = ext.sync();
 
-    // The core's engine has the family: after the built-ins, so the
-    // default device list ends with `tf1`.
+    // The core's engine has the family: after the built-ins (whichever
+    // are still built in), so the default device list ends with `tf1`.
     let families = run(&list, "PATCHBAY_FAMILIES", &json!({})).unwrap();
     let kinds: Vec<&str> = families
         .as_array()
@@ -79,11 +79,9 @@ fn the_tf_extension_adds_the_family_and_its_console_reads_through_the_core() {
         .iter()
         .map(|f| f["kind"].as_str().unwrap())
         .collect();
-    assert_eq!(
-        kinds,
-        ["system-audio", "antelope-galaxy32", "dante", "yamaha-tf"]
-    );
-    let tf = &families[3];
+    assert_eq!(kinds.first(), Some(&"system-audio"), "{kinds:?}");
+    assert_eq!(kinds.last(), Some(&"yamaha-tf"), "{kinds:?}");
+    let tf = families.as_array().unwrap().last().unwrap();
     assert_eq!(tf["label"], "Yamaha TF");
     assert_eq!(tf["origin"], "linked");
     assert_eq!(tf["available"], true);

@@ -311,9 +311,10 @@ mod tests {
             no_family("yamaha-tf", &known),
             "the Yamaha TF extension (patchbay-yamaha-tf) is not installed in this app"
         );
-        assert_eq!(
-            no_family("theremin", &known),
-            "unknown device kind 'theremin' (known: system-audio, antelope-galaxy32, dante)"
+        let unknown = no_family("theremin", &known);
+        assert!(
+            unknown.starts_with("unknown device kind 'theremin' (known: system-audio, "),
+            "{unknown}"
         );
     }
 
