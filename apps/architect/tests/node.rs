@@ -288,6 +288,19 @@ async fn studios_node_draws_a_shared_chart_as_the_follow_svg() {
         !values(svg, "data-bar").is_empty(),
         "no data-bar on the chart's bars"
     );
+    // Its beats' lines glide (the page player's `data-glide`, read from
+    // the Architect release that knows it): the node's sanitiser keeps
+    // them on the release pinned now.
+    let beats = &svg[svg.find("class=\"kf-beats\"").expect("no beats box")..];
+    assert_eq!(
+        values(beats, "data-glide").len(),
+        values(beats, "data-at").len(),
+        "a beat without its glide"
+    );
+    assert!(
+        !values(beats, "data-until").is_empty(),
+        "no data-until on the chart's beats"
+    );
     assert!(
         values(svg, "data-media")
             .iter()
