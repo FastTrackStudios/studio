@@ -2333,7 +2333,8 @@ island: island-check
 island-web out:
     #!/usr/bin/env bash
     set -euo pipefail
-    meta=$(cargo metadata --format-version 1)
+    # The dev shell's cargo (its own output kept out of the JSON).
+    metafile=$(mktemp); devenv shell -- sh -c 'cargo metadata --format-version 1 > "$1"' sh "$metafile" >/dev/null; meta=$(cat "$metafile"); rm -f "$metafile"
     target=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])' <<<"$meta")
     # The dev shell's own cargo, wasm-bindgen (pinned with the crate) and
     # wasm-opt (binaryen), never whatever else is on the PATH.
@@ -2355,7 +2356,7 @@ island-web out:
 # empty, so a host clippy checks nothing). Warnings fail.
 island-check:
     devenv --profile wasi shell -- cargo clippy -p studio-island --target wasm32-wasip2 -- -D warnings
-    cargo clippy -p studio-island --target wasm32-unknown-unknown -- -D warnings
+    devenv shell -- cargo clippy -p studio-island --target wasm32-unknown-unknown -- -D warnings
 
 # Serve the built web DAW on http://localhost:8765.
 web-daw-serve:
