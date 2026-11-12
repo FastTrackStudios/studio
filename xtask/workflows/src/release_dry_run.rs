@@ -41,6 +41,7 @@ fn dry_run() -> Result<Job> {
         .step(Step::run("minisign (pinned)", crate::sums::INSTALL_MINISIGN))
         .step(
             Step::run("scripts/release-dry-run.sh", "bash scripts/release-dry-run.sh\n")
-                .env("GH_TOKEN", "${{ github.token }}"),
+                .env("GH_TOKEN", "${{ github.token }}")
+                .env("DRY_RUN_TARGET", "${{ github.event.pull_request.base.sha || github.sha }}"),
         ))
 }
