@@ -134,6 +134,7 @@ impl SampleEngine {
         let interval = to.abs_diff(from);
         let big = interval > 12;
         let hard = velocity > 75 && ioi > 50;
+        self.marcato_kbqnb = hard;
         let line = self.cur_line as u8;
         let sr = self.sample_rate;
         let ms = move |v: f32| ms_to_frames_f(v, sr);

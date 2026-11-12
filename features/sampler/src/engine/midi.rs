@@ -305,10 +305,12 @@ impl SampleEngine {
                 self.play_direction = "up".to_string();
                 self.trigger_zoned_sustain(note);
                 self.spawn_attack_layer(note);
+                self.spawn_marcato_overlay(note, velocity);
                 self.ab_anchor_frame = now;
                 let l = self.line_mut();
                 l.note = Some(note);
                 l.last_onset_frame = now;
+                l.marcato_ioi = None;
             }
         }
     }
@@ -447,6 +449,7 @@ impl SampleEngine {
                         // Pacific atk+sus: layer the one-shot attack on a
                         // fresh phrase start (no-op without `attack_artic`).
                         self.spawn_attack_layer(note);
+                        self.spawn_marcato_overlay(note, velocity);
                         let now = self.frames_rendered;
                         // `$0nind := $e44qy` (script 17528) — the AB dip's
                         // anchor is planted here and nowhere else.
@@ -1037,6 +1040,34 @@ impl SampleEngine {
         }
     }
 
+    /// A marcato phrase's first-note overlay (see `OverlaySpec`). After a
+    /// hard transition (`$kbqnb`) Kontakt draws a marcato-mod zone at
+    /// velocity 5/6 instead — those zones are not modelled, so none plays.
+    fn spawn_marcato_overlay(&mut self, note: u8, velocity: u8) {
+        if !self.marcato_overlay || self.marcato_kbqnb {
+            return;
+        }
+        let Some(ov) = self
+            .patch
+            .spec
+            .articulation(&self.articulation)
+            .and_then(|a| a.overlay.clone())
+        else {
+            return;
+        };
+        let scale = ov
+            .cc1_scale
+            .get(usize::from(self.cc1))
+            .copied()
+            .unwrap_or(100);
+        let v = ((u32::from(velocity) * u32::from(scale)) / 100).max(1) as u8;
+        let keep = std::mem::replace(&mut self.articulation, ov.articulation);
+        self.suppress_random_tune = true;
+        self.trigger_zoned_short(note, v);
+        self.suppress_random_tune = false;
+        self.articulation = keep;
+    }
+
     /// Kontakt's short RR pick (`ArticulationSpec::rr_sequence`, KSP
     /// `SpiccRR1`…): the band's counter walks the sequence; a pick equal to
     /// the last RR this note-class played in the band advances once more.
@@ -1091,7 +1122,7 @@ impl SampleEngine {
         let recent =
             slot.is_some_and(|f| frames_to_ms(now.saturating_sub(f), self.sample_rate) < gate_ms);
         *slot = Some(now);
-        if n == 0 || recent {
+        if n == 0 || recent || self.suppress_random_tune {
             return 0;
         }
         if let Some(t) = self.forced_tunes.pop_front() {

@@ -158,6 +158,36 @@ def main():
         # Marcato (CC58 66 = overlay off) — CC1=127, CC2 has no say here.
         # Single notes (soft/hard) and connected pairs at slow gaps (no run
         # mode, which only engages within 175 ms).
+        if "--overlay" in sys.argv:
+            # Marcato WITH overlay (CC58 71) single notes, and runs (IOI <=
+            # 175 ms: run mode's extra voice) without and with overlay.
+            for vel in (40, 120):
+                for key in (67, 72):
+                    unit("MARC-OV", f"marcato+overlay key{key} v{vel}", key, vel, 127, 0, 2.0, cc58=71)
+
+            def run(desc, keys, vel, gap, cc58):
+                nonlocal t
+                m.cc(t, 58, cc58)
+                m.cc(t, 1, 127)
+                start = t + 1.5
+                for i, key in enumerate(keys):
+                    last = i == len(keys) - 1
+                    m.note(start + i * gap, 2.0 if last else gap + 0.05, key, vel)
+                win = gap * (len(keys) - 1) + 2.0 + 2.5
+                rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", keys[-1], "MARC-RUN", desc))
+                t = start + win
+
+            for vel in (40, 120):
+                for gap in (0.06, 0.12):
+                    run(f"run 67-69-71-72 v{vel} gap{int(gap*1000)}", [67, 69, 71, 72], vel, gap, 66)
+            run("run 67-69-71-72 v120 gap120 +overlay", [67, 69, 71, 72], 120, 0.12, 71)
+            m.write(sys.argv[1])
+            with open(sys.argv[2], "w") as f:
+                f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
+                for r in rows:
+                    f.write("\t".join(map(str, r)) + "\n")
+            print(f"{len(rows)} units, {t:.1f} s")
+            return
         for vel in (40, 120):
             for key in (67, 72):
                 unit("MARC-1", f"marcato key{key} v{vel}", key, vel, 127, 0, 2.0, cc58=66)

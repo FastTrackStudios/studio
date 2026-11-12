@@ -895,6 +895,13 @@ pub struct SampleEngine {
     /// Keys a trill pair absorbed without sounding them (their key-up is a
     /// no-op; the trill note is the lower key's).
     pub(crate) trill_silent: [bool; 128],
+    /// The marcato overlay switch (CC58 "with overlay" / "no overlay"; the
+    /// shipped default is on), and whether the last marcato transition was
+    /// hard (`$kbqnb`, which picks the overlay type).
+    pub(crate) marcato_overlay: bool,
+    pub(crate) marcato_kbqnb: bool,
+    /// Skip the random short detune (the overlay plays untuned).
+    pub(crate) suppress_random_tune: bool,
     /// CSS `%jcxqm` two-stage transition fade-in `(stage1_run, stage1_denom,
     /// stage2)` in frames — the transition voice EMERGES via the swell, not a
     /// 25 ms declick (the `NVLeg` sample has no silent head; it starts ~-16 dB, so
@@ -1289,6 +1296,9 @@ impl SampleEngine {
             trill_due: None,
             trill_bypass: false,
             trill_silent: [false; 128],
+            marcato_overlay: true,
+            marcato_kbqnb: false,
+            suppress_random_tune: false,
             transition_fade: None,
             sord_filter: BiquadFilter::lowpass(filter::SORD_FC, filter::SORD_Q, sample_rate),
             // Pre-size note-keyed maps to the full MIDI range so note-on never

@@ -221,6 +221,26 @@ impl SampleEngine {
                 }
             }
         }
+        // And what an articulation plays besides itself: a marcato first
+        // note's overlay short, a tremolo/marcato transition's legato zones.
+        let extra: Vec<String> = warm_ids
+            .iter()
+            .filter_map(|id| self.patch.spec.articulation(id))
+            .flat_map(|a| {
+                [
+                    a.overlay.as_ref().map(|o| o.articulation.clone()),
+                    a.simple_transition
+                        .as_ref()
+                        .map(|t| t.lt_articulation.clone())
+                        .filter(|s| !s.is_empty()),
+                    a.marcato_transition
+                        .as_ref()
+                        .map(|m| m.lt_articulation.clone()),
+                ]
+            })
+            .flatten()
+            .collect();
+        warm_ids.extend(extra);
         let mut stats = PreloadStats::default();
         for (i, z) in self.patch.spec.zones.iter().enumerate() {
             if !zone_trigger_matches(z, ZoneTrigger::Attack) {

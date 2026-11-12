@@ -1359,6 +1359,10 @@ impl SampleEngine {
             _ => {}
         }
 
+        if label.starts_with("Marcato") {
+            self.marcato_overlay = label.contains("with overlay");
+        }
+
         // ── Articulation selection ───────────────────────────────────────────
         let matched = self
             .patch

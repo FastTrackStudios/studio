@@ -825,6 +825,16 @@ pub struct SimpleTransitionSpec {
     pub lt_fade_out_ms: f32,
 }
 
+/// A marcato phrase's first-note overlay (KSP 17620-17855): with the
+/// overlay on (CC58 71-75) the first note also plays a short of
+/// `articulation` at velocity `vel · cc1_scale[CC1] / 100`, through that
+/// short's own layer/level law and RR sequence, untuned.
+#[derive(Debug, Clone, Facet)]
+pub struct OverlaySpec {
+    pub articulation: String,
+    pub cc1_scale: Vec<u8>,
+}
+
 /// See [`PerformanceSpec::trill_pair`].
 #[derive(Debug, Clone, Facet)]
 pub struct TrillPairSpec {
@@ -1808,6 +1818,8 @@ pub struct ArticulationSpec {
     pub marcato_transition: Option<MarcatoTransitionSpec>,
     /// Tremolo / trills / harmonics legato: see [`SimpleTransitionSpec`].
     pub simple_transition: Option<SimpleTransitionSpec>,
+    /// Marcato first-note overlay: see [`OverlaySpec`].
+    pub overlay: Option<OverlaySpec>,
     /// Whether the envelope freezes at its hold level while the note is held
     /// (sustains) or plays through one-shot (shorts, releases, transitions).
     /// `None` = held for Sustain/Looped/Trill kinds, one-shot otherwise.
