@@ -9084,6 +9084,7 @@ dependencies = [
  "include_dir",
  "libc",
  "patchbay",
+ "patchbay-antelope",
  "patchbay-yamaha-tf",
  "serde",
  "serde_json",
@@ -16501,7 +16502,6 @@ dependencies = [
  "pipewire",
  "serde",
  "serde_json",
- "socket2 0.6.5",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -16510,6 +16510,27 @@ dependencies = [
  "vox-core",
  "vox-types",
  "vox-websocket",
+]
+
+[[package]]
+name = "patchbay-antelope"
+version = "26.10.3"
+dependencies = [
+ "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.4)",
+ "architect-extensions",
+ "architect-settings",
+ "dioxus",
+ "futures",
+ "parking_lot",
+ "patchbay",
+ "patchbay-antelope",
+ "serde",
+ "serde_json",
+ "socket2 0.6.5",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
