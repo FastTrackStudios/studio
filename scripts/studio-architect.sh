@@ -131,6 +131,15 @@ release() {
     rm -rf "${dir:?}/$name"
     mkdir -p "$dir/$name"
     cp "$bin" "$dir/$name/studio-architect"
+    # Studio's island (#445) beside the binary, where the distribution reads
+    # it (studio_architect::ISLAND_FOLDER): `just island`'s folder. Without
+    # it the node ships without the island (the view keeps Architect's own
+    # bar and controls).
+    if [ -f target/studio-island/architect.lock.json ]; then
+        cp -r target/studio-island "$dir/$name/studio-island"
+    else
+        echo "studio-architect: no target/studio-island (run \`just island\`): released without the island" >&2
+    fi
     tar -C "$dir" -czf "$dir/$name.tar.gz" "$name"
     rm -rf "${dir:?}/$name"
     local web="studio-architect-web-$tag"
