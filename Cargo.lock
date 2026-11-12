@@ -9043,6 +9043,7 @@ dependencies = [
  "anyrender",
  "anyrender_vello",
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.2)",
+ "architect-desktop",
  "architect-telemetry",
  "blitz-dom",
  "blitz-paint",

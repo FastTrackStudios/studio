@@ -2366,6 +2366,11 @@ patchbay-install-linux: patchbay-web-stage
 patchbay:
     cargo run -p fts-patchbay
 
+# Run the Patchbay distribution of Architect (patchbay-app: Architect's
+# window with the Patchbay extension), joining this machine's engine.
+patchbay-app *args:
+    cargo run -p fts-patchbay --features app --bin patchbay-app -- {{args}}
+
 # Run Patchbay's agent CLI from source, e.g. `just patchbay-cli health --json`.
 patchbay-cli *args:
     cargo run -p fts-patchbay --bin patchbay -- {{args}}

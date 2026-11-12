@@ -30,19 +30,36 @@ extension per device family, packaged as its own distribution
 - **One engine per machine** (`server::Engine`, held by `home`).
   `build` starts nothing; the first action or view calls
   `home::engine()`, which joins a Patchbay engine already answering on
-  the port (`fts-patchbay`, `patchbay serve`, another Architect app;
-  probed on the configured host, loopback for `0.0.0.0`/`[::]`) or binds
-  the port **before** creating the backend and runs it here; a loser of
-  the race retries the join. When a joined engine goes away (its app
-  quit), the next call or the view starts or joins again, so a survivor
-  takes the port. `fts-patchbay` goes through the same `home` (it joins
-  too; a port held by something that is not Patchbay still runs it
-  unserved). Every engine and start runs on one runtime per process
-  (`server::runtime`). No version check on join yet (#425).
-- `PATCHBAY_PIPEWIRE=off` keeps an engine off the machine's PipeWire (no
-  connection, no `pw-dump` poller): the tests use it. The engine's
-  PipeWire client is always named `patchbay`
+  the port (`fts-patchbay`, `patchbay serve`, `patchbay-app`, another
+  Architect app; probed on the configured host, loopback for
+  `0.0.0.0`/`[::]`) or binds the port **before** creating the backend and
+  runs it here. When a joined engine goes away (its app quit), the next
+  call or the view starts or joins again, so a survivor takes the port.
+  Every starter goes through `home`, the macOS bundle included (it joins
+  rather than exiting). Every engine and start runs on one runtime per
+  process (`server::runtime`). No version check on join yet (#425).
+- **Never a second engine while a Patchbay holds the port.** A join that
+  is refused takes the port; one that connects and gets no answer keeps
+  trying until `join_deadline` (20 s) and then fails (`NoAnswer`); only a
+  holder that answers and is not Patchbay lets `IfTaken::RunUnserved`
+  (`fts-patchbay`) run the engine unserved.
+- **The engine's config decides LAN serving, not the starter**
+  (`server::listen_addr`): `PATCHBAY_ADDR` (a per-process override for
+  scratch engines), else the config's `network.bind` (`patchbay listen
+  lan|local`), else `DEFAULT_ADDR` (loopback on macOS, every interface on
+  Linux), for every starter and every takeover.
+- `PATCHBAY_PIPEWIRE=off` keeps an engine off the machine's PipeWire: it
+  gates the connection and the `pw-dump` poller only (see
+  `server::engine::pipewire_enabled` for what still runs). It is logged as
+  a warning at start, and `engine_info` (`status`'s and `health`'s
+  `pipewire`: `on`/`off`/`unsupported`) says so. The tests use it. The
+  engine's PipeWire client is always named `patchbay`
   (`pw-cli ls Client | rg -c 'application.name = "patchbay"'`).
+- **The Patchbay distribution** (`apps/patchbay/src/distribution.rs`,
+  `patchbay-app`, feature `app`, `just patchbay-app`): Architect's window
+  with the `patchbay` bundle linked in, app and folder `patchbay`, bundle
+  id `app.fasttrackstudio.patchbay`. Beside `fts-patchbay` until that
+  becomes the distribution (#428).
 - Reports built from several calls (`report::status`,
   `report::collect_health`) live in the crate, so the CLI and the actions
   answer with the same JSON.

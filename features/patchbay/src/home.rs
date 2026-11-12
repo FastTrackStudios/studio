@@ -13,7 +13,7 @@ use std::sync::{Arc, OnceLock};
 
 use dioxus::prelude::*;
 
-use crate::server::{DEFAULT_ADDR, Engine, EngineOptions};
+use crate::server::{Engine, EngineOptions};
 use crate::ui::{Dialer, EngineLink, Page, PatchbayApp, PatchbayHandle, Shell};
 
 /// The page this process draws in; [`native_page`] unless the app says
@@ -75,8 +75,9 @@ fn write_prefs(prefs: &Prefs) {
     }
 }
 
-/// How this process starts its engine; [`EngineOptions::new`] on the
-/// configured address unless the app says otherwise ([`configure`]).
+/// How this process starts its engine; [`EngineOptions::machine`] (this
+/// machine's listen address) unless the app says otherwise
+/// ([`configure`]).
 static OPTIONS: OnceLock<fn() -> EngineOptions> = OnceLock::new();
 
 /// Set how this process starts its engine (the address, its web bundle,
@@ -86,10 +87,9 @@ pub fn configure(options: fn() -> EngineOptions) {
 }
 
 fn options() -> EngineOptions {
-    OPTIONS.get().map_or_else(
-        || EngineOptions::new(EngineOptions::configured_addr(DEFAULT_ADDR)),
-        |make| make(),
-    )
+    OPTIONS
+        .get()
+        .map_or_else(EngineOptions::machine, |make| make())
 }
 
 /// This machine's engine, as this process reaches it: started here, or
