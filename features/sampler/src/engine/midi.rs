@@ -175,6 +175,16 @@ impl SampleEngine {
     /// - Otherwise: fresh attack on a free line (LRU-silent first; if every
     ///   line is sounding, the least-recently-active line is retagged).
     pub(crate) fn live_divisi_note_on(&mut self, note: u8, velocity: u8) {
+        // The same per-note bookkeeping `note_on_line` does. Without it the
+        // velocity zone of a fresh live note came from the PREVIOUS note (90 at
+        // startup), so a soft first note took the zone-2 attack swap —
+        // body muted 40 ms and a Legzero attack voice on top — where Kontakt
+        // plays the plain body (probe null test).
+        self.voices.begin_strike();
+        self.last_velocity = velocity;
+        self.recent_velocity =
+            (((self.recent_velocity as u16 * 3 + velocity as u16) / 4) as u8).max(1);
+        self.note_strike_vel[note as usize] = velocity;
         let now = self.frames_rendered;
         let window = ms_to_frames(
             self.patch.spec.live_chord_window_ms.max(0.0).round() as u32,
@@ -239,11 +249,16 @@ impl SampleEngine {
             Some((_, _, Some(rel))) => {
                 self.start_legato_transition(rel, note, velocity);
             }
-            // Fresh sustain attack on its own line.
+            // Fresh sustain attack on its own line — the first-note branch of
+            // `note_on_line`, line for line.
             None => {
                 self.play_direction = "up".to_string();
                 self.trigger_zoned_sustain(note);
-                self.line_mut().note = Some(note);
+                self.spawn_attack_layer(note);
+                self.ab_anchor_frame = now;
+                let l = self.line_mut();
+                l.note = Some(note);
+                l.last_onset_frame = now;
             }
         }
     }
@@ -769,7 +784,7 @@ impl SampleEngine {
         // the hammer and most of the note's identity — measured on The
         // Grandeur as a first non-zero sample 1940 frames (40 ms) after
         // note-on against 1 frame in the source recording.
-        let fresh_vz = if !self.legato_sustain && self.cs_family() {
+        let fresh_vz = if !self.legato_sustain && !self.in_transition && self.cs_family() {
             self.patch
                 .spec
                 .legato_cfg()
@@ -778,9 +793,22 @@ impl SampleEngine {
             0
         };
         if fresh_vz >= 2 {
-            let mute = ms_to_frames(40, self.sample_rate);
+            let cfg = self.patch.spec.legato_cfg();
+            let mute_ms = cfg
+                .first_note_mute_ms
+                .get(usize::from(fresh_vz - 2))
+                .copied()
+                .unwrap_or(40.0);
+            let mute = ms_to_frames_f(mute_ms, self.sample_rate);
             let fade = ms_to_frames(if fresh_vz == 3 { 180 } else { 230 }, self.sample_rate);
             self.sustain_fade_in = Some((mute, fade, fade, 0));
+            // The body is a scripted VARIANT of the recording (KSP
+            // `%v2aqt[$2ekvq]`, then `$2ekvq++`).
+            let n = cfg.first_note_variants.len();
+            if n > 0 {
+                self.spawn_variant = Some(cfg.first_note_variants[self.variant_counter % n]);
+                self.variant_counter = (self.variant_counter + 1) % n;
+            }
         }
         if nv_scale > 0.0 || self.cc_driven_layers() {
             self.spawn_sustain_layers(&nv_id, false, nv_scale, &direction, note, rr);
@@ -796,8 +824,17 @@ impl SampleEngine {
                 self.spawn_sustain_layers(&vib_id, true, vb_scale, &direction, note, rr);
             }
         }
+        self.spawn_variant = None;
+        let attack_voice = self
+            .patch
+            .spec
+            .legato_cfg()
+            .first_note_attack_voice
+            .unwrap_or(true);
         if fresh_vz >= 2 {
             self.sustain_fade_in = None;
+        }
+        if fresh_vz >= 2 && attack_voice {
             let (nv_ret, vib_ret) = self.legato_pair_ids(true);
             let expr = self.cc1_expression(self.cc1);
             let hold = ms_to_frames(300, self.sample_rate);
@@ -995,6 +1032,33 @@ impl SampleEngine {
         // crossfade). Both paths spawn every declared dynamic layer and blend
         // the active pair equal-power by CC1; `update_sustain_gains` re-levels
         // them live as CC1 sweeps.
+        // Kontakt group curves, when decoded: every layer at its own table
+        // value — the CC2 side is one of the curves, so `side_scale` (the
+        // legacy equal-power split) does not apply.
+        if self
+            .patch
+            .spec
+            .articulation(artic)
+            .is_some_and(|a| !a.group_curves.is_empty())
+        {
+            for (i, label) in dyn_labels.iter().enumerate() {
+                let gain = self.group_curve_gain(artic, label).unwrap_or(0.0);
+                if let Some(idx) = self.find_layer_zone(artic, direction, label, note, rr) {
+                    self.spawn_zone_voice(
+                        idx,
+                        note,
+                        VoiceKind::SustainLayer,
+                        gain,
+                        Some(DynLayer {
+                            vib,
+                            index: i as u8,
+                        }),
+                        0.0,
+                    );
+                }
+            }
+            return;
+        }
         let expr = self.cc1_expression(self.cc1);
         if dyn_labels.len() <= 1 {
             // Single (or no) declared dynamic — one zone, loudness from CC1.
@@ -1530,14 +1594,37 @@ impl SampleEngine {
     /// current sustain articulation when a note is released — CSS's release
     /// tail. No-op if the articulation declares no `release_artic`.
     pub(crate) fn spawn_release(&mut self, note: u8) {
-        let rel_id = self
-            .patch
-            .spec
-            .articulation(&self.articulation)
-            .and_then(|a| a.release_artic.clone());
-        let Some(rel_id) = rel_id else {
+        let release_of = |engine: &Self, artic: &str| {
+            engine
+                .patch
+                .spec
+                .articulation(artic)
+                .and_then(|a| a.release_artic.clone())
+        };
+        let Some(rel_id) = release_of(self, &self.articulation) else {
             return;
         };
+        // Kontakt releases BOTH sides of the CC2 vibrato pair (NVrel and
+        // Vsusrel each on their own CC2 curve), the way both bodies played.
+        // Only when the pair's release carries decoded group curves — the
+        // legacy single-side release is unchanged elsewhere.
+        let pair_rel = self
+            .find_vibrato_pair_id(&self.articulation)
+            .and_then(|p| release_of(self, &p))
+            .filter(|r| *r != rel_id)
+            .filter(|r| {
+                self.patch
+                    .spec
+                    .articulation(r)
+                    .is_some_and(|a| !a.group_curves.is_empty())
+            });
+        self.spawn_release_of(note, rel_id);
+        if let Some(r) = pair_rel {
+            self.spawn_release_of(note, r);
+        }
+    }
+
+    fn spawn_release_of(&mut self, note: u8, rel_id: String) {
         let (lo, hi, blend) = self.layers_for_artic(&rel_id);
         let dynamic = if blend >= 0.5 { hi } else { lo };
         let rr = self.forced_rr.map_or(self.zone_rr_counter, |f| f as usize);
@@ -1556,14 +1643,56 @@ impl SampleEngine {
                     self.sample_rate,
                 )
             });
-            let held_db = if held_ms >= 1000.0 {
-                0.0
+            let perf = &self.patch.spec.performance;
+            let held_gain = if perf.release_held_table.is_empty() {
+                let held_db = if held_ms >= 1000.0 {
+                    0.0
+                } else {
+                    -6.0 * (1.0 - ((held_ms - 10.0).max(0.0) / 990.0))
+                };
+                db_to_gain(-6.0 + held_db)
             } else {
-                -6.0 * (1.0 - ((held_ms - 10.0).max(0.0) / 990.0))
+                // KSP 21171-21196: `$gflmk = $ofpdo·%ru5pa[held/10 − 1]/100`.
+                let t = &perf.release_held_table;
+                let i = ((held_ms / 10.0) as i64 - 1).clamp(0, t.len() as i64 - 1) as usize;
+                db_to_gain(perf.release_held_db * f32::from(t[i]) / 100.0)
             };
-            let release_gain =
-                self.patch.spec.performance.release_gain * db_to_gain(-6.0 + held_db);
+            let release_gain = self
+                .release_gain_override
+                .unwrap_or(perf.release_gain * held_gain);
+            // Kontakt plays the release `wait(2000)` µs after the note-off
+            // (KSP 20788) — the spec's `release_delay_ms`.
+            self.spawn_extra_hold = ms_to_frames_f(perf.release_delay_ms, self.sample_rate);
+            // Decoded group curves: every release layer plays, crossfaded by
+            // CC36 (= last CC1) and CC2 — like the body it ends.
+            let curves = self
+                .patch
+                .spec
+                .articulation(&rel_id)
+                .filter(|a| !a.group_curves.is_empty())
+                .map(|a| a.dynamics.clone());
+            if let Some(dyns) = curves {
+                for label in dyns {
+                    let g = self.group_curve_gain(&rel_id, &label).unwrap_or(0.0);
+                    if g <= 0.0 {
+                        continue;
+                    }
+                    if let Some(i) = self.find_layer_zone(&rel_id, "", &label, note, rr) {
+                        self.spawn_zone_voice(
+                            i,
+                            note,
+                            VoiceKind::Release,
+                            release_gain * g,
+                            None,
+                            0.0,
+                        );
+                    }
+                }
+                self.spawn_extra_hold = 0;
+                return;
+            }
             self.spawn_zone_voice(idx, note, VoiceKind::Release, release_gain, None, 0.0);
+            self.spawn_extra_hold = 0;
         }
     }
 
@@ -2033,11 +2162,12 @@ impl SampleEngine {
         // rare (a release tail reaching past its sampled range) and nobody
         // minds it running a few milliseconds short. Fold it into the playback
         // rate instead, which is free.
-        let (transpose_cents, resample_semitones) = if self.cs_family() {
-            (semitones * 100.0, 0.0)
-        } else {
-            (0.0, semitones)
-        };
+        let (transpose_cents, resample_semitones) =
+            if self.cs_family() && !self.patch.spec.performance.resample_transpose {
+                (semitones * 100.0, 0.0)
+            } else {
+                (0.0, semitones)
+            };
         let tune_cents_total = tune_cents as f64
             + self.master_tune_cents()
             + f64::from(self.piano_key_cents[usize::from(note & 127)]);
@@ -2138,7 +2268,7 @@ impl SampleEngine {
                 }
             }
             None => 0,
-        };
+        } + self.spawn_extra_hold;
         let is_sustain_layer = matches!(
             kind,
             VoiceKind::SustainNVLo
@@ -2216,8 +2346,14 @@ impl SampleEngine {
             let v = f32::from(self.last_velocity) / 127.0;
             1.0 - s + s * v * v
         });
-        let gain =
-            10.0f32.powf(gain_db / 20.0) * gain_scale * makeup * db_to_gain(piano_db) * vel_law;
+        // Everything but the controller-driven `gain_scale`: what CC
+        // re-levelling must keep (`Voice::level`).
+        let level = 10.0f32.powf(gain_db / 20.0)
+            * makeup
+            * db_to_gain(piano_db)
+            * vel_law
+            * db_to_gain(self.patch.spec.performance.instrument_gain_db);
+        let gain = level * gain_scale;
         let mic_index = self.mic_index_for(&mic);
 
         // Decoded ENV_FLEX amp envelope for this voice's articulation family
@@ -2232,6 +2368,19 @@ impl SampleEngine {
             is_sustain_layer,
             self.sample_rate,
         );
+        let flex_env2 = self
+            .patch
+            .spec
+            .articulation(&flex_artic)
+            .filter(|a| !a.amp_env2.is_empty())
+            .and_then(|a| {
+                let t: Vec<(f32, f32, f32)> = a
+                    .amp_env2
+                    .iter()
+                    .map(|s| (s.time_ms, s.level, s.curve))
+                    .collect();
+                FlexEnv::from_segments(&t, 0.0, self.sample_rate, false)
+            });
 
         // CSS-style sustains ship no loop points but have a slow ~0.8s natural
         // attack pre-roll that CSS skips (Kontakt sample-start) for a fast attack.
@@ -2278,7 +2427,23 @@ impl SampleEngine {
         // jump. The loop below still holds the body for indefinite sustain.
         // (`start_offset` shifts into the window for prefired legato
         // transitions whose measured lead-in exceeds the scheduled lead.)
-        let start_frame = sample_start as usize + start_offset;
+        // A scripted body variant enters the same file deeper (Kontakt's
+        // velocity-2.. zone over it).
+        let sample_start = match self.spawn_variant {
+            Some(v) if is_sustain_layer && v >= 2 => self.patch.spec.zones[idx]
+                .variant_starts
+                .get(usize::from(v - 2))
+                .copied()
+                .unwrap_or(sample_start),
+            _ => sample_start,
+        };
+        let start_frame = sample_start as usize
+            + start_offset
+            + if is_sustain_layer {
+                self.spawn_extra_start
+            } else {
+                0
+            };
 
         // Attack envelope. Sustain layers get the full musical attack. Legato
         // transitions and release tails — and ANY voice that starts mid-sample
@@ -2374,6 +2539,7 @@ impl SampleEngine {
             .with_attack(attack)
             .with_start_hold(start_hold)
             .with_pitch_cents(transpose_cents)
+            .with_level(level * comp)
             .with_sample_window(start_frame, (sample_end > 0).then_some(sample_end as usize));
             // A patch layer's breakpoint amp envelope (not on the release
             // samples, which play after the key).
@@ -2412,6 +2578,12 @@ impl SampleEngine {
             // DYNAMICS, not the utility fades / arrival timing.
             if let Some(flex) = flex_env.clone() {
                 voice = voice.with_flex_env(flex);
+            }
+            if let Some(env2) = flex_env2.clone() {
+                voice = voice.with_flex_env2(env2);
+            }
+            if is_sustain_layer {
+                voice = voice.with_release_curve(self.patch.spec.performance.release_curve_k);
             }
             let loop_xfade =
                 ms_to_frames(self.patch.spec.performance.loop_xfade_ms, self.sample_rate);
@@ -2881,6 +3053,12 @@ impl SampleEngine {
                 self.rr.borrow_mut().reset_to(value as usize);
                 self.zone_rr_counter = value as usize;
                 self.zone_rr_last_slots.clear();
+                // KSP SetRR: the first-note body-variant counter too
+                // (`$2ekvq := CC59 mod 18`).
+                let n = self.patch.spec.legato_cfg().first_note_variants.len();
+                if n > 0 {
+                    self.variant_counter = value as usize % n;
+                }
             }
             64 => {
                 let was_held = self.cc64_held;

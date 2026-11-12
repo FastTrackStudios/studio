@@ -342,6 +342,30 @@ impl SampleEngine {
         self.patch.spec.dynamics.cc1_expression_gain(cc1)
     }
 
+    /// Kontakt per-group CC volume for one dynamic layer of `artic`: the
+    /// product of its decoded tables at the current CC1/CC2. `None` when the
+    /// articulation declares no `group_curves` — callers then use the legacy
+    /// equal-power crossfade + `cc1_expression`.
+    pub(crate) fn group_curve_gain(&self, artic: &str, dynamic: &str) -> Option<f32> {
+        let a = self.patch.spec.articulation(artic)?;
+        if a.group_curves.is_empty() {
+            return None;
+        }
+        let mut g = 1.0f32;
+        for c in a.group_curves.iter().filter(|c| c.dynamic == dynamic) {
+            let v = match c.cc {
+                1 => self.cc1,
+                2 => self.cc2,
+                // The KSP sets CC36 := the last CC1 just before a release
+                // sample plays (script 21422); release groups crossfade on it.
+                36 => self.cc1,
+                _ => continue,
+            };
+            g *= crate::spec::kontakt_table_value(&c.points, f32::from(v) / 127.0);
+        }
+        Some(g)
+    }
+
     /// The CC1 layer slice for a given articulation (by its dynamics count).
     pub(crate) fn cc1_layers_for(&self, artic_id: &str) -> &[Cc1Layer] {
         let Some(artic) = self.patch.spec.articulation(artic_id) else {

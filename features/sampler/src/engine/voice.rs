@@ -390,6 +390,22 @@ pub struct Voice {
     /// For `SustainLayer` voices: which vib side + dynamic-layer index this is,
     /// so the engine can set its CC1/CC2 crossfade gain. `None` otherwise.
     pub dyn_layer: Option<DynLayer>,
+    /// The CC-independent part of this voice's gain (zone volume, instrument
+    /// gain, makeup, unison compensation). CC1/CC2 re-levelling multiplies the
+    /// controller gain by THIS — re-levelling to the bare controller gain
+    /// dropped it (a held note fell to its unscaled level on the first CC).
+    pub level: f32,
+    /// Curvature of the note-off release (`k` of `(e^(−k·x) − e^(−k)) /
+    /// (1 − e^(−k))`, x = elapsed fraction). 0 = the linear fade. Kontakt's
+    /// AHDSR release on CSS sustains measured k = 2.6 over 580 ms.
+    release_k: f32,
+    /// `release_k` while a NOTE-OFF release runs; retire/steal fades leave it
+    /// 0 (linear), as Kontakt's script fades are.
+    release_k_active: f32,
+    /// Second amplitude envelope multiplied with `flex` — Kontakt runs a
+    /// group's ENV_FLEX and ENV_AHDSR together (release samples: AHD 250 ms
+    /// attack / 25 s decay to 0.25 under the flex tail).
+    flex2: Option<FlexEnv>,
 
     /// Mono legato line this voice belongs to (engine `LineId`). Line-scoped
     /// operations (legato fade of the outgoing note, per-line note-off,
@@ -539,7 +555,10 @@ impl FlexEnv {
     /// identified, not tuned.
     #[inline]
     fn shape(t: f32, tension: f32) -> f32 {
-        let a = (tension - 0.5) * 12.0;
+        // Sign measured against Kontakt (CSS legato envelope, null −41 dB):
+        // tension > 0.5 is CONCAVE (fast start), < 0.5 convex. The earlier
+        // `(tension − 0.5)` had every curved segment mirrored.
+        let a = (0.5 - tension) * 12.0;
         if a.abs() < 1.0e-3 {
             t
         } else {
@@ -549,7 +568,7 @@ impl FlexEnv {
 
     /// The shape law's `a` for `tension` — 0 for a (near-)linear segment.
     fn curvature(tension: f32) -> f64 {
-        let a = (f64::from(tension) - 0.5) * 12.0;
+        let a = (0.5 - f64::from(tension)) * 12.0;
         if a.abs() < 1.0e-3 { 0.0 } else { a }
     }
 
@@ -671,6 +690,10 @@ impl Voice {
             pan_l: 1.0,
             pan_r: 1.0,
             target_gain: gain,
+            level: 1.0,
+            release_k: 0.0,
+            release_k_active: 0.0,
+            flex2: None,
             gain_ramp_frames: 0,
             stage1_run: 0,
             stage2_frames: 0,
@@ -754,6 +777,10 @@ impl Voice {
             pan_l: 1.0,
             pan_r: 1.0,
             target_gain: gain,
+            level: 1.0,
+            release_k: 0.0,
+            release_k_active: 0.0,
+            flex2: None,
             gain_ramp_frames: 0,
             stage1_run: 0,
             stage2_frames: 0,
@@ -953,6 +980,54 @@ impl Voice {
     #[must_use]
     pub fn with_dyn_layer(mut self, layer: DynLayer) -> Self {
         self.dyn_layer = Some(layer);
+        self
+    }
+
+    /// Curve the note-off release (see [`Self::release_k`]).
+    #[must_use]
+    pub fn with_release_curve(mut self, k: f32) -> Self {
+        self.release_k = k;
+        self
+    }
+
+    /// Replace this voice's flex envelope after spawn (a per-event envelope,
+    /// e.g. the CSS transition shaped by that transition's CC66–68).
+    pub fn set_flex_env(&mut self, env: FlexEnv) {
+        self.flex = Some(env);
+    }
+
+    /// Attach the second envelope (see [`Self::flex2`]).
+    #[must_use]
+    pub fn with_flex_env2(mut self, env: FlexEnv) -> Self {
+        self.flex2 = Some(env);
+        self
+    }
+
+    /// Whether `idx` is before the playable window. A position inside the
+    /// loop is always playable: a voice that STARTS past its loop start (a
+    /// CSS body variant entering the file deep, Kontakt's velocity-3 zone at
+    /// frame 168000 looping 48010..end) wraps below its start frame — which
+    /// used to end the voice at its first wrap.
+    #[inline]
+    fn below_window(&self, idx: usize) -> bool {
+        idx < self.start_frame && !self.loop_range.is_some_and(|(ls, _)| idx >= ls)
+    }
+
+    /// Release-fade gain for `t` = remaining fraction (1 → 0).
+    #[inline]
+    fn release_shape(&self, t: f32) -> f32 {
+        let k = self.release_k_active;
+        if k < 1e-4 {
+            return t;
+        }
+        let x = 1.0 - t;
+        ((-k * x).exp() - (-k).exp()) / (1.0 - (-k).exp())
+    }
+
+    /// Record the CC-independent part of the gain (see [`Self::level`]).
+    #[must_use]
+    pub fn with_level(mut self, level: f32) -> Self {
+        self.level = level;
         self
     }
 
@@ -1287,6 +1362,7 @@ impl Voice {
                     // voice's stored `release_frames` the envelope amplifies
                     // beyond 1.0 instead of fading. Sync them now.
                     self.release_frames = frames;
+                    self.release_k_active = self.release_k;
                     self.state = VoiceState::Releasing {
                         frames_remaining: frames,
                     };
@@ -1428,14 +1504,14 @@ impl Voice {
                 }
                 let t = *frames_remaining as f32 / self.release_frames.max(1) as f32;
                 *frames_remaining -= 1;
-                t
+                self.release_shape(t)
             }
             VoiceState::Done => return (0.0, 0.0),
         };
 
         // Read sample with linear interpolation
         let frame_idx = self.position as usize;
-        if frame_idx >= self.end_frame || frame_idx < self.start_frame {
+        if frame_idx >= self.end_frame || self.below_window(frame_idx) {
             self.state = VoiceState::Done;
             return (0.0, 0.0);
         }
@@ -1491,8 +1567,12 @@ impl Voice {
         // Decoded ENV_FLEX amplitude envelope. Freezes at the sustain-hold
         // point while Playing (held note stays steady); advances through the
         // decay once Releasing. Multiplied on top of the note-off release fade.
+        let released = !matches!(self.state, VoiceState::Playing);
         let flex = match &mut self.flex {
-            Some(f) => f.next(!matches!(self.state, VoiceState::Playing)),
+            Some(f) => f.next(released),
+            None => 1.0,
+        } * match &mut self.flex2 {
+            Some(f) => f.next(released),
             None => 1.0,
         };
 
@@ -1682,6 +1762,9 @@ impl Voice {
             (Some((_, loop_end)), true) => loop_end as f64 - self.loop_xfade as f64,
             _ => f64::INFINITY,
         };
+        // Copied out: `span` below borrows the voice mutably for the loop.
+        let (win_start, loop_lo) = (self.start_frame, self.loop_range.map(|(ls, _)| ls));
+        let below = move |idx: usize| idx < win_start && !loop_lo.is_some_and(|ls| idx >= ls);
         let Some((span, base)) = self.data.span_cursored(idx0, &mut self.stream_cursor) else {
             return 0;
         };
@@ -1693,7 +1776,7 @@ impl Voice {
             let idx = position as usize;
             // Frames `next_frame` decides: past the sample, at its last
             // frame, out of this run, at the loop seam, the fade's end.
-            if idx >= self.end_frame || idx < self.start_frame || idx + 1 > last {
+            if idx >= self.end_frame || below(idx) || idx + 1 > last {
                 break;
             }
             if idx < base || idx + 1 >= span_end || position >= seam {
@@ -1721,7 +1804,13 @@ impl Voice {
                     }
                     let t = *frames_remaining as f32 / self.release_frames.max(1) as f32;
                     *frames_remaining -= 1;
-                    t
+                    let k = self.release_k_active;
+                    if k < 1e-4 {
+                        t
+                    } else {
+                        let x = 1.0 - t;
+                        ((-k * x).exp() - (-k).exp()) / (1.0 - (-k).exp())
+                    }
                 }
                 VoiceState::Done => break,
             };
@@ -1739,8 +1828,12 @@ impl Voice {
             furthest = b;
             let (l, r) = (l0 + (l1 - l0) * frac, r0 + (r1 - r0) * frac);
             // The envelopes, as `next_frame` steps them.
+            let released = !matches!(state, VoiceState::Playing);
             let flex = match &mut self.flex {
-                Some(f) => f.next(!matches!(state, VoiceState::Playing)),
+                Some(f) => f.next(released),
+                None => 1.0,
+            } * match &mut self.flex2 {
+                Some(f) => f.next(released),
                 None => 1.0,
             };
             let (env, bp) = match &mut self.amp_bp {
@@ -2273,6 +2366,35 @@ impl VoicePool {
                     frames_remaining: fade,
                 };
             }
+        }
+    }
+
+    /// Kontakt `fade_out`: a LINEAR fade to silence over `trans_fade` frames
+    /// for `note`'s transition voices on `line` and `sus_fade` for its body
+    /// layers — no gain ramp on top (which made `retire_note_line` a
+    /// (1 − t)² curve).
+    pub fn fade_out_note_line(&mut self, line: u8, note: u8, trans_fade: usize, sus_fade: usize) {
+        for v in &mut self.voices {
+            if v.note != note || v.line != line {
+                continue;
+            }
+            let fade = match v.kind {
+                VoiceKind::Legato => trans_fade,
+                VoiceKind::SustainLayer
+                | VoiceKind::SustainNVLo
+                | VoiceKind::SustainNVHi
+                | VoiceKind::SustainVibLo
+                | VoiceKind::SustainVibHi
+                | VoiceKind::SustainLo
+                | VoiceKind::SustainHi => sus_fade,
+                _ => continue,
+            }
+            .max(1);
+            v.release_frames = fade;
+            v.release_k_active = 0.0;
+            v.state = VoiceState::Releasing {
+                frames_remaining: fade,
+            };
         }
     }
 

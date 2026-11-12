@@ -327,6 +327,29 @@ enum ZonesCmd {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Sync the NKI's per-zone playback numbers into EXISTING zones, matched
+    /// by file: `tune_cents` (zone tune), `gain_db` (zone volume), and the
+    /// key range / root. Kontakt plays a zone retuned by the group tune
+    /// (`master_tune_cents`) PLUS this zone tune, across `key_min..=key_max`
+    /// (CSS maps each whole-tone sample over two keys); without them no
+    /// note can null against a Kontakt render. Every other field (loops,
+    /// measured arrivals) is left alone.
+    SyncTsv {
+        /// A .signalpack or a loose library.styx.
+        target: PathBuf,
+        /// zones.tsv from the `nki` decoder.
+        #[arg(long)]
+        from_tsv: PathBuf,
+        /// Section label used in extracted WAV paths (e.g. "1st Violins").
+        #[arg(long)]
+        section: String,
+        /// Flat `<Mic>/<Section>/<Artic>/` extraction (CSB/CSW/Solo Strings).
+        #[arg(long)]
+        flat: bool,
+        /// Report what would change without writing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Set scalar fields on matching zones: `--set loop_xfade=4800 …`.
     Set {
         /// A .signalpack (embedded spec is rewritten) or a loose .styx
@@ -420,6 +443,16 @@ pub fn cli_main(argv: impl IntoIterator<Item = OsString>) -> Result<()> {
             wav_root.as_deref(),
             dry_run,
         ),
+        Cmd::Zones {
+            command:
+                ZonesCmd::SyncTsv {
+                    target,
+                    from_tsv,
+                    section,
+                    flat,
+                    dry_run,
+                },
+        } => zones_sync_tsv(&target, &from_tsv, &section, flat, dry_run),
         Cmd::Zones {
             command:
                 ZonesCmd::Set {
@@ -842,6 +875,83 @@ fn zones_set(
     tgt.write(&new_spec)
 }
 
+// ── zones sync-tsv ───────────────────────────────────────────────────────────
+
+/// The NKI numbers a zone block should carry, as styx field values.
+fn tsv_zone_fields(z: &TsvZone) -> Vec<(&'static str, String)> {
+    let mut v = vec![
+        // Full precision: 0.001 c of rate error drifts a sustain ~0.02 rad at
+        // 2 kHz over 3 s — enough to cap a Kontakt null near −35 dB.
+        ("tune_cents", format!("{:.6}", z.tune_cents)),
+        ("gain_db", format!("{:.3}", z.gain_db)),
+        ("key_min", z.key_min.to_string()),
+        ("key_max", z.key_max.to_string()),
+        ("root_key", z.root_key.to_string()),
+    ];
+    if let Some(s) = z.sample_start {
+        v.push(("sample_start", s.to_string()));
+    }
+    // Variants only when they form the contiguous run velocity 2, 3, … that
+    // `ZoneSpec::variant_starts` indexes.
+    let run: Vec<u64> = (2..)
+        .map_while(|vel| z.variant_starts.get(&vel).copied())
+        .collect();
+    if !run.is_empty() {
+        let list = run.iter().map(u64::to_string).collect::<Vec<_>>().join(" ");
+        v.push(("variant_starts", format!("({list})")));
+    }
+    v
+}
+
+fn zones_sync_tsv(
+    target: &Path,
+    tsv: &Path,
+    section: &str,
+    flat: bool,
+    dry_run: bool,
+) -> Result<()> {
+    let by_file = load_tsv_zones(tsv, section, flat)?;
+    let (tgt, spec_text) = Target::open(target)?;
+    let (mut matched, mut unmatched) = (0usize, 0usize);
+    let mut field_changes: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let (new_spec, changed) = edit_zones(&spec_text, |block| {
+        let file = styx_edit::entry_field(block, "file")?;
+        let Some(z) = by_file.get(file.as_str()) else {
+            unmatched += 1;
+            return None;
+        };
+        matched += 1;
+        let mut b = block.to_string();
+        for (k, v) in tsv_zone_fields(z) {
+            let old = styx_edit::entry_field(&b, k);
+            let same = old.as_deref().is_some_and(|o| {
+                o.parse::<f64>()
+                    .ok()
+                    .zip(v.parse::<f64>().ok())
+                    .map_or(o.trim() == v.trim(), |(o, n)| (o - n).abs() < 1e-7)
+            });
+            if !same {
+                *field_changes.entry(k).or_default() += 1;
+                b = styx_edit::set_entry_field(&b, k, &v);
+            }
+        }
+        (b != block).then_some(b)
+    })?;
+
+    println!("{matched} zone(s) matched a tsv file, {unmatched} did not, {changed} edited");
+    for (k, n) in &field_changes {
+        println!("  {k:<10} changed on {n} zone(s)");
+    }
+    if matched == 0 {
+        bail!("no zone's `file` matched a zones.tsv sample (wrong --section or --flat?)");
+    }
+    if dry_run || changed == 0 {
+        println!("(nothing written)");
+        return Ok(());
+    }
+    tgt.write(&new_spec)
+}
+
 // ── zones normalize-pacific ──────────────────────────────────────────────────
 
 /// Parsed form of a Pacific baked-suffix articulation id.
@@ -962,6 +1072,16 @@ struct TsvZone {
     key_max: u8,
     root_key: u8,
     tune_cents: f64,
+    /// Zone volume (`zvol`, a linear amplitude factor) in dB.
+    gain_db: f64,
+    /// Kontakt zone sample start (frames) of the file's velocity-1 zone —
+    /// the plain note-on entry. CSS reuses one file across velocity-2..4
+    /// zones with deeper starts for scripted variants; those are not zones
+    /// of ours. `None` when the decode has no `sample_start` column.
+    sample_start: Option<u64>,
+    /// Sample starts of the file's velocity-2.. zones (CSS body variants),
+    /// keyed by velocity.
+    variant_starts: BTreeMap<i32, u64>,
     rr_index: u32,
     mic: String,
     articulation: String,
@@ -1012,6 +1132,10 @@ fn load_tsv_zones(
         col("loop_end")?,
         col("sample")?,
     );
+    // Older decodes have no zone-volume / sample-start columns.
+    let c_zvol = header.iter().position(|h| *h == "zvol");
+    let c_start = header.iter().position(|h| *h == "sample_start");
+    let c_vel_lo = header.iter().position(|h| *h == "vel_lo");
 
     let mut by_file: BTreeMap<String, TsvZone> = BTreeMap::new();
     let mut skipped = 0usize;
@@ -1071,6 +1195,15 @@ fn load_tsv_zones(
         let key_hi: i32 = f.get(c_khi).and_then(|v| v.parse().ok()).unwrap_or(0);
         let root: i32 = f.get(c_root).and_then(|v| v.parse().ok()).unwrap_or(60);
         let tune: f64 = f.get(c_tune).and_then(|v| v.parse().ok()).unwrap_or(1.0);
+        let zvol: f64 = c_zvol
+            .and_then(|c| f.get(c))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1.0);
+        let start: Option<u64> = c_start
+            .and_then(|c| f.get(c))
+            .and_then(|v| v.parse::<i64>().ok())
+            .map(|v| v.max(0) as u64);
+        let vel_lo: Option<i32> = c_vel_lo.and_then(|c| f.get(c)).and_then(|v| v.parse().ok());
         let (ls, le) = (
             f.get(c_ls).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0),
             f.get(c_le).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0),
@@ -1085,6 +1218,9 @@ fn load_tsv_zones(
             } else {
                 0.0
             },
+            gain_db: if zvol > 0.0 { 20.0 * zvol.log10() } else { 0.0 },
+            sample_start: None,
+            variant_starts: BTreeMap::new(),
             rr_index,
             mic,
             articulation: artic,
@@ -1098,6 +1234,18 @@ fn load_tsv_zones(
         });
         entry.key_min = entry.key_min.min(key_lo.clamp(0, 127) as u8);
         entry.key_max = entry.key_max.max(key_hi.clamp(0, 127) as u8);
+        // The velocity-1 row is the plain note-on zone; without a vel column
+        // the first row stands in for it.
+        if start.is_some()
+            && (vel_lo == Some(1) || (vel_lo.is_none() && entry.sample_start.is_none()))
+        {
+            entry.sample_start = start;
+        }
+        if let (Some(v), Some(st)) = (vel_lo, start) {
+            if v >= 2 {
+                entry.variant_starts.insert(v, st);
+            }
+        }
         if le > ls && entry.loop_end <= entry.loop_start {
             entry.loop_start = ls;
             entry.loop_end = le;
@@ -1125,7 +1273,7 @@ fn emit_zone_block(z: &TsvZone) -> String {
     f("mic", format!("{:?}", z.mic));
     f("articulation", format!("{:?}", z.articulation));
     f("dynamic", format!("{:?}", z.dynamic));
-    f("gain_db", "0.000".into());
+    f("gain_db", format!("{:.3}", z.gain_db));
     let cents = if z.tune_cents.abs() < 1e-2 {
         0.0
     } else {

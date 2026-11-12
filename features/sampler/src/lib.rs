@@ -524,6 +524,11 @@ impl PlayerPatch {
         patch.spec.short_note_timing = cfg.short_note_timing;
         patch.spec.keyswitch = cfg.keyswitch;
         patch.spec.performance = cfg.performance;
+        // Live legato gating is playing behaviour too — it belongs with the
+        // config (CSS sets it so every connected note is a transition, as in
+        // Kontakt). Dropping it here left the engine's 2-semitone default.
+        patch.spec.live_legato_interval_max = cfg.live_legato_interval_max;
+        patch.spec.live_chord_window_ms = cfg.live_chord_window_ms;
         Ok(patch)
     }
 
@@ -610,6 +615,7 @@ impl PlayerPatch {
                     pan: 0.0,
                     tune_cents: 0.0,
                     sample_start: 0,
+                    variant_starts: Vec::new(),
                     sample_end: 0,
                     loop_start: 0,
                     loop_end: 0,

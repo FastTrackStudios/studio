@@ -553,6 +553,34 @@ pub struct PerformanceSpec {
     /// actually cares sets its own value.
     #[facet(default)]
     pub sustain_makeup_db: f32,
+    /// Level the host instrument adds to EVERY voice (dB). Kontakt plays a
+    /// CSS zone at +2.55 dB over the raw file when every group curve reads
+    /// 1.0 (null-tested). Unlike `sustain_makeup_db` it is not a loop or
+    /// legato compensation and applies to shorts and releases too.
+    #[facet(default)]
+    pub instrument_gain_db: f32,
+    /// How a note between sampled keys is pitched. `true`: RESAMPLE (rate
+    /// change, the note runs shorter/longer) — what Kontakt does, null-tested
+    /// on CSS (+100 c at key 72 from the B3 zone, −52.7 dB). `false`/unset:
+    /// the Cinematic-family default, a time-preserving pitch shift (a delay
+    /// line, which also adds an echo-like double) — kept for libraries not
+    /// yet null-tested.
+    #[facet(default)]
+    pub resample_transpose: bool,
+    /// Curvature `k` of the sustain body's note-off release (0 = linear;
+    /// see `Voice::release_k`). CSS in Kontakt: 2.6 over `release_ms` 580.
+    #[facet(default)]
+    pub release_curve_k: f32,
+    /// Release-sample level by held time (KSP `%ru5pa`): gain =
+    /// `release_held_db × table[clamp(held_ms/10 − 1, 0, len−1)] / 100`. Empty
+    /// = the legacy −6 dB base + linear held curve.
+    #[facet(default)]
+    pub release_held_table: Vec<u8>,
+    #[facet(default)]
+    pub release_held_db: f32,
+    /// Delay from note-off to the release sample (ms). CSS: 2 (KSP `wait(2000)`).
+    #[facet(default)]
+    pub release_delay_ms: f32,
     /// Global master tune in cents, applied on top of the per-note transpose.
     /// CSS ships `tune=1.00521` ≈ +9.0 cents on every playable group; other
     /// libraries stay at 0.
@@ -601,6 +629,12 @@ impl Default for PerformanceSpec {
         Self {
             sustain_noteoff_ms: 400,
             sustain_makeup_db: 0.0,
+            instrument_gain_db: 0.0,
+            resample_transpose: false,
+            release_curve_k: 0.0,
+            release_held_table: Vec::new(),
+            release_held_db: 0.0,
+            release_delay_ms: 0.0,
             master_tune_cents: 0.0,
             loop_xfade_ms: 150,
             zone_pitch_tolerance: 2,
@@ -623,6 +657,75 @@ pub struct EnvSegmentSpec {
     pub level: f32,
     /// Curve shape parameter (0.5 = linear-ish; matches the decoded tables).
     pub curve: f32,
+}
+
+/// A CSS legato transition as Kontakt plays it (KSP §1.2, every number
+/// null-tested). At the transition (after the overlap delay):
+/// - the old body fades out linearly over `old_body_fade_ms`;
+/// - the previous transition voice fades out over 250 → 400 ms by IOI
+///   (low latency; expressive flat 400);
+/// - the old note's in-phrase release plays at `in_phrase_release_db`;
+/// - the new body enters silent, waits `body_wait_ms`, then fades in
+///   linearly over `body_fade_ms`;
+/// - the transition sample of the LOWER note (interval-coded) enters at the
+///   mode/zone offset + the overlap delay, under the envelope `lt_env`, its
+///   first node at `(CC66·CC67)/127²` reached in `lt_seg0_ms`.
+/// Intervals above an octave play no transition sample: the body enters at
+/// `big_leap_body_offset_ms`, fading in over `big_leap_new_fade_ms` while
+/// the old body fades over `big_leap_old_fade_ms`.
+#[derive(Debug, Clone, Facet)]
+pub struct KontaktTransitionSpec {
+    pub old_body_fade_ms: f32,
+    pub body_wait_ms: f32,
+    pub body_fade_ms: f32,
+    pub big_leap_body_offset_ms: f32,
+    pub big_leap_old_fade_ms: f32,
+    pub big_leap_new_fade_ms: f32,
+    pub in_phrase_release_db: f32,
+    /// First envelope segment's length: low latency (CC68 = 108), expressive (127).
+    pub lt_seg0_ms_low_latency: f32,
+    pub lt_seg0_ms_expressive: f32,
+    /// The transition envelope after its first node (FlexEnv segments).
+    pub lt_env: Vec<EnvSegmentSpec>,
+    /// Phrase-start dip on the transition voice: within `phrase_dip_window_ms`
+    /// of the phrase anchor it starts `phrase_dip_db` down and recovers over
+    /// `phrase_dip_window_ms`.
+    pub phrase_dip_db: f32,
+    pub phrase_dip_window_ms: f32,
+}
+
+/// CSS transition-envelope CC values (KSP 7186-7425) for one transition.
+#[must_use]
+pub fn css_transition_ccs(expressive: bool, zone: u8, ioi_ms: f32) -> (f32, f32) {
+    let ioi = ioi_ms.max(0.0).floor();
+    if expressive {
+        let cc66 = if ioi < 1750.0 {
+            (64.0 + (63.0 * ioi / 1750.0).floor()).min(127.0)
+        } else {
+            127.0
+        };
+        return (cc66, 84.0);
+    }
+    let cc66 = if ioi < 250.0 {
+        117.0 + (-44.0 * ioi / 250.0).ceil()
+    } else if ioi < 1750.0 {
+        73.0 + (54.0 * (ioi - 250.0) / 1500.0).floor()
+    } else {
+        127.0
+    };
+    let (hi, lo) = if zone <= 1 {
+        (64.0, 62.0)
+    } else {
+        (62.0, 42.0)
+    };
+    let cc67 = if ioi < 200.0 {
+        hi
+    } else if ioi < 250.0 {
+        hi + ((lo - hi) * (ioi - 200.0) / 50.0).trunc()
+    } else {
+        lo
+    };
+    (cc66, cc67)
 }
 
 /// A piecewise-linear curve over the inter-onset interval (IOI, ms): below
@@ -1091,6 +1194,7 @@ fn zone_from_sfz(
         pan: (sfz_f32(group, region, "pan").unwrap_or(0.0) / 100.0).clamp(-1.0, 1.0),
         tune_cents: tune + transpose,
         sample_start: sfz_u32(group, region, "offset").unwrap_or(0),
+        variant_starts: Vec::new(),
         sample_end: sfz_u32(group, region, "end").unwrap_or(0),
         loop_start: sfz_u32(group, region, "loop_start").unwrap_or(0),
         loop_end: sfz_u32(group, region, "loop_end").unwrap_or(0),
@@ -1250,6 +1354,130 @@ pub struct Cc1Layer {
     pub cc_range: [u8; 2],
 }
 
+/// One Kontakt `CC_VOLUME` table on one dynamic layer's group.
+#[derive(Debug, Clone, Facet)]
+pub struct GroupCurveSpec {
+    /// The layer it scales (zone `dynamic` tag: `"p"`, `"mf"`, `"ff"`, …).
+    pub dynamic: String,
+    /// Controller number (1 dynamics, 2 vibrato, …).
+    pub cc: u8,
+    /// Kontakt's table, verbatim: `y0 c0 (x y c)…` — the first point sits at
+    /// x = 0; each point's `c` bends the segment that STARTS at it (see
+    /// [`kontakt_table_value`]).
+    pub points: Vec<f32>,
+}
+
+/// Evaluate a Kontakt modulation table (`y0 c0 (x y c)…`) at `x` in `[0, 1]`.
+///
+/// Measured against Kontakt 8 renders of CSS (sweeps of CC1 and CC2, every
+/// value within ±0.002): between two points the curve follows
+/// `(e^(k·t) − 1) / (e^k − 1)` with `k = 16·|c|`, where `c` is the curvature
+/// of the segment's START point; `c > 0` bends the segment BELOW its chord,
+/// `c < 0` above it, `c = 0` is a straight line.
+#[must_use]
+pub fn kontakt_table_value(points: &[f32], x: f32) -> f32 {
+    if points.len() < 2 {
+        return 1.0;
+    }
+    let x = x.clamp(0.0, 1.0);
+    // (x, y, c) triples, the implicit first point at x = 0.
+    let mut pts: Vec<(f32, f32, f32)> = vec![(0.0, points[0], points[1])];
+    pts.extend(points[2..].chunks_exact(3).map(|p| (p[0], p[1], p[2])));
+    let Some(seg) = pts.windows(2).find(|w| x <= w[1].0) else {
+        return pts.last().map_or(1.0, |p| p.1);
+    };
+    let ((x0, y0, c), (x1, y1, _)) = (seg[0], seg[1]);
+    if x1 <= x0 {
+        return y1;
+    }
+    let t = (x - x0) / (x1 - x0);
+    let k = 16.0 * c.abs();
+    if k < 1e-6 {
+        return y0 + (y1 - y0) * t;
+    }
+    let g = |u: f32| ((k * u).exp() - 1.0) / (k.exp() - 1.0);
+    // The two curvature shapes; pick the one on the side `c` asks for.
+    let (a, b) = (y0 + (y1 - y0) * g(t), y0 + (y1 - y0) * (1.0 - g(1.0 - t)));
+    let chord = y0 + (y1 - y0) * t;
+    let (below, above) = if a <= chord { (a, b) } else { (b, a) };
+    if c > 0.0 { below } else { above }
+}
+
+#[cfg(test)]
+mod kontakt_table_tests {
+    use super::kontakt_table_value as v;
+
+    // Tables and expected values: CSS 1st Violins Mix groups, measured from
+    // Kontakt 8 renders (orchestra/tests/curve_fit.py).
+    const NV_P: &[f32] = &[
+        0.0,
+        0.067_567_55,
+        0.194_881_89,
+        0.418_918_9,
+        -1.862_645_1e-8,
+        0.360_236_23,
+        1.0,
+        -0.168_918_9,
+        0.480_314_97,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+    ];
+    const NV_FF: &[f32] = &[
+        0.0,
+        0.0,
+        0.421_259_85,
+        0.0,
+        0.067_567_57,
+        0.795_275_57,
+        0.716_216_2,
+        -0.152_027_01,
+        1.0,
+        1.0,
+        0.0,
+    ];
+    const NV_CC2: &[f32] = &[1.0, -0.084_459_47, 1.0, 0.0, 0.0];
+    const VS_CC2: &[f32] = &[0.0, -0.084_459_46, 1.0, 1.0, 0.0];
+    const ZVOL_P: f32 = 1.2599; // the p zones' +2 dB zone volume rides on the measurement
+
+    fn near(a: f32, b: f32, tol: f32) {
+        assert!((a - b).abs() <= tol, "{a} vs {b}");
+    }
+
+    #[test]
+    fn convex_rising_segment() {
+        near(v(NV_P, 4.0 / 127.0) * ZVOL_P, 0.0508, 0.002);
+        near(v(NV_P, 16.0 / 127.0) * ZVOL_P, 0.2734, 0.003);
+    }
+
+    #[test]
+    fn straight_segment() {
+        near(v(NV_P, 32.0 / 127.0) * ZVOL_P, 0.7805, 0.002);
+    }
+
+    #[test]
+    fn concave_falling_segment() {
+        near(v(NV_P, 48.0 / 127.0) * ZVOL_P, 1.2154, 0.003);
+        near(v(NV_P, 52.0 / 127.0) * ZVOL_P, 1.0763, 0.003);
+    }
+
+    #[test]
+    fn concave_rising_segment_and_ends() {
+        near(v(NV_FF, 104.0 / 127.0), 0.7930, 0.002);
+        near(v(NV_FF, 0.0), 0.0, 1e-6);
+        near(v(NV_FF, 1.0), 1.0, 1e-6);
+    }
+
+    #[test]
+    fn vibrato_crossfade() {
+        near(v(NV_CC2, 16.0 / 127.0), 0.9363, 0.002);
+        near(v(VS_CC2, 16.0 / 127.0), 0.2094, 0.002);
+        near(v(NV_CC2, 64.0 / 127.0), 0.6594, 0.003);
+    }
+}
+
 // ── Articulation ─────────────────────────────────────────────────────────────
 
 /// One playing technique in the library.
@@ -1330,6 +1558,18 @@ pub struct ArticulationSpec {
     // r[impl signal.soundsource.declarative]
     #[facet(default)]
     pub amp_env: Vec<EnvSegmentSpec>,
+    /// Kontakt per-group CC volume tables, decoded from the instrument
+    /// (`groups.json` `CC_VOLUME` mods). A dynamic layer's gain is the
+    /// PRODUCT of its curves at the current CC values — this replaces the
+    /// equal-power CC1/CC2 crossfades and `cc1_expression` for any
+    /// articulation that declares it. Empty = the legacy crossfade.
+    #[facet(default)]
+    pub group_curves: Vec<GroupCurveSpec>,
+    /// A second amplitude envelope multiplied with `amp_env`, always one-shot
+    /// (runs through, no hold) — Kontakt's group ENV_AHDSR running alongside
+    /// its ENV_FLEX. CSS release groups: 250 ms attack, 25 s decay to 0.25.
+    #[facet(default)]
+    pub amp_env2: Vec<EnvSegmentSpec>,
     /// Whether the envelope freezes at its hold level while the note is held
     /// (sustains) or plays through one-shot (shorts, releases, transitions).
     /// `None` = held for Sustain/Looped/Trill kinds, one-shot otherwise.
@@ -1480,6 +1720,29 @@ pub struct LegatoEngineSpec {
     // r[impl signal.soundsource.legato.velocity-zones]
     #[facet(default)]
     pub velocity_splits: Vec<u8>,
+    /// Body variant per loud (zone 2/3) first note, cycled by a counter
+    /// (KSP `%v2aqt[$2ekvq]`): the zone velocity whose `variant_starts`
+    /// entry the body starts at. CC59 sets the counter to `value mod len`.
+    /// Empty = the body starts at its own `sample_start`.
+    #[facet(default)]
+    pub first_note_variants: Vec<u8>,
+    /// Initial counter for `first_note_variants` (CSS ships `$2ekvq` = 9).
+    #[facet(default)]
+    pub first_note_variant_init: u8,
+    /// Whether a loud first note layers the attack-ornament voice. CSS: no —
+    /// its attack velocities (5–9) have no vibsus zones, so Kontakt plays
+    /// nothing there (null test: silent for the first 38 ms).
+    pub first_note_attack_voice: Option<bool>,
+    /// Silence before a loud first note's body fades in, per velocity zone
+    /// `[zone 2, zone 3]` in ms. Empty = 40 ms (the KSP `wait`). Measured in
+    /// Kontakt: 38.61 / 37.34 ms (the wait lands on a processing block).
+    #[facet(default)]
+    pub first_note_mute_ms: Vec<f32>,
+    /// The legato transition exactly as Kontakt runs CSS's script, measured
+    /// against Kontakt renders (null −41 dB per transition). When set, a
+    /// mono-legato transition on a zoned patch uses it instead of the older
+    /// fitted model. See [`KontaktTransitionSpec`].
+    pub kontakt_transition: Option<KontaktTransitionSpec>,
     /// Overlap-Delay curves (`legtrans_OD` / `$b0n3s`) — the wait between a
     /// live note-on and the transition firing, IOI-interpolated per legato
     /// mode and velocity range. `None` = the decoded CSS defaults.
@@ -1557,6 +1820,11 @@ impl Default for LegatoEngineSpec {
             portamento: None,
             retrigger: None,
             velocity_splits: Vec::new(),
+            first_note_variants: Vec::new(),
+            first_note_variant_init: 0,
+            first_note_attack_voice: None,
+            first_note_mute_ms: Vec::new(),
+            kontakt_transition: None,
             overlap_delay: None,
             start_offset: None,
             transition_fade_ms: 30,
@@ -2024,6 +2292,12 @@ pub struct ZoneSpec {
     /// First sample frame to play from this zone. 0 = sample start.
     #[facet(default)]
     pub sample_start: u32,
+    /// Kontakt's velocity-2.. zones over this same file (index 0 = velocity
+    /// 2): the scripted body VARIANTS — the same recording entered deeper.
+    /// CSS plays one for a loud first note (`%v2aqt`), see
+    /// `LegatoEngineSpec::first_note_variants`. Empty = no variants.
+    #[facet(default)]
+    pub variant_starts: Vec<u32>,
     /// One-past-last sample frame to play from this zone. 0 = sample end.
     #[facet(default)]
     pub sample_end: u32,

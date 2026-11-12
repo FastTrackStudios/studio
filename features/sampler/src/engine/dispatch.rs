@@ -523,6 +523,16 @@ impl SampleEngine {
             to: to_note,
             portamento,
         });
+        // The Kontakt-measured CSS transition, when the library declares it.
+        if !portamento && self.patch.is_zoned() {
+            if let Some(kt) = self.patch.spec.legato_cfg().kontakt_transition.clone() {
+                self.fire_kontakt_transition(from_note, to_note, velocity, ioi_ms, &kt);
+                if let Some(i) = log_idx {
+                    self.legato_fire_log[i].arrival = self.last_arrival_prediction;
+                }
+                return;
+            }
+        }
         let direction = if to_note > from_note { "up" } else { "down" };
 
         // Retire the PREVIOUS pair on THIS line (spec §2.1 step 4) — the old
@@ -1093,6 +1103,28 @@ impl SampleEngine {
             .spec
             .articulation(&self.articulation)
             .is_some_and(|a| a.dynamics.len() > 1);
+        // Kontakt group curves per layer index, per side (decoded tables);
+        // `None` for a side/library without them → legacy crossfade below.
+        let side_curves = |artic: Option<&str>| -> Vec<Option<f32>> {
+            let Some(artic) = artic else {
+                return Vec::new();
+            };
+            self.patch
+                .spec
+                .articulation(artic)
+                .map(|a| {
+                    a.dynamics
+                        .iter()
+                        .map(|d| self.group_curve_gain(artic, d))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let curve_gains = {
+            let nv = side_curves(Some(&nv_artic));
+            let vb = side_curves(vib_artic.as_deref());
+            (nv.iter().chain(&vb).any(Option::is_some)).then_some((nv, vb))
+        };
         for v in self.voices.voices_mut() {
             if !has_cc1_dynamics {
                 break;
@@ -1102,12 +1134,20 @@ impl SampleEngine {
             }
             if let Some(layer) = v.dyn_layer {
                 let i = layer.index as usize;
+                if let Some(g) = curve_gains.as_ref().and_then(|(nv, vb)| {
+                    if layer.vib { vb.get(i) } else { nv.get(i) }
+                        .copied()
+                        .flatten()
+                }) {
+                    v.ramp_gain(g * v.level, ramp);
+                    continue;
+                }
                 let g = if layer.vib {
                     vb * layer_gain(i, vb_lo, vb_hi, vb_lo_g, vb_hi_g)
                 } else {
                     nv * layer_gain(i, nv_lo, nv_hi, nv_lo_g, nv_hi_g)
                 };
-                v.ramp_gain(g * expr, ramp);
+                v.ramp_gain(g * expr * v.level, ramp);
             }
         }
 

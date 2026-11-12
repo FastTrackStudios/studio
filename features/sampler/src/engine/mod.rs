@@ -223,6 +223,7 @@ pub use fts_sample::stream_cache;
 mod dispatch;
 pub mod filter;
 mod helpers;
+mod kontakt_legato;
 mod legato;
 mod midi;
 pub mod pitch_shift;
@@ -1005,6 +1006,20 @@ pub struct SampleEngine {
     /// regardless of (note, velocity) so RR cycling within a matching zone set
     /// behaves as expected when the same key is repeatedly struck.
     zone_rr_counter: usize,
+    /// `LegatoEngineSpec::first_note_variants` counter (KSP `$2ekvq`).
+    pub(crate) variant_counter: usize,
+    /// Velocity whose `ZoneSpec::variant_starts` entry the sustain body being
+    /// spawned right now starts at (set only around a loud first note).
+    pub(crate) spawn_variant: Option<u8>,
+    /// Inside a Kontakt-model legato transition: the body being spawned is the
+    /// DESTINATION body, not a first note (no first-note variant/mute logic).
+    pub(crate) in_transition: bool,
+    /// Gain for the release sample being spawned right now, replacing the
+    /// held-time law (the in-phrase release's flat level).
+    pub(crate) release_gain_override: Option<f32>,
+    /// Extra file frames the sustain body being spawned right now is entered
+    /// at (the >1-octave transition body's 75 ms offset).
+    pub(crate) spawn_extra_start: usize,
     zone_rr_random_state: u64,
     /// Last-used RR slot per (trigger, note, velocity), keyed by a packed
     /// integer so note-on allocates nothing (was a `format!`-built String key).
@@ -1023,6 +1038,9 @@ pub struct SampleEngine {
     /// tick — per round-robin, per mic, per dynamic layer. `None` = live /
     /// legacy dispatch (voices start immediately).
     spawn_align_lead: Option<u64>,
+    /// Extra frames every voice spawned right now is held back (the release
+    /// sample's `release_delay_ms`); 0 otherwise.
+    spawn_extra_hold: usize,
     /// Transition-spawn arrival override (ms of sample time) for the
     /// diagnostic semantics sweep — set by `spawn_transition_voice` so the
     /// alignment hold uses the SAME re-interpreted arrival the prefire lead
@@ -1059,6 +1077,7 @@ impl SampleEngine {
     ) -> Self {
         let section = section_id.into();
         let mic = mic_id.into();
+        let variant_init = usize::from(patch.spec.legato_cfg().first_note_variant_init);
         // An NI Essential Piano pack plays through its instrument's script
         // (Color / Dynamic Range offsets) from load, whichever path built it
         // — a keys layer or the bank. Anything else plays flat.
@@ -1277,10 +1296,16 @@ impl SampleEngine {
             cutoff_mod_oct: 0.0,
             unison: (1, 0.0, 0.0),
             zone_rr_counter: 0,
+            variant_counter: variant_init,
+            spawn_variant: None,
+            in_transition: false,
+            release_gain_override: None,
+            spawn_extra_start: 0,
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,
             zone_rr_last_slots: HashMap::with_capacity(128),
             forced_rr: None,
             spawn_align_lead: None,
+            spawn_extra_hold: 0,
             spawn_arrival_override_ms: None,
             zone_choked_scratch: Vec::with_capacity(16),
             zone_capped_scratch: Vec::with_capacity(16),
@@ -2352,6 +2377,12 @@ fn amp_env_for(
     };
     let tuples: Vec<(f32, f32, f32)> = segs.iter().map(|s| (s.time_ms, s.level, s.curve)).collect();
     FlexEnv::from_segments(&tuples, 0.0, sample_rate, hold)
+}
+
+/// Fractional milliseconds → frames (rounded) — for sub-ms spec values.
+#[must_use]
+pub fn ms_to_frames_f(ms: f32, sample_rate: u32) -> usize {
+    (f64::from(ms.max(0.0)) * f64::from(sample_rate) / 1000.0).round() as usize
 }
 
 /// Frames → milliseconds (the inverse of [`ms_to_frames`]).
