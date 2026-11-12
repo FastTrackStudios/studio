@@ -4,7 +4,11 @@
  * folder; the page's runtime puts it, sanitised (`cleanSheet`), in each
  * view's shadow root. Its theme variables are not defined here: they
  * inherit from the share page's own (its light or dark Architect theme). */
-@import "tailwindcss" source(none);
+/* Tailwind's theme and utilities, not its preflight: preflight styles `html`
+ * and `:host`, which a view's sheet may not (Architect's `cleanSheet`). */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme) source(none);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
 @import "../../../features/ui/.architect-ui/assets/fts-theme.css";
 @source "../../../features/ui/transport-ui/src/**/*.rs";
 @source "./src/**/*.rs";

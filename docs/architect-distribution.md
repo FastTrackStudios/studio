@@ -112,8 +112,9 @@ Its theme variables come from the share page's own theme.
 
 `just island` builds it (in the `wasi` devenv profile: `wasm32-wasip2` and
 node) into `target/studio-island/`: Architect's `build-web` folder and its
-stylesheet (`apps/architect/island/island.css`, Tailwind for the
-components' classes). Release build: 1.7 MB, 415 KB gzipped (304 KB
+stylesheet (`apps/architect/island/island.css`, Tailwind's theme and
+utilities for the components' classes, no preflight: a view's sheet may not
+style `html` or `:host`). Release build: 1.7 MB, 415 KB gzipped (304 KB
 brotli), plus Architect's web runtime, 48 KB gzipped. The page loads it
 only when the view first opens; Architect's own bar and controls show
 until its first frame, and stay where it cannot run (Safari, which has no
