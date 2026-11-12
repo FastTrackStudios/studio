@@ -22430,6 +22430,7 @@ name = "studio-architect"
 version = "26.10.3"
 dependencies = [
  "architect-desktop",
+ "architect-sites",
  "architect-spaces",
  "productions",
  "setlists",
