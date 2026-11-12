@@ -1,0 +1,443 @@
+//! A song's lyrics, in layers, on the song's own timeline.
+//!
+//! Seven layers, coarse to fine:
+//!
+//! | layer | what it is | where it comes from |
+//! |---|---|---|
+//! | [`Layer::Song`] | every line | derived |
+//! | [`Layer::Section`] | a section's lines at a time | derived: lines ⨯ the song's sections |
+//! | [`Layer::Slide`] | projector slides, broken automatically | derived: each section's lines, a few at a time |
+//! | [`Layer::Line`] | line by line | timed lines (a synced `.lrc`) |
+//! | [`Layer::Word`] | word by word | timed words (word-synced LRC, alignment) |
+//! | [`Layer::Syllable`] | syllable by syllable | a hyphenation of the words |
+//! | [`Layer::SyllableMidi`] | syllables with their melody | syllables plus pitches |
+//!
+//! Having a layer gives every layer above it: timed lines give sections
+//! (placed against the song's own section regions), slides (a section's
+//! lines broken [`SLIDE_LINES`] at a time) and the song. Words and
+//! syllables are carried when a source has them — nothing makes them up
+//! yet, and [`Lyrics::deepest`] says how far a song's lyrics go.
+//!
+//! Times are seconds on the song's timeline (the project's), not the
+//! recording's: [`Lyrics::from_lrc`] is told where the recording's 0
+//! lands (the song's start, SONGSTART, by default).
+
+use std::ops::Range;
+
+/// How many lines a slide holds, as a church projects them: two lines
+/// read at a glance from the back of the room.
+pub const SLIDE_LINES: usize = 2;
+
+/// A layer of the lyrics, coarse to fine.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Layer {
+    Song,
+    Section,
+    Slide,
+    Line,
+    Word,
+    Syllable,
+    SyllableMidi,
+}
+
+impl Layer {
+    pub const ALL: [Self; 7] = [
+        Self::Song,
+        Self::Section,
+        Self::Slide,
+        Self::Line,
+        Self::Word,
+        Self::Syllable,
+        Self::SyllableMidi,
+    ];
+
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Song => "Song",
+            Self::Section => "Section",
+            Self::Slide => "Slides",
+            Self::Line => "Lines",
+            Self::Word => "Words",
+            Self::Syllable => "Syllables",
+            Self::SyllableMidi => "Syllables + melody",
+        }
+    }
+}
+
+/// One syllable: its span, its text, and — for [`Layer::SyllableMidi`] —
+/// the melody note it is sung on.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Syllable {
+    pub start: f64,
+    pub end: f64,
+    pub text: String,
+    pub pitch: Option<u8>,
+}
+
+/// One word, and its syllables when something has split it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Word {
+    pub start: f64,
+    pub end: f64,
+    pub text: String,
+    pub syllables: Vec<Syllable>,
+}
+
+/// One sung line, and its words when the source timed them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Line {
+    pub start: f64,
+    pub end: f64,
+    pub text: String,
+    pub words: Vec<Word>,
+}
+
+/// A section of the song, as the lyrics are placed against it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SectionSpan {
+    pub name: String,
+    pub start: f64,
+    pub end: f64,
+}
+
+/// A section's lyrics: the section, and the lines sung in it (empty for
+/// an instrumental).
+#[derive(Clone, Debug, PartialEq)]
+pub struct LyricSection {
+    pub name: String,
+    pub start: f64,
+    pub end: f64,
+    pub lines: Range<usize>,
+}
+
+/// A slide: a few of a section's lines, shown together.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Slide {
+    /// Which of [`Lyrics::sections`]' sections it belongs to.
+    pub section: usize,
+    pub lines: Range<usize>,
+    pub start: f64,
+    pub end: f64,
+}
+
+/// The song's lyrics: its lines, in order, on the song's timeline.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Lyrics {
+    pub lines: Vec<Line>,
+}
+
+impl Lyrics {
+    #[cfg(feature = "lrc")]
+    /// Timed lines from a synced `.lrc`, the recording's 0 placed at
+    /// `at` on the song's timeline, the last line held to `end`.
+    ///
+    /// A line lasts until the next one starts. A timed blank line is a
+    /// gap — an instrumental, a breath — which ends the line before it
+    /// and is not a line itself. Word stamps (enhanced LRC) become the
+    /// line's words, each until the next.
+    #[must_use]
+    pub fn from_lrc(text: &str, at: f64, end: f64) -> Self {
+        let lrc = keyflow::lrc::parse(text);
+        let stamps: Vec<(f64, &keyflow::lrc::LrcLine)> = lrc
+            .lines
+            .iter()
+            .map(|line| (at + f64::from(line.start), line))
+            .collect();
+        let mut lines = Vec::new();
+        for (i, (start, line)) in stamps.iter().enumerate() {
+            let text = line.text.trim();
+            if text.is_empty() {
+                continue;
+            }
+            let until = stamps.get(i + 1).map_or(end.max(*start), |(next, _)| *next);
+            let words = line
+                .words
+                .iter()
+                .enumerate()
+                .filter(|(_, w)| !w.text.trim().is_empty())
+                .map(|(k, w)| Word {
+                    start: at + f64::from(w.start),
+                    end: line
+                        .words
+                        .get(k + 1)
+                        .map_or(until, |next| at + f64::from(next.start)),
+                    text: w.text.trim().to_owned(),
+                    syllables: Vec::new(),
+                })
+                .collect();
+            lines.push(Line {
+                start: *start,
+                end: until,
+                text: text.to_owned(),
+                words,
+            });
+        }
+        Self { lines }
+    }
+
+    /// The finest layer these lyrics have; every layer above it comes
+    /// with it. `None` when there are no lyrics at all.
+    #[must_use]
+    pub fn deepest(&self) -> Option<Layer> {
+        let words = || self.lines.iter().flat_map(|l| &l.words);
+        let syllables = || words().flat_map(|w| &w.syllables);
+        if self.lines.is_empty() {
+            None
+        } else if syllables().next().is_none() {
+            Some(if words().next().is_some() {
+                Layer::Word
+            } else {
+                Layer::Line
+            })
+        } else if syllables().all(|s| s.pitch.is_some()) {
+            Some(Layer::SyllableMidi)
+        } else {
+            Some(Layer::Syllable)
+        }
+    }
+
+    /// Every layer these lyrics can show: the deepest, and all above it.
+    #[must_use]
+    pub fn layers(&self) -> Vec<Layer> {
+        self.deepest().map_or_else(Vec::new, |deepest| {
+            Layer::ALL.into_iter().filter(|l| *l <= deepest).collect()
+        })
+    }
+
+    /// The line being sung at `at`, if any.
+    #[must_use]
+    pub fn line_at(&self, at: f64) -> Option<usize> {
+        self.lines.iter().position(|l| l.start <= at && at < l.end)
+    }
+
+    /// The line sung at `at`, or the last one sung before it — what a
+    /// display holds on through a gap.
+    #[must_use]
+    pub fn line_reached(&self, at: f64) -> Option<usize> {
+        self.lines.iter().rposition(|l| l.start <= at)
+    }
+
+    /// The song's sections with their lines. A line belongs to the
+    /// section it overlaps most, so a pickup sung just before a downbeat
+    /// stays with the section it leads into.
+    #[must_use]
+    pub fn sections(&self, spans: &[SectionSpan]) -> Vec<LyricSection> {
+        let home = |line: &Line| {
+            spans
+                .iter()
+                .enumerate()
+                .map(|(i, s)| (i, line.end.min(s.end) - line.start.max(s.start)))
+                .filter(|(_, overlap)| *overlap > 0.0)
+                .max_by(|a, b| a.1.total_cmp(&b.1))
+                .map(|(i, _)| i)
+        };
+        let homes: Vec<Option<usize>> = self.lines.iter().map(home).collect();
+        spans
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                let first = homes.iter().position(|h| *h == Some(i));
+                let last = homes.iter().rposition(|h| *h == Some(i));
+                let lines = match (first, last) {
+                    (Some(a), Some(b)) => a..b + 1,
+                    _ => 0..0,
+                };
+                LyricSection {
+                    name: s.name.clone(),
+                    start: s.start,
+                    end: s.end,
+                    lines,
+                }
+            })
+            .collect()
+    }
+
+    /// Slides: each section's lines, `per_slide` at a time. A slide never
+    /// crosses a section, and an instrumental section has none.
+    #[must_use]
+    pub fn slides(&self, sections: &[LyricSection], per_slide: usize) -> Vec<Slide> {
+        let per_slide = per_slide.max(1);
+        let mut slides = Vec::new();
+        for (index, section) in sections.iter().enumerate() {
+            let mut from = section.lines.start;
+            while from < section.lines.end {
+                let to = (from + per_slide).min(section.lines.end);
+                slides.push(Slide {
+                    section: index,
+                    lines: from..to,
+                    start: self.lines[from].start,
+                    end: self.lines[to - 1].end,
+                });
+                from = to;
+            }
+        }
+        slides
+    }
+}
+
+/// Where a song's lyrics are pinned to it: a line of the lyrics (the
+/// first that begins with `line`) starts `beats` after the downbeat of
+/// the section named `section` (negative: before it — a pickup). Every
+/// line moves with it; with `drop_before`, the lines ahead of it go (a
+/// recording's opening the song's version does not have).
+///
+/// A synced `.lrc` is timed to its recording, and a multitrack's song is
+/// rarely laid out the same from its first beat — the anchor is what
+/// places one on the other. It is kept in the `.lrc` itself, as a
+/// comment the lyrics' own readers skip:
+///
+/// ```text
+/// [#anchor: VS 1 | -1 | And I'm clean | drop-before]
+/// ```
+#[derive(Clone, Debug, PartialEq)]
+pub struct Anchor {
+    pub section: String,
+    pub beats: f64,
+    pub line: String,
+    pub drop_before: bool,
+}
+
+impl Anchor {
+    /// Whether a section region named `name` is the anchor's: its name
+    /// exactly, or one of its lettered parts — `VS 1` is `VS 1A` when a
+    /// song's first verse comes in two.
+    #[must_use]
+    pub fn names(&self, name: &str) -> bool {
+        let (name, wanted) = (name.trim(), self.section.trim());
+        name.eq_ignore_ascii_case(wanted)
+            || (name.len() == wanted.len() + 1
+                && name.is_char_boundary(wanted.len())
+                && name[..wanted.len()].eq_ignore_ascii_case(wanted)
+                && name[wanted.len()..]
+                    .chars()
+                    .all(|c| c.is_ascii_alphabetic()))
+    }
+
+    /// The anchor a `.lrc` carries, if it has one.
+    #[must_use]
+    pub fn in_lrc(text: &str) -> Option<Self> {
+        text.lines().find_map(|line| {
+            let body = line.trim().strip_prefix("[#anchor:")?.strip_suffix(']')?;
+            let mut parts = body.split('|').map(str::trim);
+            let section = parts.next().filter(|s| !s.is_empty())?.to_owned();
+            let beats = parts.next()?.parse().ok()?;
+            let line = parts.next().filter(|s| !s.is_empty())?.to_owned();
+            let drop_before = parts.any(|flag| flag.eq_ignore_ascii_case("drop-before"));
+            Some(Self {
+                section,
+                beats,
+                line,
+                drop_before,
+            })
+        })
+    }
+}
+
+/// Text as a line is matched: lower case, curly apostrophes straight.
+fn matchable(text: &str) -> String {
+    text.trim()
+        .to_lowercase()
+        .replace(['\u{2019}', '\u{2018}'], "'")
+}
+
+impl Lyrics {
+    /// Move every line so the first that begins with `line` starts at
+    /// `at`, dropping the lines ahead of it when `drop_before`; the last
+    /// line is held to `end`. `false`, and nothing moved, when no line
+    /// begins that way.
+    pub fn align(&mut self, line: &str, at: f64, drop_before: bool, end: f64) -> bool {
+        let wanted = matchable(line);
+        let Some(index) = self
+            .lines
+            .iter()
+            .position(|l| matchable(&l.text).starts_with(&wanted))
+        else {
+            return false;
+        };
+        let shift = at - self.lines[index].start;
+        if drop_before {
+            self.lines.drain(..index);
+        }
+        for line in &mut self.lines {
+            line.start += shift;
+            line.end += shift;
+            for word in &mut line.words {
+                word.start += shift;
+                word.end += shift;
+            }
+        }
+        if let Some(last) = self.lines.last_mut() {
+            last.end = end.max(last.start);
+        }
+        true
+    }
+}
+
+/// The Keyflow folder's track the lyrics are kept on: one empty item a
+/// line, spanning it, labelled with its text — so the lines are part of
+/// the song (saved in its `.session`, moved and trimmed in the
+/// arrangement) and the display reads them from the song, not from a
+/// file beside it. (Not LINES, beside it: that is the chart's melodies.)
+pub const LYRICS_TRACK: &str = "Lyrics";
+
+/// Whether `name` is the lyrics track's.
+#[must_use]
+pub fn is_lyrics_track(name: &str) -> bool {
+    name.trim().eq_ignore_ascii_case(LYRICS_TRACK)
+}
+
+impl Lyrics {
+    /// Timed lines as a page lists them: `(start, text)` each, in any
+    /// order, every line lasting until the next starts and the last until
+    /// `end` (or its own start, if `end` is before it). A line with no
+    /// words (blank, or a page's `♪`) is a gap, as a timed blank line of
+    /// an `.lrc` is ([`Lyrics::from_lrc`]): it ends the line before it and
+    /// is not a line itself. A time that is not a number is no line.
+    #[must_use]
+    pub fn from_stamps(stamps: impl IntoIterator<Item = (f64, String)>, end: f64) -> Self {
+        let mut stamps: Vec<(f64, String)> = stamps
+            .into_iter()
+            .filter(|(at, _)| at.is_finite() && *at >= 0.0)
+            .collect();
+        stamps.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let gap = |text: &str| {
+            let text = text.trim();
+            text.is_empty() || text.chars().all(|c| matches!(c, '♪' | '♫' | '♬' | '♩'))
+        };
+        let mut lines = Vec::new();
+        for (i, (start, text)) in stamps.iter().enumerate() {
+            if gap(text) {
+                continue;
+            }
+            let until = stamps
+                .get(i.saturating_add(1))
+                .map_or(end.max(*start), |(next, _)| *next);
+            lines.push(Line {
+                start: *start,
+                end: until,
+                text: text.trim().to_owned(),
+                words: Vec::new(),
+            });
+        }
+        Self { lines }
+    }
+
+    /// The lines as a track holds them: `(start, length, label)` per item.
+    /// Items with no text are skipped; the order is by start.
+    #[must_use]
+    pub fn from_items<'a>(items: impl IntoIterator<Item = (f64, f64, &'a str)>) -> Self {
+        let mut lines: Vec<Line> = items
+            .into_iter()
+            .filter(|(_, _, text)| !text.trim().is_empty())
+            .map(|(start, length, text)| Line {
+                start,
+                end: start + length.max(0.0),
+                text: text.trim().to_owned(),
+                words: Vec::new(),
+            })
+            .collect();
+        lines.sort_by(|a, b| a.start.total_cmp(&b.start));
+        Self { lines }
+    }
+}

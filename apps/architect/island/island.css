@@ -23,3 +23,8 @@
   --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) 10;
 }
 @source not inline("transition-all transition-transform transition");
+/* Words in the island's sources (its comments, its code) that are also
+ * utilities nothing uses, whose property `cleanSheet` refuses: `fixed`
+ * (`position: fixed`; "fixed to its Confidence Monitor") and `resize`
+ * (the lyrics view listens for its frame's resize event). */
+@source not inline("fixed resize");

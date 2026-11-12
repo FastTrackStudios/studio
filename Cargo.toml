@@ -16,6 +16,7 @@ members = [
     "features/ui/plugin-core",
     "features/ui/dock",
     "features/ui/transport-ui",
+    "features/ui/lyrics-ui",
     "apps/architect/island",
     "features/sync",
     "crates/frame",
@@ -192,6 +193,7 @@ editing = { path = "features/editing" }
 plugin-core = { path = "features/ui/plugin-core" }
 dock = { path = "features/ui/dock" }
 transport-ui = { path = "features/ui/transport-ui" }
+lyrics-ui = { path = "features/ui/lyrics-ui", default-features = false }
 daw-sync = { path = "features/sync" }
 frame = { path = "crates/frame" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }
@@ -338,7 +340,7 @@ studio-views = { path = "features/studio-views" }
 # tree-sitter grammar, and Engraver.) One tag pin shared by every entry so
 # the whole domain moves together.
 #
-# keyflow v0.5.3 is on Architect v0.12.4 by tag, as here (a rev of the
+# keyflow v0.5.4 is on Architect v0.12.6 by tag, as here (a rev of the
 # same commit would be a second source).
 #
 # `keyflow` and `engraver` are the facades — depend on those. The rest are
@@ -351,17 +353,17 @@ studio-views = { path = "features/studio-views" }
 # `chordpro`, `midi`, `orchestra`, `sync`, …), `engraver` (layout +
 # render, `score` included) and the `keyflow` facade. `keyflow-lang`
 # defaults OFF here; consumers name the formats they use.
-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.3" }
-keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.3" }
-keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.3", default-features = false }
-keyflow-annotate = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.3" }
-keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.3" }
-keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.3" }
-keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.3" }
-tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.3" }
+keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
+keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
+keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
+keyflow-annotate = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
+keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
+keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
+keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
+tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
 # Engraver — defaults OFF at the root (the full `engraver` feature drags
 # wgpu/vello + PDF export); consumers opt into `svg`/`wgpu`/`engraver`.
-engraver = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.3", default-features = false }
+engraver = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
 
 # ── signal domain (wave 4) ────────────────────────────────────────────
 # `signal` is the facade — the only public API surface for the signal
@@ -486,72 +488,72 @@ inferno-net = { git = "https://github.com/FastTrackStudios/inferno-control", rev
 # (FastTrackStudios/architect: the entity/RPC framework, the auth/crdt/
 # permissions stack, architect-ui + architect-story, architect-telemetry).
 # One tag pin shared by every entry so the whole framework moves together.
-architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-rpc-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-action-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-mcp = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-atom = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-form = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-permissions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-permissions-proto = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-auth = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-auth = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-auth-proto = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-auth-db = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-rpc-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-action-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-mcp = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-atom = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-form = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-permissions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-permissions-proto = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-auth = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+auth = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+auth-proto = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+auth-db = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # auth-client (`auth_client::device`, sign-in from another device) is on
 # the same tag as the rest: one architect source per Cargo.lock.
-auth-client = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-crdt = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-crdt-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-crdt-seaorm = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+auth-client = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+crdt = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+crdt-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+crdt-seaorm = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # The Dioxus primitive library (was libs/ui/fts-ui, renamed on the split).
-architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # Architect extensions: Studio's features are linked extensions, compiled
 # into Studio's app and served as process extensions the Architect app
 # installs (features/setlists; studio#386).
-architect-extensions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect-extensions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # A WASI component's guest side (Studio's island, apps/architect/island).
-architect-extension-wasi = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect-extension-wasi = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # The app's theme as data (`use_resolved`): what a Studio view in Architect
 # colours itself from.
-architect-theme = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect-theme = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # The app side an extension's tests run against: the vault's and Bases'
 # actions over a folder, and the settings registry a Host is given.
-architect-vault = { package = "vault", git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-bases = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-settings = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect-vault = { package = "vault", git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-bases = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-settings = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # Sites: a vault drawn as pages, the share page a setlist is read on; its
 # block renderers and sanitiser (features/setlists `share`).
-architect-sites = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect-sites = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # The Architect app itself, as a library a distribution's `main` runs
 # (`architect_desktop::run`): Studio's distribution, apps/architect. Without
 # its window by default (`gui` turns it on there); `vox` is the node's
 # services and every build of it needs them.
-architect-desktop = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4", default-features = false, features = ["vox"] }
+architect-desktop = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6", default-features = false, features = ["vox"] }
 # Share links as notes of their vault (`share_note`): apps/architect's
 # node test writes the share SHARE_CREATE would.
-architect-spaces = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect-spaces = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # The keymap engine (studio's former `features/input`, studio#61).
-architect-input = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect-input = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # The launcher engine, vendored into architect in v0.2.0 (was
 # launcher-core / launcher-ui / providers on dioxus-launcher.git).
-architect-launcher-core = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect-launcher-core = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # default-features = false lives here, not on the consumer: cargo refuses
 # `default-features = false` on a workspace-inherited dep.
-architect-launcher-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-launcher-providers = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect-launcher-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-launcher-providers = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # Wide-events telemetry (was crates/task/telemetry).
-architect-telemetry = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect-telemetry = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 # Story/snapshot tooling (was libs/fts-story/*).
-architect-story-core = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-story-macros = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-story-runtime = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-story-shell = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-story-snapshots = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
-architect-story-parity = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.4" }
+architect-story-core = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-story-macros = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-story-runtime = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-story-shell = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-story-snapshots = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-story-parity = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 
 # Architect's externals, merged from its dissolved workspace table
 # (root pins win — both were already on the rc.5 fleet).
@@ -591,7 +593,7 @@ musicxml = "1.1"
 
 # ── UI framework ──────────────────────────────────────────────────────
 # dioxus 0.8 line — git rev pinned: DioxusLabs/dioxus main 430cfb56
-# (0.8.0-alpha.3), architect v0.12.4's. Bump it deliberately and in
+# (0.8.0-alpha.3), architect v0.12.6's. Bump it deliberately and in
 # lockstep across every dioxus-* entry below AND the FTS fork tags of
 # primitives/lumen/lucide/sdk, which pin the same rev.
 dioxus = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41", default-features = false, features = ["lib"] }
@@ -648,7 +650,7 @@ dioxus-mcp-probe = { git = "https://github.com/tonybierman/dioxus-mcp" }
 dioxus-test = { path = "vendor/dioxus-test" }
 dioxus-devtools = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
 # FTS fork tags carrying the dioxus-0.8 bumps until upstream moves (the
-# tags architect v0.12.4 pins).
+# tags architect v0.12.6 pins).
 lumen-blocks = { git = "https://github.com/FastTrackStudios/lumen-blocks", tag = "v0.3.1" }
 dioxus-primitives = { git = "https://github.com/FastTrackStudios/dioxus-components", package = "dioxus-primitives", tag = "fts-upstream-2026-11", default-features = false }
 lucide-dioxus = { git = "https://github.com/FastTrackStudios/lucide", tag = "fts-upstream-2026-11", features = ["all-icons"] }
@@ -695,7 +697,7 @@ vst3 = "0.3"
 libloading = "0.8"
 
 # ── GPU rendering stack (reaper-embed / reaper-dioxus) ────────
-# One stack for the whole tree, the one architect v0.12.4's Blitz tag
+# One stack for the whole tree, the one architect v0.12.6's Blitz tag
 # (`fts-upstream-2026-11`) builds on: vello 0.11 / wgpu 30, anyrender 0.14
 # (from the blitz tag, patched below) with anyrender_vello 0.15 and
 # anyrender_vello_hybrid 0.11 (vendor v0.7.0), parley 0.12. frame and
@@ -854,7 +856,7 @@ libc = "0.2"
 # The editor itself, from its own repo — what the Organize view's keyflow
 # editor is built on (Blitz-native: `editor-view/native`). The core only:
 # no Typst / Mermaid fence renderers (`default-features = false`).
-# At architect v0.12.4's own editor revision (architect and keyflow pin
+# At architect v0.12.6's own editor revision (architect and keyflow pin
 # this rev, not a tag); the editor [patch] at the foot of this file makes
 # it one editor source.
 editor-view = { git = "https://github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528", default-features = false }
@@ -866,7 +868,7 @@ editor-crdt = { git = "https://github.com/FastTrackStudios/editor", rev = "6817d
 # folded into it at keyflow v0.2.8). Defaults off: no `.kf` fence
 # renderer, so no engraver. Renamed because task's older `editor-keyflow`
 # (below, for the site) has the same package name.
-keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.3", default-features = false }
+keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
 editor-keyflow = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 editor-keyflow-lang = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 view-knowledge-graph = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
@@ -1151,7 +1153,7 @@ baseview = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1" 
 # drop this patch when a release carrying it lands on crates.io.
 libspa-sys = { git = "https://gitlab.freedesktop.org/pipewire/pipewire-rs.git", rev = "9b54509e848e53ffa971ace15d7adf4908c09358" }
 pipewire-sys = { git = "https://gitlab.freedesktop.org/pipewire/pipewire-rs.git", rev = "9b54509e848e53ffa971ace15d7adf4908c09358" }
-# Blitz from the FTS fork, at the revision architect v0.12.4 pins (past the
+# Blitz from the FTS fork, at the revision architect v0.12.6 pins (past the
 # `fts-upstream-2026-11` tag; the `www.` host so it is the same source as
 # architect's workspace-hack, which names it directly): DioxusLabs/blitz
 # main (0.3.0-beta.4) with the FTS work rebased on top — focus follows
@@ -1634,7 +1636,7 @@ inherits = "release"
 lto = "thin"
 codegen-units = 16
 
-# One editor source. architect v0.12.4's workspace-hack names the editor on
+# One editor source. architect v0.12.6's workspace-hack names the editor on
 # the `www.` host (keyflow pins it there too) while its other crates name
 # the plain one; architect's own [patch] joins them, but a git dependency's
 # [patch] does not reach its consumers, so this is that table. Move it with

@@ -137,6 +137,10 @@ pub struct SongRow {
     pub at: SongRef,
     pub path: String,
     pub key: Option<String>,
+    /// The key it ends in, when another ([`crate::keys`]).
+    pub key_end: Option<String>,
+    /// Not plainly in its key.
+    pub key_outside: bool,
     pub tempo: Option<String>,
     pub meter: Option<String>,
     pub artist: Option<String>,
@@ -171,6 +175,8 @@ impl SongRow {
             path: row.path.clone(),
             recording,
             key: row.text("key"),
+            key_end: row.text("key_end"),
+            key_outside: matches!(row.values.get("key_outside"), Some(Value::Bool(true))),
             tempo: row.text("tempo"),
             meter: row.text("meter"),
             artist: row.text("artist"),
@@ -206,6 +212,11 @@ impl SongRow {
             recording: self.recording.clone(),
             artist: self.artist.clone(),
             length: self.length,
+            key: self.key.as_ref().map(|start| crate::keys::KeyLabel {
+                start: start.clone(),
+                end: self.key_end.clone(),
+                outside: self.key_outside,
+            }),
         }
     }
 }
@@ -297,6 +308,7 @@ impl SetlistRow {
             songs: self.songs.clone(),
             sets: self.sets.clone(),
             share: self.share.clone(),
+            plays: std::collections::BTreeMap::new(),
         }
     }
 }

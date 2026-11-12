@@ -269,7 +269,8 @@ fn libraries_setlists_and_a_share_through_the_app() {
     });
 
     // A setlist in named sets: made with one, grown by another; a move
-    // into a set by name. Its page lists each set under a heading.
+    // into a set by name. Its page lists its songs in one fence, each set's
+    // name a line before its songs.
     run(
         &list,
         "STUDIO_SETLISTS_CREATE",
@@ -278,7 +279,7 @@ fn libraries_setlists_and_a_share_through_the_app() {
     let page = std::fs::read_to_string(dir.join("Setlists/Tree Lighting.md")).unwrap();
     assert!(page.contains("sets:\n- name: Presidents Songs\n"), "{page}");
     assert!(
-        page.contains("## Presidents Songs\n\n```studio-setlist downloads\n1 | Old Hundredth |"),
+        page.contains("```studio-setlist downloads\n## Presidents Songs\n1 | Old Hundredth |"),
         "{page}"
     );
     until("the second setlist", || {

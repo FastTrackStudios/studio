@@ -182,6 +182,8 @@ mod tests {
             at: SongRef::new(lib, title, None),
             path: format!("Libraries/{lib}/{title}/{title}.md"),
             key: Some("A".to_owned()),
+            key_end: None,
+            key_outside: false,
             tempo: Some("83".to_owned()),
             meter: None,
             artist: None,

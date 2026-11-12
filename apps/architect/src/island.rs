@@ -163,8 +163,12 @@ pub fn at(dir: &Path) -> Result<SiteIsland, IslandError> {
         files.push((name.clone(), Cow::Owned(bytes)));
     }
     files.push((LOCK.to_owned(), Cow::Owned(lock_bytes)));
+    // Its web bundle (the `web-*` files `just island` writes) is found by
+    // its files; its `lyrics` view is the web bundle's only (the share
+    // page's Lyrics tab, Session's lyrics panel as its Confidence Monitor).
     Ok(SiteIsland::new(ID, files)
         .progress("progress")
         .transport("transport")
+        .lyrics("lyrics")
         .stylesheet(STYLESHEET))
 }
