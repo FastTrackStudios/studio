@@ -60,6 +60,11 @@ extension per device family, packaged as its own distribution
   with the `patchbay` bundle linked in, app and folder `patchbay`, bundle
   id `app.fasttrackstudio.patchbay`. Beside `fts-patchbay` until that
   becomes the distribution (#428).
+- **Device families** (`family::DeviceFamily`, `family::Families`): the
+  hub connects each configured device through the family for its `kind`.
+  The four built-ins are in `server/devices/registry.rs`; `patchbay
+  families` / `PATCHBAY_FAMILIES` lists what an engine has. Adding a
+  family is a registration, not an edit to the hub.
 - Reports built from several calls (`report::status`,
   `report::collect_health`) live in the crate, so the CLI and the actions
   answer with the same JSON.

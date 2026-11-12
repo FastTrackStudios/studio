@@ -131,7 +131,10 @@ impl PatchbayBackend {
             }
         }
 
-        let devices = crate::server::devices::DeviceHub::start(presets.clone(), store.clone());
+        let devices = crate::server::devices::DeviceHub::start(
+            presets.clone(),
+            crate::server::devices::registry::builtin(store.clone()),
+        );
         let mixes = crate::server::mixes::MixHub::new(presets.clone());
         mixes.start();
 
@@ -1416,6 +1419,10 @@ impl PatchbayService for PatchbayBackend {
 
     async fn list_devices(&self) -> Result<Vec<DeviceSummary>, PatchbayError> {
         Ok(self.inner.devices.list())
+    }
+
+    async fn families(&self) -> Result<Vec<crate::proto::FamilyInfo>, PatchbayError> {
+        Ok(self.inner.devices.families().infos())
     }
 
     async fn device(&self, id: String) -> Result<DeviceView, PatchbayError> {

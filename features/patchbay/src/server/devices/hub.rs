@@ -20,11 +20,10 @@ use parking_lot::Mutex;
 use tokio::sync::broadcast::error::RecvError;
 
 use super::cache::DiscoveryCache;
-use super::registry::{self, Adapter, ConnectCtx, ConnectError};
 use super::wire;
+use crate::family::{Adapter, ConnectCtx, ConnectError, DeviceFamily, Families};
 use crate::server::plan::devices::{self as planner, DeviceOp};
 use crate::server::presets::PresetStore;
-use crate::server::store::GraphStore;
 
 const BACKOFF_MIN: Duration = Duration::from_secs(2);
 const BACKOFF_MAX: Duration = Duration::from_secs(60);
@@ -117,6 +116,7 @@ pub(crate) struct DeviceHub {
     slots: Vec<Arc<Slot>>,
     events: architect::PubSub<DeviceEventWire>,
     presets: Arc<PresetStore>,
+    families: Families,
 }
 
 /// `PATCHBAY_DEVICES=off` (or `0`/`false`) disables the device layer.
@@ -130,54 +130,53 @@ pub(crate) fn devices_disabled_by_env() -> bool {
 }
 
 impl DeviceHub {
-    /// Build from config and start a supervisor per enabled entry. With
-    /// no `devices` section the default set is used
-    /// ([`registry::default_devices`]).
+    /// Build from config and start a supervisor per enabled entry, each
+    /// connected by the family for its `kind`. With no `devices` section
+    /// the families' defaults are used ([`Families::defaults`]).
     ///
     /// Needs a tokio runtime to supervise; without one (a sync caller)
     /// the devices are listed but stay offline.
-    pub(crate) fn start(
+    pub(crate) fn start(presets: Arc<PresetStore>, families: Families) -> Self {
+        Self::start_with(
+            presets,
+            families,
+            &ConnectCtx::new(Arc::new(DiscoveryCache::open())),
+        )
+    }
+
+    /// [`Self::start`] with the connect context given (a test's in-memory
+    /// discovery cache).
+    pub(crate) fn start_with(
         presets: Arc<PresetStore>,
-        graph: Arc<parking_lot::RwLock<GraphStore>>,
+        families: Families,
+        ctx: &ConnectCtx,
     ) -> Self {
         let events = architect::PubSub::sliding(4096);
         let configs = if devices_disabled_by_env() {
             Vec::new()
         } else {
             let c = presets.device_configs();
-            if c.is_empty() {
-                registry::default_devices()
-            } else {
-                c
-            }
+            if c.is_empty() { families.defaults() } else { c }
         };
         let runtime = tokio::runtime::Handle::try_current().ok();
-        let ctx = ConnectCtx {
-            cache: Arc::new(DiscoveryCache::open()),
-            graph,
-        };
         let mut slots = Vec::new();
         for config in configs {
-            let kind = registry::find(&config.kind);
-            let (link, error) = match (!config.is_enabled(), kind, &runtime) {
+            let kind = families.find(&config.kind).cloned();
+            let (link, error) = match (!config.is_enabled(), kind.as_ref(), &runtime) {
                 (true, _, _) => (DeviceLinkState::Disabled, String::new()),
                 (false, None, _) => (
                     DeviceLinkState::Offline,
                     format!(
                         "unknown device kind '{}' (known: {})",
                         config.kind,
-                        registry::KINDS
-                            .iter()
-                            .map(|k| k.kind)
-                            .collect::<Vec<_>>()
-                            .join(", ")
+                        families.kinds().join(", ")
                     ),
                 ),
                 (false, Some(_), None) => (
                     DeviceLinkState::Offline,
                     "no async runtime to supervise the device".to_owned(),
                 ),
-                (false, Some(k), Some(_)) if k.discovers && config.addr.is_empty() => {
+                (false, Some(k), Some(_)) if k.info().discovers && config.addr.is_empty() => {
                     (DeviceLinkState::Searching, String::new())
                 }
                 (false, Some(_), Some(_)) => (DeviceLinkState::Connecting, String::new()),
@@ -200,7 +199,7 @@ impl DeviceHub {
             {
                 rt.spawn(supervise(
                     Arc::clone(&slot),
-                    kind.connect,
+                    kind,
                     ctx.clone(),
                     events.clone(),
                 ));
@@ -211,7 +210,13 @@ impl DeviceHub {
             slots,
             events,
             presets,
+            families,
         }
+    }
+
+    /// The families this hub connects devices with, in order.
+    pub(crate) const fn families(&self) -> &Families {
+        &self.families
     }
 
     pub(crate) const fn events(&self) -> &architect::PubSub<DeviceEventWire> {
@@ -483,13 +488,13 @@ const fn link_after_failure(e: &ConnectError, ever_online: bool) -> DeviceLinkSt
 /// the life of the process.
 async fn supervise(
     slot: Arc<Slot>,
-    connect: fn(DeviceConfig, ConnectCtx) -> registry::ConnectFuture,
+    family: Arc<dyn DeviceFamily>,
     ctx: ConnectCtx,
     events: architect::PubSub<DeviceEventWire>,
 ) {
     let mut backoff = BACKOFF_MIN;
     loop {
-        match connect(slot.config.clone(), ctx.clone()).await {
+        match family.connect(slot.config.clone(), ctx.clone()).await {
             Ok(adapter) => {
                 let up_since = std::time::Instant::now();
                 // Subscribe before announcing so nothing slips between.

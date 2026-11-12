@@ -224,7 +224,8 @@ use the same surface: `PatchbayService` in `patchbay-proto`.
 crates/proto/src/devices.rs             wire types: DeviceSummary, DeviceView, ParamView,
                                         DeviceParamValue/Kind, DeviceEventWire, DeviceConfig,
                                         DeviceSettingSnapshot, DeviceRestoreReport
-crates/patchbay/src/devices/registry.rs config `kind` → connect fn (one entry per family), default set
+features/patchbay/src/family.rs        the family contract: DeviceFamily, Families, ConnectCtx, ConnectError
+crates/patchbay/src/devices/registry.rs the built-in families (one DeviceFamily per kind), in default-list order
 crates/patchbay/src/devices/cache.rs    last-found address of auto-discovered devices (<config>.state.json)
 crates/patchbay/src/devices/system_audio.rs  the host audio system as a read-only device
 crates/patchbay/src/devices/hub.rs      DeviceHub: supervision, events, calls, snapshots
@@ -237,7 +238,7 @@ features/ui/src/devices.rs                the Devices tab
 - **Defaults.** With no `devices` section the hub starts four entries,
   all auto-discovered: `system-audio` (kind `system-audio`), `galaxy32`
   (`antelope-galaxy32`), `tf1` (`yamaha-tf`) and `dante` (`dante`)
-  (`registry::default_devices`).
+  (each family's `DeviceFamily::defaults`, in registration order).
 - **Config.** A styx `devices` section replaces the defaults:
   `devices ({name galaxy32, kind antelope-galaxy32, serial "4202524000109"}
   {name foh, kind yamaha-tf, addr "192.168.1.214"} {name dante, kind dante,
@@ -286,13 +287,16 @@ features/ui/src/devices.rs                the Devices tab
 
 ## Adding an adapter
 
-1. Create `crates/adapters/<family>` (package `patchbay-<family>`) with
-   `[lints] workspace = true`. Register it in the root `members` and
-   `[workspace.dependencies]`, then add one `AdapterKind` entry (`kind`,
-   `discovers`, and its `connect(DeviceConfig, ConnectCtx)` function
-   returning `ConnectError::NotFound` / `::Failed`) to
-   `crates/patchbay/src/devices/registry.rs`. The hub,
-   RPC, CLI, UI and snapshots then work without further changes.
+1. Implement `patchbay::family::DeviceFamily` for the family: its config
+   `kind`, its `info` (label, platforms, whether it discovers), its
+   `defaults` for a config with no `devices` section, and
+   `connect(DeviceConfig, ConnectCtx)` returning
+   `ConnectError::NotFound` / `::Failed`. Register it in the hub's
+   `Families` (the built-ins are in `server/devices/registry.rs`; a family
+   extension registers its own, studio#410). The hub, RPC, CLI, UI and
+   snapshots then work without further changes, and `patchbay families`
+   lists it. `server/devices/family_tests.rs` drives the hub through a
+   fake family: the pattern for a family's own tests.
 2. Keep modules private and expose a small `pub use` surface from `lib.rs`:
    the adapter type, discovery, a typed ops handle and a raw escape hatch.
 3. Split the code into layers the same way: **protocol** (pure, unit-tested
