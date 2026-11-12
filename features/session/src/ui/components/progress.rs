@@ -224,6 +224,11 @@ pub fn SegmentedProgressBar(
 ) -> Element {
     let bar_height = height.unwrap_or_else(|| "5rem".to_owned());
     let corners = if flat { "" } else { "rounded-lg" };
+    // The layout inline as well as in classes: a host without Session's
+    // Tailwind sheet (the setlists extension's song workspace, in
+    // Architect's document) lays it out the same (AGENTS.md: classes are
+    // additive only).
+    let radius = if flat { "0" } else { "0.5rem" };
     // Text width estimation constants (in pixels):
     // We use generous estimates since text will truncate with ellipsis if needed.
     // Better to show text that gets truncated than hide it entirely.
@@ -429,7 +434,8 @@ pub fn SegmentedProgressBar(
     rsx! {
         div {
             class: "relative flex flex-col items-center justify-center h-20 w-full",
-            style: "height: {bar_height};",
+            style: "position: relative; display: flex; flex-direction: column; align-items: center; \
+                    justify-content: center; width: 100%; height: {bar_height};",
             // Tempo/Time Signature labels
             if !tempo_markers.is_empty() {
                 // Time signature markers
@@ -579,8 +585,9 @@ pub fn SegmentedProgressBar(
             }
             // Main segmented progress bar
             div {
-                                class: "relative w-full h-20 {corners} overflow-hidden bg-secondary",
-                style: "height: {bar_height};",
+                class: "relative w-full h-20 {corners} overflow-hidden bg-secondary",
+                style: "position: relative; width: 100%; height: {bar_height}; overflow: hidden; \
+                        border-radius: {radius}; background-color: var(--color-secondary, #26282e);",
                 // Render sections as background layers
                 for (index, section_start, _section_end, section_width, section_color, _filled_percent, _section_name, _section_comment) in section_data.iter() {
                     {
@@ -600,7 +607,7 @@ pub fn SegmentedProgressBar(
                                 } else {
                                     "absolute h-full z-0"
                                 },
-                                style: format!("left: {}%; width: {}%;", section_start, section_width),
+                                style: format!("position: absolute; top: 0; height: 100%; z-index: 0; left: {}%; width: {}%;", section_start, section_width),
                                 // Hover reveals the full name even when the
                                 // segment is too narrow for a legible label.
                                 title: "{sections.get(*index).map(|s| s.name.as_str()).unwrap_or_default()}",
@@ -619,7 +626,7 @@ pub fn SegmentedProgressBar(
                                     } else {
                                         "absolute inset-0 h-full transition-all duration-200"
                                     },
-                                    style: format!("background-color: {};", section_color),
+                                    style: format!("position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: {};", section_color),
                                 }
                             }
                         }
@@ -632,7 +639,7 @@ pub fn SegmentedProgressBar(
                             key: "section-boundary-{index}",
                             class: "absolute pointer-events-none z-20",
                             style: format!(
-                                "left: {}%; width: 1px; top: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.15);",
+                                "position: absolute; pointer-events: none; z-index: 20; left: {}%; width: 1px; top: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.15);",
                                 section_start
                             ),
                         }
@@ -648,7 +655,7 @@ pub fn SegmentedProgressBar(
                     style: {
                         let progress = current_progress.clamp(0.0, 100.0);
                         format!(
-                            "left: {}%; width: {}%; background-color: rgba(0, 0, 0, 0.6); border-top-right-radius: 0.5rem; border-bottom-right-radius: 0.5rem;",
+                            "position: absolute; top: 0; height: 100%; z-index: 10; pointer-events: none; left: {}%; width: {}%; background-color: rgba(0, 0, 0, 0.6); border-top-right-radius: 0.5rem; border-bottom-right-radius: 0.5rem;",
                             progress,
                             100.0 - progress
                         )
@@ -660,14 +667,17 @@ pub fn SegmentedProgressBar(
                         div {
                             key: "text-{index}",
                             class: "absolute h-full pointer-events-none z-30 overflow-hidden",
-                            style: format!("left: {}%; width: {}%;", section_start, section_width),
+                            style: format!("position: absolute; top: 0; height: 100%; pointer-events: none; z-index: 30; overflow: hidden; left: {}%; width: {}%;", section_start, section_width),
                             // Stack section name and optional comment vertically
                             div {
                                 class: "absolute inset-0 flex flex-col items-center justify-center gap-0.5 overflow-hidden",
-                                style: "text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);",
+                                style: "position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; \
+                                        flex-direction: column; align-items: center; justify-content: center; \
+                                        overflow: hidden; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);",
                                 // Section name
                                 span {
                                     class: "text-xs font-medium text-white truncate max-w-full",
+                                    style: "font-size: 12px; font-weight: 500; color: #ffffff; white-space: nowrap; max-width: 100%;",
                                     "{section_name}"
                                 }
                                 // Comment (smaller, lighter text below)
@@ -759,6 +769,7 @@ pub fn SongProgressBar(
     rsx! {
         div {
             class: "w-full relative",
+            style: "position: relative; width: 100%;",
             SegmentedProgressBar {
                 height: height,
                 labels: labels,
