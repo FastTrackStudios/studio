@@ -523,6 +523,17 @@ impl SampleEngine {
             to: to_note,
             portamento,
         });
+        // A CSS marcato transition (document path; the reactive path fires
+        // it straight from the note-on).
+        if from_note != to_note {
+            if let Some(mt) = self.marcato_transition() {
+                self.fire_marcato_transition(from_note, to_note, velocity, ioi_ms, &mt);
+                if let Some(i) = log_idx {
+                    self.legato_fire_log[i].arrival = self.last_arrival_prediction;
+                }
+                return;
+            }
+        }
         // The Kontakt-measured CSS transition, when the library declares it.
         if !portamento && self.patch.is_zoned() {
             if let Some(kt) = self.patch.spec.legato_cfg().kontakt_transition.clone() {

@@ -130,6 +130,8 @@ def main():
 
     W = int(0.01 * SR)
     if model:
+        global zt_
+        zt_ = zt
         return run_model(kon, on1, on0, A, sa, ra, B, sb, rb, LT, sl, rl, R, sr_, rr, b_off, lt_off,
                          vel, ioi, interval, hard, stage2, a, b, lt_zvol)
     span = range(on0 - 5 * W, on0 + int(1.4 * SR), W)
@@ -227,7 +229,7 @@ def run_model(kon, on1, on0, A, sa, ra, B, sb, rb, LT, sl, rl, R, sr_, rr, b_off
     xt = 225.0
     s1 = xt * igmiu / x444h  # stage-1 fade-in ms
     s2 = xt * (100 - igmiu) / 100.0
-    s2_at = int(xt * igmiu / 100)  # integer ticks
+    s2_at = int(xt * igmiu / 100) - int(os.environ.get("S2M1", 0))  # integer ticks
     fade_a = np.where(after, np.clip(1 - t / xt, 0, 1), 1.0)
     # Old body sinks toward 1 − 0.5946 (the CC19=127 step mod's depth) once
     # CC19 leaves 127: measured, flat across bands (a gain, not the filter).
@@ -271,6 +273,27 @@ def run_model(kon, on1, on0, A, sa, ra, B, sb, rb, LT, sl, rl, R, sr_, rr, b_off
         res = np.zeros_like(kon)
         res[n] = k - pred
         np.save(os.environ["SAVE_RES"], res)
+    if os.environ.get("NOTEOFF"):
+        # Kontakt's end of the phrase note b (note-off 2.0 s after t0): free
+        # gains of B, LT and b's release per 10 ms window.
+        off = on0 + int(2.0 * SR)
+        Rb, rrb, srb, _ = zt_.voice(zt_.find(r"_Marcrel_Mix_fff_", b, 1), b, "Releases")
+        w10 = int(0.01 * SR)
+        for w in range(off - 3 * w10, off + int(0.7 * SR), 2 * w10):
+            m = np.arange(w, w + w10)
+            tt = (m - on0) / SR * 1000.0
+            cols = [read(B, bent(m, on0, sb + b_off * SR / 1000 + (m[0] - on0) * rb, rb, lambda q: 0 * q)).ravel(),
+                    read(Rb, srb + (m - off - 0.002 * SR) * rrb).ravel() * (m >= off + 0.002 * SR).repeat(2)]
+            if LT is not None:
+                cols.append(read(LT, sl + lt_off * SR / 1000 + (m - on0) * rl).ravel())
+            M = np.stack(cols, 1) * FULL
+            ok = [i for i in range(M.shape[1]) if np.dot(M[:, i], M[:, i]) > 1e-12]
+            g = np.zeros(M.shape[1])
+            g[ok], *_ = np.linalg.lstsq(M[:, ok], kon[m].ravel(), rcond=None)
+            res = kon[m].ravel() - M @ g
+            print(f"off+{(w - off) / SR * 1000:6.0f}  B {g[0]:6.3f}  Rb {g[1]:6.3f}" + (f"  LT {g[2]:6.3f}" if LT is not None else "")
+                  + f"   res {db(np.sum(res**2) / (np.sum(kon[m]**2) + 1e-30)):6.1f}")
+        return
     if os.environ.get("BANDS"):
         rest = k - FULL * (pb + pl + pr)
         ua = read(A, sa + (n - on1) * ra) * FULL * (fade_a * (t < xt))[:, None]

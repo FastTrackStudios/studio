@@ -83,7 +83,7 @@ performance {
     instrument_gain_db   2.55  // Kontakt's level over the raw file with every curve at 1.0 (null-tested, all voices)
     resample_transpose   true  // keys between samples are RESAMPLED, like Kontakt (no time-preserving shifter)
     master_tune_cents    9.000103  // group tune 1.0052122 = 1200·log2(…) cents, exact (null-tested: 9.0 drifts a held note to −36 dB)
-    loop_xfade_ms        150   // synth-loop seam crossfade
+    loop_xfade_ms        0     // Kontakt plays the CSS zone loops hard (null test: a marcato body wrapping 136 ms after its note-off)
     // CSS sustains ship no loop points and open with a slow ~0.8 s bow
     // swell that the vendor instrument skips via Kontakt sample-start.
     // Starting the body at its steady plateau is what makes onsets prompt
@@ -537,6 +537,51 @@ articulations (
             { dynamic f, cc 1, points (0 0 0.3503937 0 0.06756757 0.8228347 1 0 1 0 -0.16891891) }
             { dynamic fff, cc 1, points (0 0 0.6003937 0 0.11824326 1 1 0) }
         )
+        // Connected marcato notes (KSP $ocjln=6, 18114-20402), null-tested
+        // against Kontakt with tests/marcato_fit.py --model: −34..−43 dB.
+        marcato_transition {
+            xfade_ms        225                     // $a3zg3
+            split           (50 60)                 // $igmiu soft / hard
+            split_big       50
+            node_divisor    ((150 90) (300 60))     // $x444h
+            body_offset_ms  (60 20)                 // $1fvjk soft / hard
+            body_offset_big_ms (10 0)
+            cc19_soft       ((150 0) (300 60) (500 0))   // $313em
+            cc19_other      (100 0 96)              // hard, > octave soft, > octave hard
+            cc18_soft_step  ((150 127) (300 52) (500 52)) // $eaghu, interval ≤ 2
+            cc18_soft_leap  ((150 96) (300 52) (500 52))
+            cc18_other      (105 52 127)
+            // The marcato mod groups' two volume ENV_FLEX: CC19 → level 1,
+            // CC18 → levels 1-2 (level −1 = the CC ÷ 127).
+            body_env_cc19 ( {time_ms 1.0, level -1, curve 0.505}
+                            {time_ms 299.0, level 1.0, curve 0.67} )
+            body_env_cc18 ( {time_ms 1.0, level -1, curve 0.5}
+                            {time_ms 559.0, level -1, curve 0.505}
+                            {time_ms 1440.0, level 1.0, curve 0.67} )
+            // The old body loses the CC19=127 step mod (0.5946): measured, a
+            // linear sink from 45 ms over 270 ms (flat across bands).
+            old_sink_level    0.4054
+            old_sink_start_ms 45
+            old_sink_ms       270
+            glide_semitone  ((75 40) (100 10) (500 10))   // $ruv02, cents
+            glide_tone      ((75 30) (100 10) (500 0))
+            glide_wide      ((75 20) (100 0) (500 0))
+            glide_ms        60                      // $1mwwo ticks
+            lt_articulation Leg
+            lt_layers ( {dynamic mf, lt_dynamic mf, gain_index 0}
+                        {dynamic f, lt_dynamic ff, gain_index 0}
+                        {dynamic fff, lt_dynamic ff, gain_index 1} )
+            lt_offset_ms    ((150 177) (500 117))
+            lt_db_step      ((150 -9.0) (300 0.0))  // "LT Vol"
+            lt_db_leap      ((150 -1.5) (300 0.0))
+            lt_group_db     0.0371                  // marc leg groups 1.0042866
+            lt_env ( {time_ms 68.0, level 0.49315068, curve 0.499}
+                     {time_ms 492.0, level 1.0, curve 0.72}
+                     {time_ms 1440.0, level 0.0, curve 0.33} )
+            lt_retire_ms    ((150 200) (250 225) (500 281))
+            in_phrase_release_db -8.0               // flat, against the zone (the override replaces Marcrel's level)
+            lt_noteoff_ms   ((75 150) (150 281) (500 281))
+        }
     }
     {
         id       Sfz
@@ -590,10 +635,10 @@ articulations (
                   {time_ms 4007.0, level 1.0, curve 0.9}
                   {time_ms 1250.0, level 0.0, curve 0.7} )
         // Kontakt group ENV_AHDSR of the release groups (AHD only), measured
-        // against Kontakt: 250 ms attack (concave k 2.1 → tension 0.675), 25 s
-        // decay to 0.25 (concave k 3.7 → tension 0.808); × amp_env.
-        amp_env2 ( {time_ms 250.0, level 1.0, curve 0.675}
-                   {time_ms 25000.0, level 0.25, curve 0.808} )
+        // against Kontakt: 250 ms attack (concave k 2.1 → tension 0.64), 25 s
+        // decay to 0.25 (concave k 3.7 → tension 0.7464; shape scale 15); × amp_env.
+        amp_env2 ( {time_ms 250.0, level 1.0, curve 0.64}
+                   {time_ms 25000.0, level 0.25, curve 0.7464} )
         // Kontakt release-group curves: CC36 (= last CC1) and CC2.
         group_curves (
             { dynamic ppp, cc 2, points (0 -0.08445947 1 1 0) }
@@ -619,10 +664,10 @@ articulations (
                   {time_ms 4007.0, level 1.0, curve 0.9}
                   {time_ms 1250.0, level 0.0, curve 0.7} )
         // Kontakt group ENV_AHDSR of the release groups (AHD only), measured
-        // against Kontakt: 250 ms attack (concave k 2.1 → tension 0.675), 25 s
-        // decay to 0.25 (concave k 3.7 → tension 0.808); × amp_env.
-        amp_env2 ( {time_ms 250.0, level 1.0, curve 0.675}
-                   {time_ms 25000.0, level 0.25, curve 0.808} )
+        // against Kontakt: 250 ms attack (concave k 2.1 → tension 0.64), 25 s
+        // decay to 0.25 (concave k 3.7 → tension 0.7464; shape scale 15); × amp_env.
+        amp_env2 ( {time_ms 250.0, level 1.0, curve 0.64}
+                   {time_ms 25000.0, level 0.25, curve 0.7464} )
         // Kontakt release-group curves: CC36 (= last CC1) and CC2.
         group_curves (
             { dynamic p, cc 2, points (1 -0.08445946 1 0 0) }
@@ -652,8 +697,8 @@ articulations (
         amp_env ( {time_ms 1.0, level 0.986, curve 0.125}
                   {time_ms 4007.0, level 1.0, curve 0.9}
                   {time_ms 1250.0, level 0.0, curve 0.7} )
-        amp_env2 ( {time_ms 250.0, level 1.0, curve 0.675}
-                   {time_ms 25000.0, level 0.25, curve 0.808} )
+        amp_env2 ( {time_ms 250.0, level 1.0, curve 0.64}
+                   {time_ms 25000.0, level 0.25, curve 0.7464} )
         dynamics (mf f fff)
         rr       1
         dyn_ctrl cc1
@@ -767,9 +812,9 @@ legato_engine {
         // After the first node ((CC66·CC67)/127²): 480 ms concave to 0.90,
         // 442 ms linear to 1.0, 1002 ms convex to silence (fitted k 2.4 / 2.6).
         lt_node1_cc66_depth     0.47   // 2nd node = 1 − 0.47·(1 − CC66/127): 0.90 @100, 0.83 @82 (measured)
-        lt_env ( {time_ms 480.0, level 0.90, curve 0.70}
+        lt_env ( {time_ms 480.0, level 0.90, curve 0.66}
                  {time_ms 442.0, level 1.0, curve 0.5}
-                 {time_ms 1002.0, level 0.0, curve 0.283} )
+                 {time_ms 1002.0, level 0.0, curve 0.3264} )
         phrase_dip_db           -3.1   // within 250 ms of the phrase start
         phrase_dip_window_ms    250
         // Measured recovery (Kontakt, LL 200 ms phrase, against the CC66-

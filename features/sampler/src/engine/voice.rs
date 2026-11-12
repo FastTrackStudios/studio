@@ -456,6 +456,10 @@ pub struct Voice {
     pitch: Option<[crate::engine::pitch_shift::PitchShifter; 2]>,
 }
 
+/// Kontakt `ENV_FLEX` segment shape: `a = (0.5 − tension)·FLEX_CURVE_SCALE`,
+/// level `(e^{a·t} − 1)/(e^a − 1)` along the segment.
+pub const FLEX_CURVE_SCALE: f32 = 15.0;
+
 /// One decoded Kontakt `ENV_FLEX` amplitude envelope, evaluated per frame and
 /// multiplied into the voice's output.
 ///
@@ -549,16 +553,16 @@ impl FlexEnv {
     /// (0.5 = linear, <0.5 concave, >0.5 convex). PINNED law (not fitted): a
     /// fixed exponential-tension curve, the standard shape for Kontakt bipolar
     /// curve controls — `f(t) = (e^{a t} − 1)/(e^a − 1)` with
-    /// `a = (tension − 0.5)·2·K`, `K = 6` (full-scale curvature), linear at
-    /// tension = 0.5. The A/B metric (RMS over ~1 s windows) is insensitive to
-    /// the exact curvature — only segment levels/times move it — so this is
-    /// identified, not tuned.
+    /// `a = (0.5 − tension)·FLEX_CURVE_SCALE`, linear at tension = 0.5
+    /// (sign and scale null-tested against Kontakt).
     #[inline]
     fn shape(t: f32, tension: f32) -> f32 {
         // Sign measured against Kontakt (CSS legato envelope, null −41 dB):
         // tension > 0.5 is CONCAVE (fast start), < 0.5 convex. The earlier
-        // `(tension − 0.5)` had every curved segment mirrored.
-        let a = (0.5 - tension) * 12.0;
+        // `(tension − 0.5)` had every curved segment mirrored. Scale 15: the
+        // decoded CSS marcato body/transition envelopes null Kontakt at
+        // −42 dB with it, −37 at 12 or 16.
+        let a = (0.5 - tension) * FLEX_CURVE_SCALE;
         if a.abs() < 1.0e-3 {
             t
         } else {
@@ -568,7 +572,7 @@ impl FlexEnv {
 
     /// The shape law's `a` for `tension` — 0 for a (near-)linear segment.
     fn curvature(tension: f32) -> f64 {
-        let a = (0.5 - f64::from(tension)) * 12.0;
+        let a = (0.5 - f64::from(tension)) * f64::from(FLEX_CURVE_SCALE);
         if a.abs() < 1.0e-3 { 0.0 } else { a }
     }
 
@@ -1638,7 +1642,11 @@ impl Voice {
                 self.glide_cents += self.glide_step;
                 self.glide_frames -= 1;
                 if self.glide_frames == 0 {
-                    self.glide_cents = self.glide_end;
+                    // The glide's end pitch holds (an outgoing voice stays
+                    // bent toward the new note until it is cut).
+                    self.rate *= 2f64.powf(f64::from(self.glide_end) / 1200.0);
+                    self.glide_cents = 0.0;
+                    self.glide_end = 0.0;
                 }
                 s
             } else {
@@ -2385,13 +2393,18 @@ impl VoicePool {
             }
             let fade = match v.kind {
                 VoiceKind::Legato => trans_fade,
+                // `sus_fade == 0`: leave the bodies as they are.
                 VoiceKind::SustainLayer
                 | VoiceKind::SustainNVLo
                 | VoiceKind::SustainNVHi
                 | VoiceKind::SustainVibLo
                 | VoiceKind::SustainVibHi
                 | VoiceKind::SustainLo
-                | VoiceKind::SustainHi => sus_fade,
+                | VoiceKind::SustainHi
+                    if sus_fade > 0 =>
+                {
+                    sus_fade
+                }
                 _ => continue,
             }
             .max(1);
@@ -2408,6 +2421,59 @@ impl VoicePool {
             v.state = VoiceState::Releasing {
                 frames_remaining: fade,
             };
+        }
+    }
+
+    /// Retire a CSS marcato transition's outgoing pair on `line`: the body
+    /// fades linearly over `body_fade` (and is cut there), bends 0 → `bend`
+    /// cents over `glide` frames and takes `sink` as its second envelope; the
+    /// previous transition voice fades over `lt_fade`. Each fade starts from
+    /// the voice's current level (see [`Self::fade_out_note_line`]).
+    pub fn marcato_retire(
+        &mut self,
+        line: u8,
+        note: u8,
+        body_fade: usize,
+        lt_fade: usize,
+        bend: f32,
+        glide: usize,
+        sink: Option<&FlexEnv>,
+    ) {
+        for v in &mut self.voices {
+            if v.note != note || v.line != line || v.is_done() {
+                continue;
+            }
+            let body = matches!(
+                v.kind,
+                VoiceKind::SustainLayer
+                    | VoiceKind::SustainNVLo
+                    | VoiceKind::SustainNVHi
+                    | VoiceKind::SustainVibLo
+                    | VoiceKind::SustainVibHi
+                    | VoiceKind::SustainLo
+                    | VoiceKind::SustainHi
+            );
+            let fade = match v.kind {
+                VoiceKind::Legato => lt_fade,
+                _ if body => body_fade,
+                _ => continue,
+            }
+            .max(1);
+            v.target_gain = v.gain;
+            v.gain_ramp_frames = 0;
+            v.stage1_run = 0;
+            v.stage2_frames = 0;
+            v.release_frames = fade;
+            v.release_k_active = 0.0;
+            v.state = VoiceState::Releasing {
+                frames_remaining: fade,
+            };
+            if body {
+                v.set_pitch_glide(0.0, bend, glide);
+                if let Some(e) = sink {
+                    v.set_flex_env2(e.clone());
+                }
+            }
         }
     }
 

@@ -705,6 +705,115 @@ pub struct KontaktTransitionSpec {
     pub phrase_dip_curve: Vec<EnvSegmentSpec>,
 }
 
+/// A CSS MARCATO transition as Kontakt plays it (`$ocjln=6`, KSP 18114-20402,
+/// null-tested against Kontakt 8 renders of CSS 1st Violins: −34 to −43 dB
+/// on every probed transition). No overlap delay; at the note-on:
+/// - "hard" = velocity > 75 and IOI > 50 ms (`$kbqnb`);
+/// - the old body fades out linearly over `xfade_ms` (cut at its end),
+///   bending 0 → +glide cents toward the new note, and — CC19 leaving 127
+///   drops its `CC19=127` step mod — sinking toward `old_sink_level` from
+///   `old_sink_start_ms` over `old_sink_ms`;
+/// - the previous transition voice retires over `lt_retire_ms` by IOI;
+/// - the old note's in-phrase release plays at `in_phrase_release_db`;
+/// - the new body (next round-robin) enters `body_offset_ms` deep, muted,
+///   bending from −glide back to 0, fading in in two stages (stage 1 at the
+///   rate of `xfade·split/node_divisor`, until `xfade·split/100` ticks; stage
+///   2 to full over `xfade·(100 − split)/100`), under the body envelopes
+///   `body_env_cc19` / `body_env_cc18` whose negative levels stand for the
+///   CC value the script sets ÷ 127;
+/// - the marc-leg transition sample (the lower note's interval-coded zone of
+///   `lt_articulation`, entered at its `marcato_start` + `lt_offset_ms`)
+///   plays per marcato dynamic layer at that zone's marcato level × `lt_db`
+///   × `lt_group_db` under `lt_env`.
+/// Every IOI table is the script's integer lerp, flat outside its ends.
+#[derive(Debug, Clone, Facet)]
+pub struct MarcatoTransitionSpec {
+    /// XTime `$a3zg3`, ms.
+    pub xfade_ms: f32,
+    /// Atk-fade split `$igmiu` %: (soft hard) within an octave; beyond it.
+    pub split: [f32; 2],
+    pub split_big: f32,
+    /// Node-volume divisor `$x444h` by IOI.
+    pub node_divisor: Vec<[f32; 2]>,
+    /// Body entry `$1fvjk`, ms: (soft hard) within an octave / beyond it.
+    pub body_offset_ms: [f32; 2],
+    pub body_offset_big_ms: [f32; 2],
+    /// CC19 (`$313em`): soft by IOI; (hard, beyond-octave soft, beyond hard).
+    pub cc19_soft: Vec<[f32; 2]>,
+    pub cc19_other: [f32; 3],
+    /// CC18 (`$eaghu`): soft by IOI for a step (≤ 2 semitones) and a leap;
+    /// (hard, beyond-octave soft, beyond hard).
+    pub cc18_soft_step: Vec<[f32; 2]>,
+    pub cc18_soft_leap: Vec<[f32; 2]>,
+    pub cc18_other: [f32; 3],
+    /// The body's CC-driven volume envelopes (level < 0 = CC ÷ 127).
+    pub body_env_cc19: Vec<EnvSegmentSpec>,
+    pub body_env_cc18: Vec<EnvSegmentSpec>,
+    /// The outgoing body's sink once CC19 leaves 127.
+    pub old_sink_level: f32,
+    pub old_sink_start_ms: f32,
+    pub old_sink_ms: f32,
+    /// Glide depth `$ruv02`, cents by IOI: semitone, tone, wider; over `glide_ms`.
+    pub glide_semitone: Vec<[f32; 2]>,
+    pub glide_tone: Vec<[f32; 2]>,
+    pub glide_wide: Vec<[f32; 2]>,
+    pub glide_ms: f32,
+    /// The transition-sample articulation and its layers: `(marcato dynamic,
+    /// transition dynamic, index into the zone's marcato_gains_db)`.
+    pub lt_articulation: String,
+    pub lt_layers: Vec<MarcLegLayerSpec>,
+    /// LT entry past the zone's marcato start, ms, by IOI.
+    pub lt_offset_ms: Vec<[f32; 2]>,
+    /// LT level "LT Vol" dB by IOI: step (≤ 2) / leap; plus the group volume.
+    pub lt_db_step: Vec<[f32; 2]>,
+    pub lt_db_leap: Vec<[f32; 2]>,
+    pub lt_group_db: f32,
+    pub lt_env: Vec<EnvSegmentSpec>,
+    /// The previous transition voice's retire fade, ms by IOI.
+    pub lt_retire_ms: Vec<[f32; 2]>,
+    /// The in-phrase release's level against the zone (it replaces the
+    /// release articulation's held-time level; Kontakt: −8 dB).
+    pub in_phrase_release_db: f32,
+    /// At the note-off of a note reached by a transition its transition
+    /// voice fades over `lt_noteoff_ms` by that transition's IOI (20831-20859);
+    /// the body keeps the articulation's held-time fade (measured — not the
+    /// decode's 225 ms phrase-note fade).
+    pub lt_noteoff_ms: Vec<[f32; 2]>,
+}
+
+/// One marcato dynamic layer's transition sample (see
+/// [`MarcatoTransitionSpec::lt_layers`]).
+#[derive(Debug, Clone, Facet)]
+pub struct MarcLegLayerSpec {
+    pub dynamic: String,
+    pub lt_dynamic: String,
+    pub gain_index: u32,
+}
+
+/// The KSP's integer lerp over IOI breakpoints (`$5agkf*($l022q*10000/$5yyiz)
+/// /10000+base`): the first value below the first breakpoint, the last at or
+/// past the last, truncated toward zero in between.
+#[must_use]
+pub fn ksp_lerp(pts: &[[f32; 2]], x_ms: i64) -> i64 {
+    let Some(first) = pts.first() else { return 0 };
+    if x_ms < first[0] as i64 {
+        return first[1] as i64;
+    }
+    for w in pts.windows(2) {
+        let (x0, y0, x1, y1) = (
+            w[0][0] as i64,
+            w[0][1] as i64,
+            w[1][0] as i64,
+            w[1][1] as i64,
+        );
+        if x_ms < x1 {
+            let span = (x1 - x0).max(1);
+            return y0 + (y1 - y0) * ((x_ms - x0) * 10000 / span) / 10000;
+        }
+    }
+    pts[pts.len() - 1][1] as i64
+}
+
 /// Piecewise-linear `(x, y)` table lookup, clamped at both ends.
 #[must_use]
 pub fn lerp_table(pts: &[[f32; 2]], x: f32) -> f32 {
@@ -1226,6 +1335,8 @@ fn zone_from_sfz(
         tune_cents: tune + transpose,
         sample_start: sfz_u32(group, region, "offset").unwrap_or(0),
         variant_starts: Vec::new(),
+        marcato_start: 0,
+        marcato_gains_db: Vec::new(),
         sample_end: sfz_u32(group, region, "end").unwrap_or(0),
         loop_start: sfz_u32(group, region, "loop_start").unwrap_or(0),
         loop_end: sfz_u32(group, region, "loop_end").unwrap_or(0),
@@ -1619,6 +1730,9 @@ pub struct ArticulationSpec {
     /// marcato releases sound 6 dB under their zone volume (null-tested).
     #[facet(default)]
     pub level_db: f32,
+    /// A CSS marcato transition: when set, this articulation plays legato
+    /// (mono line) with Kontakt's marcato two-stage transition.
+    pub marcato_transition: Option<MarcatoTransitionSpec>,
     /// Whether the envelope freezes at its hold level while the note is held
     /// (sustains) or plays through one-shot (shorts, releases, transitions).
     /// `None` = held for Sustain/Looped/Trill kinds, one-shot otherwise.
@@ -2347,6 +2461,14 @@ pub struct ZoneSpec {
     /// `LegatoEngineSpec::first_note_variants`. Empty = no variants.
     #[facet(default)]
     pub variant_starts: Vec<u32>,
+    /// A transition zone's MARCATO entry (CSS `marc leg` zones over this same
+    /// file): the sample frame those zones start at (0 = none) …
+    #[facet(default)]
+    pub marcato_start: u32,
+    /// … and their levels in zone order, dB: `(f fff)` on a Leg ff file (the
+    /// f and fff marcato layers both play it), `(mf)` on a Leg mf file.
+    #[facet(default)]
+    pub marcato_gains_db: Vec<f32>,
     /// One-past-last sample frame to play from this zone. 0 = sample end.
     #[facet(default)]
     pub sample_end: u32,

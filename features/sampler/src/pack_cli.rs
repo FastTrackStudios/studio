@@ -900,6 +900,18 @@ fn tsv_zone_fields(z: &TsvZone) -> Vec<(&'static str, String)> {
         let list = run.iter().map(u64::to_string).collect::<Vec<_>>().join(" ");
         v.push(("variant_starts", format!("({list})")));
     }
+    if let Some(&(_, start, _)) = z.marcato.first() {
+        v.push(("marcato_start", start.to_string()));
+        let mut rows = z.marcato.clone();
+        rows.sort_by_key(|r| r.0);
+        // One level per zone set (the f and fff sets repeat a file once each).
+        let list = rows
+            .iter()
+            .map(|r| format!("{:.3}", if r.2 > 0.0 { 20.0 * r.2.log10() } else { -96.0 }))
+            .collect::<Vec<_>>()
+            .join(" ");
+        v.push(("marcato_gains_db", format!("({list})")));
+    }
     v
 }
 
@@ -1082,6 +1094,9 @@ struct TsvZone {
     /// Sample starts of the file's velocity-2.. zones (CSS body variants),
     /// keyed by velocity.
     variant_starts: BTreeMap<i32, u64>,
+    /// A transition file's deeper-entered rows (CSS `marc leg` zones):
+    /// `(tsv row, start, zvol)`, emitted in row order.
+    marcato: Vec<(usize, u64, f64)>,
     rr_index: u32,
     mic: String,
     articulation: String,
@@ -1139,7 +1154,7 @@ fn load_tsv_zones(
 
     let mut by_file: BTreeMap<String, TsvZone> = BTreeMap::new();
     let mut skipped = 0usize;
-    for line in lines {
+    for (row, line) in lines.enumerate() {
         let f: Vec<&str> = line.split('\t').collect();
         let Some(sample) = f.get(c_sample).filter(|s| !s.is_empty()) else {
             skipped += 1;
@@ -1221,6 +1236,7 @@ fn load_tsv_zones(
             gain_db: if zvol > 0.0 { 20.0 * zvol.log10() } else { 0.0 },
             sample_start: None,
             variant_starts: BTreeMap::new(),
+            marcato: Vec::new(),
             rr_index,
             mic,
             articulation: artic,
@@ -1241,7 +1257,13 @@ fn load_tsv_zones(
         {
             entry.sample_start = start;
         }
-        if let (Some(v), Some(st)) = (vel_lo, start) {
+        // A transition file's velocity column is its interval code, not a
+        // velocity: its deeper-entered rows are the marcato transition zones.
+        if entry.direction.is_some() {
+            if let Some(st) = start.filter(|&st| st > 0) {
+                entry.marcato.push((row, st, zvol));
+            }
+        } else if let (Some(v), Some(st)) = (vel_lo, start) {
             if v >= 2 {
                 entry.variant_starts.insert(v, st);
             }

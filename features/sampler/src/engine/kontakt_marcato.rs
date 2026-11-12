@@ -1,0 +1,212 @@
+//! A CSS marcato transition exactly as Kontakt runs the instrument's script
+//! (`$ocjln=6`) — `ArticulationSpec::marcato_transition`. Every step was
+//! null-tested against Kontakt 8 renders of CSS 1st Violins with
+//! `features/rigs/orchestra/tests/marcato_fit.py --model` (−34 to −43 dB on
+//! every probed transition); the numbers and KSP lines are in
+//! [`MarcatoTransitionSpec`]'s doc.
+
+use super::*;
+use crate::spec::{EnvSegmentSpec, MarcatoTransitionSpec, ksp_lerp, lerp_table};
+
+impl SampleEngine {
+    /// The current articulation's marcato transition, if it has one.
+    pub(crate) fn marcato_transition(&self) -> Option<MarcatoTransitionSpec> {
+        self.patch
+            .spec
+            .articulation(&self.articulation)
+            .and_then(|a| a.marcato_transition.clone())
+    }
+
+    /// Fire one marcato transition `from → to` at the second note-on (no
+    /// overlap delay). `ioi_ms` is the time since the previous note-on.
+    pub(crate) fn fire_marcato_transition(
+        &mut self,
+        from: u8,
+        to: u8,
+        velocity: u8,
+        ioi_ms: f32,
+        mt: &MarcatoTransitionSpec,
+    ) {
+        // The script measures the IOI in whole ms of `$ENGINE_UPTIME`.
+        let ioi = ioi_ms.max(0.0) as i64;
+        let interval = to.abs_diff(from);
+        let big = interval > 12;
+        let hard = velocity > 75 && ioi > 50;
+        let line = self.cur_line as u8;
+        let sr = self.sample_rate;
+        let ms = move |v: f32| ms_to_frames_f(v, sr);
+
+        // `$igmiu` split and `$x444h` divisor → the two-stage fade-in.
+        let split = if big {
+            mt.split_big
+        } else {
+            mt.split[usize::from(hard)]
+        };
+        let divisor = ksp_lerp(&mt.node_divisor, ioi).max(1) as f32;
+        let stage1_ms = mt.xfade_ms * split / divisor;
+        let stage2_ms = mt.xfade_ms * (100.0 - split) / 100.0;
+        // Stage 2 starts on the `$qsazz`-th 1 ms tick of the loop, which
+        // decrements before it tests: at tick − 1 ms.
+        let stage2_at_ms = ((mt.xfade_ms * split / 100.0) as i64 - 1).max(0) as f32;
+
+        // CC19 / CC18 the script sets, and the glide depth.
+        let pick = |soft: i64, other: [f32; 3]| -> f32 {
+            match (big, hard) {
+                (false, false) => soft as f32,
+                (false, true) => other[0],
+                (true, false) => other[1],
+                (true, true) => other[2],
+            }
+        };
+        let cc19 = pick(ksp_lerp(&mt.cc19_soft, ioi), mt.cc19_other);
+        let cc18_soft = if interval <= 2 {
+            &mt.cc18_soft_step
+        } else {
+            &mt.cc18_soft_leap
+        };
+        let cc18 = pick(ksp_lerp(cc18_soft, ioi), mt.cc18_other);
+        let glide_tab = match interval {
+            0 => None,
+            1 => Some(&mt.glide_semitone),
+            2 => Some(&mt.glide_tone),
+            _ => Some(&mt.glide_wide),
+        };
+        let bend =
+            glide_tab.map_or(0.0, |t| ksp_lerp(t, ioi) as f32) * if to > from { 1.0 } else { -1.0 };
+        let glide = ms(mt.glide_ms);
+
+        // 1. Retire the old pair: body fade + bend + sink, previous LT.
+        let sink = (cc19 < 127.0)
+            .then(|| {
+                voice::FlexEnv::from_segments(
+                    &[
+                        (mt.old_sink_start_ms, 1.0, 0.5),
+                        (mt.old_sink_ms, mt.old_sink_level, 0.5),
+                    ],
+                    1.0,
+                    sr,
+                    false,
+                )
+            })
+            .flatten();
+        let lt_retire = ksp_lerp(&mt.lt_retire_ms, ioi) as f32;
+        self.voices.marcato_retire(
+            line,
+            from,
+            ms(mt.xfade_ms),
+            ms(lt_retire),
+            bend,
+            glide,
+            sink.as_ref(),
+        );
+
+        // 2. The old note's in-phrase release.
+        self.release_gain_override = Some(db_to_gain(mt.in_phrase_release_db));
+        self.spawn_release(from);
+        self.release_gain_override = None;
+
+        // 3. The new body: next round-robin, entered deep, muted, two-stage
+        //    fade-in under the CC-driven envelopes, scooping into pitch.
+        let offs = if big {
+            mt.body_offset_big_ms
+        } else {
+            mt.body_offset_ms
+        };
+        let env = |segs: &[EnvSegmentSpec], cc: f32| {
+            let lv = |l: f32| if l < 0.0 { cc / 127.0 } else { l };
+            let s: Vec<(f32, f32, f32)> = segs
+                .iter()
+                .map(|e| (e.time_ms, lv(e.level), e.curve))
+                .collect();
+            voice::FlexEnv::from_segments(&s, 0.0, sr, false)
+        };
+        self.sustain_flex = Some((env(&mt.body_env_cc19, cc19), env(&mt.body_env_cc18, cc18)));
+        self.sustain_fade_in = Some((0, ms(stage2_at_ms), ms(stage1_ms), ms(stage2_ms)));
+        self.spawn_extra_start = ms(offs[usize::from(hard)]);
+        self.legato_glide = (bend != 0.0).then_some((-bend, glide));
+        self.in_transition = true;
+        self.play_direction = if to >= from { "up" } else { "down" }.to_string();
+        self.trigger_zoned_sustain(to);
+        self.in_transition = false;
+        self.legato_glide = None;
+        self.spawn_extra_start = 0;
+        self.sustain_fade_in = None;
+        self.sustain_flex = None;
+
+        // 4. The marc-leg transition sample, per marcato dynamic layer.
+        if !big {
+            let lt_ms = ksp_lerp(&mt.lt_offset_ms, ioi) as f32;
+            let lt_db_tab = if interval <= 2 {
+                &mt.lt_db_step
+            } else {
+                &mt.lt_db_leap
+            };
+            let lt_db = lerp_table(lt_db_tab, ioi as f32) + mt.lt_group_db;
+            let lt_env: Vec<(f32, f32, f32)> = mt
+                .lt_env
+                .iter()
+                .map(|e| (e.time_ms, e.level, e.curve))
+                .collect();
+            let lt_env = voice::FlexEnv::from_segments(&lt_env, 0.0, sr, false);
+            self.spawn_marcato_lt(mt, from, to, u32::from(interval), lt_ms, lt_db, lt_env);
+        }
+        let l = self.line_mut();
+        l.note = Some(to);
+        l.marcato_ioi = Some(ioi as f32);
+    }
+
+    /// The marc-leg zones of the LOWER note (interval-coded), one voice per
+    /// marcato dynamic layer the CC1 curves leave audible.
+    #[allow(clippy::too_many_arguments)]
+    fn spawn_marcato_lt(
+        &mut self,
+        mt: &MarcatoTransitionSpec,
+        from: u8,
+        to: u8,
+        interval: u32,
+        lt_ms: f32,
+        lt_db: f32,
+        env: Option<voice::FlexEnv>,
+    ) {
+        let lower = from.min(to);
+        let direction = if to > from { "up" } else { "down" };
+        let marc = self.articulation.clone();
+        for layer in &mt.lt_layers {
+            let g = self.group_curve_gain(&marc, &layer.dynamic).unwrap_or(1.0);
+            if g <= 0.0 {
+                continue;
+            }
+            let idx = self.patch.spec.zones.iter().position(|z| {
+                z.articulation.eq_ignore_ascii_case(&mt.lt_articulation)
+                    && z.direction.eq_ignore_ascii_case(direction)
+                    && z.interval == interval
+                    && z.dynamic.eq_ignore_ascii_case(&layer.lt_dynamic)
+                    && (z.key_min..=z.key_max).contains(&lower)
+                    && z.marcato_start > 0
+                    && self
+                        .solo_mic
+                        .as_ref()
+                        .is_none_or(|m| z.mic.eq_ignore_ascii_case(m))
+            });
+            let Some(idx) = idx else { continue };
+            let z = &self.patch.spec.zones[idx];
+            let Some(&zone_db) = z.marcato_gains_db.get(layer.gain_index as usize) else {
+                continue;
+            };
+            // Past the zone's own start: marcato zones enter the same file
+            // at `marcato_start`, then the IOI offset.
+            let offset = (z.marcato_start as usize).saturating_sub(z.sample_start as usize)
+                + ms_to_frames_f(lt_ms, self.sample_rate);
+            let gain = g * db_to_gain(zone_db - z.gain_db + lt_db);
+            // Pitched from the lower note, where Kontakt maps the zone.
+            let pitch = f64::from(lower) - f64::from(to);
+            if self.spawn_zone_voice_at(idx, to, VoiceKind::Legato, gain, None, pitch, offset) {
+                if let Some(v) = self.voices.last_spawned_mut() {
+                    if let Some(e) = env.clone() {
+                        v.set_flex_env(e);
+                    }
+                }
+            }
+        }
+    }
+}

@@ -224,6 +224,7 @@ mod dispatch;
 pub mod filter;
 mod helpers;
 mod kontakt_legato;
+mod kontakt_marcato;
 mod legato;
 mod midi;
 pub mod pitch_shift;
@@ -540,6 +541,9 @@ pub(crate) struct LegatoLine {
     /// path measures the inter-onset interval (IOI) as `now − last_onset_frame`
     /// to drive the Overlap-Delay (spec §2.1 — IOI-driven, not velocity).
     last_onset_frame: u64,
+    /// The IOI (ms) of the CSS marcato transition that reached the sounding
+    /// note — `None` for a phrase's first note. Its note-off fades by it.
+    marcato_ioi: Option<f32>,
 }
 
 impl Default for LegatoLine {
@@ -554,6 +558,7 @@ impl Default for LegatoLine {
             last_release_frame: 0,
             last_activity: 0,
             last_onset_frame: 0,
+            marcato_ioi: None,
         }
     }
 }
@@ -876,6 +881,9 @@ pub struct SampleEngine {
     /// starts detuned toward the departed note and scoops to true pitch. Set
     /// around the legato spawn, applied in `spawn_zone_voice_at`.
     legato_glide: Option<(f32, usize)>,
+    /// Gain envelopes (`flex`, `flex2`) for the sustain layers spawned next —
+    /// a CSS marcato transition's CC-driven body envelopes.
+    sustain_flex: Option<(Option<voice::FlexEnv>, Option<voice::FlexEnv>)>,
     /// CSS `%jcxqm` two-stage transition fade-in `(stage1_run, stage1_denom,
     /// stage2)` in frames — the transition voice EMERGES via the swell, not a
     /// 25 ms declick (the `NVLeg` sample has no silent head; it starts ~-16 dB, so
@@ -1250,6 +1258,7 @@ impl SampleEngine {
             legato_attack_dip_db: 0.0,
             ab_anchor_frame: 0,
             legato_glide: None,
+            sustain_flex: None,
             transition_fade: None,
             sord_filter: BiquadFilter::lowpass(filter::SORD_FC, filter::SORD_Q, sample_rate),
             // Pre-size note-keyed maps to the full MIDI range so note-on never

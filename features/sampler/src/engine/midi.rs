@@ -48,6 +48,15 @@ impl SampleEngine {
     /// global legato toggle is on. (Reciprocity is what rejects the false
     /// `find_vibrato_pair_id` matches: Tremolo→Nonvib, but Nonvib→Vibsus.)
     pub(crate) fn is_legato_capable_artic(&self, artic: &str) -> bool {
+        // CSS marcato plays legato through its own two-stage transition.
+        if self
+            .patch
+            .spec
+            .articulation(artic)
+            .is_some_and(|a| a.marcato_transition.is_some())
+        {
+            return true;
+        }
         let kind = self.patch.spec.articulation(artic).map(|a| a.kind.clone());
         if matches!(kind, Some(ArticulationKind::Legato)) {
             return true;
@@ -404,6 +413,7 @@ impl SampleEngine {
                         let l = self.line_mut();
                         l.note = Some(note);
                         l.last_onset_frame = now;
+                        l.marcato_ioi = None;
                     }
                     // Transition from the currently-sounding note to this one,
                     // delayed by the velocity-mapped legato latency. A note that
@@ -550,6 +560,9 @@ impl SampleEngine {
                 l.released_note = Some(note);
                 l.last_release_frame = now;
             }
+            let marcato_phrase = self
+                .marcato_transition()
+                .zip(self.line_mut().marcato_ioi.take());
             // Recorded release tail (CSS Vsusrel/NVrel) — default OFF
             // (`$4p5kj=0`, spec §6). Only fires when "Releases" is enabled.
             if !self.spawn_piano_release(note) && self.releases_enabled {
@@ -577,6 +590,18 @@ impl SampleEngine {
                 ms_to_frames_f(crate::spec::lerp_table(&by_held, held_ms), self.sample_rate)
             };
             self.voices.note_off_line(cur_line, note, Some(sus_off));
+            // A note reached by a marcato transition: its transition voice
+            // fades by that transition's IOI (the body keeps the held-time
+            // fade — measured, Kontakt ends a phrase note like a single one).
+            if let Some((mt, ioi)) = marcato_phrase {
+                let lt = crate::spec::ksp_lerp(&mt.lt_noteoff_ms, ioi as i64) as f32;
+                self.voices.fade_out_note_line(
+                    cur_line,
+                    note,
+                    ms_to_frames_f(lt, self.sample_rate),
+                    0,
+                );
+            }
             return;
         }
         self.do_note_off_with_release_frames(note, release_velocity, release_frames);
@@ -1178,6 +1203,13 @@ impl SampleEngine {
         let ioi_frames = now.saturating_sub(self.line().last_onset_frame);
         self.line_mut().last_onset_frame = now;
         let ioi_ms = frames_to_ms(ioi_frames, self.sample_rate);
+        // A marcato transition has no overlap delay: it fires on the note-on.
+        if from != to {
+            if let Some(mt) = self.marcato_transition() {
+                self.fire_marcato_transition(from, to, velocity, ioi_ms, &mt);
+                return;
+            }
+        }
         let (delay_ms, portamento) = self.legato_timing(velocity, ioi_frames);
         let frames = ms_to_frames(delay_ms, self.sample_rate);
         if frames == 0 {
@@ -2648,6 +2680,18 @@ impl SampleEngine {
             }
             if let Some(env2) = flex_env2.clone() {
                 voice = voice.with_flex_env2(env2);
+            }
+            // A marcato transition's CC-driven body envelopes replace the
+            // articulation's own.
+            if is_sustain_layer {
+                if let Some((e1, e2)) = &self.sustain_flex {
+                    if let Some(e) = e1 {
+                        voice.set_flex_env(e.clone());
+                    }
+                    if let Some(e) = e2 {
+                        voice.set_flex_env2(e.clone());
+                    }
+                }
             }
             if is_sustain_layer {
                 let k = self
