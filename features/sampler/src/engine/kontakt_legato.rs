@@ -7,6 +7,14 @@
 use super::*;
 use crate::spec::{KontaktTransitionSpec, css_transition_ccs};
 
+/// The transition voice's phrase-start dip: a measured recovery curve, or a
+/// plain linear ramp back from `(gain, frames)`.
+#[derive(Clone)]
+pub(crate) enum KontaktDip {
+    Curve(voice::FlexEnv),
+    Ramp(f32, usize),
+}
+
 impl SampleEngine {
     /// Fire one transition `from → to` (the overlap delay has already been
     /// waited by the reactive countdown).
@@ -93,7 +101,7 @@ impl SampleEngine {
             let dip = self.kontakt_phrase_dip(kt);
             let (leg_nv, leg_vib) = self.legato_pair_ids(false);
             for leg in [leg_nv, leg_vib].into_iter().flatten() {
-                self.spawn_kontakt_lt(&leg, from, to, interval, offset, env.clone(), dip);
+                self.spawn_kontakt_lt(&leg, from, to, interval, offset, env.clone(), dip.clone());
             }
         }
         self.line_mut().note = Some(to);
@@ -118,6 +126,11 @@ impl SampleEngine {
         };
         let mut segs = vec![(seg0, node, 0.5)];
         segs.extend(kt.lt_env.iter().map(|s| (s.time_ms, s.level, s.curve)));
+        if kt.lt_node1_cc66_depth > 0.0 {
+            if let Some(first) = segs.get_mut(1) {
+                first.1 = 1.0 - kt.lt_node1_cc66_depth * (1.0 - cc66 / 127.0);
+            }
+        }
         voice::FlexEnv::from_segments(&segs, 0.0, self.sample_rate, false)
     }
 
@@ -125,15 +138,23 @@ impl SampleEngine {
     /// within the window of the phrase anchor it plays `phrase_dip_db` down
     /// (recovering over the window); otherwise 0 dB and the anchor moves to
     /// `now − window` so the dip never applies twice in a row.
-    fn kontakt_phrase_dip(&mut self, kt: &KontaktTransitionSpec) -> Option<(f32, usize)> {
+    fn kontakt_phrase_dip(&mut self, kt: &KontaktTransitionSpec) -> Option<KontaktDip> {
         let now = self.frames_rendered;
         let window = ms_to_frames_f(kt.phrase_dip_window_ms, self.sample_rate);
-        if now.saturating_sub(self.ab_anchor_frame) <= window as u64 {
-            Some((db_to_gain(kt.phrase_dip_db), window))
-        } else {
+        if now.saturating_sub(self.ab_anchor_frame) > window as u64 {
             self.ab_anchor_frame = now.saturating_sub(window as u64);
-            None
+            return None;
         }
+        let start = db_to_gain(kt.phrase_dip_db);
+        if kt.phrase_dip_curve.is_empty() {
+            return Some(KontaktDip::Ramp(start, window));
+        }
+        let segs: Vec<(f32, f32, f32)> = kt
+            .phrase_dip_curve
+            .iter()
+            .map(|s| (s.time_ms, s.level, s.curve))
+            .collect();
+        voice::FlexEnv::from_segments(&segs, start, self.sample_rate, false).map(KontaktDip::Curve)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -145,7 +166,7 @@ impl SampleEngine {
         interval: u32,
         offset: usize,
         env: Option<voice::FlexEnv>,
-        dip: Option<(f32, usize)>,
+        dip: Option<KontaktDip>,
     ) {
         let lower = from.min(to);
         let direction = if to > from { "up" } else { "down" };
@@ -178,10 +199,14 @@ impl SampleEngine {
                     if let Some(e) = env.clone() {
                         v.set_flex_env(e);
                     }
-                    if let Some((d, frames)) = dip {
-                        let full = v.target_gain;
-                        v.gain = full * d;
-                        v.ramp_gain(full, frames);
+                    match dip.clone() {
+                        Some(KontaktDip::Curve(c)) => v.set_flex_env2(c),
+                        Some(KontaktDip::Ramp(d, frames)) => {
+                            let full = v.target_gain;
+                            v.gain = full * d;
+                            v.ramp_gain(full, frames);
+                        }
+                        None => {}
                     }
                 }
             }

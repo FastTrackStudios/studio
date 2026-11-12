@@ -687,11 +687,22 @@ pub struct KontaktTransitionSpec {
     pub lt_seg0_ms_expressive: f32,
     /// The transition envelope after its first node (FlexEnv segments).
     pub lt_env: Vec<EnvSegmentSpec>,
+    /// The level of `lt_env`'s first segment is `1 − depth·(1 − CC66/127)`
+    /// (measured: 0.90 at CC66 = 100, 0.83 at 82, either mode). 0 = use the
+    /// spec level as is.
+    #[facet(default)]
+    pub lt_node1_cc66_depth: f32,
     /// Phrase-start dip on the transition voice: within `phrase_dip_window_ms`
     /// of the phrase anchor it starts `phrase_dip_db` down and recovers over
     /// `phrase_dip_window_ms`.
     pub phrase_dip_db: f32,
     pub phrase_dip_window_ms: f32,
+    /// The dip's measured recovery, as a gain envelope starting at
+    /// `phrase_dip_db` (Kontakt's ramp is slower than the script's nominal
+    /// 0.12 dB / 10 ms: −1.4 dB at 250 ms, 0 dB near 1 s). Empty = a linear
+    /// ramp back over `phrase_dip_window_ms`.
+    #[facet(default)]
+    pub phrase_dip_curve: Vec<EnvSegmentSpec>,
 }
 
 /// CSS transition-envelope CC values (KSP 7186-7425) for one transition.

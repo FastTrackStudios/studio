@@ -996,6 +996,11 @@ impl Voice {
         self.flex = Some(env);
     }
 
+    /// Replace the second envelope after spawn (see [`Self::flex2`]).
+    pub fn set_flex_env2(&mut self, env: FlexEnv) {
+        self.flex2 = Some(env);
+    }
+
     /// Attach the second envelope (see [`Self::flex2`]).
     #[must_use]
     pub fn with_flex_env2(mut self, env: FlexEnv) -> Self {

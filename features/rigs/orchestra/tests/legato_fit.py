@@ -83,7 +83,7 @@ class Zones:
 def main():
     argv = sys.argv[1:]
     opt = {}
-    for k in ("--od", "--lt-off", "--a-start", "--b-start", "--b-delay", "--lt-delay", "--r-delay"):
+    for k in ("--od", "--lt-off", "--a-start", "--b-start", "--b-delay", "--lt-delay", "--r-delay", "--r2"):
         if k in argv:
             i = argv.index(k)
             opt[k] = float(argv[i + 1])
@@ -138,6 +138,10 @@ def main():
             cols.append(read(LT, sl + lt_off * SR / 1000 + (n - ls_) * rl) * ((n >= ls_)[:, None]))
         rs = start + rd
         cols.append(read(R, sr_ + (n - rs) * rr) * ((n >= rs)[:, None]))
+        if "--r2" in opt:
+            # A second release of a: its own key-up release, opt ms after t0.
+            r2 = on0 + opt["--r2"] * SR / 1000.0
+            cols.append(read(R, sr_ + (n - r2) * rr) * ((n >= r2)[:, None]))
         return cols
 
     def fit(n, od, lt_off):
@@ -161,7 +165,7 @@ def main():
                 if best is None or e < best[0]:
                     best = (e, od_t, lo)
         _, od, lt_off = best
-    names = ["A old", "B new"] + (["LT"] if LT is not None else []) + ["R rel"]
+    names = ["A old", "B new"] + (["LT"] if LT is not None else []) + ["R rel"] + (["R2 keyup"] if "--r2" in opt else [])
     print(f"unit {unit}: {row['description']}  zone {zone}  OD {od} ms  LT {lt_name if LT is not None else '-'} off {lt_off:.0f} ms  B off {b_off:.0f} ms")
     print("   t ms  " + "  ".join(f"{n:>7}" for n in names) + "   residual")
     tot_e = tot_s = 0.0

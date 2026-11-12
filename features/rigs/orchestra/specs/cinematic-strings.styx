@@ -737,11 +737,24 @@ legato_engine {
         lt_seg0_ms_expressive   80     // … and at CC68=127 (the group's 80 ms)
         // After the first node ((CC66·CC67)/127²): 480 ms concave to 0.90,
         // 442 ms linear to 1.0, 1002 ms convex to silence (fitted k 2.4 / 2.6).
+        lt_node1_cc66_depth     0.47   // 2nd node = 1 − 0.47·(1 − CC66/127): 0.90 @100, 0.83 @82 (measured)
         lt_env ( {time_ms 480.0, level 0.90, curve 0.70}
                  {time_ms 442.0, level 1.0, curve 0.5}
                  {time_ms 1002.0, level 0.0, curve 0.283} )
-        phrase_dip_db           -3.0   // within 250 ms of the phrase start
+        phrase_dip_db           -3.1   // within 250 ms of the phrase start
         phrase_dip_window_ms    250
+        // Measured recovery (Kontakt, LL 200 ms phrase, against the CC66-
+        // corrected envelope): −3.0 dB, ≈0.1 dB per 10 ms, 0 dB by ~525 ms.
+        phrase_dip_curve (
+            {time_ms 55.0, level 0.7079, curve 0.5}
+            {time_ms 40.0, level 0.7464, curve 0.5}
+            {time_ms 60.0, level 0.7989, curve 0.5}
+            {time_ms 40.0, level 0.8453, curve 0.5}
+            {time_ms 60.0, level 0.9131, curve 0.5}
+            {time_ms 70.0, level 0.9561, curve 0.5}
+            {time_ms 100.0, level 0.9795, curve 0.5}
+            {time_ms 100.0, level 1.0000, curve 0.5}
+        )
     }
 
     // Overlap-Delay (legtrans_OD / $b0n3s): the wait between a live note-on
