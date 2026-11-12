@@ -39,8 +39,14 @@
 //! ```text
 //!   thebattleship  rail plan, check (`cargo check --workspace`), wasm, tests
 //!                  (the core test set), lint (advisory clippy)
+//!   thebattleship  web image (the studio-web image evaluates, its crates
+//!                  vendor: every git fetch as nix makes it)
 //!   ubuntu-latest  plan, gates, deps-cache and the `CI passed` aggregator
 //!   macos-latest   release tooling (the sandbox, macOS's own tools)
+//!   airlock        Apple builds (`studio-release-mac`: the macOS app's
+//!                  `cargo check`, the iOS app's linking `cargo build`), so a
+//!                  tag's .dmg and TestFlight builds compile before the tag
+//!                  (studio#444)
 //! ```
 //!
 //! One job per BUILD KIND, as Task's lint/tests/wasm: check mode, clippy's
@@ -98,6 +104,8 @@ workflow_dispatch:
     .job("wasm", wasm())
     .job("tests", tests())
     .job("release-macos", release_macos())
+    .job("web-image", web_image())
+    .job("apple", apple())
     .job("ci-passed", ci_passed()?))
 }
 
@@ -327,6 +335,76 @@ fn release_macos() -> Job {
             "env -i HOME=\"$HOME\" TMPDIR=\"$RUNNER_TEMP\" PATH=/usr/bin:/bin:/usr/sbin:/sbin \\\n  /bin/bash scripts/release-sandbox.sh\n",
         ))
 }
+
+/// REQUIRED (through `CI passed`): the web image a tag publishes
+/// (images.yml, `.#studio-web-image`) evaluates, and its crates vendor
+/// (every git dependency fetched as nix fetches it). v26.11.0 and v26.11.1
+/// shipped without the image because a git revision cargo could fetch, nix
+/// could not (studio#444); nothing before the tag evaluated the image.
+/// Builds nothing but the vendor directory (fetches, cached on the host).
+fn web_image() -> Job {
+    pool_job("Web image evaluates", "web-image", 45)
+        .cond(CHECK_PLANNED)
+        .step(Step::run(
+            "studio-web: evaluate the image, vendor its crates",
+            WEB_IMAGE,
+        ))
+}
+
+const WEB_IMAGE: &str = r#"set -euo pipefail
+export PATH="$PATH:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin"
+system="$(nix eval --impure --raw --expr builtins.currentSystem)"
+# The image's derivation: evaluating it fetches every builtins.fetchGit.
+nix eval --accept-flake-config --raw ".#packages.$system.studio-web-image.drvPath" > /dev/null
+# The crates it builds from: crane's vendor directory (the fixed-output
+# fetches too). git+file: the tracked files only, as the image builds.
+nix build --no-link --accept-flake-config --impure --expr \
+  "(builtins.getFlake \"git+file://$PWD?rev=$(git rev-parse HEAD)\").packages.$system.session-app-web.cargoVendorDir"
+"#;
+
+/// REQUIRED (through `CI passed`): what a tag's Apple builds compile, on the
+/// runner that builds them (airlock's `studio-release-mac`, its own warm
+/// checkout and dev target): `cargo check` of the macOS app (the .dmg's,
+/// scripts/desktop/macos.sh) and a `cargo build` of the iOS app with
+/// TestFlight's features, which links (deploy-testflight.sh). v26.11.0 and
+/// v26.11.1 shipped neither: a macOS-only compile error and an iOS-only
+/// link error that no Linux check could see (studio#444).
+fn apple() -> Job {
+    Job::new(RunsOn::Labels(&[
+        "self-hosted",
+        "macos",
+        "studio-release-mac",
+    ]))
+    .name("Apple builds (macOS check, iOS build)")
+    .needs(&["plan", "rail"])
+    .cond(CHECK_PLANNED)
+    .timeout(120)
+    .step(
+        checkout()
+            .with("clean", false)
+            .with("persist-credentials", false),
+    )
+    .step(Step::uses("devenv CLI", "./.github/actions/devenv"))
+    .step(Step::run(
+        "macOS: cargo check -p studio-desktop (the .dmg's app)",
+        &in_shell("cargo check -p studio-desktop\n"),
+    ))
+    .step(Step::run(
+        "iOS: cargo build -p studio-desktop (TestFlight's features, linked)",
+        &in_shell(IOS),
+    ))
+}
+
+/// iOS needs Xcode's own xcrun first on PATH and the nix SDK variables
+/// unset (the airlock-ios skill); the devenv shell's iOS linker wrappers do
+/// the rest. TestFlight's feature set (deploy-testflight.sh's DX_FEATURES).
+const IOS: &str = r#"mkdir -p "$RUNNER_TEMP/bin-ios"
+ln -sf /usr/bin/xcrun "$RUNNER_TEMP/bin-ios/xcrun"
+export PATH="$RUNNER_TEMP/bin-ios:$PATH"
+unset DEVELOPER_DIR SDKROOT
+cargo build -p studio-desktop --target aarch64-apple-ios --no-default-features \
+  --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app,doc-sync
+"#;
 
 /// Not `--locked`: cargo writes the lockfile's [[patch.unused]] trailer in
 /// HashMap order — one group per patched source URL — so the same inputs
@@ -772,6 +850,8 @@ fn ci_passed() -> Result<Job> {
             "wasm",
             "tests",
             "release-macos",
+            "web-image",
+            "apple",
         ])
         .cond("${{ always() }}")
         .timeout(5)
@@ -784,7 +864,9 @@ fn ci_passed() -> Result<Job> {
                 .env("CHECK", "${{ needs.check.result }}")
                 .env("WASM", "${{ needs.wasm.result }}")
                 .env("TESTS", "${{ needs.tests.result }}")
-                .env("RELEASE_MACOS", "${{ needs.release-macos.result }}"),
+                .env("RELEASE_MACOS", "${{ needs.release-macos.result }}")
+                .env("WEB_IMAGE", "${{ needs.web-image.result }}")
+                .env("APPLE", "${{ needs.apple.result }}"),
         )
         .step(
             Step::run(
@@ -813,7 +895,7 @@ for job in "gates:$GATES" "release-macos:$RELEASE_MACOS"; do
 done
 # The builds: skipped is fine when the rail plan skipped them (nothing they
 # cover changed since a green base); anything else must have succeeded.
-for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS"; do
+for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "web-image:$WEB_IMAGE" "apple:$APPLE"; do
   case "${job#*:}" in
     success | skipped) ;;
     *) bad "${job%%:*}: ${job#*:}" ;;

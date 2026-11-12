@@ -588,6 +588,97 @@ jobs:
       run: |
         env -i HOME="$HOME" TMPDIR="$RUNNER_TEMP" PATH=/usr/bin:/bin:/usr/sbin:/sbin \
           /bin/bash scripts/release-sandbox.sh
+  web-image:
+    name: Web image evaluates
+    needs:
+    - plan
+    - rail
+    if: ${{ needs.rail.outputs.check == 'true' || needs.rail.outputs.cargo == 'true' }}
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
+    timeout-minutes: 45
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - name: Hosted hotfix setup
+      if: ${{ runner.environment == 'github-hosted' }}
+      uses: ./.github/actions/hosted-nix
+    - name: Shared runner tools
+      if: ${{ runner.environment == 'self-hosted' }}
+      uses: ./.github/actions/shared-tools
+    - name: CI cargo config (the pool's cargo home)
+      run: |
+        # Public hotfix PRs run on hosted VMs; the protected-ref jobs use the gate's cache.
+        if [ -z "${CI_CACHE_DIR:-}" ]; then
+          export CI_CACHE_DIR="$RUNNER_TEMP/studio-ci"
+          echo "CI_CACHE_DIR=$CI_CACHE_DIR" >> "$GITHUB_ENV"
+        fi
+        home="$CI_CACHE_DIR/cargo-home"
+        mkdir -p "$home"
+        echo "CARGO_HOME=$home" >> "$GITHUB_ENV"
+        # The old per-checkout copy, which cargo would still find from the checkout.
+        rm -f ../.cargo/config.toml
+        tmp="$(mktemp "$home/config.toml.XXXXXX")"
+        cp .cargo/ci-config.toml "$tmp"
+        mv -f "$tmp" "$home/config.toml"
+    - name: Target dir (web-image, pool capped at 200 GB)
+      run: |
+        pool="${CI_CACHE_DIR:?not a shared runner (no CI_CACHE_DIR)}"
+        dir="$pool/web-image/$RUNNER_NAME/target"
+        mkdir -p "$dir"
+        echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
+        used="$(du -s --block-size=1G "$pool" | cut -f1)"
+        if [ "$used" -gt 200 ]; then
+          echo "::warning::the pool cache is ${used} GB, over 200 GB: emptying $dir (a cold web-image build)"
+          rm -rf "$dir" && mkdir -p "$dir"
+        fi
+        echo "target dir: $dir; pool $(du -sh "$pool" | cut -f1) of 200 GB; $(df -h "$pool" | awk 'NR==2 {print $4}') free on the disk"
+    - name: 'studio-web: evaluate the image, vendor its crates'
+      run: |
+        set -euo pipefail
+        export PATH="$PATH:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin"
+        system="$(nix eval --impure --raw --expr builtins.currentSystem)"
+        # The image's derivation: evaluating it fetches every builtins.fetchGit.
+        nix eval --accept-flake-config --raw ".#packages.$system.studio-web-image.drvPath" > /dev/null
+        # The crates it builds from: crane's vendor directory (the fixed-output
+        # fetches too). git+file: the tracked files only, as the image builds.
+        nix build --no-link --accept-flake-config --impure --expr \
+          "(builtins.getFlake \"git+file://$PWD?rev=$(git rev-parse HEAD)\").packages.$system.session-app-web.cargoVendorDir"
+  apple:
+    name: Apple builds (macOS check, iOS build)
+    needs:
+    - plan
+    - rail
+    if: ${{ needs.rail.outputs.check == 'true' || needs.rail.outputs.cargo == 'true' }}
+    runs-on:
+    - self-hosted
+    - macos
+    - studio-release-mac
+    timeout-minutes: 120
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        clean: false
+        persist-credentials: false
+    - name: devenv CLI
+      uses: ./.github/actions/devenv
+    - name: 'macOS: cargo check -p studio-desktop (the .dmg''s app)'
+      run: |
+        devenv shell -- bash -euo pipefail -s <<'EOF'
+        cargo check -p studio-desktop
+        EOF
+    - name: 'iOS: cargo build -p studio-desktop (TestFlight''s features, linked)'
+      run: |
+        devenv shell -- bash -euo pipefail -s <<'EOF'
+        mkdir -p "$RUNNER_TEMP/bin-ios"
+        ln -sf /usr/bin/xcrun "$RUNNER_TEMP/bin-ios/xcrun"
+        export PATH="$RUNNER_TEMP/bin-ios:$PATH"
+        unset DEVELOPER_DIR SDKROOT
+        cargo build -p studio-desktop --target aarch64-apple-ios --no-default-features \
+          --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app,doc-sync
+        EOF
   ci-passed:
     name: CI passed
     needs:
@@ -598,6 +689,8 @@ jobs:
     - wasm
     - tests
     - release-macos
+    - web-image
+    - apple
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -613,6 +706,8 @@ jobs:
         WASM: ${{ needs.wasm.result }}
         TESTS: ${{ needs.tests.result }}
         RELEASE_MACOS: ${{ needs.release-macos.result }}
+        WEB_IMAGE: ${{ needs.web-image.result }}
+        APPLE: ${{ needs.apple.result }}
       run: |
         set -u
         fail=0
@@ -625,7 +720,7 @@ jobs:
         done
         # The builds: skipped is fine when the rail plan skipped them (nothing they
         # cover changed since a green base); anything else must have succeeded.
-        for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS"; do
+        for job in "check:$CHECK" "wasm:$WASM" "tests:$TESTS" "web-image:$WEB_IMAGE" "apple:$APPLE"; do
           case "${job#*:}" in
             success | skipped) ;;
             *) bad "${job%%:*}: ${job#*:}" ;;

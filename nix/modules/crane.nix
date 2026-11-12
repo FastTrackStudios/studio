@@ -44,6 +44,20 @@
       cargoVendorDir = craneLib.vendorCargoDeps {
         src = ftsSrc;
 
+        # Blitz (FastTrackStudios/blitz) pins stylo at a commit that is on no
+        # branch of nicoburns/stylo any more (its branch was deleted; it is
+        # 6 ahead of main). cargo fetches a commit by its SHA and GitHub
+        # serves it, but crane's default `builtins.fetchGit` fetches the
+        # advertised refs only and fails: "Cannot find Git revision … in
+        # ref 'refs/heads/main'" (studio#444, every studio-web image since).
+        # A hash makes crane fetch it with nixpkgs' `fetchgit`, which asks
+        # for the commit itself. Every other git source keeps the default
+        # (crane warns that they have no hash; that is expected).
+        outputHashes = {
+          "git+https://github.com/nicoburns/stylo?rev=78734bf554bb40af9dc11c0eedbe724f6055697c#78734bf554bb40af9dc11c0eedbe724f6055697c" =
+            "sha256-lbhr0hkTHF9DHQRVWjrd5t8ZpKP6zCmK3OQ81KJVDUI=";
+        };
+
         # libspa-sys needs bindgen's `clang_macro_fallback()` to evaluate
         # cast-expression C macros its normal cexpr parser can't fold —
         # notably SPA_ID_INVALID (`((uint32_t)0xffffffff)`). That fallback
