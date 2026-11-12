@@ -31,9 +31,6 @@ architect = { workspace = true, features = ["action-list"] }
 architect-extensions = { workspace = true, features = ["host", "linked", "process"] }
 architect-settings = { workspace = true }
 tempfile = { workspace = true }
-# The views a button opens today (the setlists extension's), linked beside
-# it as Studio Architect links them.
-setlists = { workspace = true, features = ["extension"] }
 
 [lints]
 workspace = true

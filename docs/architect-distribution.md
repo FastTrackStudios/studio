@@ -49,7 +49,7 @@ It does not adopt the Architect app's folder (`named` drops
 - the `studio` bundle: Setlists (`setlists::ext::Setlists`, id
   `studio-setlists`), Productions (`productions::ext::Productions`, id
   `studio-productions`) and Studio's views (`studio_views::ext::StudioViews`,
-  id `studio-views`: the Views toolbar at the bottom, studio#409,
+  id `studio-views`: the Views toolbar at the bottom with the owner's six views, studio#409,
   `features/studio-views/README.md`);
 - Studio's block renderer (`setlists::share::blocks`): the `kf` chart
   fence as the follow SVG and the `studio-setlist` fence as a set's

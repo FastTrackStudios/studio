@@ -55,7 +55,7 @@ async fn open(view: &'static StudioView) -> Result<Value, String> {
     } = view.opens
     else {
         let why = match view.opens {
-            Opens::Missing(why) => format!("{} {why}", view.label),
+            Opens::Missing(why) => format!("{} {why} ({})", view.label, view.issue),
             Opens::View { .. } => format!("{} cannot open", view.label),
         };
         // Said to the person too: a toolbar button's failed action is not

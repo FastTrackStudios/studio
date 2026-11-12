@@ -1,7 +1,7 @@
 //! The extension in a host, as Studio Architect loads it: its Views
-//! toolbar at the bottom, every item an action it has; a view button
-//! opening its view and lit; one whose view is not there refusing with
-//! why; the lit button following the workspace's focus.
+//! toolbar at the bottom, every item an action it has; a button whose view
+//! is not there refusing with why and opening nothing; the toggles'
+//! state written from the workspace's focus.
 #![allow(clippy::unwrap_used, clippy::panic, clippy::indexing_slicing)]
 
 use std::sync::{Arc, Mutex, PoisonError};
@@ -66,8 +66,6 @@ fn app() -> App {
     host.forward_actions_to(&app);
     let ext = Extensions::new(host.clone(), Installs::new(tmp.path().join("installs")))
         .with_linked(&studio_views::ext::StudioViews)
-        .unwrap()
-        .with_linked(&setlists::ext::Setlists)
         .unwrap();
     ext.install_contribution_actions().unwrap();
     let _ = ext.sync();
@@ -150,40 +148,27 @@ fn the_views_toolbar_is_at_the_bottom_every_item_an_action_it_has() {
 }
 
 #[test]
-fn a_view_button_opens_its_view_and_is_lit() {
-    let app = app();
-    let out = app.run("STUDIO_VIEWS_SETLISTS").unwrap();
-    assert_eq!(out["opened"], "studio-setlists/setlist");
-    assert_eq!(
-        *app.opened.lock().unwrap(),
-        vec!["studio-setlists/setlist".to_owned()]
-    );
-    assert_eq!(app.lit(), ["STUDIO_VIEWS_SETLISTS"]);
-}
-
-#[test]
 fn a_view_that_is_not_there_refuses_with_why() {
     let app = app();
     let why = app.run("STUDIO_VIEWS_MIXER").unwrap_err();
     assert!(why.contains("Mixer needs Studio's engine"), "{why}");
+    assert!(why.contains("(studio#434)"), "{why}");
     let why = app.run("STUDIO_VIEWS_CHART").unwrap_err();
     assert!(why.contains("song workspace"), "{why}");
     assert_eq!(app.opened.lock().unwrap().len(), 0);
 }
 
 #[test]
-fn the_lit_button_follows_the_focus() {
+fn the_toggles_follow_the_focus() {
     let app = app();
-    app.focus.set("studio-setlists/song");
+    // No button's view is registered yet: whatever is focused, every
+    // toggle is written off.
+    app.focus.set("studio-views/mixer");
     let out = app.run("STUDIO_VIEWS_FOLLOW").unwrap();
-    assert_eq!(out["lit"], "STUDIO_VIEWS_SONG");
-    assert_eq!(app.lit(), ["STUDIO_VIEWS_SONG"]);
-    // Its toolbar focused (a button pressed): the song stays lit.
-    app.focus.set("toolbar:studio-views/views");
-    app.run("STUDIO_VIEWS_FOLLOW").unwrap();
-    assert_eq!(app.lit(), ["STUDIO_VIEWS_SONG"]);
-    // A note focused: none.
-    app.focus.set("note");
-    app.run("STUDIO_VIEWS_FOLLOW").unwrap();
+    assert_eq!(out["lit"], Value::Null);
     assert_eq!(app.lit(), Vec::<String>::new());
+    // Its toolbar focused (a button pressed): nothing is written.
+    app.focus.set("toolbar:studio-views/views");
+    let out = app.run("STUDIO_VIEWS_FOLLOW").unwrap();
+    assert_eq!(out["lit"], "unchanged");
 }

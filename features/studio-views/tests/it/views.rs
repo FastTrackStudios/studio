@@ -1,12 +1,13 @@
 //! Which views there are, what opens each, and which button is lit.
 
 use studio_views::{
-    NEEDS_ENGINE, Opens, SETLISTS, VIEWS, WITH_SONG_WORKSPACE, by_action, checked, lit, moves_lit,
+    NEEDS_ENGINE, Opens, StudioView, VIEWS, WITH_SONG_WORKSPACE, by_action, checked, checked_among,
+    lit, moves_lit,
 };
 
 #[test]
-fn the_owners_six_in_the_bars_order() {
-    let labels: Vec<&str> = VIEWS.iter().map(|v| v.label).collect();
+fn the_owners_six_in_the_bars_order_and_no_others() {
+    let labels: Vec<&str> = studio_views::all().map(|v| v.label).collect();
     assert_eq!(
         labels,
         [
@@ -19,19 +20,19 @@ fn the_owners_six_in_the_bars_order() {
         ]
     );
     // Every button an action of this extension's, each its own.
-    let mut actions: Vec<&str> = VIEWS
-        .iter()
-        .chain(SETLISTS.iter())
-        .map(|v| v.action)
-        .collect();
+    let mut actions: Vec<&str> = VIEWS.iter().map(|v| v.action).collect();
     assert!(actions.iter().all(|a| a.starts_with("STUDIO_VIEWS_")));
     actions.sort_unstable();
     actions.dedup();
-    assert_eq!(actions.len(), VIEWS.len() + SETLISTS.len());
+    assert_eq!(actions.len(), VIEWS.len());
+    assert_eq!(
+        by_action("STUDIO_VIEWS_MIXER").map(|v| v.label),
+        Some("Mixer")
+    );
 }
 
 #[test]
-fn a_view_that_needs_the_engine_says_so() {
+fn a_view_that_is_not_there_says_why() {
     for label in ["Arrangement", "Mixer", "Editor"] {
         let v = VIEWS.iter().find(|v| v.label == label).unwrap();
         assert_eq!(v.opens, Opens::Missing(NEEDS_ENGINE), "{label}");
@@ -41,32 +42,56 @@ fn a_view_that_needs_the_engine_says_so() {
         let v = VIEWS.iter().find(|v| v.label == label).unwrap();
         assert_eq!(v.opens, Opens::Missing(WITH_SONG_WORKSPACE), "{label}");
     }
+    // Each with the issue that makes it one.
+    let issues: Vec<&str> = VIEWS.iter().map(|v| v.issue).collect();
+    assert_eq!(
+        issues,
+        [
+            "studio#433",
+            "studio#434",
+            "studio#435",
+            "studio#436",
+            "studio#437",
+            "studio#438"
+        ]
+    );
+    // None is a view yet: whatever is focused, none is lit.
+    assert_eq!(lit("studio-views/mixer"), None);
+    assert!(checked("note").iter().all(|(_, on)| !on));
+    assert_eq!(checked("note").len(), VIEWS.len());
 }
 
 #[test]
 fn the_focused_views_button_is_lit_and_only_it() {
+    // Once a button's view is registered, it is lit while focused.
+    let views = [
+        StudioView {
+            action: "STUDIO_VIEWS_MIXER",
+            label: "Mixer",
+            icon: "sliders-horizontal",
+            opens: Opens::View {
+                extension: "studio-views",
+                view: "mixer",
+            },
+            issue: "",
+        },
+        VIEWS[0],
+    ];
+    let states = checked_among(&views, "studio-views/mixer");
     assert_eq!(
-        lit("studio-setlists/setlist").map(|v| v.action),
-        Some("STUDIO_VIEWS_SETLISTS")
+        states,
+        [
+            ("STUDIO_VIEWS_MIXER", true),
+            ("STUDIO_VIEWS_ARRANGEMENT", false)
+        ]
     );
-    let states = checked("studio-setlists/song");
-    assert_eq!(states.iter().filter(|(_, on)| *on).count(), 1);
-    assert!(states.contains(&("STUDIO_VIEWS_SONG", true)));
-    assert!(states.contains(&("STUDIO_VIEWS_ARRANGEMENT", false)));
-    // Another view focused (a note): none lit, every one said off.
-    let states = checked("note");
-    assert!(states.iter().all(|(_, on)| !on));
-    assert_eq!(states.len(), VIEWS.len() + SETLISTS.len());
-    assert_eq!(
-        by_action("STUDIO_VIEWS_MIXER").map(|v| v.label),
-        Some("Mixer")
-    );
+    assert!(checked_among(&views, "note").iter().all(|(_, on)| !on));
 }
 
 #[test]
 fn pressing_a_toolbar_button_does_not_unlight_the_view_in_front() {
     // The toolbar's pane takes the focus when its button is pressed.
     assert!(!moves_lit("toolbar:studio-views/views"));
-    assert!(moves_lit("studio-setlists/setlist"));
+    assert!(moves_lit("studio-views/mixer"));
     assert!(moves_lit("note"));
 }

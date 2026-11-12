@@ -12,7 +12,7 @@ name = "Studio"
 version = "0.1.0"
 kind = "process"
 api = "0.1"
-description = "Studio's views and the toolbar that opens them: Arrangement, Mixer, Chart, Chart Editor, Progress Bar and Editor, and the song and setlists views, as the buttons of a bar at the bottom of the window, each lit while its view is focused."
+description = "Studio's views and the toolbar that opens them: Arrangement, Mixer, Chart, Chart Editor, Progress Bar and Editor, as the buttons of a bar at the bottom of the window, each lit while its view is focused."
 authors = ["FastTrackStudios"]
 
 [entry]
@@ -84,22 +84,6 @@ effect = "mutating"
 toggle = true
 
 [[actions]]
-id = "STUDIO_VIEWS_SONG"
-name = "Show Song"
-description = "The song's view (the setlists extension's): opened or focused as a pane, lit while it is focused."
-group = "Views"
-effect = "mutating"
-toggle = true
-
-[[actions]]
-id = "STUDIO_VIEWS_SETLISTS"
-name = "Show Setlists"
-description = "Every setlist and its songs (the setlists extension's view): opened or focused as a pane, lit while it is focused."
-group = "Views"
-effect = "mutating"
-toggle = true
-
-[[actions]]
 id = "STUDIO_VIEWS_FOLLOW"
 name = "Views: follow the focus"
 description = "Lights the Views toolbar's button of the view the workspace has focused (and only it): run on every workspace.changed. Answers the focused view and the button lit."
@@ -107,7 +91,7 @@ group = "Views"
 effect = "read_only"
 
 # The Views toolbar: the bottom of the window (the owner's placement,
-# studio#409), the owner's six, then the views Studio has today.
+# studio#409): the owner's six, and no others.
 [[toolbars]]
 id = "views"
 title = "Views"
@@ -142,19 +126,6 @@ label = "Progress Bar"
 action = "STUDIO_VIEWS_EDITOR"
 icon = "music"
 label = "Editor"
-
-[[toolbars.items]]
-kind = "separator"
-
-[[toolbars.items]]
-action = "STUDIO_VIEWS_SONG"
-icon = "file-text"
-label = "Song"
-
-[[toolbars.items]]
-action = "STUDIO_VIEWS_SETLISTS"
-icon = "list"
-label = "Setlists"
 
 # Which button is lit follows the workspace's focus.
 [[hooks]]
