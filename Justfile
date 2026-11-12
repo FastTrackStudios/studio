@@ -2295,6 +2295,9 @@ island: island-check
         "$target/wasm32-wasip2/wasm-release/studio_island.wasm" "$out" --manifest apps/architect/island/extension.toml
     just _lumen-link
     tailwindcss -i apps/architect/island/island.css -o "$out/island.css" --minify
+    # The sheet as the page will hold it: refused by Architect's cleanSheet,
+    # the island would draw unstyled, so the build fails instead.
+    bash scripts/island-sheet.sh "$out/island.css"
     # The commit it was built from: the release ships it only at that commit
     # (scripts/studio-architect.sh release).
     git rev-parse HEAD > "$out/BUILT_FROM"
