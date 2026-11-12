@@ -27,20 +27,45 @@ builds them as an Architect site, and Studio draws its own blocks into it
   page stacked in one SVG, a transparent `kf-bar` rect per bar played with
   its time (`data-at`, seconds, on the chart's own clock: `\downbeat`, its
   tempo, tempo changes and meters; Keyflow's `bar_times`), tied to the
-  song's recording (`data-media`). Architect's page player marks the bar at
-  the playhead, keeps it in view and seeks on a click. The text is drawn as
-  outlines: a block cannot load the engraver's fonts on a share page.
+  song's recording (`data-media`). It follows **beat by beat** with
+  Session's cursor (Keyflow's `CursorConfig::playback()`): a wash over the
+  bar and a line at the beat, where Keyflow's `ChartCursor` puts the
+  playhead, a `kf-beat` rect per beat played timed on the same clock (the
+  bar's time split by its beats; a chord, rest or hold over several beats
+  gets a mark at each of them). Architect's page player
+  marks the bar and the beat at the playhead, keeps them in view and seeks
+  on a click on a bar. The text is drawn as outlines: a block cannot load
+  the engraver's fonts on a share page. A glyph drawn more than once is
+  defined once and placed with `<use>`, under ids of the chart's own (a
+  song page shows its arrangements' charts too) (This Christmas: 11.1 MB of page to
+  2.4 MB, 300 KB gzipped).
   The PNG pages and the PDF stay as downloads.
 - **Its lyrics: one source a song.** A song with an LRC shows the LRC
   (`![[Song.lrc]]`, drawn by Architect as timed lines). A song with no LRC
   whose chart has a timed lyric lane (`[lyrics lrc]`) shows the LRC made
   from the lane on the chart's clock (a ```` ```lrc ```` fence). Never both.
-- **The setlist's page** lists each set (a heading) as a
-  ```` ```studio-setlist ```` fence: "Play this set", then each song a row
-  that plays its recording (marked while it plays) and links to its chart.
-- **Playing through** is the link's queue: every song's recording in
-  running order; when one ends the next starts (on its own page, with
-  Follow on).
+- **The setlist's page is a playlist** (Architect's `[data-playlist]`):
+  each set (a heading) a ```` ```studio-setlist ```` fence, the first with
+  one big Play (the setlist through), the others "Play this set", then each
+  song a row: its number, title, artist · key · tempo · meter, the length
+  of its recording, and a link to its chart. A tap on a row plays it there;
+  the songs follow each other with no page load, the playing row marked.
+  The bar at the foot opens the **now-playing view**: the playing song's
+  chart (its `[data-now-playing]`, fetched from its page), following beat by
+  beat, with the controls under it (Architect's until Studio's progress bar
+  and transport are on the page: #445). Each row is also a follow box whose
+  one line is the song's start, so an Architect before playlists (v0.12.2)
+  plays a tapped row from the setlist's page as it did.
+- **A song's length** is its recording's (`length` on its note, seconds,
+  read from the file's header at import and re-engrave: MP4, WAV, AIFF,
+  FLAC, Ogg Vorbis/Opus, MP3; `src/media.rs`), and a set's line carries it
+  and the artist (`… | <recording> | <artist> | <length>`, a `|` in a field
+  written `\|`). A setlist page written before shows its rows without them
+  until it is written again, and nothing writes it again when a song
+  changes yet (#451, beside FastTrackStudios/architect#492).
+- **Playing through** is the playlist on its page, and elsewhere the link's
+  queue: every song's recording in running order; when one ends the next
+  starts (on its own page, with Follow on).
 
 ## What Architect does not do yet
 

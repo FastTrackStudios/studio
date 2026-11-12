@@ -86,12 +86,16 @@ struct Fields {
 }
 
 /// What a setlist's page says of a song beside its name.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct SongInfo {
     /// `A · 83 bpm · 3/4` of the chart it plays.
     pub summary: String,
     /// Its recording, by vault path: what its page plays.
     pub recording: Option<String>,
+    /// Who it is by.
+    pub artist: Option<String>,
+    /// How long its recording runs, in seconds ([`Song::length`]).
+    pub length: Option<f64>,
 }
 
 impl SongInfo {
@@ -107,14 +111,20 @@ impl SongInfo {
             recording: song
                 .recording()
                 .map(|r| at.library().song_file(&at.title, r)),
+            artist: song.artist.clone(),
+            length: song.length,
         }
     }
 }
 
-/// One song as a line of its set's fence ([`SETLIST_FENCE`]):
-/// `<n> | <label> | <note>[#<arrangement>] | <summary> | <recording>`, its
-/// note and recording by vault path, the last two possibly empty.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// One song as a line of its set's fence ([`SETLIST_FENCE`]).
+///
+/// `<n> | <label> | <note>[#<arrangement>] | <summary> | <recording> |
+/// <artist> | <length>`, its note and recording by vault path, its length
+/// in seconds; the last four possibly empty (a line written before the
+/// last two were has five fields). A `|` or `\` in a field is written
+/// `\|`, `\\`.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Line {
     /// Its 1-based place in the running order.
     pub number: usize,
@@ -125,6 +135,9 @@ pub struct Line {
     pub arrangement: Option<String>,
     pub summary: String,
     pub recording: Option<String>,
+    pub artist: Option<String>,
+    /// Seconds.
+    pub length: Option<f64>,
 }
 
 impl Line {
@@ -139,17 +152,41 @@ impl Line {
             note,
             self.summary.clone(),
             self.recording.clone().unwrap_or_default(),
+            self.artist.clone().unwrap_or_default(),
+            self.length.map(|l| format!("{l:.1}")).unwrap_or_default(),
         ];
         while fields.last().is_some_and(String::is_empty) {
             fields.pop();
         }
-        fields.join(" | ")
+        fields
+            .iter()
+            .map(|f| f.replace('\\', "\\\\").replace('|', "\\|"))
+            .collect::<Vec<_>>()
+            .join(" | ")
+    }
+
+    /// `line`'s fields: split at each `|` not escaped (`\|`), each
+    /// unescaped and trimmed.
+    fn fields(line: &str) -> Vec<String> {
+        let mut fields = Vec::new();
+        let mut field = String::new();
+        let mut chars = line.chars();
+        while let Some(c) = chars.next() {
+            match c {
+                '\\' => field.push(chars.next().unwrap_or('\\')),
+                '|' => fields.push(std::mem::take(&mut field).trim().to_owned()),
+                c => field.push(c),
+            }
+        }
+        fields.push(field.trim().to_owned());
+        fields
     }
 
     /// A line of the fence; None for one that is not a song's.
     #[must_use]
     pub fn parse(line: &str) -> Option<Self> {
-        let mut parts = line.split('|').map(str::trim);
+        let fields = Self::fields(line);
+        let mut parts = fields.iter().map(String::as_str);
         let number = parts.next()?.parse().ok()?;
         let label = parts.next()?.to_owned();
         let target = parts.next()?;
@@ -162,6 +199,11 @@ impl Line {
         }
         let summary = parts.next().unwrap_or_default().to_owned();
         let recording = parts.next().filter(|r| !r.is_empty()).map(str::to_owned);
+        let artist = parts.next().filter(|a| !a.is_empty()).map(str::to_owned);
+        let length = parts
+            .next()
+            .and_then(|l| l.parse::<f64>().ok())
+            .filter(|l| l.is_finite() && *l > 0.0);
         Some(Self {
             number,
             label,
@@ -169,6 +211,8 @@ impl Line {
             arrangement,
             summary,
             recording,
+            artist,
+            length,
         })
     }
 }
@@ -369,6 +413,8 @@ impl Setlist {
                     arrangement: at.arrangement.clone(),
                     summary: info.summary,
                     recording: info.recording,
+                    artist: info.artist,
+                    length: info.length,
                 };
                 let _ = writeln!(out, "{}", line.write());
             }
@@ -680,8 +726,32 @@ mod tests {
             arrangement: Some("Acoustic".to_owned()),
             summary: "G · 72 bpm · 3/4".to_owned(),
             recording: Some("Libraries/Hymns/Silent Night/Media/Silent Night.ogg".to_owned()),
+            artist: Some("Franz Gruber".to_owned()),
+            length: Some(186.5),
         };
         assert_eq!(Line::parse(&line.write()), Some(line));
+        // A `|` or a `\` in a field stays in its field.
+        let piped = Line {
+            number: 1,
+            label: "Medley | Joy \\ Noel".to_owned(),
+            note: "Libraries/H/Medley/Medley.md".to_owned(),
+            arrangement: None,
+            summary: "D · 100 bpm · 2/4".to_owned(),
+            recording: Some("Libraries/H/Medley/Media/Medley.mp4".to_owned()),
+            artist: Some("Simon | Garfunkel".to_owned()),
+            length: Some(201.5),
+        };
+        assert_eq!(Line::parse(&piped.write()), Some(piped));
+        // A line written before the artist and the length were.
+        let old = Line::parse(
+            "2 | Joy | Libraries/H/Joy/Joy.md | D · 100 bpm · 2/4 | Libraries/H/Joy/Media/Joy.wav",
+        )
+        .unwrap();
+        assert_eq!((old.artist, old.length), (None, None));
+        assert_eq!(
+            old.recording.as_deref(),
+            Some("Libraries/H/Joy/Media/Joy.wav")
+        );
         assert_eq!(Line::parse("not a song"), None);
     }
 }

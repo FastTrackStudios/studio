@@ -155,6 +155,8 @@ pub struct Song {
     pub session: Option<String>,
     /// Everything else of the song's, in `Media/`.
     pub media: Vec<String>,
+    /// How long its recording runs, in seconds ([`crate::media::length`]).
+    pub length: Option<f64>,
 }
 
 /// An arrangement as its note's property writes it.
@@ -185,6 +187,8 @@ struct Fields {
     artist: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     categories: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    length: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -252,6 +256,7 @@ impl Song {
             title: self.title.clone(),
             artist: self.artist.clone(),
             categories: self.categories.clone(),
+            length: self.length,
             key: self.chart.key.clone(),
             tempo: self.chart.tempo,
             meter: self.chart.meter.clone(),
@@ -429,6 +434,7 @@ impl Song {
             title: f.title,
             artist: f.artist,
             categories: f.categories,
+            length: f.length.filter(|l| l.is_finite() && *l > 0.0),
             lrc: name(f.lyrics),
             session: name(f.session),
             media: f.media.iter().map(|m| rel(m)).collect(),
@@ -496,6 +502,7 @@ mod tests {
             lrc: None,
             session: Some("Silent Night.RPP".to_owned()),
             media: vec!["Media/Click.wav".to_owned()],
+            length: Some(186.5),
         }
     }
 

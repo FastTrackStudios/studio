@@ -185,6 +185,7 @@ mod tests {
             tempo: Some("83".to_owned()),
             meter: None,
             artist: None,
+            length: None,
             categories: cats.iter().map(|c| (*c).to_owned()).collect(),
             arrangements: Vec::new(),
             recording: None,

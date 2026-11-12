@@ -110,6 +110,10 @@ fn studio_blocks(html: &str) -> Vec<&str> {
         .collect()
 }
 
+/// A bar's time (`values(svg, BAR_AT)`), and a beat's.
+const BAR_AT: &str = "class=\"kf-bar\" data-at";
+const BEAT_AT: &str = "class=\"kf-beat\" data-at";
+
 fn seconds(values: &[&str]) -> Vec<f64> {
     values.iter().map(|v| v.parse::<f64>().unwrap()).collect()
 }
@@ -131,14 +135,31 @@ fn the_follow_svg_survives_the_sanitiser() {
         );
     }
     assert_eq!(values(&chart.svg, "data-at"), values(&kept, "data-at"));
-    assert_eq!(values(&kept, "data-follow-playhead"), [""]);
-    assert_eq!(values(&kept, "data-media"), ["../Media/Silent%20Night.wav"]);
-    assert!(
-        kept.contains(&format!(
-            ".{scope} .kf-bar[aria-current=time] {{ fill-opacity:0.22 }}"
-        )),
-        "the current bar's rule is kept, under the block's scope"
+    assert_eq!(
+        values(&kept, "data-follow-playhead"),
+        ["", ""],
+        "bars, beats"
     );
+    assert_eq!(
+        values(&kept, "data-media"),
+        ["../Media/Silent%20Night.wav"; 2]
+    );
+    for rule in [
+        ".kf-bar[aria-current=time] { fill-opacity:0.180 }",
+        ".kf-beat[aria-current=time] { fill-opacity:0.902 }",
+    ] {
+        assert!(
+            kept.contains(&format!(".{scope} {rule}")),
+            "{rule} is kept, under the block's scope"
+        );
+    }
+    for tag in ["<use", "<defs"] {
+        assert_eq!(
+            chart.svg.matches(tag).count(),
+            kept.matches(tag).count(),
+            "every {tag} is kept"
+        );
+    }
     assert!(!kept.contains("<text"), "the text is drawn as outlines");
     assert!(
         !kept.contains("font-family"),
@@ -158,16 +179,21 @@ fn the_bars_carry_the_charts_own_clock() {
         .iter()
         .map(|b| format!("{:.3}", b.start))
         .collect();
-    assert_eq!(values(&chart.svg, "data-at"), want);
+    assert_eq!(values(&chart.svg, BAR_AT), want);
     assert_eq!(want.len(), 96, "8 verses of 12 bars");
     assert_eq!(want[0], "0.500");
     // 72 bpm in 3/4: a bar is 2.5 s.
     assert_eq!(want[1], "3.000");
-    let times = seconds(&values(&chart.svg, "data-at"));
+    let times = seconds(&values(&chart.svg, BAR_AT));
     assert!(times.windows(2).all(|w| w[0] < w[1]), "ascending");
-    assert_eq!(chart.svg.matches("data-follow-playhead").count(), 1);
+    let beats = seconds(&values(&chart.svg, BEAT_AT));
+    assert_eq!(beats.len(), 96 * 3, "a beat each of 3/4");
+    assert!(beats.windows(2).all(|w| w[0] < w[1]), "ascending");
+    // 72 bpm: a beat is 5/6 s.
+    assert!((beats[1] - beats[0] - 60.0 / 72.0).abs() < 0.001);
+    assert_eq!(chart.svg.matches("data-follow-playhead").count(), 2);
     assert_eq!(chart.svg.matches("class=\"kf-page\"").count(), chart.pages);
-    assert_eq!(values(&chart.svg, "data-bar").len(), chart.bars.len());
+    assert_eq!(values(&chart.svg, BAR_AT).len(), chart.bars.len());
 }
 
 #[test]
@@ -255,8 +281,13 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
     assert_eq!(blocks.len(), 1, "the chart, drawn by Studio");
     let chart = blocks[0];
     assert!(chart.contains("<svg"), "drawn, not left as text");
+    assert!(
+        chart.contains("data-now-playing"),
+        "the song's now-playing view"
+    );
     let media = values(chart, "data-media");
-    assert_eq!(media.len(), 1);
+    assert_eq!(media.len(), 3, "the view, the bars and the beats");
+    assert!(media.iter().all(|m| *m == media[0]));
     assert_eq!(
         resolve(&format!("{link}{page}"), media[0]),
         queue_src(&recording),
@@ -267,11 +298,7 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
         .iter()
         .map(|b| format!("{:.3}", b.start))
         .collect();
-    assert_eq!(
-        values(chart, "data-at"),
-        want,
-        "every bar timed, every page"
-    );
+    assert_eq!(values(chart, BAR_AT), want, "every bar timed, every page");
     assert!(
         chart.contains(".kf-bar[aria-current=time]"),
         "the sheet kept"
@@ -301,13 +328,31 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
     );
     assert!(lyrics.contains("Let earth receive her King"));
 
-    // ── The setlist's page: its sets, each song a row that plays ────
+    // ── The setlist's page: a playlist a set, each song a row ───────
     let page = "/setlists/tree-lighting/";
     let html = read(page);
     let presidents = html.find(">Presidents Songs<").unwrap();
     let tree = html.find(">Tree Lighting Concert Set<").unwrap();
     assert!(presidents < tree, "the sets in order");
-    assert_eq!(html.matches("▶ Play this set").count(), 2);
+    assert_eq!(
+        html.matches("data-playlist=\"\"").count(),
+        2,
+        "a playlist a set"
+    );
+    assert_eq!(html.matches("data-playlist-play").count(), 2);
+    assert!(
+        html.contains("</svg>Play</button>"),
+        "the first set's Play plays it all"
+    );
+    assert!(html.contains("</svg>Play this set</button>"));
+    // The playing row is marked on an Architect that marks only the line
+    // (v0.12.2): its sheet kept, under the block's box.
+    let block = studio_blocks(&html)[0];
+    assert!(
+        block.contains("[data-track] [data-at][aria-current=time] { color:#6366f1 }"),
+        "{}",
+        &block[..block.find("</style>").unwrap_or(0).min(600)]
+    );
     // The link's files page and archive, once, after the last set: the
     // node's routes of the link, which serve only its audience's files.
     assert_eq!(
@@ -334,7 +379,29 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
     assert_eq!(
         rows,
         [joy_src.clone(), joy_src, silent_src.clone(), silent_src],
-        "each set's Play, then its songs, in running order"
+        "each set's Play (its first song), then its songs, in running order"
+    );
+    // Each row's title and the page where it plays.
+    assert_eq!(
+        values(&html, "data-title"),
+        ["Joy to the World", "Silent Night"]
+    );
+    let pages: Vec<String> = values(&html, "data-page")
+        .into_iter()
+        .map(|h| resolve(page, h))
+        .collect();
+    assert_eq!(
+        pages,
+        [
+            "/libraries/christmas/joy-to-the-world/joy-to-the-world/",
+            "/libraries/christmas/silent-night/silent-night/"
+        ]
+    );
+    // One second of WAV each, read from the file at import.
+    assert_eq!(
+        html.matches(">0:01</span>").count(),
+        2,
+        "each song's length"
     );
     let links: Vec<String> = values(&html, "href")
         .into_iter()
