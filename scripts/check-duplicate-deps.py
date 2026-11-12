@@ -8,7 +8,11 @@ a second version, or one on it gets more than its count. A crate that
 drops off (or below its count) is reported so the list can shrink.
 
     python3 scripts/check-duplicate-deps.py          # check
-    python3 scripts/check-duplicate-deps.py --write  # rewrite the list from Cargo.lock
+    python3 scripts/check-duplicate-deps.py --write  # rewrite the list from Cargo.lock (drops every note)
+    python3 scripts/check-duplicate-deps.py --add "architect v0.12.5"
+        # ADD-ONLY: a line for each new duplicate, a raised count for each grown
+        # one, each with that reason; every other line and note is kept as is
+        # (what the Architect bump bot runs)
 
 To see who pulls a version in: cargo tree --target all -i <name>@<version>
 """
@@ -46,7 +50,49 @@ def lock_versions():
     return {n: sorted(v) for n, v in by.items() if len(v) > 1}
 
 
+def add(reason):
+    """Raise or add the lines Cargo.lock now needs; touch nothing else."""
+    dups = lock_versions()
+    text = ALLOW.read_text()
+    allowed = tomllib.loads(text)["allowed"]
+    lines = text.splitlines(keepends=True)
+    start = next(i for i, l in enumerate(lines) if l.strip() == "[allowed]") + 1
+    done = []
+    for name, versions in sorted(dups.items()):
+        cap = allowed.get(name, 1)
+        if len(versions) <= cap:
+            continue
+        entry = f'{name} = {len(versions)}  # {", ".join(versions)} ({reason})\n'
+        key = re.compile(rf'^{re.escape(name)}\s*=')
+        at = next((i for i in range(start, len(lines)) if key.match(lines[i])), None)
+        if at is not None:
+            # A note on the old line stays, after the new versions.
+            note = lines[at].split("#", 1)[1].strip() if "#" in lines[at] else ""
+            if note and not re.fullmatch(r"[0-9A-Za-z.+-]+(, [0-9A-Za-z.+-]+)*", note):
+                entry = entry.rstrip("\n") + f"; before: {note}\n"
+            lines[at] = entry
+            done.append(f"  raised {name}: {cap} -> {len(versions)}")
+            continue
+        # A new line, in name order among the entries (the list is sorted).
+        at = next((i for i in range(start, len(lines))
+                   if re.match(r'^[A-Za-z0-9_.-]+\s*=', lines[i]) and lines[i].split("=")[0].strip() > name),
+                  len(lines))
+        lines.insert(at, entry)
+        done.append(f"  added {name} = {len(versions)}")
+    if done:
+        ALLOW.write_text("".join(lines))
+        print(f"{ALLOW.relative_to(ROOT)} ({reason}):")
+        print("\n".join(done))
+    else:
+        print(f"{ALLOW.relative_to(ROOT)}: nothing to add")
+    return 0
+
+
 def main():
+    if "--add" in sys.argv:
+        i = sys.argv.index("--add")
+        reason = sys.argv[i + 1] if i + 1 < len(sys.argv) else "added"
+        return add(reason)
     dups = lock_versions()
     if "--write" in sys.argv:
         lines = [f'{n} = {len(v)}  # {", ".join(v)}' for n, v in sorted(dups.items())]

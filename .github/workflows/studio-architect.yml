@@ -347,3 +347,32 @@ jobs:
           cat SHA256SUMS
           echo '```'
         } >> "$GITHUB_STEP_SUMMARY"
+  notify-infra:
+    name: Wake infra's release bump
+    needs: sums
+    if: ${{ vars.RELEASE_DISPATCH == 'on' && needs.sums.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    permissions: {}
+    environment: release-dispatch
+    steps:
+    - name: fts-forge token (infra, actions only)
+      id: forge
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ vars.FORGE_APP_ID }}
+        private-key: ${{ secrets.FORGE_APP_PRIVATE_KEY }}
+        owner: FastTrackStudios
+        repositories: infra
+        permission-actions: write
+    - name: gh workflow run release-bump.yml (infra)
+      env:
+        GH_TOKEN: ${{ steps.forge.outputs.token }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "$TAG is not a stable release tag: infra is not told"; exit 0
+        fi
+        gh workflow run release-bump.yml -R FastTrackStudios/infra -f repo=FastTrackStudios/studio -f tag="$TAG"
+        echo "infra's release-bump started for studio $TAG" >> "$GITHUB_STEP_SUMMARY"

@@ -134,9 +134,11 @@ working there.
   repo's dioxus-native{,-dom} and dioxus-core);
   `FastTrackStudios/daw` (hands keyflow's git dep the in-tree `daw`,
   `dawfile-reaper` and `fts-sample` — goes when keyflow takes them from
-  studio). There is no architect `[patch]`: studio, keyflow and task@main
-  pin the same architect tag, so `Cargo.lock` holds one architect source;
-  bump them together. A `[patch]` **cannot rename a crate**.
+  studio). There is no architect `[patch]`: studio and keyflow pin the same
+  architect tag, so `Cargo.lock` holds one architect source besides
+  task@main's own older one; bump them together with `just bump-architect
+  vX.Y.Z` (docs/agents/release-workflow.md, "Moving the Architect and
+  Keyflow pins"). A `[patch]` **cannot rename a crate**.
 - **Co-developing across repos**: override with a local checkout —
   `[patch."https://github.com/FastTrackStudios/architect"] architect =
   { path = "../architect/architect" }` — and never commit it; the paths are

@@ -2212,6 +2212,21 @@ release *ARGS:
 release-hotfix +COMMITS:
     bash scripts/release.sh hotfix {{COMMITS}}
 
+# Every architect pin (and keyflow's, to the newest keyflow release on that
+# architect) moves to TAG: the manifests and the comments naming the tags,
+# Cargo.lock (cargo resolves; nothing compiles), add-only lines in
+# .config/duplicate-deps.toml, the change file. Exit 3: needs a person;
+# exit 4: no keyflow release on TAG yet. The bot runs exactly this.
+# Move the architect and keyflow pins to architect TAG (e.g. v0.12.5)
+bump-architect TAG *ARGS:
+    python3 scripts/bump-architect.py {{TAG}} {{ARGS}}
+
+# studio#457's replay must equal the merged commit (Cargo.lock included);
+# a keyflow behind the tag must exit 4, an editor move exit 3.
+# Test the bump script against real bumps
+bump-architect-test:
+    bash scripts/bump-architect-replay.sh
+
 # The release notes of a tag (default: the draft for origin/main).
 release-notes *ARGS:
     @bash scripts/release.sh notes {{ARGS}}

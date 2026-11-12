@@ -134,6 +134,38 @@ release time, and change files stay in `.changes/` as the record.
 `CHANGELOG.md` ends at 26.10.3 and is no longer written. To fix a note,
 edit the change file on main before releasing.
 
+## Moving the Architect and Keyflow pins
+
+Studio pins Architect AND Keyflow by tag, and Keyflow pins Architect by tag
+itself, so both must agree on one Architect (one architect source in
+`Cargo.lock`, task@main's own older one aside). One command does the whole
+bump:
+
+```bash
+just bump-architect v0.12.5                    # keyflow: the newest keyflow release on v0.12.5
+just bump-architect v0.12.5 --keyflow v0.5.4   # keyflow named; `--keyflow keep` leaves it
+just bump-architect-test                       # replays studio#457 (+ two refusals)
+```
+
+It moves every architect (and keyflow) `tag =` pin in every manifest and
+the comments that name them, lets cargo update `Cargo.lock` (nothing
+compiles), adds lines to `.config/duplicate-deps.toml` ONLY for crates the
+bump gives a new version (`check-duplicate-deps.py --add`: notes and other
+lines stay; never `--write`, which drops them), and writes the change file
+(`studio-architect`, patch). Exit 3: done, but Architect moved a pin Studio
+follows (editor, dioxus, blitz), or a second architect source is left: a
+person finishes it. Exit 4: no keyflow release on that Architect yet;
+nothing changed. Run it in a clean worktree (it refuses the fts-dev link).
+
+**The bot** (`bump-architect.yml`, from `xtask/workflows/src/bump_architect.rs`)
+runs the same command when Architect releases a stable tag (Architect's
+dispatch, or hourly), opens `bump/architect-<tag>`, and dispatches the full
+suite (`CI`) on it: `PR checks` compiles nothing, so a bump counts as
+mechanical only once CI is green on its head. Then it turns auto-merge on;
+on red it comments with the failed jobs and leaves the PR for a person. It
+is inert until the repo variable `ARCHITECT_BUMP` is `on` (the module's
+header lists the environment and secret it needs). It cuts no release.
+
 ## What runs where
 
 | Event | Workflows | Runner |

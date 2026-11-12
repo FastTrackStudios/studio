@@ -75,7 +75,55 @@ workflow_dispatch:
     .jobs(crate::sums::jobs(
         &["publish"],
         "inputs.mode != 'build-only' && needs.publish.result == 'success'",
-    )?))
+    )?)
+    .job("notify-infra", notify_infra()?))
+}
+
+/// Tell FastTrackStudios/infra that a stable release's node is up and its
+/// SHA256SUMS signed: infra's `release-bump` workflow verifies the
+/// signature itself, rewrites packages/architect-node/source.json and
+/// opens its PR (infra#3). This job only wakes it: the token can start
+/// workflows in infra and nothing else (`actions: write`, infra only), and
+/// infra treats the inputs as untrusted. Infra also polls hourly, so a
+/// missed dispatch costs at most an hour. Never a pre-release, a
+/// build-only run or a dispatch from a branch (sums, the signed job, runs
+/// only on a tag ref).
+///
+/// INERT until the owner sets the repo variable `RELEASE_DISPATCH` = `on`
+/// and gives the environment `release-dispatch` (deployment: `v*` tags
+/// only) the secret `FORGE_APP_PRIVATE_KEY` (and the repo the variable
+/// `FORGE_APP_ID`). A failure here never fails the release.
+fn notify_infra() -> Result<Job> {
+    Ok(Job::new(UBUNTU)
+        .name("Wake infra's release bump")
+        .needs(&["sums"])
+        .cond("${{ vars.RELEASE_DISPATCH == 'on' && needs.sums.result == 'success' }}")
+        .timeout(5)
+        .continue_on_error()
+        .environment("release-dispatch")
+        .permissions(yaml("{}")?)
+        .step(
+            Step::uses("fts-forge token (infra, actions only)", "actions/create-github-app-token@v2")
+                .id("forge")
+                .with("app-id", "${{ vars.FORGE_APP_ID }}")
+                .with("private-key", "${{ secrets.FORGE_APP_PRIVATE_KEY }}")
+                .with("owner", "FastTrackStudios")
+                .with("repositories", "infra")
+                .with("permission-actions", "write"),
+        )
+        .step(
+            Step::run(
+                "gh workflow run release-bump.yml (infra)",
+                r#"set -euo pipefail
+if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "$TAG is not a stable release tag: infra is not told"; exit 0
+fi
+gh workflow run release-bump.yml -R FastTrackStudios/infra -f repo=FastTrackStudios/studio -f tag="$TAG"
+echo "infra's release-bump started for studio $TAG" >> "$GITHUB_STEP_SUMMARY"
+"#,
+            )
+            .env("GH_TOKEN", "${{ steps.forge.outputs.token }}"),
+        ))
 }
 
 /// The release pool, as the AppImage builds: the node (Studio's checkout,

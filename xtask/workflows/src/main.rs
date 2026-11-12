@@ -17,6 +17,7 @@
 // env var names, file paths and runner labels read better as written.
 #![allow(clippy::doc_markdown)]
 
+mod bump_architect;
 mod cache_devshell;
 mod checks;
 mod desktop;
@@ -48,6 +49,7 @@ const WORKFLOWS: &[(&str, Build)] = &[
     ("checks", checks::workflow),
     ("pr", pr::workflow),
     ("cache-devshell", cache_devshell::workflow),
+    ("bump-architect", bump_architect::workflow),
     ("desktop", desktop::workflow),
     ("images", images::workflow),
     ("release", release::workflow),
