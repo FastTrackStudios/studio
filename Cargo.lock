@@ -22432,7 +22432,6 @@ dependencies = [
  "architect-settings",
  "futures",
  "serde_json",
- "setlists",
  "tempfile",
 ]
 
