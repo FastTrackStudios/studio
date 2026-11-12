@@ -81,10 +81,20 @@ impl SampleEngine {
         } else {
             0
         };
+        // Zone 2 plays a random body variant (`$jpvdn := random(2,4)`,
+        // 18108); zones 1 and 3 the plain zone.
+        if zone == 2 {
+            let v = match self.forced_variants.pop_front() {
+                Some(v) => v,
+                None => self.draw_uniform(2, 4),
+            };
+            self.spawn_variant = Some(v);
+        }
         self.in_transition = true;
         self.play_direction = if to >= from { "up" } else { "down" }.to_string();
         self.trigger_zoned_sustain(to);
         self.in_transition = false;
+        self.spawn_variant = None;
         self.spawn_extra_start = 0;
         self.sustain_fade_in = None;
 

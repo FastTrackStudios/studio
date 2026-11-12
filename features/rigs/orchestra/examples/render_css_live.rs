@@ -137,6 +137,14 @@ fn main() -> eyre::Result<()> {
             .unwrap_or_default();
         rig.force_random_tunes(ID, &tunes);
     }
+    // `--variants a,b,…`: legato zone-2 body-variant draws (2..=4).
+    if let Some(i) = args.iter().position(|a| a == "--variants") {
+        let v: Vec<u8> = args
+            .get(i + 1)
+            .map(|s| s.split(',').filter_map(|v| v.trim().parse().ok()).collect())
+            .unwrap_or_default();
+        rig.force_random_variants(ID, &v);
+    }
 
     // Render up to an ABSOLUTE frame in host-sized blocks. Each event lands on
     // round(sec * SR) exactly: no per-gap rounding that drifts across a file.

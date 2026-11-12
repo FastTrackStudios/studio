@@ -1045,6 +1045,8 @@ pub struct SampleEngine {
     /// Random-tune draws to use instead of the generator, in order (tests
     /// replaying a reference render's draws).
     pub(crate) forced_tunes: VecDeque<i8>,
+    /// Legato zone-2 body-variant draws to use instead of the generator.
+    pub(crate) forced_variants: VecDeque<u8>,
     pub(crate) tune_rng: u64,
     /// The short sequence counters' start (`CC59 mod 16`).
     pub(crate) seq_rr_base: usize,
@@ -1344,6 +1346,7 @@ impl SampleEngine {
             seq_rr_last: HashMap::new(),
             short_key_frame: [None; 128],
             forced_tunes: VecDeque::new(),
+            forced_variants: VecDeque::new(),
             tune_rng: 0x9E37_79B9_7F4A_7C15,
             seq_rr_base: 0,
             release_gain_override: None,
@@ -1919,6 +1922,21 @@ impl SampleEngine {
     /// replaying a reference render's draws for a null test.
     pub fn force_random_tunes(&mut self, cents: &[i8]) {
         self.forced_tunes = cents.iter().copied().collect();
+    }
+
+    /// Use these legato zone-2 body-variant draws (2..=4) in order.
+    pub fn force_random_variants(&mut self, variants: &[u8]) {
+        self.forced_variants = variants.iter().copied().collect();
+    }
+
+    /// The next uniform draw in `lo..=hi` from the engine's generator.
+    pub(crate) fn draw_uniform(&mut self, lo: u8, hi: u8) -> u8 {
+        let mut x = self.tune_rng;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.tune_rng = x;
+        lo + (x % u64::from(hi - lo + 1)) as u8
     }
 
     pub fn set_forced_rr(&mut self, slot: Option<u32>) {

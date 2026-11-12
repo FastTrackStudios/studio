@@ -217,8 +217,9 @@ def main():
             rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", b, "LEG", desc))
             t = start + win
 
+        vels = (80,) if "--zone2" in sys.argv else (40, 120)
         for mode, cc58 in (("LL", 2), ("EX", 8)):
-            for vel in (40, 120):
+            for vel in vels:
                 for ioi in (0.08, 0.2, 1.0):
                     phrase(f"{mode} v{vel} 67->69 ioi{int(ioi*1000)}", 67, 69, vel, ioi, cc58)
                 for a, b in ((67, 72), (69, 66), (67, 79), (67, 81)):

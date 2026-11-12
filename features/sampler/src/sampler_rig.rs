@@ -844,6 +844,13 @@ impl SamplerRig {
         }
     }
 
+    /// Replay a reference render's legato zone-2 body-variant draws.
+    pub fn force_random_variants(&self, id: &str, v: &[u8]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_random_variants(id, v);
+        }
+    }
+
     /// Replay a reference render's random-tune draws (cents, in order) —
     /// see [`crate::engine::SampleEngine::force_random_tunes`].
     pub fn force_random_tunes(&self, id: &str, cents: &[i8]) {
