@@ -76,8 +76,12 @@ pub struct BeatMark {
     pub at: f64,
     /// The engraver's bar index.
     pub bar: usize,
-    /// The beat within its bar (0-based).
+    /// The beat within its bar (0-based): its meter's beat, also inside a
+    /// chord held over several.
     pub beat: usize,
+    /// The same instant on the layout's own one-pass clock: what Session's
+    /// cursor reads ([`BeatPosition::x_at_time`]) to put its line at `x`.
+    pub layout_at: f64,
     /// The line: left edge, top, width, height.
     pub x: f64,
     pub y: f64,
@@ -128,16 +132,20 @@ pub fn follow_chart(source: &str, media: Option<&str>) -> Result<FollowChart> {
         "<svg xmlns=\"http://www.w3.org/2000/svg\" class=\"kf-chart\" viewBox=\"0 0 {width:.2} {total:.2}\" width=\"100%\" style=\"display:block;width:100%;height:auto;max-width:100%\""
     );
     svg.push('>');
+    // Every id this chart draws starts with its own prefix: a page shows
+    // several charts (a song's arrangements; the now-playing view beside
+    // the page's), and an id resolves to the first on the page.
+    let ids = format!("kf{:08x}", chart_id(source));
     let mut drawn = String::with_capacity(pages.len().saturating_mul(600_000));
     for (n, page) in (0_u32..).zip(&pages) {
-        let outlined = outline(page, n)?;
+        let outlined = outline(page, &format!("{ids}p{n}-"))?;
         let _ = write!(
             drawn,
             "<g class=\"kf-page\" transform=\"translate(0 {:.2})\">{outlined}</g>",
             pitch * f64::from(n)
         );
     }
-    let (defs, drawn) = share_paths(&drawn);
+    let (defs, drawn) = share_paths(&drawn, &ids);
     svg.push_str(&defs);
     svg.push_str(&drawn);
     let cursor = CursorConfig::playback();
@@ -248,31 +256,80 @@ fn beat_marks(
         let Some(beats) = by_bar.get(&bar.bar) else {
             continue;
         };
-        let (Some(first), Some(last)) = (beats.first(), beats.last()) else {
+        let Some(first) = beats.first() else {
             continue;
         };
-        let (from, to) = (first.time_start, last.time_end);
-        let span = to - from;
-        for beat in beats {
-            let part = if span > 0.0 {
-                ((beat.time_start - from) / span).clamp(0.0, 1.0)
+        // The meter's beat and bar, in ticks (480 a quarter). A bar is
+        // its meter long, or as long as its slots where they end sooner: a
+        // bar of another meter inline (`!T3/4`: the layout reports the
+        // chart's), a pickup. A slot the layout runs past its bar is cut.
+        let (num, den) = first.time_signature;
+        let beat_ticks = 1920_i64
+            .checked_div(i64::from(den.max(1)))
+            .unwrap_or(480)
+            .max(1);
+        let slots_end = beats
+            .iter()
+            .map(|b| i64::from(b.tick).saturating_add(i64::from(b.duration_ticks)))
+            .max()
+            .unwrap_or(0);
+        let bar_ticks = beat_ticks
+            .saturating_mul(i64::from(num.max(1)))
+            .min(slots_end)
+            .max(1);
+        // A slot (a chord, a rest, a hold) is marked at its start and at
+        // every beat of the meter inside it: a whole-bar chord is a beat
+        // by beat line too, as Session's glides across it.
+        for slot in beats {
+            let start = i64::from(slot.tick);
+            let end = start
+                .saturating_add(i64::from(slot.duration_ticks.max(1)))
+                .min(bar_ticks.max(start.saturating_add(1)));
+            let per_tick = if slot.duration_ticks > 0 {
+                (slot.time_end - slot.time_start) / f64::from(slot.duration_ticks)
             } else {
                 0.0
             };
-            let at = (bar.end - bar.start).mul_add(part, bar.start);
-            let x = beat.x_at_time(beat.time_start) - width / 2.0;
-            let Some((x, y)) = place(beat.page, x, beat.staff_y - overhang, offsets, pitch) else {
-                continue;
-            };
-            marks.push(BeatMark {
-                at,
-                bar: bar.bar,
-                beat: beat.beat,
-                x,
-                y,
-                width,
-                height: 2.0f64.mul_add(overhang, beat.staff_height),
-            });
+            let mut tick = start;
+            while tick < end {
+                #[allow(clippy::cast_precision_loss, clippy::as_conversions)]
+                let (part, into) = (
+                    (tick as f64 / bar_ticks as f64).clamp(0.0, 1.0),
+                    tick.saturating_sub(start) as f64,
+                );
+                let at = (bar.end - bar.start).mul_add(part, bar.start);
+                let layout_at = per_tick.mul_add(into, slot.time_start);
+                // Where Session's cursor is at `layout_at`
+                // (`x_at_time`: the slot's width over its length), the
+                // length cut at the bar's end: a slot the layout runs past
+                // its bar (Keyflow's `| C |` in 3/4) is split by its bar.
+                #[allow(clippy::cast_precision_loss, clippy::as_conversions)]
+                let across = into / end.saturating_sub(start).max(1) as f64;
+                let x = slot.width.mul_add(across, slot.x) - width / 2.0;
+                if let Some((x, y)) = place(slot.page, x, slot.staff_y - overhang, offsets, pitch) {
+                    marks.push(BeatMark {
+                        at,
+                        bar: bar.bar,
+                        #[allow(
+                            clippy::cast_possible_truncation,
+                            clippy::cast_sign_loss,
+                            clippy::as_conversions
+                        )]
+                        beat: tick.checked_div(beat_ticks).unwrap_or(0) as usize,
+                        layout_at,
+                        x,
+                        y,
+                        width,
+                        height: 2.0f64.mul_add(overhang, slot.staff_height),
+                    });
+                }
+                // The next beat of the meter.
+                tick = tick
+                    .checked_div(beat_ticks)
+                    .unwrap_or(0)
+                    .saturating_add(1)
+                    .saturating_mul(beat_ticks);
+            }
         }
     }
     marks
@@ -282,7 +339,7 @@ fn beat_marks(
 /// symbol's letters, every slash) moved into `<defs>` once and placed with
 /// `<use>`: (the `<defs>`, what is left of `drawn`). A path keeps its other
 /// attributes on its `<use>`; its definition is its outline alone.
-fn share_paths(drawn: &str) -> (String, String) {
+fn share_paths(drawn: &str, ids_from: &str) -> (String, String) {
     // Each path element: (where it starts, where it ends, its outline).
     let mut found: Vec<(usize, usize, &str)> = Vec::new();
     let mut seen: HashMap<&str, usize> = HashMap::new();
@@ -324,7 +381,7 @@ fn share_paths(drawn: &str) -> (String, String) {
         }
         let next = ids.len();
         let id = *ids.entry(d).or_insert_with(|| {
-            let _ = write!(defs, "<path id=\"kfg{next}\" d=\"{d}\"/>");
+            let _ = write!(defs, "<path id=\"{ids_from}g{next}\" d=\"{d}\"/>");
             next
         });
         out.push_str(drawn.get(kept..start).unwrap_or_default());
@@ -334,7 +391,7 @@ fn share_paths(drawn: &str) -> (String, String) {
             .trim_end_matches('/')
             .trim_start_matches("<path")
             .replace(&format!(" d=\"{d}\""), "");
-        let _ = write!(out, "<use href=\"#kfg{id}\"{rest}/>");
+        let _ = write!(out, "<use href=\"#{ids_from}g{id}\"{rest}/>");
         kept = end;
     }
     out.push_str(drawn.get(kept..).unwrap_or_default());
@@ -343,6 +400,17 @@ fn share_paths(drawn: &str) -> (String, String) {
     } else {
         (format!("<defs>{defs}</defs>"), out)
     }
+}
+
+/// A chart's own: FNV-1a of its source, so the same chart drawn twice
+/// draws the same ids, and two charts never share one.
+fn chart_id(source: &str) -> u32 {
+    let mut hash: u32 = 0x811c_9dc5;
+    for byte in source.bytes() {
+        hash ^= u32::from(byte);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    hash
 }
 
 /// The value of attribute `name` in start tag `tag`, as written.
@@ -354,16 +422,17 @@ fn attr<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
 }
 
 /// Page `svg` with its text drawn as outlines, as the inside of an `<svg>`
-/// in the page's own coordinates (its top left at 0,0). Its ids are made
-/// the page's own (`kfp<n>-`), so stacked pages never share one.
-fn outline(svg: &str, page: u32) -> Result<String> {
+/// in the page's own coordinates (its top left at 0,0). Its ids start with
+/// `prefix` (the chart's and the page's), so no two pages or charts on a
+/// page share one.
+fn outline(svg: &str, prefix: &str) -> Result<String> {
     let options = usvg::Options {
         fontdb: fontdb()?,
         ..usvg::Options::default()
     };
     let tree = usvg::Tree::from_str(svg, &options).map_err(|e| Error::Engrave(e.to_string()))?;
     let written = tree.to_string(&usvg::WriteOptions {
-        id_prefix: Some(format!("kfp{page}-")),
+        id_prefix: Some(prefix.to_owned()),
         preserve_text: false,
         coordinates_precision: 2,
         transforms_precision: 3,
@@ -511,6 +580,8 @@ fn escape(s: &str) -> String {
 #[cfg(test)]
 #[allow(
     clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
     clippy::cast_precision_loss,
     clippy::indexing_slicing,
     clippy::string_slice,
@@ -527,14 +598,14 @@ mod tests {
     /// layout's own clock is the chart's less its downbeat.
     const WALTZ: &str = "Waltz - Test\n90bpm 3/4 #G\n\\downbeat = 0.5\n\nVS 8\nG G C D\nG Em C D\n\nCH 4\nC D G G\n";
 
-    #[test]
-    fn beats_are_where_keyflows_cursor_puts_the_playhead() {
-        let chart = keyflow::parse(WALTZ).unwrap();
+    /// Every mark of `source`: its line where Keyflow's cursor (Session's)
+    /// is at that instant, and its time on the chart's clock `n` beats of
+    /// `bpm` after the downbeat, `per_bar` marks a bar.
+    fn check(source: &str, downbeat: f64, bpm: f64, per_bar: usize) -> FollowChart {
+        let chart = keyflow::parse(source).unwrap();
         let (_, layout) = layout(&chart).unwrap();
-        let drawn = follow_chart(WALTZ, None).unwrap();
-        let downbeat = 0.5;
-        let beats_per_bar = 3;
-        assert_eq!(drawn.beats.len(), drawn.bars.len() * beats_per_bar);
+        let drawn = follow_chart(source, None).unwrap();
+        assert_eq!(drawn.beats.len(), drawn.bars.len() * per_bar, "{source}");
         let cursor = ChartCursor::new(CursorConfig::playback());
         let offsets: Vec<(f64, f64)> = layout
             .pages
@@ -542,58 +613,179 @@ mod tests {
             .map(|p| (p.x_offset, p.y_offset))
             .collect();
         let half = 1.5 / 2.0;
-        for pair in drawn.beats.windows(2) {
-            let (beat, next) = (pair[0], pair[1]);
-            // One clock: 90 bpm is 2/3 s a beat, from the downbeat.
-            let n = drawn.beats.iter().position(|b| *b == beat).unwrap();
-            let want = downbeat + n as f64 * 60.0 / 90.0;
+        for (n, beat) in drawn.beats.iter().enumerate() {
+            let want = downbeat + n as f64 * 60.0 / bpm;
             assert!(
                 (beat.at - want).abs() < 1e-6,
                 "beat {n}: {} not {want}",
                 beat.at
             );
-            // Anywhere in the beat, the line is where Keyflow's cursor is at
-            // its start, on the same page.
-            for part in [0.0, 0.5, 0.99] {
-                let t = beat.at + (next.at - beat.at) * part;
-                let current = drawn.beats.iter().rev().find(|b| b.at <= t).unwrap();
-                assert_eq!(*current, beat);
-                let state = cursor.compute_at_time(&layout, beat.at - downbeat).unwrap();
-                let (ox, _) = offsets[(state.page - 1) as usize];
-                assert!(
-                    (current.x + half - (state.cursor_x - ox)).abs() < 1e-6,
-                    "beat {n} at {t:.3}s: line at {} , Keyflow's cursor at {}",
-                    current.x + half,
-                    state.cursor_x - ox
-                );
+            assert_eq!(beat.beat, n % per_bar, "beat {n}'s place in its bar");
+            let state = cursor.compute_at_time(&layout, beat.layout_at).unwrap();
+            let (ox, _) = offsets[(state.page - 1) as usize];
+            assert!(
+                (beat.x + half - (state.cursor_x - ox)).abs() < 1e-6,
+                "beat {n}: line at {}, Keyflow's cursor at {}",
+                beat.x + half,
+                state.cursor_x - ox
+            );
+            // Until the next beat, it is the one marked.
+            if let Some(next) = drawn.beats.get(n + 1) {
+                for part in [0.0, 0.5, 0.99] {
+                    let t = beat.at + (next.at - beat.at) * part;
+                    assert_eq!(drawn.beats.iter().rev().find(|b| b.at <= t), Some(beat));
+                }
             }
         }
-        // Each bar's first beat is the bar's time.
         for bar in &drawn.bars {
             let first = drawn.beats.iter().find(|b| b.bar == bar.bar).unwrap();
-            assert!((first.at - bar.start).abs() < 1e-9);
+            assert!(
+                (first.at - bar.start).abs() < 1e-9,
+                "a bar's first beat is its time"
+            );
         }
+        drawn
+    }
+
+    #[test]
+    fn beats_are_where_keyflows_cursor_puts_the_playhead() {
+        check(WALTZ, 0.5, 90.0, 3);
+    }
+
+    #[test]
+    fn a_chord_held_over_the_bar_is_still_beat_by_beat() {
+        // A whole-bar chord is one slot of the layout; a whole-bar rest too.
+        check(
+            "Held - Test\n120bpm 4/4 #C\n\nVS 4\n| C | G | Am | F |\n",
+            0.0,
+            120.0,
+            4,
+        );
+        check(
+            "Held - Test\n90bpm 3/4 #C\n\\downbeat = 1\n\nVS 4\nC r2. G r2.\n",
+            1.0,
+            90.0,
+            3,
+        );
+        // `| C |` in 3/4: the layout makes its slot a 4/4 bar long, past its
+        // own; on the chart's clock it is three beats, a third of the bar
+        // each, from the barline.
+        let held = follow_chart("Held - Test\n90bpm 3/4 #C\n\nVS 2\n| C | G |\n", None).unwrap();
+        assert_eq!(held.beats.len(), 6);
+        for bar in held.beats.chunks(3) {
+            let step = bar[1].x - bar[0].x;
+            assert!(
+                step > 0.0 && (bar[2].x - bar[1].x - step).abs() < 1e-6,
+                "{bar:?}"
+            );
+            assert!((bar[1].at - bar[0].at - 60.0 / 90.0).abs() < 1e-6);
+        }
+        let rest = check(
+            "Rest - Test\n100bpm 4/4 #C\n\nVS 4\nC G r1 F\n",
+            0.0,
+            100.0,
+            4,
+        );
+        // The rest's bar (the third) moves across it too.
+        let xs: Vec<f64> = rest
+            .beats
+            .iter()
+            .filter(|b| b.bar == 2)
+            .map(|b| b.x)
+            .collect();
+        assert!(xs.windows(2).all(|w| w[0] < w[1]), "{xs:?}");
+        // A bar of 3/4 inline in a 4/4 chart: three beats, its own third
+        // each (the layout reports the chart's meter there).
+        let inline = follow_chart(
+            "Inline - Test\n120bpm 4/4 #C\n\nVS 3\nC !T3/4 F // G / C\n",
+            None,
+        )
+        .unwrap();
+        let bars: Vec<(f64, f64, usize)> = inline
+            .bars
+            .iter()
+            .map(|b| {
+                (
+                    b.start,
+                    b.end,
+                    inline.beats.iter().filter(|m| m.bar == b.bar).count(),
+                )
+            })
+            .collect();
+        for (start, end, marks) in &bars {
+            let beats_in = ((end - start) / 0.5).round() as usize;
+            assert_eq!(*marks, beats_in, "{bars:?}");
+        }
+        for pair in inline.beats.windows(2) {
+            assert!(
+                (pair[1].at - pair[0].at - 0.5).abs() < 1e-6,
+                "a beat is 0.5 s: {pair:?}"
+            );
+        }
+        // Silent Night (the share test's): a chord a bar of 3/4.
+        check(
+            "Silent Night - Franz Gruber\n72bpm 3/4 #A\n\\downbeat = 0.5\n\nVS 12\nA A A A\nE E A A\nD D A A\n",
+            0.5,
+            72.0,
+            3,
+        );
+    }
+
+    /// Each `href="#…"` of `svg`, and each `id`.
+    fn refs_and_ids(svg: &str) -> (Vec<String>, Vec<String>) {
+        let grab = |needle: &str| {
+            let mut out = Vec::new();
+            let mut at = 0;
+            while let Some(i) = svg[at..].find(needle) {
+                let start = at + i + needle.len();
+                let end = start + svg[start..].find('"').unwrap();
+                out.push(svg[start..end].to_owned());
+                at = end;
+            }
+            out
+        };
+        (grab("href=\"#"), grab(" id=\""))
+    }
+
+    #[test]
+    fn two_charts_on_one_page_each_draw_their_own_glyphs() {
+        let main = follow_chart(WALTZ, None).unwrap().svg;
+        let other = follow_chart(
+            &WALTZ.replace("#G", "#Eb").replace("G G C D", "Eb Ab Bb Cm"),
+            None,
+        )
+        .unwrap()
+        .svg;
+        let (main_refs, main_ids) = refs_and_ids(&main);
+        let (other_refs, other_ids) = refs_and_ids(&other);
+        assert!(
+            !main_refs.is_empty() && !other_refs.is_empty(),
+            "glyphs shared"
+        );
+        // On one page (an arrangement's under the song's), every reference
+        // finds its own chart's element first: no id is in both.
+        for id in &other_ids {
+            assert!(!main_ids.contains(id), "{id} in both charts");
+        }
+        for r in &main_refs {
+            assert!(main_ids.contains(r), "{r} drawn by its chart");
+        }
+        for r in &other_refs {
+            assert!(other_ids.contains(r), "{r} drawn by its chart");
+        }
+        // The same chart twice draws the same ids (the same drawing).
+        assert_eq!(follow_chart(WALTZ, None).unwrap().svg, main);
     }
 
     #[test]
     fn glyphs_drawn_twice_are_drawn_once() {
         let drawn = follow_chart(WALTZ, None).unwrap();
-        assert!(
-            drawn.svg.contains("<defs><path id=\"kfg0\""),
-            "shared glyphs"
-        );
-        assert!(drawn.svg.contains("<use href=\"#kfg0\""));
+        assert!(drawn.svg.contains("<defs><path id=\"kf"), "shared glyphs");
+        assert!(drawn.svg.contains("<use href=\"#kf"));
         // Every glyph used is defined.
-        let mut at = 0;
-        while let Some(i) = drawn.svg[at..].find("href=\"#kfg") {
-            let start = at + i + "href=\"#".len();
-            let end = start + drawn.svg[start..].find('"').unwrap();
-            let id = &drawn.svg[start..end];
-            assert!(
-                drawn.svg.contains(&format!("<path id=\"{id}\"")),
-                "{id} defined"
-            );
-            at = end;
+        let (refs, ids) = refs_and_ids(&drawn.svg);
+        for r in &refs {
+            assert!(ids.contains(r), "{r} defined");
         }
         // Two follow boxes: bars and beats, both tied to the recording.
         let drawn = follow_chart(WALTZ, Some("rec.mp4")).unwrap();
