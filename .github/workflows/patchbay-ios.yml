@@ -1,0 +1,175 @@
+# Generated from xtask::workflows::patchbay_ios (xtask/workflows/src/patchbay_ios.rs)
+# Rebuild with `just workflows`; do not edit by hand (`just workflows-check` fails CI on drift).
+# The reasons for every job and step are comments in that Rust source.
+name: patchbay-ios
+on:
+  push:
+    tags:
+    - v*
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to ship to TestFlight (e.g. v26.11.2): run it from that tag (--ref)'
+        required: true
+        type: string
+      dry_run:
+        description: Build, sign and validate with App Store Connect; do not upload
+        required: false
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: ios-testflight-${{ github.workflow }}-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+jobs:
+  resolve:
+    name: Resolve the tag
+    if: ${{ github.repository == 'FastTrackStudios/studio' && vars.PATCHBAY_IOS_RELEASE != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      checks: read
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+    - name: The tag is vX.Y.Z
+      run: |
+        if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::'$TAG' is not a release tag (^v[0-9]+\.[0-9]+\.[0-9]+$): TestFlight uploads only from the studio release tag"
+          exit 1
+        fi
+    - uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.TAG }}
+        fetch-depth: 0
+    - name: Stamp the release version from the tag
+      env:
+        STAMP_TAG: ${{ env.TAG }}
+      run: |
+        set -euo pipefail
+        if grep -q '^    stamp)' scripts/release.sh; then
+          bash scripts/release.sh stamp "$STAMP_TAG"
+        else
+          echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
+        fi
+    - name: Marketing version = tag version, tag on main or release/v*, green
+      id: resolve
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        bash scripts/release.sh ios-resolve patchbay "$TAG"
+    - name: A GitHub Release exists for the tag
+      if: ${{ !inputs.dry_run }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        bash scripts/release.sh ios-release "$TAG"
+  testflight:
+    name: Build, sign, upload
+    needs: resolve
+    runs-on:
+    - self-hosted
+    - macos
+    - studio-release-mac
+    timeout-minutes: 90
+    environment: release-signing
+    outputs:
+      build_no: ${{ steps.stamp.outputs.build_no }}
+    steps:
+    - name: Preflight — build volume mounted
+      run: |
+        if [ ! -d /Volumes/build-disk ]; then
+          echo "ERROR: /Volumes/build-disk is not mounted on this runner." >&2
+          exit 1
+        fi
+        df -h /Volumes/build-disk | tail -1
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.resolve.outputs.sha }}
+        clean: false
+    - name: Stamp the release version from the tag
+      env:
+        STAMP_TAG: ${{ env.TAG }}
+      run: |
+        set -euo pipefail
+        if grep -q '^    stamp)' scripts/release.sh; then
+          bash scripts/release.sh stamp "$STAMP_TAG"
+        else
+          echo "$STAMP_TAG predates the stamp: its commit carries its version ($(bash scripts/release.sh version))"
+        fi
+    - name: Build number
+      id: stamp
+      run: |
+        build_no="$(date +%s)"
+        echo "build_no=$build_no" >> "$GITHUB_OUTPUT"
+        echo "Patchbay $TAG: marketing version ${{ needs.resolve.outputs.version }}, build $build_no"
+    - name: devenv CLI
+      uses: ./.github/actions/devenv
+    - name: Build, sign, and upload Patchbay to TestFlight
+      env:
+        KEYCHAIN: fts-build.keychain
+        KEYCHAIN_PW: fts-build
+        MARKETING_VER: ${{ needs.resolve.outputs.version }}
+        BUILD_NO: ${{ steps.stamp.outputs.build_no }}
+        DRY_RUN: ${{ inputs.dry_run }}
+        DX_BUNDLE_ID: app.fasttrackstudio.patchbay
+        PROFILE_NAME: FTS Patchbay App Store
+      run: |
+        set -euo pipefail
+        export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+        export TMPDIR="$RUNNER_TEMP"
+        flags=()
+        [ "$DRY_RUN" = true ] && flags=(--dry-run)
+        bash apps/patchbay/ios/deploy-testflight.sh ${flags[@]+"${flags[@]}"}
+    - name: App Store Connect has the build
+      if: ${{ !inputs.dry_run }}
+      env:
+        BUILD_NO: ${{ steps.stamp.outputs.build_no }}
+      run: |
+        set -uo pipefail
+        for _ in $(seq 1 30); do
+          if out="$(ruby apps/patchbay/ios/testflight-status.rb app.fasttrackstudio.patchbay "$BUILD_NO")"; then
+            echo "$out"
+            { echo '```'; echo "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          sleep 30
+        done
+        echo "::warning::build $BUILD_NO is not in App Store Connect after 15 minutes (apps/patchbay/ios/testflight-status.rb shows it later)"
+    - name: Summary
+      if: always()
+      env:
+        VERSION: ${{ needs.resolve.outputs.version }}
+        BUILD_NO: ${{ steps.stamp.outputs.build_no }}
+        DRY_RUN: ${{ inputs.dry_run }}
+        RESULT: ${{ job.status }}
+      run: |
+        echo "### Patchbay iOS TestFlight" >> "$GITHUB_STEP_SUMMARY"
+        echo "\`$TAG\` (\`$(git rev-parse --short HEAD)\`): marketing version \`$VERSION\`, build \`$BUILD_NO\`$([ "$DRY_RUN" = true ] && echo ' (dry run: not uploaded)'): $RESULT." >> "$GITHUB_STEP_SUMMARY"
+  record:
+    name: Record on the GitHub Release
+    needs:
+    - resolve
+    - testflight
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.resolve.outputs.sha }}
+    - name: Marketing version + build number into the release notes
+      env:
+        GH_TOKEN: ${{ github.token }}
+        VERSION: ${{ needs.resolve.outputs.version }}
+        BUILD_NO: ${{ needs.testflight.outputs.build_no }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        bash scripts/release.sh ios-record patchbay "$TAG" "$VERSION" "$BUILD_NO" "$RUN_URL"

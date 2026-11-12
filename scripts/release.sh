@@ -194,20 +194,22 @@ next_version() {
     fi
 }
 
-# ── the iOS app (Studio) ─────────────────────────────────────────────────
-# Studio (Signal and Session in one app, apps/studio/desktop) is the one iOS
-# app; Signal's and Session's own App Store records get no new builds. It is
-# built from the one `v<version>` tag: its marketing version is the tag's
-# (deploy-testflight.sh writes MARKETING_VER into the Info.plist) and the
-# app reports it in-app through fts-version (FTS_RELEASE_VERSION, which
-# `stamp` exported). The tag guard and the TestFlight gate prove the
-# checkout was stamped with the tag's version.
-IOS_APPS="studio"
+# ── the iOS apps (Studio, Patchbay) ──────────────────────────────────────
+# Studio (Signal and Session in one app, apps/studio/desktop) and Patchbay
+# (apps/patchbay `patchbay-ios`, a controller of other machines' engines),
+# each with its `<app>-ios` workflow; Signal's and Session's own App Store
+# records get no new builds. Each is built from the one `v<version>` tag:
+# its marketing version is the tag's (deploy-testflight.sh writes
+# MARKETING_VER into the Info.plist) and Studio reports it in-app through
+# fts-version (FTS_RELEASE_VERSION, which `stamp` exported). The tag guard
+# and the TestFlight gate prove the checkout was stamped with the tag's
+# version.
+IOS_APPS="studio patchbay"
 
 ios_check() {
-    case "${1:-}" in studio) ;; *) die "unknown iOS app '${1:-}' (studio)" ;; esac
+    case "${1:-}" in studio | patchbay) ;; *) die "unknown iOS app '${1:-}' (studio, patchbay)" ;; esac
 }
-ios_title() { case "$1" in studio) echo Studio ;; esac; }
+ios_title() { case "$1" in studio) echo Studio ;; patchbay) echo Patchbay ;; esac; }
 ios_bundle_id() { echo "app.fasttrackstudio.$1"; }
 
 # Git dependencies whose locked commit moved in a range — behaviour can
@@ -679,7 +681,7 @@ tf_render() { # <tag> <version> <body> [<app> <newline>]
     local a l
     echo "$TF_BEGIN"
     echo "### iOS TestFlight"
-    echo "Marketing version **$2** (CFBundleShortVersionString) == this release, \`$1\`, for Studio. One line per app, its latest upload."
+    echo "Marketing version **$2** (CFBundleShortVersionString) == this release, \`$1\`, for every app. One line per app, its latest upload."
     for a in $IOS_APPS; do
         if [ "$a" = "${4:-}" ]; then
             echo "${5:-}"
