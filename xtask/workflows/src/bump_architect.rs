@@ -214,6 +214,8 @@ fn prepare() -> Result<Job> {
         .step(
             Step::run("just bump-architect", BUMP)
                 .id("bump")
+                // Read-only: GitHub's API (is a keyflow tag on keyflow's main?).
+                .env("GH_TOKEN", "${{ github.token }}")
                 .env("TAG", "${{ steps.tag.outputs.tag }}"),
         )
         .step(

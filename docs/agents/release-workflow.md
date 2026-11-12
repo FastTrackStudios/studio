@@ -152,7 +152,7 @@ the comments that name them, lets cargo update `Cargo.lock` (nothing
 compiles), adds lines to `.config/duplicate-deps.toml` ONLY for crates the
 bump gives a new version (`check-duplicate-deps.py --add`: notes and other
 lines stay; never `--write`, which drops them), and writes the change file
-(`studio-architect`, patch). Exit 3: done, but Architect moved a pin Studio
+(`studio-architect`, patch). `--keyflow auto` takes only a keyflow tag whose commit is on keyflow's `main`. Exit 3: done, but Architect moved a pin Studio
 follows (editor, dioxus, blitz), or a second architect source is left: a
 person finishes it. Exit 4: no keyflow release on that Architect yet;
 nothing changed. Run it in a clean worktree (it refuses the fts-dev link).

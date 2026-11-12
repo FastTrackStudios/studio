@@ -37,6 +37,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
+import os
 import re
 import subprocess
 import sys
@@ -114,14 +116,33 @@ def remote_tags(repo: str) -> list[str]:
     return sorted((t for t in tags if STABLE.match(t)), key=version, reverse=True)
 
 
+def on_main(repo: str, tag: str) -> bool:
+    """Is `tag`'s commit on `repo`'s main (main contains it)?"""
+    req = urllib.request.Request(f"https://api.github.com/repos/{repo}/compare/main...{tag}",
+                                 headers={"Accept": "application/vnd.github+json"})
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.load(r).get("status") in ("behind", "identical")
+    except Exception as e:  # noqa: BLE001
+        sys.exit(f"bump-architect: cannot tell whether {repo} {tag} is on main ({e})")
+
+
 def keyflow_on(architect: str, at_least: str) -> str | None:
-    """The newest keyflow release (not older than `at_least`) pinning `architect`."""
+    """The newest keyflow release (not older than `at_least`) pinning `architect`,
+    whose commit is on keyflow's main: a tag pushed onto a branch nobody
+    merged is never picked by `auto` (a person can still name it)."""
     for tag in remote_tags(KEYFLOW):
         if version(tag) < version(at_least):
             return None
         text = manifest_at(KEYFLOW, tag) or ""
         if {m.group(1) for m in tag_pin(ARCHITECT).finditer(text)} == {architect}:
-            return tag
+            if on_main(KEYFLOW, tag):
+                return tag
+            print(f"bump-architect: keyflow {tag} pins architect {architect} but is not on keyflow's main: skipped",
+                  file=sys.stderr)
     return None
 
 
