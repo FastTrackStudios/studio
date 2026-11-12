@@ -18,6 +18,17 @@ none.
   migrations/). Add a `Migration:` paragraph to the file body: what
   changed, why, the exact steps.
 
+- A change to STORED DATA (a schema, a storage format, a migration of a
+  vault, an index or a database): add a line to the body,
+
+      Data-Migration: <what changes, and whether a rollback undoes it>
+
+  at any bump level. The release's notes list it first ("Data migration"),
+  and its release-facts.json (signed with the release) says
+  "data_migration": true: the server's release bump never deploys that
+  release by itself, because rolling the binary back does not roll the
+  data back.
+
 `just release` (scripts/release.sh) builds a release's notes from the
 files ADDED since the previous tag (major -> Breaking / Migration, minor
 -> Added, patch -> Fixed and improved) and they go into the GitHub

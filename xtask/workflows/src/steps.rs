@@ -130,7 +130,7 @@ const APT_CACHE_VERSION: &str = "1";
 /// The event's own ref: a PR's merge ref, the pushed commit, main for the
 /// nightly, a dispatched branch.
 pub fn checkout() -> Step {
-    Step::action("actions/checkout@v4")
+    Step::action(crate::model::pinned::CHECKOUT)
 }
 
 /// Full history (`fetch-depth: 0`), at an optional ref.
@@ -213,12 +213,13 @@ pub fn hosted_setup(components: &str, targets: &str, tools: Tools) -> Vec<Step> 
     }
     if tools.just {
         steps.push(
-            Step::uses("just", "taiki-e/install-action@v2").with("tool", format!("just@{JUST}")),
+            Step::uses("just", crate::model::pinned::INSTALL_ACTION)
+                .with("tool", format!("just@{JUST}")),
         );
     }
     if tools.nextest {
         steps.push(
-            Step::uses("cargo-nextest", "taiki-e/install-action@v2")
+            Step::uses("cargo-nextest", crate::model::pinned::INSTALL_ACTION)
                 .with("tool", format!("cargo-nextest@{NEXTEST}")),
         );
     }
@@ -259,9 +260,10 @@ nohup sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \\
 /// The workspace pin, with only what the job needs. dtolnay's action makes it
 /// the rustup default, so it shadows the image's preinstalled stable.
 fn rust_toolchain(components: &str, targets: &str) -> Step {
+    // dtolnay's branch for RUST, pinned by commit (model::pinned).
     let step = Step::uses(
         &format!("Rust {RUST}"),
-        &format!("dtolnay/rust-toolchain@{RUST}"),
+        crate::model::pinned::RUST_TOOLCHAIN,
     );
     let step = if components.is_empty() {
         step
@@ -378,11 +380,14 @@ const CARGO_DEPS_KEY: &str = "cargo-deps-${{ runner.os }}-${{ hashFiles('Cargo.l
 /// Only main writes the entry (CI's `deps-cache` job, [`cargo_deps_save`]),
 /// so PRs never spend the 10 GB budget.
 pub fn cargo_deps_restore() -> Step {
-    Step::uses("Restore cargo's dependencies", "actions/cache/restore@v4")
-        .id("deps")
-        .with("path", CARGO_DEPS_PATHS)
-        .with("key", CARGO_DEPS_KEY)
-        .with("restore-keys", "cargo-deps-${{ runner.os }}-")
+    Step::uses(
+        "Restore cargo's dependencies",
+        crate::model::pinned::CACHE_RESTORE,
+    )
+    .id("deps")
+    .with("path", CARGO_DEPS_PATHS)
+    .with("key", CARGO_DEPS_KEY)
+    .with("restore-keys", "cargo-deps-${{ runner.os }}-")
 }
 
 /// [`cargo_deps_restore`], then on a miss fetch everything and save it.
@@ -391,10 +396,13 @@ pub fn cargo_deps_save() -> [Step; 3] {
     [
         cargo_deps_restore(),
         Step::run("Fetch cargo's dependencies", "cargo fetch").cond(miss),
-        Step::uses("Save cargo's dependencies", "actions/cache/save@v4")
-            .cond(miss)
-            .with("path", CARGO_DEPS_PATHS)
-            .with("key", CARGO_DEPS_KEY),
+        Step::uses(
+            "Save cargo's dependencies",
+            crate::model::pinned::CACHE_SAVE,
+        )
+        .cond(miss)
+        .with("path", CARGO_DEPS_PATHS)
+        .with("key", CARGO_DEPS_KEY),
     ]
 }
 

@@ -401,6 +401,63 @@ includes_line() { # <prev> <sha> [below]
     fi
 }
 
+# "<change file>: <text>" for every `Data-Migration:` line in the body of a
+# release's change files (.changes/README): the release changes stored data,
+# and rolling the binary back does not undo it.
+data_migrations() { # <prev> <sha> [version]
+    local files f
+    files="$(release_change_files "$1" "$2" "${3:-}")"
+    [ -n "$files" ] || return 0
+    while read -r f; do
+        git show "$2:$f" | awk 'c >= 2 { print; next } $0 == "---" { c++ }' \
+            | sed -n 's/^[[:space:]]*Data-Migration:[[:space:]]*//p' \
+            | while read -r line; do printf '%s: %s\n' "$(basename "$f" .md)" "$line"; done
+    done <<<"$files"
+}
+
+# release-facts.json of a tag: {"repo","tag","data_migration","migrations"}.
+# `publish` attaches it to the Release before any build does, so every
+# SHA256SUMS signs it: infra's release bump reads it from signed material
+# and never deploys a migrating release by itself.
+cmd_facts() { # <tag>
+    local tag="${1:-}" sha prev
+    [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "usage: facts vX.Y.Z"
+    sha="$(git rev-parse -q --verify "$tag^{commit}")" || die "no tag $tag"
+    prev="$(last_tag "$sha^")"
+    data_migrations "$prev" "$sha" "$tag" | awk -v tag="$tag" '
+        function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); gsub(/\t/, " ", s); return s }
+        { m[++n] = $0 }
+        END {
+            printf "{\"repo\":\"studio\",\"tag\":\"%s\",\"data_migration\":%s,\"migrations\":[", tag, (n ? "true" : "false")
+            for (i = 1; i <= n; i++) printf "%s\"%s\"", (i > 1 ? "," : ""), esc(m[i])
+            print "]}"
+        }'
+}
+
+# The release queue's first question (release-queue.yml): which commits on
+# main since the last release below <sha> CLAIM to be bot pin bumps? Prints
+# them, newest first, and exits 0, or exits 1 when none does. A claim is a
+# first-parent commit authored by fts-forge[bot] whose message has the line
+# `Release-Queue: bump` (bump-architect.yml's land writes it). That is free
+# text (every agent PR is fts-forge's, any body can carry the line), so the
+# queue releases only after scripts/bump-verify.py confirms one through the
+# API: a merged PR from bump/architect-*, by the bot, allow-listed files.
+BOT_EMAIL="345159799+fts-forge[bot]@users.noreply.github.com"
+cmd_bump_queued() { # <sha>
+    local sha="${1:?usage: bump-queued <sha>}" last c
+    last="$(git -c versionsort.suffix=- tag --list 'v[0-9]*' --sort=-v:refname --merged "$sha" \
+        | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
+    local found=1
+    while read -r c; do
+        if [ "$(git log -1 --format=%ae "$c")" = "$BOT_EMAIL" ] \
+            && git log -1 --format=%B "$c" | grep -qx 'Release-Queue: bump'; then
+            echo "$c"
+            found=0
+        fi
+    done < <(git rev-list --first-parent "${last:+$last..}$sha")
+    return "$found"
+}
+
 # The release notes of <sha> since <prev>, grouped the way the CHANGELOG
 # sections were (Breaking / Migration, Added, Fixed and improved; `none`
 # lists nothing). Read from <sha>'s tree. <version>: the release they
@@ -416,6 +473,16 @@ render_notes() { # <prev> <sha> [version]
     fi
     incl="$(includes_line "$prev" "$sha" "$ver")"
     if [ -n "$incl" ]; then echo "$incl"; echo; fi
+    local migrations
+    migrations="$(data_migrations "$prev" "$sha" "$ver")"
+    if [ -n "$migrations" ]; then
+        echo "### Data migration"
+        echo
+        echo "This release changes stored data; rolling back the binary does not undo it."
+        echo
+        printf '%s\n' "$migrations" | sed 's/^/- /'
+        echo
+    fi
     for group in major minor patch; do
         [ -n "$files" ] || break
         case "$group" in
@@ -708,8 +775,22 @@ publish_release() { # [tag]
     [ -n "$tag" ] || die "publish needs a tag (an argument, or a run on refs/tags/v*)"
     v="${tag#v}"
     is_semver "$v" || die "version '$v' is not X.Y.Z"
-    if gh release view "$tag" --repo "$REPO" >/dev/null 2>&1; then
-        note "release $tag already exists — nothing to do"; return 0
+    if release_id "$tag" >/dev/null; then
+        release_dedupe "$tag"
+        ensure_facts "$tag"
+        note "release $tag exists — its facts are on it"; return 0
+    fi
+    # ONE writer creates the draft: release.yml's publish job. The other
+    # callers (desktop, studio-ios) wait for it, and create it themselves
+    # only when it never came (release.yml failed).
+    if [ "${PUBLISH_MODE:-create}" = wait ]; then
+        local i
+        local tries="${PUBLISH_WAIT_TRIES:-20}"
+        for ((i = 1; i <= tries; i++)); do
+            if release_id "$tag" >/dev/null; then release_dedupe "$tag"; ensure_facts "$tag"; return 0; fi
+            note "waiting for release.yml to create the $tag draft ($i/$tries)"; sleep 30
+        done
+        note "no $tag release after $((tries / 2)) minutes: creating it here"
     fi
     git rev-parse -q --verify "refs/tags/$tag" >/dev/null || die "no tag $tag: tag first (just release)"
     target="$(git rev-parse "$tag^{commit}")"
@@ -734,15 +815,46 @@ publish_release() { # [tag]
     } > "$notes"
     [ -s "$notes" ] || die "no release notes for $v"
 
-    if ! gh release create "$tag" --repo "$REPO" --verify-tag \
-        --title "studio $v" --notes-file "$notes" --latest; then
+    # A DRAFT: the first workflow whose `sums` has signed its assets
+    # publishes it (sums.rs); nothing reads a release before it is signed.
+    if ! gh release create "$tag" --repo "$REPO" --verify-tag --draft \
+        --title "studio $v" --notes-file "$notes"; then
         gh release view "$tag" --repo "$REPO" >/dev/null 2>&1 \
             || die "could not create the GitHub Release for $tag"
         note "release $tag was created meanwhile — nothing to do"; rm -f "$notes"; release_dedupe "$tag"; return 0
     fi
     rm -f "$notes"
     release_dedupe "$tag"
-    note "published https://github.com/$REPO/releases/tag/$tag"
+    ensure_facts "$tag"
+    note "created the $tag draft (sums publishes it once signed)"
+}
+
+# The id of <tag>'s release, drafts included (a draft has no tag yet, so
+# `releases/tags/<tag>` does not find it), the oldest if several.
+release_id() { # <tag>
+    local id
+    id="$(gh api --paginate "repos/$REPO/releases?per_page=100" --jq ".[] | select(.tag_name == \"$1\") | .id" 2>/dev/null | sort -n | head -1)"
+    [ -n "$id" ] || return 1
+    echo "$id"
+}
+
+# release-facts.json on <tag>'s release, every time a caller passes (the
+# first upload can fail; `sums` refuses a release without the facts it
+# recomputes, and uploads them itself as a last resort). A race on the
+# upload (422) is retried.
+ensure_facts() { # <tag>
+    local tag="$1" facts id i
+    id="$(release_id "$tag")" || die "no $tag release to put the facts on"
+    if gh api "repos/$REPO/releases/$id/assets?per_page=100" --jq '.[].name' | grep -qx release-facts.json; then
+        return 0
+    fi
+    facts="$(mktemp -d)/release-facts.json"
+    cmd_facts "$tag" > "$facts"
+    for i in 1 2 3; do
+        gh release upload "$tag" "$facts" --repo "$REPO" --clobber && return 0
+        sleep 5
+    done
+    die "could not upload release-facts.json to $tag"
 }
 
 # `publish` and both ios-release steps start together on a tag, and
@@ -801,7 +913,7 @@ cmd_ios_resolve() { # <app> <tag>
 cmd_ios_release() { # <tag>
     local tag="${1:-}"
     [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "usage: ios-release vX.Y.Z"
-    publish_release "$tag"
+    PUBLISH_MODE="wait" publish_release "$tag"
 }
 
 # The app's line once its build is uploaded; earlier builds of the same
@@ -871,6 +983,8 @@ case "${1:-}" in
     stamp) shift; cmd_stamp "$@" ;;
     image-tag) shift; cmd_image_tag "$@" ;;
     release-only) shift; cmd_release_only "$@" ;;
+    facts) shift; cmd_facts "$@" ;;
+    bump-queued) shift; cmd_bump_queued "$@" ;;
     tag-guard) shift; cmd_tag_guard "$@" ;;
     publish) shift; cmd_publish "$@" ;;
     ios-resolve) shift; cmd_ios_resolve "$@" ;;

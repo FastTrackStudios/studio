@@ -2264,6 +2264,36 @@ release *ARGS:
 release-hotfix +COMMITS:
     bash scripts/release.sh hotfix {{COMMITS}}
 
+# Every architect pin (and keyflow's, to the newest keyflow release on that
+# architect) moves to TAG: the manifests and the comments naming the tags,
+# Cargo.lock (cargo resolves; nothing compiles), add-only lines in
+# .config/duplicate-deps.toml, the change file. Exit 3: needs a person;
+# exit 4: no keyflow release on TAG yet. The bot runs exactly this.
+# Move the architect and keyflow pins to architect TAG (e.g. v0.12.5)
+bump-architect TAG *ARGS:
+    python3 scripts/bump-architect.py "{{TAG}}" {{ARGS}}
+
+# studio#457's replay must equal the merged commit (Cargo.lock included);
+# a keyflow behind the tag must exit 4, an editor move exit 3.
+# Test the bump script against real bumps
+bump-architect-test:
+    bash scripts/bump-architect-replay.sh
+
+# Every workflow's App token: one repository, its hop's permissions, its
+# environment's own key (scripts/check-token-mints.py; PR checks run it).
+# Check the App token mints of every workflow
+check-token-mints:
+    python3 scripts/check-token-mints.py --self-test
+    python3 scripts/check-token-mints.py
+
+# What `sums` signs, the queue's API check, the www [patch] guard (PR checks run them)
+release-bots-test:
+    bash scripts/release-sums-test.sh
+    bash scripts/bump-verify-test.sh
+    bash scripts/release-facts-test.sh
+    python3 scripts/check-www-patch.py --self-test
+    python3 scripts/check-www-patch.py
+
 # The release notes of a tag (default: the draft for origin/main).
 release-notes *ARGS:
     @bash scripts/release.sh notes {{ARGS}}

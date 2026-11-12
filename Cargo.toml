@@ -1649,3 +1649,29 @@ editor-syntax = { git = "https://www.github.com/FastTrackStudios/editor", rev = 
 editor-view = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
 editor-vim = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
 editor-crdt = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
+
+# Keyflow's Architect, retargeted to Studio's own (keyflow names every
+# Architect dependency on the `www.` spelling on purpose: cargo treats it as
+# a different source from the plain URL above, which is what lets this
+# table hand keyflow's crates Studio's Architect tag). So an Architect PATCH
+# release needs no keyflow release: `just bump-architect vX.Y.Z` moves the
+# tags below with every other architect pin. Limits:
+# - An Architect MINOR still goes through keyflow (it may break keyflow's
+#   code, and every minor so far moved the editor/dioxus/blitz revisions):
+#   `just bump-architect` waits (exit 4) for a keyflow release on that minor.
+# - Every Architect crate a keyflow crate depends on DIRECTLY must be listed
+#   here (their own dependencies then resolve inside Studio's source). A
+#   missing one lands as a second architect source in Cargo.lock: `just
+#   bump-architect` refuses any `www.github.com/FastTrackStudios/architect`
+#   source in the lock.
+# - Until Studio pins a keyflow release on the www spelling, these entries
+#   are unused (`[[patch.unused]]` in Cargo.lock).
+# - Local dev overrides (the dev stack's links to local checkouts) must
+#   patch BOTH spellings, from a cargo CONFIG file: a config [patch] wins
+#   over this manifest table for the same source and crate, while a second
+#   `[patch."https://www.github.com/…"]` table in this file is a TOML
+#   duplicate-key error (docs/agents/release-workflow.md).
+[patch."https://www.github.com/FastTrackStudios/architect"]
+architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
