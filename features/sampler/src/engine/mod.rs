@@ -1025,6 +1025,18 @@ pub struct SampleEngine {
     /// Per-note-class round-robin counters (`ArticulationSpec::rr_per_note`),
     /// keyed by zone root key.
     pub(crate) note_rr: [u8; 128],
+    /// `ArticulationSpec::rr_sequence` state: the counter per (articulation,
+    /// velocity band) and the last RR per (articulation, band, note-class).
+    pub(crate) seq_rr_counter: HashMap<(String, usize), usize>,
+    pub(crate) seq_rr_last: HashMap<(String, usize, u8), u8>,
+    /// Engine frame each key last struck a short (random-tune gate).
+    pub(crate) short_key_frame: [Option<u64>; 128],
+    /// Random-tune draws to use instead of the generator, in order (tests
+    /// replaying a reference render's draws).
+    pub(crate) forced_tunes: VecDeque<i8>,
+    pub(crate) tune_rng: u64,
+    /// The short sequence counters' start (`CC59 mod 16`).
+    pub(crate) seq_rr_base: usize,
     /// Gain for the release sample being spawned right now, replacing the
     /// held-time law (the in-phrase release's flat level).
     pub(crate) release_gain_override: Option<f32>,
@@ -1312,6 +1324,12 @@ impl SampleEngine {
             spawn_variant: None,
             in_transition: false,
             note_rr: [0; 128],
+            seq_rr_counter: HashMap::new(),
+            seq_rr_last: HashMap::new(),
+            short_key_frame: [None; 128],
+            forced_tunes: VecDeque::new(),
+            tune_rng: 0x9E37_79B9_7F4A_7C15,
+            seq_rr_base: 0,
             release_gain_override: None,
             spawn_extra_start: 0,
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,
@@ -1881,6 +1899,12 @@ impl SampleEngine {
     /// releases) to a specific round-robin slot, or `None` to restore normal
     /// CC59 / cycle / random behaviour. The A/B null harness uses this to sweep
     /// round-robins and align our RR ordering with a deterministic CSS render.
+    /// Use these random-tune draws (cents) in order before the generator —
+    /// replaying a reference render's draws for a null test.
+    pub fn force_random_tunes(&mut self, cents: &[i8]) {
+        self.forced_tunes = cents.iter().copied().collect();
+    }
+
     pub fn set_forced_rr(&mut self, slot: Option<u32>) {
         self.forced_rr = slot;
     }
@@ -2361,12 +2385,11 @@ pub fn gain_to_db(gain: f32) -> f32 {
 /// per-event velocity term `$arhiq` applies, which is the sample's own dynamic
 /// selection, not a fixed makeup. (Measured Tremolo's −14 dB `$kuqqb` is a
 /// distinct KSP-scripted articulation, not the sampled `Tremolo`.)
-fn css_short_makeup_db(artic_id: &str) -> f32 {
-    if artic_id.eq_ignore_ascii_case("Staccatissimo") {
-        -9.5 // $xfnyt
-    } else {
-        0.0
-    }
+fn css_short_makeup_db(_artic_id: &str) -> f32 {
+    // The decoded `$xfnyt` −9.5 dB on Staccatissimo is not what Kontakt
+    // plays: its staccatissimo notes sit at the zone level like every other
+    // short (null test, 2026-11-12: ours exactly 9.5 dB under).
+    0.0
 }
 
 // ── Amp envelopes ────────────────────────────────────────────────────────────
@@ -2412,8 +2435,15 @@ fn amp_env_for(
         ),
         None => crate::spec::default_amp_env(artic_id, role)?,
     };
+    let release = spec
+        .articulations
+        .iter()
+        .find(|a| a.id.eq_ignore_ascii_case(artic_id))
+        .and_then(|a| a.amp_env_release)
+        .map(|r| r as usize)
+        .or((role == AmpEnvRole::Short).then_some(2));
     let tuples: Vec<(f32, f32, f32)> = segs.iter().map(|s| (s.time_ms, s.level, s.curve)).collect();
-    FlexEnv::from_segments(&tuples, 0.0, sample_rate, hold)
+    FlexEnv::from_segments(&tuples, 0.0, sample_rate, hold).map(|e| e.with_release_segment(release))
 }
 
 /// Fractional milliseconds → frames (rounded) — for sub-ms spec values.

@@ -1097,6 +1097,10 @@ struct TsvZone {
     /// A transition file's deeper-entered rows (CSS `marc leg` zones):
     /// `(tsv row, start, zvol)`, emitted in row order.
     marcato: Vec<(usize, u64, f64)>,
+    /// `(velocity, start, zvol)` of the file's main row when it has no
+    /// velocity-1 row; `sample_start_vel1` = that row's start when it does.
+    main_row: Option<(i32, Option<u64>, f64)>,
+    sample_start_vel1: Option<Option<u64>>,
     rr_index: u32,
     mic: String,
     articulation: String,
@@ -1237,6 +1241,8 @@ fn load_tsv_zones(
             sample_start: None,
             variant_starts: BTreeMap::new(),
             marcato: Vec::new(),
+            main_row: None,
+            sample_start_vel1: None,
             rr_index,
             mic,
             articulation: artic,
@@ -1257,6 +1263,28 @@ fn load_tsv_zones(
         {
             entry.sample_start = start;
         }
+        // A file with no velocity-1 row (a short: one zone per velocity, each
+        // its own RR/band) plays from its MAIN row — the one at unity level
+        // (CSS lists some files again in other groups, quieter and entered
+        // elsewhere); its start and level are the zone's.
+        if entry.direction.is_none() && vel_lo != Some(1) && entry.sample_start_vel1.is_none() {
+            // Ties go to the later start: CSS Staccato mp lists RR1 twice at
+            // unity, from 0 and from 288; Kontakt plays the 288 one.
+            let better = entry.main_row.is_none_or(|(_, st, zv)| {
+                let (d, dn) = ((zv - 1.0).abs(), (zvol - 1.0).abs());
+                dn < d - 1e-9 || ((dn - d).abs() <= 1e-9 && start > st)
+            });
+            if better {
+                entry.main_row = Some((vel_lo.unwrap_or(0), start, zvol));
+            }
+        }
+        if vel_lo == Some(1) {
+            // The plain note-on zone: its start and level are the zone's
+            // (not the first row read — CSS lists a file again in quieter
+            // groups, e.g. Sfz mf RR1 at 0.315 under vel 8).
+            entry.sample_start_vel1 = Some(start);
+            entry.gain_db = if zvol > 0.0 { 20.0 * zvol.log10() } else { 0.0 };
+        }
         // A transition file's velocity column is its interval code, not a
         // velocity: its deeper-entered rows are the marcato transition zones.
         if entry.direction.is_some() {
@@ -1275,6 +1303,15 @@ fn load_tsv_zones(
     }
     if skipped > 0 {
         eprintln!("  NOTE: {skipped} tsv row(s) skipped (unparseable/unmapped)");
+    }
+    for z in by_file.values_mut() {
+        if z.sample_start_vel1.is_none() {
+            if let Some((vel, start, zvol)) = z.main_row {
+                z.sample_start = start;
+                z.gain_db = if zvol > 0.0 { 20.0 * zvol.log10() } else { 0.0 };
+                z.variant_starts.remove(&vel);
+            }
+        }
     }
     Ok(by_file)
 }

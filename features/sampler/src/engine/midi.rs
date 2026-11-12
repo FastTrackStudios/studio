@@ -130,7 +130,13 @@ impl SampleEngine {
         // Polyphony: make room before the new note's voices spawn.
         if let Some(max) = self.max_notes {
             if velocity > 0 && !self.keyswitch_notes.contains_key(&note) {
-                self.voices.make_room_for_note(note, max);
+                let repeats = self
+                    .patch
+                    .spec
+                    .performance
+                    .max_repeat_strikes
+                    .map_or(voice::MAX_REPEAT_STRIKES, |n| n as usize);
+                self.voices.make_room_for_note_with(note, max, repeats);
             }
         }
 
@@ -953,6 +959,8 @@ impl SampleEngine {
         let rr = self.forced_rr.map_or(self.zone_rr_counter, |f| f as usize);
         self.zone_rr_counter = self.zone_rr_counter.wrapping_add(1);
         let artic = self.articulation.clone();
+        let seq_rr = self.short_sequence_rr(&artic, note, velocity);
+        let tune_cents = self.short_random_tune(&artic, note);
 
         // VELOCITY → dynamic layer (`%g1qri` band) + intra-band volume (`$arhiq`).
         let (dynamic, velvol_db) = self.short_layer_and_velvol(&artic, velocity);
@@ -968,9 +976,107 @@ impl SampleEngine {
         } else {
             velocity_gain(velocity)
         } * db_to_gain(css_short_makeup_db(&artic) + velvol_db);
-        if let Some(idx) = self.find_layer_zone(&artic, "", &dynamic, note, rr) {
-            self.spawn_zone_voice(idx, note, VoiceKind::Short, gain, None, 0.0);
+        let idx = match seq_rr {
+            Some(r) => self
+                .find_layer_zone_rr_index(&artic, &dynamic, note, r)
+                .or_else(|| self.find_layer_zone(&artic, "", &dynamic, note, r)),
+            None => self.find_layer_zone(&artic, "", &dynamic, note, rr),
+        };
+        if let Some(idx) = idx {
+            self.spawn_zone_voice(
+                idx,
+                note,
+                VoiceKind::Short,
+                gain,
+                None,
+                f64::from(tune_cents) / 100.0,
+            );
         }
+    }
+
+    /// Kontakt's short RR pick (`ArticulationSpec::rr_sequence`, KSP
+    /// `SpiccRR1`…): the band's counter walks the sequence; a pick equal to
+    /// the last RR this note-class played in the band advances once more.
+    /// 0-based RR index, or `None` when the articulation has no sequence.
+    fn short_sequence_rr(&mut self, artic_id: &str, note: u8, velocity: u8) -> Option<usize> {
+        let a = self.patch.spec.articulation(artic_id)?;
+        if a.rr_sequence.is_empty() {
+            return None;
+        }
+        let seq = a.rr_sequence.clone();
+        let band = Self::short_band(a, velocity).map_or(0, |b| b.0);
+        // Note-class = the zone root this key plays from.
+        let class = self
+            .patch
+            .spec
+            .zones
+            .iter()
+            .find(|z| {
+                z.articulation.eq_ignore_ascii_case(artic_id)
+                    && (z.key_min..=z.key_max).contains(&note)
+            })
+            .map_or(note, |z| z.root_key);
+        let base = self.seq_rr_base;
+        let c = self
+            .seq_rr_counter
+            .entry((artic_id.to_string(), band))
+            .or_insert(base);
+        let mut pick = seq[*c % seq.len()];
+        *c = (*c + 1) % seq.len();
+        let last = self
+            .seq_rr_last
+            .get(&(artic_id.to_string(), band, class))
+            .copied();
+        if last == Some(pick) {
+            pick = seq[*c % seq.len()];
+            *c = (*c + 1) % seq.len();
+        }
+        self.seq_rr_last
+            .insert((artic_id.to_string(), band, class), pick);
+        Some(usize::from(pick.max(1) - 1))
+    }
+
+    /// Kontakt's short detune (`ArticulationSpec::random_tune_cents`): a
+    /// uniform integer draw unless the key struck within the gate.
+    fn short_random_tune(&mut self, artic_id: &str, note: u8) -> i32 {
+        let Some(a) = self.patch.spec.articulation(artic_id) else {
+            return 0;
+        };
+        let (n, gate_ms) = (i32::from(a.random_tune_cents), a.random_tune_gate_ms);
+        let now = self.frames_rendered;
+        let slot = &mut self.short_key_frame[usize::from(note & 127)];
+        let recent =
+            slot.is_some_and(|f| frames_to_ms(now.saturating_sub(f), self.sample_rate) < gate_ms);
+        *slot = Some(now);
+        if n == 0 || recent {
+            return 0;
+        }
+        if let Some(t) = self.forced_tunes.pop_front() {
+            return i32::from(t);
+        }
+        // xorshift64
+        let mut x = self.tune_rng;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.tune_rng = x;
+        (x % (2 * n as u64 + 1)) as i32 - n
+    }
+
+    /// The zone of `artic`/`dynamic` covering `note` with round-robin
+    /// `rr_index` (passing the solo-mic filter).
+    fn find_layer_zone_rr_index(
+        &self,
+        artic: &str,
+        dynamic: &str,
+        note: u8,
+        rr_index: usize,
+    ) -> Option<usize> {
+        let cands = self.zone_keys.get(note as usize)?;
+        cands.iter().map(|&i| i as usize).find(|&i| {
+            let z = &self.patch.spec.zones[i];
+            z.rr_index as usize == rr_index && self.zone_passes(z, artic, "", dynamic)
+        })
     }
 
     /// VELOCITY → dynamic band + `$arhiq` volume for a SHORT note, per the
@@ -3171,6 +3277,10 @@ impl SampleEngine {
                 self.zone_rr_counter = value as usize;
                 self.zone_rr_last_slots.clear();
                 self.note_rr = [0; 128];
+                // Short sequence counters `:= CC59 mod 16`, no-repeat tables 0.
+                self.seq_rr_counter.clear();
+                self.seq_rr_last.clear();
+                self.seq_rr_base = usize::from(value) % 16;
                 // KSP SetRR: the first-note body-variant counter too
                 // (`$2ekvq := CC59 mod 18`).
                 let n = self.patch.spec.legato_cfg().first_note_variants.len();

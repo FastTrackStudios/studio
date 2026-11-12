@@ -494,6 +494,9 @@ pub struct FlexEnv {
     seg: usize,
     t: f64,
     eat: f64,
+    /// The segment a note-off jumps to (from the current level) — Kontakt's
+    /// release stage after the sustain loop. `None` = keep walking.
+    release_seg: Option<usize>,
 }
 
 impl FlexEnv {
@@ -545,7 +548,33 @@ impl FlexEnv {
             seg: 0,
             t: 0.0,
             eat: 1.0,
+            release_seg: None,
         })
+    }
+
+    /// Declare the release segment (see [`Self::release`]).
+    #[must_use]
+    pub fn with_release_segment(mut self, seg: Option<usize>) -> Self {
+        self.release_seg = seg.filter(|&s| s < self.segs.len());
+        self
+    }
+
+    /// Note-off: jump to the release segment from the current level (once;
+    /// a no-op when there is none or the envelope is already past it).
+    pub fn release(&mut self) {
+        let Some(rs) = self.release_seg.take() else {
+            return;
+        };
+        if self.seg >= rs {
+            return;
+        }
+        let lvl = self.level_here();
+        self.segs[rs].1 = lvl;
+        self.pos = self.segs[..rs].iter().map(|s| s.0).sum();
+        self.seg = rs;
+        self.t = 0.0;
+        self.eat = 1.0;
+        self.hold_end = None;
     }
 
     /// Kontakt segment-tension shape law. `t` is normalized progress [0,1]
@@ -1343,7 +1372,13 @@ impl Voice {
         match self.kind {
             // A one-shot plays to its end — unless a breakpoint amp envelope
             // shapes it, which releases with the key like any other voice.
-            VoiceKind::Short if self.amp_bp.is_none() => {}
+            // A one-shot plays to its end; its envelope still takes the
+            // key-up (Kontakt's short groups release from the note-off).
+            VoiceKind::Short if self.amp_bp.is_none() => {
+                if let Some(f) = &mut self.flex {
+                    f.release();
+                }
+            }
             VoiceKind::Release => {
                 // Play to end — do not release early.
             }
@@ -2715,6 +2750,18 @@ impl VoicePool {
     /// worship passage). Counting each strike against the note limit instead
     /// held the voices down but stole the chord under a pedalled melody.
     pub fn make_room_for_note(&mut self, incoming: u8, max_notes: usize) -> usize {
+        self.make_room_for_note_with(incoming, max_notes, MAX_REPEAT_STRIKES)
+    }
+
+    /// [`make_room_for_note`](Self::make_room_for_note) keeping
+    /// `repeat_strikes` strikes of the same key (0 = every strike rings on,
+    /// as Kontakt plays a library like CSS).
+    pub fn make_room_for_note_with(
+        &mut self,
+        incoming: u8,
+        max_notes: usize,
+        repeat_strikes: usize,
+    ) -> usize {
         const STEAL_NOTE_FADE: usize = 240; // 5 ms: fast, not a click
         // A voice with no more than a repeat fade left — a steal, a repeat,
         // a release nearly over — no longer counts.
@@ -2731,8 +2778,8 @@ impl VoicePool {
                 strikes.push(v.strike);
             }
         }
-        if strikes.len() >= MAX_REPEAT_STRIKES {
-            let keep = &strikes[strikes.len() + 1 - MAX_REPEAT_STRIKES..];
+        if repeat_strikes > 0 && strikes.len() >= repeat_strikes {
+            let keep = &strikes[strikes.len() + 1 - repeat_strikes..];
             for v in self.voices.iter_mut().filter(|v| {
                 v.note == incoming && v.state != VoiceState::Done && !keep.contains(&v.strike)
             }) {

@@ -398,6 +398,11 @@ impl SamplerBlock {
         self.engine.set_solo_notes(notes);
     }
 
+    /// See [`SampleEngine::force_random_tunes`].
+    pub fn force_random_tunes(&mut self, cents: &[i8]) {
+        self.engine.force_random_tunes(cents);
+    }
+
     pub fn set_pure_playback(&mut self, on: bool) {
         self.engine.set_pure_playback(on);
     }

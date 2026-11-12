@@ -844,6 +844,14 @@ impl SamplerRig {
         }
     }
 
+    /// Replay a reference render's random-tune draws (cents, in order) —
+    /// see [`crate::engine::SampleEngine::force_random_tunes`].
+    pub fn force_random_tunes(&self, id: &str, cents: &[i8]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_random_tunes(id, cents);
+        }
+    }
+
     /// Per-note solo filter (offline analysis) — only the given notes are
     /// audible; muted voices still advance so legato timing is unchanged.
     /// `None` = full mix.

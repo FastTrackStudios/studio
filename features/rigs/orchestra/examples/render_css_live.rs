@@ -127,6 +127,16 @@ fn main() -> eyre::Result<()> {
     .map_err(|e| eyre::eyre!(e))?;
     let trace = std::env::args().any(|a| a == "--trace");
     rig.set_trace_enabled(ID, trace);
+    // `--tunes a,b,…`: Kontakt's random short detune draws (cents), fitted
+    // from its render, replayed so the rest of the null test is exact.
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--tunes") {
+        let tunes: Vec<i8> = args
+            .get(i + 1)
+            .map(|s| s.split(',').filter_map(|v| v.trim().parse().ok()).collect())
+            .unwrap_or_default();
+        rig.force_random_tunes(ID, &tunes);
+    }
 
     // Render up to an ABSOLUTE frame in host-sized blocks. Each event lands on
     // round(sec * SR) exactly: no per-gap rounding that drifts across a file.

@@ -73,6 +73,40 @@ def main():
         rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", key, cat, desc))
         t = start + win
 
+    if "--shorts" in sys.argv:
+        # Shorts (CC58 picks the type). A key repeated within 500 ms plays
+        # untuned; the first note of each burst draws Kontakt's random ±5 c
+        # (fitted from the render and forced into ours). Bursts walk the RR
+        # sequence of one velocity band; the alternating burst shares a
+        # note-class (67/68), exercising the no-repeat rule.
+        # The short TYPE follows CC1 (Kontakt's MIDI-learned type knob):
+        # 0-5 Spiccato, 6-64 Staccatissimo, 65-121 Staccato, 122+ Sfz.
+        cc1_for = {11: 2, 16: 40, 21: 100, 26: 127}
+
+        def burst(cat, desc, keys, vel, gap, cc58):
+            nonlocal t
+            m.cc(t, 58, cc58)
+            m.cc(t, 1, cc1_for[cc58])
+            start = t + 1.5
+            for i, key in enumerate(keys):
+                m.note(start + i * gap, 0.1, key, vel)
+            win = gap * (len(keys) - 1) + 3.0
+            rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", keys[0], cat, desc))
+            t = start + win
+
+        for name, cc58, vels in (("Spiccato", 11, (40, 100, 120)), ("Staccatissimo", 16, (40, 100, 120)),
+                                 ("Staccato", 21, (40, 100, 120)), ("Sfz", 26, (60, 100, 120))):
+            for vel in vels:
+                burst(name, f"{name} key67 v{vel} x6", [67] * 6, vel, 0.3, cc58)
+            burst(name, f"{name} alt67/68 v100 x6", [67, 68] * 3, 100, 0.2, cc58)
+        m.write(sys.argv[1])
+        with open(sys.argv[2], "w") as f:
+            f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
+            for r in rows:
+                f.write("\t".join(map(str, r)) + "\n")
+        print(f"{len(rows)} units, {t:.1f} s")
+        return
+
     if "--marcato" in sys.argv:
         # Marcato (CC58 66 = overlay off) — CC1=127, CC2 has no say here.
         # Single notes (soft/hard) and connected pairs at slow gaps (no run

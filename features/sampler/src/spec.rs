@@ -571,6 +571,11 @@ pub struct PerformanceSpec {
     /// see `Voice::release_k`). CSS in Kontakt: 2.6 over `release_ms` 580.
     #[facet(default)]
     pub release_curve_k: f32,
+    /// Strikes of one key kept ringing when it is struck again (older ones
+    /// fade over 100 ms). `None` = 2 (a pedalled piano's guard); `Some(0)` =
+    /// every strike rings on — Kontakt's CSS (null test: shorts re-struck
+    /// every 300 ms all ring).
+    pub max_repeat_strikes: Option<u32>,
     /// Release-sample level by held time (KSP `%ru5pa`): gain =
     /// `release_held_db × table[clamp(held_ms/10 − 1, 0, len−1)] / 100`. Empty
     /// = the legacy −6 dB base + linear held curve.
@@ -632,6 +637,7 @@ impl Default for PerformanceSpec {
             instrument_gain_db: 0.0,
             resample_transpose: false,
             release_curve_k: 0.0,
+            max_repeat_strikes: None,
             release_held_table: Vec::new(),
             release_held_db: 0.0,
             release_delay_ms: 0.0,
@@ -1730,6 +1736,20 @@ pub struct ArticulationSpec {
     /// marcato releases sound 6 dB under their zone volume (null-tested).
     #[facet(default)]
     pub level_db: f32,
+    /// Kontakt's short round-robin ORDER (CSS `%5y220`, `%okqzw`, …): a fixed
+    /// sequence of 1-based RR numbers walked by one counter per velocity
+    /// band, reset by CC59 to `CC59 mod 16`. A pick equal to the last RR that
+    /// note-class played in that band advances once more. Empty = the
+    /// engine's own rotation.
+    #[facet(default)]
+    pub rr_sequence: Vec<u8>,
+    /// Random detune: a uniform integer −n..=n cents per note, unless the
+    /// same key was played within `random_tune_gate_ms` (then 0). CSS
+    /// shorts: 5 cents, 500 ms.
+    #[facet(default)]
+    pub random_tune_cents: u8,
+    #[facet(default)]
+    pub random_tune_gate_ms: f32,
     /// A CSS marcato transition: when set, this articulation plays legato
     /// (mono line) with Kontakt's marcato two-stage transition.
     pub marcato_transition: Option<MarcatoTransitionSpec>,
@@ -1737,6 +1757,10 @@ pub struct ArticulationSpec {
     /// (sustains) or plays through one-shot (shorts, releases, transitions).
     /// `None` = held for Sustain/Looped/Trill kinds, one-shot otherwise.
     pub amp_env_hold: Option<bool>,
+    /// The `amp_env` segment a note-off jumps to (Kontakt's release stage,
+    /// after the flex sustain loop). `None` = the family default (shorts:
+    /// 2, their group flex `[8 ms, 604 ms hold, 7381 ms release]`).
+    pub amp_env_release: Option<u32>,
 
     /// Which side of the CC2 vibrato crossfade this articulation belongs to.
     /// `None` = infer from the id (CSS convention: `NV`/`Nonvib` in the name

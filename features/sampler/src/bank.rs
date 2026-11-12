@@ -851,6 +851,10 @@ impl SamplerBank {
         self.with_block(id, |b| b.set_trace_enabled(enabled));
     }
 
+    pub fn force_random_tunes(&mut self, id: &str, cents: &[i8]) {
+        self.with_block(id, |b| b.force_random_tunes(cents));
+    }
+
     pub fn set_solo_notes(&mut self, id: &str, notes: Option<std::collections::BTreeSet<u8>>) {
         self.with_block(id, |b| b.set_solo_notes(notes.clone()));
     }
