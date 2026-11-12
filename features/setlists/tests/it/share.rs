@@ -377,7 +377,7 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
         let hue = setlists::share::tile_hue(title);
         assert!(
             html.contains(&format!(
-                "data-hue=\"{hue}\" data-key=\"\" role=\"img\" aria-label=\"{said}\" style=\"background:hsl({hue} 42% 40%)\"><span data-track-key=\"\" aria-hidden=\"true\">{key}</span></span>"
+                "data-hue=\"{hue}\" data-key=\"\" role=\"img\" aria-label=\"{said}\" style=\"background:hsl({hue} 42% 32%)\"><span data-track-key=\"\" aria-hidden=\"true\">{key}</span></span>"
             )),
             "{title}: {html}"
         );
@@ -580,4 +580,46 @@ fn a_rows_key_is_on_its_tile_and_a_setlists_key_moves_it() {
     assert!(!same.contains("data-track-transposed") && same.contains(">E</span>"));
     // Its key column over its summary's.
     assert!(!plain.contains(">D</span>"));
+}
+
+/// White on a tile reads at 4.5:1 or more on every hue (WCAG's contrast of
+/// relative luminances), the key's 10 px included.
+#[test]
+#[allow(
+    clippy::many_single_char_names,
+    clippy::suboptimal_flops,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)] // HSL to RGB as the formula writes it.
+fn white_on_every_tile_reads_at_four_and_a_half_to_one() {
+    fn channel(c: f64) -> f64 {
+        if c <= 0.039_28 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    }
+    for hue in 0..360_u32 {
+        let colour = setlists::share::tile_colour(hue);
+        let inner = colour.trim_start_matches("hsl(").trim_end_matches(')');
+        let parts: Vec<f64> = inner
+            .split_whitespace()
+            .map(|p| p.trim_end_matches('%').parse::<f64>().unwrap())
+            .collect();
+        let (h, sat, l) = (parts[0], parts[1] / 100.0, parts[2] / 100.0);
+        let c = (1.0 - (2.0 * l - 1.0).abs()) * sat;
+        let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+        let (r, g, b) = match (h / 60.0) as u32 {
+            0 => (c, x, 0.0),
+            1 => (x, c, 0.0),
+            2 => (0.0, c, x),
+            3 => (0.0, x, c),
+            4 => (x, 0.0, c),
+            _ => (c, 0.0, x),
+        };
+        let m = l - c / 2.0;
+        let lum = 0.2126 * channel(r + m) + 0.7152 * channel(g + m) + 0.0722 * channel(b + m);
+        let contrast = 1.05 / (lum + 0.05);
+        assert!(contrast >= 4.5, "hue {hue}: {colour} is {contrast:.2}:1");
+    }
 }
