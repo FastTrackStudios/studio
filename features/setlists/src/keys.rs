@@ -19,6 +19,33 @@
 /// How many different chords outside the key earn the asterisk.
 pub const OUTSIDE: usize = 2;
 
+/// Whether key `key` is a minor key (`Em`, `F#m`; not `Emaj`).
+fn minor(key: &str) -> bool {
+    pitch(key).is_some_and(|(_, rest)| rest.starts_with('m') && !rest.starts_with("maj"))
+}
+
+/// The step from pitch class `from` to `to`, the shorter way: −5…+6 (a
+/// tritone is +6), 0 for the same pitch however it is spelled.
+#[must_use]
+pub const fn semitones(from: i32, to: i32) -> i32 {
+    let up = to.wrapping_sub(from).rem_euclid(12);
+    if up > 6 { up.wrapping_sub(12) } else { up }
+}
+
+/// What a setlist's key for a song does to its label ([`KeyLabel::played`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Played {
+    /// Its own key, or the same pitch spelled another way (`Gb` for `F#`):
+    /// as charted, no mark.
+    AsCharted,
+    /// Transposed: the label in the played key (every key of it moved the
+    /// same way), and by how far, the shorter way (−5…+6, never 0).
+    Moved { label: KeyLabel, semitones: i32 },
+    /// Another mode (`E` played `Em`): not a transposition. The played key
+    /// alone, no mark and no number; its chart is still the song's own.
+    OtherMode(KeyLabel),
+}
+
 /// A song's key as a row shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct KeyLabel {
@@ -188,6 +215,29 @@ impl KeyLabel {
         })
     }
 
+    /// Played in the setlist's key `key`: as charted, moved by a number of
+    /// semitones (its tonic's, the shorter way; a `start→end` label moves
+    /// as one song, by one number), or in another mode (no transposition).
+    /// Not a key: as charted.
+    #[must_use]
+    pub fn played(&self, key: &str) -> Played {
+        let (Some((to, _)), Some((from, _))) = (pitch(key), pitch(&self.start)) else {
+            return Played::AsCharted;
+        };
+        if minor(key) != minor(&self.start) {
+            return Played::OtherMode(Self::plain(key.trim()));
+        }
+        let step = semitones(from, to);
+        if step == 0 {
+            return Played::AsCharted;
+        }
+        self.in_key(key)
+            .map_or(Played::AsCharted, |label| Played::Moved {
+                label,
+                semitones: step,
+            })
+    }
+
     /// How big its type can be on a 48 px tile: `""`, `s`, or `xs`.
     #[must_use]
     pub fn size(&self) -> &'static str {
@@ -342,6 +392,127 @@ mod tests {
         );
         assert_eq!(KeyLabel::parse("Eb→F#m").unwrap().size(), "xs");
         assert_eq!(KeyLabel::parse("E*").unwrap().size(), "");
+    }
+
+    const NAMES: [&str; 12] = [
+        "C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B",
+    ];
+
+    #[test]
+    fn every_interval_both_ways_the_shorter_way() {
+        for (from, a) in NAMES.iter().enumerate() {
+            for up in 0..12_i32 {
+                let to = NAMES[(from + usize::try_from(up).unwrap()) % 12];
+                let want = if up > 6 { up - 12 } else { up };
+                let got = KeyLabel::plain(a).played(to);
+                if want == 0 {
+                    assert_eq!(got, Played::AsCharted, "{a}→{to}");
+                } else {
+                    let Played::Moved { semitones, label } = got else {
+                        panic!("{a}→{to}: {got:?}")
+                    };
+                    assert_eq!(semitones, want, "{a}→{to}");
+                    assert_eq!(label.start, to);
+                    // And back the other way: the same distance, negated
+                    // (a tritone is +6 both ways).
+                    let Played::Moved {
+                        semitones: back, ..
+                    } = KeyLabel::plain(to).played(a)
+                    else {
+                        panic!("{to}→{a}")
+                    };
+                    assert_eq!(back, if want == 6 { 6 } else { -want }, "{to}→{a}");
+                }
+            }
+        }
+        assert_eq!(semitones(2, 6), 4, "D→F# up 4");
+        assert_eq!(semitones(7, 4), -3, "G→E down 3");
+        assert_eq!(semitones(0, 6), 6, "the tritone, up");
+        assert_eq!(semitones(6, 0), 6, "the tritone, up again");
+        assert_eq!(semitones(0, 7), -5, "a fifth up is a fourth down");
+    }
+
+    #[test]
+    fn enharmonic_keys_are_no_transposition() {
+        for (a, b) in [
+            ("F#", "Gb"),
+            ("Gb", "F#"),
+            ("C#", "Db"),
+            ("A#m", "Bbm"),
+            ("D#m", "Ebm"),
+            ("Cb", "B"),
+            ("E#", "F"),
+        ] {
+            assert_eq!(KeyLabel::plain(a).played(b), Played::AsCharted, "{a} = {b}");
+        }
+    }
+
+    #[test]
+    fn minor_keys_move_by_their_tonic_and_a_mode_change_is_no_transposition() {
+        let Played::Moved { label, semitones } = KeyLabel::plain("Am").played("Cm") else {
+            panic!()
+        };
+        assert_eq!((label.text().as_str(), semitones), ("Cm", 3));
+        let Played::Moved { label, semitones } = KeyLabel::plain("F#m").played("Em") else {
+            panic!()
+        };
+        assert_eq!((label.text().as_str(), semitones), ("Em", -2));
+        assert_eq!(
+            KeyLabel::plain("E").played("Em"),
+            Played::OtherMode(KeyLabel::plain("Em"))
+        );
+        assert_eq!(
+            KeyLabel::plain("Em").played("G"),
+            Played::OtherMode(KeyLabel::plain("G"))
+        );
+        assert_eq!(
+            KeyLabel::plain("E").played("Emaj"),
+            Played::AsCharted,
+            "maj is major"
+        );
+        assert_eq!(
+            KeyLabel::plain("E").played("H"),
+            Played::AsCharted,
+            "no key"
+        );
+    }
+
+    #[test]
+    fn a_start_end_label_moves_as_one_song_by_one_number() {
+        let label = KeyLabel {
+            start: "D".into(),
+            end: Some("E".into()),
+            outside: false,
+        };
+        let Played::Moved {
+            label: moved,
+            semitones,
+        } = label.played("Eb")
+        else {
+            panic!()
+        };
+        assert_eq!((moved.text().as_str(), semitones), ("Eb→F", 1));
+        let Played::Moved {
+            label: moved,
+            semitones,
+        } = label.played("Bb")
+        else {
+            panic!()
+        };
+        assert_eq!((moved.text().as_str(), semitones), ("Bb→C", -4));
+        let star = KeyLabel {
+            start: "G".into(),
+            end: None,
+            outside: true,
+        };
+        let Played::Moved {
+            label: moved,
+            semitones,
+        } = star.played("A")
+        else {
+            panic!()
+        };
+        assert_eq!((moved.text().as_str(), semitones), ("A*", 2));
     }
 
     #[test]

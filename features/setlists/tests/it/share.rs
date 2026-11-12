@@ -486,18 +486,14 @@ fn an_older_setlist_page_still_draws_and_a_song_with_no_recording_is_a_row() {
     assert!(second.contains("<li data-page=\"../../libraries/c/feliz-navidad/feliz-navidad/\" data-title=\"Feliz Navidad\">"), "{second}");
     assert!(second.contains(">No recording</span>"));
     assert!(!second.contains("data-track-open"));
-    // No key: its initials, a picture to a screen reader.
+    // No key (and no art): a music note on its colour, never letters; a
+    // picture to a screen reader.
     assert!(
         second.contains("aria-hidden=\"true\" style=\"background:hsl("),
         "{second}"
     );
-    assert!(second.contains(">FN</span>"));
-    assert_eq!(
-        setlists::share::tile_initials("Rockin' Around the Christmas Tree"),
-        "RA"
-    );
-    assert_eq!(setlists::share::tile_initials("¡Olé!"), "O");
-    assert_eq!(setlists::share::tile_initials("…"), "\u{266A}");
+    assert!(second.contains("<path d=\"M9 18V5l12-2v13\">"), "{second}");
+    assert!(!second.contains(">FN<"), "no initials");
 }
 
 /// A row's key: its column (`E`, `E*`, `E→F`), spoken in words; played in
@@ -537,12 +533,41 @@ fn a_rows_key_is_on_its_tile_and_a_setlists_key_moves_it() {
     assert!(played.contains(">Eb→F</span>"), "{played}");
     assert!(played.contains("data-key-size=\"s\""));
     assert!(
-        played.contains("aria-label=\"Starts in E flat, ends in F, transposed from D\""),
+        played.contains(
+            "aria-label=\"Starts in E flat, ends in F, transposed up 1 semitone from D\""
+        ),
         "{played}"
     );
-    assert!(played.contains("<span data-track-transposed=\"\" title=\"Transposed from D\">"));
+    // How far, in the corner: one number for the whole song.
+    assert!(played.contains("<span data-track-transposed=\"\" aria-hidden=\"true\">+1</span>"));
     let minor = row("C→Em", "Eb");
     assert!(minor.contains(">Eb→Gm</span>"), "{minor}");
+    assert!(minor.contains(">+3</span>"));
+    // Down, with a minus sign; the key alone is the tile's text.
+    let down = row("G", "E");
+    assert!(
+        down.contains("<span data-track-transposed=\"\" aria-hidden=\"true\">\u{2212}3</span>"),
+        "{down}"
+    );
+    assert!(
+        down.contains("aria-label=\"Key of E, transposed down 3 semitones from G\""),
+        "{down}"
+    );
+    // A tritone is +6; the same pitch spelled otherwise is no transposition.
+    assert!(row("C", "F#").contains(">+6</span>"));
+    let enharmonic = row("F#", "Gb");
+    assert!(!enharmonic.contains("data-track-transposed") && enharmonic.contains(">F#</span>"));
+    // Another mode is no transposition: the played key, no number, and
+    // the chart's key said.
+    let mode = row("E", "Em");
+    assert!(
+        !mode.contains("data-track-transposed") && mode.contains(">Em</span>"),
+        "{mode}"
+    );
+    assert!(
+        mode.contains("aria-label=\"Key of E minor; its chart is in E\""),
+        "{mode}"
+    );
     // The longest a label gets, smallest type.
     let longest = row("Eb→F#m", "");
     assert!(longest.contains(">Eb→F#m</span>") && longest.contains("data-key-size=\"xs\""));

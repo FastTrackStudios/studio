@@ -126,7 +126,7 @@ builds them as an Architect site, and Studio draws its own blocks into it
   button whose menu (Architect's player's) opens its chart, its lyrics and
   its page with its downloads. The tile carries the song's **key** on a
   colour from its title (the song's art under it, dimmed, when the link
-  has some; the title's initials when the song has no key): `E`, `E*` when
+  has some; a music note when the song has no key, never letters): `E`, `E*` when
   the chart is not plainly in E (two different chords outside the key, a
   secondary dominant not counted, or a key change that comes back), `E→F`
   when it ends in another key (that over the asterisk), each said in words
@@ -134,9 +134,14 @@ builds them as an Architect site, and Studio draws its own blocks into it
   ends in F"). The facts are Keyflow's (`setlists::keys::facts`), kept on
   the song's note (`key`, `key_end`, `key_outside`) and written into the
   fence's `key` column. A setlist that plays a song in another key (the
-  `play` column) shows every key of the label moved there and a corner
-  mark, "Transposed from D"; the chart on the page is the song's own and
-  is not moved. A page written before the `key` column reads the key from
+  `play` column) shows every key of the label moved there and, in the
+  tile's corner, by how far: the signed semitones from the song's own key,
+  the shorter way (`+4`, `−3`; a tritone `+6`), one number for a `start→end`
+  label, said "transposed up 4 semitones from D". The same pitch spelled
+  otherwise (`Gb` for `F#`) is no transposition; nor is another mode (`E`
+  played `Em`): the row shows the played key, no number, and says its chart
+  is in E. The chart on the page is the song's own and is not moved
+  (studio#467). A page written before the `key` column reads the key from
   the summary. No play buttons: a tap on a row plays it
   there, the songs follow each other with no page load, the playing row
   marked. A song with no recording stays in the list, quieter, and opens
