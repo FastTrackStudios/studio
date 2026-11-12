@@ -343,10 +343,20 @@ records (`app.fasttrackstudio.signal`, `.session`) get no new builds.
   `main` nor `release/v*`, or a red `CI passed`. `workflow_dispatch` with
   `dry_run` stops after those checks.
 
+**Patchbay** (`apps/patchbay` `patchbay-ios`, `app.fasttrackstudio.patchbay`,
+profile `FTS Patchbay App Store`) is the second iOS app: the Patchbay
+distribution on a phone or tablet, a controller of the Patchbay engines on
+other machines. `patchbay-ios` ships it from the same tag, the same way
+(resolve, then `apps/patchbay/ios/deploy-testflight.sh` on airlock's
+`studio-release-mac` in the tag-only `release-signing` environment, then
+its line in the Release's TestFlight block). The repository variable
+`PATCHBAY_IOS_RELEASE=false` turns it off. By hand on airlock:
+`MARKETING_VER=26.11.2 apps/patchbay/ios/deploy-testflight.sh [--dry-run]`.
+
 Verify a release: App Store Connect's build for each bundle id has the
 Release's version and the build number written in its notes
 (`ruby apps/<app>/desktop/ios/testflight-status.rb app.fasttrackstudio.<app>`
-on airlock).
+on airlock; Patchbay's read-only one is `apps/patchbay/ios/testflight-status.rb`).
 
 ## Hotfix
 

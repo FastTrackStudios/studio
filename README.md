@@ -81,6 +81,20 @@ just plugins-bundle         # build the CLAP/VST3 plugins into target/bundled
 
 `just --list` shows every recipe.
 
+## Run it locally
+
+```bash
+just dev       # everything, rebuilt on save: the issuer, Studio's node on a copy of the
+               # Merry & Bright setlist and its share link, the web app, the site
+just dev architect=local keyflow=local   # with your ../architect and ../keyflow under it
+just demo      # the quickest look: issuer + node + share link, nothing watched
+just website   # the public site (Architect's apps/site), hot reload
+just phone     # the running node on your tailnet over HTTPS, for a phone
+```
+
+The same recipes mean the same in Architect and Keyflow. What each starts,
+the URLs, what a save costs: [docs/local-stack.md](docs/local-stack.md).
+
 ## Assets
 
 Large binaries — test fixtures, research captures, the amp captures and

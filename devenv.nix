@@ -6,7 +6,7 @@
 # what the workspace links against, runs and records. It is the flake's
 # devShell (nix/modules/shells/default.nix, toolchain.nix) without what the
 # fleet provides. CI enters this same shell: `devenv shell -- <cmd>`.
-{ pkgs, lib, inputs, ... }:
+{ pkgs, lib, inputs, config, ... }:
 let
   # The nixpkgs-dx pin the fleet's dioxus module builds dx from. Playwright
   # and linuxdeploy come from the same set.
@@ -108,6 +108,8 @@ in
 {
   packages = with pkgs; [
     cargo-watch
+    # The local stack's web app (scripts/local-stack.sh `run web`).
+    static-web-server
     cargo-nextest
     bacon
     flac
@@ -263,6 +265,52 @@ in
     pkgs.imagemagick  # `import` and `identify`: screenshots, window lookup
     pkgs.xwininfo     # the window geometry daw::test::VirtualDisplay reads
   ];
+
+  # `devenv up`: the local stack (docs/local-stack.md). The just
+  # recipes in front of it (`just dev`, `just demo`, `just website`) choose
+  # what is local first (scripts/local-stack.sh `choose`); a bare
+  # `devenv up` runs the last choice (Architect and Keyflow pinned by
+  # default). Each process is `scripts/local-stack.sh run <name>`: the
+  # issuer and the node's environment are Architect's own `cargo xtask dev`
+  # (from the Architect checkout it resolves), on this stack's ports
+  # (local-stack.toml) and state (.devenv/state/local-stack).
+  processes = let
+    stack = "${config.devenv.root}/scripts/local-stack.sh";
+    probe = name: { exec = "${stack} ready ${name}"; period = 2; };
+  in {
+    mock-oauth = {
+      exec = "exec ${stack} run mock-oauth";
+      ready = probe "mock-oauth";
+    };
+    auth = {
+      exec = "exec ${stack} run auth";
+      after = [ "devenv:processes:mock-oauth" ];
+      ready = probe "auth";
+    };
+    # Studio Architect's headless node, built from this tree (and a local
+    # Architect or Keyflow), signed in to the local issuer, serving a copy
+    # of the test vault and its share link (the URL is in its log); rebuilt
+    # and restarted on a save.
+    node = {
+      exec = "exec ${stack} run node";
+      after = [ "devenv:processes:auth" ];
+      ready = probe "node";
+    };
+    # The web app (Architect's, with this distribution's
+    # distribution.json), its issuer the local one.
+    web = {
+      exec = "exec ${stack} run web";
+      after = [ "devenv:processes:auth" ];
+    };
+    # The public site (Architect's apps/site), hot reload.
+    site.exec = "exec ${stack} run site";
+    # The window, off unless chosen (`just dev desktop=on`).
+    desktop = {
+      exec = "exec ${stack} run desktop";
+      after = [ "devenv:processes:node" ];
+      start.enable = false;
+    };
+  };
 
   fleet.banner = ''
     FastTrackStudio dev shell

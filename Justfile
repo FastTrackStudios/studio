@@ -19,9 +19,60 @@ GOLDEN_DIR := "features/dynamic-template/fixtures/golden"
 DAW_PROJECT := env("FTS_DAW_TEMPLATE", GOLDEN_DIR / "template.rpp")
 DAW_VOCAL := env("FTS_DAW_VOCAL", GOLDEN_DIR / "vocal-fx.rpp")
 
-# List recipes by default
+# List recipes by default: the three that run it first (file order).
 default:
-    @just --list
+    @just --list --unsorted
+
+# ── Run it: the local stack (docs/local-stack.md) ─────────────────
+# The same three recipes, with the same meaning, in Studio, Architect and
+# Keyflow. `devenv up` (processes in devenv.nix, scripts/local-stack.sh)
+# is the engine underneath; `just dev-status` says what runs and where.
+
+# Everything locally, rebuilt on save: issuer, Studio's node + share link on the test vault, web app, site (architect=local keyflow=local desktop=on)
+dev *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # `just dev local` and `just dev --fresh` were the DAW loop, now `just daw-dev`.
+    case " {{ARGS}} " in
+        *" local "* | *" --"*)
+            echo "just: the DAW loop is \`just daw-dev\` now (\`just dev\` is the local stack): running \`just daw-dev {{ARGS}}\`" >&2
+            exec just daw-dev {{ARGS}} ;;
+    esac
+    scripts/local-stack.sh choose mode=dev {{ARGS}}
+    # shellcheck disable=SC2046 # the process names, split on purpose
+    exec devenv up $(scripts/local-stack.sh procs)
+
+# See it working, quickly: issuer + Studio's node on the test vault with its share link, last build, no watchers
+demo *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    scripts/local-stack.sh choose mode=demo watch=off {{ARGS}}
+    # shellcheck disable=SC2046
+    exec devenv up $(scripts/local-stack.sh procs)
+
+# The public website (Architect's apps/site: landing, download, changelog, extensions, docs), hot reload
+website *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "just: the website is Architect's (apps/site); running it from the Architect the stack resolves (architect=local for your checkout)" >&2
+    scripts/local-stack.sh choose mode=dev {{ARGS}}
+    exec devenv up site
+
+# The running stack's node on this tailnet over HTTPS for a phone (tailscale serve, never funnel); `just phone off`
+phone *ARGS:
+    scripts/local-stack.sh phone {{ARGS}}
+
+# What the local stack runs, from where (studio/architect/keyflow versions), its URLs
+dev-status:
+    scripts/local-stack.sh status
+
+# The local stack, checked end to end: share page, songs, island files, Firefox plays and the playhead moves
+dev-smoke:
+    scripts/local-stack.sh smoke
+
+# Remove the local stack's state (its vault copy, issuer database, staged node); stop it first
+dev-reset:
+    scripts/local-stack.sh reset
 
 # ── Tailwind (app UI sheet) ──────────────────────────────────────────────
 # The single compiled sheet (assets/tailwind-signal.css) is inlined by
@@ -833,7 +884,7 @@ check:
 # build and run exactly these; building the workspace's ~200 crates with no
 # tests left would only link empty harnesses. Add a crate here when it gains
 # tests worth running on every change.
-test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp dioxus-test dock studio-architect patchbay"
+test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp dioxus-test dock studio-architect patchbay patchbay-yamaha-tf"
 
 # Run the core test set (test_packages above).
 test:
@@ -1760,14 +1811,15 @@ theme-parity PROJECT="features/dynamic-template/fixtures/golden/template.rpp" SI
     FTS_THEME=apps/session/ui/themes/fts-dark.frame FTS_BENCH_MIXER="{{OUT}}/themed.png" FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "{{PROJECT}}" 2>&1 | grep -E 'wrote|theme' || true
     ./target/release/theme_diff "{{OUT}}/native.png" "{{OUT}}/themed.png" "{{OUT}}/diff.png"
 
-# The whole dev loop in one herdr session (`herdr --session studio` to
+# The DAW's dev loop in one herdr session (`herdr --session studio` to
 # watch): the engine (`studio engine --reopen`, restart it with Ctrl-C and
 # ↑ Enter) and the window under `dx serve` beside it, which only attaches —
 # a rebuilt window leaves the engine playing, a restarted engine is
-# re-attached to. Production Task by default; `just dev local` runs a dev
+# re-attached to. Production Task by default; `just daw-dev local` runs a dev
 # Task server too and points Studio at it. `--fresh` replaces a running one.
-# See scripts/dev-herdr.sh.
-dev *ARGS:
+# See scripts/dev-herdr.sh. (It was `just dev` until the local stack took
+# that name; `just dev local` and `just dev --fresh` still come here.)
+daw-dev *ARGS:
     scripts/dev-herdr.sh {{ARGS}}
 
 # The studio window (Blitz + the painted arrangement) on a real session,
@@ -2310,7 +2362,11 @@ studio-web-config-test:
 # with the component (a second build-web run), and BUILT_FROM records
 # `git describe --always --dirty` of the tree it was built from, which the
 # release checks.
-island: island-check
+island: island-check island-build
+
+# The island without its clippy: what `just island` builds, and what the
+# local stack rebuilds on a save (scripts/local-stack.sh).
+island-build:
     #!/usr/bin/env bash
     set -euo pipefail
     # What it is built from, taken before the build: the commit, and
@@ -2322,8 +2378,17 @@ island: island-check
         cargo build --profile wasm-release -p studio-island --target wasm32-wasip2
     ext=$(python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="architect-extensions"))' <<<"$meta")
     tools="$target/architect-web"
-    rm -rf "$tools" && mkdir -p "$tools" && cp -r "$ext/web/." "$tools/"
-    devenv --profile wasi shell -- bash -c "cd '$tools' && npm ci --no-audit --no-fund >/dev/null"
+    # jco and its transpiler, pinned by the folder's package-lock.json: `npm
+    # ci` again only when that lock (or the architect it came from) changed,
+    # so the local stack's rebuild of the island does not fetch or reinstall.
+    if [ -d "$tools/node_modules" ] && cmp -s "$ext/web/package-lock.json" "$tools/package-lock.json" \
+        && [ "$(cat "$tools/.from" 2>/dev/null)" = "$ext" ]; then
+        cp -r "$ext/web/." "$tools/"
+    else
+        rm -rf "$tools" && mkdir -p "$tools" && cp -r "$ext/web/." "$tools/"
+        devenv --profile wasi shell -- bash -c "cd '$tools' && npm ci --no-audit --no-fund >/dev/null"
+        printf '%s' "$ext" > "$tools/.from"
+    fi
     out="$target/studio-island"
     rm -rf "$out"
     web() {
@@ -2331,6 +2396,11 @@ island: island-check
             "$target/wasm32-wasip2/wasm-release/studio_island.wasm" "$out" --manifest apps/architect/island/extension.toml
     }
     web
+    # The same views as a web bundle (`web-*` files of the folder): what a
+    # share page in a browser without JS Promise Integration (Safari before
+    # 27, every browser on iOS before it) draws them with, in Architect's
+    # web view frame (`SiteIsland::web`).
+    just island-web "$out"
     just _lumen-link
     tailwindcss -i apps/architect/island/island.css -o "$out/island.css" --minify
     # The sheet as the page will hold it: refused by Architect's cleanSheet,
@@ -2346,10 +2416,42 @@ island: island-check
     printf '%s\n' "$built" > "$out/BUILT_FROM"
     ls -la "$out"
 
-# The island's clippy, for the target it is built for (wasm32-wasip2: on the
-# host the crate is empty, so a host clippy checks nothing). Warnings fail.
+# The island's views as a web bundle into <out> (Architect's web view,
+# `SiteIsland::web`): built for wasm32-unknown-unknown, wasm-bindgen's
+# `--target web` glue (the CLI pinned with the crate, =0.2.127), its
+# snippets flattened to `web-snippet-<n>.js` (one folder, as the frame
+# loads it: scripts/island-web-flatten.py), and its wasm optimized by
+# wasm-opt allowing only the features Safari 15 has (bulk memory, mutable
+# globals, non-trapping float-to-int, reference types, sign extension,
+# multi-value): a module that needs another fails the build here, not on a
+# phone.
+island-web out:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # The dev shell's cargo (its own output kept out of the JSON).
+    metafile=$(mktemp); devenv shell -- sh -c 'cargo metadata --format-version 1 > "$1"' sh "$metafile" >/dev/null; meta=$(cat "$metafile"); rm -f "$metafile"
+    target=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])' <<<"$meta")
+    # The dev shell's own cargo, wasm-bindgen (pinned with the crate) and
+    # wasm-opt (binaryen), never whatever else is on the PATH.
+    devenv shell -- env CARGO_TARGET_DIR="$target" CARGO_PROFILE_WASM_RELEASE_STRIP=true \
+        cargo build --profile wasm-release -p studio-island --target wasm32-unknown-unknown
+    raw=$(mktemp -d)
+    trap 'rm -rf "$raw"' EXIT
+    devenv shell -- wasm-bindgen --target web --no-typescript --out-name web-studio-island --out-dir "$raw" \
+        "$target/wasm32-unknown-unknown/wasm-release/studio_island.wasm"
+    # Flattened, only what the glue reaches, and refused if it names
+    # WebRTC, a WebSocket, storage or cookies.
+    python3 scripts/island-web-flatten.py "$raw" "{{out}}"
+    devenv shell -- wasm-opt -Oz --mvp-features --enable-bulk-memory --enable-mutable-globals \
+        --enable-nontrapping-float-to-int --enable-reference-types --enable-sign-ext --enable-multivalue \
+        "{{out}}/web-studio-island_bg.wasm" -o "{{out}}/web-studio-island_bg.wasm"
+
+# The island's clippy, for the targets it is built for (wasm32-wasip2, and
+# wasm32-unknown-unknown for its web bundle: on the host the crate is
+# empty, so a host clippy checks nothing). Warnings fail.
 island-check:
     devenv --profile wasi shell -- cargo clippy -p studio-island --target wasm32-wasip2 -- -D warnings
+    devenv shell -- cargo clippy -p studio-island --target wasm32-unknown-unknown -- -D warnings
 
 # Serve the built web DAW on http://localhost:8765.
 web-daw-serve:

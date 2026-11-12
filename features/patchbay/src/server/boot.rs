@@ -313,6 +313,17 @@ pub fn runtime() -> Result<&'static tokio::runtime::Runtime, EngineError> {
 }
 
 async fn start_or_attach_here(opts: EngineOptions) -> Result<Engine, EngineError> {
+    // Port 0 is any free port (a phone's engine, `patchbay-ios`): no
+    // engine can be waiting there to be joined, so take one at once.
+    if crate::server::net::port_of(&opts.addr) == 0 {
+        let listener = tokio::net::TcpListener::bind(&opts.addr)
+            .await
+            .map_err(|e| EngineError::AddressTaken {
+                addr: opts.addr.clone(),
+                detail: e.to_string(),
+            })?;
+        return run_here(opts, Some(listener)).await;
+    }
     let url = probe_url(&opts.addr);
     let started = tokio::time::Instant::now();
     loop {
@@ -455,9 +466,15 @@ async fn attach(url: &str) -> Result<Engine, Join> {
 /// Create the backend and its in-process clients, and serve it on
 /// `listener` when there is one.
 async fn run_here(
-    opts: EngineOptions,
+    mut opts: EngineOptions,
     listener: Option<tokio::net::TcpListener>,
 ) -> Result<Engine, EngineError> {
+    // The address actually bound: port 0 (a phone's engine) is whichever
+    // port the system gave, and that is what the engine reports and
+    // advertises, not 0.
+    if let Some(bound) = listener.as_ref().and_then(|l| l.local_addr().ok()) {
+        opts.addr = bound.to_string();
+    }
     let backend = PatchbayBackend::new();
     if let Some(make) = opts.permissions {
         backend.set_permission_provider(make(tokio::runtime::Handle::current()));

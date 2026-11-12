@@ -328,31 +328,62 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
     );
     assert!(lyrics.contains("Let earth receive her King"));
 
-    // ── The setlist's page: a playlist a set, each song a row ───────
+    // ── The setlist's page: one playlist, its sets labels in it ─────
     let page = "/setlists/tree-lighting/";
     let html = read(page);
-    let presidents = html.find(">Presidents Songs<").unwrap();
-    let tree = html.find(">Tree Lighting Concert Set<").unwrap();
-    assert!(presidents < tree, "the sets in order");
+    assert_eq!(html.matches("data-playlist=\"\"").count(), 1, "one list");
+    let presidents = html
+        .find("<li data-playlist-section=\"\">Presidents Songs</li>")
+        .unwrap();
+    let tree = html
+        .find("<li data-playlist-section=\"\">Tree Lighting Concert Set</li>")
+        .unwrap();
+    let joy_row = html.find("data-title=\"Joy to the World\"").unwrap();
+    let silent_row = html.find("data-title=\"Silent Night\"").unwrap();
+    assert!(
+        presidents < joy_row && joy_row < tree && tree < silent_row,
+        "labels before their songs"
+    );
+    assert!(!html.contains("<h2"), "a set is no heading of the page");
+    let list = studio_blocks(&html)[0];
+    assert!(!list.contains("data-playlist-play"), "no play buttons");
+    // Its one button a row: its menu.
     assert_eq!(
-        html.matches("data-playlist=\"\"").count(),
-        2,
-        "a playlist a set"
+        list.matches("<button").count(),
+        list.matches("<button type=\"button\" data-track-more=\"\" aria-label=\"More: ")
+            .count(),
+        "{list}"
     );
-    assert_eq!(html.matches("data-playlist-play").count(), 2);
+    assert_eq!(list.matches("data-track-more=\"\"").count(), 2);
+    // Its own list reset, inline, and its sets joined as one playlist.
     assert!(
-        html.contains("</svg>Play</button>"),
-        "the first set's Play plays it all"
+        list.contains(
+            "data-playlist-join=\"\"><ol style=\"list-style:none; margin:0; padding:0\">"
+        ),
+        "{list}"
     );
-    assert!(html.contains("</svg>Play this set</button>"));
-    // The playing row is marked on an Architect that marks only the line
-    // (v0.12.2): its sheet kept, under the block's box.
-    let block = studio_blocks(&html)[0];
-    assert!(
-        block.contains("[data-track] [data-at][aria-current=time] { color:#6366f1 }"),
-        "{}",
-        &block[..block.find("</style>").unwrap_or(0).min(600)]
-    );
+    // Numbers run on through the sets; a label is no track.
+    assert_eq!(values(&html, "data-track").len(), 2);
+    let marks: Vec<&str> = html
+        .match_indices("<span data-track-mark=\"\">")
+        .map(|(i, m)| &html[i + m.len()..=i + m.len()])
+        .collect();
+    assert_eq!(marks, ["1", "2"]);
+    // Each song's tile: its key (its chart's) on its title's colour.
+    for (title, key, said) in [
+        ("Joy to the World", "D", "Key of D"),
+        ("Silent Night", "A", "Key of A"),
+    ] {
+        let hue = setlists::share::tile_hue(title);
+        assert!(
+            html.contains(&format!(
+                "data-hue=\"{hue}\" data-key=\"\" role=\"img\" aria-label=\"{said}\" style=\"background:hsl({hue} 42% 40%)\"><span data-track-key=\"\" aria-hidden=\"true\">{key}</span></span>"
+            )),
+            "{title}: {html}"
+        );
+    }
+    assert!(!html.contains("data-track-transposed"), "played as charted");
+    assert!(html.contains("<span data-track-meta=\"\">"));
     // The link's files page and archive, once, after the last set: the
     // node's routes of the link, which serve only its audience's files.
     assert_eq!(
@@ -376,11 +407,7 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
         .collect();
     let joy_src = queue_src(&lib.song_file("Joy to the World", "Media/Joy to the World.wav"));
     let silent_src = queue_src(&recording);
-    assert_eq!(
-        rows,
-        [joy_src.clone(), joy_src, silent_src.clone(), silent_src],
-        "each set's Play (its first song), then its songs, in running order"
-    );
+    assert_eq!(rows, [joy_src, silent_src], "its songs, in running order");
     // Each row's title and the page where it plays.
     assert_eq!(
         values(&html, "data-title"),
@@ -397,22 +424,160 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
             "/libraries/christmas/silent-night/silent-night/"
         ]
     );
-    // One second of WAV each, read from the file at import.
-    assert_eq!(
-        html.matches(">0:01</span>").count(),
-        2,
-        "each song's length"
-    );
-    let links: Vec<String> = values(&html, "href")
-        .into_iter()
-        .filter(|h| h.contains("libraries/christmas/"))
-        .map(|h| resolve(page, h))
-        .collect();
-    for song in [
-        "/libraries/christmas/joy-to-the-world/joy-to-the-world/",
-        "/libraries/christmas/silent-night/silent-night/",
-    ] {
-        assert!(links.iter().any(|l| l == song), "{song} in {links:?}");
+    // No length, no link of its own: its page is its menu's.
+    assert!(!html.contains("data-track-length") && !html.contains(">0:01</span>"));
+    assert!(!html.contains("data-track-open"));
+    for song in &pages {
         assert!(Path::new(&out.path().join(song.trim_matches('/'))).is_dir());
     }
+}
+
+/// A setlist page written before its sets were lines of one fence (a
+/// fence a set, under `## headings`): each fence still draws as a list of
+/// rows with no play buttons, numbered as written (Architect's player joins
+/// them into one), and a song with no recording is a row that is no track.
+#[test]
+fn an_older_setlist_page_still_draws_and_a_song_with_no_recording_is_a_row() {
+    let page = "Setlists/Eve.md";
+    let draw = |source: &str, info: &str| {
+        let claim = architect_sites::Claim::Fence("studio-setlist".to_owned());
+        let block = architect_sites::Block {
+            claim: &claim,
+            info,
+            source,
+            page,
+        };
+        let (_, html) = setlists::share::blocks().draw(&block).unwrap();
+        html.unwrap()
+    };
+    let first = draw(
+        "1 | Sleigh Ride | Libraries/C/Sleigh Ride/Sleigh Ride.md | B · 86 bpm · 4/4 | Libraries/C/Sleigh Ride/Media/Sleigh Ride.mp4 | Tori Kelly | 186.0\n",
+        "studio-setlist",
+    );
+    let second = draw(
+        "4 | Feliz Navidad | Libraries/C/Feliz Navidad/Feliz Navidad.md\n",
+        "studio-setlist downloads",
+    );
+    assert!(!first.contains("data-playlist-play") && !second.contains("data-playlist-play"));
+    assert!(
+        first.contains(
+            "<button type=\"button\" data-track-more=\"\" aria-label=\"More: Sleigh Ride\""
+        )
+    );
+    assert!(second.contains(
+        "<button type=\"button\" data-track-more=\"\" aria-label=\"More: Feliz Navidad\""
+    ));
+    assert!(first.contains("<span data-track-mark=\"\">1</span>"));
+    assert!(
+        second.contains("<span data-track-mark=\"\">4</span>"),
+        "numbered as written"
+    );
+    assert!(
+        first.contains("<span data-track-meta=\"\">Tori Kelly</span>"),
+        "who it is by, only"
+    );
+    assert!(first.contains("data-subtitle=\"Tori Kelly\""));
+    // Its key, from its summary (a page written before keys had a column).
+    assert!(first.contains("aria-label=\"Key of B\""));
+    assert!(first.contains("<span data-track-key=\"\" aria-hidden=\"true\">B</span>"));
+    assert!(!first.contains("data-track-length") && !first.contains("3:06"));
+    // No recording: no track, its page still a tap away, said so.
+    assert!(!second.contains("data-track=\"\""));
+    assert!(second.contains("<li data-page=\"../../libraries/c/feliz-navidad/feliz-navidad/\" data-title=\"Feliz Navidad\">"), "{second}");
+    assert!(second.contains(">No recording</span>"));
+    assert!(!second.contains("data-track-open"));
+    // No key (and no art): a music note on its colour, never letters; a
+    // picture to a screen reader.
+    assert!(
+        second.contains("aria-hidden=\"true\" style=\"background:hsl("),
+        "{second}"
+    );
+    assert!(second.contains("<path d=\"M9 18V5l12-2v13\">"), "{second}");
+    assert!(!second.contains(">FN<"), "no initials");
+}
+
+/// A row's key: its column (`E`, `E*`, `E→F`), spoken in words; played in
+/// the setlist's own key (`play`), every key in it moved and a mark saying
+/// from what. The chart itself is not moved.
+#[test]
+fn a_rows_key_is_on_its_tile_and_a_setlists_key_moves_it() {
+    let draw = |source: &str| {
+        let claim = architect_sites::Claim::Fence("studio-setlist".to_owned());
+        let block = architect_sites::Block {
+            claim: &claim,
+            info: "studio-setlist",
+            source,
+            page: "Setlists/Eve.md",
+        };
+        let (_, html) = setlists::share::blocks().draw(&block).unwrap();
+        html.unwrap()
+    };
+    let row = |key: &str, play: &str| {
+        draw(&format!(
+            "1 | Song | Libraries/C/Song/Song.md | D · 90 bpm · 4/4 | Libraries/C/Song/Media/Song.mp3 | Band | 180 | {key} | {play}\n"
+        ))
+    };
+    // Plain, with notes outside it, and starting in one key and ending in
+    // another.
+    let plain = row("E", "");
+    assert!(plain.contains("aria-label=\"Key of E\""), "{plain}");
+    assert!(plain.contains(">E</span>") && !plain.contains("data-track-transposed"));
+    let outside = row("E*", "");
+    assert!(outside.contains("aria-label=\"Key of E, with notes outside the key\""));
+    assert!(outside.contains(">E*</span>"));
+    let moves = row("D→E", "");
+    assert!(moves.contains("aria-label=\"Starts in D, ends in E\""));
+    assert!(!moves.contains("data-key-size"), "three letters: full size");
+    // In the setlist's key: both ends moved, spelled as that key is.
+    let played = row("D→E", "Eb");
+    assert!(played.contains(">Eb→F</span>"), "{played}");
+    assert!(played.contains("data-key-size=\"s\""));
+    assert!(
+        played.contains(
+            "aria-label=\"Starts in E flat, ends in F, transposed up 1 semitone from D\""
+        ),
+        "{played}"
+    );
+    // How far, in the corner: one number for the whole song.
+    assert!(played.contains("<span data-track-transposed=\"\" aria-hidden=\"true\">+1</span>"));
+    let minor = row("C→Em", "Eb");
+    assert!(minor.contains(">Eb→Gm</span>"), "{minor}");
+    assert!(minor.contains(">+3</span>"));
+    // Down, with a minus sign; the key alone is the tile's text.
+    let down = row("G", "E");
+    assert!(
+        down.contains("<span data-track-transposed=\"\" aria-hidden=\"true\">\u{2212}3</span>"),
+        "{down}"
+    );
+    assert!(
+        down.contains("aria-label=\"Key of E, transposed down 3 semitones from G\""),
+        "{down}"
+    );
+    // A tritone is +6; the same pitch spelled otherwise is no transposition.
+    assert!(row("C", "F#").contains(">+6</span>"));
+    let enharmonic = row("F#", "Gb");
+    assert!(!enharmonic.contains("data-track-transposed") && enharmonic.contains(">F#</span>"));
+    // Another mode is no transposition: the played key, no number, and
+    // the chart's key said.
+    let mode = row("E", "Em");
+    assert!(
+        !mode.contains("data-track-transposed") && mode.contains(">Em</span>"),
+        "{mode}"
+    );
+    assert!(
+        mode.contains("aria-label=\"Key of E minor; its chart is in E\""),
+        "{mode}"
+    );
+    // The longest a label gets, smallest type.
+    let longest = row("Eb→F#m", "");
+    assert!(longest.contains(">Eb→F#m</span>") && longest.contains("data-key-size=\"xs\""));
+    assert!(
+        longest.contains("aria-label=\"Starts in E flat, ends in F sharp minor\""),
+        "{longest}"
+    );
+    // The setlist's key the song's own: not moved.
+    let same = row("E", "E");
+    assert!(!same.contains("data-track-transposed") && same.contains(">E</span>"));
+    // Its key column over its summary's.
+    assert!(!plain.contains(">D</span>"));
 }

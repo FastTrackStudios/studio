@@ -1,0 +1,44 @@
+# The local stack (docs/local-stack.md): `just dev`, `just demo`,
+# `just website` start Studio's node, its issuer, the web app and the site
+# on this machine, from these settings, through scripts/local-stack.sh.
+# The issuer, the node's environment and the guard are Architect's own
+# (`cargo xtask dev`, xtask/src/dev in the Architect checkout the stack
+# resolves): nothing here copies them.
+
+# Every process binds 127.0.0.1. Clear of Architect's own stack (7410-7414,
+# its dev-stack.toml), so both run at once, and of what a fleet machine
+# runs (Teley 8787, the collector 4318, `just web` 8080, Task's 9090).
+# `LOCAL_STACK_PORT_<NAME>` (MOCK_OAUTH, AUTH, NODE, WEB, SITE) moves one.
+[ports]
+mock_oauth = 7420
+auth = 7421
+node = 7422
+web = 7423
+site = 7424
+
+# `just phone`: the node on this machine's tailnet name over HTTPS
+# (`tailscale serve`, never funnel). Tailscale serves HTTPS on 443, 8443
+# and 10000; the first two are often taken on a fleet machine.
+[phone]
+https_port = 10000
+
+# The other two repos, when they are local (`just dev architect=local`).
+# Relative paths are tried from this checkout, then from the main checkout
+# of a worktree. `LOCAL_STACK_ARCHITECT_PATH` / `LOCAL_STACK_KEYFLOW_PATH`
+# name another.
+[sources]
+architect = "../architect"
+keyflow = "../keyflow"
+
+# The vault the node serves: a COPY of it, made once into the stack's
+# state (`just dev-reset` drops it), so nothing done while testing
+# reaches the source. `LOCAL_STACK_VAULT` names another. Missing: the
+# node holds Architect's demo seed instead (its setlist `Fall Show`, link
+# /s/ksqx75iaaaaaaaae/).
+[vault]
+source = "../setlists/merry-and-bright/vault"
+# The setlist the share link opens, with its songs.
+setlist = "Setlists/Merry & Bright - CBU Christmas 2026.md"
+# Fixed, so the link is the same on every start and every machine
+# (16 characters of abcdefghijkmnpqrstuvwxyz23456789).
+share_code = "merrybrightstack"

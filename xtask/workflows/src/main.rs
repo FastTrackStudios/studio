@@ -24,6 +24,7 @@ mod checks;
 mod desktop;
 mod images;
 mod model;
+mod patchbay_ios;
 mod pr;
 mod release;
 mod release_dry_run;
@@ -61,6 +62,7 @@ const WORKFLOWS: &[(&str, Build)] = &[
     ("setlists-extension", setlists_extension::workflow),
     ("studio-architect", studio_architect::workflow),
     ("studio-ios", studio_ios::workflow),
+    ("patchbay-ios", patchbay_ios::workflow),
 ];
 
 fn workflows_dir() -> PathBuf {

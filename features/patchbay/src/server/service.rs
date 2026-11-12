@@ -131,7 +131,23 @@ impl PatchbayBackend {
             }
         }
 
-        let devices = crate::server::devices::DeviceHub::start(presets.clone(), store.clone());
+        // The built-in families, then every family registered in this
+        // process (a family extension's), which replaces a built-in of
+        // its kind.
+        let families = crate::family::assemble(
+            crate::server::devices::registry::builtin(store.clone()),
+            crate::family::registered(),
+            crate::family::FAMILIES_HERE,
+        );
+        // Where the window is in this process too, its views and the
+        // engine's families should name the same kinds.
+        #[cfg(feature = "ui")]
+        for warning in
+            crate::family::views_mismatch(&families.kinds(), &crate::ui::family_view_kinds())
+        {
+            tracing::warn!(%warning, "patchbay: device family without views, or views without a family");
+        }
+        let devices = crate::server::devices::DeviceHub::start(presets.clone(), &families);
         let mixes = crate::server::mixes::MixHub::new(presets.clone());
         mixes.start();
 
@@ -1416,6 +1432,10 @@ impl PatchbayService for PatchbayBackend {
 
     async fn list_devices(&self) -> Result<Vec<DeviceSummary>, PatchbayError> {
         Ok(self.inner.devices.list())
+    }
+
+    async fn families(&self) -> Result<Vec<crate::proto::FamilyInfo>, PatchbayError> {
+        Ok(self.inner.devices.family_infos())
     }
 
     async fn device(&self, id: String) -> Result<DeviceView, PatchbayError> {

@@ -102,8 +102,13 @@ fn fence(info: &str, body: &str) -> String {
 /// How a chart is drawn: the song's own, or an arrangement's.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Chart {
-    /// As the chart writes it (`A`, `F#m`).
+    /// As the chart writes it (`A`, `F#m`): the key it starts in.
     pub key: Option<String>,
+    /// The key it ends in, when another ([`crate::keys`]).
+    pub key_end: Option<String>,
+    /// Not plainly in its key: a key change that comes back, or chords
+    /// outside it ([`crate::keys::OUTSIDE`]).
+    pub key_outside: bool,
     pub tempo: Option<f64>,
     pub meter: Option<String>,
     /// The source (`<Song>.kf`), relative to the song's folder.
@@ -115,6 +120,16 @@ pub struct Chart {
 }
 
 impl Chart {
+    /// Its key as a setlist's row says it (`E`, `E*`, `E→F`).
+    #[must_use]
+    pub fn key_label(&self) -> Option<crate::keys::KeyLabel> {
+        self.key.as_ref().map(|start| crate::keys::KeyLabel {
+            start: start.clone(),
+            end: self.key_end.clone(),
+            outside: self.key_outside,
+        })
+    }
+
     /// `A · 83 bpm · 3/4`, what is known of it.
     #[must_use]
     pub fn summary(&self) -> String {
@@ -157,6 +172,10 @@ pub struct Song {
     pub media: Vec<String>,
     /// How long its recording runs, in seconds ([`crate::media::length`]).
     pub length: Option<f64>,
+    /// Its art (`art:`): an image of its folder (`cover.jpg`), shown beside
+    /// it in a setlist and on a share link's player (Architect's
+    /// `architect_sites::art`). Set by hand in the note; kept on import.
+    pub art: Option<String>,
 }
 
 /// An arrangement as its note's property writes it.
@@ -192,6 +211,10 @@ struct Fields {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    key_end: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    key_outside: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     tempo: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     meter: Option<String>,
@@ -209,6 +232,9 @@ struct Fields {
     session: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     media: Vec<String>,
+    /// Its art: a link to an image beside it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    art: Option<String>,
     /// The library it is in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     library: Option<String>,
@@ -258,6 +284,8 @@ impl Song {
             categories: self.categories.clone(),
             length: self.length,
             key: self.chart.key.clone(),
+            key_end: self.chart.key_end.clone(),
+            key_outside: self.chart.key_outside,
             tempo: self.chart.tempo,
             meter: self.chart.meter.clone(),
             chart: link(&self.chart.source),
@@ -293,6 +321,7 @@ impl Song {
                 .iter()
                 .map(|m| wikilink(&file(m), base(m)))
                 .collect(),
+            art: link(&self.art),
             library: Some(wikilink(lib.note().trim_end_matches(".md"), &lib.name)),
         };
         frontmatter::write(&fields, &self.body(lib, page))
@@ -410,6 +439,8 @@ impl Song {
         Some(Self {
             chart: Chart {
                 key: f.key,
+                key_end: f.key_end,
+                key_outside: f.key_outside,
                 tempo: f.tempo,
                 meter: f.meter,
                 source: name(f.chart),
@@ -423,6 +454,8 @@ impl Song {
                     name: a.name,
                     chart: Chart {
                         key: a.key,
+                        key_end: None,
+                        key_outside: false,
                         tempo: a.tempo,
                         meter: a.meter,
                         source: name(a.chart),
@@ -438,6 +471,7 @@ impl Song {
             lrc: name(f.lyrics),
             session: name(f.session),
             media: f.media.iter().map(|m| rel(m)).collect(),
+            art: name(f.art),
         })
     }
 
@@ -482,6 +516,8 @@ mod tests {
             categories: vec!["Christmas".to_owned(), "Hymns".to_owned()],
             chart: Chart {
                 key: Some("A".to_owned()),
+                key_end: Some("Bb".to_owned()),
+                key_outside: false,
                 tempo: Some(83.0),
                 meter: Some("3/4".to_owned()),
                 source: Some("Silent Night.kf".to_owned()),
@@ -503,6 +539,7 @@ mod tests {
             session: Some("Silent Night.RPP".to_owned()),
             media: vec!["Media/Click.wav".to_owned()],
             length: Some(186.5),
+            art: Some("cover.jpg".to_owned()),
         }
     }
 
@@ -524,6 +561,18 @@ mod tests {
             "{note}"
         );
         assert_eq!(Song::from_note(&lib, &note), Some(song()));
+        // Its art, a link to the image beside it; none, no property.
+        assert!(
+            note.contains("\nart: '[[Libraries/Christmas/Silent Night/cover.jpg|cover.jpg]]'"),
+            "{note}"
+        );
+        let plain = Song {
+            art: None,
+            ..song()
+        };
+        let note = plain.note(&lib, &SongPage::default());
+        assert!(!note.contains("\nart:"), "{note}");
+        assert_eq!(Song::from_note(&lib, &note).and_then(|s| s.art), None);
         assert_eq!(song().summary(), "A · 83 bpm · 3/4");
         assert_eq!(
             song()

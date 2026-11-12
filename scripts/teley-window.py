@@ -1,6 +1,6 @@
 """teley's dashboard as a desktop app: one WebKitGTK window, no browser.
 
-`just dev` opens it (through scripts/dev-herdr.sh's dashboard.sh) on the
+`just daw-dev` opens it (through scripts/dev-herdr.sh's dashboard.sh) on the
 dev room's `/live/<room>?token=…` address: no tabs, no address bar, its own
 window with its own app id (`dev.fts.teley`), so a window rule can place it.
 The web app's storage (IndexedDB) is kept in DATA_DIR between runs.

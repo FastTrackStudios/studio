@@ -286,7 +286,7 @@ fn link_engine() -> bool {
                 return true;
             }
             // Attaching only, there is nothing to start: the engine is
-            // someone else's to bring up (`just dev` builds it first), so
+            // someone else's to bring up (`just daw-dev` builds it first), so
             // the window waits for it however long that takes.
             Err(e) if mode == link::Mode::Attach => {
                 if !waiting {

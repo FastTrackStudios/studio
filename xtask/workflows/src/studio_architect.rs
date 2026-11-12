@@ -10,7 +10,9 @@
 //!       studio-architect-node-vX.Y.Z-x86_64-linux/studio-architect
 //!       studio-architect-node-vX.Y.Z-x86_64-linux/studio-island/
 //!           architect.json, architect.lock.json, studio_island.js,
-//!           studio_island.*.wasm (the lock's files), island.css, BUILT_FROM
+//!           studio_island.*.wasm (the lock's files), island.css,
+//!           web-studio-island.js, web-studio-island_bg.wasm, web-snippet-*.js
+//!           (its web bundle, for browsers without JSPI), BUILT_FROM
 //!   studio-architect-web-vX.Y.Z.tar.gz (+ .sha256)
 //!       studio-architect-web-vX.Y.Z/{index.html, docs/, app/ (+ distribution.json)}
 //!   SHA256SUMS (+ SHA256SUMS.minisig, the org key)   sums.rs, over the whole Release
@@ -160,6 +162,7 @@ island="$tmp/studio-architect-node-$name-x86_64-linux/studio-island"
 test -f "$island/architect.lock.json"
 test "$(cat "$island/BUILT_FROM")" = "$(git describe --always --dirty --abbrev=40)"
 python3 -c 'import json,sys; sys.exit(0 if "island.css" in json.load(open(sys.argv[1]))["files"] else "island.css is not in the lock")' "$island/architect.lock.json"
+python3 -c 'import json,sys; f=json.load(open(sys.argv[1]))["files"]; sys.exit(0 if "web-studio-island.js" in f and "web-studio-island_bg.wasm" in f else "the web bundle of the island is not in the lock")' "$island/architect.lock.json"
 {
   echo "### Studio Architect $TAG"
   echo '```'

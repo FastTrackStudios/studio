@@ -27,6 +27,10 @@ pub struct Engraved {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub key: Option<String>,
+    /// The key it ends in, when another (its last key in force).
+    pub key_end: Option<String>,
+    /// Not plainly in its key ([`crate::keys`]).
+    pub key_outside: bool,
     pub tempo: Option<f64>,
     pub meter: Option<String>,
     /// One PNG per page.
@@ -78,7 +82,10 @@ pub fn engrave(source: &str) -> Result<Engraved> {
         .collect::<Result<Vec<_>>>()?;
     let pdf = pipeline.export_pdf(&layout).map_err(Error::Engrave)?;
     let meta = &chart.metadata;
+    let facts = crate::keys::facts(&chart);
     Ok(Engraved {
+        key_end: facts.as_ref().and_then(|f| f.end.clone()),
+        key_outside: facts.as_ref().is_some_and(|f| f.outside),
         title: meta.title.clone().filter(|t| !t.trim().is_empty()),
         artist: meta.artist.clone().filter(|a| !a.trim().is_empty()),
         key: chart
@@ -355,6 +362,8 @@ fn write_engraving(
     chart.pages = pages;
     chart.pdf = Some(pdf);
     chart.key = engraved.key.or_else(|| chart.key.take());
+    chart.key_end = engraved.key_end;
+    chart.key_outside = engraved.key_outside;
     chart.tempo = engraved.tempo.or(chart.tempo);
     chart.meter = engraved.meter.or_else(|| chart.meter.take());
     Ok(())

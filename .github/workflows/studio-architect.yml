@@ -176,6 +176,7 @@ jobs:
         test -f "$island/architect.lock.json"
         test "$(cat "$island/BUILT_FROM")" = "$(git describe --always --dirty --abbrev=40)"
         python3 -c 'import json,sys; sys.exit(0 if "island.css" in json.load(open(sys.argv[1]))["files"] else "island.css is not in the lock")' "$island/architect.lock.json"
+        python3 -c 'import json,sys; f=json.load(open(sys.argv[1]))["files"]; sys.exit(0 if "web-studio-island.js" in f and "web-studio-island_bg.wasm" in f else "the web bundle of the island is not in the lock")' "$island/architect.lock.json"
         {
           echo "### Studio Architect $TAG"
           echo '```'
