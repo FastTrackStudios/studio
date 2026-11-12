@@ -14,8 +14,9 @@ use crate::{Error, Result};
 
 pub const KIND: &str = "setlist";
 
-/// The fence a setlist's page lists its songs in, one a line ([`Line`]),
-/// each set's name a line of its own before its songs (`## Encore`,
+/// The fence a setlist's page lists its songs in, one a line ([`Line`]).
+///
+/// Each set's name is a line of its own before its songs (`## Encore`,
 /// [`section_line`]); Studio's share renderer draws it as the one list a
 /// page plays (`setlists::share`), and where nothing draws it, it reads as
 /// text. A page written before sets were lines has a fence a set, each
@@ -49,6 +50,10 @@ pub struct Setlist {
     pub sets: Vec<Set>,
     /// The code of its share link, once shared.
     pub share: Option<String>,
+    /// The key it plays a song in, by hand in its page's fence (the
+    /// `play` column), by the song's note and arrangement (`note#arr`):
+    /// kept when its page is written again.
+    pub plays: std::collections::BTreeMap<String, String>,
 }
 
 /// A set of a setlist: a run of its songs, named (the songs before the
@@ -109,6 +114,8 @@ pub struct SongInfo {
     pub artist: Option<String>,
     /// How long its recording runs, in seconds ([`Song::length`]).
     pub length: Option<f64>,
+    /// Its key as the row says it ([`crate::keys`]).
+    pub key: Option<crate::keys::KeyLabel>,
 }
 
 impl SongInfo {
@@ -126,17 +133,45 @@ impl SongInfo {
                 .map(|r| at.library().song_file(&at.title, r)),
             artist: song.artist.clone(),
             length: song.length,
+            key: song
+                .chart_of(at.arrangement.as_deref())
+                .and_then(crate::song::Chart::key_label),
         }
     }
+}
+
+/// What [`Setlist::plays`] keys a song by: its note, `#` its arrangement.
+fn play_key(note: &str, arrangement: Option<&str>) -> String {
+    arrangement.map_or_else(|| note.to_owned(), |a| format!("{note}#{a}"))
+}
+
+/// The keys a page's fence plays its songs in (its rows' `play` column).
+fn plays_of(body: &str) -> std::collections::BTreeMap<String, String> {
+    let mut plays = std::collections::BTreeMap::new();
+    let mut inside = false;
+    for text in body.lines() {
+        let fence = text.trim_start();
+        if let Some(info) = fence.strip_prefix("```") {
+            inside = !inside && info.split_whitespace().next() == Some(SETLIST_FENCE);
+            continue;
+        }
+        if let Some(line) = inside.then(|| Line::parse(text)).flatten() {
+            if let Some(play) = line.play {
+                plays.insert(play_key(&line.note, line.arrangement.as_deref()), play);
+            }
+        }
+    }
+    plays
 }
 
 /// One song as a line of its set's fence ([`SETLIST_FENCE`]).
 ///
 /// `<n> | <label> | <note>[#<arrangement>] | <summary> | <recording> |
-/// <artist> | <length>`, its note and recording by vault path, its length
-/// in seconds; the last four possibly empty (a line written before the
-/// last two were has five fields). A `|` or `\` in a field is written
-/// `\|`, `\\`.
+/// <artist> | <length> | <key> | <play>`, its note and recording by vault
+/// path, its length in seconds, its key as the row says it (`E`, `E*`,
+/// `E→F`), the key this setlist plays it in (by hand); all after the note
+/// possibly empty (a line written before the last ones were has fewer
+/// fields). A `|` or `\` in a field is written `\|`, `\\`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {
     /// Its 1-based place in the running order.
@@ -151,6 +186,12 @@ pub struct Line {
     pub artist: Option<String>,
     /// Seconds.
     pub length: Option<f64>,
+    /// The song's key as the row says it (`E`, `E*`, `E→F`): written from
+    /// its chart when the page is made ([`crate::keys`]).
+    pub key: Option<String>,
+    /// The key this setlist plays it in, when another than its own (by
+    /// hand in the fence: the row then marks it transposed).
+    pub play: Option<String>,
 }
 
 impl Line {
@@ -167,6 +208,8 @@ impl Line {
             self.recording.clone().unwrap_or_default(),
             self.artist.clone().unwrap_or_default(),
             self.length.map(|l| format!("{l:.1}")).unwrap_or_default(),
+            self.key.clone().unwrap_or_default(),
+            self.play.clone().unwrap_or_default(),
         ];
         while fields.last().is_some_and(String::is_empty) {
             fields.pop();
@@ -217,6 +260,8 @@ impl Line {
             .next()
             .and_then(|l| l.parse::<f64>().ok())
             .filter(|l| l.is_finite() && *l > 0.0);
+        let key = parts.next().filter(|k| !k.is_empty()).map(str::to_owned);
+        let play = parts.next().filter(|k| !k.is_empty()).map(str::to_owned);
         Some(Self {
             number,
             label,
@@ -226,6 +271,8 @@ impl Line {
             recording,
             artist,
             length,
+            key,
+            play,
         })
     }
 }
@@ -425,6 +472,14 @@ impl Setlist {
                     recording: info.recording,
                     artist: info.artist,
                     length: info.length,
+                    key: info.key.as_ref().map(crate::keys::KeyLabel::text),
+                    play: self
+                        .plays
+                        .get(&play_key(
+                            &at.library().song_note(&at.title),
+                            at.arrangement.as_deref(),
+                        ))
+                        .cloned(),
                 };
                 let _ = writeln!(out, "{}", line.write());
             }
@@ -453,6 +508,7 @@ impl Setlist {
             songs: refs(&f.songs),
             sets: Vec::new(),
             share: f.share,
+            plays: plays_of(frontmatter::split(text).1),
         };
         if !f.sets.is_empty() {
             set.songs.clear();
@@ -748,6 +804,30 @@ mod tests {
         ));
     }
 
+    /// The key a setlist plays a song in is typed into its page's fence by
+    /// hand (`play`); writing its page again keeps it.
+    #[test]
+    fn a_key_set_by_hand_is_kept_when_the_page_is_written_again() {
+        let note = set().note(&[]);
+        let row = note
+            .lines()
+            .find(|l| l.contains("Silent Night.md#Acoustic"))
+            .unwrap();
+        let mut line = Line::parse(row).unwrap();
+        assert_eq!(line.play, None);
+        line.play = Some("F".to_owned());
+        let edited = note.replace(row, &line.write());
+        let read = Setlist::from_note(&edited).unwrap();
+        assert_eq!(read.plays.len(), 1, "{:?}", read.plays);
+        let again = read.note(&[]);
+        let plays: Vec<Option<String>> = again
+            .lines()
+            .filter_map(Line::parse)
+            .map(|l| l.play)
+            .collect();
+        assert_eq!(plays, [None, Some("F".to_owned())], "{again}");
+    }
+
     #[test]
     fn page_lines_read_back() {
         let line = Line {
@@ -759,6 +839,8 @@ mod tests {
             recording: Some("Libraries/Hymns/Silent Night/Media/Silent Night.ogg".to_owned()),
             artist: Some("Franz Gruber".to_owned()),
             length: Some(186.5),
+            key: Some("G→A".to_owned()),
+            play: Some("F".to_owned()),
         };
         assert_eq!(Line::parse(&line.write()), Some(line));
         // A `|` or a `\` in a field stays in its field.
@@ -771,6 +853,8 @@ mod tests {
             recording: Some("Libraries/H/Medley/Media/Medley.mp4".to_owned()),
             artist: Some("Simon | Garfunkel".to_owned()),
             length: Some(201.5),
+            key: None,
+            play: None,
         };
         assert_eq!(Line::parse(&piped.write()), Some(piped));
         // A line written before the artist and the length were.

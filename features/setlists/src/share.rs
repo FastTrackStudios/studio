@@ -45,6 +45,7 @@ use architect_sites::{
 };
 
 use crate::follow::follow_chart;
+use crate::keys::KeyLabel;
 use crate::setlist::{Line, SETLIST_FENCE};
 use crate::song::{CHART_FENCE, unescape_info};
 
@@ -149,15 +150,65 @@ fn header_media(source: &str) -> Option<String> {
     keyflow::parse(source).ok()?.settings.media
 }
 
-/// The way from a row to its song's page (its chart, its files): a small
-/// chart icon, drawn by its own attributes (no sheet needed).
-const OPEN_ICON: &str = "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z\"/><path d=\"M14 3v5h5\"/><circle cx=\"10\" cy=\"16.5\" r=\"1.8\"/><path d=\"M11.8 16.5v-5l3 1\"/></svg>";
+/// A row's menu button: three dots, drawn by its own attributes.
+const MORE_ICON: &str = "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"currentColor\" aria-hidden=\"true\"><circle cx=\"5\" cy=\"12\" r=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/><circle cx=\"19\" cy=\"12\" r=\"2\"/></svg>";
 
-/// `m:ss` of `seconds`.
-fn length(seconds: f64) -> String {
-    let whole = seconds.max(0.0).round();
-    let minutes = (whole / 60.0).floor();
-    format!("{minutes:.0}:{:02.0}", minutes.mul_add(-60.0, whole))
+/// The transposed mark: Lucide's arrow-down-up.
+const MOVED_ICON: &str = "<svg viewBox=\"0 0 24 24\" width=\"10\" height=\"10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m3 16 4 4 4-4\"/><path d=\"M7 20V4\"/><path d=\"m21 8-4-4-4 4\"/><path d=\"M17 4v16\"/></svg>";
+
+/// The key a row says (`E`, `E*`, `E→F`), played in the setlist's key when
+/// it names another, and whether that moved it: its column, or the first
+/// part of its summary on a page written before keys had one.
+#[must_use]
+pub fn row_key(line: &Line) -> Option<(KeyLabel, Option<String>)> {
+    let own = line.key.as_deref().and_then(KeyLabel::parse).or_else(|| {
+        line.summary
+            .split(" · ")
+            .next()
+            .filter(|k| !k.is_empty() && !k.contains("bpm") && !k.contains('/'))
+            .map(KeyLabel::plain)
+    })?;
+    match line.play.as_deref().and_then(|p| own.in_key(p)) {
+        Some(moved) => Some((moved, Some(own.start))),
+        None => Some((own, None)),
+    }
+}
+
+/// A row's tile: the song's key on it (the page's player lays its art
+/// under, dimmed), a mark when the setlist plays it in another key; with
+/// no key, the title's initials.
+fn tile(line: &Line, hue: u32) -> String {
+    let Some((key, from)) = row_key(line) else {
+        return format!(
+            "<span data-track-art=\"\" data-hue=\"{hue}\" aria-hidden=\"true\" style=\"background:hsl({hue} 42% 40%)\">{}</span>",
+            escape(&tile_initials(&line.label))
+        );
+    };
+    let mut said = key.spoken();
+    let mut mark = String::new();
+    if let Some(from) = &from {
+        let _ = write!(
+            said,
+            ", transposed from {}",
+            KeyLabel::plain(from).spoken().trim_start_matches("Key of ")
+        );
+        let _ = write!(
+            mark,
+            "<span data-track-transposed=\"\" title=\"Transposed from {}\">{MOVED_ICON}</span>",
+            escape(from)
+        );
+    }
+    let size = key.size();
+    let size = if size.is_empty() {
+        String::new()
+    } else {
+        format!(" data-key-size=\"{size}\"")
+    };
+    format!(
+        "<span data-track-art=\"\" data-hue=\"{hue}\" data-key=\"\"{size} role=\"img\" aria-label=\"{}\" style=\"background:hsl({hue} 42% 40%)\"><span data-track-key=\"\" aria-hidden=\"true\">{}</span>{mark}</span>",
+        escape(&said),
+        escape(&key.text()),
+    )
 }
 
 /// The hue of a song's tile, from its title (any case): FNV-1a, so the
@@ -201,7 +252,11 @@ pub fn tile_initials(title: &str) -> String {
 /// its page. The page's player and sheet draw the rest.
 fn set(block: &Block<'_>) -> String {
     let page = block.page;
-    let mut html = String::from("<div class=\"studio-setlist\" data-playlist=\"\"><ol>");
+    // Its list's own reset, inline: a player that styles no playlist (an
+    // Architect before this) still draws it as rows, not a numbered list.
+    let mut html = String::from(
+        "<div class=\"studio-setlist\" data-playlist=\"\" data-playlist-join=\"\"><ol style=\"list-style:none;margin:0;padding:0\">",
+    );
     for text in block.source.lines() {
         if let Some(name) = crate::setlist::section_line(text) {
             let _ = write!(html, "<li data-playlist-section=\"\">{}</li>", escape(name));
@@ -214,14 +269,9 @@ fn set(block: &Block<'_>) -> String {
         if let Some(a) = &line.arrangement {
             let _ = write!(href, "#{}", fragment_id(a));
         }
-        let mut about: Vec<&str> = Vec::new();
-        if let Some(artist) = &line.artist {
-            about.push(artist);
-        }
-        if !line.summary.is_empty() {
-            about.push(&line.summary);
-        }
-        let about = about.join(" · ");
+        // Who it is by, and nothing else: the key is on its art, its tempo
+        // and meter on its chart.
+        let about = line.artist.clone().unwrap_or_default();
         let meta = match (&line.recording, about.is_empty()) {
             (Some(_), _) => about.clone(),
             (None, true) => "No recording".to_owned(),
@@ -250,22 +300,17 @@ fn set(block: &Block<'_>) -> String {
         let hue = tile_hue(&line.label);
         let _ = write!(
             html,
-            "<span data-track-mark=\"\">{}</span><span data-track-art=\"\" data-hue=\"{hue}\" aria-hidden=\"true\" style=\"background:hsl({hue} 42% 40%)\">{}</span><span data-track-text=\"\"><span data-track-title=\"\">{}</span><span data-track-meta=\"\">{}</span></span>",
+            "<span data-track-mark=\"\">{}</span>{}<span data-track-text=\"\"><span data-track-title=\"\">{}</span><span data-track-meta=\"\">{}</span></span>",
             line.number,
-            escape(&tile_initials(&line.label)),
+            tile(&line, hue),
             escape(&line.label),
             escape(&meta),
         );
-        match line.length {
-            Some(l) => {
-                let _ = write!(html, "<span data-track-length=\"\">{}</span>", length(l));
-            }
-            None => html.push_str("<span data-track-length=\"\"></span>"),
-        }
+        // Its menu (Architect's player fills it: its chart, its lyrics, its
+        // page and downloads).
         let _ = write!(
             html,
-            "<a data-track-open=\"\" href=\"{}\" aria-label=\"{}: chart and song page\" title=\"Chart and song page\">{OPEN_ICON}</a></li>",
-            escape(&href),
+            "<button type=\"button\" data-track-more=\"\" aria-label=\"More: {}\" title=\"More\">{MORE_ICON}</button></li>",
             escape(&line.label),
         );
     }

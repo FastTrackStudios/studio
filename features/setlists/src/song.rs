@@ -102,8 +102,13 @@ fn fence(info: &str, body: &str) -> String {
 /// How a chart is drawn: the song's own, or an arrangement's.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Chart {
-    /// As the chart writes it (`A`, `F#m`).
+    /// As the chart writes it (`A`, `F#m`): the key it starts in.
     pub key: Option<String>,
+    /// The key it ends in, when another ([`crate::keys`]).
+    pub key_end: Option<String>,
+    /// Not plainly in its key: a key change that comes back, or chords
+    /// outside it ([`crate::keys::OUTSIDE`]).
+    pub key_outside: bool,
     pub tempo: Option<f64>,
     pub meter: Option<String>,
     /// The source (`<Song>.kf`), relative to the song's folder.
@@ -115,6 +120,16 @@ pub struct Chart {
 }
 
 impl Chart {
+    /// Its key as a setlist's row says it (`E`, `E*`, `E→F`).
+    #[must_use]
+    pub fn key_label(&self) -> Option<crate::keys::KeyLabel> {
+        self.key.as_ref().map(|start| crate::keys::KeyLabel {
+            start: start.clone(),
+            end: self.key_end.clone(),
+            outside: self.key_outside,
+        })
+    }
+
     /// `A · 83 bpm · 3/4`, what is known of it.
     #[must_use]
     pub fn summary(&self) -> String {
@@ -196,6 +211,10 @@ struct Fields {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    key_end: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    key_outside: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     tempo: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     meter: Option<String>,
@@ -265,6 +284,8 @@ impl Song {
             categories: self.categories.clone(),
             length: self.length,
             key: self.chart.key.clone(),
+            key_end: self.chart.key_end.clone(),
+            key_outside: self.chart.key_outside,
             tempo: self.chart.tempo,
             meter: self.chart.meter.clone(),
             chart: link(&self.chart.source),
@@ -418,6 +439,8 @@ impl Song {
         Some(Self {
             chart: Chart {
                 key: f.key,
+                key_end: f.key_end,
+                key_outside: f.key_outside,
                 tempo: f.tempo,
                 meter: f.meter,
                 source: name(f.chart),
@@ -431,6 +454,8 @@ impl Song {
                     name: a.name,
                     chart: Chart {
                         key: a.key,
+                        key_end: None,
+                        key_outside: false,
                         tempo: a.tempo,
                         meter: a.meter,
                         source: name(a.chart),
@@ -491,6 +516,8 @@ mod tests {
             categories: vec!["Christmas".to_owned(), "Hymns".to_owned()],
             chart: Chart {
                 key: Some("A".to_owned()),
+                key_end: Some("Bb".to_owned()),
+                key_outside: false,
                 tempo: Some(83.0),
                 meter: Some("3/4".to_owned()),
                 source: Some("Silent Night.kf".to_owned()),

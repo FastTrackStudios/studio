@@ -36,6 +36,7 @@
 //! through.
 
 pub mod frontmatter;
+pub mod keys;
 pub mod layout;
 pub mod lyrics;
 pub mod media;
