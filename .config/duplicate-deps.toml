@@ -27,7 +27,7 @@
 # architect-pages), itertools 0.15 (object_store), atoi 2 (sqlx, through
 # architect's workspace-hack), zbus/zvariant 4 (in the lockfile, no edge
 # cargo tree shows on these targets), and architect's links-proto 0.1
-# beside Studio's own crate of that name. One architect source (v0.12.3),
+# beside Studio's own crate of that name. One architect source (v0.12.4),
 # so they come with it.
 #
 # 2026-11-12 (studio#445): studio-island (apps/architect/island) is a WASI
