@@ -73,6 +73,20 @@ def main():
         rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", key, cat, desc))
         t = start + win
 
+    if "--tunes" in sys.argv:
+        # One single-voice note (nonvib ff, CC1=127, CC2=0, velocity 40) per
+        # playable key: Kontakt's effective playback rate per zone, to find
+        # how it turns group × zone tune × semitones into a rate.
+        for key in range(55, 99):
+            unit("TUNE", f"nonvib ff only key{key} v40", key, 40, 127, 0, 3.0)
+        m.write(sys.argv[1])
+        with open(sys.argv[2], "w") as f:
+            f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
+            for r in rows:
+                f.write("\t".join(map(str, r)) + "\n")
+        print(f"{len(rows)} units, {t:.1f} s")
+        return
+
     if "--legato" in sys.argv:
         # Two-note connected phrases (second note-on before the first
         # note-off) — CC1=127/CC2=0 leaves only the ff nonvib groups (NV
