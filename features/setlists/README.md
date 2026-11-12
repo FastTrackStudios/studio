@@ -118,18 +118,44 @@ builds them as an Architect site, and Studio draws its own blocks into it
   (`![[Song.lrc]]`, drawn by Architect as timed lines). A song with no LRC
   whose chart has a timed lyric lane (`[lyrics lrc]`) shows the LRC made
   from the lane on the chart's clock (a ```` ```lrc ```` fence). Never both.
-- **The setlist's page is a playlist** (Architect's `[data-playlist]`):
-  each set (a heading) a ```` ```studio-setlist ```` fence, the first with
-  one big Play (the setlist through), the others "Play this set", then each
-  song a row: its number, title, artist · key · tempo · meter, the length
-  of its recording, and a link to its chart. A tap on a row plays it there;
-  the songs follow each other with no page load, the playing row marked.
-  The bar at the foot opens the **now-playing view**: the playing song's
-  chart (its `[data-now-playing]`, fetched from its page), following beat by
-  beat, with Architect's progress bar over it and its controls under it.
-  Each row is also a follow box whose
-  one line is the song's start, so an Architect before playlists (v0.12.2)
-  plays a tapped row from the setlist's page as it did.
+- **The setlist's page is a playlist** (Architect's `[data-playlist]`),
+  laid out as a streaming app's: ONE ```` ```studio-setlist ```` fence,
+  each set's name a line of it (`## Presidents Songs`) drawn as a quiet
+  label in the list, the numbers running on through the sets. Each song is
+  a row: its number, a square tile, its title over its artist, and a "…"
+  button whose menu (Architect's player's) opens its chart, its lyrics and
+  its page with its downloads. The tile carries the song's **key** on a
+  colour from its title (the song's art under it, dimmed, when the link
+  has some; a music note when the song has no key, never letters): `E`, `E*` when
+  the chart is not plainly in E (two different chords outside the key, a
+  secondary dominant not counted, or a key change that comes back), `E→F`
+  when it ends in another key (that over the asterisk), each said in words
+  to a screen reader ("Key of E, with notes outside the key", "Starts in E,
+  ends in F"). The facts are Keyflow's (`setlists::keys::facts`), kept on
+  the song's note (`key`, `key_end`, `key_outside`) and written into the
+  fence's `key` column. A setlist that plays a song in another key (the
+  `play` column) shows every key of the label moved there and, in the
+  tile's corner, by how far: the signed semitones from the song's own key,
+  the shorter way (`+4`, `−3`; a tritone `+6`), one number for a `start→end`
+  label, said "transposed up 4 semitones from D". The same pitch spelled
+  otherwise (`Gb` for `F#`) is no transposition; nor is another mode (`E`
+  played `Em`): the row shows the played key, no number, and says its chart
+  is in E. The chart on the page is the song's own and is not moved
+  (studio#467). A page written before the `key` column reads the key from
+  the summary. No play buttons: a tap on a row plays it
+  there, the songs follow each other with no page load, the playing row
+  marked. A song with no recording stays in the list, quieter, and opens
+  its page. A page written before (a fence a set, each under a `##`
+  heading) still draws: Architect's player joins the fences into one list.
+  The card at the foot (art, song, Click, Loop, play) opens the
+  **now-playing view**: the playing song's chart (its `[data-now-playing]`,
+  fetched from its page), following beat by beat, with Architect's
+  progress bar over it and its controls under it.
+- **A song's art** is its note's `art:` property, a link to an image
+  beside it (`art: "[[Libraries/Christmas/Sleigh Ride/cover.jpg|cover.jpg]]"`),
+  kept when the song is imported again (`Song::art`). Architect publishes
+  it as one of the note's files (only when the note is in the link and the
+  file in its layer) and draws it on the setlist's rows and the card.
 - **The song's sections as played** ride on the now-playing view as
   `data-sections`: a JSON list `[{"name", "start", "end", "color"}]`,
   seconds on the chart's clock (Keyflow's `chart_section_timeline`, a
