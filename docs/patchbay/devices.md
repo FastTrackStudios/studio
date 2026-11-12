@@ -327,16 +327,21 @@ apps/patchbay/src/cli_device.rs         `patchbay device …`
    `defaults`, `connect` or the adapter's `subscribe`/`info`: the family
    shows as unavailable, or the connect as failed and retried. The hub,
    RPC, CLI, UI and snapshots then work without further changes, and
-   `patchbay families` lists it. A family's views draw with
-   `patchbay::ui::kit` and build their info with `FamilyInfo::linked`.
+   `patchbay families` lists it. The family crate's `register()` is one
+   line, `patchbay::register_family!(family: …, views: …)`, which does the
+   right thing for whichever of the crate's `server`/`ui` features are on.
+   A family's views draw with `patchbay::ui::kit` and write with its
+   `ParamWriter` (`use_param_writer()`: a param on the device the page
+   shows, nothing wider); its info is `FamilyInfo::linked`.
    Tests: `ConnectCtx::in_memory()` (feature `test-util`) runs `connect`
    without an engine (`patchbay-yamaha-tf`'s `tests/family.rs`);
    `server/devices/family_tests.rs` drives the hub through a fake family;
    `tests/family.rs` registers one from outside the crate. A config that
-   names the kind of an extension family this app doesn't link says so
-   ("the Yamaha TF extension (patchbay-yamaha-tf) is not installed");
-   add the family to `registry::EXTENSION_FAMILIES` when it leaves the
-   core.
+   names a kind no family in this app connects says so ("no device family
+   for kind 'yamaha-tf' in this app: the extension that adds it is not
+   installed"); the core keeps no list of extension families, so a family
+   leaving the core edits nothing there. On a phone no family runs, and
+   the message says the device connects on the machine that runs it.
 2. Keep modules private and expose a small `pub use` surface from `lib.rs`:
    the adapter type, discovery, a typed ops handle and a raw escape hatch.
 3. Split the code into layers the same way: **protocol** (pure, unit-tested
