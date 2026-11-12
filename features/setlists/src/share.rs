@@ -114,10 +114,18 @@ fn chart(block: &Block<'_>) -> Result<Drawn, String> {
         file_url(block.page, &path)
     });
     let chart = follow_chart(block.source, media.as_deref()).map_err(|e| e.to_string())?;
-    Ok(Drawn::Html(format!(
-        "<div class=\"studio-chart\" style=\"max-height:85vh;overflow-y:auto;background:#ffffff;border-radius:6px\">{}</div>",
+    // The song's now-playing view (Architect's `[data-now-playing]`): what
+    // a setlist's player shows while its recording plays.
+    let mut view = String::from("<div class=\"studio-now\" data-now-playing=\"\"");
+    if let Some(media) = &media {
+        let _ = write!(view, " data-media=\"{}\"", escape(media));
+    }
+    let _ = write!(
+        view,
+        " style=\"display:flex;flex-direction:column;height:100%\"><div class=\"studio-chart\" style=\"flex:1;min-height:0;max-height:85vh;overflow-y:auto;background:#ffffff;border-radius:6px\">{}</div></div>",
         chart.svg
-    )))
+    );
+    Ok(Drawn::Html(view))
 }
 
 /// The recording the chart's own header names (`\media = "<file>"`),
@@ -126,58 +134,105 @@ fn header_media(source: &str) -> Option<String> {
     keyflow::parse(source).ok()?.settings.media
 }
 
-/// A set's fence: "Play this set", then each song a row that plays it.
+/// The play icon of a playlist's Play (Architect's player draws its own).
+const PLAY_ICON: &str = "<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path d=\"M7 4.5v15L20 12z\" fill=\"currentColor\"/></svg>";
+
+/// `m:ss` of `seconds`.
+fn length(seconds: f64) -> String {
+    let whole = seconds.max(0.0).round();
+    let minutes = (whole / 60.0).floor();
+    format!("{minutes:.0}:{:02.0}", minutes.mul_add(-60.0, whole))
+}
+
+/// A set's fence, as a playlist (Architect's `[data-playlist]`): its Play
+/// (the first set's the big one: it plays the setlist through), then each
+/// song a row (`[data-track]`, its recording and its page, where its chart
+/// is the now-playing view): number, title, artist · key · tempo · meter,
+/// length, and a link to its page. A tap on a row plays it and the page
+/// stays; the songs follow each other without a page load.
 fn set(block: &Block<'_>) -> String {
     let lines: Vec<Line> = block.source.lines().filter_map(Line::parse).collect();
     let page = block.page;
-    let mut html = String::from("<div class=\"studio-setlist\">");
+    let first_set = lines.first().is_some_and(|l| l.number == 1);
+    let mut html = String::from("<div class=\"studio-setlist\" data-playlist=\"\">");
     if let Some(first) = lines.iter().find_map(|l| l.recording.as_deref()) {
+        let (label, style) = if first_set {
+            (
+                "Play",
+                "display:inline-flex;align-items:center;gap:8px;margin:4px 0 12px;padding:12px 28px;border-radius:999px;border:0;background:#22c55e;color:#04210f;font:inherit;font-size:16px;font-weight:700;cursor:pointer",
+            )
+        } else {
+            (
+                "Play this set",
+                "display:inline-flex;align-items:center;gap:6px;margin:0 0 8px;padding:8px 16px;border-radius:999px;border:1px solid currentColor;background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer",
+            )
+        };
+        // Also a follow box whose one line is the first song's start: an
+        // Architect without playlists (v0.12.2) plays it from there.
         let _ = write!(
             html,
-            "<div data-follow-playhead data-media=\"{}\" style=\"margin:0 0 8px\"><button type=\"button\" data-at=\"0\" style=\"padding:10px 16px;border-radius:20px;border:1px solid currentColor;background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer\">▶ Play this set</button></div>",
+            "<div data-follow-playhead=\"\" data-media=\"{}\"><button type=\"button\" data-playlist-play=\"\" data-at=\"0\" style=\"{style}\">{PLAY_ICON}{label}</button></div>",
             escape(&file_url(page, first))
         );
     }
+    html.push_str("<ol style=\"list-style:none;margin:0;padding:0\">");
     for line in &lines {
         let mut href = note_url(page, &line.note);
         if let Some(a) = &line.arrangement {
             let _ = write!(href, "#{}", fragment_id(a));
         }
-        let label = format!(
-            "<span style=\"font-variant-numeric:tabular-nums;opacity:0.6\">{}.</span> {}",
-            line.number,
-            escape(&line.label)
-        );
-        let summary = if line.summary.is_empty() {
-            String::new()
-        } else {
-            format!(
-                " <small style=\"opacity:0.7\">{}</small>",
-                escape(&line.summary)
-            )
-        };
-        html.push_str("<div class=\"studio-song\" style=\"display:flex;align-items:center;gap:8px;border-bottom:1px solid #8883\">");
+        let mut about: Vec<&str> = Vec::new();
+        if let Some(artist) = &line.artist {
+            about.push(artist);
+        }
+        if !line.summary.is_empty() {
+            about.push(&line.summary);
+        }
+        let about = about.join(" · ");
         match &line.recording {
             Some(recording) => {
+                // The row is a follow box too, its song's start its one
+                // line: without playlists, a tap on it plays from there.
                 let _ = write!(
                     html,
-                    "<ol class=\"site-lyrics\" data-follow-playhead data-media=\"{}\" style=\"flex:1;margin:0;padding:0;max-height:none;overflow:visible\"><li data-at=\"0\"><button type=\"button\" class=\"site-lyric\" style=\"padding:12px 8px\">{label}{summary}</button></li></ol>",
-                    escape(&file_url(page, recording))
+                    "<li data-track=\"\" data-follow-playhead=\"\" data-media=\"{0}\" data-page=\"{1}\" data-title=\"{2}\" data-subtitle=\"{3}\" style=\"display:flex;align-items:center;gap:12px;padding:10px 8px;border-radius:8px;min-height:44px\"><span data-at=\"0\" style=\"flex:1;min-width:0;display:flex;align-items:center;gap:12px;cursor:pointer\">",
+                    escape(&file_url(page, recording)),
+                    escape(&href),
+                    escape(&line.label),
+                    escape(&about),
                 );
             }
-            None => {
-                let _ = write!(
-                    html,
-                    "<span style=\"flex:1;padding:12px 8px\">{label}{summary}</span>"
-                );
-            }
+            None => html.push_str(
+                "<li style=\"display:flex;align-items:center;gap:12px;padding:10px 8px;min-height:44px;opacity:0.55\"><span style=\"flex:1;min-width:0;display:flex;align-items:center;gap:12px\">",
+            ),
         }
         let _ = write!(
             html,
-            "<a href=\"{}\" style=\"padding:12px 8px;white-space:nowrap\">Chart ›</a></div>",
+            "<span data-track-mark=\"\" style=\"flex:none;width:22px;text-align:right;font-variant-numeric:tabular-nums;opacity:0.6\">{}</span><span style=\"flex:1;min-width:0;display:flex;flex-direction:column;gap:2px\"><span data-track-title=\"\" style=\"font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">{}</span><span style=\"font-size:13px;opacity:0.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">{}</span></span>",
+            line.number,
+            escape(&line.label),
+            if line.recording.is_none() && about.is_empty() {
+                "No recording".to_owned()
+            } else if line.recording.is_none() {
+                format!("{} · no recording", escape(&about))
+            } else {
+                escape(&about)
+            },
+        );
+        if let Some(l) = line.length {
+            let _ = write!(
+                html,
+                "<span style=\"flex:none;font-size:13px;font-variant-numeric:tabular-nums;opacity:0.7\">{}</span>",
+                length(l)
+            );
+        }
+        let _ = write!(
+            html,
+            "</span><a href=\"{}\" style=\"flex:none;padding:8px 4px;font-size:13px;opacity:0.8;white-space:nowrap\">Chart</a></li>",
             escape(&href)
         );
     }
+    html.push_str("</ol>");
     if block.info.split_whitespace().any(|w| w == "downloads") {
         let root = up(page);
         let _ = write!(

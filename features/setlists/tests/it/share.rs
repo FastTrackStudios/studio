@@ -281,9 +281,13 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
     assert_eq!(blocks.len(), 1, "the chart, drawn by Studio");
     let chart = blocks[0];
     assert!(chart.contains("<svg"), "drawn, not left as text");
+    assert!(
+        chart.contains("data-now-playing"),
+        "the song's now-playing view"
+    );
     let media = values(chart, "data-media");
-    assert_eq!(media.len(), 2, "the bars and the beats");
-    assert_eq!(media[0], media[1]);
+    assert_eq!(media.len(), 3, "the view, the bars and the beats");
+    assert!(media.iter().all(|m| *m == media[0]));
     assert_eq!(
         resolve(&format!("{link}{page}"), media[0]),
         queue_src(&recording),
@@ -324,13 +328,23 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
     );
     assert!(lyrics.contains("Let earth receive her King"));
 
-    // ── The setlist's page: its sets, each song a row that plays ────
+    // ── The setlist's page: a playlist a set, each song a row ───────
     let page = "/setlists/tree-lighting/";
     let html = read(page);
     let presidents = html.find(">Presidents Songs<").unwrap();
     let tree = html.find(">Tree Lighting Concert Set<").unwrap();
     assert!(presidents < tree, "the sets in order");
-    assert_eq!(html.matches("▶ Play this set").count(), 2);
+    assert_eq!(
+        html.matches("data-playlist=\"\"").count(),
+        2,
+        "a playlist a set"
+    );
+    assert_eq!(html.matches("data-playlist-play").count(), 2);
+    assert!(
+        html.contains("</svg>Play</button>"),
+        "the first set's Play plays it all"
+    );
+    assert!(html.contains("</svg>Play this set</button>"));
     // The link's files page and archive, once, after the last set: the
     // node's routes of the link, which serve only its audience's files.
     assert_eq!(
@@ -357,7 +371,29 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
     assert_eq!(
         rows,
         [joy_src.clone(), joy_src, silent_src.clone(), silent_src],
-        "each set's Play, then its songs, in running order"
+        "each set's Play (its first song), then its songs, in running order"
+    );
+    // Each row's title and the page where it plays.
+    assert_eq!(
+        values(&html, "data-title"),
+        ["Joy to the World", "Silent Night"]
+    );
+    let pages: Vec<String> = values(&html, "data-page")
+        .into_iter()
+        .map(|h| resolve(page, h))
+        .collect();
+    assert_eq!(
+        pages,
+        [
+            "/libraries/christmas/joy-to-the-world/joy-to-the-world/",
+            "/libraries/christmas/silent-night/silent-night/"
+        ]
+    );
+    // One second of WAV each, read from the file at import.
+    assert_eq!(
+        html.matches(">0:01</span>").count(),
+        2,
+        "each song's length"
     );
     let links: Vec<String> = values(&html, "href")
         .into_iter()

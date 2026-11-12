@@ -290,9 +290,16 @@ pub fn import_song(
             song.media.push(rel);
         }
     }
+    song.length = recording_length(vault, lib, &song).or(song.length);
     let page = song_page(vault, lib, &song);
     vault.write_song(lib, &song, &page)?;
     Ok(song)
+}
+
+/// How long `song`'s recording runs, from its file's header.
+fn recording_length(vault: &Vault, lib: &Library, song: &Song) -> Option<f64> {
+    let recording = song.recording()?;
+    crate::media::length(&vault.path(&lib.song_file(&song.title, recording)))
 }
 
 /// Engrave song `title`'s charts again (its own and every arrangement's)
@@ -303,6 +310,7 @@ pub fn import_song(
 /// A chart did not engrave, or a file could not be written.
 pub fn reengrave(vault: &Vault, lib: &Library, title: &str) -> Result<Song> {
     let mut song = vault.song(lib, title)?;
+    song.length = recording_length(vault, lib, &song).or(song.length);
     let mut charts: Vec<&mut SongChart> = vec![&mut song.chart];
     charts.extend(song.arrangements.iter_mut().map(|a| &mut a.chart));
     for chart in charts {

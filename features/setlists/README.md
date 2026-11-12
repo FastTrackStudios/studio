@@ -44,12 +44,26 @@ builds them as an Architect site, and Studio draws its own blocks into it
   (`![[Song.lrc]]`, drawn by Architect as timed lines). A song with no LRC
   whose chart has a timed lyric lane (`[lyrics lrc]`) shows the LRC made
   from the lane on the chart's clock (a ```` ```lrc ```` fence). Never both.
-- **The setlist's page** lists each set (a heading) as a
-  ```` ```studio-setlist ```` fence: "Play this set", then each song a row
-  that plays its recording (marked while it plays) and links to its chart.
-- **Playing through** is the link's queue: every song's recording in
-  running order; when one ends the next starts (on its own page, with
-  Follow on).
+- **The setlist's page is a playlist** (Architect's `[data-playlist]`):
+  each set (a heading) a ```` ```studio-setlist ```` fence, the first with
+  one big Play (the setlist through), the others "Play this set", then each
+  song a row: its number, title, artist · key · tempo · meter, the length
+  of its recording, and a link to its chart. A tap on a row plays it there;
+  the songs follow each other with no page load, the playing row marked.
+  The bar at the foot opens the **now-playing view**: the playing song's
+  chart (its `[data-now-playing]`, fetched from its page), following beat by
+  beat, with the controls under it (Architect's until Studio's progress bar
+  and transport are on the page: #445). Each row is also a follow box whose
+  one line is the song's start, so an Architect before playlists (v0.12.2)
+  plays a tapped row from the setlist's page as it did.
+- **A song's length** is its recording's (`length` on its note, seconds,
+  read from the file's header at import and re-engrave: an MP4's `mvhd`, a
+  WAV's `data`; `src/media.rs`), and a set's line carries it and the artist
+  (`… | <recording> | <artist> | <length>`). A setlist page written before
+  shows its rows without them until it is written again.
+- **Playing through** is the playlist on its page, and elsewhere the link's
+  queue: every song's recording in running order; when one ends the next
+  starts (on its own page, with Follow on).
 
 ## What Architect does not do yet
 

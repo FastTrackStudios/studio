@@ -132,7 +132,7 @@ pub async fn rows(source: &str) -> Result<Vec<Row>, String> {
 }
 
 /// A song as the navigator and the actions show it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SongRow {
     pub at: SongRef,
     pub path: String,
@@ -140,6 +140,8 @@ pub struct SongRow {
     pub tempo: Option<String>,
     pub meter: Option<String>,
     pub artist: Option<String>,
+    /// How long it plays, in seconds (its note's `length`).
+    pub length: Option<f64>,
     pub categories: Vec<String>,
     /// Its arrangements' names.
     pub arrangements: Vec<String>,
@@ -172,6 +174,10 @@ impl SongRow {
             tempo: row.text("tempo"),
             meter: row.text("meter"),
             artist: row.text("artist"),
+            length: row
+                .text("length")
+                .and_then(|l| l.parse::<f64>().ok())
+                .filter(|l| l.is_finite() && *l > 0.0),
             categories: row.list("categories"),
             arrangements,
             at,
@@ -198,6 +204,8 @@ impl SongRow {
         SongInfo {
             summary: self.summary(),
             recording: self.recording.clone(),
+            artist: self.artist.clone(),
+            length: self.length,
         }
     }
 }
