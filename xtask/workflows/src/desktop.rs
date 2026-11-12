@@ -131,11 +131,21 @@ fi
             .cond("${{ env.MODE != 'build-only' }}")
             .env("GH_TOKEN", "${{ github.token }}"),
         )
+        // A build-only run builds on the self-hosted release runners: only a
+        // commit already on main or a release/v* line may get there (the
+        // self-hosted runner gate), never any SHA a dispatcher names.
         .step(
             Step::run(
                 "Build-only ref",
-                r#"echo "version=$(bash scripts/release.sh version)" >> "$GITHUB_OUTPUT"
-echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+                r#"set -euo pipefail
+sha="$(git rev-parse HEAD)"
+git fetch -q origin '+refs/heads/main:refs/remotes/origin/main' '+refs/heads/release/v*:refs/remotes/origin/release/v*'
+if [ -z "$(git branch -r --contains "$sha" --format='%(refname:short)' | grep -E '^origin/(main|release/v.*)$' || true)" ]; then
+  echo "::error::build-only: $sha is on neither main nor a release/v* line: refused (the release runners build only reviewed commits)"
+  exit 1
+fi
+echo "version=$(bash scripts/release.sh version)" >> "$GITHUB_OUTPUT"
+echo "sha=$sha" >> "$GITHUB_OUTPUT"
 "#,
             )
             .id("ref")

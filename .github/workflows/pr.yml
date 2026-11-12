@@ -75,9 +75,9 @@ jobs:
     - name: rail config
       if: ${{ !cancelled() }}
       run: cargo rail config validate --strict
-    - name: App token mints
+    - name: App token mints, release facts
       if: ${{ !cancelled() }}
-      run: python3 scripts/check-token-mints.py --self-test && python3 scripts/check-token-mints.py
+      run: python3 scripts/check-token-mints.py --self-test && python3 scripts/check-token-mints.py && bash scripts/release-facts-test.sh
   studio-architect:
     name: Studio Architect node (cargo check, Linux)
     runs-on: ubuntu-latest

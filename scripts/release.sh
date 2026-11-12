@@ -399,6 +399,59 @@ includes_line() { # <prev> <sha> [below]
     fi
 }
 
+# "<change file>: <text>" for every `Data-Migration:` line in the body of a
+# release's change files (.changes/README): the release changes stored data,
+# and rolling the binary back does not undo it.
+data_migrations() { # <prev> <sha> [version]
+    local files f
+    files="$(release_change_files "$1" "$2" "${3:-}")"
+    [ -n "$files" ] || return 0
+    while read -r f; do
+        git show "$2:$f" | awk 'c >= 2 { print; next } $0 == "---" { c++ }' \
+            | sed -n 's/^[[:space:]]*Data-Migration:[[:space:]]*//p' \
+            | while read -r line; do printf '%s: %s\n' "$(basename "$f" .md)" "$line"; done
+    done <<<"$files"
+}
+
+# release-facts.json of a tag: {"repo","tag","data_migration","migrations"}.
+# `publish` attaches it to the Release before any build does, so every
+# SHA256SUMS signs it: infra's release bump reads it from signed material
+# and never deploys a migrating release by itself.
+cmd_facts() { # <tag>
+    local tag="${1:-}" sha prev
+    [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "usage: facts vX.Y.Z"
+    sha="$(git rev-parse -q --verify "$tag^{commit}")" || die "no tag $tag"
+    prev="$(last_tag "$sha^")"
+    data_migrations "$prev" "$sha" "$tag" | awk -v tag="$tag" '
+        function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); gsub(/\t/, " ", s); return s }
+        { m[++n] = $0 }
+        END {
+            printf "{\"repo\":\"studio\",\"tag\":\"%s\",\"data_migration\":%s,\"migrations\":[", tag, (n ? "true" : "false")
+            for (i = 1; i <= n; i++) printf "%s\"%s\"", (i > 1 ? "," : ""), esc(m[i])
+            print "]}"
+        }'
+}
+
+# The release queue's question (release-queue.yml): did the bump bot merge a
+# pin bump into main since the last release below <sha>? Prints that commit
+# and exits 0, or exits 1. A bot bump is a first-parent commit authored by
+# fts-forge[bot] whose message has the line `Release-Queue: bump`
+# (bump-architect.yml's land writes it on a green, mechanical bump only).
+BOT_EMAIL="345159799+fts-forge[bot]@users.noreply.github.com"
+cmd_bump_queued() { # <sha>
+    local sha="${1:?usage: bump-queued <sha>}" last c
+    last="$(git -c versionsort.suffix=- tag --list 'v[0-9]*' --sort=-v:refname --merged "$sha" \
+        | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
+    while read -r c; do
+        if [ "$(git log -1 --format=%ae "$c")" = "$BOT_EMAIL" ] \
+            && git log -1 --format=%B "$c" | grep -qx 'Release-Queue: bump'; then
+            echo "$c"
+            return 0
+        fi
+    done < <(git rev-list --first-parent "${last:+$last..}$sha")
+    return 1
+}
+
 # The release notes of <sha> since <prev>, grouped the way the CHANGELOG
 # sections were (Breaking / Migration, Added, Fixed and improved; `none`
 # lists nothing). Read from <sha>'s tree. <version>: the release they
@@ -414,6 +467,16 @@ render_notes() { # <prev> <sha> [version]
     fi
     incl="$(includes_line "$prev" "$sha" "$ver")"
     if [ -n "$incl" ]; then echo "$incl"; echo; fi
+    local migrations
+    migrations="$(data_migrations "$prev" "$sha" "$ver")"
+    if [ -n "$migrations" ]; then
+        echo "### Data migration"
+        echo
+        echo "This release changes stored data; rolling back the binary does not undo it."
+        echo
+        printf '%s\n' "$migrations" | sed 's/^/- /'
+        echo
+    fi
     for group in major minor patch; do
         [ -n "$files" ] || break
         case "$group" in
@@ -740,7 +803,11 @@ publish_release() { # [tag]
     fi
     rm -f "$notes"
     release_dedupe "$tag"
-    note "published https://github.com/$REPO/releases/tag/$tag"
+    # Before any build attaches its assets, so every SHA256SUMS signs it.
+    local facts; facts="$(mktemp -d)/release-facts.json"
+    cmd_facts "$tag" > "$facts"
+    gh release upload "$tag" "$facts" --repo "$REPO" --clobber
+    note "published https://github.com/$REPO/releases/tag/$tag (release-facts.json: $(cat "$facts"))"
 }
 
 # `publish` and both ios-release steps start together on a tag, and
@@ -869,6 +936,8 @@ case "${1:-}" in
     stamp) shift; cmd_stamp "$@" ;;
     image-tag) shift; cmd_image_tag "$@" ;;
     release-only) shift; cmd_release_only "$@" ;;
+    facts) shift; cmd_facts "$@" ;;
+    bump-queued) shift; cmd_bump_queued "$@" ;;
     tag-guard) shift; cmd_tag_guard "$@" ;;
     publish) shift; cmd_publish "$@" ;;
     ios-resolve) shift; cmd_ios_resolve "$@" ;;

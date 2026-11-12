@@ -88,8 +88,8 @@ fn pr_checks() -> Result<Job> {
         // environment's own key (scripts/check-token-mints.py's ALLOWED).
         .step(
             Step::run(
-                "App token mints",
-                "python3 scripts/check-token-mints.py --self-test && python3 scripts/check-token-mints.py",
+                "App token mints, release facts",
+                "python3 scripts/check-token-mints.py --self-test && python3 scripts/check-token-mints.py && bash scripts/release-facts-test.sh",
             )
             .cond(NOT_CANCELLED),
         ))
