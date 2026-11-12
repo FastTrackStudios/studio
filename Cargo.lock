@@ -16516,7 +16516,7 @@ dependencies = [
 name = "patchbay-antelope"
 version = "26.10.3"
 dependencies = [
- "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.4)",
+ "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "architect-extensions",
  "architect-settings",
  "dioxus",
