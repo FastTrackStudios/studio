@@ -116,10 +116,17 @@ fn main() -> eyre::Result<()> {
     // The orchestra feature's strings *definition* — loads CSS 1st Violins with
     // the exact engine settings (solo mic, arco-attack bloom, release overlap)
     // that match a real CSS-in-Kontakt render.
+    // `--section "2nd Violins"`: any CSS section (default 1st Violins).
+    let all: Vec<String> = std::env::args().collect();
+    let section = all
+        .iter()
+        .position(|a| a == "--section")
+        .and_then(|i| all.get(i + 1).cloned())
+        .unwrap_or_else(|| "1st Violins".to_string());
     signal_orchestra::load_strings(
         &rig,
         ID,
-        "1st Violins",
+        &section,
         "Mix",
         signal_orchestra::CSS_ROOT,
         signal_orchestra::CSS_CONFIG,
