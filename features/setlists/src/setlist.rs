@@ -164,6 +164,46 @@ fn plays_of(body: &str) -> std::collections::BTreeMap<String, String> {
     plays
 }
 
+/// What is wrong in a setlist's page (`text`) that its share page leaves out.
+///
+/// Each `play` key of its fence that is refused
+/// ([`crate::keys::KeyLabel::played`]: not a key's name, or the chart's
+/// other mode), as `<n> <label>: <why>`. Empty when nothing is.
+#[must_use]
+pub fn problems(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut inside = false;
+    for row in text.lines() {
+        if let Some(info) = row.trim_start().strip_prefix("```") {
+            inside = !inside && info.split_whitespace().next() == Some(SETLIST_FENCE);
+            continue;
+        }
+        let Some(line) = inside.then(|| Line::parse(row)).flatten() else {
+            continue;
+        };
+        let Some(play) = line.play.as_deref() else {
+            continue;
+        };
+        // With no key of its own to move from, a name that is not a key is
+        // still refused.
+        let refused = line.key_label().map_or_else(
+            || {
+                (!crate::keys::play_key_ok(play)).then(|| {
+                    format!("`{play}` is not a key (a note, # or b, m for minor: `Eb`, `F#m`)")
+                })
+            },
+            |own| match own.played(play) {
+                crate::keys::Played::Refused(why) => Some(why),
+                _ => None,
+            },
+        );
+        if let Some(why) = refused {
+            out.push(format!("{} {}: play {why}", line.number, line.label));
+        }
+    }
+    out
+}
+
 /// One song as a line of its set's fence ([`SETLIST_FENCE`]).
 ///
 /// `<n> | <label> | <note>[#<arrangement>] | <summary> | <recording> |
@@ -195,6 +235,22 @@ pub struct Line {
 }
 
 impl Line {
+    /// The song's own key as this row has it: its `key` column, or on a
+    /// page written before keys had one, the first part of its summary.
+    #[must_use]
+    pub fn key_label(&self) -> Option<crate::keys::KeyLabel> {
+        self.key
+            .as_deref()
+            .and_then(crate::keys::KeyLabel::parse)
+            .or_else(|| {
+                self.summary
+                    .split(" · ")
+                    .next()
+                    .filter(|k| !k.is_empty() && !k.contains("bpm") && !k.contains('/'))
+                    .map(crate::keys::KeyLabel::plain)
+            })
+    }
+
     fn write(&self) -> String {
         let note = self
             .arrangement
@@ -826,6 +882,29 @@ mod tests {
             .map(|l| l.play)
             .collect();
         assert_eq!(plays, [None, Some("F".to_owned())], "{again}");
+    }
+
+    /// A `play` key the share page leaves out is said: not a key's name,
+    /// or the chart's other mode.
+    #[test]
+    fn a_refused_play_key_is_a_problem() {
+        let page = "# Eve\n\n```studio-setlist\n\
+            1 | Joy | Libraries/H/Joy/Joy.md | D · 100 bpm | | | | D | E (capo 2)\n\
+            2 | Noel | Libraries/H/Noel/Noel.md | Am · 80 bpm | | | | Am | C\n\
+            3 | Eve | Libraries/H/Eve/Eve.md | E · 90 bpm | | | | E | F\n\
+            4 | Old | Libraries/H/Old/Old.md | G · 70 bpm | | | | | Gb\n\
+            ```\n";
+        let found = problems(page);
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(
+            found[0].starts_with("1 Joy: play `E (capo 2)` is not a key"),
+            "{found:?}"
+        );
+        assert!(
+            found[1].starts_with("2 Noel: play `C` is in the other mode"),
+            "{found:?}"
+        );
+        assert_eq!(problems("no fence here"), Vec::<String>::new());
     }
 
     #[test]

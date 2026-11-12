@@ -41,9 +41,21 @@ pub enum Played {
     /// Transposed: the label in the played key (every key of it moved the
     /// same way), and by how far, the shorter way (−5…+6, never 0).
     Moved { label: KeyLabel, semitones: i32 },
-    /// Another mode (`E` played `Em`): not a transposition. The played key
-    /// alone, no mark and no number; its chart is still the song's own.
-    OtherMode(KeyLabel),
+    /// Refused, and why: not a key's name (`^[A-G][#b]?m?$`: `E (capo 2)`,
+    /// `Emaj`), or the chart's other mode (`Em` on an `E` chart, `C` on an
+    /// `Am` one; a setlist's key keeps the chart's mode). The row shows the
+    /// song as charted; `setlist::problems` says it.
+    Refused(String),
+}
+
+/// Whether `key` is a setlist's key as a fence writes one: a note letter,
+/// a sharp or a flat, `m` for minor, nothing else (`^[A-G][#b]?m?$`).
+#[must_use]
+pub fn play_key_ok(key: &str) -> bool {
+    let mut chars = key.chars();
+    let letter = chars.next().is_some_and(|c| ('A'..='G').contains(&c));
+    let rest: String = chars.collect();
+    letter && matches!(rest.as_str(), "" | "#" | "b" | "m" | "#m" | "bm")
 }
 
 /// A song's key as a row shows it.
@@ -217,15 +229,23 @@ impl KeyLabel {
 
     /// Played in the setlist's key `key`: as charted, moved by a number of
     /// semitones (its tonic's, the shorter way; a `start→end` label moves
-    /// as one song, by one number), or in another mode (no transposition).
-    /// Not a key: as charted.
+    /// as one song, by one number), or refused (not a key's name, or the
+    /// chart's other mode).
     #[must_use]
     pub fn played(&self, key: &str) -> Played {
+        if !play_key_ok(key) {
+            return Played::Refused(format!(
+                "`{key}` is not a key (a note, # or b, m for minor: `Eb`, `F#m`)"
+            ));
+        }
         let (Some((to, _)), Some((from, _))) = (pitch(key), pitch(&self.start)) else {
             return Played::AsCharted;
         };
         if minor(key) != minor(&self.start) {
-            return Played::OtherMode(Self::plain(key.trim()));
+            return Played::Refused(format!(
+                "`{key}` is in the other mode than the chart's `{}` (a setlist's key keeps the chart's mode)",
+                self.start
+            ));
         }
         let step = semitones(from, to);
         if step == 0 {
@@ -448,7 +468,7 @@ mod tests {
     }
 
     #[test]
-    fn minor_keys_move_by_their_tonic_and_a_mode_change_is_no_transposition() {
+    fn minor_keys_move_by_their_tonic_and_the_other_mode_is_refused() {
         let Played::Moved { label, semitones } = KeyLabel::plain("Am").played("Cm") else {
             panic!()
         };
@@ -457,24 +477,46 @@ mod tests {
             panic!()
         };
         assert_eq!((label.text().as_str(), semitones), ("Em", -2));
-        assert_eq!(
-            KeyLabel::plain("E").played("Em"),
-            Played::OtherMode(KeyLabel::plain("Em"))
-        );
-        assert_eq!(
-            KeyLabel::plain("Em").played("G"),
-            Played::OtherMode(KeyLabel::plain("G"))
-        );
-        assert_eq!(
-            KeyLabel::plain("E").played("Emaj"),
-            Played::AsCharted,
-            "maj is major"
-        );
-        assert_eq!(
-            KeyLabel::plain("E").played("H"),
-            Played::AsCharted,
-            "no key"
-        );
+        // A setlist's key keeps the chart's mode: the other one is refused
+        // (ignored, said by `setlist check`), never shown.
+        for (chart, play) in [("E", "Em"), ("Em", "G"), ("Am", "C"), ("F#m", "A")] {
+            assert!(
+                matches!(KeyLabel::plain(chart).played(play), Played::Refused(_)),
+                "{chart} played {play}"
+            );
+        }
+    }
+
+    /// A setlist's key is a key's name and nothing else: `^[A-G][#b]?m?$`.
+    #[test]
+    fn a_play_key_is_a_keys_name_or_refused() {
+        for ok in ["E", "Eb", "F#", "F#m", "Bbm", "C", "Cb", "B#"] {
+            assert!(play_key_ok(ok), "{ok}");
+        }
+        for bad in [
+            "E (capo 2)",
+            "Emaj",
+            "H",
+            "e",
+            "Ebb",
+            "F#m7",
+            "E ",
+            " E",
+            "",
+            "Em*",
+            "E→F",
+            "Es",
+        ] {
+            assert!(!play_key_ok(bad), "{bad:?}");
+            assert!(
+                matches!(KeyLabel::plain("E").played(bad), Played::Refused(_)),
+                "{bad:?}"
+            );
+        }
+        let Played::Refused(why) = KeyLabel::plain("E").played("E (capo 2)") else {
+            panic!()
+        };
+        assert!(why.contains("E (capo 2)"), "{why}");
     }
 
     #[test]
