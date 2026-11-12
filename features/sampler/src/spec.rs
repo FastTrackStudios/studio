@@ -576,6 +576,15 @@ pub struct PerformanceSpec {
     /// every strike rings on — Kontakt's CSS (null test: shorts re-struck
     /// every 300 ms all ring).
     pub max_repeat_strikes: Option<u32>,
+    /// A key no zone of the articulation covers plays nothing (as Kontakt),
+    /// instead of the nearest recorded pitch.
+    #[facet(default)]
+    pub strict_key_ranges: bool,
+    /// Trills from key pairs (CSS script slot 0): with a trill articulation
+    /// selected, two keys a semitone / tone apart struck within
+    /// `window_ms` play ONE note — `half` / `whole` — on the lower key,
+    /// `delay_ms` after the first key. A lone key plays nothing.
+    pub trill_pair: Option<TrillPairSpec>,
     /// Release-sample level by held time (KSP `%ru5pa`): gain =
     /// `release_held_db × table[clamp(held_ms/10 − 1, 0, len−1)] / 100`. Empty
     /// = the legacy −6 dB base + linear held curve.
@@ -638,6 +647,8 @@ impl Default for PerformanceSpec {
             resample_transpose: false,
             release_curve_k: 0.0,
             max_repeat_strikes: None,
+            strict_key_ranges: false,
+            trill_pair: None,
             release_held_table: Vec::new(),
             release_held_db: 0.0,
             release_delay_ms: 0.0,
@@ -785,6 +796,42 @@ pub struct MarcatoTransitionSpec {
     /// the body keeps the articulation's held-time fade (measured — not the
     /// decode's 225 ms phrase-note fade).
     pub lt_noteoff_ms: Vec<[f32; 2]>,
+}
+
+/// A connected note on CSS tremolo / trills / harmonics (KSP `$ocjln` 2-4),
+/// null-tested against Kontakt 8: no overlap delay; the old body fades out
+/// linearly over `old_fade_ms[zone]`, the new body enters from its sample
+/// start fading in over `new_fade_ms[zone]` (beyond an octave both use
+/// `big_fade_ms`); the old note's in-phrase release plays at
+/// `in_phrase_release_db`; with `lt_articulation` set, the lower note's
+/// interval-coded transition zone of it enters `lt_offset_ms` deep at
+/// `lt_db` under `lt_env` × a linear fade-out over `lt_fade_out_ms`
+/// (measured: silent 120 ms, then 680 ms up to full).
+#[derive(Debug, Clone, Facet)]
+pub struct SimpleTransitionSpec {
+    pub old_fade_ms: [f32; 3],
+    pub new_fade_ms: [f32; 3],
+    pub big_fade_ms: [f32; 2],
+    pub in_phrase_release_db: f32,
+    #[facet(default)]
+    pub lt_articulation: String,
+    #[facet(default)]
+    pub lt_offset_ms: f32,
+    #[facet(default)]
+    pub lt_db: f32,
+    #[facet(default)]
+    pub lt_env: Vec<EnvSegmentSpec>,
+    #[facet(default)]
+    pub lt_fade_out_ms: f32,
+}
+
+/// See [`PerformanceSpec::trill_pair`].
+#[derive(Debug, Clone, Facet)]
+pub struct TrillPairSpec {
+    pub half: String,
+    pub whole: String,
+    pub window_ms: f32,
+    pub delay_ms: f32,
 }
 
 /// One marcato dynamic layer's transition sample (see
@@ -1759,6 +1806,8 @@ pub struct ArticulationSpec {
     /// A CSS marcato transition: when set, this articulation plays legato
     /// (mono line) with Kontakt's marcato two-stage transition.
     pub marcato_transition: Option<MarcatoTransitionSpec>,
+    /// Tremolo / trills / harmonics legato: see [`SimpleTransitionSpec`].
+    pub simple_transition: Option<SimpleTransitionSpec>,
     /// Whether the envelope freezes at its hold level while the note is held
     /// (sustains) or plays through one-shot (shorts, releases, transitions).
     /// `None` = held for Sustain/Looped/Trill kinds, one-shot otherwise.

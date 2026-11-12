@@ -73,6 +73,47 @@ def main():
         rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", key, cat, desc))
         t = start + win
 
+    if "--tremolo" in sys.argv:
+        # Tremolo / harmonics (mono path, legato on) and trills (two keys
+        # within 25 ms). CC1 127; velocity 40 = zone 1 (no random re-bow
+        # attack on transitions).
+        def single(cat, desc, keys, vel, cc58, hold=2.0):
+            nonlocal t
+            m.cc(t, 58, cc58)
+            m.cc(t, 1, 127)
+            start = t + 1.5
+            for key in keys:
+                m.note(start, hold, key, vel)
+            win = hold + 2.5
+            rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", keys[0], cat, desc))
+            t = start + win
+
+        def phrase(cat, desc, a, b, vel, ioi, cc58):
+            nonlocal t
+            m.cc(t, 58, cc58)
+            m.cc(t, 1, 127)
+            start = t + 1.5
+            m.note(start, ioi + 0.05, a, vel)
+            m.note(start + ioi, 2.0, b, vel)
+            win = ioi + 2.0 + 2.5
+            rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", b, cat, desc))
+            t = start + win
+
+        for name, cc58 in (("Tremolo", 56), ("Harm", 51)):
+            single(name, f"{name} key67 v40", [67], 40, cc58)
+            single(name, f"{name} key72 v40", [72], 40, cc58)
+            for a, b in ((67, 69), (67, 72), (69, 66)):
+                phrase(name, f"{name} {a}->{b} ioi500 v40", a, b, 40, 0.5, cc58)
+        single("Trills", "Trills 67+68 (half) v40", [67, 68], 40, 46)
+        single("Trills", "Trills 67+69 (whole) v40", [67, 69], 40, 46)
+        m.write(sys.argv[1])
+        with open(sys.argv[2], "w") as f:
+            f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
+            for r in rows:
+                f.write("\t".join(map(str, r)) + "\n")
+        print(f"{len(rows)} units, {t:.1f} s")
+        return
+
     if "--shorts" in sys.argv:
         # Shorts (CC58 picks the type). A key repeated within 500 ms plays
         # untuned; the first note of each burst draws Kontakt's random ±5 c

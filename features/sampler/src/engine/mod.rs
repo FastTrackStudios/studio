@@ -884,6 +884,17 @@ pub struct SampleEngine {
     /// Gain envelopes (`flex`, `flex2`) for the sustain layers spawned next —
     /// a CSS marcato transition's CC-driven body envelopes.
     sustain_flex: Option<(Option<voice::FlexEnv>, Option<voice::FlexEnv>)>,
+    /// `group_curve_gain` ignores CC2 tables while set (see its use).
+    curves_cc1_only: bool,
+    /// `PerformanceSpec::trill_pair`: the first key waiting for its partner
+    /// `(note, velocity, frame)`, and the trill note due `(frame, note,
+    /// velocity, articulation)`.
+    pub(crate) trill_first: Option<(u8, u8, u64)>,
+    pub(crate) trill_due: Option<(u64, u8, u8, String)>,
+    pub(crate) trill_bypass: bool,
+    /// Keys a trill pair absorbed without sounding them (their key-up is a
+    /// no-op; the trill note is the lower key's).
+    pub(crate) trill_silent: [bool; 128],
     /// CSS `%jcxqm` two-stage transition fade-in `(stage1_run, stage1_denom,
     /// stage2)` in frames — the transition voice EMERGES via the swell, not a
     /// 25 ms declick (the `NVLeg` sample has no silent head; it starts ~-16 dB, so
@@ -1271,6 +1282,11 @@ impl SampleEngine {
             ab_anchor_frame: 0,
             legato_glide: None,
             sustain_flex: None,
+            curves_cc1_only: false,
+            trill_first: None,
+            trill_due: None,
+            trill_bypass: false,
+            trill_silent: [false; 128],
             transition_fade: None,
             sord_filter: BiquadFilter::lowpass(filter::SORD_FC, filter::SORD_Q, sample_rate),
             // Pre-size note-keyed maps to the full MIDI range so note-on never
@@ -2248,6 +2264,10 @@ impl SampleEngine {
         let mut done = 0;
         self.fire_due_legato();
         while done < block_frames {
+            let trill = self
+                .trill_due
+                .as_ref()
+                .map(|t| t.0.saturating_sub(self.frames_rendered) as usize);
             let next = self
                 .lines
                 .iter()
@@ -2257,6 +2277,7 @@ impl SampleEngine {
                     } => Some(frames_remaining),
                     LegatoState::Idle => None,
                 })
+                .chain(trill)
                 .min()
                 .map_or(block_frames - done, |f| f.clamp(1, block_frames - done));
             part(&mut self.voices, done, next);
@@ -2277,6 +2298,20 @@ impl SampleEngine {
     /// Fire every countdown that has reached zero. Lines are visited in
     /// ascending [`LineId`] order — deterministic when several fire together.
     fn fire_due_legato(&mut self) {
+        if self
+            .trill_due
+            .as_ref()
+            .is_some_and(|t| t.0 <= self.frames_rendered)
+        {
+            if let Some((_, note, velocity, artic)) = self.trill_due.take() {
+                // The trill's own articulation stays selected: its note-off
+                // plays that trill's release (WTrel for a whole-tone trill).
+                self.articulation = artic;
+                self.trill_bypass = true;
+                self.note_on(note, velocity);
+                self.trill_bypass = false;
+            }
+        }
         for li in 0..self.lines.len() {
             let fire = matches!(
                 self.lines[li].state,

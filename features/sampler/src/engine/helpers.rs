@@ -355,6 +355,9 @@ impl SampleEngine {
         for c in a.group_curves.iter().filter(|c| c.dynamic == dynamic) {
             let v = match c.cc {
                 1 => self.cc1,
+                // The tremolo/trill transition groups carry only the CC1
+                // table (null test: Leg plays at CC2 0 under a tremolo).
+                2 if self.curves_cc1_only => continue,
                 2 => self.cc2,
                 // The KSP sets CC36 := the last CC1 just before a release
                 // sample plays (script 21422); release groups crossfade on it.

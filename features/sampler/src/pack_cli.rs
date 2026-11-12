@@ -1101,6 +1101,7 @@ struct TsvZone {
     /// velocity-1 row; `sample_start_vel1` = that row's start when it does.
     main_row: Option<(i32, Option<u64>, f64)>,
     sample_start_vel1: Option<Option<u64>>,
+    vel1_zvol: Option<f64>,
     rr_index: u32,
     mic: String,
     articulation: String,
@@ -1243,6 +1244,7 @@ fn load_tsv_zones(
             marcato: Vec::new(),
             main_row: None,
             sample_start_vel1: None,
+            vel1_zvol: None,
             rr_index,
             mic,
             articulation: artic,
@@ -1258,9 +1260,9 @@ fn load_tsv_zones(
         entry.key_max = entry.key_max.max(key_hi.clamp(0, 127) as u8);
         // The velocity-1 row is the plain note-on zone; without a vel column
         // the first row stands in for it.
-        if start.is_some()
-            && (vel_lo == Some(1) || (vel_lo.is_none() && entry.sample_start.is_none()))
-        {
+        // Without a velocity column the first row stands in for the
+        // velocity-1 one (chosen below when there is one).
+        if start.is_some() && vel_lo.is_none() && entry.sample_start.is_none() {
             entry.sample_start = start;
         }
         // A file with no velocity-1 row (a short: one zone per velocity, each
@@ -1281,9 +1283,18 @@ fn load_tsv_zones(
         if vel_lo == Some(1) {
             // The plain note-on zone: its start and level are the zone's
             // (not the first row read — CSS lists a file again in quieter
-            // groups, e.g. Sfz mf RR1 at 0.315 under vel 8).
-            entry.sample_start_vel1 = Some(start);
-            entry.gain_db = if zvol > 0.0 { 20.0 * zvol.log10() } else { 0.0 };
+            // groups, e.g. Sfz mf RR1 at 0.315 under vel 8). Several
+            // velocity-1 rows (HTrills ff G3: unity from 0, ×2 from 96000,
+            // ×1.41 from 48000 — other groups'): the one nearest unity.
+            let better = entry
+                .vel1_zvol
+                .is_none_or(|zv| (zvol - 1.0).abs() < (zv - 1.0).abs() - 1e-9);
+            if better {
+                entry.vel1_zvol = Some(zvol);
+                entry.sample_start_vel1 = Some(start);
+                entry.sample_start = start;
+                entry.gain_db = if zvol > 0.0 { 20.0 * zvol.log10() } else { 0.0 };
+            }
         }
         // A transition file's velocity column is its interval code, not a
         // velocity: its deeper-entered rows are the marcato transition zones.

@@ -533,6 +533,13 @@ impl SampleEngine {
                 }
                 return;
             }
+            if let Some(st) = self.simple_transition() {
+                self.fire_simple_transition(from_note, to_note, velocity, &st);
+                if let Some(i) = log_idx {
+                    self.legato_fire_log[i].arrival = self.last_arrival_prediction;
+                }
+                return;
+            }
         }
         // The Kontakt-measured CSS transition, when the library declares it.
         if !portamento && self.patch.is_zoned() {

@@ -9,6 +9,108 @@ use super::*;
 use crate::spec::{EnvSegmentSpec, MarcatoTransitionSpec, ksp_lerp, lerp_table};
 
 impl SampleEngine {
+    /// The current articulation's tremolo-style transition, if it has one.
+    pub(crate) fn simple_transition(&self) -> Option<crate::spec::SimpleTransitionSpec> {
+        self.patch
+            .spec
+            .articulation(&self.articulation)
+            .and_then(|a| a.simple_transition.clone())
+    }
+
+    /// Fire one tremolo / trills / harmonics transition `from → to` at the
+    /// second note-on (see [`crate::spec::SimpleTransitionSpec`]).
+    pub(crate) fn fire_simple_transition(
+        &mut self,
+        from: u8,
+        to: u8,
+        velocity: u8,
+        st: &crate::spec::SimpleTransitionSpec,
+    ) {
+        let interval = u32::from(to.abs_diff(from));
+        let big = interval > 12;
+        let zone = usize::from(
+            self.patch
+                .spec
+                .legato_cfg()
+                .velocity_range(velocity)
+                .clamp(1, 3)
+                - 1,
+        );
+        let (old_ms, new_ms) = if big {
+            (st.big_fade_ms[0], st.big_fade_ms[1])
+        } else {
+            (st.old_fade_ms[zone], st.new_fade_ms[zone])
+        };
+        let line = self.cur_line as u8;
+        let sr = self.sample_rate;
+        let ms = move |v: f32| ms_to_frames_f(v, sr);
+
+        // A key no zone covers (harmonics below their range): Kontakt runs
+        // no transition — the old body takes its note-off release fade now
+        // and the old note keeps the line (its release sample comes at its
+        // own key-up). Null test: harmonics A3 → F#3.
+        let artic = self.articulation.clone();
+        let covered = self.patch.spec.zones.iter().any(|z| {
+            z.articulation.eq_ignore_ascii_case(&artic) && (z.key_min..=z.key_max).contains(&to)
+        });
+        if !covered && self.patch.spec.performance.strict_key_ranges {
+            let fade = ms(self.patch.spec.performance.release_ms.unwrap_or(580) as f32);
+            self.voices.note_off_line(line, from, Some(fade));
+            // A fall-back from a released key into an unmapped one ends the
+            // line (nothing is left sounding on it).
+            if !self.held_notes.contains_key(&from) {
+                // ... and its key-up plays its release sample, as ever.
+                self.spawn_release(from);
+                self.line_mut().note = None;
+            }
+            return;
+        }
+
+        // 1. The old body (and any transition voice still sounding) fades out.
+        self.voices
+            .fade_out_note_line(line, from, ms(old_ms), ms(old_ms));
+        // 2. The old note's in-phrase release.
+        self.release_gain_override = Some(db_to_gain(st.in_phrase_release_db));
+        self.spawn_release(from);
+        self.release_gain_override = None;
+        // 3. The new body from its sample start, fading in.
+        let fade = ms(new_ms);
+        self.sustain_fade_in = Some((0, fade, fade, 0));
+        self.in_transition = true;
+        self.play_direction = if to >= from { "up" } else { "down" }.to_string();
+        self.trigger_zoned_sustain(to);
+        self.in_transition = false;
+        self.sustain_fade_in = None;
+        // 4. The transition voice (tremolo / trills; within an octave).
+        if !st.lt_articulation.is_empty() && !big {
+            let segs: Vec<(f32, f32, f32)> = st
+                .lt_env
+                .iter()
+                .map(|e| (e.time_ms, e.level, e.curve))
+                .collect();
+            let env = voice::FlexEnv::from_segments(&segs, 0.0, sr, false);
+            let fade_out =
+                voice::FlexEnv::from_segments(&[(st.lt_fade_out_ms, 0.0, 0.5)], 1.0, sr, false)
+                    .map(super::kontakt_legato::KontaktDip::Curve);
+            let lt = st.lt_articulation.clone();
+            self.curves_cc1_only = true;
+            self.spawn_kontakt_lt_at(
+                &lt,
+                from,
+                to,
+                interval,
+                ms(st.lt_offset_ms),
+                env,
+                fade_out,
+                db_to_gain(st.lt_db),
+            );
+            self.curves_cc1_only = false;
+        }
+        let l = self.line_mut();
+        l.note = Some(to);
+        l.marcato_ioi = None;
+    }
+
     /// The current articulation's marcato transition, if it has one.
     pub(crate) fn marcato_transition(&self) -> Option<MarcatoTransitionSpec> {
         self.patch

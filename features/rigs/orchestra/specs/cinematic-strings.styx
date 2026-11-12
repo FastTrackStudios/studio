@@ -94,6 +94,10 @@ performance {
     release_ms           580   // measured against Kontakt (CC81=85, legato on): the body is gone at 580 ms
     release_curve_k      2.6   // …along (e^(−2.6x) − e^(−2.6))/(1 − e^(−2.6)) — measured, every 100 ms within 0.004
     max_repeat_strikes   0     // every strike of a key rings on, like Kontakt (null test: re-struck shorts)
+    strict_key_ranges    true  // a key outside every zone plays nothing, like Kontakt (null test: harmonics at F#3)
+    // Trills from key pairs (CSS script slot 0): two keys within 25 ms play
+    // one half / whole trill on the lower key, ~26 ms after the first.
+    trill_pair { half HTrills, whole WTrills, window_ms 25, delay_ms 25.0 }
     release_held_db      -6.0  // release sample: −6 dB × %ru5pa[held/10 − 1]/100 (KSP 21171-21196)
     release_delay_ms     2.0   // release sample plays wait(2000) µs after note-off (KSP 20788)
     release_held_table   (100 98 97 96 95 94 93 92 91 90 89 88 87 86 85 84 83 82 81 80 79 78 77 76 75 74 73 72 71 70 69 68 67 66 65 64 63 62 61 60 59 58 57 56 55 54 53 52 51 50 49 48 47 46 45 44 43 42 41 40 39 38 37 36 35 34 33 32 31 30 29 28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 1)
@@ -308,6 +312,28 @@ articulations (
         // "Measured Tremolo" (CC58=63) is KSP-scripted — re-triggers spiccato
         // samples at a synced 16th-note rate. Not replicable without scripting.
         vibrato_pair ""   // no CC2 crossfade partner — tremolo is its own colour
+        // Kontakt group curves (groups.json).
+        group_curves (
+            { dynamic pp, cc 1, points (0 -0.10135136 0.1496063 1 -0.2195946 0.20669292 0 0 1 0 0) }
+            { dynamic mp, cc 1, points (0 -0.10135135 0.11023622 0 0 0.20472442 0.6621622 -0.16891891 0.36023623 1 -0.1689189 0.48031497 0 0 1 0 0) }
+            { dynamic f, cc 1, points (0 0 0.25 0 7.450581e-09 0.42519686 0.44594595 -0.067567565 0.6988189 1 -0.13513513 0.8503937 0 0 1 0 -0.16891891) }
+            { dynamic fff, cc 1, points (0 0 0.56299216 0 0.08445947 0.79527557 0.6081081 -0.15202701 1 1 0) }
+        )
+        // Connected notes ($ocjln 2-4), null-tested against Kontakt: old body
+        // out / new body in by velocity zone, no overlap delay, the new body
+        // from its sample start (not the decode's 212 ms).
+        simple_transition {
+            old_fade_ms (400 400 250)
+            new_fade_ms (150 50 50)
+            big_fade_ms (250 250)
+            in_phrase_release_db -3.0
+            lt_articulation Leg
+            lt_offset_ms    177
+            lt_db           -2.55
+            lt_env ( {time_ms 120.0, level 0.0, curve 0.5}
+                     {time_ms 680.0, level 1.0, curve 0.57} )
+            lt_fade_out_ms  1000
+        }
     }
     {
         id            HTrills
@@ -318,6 +344,27 @@ articulations (
         dyn_ctrl      cc1
         release_artic HTrel
         notes         full
+        // Kontakt group curves (groups.json).
+        group_curves (
+            { dynamic p, cc 1, points (0 -0.016891904 0.15551181 0.6351351 -0.01689191 0.36023623 1 -0.1689189 0.48031497 0 0 1 0 0) }
+            { dynamic mf, cc 1, points (0 0 0.25 0 7.450581e-09 0.42519686 0.44594595 -0.067567565 0.6988189 1 -0.13513513 0.8503937 0 0 1 0 -0.16891891) }
+            { dynamic ff, cc 1, points (0 0 0.56299216 0 0.08445947 0.79527557 0.6081081 -0.15202701 1 1 0) }
+        )
+        // Connected notes ($ocjln 2-4), null-tested against Kontakt: old body
+        // out / new body in by velocity zone, no overlap delay, the new body
+        // from its sample start (not the decode's 212 ms).
+        simple_transition {
+            old_fade_ms (400 400 250)
+            new_fade_ms (150 50 50)
+            big_fade_ms (250 250)
+            in_phrase_release_db -3.0
+            lt_articulation Leg
+            lt_offset_ms    177
+            lt_db           -2.55
+            lt_env ( {time_ms 120.0, level 0.0, curve 0.5}
+                     {time_ms 680.0, level 1.0, curve 0.57} )
+            lt_fade_out_ms  1000
+        }
     }
     {
         id            WTrills
@@ -328,6 +375,27 @@ articulations (
         dyn_ctrl      cc1
         release_artic WTrel
         notes         full
+        // Kontakt group curves (groups.json).
+        group_curves (
+            { dynamic p, cc 1, points (0 -0.016891904 0.15551181 0.6351351 -0.01689191 0.36023623 1 -0.1689189 0.48031497 0 0 1 0 0) }
+            { dynamic mf, cc 1, points (0 0 0.25 0 7.450581e-09 0.42519686 0.44594595 -0.067567565 0.6988189 1 -0.13513513 0.8503937 0 0 1 0 -0.16891891) }
+            { dynamic ff, cc 1, points (0 0 0.56299216 0 0.08445947 0.79527557 0.6081081 -0.15202701 1 1 0) }
+        )
+        // Connected notes ($ocjln 2-4), null-tested against Kontakt: old body
+        // out / new body in by velocity zone, no overlap delay, the new body
+        // from its sample start (not the decode's 212 ms).
+        simple_transition {
+            old_fade_ms (400 400 250)
+            new_fade_ms (150 50 50)
+            big_fade_ms (250 250)
+            in_phrase_release_db -3.0
+            lt_articulation Leg
+            lt_offset_ms    177
+            lt_db           -2.55
+            lt_env ( {time_ms 120.0, level 0.0, curve 0.5}
+                     {time_ms 680.0, level 1.0, curve 0.57} )
+            lt_fade_out_ms  1000
+        }
     }
     {
         id            Harm
@@ -342,6 +410,20 @@ articulations (
         // (Harm mp_G2 → key 67, root 67), synced by `zones sync-tsv`. The old
         // `transpose -12` undid a wrong root (55) through the pitch shifter.
         vibrato_pair ""   // harmonics have no vibrato pair
+        // Kontakt group curves (groups.json).
+        group_curves (
+            { dynamic pp, cc 1, points (0 0 0.5 1 -0.16891892 1 0 0) }
+            { dynamic mp, cc 1, points (0 0 0.3996063 0 -0.08445946 1 1 -0.16891891) }
+        )
+        // Connected notes ($ocjln 2-4), null-tested against Kontakt: old body
+        // out / new body in by velocity zone, no overlap delay, the new body
+        // from its sample start (not the decode's 212 ms).
+        simple_transition {
+            old_fade_ms (400 400 250)
+            new_fade_ms (150 50 50)
+            big_fade_ms (250 250)
+            in_phrase_release_db -3.0
+        }
     }
     {
         id       Clegno
@@ -719,6 +801,17 @@ articulations (
         rr       1
         dyn_ctrl cc1
         notes    short
+        // The release groups' envelopes (as Marcrel/NVrel): flex tail × AHD.
+        amp_env ( {time_ms 1.0, level 0.986, curve 0.125}
+                  {time_ms 4007.0, level 1.0, curve 0.9}
+                  {time_ms 1250.0, level 0.0, curve 0.7} )
+        amp_env2 ( {time_ms 250.0, level 1.0, curve 0.64}
+                   {time_ms 25000.0, level 0.25, curve 0.7464} )
+        // Kontakt group curves (groups.json).
+        group_curves (
+            { dynamic pp, cc 36, points (0 0 0.5 1 -0.16891892 1 0 0) }
+            { dynamic mp, cc 36, points (0 0 0.3996063 0 -0.08445946 1 1 -0.16891891) }
+        )
     }
     {
         id       Marcrel
@@ -751,6 +844,18 @@ articulations (
         rr       1
         dyn_ctrl cc1
         notes    full
+        // The release groups' envelopes (as Marcrel/NVrel): flex tail × AHD.
+        amp_env ( {time_ms 1.0, level 0.986, curve 0.125}
+                  {time_ms 4007.0, level 1.0, curve 0.9}
+                  {time_ms 1250.0, level 0.0, curve 0.7} )
+        amp_env2 ( {time_ms 250.0, level 1.0, curve 0.64}
+                   {time_ms 25000.0, level 0.25, curve 0.7464} )
+        // Kontakt group curves (groups.json).
+        group_curves (
+            { dynamic p, cc 36, points (0 -0.016891904 0.15551181 0.6351351 -0.01689191 0.36023623 1 -0.1689189 0.48031497 0 0 1 0 0) }
+            { dynamic mf, cc 36, points (0 0 0.25 0 7.450581e-09 0.42519686 0.44594595 -0.067567565 0.6988189 1 -0.13513513 0.8503937 0 0 1 0 -0.16891891) }
+            { dynamic ff, cc 36, points (0 0 0.56299216 0 0.08445947 0.79527557 0.6081081 -0.15202701 1 1 0) }
+        )
     }
     {
         id       WTrel
@@ -760,6 +865,18 @@ articulations (
         rr       1
         dyn_ctrl cc1
         notes    full
+        // The release groups' envelopes (as Marcrel/NVrel): flex tail × AHD.
+        amp_env ( {time_ms 1.0, level 0.986, curve 0.125}
+                  {time_ms 4007.0, level 1.0, curve 0.9}
+                  {time_ms 1250.0, level 0.0, curve 0.7} )
+        amp_env2 ( {time_ms 250.0, level 1.0, curve 0.64}
+                   {time_ms 25000.0, level 0.25, curve 0.7464} )
+        // Kontakt group curves (groups.json).
+        group_curves (
+            { dynamic p, cc 36, points (0 -0.016891904 0.15551181 0.6351351 -0.01689191 0.36023623 1 -0.1689189 0.48031497 0 0 1 0 0) }
+            { dynamic mf, cc 36, points (0 0 0.25 0 7.450581e-09 0.42519686 0.44594595 -0.067567565 0.6988189 1 -0.13513513 0.8503937 0 0 1 0 -0.16891891) }
+            { dynamic ff, cc 36, points (0 0 0.56299216 0 0.08445947 0.79527557 0.6081081 -0.15202701 1 1 0) }
+        )
     }
     {
         id       Tremrel
@@ -769,6 +886,19 @@ articulations (
         rr       1
         dyn_ctrl cc1
         notes    full
+        // The release groups' envelopes (as Marcrel/NVrel): flex tail × AHD.
+        amp_env ( {time_ms 1.0, level 0.986, curve 0.125}
+                  {time_ms 4007.0, level 1.0, curve 0.9}
+                  {time_ms 1250.0, level 0.0, curve 0.7} )
+        amp_env2 ( {time_ms 250.0, level 1.0, curve 0.64}
+                   {time_ms 25000.0, level 0.25, curve 0.7464} )
+        // Kontakt group curves (groups.json).
+        group_curves (
+            { dynamic pp, cc 36, points (0 -0.10135136 0.1496063 1 -0.2195946 0.20669292 0 0 1 0 0) }
+            { dynamic mp, cc 36, points (0 -0.10135135 0.11023622 0 0 0.20472442 0.6621622 -0.16891891 0.36023623 1 -0.1689189 0.48031497 0 0 1 0 0) }
+            { dynamic f, cc 36, points (0 0 0.25 0 7.450581e-09 0.42519686 0.44594595 -0.067567565 0.6988189 1 -0.13513513 0.8503937 0 0 1 0 -0.16891891) }
+            { dynamic fff, cc 36, points (0 0 0.56299216 0 0.08445947 0.79527557 0.6081081 -0.15202701 1 1 0) }
+        )
     }
 )
 

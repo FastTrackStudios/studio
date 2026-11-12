@@ -53,7 +53,7 @@ impl SampleEngine {
             .patch
             .spec
             .articulation(artic)
-            .is_some_and(|a| a.marcato_transition.is_some())
+            .is_some_and(|a| a.marcato_transition.is_some() || a.simple_transition.is_some())
         {
             return true;
         }
@@ -144,8 +144,43 @@ impl SampleEngine {
         // from THIS note's velocity before any routing decision — so the live
         // auto-divisi gate below and every downstream path see the real artic
         // (a playable note; keyswitch notes select via `try_keyswitch` instead).
-        if velocity > 0 && !self.keyswitch_notes.contains_key(&note) {
+        // (A generated trill note keeps the articulation its pair chose.)
+        if velocity > 0 && !self.trill_bypass && !self.keyswitch_notes.contains_key(&note) {
             self.resolve_pending_cc58(velocity);
+        }
+
+        // Trills from key pairs (see `PerformanceSpec::trill_pair`).
+        if velocity > 0 && !self.trill_bypass && !self.keyswitch_notes.contains_key(&note) {
+            if let Some(tp) = self.patch.spec.performance.trill_pair.clone() {
+                if self.articulation.eq_ignore_ascii_case(&tp.half)
+                    || self.articulation.eq_ignore_ascii_case(&tp.whole)
+                {
+                    let now = self.frames_rendered;
+                    let window = ms_to_frames_f(tp.window_ms, self.sample_rate) as u64;
+                    match self.trill_first.take() {
+                        Some((first, vel, at))
+                            if now.saturating_sub(at) <= window
+                                && matches!(note.abs_diff(first), 1 | 2) =>
+                        {
+                            let artic = if note.abs_diff(first) == 1 {
+                                tp.half
+                            } else {
+                                tp.whole
+                            };
+                            let due = at + ms_to_frames_f(tp.delay_ms, self.sample_rate) as u64;
+                            self.trill_due = Some((due, note.min(first), vel, artic));
+                            self.trill_silent[usize::from(note.max(first) & 127)] = true;
+                        }
+                        _ => {
+                            if let Some((lone, ..)) = self.trill_first {
+                                self.trill_silent[usize::from(lone & 127)] = true;
+                            }
+                            self.trill_first = Some((note, velocity, now));
+                        }
+                    }
+                    return;
+                }
+            }
         }
 
         // Live auto-divisi (StrictLive + mono-legato patch): the greedy line
@@ -513,6 +548,14 @@ impl SampleEngine {
     }
 
     pub(crate) fn note_off_with_velocity_on_line(&mut self, note: u8, release_velocity: u8) {
+        // A key a trill pair absorbed sounds nothing, so its key-up neither.
+        if std::mem::take(&mut self.trill_silent[usize::from(note & 127)]) {
+            return;
+        }
+        if self.trill_first.is_some_and(|(n, ..)| n == note) {
+            self.trill_first = None;
+            return;
+        }
         let release_frames = self.pedal_release_frames();
         if self.cc64_held {
             // Sustain pedal held — defer release.
@@ -1315,6 +1358,10 @@ impl SampleEngine {
                 self.fire_marcato_transition(from, to, velocity, ioi_ms, &mt);
                 return;
             }
+            if let Some(st) = self.simple_transition() {
+                self.fire_simple_transition(from, to, velocity, &st);
+                return;
+            }
         }
         let (delay_ms, portamento) = self.legato_timing(velocity, ioi_frames);
         let frames = ms_to_frames(delay_ms, self.sample_rate);
@@ -2095,7 +2142,11 @@ impl SampleEngine {
             return Some(i);
         }
         // No zone covers the key: the nearest recorded pitch (the rare
-        // whole-tone-grid library) — the full scan.
+        // whole-tone-grid library) — the full scan. Kontakt itself plays
+        // nothing there (`strict_key_ranges`: CSS harmonics below G3).
+        if self.patch.spec.performance.strict_key_ranges {
+            return None;
+        }
         self.find_layer_zone_scan(artic, direction, dynamic, note, rr)
     }
 

@@ -168,6 +168,22 @@ impl SampleEngine {
         env: Option<voice::FlexEnv>,
         dip: Option<KontaktDip>,
     ) {
+        self.spawn_kontakt_lt_at(leg, from, to, interval, offset, env, dip, 1.0);
+    }
+
+    /// [`spawn_kontakt_lt`](Self::spawn_kontakt_lt) at an extra `level`.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn spawn_kontakt_lt_at(
+        &mut self,
+        leg: &str,
+        from: u8,
+        to: u8,
+        interval: u32,
+        offset: usize,
+        env: Option<voice::FlexEnv>,
+        dip: Option<KontaktDip>,
+        level: f32,
+    ) {
         let lower = from.min(to);
         let direction = if to > from { "up" } else { "down" };
         let Some(a) = self.patch.spec.articulation(leg) else {
@@ -175,7 +191,7 @@ impl SampleEngine {
         };
         let dyns = a.dynamics.clone();
         for label in dyns {
-            let g = self.group_curve_gain(leg, &label).unwrap_or(1.0);
+            let g = self.group_curve_gain(leg, &label).unwrap_or(1.0) * level;
             if g <= 0.0 {
                 continue;
             }
