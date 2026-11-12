@@ -68,6 +68,20 @@ fn style(cursor: &CursorConfig) -> String {
     )
 }
 
+/// Session's playback cursor as CSS colours: (the wash over the bar being
+/// played, the line at the beat), as [`style`] draws them in the SVG.
+#[must_use]
+pub fn cursor_colors() -> (String, String) {
+    let cursor = CursorConfig::playback();
+    let [r, g, b, a] = cursor.accent_color;
+    let line = f64::from(a) / 255.0;
+    let wash = line * f64::from(cursor.fill_alpha);
+    (
+        format!("rgba({r},{g},{b},{wash:.3})"),
+        format!("rgba({r},{g},{b},{line:.3})"),
+    )
+}
+
 /// One beat played: when, and where its line is drawn (page-stacked SVG
 /// coordinates).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -82,6 +96,8 @@ pub struct BeatMark {
     /// The same instant on the layout's own one-pass clock: what Session's
     /// cursor reads ([`BeatPosition::x_at_time`]) to put its line at `x`.
     pub layout_at: f64,
+    /// The page it is drawn on (0-based).
+    pub page: usize,
     /// The line: left edge, top, width, height.
     pub x: f64,
     pub y: f64,
@@ -208,6 +224,115 @@ pub fn follow_chart(source: &str, media: Option<&str>) -> Result<FollowChart> {
     })
 }
 
+/// A chart engraved page by page, each bar placed on its page.
+///
+/// What the song workspace's chart shows a page at a time, the bar at the
+/// playhead marked (`crate::workspace`): the same engraving as
+/// [`follow_chart`]'s.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FollowPages {
+    /// Each page as an SVG of its own, its text as outlines, its
+    /// `viewBox` the page (`width` × `height` points).
+    pub pages: Vec<String>,
+    /// A page's size, in points.
+    pub width: f64,
+    pub height: f64,
+    /// Every bar in playing order, with where it is drawn.
+    pub bars: Vec<PlacedBar>,
+    /// Every beat played, in playing order, its line on its page
+    /// ([`BeatMark::page`]), in points.
+    pub beats: Vec<BeatMark>,
+    /// Each of the chart's sections: its name and colour (CSS), by
+    /// [`PlacedBar::section`].
+    pub sections: Vec<(String, String)>,
+}
+
+/// A bar as played and where it is drawn.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlacedBar {
+    /// When it is played and when it ends, seconds into the recording.
+    pub start: f64,
+    pub end: f64,
+    /// Its number as drawn (1-based), and which time through a repeat.
+    pub number: usize,
+    pub pass: u32,
+    /// Its section, by index into [`FollowPages::sections`].
+    pub section: usize,
+    /// The page it is on (0-based), and its box on that page, in points.
+    pub page: usize,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// Chart `source` engraved page by page, its bars timed on its own clock.
+///
+/// # Errors
+///
+/// It does not parse, or a page did not draw.
+pub fn follow_pages(source: &str) -> Result<FollowPages> {
+    let chart = keyflow::parse(source).map_err(|e| Error::Engrave(e.to_string()))?;
+    let (pipeline, layout) = layout(&chart)?;
+    let times = bar_times(&chart, clock(&chart));
+    let (width, height) = layout
+        .pages
+        .first()
+        .map_or((595.28, 841.89), |p| (p.width, p.height));
+    // The chart's own ids, as `follow_chart` draws them, each page's its
+    // own: a window shows several charts (`follow_chart`'s prefix).
+    let ids = format!("kf{:08x}", chart_id(source));
+    let mut pages = Vec::new();
+    for (n, page) in (0_u32..).zip(&pipeline.export_svg_pages_linked(&layout)) {
+        let prefix = format!("{ids}p{n}-");
+        let (defs, inner) = share_paths(&outline(page, &prefix)?, &prefix);
+        pages.push(format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {width:.2} {height:.2}\" width=\"{width:.2}\" height=\"{height:.2}\">{defs}<rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>{inner}</svg>"
+        ));
+    }
+    let boxes = bar_boxes(&layout);
+    let offsets: Vec<(f64, f64)> = layout
+        .pages
+        .iter()
+        .map(|p| (p.x_offset, p.y_offset))
+        .collect();
+    let bars = times
+        .iter()
+        .filter_map(|t| {
+            let b = boxes.get(&t.bar)?;
+            let page = usize::try_from(b.page.checked_sub(1)?).ok()?;
+            let (x, y) = place(b.page, b.x, b.y, &offsets, 0.0)?;
+            Some(PlacedBar {
+                start: t.start,
+                end: t.end,
+                number: t.bar.saturating_add(1),
+                pass: t.pass,
+                section: t.section,
+                page,
+                x,
+                y,
+                width: b.width,
+                height: b.height,
+            })
+        })
+        .collect();
+    // Pitch 0: each beat on its own page's sheet.
+    let beats = beat_marks(&layout, &times, &CursorConfig::playback(), &offsets, 0.0);
+    let sections = chart
+        .sections
+        .iter()
+        .map(|s| (s.section.display_name(), s.section.color_bright()))
+        .collect();
+    Ok(FollowPages {
+        pages,
+        width,
+        height,
+        bars,
+        beats,
+        sections,
+    })
+}
+
 /// Where point `x`, `y` of 1-based page `page` of the engraver's scene is
 /// in the stacked SVG: its page's offset in the scene taken off, its
 /// page's place in the stack put on.
@@ -310,6 +435,7 @@ fn beat_marks(
                     marks.push(BeatMark {
                         at,
                         bar: bar.bar,
+                        page: usize::try_from(slot.page.saturating_sub(1)).unwrap_or(0),
                         #[allow(
                             clippy::cast_possible_truncation,
                             clippy::cast_sign_loss,

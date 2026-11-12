@@ -22,7 +22,9 @@ use std::time::Duration;
 use dioxus::prelude::*;
 use futures_util::StreamExt as _;
 
-use crate::shell::{DIM, RULE, TEXT};
+use session::ui::components::chart_text::{ChartText, ChartTextStatus, keyflow_decorations};
+
+use crate::shell::{RULE, TEXT};
 use crate::song_model::StudioSession;
 
 /// How long typing has to pause before the chart is laid over the song.
@@ -106,9 +108,9 @@ pub fn ChartEditor() -> Element {
     let _ = carets();
 
     let status = match outcome() {
-        None => ("", DIM.to_owned()),
-        Some(Outcome::Applied { .. }) => ("", "#4ac26b".to_owned()),
-        Some(Outcome::Refused(_) | Outcome::ChartOnly) => ("", "#e3b341".to_owned()),
+        None => ChartTextStatus::Idle,
+        Some(Outcome::Applied { .. }) => ChartTextStatus::Done,
+        Some(Outcome::Refused(_) | Outcome::ChartOnly) => ChartTextStatus::Warn,
     };
     let message = match outcome() {
         None => file.as_ref().and_then(|f| f.file_name()).map_or_else(
@@ -123,43 +125,19 @@ pub fn ChartEditor() -> Element {
             "chart saved — the song is rebuilt only in Engine mode".to_owned()
         }
     };
-    let css = keyflow_editor_lang::lang::highlight_css(
-        &keyflow_editor_lang::lang::HighlightTheme::default_dark(),
-    );
+    // The pane is the shared one (`session::ui::components::chart_text`):
+    // Keyflow's colours with the others' carets over them.
     rsx! {
-        style { dangerous_inner_html: editor_view::EDITOR_CSS }
-        style { dangerous_inner_html: "{css}" }
-        style { dangerous_inner_html: EDITOR_THEME }
-        div {
-            style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; \
-                    flex-direction:column; background:#101114;",
-            // Clicking in here gives this pane the keyboard: the space bar
-            // types a space rather than playing.
-            onmousedown: move |event| {
-                crate::keys::set_editing(true);
-                event.stop_propagation();
-            },
-            div {
-                style: "flex:none; display:flex; align-items:center; gap:8px; height:26px; \
-                        padding:0 10px; border-bottom:1px solid {RULE}; font-size:11px;",
-                span { style: "width:7px; height:7px; border-radius:4px; background:{status.1};" }
-                span {
-                    style: "color:{DIM}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;",
-                    "{message}"
-                }
-            }
-            div {
-                style: "flex:1; min-height:0; overflow:scroll; padding:8px 12px; color:{TEXT}; \
-                        font-family: ui-monospace, Menlo, monospace; font-size:13px;",
-                editor_view::Editor {
-                    state,
-                    decorations: Some(editor_view::DecorationSource::new(|st| {
-                        let mut out = keyflow_editor_lang::lang::keyflow_decorations(st);
-                        out.extend(remote_carets(st));
-                        out
-                    })),
-                }
-            }
+        ChartText {
+            state,
+            message,
+            status,
+            decorations: editor_view::DecorationSource::new(|st| {
+                let mut out = keyflow_decorations(st);
+                out.extend(remote_carets(st));
+                out
+            }),
+            on_press: move |()| crate::keys::set_editing(true),
         }
     }
 }
@@ -298,17 +276,6 @@ fn apply_remote(state: Signal<editor_state::EditorState>, text: &str) {
         ),
     );
 }
-
-/// The editor's own palette tokens, dark, for the stylesheet's variables.
-const EDITOR_THEME: &str = "
-:root {
-    --background: #101114;
-    --muted: #1a1c20;
-    --foreground: #e5e7eb;
-    --muted-foreground: #8b9099;
-    --primary: #3aa0ff;
-}
-";
 
 /// Start the worker that lays chart text over `project`: it takes the
 /// latest text once typing has paused, applies it, saves, and replies.

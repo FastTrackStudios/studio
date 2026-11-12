@@ -3,7 +3,10 @@
 //! Pure presentation components that render UI based on props only.
 //! No signal dependencies - all state is passed via props.
 
+#[cfg(feature = "chart-editor")]
+pub mod chart_text;
 pub mod lyric_sync;
+pub mod lyrics;
 pub mod mixer;
 pub mod progress;
 pub mod section_progress;

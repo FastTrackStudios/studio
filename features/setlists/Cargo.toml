@@ -18,8 +18,14 @@ required-features = ["extension"]
 [features]
 default = []
 # The extension: its navigator providers, views and actions, over the
-# app's actions (never the disk).
-extension = ["dep:architect-extensions", "dep:architect-navigator-api", "dep:architect-workspace", "dep:dioxus"]
+# app's actions (never the disk), and a song's workspace (`workspace`)
+# drawn with Session's panels (`session`'s `ui` components: the progress
+# bar, the lyrics, the chart's text editor).
+extension = ["workspace", "dep:architect-extensions", "dep:architect-navigator-api", "dep:architect-workspace", "dep:architect-theme", "dep:dioxus", "session/chart-editor", "dep:editor-state", "dep:editor-view", "dep:base64", "dep:lucide-dioxus", "dep:web-time", "dep:futures-util", "dep:futures-channel", "dep:futures-timer", "dep:wasm-bindgen-futures", "dep:gloo-timers"]
+# A song's workspace, the model (`setlists::workspace`): the chart engraved
+# page by page and timed on its own clock, its parts, its one lyrics
+# source, the play clock and where the panes go.
+workspace = ["engrave", "dep:session"]
 # Engrave a song's `.kf` to its Master Rhythm pages and PDF.
 engrave = ["dep:keyflow", "dep:engraver", "dep:resvg"]
 # `studio setlist import|engrave`: songs brought into a library from their files.
@@ -28,6 +34,10 @@ cli = ["engrave", "dep:clap"]
 # timed, so Architect's page player marks the bar being played), as the
 # block renderer a node draws a setlist's share link with.
 share = ["engrave", "dep:architect-sites"]
+
+[[example]]
+name = "workspace_shot"
+required-features = ["extension"]
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
@@ -42,11 +52,46 @@ architect-sites = { workspace = true, optional = true }
 architect-extensions = { workspace = true, optional = true, features = ["guest"] }
 architect-navigator-api = { workspace = true, optional = true }
 architect-workspace = { workspace = true, optional = true, features = ["ui"] }
+# The app's theme (the song workspace's colours).
+architect-theme = { workspace = true, optional = true, features = ["dioxus"] }
 dioxus = { workspace = true, optional = true }
 serde_json = { workspace = true }
+# The song workspace's panels, Session's (`ui::components`), and its
+# lyrics model (`session::lyrics`).
+session = { workspace = true, optional = true }
+editor-state = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+lucide-dioxus = { workspace = true, optional = true }
+web-time = { workspace = true, optional = true }
+futures-util = { workspace = true, optional = true }
+futures-channel = { workspace = true, optional = true }
 clap = { workspace = true, optional = true, features = ["env"] }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# The editor drawn under Blitz (its focus and its scrolling: `native`).
+editor-view = { workspace = true, optional = true, features = ["native"] }
+futures-timer = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+editor-view = { workspace = true, optional = true }
+futures-timer = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+gloo-timers = { workspace = true, optional = true }
+
 [dev-dependencies]
+# examples/workspace_shot.rs: the song workspace in a headless Blitz
+# document, painted to a PNG.
+dioxus = { workspace = true }
+dioxus-native-dom = { workspace = true }
+blitz-dom = { workspace = true }
+blitz-traits = { workspace = true }
+blitz-paint = { workspace = true }
+anyrender = { workspace = true }
+anyrender_vello_cpu = { workspace = true }
+image = { workspace = true }
+base64 = { workspace = true }
+# tests/it/workspace_view.rs: the workspace mounted headless, clicked.
+dioxus-test = { workspace = true }
 tempfile = { workspace = true }
 futures = { workspace = true }
 facet = { workspace = true }

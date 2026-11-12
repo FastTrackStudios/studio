@@ -26,11 +26,24 @@ net = ["dep:crdt", "dep:futures"]
 project-sync = ["dep:crdt", "dep:task-dial", "dep:dirs", "dep:fts-account", "fts-account/sync", "dep:session-format", "session-format/sync"]
 reaper = ["studio/reaper", "dep:daw-actions", "dep:daw-reaper", "dep:daw-sync", "dep:reaper-high", "dep:reaper-low", "dep:reaper-medium"]
 tts = ["dep:chatterbox-rs", "dep:ort", "ort/load-dynamic"]
-ui = ["dep:architect-ui", "dep:dock", "dock?/ui", "dep:lucide-dioxus", "web"]
+# The presentation components (`ui::components`): the progress bar, the
+# lyrics panel (`components::lyrics`, ticking on a thread natively and on
+# the browser's timer on a page), the mixer, … — props only, so Session's
+# window and the setlists extension's song workspace mount the same ones.
+ui = ["dep:architect-ui", "dep:dock", "dock?/ui", "dep:lucide-dioxus", "web", "dep:futures-util", "dep:futures-channel", "dep:web-time", "dep:wasm-bindgen-futures", "dep:gloo-timers"]
+# The chart's text editor (`components::chart_text`): Keyflow source in
+# the editor (`editor-view`), coloured and checked as it is typed — what
+# Session's chart editor and the song workspace's both draw.
+chart-editor = ["ui", "dep:editor-view", "dep:editor-state", "dep:keyflow-editor-lang"]
 vox = []
 web = ["dioxus", "dock/ui", "dock/web"]
 
 [dependencies]
+futures-channel = { workspace = true, optional = true }
+web-time = { workspace = true, optional = true }
+editor-view = { workspace = true, optional = true }
+editor-state = { workspace = true, optional = true }
+keyflow-editor-lang = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 architect = { workspace = true, features = ["local", "platform", "vox"] }
 architect-ui = { workspace = true, optional = true }
@@ -125,6 +138,8 @@ reaper-medium = { workspace = true, optional = true }
 vox = { workspace = true, features = ["transport-local"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = { workspace = true, optional = true }
+gloo-timers = { workspace = true, optional = true }
 futures = { workspace = true }
 web-sys = { workspace = true, features = ["Window", "Performance"] }
 

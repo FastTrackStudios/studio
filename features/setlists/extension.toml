@@ -31,6 +31,15 @@ path = "features/setlists"
 [capabilities]
 actions = ["VAULT_", "BASES_", "SHARE_CREATE", "EXT_VIEW_OPEN"]
 effect = "mutating"
+# A song's workspace reads its `.kf` and `.lrc` and saves an edited chart
+# back to its `.kf`: files beside the song's note, which the vault's
+# actions (notes only) cannot reach, so the host's `read_file` and
+# `write_file` do, in the vault's folder (VAULT_STATUS's root). A vault
+# under the home folder is in reach; one elsewhere, once the person picks
+# its folder ("Allow saving", `pickers`), for the run. Until the app has
+# an action for a vault's files (FastTrackStudios/architect#492).
+folders = ["~"]
+ui = ["pickers"]
 
 [[actions]]
 id = "STUDIO_SETLISTS_LIST"

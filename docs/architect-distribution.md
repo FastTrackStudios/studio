@@ -159,5 +159,9 @@ it is not required, and PRs that don't reach the node skip it after
   stock Architect app. It works there, but it can't draw on a node.
   Installed into Studio Architect, it overrides the compiled-in copy, as a
   development copy does.
+  A song note opens as its workspace (Session's Overview: the progress
+  bar, the chart's text over the lyrics, the chart;
+  `features/setlists/README.md`) in both, drawn in the app's document when
+  compiled in and remotely as a process.
 - **Productions** (`studio-productions`) is compiled in beside it. A
   production's show set is a setlist.
