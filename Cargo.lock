@@ -9040,11 +9040,20 @@ dependencies = [
 name = "fts-patchbay"
 version = "0.1.0"
 dependencies = [
+ "anyrender",
+ "anyrender_vello",
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.2)",
+ "architect-desktop",
  "architect-telemetry",
+ "blitz-dom",
+ "blitz-paint",
+ "blitz-traits",
  "clap",
  "dioxus",
+ "dioxus-native",
+ "dioxus-native-dom",
  "eyre",
+ "image",
  "include_dir",
  "libc",
  "patchbay",
@@ -16419,6 +16428,7 @@ dependencies = [
  "facet",
  "facet-styx",
  "futures",
+ "futures-timer",
  "futures-util",
  "gloo-timers 0.3.0",
  "if-addrs",
