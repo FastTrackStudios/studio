@@ -134,10 +134,21 @@ it is ready at 8.7 s, with the chart, which is the longer wait, as the node
 serves both uncompressed: FastTrackStudios/architect#602), and stay where it
 cannot run (Safari, which has no JS Promise Integration yet).
 
-The distribution reads it from `studio-island/` beside the binary
-(`studio_architect::island`, `Distribution::island`); `scripts/studio-architect.sh
-release` puts `just island`'s folder there, and a release without it ships the
-node without the island. Needs the Architect release with #601.
+The distribution reads it from `studio-island/` beside the node's own
+executable (`studio_architect::island`, `Distribution::island`) and checks
+it against its lock first (`studio_architect::island::at`): every file
+`architect.lock.json` names must be there with the digest the lock gives
+(sha256, base64), and no name may leave the folder. A folder that does not
+match is refused whole, with one warning (`island.outcome = "refused"`):
+the node serves no island, and the now-playing view keeps Architect's own
+bar and controls, as on a node shipped without the folder. Only the lock's
+files, the lock and `island.css` are served. `just island` writes
+`BUILT_FROM` (the commit it was built from) beside them, and
+`scripts/studio-architect.sh release` refuses to package a folder that is
+missing or was built from another commit. The release job builds it just
+before, in the same target dir (`xtask/workflows/src/studio_architect.rs`,
+step "Studio's island": the `wasi` profile's `wasm32-wasip2` target and
+node >= 26, checked first).
 
 ## Release artefacts
 
@@ -149,7 +160,7 @@ tag's one GitHub Release:
 
 | asset | what |
 | --- | --- |
-| `studio-architect-node-<tag>-x86_64-linux.tar.gz` (+ `.sha256`) | `studio-architect-node-<tag>-x86_64-linux/studio-architect`, the node |
+| `studio-architect-node-<tag>-x86_64-linux.tar.gz` (+ `.sha256`) | `studio-architect-node-<tag>-x86_64-linux/`: `studio-architect`, the node, and `studio-island/` beside it, its island (`architect.json`, `architect.lock.json`, `studio_island.js`, the `studio_island.*.wasm` the lock names, `island.css`, `BUILT_FROM`). Install the folder next to the node's real binary (not a wrapper or a symlink's folder): the node finds it from its own executable's path |
 | `studio-architect-web-<tag>.tar.gz` (+ `.sha256`) | `studio-architect-web-<tag>/`: the landing page, `docs/`, `app/` with `distribution.json` |
 | `SHA256SUMS` (+ `SHA256SUMS.minisig`) | every asset of the release, signed with the org key |
 

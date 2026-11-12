@@ -167,7 +167,8 @@ async fn serve(dist: &Distribution, data: &Path, vault: &Path) -> Running {
     ]);
     let config = Config::load(None, |k| env.get(k).cloned()).unwrap();
     let blocks = dist.blocks(&config.data_dir.join("linked"));
-    tokio::time::timeout(Duration::from_secs(60), node::start_with(config, blocks))
+    let start = node::start_with_islands(config, blocks, dist.share_layers(), dist.islands());
+    tokio::time::timeout(Duration::from_secs(60), start)
         .await
         .expect("the node started within a minute")
         .unwrap()
@@ -193,13 +194,13 @@ async fn get(node: SocketAddr, path: &str) -> (u16, String) {
     (status, body.to_owned())
 }
 
-/// The song page of the share, once the node has built it (bounded).
-async fn song_page(node: SocketAddr, code: &str) -> String {
-    let page = format!("/s/{code}/libraries/christmas/silent-night/silent-night/");
+/// `page` of the share, once the node has built it with `marker` on it
+/// (bounded).
+async fn page(node: SocketAddr, page: &str, marker: &str, code: &str) -> String {
     let deadline = Instant::now() + Duration::from_secs(90);
     loop {
-        let (status, body) = get(node, &page).await;
-        if status == 200 && body.contains("Silent Night") {
+        let (status, body) = get(node, page).await;
+        if status == 200 && body.contains(marker) {
             return body;
         }
         assert!(
@@ -214,6 +215,17 @@ async fn song_page(node: SocketAddr, code: &str) -> String {
 
 /// The page of `dist`'s node for the shared setlist's song.
 async fn shared_song_on(dist: &Distribution) -> String {
+    shared_page_on(
+        dist,
+        "libraries/christmas/silent-night/silent-night/",
+        "Silent Night",
+    )
+    .await
+}
+
+/// The page at `rest` of the shared setlist on `dist`'s node, once it
+/// holds `marker` (bounded).
+async fn shared_page_on(dist: &Distribution, rest: &str, marker: &str) -> String {
     let dir = tempfile::tempdir().unwrap();
     let (data, vault, files) = (
         dir.path().join("data"),
@@ -225,7 +237,7 @@ async fn shared_song_on(dist: &Distribution) -> String {
     }
     let code = shared_setlist(&vault, &files);
     let node = serve(dist, &data, &vault).await;
-    let html = song_page(node.http, &code).await;
+    let html = page(node.http, &format!("/s/{code}/{rest}"), marker, &code).await;
     node.stop().await;
     html
 }
@@ -328,4 +340,148 @@ fn it_is_studio_architect_with_studios_extensions_compiled_in() {
         assert!(ids.contains(&e["id"].as_str().unwrap()), "{e} is missing");
     }
     assert_ne!(d["bundle_id"], stock["bundle_id"]);
+}
+
+// Studio's island (#445): the folder beside the binary, checked against
+// its lock. The page's player reads `<script id="site-islands">` (the
+// node writes it on a page with recordings, its `islands` list empty when
+// it has none) and draws Architect's own bar and controls without one.
+
+/// The islands the page offers its now-playing view: their ids.
+fn islands_on(html: &str) -> Vec<String> {
+    let open = "<script type=\"application/json\" id=\"site-islands\">";
+    let Some(at) = html.find(open) else {
+        return Vec::new();
+    };
+    let rest = &html[at + open.len()..];
+    let json: serde_json::Value =
+        serde_json::from_str(&rest[..rest.find("</script>").unwrap()].replace("<\\/", "</"))
+            .unwrap();
+    json["islands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["id"].as_str().unwrap().to_owned())
+        .collect()
+}
+
+/// The setlist's page (a playlist: it has recordings) on `dist`'s node.
+async fn setlist_page_on(dist: &Distribution) -> String {
+    shared_page_on(dist, "setlists/tree-lighting/", "Silent Night").await
+}
+
+/// A built island folder as `build-web` writes it: its files and a lock
+/// naming each with its digest, and the stylesheet beside them.
+fn island_folder(dir: &Path) {
+    use base64::Engine as _;
+    use sha2::Digest as _;
+    let files: [(&str, &[u8]); 3] = [
+        ("architect.json", br#"{"module":"studio_island.js"}"#),
+        ("studio_island.js", b"export const instantiate = () => {};"),
+        ("studio_island.core.wasm", b"\0asm\x01\0\0\0"),
+    ];
+    let mut lock = serde_json::Map::new();
+    for (name, bytes) in files {
+        std::fs::write(dir.join(name), bytes).unwrap();
+        let digest = base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(bytes));
+        lock.insert(name.to_owned(), format!("sha256-{digest}").into());
+    }
+    let lock = serde_json::json!({ "lockfileVersion": 1, "files": lock });
+    std::fs::write(dir.join("architect.lock.json"), lock.to_string()).unwrap();
+    std::fs::write(
+        dir.join("island.css"),
+        b".studio-island-progress{display:flex}",
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_folder_matching_its_lock_is_the_island() {
+    let dir = tempfile::tempdir().unwrap();
+    island_folder(dir.path());
+    let island = studio_architect::island::at(dir.path()).unwrap();
+    assert_eq!(island.id(), "studio.transport");
+    assert!(island.integrity().unwrap().starts_with("sha256-"));
+    assert!(island.stylesheet_integrity().is_some());
+    assert!(island.file("studio_island.js").is_some());
+    // Only what the lock names, the lock and the sheet are served.
+    std::fs::write(dir.path().join("stray.js"), "alert(1)").unwrap();
+    let island = studio_architect::island::at(dir.path()).unwrap();
+    assert!(island.file("stray.js").is_none());
+}
+
+#[test]
+fn a_folder_that_does_not_match_its_lock_is_refused_whole() {
+    use studio_architect::island::{IslandError, at};
+    let none = tempfile::tempdir().unwrap();
+    assert!(matches!(
+        at(&none.path().join("studio-island")),
+        Err(IslandError::Absent(_))
+    ));
+
+    let missing = tempfile::tempdir().unwrap();
+    island_folder(missing.path());
+    std::fs::remove_file(missing.path().join("studio_island.core.wasm")).unwrap();
+    assert!(
+        matches!(at(missing.path()), Err(IslandError::Missing(f)) if f == "studio_island.core.wasm")
+    );
+
+    let altered = tempfile::tempdir().unwrap();
+    island_folder(altered.path());
+    std::fs::write(altered.path().join("studio_island.js"), "fetch('//evil')").unwrap();
+    assert!(matches!(at(altered.path()), Err(IslandError::Altered(f)) if f == "studio_island.js"));
+
+    let outside = tempfile::tempdir().unwrap();
+    island_folder(outside.path());
+    std::fs::write(
+        outside.path().join("architect.lock.json"),
+        r#"{"files":{"../../etc/passwd":"sha256-x"}}"#,
+    )
+    .unwrap();
+    assert!(matches!(at(outside.path()), Err(IslandError::Path(_))));
+
+    let garbled = tempfile::tempdir().unwrap();
+    island_folder(garbled.path());
+    std::fs::write(garbled.path().join("architect.lock.json"), "{").unwrap();
+    assert!(matches!(at(garbled.path()), Err(IslandError::Lock(_))));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_node_with_the_island_offers_it_to_the_now_playing_view() {
+    let dir = tempfile::tempdir().unwrap();
+    island_folder(dir.path());
+    let dist = studio_architect::distribution_with(studio_architect::island::at(dir.path()).ok());
+    let html = setlist_page_on(&dist).await;
+    assert_eq!(islands_on(&html), ["studio.transport"], "{html}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_node_without_the_folder_offers_no_island() {
+    // The test binary has no `studio-island/` beside it: as a node shipped
+    // without one.
+    assert!(studio_architect::island().is_none());
+    let html = setlist_page_on(&studio_architect::distribution()).await;
+    assert!(
+        html.contains("id=\"site-islands\""),
+        "not a page with recordings:\n{html}"
+    );
+    assert_eq!(islands_on(&html), Vec::<String>::new());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_node_whose_folder_was_altered_offers_no_island() {
+    let dir = tempfile::tempdir().unwrap();
+    island_folder(dir.path());
+    std::fs::write(
+        dir.path().join("studio_island.core.wasm"),
+        b"\0asm\x01\0\0\0tampered",
+    )
+    .unwrap();
+    let dist = studio_architect::distribution_with(studio_architect::island::at(dir.path()).ok());
+    let html = setlist_page_on(&dist).await;
+    assert!(
+        html.contains("id=\"site-islands\""),
+        "not a page with recordings:\n{html}"
+    );
+    assert_eq!(islands_on(&html), Vec::<String>::new());
 }

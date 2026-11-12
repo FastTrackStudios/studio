@@ -47,47 +47,37 @@ pub fn studio() -> Bundle {
         .member(&studio_views::ext::StudioViews)
 }
 
+pub mod island;
+
 /// Where Studio's island ships: `studio-island/` beside the binary (the
-/// release puts `just island`'s folder there).
+/// release puts `just island`'s folder there: scripts/studio-architect.sh).
 pub const ISLAND_FOLDER: &str = "studio-island";
 
-/// Studio's island (#445): Session's progress bar and transport on a share
-/// link's now-playing view, a WASI component (`apps/architect/island`)
-/// the node serves from its own `/_ext/` (`architect_sites::island`). Read
-/// from [`ISLAND_FOLDER`] beside the binary: part of the distribution as
-/// shipped, never a vault's or the node's config. None when it is not
-/// there (the view keeps Architect's own bar and controls).
+/// Studio's island (#445), from the folder beside the binary, if it matches its lock.
+///
+/// Session's progress bar and transport on a share link's now-playing
+/// view, a WASI component (`apps/architect/island`) the node serves from
+/// its own `/_ext/` (`architect_sites::island`). Read
+/// from [`ISLAND_FOLDER`] beside the binary (part of the distribution as
+/// shipped, never a vault's or the node's config) and checked against its
+/// lock ([`island::at`]). None when it is not there, or when it does not
+/// match its lock (one warning): the view keeps Architect's own bar and
+/// controls.
 #[must_use]
 pub fn island() -> Option<architect_sites::SiteIsland> {
     let dir = std::env::current_exe().ok()?.parent()?.join(ISLAND_FOLDER);
-    let mut files = Vec::new();
-    read_folder(&dir, &dir, &mut files).ok()?;
-    files
-        .iter()
-        .any(|(path, _)| path == "architect.lock.json")
-        .then(|| {
-            architect_sites::SiteIsland::new("studio.transport", files)
-                .progress("progress")
-                .transport("transport")
-                .stylesheet("island.css")
-        })
-}
-
-fn read_folder(
-    root: &std::path::Path,
-    dir: &std::path::Path,
-    out: &mut Vec<(String, std::borrow::Cow<'static, [u8]>)>,
-) -> std::io::Result<()> {
-    for entry in std::fs::read_dir(dir)? {
-        let path = entry?.path();
-        if path.is_dir() {
-            read_folder(root, &path, out)?;
-        } else if let Ok(rel) = path.strip_prefix(root) {
-            let rel = rel.to_string_lossy().replace('\\', "/");
-            out.push((rel, std::borrow::Cow::Owned(std::fs::read(&path)?)));
+    match island::at(&dir) {
+        Ok(island) => Some(island),
+        Err(island::IslandError::Absent(_)) => None,
+        Err(error) => {
+            tracing::warn!(
+                island.outcome = "refused",
+                island.reason = %error,
+                "studio-architect: its island does not match its lock; serving none"
+            );
+            None
         }
     }
-    Ok(())
 }
 
 /// Studio Architect: the Architect app, renamed, with [`studio`] compiled
@@ -95,8 +85,14 @@ fn read_folder(
 /// island ([`island`]) when it ships with it.
 #[must_use]
 pub fn distribution() -> Distribution {
+    distribution_with(island())
+}
+
+/// [`distribution`] with `island` (or none) for its island.
+#[must_use]
+pub fn distribution_with(island: Option<architect_sites::SiteIsland>) -> Distribution {
     let dist = base();
-    match island() {
+    match island {
         Some(island) => dist.island(island),
         None => dist,
     }

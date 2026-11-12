@@ -22434,11 +22434,17 @@ dependencies = [
  "architect-desktop",
  "architect-sites",
  "architect-spaces",
+ "base64 0.22.1",
  "productions",
+ "serde",
+ "serde_json",
  "setlists",
+ "sha2 0.10.9",
  "studio-views",
  "tempfile",
+ "thiserror 2.0.20",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
