@@ -49,6 +49,8 @@ pub mod chart;
 pub mod follow;
 #[cfg(feature = "share")]
 pub mod share;
+#[cfg(feature = "workspace")]
+pub mod workspace;
 
 #[cfg(feature = "extension")]
 pub mod ext;
@@ -56,6 +58,8 @@ pub mod ext;
 pub mod host;
 #[cfg(feature = "extension")]
 pub mod nav;
+#[cfg(feature = "extension")]
+pub mod workspace_view;
 
 #[cfg(feature = "cli")]
 pub mod cli;

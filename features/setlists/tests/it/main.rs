@@ -4,3 +4,5 @@
 mod extension;
 mod library;
 mod share;
+mod workspace;
+mod workspace_view;

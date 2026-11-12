@@ -16,6 +16,58 @@ it always was. `STUDIO_SETLISTS_CREATE`, `_ADD` and `_MOVE` take an
 optional `section` (the set), and the navigator shows the sets under
 their setlist.
 
+## A song's workspace (the song view)
+
+A song note opens (`SongView`, `src/ext.rs`) as Session's Overview
+(`src/workspace.rs` the model, `src/workspace_view.rs` the view):
+
+```
+┌──────────────────────────────────────────────┐
+│ progress bar (sections, playhead, seek)      │
+├──────────────────────┬───────────────────────┤
+│ chart editor (.kf)   │                       │
+├──────────────────────┤ chart (engraved,      │
+│ lyrics (timed lines) │ the full height)      │
+└──────────────────────┴───────────────────────┘
+```
+
+- **Session's panels**, not second ones: the progress bar is
+  `session::ui::components::progress::SongProgressBar` (what Session's
+  `ProgressBar` draws), the lyrics `session::ui::components::lyrics`
+  (Session's lyrics panel, in its Performer view; moved there from
+  `session-ui` so both draw it), the editor
+  `session::ui::components::chart_text` (Session's chart editor's pane).
+  The chart is the share page's engraving (`follow::follow_pages`), a page
+  at a time: Session's chart panel is a Blitz widget painting into the
+  window's own scene from the window's events, which a process
+  extension's view (drawn remotely) cannot carry.
+- **One playhead** (`workspace::Clock`): seconds of the song's recording.
+  The bars are timed on the chart's own clock, the lyrics are the LRC's,
+  the progress bar's sections are the chart's sections as played. The bar
+  and the lyric line at the playhead are marked; a click on a section, a
+  bar or a line seeks. This is the Reference layer (a recording and the
+  chart's clock): the clock runs on its own, silent, because Architect's
+  app plays no media for an extension's view (`architect.playhead` is a
+  share page's). Studio's engine, the Full layer, is what adds the sound
+  and drives the clock from its transport.
+- **The editor**: each pause in typing engraves the chart again on a
+  thread of its own (the parts, the pages and a lyric lane with it), and
+  saves the `.kf` back to the song through the host's `write_file` (the
+  vault's actions write notes only). A vault under the home folder is in
+  reach (`capabilities.folders`); one elsewhere asks for its folder once a
+  run ("Allow saving"). The chart is read from the `.kf`, else from the
+  ```` ```kf ```` fence on the song's page.
+- **On a phone** (narrower than 720 px): the progress, the chart and the
+  lyrics stacked, the editor behind "Edit chart".
+- **Linked or a process**: the same view both ways. Compiled into Studio
+  Architect it is drawn in the app's own document; as an installed
+  process its view is drawn remotely. Where a view cannot measure itself,
+  it stays in its wide form, the chart fits the pane's width and the
+  lyrics take a usual pane's size.
+
+`cargo run -p setlists --features extension --example workspace_shot --
+/tmp/ws.png [wide|narrow] [seconds]` draws it headless to a PNG.
+
 ## The share page (layer 0 of a share link: the page, no engine)
 
 `STUDIO_SETLISTS_SHARE` shares the setlist's note and its songs'. The node

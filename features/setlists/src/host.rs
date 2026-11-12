@@ -316,6 +316,92 @@ pub async fn setlists() -> Result<Vec<SetlistRow>, String> {
     Ok(all)
 }
 
+/// The vault's folder on disk (`VAULT_STATUS`'s `root`).
+///
+/// # Errors
+///
+/// `VAULT_STATUS` refused or named no folder.
+pub async fn vault_root() -> Result<String, String> {
+    let out = run("VAULT_STATUS", json!({})).await?;
+    out.get("root")
+        .and_then(Value::as_str)
+        .map(|r| r.trim_end_matches('/').to_owned())
+        .ok_or_else(|| "the vault has no folder on disk".to_owned())
+}
+
+/// File `path` of the vault (a vault path: `Libraries/…/Song.kf`) on disk.
+async fn vault_file(path: &str) -> Result<String, String> {
+    if path.split('/').any(|p| p == "..") {
+        return Err(format!("{path}: not a vault path"));
+    }
+    Ok(format!(
+        "{}/{}",
+        vault_root().await?,
+        path.trim_start_matches('/')
+    ))
+}
+
+/// The text of file `path` of the vault, through the host's `read_file`.
+///
+/// A song's `.kf` and `.lrc` are files beside its note, not notes, and the
+/// vault's actions read and write notes only: the host reads them, where
+/// the extension may reach (`capabilities.folders`, or a folder the person
+/// picked: [`allow_vault`]).
+///
+/// # Errors
+///
+/// The host refused or the file is not there.
+pub async fn read_vault_file(path: &str) -> Result<String, String> {
+    let file = vault_file(path).await?;
+    let h = handle().ok_or("the setlists extension is not running")?;
+    h.host(HostRequest::ReadFile { path: file })
+        .await
+        .map_err(|e| e.to_string())?
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| format!("{path}: not text"))
+}
+
+/// Writes `text` to file `path` of the vault, through the host's
+/// `write_file` (see [`read_vault_file`]).
+///
+/// # Errors
+///
+/// The host refused it.
+pub async fn write_vault_file(path: &str, text: &str) -> Result<(), String> {
+    let file = vault_file(path).await?;
+    let h = handle().ok_or("the setlists extension is not running")?;
+    h.host(HostRequest::WriteFile {
+        path: file,
+        text: text.to_owned(),
+    })
+    .await
+    .map(drop)
+    .map_err(|e| e.to_string())
+}
+
+/// Asks the person to pick the vault's folder, so its files may be read
+/// and written for the rest of the run (a vault outside the folders the
+/// manifest names).
+///
+/// # Errors
+///
+/// The person did not pick it, or the host cannot ask.
+pub async fn allow_vault() -> Result<(), String> {
+    use architect_extensions::hostcall::{Pick, PickKind};
+    let root = vault_root().await?;
+    let h = handle().ok_or("the setlists extension is not running")?;
+    h.host(HostRequest::Pick(Pick {
+        kind: PickKind::Folder,
+        title: Some("Allow Setlists to save charts in this vault".to_owned()),
+        folder: Some(root),
+        ..Pick::default()
+    }))
+    .await
+    .map(drop)
+    .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -14,6 +14,7 @@ use crate::host::{self, SetlistRow, SongRow};
 use crate::layout::{SongRef, setlist_note};
 use crate::nav::{self, LibrariesNav, SetlistsNav};
 use crate::setlist::Setlist;
+use crate::workspace::{Loaded, chart_fence, lyrics_source};
 use crate::{check_name, frontmatter};
 
 /// The extension.
@@ -358,43 +359,74 @@ fn deck_song() -> Option<DeckSong> {
         })
 }
 
-/// A song's page: its note, read through the app.
+/// A song's workspace: its note, read through the app, as Session's
+/// Overview (`crate::workspace_view::SongWorkspace`): the progress, the
+/// chart's text over the lyrics, the chart.
 #[allow(non_snake_case)]
 fn SongView() -> Element {
     let song = deck_song();
-    let path = song.as_ref().map(|(p, _, _)| p.clone());
-    let note = use_resource(move || {
-        let path = path.clone();
-        async move {
-            let path = path?;
-            host::run("VAULT_READ", json!({ "path": path }))
-                .await
-                .ok()
-                .and_then(|v| {
-                    v.get("body")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned)
-                        .or_else(|| v.as_str().map(str::to_owned))
-                })
-        }
-    });
     let Some((path, title, props)) = song else {
         return rsx! { div { style: "padding: 24px; opacity: 0.7;", "Open a song from a setlist or a library." } };
     };
-    let body = note.read().clone().flatten().unwrap_or_default();
-    let (_, body) = frontmatter::split(&body);
-    let body = body.to_owned();
-    rsx! {
-        div { "data-studio-song": "{path}",
-            style: "height: 100%; overflow-y: scroll; padding: 20px 24px; box-sizing: border-box;",
-            h2 { style: "margin: 0 0 8px; font-size: 20px;", "{title}" }
-            div { style: "display: flex; gap: 16px; margin-bottom: 16px; font-size: 13px; opacity: 0.75;",
-                for (k, v) in props {
-                    span { key: "{k}", "{k}: {v}" }
-                }
-            }
-            pre { style: "margin: 0; white-space: pre-wrap; font-size: 13px; line-height: 1.5;", "{body}" }
-        }
+    rsx! { SongLoader { key: "{path}", path, title, props } }
+}
+
+/// One song's workspace, once its files are read. Keyed by the note's
+/// path, so another song starts from nothing.
+#[component]
+fn SongLoader(path: String, title: String, props: Vec<(String, String)>) -> Element {
+    let loaded = use_resource(move || {
+        let (path, title, props) = (path.clone(), title.clone(), props.clone());
+        async move { load(&path, &title, &props).await }
+    });
+    let ready = loaded.read().clone();
+    ready.map_or_else(
+        || rsx! { div { style: "padding: 24px; opacity: 0.7;", "Opening the song…" } },
+        |loaded| rsx! { crate::workspace_view::SongWorkspace { loaded } },
+    )
+}
+
+/// What a song's workspace needs from its note `path`: its chart's source
+/// (its `.kf`, or the chart its page carries when the file cannot be read)
+/// and its one lyrics source.
+async fn load(path: &str, title: &str, props: &[(String, String)]) -> Loaded {
+    let note = host::run("VAULT_READ", json!({ "path": path })).await.ok();
+    let property = |key: &str| {
+        note.as_ref()
+            .and_then(|n| n.get("properties"))
+            .and_then(|p| p.get(key))
+            .and_then(|v| match v {
+                Value::String(s) => Some(s.clone()),
+                Value::Array(a) => a.first().and_then(Value::as_str).map(str::to_owned),
+                _ => None,
+            })
+            .or_else(|| props.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone()))
+            .filter(|v| !v.trim().is_empty())
+            .map(|v| frontmatter::link_target(&v).to_owned())
+    };
+    let body = note
+        .as_ref()
+        .and_then(|n| n.get("body"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let chart_file = property("chart");
+    let source = match &chart_file {
+        Some(file) => host::read_vault_file(file).await.ok(),
+        None => None,
+    };
+    let source = source.or_else(|| chart_fence(&body)).unwrap_or_default();
+    let lrc = match property("lyrics").filter(|f| f.to_ascii_lowercase().ends_with(".lrc")) {
+        Some(file) => host::read_vault_file(&file).await.ok(),
+        None => None,
+    };
+    let lyrics = lyrics_source(lrc.as_deref(), Some(&source));
+    Loaded {
+        title: property("title").unwrap_or_else(|| title.to_owned()),
+        artist: property("artist"),
+        source,
+        chart_file,
+        lyrics,
     }
 }
 
