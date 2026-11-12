@@ -15,7 +15,7 @@ pub mod chanmap;
 pub mod clock;
 pub mod dante;
 mod dante_net;
-mod devices;
+pub(crate) mod devices;
 mod engine;
 mod enrich;
 mod icons;

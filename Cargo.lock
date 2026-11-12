@@ -9055,6 +9055,7 @@ version = "0.1.0"
 dependencies = [
  "anyrender",
  "anyrender_vello",
+ "app-shell",
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.4)",
  "architect-desktop",
  "architect-telemetry",
@@ -9070,6 +9071,7 @@ dependencies = [
  "include_dir",
  "libc",
  "patchbay",
+ "patchbay-yamaha-tf",
  "serde",
  "serde_json",
  "tokio",
@@ -16460,6 +16462,7 @@ dependencies = [
  "axum",
  "block2 0.6.2",
  "dioxus",
+ "dioxus-test",
  "dirs 6.0.0",
  "dispatch2",
  "eyre",
@@ -16469,7 +16472,6 @@ dependencies = [
  "futures-timer",
  "futures-util",
  "gloo-timers 0.3.0",
- "if-addrs",
  "inferno-net",
  "libc",
  "mdns-sd",
@@ -16507,6 +16509,27 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "patchbay-yamaha-tf"
+version = "26.10.3"
+dependencies = [
+ "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.4)",
+ "architect-extensions",
+ "architect-settings",
+ "dioxus",
+ "futures",
+ "futures-util",
+ "if-addrs",
+ "parking_lot",
+ "patchbay",
+ "patchbay-yamaha-tf",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

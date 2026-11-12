@@ -60,6 +60,24 @@ extension per device family, packaged as its own distribution
   with the `patchbay` bundle linked in, app and folder `patchbay`, bundle
   id `app.fasttrackstudio.patchbay`. Beside `fts-patchbay` until that
   becomes the distribution (#428).
+- **Device families** (`family::DeviceFamily`, `family::Families`): the
+  hub connects each configured device through the family for its `kind`.
+  The built-ins (system audio, Galaxy32, Dante) are in
+  `server/devices/registry.rs`; a family of its own calls
+  `family::register` (or `register_with_views`, with its views) before
+  the engine starts (read once, at start). The Yamaha TF is the first:
+  `features/patchbay/yamaha-tf` (`patchbay-yamaha-tf`), registered by its
+  extension's `build` and by each `fts-patchbay` binary's `main`. A
+  family's views draw with `ui::kit`. On iOS no family runs:
+  `family::register` registers nothing and `family::assemble` (where the
+  engine's families are put together) gives none, so every family
+  extension inherits the phone's gate; their views still register. `patchbay families` / `PATCHBAY_FAMILIES` lists what an engine
+  has. Adding a family is a registration, not an edit to the hub. The
+  system-audio family holds no PipeWire connection of its own: it gets a
+  clone of the same `Arc<RwLock<GraphStore>>` the `patchbay-pw` thread
+  fills (one connection, no duplicate events). A family's panics are
+  caught by the hub (its info, defaults, connect, and the adapter's
+  subscribe/info), never the engine's end.
 - Reports built from several calls (`report::status`,
   `report::collect_health`) live in the crate, so the CLI and the actions
   answer with the same JSON.
@@ -76,6 +94,17 @@ skill before UI work.
   shells give `apps/patchbay/src/page.rs` (JavaScript, `localStorage`);
   Architect's window gives `home::native_page` (prefs in `ui.json` beside
   the engine config). No `document::eval` in `src/ui`.
+- **Family views by kind** (`ui::families`): the Route and Mix pages and
+  the device console draw the view the selected device's family
+  registered (`FamilyViews { route, mix, console }`), each mounted as a
+  component of its own, never called as a function (`families::mount`
+  for a page, `families::mount_console` for a console, whose identity is
+  the console function, so a re-registered kind gets fresh hooks);
+  a kind with none gets the generic device view. How the shell presents
+  a device comes from there too: `label` (rail), `what` (context
+  switcher), `icon`, `reads_device`, `route_note`. Never match on a kind
+  in the shell: add a field and register. Register before launch (the
+  registry is read when a page draws, not watched).
 - **Controls Blitz can draw.** `ui::ui::Choice` instead of `<select>`,
   `ui::ui::Slider` instead of `<input type=range>` (`on_input` live,
   `on_commit` on release), `ui::ui::TextField` (commit on Enter/blur)
