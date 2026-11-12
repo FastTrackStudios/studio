@@ -150,12 +150,27 @@ def remote_tags(repo: str) -> list[str]:
     return sorted((t for t in tags if STABLE.match(t)), key=version, reverse=True)
 
 
+def commit_of(repo: str, ref: str) -> str:
+    """The commit a TAG names (refs/tags/<tag>, peeled), or a commit sha as
+    it is: never a branch that happens to share a tag's name."""
+    if re.fullmatch(r"[0-9a-f]{40}", ref):
+        return ref
+    out = subprocess.run(["git", "ls-remote", f"https://github.com/{repo}", f"refs/tags/{ref}", f"refs/tags/{ref}^{{}}"],
+                         check=True, capture_output=True, text=True).stdout.split("\n")
+    shas = {line.split("\t")[1]: line.split("\t")[0] for line in out if "\t" in line}
+    sha = shas.get(f"refs/tags/{ref}^{{}}") or shas.get(f"refs/tags/{ref}")
+    if not sha:
+        sys.exit(f"bump-architect: {repo} has no tag {ref}")
+    return sha
+
+
 def on_main(repo: str, ref: str) -> bool:
-    """Is `ref`'s commit on `repo`'s main (main contains it)?"""
+    """Is the commit of `ref` (a tag, resolved as refs/tags/) on `repo`'s main?"""
+    sha = commit_of(repo, ref)
     try:
-        return github(f"repos/{repo}/compare/main...{ref}").get("status") in ("behind", "identical")
+        return github(f"repos/{repo}/compare/main...{sha}").get("status") in ("behind", "identical")
     except Exception as e:  # noqa: BLE001
-        sys.exit(f"bump-architect: cannot tell whether {repo} {ref} is on main ({e})")
+        sys.exit(f"bump-architect: cannot tell whether {repo} {ref} ({sha}) is on main ({e})")
 
 
 def keyflow_fits(text: str, architect: str) -> bool:
@@ -401,6 +416,10 @@ def main() -> int:
                             "a person decides when Studio ships it")
         elif state == "unknown":
             problems.append("whether architect " + new + " migrates data is unknown (" + "; ".join(notes) + ")")
+            # Unknown counts as a migration downstream: the change file says
+            # so, Studio's own release-facts.json then declares it, and infra
+            # never auto-merges that release (even when a person merges this).
+            migrations = ["unknown (" + "; ".join(notes) + ")"]
 
     changed: set[Path] = set()
     for path in [*manifests(), *tracked(*NOTES)]:

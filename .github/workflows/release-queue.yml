@@ -42,20 +42,27 @@ jobs:
         ref: main
         fetch-depth: 0
         persist-credentials: false
-    - name: A bot bump since the last release?
+    - name: A verified bot bump since the last release?
       id: asked
       env:
+        GH_TOKEN: ${{ github.token }}
         SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       run: |
         set -euo pipefail
         git fetch -q --tags --force origin main
-        if asked="$(bash scripts/release.sh bump-queued "$SHA")"; then
-          echo "asked by $(git log -1 --format='%h %s' "$asked"): releasing $SHA" | tee -a "$GITHUB_STEP_SUMMARY"
-          echo "asked=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "no bot bump on main since the last release: nothing to release" | tee -a "$GITHUB_STEP_SUMMARY"
-          echo "asked=false" >> "$GITHUB_OUTPUT"
-        fi
+        echo "asked=false" >> "$GITHUB_OUTPUT"
+        claims="$(bash scripts/release.sh bump-queued "$SHA" || true)"
+        [ -n "$claims" ] || { echo "no bot bump on main since the last release: nothing to release" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; }
+        for c in $claims; do
+          # The trailer is free text: the API says whether it is a real bot bump.
+          if pr="$(python3 scripts/bump-verify.py "$c")"; then
+            echo "asked by #$pr ($(git log -1 --format='%h %s' "$c")): releasing $SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "asked=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$pr" | tee -a "$GITHUB_STEP_SUMMARY"
+        done
+        echo "no claimed bump is a verified bot bump: nothing to release" | tee -a "$GITHUB_STEP_SUMMARY"
     - name: fts-forge token (studio only)
       id: forge
       if: ${{ steps.asked.outputs.asked == 'true' }}

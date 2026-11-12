@@ -2,7 +2,11 @@
 //!
 //! Only a bump: `bump-architect.yml`'s `land` squash-merges a green,
 //! mechanical Architect bump with the trailer `Release-Queue: bump` in its
-//! commit message, authored by fts-forge[bot]. When `CI` (checks.yml, the
+//! commit message, authored by fts-forge[bot]. Those are free text (every
+//! agent PR is fts-forge's), so a claimed bump counts only once
+//! scripts/bump-verify.py confirms through the API that it is the merge of
+//! a PR from `bump/architect-*` in this repo, opened by fts-forge[bot],
+//! changing only allow-listed files. When `CI` (checks.yml, the
 //! full suite) passes on a push to main, this looks at main's first-parent
 //! commits since the last release tag for one such commit; if there is one,
 //! it runs exactly `just release <sha>` (`release.sh release --yes <sha>`)
@@ -39,13 +43,19 @@ const SECRET: &str = "RELEASE_QUEUE_APP_KEY";
 /// (`release.sh bump-queued`, tested by scripts/release-facts-test.sh.)
 const ASKED: &str = r#"set -euo pipefail
 git fetch -q --tags --force origin main
-if asked="$(bash scripts/release.sh bump-queued "$SHA")"; then
-  echo "asked by $(git log -1 --format='%h %s' "$asked"): releasing $SHA" | tee -a "$GITHUB_STEP_SUMMARY"
-  echo "asked=true" >> "$GITHUB_OUTPUT"
-else
-  echo "no bot bump on main since the last release: nothing to release" | tee -a "$GITHUB_STEP_SUMMARY"
-  echo "asked=false" >> "$GITHUB_OUTPUT"
-fi
+echo "asked=false" >> "$GITHUB_OUTPUT"
+claims="$(bash scripts/release.sh bump-queued "$SHA" || true)"
+[ -n "$claims" ] || { echo "no bot bump on main since the last release: nothing to release" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; }
+for c in $claims; do
+  # The trailer is free text: the API says whether it is a real bot bump.
+  if pr="$(python3 scripts/bump-verify.py "$c")"; then
+    echo "asked by #$pr ($(git log -1 --format='%h %s' "$c")): releasing $SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+    echo "asked=true" >> "$GITHUB_OUTPUT"
+    exit 0
+  fi
+  echo "$pr" | tee -a "$GITHUB_STEP_SUMMARY"
+done
+echo "no claimed bump is a verified bot bump: nothing to release" | tee -a "$GITHUB_STEP_SUMMARY"
 "#;
 
 const RELEASE: &str = r#"set -euo pipefail
@@ -89,8 +99,9 @@ fn release() -> Result<Job> {
                 .with("persist-credentials", false),
         )
         .step(
-            Step::run("A bot bump since the last release?", ASKED)
+            Step::run("A verified bot bump since the last release?", ASKED)
                 .id("asked")
+                .env("GH_TOKEN", "${{ github.token }}")
                 .env("SHA", "${{ github.event.workflow_run.head_sha || github.sha }}"),
         )
         .step(app_token(SECRET, "studio", &[("contents", "write")]).cond(asked))

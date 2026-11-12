@@ -98,6 +98,14 @@ jobs:
     - name: Rust 1.99.1
       if: ${{ steps.state.outputs.go == 'true' }}
       uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8
+    - name: minisign (pinned)
+      if: ${{ steps.state.outputs.go == 'true' }}
+      run: |
+        set -euo pipefail
+        curl -fsSL --retry 3 -o "$RUNNER_TEMP/minisign.tgz" https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz
+        echo "9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73  $RUNNER_TEMP/minisign.tgz" | sha256sum -c -
+        tar -xzf "$RUNNER_TEMP/minisign.tgz" -C "$RUNNER_TEMP" --warning=no-unknown-keyword minisign-linux/x86_64/minisign
+        echo "$RUNNER_TEMP/minisign-linux/x86_64" >> "$GITHUB_PATH"
     - name: Restore cargo's dependencies
       if: ${{ steps.state.outputs.go == 'true' }}
       uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
@@ -229,8 +237,12 @@ jobs:
             exit 0
           fi
         fi
-        git push -q --force-with-lease="refs/heads/$BRANCH:$PR_HEAD" \
-          "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
+        # The token reaches git through GIT_CONFIG_* (this step's environment),
+        # never argv or a file.
+        auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        echo "::add-mask::$auth"
+        GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+          git push -q --force-with-lease="refs/heads/$BRANCH:$PR_HEAD" "https://github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
         if [ "$STATUS" = 0 ]; then
           verdict="$MECHANICAL"$'\n'"Mechanical so far: only the pins, the comments that name them, \`Cargo.lock\`, add-only lines in \`.config/duplicate-deps.toml\` and the change file. The full suite (\`CI\`) is running on this branch; when it is green on this head, the bot merges it. When it fails, the bump needs source changes and waits for a person."
         else
@@ -310,6 +322,14 @@ jobs:
         others="$(gh pr diff "$pr" -R "$GITHUB_REPOSITORY" --name-only | grep -vE "$PATHS_RE" || true)"
         if [ -n "$others" ]; then
           echo "PR #$pr changes files outside the bump's allow-list: a person merges it:"$'\n'"$others"; exit 0
+        fi
+        # No git source repository the lock on main does not already have.
+        repos() { sed -n 's|.*source = "git+https://\(www\.\)\{0,1\}\([^?#"]*\).*|\2|p' | tr '[:upper:]' '[:lower:]' | sort -u; }
+        gh api -H "Accept: application/vnd.github.raw" "repos/$GITHUB_REPOSITORY/contents/Cargo.lock?ref=main" | repos > "$RUNNER_TEMP/main-repos"
+        gh api -H "Accept: application/vnd.github.raw" "repos/$GITHUB_REPOSITORY/contents/Cargo.lock?ref=$HEAD_SHA" | repos > "$RUNNER_TEMP/pr-repos"
+        added="$(comm -13 "$RUNNER_TEMP/main-repos" "$RUNNER_TEMP/pr-repos")"
+        if [ -n "$added" ]; then
+          echo "PR #$pr adds git source repositories to Cargo.lock: a person merges it:"$'\n'"$added"; exit 0
         fi
         { echo "merge=true"; echo "pr=$pr"; } >> "$GITHUB_OUTPUT"
     - name: fts-forge token (studio only)

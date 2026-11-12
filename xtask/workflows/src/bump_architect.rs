@@ -165,8 +165,12 @@ if [ -n "$PR_HEAD" ]; then
     exit 0
   fi
 fi
-git push -q --force-with-lease="refs/heads/$BRANCH:$PR_HEAD" \
-  "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
+# The token reaches git through GIT_CONFIG_* (this step's environment),
+# never argv or a file.
+auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+echo "::add-mask::$auth"
+GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+  git push -q --force-with-lease="refs/heads/$BRANCH:$PR_HEAD" "https://github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
 if [ "$STATUS" = 0 ]; then
   verdict="$MECHANICAL"$'\n'"Mechanical so far: only the pins, the comments that name them, \`Cargo.lock\`, add-only lines in \`.config/duplicate-deps.toml\` and the change file. The full suite (\`CI\`) is running on this branch; when it is green on this head, the bot merges it. When it fails, the bump needs source changes and waits for a person."
 else
@@ -216,6 +220,14 @@ author="$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA" --jq '.author.logi
 others="$(gh pr diff "$pr" -R "$GITHUB_REPOSITORY" --name-only | grep -vE "$PATHS_RE" || true)"
 if [ -n "$others" ]; then
   echo "PR #$pr changes files outside the bump's allow-list: a person merges it:"$'\n'"$others"; exit 0
+fi
+# No git source repository the lock on main does not already have.
+repos() { sed -n 's|.*source = "git+https://\(www\.\)\{0,1\}\([^?#"]*\).*|\2|p' | tr '[:upper:]' '[:lower:]' | sort -u; }
+gh api -H "Accept: application/vnd.github.raw" "repos/$GITHUB_REPOSITORY/contents/Cargo.lock?ref=main" | repos > "$RUNNER_TEMP/main-repos"
+gh api -H "Accept: application/vnd.github.raw" "repos/$GITHUB_REPOSITORY/contents/Cargo.lock?ref=$HEAD_SHA" | repos > "$RUNNER_TEMP/pr-repos"
+added="$(comm -13 "$RUNNER_TEMP/main-repos" "$RUNNER_TEMP/pr-repos")"
+if [ -n "$added" ]; then
+  echo "PR #$pr adds git source repositories to Cargo.lock: a person merges it:"$'\n'"$added"; exit 0
 fi
 { echo "merge=true"; echo "pr=$pr"; } >> "$GITHUB_OUTPUT"
 "#;
@@ -288,8 +300,10 @@ fn prepare() -> Result<Job> {
                 .env("GH_TOKEN", "${{ github.token }}")
                 .env("TAG", "${{ steps.tag.outputs.tag }}"),
         )
-        // cargo resolves the lock; nothing compiles.
+        // cargo resolves the lock; nothing compiles. minisign: Architect's
+        // release-facts.json is read only through its signed SHA256SUMS.
         .step(Step::uses("Rust 1.99.1", pinned::RUST_TOOLCHAIN).cond(go))
+        .step(Step::run("minisign (pinned)", crate::sums::INSTALL_MINISIGN).cond(go))
         .step(
             Step::uses("Restore cargo's dependencies", pinned::CACHE_RESTORE)
                 .cond(go)

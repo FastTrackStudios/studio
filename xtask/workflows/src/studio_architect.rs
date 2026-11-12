@@ -75,51 +75,8 @@ workflow_dispatch:
     .jobs(crate::sums::jobs(
         &["publish"],
         "inputs.mode != 'build-only' && needs.publish.result == 'success'",
-    )?)
-    .job("notify-infra", notify_infra()?))
-}
-
-/// Tell FastTrackStudios/infra that a stable release's node is up and its
-/// SHA256SUMS signed: infra's `release-bump` workflow verifies everything
-/// itself (the signature, the tag on studio's main, `CI passed` on it) and
-/// rewrites packages/architect-node/source.json (infra#3). This job only
-/// wakes it, and infra also polls, so a missed wake costs one poll.
-///
-/// Token (scripts/check-token-mints.py): FastTrackStudios/infra only,
-/// `actions: write` (start a workflow there), nothing else. Never a
-/// pre-release, a build-only run or a branch run (`sums`, the signed job,
-/// runs only on a tag ref).
-///
-/// INERT until the owner sets the repo variable `RELEASE_DISPATCH` = `on`
-/// and the environment `release-dispatch` (deployment: `v*` tags only)
-/// holds the environment variable `BOT_ENVIRONMENT` = `release-dispatch`
-/// and the secret `RELEASE_DISPATCH_APP_KEY` (the fts-forge App's key under
-/// a name nothing else uses). A failure here never fails the release.
-fn notify_infra() -> Result<Job> {
-    const SECRET: &str = "RELEASE_DISPATCH_APP_KEY";
-    Ok(Job::new(UBUNTU)
-        .name("Wake infra's release bump")
-        .needs(&["sums"])
-        .cond("${{ vars.RELEASE_DISPATCH == 'on' && needs.sums.result == 'success' }}")
-        .timeout(5)
-        .continue_on_error()
-        .environment("release-dispatch")
-        .permissions(yaml("{}")?)
-        .step(crate::bot::environment_guard("release-dispatch", SECRET))
-        .step(crate::bot::app_token(SECRET, "infra", &[("actions", "write")]))
-        .step(
-            Step::run(
-                "gh workflow run release-bump.yml (infra)",
-                r#"set -euo pipefail
-if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "$TAG is not a stable release tag: infra is not told"; exit 0
-fi
-gh workflow run release-bump.yml -R FastTrackStudios/infra -f repo=FastTrackStudios/studio -f tag="$TAG"
-echo "infra's release-bump started for studio $TAG" >> "$GITHUB_STEP_SUMMARY"
-"#,
-            )
-            .env("GH_TOKEN", "${{ steps.forge.outputs.token }}"),
-        ))
+        "${{ needs.publish.outputs.digests }}",
+    )?))
 }
 
 /// The release pool, as the AppImage builds: the node (Studio's checkout,
@@ -252,6 +209,7 @@ fn publish() -> Result<Job> {
         .cond("${{ inputs.mode != 'build-only' && needs.build.result == 'success' }}")
         .timeout(15)
         .permissions(yaml("contents: write\n")?)
+        .output("digests", "${{ steps.attach.outputs.digests }}")
         .step(
             Step::uses("The tarballs", "actions/download-artifact@v4")
                 .with("name", "studio-architect")
@@ -271,15 +229,19 @@ done
 gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber ./*.tar.gz ./*.tar.gz.sha256
 for f in "${files[@]}"; do
   want="sha256:$(sha256sum "$f" | cut -d' ' -f1)"
-  got="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq ".assets[] | select(.name == \"$f\") | .digest")"
+  # The Release is a draft until `sums` publishes it: find it in the list.
+  got="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50" --jq ".[] | select(.tag_name == \"$TAG\") | .assets[] | select(.name == \"$f\") | .digest")"
   [ "$got" = "$want" ] || { echo "::error::$f: GitHub's digest is '$got', the file is $want"; exit 1; }
 done
+# What `sums` may sign for this workflow: exactly these files (and their sidecars).
+{ echo "digests<<EOF"; sha256sum ./*.tar.gz ./*.tar.gz.sha256 | sed 's|  \./|  |'; echo "EOF"; } >> "$GITHUB_OUTPUT"
 {
   echo "### Attached to $TAG"
   for f in "${files[@]}"; do echo "- \`$f\` ($(du -h "$f" | cut -f1))"; done
 } >> "$GITHUB_STEP_SUMMARY"
 "####,
             )
+            .id("attach")
             .env("GH_TOKEN", "${{ github.token }}"),
         ))
 }

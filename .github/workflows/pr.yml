@@ -75,9 +75,17 @@ jobs:
     - name: rail config
       if: ${{ !cancelled() }}
       run: cargo rail config validate --strict
-    - name: App token mints, release facts
+    - name: 'Release bots: token mints, sums, facts, queue, www patch'
       if: ${{ !cancelled() }}
-      run: python3 scripts/check-token-mints.py --self-test && python3 scripts/check-token-mints.py && bash scripts/release-facts-test.sh
+      run: |
+        set -euo pipefail
+        python3 scripts/check-token-mints.py --self-test
+        python3 scripts/check-token-mints.py
+        bash scripts/release-facts-test.sh
+        bash scripts/release-sums-test.sh
+        bash scripts/bump-verify-test.sh
+        python3 scripts/check-www-patch.py --self-test
+        python3 scripts/check-www-patch.py
   studio-architect:
     name: Studio Architect node (cargo check, Linux)
     runs-on: ubuntu-latest

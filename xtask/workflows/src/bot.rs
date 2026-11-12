@@ -4,7 +4,7 @@
 //! needs it:
 //! - runs in its own GitHub environment and reads the key under a secret
 //!   name that exists in THAT environment only (`PIN_BUMP_APP_KEY`,
-//!   `RELEASE_DISPATCH_APP_KEY`, ...), never `FORGE_APP_PRIVATE_KEY`
+//!   `RELEASE_QUEUE_APP_KEY`), never `FORGE_APP_PRIVATE_KEY`
 //!   (an org secret and repo secrets carry that name, and a job whose
 //!   environment lacks the key would silently fall back to them);
 //! - first checks it really runs there: the environment's own variable

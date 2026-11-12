@@ -77,6 +77,7 @@ workflow_dispatch:
     .jobs(crate::sums::jobs(
         &["publish"],
         "inputs.mode != 'validate' && inputs.mode != 'build-only' && needs.publish.result == 'success'",
+        "${{ needs.publish.outputs.digests }}",
     )?))
 }
 
@@ -383,6 +384,7 @@ fn publish() -> Result<Job> {
         )
         .timeout(15)
         .permissions(yaml("contents: write\n")?)
+        .output("digests", "${{ steps.attach.outputs.digests }}")
         .step(
             Step::uses("The installers", "actions/download-artifact@v4")
                 .with("path", "installers")
@@ -402,9 +404,12 @@ gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber ./*.dmg ./*.AppIm
 for f in ./*.dmg ./*.AppImage; do
   name="$(basename "$f")"
   want="sha256:$(sha256sum "$f" | cut -d' ' -f1)"
-  got="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq ".assets[] | select(.name == \"$name\") | .digest")"
+  # The Release is a draft until `sums` publishes it: find it in the list.
+  got="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50" --jq ".[] | select(.tag_name == \"$TAG\") | .assets[] | select(.name == \"$name\") | .digest")"
   [ "$got" = "$want" ] || { echo "::error::$name: GitHub's digest is '$got', the file is $want"; exit 1; }
 done
+# What `sums` may sign for this workflow: exactly these files.
+{ echo "digests<<EOF"; sha256sum ./*.dmg ./*.AppImage | sed 's|  \./|  |'; echo "EOF"; } >> "$GITHUB_OUTPUT"
 {
   echo "### Attached to $TAG"
   # shellcheck disable=SC2016 # the backticks are markdown, for jq's output
@@ -412,6 +417,7 @@ done
 } >> "$GITHUB_STEP_SUMMARY"
 "####,
             )
+            .id("attach")
             .env("GH_TOKEN", "${{ github.token }}")
             .env("VERSION", "${{ needs.resolve.outputs.version }}"),
         ))

@@ -182,7 +182,7 @@ patch), carrying Architect's `Data-Migration:` lines.
 
 **The bot** (`bump-architect.yml`, from
 `xtask/workflows/src/bump_architect.rs`) runs the same command when
-Architect releases a stable tag (Architect's dispatch, or hourly). It opens
+Architect releases a stable tag (it polls hourly; nothing dispatches it). It opens
 `bump/architect-<tag>` and dispatches the full suite (`CI`) on it: `PR
 checks` compiles nothing. When CI is green on the bot's own head, the PR is
 still marked mechanical and every changed file is on the bump's allow-list,
@@ -197,8 +197,12 @@ nothing merges until a person does it.
 
 **The release queue** (`release-queue.yml`, from
 `xtask/workflows/src/release_queue.rs`) ships Studio after such a merge.
-When `CI` passes on a push to main and `release.sh bump-queued` finds a bot
-bump since the last tag, it runs `release.sh release --yes <sha>`, exactly
+When `CI` passes on a push to main, `release.sh bump-queued` lists the
+commits since the last tag that claim to be bot bumps (fts-forge's, with the
+trailer). That is free text, so the queue continues only after
+`scripts/bump-verify.py` confirms one through the API: a merged PR from
+`bump/architect-*` in this repo, opened by fts-forge[bot], touching only
+allow-listed files. Then it runs `release.sh release --yes <sha>`, exactly
 `just release <sha>`. That means a CalVer tag on a green commit, `CI passed`
 with "Web image evaluates" and "Apple builds" still gating, and no release
 commit. Nothing else ships without a person.
@@ -211,16 +215,29 @@ signs it. Infra's release bump reads it after checking the signature, and
 never merges a migrating (or unknown) release by itself.
 `scripts/release-facts-test.sh` (PR checks) tests it.
 
+**The Release is a draft until it is signed.** `release.sh publish`
+creates it as a draft. Each workflow's `sums` job signs ONLY what it can
+vouch for (`scripts/release-sums.sh`):
+- the digests its own build jobs reported as job outputs;
+- `release-facts.json` recomputed from the tag;
+- the SHA256SUMS already there, once its signature and trusted comment
+  verify.
+
+It refuses an asset it vouches for that was replaced, or one of its own
+that is missing, and leaves any other asset unsigned. Then it publishes the
+draft. minisign is the pinned upstream binary.
+
 **Tokens.** Each bot job reads the fts-forge App's key from its environment's
-own secret: `PIN_BUMP_APP_KEY` (`pin-bump`, main only), `RELEASE_QUEUE_APP_KEY`
-(`release-queue`, main only) and `RELEASE_DISPATCH_APP_KEY`
-(`release-dispatch`, `v*` tags only). It reads the key only after checking
+own secret: `PIN_BUMP_APP_KEY` (`pin-bump`, main only) and
+`RELEASE_QUEUE_APP_KEY` (`release-queue`, main only). It reads the key only after checking
 that the environment variable `BOT_ENVIRONMENT` names that environment. Each
 mints a token for one repository with its hop's permissions only.
 `scripts/check-token-mints.py` (PR checks, `just check-token-mints`) fails a
 workflow that mints anything wider, or reads `FORGE_APP_PRIVATE_KEY` outside
 the listed legacy reader. Every bot is inert until its variable is `on`:
-`ARCHITECT_BUMP`, `STUDIO_RELEASE_QUEUE` and `RELEASE_DISPATCH`.
+`ARCHITECT_BUMP` and `STUDIO_RELEASE_QUEUE`. `scripts/check-www-patch.py` (PR checks)
+keeps the www [patch] table on Studio's own tag and the lock free of www
+sources on every PR, not only on bumps.
 
 **Local dev overrides** (the dev stack linking local Architect and Keyflow
 checkouts) must patch **both** spellings of the Architect URL, from a cargo

@@ -142,4 +142,24 @@ www_case() {
 }
 www_case
 
+# 5. Facts unknown (architect v0.12.4 predates release-facts.json): exit 3,
+#    and the change file says `Data-Migration: … unknown`, so Studio's own
+#    release-facts.json declares it and infra never auto-merges that node.
+facts_case() {
+    local scratch status=0 cf
+    scratch="$(mktemp -d "${TMPDIR:-/tmp}/bump-replay.XXXXXX")"
+    GIT_LFS_SKIP_SMUDGE=1 git -C "$root" -c core.hooksPath=/dev/null worktree add -q --detach "$scratch" a7ec2ad9cd484be12582c0d79e639c1ee28416d3
+    for s in "${scripts[@]}"; do cp "$root/scripts/$s" "$scratch/scripts/$s"; done
+    (cd "$scratch" && python3 scripts/bump-architect.py v0.12.4 --keyflow auto --no-lock) >"$scratch.log" 2>&1 || status=$?
+    cf="$(git -C "$scratch" status --porcelain -- .changes | sed -n 's/^?? //p')"
+    if [ "$status" = 3 ] && [ -n "$cf" ] && grep -q '^Data-Migration: architect v0.12.4: unknown' "$scratch/$cf"; then
+        echo "ok   facts unknown: exit 3, the change file declares an unknown migration"
+    else
+        echo "FAIL facts unknown: exit $status, change file ${cf:-none}" >&2; cat "$scratch.log" >&2; fail=1
+    fi
+    git -C "$root" worktree remove --force "$scratch" >/dev/null 2>&1 || true
+    rm -rf "$scratch" "$scratch.log"
+}
+facts_case
+
 exit "$fail"

@@ -222,12 +222,6 @@ impl Job {
         self
     }
 
-    /// A failure of this job never fails the run.
-    pub const fn continue_on_error(mut self) -> Self {
-        self.continue_on_error = Some(true);
-        self
-    }
-
     pub fn concurrency(mut self, group: &str, cancel_in_progress: bool) -> Self {
         self.concurrency = Some(Concurrency::new(group, cancel_in_progress));
         self

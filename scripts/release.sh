@@ -432,24 +432,28 @@ cmd_facts() { # <tag>
         }'
 }
 
-# The release queue's question (release-queue.yml): did the bump bot merge a
-# pin bump into main since the last release below <sha>? Prints that commit
-# and exits 0, or exits 1. A bot bump is a first-parent commit authored by
-# fts-forge[bot] whose message has the line `Release-Queue: bump`
-# (bump-architect.yml's land writes it on a green, mechanical bump only).
+# The release queue's first question (release-queue.yml): which commits on
+# main since the last release below <sha> CLAIM to be bot pin bumps? Prints
+# them, newest first, and exits 0, or exits 1 when none does. A claim is a
+# first-parent commit authored by fts-forge[bot] whose message has the line
+# `Release-Queue: bump` (bump-architect.yml's land writes it). That is free
+# text (every agent PR is fts-forge's, any body can carry the line), so the
+# queue releases only after scripts/bump-verify.py confirms one through the
+# API: a merged PR from bump/architect-*, by the bot, allow-listed files.
 BOT_EMAIL="345159799+fts-forge[bot]@users.noreply.github.com"
 cmd_bump_queued() { # <sha>
     local sha="${1:?usage: bump-queued <sha>}" last c
     last="$(git -c versionsort.suffix=- tag --list 'v[0-9]*' --sort=-v:refname --merged "$sha" \
         | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
+    local found=1
     while read -r c; do
         if [ "$(git log -1 --format=%ae "$c")" = "$BOT_EMAIL" ] \
             && git log -1 --format=%B "$c" | grep -qx 'Release-Queue: bump'; then
             echo "$c"
-            return 0
+            found=0
         fi
     done < <(git rev-list --first-parent "${last:+$last..}$sha")
-    return 1
+    return "$found"
 }
 
 # The release notes of <sha> since <prev>, grouped the way the CHANGELOG
@@ -795,8 +799,10 @@ publish_release() { # [tag]
     } > "$notes"
     [ -s "$notes" ] || die "no release notes for $v"
 
-    if ! gh release create "$tag" --repo "$REPO" --verify-tag \
-        --title "studio $v" --notes-file "$notes" --latest; then
+    # A DRAFT: the first workflow whose `sums` has signed its assets
+    # publishes it (sums.rs); nothing reads a release before it is signed.
+    if ! gh release create "$tag" --repo "$REPO" --verify-tag --draft \
+        --title "studio $v" --notes-file "$notes"; then
         gh release view "$tag" --repo "$REPO" >/dev/null 2>&1 \
             || die "could not create the GitHub Release for $tag"
         note "release $tag was created meanwhile — nothing to do"; rm -f "$notes"; release_dedupe "$tag"; return 0

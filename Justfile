@@ -2234,6 +2234,14 @@ check-token-mints:
     python3 scripts/check-token-mints.py --self-test
     python3 scripts/check-token-mints.py
 
+# What `sums` signs, the queue's API check, the www [patch] guard (PR checks run them)
+release-bots-test:
+    bash scripts/release-sums-test.sh
+    bash scripts/bump-verify-test.sh
+    bash scripts/release-facts-test.sh
+    python3 scripts/check-www-patch.py --self-test
+    python3 scripts/check-www-patch.py
+
 # The release notes of a tag (default: the draft for origin/main).
 release-notes *ARGS:
     @bash scripts/release.sh notes {{ARGS}}
