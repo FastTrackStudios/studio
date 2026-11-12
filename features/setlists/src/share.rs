@@ -165,40 +165,26 @@ pub struct RowKey {
     /// Transposed: from the chart's own key, by this many semitones (the
     /// shorter way, −5…+6, never 0).
     pub moved: Option<(String, i32)>,
-    /// Played in another mode (`E` as `Em`), no transposition: the
-    /// chart's own key.
-    pub charted: Option<String>,
 }
 
-/// The key a row says, played in the setlist's key when it names another:
-/// its column, or the first part of its summary on a page written before
-/// keys had one ([`KeyLabel::played`]).
+/// The key a row says ([`Line::key_label`]), in the setlist's key if moved.
+///
+/// Played in the setlist's key when it names another
+/// ([`KeyLabel::played`]); a key it names that is refused (not a key's
+/// name, the chart's other mode) is ignored: the row shows the song as
+/// charted (`setlist::problems` says why).
 #[must_use]
 pub fn row_key(line: &Line) -> Option<RowKey> {
-    let own = line.key.as_deref().and_then(KeyLabel::parse).or_else(|| {
-        line.summary
-            .split(" · ")
-            .next()
-            .filter(|k| !k.is_empty() && !k.contains("bpm") && !k.contains('/'))
-            .map(KeyLabel::plain)
-    })?;
-    let as_charted = |label| RowKey {
-        label,
-        moved: None,
-        charted: None,
-    };
+    let own = line.key_label()?;
     Some(match line.play.as_deref().map(|p| own.played(p)) {
         Some(Played::Moved { label, semitones }) => RowKey {
             label,
             moved: Some((own.start, semitones)),
-            charted: None,
         },
-        Some(Played::OtherMode(label)) => RowKey {
-            label,
+        Some(Played::AsCharted | Played::Refused(_)) | None => RowKey {
+            label: own,
             moved: None,
-            charted: Some(own.start),
         },
-        Some(Played::AsCharted) | None => as_charted(own),
     })
 }
 
@@ -246,9 +232,6 @@ fn tile(line: &Line, hue: u32) -> String {
             "<span data-track-transposed=\"\" aria-hidden=\"true\">{}</span>",
             signed(*semitones)
         );
-    }
-    if let Some(charted) = &key.charted {
-        let _ = write!(said, "; its chart is in {}", key_words(charted));
     }
     let size = key.label.size();
     let size = if size.is_empty() {
