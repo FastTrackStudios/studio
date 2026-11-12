@@ -62,9 +62,13 @@ extension per device family, packaged as its own distribution
   becomes the distribution (#428).
 - **Device families** (`family::DeviceFamily`, `family::Families`): the
   hub connects each configured device through the family for its `kind`.
-  The four built-ins are in `server/devices/registry.rs`; another family
-  calls `family::register` before the engine starts (read once, at
-  start). `patchbay families` / `PATCHBAY_FAMILIES` lists what an engine
+  The built-ins (system audio, Galaxy32, Dante) are in
+  `server/devices/registry.rs`; a family of its own calls
+  `family::register` (or `register_with_views`, with its views) before
+  the engine starts (read once, at start). The Yamaha TF is the first:
+  `features/patchbay/yamaha-tf` (`patchbay-yamaha-tf`), registered by its
+  extension's `build` and by each `fts-patchbay` binary's `main`. A
+  family's views draw with `ui::kit`. `patchbay families` / `PATCHBAY_FAMILIES` lists what an engine
   has. Adding a family is a registration, not an edit to the hub. The
   system-audio family holds no PipeWire connection of its own: it gets a
   clone of the same `Arc<RwLock<GraphStore>>` the `patchbay-pw` thread

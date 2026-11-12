@@ -24,8 +24,7 @@ use dioxus::prelude::*;
 pub mod console;
 mod core_audio;
 pub(crate) mod galaxy32;
-mod strip;
-pub(crate) mod yamaha_tf;
+pub(crate) mod strip;
 
 use crate::ui::state::{self, PatchbayHandle};
 use crate::ui::ui::{

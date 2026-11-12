@@ -159,6 +159,7 @@ members = [
     "apps/plugins/sampler",
     # ── patchbay ──
     "features/patchbay/driver",
+    "features/patchbay/yamaha-tf",
     "apps/patchbay",
     # ── frame ──
     "crates/frame/tools/cli",
@@ -195,6 +196,7 @@ daw-sync = { path = "features/sync" }
 frame = { path = "crates/frame" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }
 patchbay = { path = "features/patchbay" }
+patchbay-yamaha-tf = { path = "features/patchbay/yamaha-tf" }
 midi = { path = "features/midi" }
 editor = { path = "features/editor" }
 session = { path = "features/session" }

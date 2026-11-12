@@ -94,6 +94,28 @@ pub fn register(family: Arc<dyn DeviceFamily>) -> Option<Arc<dyn DeviceFamily>> 
     replace_or_push(&mut list, family)
 }
 
+/// [`register`] `family` and its views, for one kind, in one call.
+///
+/// What a family extension with views of its own calls, before the
+/// engine and the window start: the views go to the window's registry
+/// ([`crate::ui::register_family_views`]), the family to the engine's.
+///
+/// # Panics
+/// In debug builds, when `views` is for another kind than `family`.
+#[cfg(feature = "ui")]
+pub fn register_with_views(
+    family: Arc<dyn DeviceFamily>,
+    views: crate::ui::FamilyViews,
+) -> Option<Arc<dyn DeviceFamily>> {
+    debug_assert_eq!(
+        family.kind(),
+        views.kind,
+        "a family's views registered under another kind"
+    );
+    crate::ui::register_family_views(views);
+    register(family)
+}
+
 /// The families [`register`]ed in this process, in order.
 #[must_use]
 pub fn registered() -> Vec<Arc<dyn DeviceFamily>> {

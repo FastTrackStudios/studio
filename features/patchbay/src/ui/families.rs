@@ -120,7 +120,7 @@ pub fn views(kind: &str) -> Option<FamilyViews> {
 /// The built-in families' views, as each family extension will register
 /// its own.
 fn builtin() -> Vec<FamilyViews> {
-    use crate::ui::devices::{galaxy32, yamaha_tf};
+    use crate::ui::devices::galaxy32;
     use crate::ui::{icons, pages};
     vec![
         FamilyViews {
@@ -139,10 +139,6 @@ fn builtin() -> Vec<FamilyViews> {
             icon: Some(icons::NetworkIcon),
             reads_device: false,
             ..FamilyViews::new("dante")
-        },
-        FamilyViews {
-            console: Some(|view| rsx! { yamaha_tf::YamahaTfConsole { view } }),
-            ..FamilyViews::new("yamaha-tf")
         },
         FamilyViews {
             console: Some(|view| rsx! { galaxy32::Galaxy32Console { view } }),
@@ -305,8 +301,8 @@ mod tests {
     fn an_unregistered_kind_gets_the_generic_device_view() {
         assert!(views("no-such-kind").is_none());
         // The built-in consoles answer only for their own kinds.
-        assert!(views("yamaha-tf").and_then(|v| v.console).is_some());
-        assert!(views("yamaha-tf").and_then(|v| v.route).is_none());
+        assert!(views("antelope-galaxy32").and_then(|v| v.console).is_some());
+        assert!(views("antelope-galaxy32").and_then(|v| v.route).is_none());
         assert!(views("dante").and_then(|v| v.route).is_some());
         assert!(views("system-audio").and_then(|v| v.mix).is_some());
     }

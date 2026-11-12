@@ -7,7 +7,7 @@ control everything. It has two parts:
 ```
 crates/device              patchbay-device    generic model + DeviceAdapter trait (no vendor code)
 crates/adapters/antelope   patchbay-antelope  Antelope Galaxy32 via Antelope Manager Server
-crates/adapters/yamaha     patchbay-yamaha    Yamaha TF-series over RCP (+ subnet discovery)
+features/patchbay/yamaha-tf  patchbay-yamaha-tf  Yamaha TF over RCP (+ subnet discovery): a family and an extension of its own
 crates/adapters/dante      patchbay-dante     the Dante network over inferno-net (mDNS + ARC)
 crates/adapters/<family>   patchbay-<family>  one crate per hardware family
 ```
@@ -110,10 +110,19 @@ cargo run -p patchbay-antelope --example galaxy_read         # read-only
 cargo run -p patchbay-antelope --example galaxy_write_test   # guarded round-trips on cleared targets only
 ```
 
-## Yamaha TF (`patchbay-yamaha`)
+## Yamaha TF (`patchbay-yamaha-tf`)
 
 `TfAdapter` talks RCP (text lines on TCP 49280) straight to the console.
 Verified read-only on a TF1 (V4.55).
+
+The first family that is its own crate and Architect extension
+(`features/patchbay/yamaha-tf`, extension `patchbay-yamaha-tf`, studio#417):
+`register()` adds `YamahaTfFamily` to the engine and the console view to the
+window; `ext::YamahaTf` calls it from its `build`, and `fts-patchbay`'s
+binaries call it from `main`. Its tests drive an in-process fake TF1
+(`tests/fake_server.rs`) and the extension beside the core
+(`tests/extension.rs`). `cargo run -p patchbay-yamaha-tf --example tf_read --
+<addr>` reads a real console, read-only.
 
 - **Params only.** Paths are `in/{ch}/…`, `stin/…`, `fxrtn/…`, `aux/…`,
   `matrix/…`, `stereo/…`, `sub/…`, `dca/…`, `mutegroup/…` and `scene/…`, e.g.
@@ -145,7 +154,7 @@ Verified read-only on a TF1 (V4.55).
 - **Session.** The hub connects with `ClientOptions::keepalive = None`, so
   patchbay never sends `scpmode`; liveness comes from the read-only
   `devstatus runmode` ping.
-- Protocol research: `docs/yamaha-tf-rcp.md`.
+- Protocol research: `docs/patchbay/yamaha-tf-rcp.md`.
 
 ## Dante (`patchbay-dante`)
 
@@ -239,10 +248,11 @@ features/patchbay/src/                 (paths below are relative to this)
 apps/patchbay/src/cli_device.rs         `patchbay device …`
 ```
 
-- **Defaults.** With no `devices` section the hub starts four entries,
-  all auto-discovered: `system-audio` (kind `system-audio`), `galaxy32`
-  (`antelope-galaxy32`), `tf1` (`yamaha-tf`) and `dante` (`dante`)
-  (each family's `DeviceFamily::defaults`, in registration order).
+- **Defaults.** With no `devices` section the hub starts one entry per
+  family, all auto-discovered, in registration order: the built-ins
+  `system-audio` (kind `system-audio`), `galaxy32` (`antelope-galaxy32`) and
+  `dante` (`dante`), then the registered families' (`tf1`, `yamaha-tf`, in
+  every Patchbay app). Each comes from the family's `DeviceFamily::defaults`.
 - **Config.** A styx `devices` section replaces the defaults:
   `devices ({name galaxy32, kind antelope-galaxy32, serial "4202524000109"}
   {name foh, kind yamaha-tf, addr "192.168.1.214"} {name dante, kind dante,
