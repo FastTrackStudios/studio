@@ -9,6 +9,9 @@
 #   scripts/studio-architect.sh check           `cargo check` of the node (PR CI)
 #   scripts/studio-architect.sh release TAG DIR the release's tarballs into DIR:
 #       studio-architect-node-TAG-<arch>-<os>.tar.gz (+ .sha256)
+#           studio-architect                the node
+#           studio-island/                  its island (#445), from `just island`
+#                                           at this commit (required)
 #       studio-architect-web-TAG.tar.gz              (+ .sha256)
 #
 # The node is `--no-default-features` (no window: no Blitz, wgpu or
@@ -132,14 +135,33 @@ release() {
     mkdir -p "$dir/$name"
     cp "$bin" "$dir/$name/studio-architect"
     # Studio's island (#445) beside the binary, where the distribution reads
-    # it (studio_architect::ISLAND_FOLDER): `just island`'s folder. Without
-    # it the node ships without the island (the view keeps Architect's own
-    # bar and controls).
-    if [ -f target/studio-island/architect.lock.json ]; then
-        cp -r target/studio-island "$dir/$name/studio-island"
-    else
-        echo "studio-architect: no target/studio-island (run \`just island\`): released without the island" >&2
+    # it (studio_architect::ISLAND_FOLDER): `just island`'s folder, which the
+    # release job builds just before this, into the same target dir. A
+    # release without it, or with one built from another commit, fails: a
+    # stale island would ship code this tag does not hold.
+    local island
+    island="$(target_dir)/studio-island"
+    local head
+    head="$(git rev-parse HEAD)"
+    if [ ! -f "$island/architect.lock.json" ]; then
+        echo "studio-architect: no $island (run \`just island\`)" >&2
+        exit 1
     fi
+    if [ "$(cat "$island/BUILT_FROM" 2>/dev/null)" != "$head" ]; then
+        echo "studio-architect: $island was built from $(cat "$island/BUILT_FROM" 2>/dev/null || echo 'an unknown commit'), not $head: run \`just island\`" >&2
+        exit 1
+    fi
+    mkdir -p "$dir/$name/studio-island"
+    # What the node serves (the lock's files, the lock, the sheet) and the
+    # stamp; nothing else build-web left there.
+    python3 - "$island" "$dir/$name/studio-island" <<'PY'
+import json, shutil, sys, os
+src, dst = sys.argv[1], sys.argv[2]
+names = list(json.load(open(os.path.join(src, "architect.lock.json")))["files"])
+for n in names + ["architect.lock.json", "island.css", "BUILT_FROM"]:
+    os.makedirs(os.path.dirname(os.path.join(dst, n)) or dst, exist_ok=True)
+    shutil.copy2(os.path.join(src, n), os.path.join(dst, n))
+PY
     tar -C "$dir" -czf "$dir/$name.tar.gz" "$name"
     rm -rf "${dir:?}/$name"
     local web="studio-architect-web-$tag"

@@ -8,13 +8,18 @@
 //! ```text
 //!   studio-architect-node-vX.Y.Z-x86_64-linux.tar.gz (+ .sha256)
 //!       studio-architect-node-vX.Y.Z-x86_64-linux/studio-architect
+//!       studio-architect-node-vX.Y.Z-x86_64-linux/studio-island/
+//!           architect.json, architect.lock.json, studio_island.js,
+//!           studio_island.*.wasm (the lock's files), island.css, BUILT_FROM
 //!   studio-architect-web-vX.Y.Z.tar.gz (+ .sha256)
 //!       studio-architect-web-vX.Y.Z/{index.html, docs/, app/ (+ distribution.json)}
 //!   SHA256SUMS (+ SHA256SUMS.minisig, the org key)   sums.rs, over the whole Release
 //! ```
 //!
 //! No image: the hosted node runs as a NixOS service from the tarball
-//! (FastTrackStudios/infra wraps it).
+//! (FastTrackStudios/infra wraps it). `studio-island/` must sit beside the
+//! node's real binary: the node reads it from its own executable's folder
+//! (`studio_architect::ISLAND_FOLDER`), and serves no island without it.
 //!
 //! ```text
 //!   `just release` pushes vX.Y.Z --> resolve (desktop.rs's: the stamped
@@ -109,6 +114,26 @@ echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
 echo "STUDIO_ARCHITECT_CACHE=$base/studio-architect/$RUNNER_NAME" >> "$GITHUB_ENV"
 "#,
         ))
+        // Studio's island (#445), into the same target dir, from this very
+        // checkout: the release script ships it only when its BUILT_FROM
+        // is this commit. Its toolchain is the `wasi` devenv profile
+        // (devenv.nix: the `wasm32-wasip2` target and node), checked here
+        // first so a runner without it fails on the cause. `npm ci` in
+        // Architect's web tools fetches their packages (pinned by its
+        // package-lock.json).
+        .step(Step::run(
+            "Studio's island (wasm32-wasip2, node >= 26)",
+            r#"set -euo pipefail
+# The wasi profile's shell expands these, not this one.
+# shellcheck disable=SC2016
+devenv --profile wasi shell -- bash -c '
+  test -d "$(rustc --print sysroot)/lib/rustlib/wasm32-wasip2" || { echo "::error::no wasm32-wasip2 target in the wasi profile"; exit 1; }
+  node -e "process.exit(Number(process.versions.node.split(\".\")[0]) >= 26 ? 0 : 1)" || { echo "::error::node $(node --version) is older than 26"; exit 1; }
+  echo "rustc $(rustc --version), node $(node --version)"
+'
+devenv shell -- just island
+"#,
+        ))
         .step(Step::run(
             "Build the node and the web bundle",
             r#"set -euo pipefail
@@ -130,6 +155,9 @@ tar -C "$tmp" -xzf "$out/studio-architect-node-$name-x86_64-linux.tar.gz"
 bin="$tmp/studio-architect-node-$name-x86_64-linux/studio-architect"
 "$bin" serve --help > /dev/null
 "$bin" distribution > "$tmp/distribution.json"
+island="$tmp/studio-architect-node-$name-x86_64-linux/studio-island"
+test -f "$island/architect.lock.json"
+test "$(cat "$island/BUILT_FROM")" = "$(git rev-parse HEAD)"
 {
   echo "### Studio Architect $TAG"
   echo '```'
