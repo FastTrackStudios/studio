@@ -354,12 +354,15 @@ fn web_image() -> Job {
 const WEB_IMAGE: &str = r#"set -euo pipefail
 export PATH="$PATH:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin"
 system="$(nix eval --impure --raw --expr builtins.currentSystem)"
+# The checkout, as a flake: git+file, the tracked files only, as the image
+# builds; shallow=1, since actions/checkout clones one commit deep (nix
+# refuses a shallow repository otherwise).
+flake="git+file://$PWD?shallow=1&rev=$(git rev-parse HEAD)"
 # The image's derivation: evaluating it fetches every builtins.fetchGit.
-nix eval --accept-flake-config --raw ".#packages.$system.studio-web-image.drvPath" > /dev/null
+nix eval --accept-flake-config --raw "$flake#packages.$system.studio-web-image.drvPath" > /dev/null
 # The crates it builds from: crane's vendor directory (the fixed-output
-# fetches too). git+file: the tracked files only, as the image builds.
-nix build --no-link --accept-flake-config --impure --expr \
-  "(builtins.getFlake \"git+file://$PWD?rev=$(git rev-parse HEAD)\").packages.$system.session-app-web.cargoVendorDir"
+# fetches too).
+nix build --no-link --accept-flake-config "$flake#packages.$system.session-app-web.cargoVendorDir"
 "#;
 
 /// REQUIRED (through `CI passed`): what a tag's Apple builds compile, on the
