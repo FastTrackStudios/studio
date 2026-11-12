@@ -126,10 +126,27 @@ builds them as an Architect site, and Studio draws its own blocks into it
   the songs follow each other with no page load, the playing row marked.
   The bar at the foot opens the **now-playing view**: the playing song's
   chart (its `[data-now-playing]`, fetched from its page), following beat by
-  beat, with the controls under it (Architect's until Studio's progress bar
-  and transport are on the page: #445). Each row is also a follow box whose
+  beat, with Architect's progress bar over it and its controls under it.
+  Each row is also a follow box whose
   one line is the song's start, so an Architect before playlists (v0.12.2)
   plays a tapped row from the setlist's page as it did.
+- **The song's sections as played** ride on the now-playing view as
+  `data-sections`: a JSON list `[{"name", "start", "end", "color"}]`,
+  seconds on the chart's clock (Keyflow's `chart_section_timeline`, a
+  section played twice listed twice, in playing order) and the section
+  mark's colour (Keyflow's `get_section_theme`, the colour the chart
+  prints; `follow::played_sections`). The page player hands them to the
+  views that draw the song.
+- **Studio's island** (`apps/architect/island`, `just island`;
+  docs/architect-distribution.md): on a node that ships it, the
+  now-playing view's bar is Session's own progress bar (its sections from
+  `data-sections`, a tap on one seeks there, a song without sections one
+  fill the whole length) and its controls Session's transport (previous,
+  play / pause, next; no record, no loop), from `features/ui/transport-ui`,
+  the crate Session draws them from. It runs in the page's extension
+  sandbox and may only ask the page to seek, play, pause or skip.
+  Architect's bar and controls show until its first frame, and stay
+  where it cannot run.
 - **A song's length** is its recording's (`length` on its note, seconds,
   read from the file's header at import and re-engrave: MP4, WAV, AIFF,
   FLAC, Ogg Vorbis/Opus, MP3; `src/media.rs`), and a set's line carries it

@@ -33,7 +33,7 @@ fn number(v: &Value, key: &str) -> f64 {
 }
 
 fn playhead() -> Playhead {
-    let props = embed().map(|e| e.props).unwrap_or(Value::Null);
+    let props = embed().map_or(Value::Null, |e| e.props);
     let sections = props
         .get("sections")
         .and_then(Value::as_array)
@@ -67,6 +67,9 @@ fn playhead() -> Playhead {
     }
 }
 
+/// The colour of a song without sections: one slate fill the whole length.
+const WHOLE_SONG: &str = "#94a3b8";
+
 /// Asks the page `action` (one of its five intents).
 fn ask(action: &str, args: &Value) {
     let _ = host::run(action, args);
@@ -84,9 +87,22 @@ fn clock(seconds: f64) -> String {
 }
 
 /// The song's sections as the bar draws them: a part of its length each.
+/// A song without sections is one unnamed section the whole length, so
+/// the bar still shows how much has played (the bar darkens what has not,
+/// over its sections' colours: with none, there would be nothing to see).
 fn sections(p: &Playhead) -> Vec<ProgressSection> {
     if p.duration <= 0.0 {
         return Vec::new();
+    }
+    if p.sections.is_empty() {
+        return vec![ProgressSection {
+            start_percent: 0.0,
+            end_percent: 100.0,
+            color: WHOLE_SONG.to_owned(),
+            name: String::new(),
+            short_name: String::new(),
+            comment: None,
+        }];
     }
     p.sections
         .iter()

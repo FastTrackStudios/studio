@@ -111,14 +111,28 @@ and may ask only to seek, play, pause, or go to the previous or next song.
 Its theme variables come from the share page's own theme.
 
 `just island` builds it (in the `wasi` devenv profile: `wasm32-wasip2` and
-node) into `target/studio-island/`: Architect's `build-web` folder and its
+node) into `<target>/studio-island/` (`<target>` is cargo's target
+directory, from `cargo metadata`): Architect's `build-web` folder and its
 stylesheet (`apps/architect/island/island.css`, Tailwind's theme and
 utilities for the components' classes, no preflight: a view's sheet may not
-style `html` or `:host`). Release build: 1.7 MB, 415 KB gzipped (304 KB
-brotli), plus Architect's web runtime, 48 KB gzipped. The page loads it
-only when the view first opens; Architect's own bar and controls show
-until its first frame, and stay where it cannot run (Safari, which has no
-JS Promise Integration yet).
+style `html` or `:host`). It runs `just island-check` first, the island's
+clippy for `wasm32-wasip2` (on the host the crate is empty, so a host
+clippy checks nothing), warnings denied. **It fetches npm packages at build
+time**: `npm ci` in Architect's web tools (copied from the architect
+checkout cargo resolved into `<target>/architect-web`) installs jco and its
+transpiler, pinned by that folder's `package-lock.json`.
+
+The component is built as `wasm-release` (opt-level `s`, fat LTO, one
+codegen unit) with its name section stripped
+(`CARGO_PROFILE_WASM_RELEASE_STRIP=true`): 1.20 MB, 314 KB gzipped (the core
+module 806 KB / 259 KB, jco's glue 393 KB / 54 KB), down from 1.7 MB /
+415 KB unstripped at `release`; plus Architect's web runtime, 48 KB
+gzipped, and the sheet, 12 KB / 3 KB. The page loads it only when the view
+first opens; Architect's own bar and controls show until its first frame
+(about 0.3 s after the view opens on a local node; at 1.6 Mbit/s and 150 ms
+it is ready at 8.7 s, with the chart, which is the longer wait, as the node
+serves both uncompressed: FastTrackStudios/architect#602), and stay where it
+cannot run (Safari, which has no JS Promise Integration yet).
 
 Wiring it into this distribution (`Distribution::island`, the folder
 shipped beside the binary as `studio-island/`) needs the Architect release
