@@ -15,6 +15,28 @@ Crate facade pattern:
 
 Apps depend on `patchbay` / `patchbay-ui`, never on internals.
 
+## As an Architect extension
+
+Patchbay is becoming Architect extensions: this crate's core plus one
+extension per device family, packaged as its own distribution
+(FastTrackStudios/studio#410 has the design and the stack).
+
+- `ext::Patchbay` (feature `extension`, manifest `extension.toml`, id
+  `patchbay`) is the core as a linked extension: the `patchbay` view and
+  the `PATCHBAY_*` actions (`STATUS`, `HEALTH`, `NOW`, `DEVICE_LIST`,
+  `DEVICE_SHOW`), each answering the JSON its `patchbay … --json` verb
+  prints. Linked only: no `[entry]`/`[source]` until a linked extension
+  can be stopped (FastTrackStudios/architect#577).
+- **One engine per machine** (`server::Engine`). `build` starts nothing;
+  the first action or view calls `ext::engine()`, which attaches to a
+  Patchbay engine already answering on the port (`fts-patchbay`,
+  `patchbay serve`, another Architect app) or binds the port **before**
+  creating the backend and runs it here. `fts-patchbay` uses
+  `Engine::start` (always here, as before).
+- Reports built from several calls (`report::status`,
+  `report::collect_health`) live in the crate, so the CLI and the actions
+  answer with the same JSON.
+
 ## Key rules
 
 - **Headless core (STRICT)**: the engine never touches dioxus. GUIs are
@@ -38,4 +60,6 @@ Apps depend on `patchbay` / `patchbay-ui`, never on internals.
 cargo check -p patchbay -p patchbay-ui -p fts-patchbay
 cargo run -p patchbay --example snapshot   # read-only live-graph smoke
 cargo run -p fts-patchbay                  # the app (ws on :4046 too)
+# the core as a linked extension, in an Architect host (scratch port and config)
+cargo nextest run -p patchbay --features extension --test extension
 ```

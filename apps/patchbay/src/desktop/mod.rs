@@ -10,11 +10,9 @@ use std::process::ExitCode;
 use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 
-use architect::host::{EngineHost, WebBundle};
+use architect::host::WebBundle;
 use dioxus::prelude::*;
-use patchbay::proto::PatchbayServiceClient;
-use patchbay::proto::services::patchbay_service::PatchbayServiceStreamClient;
-use patchbay::server::PatchbayBackend;
+use patchbay::server::{Engine, EngineOptions};
 use patchbay::ui::{Dialer, EngineLink, PatchbayApp, PatchbayHandle, Shell};
 
 #[cfg(target_os = "macos")]
@@ -63,15 +61,9 @@ fn web_bundle() -> Option<WebBundle> {
     }
 }
 
-/// In-process clients over the `LocalServer` conduit — the same shape
-/// every network remote uses.
-struct Engine {
-    client: PatchbayServiceClient,
-    stream_client: PatchbayServiceStreamClient,
-    /// Keeps the `LocalServer`'s acceptor + lanes alive.
-    _scope: Arc<architect::Scope>,
-}
-
+/// This machine's engine, run in-process and served on [`bind_addr`]:
+/// the same `patchbay::server::Engine` an Architect app that links the
+/// Patchbay extension starts.
 static ENGINE: OnceLock<Engine> = OnceLock::new();
 
 /// The bootstrapped engine. `main` refuses to reach the dioxus launch
@@ -90,77 +82,30 @@ fn bind_addr() -> String {
     let default = macos::default_addr(DEFAULT_ADDR);
     #[cfg(not(target_os = "macos"))]
     let default = DEFAULT_ADDR;
-    std::env::var("PATCHBAY_ADDR")
-        .ok()
-        .or_else(patchbay::server::configured_bind)
-        .unwrap_or_else(|| default.to_string())
+    EngineOptions::configured_addr(default)
 }
 
-/// Bring up the backend + serving before the UI launches. The runtime
-/// is leaked so it keeps hosting the ws server, the stream pumps, and
-/// the local acceptor for the life of the process.
+/// Bring up the engine and its serving before the UI launches. The
+/// engine always runs here (an address already in use is logged and the
+/// engine runs unserved, as before); the macOS single-instance check in
+/// `main` runs first.
 fn bootstrap_blocking() -> eyre::Result<()> {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()?;
-    let rt = Box::leak(Box::new(rt));
-
-    rt.block_on(async {
-        let backend = PatchbayBackend::new();
-        // macOS privacy permissions belong to Patchbay.app: the app
-        // answers the `permissions` RPCs and runs the prompt flow once
-        // the window is up (see `App`).
-        #[cfg(target_os = "macos")]
-        backend.set_permission_provider(Arc::new(macos::AppPermissions::install(
-            tokio::runtime::Handle::current(),
-        )));
-
-        // In-process client link.
-        let scope = architect::Scope::new();
-        let server = architect::LocalServer::serve(backend.router(), Arc::clone(&scope));
-        let caller = server
-            .caller()
-            .await
-            .map_err(|e| eyre::eyre!("local patchbay caller: {e:?}"))?;
-        let client = PatchbayServiceClient::new(caller);
-        let stream_client = server
-            .establish::<PatchbayServiceStreamClient>()
-            .await
-            .map_err(|e| eyre::eyre!("local patchbay stream client: {e:?}"))?;
-
-        // Network serving for future remotes (browser/tablet). Spawned,
-        // not awaited — serve() never returns.
-        let router = backend.router();
-        let addr = bind_addr();
-        let web = web_bundle();
-        // Record what we're serving so `patchbay listen` can report it
-        // (and tell the user which URLs would actually answer).
-        patchbay::server::record_bound(
-            &addr,
-            if web.is_some() {
-                ""
-            } else {
-                "no browser remote in this build (install `dx` and rebuild, \
-                 or set PATCHBAY_WEB_DIST) — /health and /vox still work"
-            },
-        );
-        // Advertise to (when LAN-reachable) and look for other engines, so
-        // a UI attached here can offer to switch to them.
-        patchbay::server::start_peer_discovery(&addr);
-        tokio::spawn(async move {
-            // Ungated as before: no PermissionsGate on this engine yet (FastTrackStudios/studio#362).
-            EngineHost::ungated(router, addr).web(web).serve().await;
-        });
-
-        ENGINE
-            .set(Engine {
-                client,
-                stream_client,
-                _scope: scope,
-            })
-            .map_err(|_| eyre::eyre!("engine already initialised"))?;
-        Ok(())
-    })
+    let mut opts = EngineOptions::new(bind_addr());
+    opts.web = web_bundle();
+    // macOS privacy permissions belong to Patchbay.app: the app answers
+    // the `permissions` RPCs and runs the prompt flow once the window is
+    // up (see `App`).
+    #[cfg(target_os = "macos")]
+    {
+        opts.permissions = Some(Box::new(|runtime| {
+            Arc::new(macos::AppPermissions::install(runtime))
+        }));
+    }
+    let engine = Engine::start(opts)?;
+    ENGINE
+        .set(engine)
+        .map_err(|_| eyre::eyre!("engine already initialised"))?;
+    Ok(())
 }
 
 pub fn main() -> ExitCode {
@@ -224,20 +169,7 @@ pub fn main() -> ExitCode {
 /// Dial another machine's engine over WebSocket — the same two links a
 /// browser remote opens. Home is in-process and never goes through this.
 async fn dial(url: String) -> Result<EngineLink, String> {
-    let link = vox_websocket::WsLink::connect(&url)
-        .await
-        .map_err(|e| format!("connect {url}: {e}"))?;
-    let client: PatchbayServiceClient = vox_core::initiator_on(link)
-        .establish()
-        .await
-        .map_err(|e| format!("handshake with {url}: {e:?}"))?;
-    let stream_link = vox_websocket::WsLink::connect(&url)
-        .await
-        .map_err(|e| format!("connect (stream) {url}: {e}"))?;
-    let stream: PatchbayServiceStreamClient = vox_core::initiator_on(stream_link)
-        .establish()
-        .await
-        .map_err(|e| format!("handshake (stream) with {url}: {e:?}"))?;
+    let (client, stream) = patchbay::server::dial(&url).await?;
     Ok(EngineLink {
         handle: PatchbayHandle(Arc::new(client)),
         stream: Rc::new(stream),
@@ -254,8 +186,8 @@ fn App() -> Element {
     // engines) is `patchbay_ui`'s.
     use_context_provider(|| Shell {
         home: EngineLink {
-            handle: PatchbayHandle(Arc::new(engine.client.clone())),
-            stream: Rc::new(engine.stream_client.clone()),
+            handle: PatchbayHandle(Arc::new(engine.client().clone())),
+            stream: Rc::new(engine.stream_client().clone()),
         },
         dial: Some(Dialer(Rc::new(|url| Box::pin(dial(url))))),
         // In-process: if this link ends, so has the app.

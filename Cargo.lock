@@ -16385,7 +16385,10 @@ name = "patchbay"
 version = "26.10.3"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.0)",
+ "architect-extensions",
+ "architect-settings",
  "architect-telemetry",
+ "axum",
  "block2 0.6.2",
  "dioxus",
  "dirs 6.0.0",
@@ -16393,6 +16396,7 @@ dependencies = [
  "eyre",
  "facet",
  "facet-styx",
+ "futures",
  "futures-util",
  "gloo-timers 0.3.0",
  "if-addrs",
@@ -16413,6 +16417,7 @@ dependencies = [
  "serde",
  "serde_json",
  "socket2 0.6.5",
+ "tempfile",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
