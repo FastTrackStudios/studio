@@ -17,6 +17,7 @@
 // env var names, file paths and runner labels read better as written.
 #![allow(clippy::doc_markdown)]
 
+mod bot;
 mod bump_architect;
 mod cache_devshell;
 mod checks;

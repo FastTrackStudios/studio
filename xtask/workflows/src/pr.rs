@@ -83,7 +83,16 @@ fn pr_checks() -> Result<Job> {
             .cond(NOT_CANCELLED),
         )
         .step(Step::run("Manifests + lockfile", LOCKFILE).cond(NOT_CANCELLED))
-        .step(Step::run("rail config", "cargo rail config validate --strict").cond(NOT_CANCELLED)))
+        .step(Step::run("rail config", "cargo rail config validate --strict").cond(NOT_CANCELLED))
+        // Every App token: one repository, its hop's permissions, its
+        // environment's own key (scripts/check-token-mints.py's ALLOWED).
+        .step(
+            Step::run(
+                "App token mints",
+                "python3 scripts/check-token-mints.py --self-test && python3 scripts/check-token-mints.py",
+            )
+            .cond(NOT_CANCELLED),
+        ))
 }
 
 /// The PR's changed files reach the node: a crate of this repo in its

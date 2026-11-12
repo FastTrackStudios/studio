@@ -357,12 +357,22 @@ jobs:
     permissions: {}
     environment: release-dispatch
     steps:
-    - name: fts-forge token (infra, actions only)
+    - name: Runs in the release-dispatch environment, with its key
+      env:
+        BOT_ENVIRONMENT: ${{ vars.BOT_ENVIRONMENT }}
+        KEY_SET: ${{ secrets.RELEASE_DISPATCH_APP_KEY != '' }}
+      run: |
+        set -euo pipefail
+        if [ "${BOT_ENVIRONMENT:-}" != "release-dispatch" ] || [ "$KEY_SET" != true ]; then
+          echo "::error::this job must run in the 'release-dispatch' environment, whose variable BOT_ENVIRONMENT is 'release-dispatch' and which holds the secret RELEASE_DISPATCH_APP_KEY (got BOT_ENVIRONMENT='${BOT_ENVIRONMENT:-}', key set: $KEY_SET)"
+          exit 1
+        fi
+    - name: fts-forge token (infra only)
       id: forge
-      uses: actions/create-github-app-token@v2
+      uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
       with:
         app-id: ${{ vars.FORGE_APP_ID }}
-        private-key: ${{ secrets.FORGE_APP_PRIVATE_KEY }}
+        private-key: ${{ secrets.RELEASE_DISPATCH_APP_KEY }}
         owner: FastTrackStudios
         repositories: infra
         permission-actions: write

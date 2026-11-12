@@ -2219,13 +2219,20 @@ release-hotfix +COMMITS:
 # exit 4: no keyflow release on TAG yet. The bot runs exactly this.
 # Move the architect and keyflow pins to architect TAG (e.g. v0.12.5)
 bump-architect TAG *ARGS:
-    python3 scripts/bump-architect.py {{TAG}} {{ARGS}}
+    python3 scripts/bump-architect.py "{{TAG}}" {{ARGS}}
 
 # studio#457's replay must equal the merged commit (Cargo.lock included);
 # a keyflow behind the tag must exit 4, an editor move exit 3.
 # Test the bump script against real bumps
 bump-architect-test:
     bash scripts/bump-architect-replay.sh
+
+# Every workflow's App token: one repository, its hop's permissions, its
+# environment's own key (scripts/check-token-mints.py; PR checks run it).
+# Check the App token mints of every workflow
+check-token-mints:
+    python3 scripts/check-token-mints.py --self-test
+    python3 scripts/check-token-mints.py
 
 # The release notes of a tag (default: the draft for origin/main).
 release-notes *ARGS:
