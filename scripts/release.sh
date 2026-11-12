@@ -773,8 +773,22 @@ publish_release() { # [tag]
     [ -n "$tag" ] || die "publish needs a tag (an argument, or a run on refs/tags/v*)"
     v="${tag#v}"
     is_semver "$v" || die "version '$v' is not X.Y.Z"
-    if gh release view "$tag" --repo "$REPO" >/dev/null 2>&1; then
-        note "release $tag already exists — nothing to do"; return 0
+    if release_id "$tag" >/dev/null; then
+        release_dedupe "$tag"
+        ensure_facts "$tag"
+        note "release $tag exists — its facts are on it"; return 0
+    fi
+    # ONE writer creates the draft: release.yml's publish job. The other
+    # callers (desktop, studio-ios) wait for it, and create it themselves
+    # only when it never came (release.yml failed).
+    if [ "${PUBLISH_MODE:-create}" = wait ]; then
+        local i
+        local tries="${PUBLISH_WAIT_TRIES:-20}"
+        for ((i = 1; i <= tries; i++)); do
+            if release_id "$tag" >/dev/null; then release_dedupe "$tag"; ensure_facts "$tag"; return 0; fi
+            note "waiting for release.yml to create the $tag draft ($i/$tries)"; sleep 30
+        done
+        note "no $tag release after $((tries / 2)) minutes: creating it here"
     fi
     git rev-parse -q --verify "refs/tags/$tag" >/dev/null || die "no tag $tag: tag first (just release)"
     target="$(git rev-parse "$tag^{commit}")"
@@ -809,11 +823,36 @@ publish_release() { # [tag]
     fi
     rm -f "$notes"
     release_dedupe "$tag"
-    # Before any build attaches its assets, so every SHA256SUMS signs it.
-    local facts; facts="$(mktemp -d)/release-facts.json"
+    ensure_facts "$tag"
+    note "created the $tag draft (sums publishes it once signed)"
+}
+
+# The id of <tag>'s release, drafts included (a draft has no tag yet, so
+# `releases/tags/<tag>` does not find it), the oldest if several.
+release_id() { # <tag>
+    local id
+    id="$(gh api --paginate "repos/$REPO/releases?per_page=100" --jq ".[] | select(.tag_name == \"$1\") | .id" 2>/dev/null | sort -n | head -1)"
+    [ -n "$id" ] || return 1
+    echo "$id"
+}
+
+# release-facts.json on <tag>'s release, every time a caller passes (the
+# first upload can fail; `sums` refuses a release without the facts it
+# recomputes, and uploads them itself as a last resort). A race on the
+# upload (422) is retried.
+ensure_facts() { # <tag>
+    local tag="$1" facts id i
+    id="$(release_id "$tag")" || die "no $tag release to put the facts on"
+    if gh api "repos/$REPO/releases/$id/assets?per_page=100" --jq '.[].name' | grep -qx release-facts.json; then
+        return 0
+    fi
+    facts="$(mktemp -d)/release-facts.json"
     cmd_facts "$tag" > "$facts"
-    gh release upload "$tag" "$facts" --repo "$REPO" --clobber
-    note "published https://github.com/$REPO/releases/tag/$tag (release-facts.json: $(cat "$facts"))"
+    for i in 1 2 3; do
+        gh release upload "$tag" "$facts" --repo "$REPO" --clobber && return 0
+        sleep 5
+    done
+    die "could not upload release-facts.json to $tag"
 }
 
 # `publish` and both ios-release steps start together on a tag, and
@@ -872,7 +911,7 @@ cmd_ios_resolve() { # <app> <tag>
 cmd_ios_release() { # <tag>
     local tag="${1:-}"
     [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "usage: ios-release vX.Y.Z"
-    publish_release "$tag"
+    PUBLISH_MODE="wait" publish_release "$tag"
 }
 
 # The app's line once its build is uploaded; earlier builds of the same

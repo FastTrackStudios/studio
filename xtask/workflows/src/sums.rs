@@ -54,13 +54,31 @@ const SUMS: &str = r####"set -euo pipefail
 dir="$RUNNER_TEMP/sums"
 rm -rf "$dir" && mkdir -p "$dir"
 printf '%s\n' "$OWN" | sed 's/^[[:space:]]*//; /^$/d' > "$dir/own"
-# release-facts.json as the tag says it must be (release.sh publish attached it).
+# release-facts.json as the tag says it must be.
 bash scripts/release.sh facts "$TAG" > "$dir/release-facts.json"
-printf '%s  release-facts.json\n' "$(sha256sum < "$dir/release-facts.json" | cut -d' ' -f1)" >> "$dir/own"
-id="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50" --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -1)"
-[ -n "$id" ] || { echo "::error::no release for $TAG"; exit 1; }
+facts_sha="$(sha256sum < "$dir/release-facts.json" | cut -d' ' -f1)"
+printf '%s  release-facts.json\n' "$facts_sha" >> "$dir/own"
+id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.tag_name == \"$TAG\") | .id" | sort -n | head -1)"
+[ -n "$id" ] || { echo "::error::no release for $TAG (release.yml's publish job creates it)"; exit 1; }
 assets() { gh api "repos/$GITHUB_REPOSITORY/releases/$id/assets?per_page=100" --jq '[.[] | {name, digest}]'; }
 assets > "$dir/assets.json"
+# Never over a signed release from a branch run: it would replace the signed
+# sums with this workflow's alone and drop the signature. Re-run a tag with
+# `gh workflow run <workflow> --ref vX.Y.Z` (a tag ref: the signed path).
+if [ "$SIGNED" != true ] && jq -e 'map(.name) | index("SHA256SUMS.minisig")' "$dir/assets.json" >/dev/null; then
+  echo "::error::$TAG already has a signed SHA256SUMS: an unsigned (branch) run must not touch it; dispatch with --ref $TAG"
+  exit 1
+fi
+# The facts on the release: put them there when the release job's upload
+# did not make it (re-running the release job cannot), refuse other ones.
+have="$(jq -r '.[] | select(.name == "release-facts.json") | .digest // ""' "$dir/assets.json")"
+if [ -z "$have" ]; then
+  for _ in 1 2 3; do gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "$dir/release-facts.json" && break; sleep 5; done
+  assets > "$dir/assets.json"
+elif [ "$have" != "sha256:$facts_sha" ]; then
+  echo "::error::release-facts.json on $TAG is $have, the tag says sha256:$facts_sha: refusing"
+  exit 1
+fi
 # The workflows that signed before: trusted only through their signature.
 prev=/dev/null
 if jq -e 'map(.name) | index("SHA256SUMS")' "$dir/assets.json" >/dev/null; then
@@ -93,11 +111,18 @@ gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "${upload[@]}"
 if [ "${#upload[@]}" = 1 ] && jq -e 'map(.name) | index("SHA256SUMS.minisig")' "$dir/assets.json" >/dev/null; then
   gh release delete-asset "$TAG" SHA256SUMS.minisig --repo "$GITHUB_REPOSITORY" --yes
 fi
-# Nothing moved while signing; then publish (a signed run only).
+# Nothing moved while signing; then publish (a signed run only): ONLY a
+# draft, and Latest only for the highest stable tag (scripts/release-publish.sh).
 assets > "$dir/assets.json"
 bash scripts/release-sums.sh plan "$dir/own" "$dir/assets.json" "$prev" > /dev/null
 if [ "$SIGNED" = true ] && [ "${#upload[@]}" = 2 ]; then
-  gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+  draft="$(gh api "repos/$GITHUB_REPOSITORY/releases/$id" --jq .draft)"
+  highest="$(git tag --list 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+  case "$(bash scripts/release-publish.sh decide "$draft" "$TAG" "$highest")" in
+    publish-latest) gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest ;;
+    publish) gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false ;;
+    leave) echo "$TAG is published already: Latest left where it is" ;;
+  esac
 fi
 {
   echo "### SHA256SUMS of $TAG ($(wc -l < "$dir/SHA256SUMS") assets$( [ "${#upload[@]}" = 2 ] && echo ', signed, published'))"

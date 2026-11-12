@@ -47,7 +47,7 @@ stack a◀b◀c  ─merge commits, titled with each PR title─┘              
                                           ├─ studio-ios: TestFlight
                                           ├─ desktop: .dmg + AppImage, attached to the Release
                                           ├─ studio-architect: the distribution's node + web tarballs (docs/architect-distribution.md)
-                                          │    (each of the two above ends with SHA256SUMS over the whole Release, signed)
+                                          │    (each of the two above ends with SHA256SUMS over what it built + the signed sums, then publishes the draft)
                                           └─ release: the GitHub Release (notes from .changes/)
 
 hotfix: release/v26.10.4 (from the tag) ◀── cherry-pick -x PR ── CI passed ── just release <sha> ─▶ v26.10.5
@@ -225,7 +225,21 @@ vouch for (`scripts/release-sums.sh`):
 
 It refuses an asset it vouches for that was replaced, or one of its own
 that is missing, and leaves any other asset unsigned. Then it publishes the
-draft. minisign is the pinned upstream binary.
+draft (`scripts/release-publish.sh`): only a release that is still a draft,
+and marked Latest only when its tag is the highest stable tag. A re-run, or
+the second workflow's run, leaves a published release and Latest alone, so
+re-running an old tag's `desktop` never makes it Latest again. minisign is
+the pinned upstream binary.
+
+`release.yml`'s publish job is the one writer that creates the draft; the
+others (`desktop`, `studio-ios`) wait for it (10 minutes, then create it
+themselves). Every caller makes sure `release-facts.json` is on it, and
+`sums` uploads it as a last resort.
+
+**Re-running a tag's workflow by hand:** dispatch it ON THE TAG,
+`gh workflow run desktop.yml --ref vX.Y.Z -f tag=vX.Y.Z`. From a branch
+(`--ref main`) the run takes the unsigned path, which refuses to touch a
+release that already carries a signed SHA256SUMS.
 
 **Tokens.** Each bot job reads the fts-forge App's key from its environment's
 own secret: `PIN_BUMP_APP_KEY` (`pin-bump`, main only) and
@@ -256,7 +270,7 @@ keyflow's crates on the git tag, which means two Architects.
 | push to `main` | `CI`, narrowed: `Rail plan` (`cargo rail plan` from the newest green commit with rail evidence; the full set without one) gates `Check` (+ advisory clippy; records the evidence), `Wasm` and `Tests` (the core test set, filtered to the packages reached); with `Gates`, `Release tooling (macOS)`, aggregated as `CI passed`; also `Dependency cache`. A newer push waits behind the running run (only the newest waits) | Rail plan, Check, Tests, Wasm on THEBATTLESHIP's `studio-main`; the rest on GitHub's free runners |
 | push to `release/v*` | `CI` full set | as above |
 | `gh workflow run checks.yml --ref <branch>` | `CI` full set; when green it posts `Local CI` on the branch's head | as above |
-| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag) | all from the tag, in parallel, each in its own never-cancelled group. Each starts with `stamp` and the tag guard, and none re-runs the tests. **`Images`**: `.#studio-web-image` pushed to `ghcr.io/fasttrackstudios/studio-web` as `X.Y.Z`, `sha-<short>`, `latest`, labelled with the commit. **`studio-ios`**: the TestFlight upload. **`desktop`**: the signed, notarized macOS `.dmg` and the Linux AppImage, attached to the Release as they finish (`gh workflow run desktop.yml -f tag=<ref> -f mode=build-only` proves them from any branch). **`studio-architect`**: Studio's distribution of Architect, `studio-architect-node-<tag>-x86_64-linux.tar.gz` and `studio-architect-web-<tag>.tar.gz` with their `.sha256` (docs/architect-distribution.md). `desktop` and `studio-architect` each end with the `sums` job: `SHA256SUMS` over every asset of the Release, signed with the org minisign key in `release-signing` (`SHA256SUMS.minisig`). **`release`**: the GitHub Release with the notes, published straight away | Images on THEBATTLESHIP's `studio-release`; TestFlight and the `.dmg` on airlock's `studio-release-mac`; the AppImage and Studio Architect on `thebattleship-release`; resolve, guard and publish jobs hosted |
+| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag) | all from the tag, in parallel, each in its own never-cancelled group. Each starts with `stamp` and the tag guard, and none re-runs the tests. **`Images`**: `.#studio-web-image` pushed to `ghcr.io/fasttrackstudios/studio-web` as `X.Y.Z`, `sha-<short>`, `latest`, labelled with the commit. **`studio-ios`**: the TestFlight upload. **`desktop`**: the signed, notarized macOS `.dmg` and the Linux AppImage, attached to the Release as they finish (`gh workflow run desktop.yml -f tag=<ref> -f mode=build-only` proves them from any branch). **`studio-architect`**: Studio's distribution of Architect, `studio-architect-node-<tag>-x86_64-linux.tar.gz` and `studio-architect-web-<tag>.tar.gz` with their `.sha256` (docs/architect-distribution.md). `desktop` and `studio-architect` each end with the `sums` job: `SHA256SUMS` over only what that workflow's jobs built (their reported digests), the facts recomputed from the tag and the already-signed sums, signed with the org minisign key in `release-signing` (`SHA256SUMS.minisig`); the first signed one publishes the draft (Latest only for the highest stable tag). **`release`**: the GitHub Release with the notes, as a DRAFT (the one writer that creates it), with `release-facts.json` | Images on THEBATTLESHIP's `studio-release`; TestFlight and the `.dmg` on airlock's `studio-release-mac`; the AppImage and Studio Architect on `thebattleship-release`; resolve, guard and publish jobs hosted |
 
 **Pools.** `studio-release` (THEBATTLESHIP) and `studio-release-mac`
 (airlock) build only release artifacts: the image, the AppImage, the

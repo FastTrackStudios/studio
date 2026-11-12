@@ -230,7 +230,7 @@ ls -l target/desktop
             .env("VERSION", "${{ needs.resolve.outputs.version }}"),
         )
         .step(
-            Step::uses("Keep the .dmg", "actions/upload-artifact@v4")
+            Step::uses("Keep the .dmg", crate::model::pinned::UPLOAD_ARTIFACT)
                 .with("name", "desktop-macos")
                 .with("path", "target/desktop/*.dmg\n")
                 .with("if-no-files-found", "error")
@@ -330,7 +330,7 @@ echo "target dir after: $(du -sh "$dir" | cut -f1)"
             .cond("always()"),
         )
         .step(
-            Step::uses("Keep the AppImage", "actions/upload-artifact@v4")
+            Step::uses("Keep the AppImage", crate::model::pinned::UPLOAD_ARTIFACT)
                 .with("name", "desktop-linux")
                 .with(
                     "path",
@@ -386,7 +386,7 @@ fn publish() -> Result<Job> {
         .permissions(yaml("contents: write\n")?)
         .output("digests", "${{ steps.attach.outputs.digests }}")
         .step(
-            Step::uses("The installers", "actions/download-artifact@v4")
+            Step::uses("The installers", crate::model::pinned::DOWNLOAD_ARTIFACT)
                 .with("path", "installers")
                 .with("merge-multiple", true),
         )

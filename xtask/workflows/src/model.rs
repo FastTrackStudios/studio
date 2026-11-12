@@ -346,6 +346,11 @@ pub mod pinned {
     /// actions/create-github-app-token v2.2.2
     pub const CREATE_APP_TOKEN: &str =
         "actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349";
+    /// actions/cache/save v4.3.0
+    pub const CACHE_SAVE: &str = "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830";
+    /// taiki-e/install-action v2 (as of 2026-11-12)
+    pub const INSTALL_ACTION: &str =
+        "taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39";
     /// dtolnay/rust-toolchain, branch 1.99.1 (rust-toolchain.toml's pin)
     pub const RUST_TOOLCHAIN: &str =
         "dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8";

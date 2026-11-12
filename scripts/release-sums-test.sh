@@ -29,4 +29,10 @@ assets | jq 'map(select(.name != "node.tar.gz"))' > "$t/a.json"
 run "$t/prev" >/dev/null && no "a missing own asset was accepted" || ok "refuses when its own asset is missing"
 printf '%s  node.tar.gz\n' "$c" > "$t/prev2"; assets > "$t/a.json"
 run "$t/prev2" >/dev/null && no "a disagreement with the signed sums was accepted" || ok "refuses when it disagrees with the signed SHA256SUMS"
+# release-publish.sh decide: only a draft is published, Latest only for the highest tag.
+d() { bash "$here/release-publish.sh" decide "$@"; }
+[ "$(d true v26.11.4 v26.11.4)" = publish-latest ] && ok "a draft of the highest tag: published, Latest" || no "draft, highest"
+[ "$(d true v26.11.2 v26.11.4)" = publish ] && ok "a draft of an older tag (hotfix, old re-run): published, never Latest" || no "draft, older"
+[ "$(d false v26.11.4 v26.11.4)" = leave ] && ok "already published (second workflow, re-run): left alone" || no "published"
+[ "$(d false v26.11.2 v26.11.4)" = leave ] && ok "an old published tag re-run: Latest not moved" || no "old published"
 exit "$fail"

@@ -191,7 +191,7 @@ echo "cache after: $(du -sh "$cache" | cut -f1)"
             .cond("always()"),
         )
         .step(
-            Step::uses("Keep the tarballs", "actions/upload-artifact@v4")
+            Step::uses("Keep the tarballs", crate::model::pinned::UPLOAD_ARTIFACT)
                 .with("name", "studio-architect")
                 .with("path", "${{ runner.temp }}/studio-architect/*.tar.gz*\n")
                 .with("if-no-files-found", "error")
@@ -211,7 +211,7 @@ fn publish() -> Result<Job> {
         .permissions(yaml("contents: write\n")?)
         .output("digests", "${{ steps.attach.outputs.digests }}")
         .step(
-            Step::uses("The tarballs", "actions/download-artifact@v4")
+            Step::uses("The tarballs", crate::model::pinned::DOWNLOAD_ARTIFACT)
                 .with("name", "studio-architect")
                 .with("path", "dist"),
         )

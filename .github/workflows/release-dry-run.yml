@@ -1,0 +1,43 @@
+# Generated from xtask::workflows::release_dry_run (xtask/workflows/src/release_dry_run.rs)
+# Rebuild with `just workflows`; do not edit by hand (`just workflows-check` fails CI on drift).
+# The reasons for every job and step are comments in that Rust source.
+name: release-dry-run
+on:
+  pull_request:
+    paths:
+    - scripts/release.sh
+    - scripts/release-sums.sh
+    - scripts/release-publish.sh
+    - scripts/release-dry-run.sh
+    - xtask/workflows/src/sums.rs
+    - xtask/workflows/src/release_dry_run.rs
+  workflow_dispatch: null
+permissions: {}
+concurrency:
+  group: release-dry-run-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+jobs:
+  dry-run:
+    name: Release mechanics on a throwaway draft
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - name: minisign (pinned)
+      run: |
+        set -euo pipefail
+        curl -fsSL --retry 3 -o "$RUNNER_TEMP/minisign.tgz" https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz
+        echo "9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73  $RUNNER_TEMP/minisign.tgz" | sha256sum -c -
+        tar -xzf "$RUNNER_TEMP/minisign.tgz" -C "$RUNNER_TEMP" --warning=no-unknown-keyword minisign-linux/x86_64/minisign
+        echo "$RUNNER_TEMP/minisign-linux/x86_64" >> "$GITHUB_PATH"
+    - name: scripts/release-dry-run.sh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        bash scripts/release-dry-run.sh

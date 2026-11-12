@@ -26,6 +26,7 @@ mod images;
 mod model;
 mod pr;
 mod release;
+mod release_dry_run;
 mod release_queue;
 mod setlists_extension;
 mod steps;
@@ -56,6 +57,7 @@ const WORKFLOWS: &[(&str, Build)] = &[
     ("images", images::workflow),
     ("release", release::workflow),
     ("release-queue", release_queue::workflow),
+    ("release-dry-run", release_dry_run::workflow),
     ("setlists-extension", setlists_extension::workflow),
     ("studio-architect", studio_architect::workflow),
     ("studio-ios", studio_ios::workflow),
