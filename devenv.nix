@@ -201,6 +201,13 @@ in
   }
   // lib.optionalAttrs pkgs.stdenv.isDarwin {
     PHON_JIT_NIGHTLY_RUSTC = "${rustNightly}/bin/rustc";
+    # libz-sys asks pkg-config for zlib, and pkg-config answers for the iOS
+    # targets too: nixpkgs' zlib, built for macOS, which an iOS link refuses
+    # ("building for 'iOS', but linking in object file … built for 'macOS'";
+    # studio#444, every TestFlight build since architect's workspace-hack
+    # turned on flate2's `zlib`). Without pkg-config it links the SDK's own
+    # zlib (`-lz`), the iPhoneOS SDK's for iOS and the macOS SDK's here.
+    ZLIB_NO_PKG_CONFIG = "1";
   };
 
   # kache is not set here: the rust module exports RUSTC_WRAPPER from PATH.

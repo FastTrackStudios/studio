@@ -202,6 +202,9 @@
           # modern floor for compile + link consistency (the device is iOS
           # 26; 15 is a safe, widely-compatible baseline).
           IPHONEOS_DEPLOYMENT_TARGET = "15.0";
+          # libz-sys links the SDK's zlib, not nixpkgs' (macOS-only): see
+          # devenv.nix (studio#444).
+          ZLIB_NO_PKG_CONFIG = "1";
           CARGO_TARGET_AARCH64_APPLE_IOS_LINKER = "${iosCC "iphoneos"}";
           CARGO_TARGET_AARCH64_APPLE_IOS_SIM_LINKER = "${iosCC "iphonesimulator"}";
           CC_aarch64_apple_ios = "${iosCC "iphoneos"}";

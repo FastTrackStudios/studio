@@ -467,7 +467,7 @@ extern "C" fn scroll_wheel(this: &Object, _sel: Sel, event: id) {
 }
 
 fn mac_key_from_str(s: &str) -> Option<keyboard_types::Key> {
-    use keyboard_types::Key;
+    use keyboard_types::{Key, NamedKey};
     match s {
         "\u{7F}" | "\u{8}" => Some(Key::Named(NamedKey::Backspace)),
         "\t" => Some(Key::Named(NamedKey::Tab)),
