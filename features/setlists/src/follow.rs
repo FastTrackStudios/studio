@@ -17,13 +17,19 @@
 //!
 //! **The cursor** is Session's ([`CursorConfig::playback`], the look
 //! every chart pane of Studio's draws): a wash over the bar being played
-//! and a line at the beat being played. The page player marks one item
+//! and a line that glides across it. The page player marks one item
 //! per follow box, so the bars and the beats are two boxes in the one
 //! SVG: `kf-bars` (a rect per bar played, the wash, a click seeks to the
 //! bar) and `kf-beats` (a line per beat played, at the x Keyflow's
 //! [`ChartCursor`] puts the playhead at that beat's start). A beat's time
 //! is its bar's on the chart's clock ([`bar_times`]), split as the layout
-//! splits the bar: the beats and the bars are one clock.
+//! splits the bar: the beats and the bars are one clock. Each line carries
+//! `data-glide`, how far Keyflow's cursor moves until the next beat (to its
+//! slot's end, where the next beat is in another slot: the end of its line
+//! at a line break), and the last of a bar `data-until`, its bar's end:
+//! the page player (Architect's, from the release that reads them) moves
+//! the line there continuously as the recording plays, as Session's
+//! cursor glides. A player that does not read them marks it beat by beat.
 //!
 //! **What is drawn** is the engraving the PDF prints (A4, the Master Rhythm
 //! preset), its pages stacked top to bottom in one SVG so the bars stay in
@@ -103,6 +109,13 @@ pub struct BeatMark {
     pub y: f64,
     pub width: f64,
     pub height: f64,
+    /// How far the line moves along x by the time the next beat starts:
+    /// where Keyflow's cursor is at the end of this beat (the next beat's
+    /// x in the same slot, else its slot's right edge), less `x`.
+    pub glide: f64,
+    /// When it is there, when that is not the next beat's start: the last
+    /// beat of a bar holds there until its bar's end.
+    pub until: Option<f64>,
 }
 
 /// A chart engraved to follow its recording.
@@ -254,14 +267,19 @@ pub fn follow_chart(source: &str, media: Option<&str>) -> Result<FollowChart> {
     for beat in &beats {
         let _ = write!(
             svg,
-            "<rect class=\"kf-beat\" data-at=\"{:.3}\" data-bar=\"{}\" data-beat=\"{}\" x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\"/>",
+            "<rect class=\"kf-beat\" data-at=\"{:.3}\" data-bar=\"{}\" data-beat=\"{}\" data-glide=\"{:.2}\"",
             beat.at,
             beat.bar.saturating_add(1),
             beat.beat.saturating_add(1),
-            beat.x,
-            beat.y,
-            beat.width,
-            beat.height,
+            beat.glide,
+        );
+        if let Some(until) = beat.until {
+            let _ = write!(svg, " data-until=\"{until:.3}\"");
+        }
+        let _ = write!(
+            svg,
+            " x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\"/>",
+            beat.x, beat.y, beat.width, beat.height,
         );
     }
     svg.push_str("</g></g></svg>");
@@ -393,13 +411,27 @@ fn place(page: u32, x: f64, y: f64, offsets: &[(f64, f64)], pitch: f64) -> Optio
     Some((x - ox, pitch.mul_add(f64::from(index), y - oy)))
 }
 
+/// The playhead line `cursor` draws: its width, and how far it reaches
+/// above and below its line.
+const fn line_style(cursor: &CursorConfig) -> (f64, f64) {
+    match cursor.style {
+        CursorStyle::MeasureWithLine {
+            line_width,
+            overhang,
+        } => (line_width, overhang),
+        CursorStyle::VerticalLine { width } => (width, 0.0),
+        _ => (1.5, 4.0),
+    }
+}
+
 /// Every beat played, in playing order.
 ///
 /// Each played bar's beats as the layout draws them, timed on the chart's
 /// clock (the bar's start and end from [`bar_times`], split where the
 /// layout splits the bar), the line where [`ChartCursor`] draws the
 /// playhead at the beat's start, as tall as its line
-/// ([`CursorStyle::MeasureWithLine`]).
+/// ([`CursorStyle::MeasureWithLine`]), and how far it glides by the next
+/// beat (to where the cursor is at this beat's end).
 ///
 /// [`ChartCursor`]: keyflow::engraver::layout::chart::cursor::ChartCursor
 fn beat_marks(
@@ -409,14 +441,7 @@ fn beat_marks(
     offsets: &[(f64, f64)],
     pitch: f64,
 ) -> Vec<BeatMark> {
-    let (width, overhang) = match cursor.style {
-        CursorStyle::MeasureWithLine {
-            line_width,
-            overhang,
-        } => (line_width, overhang),
-        CursorStyle::VerticalLine { width } => (width, 0.0),
-        _ => (1.5, 4.0),
-    };
+    let (width, overhang) = line_style(cursor);
     // The bar's beats in layout order (count-in beats, at negative ticks,
     // are not bars).
     let mut by_bar: HashMap<usize, Vec<&BeatPosition>> = HashMap::new();
@@ -427,8 +452,9 @@ fn beat_marks(
     {
         by_bar.entry(beat.measure).or_default().push(beat);
     }
-    let mut marks = Vec::new();
+    let mut marks: Vec<BeatMark> = Vec::new();
     for bar in bars {
+        let first_of_bar = marks.len();
         let Some(beats) = by_bar.get(&bar.bar) else {
             continue;
         };
@@ -467,6 +493,15 @@ fn beat_marks(
                 0.0
             };
             let mut tick = start;
+            // Where Session's cursor is `into` ticks into the slot
+            // (`x_at_time`: the slot's width over its length), the length
+            // cut at the bar's end: a slot the layout runs past its bar
+            // (Keyflow's `| C |` in 3/4) is split by its bar.
+            #[allow(clippy::cast_precision_loss, clippy::as_conversions)]
+            let x_at = |into: i64| {
+                let across = into as f64 / end.saturating_sub(start).max(1) as f64;
+                slot.width.mul_add(across, slot.x) - width / 2.0
+            };
             while tick < end {
                 #[allow(clippy::cast_precision_loss, clippy::as_conversions)]
                 let (part, into) = (
@@ -475,13 +510,15 @@ fn beat_marks(
                 );
                 let at = (bar.end - bar.start).mul_add(part, bar.start);
                 let layout_at = per_tick.mul_add(into, slot.time_start);
-                // Where Session's cursor is at `layout_at`
-                // (`x_at_time`: the slot's width over its length), the
-                // length cut at the bar's end: a slot the layout runs past
-                // its bar (Keyflow's `| C |` in 3/4) is split by its bar.
-                #[allow(clippy::cast_precision_loss, clippy::as_conversions)]
-                let across = into / end.saturating_sub(start).max(1) as f64;
-                let x = slot.width.mul_add(across, slot.x) - width / 2.0;
+                // The next beat of the meter, or the slot's end.
+                let next = tick
+                    .checked_div(beat_ticks)
+                    .unwrap_or(0)
+                    .saturating_add(1)
+                    .saturating_mul(beat_ticks)
+                    .min(end);
+                let x = x_at(tick.saturating_sub(start));
+                let glide = x_at(next.saturating_sub(start)) - x;
                 if let Some((x, y)) = place(slot.page, x, slot.staff_y - overhang, offsets, pitch) {
                     marks.push(BeatMark {
                         at,
@@ -498,15 +535,20 @@ fn beat_marks(
                         y,
                         width,
                         height: 2.0f64.mul_add(overhang, slot.staff_height),
+                        glide,
+                        until: None,
                     });
                 }
-                // The next beat of the meter.
-                tick = tick
-                    .checked_div(beat_ticks)
-                    .unwrap_or(0)
-                    .saturating_add(1)
-                    .saturating_mul(beat_ticks);
+                tick = next;
             }
+        }
+        // The bar's last line holds at its end until the bar's: the next
+        // bar's first may be later (a bar the layout does not draw).
+        if let Some(last) = marks
+            .get_mut(first_of_bar..)
+            .and_then(<[BeatMark]>::last_mut)
+        {
+            last.until = Some(bar.end);
         }
     }
     marks
@@ -812,7 +854,22 @@ mod tests {
                     let t = beat.at + (next.at - beat.at) * part;
                     assert_eq!(drawn.beats.iter().rev().find(|b| b.at <= t), Some(beat));
                 }
+                // Gliding, the line is where Keyflow's cursor is all the
+                // way to the next beat (no repeats here: the layout's clock
+                // runs on as the chart's does), across a line break too.
+                for part in [0.25, 0.5, 0.999] {
+                    let t = beat.layout_at + (next.layout_at - beat.layout_at) * part;
+                    let state = cursor.compute_at_time(&layout, t).unwrap();
+                    let (ox, _) = offsets[(state.page - 1) as usize];
+                    let x = beat.x + half + beat.glide * part;
+                    assert!(
+                        (x - (state.cursor_x - ox)).abs() < 1e-6,
+                        "beat {n} at {part} of the way: line at {x}, Keyflow's cursor at {}",
+                        state.cursor_x - ox
+                    );
+                }
             }
+            assert!(beat.glide >= 0.0, "beat {n} glides left: {}", beat.glide);
         }
         for bar in &drawn.bars {
             let first = drawn.beats.iter().find(|b| b.bar == bar.bar).unwrap();
@@ -820,13 +877,31 @@ mod tests {
                 (first.at - bar.start).abs() < 1e-9,
                 "a bar's first beat is its time"
             );
+            // Its last holds until the bar's end; no other beat says.
+            let mine: Vec<&BeatMark> = drawn.beats.iter().filter(|b| b.bar == bar.bar).collect();
+            assert_eq!(mine.last().unwrap().until, Some(bar.end));
+            assert!(mine[..mine.len() - 1].iter().all(|b| b.until.is_none()));
         }
         drawn
     }
 
     #[test]
     fn beats_are_where_keyflows_cursor_puts_the_playhead() {
-        check(WALTZ, 0.5, 90.0, 3);
+        let drawn = check(WALTZ, 0.5, 90.0, 3);
+        // A line break: the last beat of a line glides to its line's end,
+        // the next starts the next line, left of there.
+        let breaks: Vec<(&BeatMark, &BeatMark)> = drawn
+            .beats
+            .windows(2)
+            .filter(|w| (w[1].y - w[0].y).abs() > 1e-9)
+            .map(|w| (&w[0], &w[1]))
+            .collect();
+        assert!(!breaks.is_empty(), "WALTZ draws more than one line");
+        for (end, next) in breaks {
+            assert!(end.glide > 0.0, "{end:?}");
+            assert!(next.x < end.x + end.glide, "{end:?} then {next:?}");
+            assert!(next.y > end.y, "{end:?} then {next:?}");
+        }
     }
 
     #[test]
@@ -968,6 +1043,20 @@ mod tests {
         let drawn = follow_chart(WALTZ, Some("rec.mp4")).unwrap();
         assert_eq!(drawn.svg.matches("data-follow-playhead").count(), 2);
         assert_eq!(drawn.svg.matches("data-media=\"rec.mp4\"").count(), 2);
+        // Every beat's line glides; the last of each bar says until when.
+        assert_eq!(
+            drawn.svg.matches(" data-glide=\"").count(),
+            drawn.beats.len()
+        );
+        assert_eq!(
+            drawn.svg.matches(" data-until=\"").count(),
+            drawn.bars.len()
+        );
+        let first = drawn.beats[0];
+        assert!(drawn.svg.contains(&format!(
+            "data-at=\"{:.3}\" data-bar=\"1\" data-beat=\"1\" data-glide=\"{:.2}\" x=\"{:.2}\"",
+            first.at, first.glide, first.x
+        )));
     }
 
     #[test]
