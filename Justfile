@@ -19,9 +19,60 @@ GOLDEN_DIR := "features/dynamic-template/fixtures/golden"
 DAW_PROJECT := env("FTS_DAW_TEMPLATE", GOLDEN_DIR / "template.rpp")
 DAW_VOCAL := env("FTS_DAW_VOCAL", GOLDEN_DIR / "vocal-fx.rpp")
 
-# List recipes by default
+# List recipes by default: the three that run it first (file order).
 default:
-    @just --list
+    @just --list --unsorted
+
+# ── Run it: the local stack (docs/local-stack.md) ─────────────────
+# The same three recipes, with the same meaning, in Studio, Architect and
+# Keyflow. `devenv up` (processes in devenv.nix, scripts/local-stack.sh)
+# is the engine underneath; `just dev-status` says what runs and where.
+
+# Everything locally, rebuilt on save: issuer, Studio's node + share link on the test vault, web app, site (architect=local keyflow=local desktop=on)
+dev *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # `just dev local` and `just dev --fresh` were the DAW loop, now `just daw-dev`.
+    case " {{ARGS}} " in
+        *" local "* | *" --"*)
+            echo "just: the DAW loop is \`just daw-dev\` now (\`just dev\` is the local stack): running \`just daw-dev {{ARGS}}\`" >&2
+            exec just daw-dev {{ARGS}} ;;
+    esac
+    scripts/local-stack.sh choose mode=dev {{ARGS}}
+    # shellcheck disable=SC2046 # the process names, split on purpose
+    exec devenv up $(scripts/local-stack.sh procs)
+
+# See it working, quickly: issuer + Studio's node on the test vault with its share link, last build, no watchers
+demo *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    scripts/local-stack.sh choose mode=demo watch=off {{ARGS}}
+    # shellcheck disable=SC2046
+    exec devenv up $(scripts/local-stack.sh procs)
+
+# The public website (Architect's apps/site: landing, download, changelog, extensions, docs), hot reload
+website *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "just: the website is Architect's (apps/site); running it from the Architect the stack resolves (architect=local for your checkout)" >&2
+    scripts/local-stack.sh choose mode=dev {{ARGS}}
+    exec devenv up site
+
+# The running stack's node on this tailnet over HTTPS for a phone (tailscale serve, never funnel); `just phone off`
+phone *ARGS:
+    scripts/local-stack.sh phone {{ARGS}}
+
+# What the local stack runs, from where (studio/architect/keyflow versions), its URLs
+dev-status:
+    scripts/local-stack.sh status
+
+# The local stack, checked end to end: share page, songs, island files, Firefox plays and the playhead moves
+dev-smoke:
+    scripts/local-stack.sh smoke
+
+# Remove the local stack's state (its vault copy, issuer database, staged node); stop it first
+dev-reset:
+    scripts/local-stack.sh reset
 
 # ── Tailwind (app UI sheet) ──────────────────────────────────────────────
 # The single compiled sheet (assets/tailwind-signal.css) is inlined by
@@ -1760,14 +1811,15 @@ theme-parity PROJECT="features/dynamic-template/fixtures/golden/template.rpp" SI
     FTS_THEME=apps/session/ui/themes/fts-dark.frame FTS_BENCH_MIXER="{{OUT}}/themed.png" FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "{{PROJECT}}" 2>&1 | grep -E 'wrote|theme' || true
     ./target/release/theme_diff "{{OUT}}/native.png" "{{OUT}}/themed.png" "{{OUT}}/diff.png"
 
-# The whole dev loop in one herdr session (`herdr --session studio` to
+# The DAW's dev loop in one herdr session (`herdr --session studio` to
 # watch): the engine (`studio engine --reopen`, restart it with Ctrl-C and
 # ↑ Enter) and the window under `dx serve` beside it, which only attaches —
 # a rebuilt window leaves the engine playing, a restarted engine is
-# re-attached to. Production Task by default; `just dev local` runs a dev
+# re-attached to. Production Task by default; `just daw-dev local` runs a dev
 # Task server too and points Studio at it. `--fresh` replaces a running one.
-# See scripts/dev-herdr.sh.
-dev *ARGS:
+# See scripts/dev-herdr.sh. (It was `just dev` until the local stack took
+# that name; `just dev local` and `just dev --fresh` still come here.)
+daw-dev *ARGS:
     scripts/dev-herdr.sh {{ARGS}}
 
 # The studio window (Blitz + the painted arrangement) on a real session,
@@ -2280,7 +2332,11 @@ studio-web-config-test:
 # with the component (a second build-web run), and BUILT_FROM records
 # `git describe --always --dirty` of the tree it was built from, which the
 # release checks.
-island: island-check
+island: island-check island-build
+
+# The island without its clippy: what `just island` builds, and what the
+# local stack rebuilds on a save (scripts/local-stack.sh).
+island-build:
     #!/usr/bin/env bash
     set -euo pipefail
     # What it is built from, taken before the build: the commit, and
@@ -2292,8 +2348,17 @@ island: island-check
         cargo build --profile wasm-release -p studio-island --target wasm32-wasip2
     ext=$(python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="architect-extensions"))' <<<"$meta")
     tools="$target/architect-web"
-    rm -rf "$tools" && mkdir -p "$tools" && cp -r "$ext/web/." "$tools/"
-    devenv --profile wasi shell -- bash -c "cd '$tools' && npm ci --no-audit --no-fund >/dev/null"
+    # jco and its transpiler, pinned by the folder's package-lock.json: `npm
+    # ci` again only when that lock (or the architect it came from) changed,
+    # so the local stack's rebuild of the island does not fetch or reinstall.
+    if [ -d "$tools/node_modules" ] && cmp -s "$ext/web/package-lock.json" "$tools/package-lock.json" \
+        && [ "$(cat "$tools/.from" 2>/dev/null)" = "$ext" ]; then
+        cp -r "$ext/web/." "$tools/"
+    else
+        rm -rf "$tools" && mkdir -p "$tools" && cp -r "$ext/web/." "$tools/"
+        devenv --profile wasi shell -- bash -c "cd '$tools' && npm ci --no-audit --no-fund >/dev/null"
+        printf '%s' "$ext" > "$tools/.from"
+    fi
     out="$target/studio-island"
     rm -rf "$out"
     web() {

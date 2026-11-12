@@ -182,6 +182,18 @@ format, the engine, the timeline, the wire types, every effect's parameter
 round-trip. `just test`, local CI and CI build and run exactly those. A
 crate gains a place there when it gains tests worth running on every change.
 
+**Run it locally: `just dev`** (everything, rebuilt on save:
+the issuer, Studio's node on a copy of the test vault with its share link,
+the web app, the site; `architect=local` / `keyflow=local` put the sibling
+checkouts under it), **`just demo`** (the quickest look, nothing watched),
+**`just website`** (Architect's public site); the same names in Architect
+and Keyflow. `docs/local-stack.md` says what starts and what a save costs.
+**Verify share-page and extension UI work on this stack, with screenshots
+at 390 px wide (`SCREENSHOTS=<dir> just dev-smoke`, or the browser at that
+width), BEFORE opening a PR**: a release takes hours to reach a phone, and
+every share-page bug found so far was found there. `just daw-dev` is the
+DAW's dev loop (it was `just dev`).
+
 **Before you push: `just install-hooks`, once per clone.** It installs the
 prek hooks (`prek.toml`): rustfmt, shellcheck and actionlint on the staged
 files at commit, and **local CI** at push (`scripts/ci-local-hook.sh` ->
