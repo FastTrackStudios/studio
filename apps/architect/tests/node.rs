@@ -253,10 +253,13 @@ async fn studios_node_draws_a_shared_chart_as_the_follow_svg() {
         .unwrap_or_else(|| panic!("the chart is not an SVG:\n{chart}"))];
     assert!(svg.contains("<svg"), "the chart is not an SVG:\n{svg}");
     assert!(!svg.contains("<img"), "the chart is an image");
-    // Its bars, timed on the chart's own clock, ascending: what the
-    // page player marks as the recording plays.
-    assert_eq!(values(svg, "data-follow-playhead"), [""]);
-    let at: Vec<f64> = values(svg, "data-at")
+    // Its bars and its beats, timed on the chart's own clock, ascending:
+    // what the page player marks as the recording plays (a box each: it
+    // marks one item per box).
+    assert_eq!(values(svg, "data-follow-playhead"), ["", ""]);
+    let bars = &svg[svg.find("class=\"kf-bars\"").expect("no bars box")..];
+    let bars = &bars[..bars.find("class=\"kf-beats\"").expect("no beats box")];
+    let at: Vec<f64> = values(bars, "data-at")
         .iter()
         .map(|v| v.parse().unwrap())
         .collect();

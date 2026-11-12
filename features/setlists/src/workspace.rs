@@ -733,6 +733,69 @@ pub fn unsaved_path(file: &str, opened: u64, now: u64) -> String {
     format!("backups/{stem}.{opened}.unsaved-{now}.{ext}")
 }
 
+/// An edit the editor holds that the file read again would replace: its
+/// text, and where in the extension's folder it is kept.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unsaved {
+    pub path: String,
+    pub text: String,
+}
+
+impl Unsaved {
+    /// The edit a re-read of the file (now `on_disk`) would lose: the
+    /// editor's text (`current`) when it was editing the file
+    /// (`was_editable`), differs from the file's and was edited since it
+    /// was last saved from (`saved_from`, the text saving starts from).
+    /// `path`: where it is kept, asked for only when there is one.
+    #[must_use]
+    pub fn of(
+        was_editable: bool,
+        current: &str,
+        on_disk: &str,
+        saved_from: Option<&str>,
+        path: impl FnOnce() -> String,
+    ) -> Option<Self> {
+        (was_editable && current != on_disk && saved_from.is_some_and(|s| s != current)).then(
+            || Self {
+                path: path(),
+                text: current.to_owned(),
+            },
+        )
+    }
+}
+
+/// What a re-read does with the editor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reread {
+    /// The editor takes the file's text; the edit it held, if any, is kept
+    /// at this path.
+    Take { kept: Option<String> },
+    /// The edit could not be kept: the editor keeps it, and says why.
+    Hold { why: String },
+}
+
+/// Keep `edit` with `write` (the extension's own folder: path, text)
+/// before the editor takes the file's text over it; when it cannot be
+/// written, the editor holds on to it.
+pub async fn keep_unsaved<W, F>(edit: Option<Unsaved>, write: W) -> Reread
+where
+    W: FnOnce(String, String) -> F,
+    F: std::future::Future<Output = std::result::Result<(), String>>,
+{
+    let Some(Unsaved { path, text }) = edit else {
+        return Reread::Take { kept: None };
+    };
+    match write(path.clone(), text).await {
+        Ok(()) => Reread::Take { kept: Some(path) },
+        Err(why) => Reread::Hold {
+            why: format!(
+                "the file changed on disk, and your unsaved edit could not be kept ({why}): \
+                 it stays in the editor, not read again. Copy it somewhere, then read the file again."
+            ),
+        },
+    }
+}
+
 /// The first symbolic link on vault path `path` under the vault's folder.
 ///
 /// Under `root`, the file itself or a folder on the way to it, as a vault path:

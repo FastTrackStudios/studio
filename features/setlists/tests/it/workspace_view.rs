@@ -158,6 +158,13 @@ fn the_bar_and_the_line_at_the_playhead_are_marked_and_a_click_seeks() {
     let doc = open(Form::Wide, 12.5, (1600, 1000));
     // 12.5 s: bar 10 (bar 1 at 1 s, 1.2 s a bar), the verse's second line.
     assert_eq!(marked_bar(&doc).as_deref(), Some("10"));
+    // And Session's line at its second beat (bar 10 from 11.8 s, 0.6 s a
+    // beat).
+    let beat = doc.query("[data-beat]").immediately().ok();
+    assert_eq!(
+        beat.and_then(|b| b.attribute("data-beat")).as_deref(),
+        Some("2")
+    );
     assert!(
         lit_line(&doc).is_some_and(|l| l.contains("Let earth receive her King")),
         "{:?}",

@@ -486,6 +486,91 @@ fn a_kf_changed_on_disk_is_read_again_and_the_unsaved_edit_kept() {
 }
 
 #[test]
+fn a_reread_writes_the_unsaved_edit_before_the_editor_takes_the_file() {
+    use std::cell::RefCell;
+
+    use setlists::workspace::{Reread, Unsaved, keep_unsaved, unsaved_path};
+    let mine = JOY.replace("100bpm", "104bpm");
+    let theirs = JOY.replace("Isaac Watts", "I. Watts");
+    let path = || unsaved_path("Joy/Joy.kf", 7, 9);
+    // Edited since the last save, and not what the file holds now: kept.
+    let edit = Unsaved::of(true, &mine, &theirs, Some(JOY), path).unwrap();
+    let written = RefCell::new(Vec::new());
+    let done = futures::executor::block_on(keep_unsaved(Some(edit), |path, text| {
+        written.borrow_mut().push((path, text));
+        async { Ok(()) }
+    }));
+    assert_eq!(
+        written.into_inner(),
+        vec![("backups/Joy/Joy.7.unsaved-9.kf".to_owned(), mine.clone())],
+        "the editor's text, written to the extension's folder"
+    );
+    assert_eq!(
+        done,
+        Reread::Take {
+            kept: Some("backups/Joy/Joy.7.unsaved-9.kf".to_owned())
+        }
+    );
+    // Not written: the editor holds on to the edit and says why.
+    let edit = Unsaved::of(true, &mine, &theirs, Some(JOY), path);
+    let held = futures::executor::block_on(keep_unsaved(edit, |_, _| async {
+        Err("the disk is full".to_owned())
+    }));
+    assert!(matches!(&held, Reread::Hold { why } if why.contains("the disk is full")));
+    // Nothing to keep: the text saving started from, the file's own, or
+    // the note's read-only copy.
+    assert_eq!(Unsaved::of(true, JOY, &theirs, Some(JOY), path), None);
+    assert_eq!(Unsaved::of(true, &theirs, &theirs, Some(JOY), path), None);
+    assert_eq!(Unsaved::of(false, &mine, &theirs, Some(JOY), path), None);
+    let nothing = futures::executor::block_on(keep_unsaved(None, |_, _| async {
+        Err("never called".to_owned())
+    }));
+    assert_eq!(nothing, Reread::Take { kept: None });
+}
+
+#[test]
+fn the_beat_at_the_playhead_is_on_its_bars_page() {
+    let song = joy();
+    assert_ne!(song.chart.beats.len(), 0);
+    // Mid-way through bar 21 (2/4: two beats), its second beat.
+    let bar = song.chart.bars[20];
+    let t = f64::midpoint(bar.start, bar.end) + 0.01;
+    let beat = song.beat_at(t).unwrap();
+    assert_eq!(beat.bar + 1, bar.number);
+    assert_eq!(beat.beat, 1);
+    assert_eq!(beat.page, bar.page);
+    // The line inside the bar's box on its own page.
+    assert!(beat.x >= bar.x - 1.0 && beat.x <= bar.x + bar.width + 1.0);
+    assert!(beat.y >= 0.0 && beat.y < song.chart.height);
+    assert_eq!(song.beat_at(-5.0), None);
+}
+
+#[test]
+fn two_charts_in_one_window_draw_no_id_twice() {
+    let ids = |song: &Song| -> Vec<String> {
+        song.chart
+            .pages
+            .iter()
+            .flat_map(|page| {
+                page.split(" id=\"")
+                    .skip(1)
+                    .filter_map(|r| r.split('"').next().map(str::to_owned))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    };
+    let joy = ids(&joy());
+    let night = ids(&Song::engrave(SILENT_NIGHT).unwrap());
+    assert_ne!(joy.len().min(night.len()), 0);
+    assert!(joy.iter().all(|id| !night.contains(id)));
+    // Nor two pages of one chart.
+    let mut all = joy.clone();
+    all.sort();
+    all.dedup();
+    assert_eq!(all.len(), joy.len());
+}
+
+#[test]
 fn a_reread_never_backs_the_file_up_again_over_the_original() {
     use setlists::workspace::{Saving, Write};
     let mut saving = Saving::new(JOY.to_owned());

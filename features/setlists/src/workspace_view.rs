@@ -41,8 +41,8 @@ use session::ui::components::progress::{ProgressSection, SongProgressBar};
 
 use crate::follow::{PlacedBar, cursor_colors};
 use crate::workspace::{
-    Arrangement, ChartAccess, ChartFrom, Clock, Form, Loaded, LyricsSource, Pane, Saving, Song,
-    Write, lyrics_source,
+    Arrangement, ChartAccess, ChartFrom, Clock, Form, Loaded, LyricsSource, Pane, Reread, Saving,
+    Song, Unsaved, Write, keep_unsaved, lyrics_source,
 };
 
 const RULE: &str = "#2a2c31";
@@ -191,6 +191,9 @@ pub fn WorkspaceLayout(
     editor: Element,
     chart: Element,
     lyrics: Element,
+    /// The panes' border: the theme's rule ([`Palette`]).
+    #[props(default = RULE.to_owned())]
+    rule: String,
 ) -> Element {
     let pane = |p: Pane| match p {
         Pane::Progress => progress.clone(),
@@ -221,7 +224,7 @@ pub fn WorkspaceLayout(
                                     key: "{p:?}",
                                     "data-pane": "{p:?}",
                                     style: "position:relative; flex:1; min-height:0; border-radius:8px; \
-                                            overflow:hidden; border:1px solid {RULE}; \
+                                            overflow:hidden; border:1px solid {rule}; \
                                             {left_share(p, left_count)}",
                                     {pane(p)}
                                 }
@@ -232,7 +235,7 @@ pub fn WorkspaceLayout(
                                 key: "{p:?}",
                                 "data-pane": "{p:?}",
                                 style: "position:relative; flex:1; min-width:0; height:100%; border-radius:8px; \
-                                        overflow:hidden; border:1px solid {RULE};",
+                                        overflow:hidden; border:1px solid {rule};",
                                 {pane(p)}
                             }
                         }
@@ -601,8 +604,8 @@ pub fn SongWorkspace(
     let palette = Palette::of(&architect_theme::use_resolved());
     let origin = use_hook(web_time::Instant::now);
     let opened = use_hook(|| {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
+        web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs())
     });
     let wall = move || origin.elapsed().as_secs_f64();
@@ -737,22 +740,31 @@ pub fn SongWorkspace(
             let next = access.peek().clone().reread(read);
             match next.editable() {
                 Ok(()) => {
-                    stale.set(None);
                     let current = state.peek().doc.to_string();
                     let prev = saving.peek().clone();
                     // An edit not saved (the file changed under it) is
                     // kept: written to the extension's folder before the
-                    // editor takes the file's text, and said where.
-                    let mut kept = None;
-                    if was_editable
-                        && current != next.text
-                        && prev.as_ref().is_some_and(|s| s.base() != current)
+                    // editor takes the file's text, and said where. Not
+                    // written, the editor keeps it and nothing is read.
+                    let edit = Unsaved::of(
+                        was_editable,
+                        &current,
+                        &next.text,
+                        prev.as_ref().map(Saving::base),
+                        || crate::workspace::unsaved_path(&unsaved_to, opened, now_secs()),
+                    );
+                    let kept = match keep_unsaved(edit, |path, text| async move {
+                        crate::host::write_own_file(&path, &text).await
+                    })
+                    .await
                     {
-                        let path = crate::workspace::unsaved_path(&unsaved_to, opened, now_secs());
-                        if crate::host::write_own_file(&path, &current).await.is_ok() {
-                            kept = Some(path);
+                        Reread::Take { kept } => kept,
+                        Reread::Hold { why } => {
+                            note(&mut status, ChartTextStatus::Warn, why);
+                            return;
                         }
-                    }
+                    };
+                    stale.set(None);
                     if !was_editable || current != next.text {
                         // The file's text, not the copy (nor an edit made
                         // against another version): the editor starts from it.
@@ -940,7 +952,7 @@ pub fn SongWorkspace(
             style: "position:absolute; top:0; left:0; right:0; bottom:0; background:{p.desk}; color:{p.ink}; \
                     font-family:system-ui, sans-serif;",
             onmounted: move |e| node.set(Some(e.data())),
-            WorkspaceLayout { arrangement, progress, editor, chart, lyrics }
+            WorkspaceLayout { arrangement, progress, editor, chart, lyrics, rule: palette.rule }
         }
     }
 }
@@ -1061,8 +1073,8 @@ async fn save(
 
 /// Seconds since the epoch, now.
 fn now_secs() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
 }
 
