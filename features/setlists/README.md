@@ -118,18 +118,27 @@ builds them as an Architect site, and Studio draws its own blocks into it
   (`![[Song.lrc]]`, drawn by Architect as timed lines). A song with no LRC
   whose chart has a timed lyric lane (`[lyrics lrc]`) shows the LRC made
   from the lane on the chart's clock (a ```` ```lrc ```` fence). Never both.
-- **The setlist's page is a playlist** (Architect's `[data-playlist]`):
-  each set (a heading) a ```` ```studio-setlist ```` fence, the first with
-  one big Play (the setlist through), the others "Play this set", then each
-  song a row: its number, title, artist · key · tempo · meter, the length
-  of its recording, and a link to its chart. A tap on a row plays it there;
-  the songs follow each other with no page load, the playing row marked.
-  The bar at the foot opens the **now-playing view**: the playing song's
-  chart (its `[data-now-playing]`, fetched from its page), following beat by
-  beat, with Architect's progress bar over it and its controls under it.
-  Each row is also a follow box whose
-  one line is the song's start, so an Architect before playlists (v0.12.2)
-  plays a tapped row from the setlist's page as it did.
+- **The setlist's page is a playlist** (Architect's `[data-playlist]`),
+  laid out as a streaming app's: ONE ```` ```studio-setlist ```` fence,
+  each set's name a line of it (`## Presidents Songs`) drawn as a quiet
+  label in the list, the numbers running on through the sets. Each song is
+  a row: its number, a square tile (its initials on a colour from its
+  title; the song's art over it when the link has some), its title over
+  its artist · key · tempo · meter, the length of its recording, and a
+  small chart icon to its page. No play buttons: a tap on a row plays it
+  there, the songs follow each other with no page load, the playing row
+  marked. A song with no recording stays in the list, quieter, and opens
+  its page. A page written before (a fence a set, each under a `##`
+  heading) still draws: Architect's player joins the fences into one list.
+  The card at the foot (art, song, Click, Loop, play) opens the
+  **now-playing view**: the playing song's chart (its `[data-now-playing]`,
+  fetched from its page), following beat by beat, with Architect's
+  progress bar over it and its controls under it.
+- **A song's art** is its note's `art:` property, a link to an image
+  beside it (`art: "[[Libraries/Christmas/Sleigh Ride/cover.jpg|cover.jpg]]"`),
+  kept when the song is imported again (`Song::art`). Architect publishes
+  it as one of the note's files (only when the note is in the link and the
+  file in its layer) and draws it on the setlist's rows and the card.
 - **The song's sections as played** ride on the now-playing view as
   `data-sections`: a JSON list `[{"name", "start", "end", "color"}]`,
   seconds on the chart's clock (Keyflow's `chart_section_timeline`, a

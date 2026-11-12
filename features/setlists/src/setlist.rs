@@ -14,10 +14,23 @@ use crate::{Error, Result};
 
 pub const KIND: &str = "setlist";
 
-/// The fence a setlist's page lists a set's songs in, one a line
-/// ([`Line`]); Studio's share renderer draws it as the songs a page plays
-/// (`setlists::share`), and where nothing draws it, it reads as text.
+/// The fence a setlist's page lists its songs in, one a line ([`Line`]),
+/// each set's name a line of its own before its songs (`## Encore`,
+/// [`section_line`]); Studio's share renderer draws it as the one list a
+/// page plays (`setlists::share`), and where nothing draws it, it reads as
+/// text. A page written before sets were lines has a fence a set, each
+/// under a `## heading` (the share page joins them).
 pub const SETLIST_FENCE: &str = "studio-setlist";
+
+/// The name a line of a [`SETLIST_FENCE`] gives a set (`## Encore`), if
+/// it is one.
+#[must_use]
+pub fn section_line(line: &str) -> Option<&str> {
+    line.trim()
+        .strip_prefix("##")
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+}
 
 /// A setlist.
 ///
@@ -381,10 +394,10 @@ impl Setlist {
         (!fields.sets.is_empty()).then(|| serde_json::to_value(fields.sets).unwrap_or_default())
     }
 
-    /// Its page: its title and date, then each set (a heading for a named
-    /// one) and its songs as a [`SETLIST_FENCE`], each song with what
-    /// `info` says of it; the last set's fence asks for the link's
-    /// downloads (`downloads` in its info).
+    /// Its page: its title and date, then its songs as one
+    /// [`SETLIST_FENCE`] (a named set's name a line before its songs),
+    /// each song with what `info` says of it; the fence asks for the
+    /// link's downloads (`downloads` in its info).
     #[must_use]
     pub fn page(&self, info: impl Fn(&SongRef) -> Option<SongInfo>) -> String {
         let mut out = format!("# {}\n\n", self.title);
@@ -395,15 +408,12 @@ impl Setlist {
             out.push_str("No songs yet.\n");
             return out;
         }
-        let sections = self.sections();
-        let last = sections.len().saturating_sub(1);
-        for (n, section) in sections.iter().enumerate() {
+        // One list: its sets are its sections, not lists of their own.
+        let _ = writeln!(out, "```{SETLIST_FENCE} downloads");
+        for section in &self.sections() {
             if let Some(name) = section.name {
-                let _ = writeln!(out, "## {name}\n");
+                let _ = writeln!(out, "## {}", name.replace(['\n', '\r'], " "));
             }
-            // The last set's block ends with the link's downloads.
-            let downloads = if n == last { " downloads" } else { "" };
-            let _ = writeln!(out, "```{SETLIST_FENCE}{downloads}");
             for (i, at) in section.songs.iter().enumerate() {
                 let info = info(at).unwrap_or_default();
                 let line = Line {
@@ -418,8 +428,8 @@ impl Setlist {
                 };
                 let _ = writeln!(out, "{}", line.write());
             }
-            out.push_str("```\n\n");
         }
+        out.push_str("```\n\n");
         out
     }
 
@@ -666,7 +676,28 @@ mod tests {
             note.contains("sets:\n- name: Presidents Songs\n  songs:\n"),
             "{note}"
         );
-        assert!(note.contains("## Tree Lighting Concert Set\n\n```studio-setlist downloads\n4 | Joy to the World |"), "{note}");
+        // One fence: each set's name a line of it, the numbers running on.
+        assert!(
+            note.contains(
+                "```studio-setlist downloads\n## Presidents Songs\n1 | Hail to the Chief |"
+            ),
+            "{note}"
+        );
+        assert!(
+            note.contains("3 | Stars and Stripes | Libraries/Christmas/Stars and Stripes/Stars and Stripes.md\n## Tree Lighting Concert Set\n4 | Joy to the World |"),
+            "{note}"
+        );
+        assert_eq!(note.matches("```studio-setlist").count(), 1, "{note}");
+        assert_eq!(
+            section_line("## Tree Lighting Concert Set"),
+            Some("Tree Lighting Concert Set")
+        );
+        assert_eq!(section_line("4 | Joy | x.md"), None);
+        assert_eq!(
+            Line::parse("## Presidents Songs"),
+            None,
+            "a set's name is no song"
+        );
         assert_eq!(Setlist::from_note(&note), Some(s.clone()));
 
         // A move in the running order joins the set it lands in; a move

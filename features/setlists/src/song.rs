@@ -157,6 +157,10 @@ pub struct Song {
     pub media: Vec<String>,
     /// How long its recording runs, in seconds ([`crate::media::length`]).
     pub length: Option<f64>,
+    /// Its art (`art:`): an image of its folder (`cover.jpg`), shown beside
+    /// it in a setlist and on a share link's player (Architect's
+    /// `architect_sites::art`). Set by hand in the note; kept on import.
+    pub art: Option<String>,
 }
 
 /// An arrangement as its note's property writes it.
@@ -209,6 +213,9 @@ struct Fields {
     session: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     media: Vec<String>,
+    /// Its art: a link to an image beside it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    art: Option<String>,
     /// The library it is in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     library: Option<String>,
@@ -293,6 +300,7 @@ impl Song {
                 .iter()
                 .map(|m| wikilink(&file(m), base(m)))
                 .collect(),
+            art: link(&self.art),
             library: Some(wikilink(lib.note().trim_end_matches(".md"), &lib.name)),
         };
         frontmatter::write(&fields, &self.body(lib, page))
@@ -438,6 +446,7 @@ impl Song {
             lrc: name(f.lyrics),
             session: name(f.session),
             media: f.media.iter().map(|m| rel(m)).collect(),
+            art: name(f.art),
         })
     }
 
@@ -503,6 +512,7 @@ mod tests {
             session: Some("Silent Night.RPP".to_owned()),
             media: vec!["Media/Click.wav".to_owned()],
             length: Some(186.5),
+            art: Some("cover.jpg".to_owned()),
         }
     }
 
@@ -524,6 +534,18 @@ mod tests {
             "{note}"
         );
         assert_eq!(Song::from_note(&lib, &note), Some(song()));
+        // Its art, a link to the image beside it; none, no property.
+        assert!(
+            note.contains("\nart: '[[Libraries/Christmas/Silent Night/cover.jpg|cover.jpg]]'"),
+            "{note}"
+        );
+        let plain = Song {
+            art: None,
+            ..song()
+        };
+        let note = plain.note(&lib, &SongPage::default());
+        assert!(!note.contains("\nart:"), "{note}");
+        assert_eq!(Song::from_note(&lib, &note).and_then(|s| s.art), None);
         assert_eq!(song().summary(), "A · 83 bpm · 3/4");
         assert_eq!(
             song()

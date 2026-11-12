@@ -328,31 +328,45 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
     );
     assert!(lyrics.contains("Let earth receive her King"));
 
-    // ── The setlist's page: a playlist a set, each song a row ───────
+    // ── The setlist's page: one playlist, its sets labels in it ─────
     let page = "/setlists/tree-lighting/";
     let html = read(page);
-    let presidents = html.find(">Presidents Songs<").unwrap();
-    let tree = html.find(">Tree Lighting Concert Set<").unwrap();
-    assert!(presidents < tree, "the sets in order");
-    assert_eq!(
-        html.matches("data-playlist=\"\"").count(),
-        2,
-        "a playlist a set"
-    );
-    assert_eq!(html.matches("data-playlist-play").count(), 2);
+    assert_eq!(html.matches("data-playlist=\"\"").count(), 1, "one list");
+    let presidents = html
+        .find("<li data-playlist-section=\"\">Presidents Songs</li>")
+        .unwrap();
+    let tree = html
+        .find("<li data-playlist-section=\"\">Tree Lighting Concert Set</li>")
+        .unwrap();
+    let joy_row = html.find("data-title=\"Joy to the World\"").unwrap();
+    let silent_row = html.find("data-title=\"Silent Night\"").unwrap();
     assert!(
-        html.contains("</svg>Play</button>"),
-        "the first set's Play plays it all"
+        presidents < joy_row && joy_row < tree && tree < silent_row,
+        "labels before their songs"
     );
-    assert!(html.contains("</svg>Play this set</button>"));
-    // The playing row is marked on an Architect that marks only the line
-    // (v0.12.2): its sheet kept, under the block's box.
-    let block = studio_blocks(&html)[0];
+    assert!(!html.contains("<h2"), "a set is no heading of the page");
+    let list = studio_blocks(&html)[0];
     assert!(
-        block.contains("[data-track] [data-at][aria-current=time] { color:#6366f1 }"),
-        "{}",
-        &block[..block.find("</style>").unwrap_or(0).min(600)]
+        !list.contains("data-playlist-play") && !list.contains("<button"),
+        "no play buttons"
     );
+    // Numbers run on through the sets; a label is no track.
+    assert_eq!(values(&html, "data-track").len(), 2);
+    let marks: Vec<&str> = html
+        .match_indices("<span data-track-mark=\"\">")
+        .map(|(i, m)| &html[i + m.len()..i + m.len() + 1])
+        .collect();
+    assert_eq!(marks, ["1", "2"]);
+    // Each song's tile: its initials on its title's colour.
+    assert!(
+        html.contains(&format!(
+            "data-hue=\"{}\" aria-hidden=\"true\" style=\"background:hsl({} 42% 40%)\">JT</span>",
+            setlists::share::tile_hue("Joy to the World"),
+            setlists::share::tile_hue("Joy to the World"),
+        )),
+        "{html}"
+    );
+    assert!(html.contains("<span data-track-meta=\"\">"));
     // The link's files page and archive, once, after the last set: the
     // node's routes of the link, which serve only its audience's files.
     assert_eq!(
@@ -376,11 +390,7 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
         .collect();
     let joy_src = queue_src(&lib.song_file("Joy to the World", "Media/Joy to the World.wav"));
     let silent_src = queue_src(&recording);
-    assert_eq!(
-        rows,
-        [joy_src.clone(), joy_src, silent_src.clone(), silent_src],
-        "each set's Play (its first song), then its songs, in running order"
-    );
+    assert_eq!(rows, [joy_src, silent_src], "its songs, in running order");
     // Each row's title and the page where it plays.
     assert_eq!(
         values(&html, "data-title"),
@@ -415,4 +425,58 @@ fn a_shared_setlist_plays_with_its_charts_and_lyrics() {
         assert!(links.iter().any(|l| l == song), "{song} in {links:?}");
         assert!(Path::new(&out.path().join(song.trim_matches('/'))).is_dir());
     }
+}
+
+/// A setlist page written before its sets were lines of one fence (a
+/// fence a set, under `## headings`): each fence still draws as a list of
+/// rows with no play buttons, numbered as written (Architect's player joins
+/// them into one), and a song with no recording is a row that is no track.
+#[test]
+fn an_older_setlist_page_still_draws_and_a_song_with_no_recording_is_a_row() {
+    let page = "Setlists/Eve.md";
+    let draw = |source: &str, info: &str| {
+        let claim = architect_sites::Claim::Fence("studio-setlist".to_owned());
+        let block = architect_sites::Block {
+            claim: &claim,
+            info,
+            source,
+            page,
+        };
+        let (_, html) = setlists::share::blocks().draw(&block).unwrap();
+        html.unwrap()
+    };
+    let first = draw(
+        "1 | Sleigh Ride | Libraries/C/Sleigh Ride/Sleigh Ride.md | B · 86 bpm · 4/4 | Libraries/C/Sleigh Ride/Media/Sleigh Ride.mp4 | Tori Kelly | 186.0\n",
+        "studio-setlist",
+    );
+    let second = draw(
+        "4 | Feliz Navidad | Libraries/C/Feliz Navidad/Feliz Navidad.md\n",
+        "studio-setlist downloads",
+    );
+    assert!(!first.contains("<button") && !second.contains("<button"));
+    assert!(first.contains("<span data-track-mark=\"\">1</span>"));
+    assert!(
+        second.contains("<span data-track-mark=\"\">4</span>"),
+        "numbered as written"
+    );
+    assert!(
+        first.contains(">Tori Kelly · B · 86 bpm · 4/4</span>"),
+        "artist first"
+    );
+    assert!(first.contains("<span data-track-length=\"\">3:06</span>"));
+    // No recording: no track, its page still a tap away, said so.
+    assert!(!second.contains("data-track=\"\""));
+    assert!(second.contains("<li data-page=\"../../libraries/c/feliz-navidad/feliz-navidad/\" data-title=\"Feliz Navidad\">"), "{second}");
+    assert!(second.contains(">No recording</span>"));
+    assert!(
+        second.contains(
+            "data-track-open=\"\" href=\"../../libraries/c/feliz-navidad/feliz-navidad/\""
+        )
+    );
+    assert_eq!(
+        setlists::share::tile_initials("Rockin' Around the Christmas Tree"),
+        "RA"
+    );
+    assert_eq!(setlists::share::tile_initials("¡Olé!"), "O");
+    assert_eq!(setlists::share::tile_initials("…"), "\u{266A}");
 }
