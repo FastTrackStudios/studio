@@ -3,11 +3,15 @@
 //! workspace draw), fixed to its Confidence Monitor, over the song the
 //! page is playing.
 //!
-//! Given, besides where the song is: `lyrics` (`[{at, text}]`, the page's
-//! timed lyrics list for the song, seconds on its recording), `sections`
-//! (the progress bar's), `title` and `artist`. It asks nothing (the
-//! Confidence Monitor has no place to tap). A song with no timed lines
-//! draws nothing: the page keeps its own list then.
+//! Given, besides where the song is: on a share page `lyrics` (`[{at,
+//! text}]`, the page's timed lyrics list for the song, seconds on its
+//! recording), `sections` (the progress bar's), `title` and `artist`; in
+//! the app, the playhead's state of this extension's source, whose item's
+//! sung `marks` are its timed lines (`queue::lyric_lines`). It asks
+//! nothing (the Confidence Monitor has no place to tap). A song with no
+//! timed lines draws nothing on a share page (the page keeps its own list
+//! then); in the app it names the song playing, so the tab follows the
+//! playhead rather than stay blank (`queue::lyrics_song`).
 
 use dioxus::prelude::*;
 use lyrics_ui::view::{LyricsView, View, Words};
@@ -32,10 +36,7 @@ pub fn words_of(props: &Value) -> Words {
             .cloned()
             .unwrap_or_default()
     };
-    let stamps = list("lyrics")
-        .iter()
-        .map(|l| (seconds(l, "at"), text(l, "text")))
-        .collect();
+    let stamps = crate::queue::lyric_lines(props);
     let sections = list("sections")
         .iter()
         .map(|s| {
@@ -100,13 +101,25 @@ pub fn Lyrics(page: Signal<Value>) -> Element {
     // tick of the playhead.
     let song = use_memo(move || {
         let p = page.read();
-        ["lyrics", "sections", "title", "artist"].map(|k| p.get(k).cloned().unwrap_or(Value::Null))
+        ["lyrics", "sections", "title", "artist", "source", "item"]
+            .map(|k| p.get(k).cloned().unwrap_or(Value::Null))
     });
     let words = use_memo(move || {
-        let [lyrics, sections, title, artist] = song();
-        words_of(&serde_json::json!({
-            "lyrics": lyrics, "sections": sections, "title": title, "artist": artist,
-        }))
+        let [lyrics, sections, title, artist, source, item] = song();
+        let mut props = serde_json::json!({
+            "sections": sections, "title": title, "artist": artist, "source": source, "item": item,
+        });
+        // Only a page that gives lines: its absence lets the item's marks in.
+        if let (false, Some(map)) = (lyrics.is_null(), props.as_object_mut()) {
+            map.insert("lyrics".into(), lyrics);
+        }
+        words_of(&props)
+    });
+    let named = use_memo(move || {
+        let [_, _, title, artist, source, _] = song();
+        crate::queue::lyrics_song(
+            &serde_json::json!({ "title": title, "artist": artist, "source": source }),
+        )
     });
     let at = page
         .read()
@@ -114,10 +127,38 @@ pub fn Lyrics(page: Signal<Value>) -> Element {
         .and_then(Value::as_f64)
         .unwrap_or(0.0);
     let (w, h) = vp();
-    if words.read().is_empty() || w <= 0.0 || h <= 0.0 {
+    if words.read().is_empty() {
+        return match named() {
+            Some((title, artist)) => rsx! { Unsynced { title, artist } },
+            None => rsx! {},
+        };
+    }
+    if w <= 0.0 || h <= 0.0 {
         return rsx! {};
     }
     rsx! {
         LyricsView { key: "{w}x{h}", words: words(), at, only: View::Confidence, start_size: (w, h) }
+    }
+}
+
+/// The song playing in the app, named, when it has no timed lines: its
+/// title, who it is by, and that its words are not timed yet. Centred in
+/// the frame, in the app's theme (its variables, system colours before).
+#[component]
+fn Unsynced(title: String, artist: String) -> Element {
+    rsx! {
+        div {
+            "data-testid": "lyrics-unsynced",
+            style: "box-sizing: border-box; min-height: 100vh; display: flex; flex-direction: column; \
+                    align-items: center; justify-content: center; gap: 6px; padding: 24px; text-align: center; \
+                    font-family: var(--font, system-ui, -apple-system, sans-serif); color: var(--foreground, CanvasText);",
+            p { style: "margin: 0; font-size: 22px; font-weight: 700; line-height: 1.25;", "{title}" }
+            if !artist.is_empty() {
+                p { style: "margin: 0; font-size: 15px; color: var(--muted-foreground, GrayText);", "{artist}" }
+            }
+            p { style: "margin: 14px 0 0; font-size: 13px; color: var(--muted-foreground, GrayText);",
+                "No timed lyrics for this song yet."
+            }
+        }
     }
 }

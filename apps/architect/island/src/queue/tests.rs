@@ -144,6 +144,20 @@ mod host {
         field(i, "subtitle", 200)?;
         list_of(i, "sections", SECTIONS_MAX, section_of)?;
         list_of(i, "marks", MARKS_MAX, mark_of)?;
+        // The host's tempo (#660): bpm 20 to 400, a downbeat at 0 or
+        // more, 1 to 16 beats a bar.
+        if let Some(t) = i.get("tempo").filter(|t| !t.is_null()) {
+            let bpm = t.get("bpm").and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let at = t.get("at").map_or(Some(0.0), Value::as_f64).unwrap_or(-1.0);
+            let meter = t.get("meter").map_or(Some(4), Value::as_u64).unwrap_or(0);
+            if !(20.0..=400.0).contains(&bpm)
+                || !at.is_finite()
+                || at < 0.0
+                || !(1..=16).contains(&meter)
+            {
+                return Err("tempo is not one".to_owned());
+            }
+        }
         Ok(id)
     }
 
@@ -170,6 +184,22 @@ mod host {
             n.as_u64().ok_or("index is a place in the queue")?;
         }
         seconds(args, "time")?;
+        // At most two of the bar's slots, each once (#660).
+        if let Some(slots) = args.get("slots").filter(|s| !s.is_null()) {
+            let list: Vec<&str> = slots
+                .as_array()
+                .ok_or("slots is a list")?
+                .iter()
+                .map(|s| {
+                    s.as_str()
+                        .filter(|s| matches!(*s, "click" | "open"))
+                        .ok_or("slots: click or open")
+                })
+                .collect::<Result<_, _>>()?;
+            if list.len() > 2 || (list.len() == 2 && list[0] == list[1]) {
+                return Err("slots: at most 2, each once".to_owned());
+            }
+        }
         Ok(queue)
     }
 
@@ -655,6 +685,27 @@ fn the_list_is_sent_once_it_settles_and_never_empty() {
 }
 
 #[test]
+fn a_view_mounted_again_does_not_set_the_list_the_source_already_has() {
+    let s = setlist_of(&note()).unwrap();
+    let args = s.source(MESSAGE_MAX).args;
+    // The source as the host holds it after this list's SET, playing its
+    // second song.
+    let mut held = args.clone();
+    held["source"] = json!(SOURCE);
+    held["index"] = json!(1);
+    held["playing"] = json!(true);
+    let mut out = Outbox::default();
+    out.set_list(s.clone(), 0.0);
+    assert_eq!(out.tick(&held, 0.0), NONE, "nothing that would move it");
+    // The same songs edited (its name): sent.
+    let mut renamed = s;
+    renamed.title = "Eve".to_owned();
+    let mut again = Outbox::default();
+    again.set_list(renamed, 0.0);
+    assert_eq!(again.tick(&held, 0.0).len(), 1);
+}
+
+#[test]
 fn a_press_sets_its_own_list_first_when_the_queue_is_anothers() {
     // Review M2: two setlist notes, one source.
     let a = setlist_of(&note_at("Setlists/A.md", NOTE)).unwrap();
@@ -865,4 +916,73 @@ fn the_manifest_declares_the_view_its_claim_and_its_favourites() {
             .iter()
             .all(|v| v["id"].as_str() != Some(VIEW))
     );
+}
+
+#[test]
+fn lyrics_are_the_pages_lines_else_the_playing_items_sung_marks() {
+    // A share page's own lines win, and carry no `source`.
+    let page =
+        json!({"lyrics": [{"at": 1.0, "text": "Joy"}, {"at": 2.0, "text": ""}], "title": "Joy"});
+    assert_eq!(lyric_lines(&page), vec![(1.0, "Joy".to_owned())]);
+    assert_eq!(lyrics_song(&page), None, "a share page keeps its own list");
+    // In the app: the item's marks that are sung, not its cues.
+    let app = json!({"source": SOURCE, "title": "Joy", "artist": "Watts", "item": {"id": "a", "marks": [
+        {"at": 0.5, "text": "Joy to the world", "kind": "line"},
+        {"at": 1.0, "text": "Count in", "kind": "cue"},
+        {"at": 4.0, "text": "the Lord is come"},
+        {"at": -1.0, "text": "before the start"},
+    ]}});
+    assert_eq!(
+        lyric_lines(&app),
+        vec![
+            (0.5, "Joy to the world".to_owned()),
+            (4.0, "the Lord is come".to_owned())
+        ]
+    );
+    // Another source's marks are not this view's.
+    let other = json!({"source": "app:notes", "title": "Memo", "item": {"marks": [{"at": 1.0, "text": "x"}]}});
+    assert!(lyric_lines(&other).is_empty());
+    assert_eq!(lyrics_song(&other), None);
+}
+
+#[test]
+fn with_no_timed_lines_the_app_names_the_song_playing() {
+    let state = |title: &str, artist: Value, subtitle: Value| json!({"source": SOURCE, "title": title, "artist": artist, "subtitle": subtitle, "item": {"id": "a"}});
+    assert_eq!(
+        lyrics_song(&state("Silent Night", json!("Franz Gruber"), Value::Null)),
+        Some(("Silent Night".to_owned(), "Franz Gruber".to_owned()))
+    );
+    assert_eq!(
+        lyrics_song(&state("Hark", Value::Null, json!("Mendelssohn"))),
+        Some(("Hark".to_owned(), "Mendelssohn".to_owned()))
+    );
+    assert_eq!(
+        lyrics_song(&state("", json!("x"), Value::Null)),
+        None,
+        "nothing current"
+    );
+}
+
+#[test]
+fn a_row_s_summary_gives_its_beat_and_the_source_asks_for_click_and_open() {
+    assert_eq!(tempo_of("D · 120 bpm · 4/4"), Some((120.0, 4)));
+    assert_eq!(tempo_of("Bb · 60 bpm · 6/8"), Some((60.0, 2)));
+    assert_eq!(tempo_of("D · 92 bpm · 3/4"), Some((92.0, 3)));
+    assert_eq!(tempo_of("A · 83 bpm"), Some((83.0, 4)));
+    assert_eq!(tempo_of("A · 3/4"), None);
+    assert_eq!(tempo_of("A · 9000 bpm · 4/4"), None);
+    let list = list_of(vec![
+        Item {
+            tempo: Some((120.0, 4)),
+            ..item("a")
+        },
+        item("b"),
+    ]);
+    let s = taken(&list);
+    assert_eq!(s.args["slots"], json!(["click", "open"]));
+    assert_eq!(
+        s.args["queue"][0]["tempo"],
+        json!({"bpm": 120.0, "at": 0.0, "meter": 4})
+    );
+    assert!(s.args["queue"][1].get("tempo").is_none());
 }

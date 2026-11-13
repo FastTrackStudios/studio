@@ -103,6 +103,10 @@ pub const SETTLE_MS: f64 = 400.0;
 pub const CONFIRM_MS: f64 = 1_500.0;
 /// How many times a `SET` not seen in the props is sent again before the
 /// view waits for a press.
+/// What the app's bar draws beside play for this source: Click (on the
+/// song's beat) and `open`, its detail.
+pub const SLOTS: [&str; 2] = ["click", "open"];
+
 pub const RETRIES: u8 = 3;
 
 /// One ask: an action and its args.
@@ -133,6 +137,9 @@ pub struct Item {
     pub recording: bool,
     /// Its recording, a vault path the host takes, when it has one.
     pub media: Option<String>,
+    /// Its tempo and beats a bar, from its row's summary (`D · 120 bpm ·
+    /// 4/4`): what the bar's Click sounds on.
+    pub tempo: Option<(f64, u8)>,
 }
 
 /// A set of the list: its name (none for the songs before the first set)
@@ -191,7 +198,11 @@ impl Setlist {
             &self.title
         };
         let name = cut(name, NAME_MAX);
-        let empty = message(PLAYHEAD_SET, &json!({"name": name, "queue": []})).len();
+        let empty = message(
+            PLAYHEAD_SET,
+            &json!({"name": name, "queue": [], "slots": SLOTS}),
+        )
+        .len();
         let mut bytes = empty;
         let mut seen = BTreeSet::new();
         let mut queue = Vec::new();
@@ -217,7 +228,7 @@ impl Setlist {
             queue.push(item);
         }
         Source {
-            args: json!({"name": name, "queue": queue}),
+            args: json!({"name": name, "queue": queue, "slots": SLOTS}),
             ids,
             bytes,
         }
@@ -254,6 +265,12 @@ fn queued(i: &Item) -> Option<Value> {
     }
     if let Some(m) = media {
         item.insert("media".to_owned(), json!(m));
+    }
+    if let Some((bpm, meter)) = i.tempo {
+        item.insert(
+            "tempo".to_owned(),
+            json!({"bpm": bpm, "at": 0.0, "meter": meter}),
+        );
     }
     Some(Value::Object(item))
 }
@@ -383,6 +400,7 @@ fn from_note(note: &Value) -> Setlist {
                 .map(|l| l.min(LENGTH_MAX)),
             media: row.recording.as_deref().and_then(vault_path),
             recording: row.recording.is_some(),
+            tempo: tempo_of(&row.summary),
         };
         if let Some(last) = sections.last_mut() {
             last.items.push(item);
@@ -395,6 +413,31 @@ fn from_note(note: &Value) -> Setlist {
         sections,
         withheld,
     })
+}
+
+/// What a row's summary (`D · 120 bpm · 4/4`) says of its beat.
+///
+/// Beats a minute (20 to 400, as the host takes them) and beats a bar. A
+/// compound meter (6/8, 9/8, 12/8) counts its dotted beats, as its tempo
+/// does; without a meter, four.
+#[must_use]
+pub fn tempo_of(summary: &str) -> Option<(f64, u8)> {
+    let parts: Vec<&str> = summary.split('·').map(str::trim).collect();
+    let bpm = parts
+        .iter()
+        .find_map(|p| p.strip_suffix("bpm")?.trim().parse::<f64>().ok())
+        .filter(|b| b.is_finite() && (20.0..=400.0).contains(b))?;
+    let meter = parts
+        .iter()
+        .find_map(|p| {
+            let (n, d) = p.split_once('/')?;
+            let (n, d) = (n.trim().parse::<u8>().ok()?, d.trim().parse::<u8>().ok()?);
+            let compound = d == 8 && n % 3 == 0 && n > 3;
+            Some(if compound { n / 3 } else { n })
+        })
+        .filter(|m| (1..=16).contains(m))
+        .unwrap_or(4);
+    Some((bpm, meter))
 }
 
 /// `base`, or `base@<n>` from `number` up, whichever is not in `seen` yet;
@@ -471,6 +514,53 @@ struct Sent {
     tries: u8,
 }
 
+/// The Lyrics view's timed lines, `(seconds on the recording, words)`.
+///
+/// A share page's own `lyrics` (`[{at, text}]`) when it gives them; else,
+/// in the app, the playing item's `marks` that are sung (#589: `{at,
+/// text, kind}`, `kind` `line` or none; a `cue` is not), from this
+/// extension's source only.
+#[must_use]
+pub fn lyric_lines(props: &Value) -> Vec<(f64, String)> {
+    let line =
+        |v: &Value| Some((seconds(v, "at")?, text(v, "text"))).filter(|(_, t)| !t.is_empty());
+    if let Some(page) = props.get("lyrics").and_then(Value::as_array) {
+        return page.iter().filter_map(line).collect();
+    }
+    if !own(props) {
+        return Vec::new();
+    }
+    props
+        .get("item")
+        .and_then(|i| i.get("marks"))
+        .and_then(Value::as_array)
+        .map(|marks| {
+            marks
+                .iter()
+                .filter(|m| matches!(m.get("kind").and_then(Value::as_str), None | Some("line")))
+                .filter_map(line)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The song this extension's source is on, `(title, artist)`.
+///
+/// The Lyrics view names it when it has no timed lines: in the app it
+/// follows the playhead rather than draw nothing. None for a share page's props
+/// (no `source`: the page keeps its own list then) or another source's.
+#[must_use]
+pub fn lyrics_song(props: &Value) -> Option<(String, String)> {
+    if !own(props) {
+        return None;
+    }
+    let title = text(props, "title");
+    let artist = Some(text(props, "artist"))
+        .filter(|a| !a.is_empty())
+        .unwrap_or_else(|| text(props, "subtitle"));
+    (!title.is_empty()).then_some((title, artist))
+}
+
 /// The view's asks of its source.
 ///
 /// The list sent once it settles, a `SET` the host did not take sent again
@@ -521,6 +611,17 @@ impl Outbox {
         queue_of(props).is_some_and(|q| q == self.built.ids)
     }
 
+    /// Whether the source in `props` is this exact `SET` already: its
+    /// name, its slots and every item as sent (a list edited, even with
+    /// the same songs, is not).
+    fn holds(&self, props: &Value) -> bool {
+        let args = &self.built.args;
+        self.shown(props)
+            && ["name", "queue", "slots"]
+                .iter()
+                .all(|k| props.get(*k) == args.get(*k))
+    }
+
     fn send(&mut self, now: f64, tries: u8) -> Vec<Ask> {
         if self.built.ids.is_empty() {
             self.sent = None;
@@ -546,6 +647,12 @@ impl Outbox {
                 return Vec::new();
             }
             self.changed = None;
+            // The source has this list already (another view of it, this
+            // view mounted again): sent again it would only risk moving it.
+            if self.holds(props) {
+                self.sent = None;
+                return Vec::new();
+            }
             return self.send(now, 0);
         }
         let Some(sent) = self.sent.clone() else {

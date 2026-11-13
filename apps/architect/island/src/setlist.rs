@@ -37,13 +37,12 @@ pub const SHEET: &str = r#"
 .sl { font-family: var(--font, system-ui, -apple-system, sans-serif); color: var(--foreground, CanvasText);
       padding: 4px 0 12px; box-sizing: border-box; width: 100%; }
 .sl * { box-sizing: border-box; }
-.sl-title { display: none; font-size: 26px; font-weight: 700; margin: 8px 24px 14px; line-height: 1.2; }
 .sl-head { display: none; }
 .sl ol { list-style: none; margin: 0; padding: 0; }
 .sl-section { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; margin: 0;
-              color: var(--muted-foreground, GrayText); padding: 18px 16px 6px; }
+              color: var(--muted-foreground, GrayText); padding: 18px 0 6px; }
 .sl-row { display: grid; grid-template-columns: 22px 48px minmax(0, 1fr) auto; align-items: center; column-gap: 12px;
-          width: 100%; min-height: 64px; padding: 8px 16px; border: 0; margin: 0; background: transparent; color: inherit;
+          width: 100%; min-height: 64px; padding: 8px 0; border: 0; margin: 0; background: transparent; color: inherit;
           font: inherit; text-align: left; position: relative; cursor: pointer; border-radius: 8px; }
 .sl-row:hover { background: rgba(128, 128, 128, .12);
                 background: color-mix(in srgb, var(--foreground, CanvasText) 6%, transparent); }
@@ -65,24 +64,21 @@ pub const SHEET: &str = r#"
 .sl-artist { display: none; font-size: 14px; color: var(--muted-foreground, GrayText); }
 .sl-len { font-size: 13px; color: var(--muted-foreground, GrayText); font-variant-numeric: tabular-nums; text-align: right; }
 .sl-row[data-current] .sl-name, .sl-row[data-current] .sl-num { color: var(--accent, Highlight); }
-.sl-bar { position: absolute; left: 16px; right: 16px; bottom: 2px; height: 2px; border-radius: 1px;
+.sl-bar { position: absolute; left: 0; right: 0; bottom: 2px; height: 2px; border-radius: 1px;
           background: rgba(128, 128, 128, .25);
           background: color-mix(in srgb, var(--foreground, CanvasText) 12%, transparent); overflow: hidden; }
 .sl-bar > span { display: block; height: 100%; background: var(--accent, Highlight); }
 .sl-eq { display: inline-flex; gap: 2px; align-items: flex-end; height: 14px; }
 .sl-eq > span { width: 3px; background: var(--accent, Highlight); border-radius: 1px; }
-.sl-empty { padding: 16px; color: var(--muted-foreground, GrayText); }
+.sl-empty { padding: 16px 0; color: var(--muted-foreground, GrayText); }
 @media (min-width: 640px) {
-  .sl-title { display: block; }
-  .sl-head, .sl-row { grid-template-columns: 28px 48px minmax(0, 3fr) minmax(0, 2fr) 64px; padding-left: 24px; padding-right: 24px; }
+  .sl-head, .sl-row { grid-template-columns: 28px 48px minmax(0, 3fr) minmax(0, 2fr) 64px; }
   .sl-head { display: grid; column-gap: 12px; font-size: 12px; color: var(--muted-foreground, GrayText);
              padding-top: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border, GrayText); margin-bottom: 4px; }
   .sl-head > span:first-child { text-align: right; }
   .sl-head > span:last-child { text-align: right; }
-  .sl-section { padding-left: 24px; }
   .sl-by { display: none; }
   .sl-artist { display: block; }
-  .sl-bar { left: 24px; right: 24px; }
 }
 "#;
 
@@ -184,10 +180,10 @@ pub fn Rows(
         setlist.title.clone()
     };
     rsx! {
-        div { class: "sl", "data-testid": "studio-setlist",
-            if !setlist.title.is_empty() {
-                h1 { class: "sl-title", "{setlist.title}" }
-            }
+        // No heading of its own: the host names the note (its tab, its
+        // place in the navigator); the list keeps the name for a screen
+        // reader.
+        div { class: "sl", "data-testid": "studio-setlist", role: "region", "aria-label": "{title}",
             div { class: "sl-head", "aria-hidden": "true",
                 span { "#" } span {} span { "Title" } span { "Artist" } span { "Length" }
             }
