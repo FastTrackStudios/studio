@@ -900,6 +900,11 @@ fn tsv_zone_fields(z: &TsvZone) -> Vec<(&'static str, String)> {
         ("key_max", z.key_max.to_string()),
         ("root_key", z.root_key.to_string()),
     ];
+    // A rip's round robin is its file's last number; the zones nki-styx
+    // wrote all sit on RR 0.
+    if cs_is_rip(&z.articulation) {
+        v.push(("rr_index", z.rr_index.to_string()));
+    }
     if let Some(s) = z.sample_start {
         v.push(("sample_start", s.to_string()));
     }
@@ -1201,6 +1206,9 @@ fn cs_is_legato(artic: &str) -> bool {
 fn cs_is_zero(artic: &str) -> bool {
     matches!(artic, "Legzero" | "NVLegzero")
 }
+fn cs_is_rip(artic: &str) -> bool {
+    artic == "Rips"
+}
 
 /// Parse an `nki --zones` zones.tsv into per-FILE zones (key ranges unioned
 /// across duplicate rows, loops first-wins) using the Cinematic Studio NCW
@@ -1284,7 +1292,9 @@ fn load_tsv_zones(
             let rr = rest.last().and_then(|s| s.parse::<u32>().ok()).unwrap_or(1);
             (None, 0, rr.saturating_sub(1))
         } else {
-            let rr = if rest.len() >= 3 {
+            // `<dyn>_<note>_<rr>`, or a brass rip's `<note>_<rr>` (no dynamic:
+            // CSB `Rips/A#3_1`, `A#3_2` are two round robins).
+            let rr = if rest.len() >= 3 || cs_is_rip(&artic) {
                 rest.last().and_then(|s| s.parse::<u32>().ok()).unwrap_or(1)
             } else {
                 1

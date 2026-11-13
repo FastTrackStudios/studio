@@ -4,6 +4,8 @@
 #
 #   features/rigs/orchestra/tests/css_section.sh "2nd Violins"
 #   features/rigs/orchestra/tests/css_section.sh "CSW Solo Flute"   (full NKI name)
+#   features/rigs/orchestra/tests/css_section.sh "CSB Solo Trumpet" (full NKI name)
+#   DECODE_ONLY=1 …  decode into _ksp/ and stop (CSB Full Ensemble: no patch)
 #
 #   1. decode its NKI (zones with sample starts, groups, KSP, persistent
 #      values) into _ksp/CSS <Section>/   (Native Access key from
@@ -38,6 +40,18 @@ case "$section" in
       "CSW Solo Piccolo") label=Spi ;; *) label="${section#CSW }" ;;
     esac
     flat=(--flat) ;;
+  CSB\ *)
+    # Brass: the full NKI name; the patch / sample folder drops "CSB " and
+    # the horns and tuba are named in full. Samples sit flat like CSW's.
+    product="cinematic studio brass"
+    root="${CSS_ROOT:-$lib_root/Cinematic Studio Brass}"
+    nki="/run/media/AudioHaven/Kontakt/Orchestral/Cinematic Studio Brass/Instruments/$section.nki"
+    ksp="$root/_ksp/$section"
+    case "$section" in
+      "CSB 4 Horns") label="4 French Horns" ;; "CSB Solo Horn") label="Solo French Horn" ;;
+      "CSB Solo Tuba") label=Tuba ;; *) label="${section#CSB }" ;;
+    esac
+    flat=(--flat) ;;
   *)
     product="cinematic studio strings"
     root="${CSS_ROOT:-$lib_root/Cinematic Studio Strings}"
@@ -51,7 +65,8 @@ stamp="$(date +%Y-%m-%d)"
 
 [ -x "$nki_bin" ] || { echo "nki decoder not built: $nki_bin" >&2; exit 1; }
 [ -f "$nki" ] || { echo "no NKI: $nki" >&2; exit 1; }
-[ -f "$patch/library.styx" ] || { echo "no $patch/library.styx" >&2; exit 1; }
+decode_only="${DECODE_ONLY:-}"
+[ -n "$decode_only" ] || [ -f "$patch/library.styx" ] || { echo "no $patch/library.styx" >&2; exit 1; }
 
 # 1. decode (the key stays in this process's environment only)
 eval "$(PRODUCT="$product" python3 -I - <<'PY'
@@ -78,6 +93,7 @@ for f in zones.tsv groups.json groups.tsv persistent_0.tsv persistent_1.tsv scri
     [ -f "$tmp/$f" ] && cp "$tmp/$f" "$ksp/$f"
 done
 echo "decoded: $(($(wc -l < "$ksp/zones.tsv") - 1)) zones → $ksp"
+[ -z "$decode_only" ] || exit 0
 
 # 2. zones
 [ -f "$patch/library.styx.pre-$stamp" ] || cp "$patch/library.styx" "$patch/library.styx.pre-$stamp"
@@ -87,8 +103,8 @@ echo "decoded: $(($(wc -l < "$ksp/zones.tsv") - 1)) zones → $ksp"
     "${flat[@]}" --disable-unmatched) \
     2>&1 | grep -E "matched|edited|wrote|^error" || true
 if [ ${#flat[@]} -gt 0 ]; then
-  # The woodwinds' per-instrument numbers are not generated yet.
-  echo "skipped section.styx (no woodwinds overlay generator yet)"
+  # The woodwinds' and brass' per-instrument numbers are not generated yet.
+  echo "skipped section.styx (no woodwinds / brass overlay generator yet)"
   exit 0
 fi
 # The other sections keep pizzicato in a "Pizz" folder; the articulation is
