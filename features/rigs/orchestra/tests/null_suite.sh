@@ -48,6 +48,14 @@ case "$section" in
   "Solo Flute")    lib=woodwinds; tag=ww_fl;  tr=0 ;;
   "Solo Oboe")     lib=woodwinds; tag=ww_ob;  tr=0 ;;
   "Spi")           lib=woodwinds; tag=ww_picc; tr=0 ;;
+  "2 Trombones")        lib=brass; tag=br_tb2;  tr=-10 ;;
+  "2 Trumpets")         lib=brass; tag=br_tpt2; tr=0 ;;
+  "4 French Horns")     lib=brass; tag=br_hn4;  tr=-3 ;;
+  "Solo Bass Trombone") lib=brass; tag=br_btb;  tr=-10 ;;
+  "Solo French Horn")   lib=brass; tag=br_hn;   tr=-3 ;;
+  "Solo Trombone")      lib=brass; tag=br_tb;   tr=-10 ;;
+  "Solo Trumpet")       lib=brass; tag=br_tpt;  tr=0 ;;
+  "Tuba")               lib=brass; tag=br_tuba; tr=-11 ;;
   *) echo "unknown section: $section" >&2; exit 1 ;;
 esac
 export CS_LIBRARY="$lib"   # fit_draws.py passes it on to the renderer

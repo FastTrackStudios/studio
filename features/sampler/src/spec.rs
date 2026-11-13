@@ -823,6 +823,126 @@ pub struct KontaktTransitionSpec {
     /// ramp back over `phrase_dip_window_ms`.
     #[facet(default)]
     pub phrase_dip_curve: Vec<EnvSegmentSpec>,
+    /// The transition envelope's first node level, `(CC66 · CC67) / 127²`,
+    /// each CC by IOI per legato mode (CSS KSP 7186-7425). None = 1.0.
+    #[facet(default)]
+    pub lt_node: Option<LtNodeSpec>,
+    /// How the previous transition voice retires on the next transition:
+    /// ms by IOI per legato mode, or by attack class. None = at once.
+    #[facet(default)]
+    pub lt_retire: Option<LtRetireSpec>,
+    /// The destination body's handoff per dynamic layer (CSB `%k1aqh`):
+    /// each layer waits and fades in on its own clock, by velocity zone.
+    /// Empty = `body_wait_ms` / `body_fade_ms` for every layer.
+    #[facet(default)]
+    pub body_handoff: Vec<BodyHandoffSpec>,
+    /// The same for a re-strike of the sounding key (CSB `%wu5b4`).
+    #[facet(default)]
+    pub retrigger_body_handoff: Vec<BodyHandoffSpec>,
+    /// A transition touching a key at or above `min_key` hands every layer
+    /// over with this wait / fade instead (CSB `$vv4qt`).
+    #[facet(default)]
+    pub high_key_handoff: Option<HighKeyHandoffSpec>,
+    /// The old body's fade by velocity zone (1-3); empty = `old_body_fade_ms`.
+    #[facet(default)]
+    pub old_body_fade_by_zone_ms: Vec<f32>,
+    /// The transition voice fades out along this curve (dB, evenly spaced
+    /// points) over its layer's body fade, starting when the body starts
+    /// fading in, then stops (CSB `%jygjv`). Empty = no such fade.
+    #[facet(default)]
+    pub lt_fade_curve_db: Vec<f32>,
+    /// The transition starts this many dB down by IOI and recovers linearly
+    /// over `recover_ms` (CSB `$dwujq`, recovered over `$pgocp`).
+    #[facet(default)]
+    pub lt_ioi_dip: Option<LtIoiDipSpec>,
+}
+
+/// See [`KontaktTransitionSpec::lt_node`].
+#[derive(Debug, Clone, Facet)]
+pub struct LtNodeSpec {
+    pub expressive: LtNodeModeSpec,
+    pub low_latency: LtNodeModeSpec,
+}
+
+/// The two CCs of one legato mode by IOI; `cc67_loud` from velocity zone 2.
+#[derive(Debug, Clone, Facet)]
+pub struct LtNodeModeSpec {
+    pub cc66: IoiCurveSpec,
+    pub cc67: IoiCurveSpec,
+    #[facet(default)]
+    pub cc67_loud: Option<IoiCurveSpec>,
+}
+
+impl LtNodeSpec {
+    /// `(CC66, CC67)` for a transition (IOI floored to whole ms, as the KSP).
+    #[must_use]
+    pub fn ccs(&self, expressive: bool, zone: u8, ioi_ms: f32) -> (f32, f32) {
+        let m = if expressive {
+            &self.expressive
+        } else {
+            &self.low_latency
+        };
+        let ioi = ioi_ms.max(0.0).floor();
+        let cc67 = match &m.cc67_loud {
+            Some(loud) if zone >= 2 => loud,
+            _ => &m.cc67,
+        };
+        (m.cc66.value_at(ioi), cc67.value_at(ioi))
+    }
+}
+
+/// How the previous transition voice retires (ms by IOI).
+#[derive(Debug, Clone, Facet)]
+pub struct LtRetireSpec {
+    pub low_latency: IoiCurveSpec,
+    pub expressive: IoiCurveSpec,
+    /// From velocity zone `loud_from_zone` up, this curve instead (CSB: the
+    /// loud attack class).
+    #[facet(default)]
+    pub loud: Option<IoiCurveSpec>,
+    #[facet(default = 2)]
+    pub loud_from_zone: u8,
+}
+
+/// One dynamic layer's body handoff on a connected note.
+#[derive(Debug, Clone, Facet)]
+pub struct BodyHandoffSpec {
+    pub dynamic: String,
+    /// Wait before fading in (ms), by velocity zone 1-3.
+    pub wait_ms: Vec<f32>,
+    /// Fade-in (ms), by velocity zone 1-3.
+    pub fade_ms: Vec<f32>,
+    /// Beyond an octave: no wait, this fade.
+    pub big_fade_ms: f32,
+}
+
+/// See [`KontaktTransitionSpec::high_key_handoff`].
+#[derive(Debug, Clone, Facet)]
+pub struct HighKeyHandoffSpec {
+    pub min_key: u8,
+    pub wait_ms: f32,
+    pub fade_ms: f32,
+}
+
+/// See [`KontaktTransitionSpec::lt_ioi_dip`].
+#[derive(Debug, Clone, Facet)]
+pub struct LtIoiDipSpec {
+    /// Starting level (dB) by IOI.
+    pub db: IoiCurveSpec,
+    pub recover_ms: f32,
+}
+
+impl BodyHandoffSpec {
+    /// (wait, fade) in ms for velocity zone `zone` (1-3), or beyond an octave.
+    #[must_use]
+    pub fn for_zone(&self, zone: u8, big_leap: bool) -> (f32, f32) {
+        if big_leap {
+            return (0.0, self.big_fade_ms);
+        }
+        let i = usize::from(zone.clamp(1, 3) - 1);
+        let pick = |v: &[f32]| v.get(i).or_else(|| v.last()).copied().unwrap_or(0.0);
+        (pick(&self.wait_ms), pick(&self.fade_ms))
+    }
 }
 
 /// A CSS MARCATO transition as Kontakt plays it (`$ocjln=6`, KSP 18114-20402,
@@ -890,6 +1010,14 @@ pub struct MarcatoTransitionSpec {
     pub lt_layers: Vec<MarcLegLayerSpec>,
     /// LT entry past the zone's marcato start, ms, by IOI.
     pub lt_offset_ms: Vec<[f32; 2]>,
+    /// By attack class `(soft, hard)` instead of by IOI (CSB `$5ibvn` /
+    /// `$cblef`; level `$b23jt` / `$rlbmz` dB; retire `$pprfd` / `$orqo1`).
+    #[facet(default)]
+    pub lt_offset_ms_by_class: Option<[f32; 2]>,
+    #[facet(default)]
+    pub lt_db_by_class: Option<[f32; 2]>,
+    #[facet(default)]
+    pub lt_retire_ms_by_class: Option<[f32; 2]>,
     /// LT level "LT Vol" dB by IOI: step (≤ 2) / leap; plus the group volume.
     pub lt_db_step: Vec<[f32; 2]>,
     pub lt_db_leap: Vec<[f32; 2]>,
@@ -959,6 +1087,14 @@ pub struct FirstNoteAttackSpec {
 pub struct OverlaySpec {
     pub articulation: String,
     pub cc1_scale: Vec<u8>,
+    /// A first note after a HARD transition plays no overlay (CSS
+    /// `$kbqnb`). CSB plays it on every first note: false.
+    #[facet(default = true)]
+    pub skip_after_hard_transition: bool,
+    /// Connected notes at or above this velocity play the overlay too
+    /// (CSB: 64, `$evk4m`). None = first notes only (CSS).
+    #[facet(default)]
+    pub connected_from_velocity: Option<u8>,
 }
 
 /// A section's decoded numbers over the shared library config (CSS: each
@@ -983,11 +1119,19 @@ pub struct LegatoOverlay {
     pub overlap_delay: Option<OverlapDelaySpec>,
     pub first_note_variant_init: Option<u8>,
     pub first_note_fade_ms: Option<Vec<f32>>,
+    /// An instrument's whole transition model (every CSB number is
+    /// per instrument).
+    pub kontakt_transition: Option<KontaktTransitionSpec>,
+    pub lt_offset_expressive: Option<Vec<u32>>,
+    pub lt_offset_low_latency: Option<Vec<u32>>,
 }
 
 /// The overridable [`MarcatoTransitionSpec`] fields of a section.
 #[derive(Debug, Clone, Default, Facet)]
 pub struct MarcatoOverlay {
+    pub lt_offset_ms_by_class: Option<[f32; 2]>,
+    pub lt_db_by_class: Option<[f32; 2]>,
+    pub lt_retire_ms_by_class: Option<[f32; 2]>,
     pub hard_velocity: Option<u8>,
     pub hard_ioi_ms: Option<f32>,
     pub body_offset_ms: Option<[f32; 2]>,
@@ -1083,12 +1227,30 @@ impl SectionOverlay {
             if let Some(v) = &l.first_note_fade_ms {
                 cfg.first_note_fade_ms.clone_from(v);
             }
+            if let Some(v) = &l.kontakt_transition {
+                cfg.kontakt_transition = Some(v.clone());
+            }
+            if let Some(v) = &l.lt_offset_expressive {
+                cfg.lt_offset_expressive.clone_from(v);
+            }
+            if let Some(v) = &l.lt_offset_low_latency {
+                cfg.lt_offset_low_latency.clone_from(v);
+            }
         }
     }
 }
 
 impl MarcatoOverlay {
     fn apply(&self, t: &mut MarcatoTransitionSpec) {
+        if self.lt_offset_ms_by_class.is_some() {
+            t.lt_offset_ms_by_class = self.lt_offset_ms_by_class;
+        }
+        if self.lt_db_by_class.is_some() {
+            t.lt_db_by_class = self.lt_db_by_class;
+        }
+        if self.lt_retire_ms_by_class.is_some() {
+            t.lt_retire_ms_by_class = self.lt_retire_ms_by_class;
+        }
         if let Some(v) = self.hard_velocity {
             t.hard_velocity = v;
         }
@@ -1175,40 +1337,6 @@ pub fn lerp_table(pts: &[[f32; 2]], x: f32) -> f32 {
     pts[pts.len() - 1][1]
 }
 
-/// CSS transition-envelope CC values (KSP 7186-7425) for one transition.
-#[must_use]
-pub fn css_transition_ccs(expressive: bool, zone: u8, ioi_ms: f32) -> (f32, f32) {
-    let ioi = ioi_ms.max(0.0).floor();
-    if expressive {
-        let cc66 = if ioi < 1750.0 {
-            (64.0 + (63.0 * ioi / 1750.0).floor()).min(127.0)
-        } else {
-            127.0
-        };
-        return (cc66, 84.0);
-    }
-    let cc66 = if ioi < 250.0 {
-        117.0 + (-44.0 * ioi / 250.0).ceil()
-    } else if ioi < 1750.0 {
-        73.0 + (54.0 * (ioi - 250.0) / 1500.0).floor()
-    } else {
-        127.0
-    };
-    let (hi, lo) = if zone <= 1 {
-        (64.0, 62.0)
-    } else {
-        (62.0, 42.0)
-    };
-    let cc67 = if ioi < 200.0 {
-        hi
-    } else if ioi < 250.0 {
-        hi + ((lo - hi) * (ioi - 200.0) / 50.0).trunc()
-    } else {
-        lo
-    };
-    (cc66, cc67)
-}
-
 /// A piecewise-linear curve over the inter-onset interval (IOI, ms): below
 /// `thresholds_ms[0]` → `anchors_ms[0]`, above the last threshold → the last
 /// anchor, linear between.
@@ -1218,6 +1346,10 @@ pub fn css_transition_ccs(expressive: bool, zone: u8, ioi_ms: f32) -> (f32, f32)
 pub struct IoiCurveSpec {
     /// Ascending IOI breakpoints (ms).
     pub thresholds_ms: Vec<f32>,
+    /// Hold each anchor until the next breakpoint instead of interpolating
+    /// (an integer step table, e.g. a KSP value computed with floor / ceil).
+    #[facet(default)]
+    pub step: bool,
     /// Anchor values (ms) at each breakpoint; same length as `thresholds_ms`.
     pub anchors_ms: Vec<f32>,
 }
@@ -1229,6 +1361,13 @@ impl IoiCurveSpec {
         let n = self.thresholds_ms.len().min(self.anchors_ms.len());
         if n == 0 {
             return 0.0;
+        }
+        if self.step {
+            let i = self.thresholds_ms[..n]
+                .iter()
+                .rposition(|t| *t <= ioi_ms)
+                .unwrap_or(0);
+            return self.anchors_ms[i];
         }
         if ioi_ms <= self.thresholds_ms[0] {
             return self.anchors_ms[0];
@@ -1274,20 +1413,24 @@ impl Default for OverlapDelaySpec {
         Self {
             low_latency: OverlapDelayCurveSpec {
                 soft: IoiCurveSpec {
+                    step: false,
                     thresholds_ms: vec![75.0, 100.0, 800.0, 1100.0],
                     anchors_ms: vec![77.0, 0.0, 0.0, 0.0],
                 },
                 loud: IoiCurveSpec {
+                    step: false,
                     thresholds_ms: vec![75.0, 100.0, 800.0, 1100.0],
                     anchors_ms: z4.clone(),
                 },
             },
             expressive: OverlapDelayCurveSpec {
                 soft: IoiCurveSpec {
+                    step: false,
                     thresholds_ms: vec![200.0, 300.0, 800.0, 800.0],
                     anchors_ms: vec![83.0, 0.0, 0.0, 0.0],
                 },
                 loud: IoiCurveSpec {
+                    step: false,
                     thresholds_ms: vec![200.0, 300.0, 800.0, 800.0],
                     anchors_ms: z4,
                 },
@@ -1302,6 +1445,7 @@ impl Default for OverlapDelaySpec {
 /// DEEPER into the transition recording (less audible pre-bow).
 fn default_start_offset_curve() -> IoiCurveSpec {
     IoiCurveSpec {
+        step: false,
         thresholds_ms: vec![100.0, 150.0, 500.0],
         anchors_ms: vec![177.0, 177.0, 117.0],
     }

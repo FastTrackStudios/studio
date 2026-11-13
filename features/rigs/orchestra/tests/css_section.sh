@@ -116,7 +116,9 @@ case "$section" in
     echo "wrote $patch/section.styx ($(grep -c '^        id ' "$patch/section.styx") articulations)"
     exit 0 ;;
   CSB\ *)
-    echo "skipped section.styx (no brass overlay generator yet)"
+    # 3. the brass instrument's numbers
+    python3 -I "$here/csb_instrument_spec.py" "$ksp" > "$patch/section.styx"
+    echo "wrote $patch/section.styx ($(grep -c '^        id ' "$patch/section.styx") articulations)"
     exit 0 ;;
 esac
 # The other sections keep pizzicato in a "Pizz" folder; the articulation is

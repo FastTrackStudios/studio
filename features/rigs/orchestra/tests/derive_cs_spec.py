@@ -56,6 +56,41 @@ LIBS = {
     },
 }
 
+LIBS["brass"] = {
+    "title": "Cinematic Studio Brass",
+    # strings slot -> brass recordings (csb_spec_requirements.md §1)
+    "rename": {
+        "Vsusrel": "Susrel",
+        "Vibsus": "Sus",
+        "Tremrel": "Mutesusrel",
+        "Tremolo": "Mutesus",
+        "Pizzicato": "Mutereps",
+        "Clegno": "Rips",
+        "Harmrel": "Fluttrel",
+        "Harm": "Flutter",
+        "Spiccato": "Repetitions",
+    },
+    # no vibrato dimension, no portamento, no bartok slot
+    "drop": ["Nonvib", "NVrel", "NVLeg", "NVLegzero", "Port", "Bartokpizz"],
+    "drop_blocks": [],
+    # brass articulations with no strings slot, kept from the brass spec
+    "own_articulations": ["Stoppedsus", "Stoppedreps", "Stoppedsusrel", "Taka"],
+    "subs": [
+        (r"\n    vibrato_controller[^\n]*", "", "no vibrato crossfade (no CC2 dimension)"),
+        (r"\n(\s*//[^\n]*\n)*\s*short_note_cc1_map \{[^}]*\}", "",
+         "the KSP never reads CC1 for the short type (CC58 / KS velocity) — verify in Kontakt"),
+        (r"\n    first_note_variants[^\n]*", "", "no first-note body variants (Sus zones vel 1-4, one start)"),
+        (r"\n    first_note_variant_init[^\n]*", "", "(same)"),
+        (r"\n    first_note_attack \{[^\n]*", "", "no attack-voice zones in the vibsus groups"),
+        (r"first_note_mute_ms[^\n]*", "first_note_mute_ms      (0 0)", "no mute wait; zones 2-3 fade in"),
+        (r"(\n\s+)0-10  Sustain", r'\g<1>0-10  "Sus"', "CC58 0-10 = sustain"),
+        (r"overlay \{ articulation Repetitions, cc1_scale \([^)]*\) \}",
+         "overlay { articulation Repetitions, cc1_scale (" + " ".join(["100"] * 128)
+         + "), skip_after_hard_transition false, connected_from_velocity 64 }",
+         "CSB overlay: no Velocomp, every first note, loud connected notes ($evk4m 64)"),
+    ],
+}
+
 TAKE_FROM_STRINGS = ["performance", "dynamics", "articulations", "legato_engine", "short_note_timing"]
 TAKE_FROM_OWN = ["sections", "mics", "keyswitch"]
 
@@ -113,6 +148,28 @@ def drop_articulations(arts, drop):
     return "\n".join(out)
 
 
+def own_articulation_entries(own, ids):
+    """The `    {` … `    }` articulation entries of the library's own spec
+    with these ids, verbatim."""
+    if not ids:
+        return ""
+    arts = block(own, "articulations").split("\n")
+    out, i = [], 0
+    while i < len(arts):
+        if arts[i] == "    {":
+            j = i
+            while arts[j] != "    }":
+                j += 1
+            entry = arts[i : j + 1]
+            m = next((re.match(r"^\s+id\s+(\S+)", l) for l in entry if re.match(r"^\s+id\s+", l)), None)
+            if m and m.group(1) in ids:
+                out.extend(entry)
+            i = j + 1
+            continue
+        i += 1
+    return "\n".join(out) + "\n" if out else ""
+
+
 def rename(text, mapping):
     for old in sorted(mapping, key=len, reverse=True):
         text = re.sub(rf"(?<![A-Za-z]){re.escape(old)}(?![A-Za-z])", mapping[old], text)
@@ -158,6 +215,11 @@ def main():
         b = block(strings, name)
         if name == "articulations":
             b = drop_articulations(b, set(cfg["drop"]))
+            extra = own_articulation_entries(own, cfg.get("own_articulations", []))
+            if extra:
+                b = b.rstrip()
+                assert b.endswith(")")
+                b = b[:-1] + extra + ")"
         b = drop_refs(rename(b, cfg["rename"]), cfg["drop"])
         if name == "dynamics":
             # the pizzicato type map has no pizzicato to pick

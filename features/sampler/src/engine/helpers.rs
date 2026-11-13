@@ -440,6 +440,13 @@ impl SampleEngine {
         // Band → recorded dynamic: 1:1 when counts match, else TOP-align (the
         // extra softest recorded dynamics sit below the short's %g1qri floor).
         let n_dyn = artic.dynamics.len();
+        if n_dyn == 0 {
+            // No recorded dynamics (CSB Rips): any zone at the key and RR.
+            return (
+                String::new(),
+                self.short_velocity_volume_db(artic_id, velocity),
+            );
+        }
         let offset = n_dyn.saturating_sub(n_bands);
         let dyn_idx = (band + offset).min(n_dyn - 1);
         let velvol = self.short_velocity_volume_db(artic_id, velocity);

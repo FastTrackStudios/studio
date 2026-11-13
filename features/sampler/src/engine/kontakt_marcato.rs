@@ -193,7 +193,10 @@ impl SampleEngine {
                 )
             })
             .flatten();
-        let lt_retire = ksp_lerp(&mt.lt_retire_ms, ioi) as f32;
+        let class = usize::from(hard);
+        let lt_retire = mt
+            .lt_retire_ms_by_class
+            .map_or_else(|| ksp_lerp(&mt.lt_retire_ms, ioi) as f32, |c| c[class]);
         self.voices.marcato_retire(
             line,
             from,
@@ -239,13 +242,18 @@ impl SampleEngine {
 
         // 4. The marc-leg transition sample, per marcato dynamic layer.
         if !big {
-            let lt_ms = ksp_lerp(&mt.lt_offset_ms, ioi) as f32;
+            let lt_ms = mt
+                .lt_offset_ms_by_class
+                .map_or_else(|| ksp_lerp(&mt.lt_offset_ms, ioi) as f32, |c| c[class]);
             let lt_db_tab = if interval <= 2 {
                 &mt.lt_db_step
             } else {
                 &mt.lt_db_leap
             };
-            let lt_db = lerp_table(lt_db_tab, ioi as f32) + mt.lt_group_db;
+            let lt_db = mt
+                .lt_db_by_class
+                .map_or_else(|| lerp_table(lt_db_tab, ioi as f32), |c| c[class])
+                + mt.lt_group_db;
             let lt_env: Vec<(f32, f32, f32)> = mt
                 .lt_env
                 .iter()
@@ -253,6 +261,16 @@ impl SampleEngine {
                 .collect();
             let lt_env = voice::FlexEnv::from_segments(&lt_env, 0.0, sr, false);
             self.spawn_marcato_lt(mt, from, to, u32::from(interval), lt_ms, lt_db, lt_env);
+        }
+        // A loud connected note plays the overlay too (CSB).
+        let connected_from = self
+            .patch
+            .spec
+            .articulation(&self.articulation)
+            .and_then(|a| a.overlay.as_ref())
+            .and_then(|o| o.connected_from_velocity);
+        if connected_from.is_some_and(|v| velocity >= v) {
+            self.spawn_marcato_overlay_unconditional(to, velocity);
         }
         let l = self.line_mut();
         l.note = Some(to);

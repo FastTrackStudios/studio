@@ -5,7 +5,7 @@
 //! in `KontaktTransitionSpec`'s doc and the orchestra decode notes.
 
 use super::*;
-use crate::spec::{KontaktTransitionSpec, css_transition_ccs};
+use crate::spec::KontaktTransitionSpec;
 
 /// The transition voice's phrase-start dip: a measured recovery curve, or a
 /// plain linear ramp back from `(gain, frames)`.
@@ -46,18 +46,24 @@ impl SampleEngine {
         let sr = self.sample_rate;
         let ms = move |v: f32| ms_to_frames_f(v, sr);
 
-        // 1. Retire the old pair with linear fades: the body over
-        //    `old_body_fade_ms` (500 beyond an octave), the previous transition
-        //    voice over 250 → 400 ms by IOI (low latency) / flat 400 (expressive).
-        let lt_retire_ms = if expressive {
-            400.0
-        } else {
-            250.0 + 150.0 * ((ioi_ms - 150.0) / 150.0).clamp(0.0, 1.0)
-        };
+        // 1. Retire the old pair with linear fades: the body over the
+        //    zone's old-body fade (the big-leap one beyond an octave), the
+        //    previous transition voice by IOI (`lt_retire`).
+        let lt_retire_ms = kt.lt_retire.as_ref().map_or(0.0, |r| {
+            let curve = match &r.loud {
+                Some(loud) if zone >= r.loud_from_zone => loud,
+                _ if expressive => &r.expressive,
+                _ => &r.low_latency,
+            };
+            curve.value_at(ioi_ms)
+        });
         let old_body_ms = if big_leap {
             kt.big_leap_old_fade_ms
         } else {
-            kt.old_body_fade_ms
+            kt.old_body_fade_by_zone_ms
+                .get(usize::from(zone.clamp(1, 3) - 1))
+                .copied()
+                .unwrap_or(kt.old_body_fade_ms)
         };
         self.voices
             .fade_out_note_line(line, from, ms(lt_retire_ms), ms(old_body_ms));
@@ -76,6 +82,12 @@ impl SampleEngine {
             (ms(kt.body_wait_ms), ms(kt.body_fade_ms))
         };
         self.sustain_fade_in = Some((wait, fade, fade, 0));
+        // Per-layer handoff (each layer on its own clock), ms per layer.
+        let handoff = self.kontakt_handoff(kt, from, to, zone, big_leap);
+        self.sustain_fade_in_by_dyn = handoff
+            .iter()
+            .map(|(d, w, f)| (d.clone(), (ms(*w), ms(*f), ms(*f), 0)))
+            .collect();
         self.spawn_extra_start = if big_leap {
             ms(kt.big_leap_body_offset_ms)
         } else {
@@ -97,6 +109,7 @@ impl SampleEngine {
         self.spawn_variant = None;
         self.spawn_extra_start = 0;
         self.sustain_fade_in = None;
+        self.sustain_fade_in_by_dyn.clear();
 
         // 4. The transition sample (interval ≤ an octave): the LOWER note's
         //    interval-coded zone of BOTH CC2 sides, entered at the mode/zone
@@ -109,9 +122,51 @@ impl SampleEngine {
             let offset = ms(base_ms + od_ms);
             let env = self.kontakt_transition_env(kt, expressive, zone, ioi_ms);
             let dip = self.kontakt_phrase_dip(kt);
+            let ioi_dip_db = kt
+                .lt_ioi_dip
+                .as_ref()
+                .map(|d| (d.db.value_at(ioi_ms), d.recover_ms));
             let (leg_nv, leg_vib) = self.legato_pair_ids(false);
             for leg in [leg_nv, leg_vib].into_iter().flatten() {
-                self.spawn_kontakt_lt(&leg, from, to, interval, offset, env.clone(), dip.clone());
+                if handoff.is_empty() && ioi_dip_db.is_none() {
+                    self.spawn_kontakt_lt(
+                        &leg,
+                        from,
+                        to,
+                        interval,
+                        offset,
+                        env.clone(),
+                        dip.clone(),
+                    );
+                    continue;
+                }
+                // Per layer: the IOI dip and the fade-out along the body's
+                // handoff, as one gain envelope.
+                let dyns = self
+                    .patch
+                    .spec
+                    .articulation(&leg)
+                    .map(|a| a.dynamics.clone())
+                    .unwrap_or_default();
+                for label in dyns {
+                    let (w, f) = handoff
+                        .iter()
+                        .find(|(d, _, _)| d.eq_ignore_ascii_case(&label))
+                        .map_or((0.0, 0.0), |(_, w, f)| (*w, *f));
+                    let shape =
+                        lt_gain_shape(ioi_dip_db, &kt.lt_fade_curve_db, w, f, self.sample_rate);
+                    let d = shape.map(KontaktDip::Curve).or_else(|| dip.clone());
+                    self.spawn_kontakt_lt_layer(
+                        &leg,
+                        &label,
+                        from,
+                        to,
+                        interval,
+                        offset,
+                        env.clone(),
+                        d,
+                    );
+                }
             }
         }
         self.line_mut().note = Some(to);
@@ -127,7 +182,10 @@ impl SampleEngine {
         zone: u8,
         ioi_ms: f32,
     ) -> Option<voice::FlexEnv> {
-        let (cc66, cc67) = css_transition_ccs(expressive, zone, ioi_ms);
+        let (cc66, cc67) = kt
+            .lt_node
+            .as_ref()
+            .map_or((127.0, 127.0), |n| n.ccs(expressive, zone, ioi_ms));
         let node = (cc66 * cc67) / (127.0 * 127.0);
         let seg0 = if expressive {
             kt.lt_seg0_ms_expressive
@@ -181,6 +239,52 @@ impl SampleEngine {
         self.spawn_kontakt_lt_at(leg, from, to, interval, offset, env, dip, 1.0);
     }
 
+    /// Each layer's (dynamic, wait ms, fade ms) for this transition: the
+    /// high-key override, else the layer table (the re-strike one for the
+    /// same key). Empty when the library hands every layer over alike.
+    fn kontakt_handoff(
+        &self,
+        kt: &KontaktTransitionSpec,
+        from: u8,
+        to: u8,
+        zone: u8,
+        big_leap: bool,
+    ) -> Vec<(String, f32, f32)> {
+        let table = if from == to && !kt.retrigger_body_handoff.is_empty() {
+            &kt.retrigger_body_handoff
+        } else {
+            &kt.body_handoff
+        };
+        let high = kt
+            .high_key_handoff
+            .as_ref()
+            .filter(|h| from.max(to) >= h.min_key && !big_leap);
+        table
+            .iter()
+            .map(|b| {
+                let (w, f) =
+                    high.map_or_else(|| b.for_zone(zone, big_leap), |h| (h.wait_ms, h.fade_ms));
+                (b.dynamic.clone(), w, f)
+            })
+            .collect()
+    }
+
+    /// One layer (`label`) of [`spawn_kontakt_lt`](Self::spawn_kontakt_lt).
+    #[allow(clippy::too_many_arguments)]
+    fn spawn_kontakt_lt_layer(
+        &mut self,
+        leg: &str,
+        label: &str,
+        from: u8,
+        to: u8,
+        interval: u32,
+        offset: usize,
+        env: Option<voice::FlexEnv>,
+        dip: Option<KontaktDip>,
+    ) {
+        self.spawn_kontakt_lt_layers(leg, Some(label), from, to, interval, offset, env, dip, 1.0);
+    }
+
     /// [`spawn_kontakt_lt`](Self::spawn_kontakt_lt) at an extra `level`.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn spawn_kontakt_lt_at(
@@ -194,12 +298,34 @@ impl SampleEngine {
         dip: Option<KontaktDip>,
         level: f32,
     ) {
+        self.spawn_kontakt_lt_layers(leg, None, from, to, interval, offset, env, dip, level);
+    }
+
+    /// The transition voices of `leg`'s layers (only `only`, when given).
+    #[allow(clippy::too_many_arguments)]
+    fn spawn_kontakt_lt_layers(
+        &mut self,
+        leg: &str,
+        only: Option<&str>,
+        from: u8,
+        to: u8,
+        interval: u32,
+        offset: usize,
+        env: Option<voice::FlexEnv>,
+        dip: Option<KontaktDip>,
+        level: f32,
+    ) {
         let lower = from.min(to);
         let direction = if to > from { "up" } else { "down" };
         let Some(a) = self.patch.spec.articulation(leg) else {
             return;
         };
-        let dyns = a.dynamics.clone();
+        let dyns: Vec<String> = a
+            .dynamics
+            .iter()
+            .filter(|d| only.is_none_or(|o| d.eq_ignore_ascii_case(o)))
+            .cloned()
+            .collect();
         for label in dyns {
             let g = self.group_curve_gain(leg, &label).unwrap_or(1.0) * level;
             if g <= 0.0 {
@@ -238,4 +364,63 @@ impl SampleEngine {
             }
         }
     }
+}
+
+/// A transition layer's gain over time: the IOI dip `(dB, recover ms)`
+/// recovering linearly to 0 dB, times the fade-out `curve_db` (evenly spaced
+/// points) over `fade_ms` after `wait_ms`, then silence. `None` when neither
+/// applies. Both shapes are piecewise linear in gain; their product is taken
+/// at every breakpoint of either.
+fn lt_gain_shape(
+    ioi_dip: Option<(f32, f32)>,
+    curve_db: &[f32],
+    wait_ms: f32,
+    fade_ms: f32,
+    sample_rate: u32,
+) -> Option<voice::FlexEnv> {
+    let dip = ioi_dip.filter(|(db, _)| *db < 0.0);
+    let fade = (!curve_db.is_empty() && fade_ms > 0.0).then_some(());
+    if dip.is_none() && fade.is_none() {
+        return None;
+    }
+    // (time ms, gain) breakpoints of each shape
+    let dip_pts: Vec<(f32, f32)> = match dip {
+        Some((db, rec)) => vec![(0.0, db_to_gain(db)), (rec.max(1.0), 1.0)],
+        None => vec![(0.0, 1.0)],
+    };
+    let mut fade_pts: Vec<(f32, f32)> = vec![(0.0, 1.0)];
+    if fade.is_some() {
+        let n = curve_db.len();
+        for (i, db) in curve_db.iter().enumerate() {
+            let t = wait_ms + fade_ms * i as f32 / (n.max(2) - 1) as f32;
+            fade_pts.push((t, db_to_gain(*db)));
+        }
+        fade_pts.push((wait_ms + fade_ms + 1.0, 0.0));
+    }
+    let at = |pts: &[(f32, f32)], t: f32| -> f32 {
+        if t <= pts[0].0 {
+            return pts[0].1;
+        }
+        for w in pts.windows(2) {
+            if t <= w[1].0 {
+                let span = (w[1].0 - w[0].0).max(1e-6);
+                return w[0].1 + (w[1].1 - w[0].1) * (t - w[0].0) / span;
+            }
+        }
+        pts[pts.len() - 1].1
+    };
+    let mut times: Vec<f32> = dip_pts.iter().chain(fade_pts.iter()).map(|p| p.0).collect();
+    times.sort_by(f32::total_cmp);
+    times.dedup_by(|a, b| (*a - *b).abs() < 0.5);
+    let start = at(&dip_pts, 0.0) * at(&fade_pts, 0.0);
+    let mut segs = Vec::new();
+    let mut prev = 0.0f32;
+    for &t in times.iter().filter(|t| **t > 0.0) {
+        segs.push((t - prev, at(&dip_pts, t) * at(&fade_pts, t), 0.5));
+        prev = t;
+    }
+    if segs.is_empty() {
+        segs.push((1.0, start, 0.5));
+    }
+    voice::FlexEnv::from_segments(&segs, start, sample_rate, false)
 }

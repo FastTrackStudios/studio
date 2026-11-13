@@ -1150,8 +1150,23 @@ impl SampleEngine {
     fn spawn_marcato_overlay(&mut self, note: u8, velocity: u8) {
         // `$kbqnb` is the last transition's: a loud first note after a pause
         // still plays the Spiccato overlay (null test: every section's
-        // marcato+overlay v120 first note).
-        if !self.marcato_overlay || self.marcato_kbqnb {
+        // marcato+overlay v120 first note) — where the library skips it
+        // after a hard transition (`OverlaySpec::skip_after_hard_transition`).
+        let skip_hard = self
+            .patch
+            .spec
+            .articulation(&self.articulation)
+            .and_then(|a| a.overlay.as_ref())
+            .is_none_or(|o| o.skip_after_hard_transition);
+        if skip_hard && self.marcato_kbqnb {
+            return;
+        }
+        self.spawn_marcato_overlay_unconditional(note, velocity);
+    }
+
+    /// The marcato overlay voice, whenever the overlay is switched on.
+    pub(crate) fn spawn_marcato_overlay_unconditional(&mut self, note: u8, velocity: u8) {
+        if !self.marcato_overlay {
             return;
         }
         let Some(ov) = self
@@ -1313,7 +1328,10 @@ impl SampleEngine {
         artic: &crate::spec::ArticulationSpec,
         velocity: u8,
     ) -> Option<(usize, usize, i32, i32)> {
-        if artic.dynamics.is_empty() {
+        // One band and no recorded dynamics is a band too when the library
+        // gives its dB (CSB Rips: `%tccxl[0]` over velocity 1-127).
+        let single = !artic.vel_layer_db.is_empty();
+        if artic.dynamics.is_empty() && !single {
             return None;
         }
         // Interior boundaries = thresholds, minus a trailing terminal 127.
@@ -1321,7 +1339,7 @@ impl SampleEngine {
         if bounds.last() == Some(&127) {
             bounds.pop();
         }
-        if bounds.is_empty() {
+        if bounds.is_empty() && !single {
             return None;
         }
         let n_bands = bounds.len() + 1;
@@ -2933,7 +2951,12 @@ impl SampleEngine {
         // IMMEDIATELY at full level, it is NOT muted/held silent. Overrides the
         // normal attack for this voice only.
         let fade_in_under = if is_sustain_layer {
-            self.sustain_fade_in
+            let layer = &self.patch.spec.zones[idx].dynamic;
+            self.sustain_fade_in_by_dyn
+                .iter()
+                .find(|(d, _)| d.eq_ignore_ascii_case(layer))
+                .map(|(_, f)| *f)
+                .or(self.sustain_fade_in)
         } else if matches!(kind, VoiceKind::Legato) {
             // Transition voice: emerge via the two-stage swell (delay 0 — the
             // `start_hold` above already provides the silent pre-roll).

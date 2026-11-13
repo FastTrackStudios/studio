@@ -142,7 +142,7 @@ def main():
         rec = recorded_dynamics(zones, group_names, prefix, aid)
         cs = [(rec[dyn], cc, pts) for dyn, cc, pts in css.curves(groups, prefix, (), rel=True) if dyn in rec]
         if cs:
-            emit_curves(aid, cs)
+            emit_curves(aid, cs, list(dict.fromkeys(dyn for dyn, _, _ in cs)))
     marcato(pers)
     print(")")
     legato(pers)
