@@ -939,7 +939,12 @@ fn zones_sync_tsv(
     let (tgt, spec_text) = Target::open(target)?;
     let (mut matched, mut unmatched, mut unreachable) = (0usize, 0usize, 0usize);
     let mut field_changes: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let borrowed = load_borrowed_zones(tsv, section)?;
     let (new_spec, changed) = edit_zones(&spec_text, |block| {
+        // borrowed zones are regenerated below
+        if styx_edit::entry_field(block, "borrowed").as_deref() == Some("true") {
+            return Some(String::new());
+        }
         let file = styx_edit::entry_field(block, "file")?;
         let Some(z) = by_file.get(file.as_str()) else {
             unmatched += 1;
@@ -975,6 +980,21 @@ fn zones_sync_tsv(
         (b != block).then_some(b)
     })?;
 
+    let mut new_spec = new_spec;
+    if !borrowed.is_empty() {
+        let (_, _, ie, _) = styx_edit::find_list_block(&new_spec, "zones")
+            .ok_or_else(|| eyre::eyre!("spec has no `zones (…)` block"))?;
+        let mut appended = String::new();
+        for z in &borrowed {
+            appended.push_str(&emit_borrowed_block(z, section));
+        }
+        new_spec.insert_str(ie, &appended);
+        println!(
+            "  {} borrowed zone(s): another articulation's recordings in a short group",
+            borrowed.len()
+        );
+    }
+    let changed = changed + borrowed.len();
     println!("{matched} zone(s) matched a tsv file, {unmatched} did not, {changed} edited");
     if unreachable > 0 {
         println!("  {unreachable} sustain zone(s) on velocities Kontakt never plays: disabled");
@@ -1383,6 +1403,204 @@ fn load_tsv_zones(
         }
     }
     Ok(by_file)
+}
+
+/// The short articulation a CSS group family plays (`Mix spiccato` →
+/// `Spiccato`), for the groups whose zones may borrow other recordings.
+fn cs_short_group_artic(family: &str) -> Option<&'static str> {
+    Some(match family {
+        "spiccato" => "Spiccato",
+        "staccatissimo" => "Staccatissimo",
+        "staccato" => "Staccato",
+        "sfz" => "Sfz",
+        "pizzicato" => "Pizzicato",
+        "bartok" => "Bartokpizz",
+        "col legno" => "Clegno",
+        _ => return None,
+    })
+}
+
+/// A zone the NKI maps into another articulation's group (see
+/// `ZoneSpec::borrowed`): the short group's articulation, the dynamic and RR
+/// its own recordings carry on the same velocity, the borrowed file's
+/// level and start.
+struct BorrowedZone {
+    file: String,
+    mic: String,
+    articulation: String,
+    dynamic: String,
+    rr_index: u32,
+    key_min: u8,
+    key_max: u8,
+    root_key: u8,
+    tune_cents: f64,
+    gain_db: f64,
+    sample_start: u64,
+}
+
+/// The borrowed zones of a decoded NKI, from `zones.tsv`'s `group` column
+/// and the `groups.json` beside it; empty for an older decode.
+fn load_borrowed_zones(tsv: &Path, section_label: &str) -> Result<Vec<BorrowedZone>> {
+    let Some(groups_path) = tsv.parent().map(|d| d.join("groups.json")) else {
+        return Ok(Vec::new());
+    };
+    let text = std::fs::read_to_string(tsv)?;
+    let mut lines = text.lines();
+    let header: Vec<&str> = lines.next().unwrap_or("").split('\t').collect();
+    let col = |name: &str| header.iter().position(|h| *h == name);
+    let (Some(c_group), Ok(groups_text)) = (col("group"), std::fs::read_to_string(&groups_path))
+    else {
+        return Ok(Vec::new());
+    };
+    let groups: Vec<serde_json::Value> = serde_json::from_str(&groups_text)?;
+    let names: Vec<String> = groups
+        .iter()
+        .map(|g| g["name"].as_str().unwrap_or("").to_string())
+        .collect();
+    let need = |n: &str| col(n).ok_or_else(|| eyre::eyre!("zones.tsv missing column {n:?}"));
+    let (c_klo, c_khi, c_vlo, c_root, c_tune, c_zvol, c_sample, c_start) = (
+        need("key_lo")?,
+        need("key_hi")?,
+        need("vel_lo")?,
+        need("root")?,
+        need("tune")?,
+        need("zvol")?,
+        need("sample")?,
+        need("sample_start")?,
+    );
+    struct Row {
+        group: String,
+        artic: String,
+        mic: String,
+        rest: Vec<String>,
+        rr: u32,
+        vel: i32,
+        key: (i32, i32),
+        root: i32,
+        tune: f64,
+        zvol: f64,
+        start: u64,
+    }
+    let mut rows = Vec::new();
+    for line in lines {
+        let f: Vec<&str> = line.split('\t').collect();
+        let Some(g) = f
+            .get(c_group)
+            .and_then(|v| v.parse::<usize>().ok())
+            .and_then(|i| names.get(i))
+        else {
+            continue;
+        };
+        let sample = f.get(c_sample).copied().unwrap_or("");
+        let base = sample.rsplit('/').next().unwrap_or(sample);
+        let stem = base.strip_suffix(".ncw").unwrap_or(base);
+        let parts: Vec<&str> = stem.split('_').collect();
+        if parts.len() < 4 {
+            continue;
+        }
+        let num = |c: usize| f.get(c).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+        rows.push(Row {
+            group: g.clone(),
+            artic: parts[1].to_string(),
+            mic: parts[2].to_string(),
+            rest: parts[3..].iter().map(|s| (*s).to_string()).collect(),
+            rr: parts
+                .last()
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(1)
+                .saturating_sub(1),
+            vel: num(c_vlo) as i32,
+            key: (num(c_klo) as i32, num(c_khi) as i32),
+            root: num(c_root) as i32,
+            tune: num(c_tune),
+            zvol: num(c_zvol),
+            start: num(c_start).max(0.0) as u64,
+        });
+    }
+    fn own_artic(a: &str) -> &str {
+        if a == "Pizz" { "Pizzicato" } else { a }
+    }
+    // (group, velocity) → the (dynamic, RR) the group's own recordings carry
+    let mut own: BTreeMap<(String, i32), (String, u32)> = BTreeMap::new();
+    for r in &rows {
+        let family = r.group.split_once(' ').map_or("", |(_, f)| f);
+        if cs_short_group_artic(family) == Some(own_artic(&r.artic)) {
+            own.entry((r.group.clone(), r.vel))
+                .or_insert_with(|| (r.rest[0].clone(), r.rr));
+        }
+    }
+    let mut out = Vec::new();
+    for r in &rows {
+        let family = r.group.split_once(' ').map_or("", |(_, f)| f);
+        let Some(artic) = cs_short_group_artic(family) else {
+            continue;
+        };
+        if artic == own_artic(&r.artic) {
+            continue;
+        }
+        let Some((dynamic, rr)) = own.get(&(r.group.clone(), r.vel)) else {
+            continue;
+        };
+        let Some(cat) = cs_category(&r.artic) else {
+            continue;
+        };
+        out.push(BorrowedZone {
+            file: format!(
+                "{}/{section_label}/{cat}/{}/{}.wav",
+                r.mic,
+                r.artic,
+                r.rest.join("_")
+            ),
+            mic: r.mic.clone(),
+            articulation: artic.to_string(),
+            dynamic: dynamic.clone(),
+            rr_index: *rr,
+            key_min: r.key.0.clamp(0, 127) as u8,
+            key_max: r.key.1.clamp(0, 127) as u8,
+            root_key: r.root.clamp(0, 127) as u8,
+            tune_cents: if r.tune > 0.0 {
+                1200.0 * r.tune.log2()
+            } else {
+                0.0
+            },
+            gain_db: if r.zvol > 0.0 {
+                20.0 * r.zvol.log10()
+            } else {
+                0.0
+            },
+            sample_start: r.start,
+        });
+    }
+    Ok(out)
+}
+
+fn emit_borrowed_block(z: &BorrowedZone, section: &str) -> String {
+    let mut s = String::from("    {\n");
+    let mut f = |k: &str, v: String| {
+        let _ = write!(s, "        {k:<12} {v}\n");
+    };
+    f("section", format!("{section:?}"));
+    f("file", format!("{:?}", z.file));
+    f("key_min", z.key_min.to_string());
+    f("key_max", z.key_max.to_string());
+    f("root_key", z.root_key.to_string());
+    f("vel_min", "0".into());
+    f("vel_max", "127".into());
+    f("rr_index", z.rr_index.to_string());
+    f("mic", format!("{:?}", z.mic));
+    f("articulation", format!("{:?}", z.articulation));
+    f("dynamic", format!("{:?}", z.dynamic));
+    f("gain_db", format!("{:.3}", z.gain_db));
+    let cents = if z.tune_cents.abs() < 1e-2 {
+        0.0
+    } else {
+        z.tune_cents
+    };
+    f("tune_cents", format!("{cents:.3}"));
+    f("sample_start", z.sample_start.to_string());
+    f("borrowed", "true".into());
+    s.push_str("    }\n");
+    s
 }
 
 fn emit_zone_block(z: &TsvZone) -> String {

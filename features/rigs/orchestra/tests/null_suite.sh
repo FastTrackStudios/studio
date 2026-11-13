@@ -9,7 +9,7 @@
 # Kontakt's random draws from deterministic notes), renders ours
 # (render_css_live --section) and scores the pair (null_test.py).
 #
-#   modes: probe legato leg2 marcato marc2 shorts pizz trem rebow
+#   modes: probe legato leg2 marcato marc2 shorts pizz trem rebow attack
 #
 # The Kontakt chain is target/orchestra-ab/chains/fxchain_<tag>.txt — the
 # track <FXCHAIN> of a REAPER project with the factory CSS <Section> loaded
@@ -34,7 +34,7 @@ case "$section" in
   *) echo "unknown section: $section" >&2; exit 1 ;;
 esac
 modes=("$@")
-[ ${#modes[@]} -gt 0 ] || modes=(probe legato leg2 marcato marc2 shorts pizz trem rebow)
+[ ${#modes[@]} -gt 0 ] || modes=(probe legato leg2 marcato marc2 shorts pizz trem rebow attack)
 
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../../../.." && pwd)"
@@ -69,6 +69,7 @@ flags_for() {
     pizz) echo "--shorts --pizz" ;;
     trem) echo "--tremolo" ;;
     rebow) echo "--tremolo --rebow" ;;
+    attack) echo "--attack" ;;
     *) echo "unknown mode: $1" >&2; return 1 ;;
   esac
 }

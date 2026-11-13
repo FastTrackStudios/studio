@@ -1547,6 +1547,7 @@ fn zone_from_sfz(
         sample_start: sfz_u32(group, region, "offset").unwrap_or(0),
         variant_starts: Vec::new(),
         disabled: false,
+        borrowed: false,
         marcato_start: 0,
         marcato_gains_db: Vec::new(),
         sample_end: sfz_u32(group, region, "end").unwrap_or(0),
@@ -2712,6 +2713,12 @@ pub struct ZoneSpec {
     /// spiccato C1…: Kontakt plays its A#1… zones there). Never played.
     #[facet(default)]
     pub disabled: bool,
+    /// A zone the NKI maps into ANOTHER articulation's group (CSS Violas'
+    /// spiccato bands play Staccatissimo recordings; 1st Violins layers a
+    /// quiet Staccatissimo under its top Spiccato notes). Written by
+    /// `zones sync-tsv` from the decoded group column, regenerated each sync.
+    #[facet(default)]
+    pub borrowed: bool,
     /// A transition zone's MARCATO entry (CSS `marc leg` zones over this same
     /// file): the sample frame those zones start at (0 = none) …
     #[facet(default)]

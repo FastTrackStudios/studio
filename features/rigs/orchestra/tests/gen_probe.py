@@ -217,6 +217,18 @@ def main():
         finish(m, rows, t)
         return
 
+    if "--attack" in sys.argv:
+        # Loud first notes with vibrato up: CSS plays an attack voice from
+        # the vibsus groups' attack zones (a Staccato at velocity 5-7 in
+        # zone 2, an Sfz at 8-9 in zone 3, drawn at random), which nonvib
+        # (CC2=0) never shows. Twice each, to see the draw vary.
+        for vel in (80, 80, 120, 120):
+            for key in (67, 72):
+                unit("SUS-VATK", f"vibsus ff key{key} v{vel} (attack voice)", key, vel, 127, 127, 2.0)
+        unit("SUS-VATK", "vib/nonvib CC2=64 key67 v120", 67, 120, 127, 64, 2.0)
+        finish(m, rows, t)
+        return
+
     if "--tunes" in sys.argv:
         # One single-voice note (nonvib ff, CC1=127, CC2=0, velocity 40) per
         # playable key: Kontakt's effective playback rate per zone, to find

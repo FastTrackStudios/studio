@@ -1042,14 +1042,38 @@ impl SampleEngine {
             None => self.find_layer_zone(&artic, "", &dynamic, note, rr),
         };
         if let Some(idx) = idx {
-            self.spawn_zone_voice(
-                idx,
-                note,
-                VoiceKind::Short,
-                gain,
-                None,
-                f64::from(tune_cents) / 100.0,
-            );
+            // Kontakt plays every zone its group maps at this key and
+            // velocity: the borrowed zones layer (CSS 1st Violins' top
+            // Spiccato notes carry a quiet Staccatissimo) or stand in.
+            let z = &self.patch.spec.zones[idx];
+            let (dynamic_of, rr_of, mic_of) = (z.dynamic.clone(), z.rr_index, z.mic.clone());
+            let layers: Vec<usize> = self
+                .patch
+                .spec
+                .zones
+                .iter()
+                .enumerate()
+                .filter(|(i, o)| {
+                    *i != idx
+                        && !o.disabled
+                        && o.rr_index == rr_of
+                        && (o.key_min..=o.key_max).contains(&note)
+                        && o.articulation.eq_ignore_ascii_case(&artic)
+                        && o.dynamic.eq_ignore_ascii_case(&dynamic_of)
+                        && o.mic.eq_ignore_ascii_case(&mic_of)
+                })
+                .map(|(i, _)| i)
+                .collect();
+            for i in std::iter::once(idx).chain(layers) {
+                self.spawn_zone_voice(
+                    i,
+                    note,
+                    VoiceKind::Short,
+                    gain,
+                    None,
+                    f64::from(tune_cents) / 100.0,
+                );
+            }
         }
     }
 

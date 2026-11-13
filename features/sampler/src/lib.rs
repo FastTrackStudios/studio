@@ -625,6 +625,7 @@ impl PlayerPatch {
                     sample_start: 0,
                     variant_starts: Vec::new(),
                     disabled: false,
+                    borrowed: false,
                     marcato_start: 0,
                     marcato_gains_db: Vec::new(),
                     sample_end: 0,
