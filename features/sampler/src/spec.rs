@@ -1006,6 +1006,7 @@ pub struct ArticulationOverlay {
     pub vel_thresholds: Option<Vec<u8>>,
     pub vel_layer_db: Option<Vec<f32>>,
     pub rr_sequence: Option<Vec<u8>>,
+    pub rr_random_avoid_last: Option<u8>,
     pub rr_per_note: Option<bool>,
     pub group_curves: Option<Vec<GroupCurveSpec>>,
     pub amp_env: Option<Vec<EnvSegmentSpec>>,
@@ -1049,6 +1050,9 @@ impl SectionOverlay {
             }
             if let Some(v) = &o.rr_sequence {
                 a.rr_sequence.clone_from(v);
+            }
+            if let Some(v) = o.rr_random_avoid_last {
+                a.rr_random_avoid_last = v;
             }
             if let Some(v) = o.rr_per_note {
                 a.rr_per_note = v;
@@ -2076,6 +2080,12 @@ pub struct ArticulationSpec {
     /// engine's own rotation.
     #[facet(default)]
     pub rr_sequence: Vec<u8>,
+    /// Random short round robins: each strike draws an RR at random and
+    /// draws again while it equals one of the last `N` this KEY played (the
+    /// history is per key, shared by every short type). 0 = off. CS
+    /// Woodwinds / Brass: 2 (KSP `random(1,n)` against `%h5aha`/`%z0q4q`).
+    #[facet(default)]
+    pub rr_random_avoid_last: u8,
     /// Per velocity band, `(compare, store)`: which band's last-RR memory the
     /// no-repeat rule reads and which it writes. Empty = each band its own.
     /// CSS pizzicato reads an unwritten table in bands 2 and 4 and writes

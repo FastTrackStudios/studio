@@ -143,6 +143,14 @@ fn main() -> eyre::Result<()> {
             .unwrap_or_default();
         rig.force_random_tunes(ID, &tunes);
     }
+    // `--rrs a,b,…`: random short RR draws (0-based; woodwinds / brass).
+    if let Some(i) = args.iter().position(|a| a == "--rrs") {
+        let v: Vec<u8> = args
+            .get(i + 1)
+            .map(|s| s.split(',').filter_map(|v| v.trim().parse().ok()).collect())
+            .unwrap_or_default();
+        rig.force_random_rrs(ID, &v);
+    }
     // `--attacks a,b,…`: loud first-note attack draws (index into the range).
     if let Some(i) = args.iter().position(|a| a == "--attacks") {
         let v: Vec<u8> = args

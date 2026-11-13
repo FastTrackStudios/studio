@@ -62,10 +62,16 @@ work="$repo/target/orchestra-ab/sec/$tag"
 bin="${BIN:-$repo/target/x86_64-unknown-linux-gnu/desktop-dev/examples/render_css_live}"
 [ -f "$chain" ] || { echo "no Kontakt chain: $chain" >&2; exit 1; }
 [ -x "$bin" ] || { echo "render_css_live not built: $bin" >&2; exit 1; }
-# shellcheck disable=SC2016  # $HOME is the remote one
-remote_home="$(timeout 20 ssh "$host" 'echo $HOME')"
-remote="$remote_home/orchestra-ab/sec/$tag"
-timeout 20 ssh "$host" "mkdir -p '$remote'"
+# The Kontakt host is reached only when a render is missing (SKIP_KONTAKT
+# with every render in place works with voyager away).
+remote=""
+remote_dir() {
+  if [ -z "$remote" ]; then
+    # shellcheck disable=SC2016  # $HOME is the remote one
+    remote="$(timeout 20 ssh "$host" 'echo $HOME')/orchestra-ab/sec/$tag"
+    timeout 20 ssh "$host" "mkdir -p '$remote'"
+  fi
+}
 
 # python with numpy (null_test.py): the system one if it has it, else nix
 npy() {
@@ -99,6 +105,7 @@ for mode in "${modes[@]}"; do
   python3 -I "$here/gen_probe.py" "$d/$mode.mid" "$d/${mode}_manifest.tsv" "${fl[@]}" "--transpose=$tr" >/dev/null
 
   if [ -z "${SKIP_KONTAKT:-}" ] || [ ! -f "$d/${mode}_kontakt_r2.wav" ]; then
+    remote_dir
     for r in r1 r2; do
       python3 -I "$here/make_ab_rpp.py" "$chain" "$d/$mode.mid" \
         "$remote/${mode}_kontakt_$r.wav" "$d/${mode}_$r.rpp" >/dev/null

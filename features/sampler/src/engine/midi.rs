@@ -1066,7 +1066,9 @@ impl SampleEngine {
             self.zone_rr_counter = self.zone_rr_counter.wrapping_add(1);
             rr
         };
-        let seq_rr = self.short_sequence_rr(&artic, note, velocity);
+        let seq_rr = self
+            .short_sequence_rr(&artic, note, velocity)
+            .or_else(|| self.short_random_rr(&artic, note));
         let tune_cents = self.short_random_tune(&artic, note);
 
         // VELOCITY → dynamic layer (`%g1qri` band) + intra-band volume (`$arhiq`).
@@ -1171,6 +1173,37 @@ impl SampleEngine {
         self.trigger_zoned_short(note, v);
         self.suppress_random_tune = false;
         self.articulation = keep;
+    }
+
+    /// A random short RR that is none of the last
+    /// `ArticulationSpec::rr_random_avoid_last` RRs this key played (0-based),
+    /// or `None` when the articulation does not draw at random.
+    fn short_random_rr(&mut self, artic_id: &str, note: u8) -> Option<usize> {
+        let a = self.patch.spec.articulation(artic_id)?;
+        let avoid = usize::from(a.rr_random_avoid_last).min(3);
+        let n = a.rr;
+        if avoid == 0 || n == 0 {
+            return None;
+        }
+        let key = usize::from(note & 127);
+        let recent = self.short_rr_hist[key];
+        let pick = if let Some(f) = self.forced_rrs.pop_front() {
+            usize::from(f) % n
+        } else if n <= avoid {
+            // Nothing is free: Kontakt would spin forever; take the oldest.
+            usize::from(recent[avoid - 1]).min(n - 1)
+        } else {
+            loop {
+                let r = next_zone_random(&mut self.tune_rng) % n;
+                if !recent[..avoid].contains(&(r as u8)) {
+                    break r;
+                }
+            }
+        };
+        let h = &mut self.short_rr_hist[key];
+        h.copy_within(0..3, 1);
+        h[0] = pick as u8;
+        Some(pick)
     }
 
     /// Kontakt's short RR pick (`ArticulationSpec::rr_sequence`, KSP
@@ -3479,6 +3512,7 @@ impl SampleEngine {
                 // Short sequence counters `:= CC59 mod 16`, no-repeat tables 0.
                 self.seq_rr_counter.clear();
                 self.seq_rr_last.clear();
+                self.short_rr_hist = [[u8::MAX; 4]; 128];
                 self.seq_rr_base = usize::from(value) % 16;
                 // KSP SetRR: the first-note body-variant counter too
                 // (`$2ekvq := CC59 mod 18`).

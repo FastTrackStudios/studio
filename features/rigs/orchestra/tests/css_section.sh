@@ -109,11 +109,16 @@ timeout 1800 "$signalpack" zones sync-tsv "$patch/library.styx" --from-tsv "$ksp
     || { cat "$sync_log" >&2; rm -f "$sync_log"; echo "sync-tsv failed" >&2; exit 1; }
 grep -E "matched|edited|wrote|borrowed|unreachable" "$sync_log" || true
 rm -f "$sync_log"
-if [ ${#flat[@]} -gt 0 ]; then
-  # The woodwinds' and brass' per-instrument numbers are not generated yet.
-  echo "skipped section.styx (no woodwinds / brass overlay generator yet)"
-  exit 0
-fi
+case "$section" in
+  CSW\ *)
+    # 3. the woodwind's numbers
+    python3 -I "$here/csw_instrument_spec.py" "$ksp" > "$patch/section.styx"
+    echo "wrote $patch/section.styx ($(grep -c '^        id ' "$patch/section.styx") articulations)"
+    exit 0 ;;
+  CSB\ *)
+    echo "skipped section.styx (no brass overlay generator yet)"
+    exit 0 ;;
+esac
 # The other sections keep pizzicato in a "Pizz" folder; the articulation is
 # Pizzicato everywhere (spec id, CC58 map).
 sed -i -E 's/^(\s*articulation\s+)"Pizz"$/\1"Pizzicato"/' "$patch/library.styx"

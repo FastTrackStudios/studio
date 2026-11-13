@@ -930,6 +930,11 @@ pub struct SampleEngine {
     pub(crate) forced_variants: VecDeque<u8>,
     /// Forced loud first-note attack draws (index into the zone's range).
     pub(crate) forced_attacks: VecDeque<u8>,
+    /// Forced random short RR draws (0-based, wrapped to the RR count).
+    pub(crate) forced_rrs: VecDeque<u8>,
+    /// `ArticulationSpec::rr_random_avoid_last` history: the RRs each key
+    /// last played, newest first (`u8::MAX` = none).
+    pub(crate) short_rr_hist: [[u8; 4]; 128],
     pub(crate) tune_rng: u64,
     /// The short sequence counters' start (`CC59 mod 16`).
     pub(crate) seq_rr_base: usize,
@@ -1241,6 +1246,8 @@ impl SampleEngine {
             forced_tunes: VecDeque::new(),
             forced_variants: VecDeque::new(),
             forced_attacks: VecDeque::new(),
+            forced_rrs: VecDeque::new(),
+            short_rr_hist: [[u8::MAX; 4]; 128],
             tune_rng: 0x9E37_79B9_7F4A_7C15,
             seq_rr_base: 0,
             release_gain_override: None,
@@ -1822,6 +1829,12 @@ impl SampleEngine {
     /// velocity zone's attack range (`FirstNoteAttackSpec`).
     pub fn force_random_attacks(&mut self, draws: &[u8]) {
         self.forced_attacks = draws.iter().copied().collect();
+    }
+
+    /// Use these random short RR draws (0-based) in order
+    /// (`ArticulationSpec::rr_random_avoid_last`).
+    pub fn force_random_rrs(&mut self, draws: &[u8]) {
+        self.forced_rrs = draws.iter().copied().collect();
     }
 
     /// Use these legato zone-2 body-variant draws (2..=4) in order.

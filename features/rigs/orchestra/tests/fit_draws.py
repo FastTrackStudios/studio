@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fit Kontakt's random draws in a probe render, for render_css_live to replay.
 
-    python3 fit_draws.py --tunes|--variants|--attacks <render_css_live> <Section> <probe.mid> <kontakt.wav> <out.wav>
+    python3 fit_draws.py --tunes|--variants|--attacks|--rrs <render_css_live> <Section> <probe.mid> <kontakt.wav> <out.wav>
 
 Kontakt draws some choices at random: a short's +-5 c detune (a key not
 struck in the last 500 ms), a zone-2 legato body variant (2..4) and a loud
@@ -94,6 +94,8 @@ def main():
         "--tunes": ("--tunes", range(-5, 6)),
         "--variants": ("--variants", (2, 3, 4)),
         "--attacks": ("--attacks", (0, 1, 2)),
+        # random short round robins (woodwinds / brass): 0-based RR
+        "--rrs": ("--rrs", range(int(os.environ.get("CS_RR_MAX", "6")))),
     }[kind]
     cands = list(cands)
     k = load(kon)

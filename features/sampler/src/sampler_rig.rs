@@ -859,6 +859,14 @@ impl SamplerRig {
         }
     }
 
+    /// Replay a reference render's random short RR draws (0-based, in order)
+    /// — see [`crate::engine::SampleEngine::force_random_rrs`].
+    pub fn force_random_rrs(&self, id: &str, draws: &[u8]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_random_rrs(id, draws);
+        }
+    }
+
     /// Replay a reference render's random-tune draws (cents, in order) —
     /// see [`crate::engine::SampleEngine::force_random_tunes`].
     pub fn force_random_tunes(&self, id: &str, cents: &[i8]) {
