@@ -939,7 +939,7 @@ fn zones_sync_tsv(
     let (tgt, spec_text) = Target::open(target)?;
     let (mut matched, mut unmatched, mut unreachable) = (0usize, 0usize, 0usize);
     let mut field_changes: BTreeMap<&'static str, usize> = BTreeMap::new();
-    let borrowed = load_borrowed_zones(tsv, section)?;
+    let borrowed = load_borrowed_zones(tsv, section, flat)?;
     let (new_spec, changed) = edit_zones(&spec_text, |block| {
         // borrowed zones are regenerated below
         if styx_edit::entry_field(block, "borrowed").as_deref() == Some("true") {
@@ -1182,11 +1182,12 @@ impl TsvZone {
     }
 }
 
-/// A CSS sample stem split at `_` (`Ce_Spiccato_Mix_ff_C2_1`), with the mic
-/// back in third place where an NKI swapped it with the dynamic (Cellos'
-/// fourth Spiccato band: `Ce_Spiccato_ff_Mix_C2_1`).
+/// A Cinematic Studio sample stem split at `_` (`Ce_Spiccato_Mix_ff_C2_1`),
+/// with the mic back in third place where an NKI swapped it with the dynamic
+/// (Cellos' fourth Spiccato band: `Ce_Spiccato_ff_Mix_C2_1`). Strings mics
+/// and the woodwinds' Close / OH.
 fn cs_name_parts(stem: &str) -> Vec<&str> {
-    const MICS: [&str; 5] = ["Mix", "Main", "Room", "Spot1", "Spot2"];
+    const MICS: [&str; 7] = ["Mix", "Main", "Room", "Spot1", "Spot2", "Close", "OH"];
     let mut parts: Vec<&str> = stem.split('_').collect();
     if parts.len() > 3 && !MICS.contains(&parts[2]) && MICS.contains(&parts[3]) {
         parts.swap(2, 3);
@@ -1457,8 +1458,9 @@ struct BorrowedZone {
 }
 
 /// The borrowed zones of a decoded NKI, from `zones.tsv`'s `group` column
-/// and the `groups.json` beside it; empty for an older decode.
-fn load_borrowed_zones(tsv: &Path, section_label: &str) -> Result<Vec<BorrowedZone>> {
+/// and the `groups.json` beside it; empty for an older decode. `flat` = the
+/// extracted tree has no category folder (CSW), as in [`load_tsv_zones`].
+fn load_borrowed_zones(tsv: &Path, section_label: &str, flat: bool) -> Result<Vec<BorrowedZone>> {
     let Some(groups_path) = tsv.parent().map(|d| d.join("groups.json")) else {
         return Ok(Vec::new());
     };
@@ -1535,6 +1537,15 @@ fn load_borrowed_zones(tsv: &Path, section_label: &str) -> Result<Vec<BorrowedZo
             start: num(c_start).max(0.0) as u64,
         });
     }
+    // the extracted file a row plays (CSS keeps a category folder, CSW not)
+    let borrowed_file = |mic: &str, artic: &str, rest: &[String]| -> Option<String> {
+        let stem = rest.join("_");
+        if flat {
+            return Some(format!("{mic}/{section_label}/{artic}/{stem}.wav"));
+        }
+        let cat = cs_category(artic)?;
+        Some(format!("{mic}/{section_label}/{cat}/{artic}/{stem}.wav"))
+    };
     fn own_artic(a: &str) -> &str {
         if a == "Pizz" { "Pizzicato" } else { a }
     }
@@ -1558,16 +1569,11 @@ fn load_borrowed_zones(tsv: &Path, section_label: &str) -> Result<Vec<BorrowedZo
             && (5..=9).contains(&r.vel)
             && r.artic != "Vibsus"
         {
-            let Some(cat) = cs_category(&r.artic) else {
+            let Some(file) = borrowed_file(r.mic.as_str(), &r.artic, &r.rest) else {
                 continue;
             };
             out.push(BorrowedZone {
-                file: format!(
-                    "{}/{section_label}/{cat}/{}/{}.wav",
-                    r.mic,
-                    r.artic,
-                    r.rest.join("_")
-                ),
+                file,
                 mic: r.mic.clone(),
                 articulation: "VibsusAtk".to_string(),
                 dynamic: dynamic.to_string(),
@@ -1598,16 +1604,11 @@ fn load_borrowed_zones(tsv: &Path, section_label: &str) -> Result<Vec<BorrowedZo
         let Some((dynamic, rr)) = own.get(&(r.group.clone(), r.vel)) else {
             continue;
         };
-        let Some(cat) = cs_category(&r.artic) else {
+        let Some(file) = borrowed_file(r.mic.as_str(), &r.artic, &r.rest) else {
             continue;
         };
         out.push(BorrowedZone {
-            file: format!(
-                "{}/{section_label}/{cat}/{}/{}.wav",
-                r.mic,
-                r.artic,
-                r.rest.join("_")
-            ),
+            file,
             mic: r.mic.clone(),
             articulation: artic.to_string(),
             dynamic: dynamic.clone(),

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Bring one Cinematic Studio Strings section up to the 1st Violins standard,
-# offline (no Kontakt needed):
+# Bring one Cinematic Studio instrument (a CSS strings section or a CSW
+# woodwind) up to the 1st Violins standard, offline (no Kontakt needed):
 #
 #   features/rigs/orchestra/tests/css_section.sh "2nd Violins"
+#   features/rigs/orchestra/tests/css_section.sh "CSW Solo Flute"   (full NKI name)
 #
 #   1. decode its NKI (zones with sample starts, groups, KSP, persistent
 #      values) into _ksp/CSS <Section>/   (Native Access key from
@@ -18,36 +19,56 @@
 # Env: CSS_ROOT (default the AudioHaven CSS folder), NKI_BIN (nki decoder).
 set -euo pipefail
 
-section="${1:?usage: css_section.sh <Section, e.g. \"2nd Violins\">}"
-root="${CSS_ROOT:-/run/media/AudioHaven/Sampled/Orchestral/Cinematic Series/Cinematic Studio Strings}"
-nki_dir="/run/media/AudioHaven/Kontakt/Orchestral/Cinematic Studio Strings/Instruments"
+section="${1:?usage: css_section.sh <Section, e.g. \"2nd Violins\" or \"CSW Solo Flute\">}"
 nki_bin="${NKI_BIN:-/run/media/Development/FastTrackStudio-legacy/nkx-extract/target/release/nki}"
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../../../.." && pwd)"
-ksp="$root/_ksp/CSS $section"
-patch="$root/_patches/$section"
+lib_root="/run/media/AudioHaven/Sampled/Orchestral/Cinematic Series"
+case "$section" in
+  CSW\ *)
+    # Woodwinds: the full NKI name; the patch / sample folder drops "CSW "
+    # and a few solos use short codes. Samples sit flat (<mic>/<label>/<artic>).
+    product="cinematic studio woodwinds"
+    root="${CSS_ROOT:-$lib_root/Cinematic Studio Woodwinds}"
+    nki="/run/media/AudioHaven/Kontakt/Orchestral/Cinematic Studio Woodwinds/Instruments/$section.nki"
+    ksp="$root/_ksp/$section"
+    case "$section" in
+      "CSW Solo Alto Flute") label=Saf ;; "CSW Solo Bass Clarinet") label=Sbc ;;
+      "CSW Solo Cor Anglais") label=Sca ;; "CSW Solo Contra Bassoon") label=Scb ;;
+      "CSW Solo Piccolo") label=Spi ;; *) label="${section#CSW }" ;;
+    esac
+    flat=(--flat) ;;
+  *)
+    product="cinematic studio strings"
+    root="${CSS_ROOT:-$lib_root/Cinematic Studio Strings}"
+    nki="/run/media/AudioHaven/Kontakt/Orchestral/Cinematic Studio Strings/Instruments/CSS $section.nki"
+    ksp="$root/_ksp/CSS $section"
+    label="$section"
+    flat=() ;;
+esac
+patch="$root/_patches/$label"
 stamp="$(date +%Y-%m-%d)"
 
 [ -x "$nki_bin" ] || { echo "nki decoder not built: $nki_bin" >&2; exit 1; }
-[ -f "$nki_dir/CSS $section.nki" ] || { echo "no NKI for $section" >&2; exit 1; }
+[ -f "$nki" ] || { echo "no NKI: $nki" >&2; exit 1; }
 [ -f "$patch/library.styx" ] || { echo "no $patch/library.styx" >&2; exit 1; }
 
 # 1. decode (the key stays in this process's environment only)
-eval "$(python3 -I - <<'PY'
-import re
+eval "$(PRODUCT="$product" python3 -I - <<'PY'
+import os, re
 t = open("/run/media/AudioHaven/Kontakt/NativeAccess.xml", encoding="utf-8", errors="replace").read()
 for p in re.split(r"(?=<Product )", t):
     m = re.search(r"<Name>([^<]*)</Name>", p)
-    if m and m.group(1).strip().lower() == "cinematic studio strings":
+    if m and m.group(1).strip().lower() == os.environ["PRODUCT"]:
         v = {k: re.search(rf"<{k}>([^<]*)</{k}>", p).group(1) for k in ("SNPID", "HU", "JDX")}
         print(f"SNPID={v['SNPID'].lstrip('0')}; HU={v['HU']}; JDX={v['JDX']}")
         break
 PY
 )"
-[ -n "${JDX:-}" ] || { echo "no Native Access key for CSS" >&2; exit 1; }
+[ -n "${JDX:-}" ] || { echo "no Native Access key for $product" >&2; exit 1; }
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-timeout 600 "$nki_bin" "$nki_dir/CSS $section.nki" --jdx "$JDX" --hu "$HU" --snpid "$SNPID" \
+timeout 600 "$nki_bin" "$nki" --jdx "$JDX" --hu "$HU" --snpid "$SNPID" \
     --zones --out-dir "$tmp" >/dev/null 2>&1
 unset JDX HU SNPID
 [ -s "$tmp/zones.tsv" ] || { echo "decode failed" >&2; exit 1; }
@@ -62,9 +83,14 @@ echo "decoded: $(($(wc -l < "$ksp/zones.tsv") - 1)) zones → $ksp"
 [ -f "$patch/library.styx.pre-$stamp" ] || cp "$patch/library.styx" "$patch/library.styx.pre-$stamp"
 (cd "$repo" && timeout 3000 nix develop -c cargo run -q --profile desktop-dev \
     --target x86_64-unknown-linux-gnu -p sampler --example signalpack -- \
-    zones sync-tsv "$patch/library.styx" --from-tsv "$ksp/zones.tsv" --section "$section" \
-    --disable-unmatched) \
+    zones sync-tsv "$patch/library.styx" --from-tsv "$ksp/zones.tsv" --section "$label" \
+    "${flat[@]}" --disable-unmatched) \
     2>&1 | grep -E "matched|edited|wrote|^error" || true
+if [ ${#flat[@]} -gt 0 ]; then
+  # The woodwinds' per-instrument numbers are not generated yet.
+  echo "skipped section.styx (no woodwinds overlay generator yet)"
+  exit 0
+fi
 # The other sections keep pizzicato in a "Pizz" folder; the articulation is
 # Pizzicato everywhere (spec id, CC58 map).
 sed -i -E 's/^(\s*articulation\s+)"Pizz"$/\1"Pizzicato"/' "$patch/library.styx"
