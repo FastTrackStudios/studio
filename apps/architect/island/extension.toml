@@ -4,8 +4,12 @@
 # (`Distribution::island`). It is given where the song is and may ask the
 # page only to seek, play, pause, or go to the previous or next song.
 # Its web bundle also draws a setlist note in Architect's web app (the
-# `setlist` view, claimed by note type below), whose list it puts in the
-# app's playhead as its source (`architect.playhead`, architect#589).
+# `setlist.playlist` view, claimed by note type below), whose list it puts
+# in the app's playhead as its source (`architect.playhead`, architect#589),
+# and declares a setlist's favourites. The step toward one Studio
+# extension: the view, its claim and the favourites that open it are this
+# one manifest's (a favourite opens only its own extension's views,
+# architect#658), never split across two.
 id = "studio.transport"
 name = "Studio transport"
 version = "0.1.0"
@@ -17,9 +21,18 @@ authors = ["FastTrackStudios"]
 [wasm]
 component = "studio_island.wasm"
 
+# The playhead's actions on its own source (architect#589): the frame
+# host lets a view ask seven of them; a favourite's round button runs
+# `PLAYHEAD_TOGGLE` (architect#660), which a favourite may name only when
+# the capabilities name `PLAYHEAD_`. `mutating`: `architect-playhead`
+# declares SET, ITEM and TOGGLE so (they move the playhead, never a vault).
 [capabilities]
-actions = ["PLAYHEAD_SEEK", "PLAYHEAD_PLAY", "PLAYHEAD_PAUSE", "PLAYHEAD_NEXT", "PLAYHEAD_PREVIOUS", "PLAYHEAD_SET", "PLAYHEAD_ITEM"]
-effect = "read_only"
+actions = ["PLAYHEAD_"]
+effect = "mutating"
+# The setlist view reads the note it is drawn beside (its fence): a
+# claimed view is handed the note only when its extension says it reads
+# the app's documents (architect#659 as revised).
+reads = ["documents"]
 
 # The setlist view sets its own source in the app's playhead and plays its
 # items (architect#589, `architect.playhead` v0.1).
@@ -36,19 +49,67 @@ id = "transport"
 title = "Transport"
 icon = "play"
 
-# A setlist as a streaming app's playlist (web bundle only): each set a
+# The Lyrics tab's view (web bundle only): Session's lyrics panel as its
+# Confidence Monitor, over the song playing (its timed lines as props).
+[[views]]
+id = "lyrics"
+title = "Lyrics"
+icon = "mic-vocal"
+
+# One setlist as a streaming app's playlist (web bundle only): each set a
 # label, each song a row (number, its key's tile, title over artist,
 # length), the song playing marked, a row pressed plays it. Given the note
-# and the playhead's state as props (src/queue.rs).
+# and the playhead's state as props (src/queue.rs). Not `setlist`:
+# `studio-setlists` has that view (every setlist), and one Studio
+# extension will hold both.
 [[views]]
-id = "setlist"
+id = "setlist.playlist"
 title = "Setlist"
 icon = "list-music"
 
 # Drawn at the head of a note of type `setlist` in the web app's frame
 # host (the node lists the claim: `SiteIsland::embed`).
+#
+# The claim reads the note (`reads`, with `[capabilities] reads` above:
+# the node's `SiteIsland::embed_note` and `SiteIsland::reads`). A member
+# is handed the note (its `%%comments%%` removed); a share link's guest
+# only its title, type and `properties` below, no body (architect#648), so
+# the view tells a guest the songs are not shared: they are in the body's
+# fence.
 [[embeds]]
-id = "setlist"
+id = "setlist.playlist"
 title = "Setlist"
-view = "setlist"
+view = "setlist.playlist"
 claims = { note_type = ["setlist"] }
+reads = ["documents"]
+properties = ["date"]
+
+# A setlist's favourites (architect#607, #658): the bottom slots while a
+# setlist note is open, each a view of this extension's own. Its playlist,
+# the lyrics of the song playing, and the round button plays and pauses
+# (`PLAYHEAD_TOGGLE`, its Pause face while the app's runtime state
+# `playing` is on: architect#660). No Charts: no view of a song's chart
+# opens in the web bundle yet (`studio-setlists`' `song` is a process
+# extension's).
+[[favourites]]
+note_type = "setlist"
+
+[[favourites.tabs]]
+id = "setlist"
+label = "Setlist"
+icon = "list-music"
+target = { view = "setlist.playlist" }
+
+[[favourites.tabs]]
+id = "lyrics"
+label = "Lyrics"
+icon = "mic-vocal"
+target = { view = "lyrics" }
+
+[favourites.primary]
+id = "play"
+label = "Play"
+icon = "play"
+target = { action = "PLAYHEAD_TOGGLE" }
+state = "playing"
+on = { label = "Pause", icon = "pause" }

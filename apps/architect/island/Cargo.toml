@@ -25,7 +25,6 @@ setlists = { workspace = true }
 architect-extension-wasi = { workspace = true }
 dioxus = { workspace = true }
 transport-ui = { workspace = true }
-serde_json = { workspace = true }
 
 # The same views as a web bundle (wasm32-unknown-unknown, wasm-bindgen's
 # `--target web`: `just island-web`), for a share page's web view frame
@@ -35,11 +34,17 @@ serde_json = { workspace = true }
 dioxus = { workspace = true, features = ["web", "launch"] }
 transport-ui = { workspace = true }
 lyrics-ui = { workspace = true, features = ["view"] }
-serde_json = { workspace = true }
+gloo-timers = { workspace = true }
 wasm-bindgen = { workspace = true }
 js-sys = { workspace = true }
 futures-channel = { workspace = true }
 futures-util = { workspace = true }
+
+# The setlist view's rows, rendered on the host by the tests.
+[dev-dependencies]
+dioxus = { workspace = true }
+dioxus-ssr = { workspace = true }
+toml = { workspace = true }
 
 [lints]
 workspace = true

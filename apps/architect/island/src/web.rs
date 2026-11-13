@@ -19,7 +19,8 @@ thread_local! {
     static VIEW: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
-/// Draw view `view` (`progress`, `transport`, `lyrics` or `setlist`)
+/// Draw view `view` (`progress`, `transport`, `lyrics` or
+/// `setlist.playlist`)
 /// into the frame's `#main`.
 #[wasm_bindgen]
 pub fn mount(view: String) {
@@ -82,7 +83,7 @@ fn App() -> Element {
     if view == "lyrics" {
         return rsx! { crate::lyrics::Lyrics { page: props } };
     }
-    if view == "setlist" {
+    if view == crate::queue::VIEW {
         return rsx! { crate::setlist::SetlistView { page: props, ask: ask() } };
     }
     let p = playhead_of(&props.read());

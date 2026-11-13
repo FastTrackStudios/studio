@@ -223,58 +223,126 @@ or one that does not match its lock (the node's log then has one warning,
 
 ## The setlist view (architect#589, #656)
 
-The island's web bundle has a fourth view, `setlist`: a setlist as a
-streaming app's playlist, the share page's list rebuilt as a Dioxus view of
-Studio's own bundle for Architect's web app, where share pages are going
-(architect#650). It draws at the head of a setlist note in the app's frame
-host (an `<iframe sandbox="allow-scripts">`, no network, no credential):
-the setlist's title; each set's name as a quiet label; each song a row with
-its number, its tile (its key on its colour, `+2` when the set moves it,
-the colour from its title as on the share page), its title over its artist,
-its length. The song playing is marked (a bar glyph for its number, the
-accent on its title, a line under it that follows the playhead); a row
-pressed plays it, pressed again pauses; a song with no recording stays
-listed, quieter, and asks nothing. Under 640 px wide the artist goes under
-the title; wider, a header and an artist column. Its colours are the theme
-the app hands the frame (`--foreground`, `--muted-foreground`,
-`--background`, `--accent`, `--border`, `--font`). There is no player bar
-in it: the Now Playing bar is Architect's.
+The island's web bundle draws a setlist as a streaming app's playlist, view
+`setlist.playlist` (not `setlist`: that is the setlists extension's view of
+every setlist, and one Studio extension will hold both): the share page's
+list rebuilt as a Dioxus view of Studio's own bundle for Architect's web
+app, where share pages are going (architect#650). It draws at the head of a
+setlist note in the app's frame host (an `<iframe sandbox="allow-scripts">`,
+no network, no credential), and fills a pane when the note's Setlist
+favourite opens it. On a desk, the setlist's title (on a phone the app's own
+heading names the note, so the view draws none under 640 px); each named
+set a list of its own under its name; each song a row with its number, its
+tile (its key on its colour, `+2` when the set moves it, the colour from its
+title as on the share page, darkened where white text would read under
+4.5:1), its title over its artist, its length. The song playing is marked
+(a bar glyph for its number, the accent on its title, a line under it that
+follows the playhead); a row pressed plays it, pressed again pauses; a song
+the source cannot queue (no recording, or nothing the host takes) stays
+listed, quieter, and asks nothing. A row tells a screen reader its number,
+title, artist, key (and how far the set moves it) and whether it is playing,
+paused or cannot play. Under 640 px wide the artist goes under the title;
+wider, a header and an artist column. Its colours are the theme the app
+hands the frame (`--foreground`, `--muted-foreground`, `--accent`,
+`--border`, `--font`). There is no player bar in it: the Now Playing bar is
+Architect's.
 
 **Props in** (data only), read in one module, `apps/architect/island/src/queue.rs`:
 
-- the playhead's state of the extension's source, flat, as
-  `architect.playhead` v0.1 gives a frame (architect#589): `item.id`,
-  `time`, `duration` and `playing` mark the row; a source not yet started
-  (item 0, paused at 0) marks nothing;
-- `note`: `{path, title, type, properties, body}`, the setlist note, as the
-  app gives the view that claims its type; the list is read from its
-  ```` ```studio-setlist ```` fence with `setlists::setlist::Line` (the
-  share page's reader) and `setlists::row` (the rows' keys and colours,
-  shared with the share page's block);
-- or `setlist`, already resolved, which wins over `note`:
-  `{title, sections: [{name, items: [{id, number, title, artist, art, key,
-  moved, length, recording, media}]}]}`. `art` is drawn only as a `data:`
-  or `blob:` URL (the frame's `img-src`); `media` is a vault path.
+- `note`, the setlist note, as the app gives the view that claims its
+  type, only when the claim names `reads = ["documents"]` and the
+  extension declares that read too (`[capabilities] reads`; on the node,
+  `SiteIsland::embed_note` and `SiteIsland::reads`). A member gets `{path,
+  title, type, properties, body}`, the body without its `%%comments%%`;
+  the list is read from its ```` ```studio-setlist ```` fence with
+  `setlists::setlist::Line` (the share page's reader) and `setlists::row`
+  (the rows' keys and colours, shared with the share page's block). A
+  share link's guest gets only `{title, type, properties}` with the
+  properties the claim declares (`date`), no body and no path, until the
+  owner decides what a guest may read (architect#648): the songs are in
+  the body's fence, so the view tells a guest they are not shared here.
+  For a guest to see the list, either #648 lets a guest have the fence,
+  or Studio writes the running order into a property the claim declares
+  as well (a `songs` list of `{title, artist, key, length}`, no vault
+  paths), which the setlists extension does not write today;
+- the playhead's state, flat, as `architect.playhead` v0.1 gives a frame
+  (architect#589). It is read only when its `source` is this extension
+  (`studio.transport`, `queue::SOURCE`): a frame's props are another
+  extension's active source until its own exists. `item.id`, `time`,
+  `duration` and `playing` mark the row; a source not yet started (item 0,
+  paused at 0) marks nothing; `queue` says whether the source holds this
+  view's list.
 
-An item's id is its note's path, `#` its arrangement (`…@<n>` for a song
-played a second time). At most 200 rows.
+An item's id is the setlist note's path, `|`, the song's note, `#` its
+arrangement, and `@<n>` from its number up for a song listed again
+(`Setlists/Eve.md|Libraries/C/Joy/Joy.md@3`). At most 200 rows.
 
-**Asks out**, on its own source only: `PLAYHEAD_SET {name, queue: [{id,
-title, subtitle, duration, media}]}` when the list is drawn or changes (the
-songs with a recording; never `play`, so it never takes the bar over, and a
-song playing keeps playing), `PLAYHEAD_ITEM {id, play: true}` for a row
-pressed, `PLAYHEAD_PLAY` / `PLAYHEAD_PAUSE` for the playing row pressed
-again. The manifest declares them (`[capabilities] actions`), `[uses]
-"architect.playhead"`, the view, and its claim: `[[embeds]] view =
-"setlist" claims = { note_type = ["setlist"] }`.
+**Asks out**, on its own source only, through one outbox (`queue::Outbox`,
+tested with time passed in):
+
+- `PLAYHEAD_SET {name, queue: [{id, title, subtitle, duration, media}]}`,
+  from the view's own clock (a 200 ms timer started by a Dioxus future),
+  never while `mount` runs: the host refuses an ask before the frame says
+  it is ready, or while the page is hidden. Sent once the list has stayed
+  the same for 400 ms (the first list at once):
+  typing in the fence sends one `SET`, not one a keystroke, against the
+  host's shared 8 asks a second. Never `play` (it never takes the bar over;
+  a song playing keeps playing), and **never an empty queue**, which would
+  remove the extension's source. The queue is built by the host's own rules
+  (`ext_host::source_of`), item by item, so the host takes it whole: ids of
+  1 to 256 characters and unique, a title of 1 to 200 (a row with none is
+  said by its number), `media` a vault path of at most 1024 bytes with no
+  scheme, leading `/`, `\`, `..` or `.` or empty segment, `?`, `#`, `%` or
+  control character (else left out, the song played on its length; spaces
+  are fine), a length over 0 and at most a day. The whole message is built
+  to fit the host's 64 KiB (200 songs with realistic paths take 39,937 B),
+  cut from the tail; the songs cut are drawn as unable to play. When the
+  `SET` does not show in the props within 1.5 s (refused before the frame
+  was ready, while the page was hidden, or dropped by the rate limit) it is
+  sent again as it was, at most three times, then the view waits for a
+  press. A row can be pressed only when its song is in the queue as built.
+- `PLAYHEAD_ITEM {id, play: true}` for a row pressed. When the source's
+  queue in the props is not this view's list (another setlist note's view
+  set it, or the host refused this one), the view's `SET` goes first.
+- `PLAYHEAD_PLAY` / `PLAYHEAD_PAUSE` for the playing row pressed again.
+
+**One source per extension.** Every setlist note's view shares the
+extension's one source: the last list pressed (or edited) holds it. Its ids
+are scoped by the setlist note's path, so a view never marks or plays
+another note's rows, and a view whose list is not the queue takes it back
+only when one of its rows is pressed, never by itself (two notes in two
+panes do not take turns). A note can name any audio path in the vault; it
+plays only when the viewer presses its row, through the app, with the
+viewer's own read ticket, never handed to the frame.
 
 **Where it is declared.** In the island's manifest
-(`apps/architect/island/extension.toml`), not the setlists extension's
-(`features/setlists/extension.toml`): the bundle that draws it is the
-island's, and the node lists a bundle's views with that bundle. The
-setlists extension keeps its `[[favourites]]` for note type `setlist`; when
-Studio becomes one extension, the two manifests merge and the view and its
-claim move with the bundle, unchanged.
+(`apps/architect/island/extension.toml`): the view, its claim (`[[embeds]]
+view = "setlist.playlist" claims = { note_type = ["setlist"] }`), the
+actions (`[capabilities] actions`), `[uses] "architect.playhead"`, the read
+capability (`[capabilities] reads` and the claim's `reads`), and the
+setlist's favourites. A favourite may open only its own
+extension's views and run only actions in its reach (architect#658), so the
+favourites live beside the view they open, not in the setlists extension's
+manifest; when Studio becomes one extension the two manifests merge and all
+of it moves together. The favourites for note type `setlist`:
+
+- **Setlist** opens `setlist.playlist` in a pane of its own;
+- **Lyrics** opens the bundle's `lyrics` view (declared now); it draws the
+  playing song's timed lines once the deck hands them to it (a source's
+  item's `marks`), and nothing before;
+- **Charts** is left out: no view of a song's chart opens in the web bundle
+  yet (the setlists extension's `song` view is a process extension's);
+- the round **Play** button runs `PLAYHEAD_TOGGLE` and shows Pause while
+  the app's runtime state `playing` is on (architect#660: the app keeps it;
+  the extension writes nothing). A favourite may name it because the
+  capabilities name `PLAYHEAD_` up to `mutating`, the effect
+  `architect-playhead` declares for SET, ITEM and TOGGLE. Pressed, it is
+  the app's press, on the active source;
+- an **Arrangement** tab would need a view that draws one song's
+  arrangement (its sections in order, as `transport-ui` and the chart know
+  them) from a song note, in the web bundle, and the song current in the
+  playhead's state to choose which (its item id names the song's note and
+  arrangement).
 
 **One frame per view, for now.** The frame host mounts each view in a frame
 of its own (`mount(view)`), and this is one more such view: the simplest
@@ -288,15 +356,20 @@ host can lay one frame across separate places of the page; a setlist's
 view stays alone in its frame.
 
 **Size** (`just island-web`, wasm-opt `-Oz`): the bundle was 931,862 B raw
-and 351,443 B gzipped (`gzip -9`); with the setlist view it is 1,047,074 B
-and 406,265 B: +115 KB raw, +55 KB gzipped (+16 %), the view and the fence
-and key logic it shares with the share page. No YAML reaches the wasm.
+and 351,443 B gzipped (`gzip -9`) before the setlist view; with it, 1,066,300 B and 413,059 B: +134 KB raw, +62 KB gzipped (+18 %), the view, its outbox, and the fence and key logic it shares with the share page. No YAML reaches the wasm.
 
-**What Architect must still provide** (architect#589, #656): the deck and
-the Now Playing bar behind `PLAYHEAD_SET` / `PLAYHEAD_ITEM` (the frame host
-draft keeps a silent stand-in per view), and Studio's node listing the
-claim (`SiteIsland::embed("setlist", ["setlist"])` in
-`studio_architect::island::at`) once an Architect release has it.
+**What Architect must still provide** (architect#589, #656, #658, #659,
+#660): the deck and the Now Playing bar behind `PLAYHEAD_SET` /
+`PLAYHEAD_ITEM` (#660; the frame host on #658 keeps a silent stand-in per
+view); a frame taller than 4,000 px (`ext_host::MAX_HEIGHT`): at a note's
+head a 200-song list (about 12,900 px) is clipped after about 60 rows,
+while the Setlist favourite's pane scrolls the whole list; and, once an
+Architect release has them, Studio's node listing the claim and its read
+(`SiteIsland::embed_note("setlist.playlist", ["setlist"], ["date"])` and
+`.reads(["documents"])` in `studio_architect::island::at`) and this
+manifest's `[[favourites]]` with the island as their declarer
+(`Manifest::declarer()`: `studio.transport`, `["PLAYHEAD_"]`, `mutating`)
+at `/_ext/favourites.json`.
 
 ## Release artefacts
 

@@ -165,36 +165,7 @@ title = "Setlist"
 icon = "list-music"
 views = ["setlist"]
 
-# A setlist's favourites (Architect's `[[favourites]]`): the tabs a shell
-# keeps one tap away while a setlist is open. On a share link's phone page:
-# the list, the chart of the song playing (it follows playback; previous and
-# next step through the set), its lyrics, and the round button plays and
-# pauses the set. The same declaration is meant for the app's shell.
-[[favourites]]
-note_type = "setlist"
-
-[[favourites.tabs]]
-id = "setlist"
-label = "Setlist"
-icon = "list-music"
-target = { view = "page" }
-
-[[favourites.tabs]]
-id = "charts"
-label = "Charts"
-icon = "file-music"
-target = { view = "player.now" }
-
-[[favourites.tabs]]
-id = "lyrics"
-label = "Lyrics"
-icon = "mic-vocal"
-target = { view = "player.lyrics" }
-
-[favourites.primary]
-id = "play"
-label = "Play"
-icon = "play"
-target = { action = "PLAYER_TOGGLE" }
-state = "playing"
-on = { label = "Pause", icon = "pause" }
+# A setlist's favourites are declared beside the view they open, in the
+# island's manifest (apps/architect/island/extension.toml): a favourite may
+# open only its own extension's views and run only actions in its reach
+# (architect#658), and the playlist view is the island's web bundle's.

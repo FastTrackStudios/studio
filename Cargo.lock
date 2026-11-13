@@ -22587,12 +22587,15 @@ version = "26.10.3"
 dependencies = [
  "architect-extension-wasi",
  "dioxus",
+ "dioxus-ssr",
  "futures-channel",
  "futures-util",
+ "gloo-timers 0.3.0",
  "js-sys",
  "lyrics-ui",
  "serde_json",
  "setlists",
+ "toml 0.8.2",
  "transport-ui",
  "wasm-bindgen",
 ]
