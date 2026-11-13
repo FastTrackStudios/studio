@@ -349,6 +349,10 @@ enum ZonesCmd {
         /// Report what would change without writing.
         #[arg(long)]
         dry_run: bool,
+        /// Mark zones whose file the NKI never maps `disabled` (Kontakt
+        /// never plays them).
+        #[arg(long)]
+        disable_unmatched: bool,
     },
     /// Set scalar fields on matching zones: `--set loop_xfade=4800 …`.
     Set {
@@ -451,8 +455,16 @@ pub fn cli_main(argv: impl IntoIterator<Item = OsString>) -> Result<()> {
                     section,
                     flat,
                     dry_run,
+                    disable_unmatched,
                 },
-        } => zones_sync_tsv(&target, &from_tsv, &section, flat, dry_run),
+        } => zones_sync_tsv(
+            &target,
+            &from_tsv,
+            &section,
+            flat,
+            dry_run,
+            disable_unmatched,
+        ),
         Cmd::Zones {
             command:
                 ZonesCmd::Set {
@@ -921,6 +933,7 @@ fn zones_sync_tsv(
     section: &str,
     flat: bool,
     dry_run: bool,
+    disable_unmatched: bool,
 ) -> Result<()> {
     let by_file = load_tsv_zones(tsv, section, flat)?;
     let (tgt, spec_text) = Target::open(target)?;
@@ -930,6 +943,11 @@ fn zones_sync_tsv(
         let file = styx_edit::entry_field(block, "file")?;
         let Some(z) = by_file.get(file.as_str()) else {
             unmatched += 1;
+            if disable_unmatched
+                && styx_edit::entry_field(block, "disabled").as_deref() != Some("true")
+            {
+                return Some(styx_edit::set_entry_field(block, "disabled", "true"));
+            }
             return None;
         };
         matched += 1;

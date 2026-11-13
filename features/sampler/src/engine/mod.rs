@@ -2933,6 +2933,9 @@ fn zone_key_index(zones: &[crate::spec::ZoneSpec], trigger: ZoneTrigger) -> Box<
 }
 
 fn zone_trigger_matches(zone: &crate::spec::ZoneSpec, trigger: ZoneTrigger) -> bool {
+    if zone.disabled {
+        return false;
+    }
     match trigger {
         ZoneTrigger::Attack => {
             !zone_is_release_trigger(zone)

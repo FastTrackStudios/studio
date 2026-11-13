@@ -2189,7 +2189,7 @@ impl SampleEngine {
         direction: &str,
         dynamic: &str,
     ) -> bool {
-        if !z.articulation.eq_ignore_ascii_case(artic) {
+        if z.disabled || !z.articulation.eq_ignore_ascii_case(artic) {
             return false;
         }
         if !z.direction.is_empty() && !z.direction.eq_ignore_ascii_case(direction) {

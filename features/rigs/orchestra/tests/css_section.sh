@@ -59,7 +59,8 @@ echo "decoded: $(($(wc -l < "$ksp/zones.tsv") - 1)) zones → $ksp"
 [ -f "$patch/library.styx.pre-$stamp" ] || cp "$patch/library.styx" "$patch/library.styx.pre-$stamp"
 (cd "$repo" && timeout 3000 nix develop -c cargo run -q --profile desktop-dev \
     --target x86_64-unknown-linux-gnu -p sampler --example signalpack -- \
-    zones sync-tsv "$patch/library.styx" --from-tsv "$ksp/zones.tsv" --section "$section") \
+    zones sync-tsv "$patch/library.styx" --from-tsv "$ksp/zones.tsv" --section "$section" \
+    --disable-unmatched) \
     2>&1 | grep -E "matched|edited|wrote|^error" || true
 
 # 3. the section's numbers
