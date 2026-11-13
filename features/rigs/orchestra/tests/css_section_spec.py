@@ -185,7 +185,7 @@ def main():
         print("    }")
     marcato(pers)
     print(")")
-    legato(pers)
+    legato(pers, os.path.basename(os.path.normpath(d)))
 
 
 def one(pers, var):
@@ -217,8 +217,11 @@ def marcato(pers):
     print("    }")
 
 
-def legato(pers):
+def legato(pers, section):
     p = lambda v: one(pers, v)  # noqa: E731
+    # %dtnvu: the violin patches ($sxwuz 1-2) pair each even key with the
+    # key below for per-note round robins; the other sections count per key.
+    print(f"rr_per_key {'false' if 'Violins' in section else 'true'}")
     print("legato {")
     print("    overlap_delay {")
     for mode, (th, soft, loud) in OVERLAP_DELAY.items():

@@ -112,10 +112,14 @@ def main():
 
     # A window can still hold the tail of an earlier drawn note (the second
     # key of an alternating burst), rendered above with the same forced
-    # value: re-search a draw that leaves more than REFINE_DB with every
-    # other draw held at its fit.
+    # value: re-search such a draw (another drawn note within the second
+    # before it) that leaves more than REFINE_DB, every other draw held at
+    # its fit.
     ours, _ = render(binary, section, mid, flag, draws, out_wav)
     for i, (a, b) in enumerate(windows):
+        # only a window that can hold an earlier drawn note's tail
+        if not any(0 < a - a0 <= SR for a0, _ in windows[:i]):
+            continue
         rel = energy(k[a:b] - ours[a:b]) / (energy(k[a:b]) + 1e-20)
         if 10 * np.log10(rel + 1e-20) <= REFINE_DB:
             continue

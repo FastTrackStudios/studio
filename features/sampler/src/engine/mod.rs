@@ -1043,6 +1043,9 @@ pub struct SampleEngine {
     /// Per-note-class round-robin counters (`ArticulationSpec::rr_per_note`),
     /// keyed by zone root key.
     pub(crate) note_rr: [u8; 128],
+    /// Per-note-class RR counters of the `rr_per_note` shorts (CSS Sfz,
+    /// Bartok pizz: KSP `%nkhtz[%dtnvu[note]]`), reset by CC59.
+    pub(crate) short_key_rr: [u8; 128],
     /// `ArticulationSpec::rr_sequence` state: the counter per (articulation,
     /// velocity band) and the last RR per (articulation, band, note-class).
     pub(crate) seq_rr_counter: HashMap<(String, usize), usize>,
@@ -1352,6 +1355,7 @@ impl SampleEngine {
             spawn_variant: None,
             in_transition: false,
             note_rr: [0; 128],
+            short_key_rr: [0; 128],
             seq_rr_counter: HashMap::new(),
             seq_rr_last: HashMap::new(),
             short_key_frame: [None; 128],

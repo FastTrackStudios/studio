@@ -580,6 +580,13 @@ pub struct PerformanceSpec {
     /// instead of the nearest recorded pitch.
     #[facet(default)]
     pub strict_key_ranges: bool,
+    /// Per-note round robins (`ArticulationSpec::rr_per_note`) count per
+    /// KEY instead of per zone root. CSS keys them by the KSP's note-class
+    /// table `%dtnvu`: the violin patches pair each even key from 60 up with
+    /// the key below (= the zone root), the other sections keep every key
+    /// apart (Cellos Sfz C2/C#2: per key).
+    #[facet(default)]
+    pub rr_per_key: bool,
     /// Trills from key pairs (CSS script slot 0): with a trill articulation
     /// selected, two keys a semitone / tone apart struck within
     /// `window_ms` play ONE note — `half` / `whole` — on the lower key,
@@ -648,6 +655,7 @@ impl Default for PerformanceSpec {
             release_curve_k: 0.0,
             max_repeat_strikes: None,
             strict_key_ranges: false,
+            rr_per_key: false,
             trill_pair: None,
             release_held_table: Vec::new(),
             release_held_db: 0.0,
@@ -846,6 +854,8 @@ pub struct SectionOverlay {
     pub articulations: Vec<ArticulationOverlay>,
     /// The section's legato timing knobs (see [`LegatoOverlay`]).
     pub legato: Option<LegatoOverlay>,
+    /// See [`PerformanceSpec::rr_per_key`].
+    pub rr_per_key: Option<bool>,
 }
 
 /// The overridable legato-engine fields of a section: the CSS editor knobs
@@ -935,6 +945,9 @@ impl SectionOverlay {
             if let (Some(m), Some(t)) = (&o.marcato_transition, a.marcato_transition.as_mut()) {
                 m.apply(t);
             }
+        }
+        if let Some(v) = self.rr_per_key {
+            spec.performance.rr_per_key = v;
         }
         if let (Some(l), Some(cfg)) = (&self.legato, spec.legato_engine.as_mut()) {
             if let Some(v) = &l.overlap_delay {

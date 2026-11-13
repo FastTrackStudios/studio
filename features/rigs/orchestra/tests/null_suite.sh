@@ -54,7 +54,7 @@ npy() {
   if python3 -c "import numpy" 2>/dev/null; then
     python3 -I "$@"
   else
-    timeout 600 nix-shell -p 'python3.withPackages (ps: [ ps.numpy ])' --run "python3 -I $(printf '%q ' "$@")"
+    timeout 3000 nix-shell -p 'python3.withPackages (ps: [ ps.numpy ])' --run "python3 -I $(printf '%q ' "$@")"
   fi
 }
 

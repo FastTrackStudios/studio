@@ -845,17 +845,7 @@ impl SampleEngine {
             .articulation(&nv_artic)
             .is_some_and(|a| a.rr_per_note);
         let rr = if let (true, None) = (per_note, self.forced_rr) {
-            // Note-class = the zone root this key plays from.
-            let class = self
-                .patch
-                .spec
-                .zones
-                .iter()
-                .find(|z| {
-                    z.articulation.eq_ignore_ascii_case(&nv_artic)
-                        && (z.key_min..=z.key_max).contains(&note)
-                })
-                .map_or(note, |z| z.root_key);
+            let class = self.rr_note_class(&nv_artic, note);
             let c = &mut self.note_rr[usize::from(class & 127)];
             let rr = usize::from(*c);
             *c = c.wrapping_add(1);
@@ -1008,9 +998,26 @@ impl SampleEngine {
     /// the flag is off or the artic carries no thresholds this falls back to the
     /// even-split dynamic with the velocity² loudness curve (non-CSS libraries).
     pub(crate) fn trigger_zoned_short(&mut self, note: u8, velocity: u8) {
-        let rr = self.forced_rr.map_or(self.zone_rr_counter, |f| f as usize);
-        self.zone_rr_counter = self.zone_rr_counter.wrapping_add(1);
         let artic = self.articulation.clone();
+        let per_key = self.forced_rr.is_none()
+            && self
+                .patch
+                .spec
+                .articulation(&artic)
+                .is_some_and(|a| a.rr_per_note && a.rr_sequence.is_empty());
+        let rr = if per_key {
+            // KSP `%nkhtz[%dtnvu[note]]`: the RR alternates per note-class
+            // (`rr_note_class`), not through the patch-wide counter.
+            let class = self.rr_note_class(&artic, note);
+            let c = &mut self.short_key_rr[usize::from(class & 127)];
+            let rr = usize::from(*c);
+            *c = c.wrapping_add(1);
+            rr
+        } else {
+            let rr = self.forced_rr.map_or(self.zone_rr_counter, |f| f as usize);
+            self.zone_rr_counter = self.zone_rr_counter.wrapping_add(1);
+            rr
+        };
         let seq_rr = self.short_sequence_rr(&artic, note, velocity);
         let tune_cents = self.short_random_tune(&artic, note);
 
@@ -1049,6 +1056,23 @@ impl SampleEngine {
     /// A marcato phrase's first-note overlay (see `OverlaySpec`). After a
     /// hard transition (`$kbqnb`) Kontakt draws a marcato-mod zone at
     /// velocity 5/6 instead — those zones are not modelled, so none plays.
+    /// The note-class a per-note round robin counts on: the zone root this
+    /// key plays from, or the key itself (`PerformanceSpec::rr_per_key`).
+    fn rr_note_class(&self, artic: &str, note: u8) -> u8 {
+        if self.patch.spec.performance.rr_per_key {
+            return note;
+        }
+        self.patch
+            .spec
+            .zones
+            .iter()
+            .find(|z| {
+                z.articulation.eq_ignore_ascii_case(artic)
+                    && (z.key_min..=z.key_max).contains(&note)
+            })
+            .map_or(note, |z| z.root_key)
+    }
+
     fn spawn_marcato_overlay(&mut self, note: u8, velocity: u8) {
         if !self.marcato_overlay || self.marcato_kbqnb {
             return;
@@ -3365,6 +3389,7 @@ impl SampleEngine {
                 self.zone_rr_counter = value as usize;
                 self.zone_rr_last_slots.clear();
                 self.note_rr = [0; 128];
+                self.short_key_rr = [0; 128];
                 // Short sequence counters `:= CC59 mod 16`, no-repeat tables 0.
                 self.seq_rr_counter.clear();
                 self.seq_rr_last.clear();
