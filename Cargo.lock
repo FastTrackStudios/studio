@@ -22592,6 +22592,7 @@ dependencies = [
  "js-sys",
  "lyrics-ui",
  "serde_json",
+ "setlists",
  "transport-ui",
  "wasm-bindgen",
 ]

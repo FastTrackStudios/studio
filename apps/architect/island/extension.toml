@@ -3,20 +3,28 @@
 # (`just island`) and linked into Studio Architect's node
 # (`Distribution::island`). It is given where the song is and may ask the
 # page only to seek, play, pause, or go to the previous or next song.
+# Its web bundle also draws a setlist note in Architect's web app (the
+# `setlist` view, claimed by note type below), whose list it puts in the
+# app's playhead as its source (`architect.playhead`, architect#589).
 id = "studio.transport"
 name = "Studio transport"
 version = "0.1.0"
 kind = "wasm"
 api = "0.1"
-description = "Session's song progress bar and transport controls on a share link's now-playing view."
+description = "Session's song progress bar and transport controls on a song's now-playing view, and a setlist as a streaming app's playlist beside a setlist note."
 authors = ["FastTrackStudios"]
 
 [wasm]
 component = "studio_island.wasm"
 
 [capabilities]
-actions = ["PLAYHEAD_SEEK", "PLAYHEAD_PLAY", "PLAYHEAD_PAUSE", "PLAYHEAD_NEXT", "PLAYHEAD_PREVIOUS"]
+actions = ["PLAYHEAD_SEEK", "PLAYHEAD_PLAY", "PLAYHEAD_PAUSE", "PLAYHEAD_NEXT", "PLAYHEAD_PREVIOUS", "PLAYHEAD_SET", "PLAYHEAD_ITEM"]
 effect = "read_only"
+
+# The setlist view sets its own source in the app's playhead and plays its
+# items (architect#589, `architect.playhead` v0.1).
+[uses]
+"architect.playhead" = "^0.1"
 
 [[views]]
 id = "progress"
@@ -27,3 +35,20 @@ icon = "music"
 id = "transport"
 title = "Transport"
 icon = "play"
+
+# A setlist as a streaming app's playlist (web bundle only): each set a
+# label, each song a row (number, its key's tile, title over artist,
+# length), the song playing marked, a row pressed plays it. Given the note
+# and the playhead's state as props (src/queue.rs).
+[[views]]
+id = "setlist"
+title = "Setlist"
+icon = "list-music"
+
+# Drawn at the head of a note of type `setlist` in the web app's frame
+# host (the node lists the claim: `SiteIsland::embed`).
+[[embeds]]
+id = "setlist"
+title = "Setlist"
+view = "setlist"
+claims = { note_type = ["setlist"] }

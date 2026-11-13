@@ -19,8 +19,8 @@ thread_local! {
     static VIEW: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
-/// Draw view `view` (`progress`, `transport` or `lyrics`) into the
-/// frame's `#main`.
+/// Draw view `view` (`progress`, `transport`, `lyrics` or `setlist`)
+/// into the frame's `#main`.
 #[wasm_bindgen]
 pub fn mount(view: String) {
     VIEW.with(|v| *v.borrow_mut() = view);
@@ -81,6 +81,9 @@ fn App() -> Element {
     let view = VIEW.with(|v| v.borrow().clone());
     if view == "lyrics" {
         return rsx! { crate::lyrics::Lyrics { page: props } };
+    }
+    if view == "setlist" {
+        return rsx! { crate::setlist::SetlistView { page: props, ask: ask() } };
     }
     let p = playhead_of(&props.read());
     match view.as_str() {

@@ -221,6 +221,83 @@ curl -sI https://<node>/_ext/island/studio.transport.<hash>/architect.lock.json
 or one that does not match its lock (the node's log then has one warning,
 `island.outcome = "refused"`).
 
+## The setlist view (architect#589, #656)
+
+The island's web bundle has a fourth view, `setlist`: a setlist as a
+streaming app's playlist, the share page's list rebuilt as a Dioxus view of
+Studio's own bundle for Architect's web app, where share pages are going
+(architect#650). It draws at the head of a setlist note in the app's frame
+host (an `<iframe sandbox="allow-scripts">`, no network, no credential):
+the setlist's title; each set's name as a quiet label; each song a row with
+its number, its tile (its key on its colour, `+2` when the set moves it,
+the colour from its title as on the share page), its title over its artist,
+its length. The song playing is marked (a bar glyph for its number, the
+accent on its title, a line under it that follows the playhead); a row
+pressed plays it, pressed again pauses; a song with no recording stays
+listed, quieter, and asks nothing. Under 640 px wide the artist goes under
+the title; wider, a header and an artist column. Its colours are the theme
+the app hands the frame (`--foreground`, `--muted-foreground`,
+`--background`, `--accent`, `--border`, `--font`). There is no player bar
+in it: the Now Playing bar is Architect's.
+
+**Props in** (data only), read in one module, `apps/architect/island/src/queue.rs`:
+
+- the playhead's state of the extension's source, flat, as
+  `architect.playhead` v0.1 gives a frame (architect#589): `item.id`,
+  `time`, `duration` and `playing` mark the row; a source not yet started
+  (item 0, paused at 0) marks nothing;
+- `note`: `{path, title, type, properties, body}`, the setlist note, as the
+  app gives the view that claims its type; the list is read from its
+  ```` ```studio-setlist ```` fence with `setlists::setlist::Line` (the
+  share page's reader) and `setlists::row` (the rows' keys and colours,
+  shared with the share page's block);
+- or `setlist`, already resolved, which wins over `note`:
+  `{title, sections: [{name, items: [{id, number, title, artist, art, key,
+  moved, length, recording, media}]}]}`. `art` is drawn only as a `data:`
+  or `blob:` URL (the frame's `img-src`); `media` is a vault path.
+
+An item's id is its note's path, `#` its arrangement (`…@<n>` for a song
+played a second time). At most 200 rows.
+
+**Asks out**, on its own source only: `PLAYHEAD_SET {name, queue: [{id,
+title, subtitle, duration, media}]}` when the list is drawn or changes (the
+songs with a recording; never `play`, so it never takes the bar over, and a
+song playing keeps playing), `PLAYHEAD_ITEM {id, play: true}` for a row
+pressed, `PLAYHEAD_PLAY` / `PLAYHEAD_PAUSE` for the playing row pressed
+again. The manifest declares them (`[capabilities] actions`), `[uses]
+"architect.playhead"`, the view, and its claim: `[[embeds]] view =
+"setlist" claims = { note_type = ["setlist"] }`.
+
+**Where it is declared.** In the island's manifest
+(`apps/architect/island/extension.toml`), not the setlists extension's
+(`features/setlists/extension.toml`): the bundle that draws it is the
+island's, and the node lists a bundle's views with that bundle. The
+setlists extension keeps its `[[favourites]]` for note type `setlist`; when
+Studio becomes one extension, the two manifests merge and the view and its
+claim move with the bundle, unchanged.
+
+**One frame per view, for now.** The frame host mounts each view in a frame
+of its own (`mount(view)`), and this is one more such view: the simplest
+thing, and a setlist note has only this one frame. PR #656 measured about
+10 MB per frame and three frames per song; a song's three views (progress,
+transport, lyrics) are where several mounts in one frame would pay
+(one wasm instance and one Dioxus runtime instead of three, about 20 MB
+less per song). Recommended next: a `mount(views)` that draws several
+views into named roots of one frame, sized by the host, once the frame
+host can lay one frame across separate places of the page; a setlist's
+view stays alone in its frame.
+
+**Size** (`just island-web`, wasm-opt `-Oz`): the bundle was 931,862 B raw
+and 351,443 B gzipped (`gzip -9`); with the setlist view it is 1,047,074 B
+and 406,265 B: +115 KB raw, +55 KB gzipped (+16 %), the view and the fence
+and key logic it shares with the share page. No YAML reaches the wasm.
+
+**What Architect must still provide** (architect#589, #656): the deck and
+the Now Playing bar behind `PLAYHEAD_SET` / `PLAYHEAD_ITEM` (the frame host
+draft keeps a silent stand-in per view), and Studio's node listing the
+claim (`SiteIsland::embed("setlist", ["setlist"])` in
+`studio_architect::island::at`) once an Architect release has it.
+
 ## Release artefacts
 
 The `studio-architect` workflow (`xtask/workflows/src/studio_architect.rs`)

@@ -40,6 +40,7 @@ pub mod keys;
 pub mod layout;
 pub mod lyrics;
 pub mod media;
+pub mod row;
 pub mod setlist;
 pub mod song;
 pub mod vault;

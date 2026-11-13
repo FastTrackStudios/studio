@@ -12,6 +12,13 @@ publish = false
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# The setlist view's contract with the app (src/queue.rs): built for every
+# target, so its tests run on the host. `setlists` without features: its
+# setlist fence reader and its rows' keys, nothing of a vault or a chart.
+[dependencies]
+serde_json = { workspace = true }
+setlists = { workspace = true }
+
 # The component (wasm32-wasip2): drawn by Architect's web runtime, which
 # needs JS Promise Integration.
 [target.'cfg(all(target_arch = "wasm32", target_os = "wasi"))'.dependencies]
