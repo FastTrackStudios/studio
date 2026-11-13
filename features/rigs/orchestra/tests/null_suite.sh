@@ -94,9 +94,10 @@ for mode in "${modes[@]}"; do
 
   echo "== $section $mode"
   case "$mode" in
-    shorts|pizz|leg2)
+    shorts|pizz|leg2|attack)
       kind=--tunes
       [ "$mode" = leg2 ] && kind=--variants
+      [ "$mode" = attack ] && kind=--attacks
       npy "$here/fit_draws.py" "$kind" "$bin" "$section" "$d/$mode.mid" \
         "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
       npy "$here/null_test.py" "$d/${mode}_manifest.tsv" "$d/${mode}_ours.wav" \

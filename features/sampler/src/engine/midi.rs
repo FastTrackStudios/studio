@@ -984,6 +984,54 @@ impl SampleEngine {
                 }
             }
         }
+        if fresh_vz >= 2 {
+            self.spawn_first_note_attack(note, fresh_vz);
+        }
+    }
+
+    /// The loud first note's attack voice (`FirstNoteAttackSpec`): one zone
+    /// per dynamic layer of the vibsus side, at a drawn velocity, at that
+    /// layer's group-curve level.
+    fn spawn_first_note_attack(&mut self, note: u8, zone: u8) {
+        let Some(atk) = self.patch.spec.legato_cfg().first_note_attack.clone() else {
+            return;
+        };
+        let Some(&[lo, hi]) = atk.velocities.get(usize::from(zone - 2)) else {
+            return;
+        };
+        // KSP `random(lo,hi)`; a forced draw is an index into the range.
+        let vel = match self.forced_attacks.pop_front() {
+            Some(i) => lo.saturating_add(i).min(hi),
+            None => self.draw_uniform(lo, hi),
+        };
+        let dynamics = self
+            .patch
+            .spec
+            .articulation(&atk.layer_articulation)
+            .map(|a| a.dynamics.clone())
+            .unwrap_or_default();
+        for dynamic in dynamics {
+            let g = self
+                .group_curve_gain(&atk.layer_articulation, &dynamic)
+                .unwrap_or(0.0);
+            if g <= 0.0 {
+                continue;
+            }
+            let idx = self.patch.spec.zones.iter().position(|z| {
+                !z.disabled
+                    && z.articulation.eq_ignore_ascii_case(&atk.articulation)
+                    && z.dynamic.eq_ignore_ascii_case(&dynamic)
+                    && z.rr_index == u32::from(vel)
+                    && (z.key_min..=z.key_max).contains(&note)
+                    && self
+                        .solo_mic
+                        .as_ref()
+                        .is_none_or(|m| z.mic.eq_ignore_ascii_case(m))
+            });
+            if let Some(idx) = idx {
+                self.spawn_zone_voice(idx, note, VoiceKind::Short, g, None, 0.0);
+            }
+        }
     }
 
     /// Trigger a one-shot short note (spiccato / staccato / sfz / pizz / …). The

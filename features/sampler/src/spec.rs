@@ -833,6 +833,23 @@ pub struct SimpleTransitionSpec {
     pub lt_fade_out_ms: f32,
 }
 
+/// A loud first note's attack voice (CSS KSP 17415-17450): in velocity
+/// zone 2 / 3 the first note of a phrase also plays, in every vibsus dynamic
+/// group, the zone at a drawn velocity — `random(5,7)` (Staccato
+/// recordings) / `random(8,9)` (Sfz) — from the sample start, at that
+/// group's own CC1/CC2 curve level (so with vibrato down it is silent).
+/// Null-tested in Kontakt: no delay, no extra trim, the zone's level.
+#[derive(Debug, Clone, Facet)]
+pub struct FirstNoteAttackSpec {
+    /// The zones' articulation (written by `zones sync-tsv`; their
+    /// `rr_index` holds the Kontakt velocity).
+    pub articulation: String,
+    /// The articulation whose dynamic layers carry it (the vibsus side).
+    pub layer_articulation: String,
+    /// Velocity ranges `[lo, hi]` for zone 2 and zone 3.
+    pub velocities: Vec<[u8; 2]>,
+}
+
 /// A marcato phrase's first-note overlay (KSP 17620-17855): with the
 /// overlay on (CC58 71-75) the first note also plays a short of
 /// `articulation` at velocity `vel · cc1_scale[CC1] / 100`, through that
@@ -2137,6 +2154,8 @@ pub struct LegatoEngineSpec {
     /// its attack velocities (5–9) have no vibsus zones, so Kontakt plays
     /// nothing there (null test: silent for the first 38 ms).
     pub first_note_attack_voice: Option<bool>,
+    /// The loud first note's attack voice (see [`FirstNoteAttackSpec`]).
+    pub first_note_attack: Option<FirstNoteAttackSpec>,
     /// Silence before a loud first note's body fades in, per velocity zone
     /// `[zone 2, zone 3]` in ms. Empty = 40 ms (the KSP `wait`). Measured in
     /// Kontakt: 38.61 / 37.34 ms (the wait lands on a processing block).
@@ -2233,6 +2252,7 @@ impl Default for LegatoEngineSpec {
             first_note_variants: Vec::new(),
             first_note_variant_init: 0,
             first_note_attack_voice: None,
+            first_note_attack: None,
             first_note_mute_ms: Vec::new(),
             first_note_fade_ms: Vec::new(),
             kontakt_transition: None,

@@ -241,6 +241,10 @@ impl SampleEngine {
             .flatten()
             .collect();
         warm_ids.extend(extra);
+        // A loud first note's attack voice (vibsus groups' attack zones).
+        if let Some(a) = &self.patch.spec.legato_cfg().first_note_attack {
+            warm_ids.push(a.articulation.clone());
+        }
         let mut stats = PreloadStats::default();
         for (i, z) in self.patch.spec.zones.iter().enumerate() {
             if !zone_trigger_matches(z, ZoneTrigger::Attack) {

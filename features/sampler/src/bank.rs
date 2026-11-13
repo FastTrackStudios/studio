@@ -851,6 +851,10 @@ impl SamplerBank {
         self.with_block(id, |b| b.set_trace_enabled(enabled));
     }
 
+    pub fn force_random_attacks(&mut self, id: &str, v: &[u8]) {
+        self.with_block(id, |b| b.force_random_attacks(v));
+    }
+
     pub fn force_random_variants(&mut self, id: &str, v: &[u8]) {
         self.with_block(id, |b| b.force_random_variants(v));
     }

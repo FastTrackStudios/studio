@@ -1057,6 +1057,8 @@ pub struct SampleEngine {
     pub(crate) forced_tunes: VecDeque<i8>,
     /// Legato zone-2 body-variant draws to use instead of the generator.
     pub(crate) forced_variants: VecDeque<u8>,
+    /// Forced loud first-note attack draws (index into the zone's range).
+    pub(crate) forced_attacks: VecDeque<u8>,
     pub(crate) tune_rng: u64,
     /// The short sequence counters' start (`CC59 mod 16`).
     pub(crate) seq_rr_base: usize,
@@ -1361,6 +1363,7 @@ impl SampleEngine {
             short_key_frame: [None; 128],
             forced_tunes: VecDeque::new(),
             forced_variants: VecDeque::new(),
+            forced_attacks: VecDeque::new(),
             tune_rng: 0x9E37_79B9_7F4A_7C15,
             seq_rr_base: 0,
             release_gain_override: None,
@@ -1936,6 +1939,12 @@ impl SampleEngine {
     /// replaying a reference render's draws for a null test.
     pub fn force_random_tunes(&mut self, cents: &[i8]) {
         self.forced_tunes = cents.iter().copied().collect();
+    }
+
+    /// Use these loud first-note attack draws in order: an index into the
+    /// velocity zone's attack range (`FirstNoteAttackSpec`).
+    pub fn force_random_attacks(&mut self, draws: &[u8]) {
+        self.forced_attacks = draws.iter().copied().collect();
     }
 
     /// Use these legato zone-2 body-variant draws (2..=4) in order.

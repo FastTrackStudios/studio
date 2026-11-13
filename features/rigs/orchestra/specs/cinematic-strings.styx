@@ -955,11 +955,15 @@ legato_engine {
     velocity_splits (64 100)
     // Loud first note (zone 2/3): the body is a scripted VARIANT of the
     // recording — %v2aqt[$2ekvq] (KSP 4612), counter shipped at 9, reset by
-    // CC59 — muted, then faded in. No attack voice sounds (the attack
-    // velocities 5–9 have no vibsus zones). All null-tested in Kontakt.
+    // CC59 — muted, then faded in. All null-tested in Kontakt. The attack
+    // voice lives in the vibsus groups (Staccato recordings on velocities
+    // 5-7, Sfz on 8-9 — found by the decoder's group column): it plays per
+    // vibsus layer at that group's CC1/CC2 level, from the sample start, no
+    // delay (null −34..−37 dB per attack, gen_probe.py --attack).
     first_note_variants     (2 3 4 2 3 2 4 3 4 2 3 4 2 4 3 2 4 3)
     first_note_variant_init 9
     first_note_attack_voice false
+    first_note_attack { articulation VibsusAtk, layer_articulation Vibsus, velocities ((5 7) (8 9)) }
     first_note_mute_ms      (38.61 37.34)
 
     // The transition as Kontakt runs it — every number null-tested against

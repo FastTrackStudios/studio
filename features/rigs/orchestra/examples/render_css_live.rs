@@ -144,6 +144,14 @@ fn main() -> eyre::Result<()> {
             .unwrap_or_default();
         rig.force_random_tunes(ID, &tunes);
     }
+    // `--attacks a,b,…`: loud first-note attack draws (index into the range).
+    if let Some(i) = args.iter().position(|a| a == "--attacks") {
+        let v: Vec<u8> = args
+            .get(i + 1)
+            .map(|s| s.split(',').filter_map(|v| v.trim().parse().ok()).collect())
+            .unwrap_or_default();
+        rig.force_random_attacks(ID, &v);
+    }
     // `--variants a,b,…`: legato zone-2 body-variant draws (2..=4).
     if let Some(i) = args.iter().position(|a| a == "--variants") {
         let v: Vec<u8> = args

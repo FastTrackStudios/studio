@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Fit Kontakt's random draws in a probe render, for render_css_live to replay.
 
-    python3 fit_draws.py --tunes|--variants <render_css_live> <Section> <probe.mid> <kontakt.wav> <out.wav>
+    python3 fit_draws.py --tunes|--variants|--attacks <render_css_live> <Section> <probe.mid> <kontakt.wav> <out.wav>
 
 Kontakt draws some choices at random: a short's +-5 c detune (a key not
-struck in the last 500 ms) and a zone-2 legato body variant (2..4). They
+struck in the last 500 ms), a zone-2 legato body variant (2..4) and a loud
+first note's attack velocity (an index into 5-7 / 8-9). They
 cannot be reproduced, so they are fitted from the render and forced into
 ours (render_css_live --tunes / --variants take them in the order they are
 drawn).
@@ -89,7 +90,11 @@ def energy(x):
 def main():
     kind = sys.argv[1]
     binary, section, mid, kon, out_wav = sys.argv[2:7]
-    flag, cands = {"--tunes": ("--tunes", range(-5, 6)), "--variants": ("--variants", (2, 3, 4))}[kind]
+    flag, cands = {
+        "--tunes": ("--tunes", range(-5, 6)),
+        "--variants": ("--variants", (2, 3, 4)),
+        "--attacks": ("--attacks", (0, 1, 2)),
+    }[kind]
     cands = list(cands)
     k = load(kon)
     tmp = tempfile.mkdtemp()

@@ -844,6 +844,14 @@ impl SamplerRig {
         }
     }
 
+    /// Replay a reference render's loud first-note attack draws (an index
+    /// into the zone's attack velocity range).
+    pub fn force_random_attacks(&self, id: &str, v: &[u8]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_random_attacks(id, v);
+        }
+    }
+
     /// Replay a reference render's legato zone-2 body-variant draws.
     pub fn force_random_variants(&self, id: &str, v: &[u8]) {
         if let Ok(mut bank) = self.bank().lock() {

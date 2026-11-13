@@ -990,7 +990,7 @@ fn zones_sync_tsv(
         }
         new_spec.insert_str(ie, &appended);
         println!(
-            "  {} borrowed zone(s): another articulation's recordings in a short group",
+            "  {} borrowed zone(s): another articulation's recordings in a short or vibsus group",
             borrowed.len()
         );
     }
@@ -1532,6 +1532,45 @@ fn load_borrowed_zones(tsv: &Path, section_label: &str) -> Result<Vec<BorrowedZo
     let mut out = Vec::new();
     for r in &rows {
         let family = r.group.split_once(' ').map_or("", |(_, f)| f);
+        // The vibsus groups' loud first-note attack zones (velocities 5-9:
+        // Staccato / Sfz recordings), as `VibsusAtk` zones of the group's
+        // dynamic whose `rr_index` is the Kontakt velocity.
+        if let Some(dynamic) = family.strip_prefix("vibsus ")
+            && !dynamic.contains(' ')
+            && (5..=9).contains(&r.vel)
+            && r.artic != "Vibsus"
+        {
+            let Some(cat) = cs_category(&r.artic) else {
+                continue;
+            };
+            out.push(BorrowedZone {
+                file: format!(
+                    "{}/{section_label}/{cat}/{}/{}.wav",
+                    r.mic,
+                    r.artic,
+                    r.rest.join("_")
+                ),
+                mic: r.mic.clone(),
+                articulation: "VibsusAtk".to_string(),
+                dynamic: dynamic.to_string(),
+                rr_index: r.vel as u32,
+                key_min: r.key.0.clamp(0, 127) as u8,
+                key_max: r.key.1.clamp(0, 127) as u8,
+                root_key: r.root.clamp(0, 127) as u8,
+                tune_cents: if r.tune > 0.0 {
+                    1200.0 * r.tune.log2()
+                } else {
+                    0.0
+                },
+                gain_db: if r.zvol > 0.0 {
+                    20.0 * r.zvol.log10()
+                } else {
+                    0.0
+                },
+                sample_start: r.start,
+            });
+            continue;
+        }
         let Some(artic) = cs_short_group_artic(family) else {
             continue;
         };
