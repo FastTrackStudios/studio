@@ -227,7 +227,8 @@ fn key_words(key: &str) -> String {
 fn tile(line: &Line, hue: u32) -> String {
     let Some(key) = row_key(line) else {
         return format!(
-            "<span data-track-art=\"\" data-hue=\"{hue}\" aria-hidden=\"true\" style=\"background:hsl({hue} 42% 40%)\">{NOTE_ICON}</span>"
+            "<span data-track-art=\"\" data-hue=\"{hue}\" aria-hidden=\"true\" style=\"background:{}\">{NOTE_ICON}</span>",
+            tile_colour(hue)
         );
     };
     let mut said = key.label.spoken();
@@ -257,10 +258,19 @@ fn tile(line: &Line, hue: u32) -> String {
         format!(" data-key-size=\"{size}\"")
     };
     format!(
-        "<span data-track-art=\"\" data-hue=\"{hue}\" data-key=\"\"{size} role=\"img\" aria-label=\"{}\" style=\"background:hsl({hue} 42% 40%)\"><span data-track-key=\"\" aria-hidden=\"true\">{}</span>{mark}</span>",
+        "<span data-track-art=\"\" data-hue=\"{hue}\" data-key=\"\"{size} role=\"img\" aria-label=\"{}\" style=\"background:{}\"><span data-track-key=\"\" aria-hidden=\"true\">{}</span>{mark}</span>",
         escape(&said),
+        tile_colour(hue),
         escape(&key.label.text()),
     )
+}
+
+/// A tile's colour for `hue`: dark enough that its white key, at the
+/// smallest size it is drawn (10 px), reads at 4.5:1 or more on every hue
+/// (yellow and green are the lightest: 4.9:1 at 32%).
+#[must_use]
+pub fn tile_colour(hue: u32) -> String {
+    format!("hsl({hue} 42% 32%)")
 }
 
 /// The hue of a song's tile, from its title (any case): FNV-1a, so the
