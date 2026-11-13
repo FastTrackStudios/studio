@@ -138,9 +138,11 @@ builds them as an Architect site, and Studio draws its own blocks into it
   tile's corner, by how far: the signed semitones from the song's own key,
   the shorter way (`+4`, `−3`; a tritone `+6`), one number for a `start→end`
   label, said "transposed up 4 semitones from D". The same pitch spelled
-  otherwise (`Gb` for `F#`) is no transposition; nor is another mode (`E`
-  played `Em`): the row shows the played key, no number, and says its chart
-  is in E. The chart on the page is the song's own and is not moved
+  otherwise (`Gb` for `F#`) is no transposition. A `play` key must be a
+  key's name (`^[A-G][#b]?m?$`: `Eb`, `F#m`) in the chart's own mode: any
+  other (`E (capo 2)`, `Em` on an E chart) is ignored, the row as charted,
+  and `studio setlist --vault … --library … check <page>` says so. The chart
+  on the page is the song's own and is not moved
   (studio#467). A page written before the `key` column reads the key from
   the summary. No play buttons: a tap on a row plays it
   there, the songs follow each other with no page load, the playing row

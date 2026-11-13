@@ -56,6 +56,13 @@ pub enum Command {
     Engrave { title: String },
     /// The library's songs.
     Songs,
+    /// What a setlist's page has that its share page leaves out (a
+    /// `play` key that is not a key, or the chart's other mode): one line
+    /// each; an error when there is any.
+    Check {
+        /// The setlist's note (`Setlists/Eve.md`), in the vault.
+        setlist: PathBuf,
+    },
 }
 
 fn line(s: &Song) -> String {
@@ -104,6 +111,19 @@ impl Cli {
                 import_song(&vault, &lib, &files, title.as_deref()).map(|s| line(&s))
             }
             Command::Engrave { title } => reengrave(&vault, &lib, &title).map(|s| line(&s)),
+            Command::Check { setlist } => {
+                let path = self.vault.join(&setlist);
+                let text = std::fs::read_to_string(&path).map_err(|source| crate::Error::Io {
+                    path: path.display().to_string(),
+                    source,
+                })?;
+                let found = crate::setlist::problems(&text);
+                if found.is_empty() {
+                    Ok(format!("{}: nothing to say", setlist.display()))
+                } else {
+                    Err(crate::Error::Check(found.join("\n")))
+                }
+            }
             Command::Songs => Ok(vault
                 .songs(&lib)
                 .iter()
