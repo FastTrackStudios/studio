@@ -937,7 +937,7 @@ fn zones_sync_tsv(
 ) -> Result<()> {
     let by_file = load_tsv_zones(tsv, section, flat)?;
     let (tgt, spec_text) = Target::open(target)?;
-    let (mut matched, mut unmatched) = (0usize, 0usize);
+    let (mut matched, mut unmatched, mut unreachable) = (0usize, 0usize, 0usize);
     let mut field_changes: BTreeMap<&'static str, usize> = BTreeMap::new();
     let (new_spec, changed) = edit_zones(&spec_text, |block| {
         let file = styx_edit::entry_field(block, "file")?;
@@ -951,6 +951,13 @@ fn zones_sync_tsv(
             return None;
         };
         matched += 1;
+        if disable_unmatched && z.unreachable_sustain() {
+            unreachable += 1;
+            if styx_edit::entry_field(block, "disabled").as_deref() != Some("true") {
+                return Some(styx_edit::set_entry_field(block, "disabled", "true"));
+            }
+            return None;
+        }
         let mut b = block.to_string();
         for (k, v) in tsv_zone_fields(z) {
             let old = styx_edit::entry_field(&b, k);
@@ -969,6 +976,9 @@ fn zones_sync_tsv(
     })?;
 
     println!("{matched} zone(s) matched a tsv file, {unmatched} did not, {changed} edited");
+    if unreachable > 0 {
+        println!("  {unreachable} sustain zone(s) on velocities Kontakt never plays: disabled");
+    }
     for (k, n) in &field_changes {
         println!("  {k:<10} changed on {n} zone(s)");
     }
@@ -1120,6 +1130,8 @@ struct TsvZone {
     main_row: Option<(i32, Option<u64>, f64)>,
     sample_start_vel1: Option<Option<u64>>,
     vel1_zvol: Option<f64>,
+    /// The lowest velocity any of the file's rows sits on.
+    min_vel: Option<i32>,
     rr_index: u32,
     mic: String,
     articulation: String,
@@ -1130,6 +1142,18 @@ struct TsvZone {
     loop_end: u64,
     section: String,
     file: String,
+}
+
+impl TsvZone {
+    /// A sustain body Kontakt can never play: CSS plays a sustain's plain
+    /// note-on at velocity 1 and its loud-note variants at 2-4, and some
+    /// sections' NKIs put a whole dynamic on other velocities (Violas mf
+    /// Nonvib 12-15 and Vibsus 17-20, Basses Vibsus ppp 10-13) — silent in
+    /// Kontakt, so silent here.
+    fn unreachable_sustain(&self) -> bool {
+        matches!(self.articulation.as_str(), "Vibsus" | "Nonvib")
+            && self.min_vel.is_some_and(|v| v > 4)
+    }
 }
 
 fn cs_is_legato(artic: &str) -> bool {
@@ -1263,6 +1287,7 @@ fn load_tsv_zones(
             main_row: None,
             sample_start_vel1: None,
             vel1_zvol: None,
+            min_vel: None,
             rr_index,
             mic,
             articulation: artic,
@@ -1274,6 +1299,9 @@ fn load_tsv_zones(
             section: section_label.to_string(),
             file,
         });
+        if let Some(v) = vel_lo {
+            entry.min_vel = Some(entry.min_vel.map_or(v, |m| m.min(v)));
+        }
         entry.key_min = entry.key_min.min(key_lo.clamp(0, 127) as u8);
         entry.key_max = entry.key_max.max(key_hi.clamp(0, 127) as u8);
         // The velocity-1 row is the plain note-on zone; without a vel column
@@ -1288,14 +1316,26 @@ fn load_tsv_zones(
         // (CSS lists some files again in other groups, quieter and entered
         // elsewhere); its start and level are the zone's.
         if entry.direction.is_none() && vel_lo != Some(1) && entry.sample_start_vel1.is_none() {
-            // Ties go to the later start: CSS Staccato mp lists RR1 twice at
-            // unity, from 0 and from 288; Kontakt plays the 288 one.
-            let better = entry.main_row.is_none_or(|(_, st, zv)| {
+            // A trill ties go to the lower velocity — the note-on's: Cellos
+            // WTrills ff C2 (and 1st Violins' Room mic) sits at unity on
+            // velocity 2 from 0 and on velocity 3 from 48000, a variant, and
+            // Kontakt plays the first. Other ties go to the later start (a
+            // short's velocity is its band, not the note-on's): CSS Staccato
+            // mp lists RR1 twice at unity, from 0 and from 288; Kontakt
+            // plays the 288 one.
+            let v = vel_lo.unwrap_or(0);
+            let by_vel = matches!(entry.articulation.as_str(), "HTrills" | "WTrills");
+            let better = entry.main_row.is_none_or(|(vel, st, zv)| {
                 let (d, dn) = ((zv - 1.0).abs(), (zvol - 1.0).abs());
-                dn < d - 1e-9 || ((dn - d).abs() <= 1e-9 && start > st)
+                let later = if by_vel && v != vel {
+                    v < vel
+                } else {
+                    start > st
+                };
+                dn < d - 1e-9 || ((dn - d).abs() <= 1e-9 && later)
             });
             if better {
-                entry.main_row = Some((vel_lo.unwrap_or(0), start, zvol));
+                entry.main_row = Some((v, start, zvol));
             }
         }
         if vel_lo == Some(1) {

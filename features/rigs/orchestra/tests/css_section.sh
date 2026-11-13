@@ -9,7 +9,10 @@
 #      NativeAccess.xml, never printed)
 #   2. sync the zones into _patches/<Section>/library.styx (backed up)
 #   3. write _patches/<Section>/section.styx — the section's decoded
-#      numbers over the shared spec (css_section_spec.py)
+#      numbers over the shared spec (css_section_spec.py): velocity tables,
+#      RR, group curves, and the editor knobs that differ by section
+#      (legato overlap delay, first-note fade and variant counter, marcato
+#      offsets / LT volume / CC18, the overlay's velocity table)
 #
 # Then null-test it against Kontakt with the probe suite (null_suite.sh).
 # Env: CSS_ROOT (default the AudioHaven CSS folder), NKI_BIN (nki decoder).
@@ -62,6 +65,9 @@ echo "decoded: $(($(wc -l < "$ksp/zones.tsv") - 1)) zones → $ksp"
     zones sync-tsv "$patch/library.styx" --from-tsv "$ksp/zones.tsv" --section "$section" \
     --disable-unmatched) \
     2>&1 | grep -E "matched|edited|wrote|^error" || true
+# The other sections keep pizzicato in a "Pizz" folder; the articulation is
+# Pizzicato everywhere (spec id, CC58 map).
+sed -i -E 's/^(\s*articulation\s+)"Pizz"$/\1"Pizzicato"/' "$patch/library.styx"
 
 # 3. the section's numbers
 python3 -I "$here/css_section_spec.py" "$ksp" > "$patch/section.styx"
