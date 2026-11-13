@@ -29,6 +29,20 @@ def vlq(v):
     return bytes(reversed(out))
 
 
+# --transpose=N shifts every key (the probes are written for violin range,
+# G4 = 67; Violas -7, Cellos -19, Basses -24 keep them inside the section).
+TRANSPOSE = next((int(a.split("=", 1)[1]) for a in sys.argv if a.startswith("--transpose=")), 0)
+
+
+def finish(m, rows, t):
+    m.write(sys.argv[1])
+    with open(sys.argv[2], "w") as f:
+        f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
+        for r in rows:
+            f.write("\t".join(map(str, (*r[:3], r[3] + TRANSPOSE, *r[4:]))) + "\n")
+    print(f"{len(rows)} units, {t:.1f} s")
+
+
 class Smf:
     def __init__(self):
         self.ev = []  # (tick, order, bytes)
@@ -37,6 +51,7 @@ class Smf:
         self.ev.append((round(t * TPS), 0, bytes([0xB0, num, val])))
 
     def note(self, t, dur, key, vel):
+        key += TRANSPOSE
         self.ev.append((round(t * TPS), 1, bytes([0x90, key, vel])))
         self.ev.append((round((t + dur) * TPS), -1, bytes([0x80, key, 0])))
 
@@ -103,12 +118,7 @@ def main():
             # Zone-2/3 tremolo transitions: the random re-bow attack voice.
             for vel in (80, 80, 120, 120):
                 phrase("Tremolo", f"Tremolo 67->69 ioi500 v{vel}", 67, 69, vel, 0.5, 56)
-            m.write(sys.argv[1])
-            with open(sys.argv[2], "w") as f:
-                f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
-                for r in rows:
-                    f.write("\t".join(map(str, r)) + "\n")
-            print(f"{len(rows)} units, {t:.1f} s")
+            finish(m, rows, t)
             return
         for name, cc58 in (("Tremolo", 56), ("Harm", 51)):
             single(name, f"{name} key67 v40", [67], 40, cc58)
@@ -117,12 +127,7 @@ def main():
                 phrase(name, f"{name} {a}->{b} ioi500 v40", a, b, 40, 0.5, cc58)
         single("Trills", "Trills 67+68 (half) v40", [67, 68], 40, 46)
         single("Trills", "Trills 67+69 (whole) v40", [67, 69], 40, 46)
-        m.write(sys.argv[1])
-        with open(sys.argv[2], "w") as f:
-            f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
-            for r in rows:
-                f.write("\t".join(map(str, r)) + "\n")
-        print(f"{len(rows)} units, {t:.1f} s")
+        finish(m, rows, t)
         return
 
     if "--shorts" in sys.argv:
@@ -157,12 +162,7 @@ def main():
             for vel in vels:
                 burst(name, f"{name} key67 v{vel} x6", [67] * 6, vel, 0.3, cc58)
             burst(name, f"{name} alt67/68 v100 x6", [67, 68] * 3, 100, 0.2, cc58)
-        m.write(sys.argv[1])
-        with open(sys.argv[2], "w") as f:
-            f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
-            for r in rows:
-                f.write("\t".join(map(str, r)) + "\n")
-        print(f"{len(rows)} units, {t:.1f} s")
+        finish(m, rows, t)
         return
 
     if "--marcato" in sys.argv:
@@ -192,12 +192,7 @@ def main():
                 for gap in (0.06, 0.12):
                     run(f"run 67-69-71-72 v{vel} gap{int(gap*1000)}", [67, 69, 71, 72], vel, gap, 66)
             run("run 67-69-71-72 v120 gap120 +overlay", [67, 69, 71, 72], 120, 0.12, 71)
-            m.write(sys.argv[1])
-            with open(sys.argv[2], "w") as f:
-                f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
-                for r in rows:
-                    f.write("\t".join(map(str, r)) + "\n")
-            print(f"{len(rows)} units, {t:.1f} s")
+            finish(m, rows, t)
             return
         for vel in (40, 120):
             for key in (67, 72):
@@ -219,12 +214,7 @@ def main():
                 mphrase(f"MC v{vel} 67->69 ioi{int(ioi*1000)}", 67, 69, vel, ioi)
             for a, b in ((67, 72), (69, 66), (67, 81)):
                 mphrase(f"MC v{vel} {a}->{b} ioi500", a, b, vel, 0.5)
-        m.write(sys.argv[1])
-        with open(sys.argv[2], "w") as f:
-            f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
-            for r in rows:
-                f.write("\t".join(map(str, r)) + "\n")
-        print(f"{len(rows)} units, {t:.1f} s")
+        finish(m, rows, t)
         return
 
     if "--tunes" in sys.argv:
@@ -233,12 +223,7 @@ def main():
         # how it turns group × zone tune × semitones into a rate.
         for key in range(55, 99):
             unit("TUNE", f"nonvib ff only key{key} v40", key, 40, 127, 0, 3.0)
-        m.write(sys.argv[1])
-        with open(sys.argv[2], "w") as f:
-            f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
-            for r in rows:
-                f.write("\t".join(map(str, r)) + "\n")
-        print(f"{len(rows)} units, {t:.1f} s")
+        finish(m, rows, t)
         return
 
     if "--legato" in sys.argv:
@@ -265,12 +250,7 @@ def main():
                     phrase(f"{mode} v{vel} 67->69 ioi{int(ioi*1000)}", 67, 69, vel, ioi, cc58)
                 for a, b in ((67, 72), (69, 66), (67, 79), (67, 81)):
                     phrase(f"{mode} v{vel} {a}->{b} ioi500", a, b, vel, 0.5, cc58)
-        m.write(sys.argv[1])
-        with open(sys.argv[2], "w") as f:
-            f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
-            for r in rows:
-                f.write("\t".join(map(str, r)) + "\n")
-        print(f"{len(rows)} units, {t:.1f} s")
+        finish(m, rows, t)
         return
 
     if "--curves" in sys.argv:
@@ -284,12 +264,7 @@ def main():
         m.cc(t, 11, 127)
         for cc2 in (0, 16, 32, 48, 64, 80, 96, 112, 127):
             unit("CURVE-CC2", f"vib/nonvib ff key67 v40 cc2={cc2}", 67, 40, 127, cc2, 1.2)
-        m.write(sys.argv[1])
-        with open(sys.argv[2], "w") as f:
-            f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
-            for r in rows:
-                f.write("\t".join(map(str, r)) + "\n")
-        print(f"{len(rows)} units, {t:.1f} s")
+        finish(m, rows, t)
         return
 
     for key in (67, 69, 72, 79):
@@ -302,12 +277,7 @@ def main():
     unit("SUS-ATK", "nonvib ff key67 v100 (attack voice)", 67, 100, 127, 0, 4.0)
     unit("SUS-ATK", "nonvib ff key67 v120 (zone 3 attack)", 67, 120, 127, 0, 4.0)
 
-    m.write(sys.argv[1])
-    with open(sys.argv[2], "w") as f:
-        f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
-        for r in rows:
-            f.write("\t".join(map(str, r)) + "\n")
-    print(f"{len(rows)} units, {t:.1f} s")
+    finish(m, rows, t)
 
 
 if __name__ == "__main__":
