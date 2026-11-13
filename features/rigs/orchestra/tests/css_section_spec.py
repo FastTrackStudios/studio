@@ -44,6 +44,19 @@ SHORTS = {
     "Bartokpizz": ("Bartokpizz", "%kgcee", "%eehua", ("bands", 2)),
     "Clegno": ("Clegno", "%fuiq3", "%a3xuw", ("bands", 3)),
 }
+# The editor knobs whose shipped values differ between sections (the
+# 1st Violins values reproduce the shared spec). Every other KSP lerp table
+# is identical across the five sections, or moves a breakpoint between two
+# equal values (CC66 $acegr, CC67 $df322, CC68 $hn0qt, CC69 $ekasy/$kezb4).
+# legtrans_OD: thresholds, soft anchors (zone 1), loud anchors (zone 2).
+OVERLAP_DELAY = {
+    "low_latency": (("$deey3", "$fxiox", "$jystg", "$zvaet"),
+                    ("$nbkqa", "$mih5r", "$yzpsq", "$myv02"),
+                    ("$55anl", "$umt5l", "$cffjr", "$yeo2q")),
+    "expressive": (("$g45yq", "$bwkdm", "$waq1e", "$whtm2"),
+                   ("$kadcz", "$nug53", "$tfwqt", "$xvurx"),
+                   ("$lkn4u", "$ff0lo", "$vl1ol", "$qqqvj")),
+}
 # KSP RR sequences by RR count (declared in script_1).
 SEQ_VARS = {4: "%okqzw", 5: "%5y220", 6: "%zs3om", 7: "%fl4bf"}
 
@@ -153,6 +166,9 @@ def main():
     for aid, (fa, tvar, dvar, (kind, k)) in SHORTS.items():
         th, db_ = pers.get(tvar), pers.get(dvar)
         dyns, rr = short_layers(zones, fa)
+        if not dyns and fa == "Pizzicato":
+            # every section but 1st Violins names its pizzicato files "Pizz"
+            dyns, rr = short_layers(zones, "Pizz")
         if not th or not db_ or not dyns:
             continue
         nb = (4 if ktuur[k] == 1 else 3) if kind == "ktuur" else k
@@ -167,7 +183,56 @@ def main():
         elif rr in seqs:
             print(f"        rr_sequence ({' '.join(map(str, seqs[rr]))})")
         print("    }")
+    marcato(pers)
     print(")")
+    legato(pers)
+
+
+def one(pers, var):
+    v = pers.get(var)
+    if not v:
+        raise SystemExit(f"{var} missing from the persistent values")
+    return v[0]
+
+
+def marcato(pers):
+    """The marcato knobs ($ocjln=6) and the first-note overlay table."""
+    p = lambda v: one(pers, v)  # noqa: E731
+    db = lambda v: fmt(p(v) / 10)  # noqa: E731  deci-dB
+    print("    {\n        id Marcato")
+    fizyd = pers.get("%fizyd", [])[:128]
+    if len(fizyd) == 128:
+        print(f"        overlay_cc1_scale ({' '.join(map(str, fizyd))})")
+    print("        marcato_transition {")
+    # $1fvjk for an interval 1-12: soft $yp2sq, hard $po1el
+    print(f"            body_offset_ms ({p('$yp2sq')} {p('$po1el')})")
+    # LT start: $ggt00/$v0rbb/$5exar over $yam53/$nzsuf/$5c2um
+    print(f"            lt_offset_ms (({p('$yam53')} {p('$ggt00')}) ({p('$nzsuf')} {p('$v0rbb')}) ({p('$5c2um')} {p('$5exar')}))")
+    # LT Vol: interval <= 2 $ycnsk -> $nqjls, wider $0uoxp -> $i0s2b, over $14fyb..$3zzii
+    print(f"            lt_db_step (({p('$14fyb')} {db('$ycnsk')}) ({p('$3zzii')} {db('$nqjls')}))")
+    print(f"            lt_db_leap (({p('$14fyb')} {db('$0uoxp')}) ({p('$3zzii')} {db('$i0s2b')}))")
+    # CC18: hard within an octave, > octave soft, > octave hard
+    print(f"            cc18_other ({p('$2ld3s')} {p('$bkgr5')} {p('$cdv4h')})")
+    print("        }")
+    print("    }")
+
+
+def legato(pers):
+    p = lambda v: one(pers, v)  # noqa: E731
+    print("legato {")
+    print("    overlap_delay {")
+    for mode, (th, soft, loud) in OVERLAP_DELAY.items():
+        t = " ".join(str(p(v)) for v in th)
+        print(f"        {mode} {{")
+        print(f"            soft {{ thresholds_ms ({t}), anchors_ms ({' '.join(str(p(v)) for v in soft)}) }}")
+        print(f"            loud {{ thresholds_ms ({t}), anchors_ms ({' '.join(str(p(v)) for v in loud)}) }}")
+        print("        }")
+    print("    }")
+    # %v2aqt[$2ekvq]: the loud first note's body-variant counter as shipped
+    print(f"    first_note_variant_init {p('$2ekvq')}")
+    # zone 2 / zone 3 body fade-in after the mute
+    print(f"    first_note_fade_ms ({p('$otlef')} {p('$yqhyd')})")
+    print("}")
 
 
 if __name__ == "__main__":

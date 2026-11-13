@@ -891,7 +891,8 @@ impl SampleEngine {
         };
         // CSS FIRST-NOTE attack SWAP (decoded round 2, §11): zones 2/3 do NOT
         // stack an ornament on the body — the body is MUTED 40 ms while the
-        // attack sample plays, then FADES IN over 230 ms (z2) / 180 ms (z3)
+        // attack sample plays, then FADES IN over `first_note_fade_ms`
+        // (1st Violins 230 ms z2 / 180 ms z3)
         // underneath it. Zone 1 (soft) plays the plain body only. Our previous
         // full-gain stacked ornament doubled the same pitch for ~2.5 s — the
         // audible "phasy overlap". The attack sample is bounded: it rings its
@@ -927,7 +928,12 @@ impl SampleEngine {
                 .copied()
                 .unwrap_or(40.0);
             let mute = ms_to_frames_f(mute_ms, self.sample_rate);
-            let fade = ms_to_frames(if fresh_vz == 3 { 180 } else { 230 }, self.sample_rate);
+            let fade_ms = cfg
+                .first_note_fade_ms
+                .get(usize::from(fresh_vz - 2))
+                .copied()
+                .unwrap_or(if fresh_vz == 3 { 180.0 } else { 230.0 });
+            let fade = ms_to_frames_f(fade_ms, self.sample_rate);
             self.sustain_fade_in = Some((mute, fade, fade, 0));
             // The body is a scripted VARIANT of the recording (KSP
             // `%v2aqt[$2ekvq]`, then `$2ekvq++`).

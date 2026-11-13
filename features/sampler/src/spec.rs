@@ -844,6 +844,27 @@ pub struct OverlaySpec {
 pub struct SectionOverlay {
     #[facet(default)]
     pub articulations: Vec<ArticulationOverlay>,
+    /// The section's legato timing knobs (see [`LegatoOverlay`]).
+    pub legato: Option<LegatoOverlay>,
+}
+
+/// The overridable legato-engine fields of a section: the CSS editor knobs
+/// whose shipped values differ between sections.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct LegatoOverlay {
+    pub overlap_delay: Option<OverlapDelaySpec>,
+    pub first_note_variant_init: Option<u8>,
+    pub first_note_fade_ms: Option<Vec<f32>>,
+}
+
+/// The overridable [`MarcatoTransitionSpec`] fields of a section.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct MarcatoOverlay {
+    pub body_offset_ms: Option<[f32; 2]>,
+    pub lt_offset_ms: Option<Vec<[f32; 2]>>,
+    pub lt_db_step: Option<Vec<[f32; 2]>>,
+    pub lt_db_leap: Option<Vec<[f32; 2]>>,
+    pub cc18_other: Option<[f32; 3]>,
 }
 
 /// The overridable fields of one articulation (see [`SectionOverlay`]).
@@ -858,6 +879,9 @@ pub struct ArticulationOverlay {
     pub rr_per_note: Option<bool>,
     pub group_curves: Option<Vec<GroupCurveSpec>>,
     pub amp_env: Option<Vec<EnvSegmentSpec>>,
+    /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
+    pub overlay_cc1_scale: Option<Vec<u8>>,
+    pub marcato_transition: Option<MarcatoOverlay>,
 }
 
 impl SectionOverlay {
@@ -905,6 +929,43 @@ impl SectionOverlay {
             if let Some(v) = &o.amp_env {
                 a.amp_env.clone_from(v);
             }
+            if let (Some(v), Some(ov)) = (&o.overlay_cc1_scale, a.overlay.as_mut()) {
+                ov.cc1_scale.clone_from(v);
+            }
+            if let (Some(m), Some(t)) = (&o.marcato_transition, a.marcato_transition.as_mut()) {
+                m.apply(t);
+            }
+        }
+        if let (Some(l), Some(cfg)) = (&self.legato, spec.legato_engine.as_mut()) {
+            if let Some(v) = &l.overlap_delay {
+                cfg.overlap_delay = Some(v.clone());
+            }
+            if let Some(v) = l.first_note_variant_init {
+                cfg.first_note_variant_init = v;
+            }
+            if let Some(v) = &l.first_note_fade_ms {
+                cfg.first_note_fade_ms.clone_from(v);
+            }
+        }
+    }
+}
+
+impl MarcatoOverlay {
+    fn apply(&self, t: &mut MarcatoTransitionSpec) {
+        if let Some(v) = self.body_offset_ms {
+            t.body_offset_ms = v;
+        }
+        if let Some(v) = &self.lt_offset_ms {
+            t.lt_offset_ms.clone_from(v);
+        }
+        if let Some(v) = &self.lt_db_step {
+            t.lt_db_step.clone_from(v);
+        }
+        if let Some(v) = &self.lt_db_leap {
+            t.lt_db_leap.clone_from(v);
+        }
+        if let Some(v) = self.cc18_other {
+            t.cc18_other = v;
         }
     }
 }
@@ -2067,6 +2128,12 @@ pub struct LegatoEngineSpec {
     /// Kontakt: 38.61 / 37.34 ms (the wait lands on a processing block).
     #[facet(default)]
     pub first_note_mute_ms: Vec<f32>,
+    /// How long a loud first note's body takes to fade in after the mute,
+    /// per velocity zone `[zone 2, zone 3]` in ms (KSP `$otlef` / `$yqhyd`,
+    /// per section: 1st Violins 230 / 180, the other CSS sections 180 / 180).
+    /// Empty = 230 / 180.
+    #[facet(default)]
+    pub first_note_fade_ms: Vec<f32>,
     /// The legato transition exactly as Kontakt runs CSS's script, measured
     /// against Kontakt renders (null −41 dB per transition). When set, a
     /// mono-legato transition on a zoned patch uses it instead of the older
@@ -2153,6 +2220,7 @@ impl Default for LegatoEngineSpec {
             first_note_variant_init: 0,
             first_note_attack_voice: None,
             first_note_mute_ms: Vec::new(),
+            first_note_fade_ms: Vec::new(),
             kontakt_transition: None,
             overlap_delay: None,
             start_offset: None,
