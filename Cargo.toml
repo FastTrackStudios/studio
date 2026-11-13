@@ -159,6 +159,7 @@ members = [
     "features/signal/content-client",
     "apps/plugins/sampler",
     # ── patchbay ──
+    "features/patchbay/antelope",
     "features/patchbay/driver",
     "features/patchbay/yamaha-tf",
     "apps/patchbay",
@@ -197,6 +198,7 @@ lyrics-ui = { path = "features/ui/lyrics-ui", default-features = false }
 daw-sync = { path = "features/sync" }
 frame = { path = "crates/frame" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }
+patchbay-antelope = { path = "features/patchbay/antelope" }
 patchbay = { path = "features/patchbay" }
 patchbay-yamaha-tf = { path = "features/patchbay/yamaha-tf" }
 midi = { path = "features/midi" }

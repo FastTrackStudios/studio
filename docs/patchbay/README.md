@@ -10,7 +10,8 @@ on today" needs answering in seconds, not by reading `pw-link -l` output.
 
 | crate | what it is |
 |---|---|
-| `patchbay` (`features/patchbay`) | the engine — PipeWire graph state, links, persistence, the Core Audio / Dante / Antelope adapters — plus its wire types (`vox`) and its Dioxus interface (`ui`), as cargo features |
+| `patchbay` (`features/patchbay`) | the engine — PipeWire graph state, links, persistence, the Core Audio / Dante adapters — plus its wire types (`vox`) and its Dioxus interface (`ui`), as cargo features |
+| `patchbay-antelope` (`features/patchbay/antelope`) | the Antelope family: the Galaxy32 through the Manager Server, its console view, and its extension (`server`, `ui`, `extension`) |
 | `patchbay-yamaha-tf` (`features/patchbay/yamaha-tf`) | the Yamaha TF family: RCP, discovery, the console view, and its extension (`server`, `ui`, `extension`) |
 | `patchbay-driver` (`features/patchbay/driver`) | the macOS AudioServerPlugIn behind the virtual devices |
 | `fts-patchbay` (`apps/patchbay`) | the desktop app + RPC server (`ws://:4046`), the `patchbay` agent/script CLI, the browser remote (`--platform web`), and `patchbay-ios`: the distribution on an iPhone or iPad (`apps/patchbay/ios/`: `build-app.sh`, `deploy-testflight.sh`), a controller of other machines' engines with no device families of its own |

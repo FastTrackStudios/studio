@@ -6,7 +6,7 @@ control everything. It has two parts:
 
 ```
 crates/device              patchbay-device    generic model + DeviceAdapter trait (no vendor code)
-crates/adapters/antelope   patchbay-antelope  Antelope Galaxy32 via Antelope Manager Server
+features/patchbay/antelope  patchbay-antelope  Antelope Galaxy32 via the Manager Server: a family and an extension of its own
 features/patchbay/yamaha-tf  patchbay-yamaha-tf  Yamaha TF over RCP (+ subnet discovery): a family and an extension of its own
 crates/adapters/dante      patchbay-dante     the Dante network over inferno-net (mDNS + ARC)
 crates/adapters/<family>   patchbay-<family>  one crate per hardware family
@@ -53,6 +53,13 @@ The adapter talks to Antelope's Manager Server, the vendor daemon, over JSON
 on TCP. Everything below was verified on a Galaxy32 with fw 8.24 and Manager
 Server 1.8.19. For the full protocol, see the `antelope-galaxy32-linux` repo
 (`docs/PROTOCOL.md` and `notes/2026-09-18_live-session-1.md`).
+
+Its own crate and Architect extension (`features/patchbay/antelope`,
+extension `patchbay-antelope`, studio#418), registered the way the Yamaha TF
+is: `register()` from `ext::Antelope`'s `build` and from `fts-patchbay`'s
+`main`s (views only on iOS). Its tests drive an in-process fake Manager
+Server (`tests/fake_server.rs`, `tests/protocol.rs`), the extension beside
+the core (`tests/extension.rs`) and the family alone (`tests/family.rs`).
 
 ```
 discovery.rs   UDP multicast 239.192.5.8:5008 announces → dynamic control ports
@@ -250,9 +257,10 @@ apps/patchbay/src/cli_device.rs         `patchbay device …`
 
 - **Defaults.** With no `devices` section the hub starts one entry per
   family, all auto-discovered, in registration order: the built-ins
-  `system-audio` (kind `system-audio`), `galaxy32` (`antelope-galaxy32`) and
-  `dante` (`dante`), then the registered families' (`tf1`, `yamaha-tf`, in
-  every Patchbay app). Each comes from the family's `DeviceFamily::defaults`.
+  `system-audio` (kind `system-audio`) and `dante` (`dante`), then the
+  registered families' (`galaxy32`, `antelope-galaxy32`; `tf1`,
+  `yamaha-tf`; in every Patchbay app, in the order each app registers
+  them). Each comes from the family's `DeviceFamily::defaults`.
 - **Config.** A styx `devices` section replaces the defaults:
   `devices ({name galaxy32, kind antelope-galaxy32, serial "4202524000109"}
   {name foh, kind yamaha-tf, addr "192.168.1.214"} {name dante, kind dante,
@@ -319,16 +327,21 @@ apps/patchbay/src/cli_device.rs         `patchbay device …`
    `defaults`, `connect` or the adapter's `subscribe`/`info`: the family
    shows as unavailable, or the connect as failed and retried. The hub,
    RPC, CLI, UI and snapshots then work without further changes, and
-   `patchbay families` lists it. A family's views draw with
-   `patchbay::ui::kit` and build their info with `FamilyInfo::linked`.
+   `patchbay families` lists it. The family crate's `register()` is one
+   line, `patchbay::register_family!(family: …, views: …)`, which does the
+   right thing for whichever of the crate's `server`/`ui` features are on.
+   A family's views draw with `patchbay::ui::kit` and write with its
+   `ParamWriter` (`use_param_writer()`: a param on the device the page
+   shows, nothing wider); its info is `FamilyInfo::linked`.
    Tests: `ConnectCtx::in_memory()` (feature `test-util`) runs `connect`
    without an engine (`patchbay-yamaha-tf`'s `tests/family.rs`);
    `server/devices/family_tests.rs` drives the hub through a fake family;
    `tests/family.rs` registers one from outside the crate. A config that
-   names the kind of an extension family this app doesn't link says so
-   ("the Yamaha TF extension (patchbay-yamaha-tf) is not installed");
-   add the family to `registry::EXTENSION_FAMILIES` when it leaves the
-   core.
+   names a kind no family in this app connects says so ("no device family
+   for kind 'yamaha-tf' in this app: the extension that adds it is not
+   installed"); the core keeps no list of extension families, so a family
+   leaving the core edits nothing there. On a phone no family runs, and
+   the message says the device connects on the machine that runs it.
 2. Keep modules private and expose a small `pub use` surface from `lib.rs`:
    the adapter type, discovery, a typed ops handle and a raw escape hatch.
 3. Split the code into layers the same way: **protocol** (pure, unit-tested
@@ -338,8 +351,8 @@ apps/patchbay/src/cli_device.rs         `patchbay device …`
    contract above).
 4. Capture real traffic into `tests/fixtures/` and test encoders byte-exact
    against what the vendor's own software sends. Test the adapter against an
-   in-process fake server. `crates/adapters/antelope/tests/fake_server.rs` is
-   the template.
+   in-process fake server. `features/patchbay/antelope/tests/common/fake_manager.rs`
+   is the template.
 5. Live testing: read-only first. Write only to targets the operator has
    cleared, and always restore them: read, write, verify, restore, verify.
 

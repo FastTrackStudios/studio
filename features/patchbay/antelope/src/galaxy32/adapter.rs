@@ -14,12 +14,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use crate::device::{
+use parking_lot::Mutex;
+use patchbay::device::{
     ChannelRef, Crosspoint, DeviceAdapter, DeviceError, DeviceEvent, DeviceId, DeviceInfo,
     DeviceSnapshot, MirrorUpdate, Param, ParamValue, PortGroup, Transport, WriteGuard, apply_event,
     diff_events,
 };
-use parking_lot::Mutex;
 use serde_json::Value;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
@@ -34,10 +34,10 @@ use super::tables::{
     self, AFX_SLOTS, AFX_STRIPS, MIXER_STRIPS, MIXERS, MONITOR_OUTPUT, OUTPUT_PAGES, ROUTING_SLOTS,
     SAMPLE_RATES, SOURCE_TYPES, TRIM_LINE_IN,
 };
-use crate::antelope::client::{CYCLIC_STATE_CMD, Client, ClientEvent};
-use crate::antelope::discovery::{Announce, Listener};
-use crate::antelope::error::{AntelopeError, Result};
-use crate::antelope::protocol::envelope::ServerFrame;
+use crate::client::{CYCLIC_STATE_CMD, Client, ClientEvent};
+use crate::discovery::{Announce, Listener};
+use crate::error::{AntelopeError, Result};
+use crate::protocol::envelope::ServerFrame;
 
 const CONFIRM_ATTEMPTS: u32 = 6;
 const CONFIRM_DELAY: Duration = Duration::from_millis(80);
@@ -278,10 +278,28 @@ impl Galaxy32Adapter {
         let listener = Listener::bind()?;
         let now = tokio::time::Instant::now();
         let deadline = now.checked_add(timeout).unwrap_or(now);
+        let mut announces = Vec::new();
+        while let Ok(recv) = tokio::time::timeout_at(deadline, listener.recv()).await {
+            announces.push(recv?);
+        }
+        Self::connect_from_announces(announces, serial).await
+    }
+
+    /// [`Self::discover_and_connect`] after the listening: of the
+    /// `announces` heard, try the control endpoints of the device with
+    /// `serial` (any Galaxy if `None`) best-first, keeping the first that
+    /// answers a read. Where the announces come from is the caller's (the
+    /// family's announce source; a test's fake).
+    ///
+    /// # Errors
+    /// No usable endpoint.
+    pub async fn connect_from_announces(
+        announces: Vec<Announce>,
+        serial: Option<&str>,
+    ) -> Result<Self> {
         let mut tried: HashSet<SocketAddr> = HashSet::new();
         let mut heard: Vec<(SocketAddr, Announce)> = Vec::new();
-        while let Ok(recv) = tokio::time::timeout_at(deadline, listener.recv()).await {
-            let a = recv?;
+        for a in announces {
             if !a.is_control() || serial.is_some_and(|s| a.serial() != Some(s)) {
                 continue;
             }
