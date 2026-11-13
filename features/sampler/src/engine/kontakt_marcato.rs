@@ -46,19 +46,20 @@ impl SampleEngine {
         let ms = move |v: f32| ms_to_frames_f(v, sr);
 
         // A key no zone covers (harmonics below their range): Kontakt runs
-        // no transition — the old body takes its note-off release fade now
-        // and the old note keeps the line (its release sample comes at its
-        // own key-up). Null test: harmonics A3 → F#3.
+        // no transition — the old note keeps the line untouched, its body
+        // fading and its release sample sounding at its own key-up. Null
+        // test: harmonics A3 → F#3, −15.2 → −33.4 dB (fading the body at
+        // the new key-on instead ran it out 50 ms early).
         let artic = self.articulation.clone();
         let covered = self.patch.spec.zones.iter().any(|z| {
             z.articulation.eq_ignore_ascii_case(&artic) && (z.key_min..=z.key_max).contains(&to)
         });
         if !covered && self.patch.spec.performance.strict_key_ranges {
-            let fade = ms(self.patch.spec.performance.release_ms.unwrap_or(580) as f32);
-            self.voices.note_off_line(line, from, Some(fade));
             // A fall-back from a released key into an unmapped one ends the
             // line (nothing is left sounding on it).
             if !self.held_notes.contains_key(&from) {
+                let fade = ms(self.patch.spec.performance.release_ms.unwrap_or(580) as f32);
+                self.voices.note_off_line(line, from, Some(fade));
                 // ... and its key-up plays its release sample, as ever.
                 self.spawn_release(from);
                 self.line_mut().note = None;
