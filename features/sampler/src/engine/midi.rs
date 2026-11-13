@@ -1146,20 +1146,9 @@ impl SampleEngine {
     }
 
     fn spawn_marcato_overlay(&mut self, note: u8, velocity: u8) {
-        // The KSP recomputes `$kbqnb` on every marcato note-on (IOI since the
-        // last onset > $hx3nl and velocity > $qm4n3): a loud first note after
-        // a pause is HARD, and the hard overlay draws marcato-mod zones at
-        // velocity 5/6 that no CSS section maps — nothing plays (null test:
-        // Cellos/Basses marcato+overlay at v120).
-        if let Some(mt) = self.marcato_transition() {
-            let last = self.line().last_onset_frame;
-            let ioi_ms = if last == 0 {
-                f32::MAX
-            } else {
-                self.frames_rendered.saturating_sub(last) as f32 * 1000.0 / self.sample_rate as f32
-            };
-            self.marcato_kbqnb = velocity > mt.hard_velocity && ioi_ms > mt.hard_ioi_ms;
-        }
+        // `$kbqnb` is the last transition's: a loud first note after a pause
+        // still plays the Spiccato overlay (null test: every section's
+        // marcato+overlay v120 first note).
         if !self.marcato_overlay || self.marcato_kbqnb {
             return;
         }
