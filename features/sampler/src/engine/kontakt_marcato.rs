@@ -294,7 +294,14 @@ impl SampleEngine {
             });
             let Some(idx) = idx else { continue };
             let z = &self.patch.spec.zones[idx];
-            let Some(&zone_db) = z.marcato_gains_db.get(layer.gain_index as usize) else {
+            // A section whose transition file is entered by one marcato row
+            // only (Cellos: one 3984 row per file, where the violins list
+            // one per marc-leg layer) plays that row for every layer.
+            let Some(&zone_db) = z
+                .marcato_gains_db
+                .get(layer.gain_index as usize)
+                .or_else(|| z.marcato_gains_db.last())
+            else {
                 continue;
             };
             // Past the zone's own start: marcato zones enter the same file
