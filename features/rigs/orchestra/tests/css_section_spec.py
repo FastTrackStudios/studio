@@ -122,6 +122,18 @@ GROUP_FAMILY = {"Spiccato": "spiccato", "Staccatissimo": "staccatissimo", "Stacc
                 "Clegno": "col legno"}
 
 
+MICS = ("Mix", "Main", "Room", "Spot1", "Spot2")
+
+
+def name_parts(sample):
+    """A CSS sample stem split at `_`, mic back in third place where an NKI
+    swapped it with the dynamic (Cellos `Ce_Spiccato_ff_Mix_C2_1`)."""
+    parts = os.path.basename(sample)[:-4].split("_")
+    if len(parts) > 3 and parts[2] not in MICS and parts[3] in MICS:
+        parts[2], parts[3] = parts[3], parts[2]
+    return parts
+
+
 def group_layers(zones, groups, artic):
     """Dynamics in velocity order and the RR count of the short's own Mix
     group (a band whose own recordings exist on only a few keys still
@@ -134,7 +146,7 @@ def group_layers(zones, groups, artic):
     for z in zones:
         if groups.get(int(z["group"])) != gname:
             continue
-        parts = os.path.basename(z["sample"])[:-4].split("_")
+        parts = name_parts(z["sample"])
         if len(parts) < 5 or parts[1] != artic or parts[2] != "Mix":
             continue
         dyn = parts[3]
@@ -149,8 +161,7 @@ def short_layers(zones, artic):
     """Dynamics in band order and the RR count, from the unity Mix zones."""
     first, rrs = {}, {}
     for z in zones:
-        n = os.path.basename(z["sample"])
-        parts = n[:-4].split("_")
+        parts = name_parts(z["sample"])
         if len(parts) < 5 or parts[1] != artic or parts[2] != "Mix" or abs(float(z["zvol"]) - 1) > 1e-3:
             continue
         dyn, rr = parts[3], parts[-1]
@@ -204,6 +215,10 @@ def main():
             continue
         nb = (4 if ktuur[k] == 1 else 3) if kind == "ktuur" else k
         thresholds = th[1:nb]
+        if gl and len(dyns) > nb:
+            # bands play velocity blocks from the bottom: a block past the
+            # last band is never reached (Cellos Spiccato's ff, %ktuur 0)
+            dyns = dyns[:nb]
         print(f"    {{\n        id {aid}")
         print(f"        dynamics ({' '.join(dyns)})")
         print(f"        rr {rr}")
@@ -215,6 +230,7 @@ def main():
             print(f"        rr_sequence ({' '.join(map(str, seqs[rr]))})")
         print("    }")
     marcato(pers)
+    pizz_release(pers, groups)
     print(")")
     legato(pers, os.path.basename(os.path.normpath(d)))
 
@@ -226,6 +242,30 @@ def one(pers, var):
     return v[0]
 
 
+# The pizz family's release knob ($3kbfg -> CC31 -> the group flex's third
+# segment time). Measured in Kontakt (Cellos/Basses pizz bursts): 75 gives
+# 1470 ms; the violins' and Violas' 127 the full 7381. Other values follow
+# the fitted power law.
+PIZZ_RELEASE_MS = {127: 7381.0, 75: 1470.0}
+
+
+def pizz_release(pers, groups):
+    """`amp_env` for the pizz family when the section shortens its release."""
+    knob = one(pers, "$3kbfg")
+    g = groups.get("pizzicato") or {}
+    segs = next((e["segments"] for e in g.get("envelopes", [])
+                 if e["kind"] == "ENV_FLEX" and e["target"] == "volume" and not e["bypassed"]), None)
+    if knob == 127 or not segs or len(segs) < 3:
+        return
+    t3 = PIZZ_RELEASE_MS.get(knob, segs[2][0] * (knob / 127) ** 3.06)
+    segs = [list(segs[0]), list(segs[1]), [t3, segs[2][1], segs[2][2]]]
+    env = " ".join(f"{{time_ms {fmt(float(t))}, level {fmt(float(l))}, curve {fmt(float(c))}}}" for t, l, c in segs)
+    for aid in ("Pizzicato", "Bartokpizz"):
+        print(f"    {{\n        id {aid}")
+        print(f"        amp_env ( {env} )")
+        print("    }")
+
+
 def marcato(pers):
     """The marcato knobs ($ocjln=6) and the first-note overlay table."""
     p = lambda v: one(pers, v)  # noqa: E731
@@ -235,6 +275,9 @@ def marcato(pers):
     if len(fizyd) == 128:
         print(f"        overlay_cc1_scale ({' '.join(map(str, fizyd))})")
     print("        marcato_transition {")
+    # $kbqnb: hard above velocity $qm4n3 and IOI $hx3nl
+    print(f"            hard_velocity {p('$qm4n3')}")
+    print(f"            hard_ioi_ms {p('$hx3nl')}")
     # $1fvjk for an interval 1-12: soft $yp2sq, hard $po1el
     print(f"            body_offset_ms ({p('$yp2sq')} {p('$po1el')})")
     # LT start: $ggt00/$v0rbb/$5exar over $yam53/$nzsuf/$5c2um

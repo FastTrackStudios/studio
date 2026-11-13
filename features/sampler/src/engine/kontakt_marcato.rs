@@ -134,7 +134,7 @@ impl SampleEngine {
         let ioi = ioi_ms.max(0.0) as i64;
         let interval = to.abs_diff(from);
         let big = interval > 12;
-        let hard = velocity > 75 && ioi > 50;
+        let hard = velocity > mt.hard_velocity && ioi > mt.hard_ioi_ms as i64;
         self.marcato_kbqnb = hard;
         let line = self.cur_line as u8;
         let sr = self.sample_rate;

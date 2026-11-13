@@ -1287,6 +1287,18 @@ impl SampleEngine {
             .iter()
             .find(|a| a.id.eq_ignore_ascii_case(tag) || a.label.eq_ignore_ascii_case(tag))
             .map_or_else(|| tag.to_string(), |a| a.id.clone());
+        // An articulation the section has no recordings of is ignored, as
+        // Kontakt does (CSS Basses harmonics keyswitch).
+        if self.patch.spec.articulation(&id).is_some()
+            && !self
+                .patch
+                .spec
+                .zones
+                .iter()
+                .any(|z| !z.disabled && z.articulation.eq_ignore_ascii_case(&id))
+        {
+            return;
+        }
         self.articulation = self.remap_sordino(&id, self.con_sordino);
     }
 
@@ -1372,6 +1384,20 @@ impl SampleEngine {
             .find(|a| a.id == label || a.label == label)
             .map(|a| a.id.clone());
 
+        // A section without that articulation's recordings (CSS Basses has
+        // no harmonics) ignores the switch: Kontakt keeps playing the
+        // articulation it had (null test: identical to the tremolo before).
+        if let Some(id) = &matched {
+            let recorded = self
+                .patch
+                .spec
+                .zones
+                .iter()
+                .any(|z| !z.disabled && z.articulation.eq_ignore_ascii_case(id));
+            if !recorded {
+                return;
+            }
+        }
         if let Some(id) = matched {
             self.articulation = self.remap_sordino(&id, self.con_sordino);
             self.pending_cc58_group = None;

@@ -964,6 +964,12 @@ fn zones_sync_tsv(
             return None;
         }
         let mut b = block.to_string();
+        // A zone the decode maps again plays again (Cellos' fourth Spiccato
+        // band was disabled while its swapped file names went unmatched).
+        if styx_edit::entry_field(&b, "disabled").as_deref() == Some("true") {
+            b = styx_edit::set_entry_field(&b, "disabled", "false");
+            *field_changes.entry("disabled").or_default() += 1;
+        }
         for (k, v) in tsv_zone_fields(z) {
             let old = styx_edit::entry_field(&b, k);
             let same = old.as_deref().is_some_and(|o| {
@@ -1176,6 +1182,18 @@ impl TsvZone {
     }
 }
 
+/// A CSS sample stem split at `_` (`Ce_Spiccato_Mix_ff_C2_1`), with the mic
+/// back in third place where an NKI swapped it with the dynamic (Cellos'
+/// fourth Spiccato band: `Ce_Spiccato_ff_Mix_C2_1`).
+fn cs_name_parts(stem: &str) -> Vec<&str> {
+    const MICS: [&str; 5] = ["Mix", "Main", "Room", "Spot1", "Spot2"];
+    let mut parts: Vec<&str> = stem.split('_').collect();
+    if parts.len() > 3 && !MICS.contains(&parts[2]) && MICS.contains(&parts[3]) {
+        parts.swap(2, 3);
+    }
+    parts
+}
+
 fn cs_is_legato(artic: &str) -> bool {
     matches!(artic, "Leg" | "NVLeg" | "MLeg" | "Port")
 }
@@ -1232,7 +1250,7 @@ fn load_tsv_zones(
             .strip_suffix(".ncw")
             .or_else(|| base.strip_suffix(".wav"))
             .unwrap_or(base);
-        let parts: Vec<&str> = stem.split('_').collect();
+        let parts = cs_name_parts(stem);
         if parts.len() < 4 {
             skipped += 1;
             continue;
@@ -1494,7 +1512,7 @@ fn load_borrowed_zones(tsv: &Path, section_label: &str) -> Result<Vec<BorrowedZo
         let sample = f.get(c_sample).copied().unwrap_or("");
         let base = sample.rsplit('/').next().unwrap_or(sample);
         let stem = base.strip_suffix(".ncw").unwrap_or(base);
-        let parts: Vec<&str> = stem.split('_').collect();
+        let parts = cs_name_parts(stem);
         if parts.len() < 4 {
             continue;
         }

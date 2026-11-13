@@ -753,6 +753,12 @@ pub struct KontaktTransitionSpec {
 /// Every IOI table is the script's integer lerp, flat outside its ends.
 #[derive(Debug, Clone, Facet)]
 pub struct MarcatoTransitionSpec {
+    /// A transition is HARD (`$kbqnb`) above this velocity (`$qm4n3`)…
+    #[facet(default = 75)]
+    pub hard_velocity: u8,
+    /// … and IOI in ms (`$hx3nl`: 50, Cellos 100).
+    #[facet(default = 50.0f32)]
+    pub hard_ioi_ms: f32,
     /// XTime `$a3zg3`, ms.
     pub xfade_ms: f32,
     /// Atk-fade split `$igmiu` %: (soft hard) within an octave; beyond it.
@@ -887,6 +893,8 @@ pub struct LegatoOverlay {
 /// The overridable [`MarcatoTransitionSpec`] fields of a section.
 #[derive(Debug, Clone, Default, Facet)]
 pub struct MarcatoOverlay {
+    pub hard_velocity: Option<u8>,
+    pub hard_ioi_ms: Option<f32>,
     pub body_offset_ms: Option<[f32; 2]>,
     pub lt_offset_ms: Option<Vec<[f32; 2]>>,
     pub lt_db_step: Option<Vec<[f32; 2]>>,
@@ -982,6 +990,12 @@ impl SectionOverlay {
 
 impl MarcatoOverlay {
     fn apply(&self, t: &mut MarcatoTransitionSpec) {
+        if let Some(v) = self.hard_velocity {
+            t.hard_velocity = v;
+        }
+        if let Some(v) = self.hard_ioi_ms {
+            t.hard_ioi_ms = v;
+        }
         if let Some(v) = self.body_offset_ms {
             t.body_offset_ms = v;
         }
