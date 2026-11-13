@@ -73,7 +73,7 @@ VOICE = re.compile(r"^\[v\d+\]\s+([\d.]+)s\s+(.*)$")
 def render(binary, section, mid, flag, values, out, trace=False):
     """Our render with `values` forced; with `trace`, also the voices started
     as (time, description) in order."""
-    args = [binary, mid, out, "--section", section]
+    args = [binary, mid, out, "--section", section, "--library", os.environ.get("CS_LIBRARY", "strings")]
     if values is not None:
         args += [flag, ",".join(str(v) for v in values)]
     if trace:

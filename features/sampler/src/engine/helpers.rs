@@ -136,8 +136,10 @@ impl SampleEngine {
         // forces voice-stealing on every subsequent key press and produces
         // intermittent silence/clicks. 2 s is plenty for any real damper
         // click + decay tail.
-        let release_lifetime_frames =
-            (RELEASE_MAX_LIFETIME_MS as usize) * (self.sample_rate as usize) / 1000;
+        let release_lifetime_frames = (self.patch.spec.performance.voice_timing.release_max_ms
+            as usize)
+            * (self.sample_rate as usize)
+            / 1000;
         // Stem class: releases follow the parent articulation (see
         // `artic_class_for`); direct triggers are classed by their own.
         let artic_class = if matches!(kind, VoiceKind::Release) {

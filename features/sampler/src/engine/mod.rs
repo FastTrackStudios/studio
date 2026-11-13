@@ -251,47 +251,13 @@ use voice::{DynLayer, FlexEnv, Voice, VoiceKind, VoicePool, VoiceStealPolicy};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/// CC1 gain ramp length (ms). Smooths dynamic crossfade to avoid clicks.
-/// CC-mod smoothing lags DECODED from the CSS group modulators
-/// (`GROUP_MODULATORS.md`): every CC1/CC11 volume mod carries `lag_ms = 120`,
-/// every CC2 (vibrato crossfade) mod `lag_ms = 1000`. These are Kontakt's
-/// per-modulator smoothing — the reason CSS CC sweeps are glassy.
-const CC1_RAMP_MS: u32 = 120;
-const CC2_RAMP_MS: u32 = 1000;
-
-/// Default release fade on note-off for sustain voices (ms).
-///
-/// This is the damper-down time: on key-up (sustain pedal NOT held) the note
-/// must stop, not ring out. A short linear fade reads as an immediate cutoff
-/// while avoiding a click. Sustain itself comes only from holding CC64, which
-/// defers the note-off entirely (see `note_off_with_velocity`); the half-pedal
-/// curve still scales this up for partial-pedal positions. Was 500 ms, which
-/// made every key-up sound like a half-second sustain even with the pedal up.
-const RELEASE_MS: u32 = 60;
-/// Extra damping time at the top of the half-pedal range.
-const HALF_PEDAL_MAX_RELEASE_MULTIPLIER: f32 = 4.0;
-
-/// Short de-click fade for sample-playback instruments that have explicit
-/// release/noise samples. The tone should stop on key-up; this only avoids a pop.
-/// Damper-engagement time on note-off when a `release_artic` supplies the
-/// natural tail (e.g. Keyscape pianos). Long enough that the body fades
-/// naturally — short enough that holding the key is what determines note
-/// length. Real Rhodes dampers ring out over ~50–100 ms.
-const KEY_UP_DECLICK_MS: u32 = 80;
-
-/// Cap on the lifetime of a `VoiceKind::Release` voice. The library's
-/// release-tail FLACs can be very long (Keyscape ships 30 s clips) and
-/// release voices play to sample-end, so without a cap each note-off
-/// consumes a voice slot for 30 s and the 64-voice pool fills up after
-/// ~20 key presses — causing voice-stealing and intermittent silence.
-const RELEASE_MAX_LIFETIME_MS: u32 = 2_000;
-
 // The legato/articulation POLICY numbers that used to live here as constants
-// (note-off fades, retire crossfades, CC1 expression curve, legato sustain
+// (note-off and declick timings, CC lags, the transition swell / skip /
+// portamento / AB-dip shape, retire crossfades, CC1 expression curve, legato sustain
 // trim, output makeup, master tune, Overlap-Delay + `$1fvjk` start-offset
 // curves, ENV_FLEX amp-envelope tables) are DATA now: see
-// `crate::spec::{PerformanceSpec, LegatoEngineSpec, DynamicsSpec,
-// Cc1ExpressionSpec, default_amp_env}`. Their defaults equal the historical
+// `crate::spec::{PerformanceSpec, VoiceTimingSpec, LegatoEngineSpec,
+// TransitionShapeSpec, DynamicsSpec, Cc1ExpressionSpec, default_amp_env}`. Their defaults equal the historical
 // hardcoded values, so specs that don't set them play identically; the
 // engine keeps only the mechanism (zone resolution, scheduling,
 // crossfading) and reads every number from `patch.spec`.
@@ -320,101 +286,6 @@ pub(crate) fn loop_debug() -> bool {
     *ON.get_or_init(|| std::env::var_os("SIGNAL_LOOP_DEBUG").is_some())
 }
 
-/// Minimum attack fade (ms) for a synthesized-loop sustain that starts mid-sample
-/// at full level — just enough to avoid an onset click without slowing the attack.
-const SUSTAIN_DECLICK_MS: u32 = 12;
-
-/// CSS Expressive crossfade shape (KSP §3.1/§8, shipped values): the DESTINATION
-/// sustain swells up under the transition, filling the bow-change dip and
-/// reaching full at the arrival tick. Two-stage: a fast stage-1 to ~90 % then a
-/// slow stage-2 swell to full.
-// Exact shipped anchors from persistent_1.tsv (css-ksp-anchor-values.md).
-const CSS_XTIME_MS: u32 = 225; // $a3zg3 (XTime) — FLAT 225 ms (all IOI anchors = 225)
-const CSS_ATK_FADE_PCT: u32 = 50; // $igmiu — stage split %, kbqnb=0 (soft); 60 hard
-/// Low-Latency legato crossfade (`$ocjln=0` standard engine, KSP §3.7): a short
-/// SINGLE-stage fade, no two-stage swell — the snappy, responsive mode selected
-/// by a CC58 0-5 keyswitch (default document legato is Expressive).
-const CSS_LL_XFADE_MS: u32 = 80;
-
-/// `$x444h` (Node-Vol) — the stage-1 fade divisor, and the ONLY IOI-scaled
-/// crossfade param (css-ksp-anchor-values.md §3): 90 for IOI<150 ms, lerp
-/// 90→60 over 150-300 ms, then flat 60. A smaller divisor lengthens stage-1
-/// (`$mlnoy = XTime*igmiu/$x444h`) → a more gradual first stage on slow notes.
-fn css_node_vol_div(ioi_ms: f32) -> u32 {
-    if ioi_ms <= 150.0 {
-        90
-    } else if ioi_ms >= 300.0 {
-        60
-    } else {
-        (90.0 - (90.0 - 60.0) * (ioi_ms - 150.0) / 150.0).round() as u32
-    }
-}
-
-/// Portamento micro-glide (CSS `$ma0b1` on, KSP §3.2/§8, shipped): the incoming
-/// note scoops to true pitch over `$1mwwo`=60 ms with a `$ruv02`=10 base bend
-/// (`$jyttf = $ruv02*1000` millicents ⇒ ~10 cents; `$i1kki`=10 = no interval
-/// scaling in the shipped state).
-const CSS_PORTA_BTIME_MS: u32 = 60; // $1mwwo
-
-/// CSS `$1fvjk` main-transition (`%jcxqm`) sample-start offset (ms) by
-/// (hard-table, interval), css-ksp-anchor-values.md §6: soft/≤12 st = 60,
-/// soft/>12 = 10, hard/≤12 = 20, hard/>12 = 0. How far INTO the transition
-/// recording playback begins, skipping the sharp bow-attack head. Used as a
-/// MINIMUM skip on the document path so the onset is never audible.
-fn css_lt_min_skip_ms(kbqnb_hard: bool, interval: u32) -> u32 {
-    match (kbqnb_hard, interval > 12) {
-        (false, false) => 60,
-        (false, true) => 10,
-        (true, false) => 20,
-        (true, true) => 0,
-    }
-}
-
-/// Portamento bend depth (cents, unsigned) as a function of interval and IOI
-/// (`$ruv02` interp, css-ksp-anchor-values.md §5a). Breakpoints 75/100/500 ms;
-/// per-interval anchors. Notably interval-2 (whole-tone) bend is 0 for IOI ≥
-/// 500 ms — a slow whole-tone line gets NO glide; the glide only appears on
-/// fast and/or small-interval moves.
-fn css_bend_cents(interval: u8, ioi_ms: f32) -> f32 {
-    let (a, b, c) = match interval {
-        0 | 1 => (40.0, 10.0, 10.0),
-        2 => (30.0, 10.0, 0.0),
-        _ => (20.0, 0.0, 0.0),
-    };
-    if ioi_ms <= 75.0 {
-        a
-    } else if ioi_ms <= 100.0 {
-        a + (b - a) * (ioi_ms - 75.0) / 25.0
-    } else if ioi_ms <= 500.0 {
-        b + (c - b) * (ioi_ms - 100.0) / 400.0
-    } else {
-        c
-    }
-}
-
-/// `$xu41m` — the AB-dip window (ms). Shipped persistent: 250.
-const CSS_AB_WINDOW_MS: u32 = 250;
-/// `$4lqhx` — the in-window dip. Shipped persistent −30, in deci-dB → −3.0 dB.
-/// (`$ee3a4`=0 shipped, so the ramp term vanishes and the dip is flat; and
-/// branch B's `$ee3a4 + elapsed*|$ee3a4|/$c2hkn` is identically 0 dB.)
-const CSS_AB_DIP_DB: f32 = -3.0;
-/// `$x0jlu` — the fixed offset a velocity-zone-3 hard attack takes instead of
-/// the AB dip. Shipped persistent 0.
-const CSS_AB_ZONE3_DB: f32 = 0.0;
-
-/// Onset declick (ms) for legato transitions, release tails, and any voice that
-/// starts mid-sample (`start_offset`). Long enough to remove the onset step
-/// click, short enough to be inaudible on a recorded bow-change / release.
-const ONSET_DECLICK_MS: u32 = 6;
-
-/// Note-body peak (linear, ~-54 dBFS) below which a note-off fires NO release
-/// tail: the note has already decayed to near-silence, so a release would just
-/// be a "thump" on a gone note.
-const RELEASE_BODY_FLOOR: f32 = 0.002;
-/// Below this release velocity the release sample is suppressed entirely —
-/// avoids producing an audible click on every note-off when a controller's
-/// release-velocity is effectively 0.
-const RELEASE_SAMPLE_VELOCITY_MIN: u8 = 1;
 const RECENT_MISS_LIMIT: usize = 8;
 
 // ── Legato state ──────────────────────────────────────────────────────────────
@@ -1151,12 +1022,18 @@ impl SampleEngine {
 
         let legato_fade_frames =
             ms_to_frames(patch.spec.legato_cfg().transition_fade_ms, sample_rate);
-        let cc1_ramp_frames = ms_to_frames(CC1_RAMP_MS, sample_rate);
+        let cc1_ramp_frames =
+            ms_to_frames(patch.spec.performance.voice_timing.cc1_lag_ms, sample_rate);
         // Library-authored defaults (CSS: 198 ms arco-attack bloom / 400 ms
         // note-off overlap) — callers can still override via
         // `set_attack_frames` / `set_release_frames`.
+        let sord = patch.spec.performance.sordino_filter.clone();
         let release_frames = ms_to_frames(
-            patch.spec.performance.release_ms.unwrap_or(RELEASE_MS),
+            patch
+                .spec
+                .performance
+                .release_ms
+                .unwrap_or(patch.spec.performance.voice_timing.noteoff_fade_ms),
             sample_rate,
         );
         let spec_attack_frames = patch
@@ -1305,7 +1182,7 @@ impl SampleEngine {
             marcato_kbqnb: false,
             suppress_random_tune: false,
             transition_fade: None,
-            sord_filter: BiquadFilter::lowpass(filter::SORD_FC, filter::SORD_Q, sample_rate),
+            sord_filter: BiquadFilter::lowpass(sord.cutoff_hz, sord.q, sample_rate),
             // Pre-size note-keyed maps to the full MIDI range so note-on never
             // reallocates them on the audio thread.
             held_notes: HashMap::with_capacity(128),
@@ -3085,12 +2962,7 @@ fn half_pedal_release_frames(
         "sqrt" | "square-root" | "square_root" => position.sqrt(),
         _ => position,
     };
-    let max_multiplier = if max_multiplier > 0.0 {
-        max_multiplier
-    } else {
-        HALF_PEDAL_MAX_RELEASE_MULTIPLIER
-    }
-    .max(1.0);
+    let max_multiplier = max_multiplier.max(1.0);
     let multiplier = 1.0 + (max_multiplier - 1.0) * shaped;
     ((base_frames as f32) * multiplier).round() as usize
 }

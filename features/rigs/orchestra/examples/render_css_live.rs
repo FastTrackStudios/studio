@@ -116,22 +116,21 @@ fn main() -> eyre::Result<()> {
     // The orchestra feature's strings *definition* — loads CSS 1st Violins with
     // the exact engine settings (solo mic, arco-attack bloom, release overlap)
     // that match a real CSS-in-Kontakt render.
-    // `--section "2nd Violins"`: any CSS section (default 1st Violins).
+    // `--library woodwinds` (default strings) and `--section "Solo Flute"`:
+    // any instrument of any library, by its patch folder name (default 1st
+    // Violins).
     let all: Vec<String> = std::env::args().collect();
-    let section = all
-        .iter()
-        .position(|a| a == "--section")
-        .and_then(|i| all.get(i + 1).cloned())
-        .unwrap_or_else(|| "1st Violins".to_string());
-    signal_orchestra::load_strings(
-        &rig,
-        ID,
-        &section,
-        "Mix",
-        signal_orchestra::CSS_ROOT,
-        signal_orchestra::CSS_CONFIG,
-    )
-    .map_err(|e| eyre::eyre!(e))?;
+    let flag = |name: &str| {
+        all.iter()
+            .position(|a| a == name)
+            .and_then(|i| all.get(i + 1).cloned())
+    };
+    let section = flag("--section").unwrap_or_else(|| "1st Violins".to_string());
+    let lib_name = flag("--library").unwrap_or_else(|| "strings".to_string());
+    let library = signal_orchestra::library(&lib_name)
+        .ok_or_else(|| eyre::eyre!("unknown library {lib_name:?}"))?;
+    signal_orchestra::load_instrument(&rig, ID, library, &section, "Mix")
+        .map_err(|e| eyre::eyre!(e))?;
     let trace = std::env::args().any(|a| a == "--trace");
     rig.set_trace_enabled(ID, trace);
     // `--tunes a,b,…`: Kontakt's random short detune draws (cents), fitted

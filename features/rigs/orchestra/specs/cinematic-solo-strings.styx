@@ -533,6 +533,30 @@ legato_engine {
         trigger sustain_pedal_held
         rr      3
     }
+
+    // The transition shape where `kontakt_transition` does not apply (the
+    // document path and portamento). These are the CSS KSP values the engine
+    // used to apply to every library; NOT yet measured for this one.
+    shape {
+        swell_ms              225   // $a3zg3 XTime (flat over IOI)
+        swell_split_pct       50    // $igmiu, soft attack
+        swell_split_pct_hard  60    // $igmiu, hard table
+        swell_split_pct_leap  50    // interval > 12 (ignores the hard table)
+        swell_divisor { thresholds_ms (150 300), anchors_ms (90 60) }   // $x444h Node-Vol
+        low_latency_fade_ms   80    // $ocjln=0 single-stage fade
+        hard_ioi_ms           50    // velocity zone 3 is "hard" only above this IOI
+        transition_min_skip_ms (60 10 20 0)   // $1fvjk: soft<=12, soft>12, hard<=12, hard>12
+        portamento_glide_ms   60    // $1mwwo
+        portamento_bend_cents (     // $ruv02 by IOI: unison/semitone, whole tone, wider
+            { thresholds_ms (75 100 500), anchors_ms (40 10 10) }
+            { thresholds_ms (75 100 500), anchors_ms (30 10 0) }
+            { thresholds_ms (75 100 500), anchors_ms (20 0 0) }
+        )
+        ab_window_ms          250   // $xu41m
+        ab_dip_db             -3.0  // $4lqhx (-30 deci-dB)
+        ab_zone3_db           0.0   // $x0jlu
+        old_body_fade_ms      250   // $jvqtp "Old out"
+    }
 }
 
 // ── Short Note Timing ─────────────────────────────────────────────────────────
@@ -554,8 +578,8 @@ keyswitch {
     user_configurable  true
 
     cc58_map {
-        0-5   "Sustain: Standard Legato"
-        6-10  "Sustain: Advanced Legato"
+        0-5   "Nonvib+@legato-low"
+        6-10  "Nonvib+@legato-expressive"
         11-15 Spiccato
         16-20 Staccatissimo
         21-25 Staccato
@@ -566,13 +590,13 @@ keyswitch {
         46-50 Trills
         51-55 Harm
         56-60 Tremolo
-        61-65 "Measured Tremolo"
-        66-70 "Marcato (no overlay)"
-        71-75 "Marcato (with overlay)"
-        76-80 "Legato On"
-        81-85 "Legato Off"
-        86-90 "Con Sordino On"
-        91-95 "Con Sordino Off"
+        61-65 "@ignore"  // Measured Tremolo: KSP-scripted, no samples
+        66-70 "Marcato+@overlay-off"
+        71-75 "Marcato+@overlay-on"
+        76-80 "@legato-on"
+        81-85 "@legato-off"
+        86-90 "@sordino-on"
+        91-95 "@sordino-off"
     }
 
     // ASSUMPTION: CSSS documents NO default keyswitch-note layout (fully

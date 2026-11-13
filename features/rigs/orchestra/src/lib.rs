@@ -67,6 +67,74 @@ pub fn load_strings(
     Ok(())
 }
 
+/// A sampled orchestral library: where it is installed and which spec drives
+/// it. Everything about one of its instruments lives in those two places —
+/// the spec (`specs/<library>.styx`) and the instrument's patch folder
+/// (`<root>/_patches/<instrument>/`: `library.styx` zones, `section.styx`
+/// numbers) — so a new library is a row here, never engine code.
+#[derive(Debug, Clone, Copy)]
+pub struct Library {
+    /// Short name (`strings`, `woodwinds`, `brass`, `solo-strings`).
+    pub name: &'static str,
+    /// Install root (the folder holding `_patches/` and the mic folders).
+    pub root: &'static str,
+    /// The library spec.
+    pub config: &'static str,
+}
+
+/// The libraries this crate can load.
+pub const LIBRARIES: &[Library] = &[
+    Library {
+        name: "strings",
+        root: CSS_ROOT,
+        config: CSS_CONFIG,
+    },
+    Library {
+        name: "woodwinds",
+        root: "/run/media/AudioHaven/Sampled/Orchestral/Cinematic Series/Cinematic Studio Woodwinds",
+        config: concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/specs/cinematic-woodwinds.styx"
+        ),
+    },
+    Library {
+        name: "brass",
+        root: "/run/media/AudioHaven/Sampled/Orchestral/Cinematic Series/Cinematic Studio Brass",
+        config: concat!(env!("CARGO_MANIFEST_DIR"), "/specs/cinematic-brass.styx"),
+    },
+    Library {
+        name: "solo-strings",
+        root: "/run/media/AudioHaven/Sampled/Orchestral/Cinematic Series/Cinematic Studio Solo Strings",
+        config: concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/specs/cinematic-solo-strings.styx"
+        ),
+    },
+];
+
+/// The library called `name` (see [`LIBRARIES`]).
+#[must_use]
+pub fn library(name: &str) -> Option<&'static Library> {
+    LIBRARIES.iter().find(|l| l.name.eq_ignore_ascii_case(name))
+}
+
+/// Load one instrument of `library` (its patch folder name, e.g.
+/// `"1st Violins"`, `"Solo Flute"`, `"Saf"`) into `rig` under `id`, playing
+/// `mic` only.
+///
+/// # Errors
+///
+/// Returns an error if the instrument cannot be loaded.
+pub fn load_instrument(
+    rig: &SamplerRig,
+    id: &str,
+    library: &Library,
+    instrument: &str,
+    mic: &str,
+) -> Result<(), String> {
+    load_strings(rig, id, instrument, mic, library.root, library.config)
+}
+
 // ── Score → document bridge (keyflow-orchestra → signal-sampler) ─────────────
 
 /// Convert one keyflow-orchestra engine output into a sampler [`TrackDocument`].

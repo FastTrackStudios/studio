@@ -22,9 +22,29 @@ else follows this loop. Tools live in `features/rigs/orchestra/tests/`.
 - Timeouts on every ssh/scp/render; builds in the background; commit through
   `nix develop -c git commit` (shellcheck/rustfmt hooks).
 
+## The engine holds no library numbers
+
+Everything an instrument does is data: the library spec
+(`features/rigs/orchestra/specs/<library>.styx`) and the instrument's patch
+folder (`<root>/_patches/<instrument>/library.styx` zones + `section.styx`
+numbers). The engine has only mechanisms. When matching a library needs
+something the spec cannot express, add the GENERIC mechanism to the engine
+(a field with a neutral default) and put the library's values in its spec
+— never a library-specific constant, label or branch in engine code. CC58
+values are tokens like keyswitch notes (`"Nonvib+@legato-low"`,
+`"Marcato+@overlay-on"`, `"@ignore"`). After any engine change, re-run the
+strings null suite (`SKIP_KONTAKT=1`) and compare every unit with the
+previous `null.json`s: a refactor must leave all 50 probes unchanged.
+
+Libraries: `signal_orchestra::LIBRARIES` (strings, woodwinds, brass,
+solo-strings); `render_css_live --library woodwinds --section "Solo Flute"`
+(patch folder name). `tests/cs_ksp_var_map.tsv` maps each KSP var the strings
+generator reads to its CSW / CSB equivalent (or "absent").
+
 ## 1. Decode and sync an instrument (offline)
 
-`css_section.sh "<Section>"`:
+`css_section.sh "<Section>"` (strings) or `css_section.sh "CSW Solo Flute"` /
+`"CSB Solo Trumpet"` (full NKI name; `DECODE_ONLY=1` decodes only):
 1. decodes `CSS <Section>.nki` (nkx-extract `nki --zones`) into
    `_ksp/CSS <Section>/`: zones.tsv **with the `group` column**, groups.json,
    KSP scripts, persistent values;
@@ -55,7 +75,8 @@ One chain per instrument: `target/orchestra-ab/chains/fxchain_<tag>.txt`
 
 ## 3. Null suite
 
-`null_suite.sh "<Section>" [modes]` — probe MIDI (`gen_probe.py`, transposed
+`null_suite.sh "<Section>" [modes]` (woodwinds by patch folder: `"Solo Flute"`,
+`"Saf"`; transpositions and chain tags `ww_<tag>` are in the script) — probe MIDI (`gen_probe.py`, transposed
 into range), two Kontakt renders, ours, `null_test.py`. Random draws (detune,
 legato variants, attacks) are fitted with `fit_draws.py` and replayed.
 Results: `target/orchestra-ab/sec/<tag>/<mode>/null.json` (read the JSON; the

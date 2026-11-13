@@ -1826,12 +1826,12 @@ impl SampleEngine {
                 // keep the arrival on the tick. That silent-gap + head-skip IS
                 // the CSS Overlap-Delay + `$1fvjk` structure, and it masks the
                 // audible NVLeg onset. Never skip past the arrival marker itself.
+                let cfg = self.patch.spec.legato_cfg();
                 let kbqnb_hard =
-                    self.patch.spec.legato_cfg().velocity_range(velocity) == 3 && ioi_ms > 50.0;
-                let min_skip_ms = crate::engine::css_lt_min_skip_ms(
-                    kbqnb_hard,
-                    self.patch.spec.zones[idx].interval,
-                );
+                    cfg.velocity_range(velocity) == 3 && ioi_ms > cfg.shape.hard_ioi_ms;
+                let min_skip_ms = cfg
+                    .shape
+                    .transition_min_skip(kbqnb_hard, self.patch.spec.zones[idx].interval);
                 let min_skip = ms_to_frames(min_skip_ms, self.sample_rate) as u64;
                 raw.max(min_skip.min(lead_sample_frames.saturating_sub(1))) as usize
             }
@@ -1854,18 +1854,17 @@ impl SampleEngine {
         // declick that reads as an artificial onset (the NVLeg sample has no
         // silent head). Same shape as the destination swell (igmiu / IOI-scaled
         // $x444h), capped at the audible window so it lands full at the arrival.
+        let shape = self.patch.spec.legato_cfg().shape.clone();
+        let declick_ms = self.patch.spec.performance.voice_timing.sustain_declick_ms;
         self.transition_fade = sched_lead.map(|_| {
             let arrival_wall = ((lead_sample_frames.saturating_sub(start_offset as u64)) as f64
                 / rate.max(1e-9))
             .round() as usize;
-            let total = ms_to_frames(crate::engine::CSS_XTIME_MS, self.sample_rate)
+            let total = ms_to_frames(shape.swell_ms, self.sample_rate)
                 .min(arrival_wall)
-                .max(ms_to_frames(
-                    crate::engine::SUSTAIN_DECLICK_MS,
-                    self.sample_rate,
-                ));
-            let igmiu = crate::engine::CSS_ATK_FADE_PCT as usize;
-            let x444h = crate::engine::css_node_vol_div(ioi_ms) as usize;
+                .max(ms_to_frames(declick_ms, self.sample_rate));
+            let igmiu = shape.swell_split_pct as usize;
+            let x444h = shape.swell_divisor_at(ioi_ms) as usize;
             let s1 = total * igmiu / 100;
             let s1d = (total * igmiu / x444h).max(1);
             let s2 = total * (100 - igmiu) / 100;
@@ -2843,7 +2842,6 @@ impl SampleEngine {
         // get a short declick ramp: without it the onset steps from silence to
         // a non-zero sample value and clicks on every note change. Shorts keep
         // their sharp natural attack (they start at true sample-start silence).
-        let _ = SUSTAIN_DECLICK_MS;
         let attack = if matches!(kind, VoiceKind::Legato) && self.transition_fade.is_some() {
             // The two-stage transition swell (below) IS the fade-in — no
             // separate declick attack, which would double the onset.
@@ -2862,9 +2860,15 @@ impl SampleEngine {
             } else if start_offset > 0 {
                 // Mid-sample entry starts at a non-zero sample value and WILL
                 // click without a ramp — which is the only thing the declick
-                // is for; see `SUSTAIN_DECLICK_MS`, "starts mid-sample at full
-                // level".
-                ms_to_frames(crate::engine::SUSTAIN_DECLICK_MS.max(20), self.sample_rate)
+                // is for.
+                ms_to_frames(
+                    self.patch
+                        .spec
+                        .performance
+                        .voice_timing
+                        .mid_sample_declick_ms,
+                    self.sample_rate,
+                )
             } else {
                 // True sample start: the recording begins at silence, so there
                 // is nothing to declick and the ramp only destroys the onset.
@@ -2884,7 +2888,10 @@ impl SampleEngine {
             )
             .min(start_offset)
         } else if matches!(kind, VoiceKind::Legato | VoiceKind::Release) {
-            ms_to_frames(ONSET_DECLICK_MS, self.sample_rate)
+            ms_to_frames(
+                self.patch.spec.performance.voice_timing.onset_declick_ms,
+                self.sample_rate,
+            )
         } else {
             0
         };
@@ -3383,8 +3390,10 @@ impl SampleEngine {
                 }
                 self.set_active_line(l as LineId);
                 if controller == 2 {
-                    self.next_cc_ramp =
-                        Some(ms_to_frames(crate::engine::CC2_RAMP_MS, self.sample_rate));
+                    self.next_cc_ramp = Some(ms_to_frames(
+                        self.patch.spec.performance.voice_timing.cc2_lag_ms,
+                        self.sample_rate,
+                    ));
                 }
                 self.update_sustain_gains();
             }
@@ -3448,8 +3457,10 @@ impl SampleEngine {
                 self.cc2 = value;
                 self.line_mut().cc2 = value;
                 // CC2 (vibrato crossfade) re-levels over its decoded 1000 ms lag.
-                self.next_cc_ramp =
-                    Some(ms_to_frames(crate::engine::CC2_RAMP_MS, self.sample_rate));
+                self.next_cc_ramp = Some(ms_to_frames(
+                    self.patch.spec.performance.voice_timing.cc2_lag_ms,
+                    self.sample_rate,
+                ));
                 self.update_sustain_gains();
             }
             58 => {

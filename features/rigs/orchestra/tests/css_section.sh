@@ -97,11 +97,18 @@ echo "decoded: $(($(wc -l < "$ksp/zones.tsv") - 1)) zones → $ksp"
 
 # 2. zones
 [ -f "$patch/library.styx.pre-$stamp" ] || cp "$patch/library.styx" "$patch/library.styx.pre-$stamp"
-(cd "$repo" && timeout 3000 nix develop -c cargo run -q --profile desktop-dev \
-    --target x86_64-unknown-linux-gnu -p sampler --example signalpack -- \
-    zones sync-tsv "$patch/library.styx" --from-tsv "$ksp/zones.tsv" --section "$label" \
-    "${flat[@]}" --disable-unmatched) \
-    2>&1 | grep -E "matched|edited|wrote|^error" || true
+# Build first, on its own: a failed build must stop the run, not pass
+# silently through the output filter below and sync nothing.
+(cd "$repo" && timeout 3000 nix develop -c cargo build -q --profile desktop-dev \
+    --target x86_64-unknown-linux-gnu -p sampler --example signalpack) \
+    || { echo "signalpack build failed" >&2; exit 1; }
+signalpack="$repo/target/x86_64-unknown-linux-gnu/desktop-dev/examples/signalpack"
+sync_log="$(mktemp)"
+timeout 1800 "$signalpack" zones sync-tsv "$patch/library.styx" --from-tsv "$ksp/zones.tsv" \
+    --section "$label" "${flat[@]}" --disable-unmatched > "$sync_log" 2>&1 \
+    || { cat "$sync_log" >&2; rm -f "$sync_log"; echo "sync-tsv failed" >&2; exit 1; }
+grep -E "matched|edited|wrote|borrowed|unreachable" "$sync_log" || true
+rm -f "$sync_log"
 if [ ${#flat[@]} -gt 0 ]; then
   # The woodwinds' and brass' per-instrument numbers are not generated yet.
   echo "skipped section.styx (no woodwinds / brass overlay generator yet)"

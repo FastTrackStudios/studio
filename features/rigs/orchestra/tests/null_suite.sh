@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Null-test one CSS section against Kontakt, probe by probe:
+# Null-test one Cinematic Studio instrument against Kontakt, probe by probe:
 #
 #   features/rigs/orchestra/tests/null_suite.sh "Violas" [mode ...]
+#   features/rigs/orchestra/tests/null_suite.sh "Solo Flute" [mode ...]
 #
 # For each mode (default: all of them) it writes the probe MIDI
 # (gen_probe.py, transposed into the section's range), renders it twice
@@ -25,14 +26,31 @@ set -euo pipefail
 
 section="${1:?usage: null_suite.sh <Section> [mode ...]}"
 shift
+# section → chain tag, probe transposition (into the instrument's range) and
+# library; the section is the instrument's patch folder name.
+lib="strings"
 case "$section" in
   "1st Violins") tag=1v; tr=0 ;;
   "2nd Violins") tag=2v; tr=0 ;;
   "Violas")      tag=va; tr=-7 ;;
   "Cellos")      tag=vc; tr=-19 ;;
   "Basses")      tag=cb; tr=-24 ;;
+  "2 Bassoons")    lib=woodwinds; tag=ww_bn2; tr=-7 ;;
+  "2 Clarinets")   lib=woodwinds; tag=ww_cl2; tr=0 ;;
+  "2 Flutes")      lib=woodwinds; tag=ww_fl2; tr=0 ;;
+  "2 Oboes")       lib=woodwinds; tag=ww_ob2; tr=0 ;;
+  "Saf")           lib=woodwinds; tag=ww_afl; tr=0 ;;
+  "Sbc")           lib=woodwinds; tag=ww_bcl; tr=-7 ;;
+  "Solo Bassoon")  lib=woodwinds; tag=ww_bn;  tr=-7 ;;
+  "Solo Clarinet") lib=woodwinds; tag=ww_cl;  tr=0 ;;
+  "Scb")           lib=woodwinds; tag=ww_cbn; tr=-11 ;;
+  "Sca")           lib=woodwinds; tag=ww_ca;  tr=0 ;;
+  "Solo Flute")    lib=woodwinds; tag=ww_fl;  tr=0 ;;
+  "Solo Oboe")     lib=woodwinds; tag=ww_ob;  tr=0 ;;
+  "Spi")           lib=woodwinds; tag=ww_picc; tr=0 ;;
   *) echo "unknown section: $section" >&2; exit 1 ;;
 esac
+export CS_LIBRARY="$lib"   # fit_draws.py passes it on to the renderer
 modes=("$@")
 [ ${#modes[@]} -gt 0 ] || modes=(probe legato leg2 marcato marc2 shorts pizz trem rebow attack)
 
@@ -104,7 +122,7 @@ for mode in "${modes[@]}"; do
         "$d/${mode}_kontakt_r1.wav" --json "$d/null.json" | tail -1
       ;;
     *)
-      "$bin" "$d/$mode.mid" "$d/${mode}_ours.wav" --section "$section" >/dev/null 2>&1
+      "$bin" "$d/$mode.mid" "$d/${mode}_ours.wav" --section "$section" --library "$lib" >/dev/null 2>&1
       npy "$here/null_test.py" "$d/${mode}_manifest.tsv" "$d/${mode}_ours.wav" \
         "$d/${mode}_kontakt_r1.wav" "$d/${mode}_kontakt_r2.wav" --json "$d/null.json" | tail -2
       ;;

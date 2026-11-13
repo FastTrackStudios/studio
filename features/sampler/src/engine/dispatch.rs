@@ -3,22 +3,6 @@
 
 use super::*;
 
-/// Fade time for the previous same-note body when a key is re-struck (see
-/// [`SampleEngine::trigger_short`]). Smooth enough to subsume the old ring, not
-/// so long that fast repeats overlap into a pileup. Chosen by ear; deliberately
-/// NOT the CSS number below, because this path also serves live re-strikes
-/// under a held pedal, where a long fade stacks 30 s voices until the pool
-/// steals still-ringing notes.
-const RETRIGGER_FADE_MS: u32 = 90;
-
-/// `$jvqtp` "Old out" — the fade the OUTGOING body takes when a new body starts
-/// (`script_1.ksp` 19239, `fade_out($eyijx,$jvqtp*1000,1)`; shipped persistent
-/// 250). It sits outside the interval guard at 19247, so it runs on every new
-/// body: a pitch change and a pedal-less repeat alike. Scoped to the CSS legato
-/// re-attack; measured neutral on the param test (S10 shape 6.00 → 5.99), so
-/// the S10 decay is NOT this fade.
-const CSS_OLD_OUT_MS: u32 = 250;
-
 /// Everything a keyswitch (CC58, a keyswitch note, a latched-CC selector)
 /// can change on an engine, captured so it can be put back — see
 /// [`SampleEngine::keyswitch_state`].
@@ -164,7 +148,10 @@ impl SampleEngine {
         // notes from piling up 30 s voices until the pool steals still-ringing
         // notes ("plays a click, the note doesn't ring"). ~90 ms is a smooth
         // subsume, not an audible cut.
-        let retrigger_fade = ms_to_frames(RETRIGGER_FADE_MS, self.sample_rate);
+        let retrigger_fade = ms_to_frames(
+            self.patch.spec.performance.voice_timing.retrigger_fade_ms,
+            self.sample_rate,
+        );
         self.voices.retrigger_fade_note(note, retrigger_fade);
 
         // Pick dynamic layer based on velocity and spec short_note_cc1_map.
@@ -182,7 +169,7 @@ impl SampleEngine {
             .is_some();
         // Voice kind + release length:
         // - has_release_artic (Keyscape pianos, orchestral shorts):
-        //   body releases on note-off in KEY_UP_DECLICK_MS (effectively
+        //   body releases on note-off in `voice_timing.key_up_declick_ms` (effectively
         //   immediate). The dedicated release_artic supplies the tail.
         // - no release_artic: long natural decay; sample's tail IS the
         //   release.
@@ -193,7 +180,10 @@ impl SampleEngine {
             VoiceKind::Short
         };
         let release_frames = if has_release_artic {
-            ms_to_frames(KEY_UP_DECLICK_MS, self.sample_rate)
+            ms_to_frames(
+                self.patch.spec.performance.voice_timing.key_up_declick_ms,
+                self.sample_rate,
+            )
         } else {
             self.release_frames
         };
@@ -389,13 +379,15 @@ impl SampleEngine {
     /// the phrase's FIRST note, 0 dB everywhere else. It is not a per-repeat
     /// anti-machine-gun dip, which is how we had it.
     pub(crate) fn css_ab_dip_db(&mut self, zone3: bool) -> f32 {
+        let shape = &self.patch.spec.legato_cfg().shape;
         if zone3 {
-            return crate::engine::CSS_AB_ZONE3_DB;
+            return shape.ab_zone3_db;
         }
+        let dip = shape.ab_dip_db;
         let now = self.frames_rendered;
-        let window = ms_to_frames(crate::engine::CSS_AB_WINDOW_MS, self.sample_rate) as u64;
+        let window = ms_to_frames(shape.ab_window_ms, self.sample_rate) as u64;
         if now.saturating_sub(self.ab_anchor_frame) <= window {
-            crate::engine::CSS_AB_DIP_DB
+            dip
         } else {
             self.ab_anchor_frame = now.saturating_sub(window);
             0.0
@@ -483,7 +475,10 @@ impl SampleEngine {
         // attack-transient dip) with the bloom recovery — with deep gaps at
         // the boundaries from the old voice's retrigger fade.
         if from_note == to_note && !self.cc64_held {
-            let fade = ms_to_frames(CSS_OLD_OUT_MS, self.sample_rate);
+            let fade = ms_to_frames(
+                self.patch.spec.legato_cfg().shape.old_body_fade_ms,
+                self.sample_rate,
+            );
             self.voices.retrigger_fade_note(to_note, fade);
             let trim_zone = self.patch.spec.legato_cfg().velocity_range(velocity) <= 2;
             self.legato_sustain = true;
@@ -647,11 +642,15 @@ impl SampleEngine {
             // handoff is continuous, not a discrete step. Not for Pacific.
             self.legato_glide = if !pacific && from_note != to_note {
                 let interval = to_note.abs_diff(from_note);
-                let bend = crate::engine::css_bend_cents(interval, ioi_ms);
+                let shape = &self.patch.spec.legato_cfg().shape;
+                let (bend, glide_ms) = (
+                    shape.portamento_bend(interval, ioi_ms),
+                    shape.portamento_glide_ms,
+                );
                 if bend > 0.0 {
                     let dir = if to_note > from_note { 1.0 } else { -1.0 };
                     let jyttf = bend * dir;
-                    let frames = ms_to_frames(crate::engine::CSS_PORTA_BTIME_MS, self.sample_rate);
+                    let frames = ms_to_frames(glide_ms, self.sample_rate);
                     // Outgoing ($upjkh): bend the retiring from_note voices.
                     self.voices
                         .glide_note_line(self.cur_line as u8, from_note, 0.0, jyttf, frames);
@@ -687,7 +686,11 @@ impl SampleEngine {
             //    arriving before the click). Hold it back to the tick: the
             //    transition sample owns the pre-arrival air, exactly as it
             //    does in Kontakt.
-            let declick = ms_to_frames(SUSTAIN_DECLICK_MS, self.sample_rate);
+            let shape = self.patch.spec.legato_cfg().shape.clone();
+            let declick = ms_to_frames(
+                self.patch.spec.performance.voice_timing.sustain_declick_ms,
+                self.sample_rate,
+            );
             let hold = sched_lead.unwrap_or(0) as usize;
             if pacific {
                 // Pacific `pisus`: the destination sustain crossfades in at
@@ -715,17 +718,17 @@ impl SampleEngine {
                     // Cap by the lead only when there IS one (document prefire
                     // must land full at the tick). Reactive/no-shift (hold 0)
                     // swells over the full XTime AFTER the tick, like CSS.
-                    let total = ms_to_frames(crate::engine::CSS_XTIME_MS, self.sample_rate)
+                    let total = ms_to_frames(shape.swell_ms, self.sample_rate)
                         .min(if hold > 0 { hold } else { usize::MAX })
                         .max(declick);
                     let igmiu = if big_leap {
-                        50 // interval>12 fallback (fixed, ignores the hard table)
+                        shape.swell_split_pct_leap // interval>12: ignores the hard table
                     } else if kbqnb_hard {
-                        60
+                        shape.swell_split_pct_hard
                     } else {
-                        crate::engine::CSS_ATK_FADE_PCT as usize
-                    };
-                    let x444h = crate::engine::css_node_vol_div(ioi_ms) as usize;
+                        shape.swell_split_pct
+                    } as usize;
+                    let x444h = shape.swell_divisor_at(ioi_ms) as usize;
                     let stage1_run = total * igmiu / 100;
                     let stage1_denom = (total * igmiu / x444h).max(1);
                     let stage2 = total * (100 - igmiu) / 100;
@@ -734,7 +737,7 @@ impl SampleEngine {
                 } else {
                     // LOW-LATENCY ($ocjln=0, KSP §3.7): a short SINGLE-stage fade,
                     // no swell — `(delay, f, f, 0)`.
-                    let fill = ms_to_frames(crate::engine::CSS_LL_XFADE_MS, self.sample_rate)
+                    let fill = ms_to_frames(shape.low_latency_fade_ms, self.sample_rate)
                         .min(hold)
                         .max(declick);
                     self.sustain_fade_in = Some((hold.saturating_sub(fill), fill, fill, 0));
@@ -980,10 +983,15 @@ impl SampleEngine {
             .articulation(&self.articulation)
             .and_then(|a| a.release_artic.clone());
 
-        if let Some(rel_id) = release_artic
-            .as_ref()
-            .filter(|_| velocity >= RELEASE_SAMPLE_VELOCITY_MIN)
-        {
+        if let Some(rel_id) = release_artic.as_ref().filter(|_| {
+            velocity
+                >= self
+                    .patch
+                    .spec
+                    .performance
+                    .voice_timing
+                    .release_min_velocity
+        }) {
             // The release-tail DYNAMIC follows the note-on strike (controllers
             // send 0/64 "no info" on note-off), and its GAIN sits a fixed dB
             // UNDER the note body that actually sounded. The body samples encode
@@ -1005,7 +1013,8 @@ impl SampleEngine {
             let body_peak = self.voices.note_body_peak(note);
             let gain = self.release_gain * body_peak;
             let had_body = self.body_voiced.remove(&note);
-            let fire = had_body && body_peak >= RELEASE_BODY_FLOOR;
+            let fire = had_body
+                && body_peak >= self.patch.spec.performance.voice_timing.release_body_floor;
             tracing::debug!(
                 target: "sampler::trigger",
                 note, strike, gain, body_peak, fire, dyn = %rel_dyn, "release tail"
@@ -1037,7 +1046,10 @@ impl SampleEngine {
         // caller's `release_frames` — that parameter is meant for the
         // release voice's own decay, not for the body's fade.
         let body_release = if release_artic.is_some() {
-            ms_to_frames(KEY_UP_DECLICK_MS, self.sample_rate)
+            ms_to_frames(
+                self.patch.spec.performance.voice_timing.key_up_declick_ms,
+                self.sample_rate,
+            )
         } else {
             release_frames
         };
@@ -1052,7 +1064,16 @@ impl SampleEngine {
             self.release_frames,
             self.cc64_value,
             &self.patch.spec.dynamics.half_pedal_curve,
-            self.patch.spec.dynamics.half_pedal_max_release_multiplier,
+            // the dynamics block's own multiplier, else the library default
+            Some(self.patch.spec.dynamics.half_pedal_max_release_multiplier)
+                .filter(|m| *m > 0.0)
+                .unwrap_or(
+                    self.patch
+                        .spec
+                        .performance
+                        .voice_timing
+                        .half_pedal_release_mult,
+                ),
         )
     }
 
@@ -1262,6 +1283,8 @@ impl SampleEngine {
                     self.legato_enabled = true;
                     self.legato_expressive = true;
                 }
+                "@overlay-on" => self.marcato_overlay = true,
+                "@overlay-off" => self.marcato_overlay = false,
                 "@sordino-on" => self.set_con_sordino(true),
                 "@sordino-off" => self.set_con_sordino(false),
                 // Force full non-vibrato (the CSS Non-Vib keyswitch): CC2 → 0.
@@ -1325,55 +1348,30 @@ impl SampleEngine {
     }
 
     pub(crate) fn apply_cc58(&mut self) {
-        let Some(ks) = self.patch.spec.keyswitch.as_ref() else {
+        let Some(value) = self
+            .patch
+            .spec
+            .keyswitch
+            .as_ref()
+            .and_then(|ks| ks.cc58_function(self.cc58))
+        else {
             return;
         };
-        let Some(label) = ks.cc58_function(self.cc58) else {
+        // The library writes what the value does as tokens (see
+        // `KeyswitchSpec::cc58_map`): `@` modes apply here, the one plain
+        // token selects an articulation or a keyswitch group below.
+        let value = value.to_string();
+        let mut target = None;
+        for tok in value.split('+').map(str::trim).filter(|t| !t.is_empty()) {
+            if tok.starts_with('@') {
+                self.apply_keyswitch_value(tok);
+            } else {
+                target = Some(tok.to_string());
+            }
+        }
+        let Some(label) = target else {
             return;
         };
-        let label = label.to_string();
-
-        // ── Mode switches ────────────────────────────────────────────────────
-        match label.as_str() {
-            "Con Sordino On" => {
-                self.set_con_sordino(true);
-                return;
-            }
-            "Con Sordino Off" => {
-                self.set_con_sordino(false);
-                return;
-            }
-            "Legato On" => {
-                self.legato_enabled = true;
-                return;
-            }
-            "Legato Off" => {
-                self.legato_enabled = false;
-                return;
-            }
-            "Sustain: Low Latency Legato" => {
-                self.legato_enabled = true;
-                self.legato_expressive = false;
-                self.select_articulation_tag("Nonvib");
-                return;
-            }
-            "Sustain: Expressive Legato" => {
-                self.legato_enabled = true;
-                self.legato_expressive = true;
-                self.select_articulation_tag("Nonvib");
-                return;
-            }
-            "Measured Tremolo" => {
-                // Scripted mode — no dedicated samples. Cannot replicate without a
-                // built-in scripted repeating trigger. Ignore for now.
-                return;
-            }
-            _ => {}
-        }
-
-        if label.starts_with("Marcato") {
-            self.marcato_overlay = label.contains("with overlay");
-        }
 
         // ── Articulation selection ───────────────────────────────────────────
         let matched = self
@@ -1404,14 +1402,28 @@ impl SampleEngine {
             return;
         }
 
-        // No single articulation carries this label — it names a velocity-split
-        // keyswitch GROUP (e.g. "Trills" → HTrills/WTrills, "Marcato (…)" →
-        // Marcato). Match it to a keyswitch NOTE by group label (ignoring any
-        // " (…)" qualifier) and defer the concrete pick to note-on velocity,
-        // exactly like striking that KS note (`try_keyswitch` / `value_for`).
-        let stem = label.split(" (").next().unwrap_or(&label).trim();
-        self.pending_cc58_group = ks.notes.iter().position(|kn| {
-            kn.label.eq_ignore_ascii_case(&label) || kn.label.eq_ignore_ascii_case(stem)
+        // A zone tag the library plays without declaring it an articulation.
+        if self
+            .patch
+            .spec
+            .zones
+            .iter()
+            .any(|z| !z.disabled && z.articulation.eq_ignore_ascii_case(&label))
+        {
+            self.select_articulation_tag(&label);
+            self.pending_cc58_group = None;
+            return;
+        }
+
+        // No articulation carries this name — it names a velocity-split
+        // keyswitch GROUP (e.g. "Trills" → HTrills/WTrills). Match it to a
+        // keyswitch NOTE by group label and defer the concrete pick to
+        // note-on velocity, exactly like striking that KS note
+        // (`try_keyswitch` / `value_for`).
+        self.pending_cc58_group = self.patch.spec.keyswitch.as_ref().and_then(|ks| {
+            ks.notes
+                .iter()
+                .position(|kn| kn.label.eq_ignore_ascii_case(&label))
         });
     }
 }

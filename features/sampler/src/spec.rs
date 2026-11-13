@@ -643,6 +643,99 @@ pub struct PerformanceSpec {
     /// before the rhythmic peak).
     #[facet(default)]
     pub attack_placement: String,
+    /// Note-off, release and declick timings every voice follows. See
+    /// [`VoiceTimingSpec`].
+    #[facet(default)]
+    pub voice_timing: VoiceTimingSpec,
+    /// The Con Sordino lowpass applied when sordino is on and the library
+    /// has no muted recordings to switch to.
+    #[facet(default)]
+    pub sordino_filter: SordinoFilterSpec,
+}
+
+/// Note-off, release and declick timings (the engine's mechanism reads
+/// every number from here). The defaults are the values the engine used to
+/// hardcode; a library sets its own in `performance { voice_timing { … } }`.
+// r[impl signal.soundsource.declarative]
+#[derive(Debug, Clone, Facet)]
+pub struct VoiceTimingSpec {
+    /// Note-off fade (ms) of a sustain voice when `performance.release_ms`
+    /// is unset: the damper-down time, a short fade that reads as a cutoff.
+    #[facet(default = 60)]
+    pub noteoff_fade_ms: u32,
+    /// The note-off fade's multiplier at the top of the half-pedal range.
+    #[facet(default = 4.0f32)]
+    pub half_pedal_release_mult: f32,
+    /// Note-off fade (ms) when a release articulation supplies the natural
+    /// tail (the body only needs a declick).
+    #[facet(default = 80)]
+    pub key_up_declick_ms: u32,
+    /// Longest a release-tail voice may ring (ms) before it is retired.
+    #[facet(default = 2000)]
+    pub release_max_ms: u32,
+    /// Fade-in (ms) of a looped sustain that starts mid-sample at full level.
+    #[facet(default = 12)]
+    pub sustain_declick_ms: u32,
+    /// Fade-in (ms) of a fresh sustain entered mid-sample (a start offset).
+    #[facet(default = 20)]
+    pub mid_sample_declick_ms: u32,
+    /// Fade-in (ms) of a voice that starts mid-sample (transitions, release
+    /// tails, sample-start offsets).
+    #[facet(default = 6)]
+    pub onset_declick_ms: u32,
+    /// Body peak (linear) below which a note-off fires no release tail.
+    #[facet(default = 0.002f32)]
+    pub release_body_floor: f32,
+    /// Lowest note-off velocity that plays a release sample.
+    #[facet(default = 1)]
+    pub release_min_velocity: u8,
+    /// Fade (ms) of the previous strike when the same key is struck again.
+    #[facet(default = 90)]
+    pub retrigger_fade_ms: u32,
+    /// Smoothing (ms) of a CC1/CC11 level change (Kontakt's modulator lag).
+    #[facet(default = 120)]
+    pub cc1_lag_ms: u32,
+    /// Smoothing (ms) of a CC2 vibrato crossfade.
+    #[facet(default = 1000)]
+    pub cc2_lag_ms: u32,
+}
+
+impl Default for VoiceTimingSpec {
+    fn default() -> Self {
+        Self {
+            noteoff_fade_ms: 60,
+            half_pedal_release_mult: 4.0,
+            key_up_declick_ms: 80,
+            release_max_ms: 2000,
+            sustain_declick_ms: 12,
+            mid_sample_declick_ms: 20,
+            onset_declick_ms: 6,
+            release_body_floor: 0.002,
+            release_min_velocity: 1,
+            retrigger_fade_ms: 90,
+            cc1_lag_ms: 120,
+            cc2_lag_ms: 1000,
+        }
+    }
+}
+
+/// The Con Sordino lowpass (a placeholder until a measured muted response
+/// replaces it).
+#[derive(Debug, Clone, Facet)]
+pub struct SordinoFilterSpec {
+    #[facet(default = 2500.0f32)]
+    pub cutoff_hz: f32,
+    #[facet(default = 0.9f32)]
+    pub q: f32,
+}
+
+impl Default for SordinoFilterSpec {
+    fn default() -> Self {
+        Self {
+            cutoff_hz: 2500.0,
+            q: 0.9,
+        }
+    }
 }
 
 impl Default for PerformanceSpec {
@@ -667,6 +760,8 @@ impl Default for PerformanceSpec {
             attack_ms: None,
             attack_placement: String::new(),
             release_ms: None,
+            voice_timing: VoiceTimingSpec::default(),
+            sordino_filter: SordinoFilterSpec::default(),
         }
     }
 }
@@ -1115,7 +1210,7 @@ pub fn css_transition_ccs(expressive: bool, zone: u8, ioi_ms: f32) -> (f32, f32)
 /// anchor, linear between.
 ///
 /// Used for the legato Overlap-Delay and the transition sample-start offset.
-#[derive(Debug, Clone, PartialEq, Facet)]
+#[derive(Debug, Clone, Default, PartialEq, Facet)]
 pub struct IoiCurveSpec {
     /// Ascending IOI breakpoints (ms).
     pub thresholds_ms: Vec<f32>,
@@ -2248,6 +2343,119 @@ pub struct LegatoEngineSpec {
     /// `0` disables the bloom (the pre-model behaviour).
     #[facet(default = 1000)]
     pub sustain_bloom_ms: u32,
+    /// The shape of a transition the library does not measure with
+    /// `kontakt_transition`: the destination swell, the low-latency fade,
+    /// the transition's start skip, portamento, the AB dip and the old
+    /// body's fade. See [`TransitionShapeSpec`].
+    #[facet(default)]
+    pub shape: TransitionShapeSpec,
+}
+
+/// How a legato transition is shaped when the library has no
+/// `kontakt_transition` (and for portamento, which never uses it). The
+/// defaults are the Cinematic Studio Strings KSP values the engine used to
+/// hardcode; `cinematic-strings.styx` writes them out with their KSP names.
+// r[impl signal.soundsource.declarative]
+#[derive(Debug, Clone, Facet)]
+pub struct TransitionShapeSpec {
+    /// Expressive-mode destination swell length (ms), capped at the lead.
+    #[facet(default = 225)]
+    pub swell_ms: u32,
+    /// Share of the swell (%) in its fast first stage: a soft attack, a
+    /// hard attack, and a leap over 12 semitones (whatever the attack).
+    #[facet(default = 50)]
+    pub swell_split_pct: u32,
+    #[facet(default = 60)]
+    pub swell_split_pct_hard: u32,
+    #[facet(default = 50)]
+    pub swell_split_pct_leap: u32,
+    /// First-stage divisor by IOI (smaller = a more gradual first stage).
+    #[facet(default)]
+    pub swell_divisor: IoiCurveSpec,
+    /// Low-latency mode's single-stage fade (ms).
+    #[facet(default = 80)]
+    pub low_latency_fade_ms: u32,
+    /// A velocity-zone-3 transition counts as a hard attack only above this
+    /// IOI (ms).
+    #[facet(default = 50.0f32)]
+    pub hard_ioi_ms: f32,
+    /// Least skip (ms) into a transition recording, by attack and interval:
+    /// `(soft ≤ 12 st, soft > 12, hard ≤ 12, hard > 12)`.
+    #[facet(default)]
+    pub transition_min_skip_ms: Vec<u32>,
+    /// Portamento glide time (ms).
+    #[facet(default = 60)]
+    pub portamento_glide_ms: u32,
+    /// Portamento bend depth (cents) by IOI, one curve per interval class:
+    /// unison/semitone, whole tone, wider.
+    #[facet(default)]
+    pub portamento_bend_cents: Vec<IoiCurveSpec>,
+    /// AB dip: a note within `ab_window_ms` of the last dips by `ab_dip_db`;
+    /// a velocity-zone-3 attack takes `ab_zone3_db` instead.
+    #[facet(default = 250)]
+    pub ab_window_ms: u32,
+    #[facet(default = -3.0f32)]
+    pub ab_dip_db: f32,
+    #[facet(default)]
+    pub ab_zone3_db: f32,
+    /// Fade (ms) of the outgoing body when a new body starts.
+    #[facet(default = 250)]
+    pub old_body_fade_ms: u32,
+}
+
+impl Default for TransitionShapeSpec {
+    fn default() -> Self {
+        Self {
+            swell_ms: 225,
+            swell_split_pct: 50,
+            swell_split_pct_hard: 60,
+            swell_split_pct_leap: 50,
+            swell_divisor: IoiCurveSpec::default(),
+            low_latency_fade_ms: 80,
+            hard_ioi_ms: 50.0,
+            transition_min_skip_ms: Vec::new(),
+            portamento_glide_ms: 60,
+            portamento_bend_cents: Vec::new(),
+            ab_window_ms: 250,
+            ab_dip_db: -3.0,
+            ab_zone3_db: 0.0,
+            old_body_fade_ms: 250,
+        }
+    }
+}
+
+impl TransitionShapeSpec {
+    /// The swell's first-stage divisor at `ioi_ms` (100 = no extra
+    /// lengthening when the library gives no curve).
+    #[must_use]
+    pub fn swell_divisor_at(&self, ioi_ms: f32) -> u32 {
+        if self.swell_divisor.thresholds_ms.is_empty() {
+            return 100;
+        }
+        self.swell_divisor.value_at(ioi_ms).round().max(1.0) as u32
+    }
+
+    /// Least skip into a transition recording (0 when the library gives none).
+    #[must_use]
+    pub fn transition_min_skip(&self, hard: bool, interval: u32) -> u32 {
+        let i = usize::from(hard) * 2 + usize::from(interval > 12);
+        self.transition_min_skip_ms.get(i).copied().unwrap_or(0)
+    }
+
+    /// Portamento bend depth (cents, unsigned) for an interval and IOI (0
+    /// when the library gives no curves).
+    #[must_use]
+    pub fn portamento_bend(&self, interval: u8, ioi_ms: f32) -> f32 {
+        let class = match interval {
+            0 | 1 => 0,
+            2 => 1,
+            _ => 2,
+        };
+        self.portamento_bend_cents
+            .get(class)
+            .or_else(|| self.portamento_bend_cents.last())
+            .map_or(0.0, |c| c.value_at(ioi_ms))
+    }
 }
 
 impl Default for LegatoEngineSpec {
@@ -2279,6 +2487,7 @@ impl Default for LegatoEngineSpec {
             fallback_velocity: 80,
             skip_declick_ms: 25,
             sustain_bloom_ms: 1000,
+            shape: TransitionShapeSpec::default(),
             lt_offset_expressive: Vec::new(),
             lt_offset_low_latency: Vec::new(),
         }
@@ -2491,8 +2700,13 @@ pub struct KeyswitchSpec {
     #[facet(default)]
     pub user_configurable: bool,
 
-    /// CC58 value range → articulation/function label.
-    /// Keys are range strings like `"0-5"`, `"6-10"`, etc.
+    /// CC58 value range → what that value does, written like a keyswitch
+    /// note's value: `+`-joined tokens, each an `@mode` token
+    /// (`@legato-low`, `@legato-expressive`, `@legato-on/off`,
+    /// `@sordino-on/off`, `@overlay-on/off`, `@novib`, `@ignore`) or an
+    /// articulation / keyswitch-group name (`Spiccato`, `Trills`).
+    /// `"Nonvib+@legato-low"` selects Nonvib in low-latency legato. Keys are
+    /// range strings like `"0-5"`, `"6-10"`, etc.
     #[facet(default)]
     pub cc58_map: HashMap<String, String>,
 
@@ -2550,6 +2764,16 @@ impl KeyswitchSpec {
             }
         }
         None
+    }
+
+    /// The articulation / keyswitch-group token of a CC58 value (its one
+    /// non-`@` token), if it names one.
+    #[must_use]
+    pub fn cc58_target(&self, value: u8) -> Option<&str> {
+        self.cc58_function(value)?
+            .split('+')
+            .map(str::trim)
+            .find(|t| !t.is_empty() && !t.starts_with('@'))
     }
 }
 
