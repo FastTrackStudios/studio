@@ -510,7 +510,7 @@ articulations (
         kind          @Sustain
         dynamics      (mf f fff)
         rr            2
-        rr_per_note   true   // RR alternates 1/2 per note-class (%fbn4o)
+        rr_per_note   false  // one RR toggle for every note ($d3x3j := 1 - $d3x3j, 11021 / 14060)
         // Body fade at note-off by held time (KSP $ftqcv; measured 500 ms,
         // k 2.0, after a 2 s note).
         release_ms_by_held ((75 80) (175 500))

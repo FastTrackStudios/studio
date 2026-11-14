@@ -140,12 +140,18 @@ for mode in "${modes[@]}"; do
   fi
 
   echo "== $section $mode"
-  case "$mode" in
+  # woodwinds / brass: the marcato overlay is a random-RR Repetitions short,
+  # fitted like the shorts
+  fit_mode="$mode"
+  if [ "$lib" != strings ] && [ "$mode" = marc2 ]; then
+    fit_mode=shorts
+  fi
+  case "$fit_mode" in
     shorts|pizz|leg2|attack)
       kind=--tunes
       # woodwinds / brass draw their shorts' round robins at random (and
       # do not detune them): fit the RR each note drew
-      if [ "$lib" != strings ] && { [ "$mode" = shorts ] || [ "$mode" = pizz ]; }; then
+      if [ "$lib" != strings ] && { [ "$fit_mode" = shorts ] || [ "$mode" = pizz ]; }; then
         kind=--rrs
       fi
       [ "$mode" = leg2 ] && kind=--variants
