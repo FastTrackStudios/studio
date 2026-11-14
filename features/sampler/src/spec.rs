@@ -1175,6 +1175,7 @@ pub struct ArticulationOverlay {
     pub release_by_held: Option<ReleaseByHeldSpec>,
     pub rr_per_note: Option<bool>,
     pub group_curves: Option<Vec<GroupCurveSpec>>,
+    pub group_fx: Option<Vec<GroupFxSpec>>,
     pub amp_env: Option<Vec<EnvSegmentSpec>>,
     /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
     pub overlay_cc1_scale: Option<Vec<u8>>,
@@ -1234,6 +1235,9 @@ impl SectionOverlay {
             }
             if let Some(v) = &o.group_curves {
                 a.group_curves.clone_from(v);
+            }
+            if let Some(v) = &o.group_fx {
+                a.group_fx.clone_from(v);
             }
             if let Some(v) = &o.amp_env {
                 a.amp_env.clone_from(v);
@@ -2104,6 +2108,53 @@ pub struct GroupCurveSpec {
     pub points: Vec<f32>,
 }
 
+/// One dynamic layer's group insert chain: Kontakt's filter/EQ slots that
+/// are not bypassed, in slot order, and the controller routes onto them.
+#[derive(Debug, Clone, Facet)]
+pub struct GroupFxSpec {
+    /// The layer it filters (zone `dynamic` tag).
+    pub dynamic: String,
+    pub stages: Vec<FxStageSpec>,
+    #[facet(default)]
+    pub routes: Vec<FxRouteSpec>,
+}
+
+/// One filter or EQ stage. `kind`: `legacy_lp1`, `legacy_lp2` (Kontakt's
+/// legacy filters, types 2 / 6), `sv_lp1`, `sv_lp2`, `sv_lp4` (the
+/// state-variable family, 50 / 52 / 55) or `eq` (1–3 bands, 22–24).
+#[derive(Debug, Clone, Facet)]
+pub struct FxStageSpec {
+    pub kind: String,
+    /// Cutoff knob, 0..1 (the kind's law maps it to Hz).
+    #[facet(default)]
+    pub cutoff: f32,
+    /// Resonance knob, 0..1.
+    #[facet(default)]
+    pub resonance: f32,
+    /// EQ bands, flat: `hz octaves db` per band.
+    #[facet(default)]
+    pub bands: Vec<f32>,
+}
+
+/// A controller route onto one stage's knob: the knob moves by
+/// `intensity × table(cc / 127)` (no table: the controller itself), smoothed
+/// by `lag_ms` (Kontakt's lag: the time to settle within 1 %).
+#[derive(Debug, Clone, Facet)]
+pub struct FxRouteSpec {
+    /// Index into the layer's `stages`.
+    pub stage: u8,
+    /// `cutoff`, `resonance`, `eq_gain1`, `eq_gain2` or `eq_gain3`.
+    pub param: String,
+    pub cc: u8,
+    #[facet(default)]
+    pub intensity: f32,
+    #[facet(default)]
+    pub lag_ms: f32,
+    /// Kontakt's breakpoint table (`y0 c0 (x y c)…`); empty = none.
+    #[facet(default)]
+    pub points: Vec<f32>,
+}
+
 /// Evaluate a Kontakt modulation table (`y0 c0 (x y c)…`) at `x` in `[0, 1]`.
 ///
 /// Measured against Kontakt 8 renders of CSS (sweeps of CC1 and CC2, every
@@ -2302,6 +2353,11 @@ pub struct ArticulationSpec {
     /// articulation that declares it. Empty = the legacy crossfade.
     #[facet(default)]
     pub group_curves: Vec<GroupCurveSpec>,
+    /// Kontakt group insert filters and EQs per dynamic layer, decoded from
+    /// the instrument (`group_fx.json`), with the controller routes that
+    /// move them. Each voice of the layer runs its own chain. Empty = none.
+    #[facet(default)]
+    pub group_fx: Vec<GroupFxSpec>,
     /// A second amplitude envelope multiplied with `amp_env`, always one-shot
     /// (runs through, no hold) — Kontakt's group ENV_AHDSR running alongside
     /// its ENV_FLEX. CSS release groups: 250 ms attack, 25 s decay to 0.25.

@@ -107,6 +107,87 @@ def curves(groups, prefix, ccs, rel):
     return out
 
 
+# Kontakt filter/EQ type ids the engine runs (`group_fx` stage kinds)
+FX_KINDS = {2: "legacy_lp1", 6: "legacy_lp2", 50: "sv_lp1", 52: "sv_lp2", 55: "sv_lp4",
+            22: "eq", 23: "eq", 24: "eq"}
+FX_PARAMS = {"filterCutoff": "cutoff", "filterQ": "resonance",
+             "eqGain1": "eq_gain1", "eqGain2": "eq_gain2", "eqGain3": "eq_gain3"}
+
+
+def group_fx(d, all_groups, prefix):
+    """`group_fx` entries `(dyn, stages, routes)` for every `Mix <prefix> <dyn>`
+    group: its filter/EQ slots that are not bypassed, in slot order, and the
+    controller routes onto them (decoded `group_fx.json` + `groups.json`)."""
+    path = os.path.join(d, "group_fx.json")
+    if not os.path.exists(path):
+        return []
+    slots = {x["group"]: x["slots"] for x in json.load(open(path))}
+    out = []
+    head = f"Mix {prefix} "
+    for i, g in enumerate(all_groups):
+        if not g["name"].startswith(head) or " " in g["name"][len(head):]:
+            continue
+        dyn = g["name"][len(head):]
+        # an envelope moving a stage (marcato's attack sweep) is not run: such
+        # a stage sits parked where the envelope starts, so leave it out
+        swept = {e.get("slot") for e in g.get("envelopes", [])
+                 if not e.get("bypassed") and e["target"] in FX_PARAMS and e.get("slot") is not None}
+        stages, at = [], {}
+        for s in sorted(slots.get(i, []), key=lambda s: s["slot"]):
+            if s["kind"] != 7 or s.get("bypass", True):
+                continue
+            if s["slot"] in swept:
+                print(f"{g['name']}: slot {s['slot']} moved by an envelope, not run", file=sys.stderr)
+                continue
+            kind = FX_KINDS.get(s.get("filter_type"))
+            if kind is None:
+                print(f"{g['name']}: live filter type {s.get('filter_type')} not run", file=sys.stderr)
+                continue
+            at[s["slot"]] = len(stages)
+            stages.append((kind, s))
+        routes = []
+        for m in g["mods"]:
+            if m.get("slot") in at and m["target"] in FX_PARAMS and m.get("source_kind") == "cc" \
+                    and m["cc"] is not None:
+                pts = m["curve"] if m["curve_kind"] == "points" and m.get("curve_enabled") else []
+                if m["curve_kind"] == "steps" and m.get("curve_enabled"):
+                    print(f"{g['name']}: step table on {m['target']} not run", file=sys.stderr)
+                    continue
+                # The decoded Invert flag is not applied: read as 1 − value it
+                # shuts CSB 4 Horns' sustain filter at ff (probe 0 dB vs −16.8
+                # without it); what it does is unverified (KONTRA ignores it too).
+                sign = -1 if m.get("negative") else 1
+                routes.append((at[m["slot"]], FX_PARAMS[m["target"]], m["cc"], sign * m["intensity"],
+                               m["lag_ms"], pts))
+        if stages:
+            out.append((dyn, stages, routes))
+    return out
+
+
+def emit_group_fx(fx):
+    """Print a `group_fx (...)` block (inside an articulation)."""
+    if not fx:
+        return
+    print("        group_fx (")
+    for dyn, stages, routes in fx:
+        st = []
+        for kind, s in stages:
+            if kind == "eq":
+                bands = " ".join(fmt(v) for b in s["eq_bands"] for v in b)
+                st.append(f"{{ kind eq, bands ({bands}) }}")
+            else:
+                st.append(f"{{ kind {kind}, cutoff {fmt(s['cutoff'])}, resonance {fmt(s['resonance'])} }}")
+        rt = []
+        for stage, param, cc, inten, lag, pts in routes:
+            r = f"{{ stage {stage}, param {param}, cc {cc}, intensity {fmt(inten)}, lag_ms {lag}"
+            if pts:
+                r += f", points ({' '.join(fmt(v) for v in pts)})"
+            rt.append(r + " }")
+        print(f"            {{ dynamic {dyn}, stages ({' '.join(st)}),")
+        print(f"              routes ({' '.join(rt)}) }}")
+    print("        )")
+
+
 def flex(groups, prefix):
     """The first unbypassed volume ENV_FLEX of the prefix's first group."""
     for name, g in groups.items():

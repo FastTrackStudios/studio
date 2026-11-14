@@ -362,6 +362,8 @@ pub struct Voice {
     bp_ctrl: (f32, f32, u32, bool),
     /// Per-voice filter envelope (`with_filter_env`); `None` = no filter.
     filter: Option<VoiceFilter>,
+    /// The layer's Kontakt group insert filters/EQs (`with_inserts`).
+    inserts: Option<super::inserts::InsertState>,
     /// Vibrato (`with_vibrato`): phase and step (cycles/frame), depth in
     /// cents, frames left before it starts, and its fade-in.
     vib_phase: f32,
@@ -752,6 +754,7 @@ impl Voice {
             amp_bp: None,
             bp_ctrl: (0.0, 0.0, 0, false),
             filter: None,
+            inserts: None,
             vib_phase: 0.0,
             vib_inc: 0.0,
             vib_cents: 0.0,
@@ -839,6 +842,7 @@ impl Voice {
             amp_bp: None,
             bp_ctrl: (0.0, 0.0, 0, false),
             filter: None,
+            inserts: None,
             vib_phase: 0.0,
             vib_inc: 0.0,
             vib_cents: 0.0,
@@ -1133,6 +1137,26 @@ impl Voice {
     pub fn with_filter_env(mut self, filter: Option<VoiceFilter>) -> Self {
         self.filter = filter;
         self
+    }
+
+    /// Run the layer's group insert chain (see [`super::inserts`]).
+    #[must_use]
+    pub fn with_inserts(mut self, inserts: Option<super::inserts::InsertState>) -> Self {
+        self.inserts = inserts;
+        self
+    }
+
+    /// Whether the voice runs a group insert chain.
+    #[must_use]
+    pub fn has_inserts(&self) -> bool {
+        self.inserts.is_some()
+    }
+
+    /// The controllers the insert chain's routes follow, read again.
+    pub fn set_insert_ccs(&mut self, cc: impl Fn(u8) -> u8) {
+        if let Some(f) = &mut self.inserts {
+            f.set_ccs(cc);
+        }
     }
 
     /// Follow the layer's cutoff knobs on a held note.
@@ -1607,6 +1631,9 @@ impl Voice {
         if let Some(f) = &mut self.filter {
             (l, r) = f.tick(l, r);
         }
+        if let Some(f) = &mut self.inserts {
+            (l, r) = f.tick(l, r);
+        }
 
         // Decoded ENV_FLEX amplitude envelope. Freezes at the sustain-hold
         // point while Playing (held note stays steady); advances through the
@@ -1776,6 +1803,7 @@ impl Voice {
             && self.decay_left == 0
             && self.pitch.is_none()
             && self.filter.is_none()
+            && self.inserts.is_none()
             && self.vib_cents <= 0.0
             && self.glide_frames == 0
             && !self.reverse

@@ -88,7 +88,7 @@ timeout 600 "$nki_bin" "$nki" --jdx "$JDX" --hu "$HU" --snpid "$SNPID" \
 unset JDX HU SNPID
 [ -s "$tmp/zones.tsv" ] || { echo "decode failed" >&2; exit 1; }
 mkdir -p "$ksp"
-for f in zones.tsv groups.json groups.tsv buses.json program.json persistent_0.tsv persistent_1.tsv script_0.ksp script_1.ksp script_2.ksp; do
+for f in zones.tsv groups.json groups.tsv buses.json program.json group_fx.json persistent_0.tsv persistent_1.tsv script_0.ksp script_1.ksp script_2.ksp; do
     [ -f "$ksp/$f" ] && [ ! -f "$ksp/$f.pre-$stamp" ] && cp "$ksp/$f" "$ksp/$f.pre-$stamp"
     [ -f "$tmp/$f" ] && cp "$tmp/$f" "$ksp/$f"
 done

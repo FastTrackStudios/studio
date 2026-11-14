@@ -101,7 +101,8 @@ def main():
         rec = csw.recorded_dynamics(zones, gnames, prefix, aid)
         cs = [(rec[dy], cc, pts) for dy, cc, pts in css.curves(groups, prefix, ccs, rel=False) if dy in rec]
         if cs:
-            csw.emit_curves(aid, cs, list(dict.fromkeys(dy for dy, _, _ in cs)))
+            csw.emit_curves(aid, cs, list(dict.fromkeys(dy for dy, _, _ in cs)),
+                            csw.layer_fx(d, all_groups, prefix, rec))
             if prefix == "tremolo":
                 done.add(prefix)
     done.clear()
@@ -111,7 +112,8 @@ def main():
         rec = csw.recorded_dynamics(zones, gnames, prefix, aid)
         cs = [(rec[dy], cc, pts) for dy, cc, pts in css.curves(groups, prefix, (), rel=True) if dy in rec]
         if cs:
-            csw.emit_curves(aid, cs, list(dict.fromkeys(dy for dy, _, _ in cs)))
+            csw.emit_curves(aid, cs, list(dict.fromkeys(dy for dy, _, _ in cs)),
+                            csw.layer_fx(d, all_groups, prefix, rec))
             if prefix == "tremolo rel":
                 done.add(prefix)
 

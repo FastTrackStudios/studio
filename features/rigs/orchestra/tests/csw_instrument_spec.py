@@ -105,7 +105,7 @@ def recorded_dynamics(zones, group_names, prefix, artic):
     return {g: max(c, key=c.get) for g, c in count.items()}
 
 
-def emit_curves(aid, cs, dyns=None):
+def emit_curves(aid, cs, dyns=None, fx=()):
     print(f"    {{\n        id {aid}")
     if dyns:
         print(f"        dynamics ({' '.join(dyns)})")
@@ -113,7 +113,13 @@ def emit_curves(aid, cs, dyns=None):
     for dyn, cc, pts in cs:
         print(f"            {{ dynamic {dyn}, cc {cc}, points ({' '.join(css.fmt(v) for v in pts)}) }}")
     print("        )")
+    css.emit_group_fx(fx)
     print("    }")
+
+
+def layer_fx(d, all_groups, prefix, rec):
+    """`group_fx` of `prefix`'s Mix groups, each named by its recorded dynamic."""
+    return [(rec[dy], st, rt) for dy, st, rt in css.group_fx(d, all_groups, prefix) if dy in rec]
 
 
 # Kontakt's level over the raw file per instrument, null-tested (Kontakt minus
@@ -152,7 +158,7 @@ def main():
         cs = [(rec[dyn], cc, pts) for dyn, cc, pts in css.curves(groups, prefix, ccs, rel=False) if dyn in rec]
         if cs:
             dyns = list(dict.fromkeys(dyn for dyn, _, _ in cs))
-            emit_curves(aid, cs, dyns)
+            emit_curves(aid, cs, dyns, layer_fx(d, all_groups, prefix, rec))
     for aid, (fa, family, tvar, dvar) in SHORTS.items():
         th, db_ = pers.get(tvar), pers.get(dvar)
         dyns, rr = short_layers(zones, group_names, fa, family)
@@ -172,7 +178,8 @@ def main():
         rec = recorded_dynamics(zones, group_names, prefix, aid)
         cs = [(rec[dyn], cc, pts) for dyn, cc, pts in css.curves(groups, prefix, (), rel=True) if dyn in rec]
         if cs:
-            emit_curves(aid, cs, list(dict.fromkeys(dyn for dyn, _, _ in cs)))
+            emit_curves(aid, cs, list(dict.fromkeys(dyn for dyn, _, _ in cs)),
+                        layer_fx(d, all_groups, prefix, rec))
     marcato(pers)
     print(")")
     legato(pers, zones, group_names)

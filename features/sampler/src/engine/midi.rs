@@ -3035,6 +3035,14 @@ impl SampleEngine {
             .with_pitch_cents(transpose_cents)
             .with_level(level * comp)
             .with_sample_window(start_frame, (sample_end > 0).then_some(sample_end as usize));
+            // the layer's Kontakt group insert filters/EQs (`group_fx`)
+            if let Some(plan) = self.insert_plan(idx) {
+                let l = usize::from(line);
+                let chain = super::inserts::InsertState::new(plan, self.sample_rate as f32, |cc| {
+                    self.line_cc(l, cc)
+                });
+                voice = voice.with_inserts(Some(chain));
+            }
             // A patch layer's breakpoint amp envelope (not on the release
             // samples, which play after the key).
             if !matches!(kind, VoiceKind::Release) {

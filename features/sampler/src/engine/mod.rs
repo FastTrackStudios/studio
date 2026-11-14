@@ -223,6 +223,7 @@ pub use fts_sample::stream_cache;
 mod dispatch;
 pub mod filter;
 mod helpers;
+pub mod inserts;
 mod kontakt_legato;
 mod kontakt_marcato;
 mod legato;
@@ -643,6 +644,9 @@ pub struct SampleEngine {
     /// Portamento glide volume [0.0, 1.0] from CC5 (CSS "Portamento Volume").
     cc5_porta_volume: f32,
     cc_values: [u8; 128],
+    /// Each (articulation, dynamic) layer's group insert chain (spec
+    /// `group_fx`), built once for the patch.
+    insert_plans: Vec<(String, String, std::sync::Arc<inserts::InsertPlan>)>,
     channel_aftertouch: u8,
     poly_aftertouch: [u8; 128],
     /// CC64 (sustain pedal) held state.
@@ -1273,13 +1277,62 @@ impl SampleEngine {
             zone_choked_scratch: Vec::with_capacity(16),
             zone_capped_scratch: Vec::with_capacity(16),
             mic_ids,
+            insert_plans: Vec::new(),
             cache_misses: Cell::new(0),
             sample_misses: Cell::new(0),
             recent_cache_misses: RefCell::new(VecDeque::with_capacity(RECENT_MISS_LIMIT)),
             recent_sample_misses: RefCell::new(VecDeque::with_capacity(RECENT_MISS_LIMIT)),
         };
         engine.apply_fixed_ccs();
+        engine.insert_plans = engine
+            .patch
+            .spec
+            .articulations
+            .iter()
+            .flat_map(|a| {
+                a.group_fx.iter().filter_map(move |fx| {
+                    let plan = inserts::InsertPlan::new(fx, sample_rate as f32)?;
+                    Some((a.id.clone(), fx.dynamic.clone(), plan))
+                })
+            })
+            .collect();
         engine
+    }
+
+    /// The group insert chain of zone `idx`'s layer, if its articulation
+    /// declares one (`group_fx`).
+    pub(crate) fn insert_plan(&self, idx: usize) -> Option<std::sync::Arc<inserts::InsertPlan>> {
+        if self.insert_plans.is_empty() {
+            return None;
+        }
+        let z = self.patch.spec.zones.get(idx)?;
+        self.insert_plans
+            .iter()
+            .find(|(a, d, _)| {
+                a.eq_ignore_ascii_case(&z.articulation) && d.eq_ignore_ascii_case(&z.dynamic)
+            })
+            .map(|(_, _, p)| std::sync::Arc::clone(p))
+    }
+
+    /// Controller `cc` as line `line` hears it: CC1/CC2 are per line, the
+    /// rest engine-wide.
+    pub(crate) fn line_cc(&self, line: usize, cc: u8) -> u8 {
+        line_cc(&self.lines, &self.cc_values, line, cc)
+    }
+
+    /// Hand every insert chain the controllers' current values (once per
+    /// render part; each chain smooths them with its routes' lag).
+    fn feed_insert_ccs(&mut self) {
+        if self.insert_plans.is_empty() {
+            return;
+        }
+        let (lines, ccs) = (&self.lines, &self.cc_values);
+        for v in self.voices.voices_mut() {
+            if v.has_inserts() {
+                let l = usize::from(v.line);
+                v.set_insert_ccs(|cc| line_cc(lines, ccs, l, cc));
+            }
+        }
     }
 
     /// Hold the library's fixed controllers (`dynamics.fixed_ccs`) at their
@@ -2231,6 +2284,7 @@ impl SampleEngine {
         let mut done = 0;
         self.fire_due_legato();
         while done < block_frames {
+            self.feed_insert_ccs();
             let trill = self
                 .trill_due
                 .as_ref()
@@ -3060,4 +3114,14 @@ pub fn default_articulation(spec: &crate::spec::LibrarySpec) -> Option<String> {
         // caller still has an id to work with.
         .or_else(|| spec.articulations.first())
         .map(|a| a.id.clone())
+}
+
+/// Controller `cc` as line `line` hears it (see [`SampleEngine::line_cc`]).
+fn line_cc(lines: &[LegatoLine], ccs: &[u8; 128], line: usize, cc: u8) -> u8 {
+    let global = ccs.get(usize::from(cc)).copied().unwrap_or(0);
+    match (cc, lines.get(line)) {
+        (1, Some(l)) => l.cc1,
+        (2, Some(l)) => l.cc2,
+        _ => global,
+    }
 }
