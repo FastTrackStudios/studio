@@ -382,6 +382,23 @@ impl SampleEngine {
             .is_some_and(|a| a.group_curves.iter().any(|c| c.cc == 2))
     }
 
+    /// The vibrato side's share of `artic`'s level when its group curves do
+    /// not carry the crossfade themselves (see `curves_carry_vibrato`): its
+    /// side of the engine's CC2 blend. 1 for an articulation with no vibrato
+    /// partner or with a CC2 table.
+    pub(crate) fn vibrato_side_gain(&self, artic: &str) -> f32 {
+        if self.curves_carry_vibrato(artic) || self.find_vibrato_pair_id(artic).is_none() {
+            return 1.0;
+        }
+        let (nv, vb) = Self::equal_power(self.cc2_blend());
+        let vib = self
+            .patch
+            .spec
+            .articulation(artic)
+            .is_some_and(crate::spec::ArticulationSpec::is_vibrato);
+        if vib { vb } else { nv }
+    }
+
     /// The CC1 layer slice for a given articulation (by its dynamics count).
     pub(crate) fn cc1_layers_for(&self, artic_id: &str) -> &[Cc1Layer] {
         let Some(artic) = self.patch.spec.articulation(artic_id) else {

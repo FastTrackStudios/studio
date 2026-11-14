@@ -2134,8 +2134,9 @@ impl SampleEngine {
                 .filter(|a| !a.group_curves.is_empty())
                 .map(|a| a.dynamics.clone());
             if let Some(dyns) = curves {
+                let side = self.vibrato_side_gain(&rel_id);
                 for label in dyns {
-                    let g = self.group_curve_gain(&rel_id, &label).unwrap_or(0.0);
+                    let g = side * self.group_curve_gain(&rel_id, &label).unwrap_or(0.0);
                     if g <= 0.0 {
                         continue;
                     }
@@ -2980,11 +2981,14 @@ impl SampleEngine {
         // IMMEDIATELY at full level, it is NOT muted/held silent. Overrides the
         // normal attack for this voice only.
         let fade_in_under = if is_sustain_layer {
-            let layer = &self.patch.spec.zones[idx].dynamic;
+            let z = &self.patch.spec.zones[idx];
             self.sustain_fade_in_by_dyn
                 .iter()
-                .find(|(d, _)| d.eq_ignore_ascii_case(layer))
-                .map(|(_, f)| *f)
+                .find(|(a, d, _)| {
+                    d.eq_ignore_ascii_case(&z.dynamic)
+                        && (a.is_empty() || a.eq_ignore_ascii_case(&z.articulation))
+                })
+                .map(|(_, _, f)| *f)
                 .or(self.sustain_fade_in)
         } else if matches!(kind, VoiceKind::Legato) {
             // Transition voice: emerge via the two-stage swell (delay 0 — the

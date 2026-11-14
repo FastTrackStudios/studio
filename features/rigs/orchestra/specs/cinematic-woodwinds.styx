@@ -948,6 +948,7 @@ legato_engine {
     // 1st Violins: EX $fjf3c/$2p1wl/$ywj0r, LL $ak2j4/$ixzi1/$cltif.
     lt_offset_expressive  (0 83 177)
     lt_offset_low_latency (100 148 177)
+    overlap_offset_zone1_only true  // CSW: $1fvjk := base + $b0n3s in velocity zone 1 only (9463-9478)
 
     // Crossfades: default legato fade; retire fades for the PREVIOUS
     // transition/sustain pair indexed by attack-velocity range

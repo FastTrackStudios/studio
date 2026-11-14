@@ -27,18 +27,22 @@ impl SampleEngine {
         kt: &KontaktTransitionSpec,
     ) {
         let expressive = self.legato_expressive;
-        let (zone, od_ms, lt_base) = {
+        let (zone, lt_od_ms, lt_base) = {
             let cfg = self.patch.spec.legato_cfg();
             let base = if expressive {
                 cfg.lt_offset_expressive.clone()
             } else {
                 cfg.lt_offset_low_latency.clone()
             };
-            (
-                cfg.velocity_range(velocity),
-                cfg.overlap_delay_ms(ioi_ms, velocity, expressive) as f32,
-                base,
-            )
+            let zone = cfg.velocity_range(velocity);
+            let od = cfg.overlap_delay_ms(ioi_ms, velocity, expressive) as f32;
+            // the share of the overlap delay that deepens the entry
+            let lt_od = if cfg.overlap_offset_zone1_only && zone > 1 {
+                0.0
+            } else {
+                od
+            };
+            (zone, lt_od, base)
         };
         let interval = u32::from(to.abs_diff(from));
         let big_leap = interval > 12;
@@ -88,7 +92,7 @@ impl SampleEngine {
         let handoff = self.kontakt_handoff(kt, from, to, zone, big_leap);
         self.sustain_fade_in_by_dyn = handoff
             .iter()
-            .map(|(d, w, f)| (d.clone(), (ms(*w), ms(*f), ms(*f), 0)))
+            .map(|(a, d, w, f)| (a.clone(), d.clone(), (ms(*w), ms(*f), ms(*f), 0)))
             .collect();
         self.spawn_extra_start = if big_leap {
             ms(kt.big_leap_body_offset_ms)
@@ -121,7 +125,7 @@ impl SampleEngine {
                 .get(usize::from(zone.max(1) - 1))
                 .copied()
                 .unwrap_or(0) as f32;
-            let offset = ms(base_ms + od_ms);
+            let offset = ms(base_ms + lt_od_ms);
             let env = self.kontakt_transition_env(kt, expressive, zone, ioi_ms);
             let dip = self.kontakt_phrase_dip(kt);
             let ioi_dip_db = kt
@@ -150,11 +154,37 @@ impl SampleEngine {
                     .articulation(&leg)
                     .map(|a| a.dynamics.clone())
                     .unwrap_or_default();
-                for label in dyns {
-                    let (w, f) = handoff
-                        .iter()
-                        .find(|(d, _, _)| d.eq_ignore_ascii_case(&label))
-                        .map_or((0.0, 0.0), |(_, w, f)| (*w, *f));
+                // the body layer this transition fades under: its own vibrato
+                // side's entry, else any entry of the dynamic
+                let leg_vib = self
+                    .patch
+                    .spec
+                    .articulation(&leg)
+                    .is_some_and(crate::spec::ArticulationSpec::is_vibrato);
+                let side_of = |a: &str| {
+                    a.is_empty()
+                        || self
+                            .patch
+                            .spec
+                            .articulation(a)
+                            .is_some_and(|x| x.is_vibrato() == leg_vib)
+                };
+                let layers: Vec<(String, f32, f32)> = dyns
+                    .into_iter()
+                    .map(|label| {
+                        let (w, f) = handoff
+                            .iter()
+                            .find(|(a, d, _, _)| d.eq_ignore_ascii_case(&label) && side_of(a))
+                            .or_else(|| {
+                                handoff
+                                    .iter()
+                                    .find(|(_, d, _, _)| d.eq_ignore_ascii_case(&label))
+                            })
+                            .map_or((0.0, 0.0), |(_, _, w, f)| (*w, *f));
+                        (label, w, f)
+                    })
+                    .collect();
+                for (label, w, f) in layers {
                     let shape =
                         lt_gain_shape(ioi_dip_db, &kt.lt_fade_curve_db, w, f, self.sample_rate);
                     let d = shape.map(KontaktDip::Curve).or_else(|| dip.clone());
@@ -252,7 +282,7 @@ impl SampleEngine {
         to: u8,
         zone: u8,
         big_leap: bool,
-    ) -> Vec<(String, f32, f32)> {
+    ) -> Vec<(String, String, f32, f32)> {
         let table = if from == to && !kt.retrigger_body_handoff.is_empty() {
             &kt.retrigger_body_handoff
         } else {
@@ -267,7 +297,7 @@ impl SampleEngine {
             .map(|b| {
                 let (w, f) =
                     high.map_or_else(|| b.for_zone(zone, big_leap), |h| (h.wait_ms, h.fade_ms));
-                (b.dynamic.clone(), w, f)
+                (b.articulation.clone(), b.dynamic.clone(), w, f)
             })
             .collect()
     }
@@ -329,8 +359,9 @@ impl SampleEngine {
             .filter(|d| only.is_none_or(|o| d.eq_ignore_ascii_case(o)))
             .cloned()
             .collect();
+        let side = self.vibrato_side_gain(leg);
         for label in dyns {
-            let g = self.group_curve_gain(leg, &label).unwrap_or(1.0) * level;
+            let g = side * self.group_curve_gain(leg, &label).unwrap_or(1.0) * level;
             if g <= 0.0 {
                 continue;
             }

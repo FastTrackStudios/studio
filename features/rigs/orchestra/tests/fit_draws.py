@@ -105,9 +105,15 @@ def main():
     renders = {c: v[0] for c, v in traced.items()}
     n = min(len(k), *(len(r) for r in renders.values()))
     ons = note_ons(mid)
-    lo, hi = traced[cands[0]][1], traced[cands[-1]][1]
-    # the onsets whose voices changed with the forced value drew
-    drawn = sorted({round(a[0], 4) for a, b in zip(lo, hi) if a != b})
+    lo = traced[cands[0]][1]
+    # the onsets whose voices changed with the forced value drew (against
+    # every candidate: a forced RR past the count wraps to the first one)
+    drawn = sorted({
+        round(a[0], 4)
+        for c in cands[1:]
+        for a, b in zip(lo, traced[c][1])
+        if a != b
+    })
     windows = []
     for t0 in drawn:
         nxt = [t for t in ons if t > t0 + 1e-4]

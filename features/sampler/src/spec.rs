@@ -907,6 +907,10 @@ pub struct LtRetireSpec {
 /// One dynamic layer's body handoff on a connected note.
 #[derive(Debug, Clone, Facet)]
 pub struct BodyHandoffSpec {
+    /// Only this articulation's layers (CSW: the vibsus and nonvib slots of
+    /// one dynamic wait differently); empty = every articulation's.
+    #[facet(default)]
+    pub articulation: String,
     pub dynamic: String,
     /// Wait before fading in (ms), by velocity zone 1-3.
     pub wait_ms: Vec<f32>,
@@ -1130,6 +1134,9 @@ pub struct LegatoOverlay {
     /// An instrument's whole transition model (every CSB number is
     /// per instrument).
     pub kontakt_transition: Option<KontaktTransitionSpec>,
+    /// Just the per-layer body handoff of the library's
+    /// `kontakt_transition` (CSW: the `%k1aqh` waits differ per instrument).
+    pub body_handoff: Option<Vec<BodyHandoffSpec>>,
     pub lt_offset_expressive: Option<Vec<u32>>,
     pub lt_offset_low_latency: Option<Vec<u32>>,
 }
@@ -1259,6 +1266,9 @@ impl SectionOverlay {
             }
             if let Some(v) = &l.kontakt_transition {
                 cfg.kontakt_transition = Some(v.clone());
+            }
+            if let (Some(v), Some(kt)) = (&l.body_handoff, cfg.kontakt_transition.as_mut()) {
+                kt.body_handoff.clone_from(v);
             }
             if let Some(v) = &l.lt_offset_expressive {
                 cfg.lt_offset_expressive.clone_from(v);
@@ -2586,6 +2596,11 @@ pub struct LegatoEngineSpec {
     /// `$ggt00/$v0rbb/$5exar` = 177/177→117 over IOI 100/150/500).
     #[facet(default)]
     pub lt_offset_expressive: Vec<u32>,
+    /// The overlap delay deepens the transition entry only in velocity
+    /// zone 1 (CSW: `$1fvjk := base + $b0n3s` in zone 1 alone); false =
+    /// every zone (CSS).
+    #[facet(default)]
+    pub overlap_offset_zone1_only: bool,
     /// [`Self::lt_offset_expressive`] for LOW-LATENCY mode (KSP:
     /// `$ak2j4/$ixzi1/$cltif`, shipped `100/148/177`).
     #[facet(default)]
@@ -2747,6 +2762,7 @@ impl Default for LegatoEngineSpec {
             shape: TransitionShapeSpec::default(),
             lt_offset_expressive: Vec::new(),
             lt_offset_low_latency: Vec::new(),
+            overlap_offset_zone1_only: false,
         }
     }
 }

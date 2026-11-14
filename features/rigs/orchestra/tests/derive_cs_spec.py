@@ -50,6 +50,9 @@ LIBS = {
         (r"\n\s+rr_sequence\s[^\n]*", "",
          "shorts draw their RR at random (random(1,n) avoiding the key's last picks), no sequence",
          "all"),
+        (r"(\n    lt_offset_low_latency[^\n]*)",
+         "\\1\n    overlap_offset_zone1_only true  // CSW: $1fvjk := base + $b0n3s in velocity zone 1 only (9463-9478)",
+         "the overlap delay deepens the transition entry in zone 1 only"),
         (r"(\n    vibrato_controller    CC2)\n",
          "\\1\n    // CC2 switches nonvib / vib at 64 (KSP `$takdp<64`, CC `$vkgua` = 2), with a\n"
          "    // timed crossfade (`$2b2p5`, 650 ms; not modelled yet): no CC2 group curves\n"

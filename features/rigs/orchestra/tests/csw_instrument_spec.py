@@ -171,7 +171,7 @@ def main():
             emit_curves(aid, cs, list(dict.fromkeys(dyn for dyn, _, _ in cs)))
     marcato(pers)
     print(")")
-    legato(pers)
+    legato(pers, zones, group_names)
 
 
 def marcato(pers):
@@ -189,9 +189,45 @@ def marcato(pers):
     print("    }")
 
 
-def legato(pers):
+DYN_ORDER = ("pp", "p", "mp", "mf", "f", "ff", "fff")
+
+
+def body_handoff(pers, zones, group_names):
+    """Per-layer body handoff from `%k1aqh` (KSP 13030-13050, the CSB
+    mechanism): body slots 0-2 are the vibsus groups and 3-5 the nonvib
+    groups, each in dynamic order; per slot `[big wait, wait z1-3, big fade,
+    fade z1-3]`. The layer is named by the recordings its group holds."""
+    arr = list(pers.get("%k1aqh", []))
+    arr += [0] * (200 - len(arr))
+    out = []
+    for first, prefix, aid in ((0, "vibsus", "Vibsus"), (3, "nonvib", "NVsus")):
+        rec = recorded_dynamics(zones, group_names, prefix, aid)
+        for k, gdyn in enumerate(sorted(rec, key=DYN_ORDER.index)):
+            b = (first + k) * 20
+            wait, fade = arr[b + 1 : b + 4], arr[b + 5 : b + 8]
+            if not any(wait):
+                continue
+            out.append(
+                f"        {{ articulation {aid}, dynamic {rec[gdyn]}, wait_ms ({' '.join(map(str, wait))}), "
+                f"fade_ms ({' '.join(map(str, fade))}), big_fade_ms {arr[b + 4]} }}"
+            )
+    return out
+
+
+def legato(pers, zones=None, group_names=None):
     p = lambda v: css.one(pers, v)  # noqa: E731
     print("legato {")
+    # the transition's entry by velocity zone (KSP 9463-9478: low latency
+    # $ak2j4/$ixzi1/$cltif, expressive $fjf3c/$2p1wl/$ywj0r; zone 1 adds the
+    # overlap delay, `overlap_offset_zone1_only` in the library spec)
+    print(f"    lt_offset_low_latency ({p('$ak2j4')} {p('$ixzi1')} {p('$cltif')})")
+    print(f"    lt_offset_expressive ({p('$fjf3c')} {p('$2p1wl')} {p('$ywj0r')})")
+    if zones is not None:
+        rows = body_handoff(pers, zones, group_names)
+        if rows:
+            print("    body_handoff (")
+            print("\n".join(rows))
+            print("    )")
     print("    overlap_delay {")
     for mode, (th, soft, loud) in css.OVERLAP_DELAY.items():
         t = " ".join(str(p(v)) for v in th)
