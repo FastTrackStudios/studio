@@ -173,6 +173,7 @@ def main():
         # with RR_AVOID_LAST or fewer RRs the KSP draw could never finish;
         # such a short (Sfz, 2 RRs) must take another path — UNVERIFIED
         print(f"        rr_random_avoid_last {min(RR_AVOID_LAST, max(rr - 1, 0))}")
+        css.emit_key_pitch(css.key_pitch_cents(all_groups, family))
         print("    }")
     for aid, prefix in RELEASE_GROUPS.items():
         rec = recorded_dynamics(zones, group_names, prefix, aid)

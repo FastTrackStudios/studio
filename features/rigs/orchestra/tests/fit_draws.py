@@ -19,6 +19,7 @@ onset and the next note-on. Prints the fitted list and writes our render
 with it to <out.wav>. No knowledge of which notes draw is needed.
 """
 import os, re, struct, subprocess, sys, tempfile
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
@@ -101,7 +102,10 @@ def main():
     cands = list(cands)
     k = load(kon)
     tmp = tempfile.mkdtemp()
-    traced = {c: render(binary, section, mid, flag, [c] * MAX_DRAWS, f"{tmp}/c{c}.wav", trace=True) for c in cands}
+    # the candidates render side by side (separate processes)
+    pool = ThreadPoolExecutor(max_workers=len(cands))
+    traced = dict(zip(cands, pool.map(
+        lambda c: render(binary, section, mid, flag, [c] * MAX_DRAWS, f"{tmp}/c{c}.wav", trace=True), cands)))
     renders = {c: v[0] for c, v in traced.items()}
     n = min(len(k), *(len(r) for r in renders.values()))
     ons = note_ons(mid)
@@ -138,12 +142,13 @@ def main():
         if 10 * np.log10(rel + 1e-20) <= REFINE_DB:
             continue
         best, best_e = draws[i], energy(k[a:b] - ours[a:b])
-        for c in cands:
-            if c == draws[i]:
-                continue
-            trial = draws[:i] + [c] + draws[i + 1 :]
-            y, _ = render(binary, section, mid, flag, trial, f"{tmp}/r.wav")
-            e = energy(k[a:b] - y[a:b])
+        others = [c for c in cands if c != draws[i]]
+
+        def trial(c, i=i):
+            y, _ = render(binary, section, mid, flag, draws[:i] + [c] + draws[i + 1 :], f"{tmp}/r{c}.wav")
+            return energy(k[a:b] - y[a:b])
+
+        for c, e in zip(others, pool.map(trial, others)):
             if e < best_e:
                 best, best_e = c, e
         if best != draws[i]:

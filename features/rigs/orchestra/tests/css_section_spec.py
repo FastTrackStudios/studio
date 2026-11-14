@@ -153,15 +153,37 @@ def group_fx(d, all_groups, prefix):
                 if m["curve_kind"] == "steps" and m.get("curve_enabled"):
                     print(f"{g['name']}: step table on {m['target']} not run", file=sys.stderr)
                     continue
-                # The decoded Invert flag is not applied: read as 1 − value it
-                # shuts CSB 4 Horns' sustain filter at ff (probe 0 dB vs −16.8
-                # without it); what it does is unverified (KONTRA ignores it too).
+                # `flag_after_slot` (ni-file's "invert") is not Kontakt's Invert:
+                # the editor shows Invert off where it is set, and applied as
+                # 1 − value it shuts CSB 4 Horns' sustain filter at ff.
                 sign = -1 if m.get("negative") else 1
                 routes.append((at[m["slot"]], FX_PARAMS[m["target"]], m["cc"], sign * m["intensity"],
                                m["lag_ms"], pts))
         if stages:
             out.append((dyn, stages, routes))
     return out
+
+
+def key_pitch_cents(all_groups, family):
+    """The `Mix <family>` group's key-position → pitch table as cents per key,
+    or None. Read bipolar (the table's 0.5 is no change): a pitch route at
+    intensity 1 spans 12 semitones."""
+    for g in all_groups:
+        if g["name"] != f"Mix {family}":
+            continue
+        for m in g["mods"]:
+            if m["target"] == "pitch" and m.get("source_kind") == "key" and m["curve_kind"] == "steps" \
+                    and m.get("curve_enabled") and len(m["curve"]) == 128 and m["intensity"]:
+                sign = -1 if m.get("negative") else 1
+                cents = [(2 * v - 1) * sign * m["intensity"] * 1200 for v in m["curve"]]
+                return cents if any(abs(c) > 0.01 for c in cents) else None
+    return None
+
+
+def emit_key_pitch(cents):
+    """Print `key_pitch_cents (...)` (inside an articulation)."""
+    if cents:
+        print(f"        key_pitch_cents ({' '.join(fmt(round(c, 3)) for c in cents)})")
 
 
 def emit_group_fx(fx):

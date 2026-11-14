@@ -2639,9 +2639,18 @@ impl SampleEngine {
             } else {
                 (0.0, semitones)
             };
+        // the articulation's per-key tuning (`key_pitch_cents`)
+        let key_cents = self
+            .patch
+            .spec
+            .articulation(&self.patch.spec.zones[idx].articulation)
+            .and_then(|a| a.key_pitch_cents.get(usize::from(note & 127)))
+            .copied()
+            .unwrap_or(0.0);
         let tune_cents_total = tune_cents as f64
             + self.master_tune_cents()
-            + f64::from(self.piano_key_cents[usize::from(note & 127)]);
+            + f64::from(self.piano_key_cents[usize::from(note & 127)])
+            + f64::from(key_cents);
         let rate = 2.0f64.powf(tune_cents_total / 1200.0 + resample_semitones / 12.0);
 
         // Marker position for playback emission (FILE frames): the zone's

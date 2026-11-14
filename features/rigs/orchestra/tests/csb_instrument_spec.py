@@ -132,6 +132,7 @@ def main():
         print(f"        vel_thresholds ({' '.join(map(str, th[1:nb]))})")
         print(f"        vel_layer_db ({' '.join(map(str, padded(pers, dvar, nb)[:nb]))})")
         print(f"        rr_random_avoid_last {min(avoid, max(rr - 1, 0))}")
+        css.emit_key_pitch(css.key_pitch_cents(all_groups, family))
         print("    }")
     # muted shorts draw a random detune only where the patch enables it
     # (`$5xze0`; KSP 12794: ±$aolsn c unless the key struck within $s01mu ms)

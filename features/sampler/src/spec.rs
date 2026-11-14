@@ -1176,6 +1176,7 @@ pub struct ArticulationOverlay {
     pub rr_per_note: Option<bool>,
     pub group_curves: Option<Vec<GroupCurveSpec>>,
     pub group_fx: Option<Vec<GroupFxSpec>>,
+    pub key_pitch_cents: Option<Vec<f32>>,
     pub amp_env: Option<Vec<EnvSegmentSpec>>,
     /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
     pub overlay_cc1_scale: Option<Vec<u8>>,
@@ -1238,6 +1239,9 @@ impl SectionOverlay {
             }
             if let Some(v) = &o.group_fx {
                 a.group_fx.clone_from(v);
+            }
+            if let Some(v) = &o.key_pitch_cents {
+                a.key_pitch_cents.clone_from(v);
             }
             if let Some(v) = &o.amp_env {
                 a.amp_env.clone_from(v);
@@ -2358,6 +2362,11 @@ pub struct ArticulationSpec {
     /// move them. Each voice of the layer runs its own chain. Empty = none.
     #[facet(default)]
     pub group_fx: Vec<GroupFxSpec>,
+    /// A fixed tuning per played key, cents (128 entries; empty = none):
+    /// Kontakt's key-position → pitch table on the articulation's group (CSB
+    /// shorts nudge single keys by up to ~20 cents).
+    #[facet(default)]
+    pub key_pitch_cents: Vec<f32>,
     /// A second amplitude envelope multiplied with `amp_env`, always one-shot
     /// (runs through, no hold) — Kontakt's group ENV_AHDSR running alongside
     /// its ENV_FLEX. CSS release groups: 250 ms attack, 25 s decay to 0.25.
