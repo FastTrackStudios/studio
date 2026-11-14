@@ -29,10 +29,15 @@ component = "studio_island.wasm"
 [capabilities]
 actions = ["PLAYHEAD_"]
 effect = "mutating"
-# The setlist view reads the note it is drawn beside (its fence): a
-# claimed view is handed the note only when its extension says it reads
-# the app's documents (architect#659 as revised).
-reads = ["documents"]
+# Its views read the note they are drawn beside: a claimed view is handed
+# the note's text only when its extension says it reads the app's
+# documents (architect#659 as revised), and the note's images and synced
+# lyrics only when it reads `files` too (architect#669, #673: images as
+# `data:` URLs, `.lrc` as text, at most 2 MiB a file, 8 MiB and 32 files a
+# note; a share link's guest only what the link shares). The setlist view
+# draws each song's cover and sends its timed lines; the song view its
+# chart and lyrics.
+reads = ["documents", "files"]
 
 # The setlist view sets its own source in the app's playhead and plays its
 # items (architect#589, `architect.playhead` v0.1).
@@ -67,15 +72,28 @@ id = "setlist.playlist"
 title = "Setlist"
 icon = "list-music"
 
+# A song note's chart and lyrics (web bundle only, studio#491): its `kf`
+# fence engraved in the frame (`setlists::follow`), the bar being played
+# marked and kept in view, a bar pressed plays from there; its `.lrc` (or
+# its `lrc` fence) as timed lines, the one sung marked, a line pressed
+# plays from there. Follows this extension's source while its item is the
+# song's recording (the one the note embeds). What a share link's guest
+# saw on the retired share page (studio#406), in the web app.
+[[views]]
+id = "song"
+title = "Song"
+icon = "music"
+
 # Drawn at the head of a note of type `setlist` in the web app's frame
 # host (the node lists the claim: `SiteIsland::embed`).
 #
 # The claim reads the note (`reads`, with `[capabilities] reads` above:
 # the node's `SiteIsland::embed_note` and `SiteIsland::reads`). A member
-# is handed the note (its `%%comments%%` removed); a share link's guest
-# only its title, type and `properties` below, no body (architect#648), so
-# the view tells a guest the songs are not shared: they are in the body's
-# fence.
+# is handed the note (its `%%comments%%` removed) and the images and
+# lyrics it and its songs reference; a share link's guest its text as the
+# link's build wrote it (architect#669: no frontmatter, no path), the
+# `properties` below, and the link's images and lyrics, the note's own
+# first.
 [[embeds]]
 id = "setlist.playlist"
 title = "Setlist"
@@ -83,6 +101,15 @@ view = "setlist.playlist"
 claims = { note_type = ["setlist"] }
 reads = ["documents"]
 properties = ["date"]
+
+# Drawn at the head of a note of type `song` (`setlists::song`): its chart
+# and lyrics, from its text and the files handed with it.
+[[embeds]]
+id = "song"
+title = "Song"
+view = "song"
+claims = { note_type = ["song"] }
+reads = ["documents"]
 
 # A setlist's favourites (architect#607, #658): the bottom slots while a
 # setlist note is open, each a view of this extension's own. Its playlist,

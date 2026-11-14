@@ -1,6 +1,6 @@
 [package]
 name = "studio-island"
-description = "Studio's island on a share link's now-playing view (studio#445): Session's progress bar and transport (transport-ui) as a WASI component the node runs in the page's sandbox, given where the song is and asking only the page's playhead intents."
+description = "Studio's island (studio#445, #491): Session's progress bar and transport (transport-ui) as a WASI component, and as a web bundle the views the Architect web app draws beside a setlist note (its playlist) and a song note (its chart following the playhead, its timed lyrics), given the note and where the song is and asking only the playhead's intents."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -34,6 +34,11 @@ transport-ui = { workspace = true }
 dioxus = { workspace = true, features = ["web", "launch"] }
 transport-ui = { workspace = true }
 lyrics-ui = { workspace = true, features = ["view"] }
+# The song view's chart (studio#491): engraved in the frame to follow the
+# playhead (`setlists::follow`, Keyflow's CPU layout and SVG: no PDF, no
+# GPU), and its header's tempo for the queue's Click.
+setlists = { workspace = true, features = ["follow"] }
+keyflow = { workspace = true, features = ["text"] }
 gloo-timers = { workspace = true }
 wasm-bindgen = { workspace = true }
 js-sys = { workspace = true }

@@ -365,11 +365,53 @@ view); a frame taller than 4,000 px (`ext_host::MAX_HEIGHT`): at a note's
 head a 200-song list (about 12,900 px) is clipped after about 60 rows,
 while the Setlist favourite's pane scrolls the whole list; and, once an
 Architect release has them, Studio's node listing the claim and its read
-(`SiteIsland::embed_note("setlist.playlist", ["setlist"], ["date"])` and
-`.reads(["documents"])` in `studio_architect::island::at`) and this
+(`SiteIsland::embed_note("setlist.playlist", ["setlist"], ["date"])`,
+`SiteIsland::embed_note("song", ["song"], [])` and
+`.reads(["documents", "files"])` in `studio_architect::island::at`; on
+Architect main, not in v0.12.6, which Studio pins) and this
 manifest's `[[favourites]]` with the island as their declarer
 (`Manifest::declarer()`: `studio.transport`, `["PLAYHEAD_"]`, `mutating`)
 at `/_ext/favourites.json`.
+
+## The song view and the note's files (studio#491)
+
+The retired share page drew a song's chart following playback and its
+timed lyrics (studio#406). Since architect#646 a share link opens the web
+app as its guest, so the island draws them, as views of its own web
+bundle:
+
+- **It reads the note's files.** `[capabilities] reads = ["documents",
+  "files"]` (architect#669, #673): with the note's text the app hands its
+  images as `data:` URLs and its `.lrc` as text (`note.files: [{path,
+  kind, size, data | text}]`, the note's own first; a guest only what the
+  link shares, at most 2 MiB a file, 8 MiB and 32 files a note).
+  `queue::files_of` reads them.
+- **The setlist view** takes each row's cover (an image in its song's
+  folder, never an engraved `.chart-<n>.png` page, `queue::art_in`) and
+  its timed lines (the `.lrc` there, `queue::lyrics_in`): the tile draws
+  the cover, and the queue item carries `art` (the Now Playing card's)
+  and its lines as sung `marks` (what the Lyrics tab follows).
+- **The song view** (`song`, claiming notes of type `song`;
+  `apps/architect/island/src/song.rs` the contract, `chart.rs` the view)
+  reads the body as `setlists::song` writes it: the `kf` fence, the
+  recording it embeds (the one the fence's `media=` names), the `.lrc` it
+  embeds (else its `lrc` fence). It engraves the chart in the frame with
+  `setlists::follow::follow_pages` (the `follow` feature: Keyflow's CPU
+  layout and SVG, no PDF writer, so it builds for wasm) and draws each
+  page with an overlay: the bar being played (Session's playback wash),
+  the beat's line gliding, a bar pressed seeks there. Its Lyrics tab
+  lists the timed lines, the one sung marked, a line pressed seeks there.
+  It follows this extension's source while its current item's `media` is
+  the song's recording, keeping the bar or line in view while it plays
+  (not for 4 s after the person scrolled). A press asks `PLAYHEAD_SEEK`
+  when the song is current, `PLAYHEAD_ITEM` then the seek when the source
+  queues it, else `PLAYHEAD_SET` with the song alone at that time,
+  playing (with its sections, marks, tempo and art).
+
+**Size**: Keyflow's engraver and its fonts are in the bundle now: 7.97 MB
+raw, 3.67 MB gzipped (was 0.99 MB and 0.40 MB). Every view of the island
+pays it; loading the engraver only for the song view (a second bundle) is
+the next step if it matters on a phone.
 
 ## Release artefacts
 

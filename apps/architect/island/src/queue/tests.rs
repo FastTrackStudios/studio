@@ -690,7 +690,7 @@ fn a_view_mounted_again_does_not_set_the_list_the_source_already_has() {
     let args = s.source(MESSAGE_MAX).args;
     // The source as the host holds it after this list's SET, playing its
     // second song.
-    let mut held = args.clone();
+    let mut held = args;
     held["source"] = json!(SOURCE);
     held["index"] = json!(1);
     held["playing"] = json!(true);
@@ -854,7 +854,10 @@ fn the_manifest_declares_the_view_its_claim_and_its_favourites() {
         .iter()
         .map(|v| v["id"].as_str().unwrap())
         .collect();
-    assert_eq!(views, ["progress", "transport", "lyrics", VIEW]);
+    assert_eq!(
+        views,
+        ["progress", "transport", "lyrics", VIEW, crate::song::VIEW]
+    );
     let embed = &m["embeds"].as_array().unwrap()[0];
     assert_eq!(embed["view"].as_str(), Some(VIEW));
     assert_eq!(embed["claims"]["note_type"][0].as_str(), Some("setlist"));
@@ -863,13 +866,20 @@ fn the_manifest_declares_the_view_its_claim_and_its_favourites() {
     assert_eq!(embed["reads"][0].as_str(), Some("documents"));
     assert_eq!(embed["properties"][0].as_str(), Some("date"));
     let caps = &m["capabilities"];
-    assert!(
-        caps["reads"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|r| r.as_str() == Some("documents"))
-    );
+    // Its text and its files (architect#673): both, or a view is handed
+    // no files.
+    let reads: Vec<&str> = caps["reads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|r| r.as_str())
+        .collect();
+    assert_eq!(reads, ["documents", "files"]);
+    // The song view claims song notes, reading them.
+    let song = &m["embeds"].as_array().unwrap()[1];
+    assert_eq!(song["view"].as_str(), Some(crate::song::VIEW));
+    assert_eq!(song["claims"]["note_type"][0].as_str(), Some("song"));
+    assert_eq!(song["reads"][0].as_str(), Some("documents"));
     // Every ask it makes, and the round button's toggle, by the prefix
     // `architect-playhead`'s rule wants (`Declarer::may_target`), up to
     // their effect (`mutating` in its manifest).
@@ -941,7 +951,7 @@ fn lyrics_are_the_pages_lines_else_the_playing_items_sung_marks() {
     );
     // Another source's marks are not this view's.
     let other = json!({"source": "app:notes", "title": "Memo", "item": {"marks": [{"at": 1.0, "text": "x"}]}});
-    assert!(lyric_lines(&other).is_empty());
+    assert_eq!(lyric_lines(&other), Vec::new());
     assert_eq!(lyrics_song(&other), None);
 }
 
@@ -985,4 +995,69 @@ fn a_row_s_summary_gives_its_beat_and_the_source_asks_for_click_and_open() {
         json!({"bpm": 120.0, "at": 0.0, "meter": 4})
     );
     assert!(s.args["queue"][1].get("tempo").is_none());
+}
+
+/// A setlist's rows take their cover and timed lines from the files the
+/// app hands its note (architect#673): the images and `.lrc` in each
+/// song's folder, sent as the queue item's `art` and sung `marks`.
+#[test]
+fn a_row_takes_its_cover_and_lines_from_the_handed_files() {
+    let body = "```studio-setlist\n\
+        1 | Joy | Libraries/Carols/Joy/Joy.md | D · 120 bpm · 4/4 | Libraries/Carols/Joy/Media/joy.ogg | Watts | 151.0 | D |\n\
+        2 | Hark | Libraries/Carols/Hark/Hark.md | F · 104 bpm · 4/4 | Libraries/Carols/Hark/Media/hark.ogg | | 175.0 | F |\n\
+        ```\n";
+    let note = json!({"title": "Eve", "body": body, "files": [
+        {"path": "Libraries/Carols/Joy/Joy.chart-1.png", "kind": "image", "size": 4, "data": "data:image/png;base64,AA=="},
+        {"path": "Libraries/Carols/Joy/cover.jpg", "kind": "image", "size": 4, "data": "data:image/jpeg;base64,AA=="},
+        {"path": "Libraries/Carols/Joy/Joy.lrc", "kind": "lyrics", "size": 30, "text": "[00:01.00]Joy to the world\n[00:03.25]The Lord is come"},
+        {"path": "Libraries/Carols/Hark/hark.webp", "kind": "image", "size": 4, "data": "data:image/webp;base64,AA=="},
+        {"path": "Libraries/Carols/Hark/x.png", "kind": "image", "size": 4, "data": "javascript:alert(1)"},
+    ]});
+    let list = setlist_of_note(&note).unwrap();
+    let items: Vec<&Item> = list.items().collect();
+    assert_eq!(
+        items[0].art.as_deref(),
+        Some("Libraries/Carols/Joy/cover.jpg")
+    );
+    assert_eq!(
+        items[0].lines,
+        vec![
+            (1.0, "Joy to the world".to_owned()),
+            (3.25, "The Lord is come".to_owned())
+        ]
+    );
+    assert_eq!(
+        items[1].art.as_deref(),
+        Some("Libraries/Carols/Hark/hark.webp")
+    );
+    assert_eq!(items[1].lines, Vec::new());
+    let images = images_of(&files_of(&note));
+    assert!(
+        !images.contains_key("Libraries/Carols/Hark/x.png"),
+        "only an image's data: URL"
+    );
+    let s = taken(&list);
+    assert_eq!(
+        s.args["queue"][0]["art"],
+        json!("Libraries/Carols/Joy/cover.jpg")
+    );
+    assert_eq!(
+        s.args["queue"][0]["marks"],
+        json!([{"at": 1.0, "text": "Joy to the world", "kind": "line"}, {"at": 3.25, "text": "The Lord is come", "kind": "line"}])
+    );
+    assert!(s.args["queue"][1].get("marks").is_none());
+}
+
+#[test]
+fn lrc_lines_are_timed_and_tags_left_out() {
+    assert_eq!(
+        lrc_lines(
+            "[ti:Eve]\n[00:02.50]b\n[00:01:00][01:00.00] a <00:01.20>word\n[00:03.00]\nno stamp"
+        ),
+        vec![
+            (1.0, "a word".to_owned()),
+            (2.5, "b".to_owned()),
+            (60.0, "a word".to_owned())
+        ]
+    );
 }

@@ -140,6 +140,14 @@ pub struct Item {
     /// Its tempo and beats a bar, from its row's summary (`D · 120 bpm ·
     /// 4/4`): what the bar's Click sounds on.
     pub tempo: Option<(f64, u8)>,
+    /// Its cover: an image of the note's handed files in its song's
+    /// folder ([`art_in`]), by its vault path: the row's tile and the Now
+    /// Playing card's art (`art` on its queue item).
+    pub art: Option<String>,
+    /// Its timed lines, `(seconds, words)`: the `.lrc` of the handed files
+    /// in its song's folder ([`lrc_lines`]), sent as its item's sung
+    /// `marks` (what the Lyrics view follows).
+    pub lines: Vec<(f64, String)>,
 }
 
 /// A set of the list: its name (none for the songs before the first set)
@@ -272,7 +280,227 @@ fn queued(i: &Item) -> Option<Value> {
             json!({"bpm": bpm, "at": 0.0, "meter": meter}),
         );
     }
+    if let Some(art) = i.art.as_deref().filter(|a| a.len() <= MEDIA_MAX) {
+        item.insert("art".to_owned(), json!(art));
+    }
+    if !i.lines.is_empty() {
+        item.insert("marks".to_owned(), marks(&i.lines));
+    }
     Some(Value::Object(item))
+}
+
+/// The most marks an item carries (#589 v0.1: 2000), and the most
+/// characters a mark's words (300).
+const MARKS_MAX: usize = 2000;
+const MARK_TEXT_MAX: usize = 300;
+
+/// Timed lines as an item's sung `marks` (`{at, text, kind: "line"}`), as
+/// the host takes them: within a day, at most [`MARKS_MAX`].
+#[must_use]
+pub fn marks(lines: &[(f64, String)]) -> Value {
+    Value::Array(
+        lines
+            .iter()
+            .filter(|(at, _)| at.is_finite() && (0.0..=LENGTH_MAX).contains(at))
+            .take(MARKS_MAX)
+            .map(|(at, text)| {
+                json!({"at": (at * 1000.0).round() / 1000.0, "text": cut(text, MARK_TEXT_MAX), "kind": "line"})
+            })
+            .collect(),
+    )
+}
+
+/// One file the app hands a view with its note (`reads = ["files"]`,
+/// architect#673): its vault path (the link's, for a guest), and an
+/// image's `data:` URL or the lyrics' text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct File {
+    pub path: String,
+    pub kind: FileKind,
+    /// An image's `data:` URL, or an `.lrc`'s text.
+    pub content: String,
+}
+
+/// What a handed file is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileKind {
+    Image,
+    Lyrics,
+}
+
+/// The files handed with `note` (`note.files`: `[{path, kind, data |
+/// text}]`), in the order handed (the note's own first); one the view
+/// cannot read is left out. An image only as a `data:` URL of an image.
+#[must_use]
+pub fn files_of(note: &Value) -> Vec<File> {
+    note.get("files")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(|f| {
+                    let path = text(f, "path");
+                    if path.is_empty() {
+                        return None;
+                    }
+                    let (kind, content) = match f.get("kind").and_then(Value::as_str)? {
+                        "image" => (
+                            FileKind::Image,
+                            f.get("data")
+                                .and_then(Value::as_str)
+                                .filter(|d| d.starts_with("data:image/"))?,
+                        ),
+                        "lyrics" => (FileKind::Lyrics, f.get("text").and_then(Value::as_str)?),
+                        _ => return None,
+                    };
+                    Some(File {
+                        path,
+                        kind,
+                        content: content.to_owned(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The folder of the note at vault path `note`, with its `/` (empty at
+/// the vault's root).
+#[must_use]
+pub fn folder_of(note: &str) -> &str {
+    note.rfind('/')
+        .and_then(|at| note.get(..=at))
+        .unwrap_or_default()
+}
+
+/// The file's name, lower case, without its extension.
+fn stem(path: &str) -> String {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    name.rsplit_once('.')
+        .map_or(name, |(s, _)| s)
+        .to_ascii_lowercase()
+}
+
+/// A song's cover among `files`, by its vault path.
+///
+/// An image in its folder `folder` (or below), never one of its chart's engraved pages (`<song>.chart-<n>.png`,
+/// `setlists::chart`); one named `cover`, `art`, `artwork`, `folder` or
+/// `front` first, else the first. None at the vault's root (every image
+/// would be in its folder).
+#[must_use]
+pub fn art_in(files: &[File], folder: &str) -> Option<String> {
+    if folder.is_empty() {
+        return None;
+    }
+    let images: Vec<&File> = files
+        .iter()
+        .filter(|f| f.kind == FileKind::Image && f.path.starts_with(folder))
+        .filter(|f| !stem(&f.path).contains(".chart-"))
+        .collect();
+    let named = |f: &&&File| {
+        matches!(
+            stem(&f.path).as_str(),
+            "cover" | "art" | "artwork" | "folder" | "front"
+        )
+    };
+    images
+        .iter()
+        .find(named)
+        .or_else(|| images.first())
+        .map(|f| f.path.clone())
+}
+
+/// A song's timed lines among `files`: the first `.lrc` in its folder
+/// `folder` (or below), read ([`lrc_lines`]). None at the vault's root.
+#[must_use]
+pub fn lyrics_in(files: &[File], folder: &str) -> Vec<(f64, String)> {
+    if folder.is_empty() {
+        return Vec::new();
+    }
+    files
+        .iter()
+        .find(|f| f.kind == FileKind::Lyrics && f.path.starts_with(folder))
+        .map(|f| lrc_lines(&f.content))
+        .unwrap_or_default()
+}
+
+/// The image files of `files`, by path: what a row's tile draws.
+#[must_use]
+pub fn images_of(files: &[File]) -> std::collections::BTreeMap<String, String> {
+    files
+        .iter()
+        .filter(|f| f.kind == FileKind::Image)
+        .map(|f| (f.path.clone(), f.content.clone()))
+        .collect()
+}
+
+/// An LRC's timed lines, `(seconds, words)`, in time order.
+///
+/// Each `[mm:ss.xx]` stamp of a line (a line may have several) at its words;
+/// tags (`[ar:…]`), untimed lines and words-less stamps are left out, and
+/// a word's own stamps inside a line (`<mm:ss.xx>`, enhanced LRC) taken
+/// off its words.
+#[must_use]
+pub fn lrc_lines(lrc: &str) -> Vec<(f64, String)> {
+    let mut out = Vec::new();
+    for line in lrc.lines() {
+        let mut rest = line.trim();
+        let mut stamps = Vec::new();
+        while let Some(after) = rest.strip_prefix('[') {
+            let Some(end) = after.find(']') else { break };
+            let tag = after.get(..end).unwrap_or_default();
+            if let Some(t) = stamp(tag) {
+                stamps.push(t);
+            }
+            rest = after
+                .get(end.saturating_add(1)..)
+                .unwrap_or_default()
+                .trim_start();
+        }
+        let words = without_word_stamps(rest);
+        if words.is_empty() {
+            continue;
+        }
+        for t in stamps {
+            out.push((t, words.clone()));
+        }
+    }
+    out.sort_by(|a, b| a.0.total_cmp(&b.0));
+    out
+}
+
+/// `mm:ss`, `mm:ss.xx` or `mm:ss:xx` as seconds; None for a tag.
+fn stamp(tag: &str) -> Option<f64> {
+    let (m, s) = tag.split_once(':')?;
+    let m: f64 = m.trim().parse().ok().filter(|m: &f64| *m >= 0.0)?;
+    let s = s.replacen(':', ".", 1);
+    let s: f64 = s
+        .trim()
+        .parse()
+        .ok()
+        .filter(|s: &f64| (0.0..60.0).contains(s))?;
+    let t = m.mul_add(60.0, s);
+    (t.is_finite() && t <= LENGTH_MAX).then_some(t)
+}
+
+/// `words` without enhanced LRC's `<mm:ss.xx>` stamps, its spaces made one.
+fn without_word_stamps(words: &str) -> String {
+    let mut out = String::with_capacity(words.len());
+    let mut rest = words;
+    while let Some(open) = rest.find('<') {
+        let tail = rest.get(open..).unwrap_or_default();
+        match tail.find('>') {
+            Some(close) if stamp(tail.get(1..close).unwrap_or_default()).is_some() => {
+                out.push_str(rest.get(..open).unwrap_or_default());
+                rest = tail.get(close.saturating_add(1)..).unwrap_or_default();
+            }
+            _ => {
+                out.push_str(rest.get(..=open).unwrap_or_default());
+                rest = rest.get(open.saturating_add(1)..).unwrap_or_default();
+            }
+        }
+    }
+    out.push_str(rest);
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// `s`, at most `max` characters.
@@ -293,6 +521,13 @@ fn vault_path(p: &str) -> Option<String> {
         && p.split('/')
             .all(|seg| !seg.is_empty() && seg != "." && seg != "..");
     ok.then(|| p.to_owned())
+}
+
+/// Whether `p` is a vault path the host takes as `media` or `art`, as
+/// it is.
+#[must_use]
+pub fn media_path(p: &str) -> bool {
+    vault_path(p).as_deref() == Some(p)
 }
 
 /// Where the source is.
@@ -339,7 +574,14 @@ fn own(props: &Value) -> bool {
 /// The list in the app's props: read from `note`; none without one.
 #[must_use]
 pub fn setlist_of(props: &Value) -> Option<Setlist> {
-    props.get("note").filter(|n| n.is_object()).map(from_note)
+    props.get("note").and_then(setlist_of_note)
+}
+
+/// The list read from the note the app handed (`note`); none when it
+/// handed none (`null`).
+#[must_use]
+pub fn setlist_of_note(note: &Value) -> Option<Setlist> {
+    note.is_object().then(|| from_note(note))
 }
 
 /// The list read from a setlist note's fence.
@@ -355,6 +597,7 @@ fn from_note(note: &Value) -> Setlist {
         .unwrap_or_default();
     let withheld = note.get("body").is_none();
     let body = note.get("body").and_then(Value::as_str).unwrap_or("");
+    let files = files_of(note);
     let mut sections = vec![Section::default()];
     let mut seen = BTreeSet::new();
     let mut inside = false;
@@ -401,6 +644,8 @@ fn from_note(note: &Value) -> Setlist {
             media: row.recording.as_deref().and_then(vault_path),
             recording: row.recording.is_some(),
             tempo: tempo_of(&row.summary),
+            art: art_in(&files, folder_of(&row.note)).and_then(|a| vault_path(&a)),
+            lines: lyrics_in(&files, folder_of(&row.note)),
         };
         if let Some(last) = sections.last_mut() {
             last.items.push(item);

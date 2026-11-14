@@ -19,9 +19,8 @@ thread_local! {
     static VIEW: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
-/// Draw view `view` (`progress`, `transport`, `lyrics` or
-/// `setlist.playlist`)
-/// into the frame's `#main`.
+/// Draw view `view` (`progress`, `transport`, `lyrics`,
+/// `setlist.playlist` or `song`) into the frame's `#main`.
 #[wasm_bindgen]
 pub fn mount(view: String) {
     VIEW.with(|v| *v.borrow_mut() = view);
@@ -55,6 +54,10 @@ fn ask() -> views::Ask {
 #[component]
 fn App() -> Element {
     let mut props = use_signal(|| Value::Null);
+    // The note the app hands with every update (`note`, its files' images
+    // as `data:` URLs among it): kept apart, and written only when it
+    // changes, so a tick of the playhead does not read the song again.
+    let mut note = use_signal(|| Value::Null);
     // The page's props, as they come: through a channel into the view's
     // own task, so the signal is written where Dioxus runs.
     use_hook(move || {
@@ -73,7 +76,12 @@ fn App() -> Element {
         }
         spawn(async move {
             while let Some(text) = rx.next().await {
-                if let Ok(v) = serde_json::from_str::<Value>(&text) {
+                if let Ok(mut v) = serde_json::from_str::<Value>(&text) {
+                    if let Some(n) = v.as_object_mut().and_then(|o| o.remove("note")) {
+                        if *note.peek() != n {
+                            note.set(n);
+                        }
+                    }
                     props.set(v);
                 }
             }
@@ -84,7 +92,10 @@ fn App() -> Element {
         return rsx! { crate::lyrics::Lyrics { page: props } };
     }
     if view == crate::queue::VIEW {
-        return rsx! { crate::setlist::SetlistView { page: props, ask: ask() } };
+        return rsx! { crate::setlist::SetlistView { page: props, note, ask: ask() } };
+    }
+    if view == crate::song::VIEW {
+        return rsx! { crate::chart::SongView { page: props, note, ask: ask() } };
     }
     let p = playhead_of(&props.read());
     match view.as_str() {

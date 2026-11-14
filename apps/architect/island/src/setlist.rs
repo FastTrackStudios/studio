@@ -21,6 +21,8 @@
 //! each song's tile, coloured from its title as the share page's (darkened
 //! where its key would not read: [`queue::tile_rgb`]).
 
+use std::collections::BTreeMap;
+
 use dioxus::prelude::*;
 
 use crate::queue::{self, Item, Now, Setlist};
@@ -56,6 +58,9 @@ pub const SHEET: &str = r#"
 .sl-key { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
 .sl-key[data-size="s"] { font-size: 14px; }
 .sl-key[data-size="xs"] { font-size: 12px; }
+.sl-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sl-chip { position: absolute; left: 3px; bottom: 3px; font-size: 10px; font-weight: 700; line-height: 1; padding: 2px 4px;
+           border-radius: 4px; background: rgba(0, 0, 0, .62); color: #fff; }
 .sl-moved { position: absolute; right: 3px; bottom: 2px; font-size: 11px; font-weight: 700; }
 .sl-text { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .sl-name, .sl-by, .sl-artist { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -85,14 +90,20 @@ pub const SHEET: &str = r#"
 /// The setlist view, over the app's props.
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 #[component]
-pub fn SetlistView(page: Signal<serde_json::Value>, ask: crate::views::Ask) -> Element {
+pub fn SetlistView(
+    page: Signal<serde_json::Value>,
+    note: Signal<serde_json::Value>,
+    ask: crate::views::Ask,
+) -> Element {
     use std::cell::RefCell;
     use std::rc::Rc;
 
     let now_ms = js_sys::Date::now;
     // The list apart from where it is: rebuilt only when the list changes,
     // not at each tick of the playhead.
-    let list = use_memo(move || queue::setlist_of(&page.read()));
+    let list = use_memo(move || queue::setlist_of_note(&note.read()));
+    // Each song's cover, as the app handed it (a `data:` URL by its path).
+    let art = use_memo(move || queue::images_of(&queue::files_of(&note.read())));
     let now = use_memo(move || queue::now_of(&page.read()));
     let outbox = use_hook(|| Rc::new(RefCell::new(queue::Outbox::default())));
     // The ids its rows may play: written only when they change.
@@ -150,7 +161,7 @@ pub fn SetlistView(page: Signal<serde_json::Value>, ask: crate::views::Ask) -> E
     };
     rsx! {
         document::Style { {SHEET} }
-        Rows { setlist, now: now(), playable: playable(), on_press }
+        Rows { setlist, now: now(), playable: playable(), art: art(), on_press }
     }
 }
 
@@ -160,6 +171,9 @@ pub fn Rows(
     setlist: Setlist,
     now: Option<Now>,
     playable: Vec<String>,
+    /// Covers by path, `data:` URLs.
+    #[props(default)]
+    art: BTreeMap<String, String>,
     on_press: EventHandler<Item>,
 ) -> Element {
     if setlist.items().next().is_none() {
@@ -194,7 +208,7 @@ pub fn Rows(
                         ol { "aria-labelledby": "sl-set-{n}",
                             for item in section.items.iter() {
                                 li { key: "{item.id}",
-                                    Row { item: item.clone(), now: now.clone(), playable: playable.contains(&item.id), on_press }
+                                    Row { item: item.clone(), now: now.clone(), playable: playable.contains(&item.id), cover: item.art.as_ref().and_then(|a| art.get(a)).cloned(), on_press }
                                 }
                             }
                         }
@@ -203,7 +217,7 @@ pub fn Rows(
                     ol { key: "s{n}", "aria-label": "{title}",
                         for item in section.items.iter() {
                             li { key: "{item.id}",
-                                Row { item: item.clone(), now: now.clone(), playable: playable.contains(&item.id), on_press }
+                                Row { item: item.clone(), now: now.clone(), playable: playable.contains(&item.id), cover: item.art.as_ref().and_then(|a| art.get(a)).cloned(), on_press }
                             }
                         }
                     }
@@ -214,7 +228,13 @@ pub fn Rows(
 }
 
 #[component]
-fn Row(item: Item, now: Option<Now>, playable: bool, on_press: EventHandler<Item>) -> Element {
+fn Row(
+    item: Item,
+    now: Option<Now>,
+    playable: bool,
+    cover: Option<String>,
+    on_press: EventHandler<Item>,
+) -> Element {
     let current = now.as_ref().filter(|n| n.id == item.id);
     let playing = current.is_some_and(|n| n.playing);
     let progress = current.map(|n| n.progress() * 100.0);
@@ -256,7 +276,12 @@ fn Row(item: Item, now: Option<Now>, playable: bool, on_press: EventHandler<Item
                 }
             }
             span { class: "sl-tile", style: "background: rgb({r} {g} {b});", "aria-hidden": "true",
-                if item.key.is_empty() {
+                if let Some(src) = &cover {
+                    img { class: "sl-art", src: "{src}", alt: "", "data-testid": "row-art" }
+                    if !item.key.is_empty() {
+                        span { class: "sl-chip", "{item.key}" }
+                    }
+                } else if item.key.is_empty() {
                     svg { view_box: "0 0 24 24", width: "22", height: "22", fill: "none", stroke: "currentColor",
                         stroke_width: "2", stroke_linecap: "round", stroke_linejoin: "round",
                         path { d: "M9 18V5l12-2v13" }
