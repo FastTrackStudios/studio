@@ -1103,7 +1103,7 @@ impl SampleEngine {
         let release_keys = zone_key_index(&patch.spec.zones, ZoneTrigger::Release);
         let (zone_mic_rank, mic_rank_names) = zone_mic_ranks(&patch.spec.zones);
 
-        Self {
+        let mut engine = Self {
             zone_keys,
             release_keys,
             zone_mic_rank,
@@ -1269,6 +1269,30 @@ impl SampleEngine {
             sample_misses: Cell::new(0),
             recent_cache_misses: RefCell::new(VecDeque::with_capacity(RECENT_MISS_LIMIT)),
             recent_sample_misses: RefCell::new(VecDeque::with_capacity(RECENT_MISS_LIMIT)),
+        };
+        engine.apply_fixed_ccs();
+        engine
+    }
+
+    /// Hold the library's fixed controllers (`dynamics.fixed_ccs`) at their
+    /// values: a script that ignores a CC and sets it itself (CSB: CC2 :=
+    /// `$takdp`) leaves the group curves reading that value only.
+    pub(crate) fn apply_fixed_ccs(&mut self) {
+        for f in self.patch.spec.dynamics.fixed_ccs.clone() {
+            if let Some(slot) = self.cc_values.get_mut(usize::from(f.cc)) {
+                *slot = f.value;
+            }
+            match f.cc {
+                1 => {
+                    self.cc1 = f.value;
+                    self.lines.iter_mut().for_each(|l| l.cc1 = f.value);
+                }
+                2 => {
+                    self.cc2 = f.value;
+                    self.lines.iter_mut().for_each(|l| l.cc2 = f.value);
+                }
+                _ => {}
+            }
         }
     }
 

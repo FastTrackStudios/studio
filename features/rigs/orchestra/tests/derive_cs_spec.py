@@ -45,7 +45,14 @@ LIBS = {
         "subs": [
             (r"(\n        id            Marcato\n(?:.*\n)*?\s+lt_articulation )Leg\b", r"\1MLeg",
              "CSW records its marcato transitions as their own MLeg files"),
-            (r"\n    first_note_variants[^\n]*", "",
+            (r"master_tune_cents\s+\S+[^\n]*", "master_tune_cents    0  // group tunes differ: folded into each zone (fold_group_tune.py)",
+         "group tune is per group here, folded into the zones"),
+        (r"(\n    vibrato_controller    CC2)\n",
+         "\\1\n    // CC2 switches nonvib / vib at 64 (KSP `$takdp<64`, CC `$vkgua` = 2), with a\n"
+         "    // timed crossfade (`$2b2p5`, 650 ms; not modelled yet): no CC2 group curves\n"
+         "    vibrato_mode          \"on_off\"\n",
+         "CSW's vibrato is a CC2 switch, not a group-curve crossfade"),
+        (r"\n    first_note_variants[^\n]*", "",
              "no first-note body-variant counter ($2ekvq absent)"),
             (r"\n    first_note_variant_init[^\n]*", "", "(same)"),
             (r"\n    first_note_mute_ms[^\n]*", "",
@@ -76,14 +83,21 @@ LIBS["brass"] = {
     # brass articulations with no strings slot, kept from the brass spec
     "own_articulations": ["Stoppedsus", "Stoppedreps", "Stoppedsusrel", "Taka"],
     "subs": [
-        (r"\n    vibrato_controller[^\n]*", "", "no vibrato crossfade (no CC2 dimension)"),
+        (r"master_tune_cents\s+\S+[^\n]*", "master_tune_cents    0  // group tunes differ: folded into each zone (fold_group_tune.py)",
+         "group tune is per group here, folded into the zones"),
+        (r"\n    vibrato_controller[^\n]*",
+         "\n    // The script ignores MIDI CC2 (it is in %vn532) and sets it to its saved\n"
+         "    // vibrato knob ($takdp, 126 on every CSB patch): the release groups' CC2\n"
+         "    // curves read that, so brass has no vibrato crossfade and a fixed CC2.\n"
+         "    fixed_ccs ({cc 2, value 126})",
+         "no vibrato crossfade; CC2 held at $takdp"),
         (r"\n(\s*//[^\n]*\n)*\s*short_note_cc1_map \{[^}]*\}", "",
          "the KSP never reads CC1 for the short type (CC58 / KS velocity) — verify in Kontakt"),
         (r"\n    first_note_variants[^\n]*", "", "no first-note body variants (Sus zones vel 1-4, one start)"),
         (r"\n    first_note_variant_init[^\n]*", "", "(same)"),
         (r"\n    first_note_attack \{[^\n]*", "", "no attack-voice zones in the vibsus groups"),
         (r"first_note_mute_ms[^\n]*", "first_note_mute_ms      (0 0)", "no mute wait; zones 2-3 fade in"),
-        (r"(\n\s+)0-10  Sustain", r'\g<1>0-10  "Sus"', "CC58 0-10 = sustain"),
+        (r'(\n\s+)0-10  (?:Sustain|"Sus")', r'\g<1>0-10  "Sus"', "CC58 0-10 = sustain"),
         (r"overlay \{ articulation Repetitions, cc1_scale \([^)]*\) \}",
          "overlay { articulation Repetitions, cc1_scale (" + " ".join(["100"] * 128)
          + "), skip_after_hard_transition false, connected_from_velocity 64 }",

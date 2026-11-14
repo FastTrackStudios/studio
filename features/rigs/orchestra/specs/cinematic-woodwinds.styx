@@ -121,7 +121,7 @@ performance {
     sustain_makeup_db    0.0   // was 5.0 (A/B-fitted); the null test shows Kontakt adds no sustain makeup
     instrument_gain_db   2.55  // Kontakt's level over the raw file with every curve at 1.0 (null-tested, all voices)
     resample_transpose   true  // keys between samples are RESAMPLED, like Kontakt (no time-preserving shifter)
-    master_tune_cents    9.000103  // group tune 1.0052122 = 1200·log2(…) cents, exact (null-tested: 9.0 drifts a held note to −36 dB)
+    master_tune_cents    0  // group tunes differ: folded into each zone (fold_group_tune.py)
     loop_xfade_ms        0     // Kontakt plays the CSS zone loops hard (null test: a marcato body wrapping 136 ms after its note-off)
     // CSS sustains ship no loop points and open with a slow ~0.8 s bow
     // swell that the vendor instrument skips via Kontakt sample-start.
@@ -167,6 +167,9 @@ performance {
 dynamics {
     sustain_controller    CC1
     vibrato_controller    CC2
+    // CC2 switches nonvib / vib at 64 (KSP `$takdp<64`, CC `$vkgua` = 2), with a
+    // timed crossfade (`$2b2p5`, 650 ms; not modelled yet): no CC2 group curves
+    vibrato_mode          "on_off"
     // SHORT-NOTE DYNAMICS — the KSP-confirmed model:
     //
     // Decoded from `script_1.ksp` (~lines 10775–11135) and verified against the

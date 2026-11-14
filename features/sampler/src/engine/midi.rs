@@ -1447,16 +1447,23 @@ impl SampleEngine {
         // the active pair equal-power by CC1; `update_sustain_gains` re-levels
         // them live as CC1 sweeps.
         // Kontakt group curves, when decoded: every layer at its own table
-        // value — the CC2 side is one of the curves, so `side_scale` (the
-        // legacy equal-power split) does not apply.
+        // value — the CC2 side is one of the curves (CSS), so `side_scale`
+        // (the legacy equal-power split) applies only to an articulation
+        // whose curves have no CC2 table (CSW).
         if self
             .patch
             .spec
             .articulation(artic)
             .is_some_and(|a| !a.group_curves.is_empty())
         {
+            // no CC2 table: the vibrato side is the engine's blend
+            let side = if self.curves_carry_vibrato(artic) {
+                1.0
+            } else {
+                side_scale
+            };
             for (i, label) in dyn_labels.iter().enumerate() {
-                let gain = self.group_curve_gain(artic, label).unwrap_or(0.0);
+                let gain = side * self.group_curve_gain(artic, label).unwrap_or(0.0);
                 if let Some(idx) = self.find_layer_zone(artic, direction, label, note, rr) {
                     self.spawn_zone_voice(
                         idx,
@@ -3465,6 +3472,17 @@ impl SampleEngine {
     /// level. Document CCs carry their channel; the scheduler resolves it to
     /// a line before calling this.
     pub fn cc_line(&mut self, line: LineId, controller: u8, value: u8) {
+        // a fixed controller ignores MIDI (`dynamics.fixed_ccs`)
+        if self
+            .patch
+            .spec
+            .dynamics
+            .fixed_ccs
+            .iter()
+            .any(|f| f.cc == controller)
+        {
+            return;
+        }
         self.set_active_line(line);
         let old_value = self
             .cc_values

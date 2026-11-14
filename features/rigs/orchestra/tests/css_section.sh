@@ -103,14 +103,35 @@ echo "decoded: $(($(wc -l < "$ksp/zones.tsv") - 1)) zones → $ksp"
     --target x86_64-unknown-linux-gnu -p sampler --example signalpack) \
     || { echo "signalpack build failed" >&2; exit 1; }
 signalpack="$repo/target/x86_64-unknown-linux-gnu/desktop-dev/examples/signalpack"
+# CSW / CSB tune group by group: fold each group's tune into its zones (the
+# library's master tune is 0). CSS tunes every group alike: its master tune.
+zones_in="$ksp/zones.tsv"
+case "$section" in
+  CSW\ *|CSB\ *)
+    python3 -I "$here/fold_group_tune.py" "$ksp" > "$tmp/zones_tuned.tsv"
+    zones_in="$tmp/zones_tuned.tsv" ;;
+esac
 sync_log="$(mktemp)"
-timeout 1800 "$signalpack" zones sync-tsv "$patch/library.styx" --from-tsv "$ksp/zones.tsv" \
+timeout 1800 "$signalpack" zones sync-tsv "$patch/library.styx" --from-tsv "$zones_in" \
     --section "$label" "${flat[@]}" --disable-unmatched > "$sync_log" 2>&1 \
     || { cat "$sync_log" >&2; rm -f "$sync_log"; echo "sync-tsv failed" >&2; exit 1; }
 grep -E "matched|edited|wrote|borrowed|unreachable" "$sync_log" || true
 rm -f "$sync_log"
 case "$section" in
   CSW\ *)
+    # zones play as the Kontakt slot that holds them (the vibrato-less
+    # instruments keep their NVsus recordings in the vibsus groups)
+    python3 -I "$here/slot_relabel.py" "$ksp" "$patch/library.styx"
+    # A nonvib sustain plays 333 ms into its recording (KSP `$0kimq := 333`
+    # when `$o24qj = 0`), clamped by each zone's sample-start-mod range, which
+    # the decoder does not read yet: the two-player patches' NVsus recordings
+    # open on exactly 333 ms of silence and start there in Kontakt; the solos'
+    # start at 0 (null-tested, probe).
+    case "$section" in
+      "CSW 2 Flutes"|"CSW 2 Oboes"|"CSW 2 Bassoons")
+        timeout 600 "$signalpack" zones set "$patch/library.styx" --articulation NVsus \
+            --set sample_start=15984 >/dev/null ;;
+    esac
     # 3. the woodwind's numbers
     python3 -I "$here/csw_instrument_spec.py" "$ksp" > "$patch/section.styx"
     echo "wrote $patch/section.styx ($(grep -c '^        id ' "$patch/section.styx") articulations)"

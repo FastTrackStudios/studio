@@ -1144,9 +1144,16 @@ impl SampleEngine {
             .is_some_and(|a| a.dynamics.len() > 1);
         // Kontakt group curves per layer index, per side (decoded tables);
         // `None` for a side/library without them → legacy crossfade below.
-        let side_curves = |artic: Option<&str>| -> Vec<Option<f32>> {
+        // An articulation whose curves have no CC2 table takes its vibrato
+        // side from the blend (`side`), like the legacy crossfade.
+        let side_curves = |artic: Option<&str>, side: f32| -> Vec<Option<f32>> {
             let Some(artic) = artic else {
                 return Vec::new();
+            };
+            let side = if self.curves_carry_vibrato(artic) {
+                1.0
+            } else {
+                side
             };
             self.patch
                 .spec
@@ -1154,14 +1161,14 @@ impl SampleEngine {
                 .map(|a| {
                     a.dynamics
                         .iter()
-                        .map(|d| self.group_curve_gain(artic, d))
+                        .map(|d| self.group_curve_gain(artic, d).map(|g| g * side))
                         .collect()
                 })
                 .unwrap_or_default()
         };
         let curve_gains = {
-            let nv = side_curves(Some(&nv_artic));
-            let vb = side_curves(vib_artic.as_deref());
+            let nv = side_curves(Some(&nv_artic), nv);
+            let vb = side_curves(vib_artic.as_deref(), vb);
             (nv.iter().chain(&vb).any(Option::is_some)).then_some((nv, vb))
         };
         for v in self.voices.voices_mut() {
@@ -1212,8 +1219,13 @@ impl SampleEngine {
 
     /// Compute the vibrato blend factor [0.0, 1.0] from the current CC2 value.
     ///
-    /// `"on_off"` mode (CSSS): snaps at 64. All other libraries: linear.
+    /// `"on_off"` mode (CSSS, CSW): snaps at 64. All other libraries: linear.
+    /// No vibrato controller (brass, the CSW clarinets): CC2 changes
+    /// nothing — the one sustain plays on the non-vibrato side, in full.
     pub(crate) fn cc2_blend(&self) -> f32 {
+        if self.patch.spec.dynamics.vibrato_controller.is_none() {
+            return 0.0;
+        }
         match self.patch.spec.dynamics.vibrato_mode.as_deref() {
             Some("on_off") => {
                 if self.cc2 >= 64 {

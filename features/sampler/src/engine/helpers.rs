@@ -371,6 +371,17 @@ impl SampleEngine {
         Some(g)
     }
 
+    /// Whether `artic`'s decoded group curves carry the vibrato crossfade
+    /// themselves (a CC2 table, CSS). A pair whose groups have none (CSW:
+    /// the script switches nonvib/vib groups on CC2) takes its level from
+    /// the engine's vibrato blend instead (`cc2_blend`).
+    pub(crate) fn curves_carry_vibrato(&self, artic: &str) -> bool {
+        self.patch
+            .spec
+            .articulation(artic)
+            .is_some_and(|a| a.group_curves.iter().any(|c| c.cc == 2))
+    }
+
     /// The CC1 layer slice for a given articulation (by its dynamics count).
     pub(crate) fn cc1_layers_for(&self, artic_id: &str) -> &[Cc1Layer] {
         let Some(artic) = self.patch.spec.articulation(artic_id) else {

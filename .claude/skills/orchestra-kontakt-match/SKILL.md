@@ -81,6 +81,10 @@ One chain per instrument: `target/orchestra-ab/chains/fxchain_<tag>.txt`
 
 ## 3. Null suite
 
+**Run sections in parallel: `tests/null_all.sh <Section>…`** (JOBS=12,
+MODES="…"): every (section, mode) pair is its own job. The strings
+regression (5 × 10) takes ~6 min instead of ~100.
+
 **Kontakt renders in bulk: `tests/kontakt_batch.py <mode> <tag>:<transpose> …`**
 builds one project with a track per instrument and run (r1, r2), renders it
 in ONE REAPER as stems (seconds, not minutes per render) and drops each stem

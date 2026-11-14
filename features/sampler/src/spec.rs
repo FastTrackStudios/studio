@@ -1110,6 +1110,14 @@ pub struct SectionOverlay {
     pub legato: Option<LegatoOverlay>,
     /// See [`PerformanceSpec::rr_per_key`].
     pub rr_per_key: Option<bool>,
+    /// See [`PerformanceSpec::instrument_gain_db`]: an instrument whose
+    /// level differs from its library's (CSW / CSB patches each set their
+    /// own instrument volume).
+    pub instrument_gain_db: Option<f32>,
+    /// See [`DynamicsSpec::vibrato_controller`]: an instrument whose vibrato
+    /// control differs from its library's. `""` = none (the CSW clarinets'
+    /// `$vkgua = -1`: CC2 never leaves the vibsus slot).
+    pub vibrato_controller: Option<String>,
 }
 
 /// The overridable legato-engine fields of a section: the CSS editor knobs
@@ -1216,6 +1224,12 @@ impl SectionOverlay {
         }
         if let Some(v) = self.rr_per_key {
             spec.performance.rr_per_key = v;
+        }
+        if let Some(v) = self.instrument_gain_db {
+            spec.performance.instrument_gain_db = v;
+        }
+        if let Some(v) = &self.vibrato_controller {
+            spec.dynamics.vibrato_controller = (!v.is_empty()).then(|| v.clone());
         }
         if let (Some(l), Some(cfg)) = (&self.legato, spec.legato_engine.as_mut()) {
             if let Some(v) = &l.overlap_delay {
@@ -1905,6 +1919,13 @@ pub struct MicSpec {
 
 // ── Dynamics ─────────────────────────────────────────────────────────────────
 
+/// A controller held at one value (see [`DynamicsSpec::fixed_ccs`]).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FixedCcSpec {
+    pub cc: u8,
+    pub value: u8,
+}
+
 /// Dynamic control model for the library.
 #[derive(Debug, Clone, Default, Facet)]
 pub struct DynamicsSpec {
@@ -1914,6 +1935,11 @@ pub struct DynamicsSpec {
     pub vibrato_controller: Option<String>,
     /// `"crossfade"` or `"on_off"` (solo strings: vibrato is binary).
     pub vibrato_mode: Option<String>,
+    /// Controllers the instrument holds at a value of its own, ignoring MIDI
+    /// for them: CSB's script ignores CC2 and sets it to its saved vibrato
+    /// knob (`$takdp` = 126), which its release groups' CC2 curves read.
+    #[facet(default)]
+    pub fixed_ccs: Vec<FixedCcSpec>,
     /// Controller for short-note dynamics. `"velocity"` for most libraries.
     pub short_note_controller: Option<String>,
 
