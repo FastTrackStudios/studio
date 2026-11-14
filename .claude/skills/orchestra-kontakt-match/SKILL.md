@@ -81,6 +81,13 @@ One chain per instrument: `target/orchestra-ab/chains/fxchain_<tag>.txt`
 
 ## 3. Null suite
 
+**Kontakt renders in bulk: `tests/kontakt_batch.py <mode> <tag>:<transpose> …`**
+builds one project with a track per instrument and run (r1, r2), renders it
+in ONE REAPER as stems (seconds, not minutes per render) and drops each stem
+where `null_suite.sh` reads it; then `SKIP_KONTAKT=1 null_suite.sh` scores
+without the host. Batch stems are bit-identical to single renders. Keep a
+batch to ~40 Kontakt instances (voyager has 32 GB).
+
 `null_suite.sh "<Section>" [modes]` (woodwinds by patch folder: `"Solo Flute"`,
 `"Saf"`; transpositions and chain tags `ww_<tag>` are in the script) — probe MIDI (`gen_probe.py`, transposed
 into range), two Kontakt renders, ours, `null_test.py`. Random draws (detune,
