@@ -47,7 +47,9 @@ pub mod vault;
 
 #[cfg(feature = "engrave")]
 pub mod chart;
-#[cfg(feature = "engrave")]
+#[cfg(feature = "follow")]
+mod engraving;
+#[cfg(feature = "follow")]
 pub mod follow;
 #[cfg(feature = "share")]
 pub mod share;

@@ -26,8 +26,12 @@ extension = ["workspace", "dep:architect-extensions", "dep:architect-navigator-a
 # page by page and timed on its own clock, its parts, its one lyrics
 # source, the play clock and where the panes go.
 workspace = ["engrave", "dep:session"]
+# A chart engraved to follow its recording (`setlists::follow`): Keyflow's
+# CPU layout and SVG, its text drawn as outlines. No PDF and no GPU, so it
+# builds for wasm too (Studio's island draws a guest's chart with it).
+follow = ["dep:keyflow", "keyflow/text", "keyflow/svg", "dep:usvg"]
 # Engrave a song's `.kf` to its Master Rhythm pages and PDF.
-engrave = ["dep:keyflow", "dep:engraver", "dep:resvg"]
+engrave = ["follow", "keyflow/engraver", "dep:engraver", "dep:resvg"]
 # `studio setlist import|engrave`: songs brought into a library from their files.
 cli = ["engrave", "dep:clap"]
 # The share page: a song's chart drawn as Keyflow's follow SVG (its bars
@@ -43,11 +47,13 @@ required-features = ["extension"]
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
 thiserror = { workspace = true }
-keyflow = { workspace = true, optional = true, features = ["text", "engraver"] }
+keyflow = { workspace = true, optional = true }
 # Its PDF writer (the facade turns the engraver on without `pdf`).
 engraver = { workspace = true, optional = true, features = ["pdf"] }
 # The pages as PNGs, as `kf png` draws them.
 resvg = { workspace = true, optional = true }
+# Its SVG reader alone: the follow chart's text as outlines.
+usvg = { workspace = true, optional = true }
 architect-sites = { workspace = true, optional = true }
 architect-extensions = { workspace = true, optional = true, features = ["guest"] }
 architect-navigator-api = { workspace = true, optional = true }

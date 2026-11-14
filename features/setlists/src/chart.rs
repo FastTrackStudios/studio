@@ -9,11 +9,8 @@
 //! shows is the chart drawn to follow playback ([`crate::follow`]).
 
 use std::path::Path;
-use std::sync::OnceLock;
 
-use keyflow::engraver::api::pipeline::ChartPipeline;
-use keyflow::engraver::layout::chart::{ChartLayoutConfig, ChartLayoutResult, LayoutMode};
-use keyflow::engraver::style::MStyle;
+use crate::engraving::{fontdb, layout};
 
 use crate::layout::{ARRANGEMENTS, Library};
 use crate::lyrics::{self, Block};
@@ -36,35 +33,6 @@ pub struct Engraved {
     /// One PNG per page.
     pub pages: Vec<Vec<u8>>,
     pub pdf: Vec<u8>,
-}
-
-/// The pipeline `kf` draws with: the shared fonts, `MStyle::new()`.
-fn pipeline() -> Result<&'static ChartPipeline> {
-    static PIPELINE: OnceLock<std::result::Result<ChartPipeline, String>> = OnceLock::new();
-    PIPELINE
-        .get_or_init(|| {
-            let style: &'static MStyle = Box::leak(Box::new(MStyle::new()));
-            ChartPipeline::with_style(style).map_err(|e| e.to_string())
-        })
-        .as_ref()
-        .map_err(|e| Error::Engrave(e.clone()))
-}
-
-/// Chart `chart` laid out as it is printed: A4 pages, the Master Rhythm
-/// preset. The pipeline it was laid out with comes along.
-///
-/// # Errors
-///
-/// The engraver's fonts did not load.
-pub(crate) fn layout(
-    chart: &keyflow::Chart,
-) -> Result<(&'static ChartPipeline, ChartLayoutResult)> {
-    let pipeline = pipeline()?;
-    let config = ChartLayoutConfig::master_rhythm().with_page_offsets(true);
-    Ok((
-        pipeline,
-        pipeline.layout_with_config(chart, &LayoutMode::paginated_a4(), &config),
-    ))
 }
 
 /// Engrave chart `source`: A4 pages, the Master Rhythm preset.
@@ -101,37 +69,6 @@ pub fn engrave(source: &str) -> Result<Engraved> {
         pages,
         pdf,
     })
-}
-
-/// The engraver's own fonts, for drawing its pages without it: as pixels
-/// (the PNG pages) or as outlines (the share page's chart, [`crate::follow`]).
-///
-/// # Errors
-///
-/// The engraver's fonts did not load.
-pub(crate) fn fontdb() -> Result<std::sync::Arc<resvg::usvg::fontdb::Database>> {
-    static FONTS: OnceLock<std::sync::Arc<resvg::usvg::fontdb::Database>> = OnceLock::new();
-    let pipeline = pipeline()?;
-    Ok(std::sync::Arc::clone(FONTS.get_or_init(|| {
-        let mut db = resvg::usvg::fontdb::Database::new();
-        for (label, bytes) in pipeline.fonts().embeddable_fonts_for_raster() {
-            db.load_font_data(bytes.to_vec());
-            // The generic families the engraving names (a rehearsal mark's
-            // `sans-serif`) are the face the engraver files under them:
-            // fontdb maps a generic family by name only.
-            let family = db
-                .faces()
-                .last()
-                .and_then(|f| f.families.first())
-                .map(|(name, _)| name.clone());
-            match (label, family) {
-                ("sans-serif", Some(name)) => db.set_sans_serif_family(name),
-                ("serif", Some(name)) => db.set_serif_family(name),
-                _ => {}
-            }
-        }
-        std::sync::Arc::new(db)
-    })))
 }
 
 /// How many pixels a point is on a page: A4 at 2× is 1190 px wide.

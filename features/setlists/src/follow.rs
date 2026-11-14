@@ -46,14 +46,12 @@ use std::fmt::Write as _;
 
 use std::collections::HashMap;
 
+use crate::engraving::{fontdb, layout};
+use crate::{Error, Result};
 use keyflow::engraver::export::follow::bar_boxes;
 use keyflow::engraver::layout::chart::cursor::{CursorConfig, CursorStyle};
 use keyflow::engraver::layout::chart::types::{BeatPosition, ChartLayoutResult};
 use keyflow::text::bar_times::{BarClock, BarTime, bar_times};
-use resvg::usvg;
-
-use crate::chart::{fontdb, layout};
-use crate::{Error, Result};
 
 /// The space between two stacked pages, in points.
 const PAGE_GAP: f64 = 16.0;

@@ -353,7 +353,9 @@ studio-views = { path = "features/studio-views" }
 # `chordpro`, `midi`, `orchestra`, `sync`, …), `engraver` (layout +
 # render, `score` included) and the `keyflow` facade. `keyflow-lang`
 # defaults OFF here; consumers name the formats they use.
-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
+# The facade defaults OFF too: each consumer names its tier (`text`,
+# `svg` for wasm, `engraver` for the full engraver with the GPU renderer).
+keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
 keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
 keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
 keyflow-annotate = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
@@ -1068,6 +1070,9 @@ quick-xml = "0.41"
 ratatui = "0.30"
 raw-window-handle-06 = { version = "0.6", package = "raw-window-handle" }
 resvg = "0.45"
+# resvg's SVG reader alone, its text drawn as outlines from fonts given it
+# (no system fonts, no memory maps): what builds for wasm (setlists' `follow`).
+usvg = { version = "0.45", default-features = false, features = ["text"] }
 rfd = "0.17"
 roxmltree = "0.20"
 rustc-hash = "2"
