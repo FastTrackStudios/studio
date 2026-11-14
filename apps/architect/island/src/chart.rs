@@ -22,7 +22,7 @@ use setlists::follow::{FollowPages, cursor_colors, follow_pages};
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::prelude::*;
 
-use crate::song::{self, Due, Pending, Played, at_or_before, following, position};
+use crate::song::{self, Beat, Due, Pending, Played, at_or_before, following, position};
 use crate::views::Ask;
 
 /// The view's sheet: the frame's `style-src 'unsafe-inline'` takes it.
@@ -163,17 +163,11 @@ fn played(chart: &FollowPages) -> Vec<Played> {
     out
 }
 
-/// The chart's tempo and beats a bar, as its header says them.
-fn tempo(source: &str) -> Option<(f64, u8)> {
-    let chart = keyflow::parse(source).ok()?;
-    let bpm = chart.tempo.as_ref()?.bpm;
-    let meter = chart
-        .initial_time_signature
-        .as_ref()
-        .or(chart.time_signature.as_ref())
-        .map(ToString::to_string)
-        .unwrap_or_default();
-    crate::queue::tempo_of(&format!("{bpm} bpm · {meter}"))
+/// The chart's beat as its header says it: its tempo, beats a bar and
+/// `\downbeat`, where its bars are timed from.
+fn tempo(source: &str) -> Option<Beat> {
+    let b = setlists::follow::chart_beat(source)?;
+    song::beat_of(b.bpm, &b.meter, b.downbeat)
 }
 
 /// A chart engraved, shared by the view's renders: the same one while its

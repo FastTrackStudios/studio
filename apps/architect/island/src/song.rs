@@ -34,8 +34,8 @@
 use serde_json::{Map, Value, json};
 
 use crate::queue::{
-    self, Ask, File, FileKind, PLAYHEAD_ITEM, PLAYHEAD_SET, SLOTS, SOURCE, art_in, files_of,
-    folder_of, lrc_lines,
+    self, Ask, File, FileKind, LENGTH_MAX, MESSAGE_MAX, PLAYHEAD_ITEM, PLAYHEAD_SET, SLOTS, SOURCE,
+    art_in, files_of, folder_of, lrc_lines,
 };
 
 /// The view's id in the bundle and the manifest (`mount(view)`): a song
@@ -279,15 +279,48 @@ pub fn hex_color(css: &str) -> Option<String> {
     }
 }
 
+/// A song's beat as its chart's header says it: what the bar's Click
+/// sounds on.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Beat {
+    /// Beats a minute.
+    pub bpm: f64,
+    /// Beats a bar.
+    pub meter: u8,
+    /// Where bar 1 is in the recording, seconds: the chart's `\downbeat`,
+    /// the clock its bars are timed on (`setlists::follow::chart_beat`).
+    pub at: f64,
+}
+
+/// The beat of a chart's tempo `bpm`, meter as written (`3/4`; empty for
+/// none: four) and `\downbeat`; none for a tempo the host refuses.
+#[must_use]
+pub fn beat_of(bpm: f64, meter: &str, downbeat: f64) -> Option<Beat> {
+    let (bpm, meter) = queue::tempo_of(&format!("{bpm} bpm · {meter}"))?;
+    Some(Beat {
+        bpm,
+        meter,
+        at: downbeat,
+    })
+}
+
+/// A time the host takes: within a day (`architect_playhead`'s
+/// `MAX_SECONDS`), to the millisecond.
+fn within_a_day(t: f64) -> f64 {
+    let t = if t.is_finite() { t } else { 0.0 };
+    (t.clamp(0.0, LENGTH_MAX) * 1000.0).round() / 1000.0
+}
+
 /// The song alone as this source's queue: what [`seek`] sets when the
 /// source does not queue it.
+///
+/// As the host takes it whole: its times within a day, its tempo's `at`
+/// the chart's downbeat, and the ask at most [`MESSAGE_MAX`] bytes (the
+/// [`queue::Outbox`]'s cut: what passes is cut from the tail, the item's
+/// marks first, then its sections). None without a recording, or when
+/// even the song bare would not fit.
 #[must_use]
-pub fn source_of(
-    song: &Song,
-    sections: &[Played],
-    tempo: Option<(f64, u8)>,
-    t: f64,
-) -> Option<Value> {
+pub fn source_of(song: &Song, sections: &[Played], beat: Option<Beat>, t: f64) -> Option<Value> {
     let rec = song.recording.as_deref()?;
     let mut item = Map::new();
     item.insert("id".to_owned(), json!(song_id(rec)));
@@ -304,41 +337,59 @@ pub fn source_of(
     if let Some(art) = &song.art {
         item.insert("art".to_owned(), json!(art));
     }
-    let sections: Vec<Value> = sections
+    let mut sections: Vec<Value> = sections
         .iter()
         .filter(|s| s.start.is_finite() && s.end >= s.start && s.start >= 0.0)
+        .filter(|s| s.start <= LENGTH_MAX)
         .take(200)
         .map(|s| {
-            let mut v = json!({"name": s.name.chars().take(40).collect::<String>(), "start": s.start, "end": s.end});
+            let mut v = json!({
+                "name": s.name.chars().take(40).collect::<String>(),
+                "start": within_a_day(s.start),
+                "end": within_a_day(s.end),
+            });
             if let (Some(c), Some(o)) = (&s.color, v.as_object_mut()) {
                 o.insert("color".to_owned(), json!(c));
             }
             v
         })
         .collect();
-    if !sections.is_empty() {
-        item.insert("sections".to_owned(), Value::Array(sections));
-    }
-    if !song.lines.is_empty() {
-        item.insert("marks".to_owned(), queue::marks(&song.lines));
-    }
-    if let Some((bpm, meter)) =
-        tempo.filter(|(b, m)| (20.0..=400.0).contains(b) && (1..=16).contains(m))
-    {
-        item.insert(
-            "tempo".to_owned(),
-            json!({"bpm": bpm, "at": 0.0, "meter": meter}),
-        );
+    let mut marks = match queue::marks(&song.lines) {
+        Value::Array(m) => m,
+        _ => Vec::new(),
+    };
+    if let Some(t) = beat.and_then(|b| queue::tempo(b.bpm, b.meter, b.at)) {
+        item.insert("tempo".to_owned(), t);
     }
     let name: String = title.chars().take(64).collect();
-    Some(json!({
-        "name": name,
-        "queue": [Value::Object(item)],
-        "slots": SLOTS,
-        "index": 0,
-        "time": (t.max(0.0) * 1000.0).round() / 1000.0,
-        "play": true,
-    }))
+    let args = |item: &Map<String, Value>, sections: &[Value], marks: &[Value]| {
+        let mut item = item.clone();
+        if !sections.is_empty() {
+            item.insert("sections".to_owned(), Value::Array(sections.to_vec()));
+        }
+        if !marks.is_empty() {
+            item.insert("marks".to_owned(), Value::Array(marks.to_vec()));
+        }
+        json!({
+            "name": name,
+            "queue": [Value::Object(item)],
+            "slots": SLOTS,
+            "index": 0,
+            "time": within_a_day(t),
+            "play": true,
+        })
+    };
+    let size = |v: &Value| queue::message(PLAYHEAD_SET, v).len();
+    let mut over = size(&args(&item, &sections, &marks)).saturating_sub(MESSAGE_MAX);
+    // Cut from the tail, each entry's bytes and its comma, marks first.
+    for list in [&mut marks, &mut sections] {
+        while over > 0 {
+            let Some(last) = list.pop() else { break };
+            over = over.saturating_sub(last.to_string().len().saturating_add(1));
+        }
+    }
+    let args = args(&item, &sections, &marks);
+    (size(&args) <= MESSAGE_MAX).then_some(args)
 }
 
 /// A seek waiting for its item to be current: where, and since when (ms).
@@ -361,7 +412,7 @@ pub fn seek(
     let Some(rec) = song.recording.as_deref() else {
         return (Vec::new(), None);
     };
-    let t = t.max(0.0);
+    let t = within_a_day(t);
     if following(props, song) {
         return (vec![(PLAYHEAD_SEEK, json!({ "t": t }))], None);
     }

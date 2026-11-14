@@ -90,7 +90,7 @@ const ID_MAX: usize = 256;
 const MEDIA_MAX: usize = 1024;
 /// The longest a song is taken to be, seconds (a day): a longer length is
 /// a typo, drawn and sent as this.
-const LENGTH_MAX: f64 = 86_400.0;
+pub const LENGTH_MAX: f64 = 86_400.0;
 
 /// How long the list must stay as it is before it is sent, ms.
 ///
@@ -140,6 +140,11 @@ pub struct Item {
     /// Its tempo and beats a bar, from its row's summary (`D · 120 bpm ·
     /// 4/4`): what the bar's Click sounds on.
     pub tempo: Option<(f64, u8)>,
+    /// Where its first downbeat is in its recording, seconds: its chart's
+    /// `\downbeat`, its tempo's `at`. None (0) unless its chart is
+    /// handed: a setlist's note is handed images and `.lrc` only
+    /// (Architect's `ViewFileKind`), so a row reads none today.
+    pub downbeat: Option<f64>,
     /// Its cover: an image of the note's handed files in its song's
     /// folder ([`art_in`]), by its vault path: the row's tile and the Now
     /// Playing card's art (`art` on its queue item).
@@ -274,11 +279,11 @@ fn queued(i: &Item) -> Option<Value> {
     if let Some(m) = media {
         item.insert("media".to_owned(), json!(m));
     }
-    if let Some((bpm, meter)) = i.tempo {
-        item.insert(
-            "tempo".to_owned(),
-            json!({"bpm": bpm, "at": 0.0, "meter": meter}),
-        );
+    if let Some(t) = i
+        .tempo
+        .and_then(|(bpm, meter)| tempo(bpm, meter, i.downbeat.unwrap_or(0.0)))
+    {
+        item.insert("tempo".to_owned(), t);
     }
     if let Some(art) = i.art.as_deref().filter(|a| a.len() <= MEDIA_MAX) {
         item.insert("art".to_owned(), json!(art));
@@ -287,6 +292,24 @@ fn queued(i: &Item) -> Option<Value> {
         item.insert("marks".to_owned(), marks(&i.lines));
     }
     Some(Value::Object(item))
+}
+
+/// An item's `tempo` as the host takes it; none for one it refuses.
+///
+/// `bpm` (20 to 400) and `meter` (1 to 16 beats a bar) as they are; `at`,
+/// where its first downbeat is (the chart's `\downbeat`, the clock its
+/// bars are timed on), within a day (a time the host cannot take is 0).
+#[must_use]
+pub fn tempo(bpm: f64, meter: u8, at: f64) -> Option<Value> {
+    if !(bpm.is_finite() && (20.0..=400.0).contains(&bpm) && (1..=16).contains(&meter)) {
+        return None;
+    }
+    let at = if at.is_finite() {
+        at.clamp(0.0, LENGTH_MAX)
+    } else {
+        0.0
+    };
+    Some(json!({"bpm": bpm, "at": (at * 1000.0).round() / 1000.0, "meter": meter}))
 }
 
 /// The most marks an item carries (#589 v0.1: 2000), and the most
@@ -509,18 +532,52 @@ fn cut(s: &str, max: usize) -> String {
 }
 
 /// A recording the app may play: a vault path as the host takes `media`
-/// (no scheme, not absolute, no `\`, no `?`, `#` or percent-encoding, no
-/// control character, no empty, `.` or `..` segment); anything else is
-/// left out rather than failing the whole source.
+/// and `art`, Architect's `architect_playhead::model::vault_path` (1 to
+/// 1024 bytes; no scheme, not absolute, no `\`, no `?`, `#` or
+/// percent-encoding; no control character, no invisible format character,
+/// no look-alike of `/` or `.`; no empty, `.` or `..` segment, none ending
+/// in `.` or a space). Anything else is left out rather than failing the
+/// whole source: the host refuses a `SET` whole for one item it refuses.
 fn vault_path(p: &str) -> Option<String> {
     let p = p.trim();
     let ok = !p.is_empty()
-        && !p.starts_with('/')
-        && !p.contains([':', '\\', '?', '#', '%'])
-        && !p.chars().any(char::is_control)
-        && p.split('/')
-            .all(|seg| !seg.is_empty() && seg != "." && seg != "..");
+        && p.len() <= MEDIA_MAX
+        && !p.chars().any(refused_char)
+        && p.split('/').all(|seg| {
+            !seg.is_empty()
+                && seg != "."
+                && seg != ".."
+                && !seg.ends_with('.')
+                && !seg.ends_with(' ')
+        });
     ok.then(|| p.to_owned())
+}
+
+/// A character no vault path holds, as the host has it
+/// (`architect_playhead::model::refused_char`): one with a meaning once
+/// the path is a URL or a file name elsewhere, one nobody sees, or one
+/// that passes for `/` or `.`.
+fn refused_char(c: char) -> bool {
+    matches!(c, ':' | '\\' | '?' | '#' | '%')
+        || c.is_control()
+        // Look-alikes of `/` and `.`.
+        || matches!(
+            c,
+            '\u{FF0F}' | '\u{2215}' | '\u{2044}' | '\u{29F8}' | '\u{FF0E}' | '\u{2024}' | '\u{FE52}'
+        )
+        // Invisible format characters (Unicode's Cf, as names use them).
+        || matches!(
+            c,
+            '\u{00AD}'
+                | '\u{061C}'
+                | '\u{180E}'
+                | '\u{200B}'..='\u{200F}'
+                | '\u{202A}'..='\u{202E}'
+                | '\u{2060}'..='\u{2064}'
+                | '\u{2066}'..='\u{206F}'
+                | '\u{FEFF}'
+                | '\u{FFF9}'..='\u{FFFB}'
+        )
 }
 
 /// Whether `p` is a vault path the host takes as `media` or `art`, as
@@ -644,6 +701,7 @@ fn from_note(note: &Value) -> Setlist {
             media: row.recording.as_deref().and_then(vault_path),
             recording: row.recording.is_some(),
             tempo: tempo_of(&row.summary),
+            downbeat: None,
             art: art_in(&files, folder_of(&row.note)).and_then(|a| vault_path(&a)),
             lines: lyrics_in(&files, folder_of(&row.note)),
         };
@@ -1040,4 +1098,4 @@ fn contrast_with_white((r, g, b): (u8, u8, u8)) -> f64 {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

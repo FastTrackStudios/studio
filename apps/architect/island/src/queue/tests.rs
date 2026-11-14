@@ -9,6 +9,12 @@
 //! (`a_source_is_what_the_contract_bounds_or_refused_whole`,
 //! `asks_are_the_playheads_intents_and_rate_limited`) are ported first, so
 //! the model is held to the host before the view is held to the model.
+//!
+//! Its media path rule and its time bound are Architect main's
+//! `architect_playhead::model` (`vault_path`, `refused_char`,
+//! `MAX_SECONDS`; FastTrackStudios/architect `features/playhead`), which
+//! the host re-exports; that model's own refuse cases
+//! (`media_and_art_are_vault_paths_never_urls`) are ported with it.
 
 use std::fmt::Write as _;
 
@@ -17,7 +23,7 @@ use super::*;
 /// No asks.
 const NONE: Vec<Ask> = Vec::new();
 
-mod host {
+pub mod host {
     use std::collections::BTreeSet;
 
     use serde_json::Value;
@@ -26,6 +32,8 @@ mod host {
     pub const QUEUE_MAX: usize = 500;
     pub const SECTIONS_MAX: usize = 200;
     pub const MARKS_MAX: usize = 2000;
+    /// The latest time anything of a source is (a day).
+    pub const MAX_SECONDS: f64 = 86_400.0;
     pub const INTENTS: &[&str] = &[
         "PLAYHEAD_SEEK",
         "PLAYHEAD_PLAY",
@@ -65,7 +73,7 @@ mod host {
             None | Some(Value::Null) => Ok(None),
             Some(n) => n
                 .as_f64()
-                .filter(|d| d.is_finite() && *d >= 0.0)
+                .filter(|d| d.is_finite() && (0.0..=MAX_SECONDS).contains(d))
                 .map(Some)
                 .ok_or_else(|| format!("{k} is not a time in seconds")),
         }
@@ -74,10 +82,37 @@ mod host {
     pub fn vault_path(p: &str) -> bool {
         !p.is_empty()
             && p.len() <= 1024
-            && !p
-                .chars()
-                .any(|c| matches!(c, ':' | '\\' | '?' | '#' | '%') || c.is_control())
-            && p.split('/').all(|s| !s.is_empty() && s != "." && s != "..")
+            && !p.chars().any(refused_char)
+            && p.split('/').all(|s| {
+                !s.is_empty() && s != "." && s != ".." && !s.ends_with('.') && !s.ends_with(' ')
+            })
+    }
+
+    fn refused_char(c: char) -> bool {
+        matches!(c, ':' | '\\' | '?' | '#' | '%')
+            || c.is_control()
+            || matches!(
+                c,
+                '\u{FF0F}'
+                    | '\u{2215}'
+                    | '\u{2044}'
+                    | '\u{29F8}'
+                    | '\u{FF0E}'
+                    | '\u{2024}'
+                    | '\u{FE52}'
+            )
+            || matches!(
+                c,
+                '\u{00AD}'
+                    | '\u{061C}'
+                    | '\u{180E}'
+                    | '\u{200B}'..='\u{200F}'
+                    | '\u{202A}'..='\u{202E}'
+                    | '\u{2060}'..='\u{2064}'
+                    | '\u{2066}'..='\u{206F}'
+                    | '\u{FEFF}'
+                    | '\u{FFF9}'..='\u{FFFB}'
+            )
     }
 
     fn color_ok(c: &str) -> bool {
@@ -152,7 +187,7 @@ mod host {
             let meter = t.get("meter").map_or(Some(4), Value::as_u64).unwrap_or(0);
             if !(20.0..=400.0).contains(&bpm)
                 || !at.is_finite()
-                || at < 0.0
+                || !(0.0..=MAX_SECONDS).contains(&at)
                 || !(1..=16).contains(&meter)
             {
                 return Err("tempo is not one".to_owned());
@@ -344,6 +379,48 @@ fn the_model_takes_and_refuses_what_the_host_does() {
     assert_eq!(host::ask_refused(false, false), Some("not ready"));
     assert_eq!(host::ask_refused(true, true), Some("the page is hidden"));
     assert_eq!(host::ask_refused(true, false), None);
+}
+
+/// Architect main's model's own cases (`architect_playhead::model`), on
+/// the host model: its media path rule and its day.
+#[test]
+fn the_model_refuses_what_architects_playhead_model_does() {
+    let one = |extra: Value| {
+        let mut i = json!({"id": "a", "title": "A", "duration": 2});
+        for (k, v) in extra.as_object().unwrap() {
+            i[k] = v.clone();
+        }
+        host::source_of(&json!({"name": "N", "queue": [i]}))
+    };
+    for bad in [
+        // Architect main's model (#659 re-check N3): look-alikes of `/`
+        // and `.`, a segment ending in a dot or a space, invisible
+        // characters; and its time bound, a day.
+        json!({"media": "Recordings\u{FF0F}..\u{FF0F}secret.m4a"}),
+        json!({"media": "Recordings/\u{FF0E}\u{FF0E}/secret.m4a"}),
+        json!({"media": "Recordings\u{2215}a.m4a"}),
+        json!({"media": "Recordings\u{2044}a.m4a"}),
+        json!({"media": "Recordings/a\u{2024}m4a"}),
+        json!({"media": "Recordings./a.m4a"}),
+        json!({"media": "Recordings/a.m4a."}),
+        json!({"media": "Recordings /a.m4a"}),
+        json!({"media": "Recordings/a.m4a "}),
+        json!({"media": "Recordings/\u{200B}a.m4a"}),
+        json!({"media": "Recordings/a\u{202E}a4m.mp3"}),
+        json!({"media": "\u{FEFF}Recordings/a.m4a"}),
+        json!({"media": "Recordings/a\u{00AD}b.m4a"}),
+        json!({"art": "Songs/Harry Connick Jr./cover.jpg"}),
+        json!({"media": "a".repeat(1025)}),
+        json!({"sections": [{"name": "S", "start": 0, "end": 86_400.5}]}),
+        json!({"marks": [{"at": 1e9, "text": "t"}]}),
+        json!({"tempo": {"bpm": 120, "at": 1e9, "meter": 4}}),
+    ] {
+        assert!(one(bad.clone()).is_err(), "{bad}");
+    }
+    assert!(one(json!({"media": "a".repeat(1024)})).is_ok());
+    assert!(one(json!({"media": "Songs/Merry & Bright/01 – Joy.flac"})).is_ok());
+    assert!(one(json!({"tempo": {"bpm": 120, "at": 86_400, "meter": 4}})).is_ok());
+    assert!(host::source_of(&json!({"queue": [], "time": 86_400.5})).is_err());
 }
 
 const NOTE: &str = "Intro words.\n\n```studio-setlist downloads\n\
@@ -612,9 +689,81 @@ fn a_recording_is_a_vault_path_the_host_takes() {
         "a\u{7}.ogg",
         "Songs/",
         "",
+        // As Architect main's model refuses them (#659 re-check N3).
+        "Songs/Harry Connick Jr./Joy.ogg",
+        "Songs/a.ogg.",
+        "Songs /a.ogg",
+        "Recordings\u{FF0F}..\u{FF0F}secret.m4a",
+        "Recordings/\u{FF0E}\u{FF0E}/secret.m4a",
+        "Recordings\u{2215}a.m4a",
+        "Recordings\u{2044}a.m4a",
+        "Recordings\u{29F8}a.m4a",
+        "Recordings/a\u{2024}m4a",
+        "Recordings/a\u{FE52}m4a",
+        "Recordings/\u{200B}a.m4a",
+        "Recordings/a\u{202E}a4m.mp3",
+        "\u{FEFF}Recordings/a.m4a",
+        "Recordings/a\u{00AD}b.m4a",
+        "Recordings/a\u{2066}b.m4a",
     ] {
-        assert_eq!(vault_path(bad), None, "{bad}");
+        assert_eq!(vault_path(bad), None, "{bad:?}");
+        assert!(!host::vault_path(bad), "the host refuses {bad:?}");
     }
+    assert!(vault_path(&"a".repeat(1024)).is_some());
+    assert_eq!(vault_path(&"a".repeat(1025)), None);
+    assert_eq!(
+        vault_path(&"é".repeat(513)),
+        None,
+        "1024 bytes, not characters"
+    );
+}
+
+/// One song whose recording the host refuses is left out, and the rest of
+/// the setlist plays (review M2: `Songs/Harry Connick Jr./…` refused the
+/// whole `SET`).
+#[test]
+fn a_song_the_host_refuses_is_left_out_and_the_rest_plays() {
+    let body = "```studio-setlist\n\
+        1 | Joy | Songs/Joy/Joy.md | | Songs/Joy/joy.ogg | | | |\n\
+        2 | What Are You Doing | Songs/Harry Connick Jr./What.md | | Songs/Harry Connick Jr./what.ogg | | | |\n\
+        3 | Hark | Songs/Hark/Hark.md | | Songs/Hark/hark.ogg | | | |\n\
+        ```\n";
+    let s = setlist_of(&note_at("S.md", body)).unwrap();
+    let source = s.source(MESSAGE_MAX);
+    let ids = host::set_ids(&source.args).expect("the host takes the SET");
+    assert_eq!(
+        ids,
+        vec!["S.md|Songs/Joy/Joy.md", "S.md|Songs/Hark/Hark.md"]
+    );
+}
+
+/// A row's tempo is sent from its downbeat, within a day (review M1).
+#[test]
+fn a_rows_tempo_starts_at_its_downbeat() {
+    let list = list_of(vec![
+        Item {
+            tempo: Some((72.0, 3)),
+            downbeat: Some(0.5),
+            ..item("a")
+        },
+        Item {
+            tempo: Some((72.0, 3)),
+            downbeat: Some(1e9),
+            ..item("b")
+        },
+    ]);
+    let s = taken(&list);
+    assert_eq!(
+        s.args["queue"][0]["tempo"],
+        json!({"bpm": 72.0, "at": 0.5, "meter": 3})
+    );
+    assert_eq!(s.args["queue"][1]["tempo"]["at"], json!(LENGTH_MAX));
+    assert_eq!(
+        tempo(120.0, 4, f64::NAN),
+        Some(json!({"bpm": 120.0, "at": 0.0, "meter": 4}))
+    );
+    assert_eq!(tempo(120.0, 4, -3.0).unwrap()["at"], json!(0.0));
+    assert_eq!(tempo(9000.0, 4, 0.0), None);
 }
 
 #[test]

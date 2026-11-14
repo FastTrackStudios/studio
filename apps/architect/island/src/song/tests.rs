@@ -4,7 +4,8 @@
 use serde_json::{Value, json};
 
 use super::*;
-use crate::queue::{PLAYHEAD_ITEM, PLAYHEAD_SET, SOURCE};
+use crate::queue::tests::host;
+use crate::queue::{LENGTH_MAX, MESSAGE_MAX, PLAYHEAD_ITEM, PLAYHEAD_SET, SOURCE};
 
 /// A song note's body as `setlists::song` writes it: its recording
 /// embedded, its chart as a `kf` fence that names it, its LRC embedded.
@@ -115,7 +116,7 @@ fn a_bar_is_the_last_started() {
 fn a_press_seeks_plays_the_queued_song_or_queues_it_alone() {
     let s = joy();
     let rec = "Libraries/Carols/Joy/Media/joy.ogg";
-    let set = || source_of(&s, &[], Some((120.0, 4)), 12.0);
+    let set = || source_of(&s, &[], beat_of(120.0, "4/4", 0.0), 12.0);
     // Current: a seek.
     let on = json!({"source": SOURCE, "item": {"id": "S|Joy.md", "media": rec}, "duration": 150.0});
     let (asks, pending) = seek(&on, &s, 12.0, 0.0, set);
@@ -169,4 +170,121 @@ fn colours_are_hex_or_left_out() {
     assert_eq!(hex_color("#2563EB").as_deref(), Some("#2563eb"));
     assert_eq!(hex_color("rgb(37, 99, 235)").as_deref(), Some("#2563eb"));
     assert_eq!(hex_color("red"), None);
+}
+
+/// What the song view sets is a `SET` the host takes whole.
+fn taken(args: &Value) -> Vec<String> {
+    host::takes(PLAYHEAD_SET, args, SOURCE)
+        .expect("the message fits")
+        .unwrap_or_else(|e| panic!("the host refuses it: {e}"))
+}
+
+/// The bar's Click counts from the chart's `\downbeat`, where its bars
+/// are timed from (review M1): Silent Night's is half a second in.
+#[test]
+fn the_click_starts_at_the_charts_downbeat() {
+    let chart = "Silent Night - Franz Gruber\n72bpm 3/4 #A\n\\downbeat = 0.5\n\nVS 12\nA A A A\nE E A A\nD D A A\n";
+    let b = setlists::follow::chart_beat(chart).unwrap();
+    let beat = beat_of(b.bpm, &b.meter, b.downbeat).unwrap();
+    assert_eq!(
+        beat,
+        Beat {
+            bpm: 72.0,
+            meter: 3,
+            at: 0.5
+        }
+    );
+    let args = source_of(&joy(), &[], Some(beat), 0.0).unwrap();
+    assert_eq!(args["queue"][0]["tempo"]["at"], json!(b.downbeat));
+    assert_eq!(
+        args["queue"][0]["tempo"],
+        json!({"bpm": 72.0, "at": 0.5, "meter": 3})
+    );
+    taken(&args);
+    // A downbeat past a day is the host's last second, never a refusal.
+    let far = Beat { at: 1e9, ..beat };
+    let args = source_of(&joy(), &[], Some(far), 0.0).unwrap();
+    assert_eq!(args["queue"][0]["tempo"]["at"], json!(LENGTH_MAX));
+    taken(&args);
+    // 6/8 counts its dotted beats; a tempo the host refuses is left out.
+    assert_eq!(
+        beat_of(60.0, "6/8", 1.0),
+        Some(Beat {
+            bpm: 60.0,
+            meter: 2,
+            at: 1.0
+        })
+    );
+    assert_eq!(beat_of(9000.0, "4/4", 0.0), None);
+}
+
+/// Times past a day are the host's last second (review M3): a section's
+/// end, the time pressed, a seek.
+#[test]
+fn the_songs_set_keeps_its_times_within_a_day() {
+    let s = joy();
+    let sections = [
+        Played {
+            name: "VS".to_owned(),
+            start: 0.0,
+            end: 20.0,
+            color: Some("#2563eb".to_owned()),
+        },
+        Played {
+            name: "Long".to_owned(),
+            start: 20.0,
+            end: 1e9,
+            color: None,
+        },
+        Played {
+            name: "Past".to_owned(),
+            start: 1e9,
+            end: 2e9,
+            color: None,
+        },
+    ];
+    let args = source_of(&s, &sections, None, 1e12).unwrap();
+    assert_eq!(args["time"], json!(LENGTH_MAX));
+    let played = args["queue"][0]["sections"].as_array().unwrap();
+    assert_eq!(played.len(), 2, "a section starting past a day is left out");
+    assert_eq!(played[1]["end"], json!(LENGTH_MAX));
+    taken(&args);
+    let on = json!({"source": SOURCE, "item": {"id": song_id("x"), "media": s.recording}});
+    let (asks, _) = seek(&on, &s, 1e12, 0.0, || None);
+    assert_eq!(asks, vec![(PLAYHEAD_SEEK, json!({"t": LENGTH_MAX}))]);
+}
+
+/// A song with every mark the host allows, each as long as it allows,
+/// is cut to one message the host reads (review M3): its last marks go
+/// first, then its last sections.
+#[test]
+fn the_songs_set_is_cut_to_one_message() {
+    let words = "w".repeat(300);
+    let s = Song {
+        lines: (0..2000).map(|n| (f64::from(n), words.clone())).collect(),
+        ..joy()
+    };
+    let sections: Vec<Played> = (0..200)
+        .map(|n| Played {
+            name: "x".repeat(40),
+            start: f64::from(n),
+            end: f64::from(n) + 1.0,
+            color: Some("#2563eb".to_owned()),
+        })
+        .collect();
+    let args = source_of(&s, &sections, beat_of(120.0, "4/4", 0.0), 3.0).unwrap();
+    let size = crate::queue::message(PLAYHEAD_SET, &args).len();
+    assert!(size <= MESSAGE_MAX, "{size}");
+    let marks = args["queue"][0]["marks"].as_array().unwrap();
+    assert!(!marks.is_empty() && marks.len() < 2000, "{}", marks.len());
+    assert_eq!(marks[0]["at"], json!(0.0), "the first marks are kept");
+    assert_eq!(
+        args["queue"][0]["sections"].as_array().map(Vec::len),
+        Some(200),
+        "the sections fit once the marks are cut"
+    );
+    assert_eq!(taken(&args), vec![song_id(s.recording.as_deref().unwrap())]);
+    // Whatever fits: every case above, the host takes.
+    let small = source_of(&joy(), &sections, None, 0.0).unwrap();
+    taken(&small);
 }

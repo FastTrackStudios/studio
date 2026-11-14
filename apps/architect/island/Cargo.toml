@@ -45,8 +45,10 @@ js-sys = { workspace = true }
 futures-channel = { workspace = true }
 futures-util = { workspace = true }
 
-# The setlist view's rows, rendered on the host by the tests.
+# The setlist view's rows, rendered on the host by the tests; the song
+# view's chart read as its own (its `\downbeat`, `setlists::follow`).
 [dev-dependencies]
+setlists = { workspace = true, features = ["follow"] }
 dioxus = { workspace = true }
 dioxus-ssr = { workspace = true }
 toml = { workspace = true }
