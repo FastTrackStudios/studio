@@ -623,6 +623,7 @@ impl PlayerPatch {
                     pan: 0.0,
                     tune_cents: 0.0,
                     sample_start: 0,
+                    start_mod: None,
                     variant_starts: Vec::new(),
                     disabled: false,
                     borrowed: false,

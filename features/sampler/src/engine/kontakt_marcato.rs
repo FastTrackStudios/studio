@@ -330,8 +330,10 @@ impl SampleEngine {
             };
             // Past the zone's own start: marcato zones enter the same file
             // at `marcato_start`, then the IOI offset.
+            // the marcato row's own start, then the script's offset (which
+            // the zone's start-modulation range may limit)
             let offset = (z.marcato_start as usize).saturating_sub(z.sample_start as usize)
-                + ms_to_frames_f(lt_ms, self.sample_rate);
+                + self.script_offset(idx, ms_to_frames_f(lt_ms, self.sample_rate));
             let gain = g * db_to_gain(zone_db - z.gain_db + lt_db);
             // Pitched from the lower note, where Kontakt maps the zone.
             let pitch = f64::from(lower) - f64::from(to);

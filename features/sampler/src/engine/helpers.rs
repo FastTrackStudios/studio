@@ -399,6 +399,34 @@ impl SampleEngine {
         if vib { vb } else { nv }
     }
 
+    /// A script's start offset (`play_note`'s offset) as Kontakt applies it
+    /// to zone `idx`: clamped to the zone's start-modulation range, ignored
+    /// where the zone allows none.
+    pub(crate) fn script_offset(&self, idx: usize, frames: usize) -> usize {
+        match self.patch.spec.zones.get(idx).and_then(|z| z.start_mod) {
+            Some(m) if m < 0 => 0,
+            Some(m) => frames.min(m as usize),
+            None => frames,
+        }
+    }
+
+    /// Add `artic`'s script start offset (`script_start_ms`) to the body's
+    /// extra start for a fresh note; returns the previous value to restore.
+    pub(crate) fn with_script_start(&mut self, artic: &str) -> usize {
+        let saved = self.spawn_extra_start;
+        if !self.in_transition {
+            let ms = self
+                .patch
+                .spec
+                .articulation(artic)
+                .map_or(0.0, |a| a.script_start_ms);
+            if ms > 0.0 {
+                self.spawn_extra_start += crate::engine::ms_to_frames_f(ms, self.sample_rate);
+            }
+        }
+        saved
+    }
+
     /// The CC1 layer slice for a given articulation (by its dynamics count).
     pub(crate) fn cc1_layers_for(&self, artic_id: &str) -> &[Cc1Layer] {
         let Some(artic) = self.patch.spec.articulation(artic_id) else {

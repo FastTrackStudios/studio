@@ -908,6 +908,9 @@ fn tsv_zone_fields(z: &TsvZone) -> Vec<(&'static str, String)> {
     if let Some(s) = z.sample_start {
         v.push(("sample_start", s.to_string()));
     }
+    if let Some(m) = z.start_mod {
+        v.push(("start_mod", m.to_string()));
+    }
     // Variants only when they form the contiguous run velocity 2, 3, … that
     // `ZoneSpec::variant_starts` indexes.
     let run: Vec<u64> = (2..)
@@ -1163,6 +1166,9 @@ struct TsvZone {
     vel1_zvol: Option<f64>,
     /// The lowest velocity any of the file's rows sits on.
     min_vel: Option<i32>,
+    /// The file's sample-start modulation range (frames; -1 = none), from
+    /// its plain note-on row (velocity 1) or else its first row.
+    start_mod: Option<i64>,
     /// A transition file's earliest row start (frames). CS Brass enters
     /// every legato transition zone 3984 frames in (no row from 0, unlike
     /// CSS / CSW): that start is the zone's.
@@ -1249,6 +1255,8 @@ fn load_tsv_zones(
     let c_zvol = header.iter().position(|h| *h == "zvol");
     let c_start = header.iter().position(|h| *h == "sample_start");
     let c_vel_lo = header.iter().position(|h| *h == "vel_lo");
+    // the decoder's sample-start modulation range (absent from older decodes)
+    let c_start_mod = header.iter().position(|h| *h == "start_mod");
 
     let mut by_file: BTreeMap<String, TsvZone> = BTreeMap::new();
     let mut skipped = 0usize;
@@ -1319,6 +1327,9 @@ fn load_tsv_zones(
             .and_then(|v| v.parse::<i64>().ok())
             .map(|v| v.max(0) as u64);
         let vel_lo: Option<i32> = c_vel_lo.and_then(|c| f.get(c)).and_then(|v| v.parse().ok());
+        let start_mod: Option<i64> = c_start_mod
+            .and_then(|c| f.get(c))
+            .and_then(|v| v.parse().ok());
         let (ls, le) = (
             f.get(c_ls).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0),
             f.get(c_le).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0),
@@ -1340,6 +1351,7 @@ fn load_tsv_zones(
             main_row: None,
             sample_start_vel1: None,
             min_transition_start: None,
+            start_mod: None,
             vel1_zvol: None,
             min_vel: None,
             rr_index,
@@ -1355,6 +1367,9 @@ fn load_tsv_zones(
         });
         if let Some(v) = vel_lo {
             entry.min_vel = Some(entry.min_vel.map_or(v, |m| m.min(v)));
+        }
+        if start_mod.is_some() && (entry.start_mod.is_none() || vel_lo == Some(1)) {
+            entry.start_mod = start_mod;
         }
         entry.key_min = entry.key_min.min(key_lo.clamp(0, 127) as u8);
         entry.key_max = entry.key_max.max(key_hi.clamp(0, 127) as u8);

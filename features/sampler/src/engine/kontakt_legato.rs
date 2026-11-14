@@ -380,6 +380,7 @@ impl SampleEngine {
             // Tagged `to` (so the next transition retires it); pitched from
             // the LOWER note, which is where Kontakt maps the zone.
             let pitch = f64::from(lower) - f64::from(to);
+            let offset = self.script_offset(idx, offset);
             if self.spawn_zone_voice_at(idx, to, VoiceKind::Legato, g, None, pitch, offset) {
                 if let Some(v) = self.voices.last_spawned_mut() {
                     if let Some(e) = env.clone() {

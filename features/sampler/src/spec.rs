@@ -1914,6 +1914,7 @@ fn zone_from_sfz(
         pan: (sfz_f32(group, region, "pan").unwrap_or(0.0) / 100.0).clamp(-1.0, 1.0),
         tune_cents: tune + transpose,
         sample_start: sfz_u32(group, region, "offset").unwrap_or(0),
+        start_mod: None,
         variant_starts: Vec::new(),
         disabled: false,
         borrowed: false,
@@ -2343,6 +2344,11 @@ pub struct ArticulationSpec {
     /// `None` = the library-wide curve.
     #[facet(default)]
     pub release_by_held: Option<ReleaseByHeldSpec>,
+    /// The script's start offset (ms) for this articulation's fresh note
+    /// (CSW nonvib sustains: `$0kimq := 333`), which each zone's
+    /// `start_mod` limits (ignored where the zone allows none). 0 = none.
+    #[facet(default)]
+    pub script_start_ms: f32,
     /// Per velocity band, `(compare, store)`: which band's last-RR memory the
     /// no-repeat rule reads and which it writes. Empty = each band its own.
     /// CSS pizzicato reads an unwritten table in bands 2 and 4 and writes
@@ -3234,6 +3240,11 @@ pub struct ZoneSpec {
     /// First sample frame to play from this zone. 0 = sample start.
     #[facet(default)]
     pub sample_start: u32,
+    /// How far (frames) a script's start offset may move this zone's start
+    /// (Kontakt's sample-start modulation range, `start_mod` in the decode):
+    /// `-1` = not at all, the offset is ignored. `None` = no limit.
+    #[facet(default)]
+    pub start_mod: Option<i64>,
     /// Kontakt's velocity-2.. zones over this same file (index 0 = velocity
     /// 2): the scripted body VARIANTS — the same recording entered deeper.
     /// CSS plays one for a loud first note (`%v2aqt`), see

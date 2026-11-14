@@ -314,3 +314,35 @@ def legato(pers, section):
 
 if __name__ == "__main__":
     main()
+
+
+def instrument_gain_db(d):
+    """Kontakt's level over the raw file, decoded: the program volume
+    (program.json) x the Mix bus fader x the gain stages (effect type 4,
+    the value 10 bytes into the slot) on the Mix bus, the last bus that
+    carries one (buses.json). None when the decode has no buses."""
+    import json, math, struct
+    try:
+        prog = json.load(open(os.path.join(d, "program.json")))
+        buses = json.load(open(os.path.join(d, "buses.json")))
+    except (OSError, ValueError):
+        return None
+    mix = None
+    for b in buses:
+        if b.get("index") is None:
+            continue
+        gains = []
+        for chain in b.get("chains", []):
+            for slot in chain:
+                if slot.get("kind") == 4:
+                    h = bytes.fromhex(slot.get("priv_hex", ""))
+                    if len(h) >= 14:
+                        gains.append(struct.unpack("<f", h[10:14])[0])
+        if gains:
+            mix = (b["pub"][0], gains)
+    if mix is None:
+        return None
+    lin = prog["volume"] * mix[0]
+    for g in mix[1]:
+        lin *= g
+    return round(20 * math.log10(lin), 2)

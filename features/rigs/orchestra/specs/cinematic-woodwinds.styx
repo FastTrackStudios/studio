@@ -312,6 +312,7 @@ articulations (
     }
     {
         id            NVsus
+        script_start_ms 333   // $0kimq := 333 on a nonvib sustain; zones without a start-mod range ignore it
         label         "Non-Vibrato Sustain"
         kind          @Sustain
         dynamics      (p mf ff)

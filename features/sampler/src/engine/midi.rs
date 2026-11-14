@@ -936,7 +936,9 @@ impl SampleEngine {
             }
         }
         if nv_scale > 0.0 || self.cc_driven_layers() {
+            let saved = self.with_script_start(&nv_id);
             self.spawn_sustain_layers(&nv_id, false, nv_scale, &direction, note, rr);
+            self.spawn_extra_start = saved;
         }
         // An articulation with no vibrato pair resolves to ITSELF on both
         // sides; spawning the "vibrato side" too played every layer twice
@@ -949,7 +951,9 @@ impl SampleEngine {
             // control — nothing will ever raise this voice — so spawning it is
             // pure waste, and on a piano it is HALF the voices.
             if vb_scale > 0.0 || self.cc_driven_layers() {
+                let saved = self.with_script_start(&vib_id);
                 self.spawn_sustain_layers(&vib_id, true, vb_scale, &direction, note, rr);
+                self.spawn_extra_start = saved;
             }
         }
         self.spawn_variant = None;
@@ -2912,7 +2916,9 @@ impl SampleEngine {
         let start_frame = sample_start as usize
             + start_offset
             + if is_sustain_layer {
-                self.spawn_extra_start
+                // a script offset on the body (a leap's entry, a marcato's
+                // body offset, a sustain's own start): the zone may limit it
+                self.script_offset(idx, self.spawn_extra_start)
             } else {
                 0
             };

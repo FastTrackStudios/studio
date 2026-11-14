@@ -88,7 +88,7 @@ timeout 600 "$nki_bin" "$nki" --jdx "$JDX" --hu "$HU" --snpid "$SNPID" \
 unset JDX HU SNPID
 [ -s "$tmp/zones.tsv" ] || { echo "decode failed" >&2; exit 1; }
 mkdir -p "$ksp"
-for f in zones.tsv groups.json groups.tsv persistent_0.tsv persistent_1.tsv script_0.ksp script_1.ksp script_2.ksp; do
+for f in zones.tsv groups.json groups.tsv buses.json program.json persistent_0.tsv persistent_1.tsv script_0.ksp script_1.ksp script_2.ksp; do
     [ -f "$ksp/$f" ] && [ ! -f "$ksp/$f.pre-$stamp" ] && cp "$ksp/$f" "$ksp/$f.pre-$stamp"
     [ -f "$tmp/$f" ] && cp "$tmp/$f" "$ksp/$f"
 done
@@ -122,16 +122,6 @@ case "$section" in
     # zones play as the Kontakt slot that holds them (the vibrato-less
     # instruments keep their NVsus recordings in the vibsus groups)
     python3 -I "$here/slot_relabel.py" "$ksp" "$patch/library.styx"
-    # A nonvib sustain plays 333 ms into its recording (KSP `$0kimq := 333`
-    # when `$o24qj = 0`), clamped by each zone's sample-start-mod range, which
-    # the decoder does not read yet: the two-player patches' NVsus recordings
-    # open on exactly 333 ms of silence and start there in Kontakt; the solos'
-    # start at 0 (null-tested, probe).
-    case "$section" in
-      "CSW 2 Flutes"|"CSW 2 Oboes"|"CSW 2 Bassoons")
-        timeout 600 "$signalpack" zones set "$patch/library.styx" --articulation NVsus \
-            --set sample_start=15984 >/dev/null ;;
-    esac
     # 3. the woodwind's numbers
     python3 -I "$here/csw_instrument_spec.py" "$ksp" > "$patch/section.styx"
     echo "wrote $patch/section.styx ($(grep -c '^        id ' "$patch/section.styx") articulations)"
