@@ -20,16 +20,38 @@
 //!   (Architect's `SiteIsland::web`): any browser, Safari before 27 and
 //!   every browser on iOS included.
 //!
-//! Empty anywhere else.
-#![cfg(target_arch = "wasm32")]
+//! The web bundle has a fourth view, `setlist.playlist` ([`setlist`]): a
+//! setlist as a streaming app's playlist, for the app's frame host beside
+//! a setlist note, given the note and where the queue is, and asking only
+//! to put the list's songs in the queue and to play one ([`queue`], the
+//! one place its contract with the app is written).
+//!
+//! And a fifth, `song` ([`song`], drawn by `chart`): a song note's chart,
+//! engraved in the frame from its `kf` fence and following the playhead
+//! bar by bar, and its timed lyrics, a bar or a line pressed seeking
+//! there (studio#491).
+//!
+//! Empty anywhere else, but for [`queue`] and [`song`] (the contracts,
+//! tested natively) and, under test, the setlist view's rows (rendered by
+//! `dioxus-ssr`).
 
+pub mod queue;
+pub mod song;
+
+#[cfg(target_arch = "wasm32")]
 pub mod views;
 
-#[cfg(target_os = "wasi")]
+#[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
 mod wasi;
 
-#[cfg(target_os = "unknown")]
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+mod chart;
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod lyrics;
 
-#[cfg(target_os = "unknown")]
+#[cfg(any(test, all(target_arch = "wasm32", target_os = "unknown")))]
+mod setlist;
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod web;

@@ -23,11 +23,11 @@ extension = ["dep:architect-extensions"]
 [dependencies]
 serde_json = { workspace = true }
 # The Chart Editor's options: Keyflow's own transposer (`transpose_source`).
-keyflow = { workspace = true, features = ["text"] }
+keyflow = { workspace = true, features = ["text", "engraver"] }
 architect-extensions = { workspace = true, optional = true, features = ["guest"] }
 
 [dev-dependencies]
-keyflow = { workspace = true, features = ["text"] }
+keyflow = { workspace = true, features = ["text", "engraver"] }
 futures = { workspace = true }
 # The app side of tests/it: the host, the app's action list.
 architect = { workspace = true, features = ["action-list"] }

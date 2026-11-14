@@ -46,14 +46,12 @@ use std::fmt::Write as _;
 
 use std::collections::HashMap;
 
+use crate::engraving::{fontdb, layout};
+use crate::{Error, Result};
 use keyflow::engraver::export::follow::bar_boxes;
 use keyflow::engraver::layout::chart::cursor::{CursorConfig, CursorStyle};
 use keyflow::engraver::layout::chart::types::{BeatPosition, ChartLayoutResult};
 use keyflow::text::bar_times::{BarClock, BarTime, bar_times};
-use resvg::usvg;
-
-use crate::chart::{fontdb, layout};
-use crate::{Error, Result};
 
 /// The space between two stacked pages, in points.
 const PAGE_GAP: f64 = 16.0;
@@ -183,6 +181,37 @@ fn played_sections(chart: &keyflow::Chart, bars: &[BarTime]) -> Vec<PlayedSectio
 /// The chart's clock: bar 1 at its `\downbeat` (0 without one).
 fn clock(chart: &keyflow::Chart) -> BarClock<'static> {
     BarClock::at(chart.settings.downbeat.unwrap_or(0.0))
+}
+
+/// What a chart's header says of its beat: what a player's click sounds
+/// on.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChartBeat {
+    /// Its tempo, beats a minute.
+    pub bpm: f64,
+    /// Its first meter as written (`4/4`, `6/8`); empty without one.
+    pub meter: String,
+    /// Where bar 1 is in the recording, seconds: its `\downbeat` (0
+    /// without one), the clock its bars are timed on ([`clock`]).
+    pub downbeat: f64,
+}
+
+/// Chart `source`'s beat; none when it does not parse or has no tempo.
+#[must_use]
+pub fn chart_beat(source: &str) -> Option<ChartBeat> {
+    let chart = keyflow::parse(source).ok()?;
+    let bpm = chart.tempo.as_ref()?.bpm;
+    let meter = chart
+        .initial_time_signature
+        .as_ref()
+        .or(chart.time_signature.as_ref())
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    Some(ChartBeat {
+        bpm,
+        meter,
+        downbeat: chart.settings.downbeat.unwrap_or(0.0),
+    })
 }
 
 /// Chart `source` engraved to follow the recording at `media` (a URL, as
@@ -981,6 +1010,23 @@ mod tests {
             72.0,
             3,
         );
+    }
+
+    /// A chart's beat is its header's tempo and meter, from its
+    /// `\downbeat`: where its bars are timed from (studio#490 M1).
+    #[test]
+    fn a_charts_beat_starts_at_its_downbeat() {
+        let silent = "Silent Night - Franz Gruber\n72bpm 3/4 #A\n\\downbeat = 0.5\n\nVS 12\nA A A A\nE E A A\nD D A A\n";
+        let beat = chart_beat(silent).unwrap();
+        assert_eq!(
+            (beat.bpm, beat.meter.as_str(), beat.downbeat),
+            (72.0, "3/4", 0.5)
+        );
+        let bars = follow_chart(silent, None).unwrap().bars;
+        assert!((bars[0].start - beat.downbeat).abs() < 1e-9, "{bars:?}");
+        let plain = chart_beat("Held - Test\n90bpm 3/4 #C\n\nVS 2\n| C | G |\n").unwrap();
+        assert_eq!(plain.downbeat, 0.0);
+        assert_eq!(chart_beat("No Tempo - Test\n#C\n\nVS 1\nC\n"), None);
     }
 
     /// Each `href="#…"` of `svg`, and each `id`.

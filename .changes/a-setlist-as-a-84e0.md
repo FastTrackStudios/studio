@@ -1,0 +1,6 @@
+---
+"setlists" = "minor"
+"studio-island" = "minor"
+---
+
+A setlist as a streaming app's playlist in Architect's web app: the island's web bundle has a view `setlist.playlist` (not `setlist`, the setlists extension's own), drawn at the head of a note of type setlist (its manifest's [[embeds]] claim, which reads the note), and opened in a pane by the setlist's favourites, now declared beside it in the island's manifest (Setlist, Lyrics, and a round Play button on PLAYHEAD_TOGGLE); the setlists extension's favourites, which named views and actions it may not, are dropped. Each set a list under its name, each song a row with its number, its key's tile, title over artist and length, read to a screen reader with its number and key; the song playing marked and followed; a row pressed plays it. The queue it sets (PLAYHEAD_SET) is built by the host's own rules so it is taken whole, within 64 KiB, sent once the list settles and never empty, item ids scoped by the setlist's path; a press sets its own list first when the source holds another's. A share link's guest, handed no body, is told the songs are not shared (architect.playhead v0.1, architect#589, #658, #659). setlists::row holds a row's key and colour for the share page and the view (session)

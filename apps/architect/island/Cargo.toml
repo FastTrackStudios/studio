@@ -1,6 +1,6 @@
 [package]
 name = "studio-island"
-description = "Studio's island on a share link's now-playing view (studio#445): Session's progress bar and transport (transport-ui) as a WASI component the node runs in the page's sandbox, given where the song is and asking only the page's playhead intents."
+description = "Studio's island (studio#445, #491): Session's progress bar and transport (transport-ui) as a WASI component, and as a web bundle the views the Architect web app draws beside a setlist note (its playlist) and a song note (its chart following the playhead, its timed lyrics), given the note and where the song is and asking only the playhead's intents."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,13 +12,19 @@ publish = false
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# The setlist view's contract with the app (src/queue.rs): built for every
+# target, so its tests run on the host. `setlists` without features: its
+# setlist fence reader and its rows' keys, nothing of a vault or a chart.
+[dependencies]
+serde_json = { workspace = true }
+setlists = { workspace = true }
+
 # The component (wasm32-wasip2): drawn by Architect's web runtime, which
 # needs JS Promise Integration.
 [target.'cfg(all(target_arch = "wasm32", target_os = "wasi"))'.dependencies]
 architect-extension-wasi = { workspace = true }
 dioxus = { workspace = true }
 transport-ui = { workspace = true }
-serde_json = { workspace = true }
 
 # The same views as a web bundle (wasm32-unknown-unknown, wasm-bindgen's
 # `--target web`: `just island-web`), for a share page's web view frame
@@ -28,11 +34,24 @@ serde_json = { workspace = true }
 dioxus = { workspace = true, features = ["web", "launch"] }
 transport-ui = { workspace = true }
 lyrics-ui = { workspace = true, features = ["view"] }
-serde_json = { workspace = true }
+# The song view's chart (studio#491): engraved in the frame to follow the
+# playhead (`setlists::follow`, Keyflow's CPU layout and SVG: no PDF, no
+# GPU), and its header's tempo for the queue's Click.
+setlists = { workspace = true, features = ["follow"] }
+keyflow = { workspace = true, features = ["text"] }
+gloo-timers = { workspace = true }
 wasm-bindgen = { workspace = true }
 js-sys = { workspace = true }
 futures-channel = { workspace = true }
 futures-util = { workspace = true }
+
+# The setlist view's rows, rendered on the host by the tests; the song
+# view's chart read as its own (its `\downbeat`, `setlists::follow`).
+[dev-dependencies]
+setlists = { workspace = true, features = ["follow"] }
+dioxus = { workspace = true }
+dioxus-ssr = { workspace = true }
+toml = { workspace = true }
 
 [lints]
 workspace = true
