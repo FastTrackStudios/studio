@@ -19,6 +19,12 @@ else follows this loop. Tools live in `features/rigs/orchestra/tests/`.
 - **Copyrighted material stays out of git**: scores, renders, Kontakt chains
   (`target/orchestra-ab/chains/`), decoded KSP. Library data lives on
   AudioHaven (`_ksp/`, `_patches/`), edited in place with dated backups.
+- **Never render on the user's `reaper.ini`.** A `REAPER -newinst -renderproject`
+  instance rewrites its ini as a cut-down stub (this wiped voyager's config on
+  2026-11-13). Render with `-cfgfile ~/orchestra-ab/cfg/render-<tag>.ini`, a copy
+  of `cfg/user-reaper.ini` (the user's settings, a present audio device) with the
+  plugin caches beside it; `null_suite.sh` does this. Never SIGTERM a render
+  REAPER that runs on the user's config.
 - Timeouts on every ssh/scp/render; builds in the background; commit through
   `nix develop -c git commit` (shellcheck/rustfmt hooks).
 

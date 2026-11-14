@@ -73,11 +73,20 @@ bin="${BIN:-$repo/target/x86_64-unknown-linux-gnu/desktop-dev/examples/render_cs
 # The Kontakt host is reached only when a render is missing (SKIP_KONTAKT
 # with every render in place works with voyager away).
 remote=""
+cfg=""
 remote_dir() {
   if [ -z "$remote" ]; then
+    local home
     # shellcheck disable=SC2016  # $HOME is the remote one
-    remote="$(timeout 20 ssh "$host" 'echo $HOME')/orchestra-ab/sec/$tag"
-    timeout 20 ssh "$host" "mkdir -p '$remote'"
+    home="$(timeout 20 ssh "$host" 'echo $HOME')"
+    [ -n "$home" ] || { echo "cannot reach $host" >&2; exit 1; }
+    remote="$home/orchestra-ab/sec/$tag"
+    # A render REAPER rewrites its ini on the way out, cut down to a stub: it
+    # must never run on the user's reaper.ini. Each section renders on its own
+    # copy of the user's settings (~/orchestra-ab/cfg/user-reaper.ini, with the
+    # plugin caches beside it), passed with -cfgfile.
+    cfg="$home/orchestra-ab/cfg/render-$tag.ini"
+    timeout 20 ssh "$host" "mkdir -p '$remote' && cp ~/orchestra-ab/cfg/user-reaper.ini '$cfg'"
   fi
 }
 
@@ -119,8 +128,13 @@ for mode in "${modes[@]}"; do
         "$remote/${mode}_kontakt_$r.wav" "$d/${mode}_$r.rpp" >/dev/null
       timeout 120 scp -q "$d/${mode}_$r.rpp" "$host:$remote/"
       # A headless REAPER of its own: renders, then quits.
+      # REAPER may return before the render is done: wait for it to exit
       timeout 900 ssh "$host" "/Applications/REAPER.app/Contents/MacOS/REAPER -newinst -nosplash \
-        -renderproject '$remote/${mode}_$r.rpp' >/dev/null 2>&1" || true
+        -cfgfile '$cfg' -renderproject '$remote/${mode}_$r.rpp' >/dev/null 2>&1
+        for i in \$(seq 280); do
+          pgrep -f '^/Applications/REAPER.app/Contents/MacOS/REAPER .*/${mode}_${r}[.]rpp' >/dev/null || break
+          sleep 3
+        done" || true
       timeout 120 scp -q "$host:$remote/${mode}_kontakt_$r.wav" "$d/"
     done
   fi
