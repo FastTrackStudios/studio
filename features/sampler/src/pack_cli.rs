@@ -1163,6 +1163,10 @@ struct TsvZone {
     vel1_zvol: Option<f64>,
     /// The lowest velocity any of the file's rows sits on.
     min_vel: Option<i32>,
+    /// A transition file's earliest row start (frames). CS Brass enters
+    /// every legato transition zone 3984 frames in (no row from 0, unlike
+    /// CSS / CSW): that start is the zone's.
+    min_transition_start: Option<u64>,
     rr_index: u32,
     mic: String,
     articulation: String,
@@ -1335,6 +1339,7 @@ fn load_tsv_zones(
             marcato: Vec::new(),
             main_row: None,
             sample_start_vel1: None,
+            min_transition_start: None,
             vel1_zvol: None,
             min_vel: None,
             rr_index,
@@ -1406,6 +1411,10 @@ fn load_tsv_zones(
         // A transition file's velocity column is its interval code, not a
         // velocity: its deeper-entered rows are the marcato transition zones.
         if entry.direction.is_some() {
+            if let Some(st) = start {
+                entry.min_transition_start =
+                    Some(entry.min_transition_start.map_or(st, |m| m.min(st)));
+            }
             if let Some(st) = start.filter(|&st| st > 0) {
                 entry.marcato.push((row, st, zvol));
             }
@@ -1423,6 +1432,12 @@ fn load_tsv_zones(
         eprintln!("  NOTE: {skipped} tsv row(s) skipped (unparseable/unmapped)");
     }
     for z in by_file.values_mut() {
+        // a transition file played only from deeper in (CSB): start there
+        if z.direction.is_some() && z.sample_start.is_none() {
+            if let Some(st) = z.min_transition_start.filter(|&st| st > 0) {
+                z.sample_start = Some(st);
+            }
+        }
         if z.sample_start_vel1.is_none() {
             if let Some((vel, start, zvol)) = z.main_row {
                 z.sample_start = start;

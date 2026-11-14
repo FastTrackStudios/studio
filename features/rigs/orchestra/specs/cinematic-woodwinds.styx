@@ -549,7 +549,6 @@ articulations (
         // Decoded KSP velocity layers (%nfxdy / %opj4y, 4 bands).
         vel_thresholds (30 65 108)
         vel_layer_db   (-14 -9 -12 -10)
-        rr_sequence    (1 2 3 4 2 1 4 3 1 4 3 2 1 4 2 3)   // %okqzw
         random_tune_cents   5     // KSP 15415: uniform −5..5 c …
         random_tune_gate_ms 500   // … unless the key struck within 500 ms
     }
@@ -564,7 +563,6 @@ articulations (
         // Decoded KSP velocity layers (%aoywv / %ak5pm, 4 bands).
         vel_thresholds (25 45 108)
         vel_layer_db   (-17 -11 -17 -9)
-        rr_sequence    (1 2 3 4 5 2 3 1 5 4 3 1 2 4 5 1 3 2 5 4)   // %5y220
         random_tune_cents   5     // KSP 15415: uniform −5..5 c …
         random_tune_gate_ms 500   // … unless the key struck within 500 ms
     }
@@ -582,7 +580,6 @@ articulations (
         // Decoded KSP velocity layers (%g1qri / %bcez1, g25wo=0, ktuur=1 → 4 bands).
         vel_thresholds (25 55 108)
         vel_layer_db   (-9 -10 -12 -6)
-        rr_sequence    (1 2 3 4 5 2 3 1 5 4 3 1 2 4 5 1 3 2 5 4)   // %5y220
         random_tune_cents   5     // KSP 15415: uniform −5..5 c …
         random_tune_gate_ms 500   // … unless the key struck within 500 ms
     }

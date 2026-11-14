@@ -415,6 +415,9 @@ pub(crate) struct LegatoLine {
     /// The IOI (ms) of the CSS marcato transition that reached the sounding
     /// note — `None` for a phrase's first note. Its note-off fades by it.
     marcato_ioi: Option<f32>,
+    /// The sounding note was reached by a legato connection (its release
+    /// is a phrase end, not a lone first note).
+    connected: bool,
 }
 
 impl Default for LegatoLine {
@@ -430,6 +433,7 @@ impl Default for LegatoLine {
             last_activity: 0,
             last_onset_frame: 0,
             marcato_ioi: None,
+            connected: false,
         }
     }
 }
@@ -944,6 +948,9 @@ pub struct SampleEngine {
     /// Gain for the release sample being spawned right now, replacing the
     /// held-time law (the in-phrase release's flat level).
     pub(crate) release_gain_override: Option<f32>,
+    /// The release context a connection sets around its `spawn_release`
+    /// (`ReleaseByHeldSpec`); `None` = decided at note-off.
+    pub(crate) release_context: Option<crate::spec::ReleaseContext>,
     /// Extra file frames the sustain body being spawned right now is entered
     /// at (the >1-octave transition body's 75 ms offset).
     pub(crate) spawn_extra_start: usize,
@@ -1255,6 +1262,7 @@ impl SampleEngine {
             tune_rng: 0x9E37_79B9_7F4A_7C15,
             seq_rr_base: 0,
             release_gain_override: None,
+            release_context: None,
             spawn_extra_start: 0,
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,
             zone_rr_last_slots: HashMap::with_capacity(128),

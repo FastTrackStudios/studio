@@ -94,8 +94,9 @@ def main():
         "--tunes": ("--tunes", range(-5, 6)),
         "--variants": ("--variants", (2, 3, 4)),
         "--attacks": ("--attacks", (0, 1, 2)),
-        # random short round robins (woodwinds / brass): 0-based RR
-        "--rrs": ("--rrs", range(int(os.environ.get("CS_RR_MAX", "6")))),
+        # random short round robins (woodwinds / brass): 0-based RR, up to
+        # the largest RR count (brass Repetitions: 7)
+        "--rrs": ("--rrs", range(int(os.environ.get("CS_RR_MAX", "8")))),
     }[kind]
     cands = list(cands)
     k = load(kon)

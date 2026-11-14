@@ -90,6 +90,7 @@ impl SampleEngine {
                 self.play_direction = "up".to_string();
                 self.trigger_zoned_sustain(note);
                 self.line_mut().note = Some(note);
+                self.line_mut().connected = false;
                 // The IOI clock runs on the document path too — see below.
                 let now = self.frames_rendered;
                 self.line_mut().last_onset_frame = now;

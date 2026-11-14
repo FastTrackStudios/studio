@@ -78,7 +78,11 @@ def short_layers(zones, group_names, artic, family):
 
 # The vibrato-less instruments put their NVsus recordings in the vibsus slot
 # (slot_relabel.py makes those zones Vibsus): the slot's curves are theirs.
-SLOT_ALSO = {"Vibsus": {"Vibsus", "NVsus"}, "Vibsusrel": {"Vibsusrel", "NVsusrel"}}
+SLOT_ALSO = {
+    "Vibsus": {"Vibsus", "NVsus"}, "Vibsusrel": {"Vibsusrel", "NVsusrel"},
+    # CSB 4 Horns: the mute slots hold Stopped recordings (slot_relabel.py)
+    "Mutesus": {"Mutesus", "Stoppedsus"}, "Mutesusrel": {"Mutesusrel", "Stoppedsusrel"},
+}
 
 
 def recorded_dynamics(zones, group_names, prefix, artic):

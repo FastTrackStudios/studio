@@ -72,7 +72,9 @@ impl SampleEngine {
             .fade_out_note_line(line, from, ms(old_ms), ms(old_ms));
         // 2. The old note's in-phrase release.
         self.release_gain_override = Some(db_to_gain(st.in_phrase_release_db));
+        self.release_context = Some(crate::spec::ReleaseContext::InPhrase);
         self.spawn_release(from);
+        self.release_context = None;
         self.release_gain_override = None;
         // 3. The new body from its sample start, fading in.
         let fade = ms(new_ms);
@@ -110,6 +112,7 @@ impl SampleEngine {
         let l = self.line_mut();
         l.note = Some(to);
         l.marcato_ioi = None;
+        l.connected = true;
     }
 
     /// The current articulation's marcato transition, if it has one.
@@ -209,7 +212,9 @@ impl SampleEngine {
 
         // 2. The old note's in-phrase release.
         self.release_gain_override = Some(db_to_gain(mt.in_phrase_release_db));
+        self.release_context = Some(crate::spec::ReleaseContext::InPhrase);
         self.spawn_release(from);
+        self.release_context = None;
         self.release_gain_override = None;
 
         // 3. The new body: next round-robin, entered deep, muted, two-stage
@@ -275,6 +280,7 @@ impl SampleEngine {
         let l = self.line_mut();
         l.note = Some(to);
         l.marcato_ioi = Some(ioi as f32);
+        l.connected = true;
     }
 
     /// The marc-leg zones of the LOWER note (interval-coded), one voice per

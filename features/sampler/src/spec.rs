@@ -1147,6 +1147,10 @@ pub struct MarcatoOverlay {
     pub lt_db_step: Option<Vec<[f32; 2]>>,
     pub lt_db_leap: Option<Vec<[f32; 2]>>,
     pub cc18_other: Option<[f32; 3]>,
+    /// The instrument's own marcato-layer → transition-layer pairs (CSB:
+    /// each `marc leg` group plays with the `marcato mod` group of its
+    /// dynamic code, holding that instrument's own recordings).
+    pub lt_layers: Option<Vec<MarcLegLayerSpec>>,
 }
 
 /// The overridable fields of one articulation (see [`SectionOverlay`]).
@@ -1159,6 +1163,9 @@ pub struct ArticulationOverlay {
     pub vel_layer_db: Option<Vec<f32>>,
     pub rr_sequence: Option<Vec<u8>>,
     pub rr_random_avoid_last: Option<u8>,
+    pub random_tune_cents: Option<u8>,
+    pub random_tune_gate_ms: Option<f32>,
+    pub release_by_held: Option<ReleaseByHeldSpec>,
     pub rr_per_note: Option<bool>,
     pub group_curves: Option<Vec<GroupCurveSpec>>,
     pub amp_env: Option<Vec<EnvSegmentSpec>>,
@@ -1202,6 +1209,15 @@ impl SectionOverlay {
             }
             if let Some(v) = &o.rr_sequence {
                 a.rr_sequence.clone_from(v);
+            }
+            if let Some(v) = o.random_tune_cents {
+                a.random_tune_cents = v;
+            }
+            if let Some(v) = o.random_tune_gate_ms {
+                a.random_tune_gate_ms = v;
+            }
+            if let Some(v) = &o.release_by_held {
+                a.release_by_held = Some(v.clone());
             }
             if let Some(v) = o.rr_random_avoid_last {
                 a.rr_random_avoid_last = v;
@@ -1282,6 +1298,9 @@ impl MarcatoOverlay {
         }
         if let Some(v) = &self.lt_db_leap {
             t.lt_db_leap.clone_from(v);
+        }
+        if let Some(v) = &self.lt_layers {
+            t.lt_layers.clone_from(v);
         }
         if let Some(v) = self.cc18_other {
             t.cc18_other = v;
@@ -1394,6 +1413,58 @@ impl IoiCurveSpec {
             }
         }
         self.anchors_ms[n - 1]
+    }
+}
+
+/// A body's release level (dB) by how long the note was held (ms), per
+/// release context. Each curve is linear between its points and flat past
+/// either end ([`IoiCurveSpec::value_at`] over the held time). CSB: `%ciooq`
+/// / `%54rxx` (detached and first), `%x1kwp` / `%5gm34` (in phrase),
+/// `%e1dvv` / `%fxjmy` (phrase end), deci-dB in the script.
+#[derive(Debug, Clone, Default, PartialEq, Facet)]
+pub struct ReleaseByHeldSpec {
+    /// Legato off: the note was played detached.
+    pub detached: IoiCurveSpec,
+    /// Added to `detached` (CSB `$b5zq1`, −3 dB).
+    #[facet(default)]
+    pub detached_db: f32,
+    /// Legato on, a phrase's only note released on its own.
+    pub first: IoiCurveSpec,
+    /// The old note of a legato connection (or a retrigger).
+    pub in_phrase: IoiCurveSpec,
+    /// Held longer than this, a connection's old note plays no release
+    /// (CSB `%nuvn3`). `None` = always.
+    #[facet(default)]
+    pub in_phrase_cutoff_ms: Option<f32>,
+    /// The last note of a legato phrase.
+    pub phrase_end: IoiCurveSpec,
+}
+
+/// Which release a note-off or a connection plays (see [`ReleaseByHeldSpec`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseContext {
+    Detached,
+    First,
+    InPhrase,
+    PhraseEnd,
+}
+
+impl ReleaseByHeldSpec {
+    /// The release level (dB) in `ctx` after `held_ms`, or `None` when this
+    /// context plays no release.
+    #[must_use]
+    pub fn db(&self, ctx: ReleaseContext, held_ms: f32) -> Option<f32> {
+        Some(match ctx {
+            ReleaseContext::Detached => self.detached.value_at(held_ms) + self.detached_db,
+            ReleaseContext::First => self.first.value_at(held_ms),
+            ReleaseContext::InPhrase => {
+                if self.in_phrase_cutoff_ms.is_some_and(|c| held_ms > c) {
+                    return None;
+                }
+                self.in_phrase.value_at(held_ms)
+            }
+            ReleaseContext::PhraseEnd => self.phrase_end.value_at(held_ms),
+        })
     }
 }
 
@@ -2256,6 +2327,12 @@ pub struct ArticulationSpec {
     /// Woodwinds / Brass: 2 (KSP `random(1,n)` against `%h5aha`/`%z0q4q`).
     #[facet(default)]
     pub rr_random_avoid_last: u8,
+    /// The release sample's level by how long the note was held, per
+    /// context (CSB `on release`, 17361-17849): replaces the library-wide
+    /// `release_held_db` / `release_held_table` for this body's releases.
+    /// `None` = the library-wide curve.
+    #[facet(default)]
+    pub release_by_held: Option<ReleaseByHeldSpec>,
     /// Per velocity band, `(compare, store)`: which band's last-RR memory the
     /// no-repeat rule reads and which it writes. Empty = each band its own.
     /// CSS pizzicato reads an unwritten table in bands 2 and 4 and writes

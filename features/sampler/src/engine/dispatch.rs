@@ -490,6 +490,7 @@ impl SampleEngine {
             self.legato_trim = false;
             self.legato_attack_dip_db = 0.0;
             self.line_mut().note = Some(to_note);
+            self.line_mut().connected = true;
             return;
         }
         let log_idx =
@@ -763,6 +764,7 @@ impl SampleEngine {
             self.sustain_fade_in = None;
             self.legato_glide = None;
             self.line_mut().note = Some(to_note);
+            self.line_mut().connected = true;
             if let Some(i) = log_idx {
                 self.legato_fire_log[i].arrival = self.last_arrival_prediction;
             }

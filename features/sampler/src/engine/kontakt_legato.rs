@@ -70,7 +70,9 @@ impl SampleEngine {
 
         // 2. The old note's "note in phrase" release, at a flat level.
         self.release_gain_override = Some(db_to_gain(kt.in_phrase_release_db));
+        self.release_context = Some(crate::spec::ReleaseContext::InPhrase);
         self.spawn_release(from);
+        self.release_context = None;
         self.release_gain_override = None;
 
         // 3. The destination body: silent, then a linear fade-in — after
@@ -170,6 +172,7 @@ impl SampleEngine {
             }
         }
         self.line_mut().note = Some(to);
+        self.line_mut().connected = true;
     }
 
     /// The transition voice's amplitude envelope for this transition: first

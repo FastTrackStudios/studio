@@ -8,7 +8,8 @@ Kontakt plays a recording by the group slot it sits in. CSW's vibrato-less
 instruments (the clarinets, the contrabassoon) put their NVsus recordings in
 the *vibsus* groups and leave the nonvib groups empty: Kontakt plays them as
 the vibrato side (always, when the instrument has no vibrato CC; at CC2 ≥ 64
-on Solo Bass Clarinet, silent below). So a slot that holds none of its own
+on Solo Bass Clarinet, silent below). CSB 4 Horns plays its Stopped
+recordings from the mute slots (CC58 31-40 / 56-60). So a slot that holds none of its own
 articulation's recordings but all of another's relabels those zones to its
 own articulation. Rewrites library.styx in place (a .pre-slot-<date> copy is
 kept) and prints what it changed.
@@ -16,7 +17,14 @@ kept) and prints what it changed.
 import collections, csv, datetime, json, os, re, shutil, sys
 
 # group family (after the mic) → the articulation that slot stands for
-SLOTS = {"vibsus": "Vibsus", "nonvib": "NVsus", "vibsus rel": "Vibsusrel", "nonvib rel": "NVsusrel"}
+SLOTS = {
+    "vibsus": "Vibsus", "nonvib": "NVsus", "vibsus rel": "Vibsusrel", "nonvib rel": "NVsusrel",
+    # CSB: the mute slots (4 Horns keeps its stopped recordings there)
+    "tremolo": "Mutesus", "tremolo rel": "Mutesusrel", "pizzicato": "Mutereps",
+}
+# recordings that may stand in for a slot's own (not the borrowed attack /
+# short zones a vibsus group also holds)
+STAND_INS = set(SLOTS.values()) | {"Stoppedsus", "Stoppedsusrel", "Stoppedreps"}
 MICS = ("Mix", "Main", "Room", "Close", "OH")
 
 
@@ -44,7 +52,7 @@ def main():
         if slot in artics:
             continue
         for a in artics:
-            if a in SLOTS.values() and where[a] == {slot}:
+            if a in STAND_INS and where[a] == {slot}:
                 relabel[a] = slot
     if not relabel:
         print("no slot holds another articulation's recordings")

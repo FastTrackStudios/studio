@@ -47,6 +47,9 @@ LIBS = {
              "CSW records its marcato transitions as their own MLeg files"),
             (r"master_tune_cents\s+\S+[^\n]*", "master_tune_cents    0  // group tunes differ: folded into each zone (fold_group_tune.py)",
          "group tune is per group here, folded into the zones"),
+        (r"\n\s+rr_sequence\s[^\n]*", "",
+         "shorts draw their RR at random (random(1,n) avoiding the key's last picks), no sequence",
+         "all"),
         (r"(\n    vibrato_controller    CC2)\n",
          "\\1\n    // CC2 switches nonvib / vib at 64 (KSP `$takdp<64`, CC `$vkgua` = 2), with a\n"
          "    // timed crossfade (`$2b2p5`, 650 ms; not modelled yet): no CC2 group curves\n"
@@ -85,6 +88,12 @@ LIBS["brass"] = {
     "subs": [
         (r"master_tune_cents\s+\S+[^\n]*", "master_tune_cents    0  // group tunes differ: folded into each zone (fold_group_tune.py)",
          "group tune is per group here, folded into the zones"),
+        (r"\n\s+rr_sequence\s[^\n]*", "",
+         "shorts draw their RR at random (random(1,n) avoiding the key's last picks), no sequence",
+         "all"),
+        (r"random_tune_cents\s+\d+[^\n]*",
+         "random_tune_cents   0     // CSB detunes no short ($5xze0 = 0 on every patch; KSP 12794)",
+         "no random detune on brass shorts", "all"),
         (r"\n    vibrato_controller[^\n]*",
          "\n    // The script ignores MIDI CC2 (it is in %vn532) and sets it to its saved\n"
          "    // vibrato knob ($takdp, 126 on every CSB patch): the release groups' CC2\n"
@@ -241,8 +250,10 @@ def main():
         parts += [b, ""]
     parts += [block(own, "keyswitch"), ""]
     text = "\n".join(parts)
-    for pat, rep, why in cfg.get("subs", []):
-        text, n = re.subn(pat, rep, text, count=1)
+    for sub in cfg.get("subs", []):
+        pat, rep, why = sub[:3]
+        # a 4th element "all" applies the rule everywhere, not just once
+        text, n = re.subn(pat, rep, text, count=0 if sub[3:] == ("all",) else 1)
         if n == 0:
             raise SystemExit(f"derive: substitution not applied ({why}): {pat}")
     sys.stdout.write(text)

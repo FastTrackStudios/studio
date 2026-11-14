@@ -143,6 +143,11 @@ for mode in "${modes[@]}"; do
   case "$mode" in
     shorts|pizz|leg2|attack)
       kind=--tunes
+      # woodwinds / brass draw their shorts' round robins at random (and
+      # do not detune them): fit the RR each note drew
+      if [ "$lib" != strings ] && { [ "$mode" = shorts ] || [ "$mode" = pizz ]; }; then
+        kind=--rrs
+      fi
       [ "$mode" = leg2 ] && kind=--variants
       [ "$mode" = attack ] && kind=--attacks
       npy "$here/fit_draws.py" "$kind" "$bin" "$section" "$d/$mode.mid" \

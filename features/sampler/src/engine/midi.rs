@@ -311,6 +311,7 @@ impl SampleEngine {
                 l.note = Some(note);
                 l.last_onset_frame = now;
                 l.marcato_ioi = None;
+                l.connected = false;
             }
         }
     }
@@ -458,6 +459,7 @@ impl SampleEngine {
                         l.note = Some(note);
                         l.last_onset_frame = now;
                         l.marcato_ioi = None;
+                        l.connected = false;
                     }
                     // Transition from the currently-sounding note to this one,
                     // delayed by the velocity-mapped legato latency. A note that
@@ -2097,9 +2099,29 @@ impl SampleEngine {
                 let i = ((held_ms / 10.0) as i64 - 1).clamp(0, t.len() as i64 - 1) as usize;
                 db_to_gain(perf.release_held_db * f32::from(t[i]) / 100.0)
             };
-            let release_gain = self
-                .release_gain_override
-                .unwrap_or(perf.release_gain * held_gain);
+            // The body's own held-time curves, by context (CSB): they replace
+            // the library curve and the connection's flat in-phrase level.
+            let by_held = self
+                .patch
+                .spec
+                .articulation(&self.articulation)
+                .and_then(|a| a.release_by_held.clone());
+            let release_gain = if let Some(rb) = by_held {
+                let ctx = self.release_context.unwrap_or(if !self.legato_enabled {
+                    crate::spec::ReleaseContext::Detached
+                } else if self.line().connected {
+                    crate::spec::ReleaseContext::PhraseEnd
+                } else {
+                    crate::spec::ReleaseContext::First
+                });
+                let Some(db) = rb.db(ctx, held_ms) else {
+                    return;
+                };
+                perf.release_gain * db_to_gain(db)
+            } else {
+                self.release_gain_override
+                    .unwrap_or(perf.release_gain * held_gain)
+            };
             // Kontakt plays the release `wait(2000)` µs after the note-off
             // (KSP 20788) — the spec's `release_delay_ms`.
             self.spawn_extra_hold = ms_to_frames_f(perf.release_delay_ms, self.sample_rate);

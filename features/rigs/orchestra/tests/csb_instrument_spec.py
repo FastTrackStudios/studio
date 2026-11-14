@@ -55,7 +55,8 @@ SHORTS = [
     ("Staccato", "Staccato", "staccato", "%nfxdy", "%opj4y", 2, 1),
     ("Sfz", "Sfz", "sfz", "%cjzwd", "%5u3ic", 3, 1),
     ("Mutereps", "Mutereps", "pizzicato", "%n4f4k", "%pyntp", 4, 1),
-    ("Stoppedreps", "Stoppedreps", "pizzicato", "%n4f4k", "%pyntp", 4, 1),
+    # 4 Horns: its stopped recordings play as the mute slot (slot_relabel.py)
+    ("Mutereps", "Stoppedreps", "pizzicato", "%n4f4k", "%pyntp", 4, 1),
 ]
 LAYER_GROUPS = ("p", "mf", "f", "ff")  # %k1aqh slots = the vibsus groups
 
@@ -126,10 +127,53 @@ def main():
         print(f"        vel_layer_db ({' '.join(map(str, padded(pers, dvar, nb)[:nb]))})")
         print(f"        rr_random_avoid_last {min(avoid, max(rr - 1, 0))}")
         print("    }")
+    # muted shorts draw a random detune only where the patch enables it
+    # (`$5xze0`; KSP 12794: ±$aolsn c unless the key struck within $s01mu ms)
+    if pers.get("$5xze0", [0])[0] == 1:
+        print("    {\n        id Mutereps")
+        print(f"        random_tune_cents {css.one(pers, '$aolsn')}")
+        print(f"        random_tune_gate_ms {css.one(pers, '$s01mu')}")
+        print("    }")
     rips(pers, zones, gnames)
-    marcato(pers)
+    marcato(pers, marcato_lt_layers(zones, gnames))
+    release_levels(pers)
     print(")")
     legato(pers, groups, zones, gnames)
+
+
+# the release-volume slot (`$se4l4`) of each body articulation
+RELEASE_SLOTS = {
+    "Sus": 0, "Mutesus": 2, "Stoppedsus": 2, "HTrills": 3, "WTrills": 3, "Flutter": 4, "Marcato": 5,
+}
+
+
+def release_levels(pers):
+    """The release level by held time, per context (on release 17361-17849):
+    3-point detached / first and phrase-end tables, a 4-point in-phrase one,
+    `%nuvn3` = no in-phrase release past its last point; deci-dB."""
+    ab, ab_db = padded(pers, "%ciooq", 18), padded(pers, "%54rxx", 18)
+    ip, ip_db = padded(pers, "%x1kwp", 24), padded(pers, "%5gm34", 24)
+    pe, pe_db = padded(pers, "%e1dvv", 18), padded(pers, "%fxjmy", 18)
+    cut = padded(pers, "%nuvn3", 6)
+    trim = css.one(pers, "$b5zq1") / 10
+
+    def curve(t, d, slot, n):
+        ts = " ".join(css.fmt(v) for v in t[slot * n:slot * n + n])
+        ds = " ".join(css.fmt(v / 10) for v in d[slot * n:slot * n + n])
+        return f"{{ thresholds_ms ({ts}), anchors_ms ({ds}) }}"
+
+    for aid, slot in RELEASE_SLOTS.items():
+        print(f"    {{\n        id {aid}")
+        print("        release_by_held {")
+        print(f"            detached    {curve(ab, ab_db, slot, 3)}")
+        print(f"            detached_db {css.fmt(trim)}")
+        print(f"            first       {curve(ab, ab_db, slot, 3)}")
+        print(f"            in_phrase   {curve(ip, ip_db, slot, 4)}")
+        if cut[slot] == 1:
+            print(f"            in_phrase_cutoff_ms {css.fmt(ip[slot * 4 + 3])}")
+        print(f"            phrase_end  {curve(pe, pe_db, slot, 3)}")
+        print("        }")
+        print("    }")
 
 
 def rips(pers, zones, gnames):
@@ -153,7 +197,33 @@ def rips(pers, zones, gnames):
     print("    }")
 
 
-def marcato(pers):
+# a group's dynamic code (`$tylrz`): the marc leg layer plays with the
+# marcato mod layer of the same code
+DYN_CODE = {"p": 1, "mf": 2, "f": 3, "ff": 4, "fff": 4}
+
+
+def marcato_lt_layers(zones, gnames):
+    """`lt_layers`: each `marc leg <x>` group with the `marcato mod <y>` of its
+    dynamic code, named by the recordings each holds (a marcato group that
+    holds a Sus recording, not a Marcato, has no marcato layer to pair)."""
+    def held(prefix, artic):
+        out = {}
+        for code_name in DYN_CODE:
+            rec = {}
+            for z in zones:
+                if gnames.get(int(z["group"])) != f"Mix {prefix} {code_name}":
+                    continue
+                parts = csw.name_parts(z["sample"])
+                if len(parts) > 3 and parts[1] == artic:
+                    rec[parts[3]] = rec.get(parts[3], 0) + 1
+            if rec:
+                out[DYN_CODE[code_name]] = max(rec, key=rec.get)
+        return out
+    legs, marcs = held("marc leg", "Leg"), held("marcato mod", "Marcato")
+    return [(marcs[c], legs[c]) for c in sorted(legs) if c in marcs]
+
+
+def marcato(pers, lt_layers):
     p = lambda v: css.one(pers, v)  # noqa: E731
     print("    {\n        id Marcato")
     print("        marcato_transition {")
@@ -165,6 +235,9 @@ def marcato(pers):
     print(f"            lt_offset_ms_by_class ({p('$5ibvn')} {p('$cblef')})")
     print(f"            lt_db_by_class ({css.fmt(p('$b23jt') / 10)} {css.fmt(p('$rlbmz') / 10)})")
     print(f"            lt_retire_ms_by_class ({p('$pprfd')} {p('$orqo1')})")
+    if lt_layers:
+        pairs = " ".join(f"{{dynamic {m}, lt_dynamic {l}, gain_index 0}}" for m, l in lt_layers)
+        print(f"            lt_layers ({pairs})")
     print("        }")
     print("    }")
 
