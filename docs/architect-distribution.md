@@ -408,10 +408,33 @@ bundle:
   queues it, else `PLAYHEAD_SET` with the song alone at that time,
   playing (with its sections, marks, tempo and art).
 
-**Size**: Keyflow's engraver and its fonts are in the bundle now: 7.97 MB
-raw, 3.67 MB gzipped (was 0.99 MB and 0.40 MB). Every view of the island
-pays it; loading the engraver only for the song view (a second bundle) is
-the next step if it matters on a phone.
+- **Its Click is on the chart's beat.** The song's queue item carries
+  `tempo: {bpm, at, meter}` with `at` the chart's `\downbeat`
+  (`setlists::follow::chart_beat`, the clock the bars are timed on), so a
+  song whose bar 1 is not at 0 s clicks on its bars. A setlist row's
+  `at` is 0: a setlist note is handed images and `.lrc` only, never its
+  songs' charts (`queue::Item::downbeat` takes one if it ever is).
+- **What it sets is one the host takes whole.** The host refuses a
+  `PLAYHEAD_SET` whole for one item it refuses, so both views hold to its
+  rules item by item: media and art paths by Architect's own rule
+  (`architect_playhead::model::vault_path`, ported as `queue::vault_path`:
+  a segment ending in `.` or a space, a look-alike of `/` or `.`, an
+  invisible format character, more than 1024 bytes are left out, so
+  `Songs/Harry Connick Jr./…` drops that song, not the setlist), every
+  time within a day, and the song view's ask cut to 64 KiB (its last
+  marks first, then its last sections), as the setlist's `Outbox` cuts
+  its tail.
+
+**Size: a known cost.** Keyflow's engraver and its fonts are in the
+bundle now: 7.97 MB raw, 3.67 MB gzipped (was 0.99 MB and 0.40 MB), and
+every view of the island pays it, the setlist's and the progress bar's
+included. About 1.94 MB of the gzipped size is the engraver's fonts:
+FreeSans (805 KB), FreeSansOblique (420 KB), Bravura (387 KB) and
+MuseJazzText (156 KB). Two changes take it back, neither in this repo:
+subsetting the fonts to the faces and glyphs a chart uses
+(FastTrackStudios/keyflow#76), and a bundle per view, fetched only when
+that view mounts, so only the song view loads the engraver
+(FastTrackStudios/architect#695).
 
 ## Release artefacts
 
