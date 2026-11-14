@@ -48,8 +48,9 @@ serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
 thiserror = { workspace = true }
 keyflow = { workspace = true, optional = true }
-# Its PDF writer (the facade turns the engraver on without `pdf`).
-engraver = { workspace = true, optional = true, features = ["pdf"] }
+# The engraver itself, for `engrave` only (`follow`, the wasm path, never
+# asks for it); its PDF writer is on everywhere but iOS (below).
+engraver = { workspace = true, optional = true }
 # The pages as PNGs, as `kf png` draws them.
 resvg = { workspace = true, optional = true }
 # Its SVG reader alone: the follow chart's text as outlines.
@@ -72,6 +73,12 @@ web-time = { workspace = true, optional = true }
 futures-util = { workspace = true, optional = true }
 futures-channel = { workspace = true, optional = true }
 clap = { workspace = true, optional = true, features = ["env"] }
+
+# Its PDF writer, everywhere but iOS: printpdf's azul stack (azul-core
+# 0.0.5) does not build for iOS, so an iOS app linking setlists (Architect's
+# standard distribution, architect#640) engraves pages and no PDF.
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+engraver = { workspace = true, optional = true, features = ["pdf"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The editor drawn under Blitz (its focus and its scrolling: `native`).

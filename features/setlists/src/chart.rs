@@ -32,6 +32,7 @@ pub struct Engraved {
     pub meter: Option<String>,
     /// One PNG per page.
     pub pages: Vec<Vec<u8>>,
+    /// The PDF; empty on iOS, where the engraver writes none.
     pub pdf: Vec<u8>,
 }
 
@@ -48,7 +49,12 @@ pub fn engrave(source: &str) -> Result<Engraved> {
         .iter()
         .map(|svg| raster(svg))
         .collect::<Result<Vec<_>>>()?;
+    // No PDF on iOS: the engraver's PDF writer is not built there
+    // (`Cargo.toml`).
+    #[cfg(not(target_os = "ios"))]
     let pdf = pipeline.export_pdf(&layout).map_err(Error::Engrave)?;
+    #[cfg(target_os = "ios")]
+    let pdf = Vec::new();
     let meta = &chart.metadata;
     let facts = crate::keys::facts(&chart);
     Ok(Engraved {
@@ -294,10 +300,13 @@ fn write_engraving(
     for old in chart.pages.iter().filter(|p| !pages.contains(p)) {
         vault.remove(&lib.song_file(title, old))?;
     }
-    let pdf = format!("{dir}{stem} - Master Rhythm.pdf");
-    vault.write(&lib.song_file(title, &pdf), &engraved.pdf)?;
     chart.pages = pages;
-    chart.pdf = Some(pdf);
+    // No PDF (iOS): the one there was is kept.
+    if !engraved.pdf.is_empty() {
+        let pdf = format!("{dir}{stem} - Master Rhythm.pdf");
+        vault.write(&lib.song_file(title, &pdf), &engraved.pdf)?;
+        chart.pdf = Some(pdf);
+    }
     chart.key = engraved.key.or_else(|| chart.key.take());
     chart.key_end = engraved.key_end;
     chart.key_outside = engraved.key_outside;
