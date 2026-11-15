@@ -1020,6 +1020,11 @@ impl BodyHandoffSpec {
 /// Every IOI table is the script's integer lerp, flat outside its ends.
 #[derive(Debug, Clone, Facet)]
 pub struct MarcatoTransitionSpec {
+    /// The connected body waits this long (ms) after the note-on — the
+    /// transition sample does not (CSW: `wait($5aowl)` = 40 ms between them,
+    /// KSP 12813). 0 = at once.
+    #[facet(default)]
+    pub body_delay_ms: f32,
     /// A transition is HARD (`$kbqnb`) above this velocity (`$qm4n3`)…
     #[facet(default = 75)]
     pub hard_velocity: u8,

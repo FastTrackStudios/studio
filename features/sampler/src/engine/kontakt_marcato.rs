@@ -234,11 +234,16 @@ impl SampleEngine {
         };
         self.sustain_flex = Some((env(&mt.body_env_cc19, cc19), env(&mt.body_env_cc18, cc18)));
         self.sustain_fade_in = Some((0, ms(stage2_at_ms), ms(stage1_ms), ms(stage2_ms)));
+        // the script's wait before it plays the body: the body starts later
+        // (held, not muted while it runs)
+        let saved_hold = self.spawn_extra_hold;
+        self.spawn_extra_hold += ms(mt.body_delay_ms);
         self.spawn_extra_start = ms(offs[usize::from(hard)]);
         self.legato_glide = (bend != 0.0).then_some((-bend, glide));
         self.in_transition = true;
         self.play_direction = if to >= from { "up" } else { "down" }.to_string();
         self.trigger_zoned_sustain(to);
+        self.spawn_extra_hold = saved_hold;
         self.in_transition = false;
         self.legato_glide = None;
         self.spawn_extra_start = 0;
@@ -299,6 +304,10 @@ impl SampleEngine {
         let lower = from.min(to);
         let direction = if to > from { "up" } else { "down" };
         let marc = self.articulation.clone();
+        // Layers whose groups hold the same recording (CSW: every marc-leg
+        // group holds the one MLeg set) play it as one voice per group in
+        // Kontakt: their levels add, into one voice here.
+        let mut plays: Vec<(usize, f32, usize)> = Vec::new();
         for layer in &mt.lt_layers {
             let g = self.group_curve_gain(&marc, &layer.dynamic).unwrap_or(1.0);
             if g <= 0.0 {
@@ -351,8 +360,14 @@ impl SampleEngine {
                 * usize::from(!own)
                 + self.script_offset(idx, ms_to_frames_f(lt_ms, self.sample_rate));
             let gain = g * db_to_gain(zone_db - z.gain_db + lt_db);
-            // Pitched from the lower note, where Kontakt maps the zone.
-            let pitch = f64::from(lower) - f64::from(to);
+            match plays.iter_mut().find(|(i, _, o)| *i == idx && *o == offset) {
+                Some(p) => p.1 += gain,
+                None => plays.push((idx, gain, offset)),
+            }
+        }
+        // Pitched from the lower note, where Kontakt maps the zone.
+        let pitch = f64::from(lower) - f64::from(to);
+        for (idx, gain, offset) in plays {
             if self.spawn_zone_voice_at(idx, to, VoiceKind::Legato, gain, None, pitch, offset) {
                 if let Some(v) = self.voices.last_spawned_mut() {
                     if let Some(e) = env.clone() {

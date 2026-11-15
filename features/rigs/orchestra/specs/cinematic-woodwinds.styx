@@ -615,27 +615,28 @@ articulations (
         // Connected marcato notes (KSP $ocjln=6, 18114-20402), null-tested
         // against Kontakt with tests/marcato_fit.py --model: −34..−43 dB.
         marcato_transition {
-            xfade_ms        225                     // $a3zg3
-            split           (50 60)                 // $igmiu soft / hard
+            body_delay_ms   40                      // wait($5aowl) = 40 ms on every CSW patch before the body plays (KSP 12301-12814); the transition sample does not wait
+            xfade_ms        70                      // $a3zg3 = 70 on every CSW patch (KSP 14666)
+            split           (50 50)                 // $igmiu 50, no hard table in CSW
             split_big       50
-            node_divisor    ((150 90) (300 60))     // $x444h
+            node_divisor    ((0 65))                // $x444h 65, flat
             body_offset_ms  (60 20)                 // $1fvjk soft / hard
             body_offset_big_ms (10 0)
-            cc19_soft       ((150 0) (300 60) (500 0))   // $313em
-            cc19_other      (100 0 96)              // hard, > octave soft, > octave hard
-            cc18_soft_step  ((150 127) (300 52) (500 52)) // $eaghu, interval ≤ 2
-            cc18_soft_leap  ((150 96) (300 52) (500 52))
-            cc18_other      (105 52 127)
+            cc19_soft       ((0 100))               // set_controller(19, $313em = 100) before the wait (KSP 12812)
+            cc19_other      (100 100 100)
+            cc18_soft_step  ((0 127))               // CSW never sets CC18: its marcato groups have no CC18 envelope
+            cc18_soft_leap  ((0 127))
+            cc18_other      (127 127 127)
             // The marcato mod groups' two volume ENV_FLEX: CC19 → level 1,
             // CC18 → levels 1-2 (level −1 = the CC ÷ 127).
-            body_env_cc19 ( {time_ms 1.0, level -1, curve 0.505}
-                            {time_ms 299.0, level 1.0, curve 0.67} )
+            body_env_cc19 ( {time_ms 20.0, level -1, curve 0.505}   // the marcato mod groups' one ENV_FLEX: CC19 -> level 1
+                            {time_ms 956.0, level 1.0, curve 0.5} )
             body_env_cc18 ( {time_ms 1.0, level -1, curve 0.5}
                             {time_ms 559.0, level -1, curve 0.505}
                             {time_ms 1440.0, level 1.0, curve 0.67} )
             // The old body loses the CC19=127 step mod (0.5946): measured, a
             // linear sink from 45 ms over 270 ms (flat across bands).
-            old_sink_level    0.4054
+            old_sink_level    1.0   // no CC19 step mod in CSW: the old body does not sink
             old_sink_start_ms 45
             old_sink_ms       270
             glide_semitone  ((75 20) (100 20) (500 20))   // $ruv02 = 20 on every CSW patch, flat (no IOI table; $i1kki = 10: no interval scaling; 14679-14693)
