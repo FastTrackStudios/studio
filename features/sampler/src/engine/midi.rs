@@ -644,6 +644,12 @@ impl SampleEngine {
                 ms_to_frames_f(crate::spec::lerp_table(&by_held, held_ms), self.sample_rate)
             };
             self.voices.note_off_line(cur_line, note, Some(sus_off));
+            // the script's own fade over that release (CSB / CSW `fade_out`)
+            let cut = self.patch.spec.performance.sustain_noteoff_cut_ms;
+            if cut > 0.0 {
+                self.voices
+                    .cut_release_line(cur_line, note, ms_to_frames_f(cut, self.sample_rate));
+            }
             // A note reached by a marcato transition: its transition voice
             // fades by that transition's IOI (the body keeps the held-time
             // fade — measured, Kontakt ends a phrase note like a single one).
@@ -3485,6 +3491,20 @@ impl SampleEngine {
     /// Process a MIDI CC event.
     pub fn cc(&mut self, controller: u8, value: u8) {
         self.cc_line(0, controller, value);
+        // A fixed controller ignores MIDI on every line, not just line 0
+        // (`dynamics.fixed_ccs`; CSB holds CC2 at 126): broadcasting it put a
+        // later phrase, allocated to another line, at CC2 0 — its release
+        // curves read 0 and the release never played.
+        if self
+            .patch
+            .spec
+            .dynamics
+            .fixed_ccs
+            .iter()
+            .any(|f| f.cc == controller)
+        {
+            return;
+        }
         // Live single-channel dispatch: CC1 (dynamics) and CC2 (vibrato) are the
         // one player's mod / expression wheel and govern EVERY mono-legato /
         // auto-divisi line the allocator may place a note on — not just line 0.

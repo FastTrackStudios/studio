@@ -538,6 +538,12 @@ pub struct PerformanceSpec {
     /// `$tukcw` = 400): on key-up the looping sustain fades over this window.
     #[facet(default = 400)]
     pub sustain_noteoff_ms: u32,
+    /// A script fade over the key-up release (ms; 0 = none): a held body's
+    /// release envelope is multiplied by a linear fade to silence over this
+    /// time, and the voice ends there — Kontakt's `fade_out` at the note-off
+    /// on top of the group's amp release (CSB `$qxeb4` 200, CSW `$tukcw` 100).
+    #[facet(default)]
+    pub sustain_noteoff_cut_ms: f32,
     /// Output makeup (dB) applied to looping sustain-layer voices — the flat
     /// level offset between a looped-plateau playback and the vendor
     /// instrument's rendered level (CSS: +6 dB, see the A/B calibration).
@@ -742,6 +748,7 @@ impl Default for PerformanceSpec {
     fn default() -> Self {
         Self {
             sustain_noteoff_ms: 400,
+            sustain_noteoff_cut_ms: 0.0,
             sustain_makeup_db: 0.0,
             instrument_gain_db: 0.0,
             resample_transpose: false,

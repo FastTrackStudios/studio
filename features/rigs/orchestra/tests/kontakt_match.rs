@@ -156,3 +156,49 @@ fn body_variant_keeps_sounding_past_the_file_end() {
         "body silent 3.0..3.5 s after a variant start"
     );
 }
+
+/// CSB holds CC2 at 126 (`dynamics.fixed_ccs`); a CC2 0 the player sends is
+/// ignored on every mono line. Kontakt plays both releases of every legato
+/// phrase (null test: the old note's in-phrase release and the phrase end's
+/// release). Before the fix only the first phrase did: the second, allocated
+/// to another line, heard the CC2 0 and its release curves read 0.
+#[test]
+fn every_brass_phrase_plays_its_releases() {
+    let Some(brass) = signal_orchestra::library("brass") else {
+        return;
+    };
+    if !std::path::Path::new(brass.root).exists() {
+        return;
+    }
+    let rig = SamplerRig::new_offline(SR);
+    if signal_orchestra::load_instrument(&rig, ID, brass, "Solo Trumpet", "Mix").is_err() {
+        return;
+    }
+    rig.set_trace_enabled(ID, true);
+    rig.cc(ID, 58, 2);
+    rig.cc(ID, 1, 127);
+    rig.cc(ID, 2, 0);
+    render(&rig, 0.5);
+    for _ in 0..2 {
+        let _ = rig.warm_note(ID, 67);
+        let _ = rig.warm_note(ID, 69);
+        rig.note_on(ID, 67, 40);
+        render(&rig, 0.2);
+        rig.note_on(ID, 69, 40);
+        render(&rig, 0.05);
+        rig.note_off(ID, 67);
+        render(&rig, 1.95);
+        rig.note_off(ID, 69);
+        render(&rig, 2.0);
+    }
+    let releases = rig
+        .render_trace(ID)
+        .events
+        .iter()
+        .filter(|e| matches!(&e.kind, TraceKind::VoiceSpawn(v) if v.voice_kind == "Release"))
+        .count();
+    assert_eq!(
+        releases, 4,
+        "two phrases × (in-phrase + phrase-end) releases"
+    );
+}

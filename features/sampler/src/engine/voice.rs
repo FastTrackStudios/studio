@@ -401,6 +401,9 @@ pub struct Voice {
     /// (1 − e^(−k))`, x = elapsed fraction). 0 = the linear fade. Kontakt's
     /// AHDSR release on CSS sustains measured k = 2.6 over 580 ms.
     release_k: f32,
+    /// Frames of a linear fade multiplied onto the key-up release
+    /// (`cut_release`); 0 = none.
+    release_cut: usize,
     /// `release_k` while a NOTE-OFF release runs; retire/steal fades leave it
     /// 0 (linear), as Kontakt's script fades are.
     release_k_active: f32,
@@ -727,6 +730,7 @@ impl Voice {
             target_gain: gain,
             level: 1.0,
             release_k: 0.0,
+            release_cut: 0,
             release_k_active: 0.0,
             flex2: None,
             gain_ramp_frames: 0,
@@ -815,6 +819,7 @@ impl Voice {
             target_gain: gain,
             level: 1.0,
             release_k: 0.0,
+            release_cut: 0,
             release_k_active: 0.0,
             flex2: None,
             gain_ramp_frames: 0,
@@ -1139,6 +1144,19 @@ impl Voice {
         self
     }
 
+    /// Fade a key-up release linearly to silence over `frames` on top of
+    /// its own shape, ending the voice there (see
+    /// `PerformanceSpec::sustain_noteoff_cut_ms`). A voice not releasing
+    /// from a key-up is left alone.
+    pub fn cut_release(&mut self, frames: usize) {
+        if frames > 0
+            && matches!(self.state, VoiceState::Releasing { .. })
+            && !matches!(self.kind, VoiceKind::Release | VoiceKind::Short)
+        {
+            self.release_cut = frames;
+        }
+    }
+
     /// Run the layer's group insert chain (see [`super::inserts`]).
     #[must_use]
     pub fn with_inserts(mut self, inserts: Option<super::inserts::InsertState>) -> Self {
@@ -1445,6 +1463,7 @@ impl Voice {
             _ => {
                 if matches!(self.state, VoiceState::Releasing { .. }) {
                     self.state = VoiceState::Playing;
+                    self.release_cut = 0;
                 }
             }
         }
@@ -1571,8 +1590,19 @@ impl Voice {
                     return (0.0, 0.0);
                 }
                 let t = *frames_remaining as f32 / self.release_frames.max(1) as f32;
+                let elapsed = self.release_frames.saturating_sub(*frames_remaining);
                 *frames_remaining -= 1;
-                self.release_shape(t)
+                if self.release_cut > 0 {
+                    // the script's fade on top of the release: silent at its end
+                    let lin = 1.0 - elapsed as f32 / self.release_cut as f32;
+                    if lin <= 0.0 {
+                        self.state = VoiceState::Done;
+                        return (0.0, 0.0);
+                    }
+                    self.release_shape(t) * lin
+                } else {
+                    self.release_shape(t)
+                }
             }
             VoiceState::Done => return (0.0, 0.0),
         };
@@ -1804,6 +1834,7 @@ impl Voice {
             && self.pitch.is_none()
             && self.filter.is_none()
             && self.inserts.is_none()
+            && self.release_cut == 0
             && self.vib_cents <= 0.0
             && self.glide_frames == 0
             && !self.reverse
@@ -2332,6 +2363,15 @@ impl VoicePool {
     /// lines playing the same pitch don't cut each other off. Live/single-line
     /// play (everything on line 0) behaves exactly like
     /// [`note_off_with_release_frames`](Self::note_off_with_release_frames).
+    /// [`Voice::cut_release`] on `line`'s voices of `note`.
+    pub fn cut_release_line(&mut self, line: u8, note: u8, frames: usize) {
+        for v in &mut self.voices {
+            if v.note == note && v.line == line {
+                v.cut_release(frames);
+            }
+        }
+    }
+
     pub fn note_off_line(&mut self, line: u8, note: u8, release_frames: Option<usize>) {
         for v in &mut self.voices {
             if v.note == note && v.line == line {

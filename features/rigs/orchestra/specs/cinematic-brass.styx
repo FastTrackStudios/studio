@@ -76,6 +76,7 @@ mics (
 
 performance {
     sustain_noteoff_ms   400   // $tukcw — held-sustain key-up overlap fade
+    sustain_noteoff_cut_ms 200   // $qxeb4 — the script's fade_out over the body's key-up release
     sustain_makeup_db    0.0   // was 5.0 (A/B-fitted); the null test shows Kontakt adds no sustain makeup
     instrument_gain_db   2.55  // Kontakt's level over the raw file with every curve at 1.0 (null-tested, all voices)
     resample_transpose   true  // keys between samples are RESAMPLED, like Kontakt (no time-preserving shifter)

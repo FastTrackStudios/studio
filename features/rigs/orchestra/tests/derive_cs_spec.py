@@ -45,7 +45,9 @@ LIBS = {
         "subs": [
             (r"(\n        id            Marcato\n(?:.*\n)*?\s+lt_articulation )Leg\b", r"\1MLeg",
              "CSW records its marcato transitions as their own MLeg files"),
-            (r"master_tune_cents\s+\S+[^\n]*", "master_tune_cents    0  // group tunes differ: folded into each zone (fold_group_tune.py)",
+            (r"(sustain_noteoff_ms\s+\S+[^\n]*)", r"\1\n    sustain_noteoff_cut_ms 100   // $tukcw — the script's fade_out over the body's key-up release",
+         "CSW's script fades a released body to silence over $tukcw = 100 ms", "all"),
+        (r"master_tune_cents\s+\S+[^\n]*", "master_tune_cents    0  // group tunes differ: folded into each zone (fold_group_tune.py)",
          "group tune is per group here, folded into the zones"),
         (r"\n\s+rr_sequence\s[^\n]*", "",
          "shorts draw their RR at random (random(1,n) avoiding the key's last picks), no sequence",
@@ -92,6 +94,8 @@ LIBS["brass"] = {
     # brass articulations with no strings slot, kept from the brass spec
     "own_articulations": ["Stoppedsus", "Stoppedreps", "Stoppedsusrel", "Taka"],
     "subs": [
+        (r"(sustain_noteoff_ms\s+\S+[^\n]*)", r"\1\n    sustain_noteoff_cut_ms 200   // $qxeb4 — the script's fade_out over the body's key-up release",
+         "CSB's script fades a released body to silence over $qxeb4 = 200 ms", "all"),
         (r"master_tune_cents\s+\S+[^\n]*", "master_tune_cents    0  // group tunes differ: folded into each zone (fold_group_tune.py)",
          "group tune is per group here, folded into the zones"),
         (r"\n\s+rr_sequence\s[^\n]*", "",
