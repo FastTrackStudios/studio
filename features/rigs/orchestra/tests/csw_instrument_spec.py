@@ -173,6 +173,11 @@ def main():
         # with RR_AVOID_LAST or fewer RRs the KSP draw could never finish;
         # such a short (Sfz, 2 RRs) must take another path — UNVERIFIED
         print(f"        rr_random_avoid_last {min(RR_AVOID_LAST, max(rr - 1, 0))}")
+        # a short the key has not struck within $5i0r1 ms detunes by a
+        # random ±$14yum cents (KSP: `$thtao`, ENGINE_UPTIME - last strike)
+        if css.one(pers, "$thtao") == 1 and css.one(pers, "$14yum"):
+            print(f"        random_tune_cents {css.one(pers, '$14yum')}")
+            print(f"        random_tune_gate_ms {css.one(pers, '$5i0r1')}")
         css.emit_key_pitch(css.key_pitch_cents(all_groups, family))
         print("    }")
     for aid, prefix in RELEASE_GROUPS.items():

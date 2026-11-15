@@ -77,6 +77,8 @@ def render(binary, section, mid, flag, values, out, trace=False):
     args = [binary, mid, out, "--section", section, "--library", os.environ.get("CS_LIBRARY", "strings")]
     if values is not None:
         args += [flag, ",".join(str(v) for v in values)]
+    # FIT_EXTRA: other draws held fixed for every render ("--tunes 0,0,…")
+    args += os.environ.get("FIT_EXTRA", "").split()
     if trace:
         args.append("--trace")
     r = subprocess.run(args, check=True, capture_output=True, text=True, timeout=900)

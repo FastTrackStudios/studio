@@ -149,15 +149,32 @@ for mode in "${modes[@]}"; do
   case "$fit_mode" in
     shorts|pizz|leg2|attack)
       kind=--tunes
-      # woodwinds / brass draw their shorts' round robins at random (and
-      # do not detune them): fit the RR each note drew
+      # woodwinds / brass draw their shorts' round robins at random: fit
+      # the RR each note drew
       if [ "$lib" != strings ] && { [ "$fit_mode" = shorts ] || [ "$mode" = pizz ]; }; then
         kind=--rrs
       fi
       [ "$mode" = leg2 ] && kind=--variants
       [ "$mode" = attack ] && kind=--attacks
-      npy "$here/fit_draws.py" "$kind" "$bin" "$section" "$d/$mode.mid" \
-        "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
+      if [ "$lib" = woodwinds ] && [ "$kind" = --rrs ]; then
+        # woodwinds shorts also detune a note the key has not struck within
+        # the gate (KSP $14yum / $5i0r1): fit the RRs with the detune held at
+        # 0, then the detune with those RRs held
+        zeros=$(printf '0,%.0s' $(seq 400)); zeros=${zeros%,}
+        FIT_EXTRA="--tunes $zeros" npy "$here/fit_draws.py" --rrs "$bin" "$section" "$d/$mode.mid" \
+          "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws_rr.txt"
+        FIT_EXTRA="--rrs $(head -1 "$d/draws_rr.txt")" npy "$here/fit_draws.py" --tunes "$bin" "$section" \
+          "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
+        # once more each way: the RRs against the fitted detune, then the
+        # detune against those RRs (2 Flutes detunes every note)
+        FIT_EXTRA="--tunes $(head -1 "$d/draws.txt")" npy "$here/fit_draws.py" --rrs "$bin" "$section" \
+          "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws_rr.txt"
+        FIT_EXTRA="--rrs $(head -1 "$d/draws_rr.txt")" npy "$here/fit_draws.py" --tunes "$bin" "$section" \
+          "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
+      else
+        npy "$here/fit_draws.py" "$kind" "$bin" "$section" "$d/$mode.mid" \
+          "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
+      fi
       npy "$here/null_test.py" "$d/${mode}_manifest.tsv" "$d/${mode}_ours.wav" \
         "$d/${mode}_kontakt_r1.wav" --json "$d/null.json" | tail -1
       ;;
