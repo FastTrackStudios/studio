@@ -1235,6 +1235,7 @@ pub struct ArticulationOverlay {
     pub rr_random_avoid_last: Option<u8>,
     pub random_tune_cents: Option<u8>,
     pub random_tune_gate_ms: Option<f32>,
+    pub held_random_tune_cents: Option<u8>,
     pub release_by_held: Option<ReleaseByHeldSpec>,
     pub rr_per_note: Option<bool>,
     pub group_curves: Option<Vec<GroupCurveSpec>>,
@@ -1287,6 +1288,9 @@ impl SectionOverlay {
             }
             if let Some(v) = o.random_tune_cents {
                 a.random_tune_cents = v;
+            }
+            if let Some(v) = o.held_random_tune_cents {
+                a.held_random_tune_cents = v;
             }
             if let Some(v) = o.random_tune_gate_ms {
                 a.random_tune_gate_ms = v;
@@ -2515,6 +2519,12 @@ pub struct ArticulationSpec {
     pub random_tune_cents: u8,
     #[facet(default)]
     pub random_tune_gate_ms: f32,
+    /// A body struck while another key is down detunes by a uniform integer
+    /// −n..=n cents, every layer alike (CSB `$q4ous` on, `$yqdot` cents:
+    /// `change_tune` when more than one key is held, KSP 11050-11071).
+    /// 0 = never.
+    #[facet(default)]
+    pub held_random_tune_cents: u8,
     /// A CSS marcato transition: when set, this articulation plays legato
     /// (mono line) with Kontakt's marcato two-stage transition.
     pub marcato_transition: Option<MarcatoTransitionSpec>,

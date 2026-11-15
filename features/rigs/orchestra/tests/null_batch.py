@@ -81,6 +81,11 @@ def draw_files(lib, mode):
         return [("--pitch-envs", "draws_penv.txt")]
     if lib == "woodwinds" and mode == "marc2":
         return [("--rrs", "draws_rr.txt"), ("--tunes", "draws.txt"), ("--pitch-envs", "draws_penv.txt")]
+    # brass bodies detune when struck with another key down (held_random_tune_cents)
+    if lib == "brass" and mode == "marcato":
+        return [("--tunes", "draws.txt")]
+    if lib == "brass" and mode == "marc2":
+        return [("--rrs", "draws_rr.txt"), ("--tunes", "draws.txt")]
     fit_mode = "shorts" if lib != "strings" and mode == "marc2" else mode
     if fit_mode not in ("shorts", "pizz", "leg2", "attack"):
         return None

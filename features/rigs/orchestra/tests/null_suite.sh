@@ -158,6 +158,11 @@ for mode in "${modes[@]}"; do
   if [ "$lib" != strings ] && [ "$mode" = marc2 ]; then
     fit_mode=shorts
   fi
+  # brass marcato: a body struck with another key down detunes at random
+  # (held_random_tune_cents) — fitted like a short's detune
+  if [ "$lib" = brass ] && [ "$mode" = marcato ]; then
+    fit_mode=shorts
+  fi
   # woodwinds marcato draws its pitch envelope per strike (fit_pitch_env.py)
   if [ "$lib" = woodwinds ] && [ "$mode" = marcato ]; then
     fit_mode=penv
@@ -176,6 +181,7 @@ for mode in "${modes[@]}"; do
       if [ "$lib" != strings ] && { [ "$fit_mode" = shorts ] || [ "$mode" = pizz ]; }; then
         kind=--rrs
       fi
+      [ "$lib" = brass ] && [ "$mode" = marcato ] && kind=--tunes
       [ "$mode" = leg2 ] && kind=--variants
       [ "$mode" = attack ] && kind=--attacks
       # woodwinds marc2: its marcato strikes draw a pitch envelope too —
@@ -184,7 +190,7 @@ for mode in "${modes[@]}"; do
       if [ "$lib" = woodwinds ] && [ "$mode" = marc2 ]; then
         penv0="--pitch-envs $(printf '0:333,%.0s' $(seq 400) | sed 's/,$//')"
       fi
-      if [ "$lib" = woodwinds ] && [ "$kind" = --rrs ]; then
+      if { [ "$lib" = woodwinds ] || { [ "$lib" = brass ] && [ "$mode" = marc2 ]; }; } && [ "$kind" = --rrs ]; then
         # woodwinds shorts also detune a note the key has not struck within
         # the gate (KSP $14yum / $5i0r1): fit the RRs with the detune held at
         # 0, then the detune with those RRs held

@@ -842,6 +842,35 @@ impl SampleEngine {
     }
 
     pub(crate) fn trigger_zoned_sustain(&mut self, note: u8) {
+        self.body_tune_cents = self.held_random_tune(note);
+        self.trigger_zoned_sustain_inner(note);
+        self.body_tune_cents = 0.0;
+    }
+
+    /// `ArticulationSpec::held_random_tune_cents` for a body of `note`: a
+    /// draw (or the next forced one) when another key is down, else 0.
+    fn held_random_tune(&mut self, note: u8) -> f32 {
+        let n = self
+            .patch
+            .spec
+            .articulation(&self.articulation)
+            .map_or(0, |a| i32::from(a.held_random_tune_cents));
+        let others = self.held_notes.keys().any(|&k| k != note);
+        if n == 0 || !others || self.suppress_random_tune {
+            return 0.0;
+        }
+        if let Some(t) = self.forced_tunes.pop_front() {
+            return f32::from(t);
+        }
+        let mut x = self.tune_rng;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.tune_rng = x;
+        ((x % (2 * n as u64 + 1)) as i32 - n) as f32
+    }
+
+    fn trigger_zoned_sustain_inner(&mut self, note: u8) {
         let direction = self.play_direction.clone();
         // Honour the forced-RR pin like every other RR-bearing trigger —
         // document mode pins a stable per-note slot here so playback never
@@ -2657,7 +2686,12 @@ impl SampleEngine {
         // `pitch_offset` lets legato keep the correct note-tag (`to`, for
         // note-off/silence) while shifting the recorded transition so it lands
         // on the target (CSS legato samples are source-labelled a grid step away).
-        let semitones = note as f64 - root_key as f64 + pitch_offset + artic_transpose;
+        let body_tune = if matches!(kind, VoiceKind::SustainLayer) {
+            f64::from(self.body_tune_cents) / 100.0
+        } else {
+            0.0
+        };
+        let semitones = note as f64 - root_key as f64 + pitch_offset + artic_transpose + body_tune;
         // Split pitch from playback speed (whole-tone-grid fill): the integer
         // TRANSPOSITION (note - root_key) becomes a time-preserving pitch
         // shift on the voice so an off-grid note keeps its recorded arrival

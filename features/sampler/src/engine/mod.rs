@@ -948,6 +948,9 @@ pub struct SampleEngine {
     pub(crate) pitch_env_draw: Option<((u8, u64), (f32, f32))>,
     /// Engine frame each key last drew a random pitch envelope (its gate).
     pub(crate) pitch_env_key_frame: [Option<u64>; 128],
+    /// The detune (cents) of the body being spawned
+    /// (`ArticulationSpec::held_random_tune_cents`); 0 outside a spawn.
+    pub(crate) body_tune_cents: f32,
     /// Legato zone-2 body-variant draws to use instead of the generator.
     pub(crate) forced_variants: VecDeque<u8>,
     /// Forced loud first-note attack draws (index into the zone's range).
@@ -1277,6 +1280,7 @@ impl SampleEngine {
             forced_pitch_envs: VecDeque::new(),
             pitch_env_draw: None,
             pitch_env_key_frame: [None; 128],
+            body_tune_cents: 0.0,
             forced_variants: VecDeque::new(),
             forced_attacks: VecDeque::new(),
             forced_rrs: VecDeque::new(),

@@ -143,6 +143,7 @@ def main():
         print("    }")
     rips(pers, zones, gnames)
     marcato(pers, marcato_lt_layers(zones, gnames))
+    held_detune(pers)
     release_levels(pers)
     print(")")
     legato(pers, groups, zones, gnames)
@@ -247,6 +248,18 @@ def marcato(pers, lt_layers):
         print(f"            lt_layers ({pairs})")
     print("        }")
     print("    }")
+
+
+def held_detune(pers):
+    """A body struck while another key is down detunes by random(-$yqdot,
+    $yqdot) cents when `$q4ous` is on (KSP 11050-11071; sustain and marcato
+    modes alike)."""
+    if not css.one(pers, "$q4ous"):
+        return
+    for aid in ("Sus", "Marcato"):
+        print(f"    {{\n        id {aid}")
+        print(f"        held_random_tune_cents {css.one(pers, '$yqdot')}")
+        print("    }")
 
 
 def handoff(arr, zones, gnames):
