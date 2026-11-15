@@ -222,9 +222,11 @@ impl SampleEngine {
             }
         }
         // A note inside the previous transition's crossfade loop waits for
-        // that loop's next tick: everything it starts below starts late.
+        // that loop's next tick: everything it starts below starts late. A
+        // note on the loop's last tick still finds it running (each pass
+        // ends in its wait, the flag clears after it).
         let now = self.frames_rendered;
-        let busy_hold = if mt.busy_tick_ms > 0.0 && now < self.line().marcato_loop_end {
+        let busy_hold = if mt.busy_tick_ms > 0.0 && now <= self.line().marcato_loop_end {
             ms(mt.busy_tick_ms)
         } else {
             0

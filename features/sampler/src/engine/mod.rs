@@ -921,6 +921,9 @@ pub struct SampleEngine {
     /// regardless of (note, velocity) so RR cycling within a matching zone set
     /// behaves as expected when the same key is repeatedly struck.
     zone_rr_counter: usize,
+    /// The sustain bodies' round-robin counter (no per-note classes), apart
+    /// from the shorts' `zone_rr_counter`.
+    sustain_rr_counter: usize,
     /// `LegatoEngineSpec::first_note_variants` counter (KSP `$2ekvq`).
     pub(crate) variant_counter: usize,
     /// Velocity whose `ZoneSpec::variant_starts` entry the sustain body being
@@ -1273,6 +1276,7 @@ impl SampleEngine {
             cutoff_mod_oct: 0.0,
             unison: (1, 0.0, 0.0),
             zone_rr_counter: 0,
+            sustain_rr_counter: 0,
             variant_counter: variant_init,
             spawn_variant: None,
             in_transition: false,
@@ -1663,6 +1667,7 @@ impl SampleEngine {
         self.section = section_id.into().into();
         self.rr.borrow_mut().reset();
         self.zone_rr_counter = 0;
+        self.sustain_rr_counter = 0;
         self.zone_rr_last_slots.clear();
     }
 

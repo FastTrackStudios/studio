@@ -901,8 +901,12 @@ impl SampleEngine {
             *c = c.wrapping_add(1);
             rr
         } else {
-            let rr = self.forced_rr.map_or(self.zone_rr_counter, |f| f as usize);
-            self.zone_rr_counter = self.zone_rr_counter.wrapping_add(1);
+            // the bodies' own toggle (CSB marcato `$d3x3j := 1 - $d3x3j`):
+            // a short played alongside (the marcato overlay) must not move it
+            let rr = self
+                .forced_rr
+                .map_or(self.sustain_rr_counter, |f| f as usize);
+            self.sustain_rr_counter = self.sustain_rr_counter.wrapping_add(1);
             rr
         };
 
@@ -3749,6 +3753,7 @@ impl SampleEngine {
                 // plays back the same RR sequence every time.
                 self.rr.borrow_mut().reset_to(value as usize);
                 self.zone_rr_counter = value as usize;
+                self.sustain_rr_counter = value as usize;
                 self.zone_rr_last_slots.clear();
                 self.note_rr = [0; 128];
                 self.short_key_rr = [0; 128];
