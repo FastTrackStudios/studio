@@ -638,9 +638,9 @@ articulations (
             old_sink_level    0.4054
             old_sink_start_ms 45
             old_sink_ms       270
-            glide_semitone  ((75 40) (100 10) (500 10))   // $ruv02, cents
-            glide_tone      ((75 30) (100 10) (500 0))
-            glide_wide      ((75 20) (100 0) (500 0))
+            glide_semitone  ((75 20) (100 20) (500 20))   // $ruv02 = 20 on every CSW patch, flat (no IOI table; $i1kki = 10: no interval scaling; 14679-14693)
+            glide_tone      ((75 20) (100 20) (500 20))
+            glide_wide      ((75 20) (100 20) (500 20))
             glide_ms        60                      // $1mwwo ticks
             lt_articulation MLeg
             lt_layers ( {dynamic mf, lt_dynamic mf, gain_index 0}
