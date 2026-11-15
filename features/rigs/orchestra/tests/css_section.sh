@@ -129,6 +129,8 @@ case "$section" in
   CSB\ *)
     # zones play as the Kontakt slot that holds them (4 Horns: Stopped in the mute slots)
     python3 -I "$here/slot_relabel.py" "$ksp" "$patch/library.styx"
+    # each marcato RR slot plays the recording Kontakt's velocity index picks
+    python3 -I "$here/vel_rr.py" "$ksp" "$patch/library.styx"
     # 3. the brass instrument's numbers
     python3 -I "$here/csb_instrument_spec.py" "$ksp" > "$patch/section.styx"
     echo "wrote $patch/section.styx ($(grep -c '^        id ' "$patch/section.styx") articulations)"
