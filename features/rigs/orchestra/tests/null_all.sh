@@ -14,6 +14,15 @@ here="$(cd "$(dirname "$0")" && pwd)"
 jobs="${JOBS:-12}"
 read -r -a modes <<< "${MODES:-probe legato leg2 marcato marc2 shorts pizz trem rebow attack}"
 [ $# -gt 0 ] || { echo "usage: null_all.sh <Section>..." >&2; exit 1; }
+# one numpy python for every job (see null_suite.sh)
+if [ -z "${NPY_PYTHON:-}" ]; then
+  if python3 -c "import numpy" 2>/dev/null; then
+    NPY_PYTHON=python3
+  else
+    NPY_PYTHON=$(timeout 600 nix-shell -p 'python3.withPackages (ps: [ ps.numpy ])' --run 'command -v python3')
+  fi
+fi
+export NPY_PYTHON
 # shellcheck disable=SC2016  # the job script expands its own variables
 for s in "$@"; do
   for m in "${modes[@]}"; do printf '%s\t%s\n' "$s" "$m"; done

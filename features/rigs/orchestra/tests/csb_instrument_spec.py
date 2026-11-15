@@ -294,6 +294,9 @@ def legato(pers, groups, zones, gnames):
     print(f"        big_leap_old_fade_ms {p('$1qyra')}")
     print(f"        big_leap_new_fade_ms {big_fade}")
     print("        in_phrase_release_db 0")
+    # the old note's release starts after the transition (null test, CSB Solo
+    # Trumpet: Kontakt's in-phrase release 5.7 ms behind ours)
+    print("        in_phrase_release_delay_ms 5.7")
     seg0 = flex[0][0] if flex else 0
     print(f"        lt_seg0_ms_low_latency {seg0}")
     print(f"        lt_seg0_ms_expressive {seg0}")

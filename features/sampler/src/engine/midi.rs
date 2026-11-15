@@ -2134,7 +2134,8 @@ impl SampleEngine {
             };
             // Kontakt plays the release `wait(2000)` µs after the note-off
             // (KSP 20788) — the spec's `release_delay_ms`.
-            self.spawn_extra_hold = ms_to_frames_f(perf.release_delay_ms, self.sample_rate);
+            self.spawn_extra_hold =
+                ms_to_frames_f(perf.release_delay_ms, self.sample_rate) + self.release_extra_hold;
             // Decoded group curves: every release layer plays, crossfaded by
             // CC36 (= last CC1) and CC2 — like the body it ends.
             let curves = self

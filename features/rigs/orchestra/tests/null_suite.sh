@@ -90,13 +90,18 @@ remote_dir() {
   fi
 }
 
-# python with numpy (null_test.py): the system one if it has it, else nix
-npy() {
+# python with numpy (null_test.py): the system one if it has it, else nix's,
+# resolved once per run (a nix-shell per call cost seconds each, several per
+# mode). NPY_PYTHON overrides; null_all.sh resolves it once for every job.
+if [ -z "${NPY_PYTHON:-}" ]; then
   if python3 -c "import numpy" 2>/dev/null; then
-    python3 -I "$@"
+    NPY_PYTHON=python3
   else
-    timeout 3000 nix-shell -p 'python3.withPackages (ps: [ ps.numpy ])' --run "python3 -I $(printf '%q ' "$@")"
+    NPY_PYTHON=$(timeout 600 nix-shell -p 'python3.withPackages (ps: [ ps.numpy ])' --run 'command -v python3')
   fi
+fi
+npy() {
+  "$NPY_PYTHON" -I "$@"
 }
 
 flags_for() {

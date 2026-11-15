@@ -67,6 +67,44 @@ pub fn load_strings(
     Ok(())
 }
 
+/// Parse one instrument of `library` once, for many rigs: the patch carries a
+/// shared sample cache, so every rig [`install_patch`] puts it in reads the
+/// same decoded samples (an offline renderer running many takes).
+///
+/// # Errors
+///
+/// Returns an error if the spec or the instrument's zones cannot be loaded.
+pub fn load_patch(library: &Library, instrument: &str) -> Result<sampler::PlayerPatch, String> {
+    let root = Path::new(library.root);
+    let zones = root.join("_patches").join(instrument).join("library.styx");
+    let mut patch = sampler::PlayerPatch::load_merged(Path::new(library.config), &zones, root)
+        .map_err(|e| e.to_string())?;
+    patch.shared_cache = Some(sampler::engine::cache::SampleCache::with_prepared(
+        patch.prepared_cache_dir.as_deref(),
+    ));
+    Ok(patch)
+}
+
+/// Install a [`load_patch`] patch into `rig` under `id`, playing `mic` only —
+/// what [`load_instrument`] does, without parsing again.
+///
+/// # Errors
+///
+/// Returns an error if the rig's bank is poisoned.
+pub fn install_patch(
+    rig: &SamplerRig,
+    id: &str,
+    patch: sampler::PlayerPatch,
+    instrument: &str,
+    mic: &str,
+) -> Result<(), String> {
+    rig.load_patch(id, patch, "library", instrument, mic)
+        .map_err(|e| e.to_string())?;
+    rig.set_solo_mic(id, Some(mic.to_string()));
+    rig.set_midi_channel(id, 0);
+    Ok(())
+}
+
 /// A sampled orchestral library: where it is installed and which spec drives
 /// it. Everything about one of its instruments lives in those two places —
 /// the spec (`specs/<library>.styx`) and the instrument's patch folder

@@ -339,6 +339,19 @@ impl SamplerBank {
         Ok(())
     }
 
+    /// Install an already-loaded patch under `id` (see
+    /// [`SamplerRig::load_patch`](crate::SamplerRig::load_patch)).
+    pub fn load_patch(
+        &mut self,
+        id: impl Into<InstrumentId>,
+        patch: crate::PlayerPatch,
+        name: impl Into<String>,
+        section: impl Into<String>,
+        mic: impl Into<String>,
+    ) {
+        self.install_patch(id.into(), patch, name.into(), section, mic);
+    }
+
     /// Wrap a loaded [`PlayerPatch`](crate::PlayerPatch) into a bank instrument
     /// slot under `id`.
     fn install_patch(

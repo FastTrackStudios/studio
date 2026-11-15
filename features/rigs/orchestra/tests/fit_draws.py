@@ -19,7 +19,6 @@ onset and the next note-on. Prints the fitted list and writes our render
 with it to <out.wav>. No knowledge of which notes draw is needed.
 """
 import os, re, struct, subprocess, sys, tempfile
-from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
@@ -28,6 +27,9 @@ from null_test import SR, load  # noqa: E402
 
 MAX_DRAWS = 400
 REFINE_DB = -30.0
+REFINE_ROUNDS = 3
+# trial renders per batch (each ~27 MB, held until the chunk is scored)
+REFINE_CHUNK = 32
 
 
 def note_ons(path):
@@ -71,19 +73,55 @@ def note_ons(path):
 VOICE = re.compile(r"^\[v\d+\]\s+([\d.]+)s\s+(.*)$")
 
 
+def render_batch(binary, section, mid, flag, jobs, keep=True):
+    """Our renders of `mid`, one per `(values, out, trace[, window])` job — `values`
+    forced through `flag`; with `trace`, also the voices started as (time,
+    description) in order. One `render_css_live --batch` process: the
+    instrument loads once and the jobs render side by side, each on a fresh
+    rig (the same WAV a single run gives)."""
+    jobs = [j if len(j) == 4 else (*j, None) for j in jobs]
+    lines = []
+    for values, out, trace, window in jobs:
+        args = []
+        if window is not None:
+            args += ["--window-frames", f"{window[0]},{window[1]}"]
+        if values is not None:
+            args += [flag, ",".join(str(v) for v in values)]
+        # FIT_EXTRA: other draws held fixed for every render ("--tunes 0,0,…")
+        args += os.environ.get("FIT_EXTRA", "").split()
+        if trace:
+            args.append("--trace")
+        lines.append("\t".join([mid, out, " ".join(args)]))
+    fd, listing = tempfile.mkstemp(suffix=".tsv")
+    with os.fdopen(fd, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    try:
+        r = subprocess.run(
+            [binary, "--batch", listing, "--section", section, "--library", os.environ.get("CS_LIBRARY", "strings")],
+            check=True, capture_output=True, text=True, timeout=1800,
+        )
+    finally:
+        os.unlink(listing)
+    # each job prints its trace, then `wrote <out> …`
+    voices, block = {}, []
+    for line in r.stdout.splitlines():
+        if line.startswith("wrote "):
+            out = next((o for _, o, _, _ in jobs if line.startswith(f"wrote {o} ")), None)
+            voices[out] = [(float(m.group(1)), m.group(2)) for m in map(VOICE.match, block) if m]
+            block = []
+        else:
+            block.append(line)
+    results = []
+    for _, out, _, _ in jobs:
+        results.append((load(out), voices.get(out, [])))
+        if not keep:
+            os.unlink(out)
+    return results
+
+
 def render(binary, section, mid, flag, values, out, trace=False):
-    """Our render with `values` forced; with `trace`, also the voices started
-    as (time, description) in order."""
-    args = [binary, mid, out, "--section", section, "--library", os.environ.get("CS_LIBRARY", "strings")]
-    if values is not None:
-        args += [flag, ",".join(str(v) for v in values)]
-    # FIT_EXTRA: other draws held fixed for every render ("--tunes 0,0,…")
-    args += os.environ.get("FIT_EXTRA", "").split()
-    if trace:
-        args.append("--trace")
-    r = subprocess.run(args, check=True, capture_output=True, text=True, timeout=900)
-    voices = [(float(m.group(1)), m.group(2)) for m in map(VOICE.match, (r.stdout + r.stderr).splitlines()) if m]
-    return load(out), voices
+    """One render (see [`render_batch`])."""
+    return render_batch(binary, section, mid, flag, [(values, out, trace)])[0]
 
 
 def energy(x):
@@ -104,10 +142,9 @@ def main():
     cands = list(cands)
     k = load(kon)
     tmp = tempfile.mkdtemp()
-    # the candidates render side by side (separate processes)
-    pool = ThreadPoolExecutor(max_workers=len(cands))
-    traced = dict(zip(cands, pool.map(
-        lambda c: render(binary, section, mid, flag, [c] * MAX_DRAWS, f"{tmp}/c{c}.wav", trace=True), cands)))
+    # the candidates render side by side, in one batch
+    traced = dict(zip(cands, render_batch(
+        binary, section, mid, flag, [([c] * MAX_DRAWS, f"{tmp}/c{c}.wav", True) for c in cands])))
     renders = {c: v[0] for c, v in traced.items()}
     n = min(len(k), *(len(r) for r in renders.values()))
     ons = note_ons(mid)
@@ -134,28 +171,37 @@ def main():
     # key of an alternating burst), rendered above with the same forced
     # value: re-search such a draw (another drawn note within the second
     # before it) that leaves more than REFINE_DB, every other draw held at
-    # its fit.
+    # its fit. Every such window's candidates render in the same batches
+    # (each against the current draws), the improvements apply together, and
+    # the search repeats until nothing changes (at most REFINE_ROUNDS).
+    for _ in range(REFINE_ROUNDS):
+        ours, _ = render(binary, section, mid, flag, draws, out_wav)
+        todo = []
+        for i, (a, b) in enumerate(windows):
+            if not any(0 < a - a0 <= SR for a0, _ in windows[:i]):
+                continue
+            rel = energy(k[a:b] - ours[a:b]) / (energy(k[a:b]) + 1e-20)
+            if 10 * np.log10(rel + 1e-20) > REFINE_DB:
+                todo.append(i)
+        if not todo:
+            break
+        trials = [(i, c) for i in todo for c in cands if c != draws[i]]
+        best = {i: (draws[i], energy(k[a:b] - ours[a:b])) for i in todo for a, b in [windows[i]]}
+        for n in range(0, len(trials), REFINE_CHUNK):
+            chunk = trials[n:n + REFINE_CHUNK]
+            # each trial renders only up to its window and keeps just that
+            jobs = [(draws[:i] + [c] + draws[i + 1:], f"{tmp}/r{i}_{c}.wav", False, windows[i]) for i, c in chunk]
+            for (i, c), (y, _) in zip(chunk, render_batch(binary, section, mid, flag, jobs, keep=False)):
+                a, b = windows[i]
+                e = energy(k[a:b] - y[: b - a])
+                if e < best[i][1]:
+                    best[i] = (c, e)
+        changed = [i for i in todo if best[i][0] != draws[i]]
+        for i in changed:
+            draws[i] = best[i][0]
+        if not changed:
+            break
     ours, _ = render(binary, section, mid, flag, draws, out_wav)
-    for i, (a, b) in enumerate(windows):
-        # only a window that can hold an earlier drawn note's tail
-        if not any(0 < a - a0 <= SR for a0, _ in windows[:i]):
-            continue
-        rel = energy(k[a:b] - ours[a:b]) / (energy(k[a:b]) + 1e-20)
-        if 10 * np.log10(rel + 1e-20) <= REFINE_DB:
-            continue
-        best, best_e = draws[i], energy(k[a:b] - ours[a:b])
-        others = [c for c in cands if c != draws[i]]
-
-        def trial(c, i=i):
-            y, _ = render(binary, section, mid, flag, draws[:i] + [c] + draws[i + 1 :], f"{tmp}/r{c}.wav")
-            return energy(k[a:b] - y[a:b])
-
-        for c, e in zip(others, pool.map(trial, others)):
-            if e < best_e:
-                best, best_e = c, e
-        if best != draws[i]:
-            draws[i] = best
-            ours, _ = render(binary, section, mid, flag, draws, out_wav)
     print(",".join(str(v) for v in draws))
     print(f"{len(draws)} draws", file=sys.stderr)
 

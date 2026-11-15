@@ -611,6 +611,30 @@ impl SamplerRig {
             .load_instrument_with_config(id, config_path, zones_path, samples_root, section, mic)
     }
 
+    /// Install an already-loaded [`PlayerPatch`](crate::PlayerPatch) — the
+    /// spec parsed once, cloned into many rigs (with a
+    /// [`shared_cache`](crate::PlayerPatch::shared_cache), every rig reads the
+    /// same decoded samples): an offline renderer running many takes of one
+    /// instrument.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bank is poisoned.
+    pub fn load_patch(
+        &self,
+        id: impl Into<InstrumentId>,
+        patch: crate::PlayerPatch,
+        name: impl Into<String>,
+        section: impl Into<String>,
+        mic: impl Into<String>,
+    ) -> eyre::Result<()> {
+        self.bank()
+            .lock()
+            .map_err(|_| eyre::eyre!("sampler bank lock poisoned"))?
+            .load_patch(id, patch, name, section, mic);
+        Ok(())
+    }
+
     /// Load a `.signalpack`.
     ///
     /// # Errors

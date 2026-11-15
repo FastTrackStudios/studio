@@ -424,6 +424,10 @@ pub struct PlayerPatch {
     /// `SampleEngine` builds its cache directly from this rather than from
     /// disk, so no on-disk source files need exist.
     pub pack: Option<SignalPcmPack>,
+    /// A sample cache shared with other engines built from this patch (one
+    /// decode per sample, process-wide): offline renderers that run many
+    /// engines over the same library. `None`: each engine builds its own.
+    pub shared_cache: Option<engine::cache::SampleCache>,
 }
 
 /// Resolved zone match: where to read the sample plus how to play it.
@@ -490,6 +494,7 @@ impl PlayerPatch {
             wavetable_paths,
             prepared_cache_dir,
             pack: None,
+            shared_cache: None,
         })
     }
 
@@ -551,6 +556,7 @@ impl PlayerPatch {
             wavetable_paths: Vec::new(),
             prepared_cache_dir: None,
             pack: None,
+            shared_cache: None,
         }
     }
 
@@ -722,6 +728,7 @@ impl PlayerPatch {
             wavetable_paths: Vec::new(),
             prepared_cache_dir: None,
             pack: Some(pack),
+            shared_cache: None,
         })
     }
 

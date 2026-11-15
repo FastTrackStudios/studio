@@ -955,6 +955,9 @@ pub struct SampleEngine {
     /// The release context a connection sets around its `spawn_release`
     /// (`ReleaseByHeldSpec`); `None` = decided at note-off.
     pub(crate) release_context: Option<crate::spec::ReleaseContext>,
+    /// Frames a release spawned now waits beyond `release_delay_ms` (the
+    /// transition's in-phrase release delay).
+    pub(crate) release_extra_hold: usize,
     /// Extra file frames the sustain body being spawned right now is entered
     /// at (the >1-octave transition body's 75 ms offset).
     pub(crate) spawn_extra_start: usize,
@@ -1060,9 +1063,10 @@ impl SampleEngine {
             .performance
             .attack_ms
             .map_or(0, |ms| ms_to_frames(ms, sample_rate));
-        let cache = match patch.pack.clone() {
-            Some(pack) => SampleCache::with_pack(pack),
-            _ => {
+        let cache = match (patch.shared_cache.clone(), patch.pack.clone()) {
+            (Some(shared), _) => shared,
+            (None, Some(pack)) => SampleCache::with_pack(pack),
+            (None, None) => {
                 // The prepared-cache dir is a native (on-disk) concept —
                 // `engine-native` only. Wasm patches always carry a pack.
                 #[cfg(not(target_arch = "wasm32"))]
@@ -1267,6 +1271,7 @@ impl SampleEngine {
             seq_rr_base: 0,
             release_gain_override: None,
             release_context: None,
+            release_extra_hold: 0,
             spawn_extra_start: 0,
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,
             zone_rr_last_slots: HashMap::with_capacity(128),

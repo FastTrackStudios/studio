@@ -809,6 +809,11 @@ pub struct KontaktTransitionSpec {
     pub big_leap_old_fade_ms: f32,
     pub big_leap_new_fade_ms: f32,
     pub in_phrase_release_db: f32,
+    /// The in-phrase release starts this long after the transition (on top
+    /// of `release_delay_ms`); 0 = with it. Null-tested on CSB Solo Trumpet:
+    /// Kontakt's starts 5.7 ms after ours did.
+    #[facet(default)]
+    pub in_phrase_release_delay_ms: f32,
     /// First envelope segment's length: low latency (CC68 = 108), expressive (127).
     pub lt_seg0_ms_low_latency: f32,
     pub lt_seg0_ms_expressive: f32,

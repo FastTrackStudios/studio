@@ -75,7 +75,9 @@ impl SampleEngine {
         // 2. The old note's "note in phrase" release, at a flat level.
         self.release_gain_override = Some(db_to_gain(kt.in_phrase_release_db));
         self.release_context = Some(crate::spec::ReleaseContext::InPhrase);
+        self.release_extra_hold = ms(kt.in_phrase_release_delay_ms);
         self.spawn_release(from);
+        self.release_extra_hold = 0;
         self.release_context = None;
         self.release_gain_override = None;
 
