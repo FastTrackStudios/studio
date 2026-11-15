@@ -533,26 +533,27 @@ articulations (
         // against Kontakt with tests/marcato_fit.py --model: −34..−43 dB.
         marcato_transition {
             xfade_ms        225                     // $a3zg3
-            split           (50 60)                 // $igmiu soft / hard
+            split           (50 50)                 // $igmiu 50 on every CSB patch
             split_big       50
-            node_divisor    ((150 90) (300 60))     // $x444h
+            node_divisor    ((0 90))                // $x444h 90, flat, every CSB patch
             body_offset_ms  (60 20)                 // $1fvjk soft / hard
             body_offset_big_ms (10 0)
-            cc19_soft       ((150 0) (300 60) (500 0))   // $313em
-            cc19_other      (100 0 96)              // hard, > octave soft, > octave hard
-            cc18_soft_step  ((150 127) (300 52) (500 52)) // $eaghu, interval ≤ 2
-            cc18_soft_leap  ((150 96) (300 52) (500 52))
-            cc18_other      (105 52 127)
+            cc19_soft       ((0 0))                 // set_controller(19, $313em = 0) for a soft connected note (KSP 14063-14070)
+            cc19_other      (90 127 127)            // hard $s3dc1 = 90; beyond an octave 127
+            cc18_soft_step  ((0 127))               // CSB never sets CC18: its marcato groups have no CC18 envelope
+            cc18_soft_leap  ((0 127))
+            cc18_other      (127 127 127)
             // The marcato mod groups' two volume ENV_FLEX: CC19 → level 1,
             // CC18 → levels 1-2 (level −1 = the CC ÷ 127).
-            body_env_cc19 ( {time_ms 1.0, level -1, curve 0.505}
-                            {time_ms 299.0, level 1.0, curve 0.67} )
+            body_env_cc19 ( {time_ms 20.0, level -1, curve 0.505}   // the marcato mod groups ENV_FLEX: CC19 -> levels 1 and 2
+                            {time_ms 280.0, level -1, curve 0.5}
+                            {time_ms 1200.0, level 1.0, curve 0.5} )
             body_env_cc18 ( {time_ms 1.0, level -1, curve 0.5}
                             {time_ms 559.0, level -1, curve 0.505}
                             {time_ms 1440.0, level 1.0, curve 0.67} )
             // The old body loses the CC19=127 step mod (0.5946): measured, a
             // linear sink from 45 ms over 270 ms (flat across bands).
-            old_sink_level    0.4054
+            old_sink_level    1.0   // no CC19 step mod in CSB: the old body does not sink
             old_sink_start_ms 45
             old_sink_ms       270
             glide_semitone  ((75 0) (100 0) (500 0))   // CSB ships its bend switches off ($upjkh = $ma0b1 = 0 on every patch, 16615): no scoop

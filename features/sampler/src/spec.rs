@@ -1197,6 +1197,8 @@ pub struct LegatoOverlay {
 /// The overridable [`MarcatoTransitionSpec`] fields of a section.
 #[derive(Debug, Clone, Default, Facet)]
 pub struct MarcatoOverlay {
+    /// The swell's XTime (`$a3zg3`; CSB differs per instrument).
+    pub xfade_ms: Option<f32>,
     pub lt_offset_ms_by_class: Option<[f32; 2]>,
     pub lt_db_by_class: Option<[f32; 2]>,
     pub lt_retire_ms_by_class: Option<[f32; 2]>,
@@ -1374,6 +1376,9 @@ impl SectionOverlay {
 
 impl MarcatoOverlay {
     fn apply(&self, t: &mut MarcatoTransitionSpec) {
+        if let Some(v) = self.xfade_ms {
+            t.xfade_ms = v;
+        }
         if self.lt_offset_ms_by_class.is_some() {
             t.lt_offset_ms_by_class = self.lt_offset_ms_by_class;
         }

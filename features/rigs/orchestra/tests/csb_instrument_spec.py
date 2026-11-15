@@ -238,6 +238,7 @@ def marcato(pers, lt_layers):
     # hard = velocity >= $kxbiw, no IOI term (the engine tests velocity > hard_velocity)
     print(f"            hard_velocity {p('$kxbiw') - 1}")
     print("            hard_ioi_ms 0")
+    print(f"            xfade_ms {p('$a3zg3')}")  # the swell's XTime, per instrument
     print(f"            body_offset_ms ({p('$yp2sq')} {p('$yp2sq')})")
     # LT offset, level and previous-LT retire by attack class (soft, hard)
     print(f"            lt_offset_ms_by_class ({p('$5ibvn')} {p('$cblef')})")
