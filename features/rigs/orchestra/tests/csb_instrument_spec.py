@@ -210,7 +210,7 @@ def rips(pers, zones, gnames):
 DYN_CODE = {"p": 1, "mf": 2, "f": 3, "ff": 4, "fff": 4}
 
 
-def marcato_lt_layers(zones, gnames):
+def marcato_lt_layers(zones, gnames, leg="Leg"):
     """`lt_layers`: each `marc leg <x>` group with the `marcato mod <y>` of its
     dynamic code, named by the recordings each holds (a marcato group that
     holds a Sus recording, not a Marcato, has no marcato layer to pair)."""
@@ -227,7 +227,7 @@ def marcato_lt_layers(zones, gnames):
             if rec:
                 out[DYN_CODE[code_name]] = max(rec, key=rec.get)
         return out
-    legs, marcs = held("marc leg", "Leg"), held("marcato mod", "Marcato")
+    legs, marcs = held("marc leg", leg), held("marcato mod", "Marcato")
     return [(marcs[c], legs[c]) for c in sorted(legs) if c in marcs]
 
 

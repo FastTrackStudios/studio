@@ -192,7 +192,7 @@ def main():
         if cs:
             emit_curves(aid, cs, list(dict.fromkeys(dyn for dyn, _, _ in cs)),
                         layer_fx(d, all_groups, prefix, rec))
-    marcato(pers)
+    marcato(pers, zones, group_names)
     print(")")
     two_player = os.path.basename(os.path.normpath(d))[4:] in TWO_PLAYER
     legato(pers, zones, group_names, two_player)
@@ -212,7 +212,7 @@ def marcato_random_pitch(pers):
     return (r * r * 1200.0, lo, lo + (p("$01q3n") or 0) / 100, p("$na4ur") or 0)
 
 
-def marcato(pers):
+def marcato(pers, zones=None, group_names=None):
     p = lambda v: css.one(pers, v)  # noqa: E731
     off = p("$5ibvn")  # the one LT start offset (CSS: $ggt00 / $v0rbb / $5exar by IOI)
     vol = css.fmt(p("$b23jt") / 10)  # the one LT volume, deci-dB (CSS: 4 by IOI and interval)
@@ -223,6 +223,15 @@ def marcato(pers):
     print(f"            lt_offset_ms ((0 {off}))")
     print(f"            lt_db_step ((0 {vol}))")
     print(f"            lt_db_leap ((0 {vol}))")
+    if zones is not None:
+        # each marc-leg group with the marcato group of its dynamic code
+        # (CSW: every marc-leg group holds the one MLeg mf recording set)
+        import csb_instrument_spec as csb  # noqa: PLC0415 (csb imports this module)
+
+        pairs = csb.marcato_lt_layers(zones, group_names, leg="MLeg")
+        if pairs:
+            txt = " ".join(f"{{dynamic {m}, lt_dynamic {l}, gain_index 0}}" for m, l in pairs)
+            print(f"            lt_layers ({txt})")
     print("        }")
     print("    }")
 

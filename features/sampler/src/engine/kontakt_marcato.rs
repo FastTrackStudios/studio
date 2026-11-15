@@ -304,35 +304,51 @@ impl SampleEngine {
             if g <= 0.0 {
                 continue;
             }
-            let idx = self.patch.spec.zones.iter().position(|z| {
+            let fits = |z: &crate::spec::ZoneSpec| {
                 z.articulation.eq_ignore_ascii_case(&mt.lt_articulation)
                     && z.direction.eq_ignore_ascii_case(direction)
                     && z.interval == interval
                     && z.dynamic.eq_ignore_ascii_case(&layer.lt_dynamic)
                     && (z.key_min..=z.key_max).contains(&lower)
-                    && z.marcato_start > 0
                     && self
                         .solo_mic
                         .as_ref()
                         .is_none_or(|m| z.mic.eq_ignore_ascii_case(m))
-            });
-            let Some(idx) = idx else { continue };
+            };
+            // A marcato row of a legato file (CSS, CSB), else a recording of
+            // its own (CSW's MLeg: no marcato rows, played from its start at
+            // its own level).
+            let zones = &self.patch.spec.zones;
+            let marked = zones.iter().position(|z| fits(z) && z.marcato_start > 0);
+            let (idx, own) = match marked {
+                Some(i) => (i, false),
+                None => match zones.iter().position(|z| fits(z) && z.marcato_start == 0) {
+                    Some(i) => (i, true),
+                    None => continue,
+                },
+            };
             let z = &self.patch.spec.zones[idx];
             // A section whose transition file is entered by one marcato row
             // only (Cellos: one 3984 row per file, where the violins list
             // one per marc-leg layer) plays that row for every layer.
-            let Some(&zone_db) = z
-                .marcato_gains_db
-                .get(layer.gain_index as usize)
-                .or_else(|| z.marcato_gains_db.last())
-            else {
-                continue;
+            let zone_db = if own {
+                z.gain_db
+            } else {
+                let Some(&db) = z
+                    .marcato_gains_db
+                    .get(layer.gain_index as usize)
+                    .or_else(|| z.marcato_gains_db.last())
+                else {
+                    continue;
+                };
+                db
             };
             // Past the zone's own start: marcato zones enter the same file
             // at `marcato_start`, then the IOI offset.
             // the marcato row's own start, then the script's offset (which
             // the zone's start-modulation range may limit)
             let offset = (z.marcato_start as usize).saturating_sub(z.sample_start as usize)
+                * usize::from(!own)
                 + self.script_offset(idx, ms_to_frames_f(lt_ms, self.sample_rate));
             let gain = g * db_to_gain(zone_db - z.gain_db + lt_db);
             // Pitched from the lower note, where Kontakt maps the zone.
