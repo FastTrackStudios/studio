@@ -555,9 +555,9 @@ articulations (
             old_sink_level    0.4054
             old_sink_start_ms 45
             old_sink_ms       270
-            glide_semitone  ((75 40) (100 10) (500 10))   // $ruv02, cents
-            glide_tone      ((75 30) (100 10) (500 0))
-            glide_wide      ((75 20) (100 0) (500 0))
+            glide_semitone  ((75 0) (100 0) (500 0))   // CSB ships its bend switches off ($upjkh = $ma0b1 = 0 on every patch, 16615): no scoop
+            glide_tone      ((75 0) (100 0) (500 0))
+            glide_wide      ((75 0) (100 0) (500 0))
             glide_ms        60                      // $1mwwo ticks
             lt_articulation Leg
             lt_layers ( {dynamic mf, lt_dynamic mf, gain_index 0}
