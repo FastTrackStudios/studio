@@ -29,6 +29,7 @@ Kontakt and fits as before.
 
 Env: BIN another render_css_live, RENDER_THREADS per render process.
 """
+import struct
 import argparse, concurrent.futures as cf, csv, hashlib, json, os, subprocess, sys, tempfile, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -92,6 +93,19 @@ def draw_files(lib, mode):
     if lib == "woodwinds":
         return [("--rrs", "draws_rr.txt"), ("--tunes", "draws.txt")]
     return [("--rrs", "draws.txt")]
+
+
+def wav_complete(path):
+    """The WAV's data is all there: its header's data size (a Kontakt render
+    or copy cut short keeps the full size in the header)."""
+    try:
+        with open(path, "rb") as f:
+            b = f.read(4096)
+        j = b.find(b"data")
+        n = struct.unpack("<I", b[j + 4 : j + 8])[0] if j > 0 else 0
+        return n > 0 and os.path.getsize(path) - (j + 8) >= n
+    except OSError:
+        return False
 
 
 def sha_file(path, h):
@@ -205,7 +219,7 @@ def section_job(row, modes, args, bin_path, bin_hash, lhash):
     pairs = [Pair(row, m) for m in modes]
     for p in pairs:
         gen_probe(p)
-        if not (os.path.exists(p.k1) and os.path.exists(p.k2)):
+        if not (wav_complete(p.k1) and wav_complete(p.k2)):
             slow.append((p, "kontakt"))
             continue
         k = p.key(bin_hash, lhash + phash)

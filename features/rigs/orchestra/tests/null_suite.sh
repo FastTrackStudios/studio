@@ -102,27 +102,52 @@ flags_for() {
   esac
 }
 
+# A WAV whose data is all there (its header's data size; a render or copy
+# cut short keeps the full size in the header).
+wav_complete() {
+  [ -f "$1" ] && python3 -I -c '
+import os, struct, sys
+b = open(sys.argv[1], "rb").read(4096)
+j = b.find(b"data")
+n = struct.unpack("<I", b[j + 4 : j + 8])[0] if j > 0 else 0
+sys.exit(0 if n > 0 and os.path.getsize(sys.argv[1]) - (j + 8) >= n else 1)' "$1"
+}
+
 for mode in "${modes[@]}"; do
   d="$work/$mode"
   mkdir -p "$d"
   read -r -a fl <<< "$(flags_for "$mode")"
   python3 -I "$here/gen_probe.py" "$d/$mode.mid" "$d/${mode}_manifest.tsv" "${fl[@]}" "--transpose=$tr" >/dev/null
 
-  if [ -z "${SKIP_KONTAKT:-}" ] || [ ! -f "$d/${mode}_kontakt_r2.wav" ]; then
+  if [ -z "${SKIP_KONTAKT:-}" ] || ! wav_complete "$d/${mode}_kontakt_r1.wav" \
+      || ! wav_complete "$d/${mode}_kontakt_r2.wav"; then
     remote_dir
     for r in r1 r2; do
+      out="$d/${mode}_kontakt_$r.wav"
+      [ -n "${SKIP_KONTAKT:-}" ] && wav_complete "$out" && continue
       python3 -I "$here/make_ab_rpp.py" "$chain" "$d/$mode.mid" \
         "$remote/${mode}_kontakt_$r.wav" "$d/${mode}_$r.rpp" >/dev/null
-      timeout 120 scp -q "$d/${mode}_$r.rpp" "$host:$remote/"
-      # A headless REAPER of its own: renders, then quits.
-      # REAPER may return before the render is done: wait for it to exit
-      timeout 900 ssh "$host" "/Applications/REAPER.app/Contents/MacOS/REAPER -newinst -nosplash \
-        -cfgfile '$cfg' -renderproject '$remote/${mode}_$r.rpp' >/dev/null 2>&1
-        for i in \$(seq 280); do
-          pgrep -f '^/Applications/REAPER.app/Contents/MacOS/REAPER .*/${mode}_${r}[.]rpp' >/dev/null || break
-          sleep 3
-        done" || true
-      timeout 120 scp -q "$host:$remote/${mode}_kontakt_$r.wav" "$d/"
+      # a finished render already on voyager (a copy that was cut short)
+      if [ -n "${SKIP_KONTAKT:-}" ]; then
+        timeout 600 scp -q "$host:$remote/${mode}_kontakt_$r.wav" "$d/" 2>/dev/null
+        wav_complete "$out" && continue
+      fi
+      for attempt in 1 2; do
+        timeout 120 scp -q "$d/${mode}_$r.rpp" "$host:$remote/"
+        # A headless REAPER of its own: renders, then quits.
+        # REAPER may return before the render is done: wait for it to exit
+        timeout 900 ssh "$host" "/Applications/REAPER.app/Contents/MacOS/REAPER -newinst -nosplash \
+          -cfgfile '$cfg' -renderproject '$remote/${mode}_$r.rpp' >/dev/null 2>&1
+          for i in \$(seq 280); do
+            pgrep -f '^/Applications/REAPER.app/Contents/MacOS/REAPER .*/${mode}_${r}[.]rpp' >/dev/null || break
+            sleep 3
+          done" || true
+        # the WAV header holds the full length: a copy or render cut short
+        # (a slow link, a REAPER that quit early) shows as missing data
+        timeout 600 scp -q "$host:$remote/${mode}_kontakt_$r.wav" "$d/"
+        wav_complete "$out" && break
+        echo "!! $section $mode $r: incomplete Kontakt render (attempt $attempt)" >&2
+      done
     done
   fi
 
