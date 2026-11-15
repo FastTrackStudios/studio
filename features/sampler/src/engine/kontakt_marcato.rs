@@ -133,6 +133,11 @@ impl SampleEngine {
         ioi_ms: f32,
         mt: &MarcatoTransitionSpec,
     ) {
+        self.trace_push(TraceKind::Transition {
+            from,
+            to,
+            portamento: false,
+        });
         // The script measures the IOI in whole ms of `$ENGINE_UPTIME`.
         let ioi = ioi_ms.max(0.0) as i64;
         let interval = to.abs_diff(from);
@@ -210,6 +215,29 @@ impl SampleEngine {
             sink.as_ref(),
         );
 
+        // the script's set_controller: routes reading the controller follow
+        if mt.cc19_controller > 0 {
+            if let Some(slot) = self.cc_values.get_mut(usize::from(mt.cc19_controller)) {
+                *slot = cc19.clamp(0.0, 127.0) as u8;
+            }
+        }
+        // A note inside the previous transition's crossfade loop waits for
+        // that loop's next tick: everything it starts below starts late.
+        let now = self.frames_rendered;
+        let busy_hold = if mt.busy_tick_ms > 0.0 && now < self.line().marcato_loop_end {
+            ms(mt.busy_tick_ms)
+        } else {
+            0
+        };
+        let outer_hold = self.spawn_extra_hold;
+        self.spawn_extra_hold += busy_hold;
+        let loop_ms = if bend != 0.0 {
+            mt.xfade_ms.max(mt.glide_ms)
+        } else {
+            mt.xfade_ms
+        };
+        self.line_mut().marcato_loop_end = now + busy_hold as u64 + ms(loop_ms) as u64;
+
         // 2. The old note's in-phrase release.
         self.release_gain_override = Some(db_to_gain(mt.in_phrase_release_db));
         self.release_context = Some(crate::spec::ReleaseContext::InPhrase);
@@ -282,6 +310,7 @@ impl SampleEngine {
         if connected_from.is_some_and(|v| velocity >= v) {
             self.spawn_marcato_overlay_unconditional(to, velocity);
         }
+        self.spawn_extra_hold = outer_hold;
         let l = self.line_mut();
         l.note = Some(to);
         l.marcato_ioi = Some(ioi as f32);

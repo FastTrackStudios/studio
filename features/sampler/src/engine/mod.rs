@@ -416,6 +416,10 @@ pub(crate) struct LegatoLine {
     /// The IOI (ms) of the CSS marcato transition that reached the sounding
     /// note — `None` for a phrase's first note. Its note-off fades by it.
     marcato_ioi: Option<f32>,
+    /// Engine frame the last marcato transition's tick loop ends at (the
+    /// script's crossfade loop, `MarcatoTransitionSpec::busy_tick_ms`); 0 =
+    /// none running.
+    marcato_loop_end: u64,
     /// The sounding note was reached by a legato connection (its release
     /// is a phrase end, not a lone first note).
     connected: bool,
@@ -434,6 +438,7 @@ impl Default for LegatoLine {
             last_activity: 0,
             last_onset_frame: 0,
             marcato_ioi: None,
+            marcato_loop_end: 0,
             connected: false,
         }
     }

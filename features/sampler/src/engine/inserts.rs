@@ -27,6 +27,8 @@
 
 use std::sync::Arc;
 
+use super::voice::FlexEnv;
+
 use crate::spec::{FxRouteSpec, FxStageSpec, GroupFxSpec, kontakt_table_value};
 
 /// Frames between coefficient updates (as the voice filter envelope).
@@ -84,6 +86,11 @@ struct PlanRoute {
     lut: [f32; 128],
     /// Smoothing coefficient per update (1 = no lag).
     coef: f32,
+    /// An envelope source (`FxRouteSpec::env`): its segments, a level < 0
+    /// standing for `cc` ÷ 127; empty = a controller route.
+    env: Vec<(f32, f32, f32)>,
+    /// `intensity × span` the envelope's level moves the knob by.
+    env_depth: f32,
 }
 
 /// A dynamic layer's insert chain, shared by its voices.
@@ -202,6 +209,12 @@ fn plan_route(r: &FxRouteSpec, stage: u8, s: &PlanStage, sample_rate: f32) -> Op
         cc: r.cc,
         lut,
         coef,
+        env: r
+            .env
+            .iter()
+            .map(|e| (e.time_ms, e.level, e.curve))
+            .collect(),
+        env_depth: r.intensity * span,
     })
 }
 
@@ -226,6 +239,8 @@ pub struct InsertState {
     cur: [f32; MAX_ROUTES],
     tgt: [f32; MAX_ROUTES],
     sections: [[Section; MAX_SECTIONS]; MAX_STAGES],
+    /// The envelope of each envelope route, run per voice.
+    envs: [Option<FlexEnv>; MAX_ROUTES],
     /// Output gain per stage (resonance loss).
     gain: [f32; MAX_STAGES],
     /// Two memories per section per channel.
@@ -243,19 +258,50 @@ impl InsertState {
             cur: [0.0; MAX_ROUTES],
             tgt: [0.0; MAX_ROUTES],
             sections: [[Section::Off; MAX_SECTIONS]; MAX_STAGES],
+            envs: Default::default(),
             gain: [1.0; MAX_STAGES],
             mem: [[[[0.0; 2]; MAX_SECTIONS]; MAX_STAGES]; 2],
             countdown: 0,
         };
+        for (slot, r) in s.envs.iter_mut().zip(&s.plan.routes) {
+            if r.env.is_empty() {
+                continue;
+            }
+            let v = f32::from(cc(r.cc).min(127)) / 127.0;
+            let segs: Vec<(f32, f32, f32)> = r
+                .env
+                .iter()
+                .map(|&(t, l, c)| (t, if l < 0.0 { v } else { l }, c))
+                .collect();
+            *slot = FlexEnv::from_segments(&segs, 0.0, sample_rate as u32, true);
+        }
         s.set_ccs(cc);
+        s.advance_envs(0);
         s.cur = s.tgt;
         s
+    }
+
+    /// Step the envelope routes `frames` frames and take their levels as
+    /// the routes' targets (no lag: the envelope is the motion).
+    fn advance_envs(&mut self, frames: u16) {
+        for (i, e) in self.envs.iter_mut().enumerate() {
+            let Some(e) = e else { continue };
+            let mut lv = 0.0;
+            for _ in 0..frames.max(1) {
+                lv = e.next(false);
+            }
+            let v = lv * self.plan.routes[i].env_depth;
+            self.tgt[i] = v;
+            self.cur[i] = v;
+        }
     }
 
     /// The controllers' current values (read again every block).
     pub fn set_ccs(&mut self, cc: impl Fn(u8) -> u8) {
         for (t, r) in self.tgt.iter_mut().zip(&self.plan.routes) {
-            *t = r.lut[usize::from(cc(r.cc).min(127))];
+            if r.env.is_empty() {
+                *t = r.lut[usize::from(cc(r.cc).min(127))];
+            }
         }
     }
 
@@ -295,6 +341,7 @@ impl InsertState {
     pub fn tick(&mut self, l: f32, r: f32) -> (f32, f32) {
         if self.countdown == 0 {
             self.countdown = COEF_EVERY;
+            self.advance_envs(COEF_EVERY);
             self.update();
         }
         self.countdown -= 1;

@@ -680,7 +680,7 @@ impl FlexEnv {
     /// Advance one frame (respecting the sustain-hold freeze) and return the
     /// level. `released` = the voice has received note-off (freeze lifts).
     #[inline]
-    fn next(&mut self, released: bool) -> f32 {
+    pub(crate) fn next(&mut self, released: bool) -> f32 {
         let lvl = self.level_here();
         let frozen = !released && self.hold_end.is_some_and(|h| self.pos >= h);
         if !frozen {

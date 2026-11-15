@@ -504,6 +504,7 @@ articulations (
     }
     {
         id            Marcato
+        note_on_cc    ((19 127))   // set_controller(19, 127) on a fresh marcato note (KSP 11018)
         label         Marcato
         // A held, CC1-crossfaded body like the sustains (Kontakt's `marcato
         // mod` groups) — not a velocity-picked short. Null-tested: a first
@@ -532,6 +533,8 @@ articulations (
         // Connected marcato notes (KSP $ocjln=6, 18114-20402), null-tested
         // against Kontakt with tests/marcato_fit.py --model: −34..−43 dB.
         marcato_transition {
+            busy_tick_ms    1                       // the crossfade loop ticks $0cqdq = 1 ms: a note inside it waits a tick (KSP 15338-15355)
+            cc19_controller 19                      // set_controller(19, …): the marcato filter envelope reads it
             xfade_ms        225                     // $a3zg3
             split           (50 50)                 // $igmiu 50 on every CSB patch
             split_big       50

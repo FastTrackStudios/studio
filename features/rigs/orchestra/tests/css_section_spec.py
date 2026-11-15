@@ -128,10 +128,13 @@ def group_fx(d, all_groups, prefix):
         if not g["name"].startswith(head) or " " in g["name"][len(head):]:
             continue
         dyn = g["name"][len(head):]
-        # an envelope moving a stage (marcato's attack sweep) is not run: such
-        # a stage sits parked where the envelope starts, so leave it out
-        swept = {e.get("slot") for e in g.get("envelopes", [])
-                 if not e.get("bypassed") and e["target"] in FX_PARAMS and e.get("slot") is not None}
+        # an envelope moving a stage (CSB marcato's cutoff sweep): run as an
+        # envelope route when the decode names its internal slot ("index"),
+        # else the stage is left out (it sits parked where the envelope starts)
+        sweeps = {e.get("slot"): e for e in g.get("envelopes", [])
+                  if not e.get("bypassed") and e["target"] in FX_PARAMS and e.get("slot") is not None
+                  and e.get("kind") == "ENV_FLEX"}
+        swept = {k for k, e in sweeps.items() if e.get("index") is None}
         stages, at = [], {}
         for s in sorted(slots.get(i, []), key=lambda s: s["slot"]):
             if s["kind"] != 7 or s.get("bypass", True):
@@ -159,6 +162,18 @@ def group_fx(d, all_groups, prefix):
                 sign = -1 if m.get("negative") else 1
                 routes.append((at[m["slot"]], FX_PARAMS[m["target"]], m["cc"], sign * m["intensity"],
                                m["lag_ms"], pts))
+        for slot, e in sweeps.items():
+            if slot not in at or e.get("index") is None:
+                continue
+            # levels a controller sets (CC_TIME1 -> fm7_levelN of this envelope)
+            cc_of = {}
+            for m in g["mods"]:
+                t = m.get("target", "")
+                if m.get("slot") == e["index"] and m.get("source") == "CC_TIME1" and t.startswith("fm7_level"):
+                    cc_of[int(t[len("fm7_level"):])] = m["cc"]
+            cc = next(iter(cc_of.values()), 0)
+            segs = [(t, -1 if (k + 1) in cc_of else lv, c) for k, (t, lv, c) in enumerate(e["segments"][:3])]
+            routes.append((at[slot], FX_PARAMS[e["target"]], cc, e["intensity"], 0, [], segs))
         if stages:
             out.append((dyn, stages, routes))
     return out
@@ -236,10 +251,13 @@ def emit_group_fx(fx):
             else:
                 st.append(f"{{ kind {kind}, cutoff {fmt(s['cutoff'])}, resonance {fmt(s['resonance'])} }}")
         rt = []
-        for stage, param, cc, inten, lag, pts in routes:
+        for stage, param, cc, inten, lag, pts, *env in routes:
             r = f"{{ stage {stage}, param {param}, cc {cc}, intensity {fmt(inten)}, lag_ms {lag}"
             if pts:
                 r += f", points ({' '.join(fmt(v) for v in pts)})"
+            if env and env[0]:
+                segs = " ".join(f"{{time_ms {fmt(t)}, level {fmt(lv)}, curve {fmt(c)}}}" for t, lv, c in env[0])
+                r += f", env ({segs})"
             rt.append(r + " }")
         print(f"            {{ dynamic {dyn}, stages ({' '.join(st)}),")
         print(f"              routes ({' '.join(rt)}) }}")

@@ -842,6 +842,19 @@ impl SampleEngine {
     }
 
     pub(crate) fn trigger_zoned_sustain(&mut self, note: u8) {
+        if !self.in_transition {
+            let sets = self
+                .patch
+                .spec
+                .articulation(&self.articulation)
+                .map(|a| a.note_on_cc.clone())
+                .unwrap_or_default();
+            for [cc, v] in sets {
+                if let Some(slot) = self.cc_values.get_mut(usize::from(cc)) {
+                    *slot = v.min(127);
+                }
+            }
+        }
         self.body_tune_cents = self.held_random_tune(note);
         self.trigger_zoned_sustain_inner(note);
         self.body_tune_cents = 0.0;
@@ -2198,9 +2211,12 @@ impl SampleEngine {
                     .unwrap_or(perf.release_gain * held_gain)
             };
             // Kontakt plays the release `wait(2000)` µs after the note-off
-            // (KSP 20788) — the spec's `release_delay_ms`.
-            self.spawn_extra_hold =
-                ms_to_frames_f(perf.release_delay_ms, self.sample_rate) + self.release_extra_hold;
+            // (KSP 20788) — the spec's `release_delay_ms` — on top of any hold
+            // the caller set (a marcato transition waiting a script tick).
+            let outer_hold = self.spawn_extra_hold;
+            self.spawn_extra_hold = outer_hold
+                + ms_to_frames_f(perf.release_delay_ms, self.sample_rate)
+                + self.release_extra_hold;
             // Decoded group curves: every release layer plays, crossfaded by
             // CC36 (= last CC1) and CC2 — like the body it ends.
             let curves = self
@@ -2227,11 +2243,11 @@ impl SampleEngine {
                         );
                     }
                 }
-                self.spawn_extra_hold = 0;
+                self.spawn_extra_hold = outer_hold;
                 return;
             }
             self.spawn_zone_voice(idx, note, VoiceKind::Release, release_gain, None, 0.0);
-            self.spawn_extra_hold = 0;
+            self.spawn_extra_hold = outer_hold;
         }
     }
 

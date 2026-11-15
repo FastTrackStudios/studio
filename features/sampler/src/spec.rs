@@ -1025,6 +1025,19 @@ pub struct MarcatoTransitionSpec {
     /// KSP 12813). 0 = at once.
     #[facet(default)]
     pub body_delay_ms: f32,
+    /// The script's crossfade loop ticks this often (ms, `$0cqdq`); a note
+    /// that arrives while the previous transition's loop still runs stops
+    /// it and waits for its next tick, so its whole transition starts one
+    /// tick late (CSS/CSW/CSB `while ($kxgro=1) wait($0cqdq)`, CSB 15338-
+    /// 15355). The loop lasts the XTime, or the bend if longer. 0 = no
+    /// interlock.
+    #[facet(default)]
+    pub busy_tick_ms: f32,
+    /// The controller the script writes its CC19 value to on a connected
+    /// note (`set_controller(19, …)`), so routes that read it follow; 0 =
+    /// not written.
+    #[facet(default)]
+    pub cc19_controller: u8,
     /// A transition is HARD (`$kbqnb`) above this velocity (`$qm4n3`)…
     #[facet(default = 75)]
     pub hard_velocity: u8,
@@ -2246,6 +2259,12 @@ pub struct FxRouteSpec {
     /// Kontakt's breakpoint table (`y0 c0 (x y c)…`); empty = none.
     #[facet(default)]
     pub points: Vec<f32>,
+    /// An envelope as the source instead of `cc` (a flex envelope swept
+    /// across the stage, e.g. CSB marcato's cutoff): its segments, a level
+    /// of −1 meaning `cc`'s value ÷ 127 at the note's start. The route moves
+    /// the knob by `intensity` × the envelope's level.
+    #[facet(default)]
+    pub env: Vec<EnvSegmentSpec>,
 }
 
 /// Evaluate a Kontakt modulation table (`y0 c0 (x y c)…`) at `x` in `[0, 1]`.
@@ -2535,6 +2554,11 @@ pub struct ArticulationSpec {
     /// 0 = never.
     #[facet(default)]
     pub held_random_tune_cents: u8,
+    /// Controllers the script sets on a fresh note of this articulation,
+    /// before its voices start (`set_controller`; CSB/CSW marcato: CC19 :=
+    /// 127, KSP 11018 / 9090), as `(cc, value)`.
+    #[facet(default)]
+    pub note_on_cc: Vec<[u8; 2]>,
     /// A CSS marcato transition: when set, this articulation plays legato
     /// (mono line) with Kontakt's marcato two-stage transition.
     pub marcato_transition: Option<MarcatoTransitionSpec>,
