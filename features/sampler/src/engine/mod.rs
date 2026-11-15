@@ -714,7 +714,9 @@ pub struct SampleEngine {
     sustain_fade_in: Option<(usize, usize, usize, usize)>,
     /// Per dynamic layer overrides of `sustain_fade_in` for the voices
     /// being spawned (`KontaktTransitionSpec::body_handoff`).
-    sustain_fade_in_by_dyn: Vec<(String, String, (usize, usize, usize, usize))>,
+    /// The last field: the layer's entry offset (frames,
+    /// `BodyHandoffSpec::offset_ms`), added to `spawn_extra_start`.
+    sustain_fade_in_by_dyn: Vec<(String, String, (usize, usize, usize, usize), usize)>,
     /// When true, sustain-layer voices spawned during this dispatch carry the
     /// −6 dB `$3tsb0` legato makeup (`LegatoEngineSpec::sustain_trim_db`) — the KSP
     /// `change_vol(%grhcg,$3tsb0*100)` on the held legato tone. Set only around

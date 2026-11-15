@@ -3002,8 +3002,18 @@ impl SampleEngine {
             + start_offset
             + if is_sustain_layer {
                 // a script offset on the body (a leap's entry, a marcato's
-                // body offset, a sustain's own start): the zone may limit it
-                self.script_offset(idx, self.spawn_extra_start)
+                // body offset, a sustain's own start, a handoff layer's
+                // entry): the zone may limit it
+                let z = &self.patch.spec.zones[idx];
+                let layer = self
+                    .sustain_fade_in_by_dyn
+                    .iter()
+                    .find(|(a, d, _, _)| {
+                        d.eq_ignore_ascii_case(&z.dynamic)
+                            && (a.is_empty() || a.eq_ignore_ascii_case(&z.articulation))
+                    })
+                    .map_or(0, |(_, _, _, o)| *o);
+                self.script_offset(idx, self.spawn_extra_start + layer)
             } else {
                 0
             };
@@ -3075,11 +3085,11 @@ impl SampleEngine {
             let z = &self.patch.spec.zones[idx];
             self.sustain_fade_in_by_dyn
                 .iter()
-                .find(|(a, d, _)| {
+                .find(|(a, d, _, _)| {
                     d.eq_ignore_ascii_case(&z.dynamic)
                         && (a.is_empty() || a.eq_ignore_ascii_case(&z.articulation))
                 })
-                .map(|(_, _, f)| *f)
+                .map(|(_, _, f, _)| *f)
                 .or(self.sustain_fade_in)
         } else if matches!(kind, VoiceKind::Legato) {
             // Transition voice: emerge via the two-stage swell (delay 0 — the

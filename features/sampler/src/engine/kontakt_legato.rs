@@ -94,7 +94,7 @@ impl SampleEngine {
         let handoff = self.kontakt_handoff(kt, from, to, zone, big_leap);
         self.sustain_fade_in_by_dyn = handoff
             .iter()
-            .map(|(a, d, w, f)| (a.clone(), d.clone(), (ms(*w), ms(*f), ms(*f), 0)))
+            .map(|(a, d, w, f, o)| (a.clone(), d.clone(), (ms(*w), ms(*f), ms(*f), 0), ms(*o)))
             .collect();
         self.spawn_extra_start = if big_leap {
             ms(kt.big_leap_body_offset_ms)
@@ -176,13 +176,13 @@ impl SampleEngine {
                     .map(|label| {
                         let (w, f) = handoff
                             .iter()
-                            .find(|(a, d, _, _)| d.eq_ignore_ascii_case(&label) && side_of(a))
+                            .find(|(a, d, _, _, _)| d.eq_ignore_ascii_case(&label) && side_of(a))
                             .or_else(|| {
                                 handoff
                                     .iter()
-                                    .find(|(_, d, _, _)| d.eq_ignore_ascii_case(&label))
+                                    .find(|(_, d, _, _, _)| d.eq_ignore_ascii_case(&label))
                             })
-                            .map_or((0.0, 0.0), |(_, _, w, f)| (*w, *f));
+                            .map_or((0.0, 0.0), |(_, _, w, f, _)| (*w, *f));
                         (label, w, f)
                     })
                     .collect();
@@ -284,7 +284,7 @@ impl SampleEngine {
         to: u8,
         zone: u8,
         big_leap: bool,
-    ) -> Vec<(String, String, f32, f32)> {
+    ) -> Vec<(String, String, f32, f32, f32)> {
         let table = if from == to && !kt.retrigger_body_handoff.is_empty() {
             &kt.retrigger_body_handoff
         } else {
@@ -299,7 +299,8 @@ impl SampleEngine {
             .map(|b| {
                 let (w, f) =
                     high.map_or_else(|| b.for_zone(zone, big_leap), |h| (h.wait_ms, h.fade_ms));
-                (b.articulation.clone(), b.dynamic.clone(), w, f)
+                let o = b.offset_for(zone, big_leap, self.legato_expressive);
+                (b.articulation.clone(), b.dynamic.clone(), w, f, o)
             })
             .collect()
     }

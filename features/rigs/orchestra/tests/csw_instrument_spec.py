@@ -194,7 +194,8 @@ def main():
                         layer_fx(d, all_groups, prefix, rec))
     marcato(pers)
     print(")")
-    legato(pers, zones, group_names)
+    two_player = os.path.basename(os.path.normpath(d))[4:] in TWO_PLAYER
+    legato(pers, zones, group_names, two_player)
 
 
 def marcato_random_pitch(pers):
@@ -229,7 +230,16 @@ def marcato(pers):
 DYN_ORDER = ("pp", "p", "mp", "mf", "f", "ff", "fff")
 
 
-def body_handoff(pers, zones, group_names):
+# CSW's 2-player instruments (`$sxwuz` 10-13, `!sen1t`): a legato transition's
+# nonvib body takes no handoff wait (KSP 13030: the wait is set only outside
+# 10-13 or on the vibrato side) — it starts at once (`fade_in(…, 0)`, 13599)
+# at the "NV Delay" offset by velocity zone (12868-12890: expressive
+# $wj5ti/$bycsx/$req1g, low latency $wrchu/$kb2nd/$zhqzl; beyond an octave
+# $t5wpo/$auf1d, 12904-12916).
+TWO_PLAYER = {"2 Flutes", "2 Clarinets", "2 Oboes", "2 Bassoons"}
+
+
+def body_handoff(pers, zones, group_names, two_player=False):
     """Per-layer body handoff from `%k1aqh` (KSP 13030-13050, the CSB
     mechanism): body slots 0-2 are the vibsus groups and 3-5 the nonvib
     groups, each in dynamic order; per slot `[big wait, wait z1-3, big fade,
@@ -242,6 +252,16 @@ def body_handoff(pers, zones, group_names):
         for k, gdyn in enumerate(sorted(rec, key=DYN_ORDER.index)):
             b = (first + k) * 20
             wait, fade = arr[b + 1 : b + 4], arr[b + 5 : b + 8]
+            if two_player and aid == "NVsus":
+                p = lambda v: css.one(pers, v)  # noqa: E731
+                ex = " ".join(str(p(v)) for v in ("$wj5ti", "$bycsx", "$req1g"))
+                ll = " ".join(str(p(v)) for v in ("$wrchu", "$kb2nd", "$zhqzl"))
+                out.append(
+                    f"        {{ articulation {aid}, dynamic {rec[gdyn]}, wait_ms (0 0 0), fade_ms (0 0 0), "
+                    f"big_fade_ms 0, offset_ms ({ex}), offset_ms_low_latency ({ll}), "
+                    f"big_offset_ms ({p('$t5wpo')} {p('$auf1d')}) }}"
+                )
+                continue
             if not any(wait):
                 continue
             out.append(
@@ -251,7 +271,7 @@ def body_handoff(pers, zones, group_names):
     return out
 
 
-def legato(pers, zones=None, group_names=None):
+def legato(pers, zones=None, group_names=None, two_player=False):
     p = lambda v: css.one(pers, v)  # noqa: E731
     print("legato {")
     # the transition's entry by velocity zone (KSP 9463-9478: low latency
@@ -260,7 +280,7 @@ def legato(pers, zones=None, group_names=None):
     print(f"    lt_offset_low_latency ({p('$ak2j4')} {p('$ixzi1')} {p('$cltif')})")
     print(f"    lt_offset_expressive ({p('$fjf3c')} {p('$2p1wl')} {p('$ywj0r')})")
     if zones is not None:
-        rows = body_handoff(pers, zones, group_names)
+        rows = body_handoff(pers, zones, group_names, two_player)
         if rows:
             print("    body_handoff (")
             print("\n".join(rows))

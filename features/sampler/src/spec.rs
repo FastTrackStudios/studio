@@ -930,6 +930,20 @@ pub struct BodyHandoffSpec {
     pub fade_ms: Vec<f32>,
     /// Beyond an octave: no wait, this fade.
     pub big_fade_ms: f32,
+    /// How deep the layer enters the recording (ms) by velocity zone 1-3,
+    /// expressive legato (CSW 2-player nonvib "NV Delay", `$wj5ti`/`$bycsx`/
+    /// `$req1g`: no handoff wait, the body starts at once this far in).
+    /// Empty = from the start.
+    #[facet(default)]
+    pub offset_ms: Vec<f32>,
+    /// The same in low-latency legato (`$wrchu`/`$kb2nd`/`$zhqzl`); empty =
+    /// `offset_ms`.
+    #[facet(default)]
+    pub offset_ms_low_latency: Vec<f32>,
+    /// Beyond an octave (`$t5wpo` / `$auf1d`; one value per mode, expressive
+    /// first). Empty = none.
+    #[facet(default)]
+    pub big_offset_ms: Vec<f32>,
 }
 
 /// See [`KontaktTransitionSpec::high_key_handoff`].
@@ -958,6 +972,28 @@ impl BodyHandoffSpec {
         let i = usize::from(zone.clamp(1, 3) - 1);
         let pick = |v: &[f32]| v.get(i).or_else(|| v.last()).copied().unwrap_or(0.0);
         (pick(&self.wait_ms), pick(&self.fade_ms))
+    }
+
+    /// The layer's entry offset (ms) for velocity zone `zone` (1-3) in the
+    /// given legato mode, or beyond an octave.
+    #[must_use]
+    pub fn offset_for(&self, zone: u8, big_leap: bool, expressive: bool) -> f32 {
+        if big_leap {
+            let i = usize::from(!expressive);
+            return self
+                .big_offset_ms
+                .get(i)
+                .or_else(|| self.big_offset_ms.first())
+                .copied()
+                .unwrap_or(0.0);
+        }
+        let v = if expressive || self.offset_ms_low_latency.is_empty() {
+            &self.offset_ms
+        } else {
+            &self.offset_ms_low_latency
+        };
+        let i = usize::from(zone.clamp(1, 3) - 1);
+        v.get(i).or_else(|| v.last()).copied().unwrap_or(0.0)
     }
 }
 
