@@ -47,6 +47,8 @@ LIBS = {
              "CSW records its marcato transitions as their own MLeg files"),
             (r"(sustain_noteoff_ms\s+\S+[^\n]*)", r"\1\n    sustain_noteoff_cut_ms 100   // $tukcw — the script's fade_out over the body's key-up release",
          "CSW's script fades a released body to silence over $tukcw = 100 ms", "all"),
+            (r"release_delay_ms\s+\S+[^\n]*", "release_delay_ms     0.0   // no wait in the CSW/CSB release callback (CSS waits 2 ms); null-tested: every release tail 96 samples late at 2.0",
+             "the release callback plays its sample without CSS's wait(2000)", "all"),
         (r"master_tune_cents\s+\S+[^\n]*", "master_tune_cents    0  // group tunes differ: folded into each zone (fold_group_tune.py)",
          "group tune is per group here, folded into the zones"),
         (r"\n\s+rr_sequence\s[^\n]*", "",
@@ -96,6 +98,8 @@ LIBS["brass"] = {
     "subs": [
         (r"(sustain_noteoff_ms\s+\S+[^\n]*)", r"\1\n    sustain_noteoff_cut_ms 200   // $qxeb4 — the script's fade_out over the body's key-up release",
          "CSB's script fades a released body to silence over $qxeb4 = 200 ms", "all"),
+        (r"release_delay_ms\s+\S+[^\n]*", "release_delay_ms     0.0   // no wait in the CSW/CSB release callback (CSS waits 2 ms); null-tested: every release tail 96 samples late at 2.0",
+         "the release callback plays its sample without CSS's wait(2000)", "all"),
         (r"master_tune_cents\s+\S+[^\n]*", "master_tune_cents    0  // group tunes differ: folded into each zone (fold_group_tune.py)",
          "group tune is per group here, folded into the zones"),
         (r"\n\s+rr_sequence\s[^\n]*", "",

@@ -1172,6 +1172,21 @@ pub struct MarcatoOverlay {
     pub lt_layers: Option<Vec<MarcLegLayerSpec>>,
 }
 
+/// A pitch envelope whose depth and decay are drawn per strike (CSW marcato,
+/// KSP 9220-9240): the depth is `±max_cents · |u|^taper` for `u` uniform in
+/// −1..1 (the script draws the raw modulation intensity uniformly; Kontakt's
+/// pitch intensity is its square: taper 2), the decay segment's length
+/// uniform in `decay_ms`. A key struck within `gate_ms` draws nothing and
+/// keeps the last draw (the script leaves the engine parameter set).
+#[derive(Debug, Clone, Facet)]
+pub struct RandomPitchEnvSpec {
+    pub max_cents: f32,
+    pub taper: f32,
+    pub decay_ms: [f32; 2],
+    #[facet(default)]
+    pub gate_ms: f32,
+}
+
 /// The overridable fields of one articulation (see [`SectionOverlay`]).
 #[derive(Debug, Clone, Facet)]
 pub struct ArticulationOverlay {
@@ -1189,6 +1204,9 @@ pub struct ArticulationOverlay {
     pub group_curves: Option<Vec<GroupCurveSpec>>,
     pub group_fx: Option<Vec<GroupFxSpec>>,
     pub key_pitch_cents: Option<Vec<f32>>,
+    pub pitch_env: Option<Vec<EnvSegmentSpec>>,
+    pub pitch_env_cents: Option<f32>,
+    pub pitch_env_random: Option<RandomPitchEnvSpec>,
     pub amp_env: Option<Vec<EnvSegmentSpec>>,
     /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
     pub overlay_cc1_scale: Option<Vec<u8>>,
@@ -1254,6 +1272,15 @@ impl SectionOverlay {
             }
             if let Some(v) = &o.key_pitch_cents {
                 a.key_pitch_cents.clone_from(v);
+            }
+            if let Some(v) = &o.pitch_env {
+                a.pitch_env.clone_from(v);
+            }
+            if let Some(v) = o.pitch_env_cents {
+                a.pitch_env_cents = v;
+            }
+            if let Some(v) = &o.pitch_env_random {
+                a.pitch_env_random = Some(v.clone());
             }
             if let Some(v) = &o.amp_env {
                 a.amp_env.clone_from(v);
@@ -2384,6 +2411,19 @@ pub struct ArticulationSpec {
     /// its ENV_FLEX. CSS release groups: 250 ms attack, 25 s decay to 0.25.
     #[facet(default)]
     pub amp_env2: Vec<EnvSegmentSpec>,
+    /// A pitch envelope, one-shot from the note's start: each level (0..1)
+    /// times `pitch_env_cents` detunes the voice — Kontakt's group
+    /// ENV_AHDSR routed to pitch (attack, hold, decay to sustain as
+    /// segments). CSW marcato: +~10 c (intensity 0.008 × 12 st), held
+    /// 333 ms, decaying 333 ms to 0. Empty = none.
+    #[facet(default)]
+    pub pitch_env: Vec<EnvSegmentSpec>,
+    /// Cents at the pitch envelope's level 1 (see `pitch_env`).
+    #[facet(default)]
+    pub pitch_env_cents: f32,
+    /// Draw the pitch envelope's depth and decay per strike instead (the
+    /// last `pitch_env` segment is the decay). `None` = fixed.
+    pub pitch_env_random: Option<RandomPitchEnvSpec>,
     /// Round-robin counted per NOTE-CLASS (notes sharing a sample zone share
     /// a counter), not globally — CSS marcato alternates RR 1/2 per class
     /// (`%fbn4o`, null-tested). CC59 resets every class counter.

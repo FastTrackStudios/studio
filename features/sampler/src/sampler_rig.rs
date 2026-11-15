@@ -899,6 +899,15 @@ impl SamplerRig {
         }
     }
 
+    /// Replay a reference render's random pitch-envelope draws `(cents,
+    /// decay_ms)`, in order — see
+    /// [`crate::engine::SampleEngine::force_random_pitch_envs`].
+    pub fn force_random_pitch_envs(&self, id: &str, draws: &[(f32, f32)]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_random_pitch_envs(id, draws);
+        }
+    }
+
     /// Per-note solo filter (offline analysis) — only the given notes are
     /// audible; muted voices still advance so legato timing is unchanged.
     /// `None` = full mix.

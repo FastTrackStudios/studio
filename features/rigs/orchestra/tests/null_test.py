@@ -93,19 +93,11 @@ def residual(ref, x):
     return db(np.sum((ref - x) ** 2) / max(np.sum(ref**2), 1e-30))
 
 
-def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    jpath = sys.argv[sys.argv.index("--json") + 1] if "--json" in sys.argv else None
-    if jpath in args:
-        args.remove(jpath)
-    if len(args) < 3:
-        raise SystemExit(__doc__)
-    rows = list(csv.DictReader(open(args[0]), delimiter="\t"))
-    ours, kon = load(args[1]), load(args[2])
-    kon2 = load(args[3]) if len(args) > 3 else None
+def score(rows, ours, kon, kon2=None, show=print):
+    """Score every manifest unit; `show` gets the table and summary lines.
+    Returns the per-unit dicts (what --json writes) and the summary lines."""
     max_lag = SEARCH_MS * SR // 1000
-
-    print(f"{'#':>2} {'category':9} {'desc':28} {'det':>4} {'strict':>8} {'lag':>7} {'@lag':>7} {'gain':>6} {'@lag+g':>7}")
+    show(f"{'#':>2} {'category':9} {'desc':28} {'det':>4} {'strict':>8} {'lag':>7} {'@lag':>7} {'gain':>6} {'@lag+g':>7}")
     out = []
     for r in rows:
         s = int(round(float(r["t_start"]) * SR))
@@ -114,7 +106,7 @@ def main():
         o = window(ours, s, e)
         ek = np.sum(k**2)
         if ek < 1e-12:
-            print(f"{r['idx']:>2} {r['category']:9} {r['description'][:28]:28}  Kontakt silent")
+            show(f"{r['idx']:>2} {r['category']:9} {r['description'][:28]:28}  Kontakt silent")
             continue
         det = None
         if kon2 is not None:
@@ -128,11 +120,12 @@ def main():
         gdb = 20 * np.log10(abs(g)) if g != 0 else -999
         flag = "" if strict <= TARGET_DB else "  <--"
         dets = "-" if det is None else ("DET" if det else "rnd")
-        print(f"{r['idx']:>2} {r['category']:9} {r['description'][:28]:28} {dets:>4} {strict:8.1f} {lag/SR*1000:6.1f}m {at_lag:7.1f} {gdb:6.1f} {at_lag_g:7.1f}{flag}")
+        show(f"{r['idx']:>2} {r['category']:9} {r['description'][:28]:28} {dets:>4} {strict:8.1f} {lag/SR*1000:6.1f}m {at_lag:7.1f} {gdb:6.1f} {at_lag_g:7.1f}{flag}")
         out.append(dict(idx=int(r["idx"]), category=r["category"], desc=r["description"], deterministic=det,
                         strict_db=strict, lag_frames=lag, at_lag_db=at_lag, gain_db=gdb, at_lag_gain_db=at_lag_g))
 
-    print()
+    show("")
+    summary = []
     for label, sel in (("deterministic", [u for u in out if u["deterministic"]]),
                        ("random", [u for u in out if u["deterministic"] is False]),
                        ("all", out)):
@@ -141,8 +134,24 @@ def main():
         st = np.array([u["strict_db"] for u in sel])
         lg = np.array([u["at_lag_gain_db"] for u in sel])
         ok = int(np.sum(st <= TARGET_DB))
-        print(f"{label:14} n={len(sel):3}  strict median {np.median(st):7.1f} dB  worst {st.max():7.1f}  "
-              f"@lag+gain median {np.median(lg):7.1f}  NULLED (<= {TARGET_DB:.0f} dB) {ok}/{len(sel)}")
+        line = (f"{label:14} n={len(sel):3}  strict median {np.median(st):7.1f} dB  worst {st.max():7.1f}  "
+                f"@lag+gain median {np.median(lg):7.1f}  NULLED (<= {TARGET_DB:.0f} dB) {ok}/{len(sel)}")
+        summary.append(line)
+        show(line)
+    return out, summary
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    jpath = sys.argv[sys.argv.index("--json") + 1] if "--json" in sys.argv else None
+    if jpath in args:
+        args.remove(jpath)
+    if len(args) < 3:
+        raise SystemExit(__doc__)
+    rows = list(csv.DictReader(open(args[0]), delimiter="\t"))
+    ours, kon = load(args[1]), load(args[2])
+    kon2 = load(args[3]) if len(args) > 3 else None
+    out, _ = score(rows, ours, kon, kon2)
     if jpath:
         json.dump(out, open(jpath, "w"), indent=1)
 

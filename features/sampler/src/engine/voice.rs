@@ -411,6 +411,12 @@ pub struct Voice {
     /// group's ENV_FLEX and ENV_AHDSR together (release samples: AHD 250 ms
     /// attack / 25 s decay to 0.25 under the flex tail).
     flex2: Option<FlexEnv>,
+    /// A pitch envelope (`with_pitch_env`): its level (0..1) times
+    /// `pitch_env_cents` nudges the read rate — Kontakt's group ENV_AHDSR
+    /// routed to pitch (CSW marcato: ~+10 c held 333 ms, decaying 333 ms).
+    /// Dropped once it settles at 0.
+    pitch_env: Option<FlexEnv>,
+    pitch_env_cents: f32,
 
     /// Mono legato line this voice belongs to (engine `LineId`). Line-scoped
     /// operations (legato fade of the outgoing note, per-line note-off,
@@ -682,6 +688,12 @@ impl FlexEnv {
         }
         lvl
     }
+
+    /// The walk is past the last segment: the level holds from here on.
+    #[inline]
+    fn settled(&self) -> bool {
+        self.seg >= self.segs.len()
+    }
 }
 
 /// Identifies a zoned sustain dynamic layer for CC1/CC2 crossfade gain control.
@@ -733,6 +745,8 @@ impl Voice {
             release_cut: 0,
             release_k_active: 0.0,
             flex2: None,
+            pitch_env: None,
+            pitch_env_cents: 0.0,
             gain_ramp_frames: 0,
             stage1_run: 0,
             stage2_frames: 0,
@@ -822,6 +836,8 @@ impl Voice {
             release_cut: 0,
             release_k_active: 0.0,
             flex2: None,
+            pitch_env: None,
+            pitch_env_cents: 0.0,
             gain_ramp_frames: 0,
             stage1_run: 0,
             stage2_frames: 0,
@@ -1047,6 +1063,17 @@ impl Voice {
     #[must_use]
     pub fn with_flex_env2(mut self, env: FlexEnv) -> Self {
         self.flex2 = Some(env);
+        self
+    }
+
+    /// Attach a pitch envelope: its level (0..1, one-shot) times `cents`
+    /// offsets the voice's pitch (see [`Self::pitch_env`]).
+    #[must_use]
+    pub fn with_pitch_env(mut self, env: FlexEnv, cents: f32) -> Self {
+        if cents != 0.0 {
+            self.pitch_env = Some(env);
+            self.pitch_env_cents = cents;
+        }
         self
     }
 
@@ -1727,8 +1754,22 @@ impl Voice {
         } else {
             1.0
         };
+        // Pitch envelope: e^y to second order (y ≤ ~0.01 here; the error is
+        // y³/6), so no exp per frame.
+        let penv = match &mut self.pitch_env {
+            Some(e) => {
+                let lvl = e.next(true);
+                if lvl == 0.0 && e.settled() {
+                    self.pitch_env = None;
+                }
+                let y = f64::from(lvl * self.pitch_env_cents) * (std::f64::consts::LN_2 / 1200.0);
+                1.0 + y + 0.5 * y * y
+            }
+            None => 1.0,
+        };
         let step = self.bend
             * vib
+            * penv
             * if self.glide_frames > 0 {
                 let s = self.rate * 2f64.powf(self.glide_cents as f64 / 1200.0);
                 self.glide_cents += self.glide_step;
@@ -1837,6 +1878,7 @@ impl Voice {
             && self.release_cut == 0
             && self.vib_cents <= 0.0
             && self.glide_frames == 0
+            && self.pitch_env.is_none()
             && !self.reverse
             && !(self.alternating_loop && self.loop_range.is_some())
             && (self.marker_arrival_file.is_none() || self.arrival_emitted.is_some())

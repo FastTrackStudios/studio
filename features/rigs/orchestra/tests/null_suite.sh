@@ -10,7 +10,7 @@
 # Kontakt's random draws from deterministic notes), renders ours
 # (render_css_live --section) and scores the pair (null_test.py).
 #
-#   modes: probe legato leg2 marcato marc2 shorts pizz trem rebow attack
+#   modes: probe legato leg2 marcato marc2 shorts pizz trem rebow attack ext
 #
 # The Kontakt chain is target/orchestra-ab/chains/fxchain_<tag>.txt — the
 # track <FXCHAIN> of a REAPER project with the factory CSS <Section> loaded
@@ -26,43 +26,24 @@ set -euo pipefail
 
 section="${1:?usage: null_suite.sh <Section> [mode ...]}"
 shift
-# section → chain tag, probe transposition (into the instrument's range) and
-# library; the section is the instrument's patch folder name.
-lib="strings"
-case "$section" in
-  "1st Violins") tag=1v; tr=0 ;;
-  "2nd Violins") tag=2v; tr=0 ;;
-  "Violas")      tag=va; tr=-7 ;;
-  "Cellos")      tag=vc; tr=-19 ;;
-  "Basses")      tag=cb; tr=-24 ;;
-  "2 Bassoons")    lib=woodwinds; tag=ww_bn2; tr=-7 ;;
-  "2 Clarinets")   lib=woodwinds; tag=ww_cl2; tr=0 ;;
-  "2 Flutes")      lib=woodwinds; tag=ww_fl2; tr=0 ;;
-  "2 Oboes")       lib=woodwinds; tag=ww_ob2; tr=0 ;;
-  "Saf")           lib=woodwinds; tag=ww_afl; tr=0 ;;
-  "Sbc")           lib=woodwinds; tag=ww_bcl; tr=-7 ;;
-  "Solo Bassoon")  lib=woodwinds; tag=ww_bn;  tr=-7 ;;
-  "Solo Clarinet") lib=woodwinds; tag=ww_cl;  tr=0 ;;
-  "Scb")           lib=woodwinds; tag=ww_cbn; tr=-11 ;;
-  "Sca")           lib=woodwinds; tag=ww_ca;  tr=0 ;;
-  "Solo Flute")    lib=woodwinds; tag=ww_fl;  tr=0 ;;
-  "Solo Oboe")     lib=woodwinds; tag=ww_ob;  tr=0 ;;
-  "Spi")           lib=woodwinds; tag=ww_picc; tr=0 ;;
-  "2 Trombones")        lib=brass; tag=br_tb2;  tr=-10 ;;
-  "2 Trumpets")         lib=brass; tag=br_tpt2; tr=0 ;;
-  "4 French Horns")     lib=brass; tag=br_hn4;  tr=-3 ;;
-  "Solo Bass Trombone") lib=brass; tag=br_btb;  tr=-10 ;;
-  "Solo French Horn")   lib=brass; tag=br_hn;   tr=-3 ;;
-  "Solo Trombone")      lib=brass; tag=br_tb;   tr=-10 ;;
-  "Solo Trumpet")       lib=brass; tag=br_tpt;  tr=0 ;;
-  "Tuba")               lib=brass; tag=br_tuba; tr=-11 ;;
-  *) echo "unknown section: $section" >&2; exit 1 ;;
-esac
+# section → library, chain tag and probe transposition (into the
+# instrument's range): sections.tsv, one row per instrument patch folder
+here="$(cd "$(dirname "$0")" && pwd)"
+row=$(awk -F'\t' -v s="$section" '$1 == s' "$here/sections.tsv")
+[ -n "$row" ] || { echo "unknown section: $section (add it to sections.tsv)" >&2; exit 1; }
+IFS=$'\t' read -r _ lib tag tr <<< "$row"
 export CS_LIBRARY="$lib"   # fit_draws.py passes it on to the renderer
 modes=("$@")
-[ ${#modes[@]} -gt 0 ] || modes=(probe legato leg2 marcato marc2 shorts pizz trem rebow attack)
+# strings' own probes (pizz, trem, rebow) are string articulations; the
+# winds and brass test their own (ext: flutter, trills, mutes, rips, …)
+if [ ${#modes[@]} -eq 0 ]; then
+  if [ "$lib" = strings ]; then
+    modes=(probe legato leg2 marcato marc2 shorts pizz trem rebow attack)
+  else
+    modes=(probe legato leg2 marcato marc2 shorts attack ext)
+  fi
+fi
 
-here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../../../.." && pwd)"
 host="${KONTAKT_HOST:-voyager}"
 chain="$repo/target/orchestra-ab/chains/fxchain_$tag.txt"
@@ -116,6 +97,7 @@ flags_for() {
     trem) echo "--tremolo" ;;
     rebow) echo "--tremolo --rebow" ;;
     attack) echo "--attack" ;;
+    ext) if [ "$lib" = brass ]; then echo "--winds --brass"; else echo "--winds"; fi ;;
     *) echo "unknown mode: $1" >&2; return 1 ;;
   esac
 }
@@ -151,7 +133,17 @@ for mode in "${modes[@]}"; do
   if [ "$lib" != strings ] && [ "$mode" = marc2 ]; then
     fit_mode=shorts
   fi
+  # woodwinds marcato draws its pitch envelope per strike (fit_pitch_env.py)
+  if [ "$lib" = woodwinds ] && [ "$mode" = marcato ]; then
+    fit_mode=penv
+  fi
   case "$fit_mode" in
+    penv)
+      npy "$here/fit_pitch_env.py" "$bin" "$section" "$d/$mode.mid" \
+        "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws_penv.txt"
+      npy "$here/null_test.py" "$d/${mode}_manifest.tsv" "$d/${mode}_ours.wav" \
+        "$d/${mode}_kontakt_r1.wav" --json "$d/null.json" | tail -1
+      ;;
     shorts|pizz|leg2|attack)
       kind=--tunes
       # woodwinds / brass draw their shorts' round robins at random: fit
@@ -161,24 +153,35 @@ for mode in "${modes[@]}"; do
       fi
       [ "$mode" = leg2 ] && kind=--variants
       [ "$mode" = attack ] && kind=--attacks
+      # woodwinds marc2: its marcato strikes draw a pitch envelope too —
+      # held at 0 while the shorts' draws are fitted, fitted after them
+      penv0=""
+      if [ "$lib" = woodwinds ] && [ "$mode" = marc2 ]; then
+        penv0="--pitch-envs $(printf '0:333,%.0s' $(seq 400) | sed 's/,$//')"
+      fi
       if [ "$lib" = woodwinds ] && [ "$kind" = --rrs ]; then
         # woodwinds shorts also detune a note the key has not struck within
         # the gate (KSP $14yum / $5i0r1): fit the RRs with the detune held at
         # 0, then the detune with those RRs held
         zeros=$(printf '0,%.0s' $(seq 400)); zeros=${zeros%,}
-        FIT_EXTRA="--tunes $zeros" npy "$here/fit_draws.py" --rrs "$bin" "$section" "$d/$mode.mid" \
+        FIT_EXTRA="--tunes $zeros $penv0" npy "$here/fit_draws.py" --rrs "$bin" "$section" "$d/$mode.mid" \
           "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws_rr.txt"
-        FIT_EXTRA="--rrs $(head -1 "$d/draws_rr.txt")" npy "$here/fit_draws.py" --tunes "$bin" "$section" \
+        FIT_EXTRA="--rrs $(head -1 "$d/draws_rr.txt") $penv0" npy "$here/fit_draws.py" --tunes "$bin" "$section" \
           "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
         # once more each way: the RRs against the fitted detune, then the
         # detune against those RRs (2 Flutes detunes every note)
-        FIT_EXTRA="--tunes $(head -1 "$d/draws.txt")" npy "$here/fit_draws.py" --rrs "$bin" "$section" \
+        FIT_EXTRA="--tunes $(head -1 "$d/draws.txt") $penv0" npy "$here/fit_draws.py" --rrs "$bin" "$section" \
           "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws_rr.txt"
-        FIT_EXTRA="--rrs $(head -1 "$d/draws_rr.txt")" npy "$here/fit_draws.py" --tunes "$bin" "$section" \
+        FIT_EXTRA="--rrs $(head -1 "$d/draws_rr.txt") $penv0" npy "$here/fit_draws.py" --tunes "$bin" "$section" \
           "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
       else
         npy "$here/fit_draws.py" "$kind" "$bin" "$section" "$d/$mode.mid" \
           "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
+      fi
+      if [ -n "$penv0" ]; then
+        FIT_EXTRA="--rrs $(head -1 "$d/draws_rr.txt") --tunes $(head -1 "$d/draws.txt")" \
+          npy "$here/fit_pitch_env.py" "$bin" "$section" "$d/$mode.mid" \
+          "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws_penv.txt"
       fi
       npy "$here/null_test.py" "$d/${mode}_manifest.tsv" "$d/${mode}_ours.wav" \
         "$d/${mode}_kontakt_r1.wav" --json "$d/null.json" | tail -1

@@ -418,6 +418,10 @@ impl SamplerBlock {
         self.engine.force_random_tunes(cents);
     }
 
+    pub fn force_random_pitch_envs(&mut self, draws: &[(f32, f32)]) {
+        self.engine.force_random_pitch_envs(draws);
+    }
+
     pub fn set_pure_playback(&mut self, on: bool) {
         self.engine.set_pure_playback(on);
     }

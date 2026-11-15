@@ -937,6 +937,15 @@ pub struct SampleEngine {
     /// Random-tune draws to use instead of the generator, in order (tests
     /// replaying a reference render's draws).
     pub(crate) forced_tunes: VecDeque<i8>,
+    /// Random pitch-envelope draws `(cents, decay_ms)` to use instead of the
+    /// generator, in order (`RandomPitchEnvSpec`; null-test replay).
+    pub(crate) forced_pitch_envs: VecDeque<(f32, f32)>,
+    /// The current random pitch-envelope draw: `(note, frame)` of the strike
+    /// that drew it (the layers of one strike share it) and `(cents,
+    /// decay_ms)`, kept for strikes the gate skips.
+    pub(crate) pitch_env_draw: Option<((u8, u64), (f32, f32))>,
+    /// Engine frame each key last drew a random pitch envelope (its gate).
+    pub(crate) pitch_env_key_frame: [Option<u64>; 128],
     /// Legato zone-2 body-variant draws to use instead of the generator.
     pub(crate) forced_variants: VecDeque<u8>,
     /// Forced loud first-note attack draws (index into the zone's range).
@@ -1263,6 +1272,9 @@ impl SampleEngine {
             seq_rr_last: HashMap::new(),
             short_key_frame: [None; 128],
             forced_tunes: VecDeque::new(),
+            forced_pitch_envs: VecDeque::new(),
+            pitch_env_draw: None,
+            pitch_env_key_frame: [None; 128],
             forced_variants: VecDeque::new(),
             forced_attacks: VecDeque::new(),
             forced_rrs: VecDeque::new(),
@@ -1917,6 +1929,12 @@ impl SampleEngine {
     /// replaying a reference render's draws for a null test.
     pub fn force_random_tunes(&mut self, cents: &[i8]) {
         self.forced_tunes = cents.iter().copied().collect();
+    }
+
+    /// Use these random pitch-envelope draws `(cents, decay_ms)` in order
+    /// before the generator (`RandomPitchEnvSpec`).
+    pub fn force_random_pitch_envs(&mut self, draws: &[(f32, f32)]) {
+        self.forced_pitch_envs = draws.iter().copied().collect();
     }
 
     /// Use these loud first-note attack draws in order: an index into the

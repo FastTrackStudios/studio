@@ -1302,6 +1302,42 @@ impl SampleEngine {
         (x % (2 * n as u64 + 1)) as i32 - n
     }
 
+    /// The pitch envelope of a strike of `note` under `r`: `(cents,
+    /// decay_ms)`, drawn once per strike (every layer spawned at this frame
+    /// shares it), the last draw kept when the key struck within the gate.
+    fn random_pitch_env(&mut self, r: &crate::spec::RandomPitchEnvSpec, note: u8) -> (f32, f32) {
+        let now = self.frames_rendered;
+        if let Some(((n, f), d)) = self.pitch_env_draw {
+            if n == note && f == now {
+                return d;
+            }
+        }
+        let slot = &mut self.pitch_env_key_frame[usize::from(note & 127)];
+        let recent =
+            slot.is_some_and(|f| frames_to_ms(now.saturating_sub(f), self.sample_rate) < r.gate_ms);
+        *slot = Some(now);
+        let d = if recent {
+            self.pitch_env_draw.map_or((0.0, r.decay_ms[0]), |(_, d)| d)
+        } else if let Some(d) = self.forced_pitch_envs.pop_front() {
+            d
+        } else {
+            let mut next = || {
+                let mut x = self.tune_rng;
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                self.tune_rng = x;
+                (x >> 11) as f64 / (1u64 << 53) as f64
+            };
+            let u = next().mul_add(2.0, -1.0) as f32;
+            let cents = u.signum() * u.abs().powf(r.taper) * r.max_cents;
+            let decay = r.decay_ms[0] + (r.decay_ms[1] - r.decay_ms[0]) * next() as f32;
+            (cents, decay)
+        };
+        self.pitch_env_draw = Some(((note, now), d));
+        d
+    }
+
     /// The zone of `artic`/`dynamic` covering `note` with round-robin
     /// `rr_index` (passing the solo-mic filter).
     fn find_layer_zone_rr_index(
@@ -2874,6 +2910,39 @@ impl SampleEngine {
                 FlexEnv::from_segments(&t, 0.0, self.sample_rate, false)
             });
 
+        let pitch_env = match self
+            .patch
+            .spec
+            .articulation(&flex_artic)
+            .filter(|a| !a.pitch_env.is_empty())
+            .map(|a| {
+                (
+                    a.pitch_env.clone(),
+                    a.pitch_env_cents,
+                    a.pitch_env_random.clone(),
+                )
+            }) {
+            Some((segs, cents, random)) => {
+                let mut t: Vec<(f32, f32, f32)> =
+                    segs.iter().map(|s| (s.time_ms, s.level, s.curve)).collect();
+                let cents = match random {
+                    Some(r) => {
+                        let (c, decay) = self.random_pitch_env(&r, note);
+                        if let Some(last) = t.last_mut() {
+                            last.0 = decay;
+                        }
+                        c
+                    }
+                    None => cents,
+                };
+                (cents != 0.0)
+                    .then(|| FlexEnv::from_segments(&t, 0.0, self.sample_rate, false))
+                    .flatten()
+                    .map(|e| (e, cents))
+            }
+            None => None,
+        };
+
         // CSS-style sustains ship no loop points but have a slow ~0.8s natural
         // attack pre-roll that CSS skips (Kontakt sample-start) for a fast attack.
         // Start such bodies at the loud steady region so onsets aren't sluggish.
@@ -3096,6 +3165,9 @@ impl SampleEngine {
             // DYNAMICS, not the utility fades / arrival timing.
             if let Some(flex) = flex_env.clone() {
                 voice = voice.with_flex_env(flex);
+            }
+            if let Some((env, cents)) = pitch_env.clone() {
+                voice = voice.with_pitch_env(env, cents);
             }
             if let Some(env2) = flex_env2.clone() {
                 voice = voice.with_flex_env2(env2);

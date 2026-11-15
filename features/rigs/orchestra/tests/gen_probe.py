@@ -88,6 +88,52 @@ def main():
         rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", key, cat, desc))
         t = start + win
 
+    if "--winds" in sys.argv:
+        # Woodwinds' / brass' own articulations (CSW / CSB CC58 maps): held
+        # notes and connected pairs of Flutter (and brass Mutesus), trills
+        # (two keys together), and brass' repeated / ornament shorts (Rips,
+        # Mutereps, Taka). CC1 for dynamics; velocity sets the attack.
+        def held(cat, desc, keys, vel, cc58, cc1, hold=2.0, ioi=None):
+            nonlocal t
+            m.cc(t, 58, cc58)
+            m.cc(t, 1, cc1)
+            start = t + 1.5
+            if ioi is None:
+                for key in keys:
+                    m.note(start, hold, key, vel)
+                win = hold + 2.5
+            else:
+                m.note(start, ioi + 0.05, keys[0], vel)
+                m.note(start + ioi, hold, keys[1], vel)
+                win = ioi + hold + 2.5
+            rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", keys[-1], cat, desc))
+            t = start + win
+
+        sustained = [("Flutter", 51)]
+        if "--brass" in sys.argv:
+            sustained.append(("Mutesus", 56))
+        for name, cc58 in sustained:
+            for cc1 in (40, 110):
+                held(name, f"{name} key67 cc{cc1} v80", [67], 80, cc58, cc1)
+            held(name, f"{name} key72 cc80 v80", [72], 80, cc58, 80)
+            held(name, f"{name} 67->69 ioi500 cc80", [67, 69], 80, cc58, 80, ioi=0.5)
+        held("Trills", "Trills 67+68 (half) cc60", [67, 68], 80, 46, 60)
+        held("Trills", "Trills 67+69 (whole) cc110", [67, 69], 80, 46, 110)
+        if "--brass" in sys.argv:
+            for name, cc58 in (("Rips", 41), ("Mutereps", 31), ("Taka", 61)):
+                for vel in (60, 120):
+                    m.cc(t, 58, cc58)
+                    m.cc(t, 1, 100)
+                    start = t + 1.5
+                    n = 1 if name == "Rips" else 4
+                    for i in range(n):
+                        m.note(start + i * 0.4, 0.2 if n > 1 else 1.0, 67, vel)
+                    win = 0.4 * (n - 1) + 3.0
+                    rows.append((len(rows), f"{start:.3f}", f"{win:.3f}", 67, name, f"{name} key67 v{vel} x{n}"))
+                    t = start + win
+        finish(m, rows, t)
+        return
+
     if "--tremolo" in sys.argv:
         # Tremolo / harmonics (mono path, legato on) and trills (two keys
         # within 25 ms). CC1 127; velocity 40 = zone 1 (no random re-bow

@@ -186,6 +186,42 @@ def emit_key_pitch(cents):
         print(f"        key_pitch_cents ({' '.join(fmt(round(c, 3)) for c in cents)})")
 
 
+# Cents per unit of a group ENV_AHDSR's pitch intensity: a pitch route at
+# full intensity is 12 semitones (KONTRA laws: PITCH_SEMITONES). CSW marcato
+# redraws this per strike (`pitch_env_random`); the stored value is the
+# draw's range. Measured: draws of −4..+4 c of a ±9.6 c range.
+AHDSR_PITCH_CENTS_PER_UNIT = 1200.0
+# Shape of an AHDSR decay as a flex-segment tension (0.5 = linear).
+AHDSR_DECAY_TENSION = 0.5
+
+
+def pitch_env(all_groups, prefix):
+    """The pitch ENV_AHDSR of `prefix`'s Mix groups, as `(segments, cents)`:
+    attack to 1, hold at 1, decay to sustain (one-shot; the release stage is
+    not modelled). None when the groups carry none."""
+    for g in all_groups:
+        if not g["name"].startswith(f"Mix {prefix}"):
+            continue
+        for e in g.get("envelopes", []):
+            if e.get("kind") == "ENV_AHDSR" and e.get("target") == "pitch" and not e.get("bypassed"):
+                segs = [(max(e["attack_ms"], 0.1), 1.0, 0.5)]
+                if e["hold_ms"] > 0:
+                    segs.append((e["hold_ms"], 1.0, 0.5))
+                segs.append((max(e["decay_ms"], 0.1), e["sustain"], AHDSR_DECAY_TENSION))
+                return segs, e["intensity"] * AHDSR_PITCH_CENTS_PER_UNIT
+    return None
+
+
+def emit_pitch_env(env):
+    """Print `pitch_env (...)` and `pitch_env_cents` (inside an articulation)."""
+    if not env:
+        return
+    segs, cents = env
+    body = " ".join(f"{{time_ms {fmt(round(t, 3))}, level {fmt(round(lv, 4))}, curve {fmt(c)}}}" for t, lv, c in segs)
+    print(f"        pitch_env ( {body} )")
+    print(f"        pitch_env_cents {fmt(round(cents, 3))}")
+
+
 def emit_group_fx(fx):
     """Print a `group_fx (...)` block (inside an articulation)."""
     if not fx:

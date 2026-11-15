@@ -105,7 +105,7 @@ def recorded_dynamics(zones, group_names, prefix, artic):
     return {g: max(c, key=c.get) for g, c in count.items()}
 
 
-def emit_curves(aid, cs, dyns=None, fx=()):
+def emit_curves(aid, cs, dyns=None, fx=(), penv=None, rnd=None):
     print(f"    {{\n        id {aid}")
     if dyns:
         print(f"        dynamics ({' '.join(dyns)})")
@@ -114,6 +114,10 @@ def emit_curves(aid, cs, dyns=None, fx=()):
         print(f"            {{ dynamic {dyn}, cc {cc}, points ({' '.join(css.fmt(v) for v in pts)}) }}")
     print("        )")
     css.emit_group_fx(fx)
+    css.emit_pitch_env(penv)
+    if penv and rnd:
+        print(f"        pitch_env_random {{ max_cents {css.fmt(round(rnd[0], 4))}, taper 2, "
+              f"decay_ms ({css.fmt(rnd[1])} {css.fmt(rnd[2])}), gate_ms {css.fmt(rnd[3])} }}")
     print("    }")
 
 
@@ -158,7 +162,9 @@ def main():
         cs = [(rec[dyn], cc, pts) for dyn, cc, pts in css.curves(groups, prefix, ccs, rel=False) if dyn in rec]
         if cs:
             dyns = list(dict.fromkeys(dyn for dyn, _, _ in cs))
-            emit_curves(aid, cs, dyns, layer_fx(d, all_groups, prefix, rec))
+            emit_curves(aid, cs, dyns, layer_fx(d, all_groups, prefix, rec),
+                        css.pitch_env(all_groups, prefix),
+                        marcato_random_pitch(pers) if aid == "Marcato" else None)
     for aid, (fa, family, tvar, dvar) in SHORTS.items():
         th, db_ = pers.get(tvar), pers.get(dvar)
         dyns, rr = short_layers(zones, group_names, fa, family)
@@ -189,6 +195,20 @@ def main():
     marcato(pers)
     print(")")
     legato(pers, zones, group_names)
+
+
+def marcato_random_pitch(pers):
+    """The marcato's per-strike pitch draw (KSP 9220-9240, `$thtao` on and
+    the key not struck within `$na4ur` ms): the envelope's raw intensity
+    uniform in ±`$3wy5c` (Kontakt's pitch intensity is the raw value
+    squared, × 12 st), its decay `($xefaf + random(0, $01q3n)) / 100` ms.
+    `(max_cents, decay_lo, decay_hi, gate_ms)`, or None."""
+    p = lambda v: css.one(pers, v)  # noqa: E731
+    if p("$thtao") != 1 or p("$3wy5c") is None or p("$xefaf") is None:
+        return None
+    r = p("$3wy5c") / 1e6
+    lo = p("$xefaf") / 100
+    return (r * r * 1200.0, lo, lo + (p("$01q3n") or 0) / 100, p("$na4ur") or 0)
 
 
 def marcato(pers):

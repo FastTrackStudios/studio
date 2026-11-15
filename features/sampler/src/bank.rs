@@ -880,6 +880,10 @@ impl SamplerBank {
         self.with_block(id, |b| b.force_random_tunes(cents));
     }
 
+    pub fn force_random_pitch_envs(&mut self, id: &str, draws: &[(f32, f32)]) {
+        self.with_block(id, |b| b.force_random_pitch_envs(draws));
+    }
+
     pub fn set_solo_notes(&mut self, id: &str, notes: Option<std::collections::BTreeSet<u8>>) {
         self.with_block(id, |b| b.set_solo_notes(notes.clone()));
     }

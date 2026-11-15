@@ -12,7 +12,7 @@
 //! ```
 //!
 //! `--batch FILE`: one render per line, `<in.mid>\t<out.wav>[\t<flags>]`
-//! (flags as on the command line: `--rrs 0,1 --tunes 0,-3 --trace`,
+//! (flags as on the command line: `--rrs 0,1 --tunes 0,-3 --pitch-envs -1.1:400 --trace`,
 //! `--window-frames A,B` to render up to frame B and keep A..B). The
 //! instrument is parsed once and its samples decoded once; every line still
 //! renders on a fresh rig, so each WAV equals a single run of that line.
@@ -148,6 +148,22 @@ fn render_one(
     // `--attacks a,b,…`: loud first-note attack draws (index into the range).
     if let Some(v) = draws::<u8>(args, "--attacks") {
         rig.force_random_attacks(ID, &v);
+    }
+    // `--pitch-envs c:d,c:d,…`: random pitch-envelope draws (cents, decay
+    // ms) of a `pitch_env_random` articulation (CSW marcato).
+    if let Some(i) = args.iter().position(|a| a == "--pitch-envs") {
+        let v: Vec<(f32, f32)> = args
+            .get(i + 1)
+            .map(|s| {
+                s.split(',')
+                    .filter_map(|p| {
+                        let (c, d) = p.split_once(':')?;
+                        Some((c.trim().parse().ok()?, d.trim().parse().ok()?))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        rig.force_random_pitch_envs(ID, &v);
     }
     // `--variants a,b,…`: legato zone-2 body-variant draws (2..=4).
     if let Some(v) = draws::<u8>(args, "--variants") {
