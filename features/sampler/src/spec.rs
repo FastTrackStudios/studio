@@ -631,6 +631,13 @@ pub struct PerformanceSpec {
     /// `fade_out($ALL_EVENTS, 100 ms)`). 0 = none.
     #[facet(default)]
     pub artic_change_fade_ms: f32,
+    /// A script's time-stretch parameter per whole speed percent (index =
+    /// percent), as the script computes it (MOJO 2's integer
+    /// `_Speed_to_ep`): the engine plays it through Kontakt's speed law,
+    /// `(7^(u³+1) − 1)/6` with `u = 2·ep/1e6 − 1` (`UnityToNat_Speed`
+    /// 0x412bf8, in f32). Empty = percent / 100.
+    #[facet(default)]
+    pub stretch_speed_ep: Vec<i32>,
     /// How voices read between sample frames: `"kontakt_normal"` plays
     /// through Kontakt 8's Normal-quality resampler (a block-formed f32
     /// step, its cache-relative f32 cursor, the 4-point Lagrange; see
@@ -794,6 +801,7 @@ impl Default for PerformanceSpec {
             pedal_ignored: false,
             rr_random_global: false,
             artic_change_fade_ms: 0.0,
+            stretch_speed_ep: Vec::new(),
             interpolation: String::new(),
             master_tune_cents: 0.0,
             loop_xfade_ms: 150,
@@ -2450,6 +2458,12 @@ pub struct FxStageSpec {
     /// −0.3 leaves the side at 0.70.
     #[facet(default)]
     pub width: f32,
+    /// `limiter`: Kontakt's classic Limiter's input gain (dB) and release
+    /// (ms).
+    #[facet(default)]
+    pub input_db: f32,
+    #[facet(default)]
+    pub release_ms: f32,
 }
 
 /// A controller route onto one stage's knob: the knob moves by

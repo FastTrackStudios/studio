@@ -58,6 +58,9 @@ enum StageKind {
     /// Kontakt's Saturation, Enhanced mode: a memoryless curve at the base
     /// rate between the linear sections (`super::kontakt_saturation`).
     Saturation,
+    /// Kontakt's classic Limiter (kind-3 group insert,
+    /// `super::kontakt_limiter`): both channels at its place in the chain.
+    Limiter,
     /// Stereo width: the side signal scaled by `1 + width`, mid kept
     /// (Kontakt's kind-9 group insert). Run after the per-channel stages:
     /// those treat both channels alike, so the order does not matter.
@@ -83,6 +86,8 @@ struct PlanStage {
     width: f32,
     /// `Saturation`: `[drive, makeup, wet]` at the saved shape.
     sat: [f32; 3],
+    /// `Limiter`: input gain (dB), release (ms).
+    limiter: [f32; 2],
     /// The stage's output gain (linear).
     out_gain: f32,
 }
@@ -172,6 +177,7 @@ fn plan_stage(s: &FxStageSpec) -> Option<PlanStage> {
         }
         "width" => StageKind::Width,
         "saturation" => StageKind::Saturation,
+        "limiter" => StageKind::Limiter,
         _ => return None,
     };
     let mut bands = [[0.0; 3]; MAX_SECTIONS];
@@ -185,6 +191,7 @@ fn plan_stage(s: &FxStageSpec) -> Option<PlanStage> {
         bands,
         width: s.width,
         sat: super::kontakt_saturation::enhanced_at(s.shape),
+        limiter: [s.input_db, s.release_ms],
         out_gain: 10f32.powf(s.output_db / 20.0),
     })
 }
@@ -204,7 +211,7 @@ fn plan_route(r: &FxRouteSpec, stage: u8, s: &PlanStage, sample_rate: f32) -> Op
     if matches!(param, Param::Cutoff | Param::Resonance)
         && matches!(
             s.kind,
-            StageKind::Eq(_) | StageKind::Width | StageKind::Saturation
+            StageKind::Eq(_) | StageKind::Width | StageKind::Saturation | StageKind::Limiter
         )
     {
         return None;
@@ -281,6 +288,8 @@ pub struct InsertState {
     /// Two memories per section per channel.
     mem: [[[[f32; 2]; MAX_SECTIONS]; MAX_STAGES]; 2],
     countdown: u16,
+    /// The chain's limiter stage, if it has one: its index and state.
+    limiter: Option<(usize, super::kontakt_limiter::KontaktLimiter)>,
 }
 
 impl InsertState {
@@ -297,7 +306,24 @@ impl InsertState {
             gain: [1.0; MAX_STAGES],
             mem: [[[[0.0; 2]; MAX_SECTIONS]; MAX_STAGES]; 2],
             countdown: 0,
+            limiter: None,
         };
+        s.limiter = s
+            .plan
+            .stages
+            .iter()
+            .position(|st| st.kind == StageKind::Limiter)
+            .map(|i| {
+                let [input_db, release_ms] = s.plan.stages[i].limiter;
+                let settings = super::kontakt_limiter::KontaktSettings {
+                    input_db,
+                    release_ms,
+                };
+                (
+                    i,
+                    super::kontakt_limiter::KontaktLimiter::new(settings, sample_rate as u32),
+                )
+            });
         for (slot, r) in s.envs.iter_mut().zip(&s.plan.routes) {
             if r.env.is_empty() {
                 continue;
@@ -412,8 +438,17 @@ impl InsertState {
         self.countdown -= 1;
         let mut out = [l, r];
         let n = self.plan.stages.len();
-        for (ch, x) in out.iter_mut().enumerate() {
-            for i in 0..n {
+        // stage by stage, both channels at each (a limiter needs both; the
+        // per-channel stages are indifferent to the order)
+        for i in 0..n {
+            if let Some((at, lim)) = self.limiter.as_mut()
+                && *at == i
+            {
+                let mut frame = [out];
+                lim.process(&mut frame);
+                out = frame[0];
+            }
+            for (ch, x) in out.iter_mut().enumerate() {
                 for (sec, m) in self.sections[i].iter().zip(self.mem[ch][i].iter_mut()) {
                     *x = run(*sec, m, *x);
                 }
@@ -499,7 +534,7 @@ fn coefficients(
     let r = res.clamp(0.0, 1.0);
     match st.kind {
         StageKind::Width => (out, 1.0),
-        StageKind::Saturation => (out, st.out_gain),
+        StageKind::Saturation | StageKind::Limiter => (out, st.out_gain),
         StageKind::OnePole(law) => {
             let g = warp(cutoff_hz(law, cutoff), fs);
             out[0] = Section::OnePole(g / (1.0 + g));
@@ -575,6 +610,8 @@ mod tests {
                 resonance: 0.0,
                 bands,
                 width: 0.0,
+                input_db: 0.0,
+                release_ms: 0.0,
                 shape: 0.0,
                 output_db: 0.0,
             }],

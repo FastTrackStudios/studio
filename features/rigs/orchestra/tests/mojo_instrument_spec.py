@@ -167,6 +167,15 @@ def group_eq(art, start, names, fx_slots, notes, lp_floor, envs=None, mods=None)
                     stages.append(("saturation", {"shape": shape, "output_db": out_db}))
                 else:
                     notes.append(f"{art} {dyn}: saturation mode {mode} (slot {s['slot']}) not run")
+            elif s["kind"] == 3:
+                # Kontakt's classic Limiter: children bytes 9..13 the input
+                # gain (dB), 13..17 the release (ms) as KONTRA reads them
+                # (BEffectLimiter); the slot's output gain after it
+                ch = bytes.fromhex(s["children_hex"])
+                inp = struct.unpack("<f", ch[9:13])[0] if len(ch) >= 13 else 0.0
+                rel = struct.unpack("<f", ch[13:17])[0] if len(ch) >= 17 else 20.0
+                stages.append(("limiter", {"input_db": inp, "release_ms": rel,
+                                           "output_db": 20 * math.log10(s.get("output_gain") or 1.0)}))
             elif s["kind"] == 9:
                 _, width = mojo_zones.group_stage({0: [s]}, 0)
                 if width:
@@ -385,6 +394,9 @@ def fx_lines(fx):
                 st.append(f"{{ kind width, width {fmt(p['width'])} }}")
             elif kind == "saturation":
                 st.append(f"{{ kind saturation, shape {p['shape']:.7f}, output_db {fmt(p['output_db'])} }}")
+            elif kind == "limiter":
+                st.append(f"{{ kind limiter, input_db {fmt(p['input_db'])}, release_ms {fmt(p['release_ms'])}, "
+                          f"output_db {fmt(p['output_db'])} }}")
             else:
                 st.append(f"{{ kind {kind}, cutoff {fmt(p['cutoff'])}, resonance {fmt(p['resonance'])} }}")
                 if p.get("env"):

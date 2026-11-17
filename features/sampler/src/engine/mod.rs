@@ -226,6 +226,7 @@ mod helpers;
 pub(crate) use helpers::kontakt_offset_frames;
 pub mod inserts;
 mod kontakt_legato;
+mod kontakt_limiter;
 mod kontakt_marcato;
 pub mod kontakt_saturation;
 mod ksp_rand;
@@ -2060,6 +2061,24 @@ impl SampleEngine {
     pub fn skip_script_draws(&mut self, n: u32) {
         for _ in 0..n {
             self.script_draw(0, 1);
+        }
+    }
+
+    /// A script's stretch speed in percent as the voice's speed ratio
+    /// (`PerformanceSpec::stretch_speed_ep`).
+    pub(crate) fn stretch_ratio(&self, pct: i32) -> f64 {
+        match self
+            .patch
+            .spec
+            .performance
+            .stretch_speed_ep
+            .get(usize::try_from(pct).unwrap_or(0))
+        {
+            Some(&ep) => {
+                let u = 2.0 * (ep as f32 / 1_000_000.0) - 1.0;
+                f64::from(((7.0f32.powf(u * u * u + 1.0) - 1.0) / 6.0).clamp(0.0, 8.0))
+            }
+            None => f64::from(pct) / 100.0,
         }
     }
 

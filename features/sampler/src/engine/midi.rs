@@ -739,7 +739,7 @@ impl SampleEngine {
             t.beats
         };
         let (take, pct) = timed_length_take(&t, self.quarter_us, beats)?;
-        Some((t.takes.get(take)?.clone(), f64::from(pct) / 100.0))
+        Some((t.takes.get(take)?.clone(), self.stretch_ratio(pct)))
     }
 
     /// The articulation's key noise after a note (`KeynoiseSpec`): tried on
