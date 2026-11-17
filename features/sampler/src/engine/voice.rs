@@ -650,6 +650,9 @@ pub struct FlexEnv {
     /// ends, whatever the intensity).
     stops_voice: bool,
     released: bool,
+    /// Runs as Kontakt's control-rate AHDSR instead of the segments
+    /// ([`Self::kontakt_ahdsr`]).
+    kontakt: Option<super::kontakt_ahdsr::Ahdsr>,
 }
 
 impl FlexEnv {
@@ -705,6 +708,7 @@ impl FlexEnv {
             depth: 1.0,
             stops_voice: false,
             released: false,
+            kontakt: None,
         })
     }
 
@@ -717,10 +721,36 @@ impl FlexEnv {
         self
     }
 
-    /// Released and run past its last segment, with `stops_voice` set.
+    /// Released and run past its last segment, with `stops_voice` set; a
+    /// Kontakt AHDSR once it is off (Kontakt ends a voice with its volume
+    /// envelope, whatever the depth).
     #[must_use]
     pub fn ended(&self) -> bool {
+        if let Some(k) = &self.kontakt {
+            return k.is_off();
+        }
         self.stops_voice && self.released && self.settled()
+    }
+
+    /// Kontakt's volume AHDSR at its control rate
+    /// ([`super::kontakt_ahdsr`]): `settings` replace the segments; the
+    /// depth and the key-up behave as before.
+    #[must_use]
+    pub fn kontakt_ahdsr(settings: super::kontakt_ahdsr::Settings) -> Self {
+        Self {
+            segs: Vec::new(),
+            curve: Vec::new(),
+            pos: 0.0,
+            hold_end: None,
+            seg: 0,
+            t: 0.0,
+            eat: 1.0,
+            release_seg: None,
+            depth: 1.0,
+            stops_voice: true,
+            released: false,
+            kontakt: Some(super::kontakt_ahdsr::Ahdsr::new(settings)),
+        }
     }
 
     /// Declare the release segment (see [`Self::release`]).
@@ -733,6 +763,13 @@ impl FlexEnv {
     /// Note-off: jump to the release segment from the current level (once;
     /// a no-op when there is none or the envelope is already past it).
     pub fn release(&mut self) {
+        if let Some(k) = self.kontakt.as_mut() {
+            if !self.released {
+                k.release();
+            }
+            self.released = true;
+            return;
+        }
         self.released = true;
         let Some(rs) = self.release_seg.take() else {
             return;
@@ -848,6 +885,16 @@ impl FlexEnv {
     pub(crate) fn next(&mut self, released: bool) -> f32 {
         if self.ended() {
             return 0.0;
+        }
+        if self.kontakt.is_some() {
+            if released {
+                self.release();
+            }
+            let lvl = self
+                .kontakt
+                .as_mut()
+                .map_or(0.0, super::kontakt_ahdsr::Ahdsr::tick);
+            return 1.0 - self.depth * (1.0 - lvl);
         }
         let lvl = self.level_here();
         let frozen = !released && self.hold_end.is_some_and(|h| self.pos >= h);
@@ -3203,12 +3250,23 @@ impl VoicePool {
 
     /// A script's `fade_out` of every sounding release voice (MOJO 2's
     /// `by_marks($MARK_3)`): linear from the current level over `frames`.
+    /// A voice already in a script's fade (a release sample's tail) is taken
+    /// over from where that fade is, as Kontakt's later fade takes over
+    /// (`ScriptFadeOut` 0x3d6aac); one released by its key keeps its release.
     pub fn fade_out_releases(&mut self, frames: usize) {
         for v in &mut self.voices {
-            if matches!(v.kind, VoiceKind::Release)
-                && !matches!(v.state, VoiceState::Releasing { .. })
-            {
-                Self::script_fade(v, frames.max(1));
+            if !matches!(v.kind, VoiceKind::Release) {
+                continue;
+            }
+            match v.state {
+                VoiceState::Playing => Self::script_fade(v, frames.max(1)),
+                VoiceState::Releasing { frames_remaining } if v.script_faded => {
+                    // the running fade's level becomes the voice's gain
+                    let level = frames_remaining as f32 / v.release_frames.max(1) as f32;
+                    v.gain *= level;
+                    Self::script_fade(v, frames.max(1));
+                }
+                _ => {}
             }
         }
     }

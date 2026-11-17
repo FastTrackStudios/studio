@@ -226,6 +226,7 @@ mod fretboard;
 mod helpers;
 pub(crate) use helpers::kontakt_offset_frames;
 pub mod inserts;
+pub mod kontakt_ahdsr;
 mod kontakt_legato;
 mod kontakt_limiter;
 mod kontakt_marcato;
@@ -2728,6 +2729,32 @@ fn amp_env_for(
     } else {
         AmpEnvRole::Other
     };
+    let artic = spec
+        .articulations
+        .iter()
+        .find(|a| a.id.eq_ignore_ascii_case(artic_id));
+    let depth_of = |a: &crate::spec::ArticulationSpec| {
+        a.amp_env_depths
+            .iter()
+            .find(|d| d.dynamic.eq_ignore_ascii_case(dynamic))
+            .map(|d| d.depth)
+            .or(a.amp_env_depth)
+    };
+    // Kontakt's AHDSR, when the spec gives it, replaces the segments.
+    if let Some((a, k)) = artic.and_then(|a| a.amp_ahdsr.map(|k| (a, k))) {
+        let settings = kontakt_ahdsr::Settings::from_ms(
+            [k.attack_ms, k.hold_ms, k.decay_ms, k.release_ms],
+            k.sustain,
+            k.curve,
+            k.ahd_only,
+            sample_rate,
+        );
+        let e = FlexEnv::kontakt_ahdsr(settings);
+        return Some(match depth_of(a) {
+            Some(d) => e.with_depth_and_stop(d),
+            None => e,
+        });
+    }
     // Authored per-articulation envelope wins.
     let authored = spec
         .articulations
