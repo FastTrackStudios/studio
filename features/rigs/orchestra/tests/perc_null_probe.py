@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Probe a Kontakt percussion instrument for a KONTRA-vs-Kontakt null, keys found by KONTRA.
 
-usage: perc_null_probe.py <instrument.nki> <ksp dir> <out dir> [--kontra BIN] [--repeats N]
+usage: perc_null_probe.py <instrument.nki|multi.nkm> <ksp dir | -> <out dir> [--kontra BIN] [--repeats N]
                           [--max-gap-ms MS] [--vels 20,64,100,127] [--max-hits N]
 
 A script decides what a key plays (1000Drums' zones sit on key 60, its script plays 48..107),
@@ -111,9 +111,11 @@ def main():
                KONTRA_INSPECT_BLOCK="512")
     env.pop("KONTRA_INSPECT_WAV", None)
 
+    # sample lengths for the gap; `-` (a multi: no one decoded folder) leaves the gap at its maximum
     length = {}
-    for z in csv.DictReader(open(os.path.join(ksp, "zones.tsv")), delimiter="\t"):
-        length[os.path.basename(z["sample"])] = int(z["frames"]) / int(z["rate"])
+    if ksp != "-":
+        for z in csv.DictReader(open(os.path.join(ksp, "zones.tsv")), delimiter="\t"):
+            length[os.path.basename(z["sample"])] = int(z["frames"]) / int(z["rate"])
 
     probe = [(k, v) for k in range(128) for v in vels]
     step = 480  # 0.5 s
@@ -126,7 +128,7 @@ def main():
             keep = bool(sig) and sig not in last_sig.get(k, set())
             if keep:
                 last_sig.setdefault(k, set()).add(sig)
-                longest = max((length.get(os.path.basename(s), 0.0) for s in samples), default=0.0)
+                longest = max((length.get(os.path.basename(s), max_gap / 1000) for s in samples), default=0.0)
                 kept.append((k, v, longest))
             f.write(f"{k}\t{v}\t{len(samples)}\t{int(keep)}\t{' '.join(sig)[:300]}\n")
     if not kept:

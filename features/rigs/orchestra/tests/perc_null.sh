@@ -21,9 +21,13 @@ case $lib in
   *) inst="/run/media/AudioHaven/Kontakt/Orchestral/Percussion/$lib/Instruments" ;;
 esac
 data="/run/media/AudioHaven/Sampled/Percussion/$lib"
-rel=$(awk -F'\t' -v t="$tag" '$1==t {print $2}' "$data/_notes/load_list.tsv")
-[ -n "$rel" ] || { echo "$tag: not in $data/_notes/load_list.tsv" >&2; exit 2; }
-nki="$inst/$rel" ksp="$data/_ksp/${rel%.nki}"
+# instruments in load_list.tsv; multis (.nkm, every slot summed) in multi_list.tsv
+rel=$(cat "$data/_notes/load_list.tsv" "$data/_notes/multi_list.tsv" 2>/dev/null | awk -F'\t' -v t="$tag" '$1==t {print $2}')
+[ -n "$rel" ] || { echo "$tag: not in $data/_notes/{load,multi}_list.tsv" >&2; exit 2; }
+case $rel in
+  *.nkm) nki="$(dirname "$inst")/$rel" ksp=- ;;
+  *) nki="$inst/$rel" ksp="$data/_ksp/${rel%.nki}" ;;
+esac
 chain="$ROOT/target/orchestra-ab/chains/fxchain_$tag.txt"
 [ -f "$chain" ] || { echo "$tag: no chain $chain" >&2; exit 2; }
 w="${WORK:-/tmp/kontra}/$tag"
