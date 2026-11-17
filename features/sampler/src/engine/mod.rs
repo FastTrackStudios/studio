@@ -227,6 +227,7 @@ pub mod inserts;
 mod kontakt_legato;
 mod kontakt_marcato;
 pub mod kontakt_saturation;
+mod ksp_rand;
 mod legato;
 mod midi;
 mod phrase;
@@ -1002,6 +1003,13 @@ pub struct SampleEngine {
     pub(crate) script_leg: script_legato::ScriptLegState,
     /// Which controllers have been sent (else a spec's shipped value holds).
     pub(crate) cc_sent: [bool; 128],
+    /// Kontakt's KSP `random()` state when a render pins the script's
+    /// draws (`set_script_seed`); `None` draws from the engine's own.
+    pub(crate) ksp_state: Option<u32>,
+    /// The last random round robin (`rr_random_global`).
+    pub(crate) rr_global_last: u8,
+    /// The note the key noise last tried (`KeynoiseSpec`).
+    pub(crate) keynoise_last: Option<u8>,
     /// Per key, what each of its sounding note-ons played, for a script
     /// release sample (`ArticulationSpec::release_sample`): (articulation,
     /// dynamic, velocity). A key's note-off releases every one of them
@@ -1338,6 +1346,9 @@ impl SampleEngine {
             spawn_fade_in: 0,
             script_leg: script_legato::ScriptLegState::default(),
             cc_sent: [false; 128],
+            ksp_state: None,
+            rr_global_last: 0,
+            keynoise_last: None,
             release_sample_notes: vec![Vec::new(); 128],
             release_body_strike: vec![None; 128],
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,
@@ -1985,6 +1996,27 @@ impl SampleEngine {
     /// replaying a reference render's draws for a null test.
     pub fn force_random_tunes(&mut self, cents: &[i8]) {
         self.forced_tunes = cents.iter().copied().collect();
+    }
+
+    /// Draw the script's random numbers as Kontakt's KSP `random()` from
+    /// this seed (`ksp_rand.rs`): the state the KSP Seed CLAP pins in a
+    /// Kontakt render and `KONTRA_KSP_SEED` in KONTRA, so all three draw
+    /// the same numbers in the same order. (The pin is at transport start:
+    /// draws a script makes in `init`, MOJO 2's humanize seeds, come
+    /// before it and take nothing from a render's draws.)
+    pub fn set_script_seed(&mut self, seed: u32) {
+        self.ksp_state = Some(seed);
+    }
+
+    /// One script draw, `lo..=hi`.
+    pub(crate) fn script_draw(&mut self, lo: i32, hi: i32) -> i32 {
+        match self.ksp_state.as_mut() {
+            Some(state) => ksp_rand::ksp_random(state, lo, hi),
+            None => {
+                let span = (i64::from(hi) - i64::from(lo) + 1).max(1) as usize;
+                lo + (next_zone_random(&mut self.tune_rng) % span) as i32
+            }
+        }
     }
 
     /// Use these random pitch-envelope draws `(cents, decay_ms)` in order

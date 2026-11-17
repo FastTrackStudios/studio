@@ -231,14 +231,18 @@ def build(nki, organized):
             return [r for r in rs if int(r["vel_lo"]) <= v <= int(r["vel_hi"])]
 
         if art in LEGATO:
+            # play_note's velocity is the interval (26031/26036): up
+            # 1 + ⌊i·126/12⌋, down 127 − ⌊i·126/12⌋; a repeated key is down
+            # at 0 (127, the unison band the tail groups hold)
             up = art in ("LegUp", "OctLegUp")
-            for i in range(1, 13):
-                v = int(1 + i * 10.5) if up else int(127 - i * 10.5)
+            for i in range(0 if not up else 1, 13):
+                v = 1 + (i * 126) // 12 if up else 127 - (i * 126) // 12
                 for r in holding(v):
                     emit(r, direction="up" if up else "down", interval=i)
         elif art == "Keyclick":
+            # play_note(64, random(1, 127)): the zone by its velocity band
             for i, r in enumerate(sorted(rs, key=lambda r: int(r["vel_lo"]))):
-                emit(r, rr_index=i)
+                emit(r, rr_index=i, vel_min=int(r["vel_lo"]), vel_max=int(r["vel_hi"]))
         else:
             for rr in range(num_rr):
                 for r in holding((127 // num_rr) * rr + 3):

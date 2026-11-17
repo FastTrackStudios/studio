@@ -890,6 +890,14 @@ impl SamplerRig {
         }
     }
 
+    /// Draw the script's random numbers from a KSP seed — see
+    /// [`crate::engine::SampleEngine::set_script_seed`].
+    pub fn set_script_seed(&self, id: &str, seed: u32) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.set_script_seed(id, seed);
+        }
+    }
+
     /// Replay a reference render's random short RR draws (0-based, in order)
     /// — see [`crate::engine::SampleEngine::force_random_rrs`].
     pub fn force_random_rrs(&self, id: &str, draws: &[u8]) {

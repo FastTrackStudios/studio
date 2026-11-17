@@ -876,6 +876,10 @@ impl SamplerBank {
         self.with_block(id, |b| b.force_random_variants(v));
     }
 
+    pub fn set_script_seed(&mut self, id: &str, seed: u32) {
+        self.with_block(id, |b| b.set_script_seed(seed));
+    }
+
     pub fn force_random_rrs(&mut self, id: &str, v: &[u8]) {
         self.with_block(id, |b| b.force_random_rrs(v));
     }

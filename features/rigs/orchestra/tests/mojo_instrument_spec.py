@@ -129,7 +129,7 @@ def group_eq(art, start, names, fx_slots, notes, lp_floor, envs=None):
                     stages.append(("width", {"width": width}))
             elif s["kind"] == 7 and s.get("filter_type") in (22, 23, 24) and s.get("eq_bands"):
                 stages.append(("eq", {"bands": [v for b in s["eq_bands"] for v in b]}))
-            elif s["kind"] == 7 and s.get("filter_type") == 50 and art in mojo_zones.LEGATO:
+            elif s["kind"] == 7 and s.get("filter_type") == 50 and art in ("LegUp", "LegDown", "LegTail"):
                 # the transition groups' lowpass: the script leaves it (only
                 # octave legato sets it, 26112-26121) at its saved cutoff,
                 # swept open by the group's ENV_FLEX on that slot
@@ -183,6 +183,10 @@ def curved(vel):
     return 1 + (vel * 126) // 127
 
 
+# The articulations whose notes roll the key noise (sustain, staccato, stab,
+# crescendo; not the FX one-shots: KONTRA, oneshots probe, 30 tries for 30 notes).
+KEYNOISE_ARTS = ("Sus", "Stacc", "Stabs")
+
 # The legato's knobs per articulation (persistent_1, names from the
 # script's own rename table, readable-script_1/ren.txt): on, mode CC,
 # mode velocity, transition volume, transition length, its CC (37617+).
@@ -217,6 +221,34 @@ def legato_numbers(p0, pers, knob, vmin, num_vels, art="Sus"):
     layer = lambda vel: max(0, curved(max(vel, 1)) // step - (num_vels - n_leg))
     edges = [next(v for v in range(128) if layer(v) >= k) for k in range(1, n_leg)]
     mode = "cc" if one(cc_var) else "velocity" if one(vel_var) else "speed"
+
+    def timing(L):
+        t = {
+            "fade_in_ms": L("FadeIn"), "trans_offset_ms": L("TransOffset"),
+            "hold_small_ms": L("TransHoldSmall"), "hold_large_ms": L("TransHoldLarge"),
+            "fade_out_ms": L("FadeOut"),
+            "target_offset_ms": g("$MiscInstAttackOffsetMS") + L("TargetOffset"),
+            "slow_small_pct": int(L("SlowSpeedSmall")), "fast_small_pct": int(L("FastSpeedSmall")),
+            "slow_large_pct": int(L("SlowSpeedLarge")), "fast_large_pct": int(L("FastSpeedLarge")),
+            "slowest_ms": int(L("SlowPlayingSpeed")), "fastest_ms": int(L("FastPlayingSpeed")),
+        }
+        if mode == "cc":
+            t["speed_cc"] = len_cc
+            t["speed_cc_default"] = one(len_var)
+        elif mode == "velocity":
+            t["speed_by_velocity"] = "true"
+        return t
+
+    # natural legato (velocity dynamics): NatLegGain instead of TransVol
+    nat_gains = [round(x - ep_db(trans_vol) + float(p0["$MiscNaturalLegatoVol"][0]) / 1000.0, 4)
+                 for x in gains]
+    n_tail = int(p0["$MiscNumLegUpDownUnisTailsIntervals"][0])
+    tail_step = 127 // n_tail + 1
+    tail_edges = [next(v for v in range(128) if curved(max(v, 1)) // tail_step >= k) for k in range(1, n_tail)]
+    octave = timing(lambda k: g(f"$OctLeg{pre}{k}"))
+    natural = {"key": one("$qnlt3"), "on": one("$uzpex") == 1,
+               "length_ms": g("$MiscNaturalLegatoLength"), "gains": nat_gains,
+               "tail_edges": tail_edges, "tail_ms": g("$MiscNatOctLegTailLength")}
     L = lambda k: g(f"$Leg{pre}{k}")
     t = {
         "fade_in_ms": L("FadeIn"), "trans_offset_ms": L("TransOffset"),
@@ -233,6 +265,7 @@ def legato_numbers(p0, pers, knob, vmin, num_vels, art="Sus"):
     elif mode == "velocity":
         t["speed_by_velocity"] = "true"
     return {"on": one(on_var) == 1, "gains": gains, "edges": edges, "timing": t, "mode": mode,
+            "octave": octave, "natural": natural,
             "trans_vol": trans_vol, "max_interval": int(p0["$MiscNumLegIntervals"][0]) - 1}
 
 
@@ -273,6 +306,7 @@ def build(nki):
     inst = re.sub(r"\s+2\.0$", "", nki)
     pers = persistent(os.path.join(ksp, "persistent_1.tsv"))
     p0 = persistent(os.path.join(ksp, "persistent_0.tsv"))
+    g0 = lambda k: float(p0[k][0])
     groups = json.load(open(os.path.join(ksp, "groups.json")))
     program = json.load(open(os.path.join(ksp, "program.json")))
     one = lambda k: int(pers[k][0])
@@ -329,6 +363,18 @@ def build(nki):
             lines += [f"        amp_env ( {body} )", "        amp_env_hold true", "        amp_env_release 1"]
             if depth is not None:
                 lines.append(f"        amp_env_depth {fmt(depth)}  // the ENV -> volume route's intensity")
+        if art in KEYNOISE_ARTS:
+            # the key noise (25520-25557): chance $1stdn, level $zlhlf (0 =
+            # silent, still drawn), the art's knob, the click groups' volume
+            # by curved velocity, ClickFadeMs
+            zl = one("$zlhlf")
+            den = 0.99 ** 127 - 1.0
+            kg = []
+            for v in range(128):
+                ep = 500000 + int(500000 * ((0.99 ** curved(max(v, 1)) - 1.0) / den))
+                kg.append(round(ep_db(ep) + ep_db(zl) + ep_db(knob), 4) if zl > 0 else -144.0)
+            lines.append(f"        keynoise {{ artic Keyclick, key 64, chance_pct {one('$1stdn')}, "
+                         f"fade_ms {fmt(g0('$MiscClickFade'))}, gain_db ({' '.join(fmt(x) for x in kg)}) }}")
         if art in LEGATO_VARS:
             leg = legato_numbers(p0, pers, knob, vmin, 4, art)
             timing = ", ".join(f"{k} {fmt(v) if isinstance(v, float) else v}" for k, v in leg["timing"].items())
@@ -339,6 +385,19 @@ def build(nki):
                 # (28665); its key-up fades the target over Exp2(release knob)
                 rel = 2 ** (one("$oumez") / 73477 + 1) - 2
                 extra = f", bypass_ms {one('$cbfyl')}, release_fade_ms {fmt(rel)}"
+            fmt_t = lambda tt: ", ".join(f"{k} {fmt(v) if isinstance(v, float) else v}" for k, v in tt.items())
+            # octave legato: pedal (CC64) and a leap past 3 keys (25595), the
+            # Octave_Legato groups at layer 0, the $OctLeg* set
+            extra += (f",\n            octave {{ up OctLegUp, down OctLegDown, pedal_cc 64, min_leap 3, "
+                      f"timing {{ {fmt_t(leg['octave'])} }} }}")
+            if art == "Sus":
+                # natural legato: latched key $qnlt3, $uzpex, NatLegLen,
+                # NatLegGain, the unison tails (decode-legato.md §2-§4)
+                n = leg["natural"]
+                extra += (f",\n            natural {{ key {n['key']}, on {'true' if n['on'] else 'false'}, "
+                          f"length_ms {fmt(n['length_ms'])}, tail LegTail, "
+                          f"tail_layer_thresholds ({' '.join(map(str, n['tail_edges']))}), tail_ms {fmt(n['tail_ms'])},\n"
+                          f"                gain_db ({' '.join(fmt(x) for x in n['gains'])}) }}")
             lines += [
                 f"        // the {art} legato (decode-legato.md); speed by {leg['mode']}; TransVol {leg['trans_vol']}",
                 f"        script_legato {{ enable_cc {26 if art == 'Sus' else 32}, on {'true' if leg['on'] else 'false'}, "
@@ -366,7 +425,10 @@ def build(nki):
     tail_ms = 2 ** (one("$q1stw") / 73477 + 1) - 2
     # The legato transition groups: their envelope, inserts and the
     # ensemble trim (the transition's level is its `script_legato` table).
-    for art, var in (("LegUp", "$MiscLegUpGroupStart"), ("LegDown", "$MiscLegDownGroupStart")):
+    for art, var in (("LegUp", "$MiscLegUpGroupStart"), ("LegDown", "$MiscLegDownGroupStart"),
+                     ("OctLegUp", "$MiscOctLegUpGroupStart"), ("OctLegDown", "$MiscOctLegDownGroupStart"),
+                     ("LegTail", "$MisLegUpDownUnisonTailsGroupStart"),
+                     ("Keyclick", "$KeyClickGroupStart")):
         gstart = int(p0[var][0])
         env, why = ahdsr_env(groups, gstart)
         if isinstance(why, str):

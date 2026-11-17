@@ -396,6 +396,11 @@ impl SampleEngine {
 
         self.resolve_pending_cc58(velocity);
 
+        // A script legato's natural key toggles it and sounds nothing.
+        if self.script_natural_key(note) {
+            return;
+        }
+
         // A key outside the articulation's playable range plays nothing
         // (MOJO 2: the whole note callback sits in `if in_range(note,
         // %ArtRange[art])`, script_1.ksp:25170).
@@ -582,7 +587,7 @@ impl SampleEngine {
             return;
         }
         let release_frames = self.pedal_release_frames();
-        if self.cc64_held {
+        if self.cc64_held && !self.patch.spec.performance.pedal_ignored {
             // Sustain pedal held — defer release.
             self.deferred_note_off_velocities
                 .insert(note, release_velocity);
@@ -702,11 +707,73 @@ impl SampleEngine {
         self.do_note_off_with_release_frames(note, release_velocity, release_frames);
     }
 
+    /// The articulation's key noise after a note (`KeynoiseSpec`): tried on
+    /// a note other than the last tried, `random(1, 100) <= chance`, then
+    /// the zone of `random(1, 127)`'s band at the spec's key, its own
+    /// strike, fading out from its start.
+    fn keynoise(&mut self, artic: &str, note: u8, velocity: u8) {
+        let Some(kn) = self
+            .patch
+            .spec
+            .articulation(artic)
+            .and_then(|a| a.keynoise.clone())
+        else {
+            return;
+        };
+        if self.keynoise_last == Some(note) {
+            return;
+        }
+        self.keynoise_last = Some(note);
+        if self.script_draw(1, 100) > kn.chance_pct {
+            return;
+        }
+        let v = self.script_draw(1, 127) as u8;
+        let Some(idx) = self.zone_keys.get(usize::from(kn.key)).and_then(|c| {
+            c.iter().map(|&i| i as usize).find(|&i| {
+                let z = &self.patch.spec.zones[i];
+                (z.vel_min..=z.vel_max).contains(&v) && self.zone_passes(z, &kn.artic, "", "")
+            })
+        }) else {
+            return;
+        };
+        let gain = kn
+            .gain_db
+            .get(usize::from(velocity.min(127)))
+            .map_or(1.0, |&db| db_to_gain(db));
+        let saved = (
+            self.spawn_extra_start,
+            self.spawn_fade_in,
+            self.spawn_stretch,
+        );
+        (
+            self.spawn_extra_start,
+            self.spawn_fade_in,
+            self.spawn_stretch,
+        ) = (0, 0, 1.0);
+        self.voices.begin_strike();
+        let strike = self.voices.current_strike();
+        self.spawn_zone_voice(idx, kn.key, VoiceKind::Short, gain, None, 0.0);
+        (
+            self.spawn_extra_start,
+            self.spawn_fade_in,
+            self.spawn_stretch,
+        ) = saved;
+        self.voices
+            .fade_out_strike_bodies(strike, ms_to_frames_f(kn.fade_ms, self.sample_rate));
+    }
+
     /// A script's release (`ArticulationSpec::release_sample`): `note`'s
     /// voices fade out over `fade_ms` and a zone of the release articulation
     /// in the note-on's `dynamic` starts `start_ms` in, at
     /// `gain_db[velocity]` (its own `amp_env` fades it in and out).
-    fn script_release(&mut self, line: u8, note: u8, artic: &str, dynamic: &str, velocity: u8) {
+    pub(crate) fn script_release(
+        &mut self,
+        line: u8,
+        note: u8,
+        artic: &str,
+        dynamic: &str,
+        velocity: u8,
+    ) {
         let Some(rs) = self
             .patch
             .spec
@@ -1311,6 +1378,7 @@ impl SampleEngine {
                     velocity,
                 ));
             }
+            self.keynoise(&artic, note, velocity);
         }
     }
 
@@ -1391,6 +1459,14 @@ impl SampleEngine {
         let recent = self.short_rr_hist[key];
         let pick = if let Some(f) = self.forced_rrs.pop_front() {
             usize::from(f) % n
+        } else if self.patch.spec.performance.rr_random_global && n > 1 {
+            // one global last pick; `while (new = last) new := random(0, n−1)`
+            let last = usize::from(self.rr_global_last);
+            let mut r = last;
+            while r == last {
+                r = self.script_draw(0, n as i32 - 1) as usize;
+            }
+            r
         } else if n <= avoid {
             // Nothing is free: Kontakt would spin forever; take the oldest.
             usize::from(recent[avoid - 1]).min(n - 1)
@@ -1405,6 +1481,7 @@ impl SampleEngine {
         let h = &mut self.short_rr_hist[key];
         h.copy_within(0..3, 1);
         h[0] = pick as u8;
+        self.rr_global_last = pick as u8;
         Some(pick)
     }
 

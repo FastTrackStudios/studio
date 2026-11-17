@@ -192,15 +192,24 @@ impl SampleEngine {
         .into_iter()
         .flatten()
         .collect();
-        // A script legato's transitions (`script_legato`): cold, they are
-        // silent the same way.
-        if let Some(sl) = artic
+        // A script legato's transitions (`script_legato`) and key noise
+        // (`keynoise`): cold, they are silent the same way.
+        if let Some(a) = artic
             .as_deref()
             .and_then(|a| self.patch.spec.articulation(a))
-            .and_then(|a| a.script_legato.as_ref())
         {
-            warm_ids.push(sl.up.clone());
-            warm_ids.push(sl.down.clone());
+            if let Some(sl) = a.script_legato.as_ref() {
+                warm_ids.extend([sl.up.clone(), sl.down.clone()]);
+                if let Some(o) = &sl.octave {
+                    warm_ids.extend([o.up.clone(), o.down.clone()]);
+                }
+                if let Some(n) = &sl.natural {
+                    warm_ids.push(n.tail.clone());
+                }
+            }
+            if let Some(k) = a.keynoise.as_ref() {
+                warm_ids.push(k.artic.clone());
+            }
         }
         // A pending CC58 velocity-group resolves to its concrete articulation
         // only at note-on (from the note's velocity), so `effective_articulation`

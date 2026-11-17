@@ -141,6 +141,13 @@ fn render_one(
     if let Some(v) = draws::<i8>(args, "--tunes") {
         rig.force_random_tunes(ID, &v);
     }
+    // `--ksp-seed N`: the script's KSP random() from seed N, as the KSP Seed
+    // CLAP pins Kontakt and KONTRA_KSP_SEED pins KONTRA (MOJO 2).
+    if let Some(v) = draws::<u32>(args, "--ksp-seed") {
+        if let Some(&seed) = v.first() {
+            rig.set_script_seed(ID, seed);
+        }
+    }
     // `--rrs a,b,…`: random short RR draws (0-based; woodwinds / brass).
     if let Some(v) = draws::<u8>(args, "--rrs") {
         rig.force_random_rrs(ID, &v);

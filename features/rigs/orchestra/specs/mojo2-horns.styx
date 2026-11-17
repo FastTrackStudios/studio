@@ -57,6 +57,8 @@ performance {
     zone_pitch_tolerance 0    // every key has its own zone or range
     loop_xfade_ms      0      // the sustain zones loop hard (no crossfade decoded)
     release_delay_ms   0.0
+    pedal_ignored      true   // the script reads CC64 (octave legato); key-ups are not held
+    rr_random_global   true   // one RR for every articulation and key (UpdateRoundRobinIndex)
 }
 
 dynamics {
@@ -106,6 +108,37 @@ articulations (
     {
         id       LegDown
         label    "Legato down"
+        kind     @Special
+        dynamics (v1 v2 v3 v4)
+        notes    full
+    }
+    // Octave legato (pedal) transitions: one layer; natural legato's
+    // unison tails (the Down unison band).
+    {
+        id       OctLegUp
+        label    "Octave legato up"
+        kind     @Special
+        dynamics (v1 v2 v3 v4)
+        notes    full
+    }
+    {
+        id       OctLegDown
+        label    "Octave legato down"
+        kind     @Special
+        dynamics (v1 v2 v3 v4)
+        notes    full
+    }
+    // Key noise (`keynoise` on Sus and Stabs): played at key 64 by a random
+    // velocity band, never selected.
+    {
+        id       Keyclick
+        label    "Key noise"
+        kind     @Special
+        notes    full
+    }
+    {
+        id       LegTail
+        label    "Legato unison tail"
         kind     @Special
         dynamics (v1 v2 v3 v4)
         notes    full

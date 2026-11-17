@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MOJO 2: our engine against KONTRA running MOJO's own script, voice by voice.
 
-    mojo_vs_kontra.py <mode> <tag> [--kontra BIN] [--ours BIN]
+    mojo_vs_kontra.py <mode> <tag> [--kontra BIN] [--ours BIN] [--seed N]
 
 KONTRA (kontra-inspect play) runs the instrument's real KSP on the probe of
 target/orchestra-ab/sec/mojo_<tag>/<mode>/ and reports every voice it
@@ -12,6 +12,10 @@ render_css_live --rrs, so the two renders play the same recordings; then
 - the voice lists are compared in order (file, start position, gain), and
 - null_test.py scores our audio against KONTRA's (the KONTRA wav stands in
   for "Kontakt": a residual here is OUR model differing from the script).
+
+`--seed N`: no replay — both draw the script's random numbers from KSP
+seed N (KONTRA_KSP_SEED, render_css_live --ksp-seed), so every pick and
+the key noise must agree on their own; keyclicks are compared too.
 
 A difference between KONTRA and Kontakt is KONTRA's to fix, not ours to fit.
 Writes kontra.wav, kontra_play.json, ours_vs_kontra.wav, vs_kontra.txt,
@@ -72,6 +76,7 @@ def main():
     kontra = arg("--kontra", "/run/media/Development/KONTRA-mojo/target/release/kontra-inspect")
     ours_bin = arg("--ours", os.path.join(REPO, "target/x86_64-unknown-linux-gnu/desktop-dev/examples/render_css_live"))
     npy = os.environ.get("NPY_PYTHON", sys.executable)
+    seed = arg("--seed", None)
     d = os.path.join(REPO, "target/orchestra-ab/sec", f"mojo_{tag}", mode)
     mid = os.path.join(d, f"{mode}.mid")
 
@@ -82,7 +87,8 @@ def main():
                        stdout=f, check=True, timeout=120)
     kwav, kjson = os.path.join(d, "kontra.wav"), os.path.join(d, "kontra_play.json")
     subprocess.run([kontra, "play", os.path.join(KONTAKT_LIB, f"{inst} 2.0.nki"), "--scenario", scn,
-                    "--json", kjson], env={**os.environ, "KONTRA_INSPECT_WAV": kwav},
+                    "--json", kjson],
+                   env={**os.environ, "KONTRA_INSPECT_WAV": kwav, **({"KONTRA_KSP_SEED": seed} if seed else {})},
                    check=True, timeout=1800, capture_output=True)
     float_to_pcm24(kwav)
     res = json.load(open(kjson))["result"]
@@ -121,7 +127,8 @@ def main():
     # 3. ours, replaying KONTRA's picks
     owav, otrace = os.path.join(d, "ours_vs_kontra.wav"), os.path.join(d, "ours_vs_kontra_trace.txt")
     with open(otrace, "w") as f:
-        subprocess.run([ours_bin, mid, owav, "--library", "mojo", "--section", inst, "--rrs", ",".join(rrs),
+        draws = ["--ksp-seed", seed] if seed else ["--rrs", ",".join(rrs)]
+        subprocess.run([ours_bin, mid, owav, "--library", "mojo", "--section", inst, *draws,
                         "--trace"], stdout=f, stderr=subprocess.STDOUT, check=True, timeout=1800)
     pat = re.compile(r"\[v\d+\]\s+([\d.]+)s\s+\S+\s+(\S.*?\.wav)\s+note.*?gain\s+([\d.]+).*?start\s+(\d+)")
     ovoices = []
@@ -131,8 +138,9 @@ def main():
             ovoices.append((round(float(m[1]) * 48000), m[2], float(m[4]), 20 * math.log10(float(m[3]) or 1e-9)))
 
     # 4. voice lists side by side (keyclicks apart: not modelled yet), and the audio null
-    clicks = [k for k in kvoices if k[1] and "keyclick" in k[1].lower()]
-    kvoices = [k for k in kvoices if not (k[1] and "keyclick" in k[1].lower())]
+    clicks = [] if seed else [k for k in kvoices if k[1] and "keyclick" in k[1].lower()]
+    if not seed:
+        kvoices = [k for k in kvoices if not (k[1] and "keyclick" in k[1].lower())]
     out = [f"KONTRA voices {len(kvoices)} (+{len(clicks)} keyclicks, not modelled), ours {len(ovoices)}"]
     for i in range(max(len(kvoices), len(ovoices))):
         k = kvoices[i] if i < len(kvoices) else None

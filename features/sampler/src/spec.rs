@@ -616,6 +616,16 @@ pub struct PerformanceSpec {
     /// Delay from note-off to the release sample (ms). CSS: 2 (KSP `wait(2000)`).
     #[facet(default)]
     pub release_delay_ms: f32,
+    /// The sustain pedal (CC64) does not hold key-ups: the instrument's
+    /// script reads the pedal itself (MOJO 2's octave legato), and its
+    /// release callbacks run at the key-ups (KONTRA trace).
+    #[facet(default)]
+    pub pedal_ignored: bool,
+    /// The random round robin avoids the last pick of ANY articulation and
+    /// key (one script global, MOJO 2's `UpdateRoundRobinIndex`), not the
+    /// key's own history.
+    #[facet(default)]
+    pub rr_random_global: bool,
     /// Global master tune in cents, applied on top of the per-note transpose.
     /// CSS ships `tune=1.00521` ≈ +9.0 cents on every playable group; other
     /// libraries stay at 0.
@@ -769,6 +779,8 @@ impl Default for PerformanceSpec {
             release_held_table: Vec::new(),
             release_held_db: 0.0,
             release_delay_ms: 0.0,
+            pedal_ignored: false,
+            rr_random_global: false,
             master_tune_cents: 0.0,
             loop_xfade_ms: 150,
             zone_pitch_tolerance: 2,
@@ -1368,6 +1380,7 @@ pub struct ArticulationOverlay {
     pub release_sample: Option<ReleaseSampleSpec>,
     pub fade_releases_ms: Option<f32>,
     pub script_legato: Option<ScriptLegatoSpec>,
+    pub keynoise: Option<KeynoiseSpec>,
     pub amp_env_depth: Option<f32>,
     pub phrase: Option<PhraseSpec>,
     /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
@@ -1476,6 +1489,9 @@ impl SectionOverlay {
             }
             if let Some(v) = &o.script_legato {
                 a.script_legato = Some(v.clone());
+            }
+            if let Some(v) = &o.keynoise {
+                a.keynoise = Some(v.clone());
             }
             if let Some(v) = o.amp_env_depth {
                 a.amp_env_depth = Some(v);
@@ -2745,6 +2761,10 @@ pub struct ArticulationSpec {
     /// A script's monophonic legato (see [`ScriptLegatoSpec`]).
     #[facet(default)]
     pub script_legato: Option<ScriptLegatoSpec>,
+    /// A script's key noise on this articulation's notes (see
+    /// [`KeynoiseSpec`]).
+    #[facet(default)]
+    pub keynoise: Option<KeynoiseSpec>,
     /// Per velocity band, `(compare, store)`: which band's last-RR memory the
     /// no-repeat rule reads and which it writes. Empty = each band its own.
     /// CSS pizzicato reads an unwritten table in bands 2 and 4 and writes
@@ -2882,6 +2902,21 @@ pub struct ReleaseSampleSpec {
     pub gain_db: Vec<f32>,
 }
 
+/// A script's key noise (MOJO 2's keyclicks, script_1.ksp 25520-25557): on
+/// a note that is not the last one it tried, it draws `random(1, 100)`
+/// and, at or under `chance_pct`, plays `artic` at `key` with velocity
+/// `random(1, 127)` (the zone by its velocity band), at `gain_db[note-on
+/// velocity]`, fading out linearly over `fade_ms` from its start.
+#[derive(Debug, Clone, Facet)]
+pub struct KeynoiseSpec {
+    pub artic: String,
+    pub key: u8,
+    pub chance_pct: i32,
+    #[facet(default)]
+    pub gain_db: Vec<f32>,
+    pub fade_ms: f32,
+}
+
 /// A script's monophonic legato over a one-layer sustain (MOJO 2's legato
 /// engine, script_1.ksp 25570-28257 and the release callback 33710-37579;
 /// `_notes/decode-legato.md`). With it on, a note within `max_interval` of
@@ -2928,6 +2963,51 @@ pub struct ScriptLegatoSpec {
     /// articulation's release sample. 0 = the release sample.
     #[facet(default)]
     pub release_fade_ms: f32,
+    /// Octave legato: with the pedal down, a leap of more than three keys
+    /// (or a fresh note) takes this set and these transitions (25595).
+    #[facet(default)]
+    pub octave: Option<ScriptLegatoOctave>,
+    /// Natural legato, switched by a latched key (see its doc).
+    #[facet(default)]
+    pub natural: Option<ScriptLegatoNatural>,
+}
+
+/// Octave legato (`ScriptLegatoSpec::octave`).
+#[derive(Debug, Clone, Facet)]
+pub struct ScriptLegatoOctave {
+    pub up: String,
+    pub down: String,
+    /// The pedal controller (down at 64 and above).
+    pub pedal_cc: u8,
+    /// Octave when `|note − last| >` this (MOJO 2: 3).
+    pub min_leap: u8,
+    /// Curved-velocity edges of its transitions' dynamics; empty = the first.
+    #[facet(default)]
+    pub layer_thresholds: Vec<u8>,
+    pub timing: ScriptLegatoTiming,
+}
+
+/// Natural legato (`ScriptLegatoSpec::natural`, 26088-26100, 26460,
+/// 27112-28249): the transition plays at its recorded speed and IS the
+/// note (no target), at `gain_db`; after `length_ms`, the key still down
+/// and the note still the line's last, it ends with the release sample
+/// and the next note is fresh. With octave legato it hands over to a
+/// unison tail (`tail`, offset 0, the sustain's level) instead of the
+/// target, which ends the same way after `tail_ms`.
+#[derive(Debug, Clone, Facet)]
+pub struct ScriptLegatoNatural {
+    /// The key that toggles it (it sounds nothing), and its shipped state.
+    pub key: u8,
+    #[facet(default)]
+    pub on: bool,
+    pub length_ms: f32,
+    /// The transition's level by MIDI velocity, dB (128 entries).
+    #[facet(default)]
+    pub gain_db: Vec<f32>,
+    pub tail: String,
+    #[facet(default)]
+    pub tail_layer_thresholds: Vec<u8>,
+    pub tail_ms: f32,
 }
 
 /// The legato timing set of one kind of connection (`ScriptLegatoSpec`).
