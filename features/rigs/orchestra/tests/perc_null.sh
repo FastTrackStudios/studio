@@ -54,7 +54,10 @@ echo "$tag: $line"
 # reference only for an instrument that does not null on every unit.
 if [ -n "${CLEAN:-}" ]; then
   rm -f k24.wav out.json
-  if [[ $line =~ NULLED\ \(\<=\ -60\ dB\)\ ([0-9]+)/([0-9]+) ]] && [ "${BASH_REMATCH[1]}" = "${BASH_REMATCH[2]}" ]; then
+  # keep the reference while there is something to look at: a miss, or a median above -95 dB
+  if [[ $line =~ median\ +(-?[0-9.]+)\ dB.*NULLED\ \(\<=\ -60\ dB\)\ ([0-9]+)/([0-9]+) ]] \
+    && [ "${BASH_REMATCH[2]}" = "${BASH_REMATCH[3]}" ] \
+    && awk -v m="${BASH_REMATCH[1]}" 'BEGIN { exit !(m <= -95) }'; then
     rm -rf "ref$SEED"
   fi
 fi
