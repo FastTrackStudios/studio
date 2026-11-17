@@ -76,6 +76,30 @@ idioms already known, and what you measured. `LESSONS.md` here is the
 catalogue of Kontakt behaviours already decoded — read it before modelling.
 **Done when** every articulation the probes will play has a written model.
 
+**Run the script before you trust a reading of it.** KONTRA
+(`/run/media/Development/KONTRA`, Apache-2.0) compiles and runs the
+library's own KSP on the real NKI and traces every callback and script
+action at the sample clock. Its trace is the ground truth for what the script
+commands; our model must issue the same events. Use the extended build
+`/run/media/Development/KONTRA-inspect-vars/target/release/kontra-inspect`
+(local branch `local/inspect-vars`: group start criteria in
+`get_engine_par`, the variable watch):
+
+```sh
+python3 -I features/rigs/orchestra/tests/analysis/mid2kontra.py probe.mid > scn.json
+KONTRA_INSPECT_VARS='1:$x,1:%arr[3]' \
+  kontra-inspect play <instrument.nki> --scenario scn.json --json out.json
+```
+
+In `out.json` → `result`: `stage_events` (callbacks with slot / name /
+resume; `script_action` with `action` and `args`: PlayNote, ChangeVol,
+FadeOut, SetEventParArr, Random…), `var_changes`, `script_faults`,
+`unhandled_actions`. Check the trace reaches `PlayNote`: an unanswered
+engine par reads 0 and can send the script down the wrong branch. Its
+`random()` is not Kontakt's, so the draws still come from fitting. Where
+KONTRA falls short, extend it on a local branch of your own (from
+`local/inspect-vars`), never pushed upstream.
+
 ### 4. Spec, overlays, registration
 - Library spec: `features/rigs/orchestra/specs/<library>.styx` (shared
   structure: articulations, keyswitch `cc58_map`, legato engine, defaults).
