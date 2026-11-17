@@ -14,6 +14,16 @@ Modes:
   oneshots  Staccato and Stabs at velocities across all four layers
             (20 50 80 110 127), the one-layer FX at 60 and 110; three keys each.
   stacc     Staccato only (the first null).
+  sustains  Sustains, legato off (shipped): held notes at several velocities
+            (body loop + normal release sample), re-struck keys, notes 300 ms
+            apart (the previous sustain's fade).
+  legato    Sustains with legato on (CC26 = 127): overlapping pairs at several
+            intervals and speeds, a fast run, natural legato (key C#2 = 37,
+            latched), octave legato (CC64 held), a held note under a line.
+  phrases   Musical horn lines mixing articulations: stabs into staccato, a
+            sustain ended by a fall (Falls keyswitch at velocity 127 while held),
+            doit / shake releases (release-type keys 97 / 98, then 96 back).
+  swells    Swells and crescendos (keys G1 / G#1) at 120 BPM, several keys.
 """
 import os, re, sys
 
@@ -21,7 +31,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gen_probe import Smf  # noqa: E402  (same SMF writer and tick grid)
 
 KEYSWITCH = {"Sus": 24, "Stacc": 25, "Stabs": 26, "BendDown": 27, "RunDown": 28, "RunUp": 29,
-             "Rise": 30, "Doits": 33, "Shakes": 34, "Trills": 35, "Falls": 36}
+             "Rise": 30, "Swells": 31, "Cresc": 32, "Doits": 33, "Shakes": 34, "Trills": 35, "Falls": 36}
+NATURAL_LEGATO = 37
+RELEASE_KEY = {"normal": 96, "doit": 97, "shake": 98, "trill": 99, "fall": 100}
+# script articulation order (`%ArtRange` = persistent `%yqd5p`, lo/hi pairs)
+SCRIPT_ARTS = ["Sus", "Stacc", "Stabs", "BendDown", "RunDown", "RunUp", "Doits",
+               "Rise", "Shakes", "Trills", "Swells", "Cresc", "Falls"]
 LAYERED = (20, 50, 80, 110, 127)
 ONE_LAYER = (60, 110)
 MODES = {
@@ -34,44 +49,160 @@ WIN = 3.5    # window scored from the note-on
 GAP = 1.5    # silence after the window
 
 
-def key_ranges(section_styx):
-    """`id` → (lo, hi) from an instrument's section.styx."""
-    out, cur = {}, None
-    for line in open(section_styx):
-        m = re.match(r"\s*id (\S+)", line)
-        if m:
-            cur = m.group(1)
-        m = re.match(r"\s*key_range \((\d+) (\d+)\)", line)
-        if m and cur:
-            out[cur] = (int(m.group(1)), int(m.group(2)))
-    return out
+def key_ranges(ksp_dir):
+    """Articulation id → (lo, hi): the shipped `%ArtRange` (persistent `%yqd5p`)."""
+    for line in open(os.path.join(ksp_dir, "persistent_1.tsv")):
+        if line.startswith("%yqd5p\t"):
+            v = [int(x) for x in line.split("\t")[1].split()]
+            return {a: (v[2 * i], v[2 * i + 1]) for i, a in enumerate(SCRIPT_ARTS)}
+    raise SystemExit("no %yqd5p")
+
+
+class Probe:
+    """Units on a timeline: each starts after the last one's window and a gap."""
+
+    def __init__(self):
+        self.m, self.rows, self.t = Smf(), [], 1.0
+
+    def ks(self, art, vel=100, gap=0.6):
+        self.m.note(self.t, 0.1, KEYSWITCH[art], vel)
+        self.t += gap
+
+    def unit(self, cat, desc, notes, ccs=(), tail=3.0, pitch=0):
+        """`notes` = [(t_rel, dur, key, vel)], `ccs` = [(t_rel, cc, val)], relative to the
+        unit start; the window runs to the last note-off + `tail`."""
+        t0 = self.t
+        for dt, num, val in ccs:
+            self.m.cc(t0 + dt, num, val)
+        end = 0.0
+        for dt, dur, key, vel in notes:
+            self.m.note(t0 + dt, dur, key, vel)
+            end = max(end, dt + dur)
+        win = end + tail
+        self.rows.append((len(self.rows), f"{t0:.3f}", f"{win:.3f}", pitch or notes[0][2], cat, desc))
+        self.t = t0 + win + 1.5
+
+
+def scale(lo, hi):
+    """A major-scale ladder around the middle of a range (tonic a fifth below it)."""
+    mid = (lo + hi) // 2
+    root = mid - 7
+    steps = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16]
+    return [root + s for s in steps if lo <= root + s <= hi]
+
+
+def one_shots(p, ranges, arts):
+    for art, vels in arts:
+        lo, hi = ranges[art]
+        p.ks(art, gap=1.0)  # the spacing the oneshots references were rendered with
+        for key in sorted({lo + 2, (lo + hi) // 2, hi - 3}):
+            for vel in vels:
+                p.unit(art.upper(), f"{art} key{key} v{vel}", [(0, HOLD, key, vel)], tail=WIN - HOLD)
+
+
+def sustains(p, ranges):
+    lo, hi = ranges["Sus"]
+    sc = scale(lo, hi)
+    p.ks("Sus")
+    for key in (sc[1], sc[4], sc[-2]):
+        for vel in (30, 70, 115):
+            p.unit("SUS", f"Sus key{key} v{vel} hold2.5", [(0, 2.5, key, vel)])
+    k = sc[4]
+    p.unit("SUS-REP", f"Sus key{k} restrike x3 every 0.6s", [(0, 0.5, k, 90), (0.6, 0.5, k, 90), (1.2, 0.5, k, 90)])
+    p.unit("SUS-REP", f"Sus key{k} restrike while held", [(0, 1.2, k, 90), (0.8, 1.2, k, 90)])
+    p.unit("SUS-SEP", "Sus two notes 300 ms apart", [(0, 0.7, sc[2], 90), (1.0, 0.7, sc[4], 90)])
+    p.unit("SUS-SHORT", f"Sus key{k} 150 ms note", [(0, 0.15, k, 100)])
+
+
+def legato(p, ranges):
+    lo, hi = ranges["Sus"]
+    sc = scale(lo, hi)
+    base = sc[3]
+    p.ks("Sus")
+    p.m.cc(p.t, 26, 127)  # sustain legato on (CC26 toggle)
+    p.t += 0.5
+    for iv in (1, 2, 4, 7, -2, -5):
+        for ioi, vel in ((0.30, 90), (0.80, 60)):
+            a, b = base, base + iv
+            p.unit("LEG", f"Leg {a}->{b} ioi{int(ioi*1000)} v{vel}",
+                   [(0, ioi + 0.10, a, vel), (ioi, 1.2, b, vel)])
+    run = sc[:8]
+    p.unit("LEG-RUN", "Leg run 8 notes ioi150", [(i * 0.15, 0.20, k, 95) for i, k in enumerate(run)])
+    p.unit("LEG-HOLD", "Leg held note under a line", [(0, 2.0, base, 90)]
+           + [(0.4 + i * 0.35, 0.40, k, 90) for i, k in enumerate((base + 2, base + 4, base + 2))])
+    p.m.note(p.t, 0.1, NATURAL_LEGATO, 100)  # natural legato (latched toggle)
+    p.t += 0.5
+    p.unit("LEG-NAT", "Natural legato run ioi200", [(i * 0.2, 0.25, k, 95) for i, k in enumerate(sc[:6])])
+    p.m.note(p.t, 0.1, NATURAL_LEGATO, 100)  # back to regular legato
+    p.t += 0.5
+    p.unit("LEG-OCT", "Octave legato +7 (pedal)", [(0, 0.5, base, 95), (0.4, 1.2, base + 7, 95)],
+           ccs=[(-0.2, 64, 127), (2.0, 64, 0)])
+    p.unit("LEG-OCT", "Octave legato -12 (pedal)", [(0, 0.5, base + 7, 95), (0.4, 1.2, base - 5, 95)],
+           ccs=[(-0.2, 64, 127), (2.0, 64, 0)])
+    p.m.cc(p.t, 26, 0)
+
+
+def phrases(p, ranges):
+    lo, hi = ranges["Sus"]
+    sc = scale(lo, hi)
+    # stabs into staccato: a typical horn-section punch
+    p.ks("Stabs")
+    p.unit("PHR-STAB", "Stab hits on the beat", [(i * 0.5, 0.2, sc[4 + (i % 2)], 110) for i in range(4)])
+    p.ks("Stacc")
+    p.unit("PHR-STACC", "Staccato eighths line", [(i * 0.25, 0.12, k, v) for i, (k, v) in
+                                                  enumerate(zip(sc[2:8], (100, 80, 90, 80, 100, 110)))])
+    # a sustain ended by a fall: Falls keyswitch at 127 while the note is held
+    p.ks("Sus")
+    k = sc[5]
+    p.m.note(p.t + 1.2, 0.1, KEYSWITCH["Falls"], 127)
+    p.unit("PHR-FALL", "Sus then fall release via KS v127", [(0, 2.0, k, 100)], tail=3.0)
+    # release types: doit, then shake, then back to normal
+    for rel in ("doit", "shake"):
+        p.m.note(p.t, 0.1, RELEASE_KEY[rel], 100)
+        p.t += 0.5
+        p.unit("PHR-REL", f"Sus with {rel} release", [(0, 1.0, k, 100)], tail=3.0)
+    p.m.note(p.t, 0.1, RELEASE_KEY["normal"], 100)
+    p.t += 0.5
+    # mixed line: stab, two staccatos, held sustain
+    p.ks("Stabs")
+    p.unit("PHR-MIX", "Stab", [(0, 0.2, sc[4], 115)], tail=1.0)
+    p.ks("Stacc")
+    p.unit("PHR-MIX", "Two staccatos", [(0, 0.12, sc[3], 95), (0.25, 0.12, sc[2], 95)], tail=1.5)
+    p.ks("Sus")
+    p.unit("PHR-MIX", "Held sustain", [(0, 1.5, sc[4], 85)])
+
+
+def swells(p, ranges):
+    for art in ("Swells", "Cresc"):
+        lo, hi = ranges[art]
+        p.ks(art)
+        for key in sorted({lo + 3, (lo + hi) // 2, hi - 4}):
+            for vel in (60, 110):
+                p.unit(art.upper(), f"{art} key{key} v{vel} hold4", [(0, 4.0, key, vel)], tail=3.0)
+
+
+MODE_FN = {"sustains": sustains, "legato": legato, "phrases": phrases, "swells": swells}
 
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if len(args) != 4 or args[0] not in MODES:
+    if len(args) != 4 or (args[0] not in MODES and args[0] not in MODE_FN):
         raise SystemExit(__doc__)
     mode, inst, mid, manifest = args
     root = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--root=")),
                 "/run/media/AudioHaven/Sampled/Horns/MOJO 2 Horn Section")
-    ranges = key_ranges(os.path.join(root, "_patches", inst, "section.styx"))
-    m, rows, t = Smf(), [], 1.0
-    for art, vels in MODES[mode]:
-        lo, hi = ranges[art]
-        keys = sorted({lo + 2, (lo + hi) // 2, hi - 3})
-        m.note(t, 0.1, KEYSWITCH[art], 100)
-        t += 1.0
-        for key in keys:
-            for vel in vels:
-                m.note(t, HOLD, key, vel)
-                rows.append((len(rows), f"{t:.3f}", f"{WIN:.3f}", key, art.upper(), f"{art} key{key} v{vel}"))
-                t += WIN + GAP
-    m.write(mid)
+    ranges = key_ranges(os.path.join(root, "_ksp", f"{inst} 2.0"))
+    p = Probe()
+    if mode in MODES:
+        one_shots(p, ranges, MODES[mode])
+    else:
+        MODE_FN[mode](p, ranges)
+    p.m.write(mid)
     with open(manifest, "w") as f:
         f.write("idx\tt_start\twin\tpitch\tcategory\tdescription\n")
-        for r in rows:
+        for r in p.rows:
             f.write("\t".join(map(str, r)) + "\n")
-    print(f"{len(rows)} units, {t:.1f} s")
+    print(f"{len(p.rows)} units, {p.t:.1f} s")
 
 
 if __name__ == "__main__":

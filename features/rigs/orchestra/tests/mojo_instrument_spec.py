@@ -82,12 +82,20 @@ def ahdsr_env(groups, start):
     return [(max(env["attack_ms"], 0.0), 1.0, tension), (env["release_ms"], 0.0, 0.5)], None
 
 
-def group_eq(art, start, names, fx_slots, notes):
-    """`(dynamic, bands)` per layer of `art`: the active EQ insert (kind 7,
-    filter type 22-24) of each layer's Bus1 group, the group the shipped
-    Mix mic plays. Layers are the articulation's 4-group blocks from `start`
-    (dynamic named by mojo_zones.classify). Other active inserts are noted,
-    not run."""
+def group_eq(art, start, names, fx_slots, notes, lp_floor):
+    """`(dynamic, stages)` per layer of `art`: the active inserts of each
+    layer's Bus1 group (the group the shipped Mix mic plays), as spec
+    stages `(kind, params)` in slot order. Layers are the articulation's
+    4-group blocks from `start` (dynamic named by mojo_zones.classify).
+
+    - kind 7, filter type 22-24: the EQ;
+    - kind 7, filter type 50: the one-layer velocity lowpass. The script
+      sets its cutoff to min(1, v/127 + $SimDynMinLP/1e6) (33439-33452):
+      a 0 cutoff plus a velocity route with that table;
+    - kind 9: a stereo width (its parameter, the float at byte 9: side ×
+      (1 + p), measured on Trumpet Stabs). Its output gain is on the zones
+      (mojo_zones.py).
+    Anything else is noted, not run."""
     out, k = [], 0
     while True:
         gi = start + 4 * k
@@ -95,24 +103,25 @@ def group_eq(art, start, names, fx_slots, notes):
         if cls is None or cls[0] != art:
             break
         dyn = cls[1]
-        bands, lp = None, None
+        stages = []
         for s in sorted(fx_slots.get(gi, []), key=lambda s: s["slot"]):
-            if s.get("bypass", True) or s["kind"] != 7:
-                if not s.get("bypass", True):
-                    notes.append(f"{art} {dyn}: active insert kind {s['kind']} (slot {s['slot']}) not run")
+            if s.get("bypass", True):
                 continue
-            if s.get("filter_type") in (22, 23, 24) and s.get("eq_bands"):
-                bands = [v for b in s["eq_bands"] for v in b]
-            elif s.get("filter_type") == 50:
-                # The one-layer velocity lowpass (33439-33452): the script sets
-                # cutoff min(1, v/127 + $SimDynMinLP/1e6). Run at its v127
-                # value, 1.0 — fully open from v = 127·(1 − min) up (Trumpet
-                # 64, Alto 43); below that it closes (not modelled yet).
-                lp = (1.0, float(s.get("resonance") or 0.0))
+            if s["kind"] == 9:
+                _, width = mojo_zones.group_stage({0: [s]}, 0)
+                if width:
+                    stages.append(("width", {"width": width}))
+            elif s["kind"] == 7 and s.get("filter_type") in (22, 23, 24) and s.get("eq_bands"):
+                stages.append(("eq", {"bands": [v for b in s["eq_bands"] for v in b]}))
+            elif s["kind"] == 7 and s.get("filter_type") == 50:
+                table = [min(1.0, v / 127.0 + lp_floor) for v in range(128)]
+                stages.append(("sv_lp1", {"cutoff": 0.0, "resonance": float(s.get("resonance") or 0.0),
+                                          "velocity_table": table}))
             else:
-                notes.append(f"{art} {dyn}: filter type {s.get('filter_type')} (slot {s['slot']}) not run")
-        if bands or lp:
-            out.append((dyn, bands, lp))
+                notes.append(f"{art} {dyn}: insert kind {s['kind']} type {s.get('filter_type')} "
+                             f"(slot {s['slot']}) not run")
+        if stages:
+            out.append((dyn, stages))
         k += 1
     return out
 
@@ -161,7 +170,7 @@ def build(nki):
         env, why = ahdsr_env(groups, starts[i])
         if why:
             notes.append(f"{art}: {why}")
-        fx = group_eq(art, starts[i], names, fx_slots, notes)
+        fx = group_eq(art, starts[i], names, fx_slots, notes, one("$lrshn") / 1e6)
         table = vel_table(knob, vmin)
         lines += [
             "    {",
@@ -179,13 +188,19 @@ def build(nki):
             lines += [f"        amp_env ( {body} )", "        amp_env_hold true", "        amp_env_release 1"]
         if fx:
             lines.append("        group_fx (")
-            for dyn, bands, lp in fx:
-                st = []
-                if bands:
-                    st.append(f"{{ kind eq, bands ({' '.join(fmt(v) for v in bands)}) }}")
-                if lp:
-                    st.append(f"{{ kind sv_lp1, cutoff {fmt(lp[0])}, resonance {fmt(lp[1])} }}")
-                lines.append(f"            {{ dynamic {dyn}, stages ({' '.join(st)}), routes () }}")
+            for dyn, stages in fx:
+                st, rt = [], []
+                for n, (kind, p) in enumerate(stages):
+                    if kind == "eq":
+                        st.append(f"{{ kind eq, bands ({' '.join(fmt(v) for v in p['bands'])}) }}")
+                    elif kind == "width":
+                        st.append(f"{{ kind width, width {fmt(p['width'])} }}")
+                    else:
+                        st.append(f"{{ kind {kind}, cutoff {fmt(p['cutoff'])}, resonance {fmt(p['resonance'])} }}")
+                        if p.get("velocity_table"):
+                            rt.append(f"{{ stage {n}, param cutoff, cc 0, source velocity, "
+                                      f"table ({' '.join(fmt(v) for v in p['velocity_table'])}) }}")
+                lines.append(f"            {{ dynamic {dyn}, stages ({' '.join(st)}), routes ({' '.join(rt)}) }}")
             lines.append("        )")
         lines.append("    }")
     lines.append(")")

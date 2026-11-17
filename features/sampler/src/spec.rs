@@ -2377,6 +2377,11 @@ pub struct FxStageSpec {
     /// EQ bands, flat: `hz octaves db` per band.
     #[facet(default)]
     pub bands: Vec<f32>,
+    /// `width` stage: the side signal is scaled by `1 + width` (mid kept).
+    /// Kontakt's kind-9 group insert, measured on MOJO 2 Trumpet Stabs:
+    /// −0.3 leaves the side at 0.70.
+    #[facet(default)]
+    pub width: f32,
 }
 
 /// A controller route onto one stage's knob: the knob moves by
@@ -2402,6 +2407,16 @@ pub struct FxRouteSpec {
     /// the knob by `intensity` × the envelope's level.
     #[facet(default)]
     pub env: Vec<EnvSegmentSpec>,
+    /// `velocity`: the note's velocity is the source instead of `cc`, read
+    /// once at the note's start (a script setting a stage per note, e.g.
+    /// MOJO 2's one-layer lowpass). Empty = `cc`.
+    #[facet(default)]
+    pub source: String,
+    /// The knob offset at each source value 0..=127, in the param's units,
+    /// replacing `intensity × points` (a law a script computes, baked by
+    /// the generator). Empty = `intensity × points`.
+    #[facet(default)]
+    pub table: Vec<f32>,
 }
 
 /// Evaluate a Kontakt modulation table (`y0 c0 (x y c)…`) at `x` in `[0, 1]`.

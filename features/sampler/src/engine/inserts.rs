@@ -55,6 +55,10 @@ enum StageKind {
     Svf(Law, u8),
     /// 1..=3 bell bands.
     Eq(u8),
+    /// Stereo width: the side signal scaled by `1 + width`, mid kept
+    /// (Kontakt's kind-9 group insert). Run after the per-channel stages:
+    /// those treat both channels alike, so the order does not matter.
+    Width,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,6 +76,8 @@ struct PlanStage {
     resonance: f32,
     /// (Hz, octaves, stored dB) per band.
     bands: [[f32; 3]; MAX_SECTIONS],
+    /// `Width`: the side gain is `1 + width`.
+    width: f32,
 }
 
 /// One route of a plan: the knob it moves and its value at every controller
@@ -91,6 +97,9 @@ struct PlanRoute {
     env: Vec<(f32, f32, f32)>,
     /// `intensity × span` the envelope's level moves the knob by.
     env_depth: f32,
+    /// The note's velocity is the source (`FxRouteSpec::source`), set once
+    /// at the note's start by [`InsertState::with_velocity`].
+    velocity: bool,
 }
 
 /// A dynamic layer's insert chain, shared by its voices.
@@ -151,6 +160,7 @@ fn plan_stage(s: &FxStageSpec) -> Option<PlanStage> {
             }
             StageKind::Eq(n as u8)
         }
+        "width" => StageKind::Width,
         _ => return None,
     };
     let mut bands = [[0.0; 3]; MAX_SECTIONS];
@@ -162,6 +172,7 @@ fn plan_stage(s: &FxStageSpec) -> Option<PlanStage> {
         cutoff: s.cutoff,
         resonance: s.resonance,
         bands,
+        width: s.width,
     })
 }
 
@@ -177,7 +188,9 @@ fn plan_route(r: &FxRouteSpec, stage: u8, s: &PlanStage, sample_rate: f32) -> Op
             }
         }
     };
-    if matches!(param, Param::Cutoff | Param::Resonance) && matches!(s.kind, StageKind::Eq(_)) {
+    if matches!(param, Param::Cutoff | Param::Resonance)
+        && matches!(s.kind, StageKind::Eq(_) | StageKind::Width)
+    {
         return None;
     }
     // an EQ gain route of depth 1 moves the stored dB by 12
@@ -195,6 +208,10 @@ fn plan_route(r: &FxRouteSpec, stage: u8, s: &PlanStage, sample_rate: f32) -> Op
             kontakt_table_value(&r.points, x)
         };
         *out = r.intensity * span * shaped;
+    }
+    // a law the script computes, baked per source value
+    if r.table.len() == 128 {
+        lut.copy_from_slice(&r.table);
     }
     let dt_ms = f32::from(COEF_EVERY) * 1000.0 / sample_rate.max(1.0);
     let coef = if r.lag_ms > 0.0 {
@@ -215,6 +232,7 @@ fn plan_route(r: &FxRouteSpec, stage: u8, s: &PlanStage, sample_rate: f32) -> Op
             .map(|e| (e.time_ms, e.level, e.curve))
             .collect(),
         env_depth: r.intensity * span,
+        velocity: r.source.eq_ignore_ascii_case("velocity"),
     })
 }
 
@@ -299,10 +317,25 @@ impl InsertState {
     /// The controllers' current values (read again every block).
     pub fn set_ccs(&mut self, cc: impl Fn(u8) -> u8) {
         for (t, r) in self.tgt.iter_mut().zip(&self.plan.routes) {
-            if r.env.is_empty() {
+            if r.env.is_empty() && !r.velocity {
                 *t = r.lut[usize::from(cc(r.cc).min(127))];
             }
         }
+    }
+
+    /// The note's velocity for its velocity routes (fixed for the voice's
+    /// life, as a script sets the knob once at the note's start).
+    #[must_use]
+    pub fn with_velocity(mut self, velocity: u8) -> Self {
+        for (i, r) in self.plan.routes.iter().enumerate() {
+            if r.velocity {
+                let v = r.lut[usize::from(velocity.min(127))];
+                self.tgt[i] = v;
+                self.cur[i] = v;
+            }
+        }
+        self.countdown = 0;
+        self
     }
 
     fn update(&mut self) {
@@ -353,6 +386,13 @@ impl InsertState {
                     *x = run(*sec, m, *x);
                 }
                 *x *= self.gain[i];
+            }
+        }
+        for st in &self.plan.stages {
+            if st.kind == StageKind::Width {
+                let mid = 0.5 * (out[0] + out[1]);
+                let side = 0.5 * (out[0] - out[1]) * (1.0 + st.width);
+                out = [mid + side, mid - side];
             }
         }
         (out[0], out[1])
@@ -422,6 +462,7 @@ fn coefficients(
     let mut out = [Section::Off; MAX_SECTIONS];
     let r = res.clamp(0.0, 1.0);
     match st.kind {
+        StageKind::Width => (out, 1.0),
         StageKind::OnePole(law) => {
             let g = warp(cutoff_hz(law, cutoff), fs);
             out[0] = Section::OnePole(g / (1.0 + g));
@@ -496,6 +537,7 @@ mod tests {
                 cutoff,
                 resonance: 0.0,
                 bands,
+                width: 0.0,
             }],
             routes,
         }
@@ -545,6 +587,8 @@ mod tests {
             lag_ms: 120.0,
             points: vec![0.0, 0.0, 0.600_393_7, 0.0, -0.168_918_88, 1.0, 1.0, 0.0],
             env: vec![],
+            source: String::new(),
+            table: vec![],
         };
         let plan = InsertPlan::new(&spec("sv_lp1", 0.0, vec![], vec![route]), 48_000.0).unwrap();
         assert!(gain_at(Arc::clone(&plan), 1000.0, 127) > -0.1);
@@ -557,5 +601,55 @@ mod tests {
             InsertPlan::new(&spec("eq", 0.0, vec![1000.0, 1.0, 6.0], vec![]), 48_000.0).unwrap();
         let g = gain_at(plan, 1000.0, 0);
         assert!((g - 12.04).abs() < 0.1, "{g}");
+    }
+
+    #[test]
+    fn width_scales_the_side_only() {
+        let mut g = spec("width", 0.0, vec![], vec![]);
+        g.stages[0].width = -0.3;
+        let plan = InsertPlan::new(&g, 48_000.0).unwrap();
+        let mut st = InsertState::new(plan, 48_000.0, |_| 0);
+        // L = mid + side, R = mid − side with mid 0.5, side 0.25
+        let (l, r) = st.tick(0.75, 0.25);
+        assert!((0.5 * (l + r) - 0.5).abs() < 1e-6, "mid {l} {r}");
+        assert!((0.5 * (l - r) - 0.25 * 0.7).abs() < 1e-6, "side {l} {r}");
+    }
+
+    #[test]
+    fn velocity_route_holds_its_table_value() {
+        // the MOJO 2 law: cutoff = min(1, v/127 + 0.5), as a velocity table
+        let table: Vec<f32> = (0..128)
+            .map(|v| (v as f32 / 127.0 + 0.5).min(1.0))
+            .collect();
+        let route = FxRouteSpec {
+            stage: 0,
+            param: "cutoff".into(),
+            cc: 0,
+            intensity: 0.0,
+            lag_ms: 0.0,
+            points: vec![],
+            env: vec![],
+            source: "velocity".into(),
+            table,
+        };
+        let plan = InsertPlan::new(&spec("sv_lp1", 0.0, vec![], vec![route]), 48_000.0).unwrap();
+        let fs = 48_000.0;
+        let run = |vel: u8| {
+            // controllers move; a velocity route must not follow them
+            let mut st = InsertState::new(Arc::clone(&plan), fs, |_| 127).with_velocity(vel);
+            st.set_ccs(|_| 0);
+            let mut peak = 0.0f32;
+            for i in 0..48_000 {
+                let x = (2.0 * std::f32::consts::PI * 8000.0 * i as f32 / fs).sin();
+                let (y, _) = st.tick(x, x);
+                if i > 24_000 {
+                    peak = peak.max(y.abs());
+                }
+            }
+            20.0 * peak.log10()
+        };
+        let (soft, loud) = (run(10), run(100));
+        assert!(soft < loud - 3.0, "soft {soft} loud {loud}");
+        assert!(loud > -1.0, "loud {loud}");
     }
 }
