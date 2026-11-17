@@ -245,6 +245,73 @@ def main(root, nki, inst, lib):
     # Argent's legato slide plays the destination on the last step (L16889);
     # Darkwall's keeps the last stitch as the destination (§6, L16433-16776)
     keep_last = "if ($sti__i=abs($sti__distance) and not" not in script
+    # the "Slide In/Out" note (L17301): string_meta[k] − n
+    si = re.search(r"\$S3__SLIDE_NOTE := %str___string_meta\[(\d+)\]-(\d+)", script)
+    slide_in = smeta[int(si.group(1))] - int(si.group(2)) if si else None
+
+    # palm-mute detune (Argent L7591, Darkwall L7474): %s3___mute_tuning by
+    # string, fret, the voice's RR, its layer and the pick stroke
+    mt = re.search(r"if \(\$args__artic=(\d+)\)\n\$_trigger__tune := \$_trigger__tune\+%s3___mute_tuning"
+                   r"\[(\d+)\*\$args__string\+\((\d+)\*\$args__fret\)\+\((\d+)\*\$_trigger__rr\)"
+                   r"\+\((\d+)\*%tact___table_matrix\[512\*\$args__artic\+\$args__velocity\]\)"
+                   r"\+\$args__pick_dir\]", script)
+    tune_table = None
+    if mt and "%s3___mute_tuning" in p:
+        vals = [int(x) for x in p["%s3___mute_tuning"]]
+        while vals and vals[-1] == 0:
+            vals.pop()
+        if any(vals):
+            tune_table = (names[int(mt.group(1))], *(int(mt.group(i)) for i in range(2, 6)), vals)
+
+    # placement limits: meta[36] string mask, meta[41] fret limit (L16190)
+    nstr = len(opens)
+    full = (1 << nstr) - 1
+    limits = []
+    for a in range(na):
+        if M(a, 21) in (6, 7):
+            continue
+        mask, top = M(a, 36) & full, M(a, 41)
+        if mask and (mask != full or top < 24):
+            strs = [i for i in range(nstr) if mask >> i & 1] if mask != full else []
+            limits.append(f"{{articulation {names[a]}{', strings (' + ' '.join(map(str, strs)) + ')' if strs else ''}"
+                          f", max_fret {top}}}")
+    # power chords leave their own pitched release (L5189-5192)
+    rm = re.search(r"if \(search\(%s3__powerchord_artics,\$__e_artic\)=-1\)\n\$__rel_artic := (\d+)\nelse\n"
+                   r"\$__rel_artic := (\d+)", script)
+    pc_rel = None
+    if rm:
+        pcs = [names[a] for a in ksp_list(script, "s3__powerchord_artics") if names[a] in pr_sources]
+        pc_rel = (pcs, names[int(rm.group(2))])
+
+    # side keys (on note, after activate_latency): fret noise, Argent's
+    # wide chokes, Darkwall's key FX — each with its %vel_db column
+    sides, side_cols = [], {}
+    nn = re.search(r"\$S3__NOISE_NOTE := %str___string_meta\[(\d+)\]-(\d+)", script)
+    noise = re.search(r"play_note\(\(\$s3__fret_noise_counter\+\$s3__i\) mod (\d+),127,0,-1\)", script)
+    if nn and noise:
+        key = smeta[int(nn.group(1))] - int(nn.group(2))
+        sides.append(f"{{key_lo {key}, key_hi {key}, articulation FretNoise, cycle {noise.group(1)}}}")
+        col = re.search(r"\$s3__fret_noise_counter := [^\n]*", script)
+        side_cols["FretNoise"] = int(re.search(r"play_note\(\(\$s3__fret_noise_counter[^\n]*\n(?:[^\n]*\n)*?"
+                                               r"change_vol\([^\n]*\*11\+(\d+)\]", script).group(1))
+    ch = re.search(r"if \(in_range\(\$EVENT_NOTE,(\d+),(\d+)\)\)\ncall s3__engine__activate_latency\n"
+                   r"\$telos_chokes__vel_layer", script)
+    if ch:
+        rr = re.search(r"\$telos_chokes__rr := \([^\n]*\) mod (\d+)", script).group(1)
+        sides.append(f"{{key_lo {ch.group(1)}, key_hi {ch.group(2)}, articulation WideChoke, rr {rr}, "
+                     "alternate true, jitter true}")
+        side_cols["WideChoke"] = int(re.search(r"play_note\(\$EVENT_NOTE-\d+,\$telos_chokes__trigger_vel[^\n]*\n"
+                                               r"(?:[^\n]*\n)*?change_vol\([^\n]*\*11\+(\d+)\]", script).group(1))
+    fx = re.search(r"if \(in_range\(\$EVENT_NOTE,(\d+),(\d+)\)\)\ncall s3__engine__activate_latency\n"
+                   r"\$key_fx__vel_layer", script)
+    if fx:
+        rrs = {int(m) for m in re.findall(r"%key_fx__rr_max\[\d+\] := (\d+)", script)}
+        if len(rrs) != 1:
+            sys.exit(f"key FX RR counts {rrs}: one only")
+        sides.append(f"{{key_lo {fx.group(1)}, key_hi {fx.group(2)}, articulation KeyFX, rr {rrs.pop()}, "
+                     "jitter true, counter_per_key true}")
+        side_cols["KeyFX"] = int(re.search(r"play_note\(\$key_fx__type[^\n]*\n(?:[^\n]*\n)*?"
+                                           r"change_vol\([^\n]*\*11\+(\d+)\]", script).group(1))
 
     ccs = list(dict((int(c), ep[int(i)]) for c, i in
                     re.findall(r"set_controller\((\d+),%s3__engine_pars\[(\d+)\]\)", script)).items())
@@ -275,7 +342,13 @@ def main(root, nki, inst, lib):
          # release_event: %tact___meta[64·a + 40] and not exclude_all_releases,
          # held engine_pars[50]..[51] ms (L5236-5250)
          f"    release_layer {{ articulation PitchedRelease, sources ({' '.join(pr_sources)}), "
-         f"min_held_ms {ep[50]}, max_held_ms {ep[51]} }}",
+         f"min_held_ms {ep[50]}, max_held_ms {ep[51]}"
+         + (f", mapped ({{ sources ({' '.join(pc_rel[0])}), articulation {pc_rel[1]} }})" if pc_rel and pc_rel[0] else "")
+         + " }",
+         *([f"    limits ({' '.join(limits)})"] if limits else []),
+         *([f"    side_keys ({' '.join(sides)})"] if sides else []),
+         # FX mode (KS of the FX artic latched, L4619): on note, no latency
+         *([f"    free_articulations ({' '.join(n for n in names if n == 'FX')})"] if 'FX' in names else []),
          # unpitched release (L5286-5310): key (counter + track) mod RR count,
          # half the source's script volume, held engine_pars[52]..[53] ms
          f"    noise_release {{ articulation UnpitchedRelease, excluded ({' '.join(excluded)}), "
@@ -316,16 +389,21 @@ def main(root, nki, inst, lib):
          f"from ({' '.join(slide_from)}), max_interval {max_iv}, time_us (), "
          f"source_fade_ms {fmt(rel_fade / 1000)}, transition_fade_in_ms 0, transition_fade_out_ms 0, "
          f"body_offset_ms 0, body_fade_in_ms 0, age_db_per_s {-1 * ep[29]}, stitched {{ "
-         f"steps ({' '.join(step(d) for d in range(1, max_iv + 1))}), "
+         f"steps ({' '.join(step(d) for d in range(1, len(scale) + 1))}), "
          f"dest_offset_ms 99.9, dest_offset_max_ms {fmt((M(0, 6) * 100 - 1) / 1000)}, "
          f"dest_gain_db {fmt(dest_mdb / 1000)}, squeak {{ articulation FretSqueak, keys {sq_keys}, "
          f"gain_db {fmt(squeak_mdb / 1000)}, vel_gain_from {names[0]} }}"
-         f"{', keep_last true' if keep_last else ''} }} }}",
+         f"{', keep_last true' if keep_last else ''}"
+         f"{f', slide_in_key {slide_in}' if slide_in is not None else ''} }} }}",
          *([f"    jitter {{ articulations ({' '.join(jit)}), "
             f"all_tracks ({' '.join(all_tracks)}), "
             f"ranges ({' '.join(f'{{lo {lo}, hi {hi}}}' for lo, hi in ranges)}), "
             f"offset_wrap_us {wraps.pop()} }}"] if len(pans) > 1 else []),
          ]
+    if tune_table:
+        a_, ss, fs, rs, ls, vals = tune_table
+        L.append(f"    tune_table {{ articulation {a_}, string_stride {ss}, fret_stride {fs}, "
+                 f"rr_stride {rs}, layer_stride {ls}, values ({' '.join(map(str, vals))}) }}")
     L.append("    rr_orders (")
     for i in range(7):
         L.append(f"        {{ rr {i + 2}, order ({' '.join(map(str, rr_seed[4096 * i: 4096 * (i + 1)]))}) }}")
@@ -374,6 +452,7 @@ def main(root, nki, inst, lib):
         L += group_fx(slots, gjson[int(g["idx"])]) + ["    }"]
     # side recordings outside TACT: their group's saved envelope
     side = [("FretSqueak", "Fret Squeaks Str 1")] + ([("ExtraPick", "Extra Pick")] if ep[84] > 0 else [])
+    side += [(a_, {"FretNoise": "Fret Noise", "WideChoke": "Wide Chokes", "KeyFX": "FX"}[a_]) for a_ in side_cols]
     for aid, word in side:
         g = gname(word)
         att, _, dec, sus, rel, crv = (float(x) for x in g["ahdsr_AHDSRc"].split("/"))
@@ -381,8 +460,11 @@ def main(root, nki, inst, lib):
         segs = [(lag, 0.0, 0.5), (att - lag, 1.0, tension(attack_k(crv)))]
         if sus < 1:
             segs.append((dec, sus, tension(FALL_K)))
-        L += ["    {", f"        id {aid}",
-              f"        level_db {fmt(float(g['vol_db']))}",
+        L += ["    {", f"        id {aid}"]
+        if aid in side_cols:
+            # change_vol(100·%vel_db[curve·11 + col]/100): no −1 mdB offset
+            L.append(f"        vel_gain_db ({' '.join(fmt(float(x) + 0.001) for x in vel_law(vel_db, curve, 100 * side_cols[aid]))})")
+        L += [f"        level_db {fmt(float(g['vol_db']))}",
               f"        amp_env ( {env_line(segs)} )",
               # an AHDSR holds at its sustain; a sustain of 0 decays to silence
               f"        amp_env_hold {'true' if segs[-1][1] > 0.01 else 'false'}",

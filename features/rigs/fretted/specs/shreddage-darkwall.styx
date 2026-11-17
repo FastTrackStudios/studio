@@ -12,10 +12,11 @@
 // Modelled so far, at the shipped settings (hand fixed at fret 0, reset on
 // transport start, Natural fretting, economy picking, one track,
 // anti-repetition off): single picked notes with pitched and unpitched
-// releases, Force Same-String hammers, the idle hand reset, and stitched
-// slides (key 12), whose last stitch rings on as the destination.
-// Not yet: slide-in and slide-out (key 14), palm-mute tuning, fret noise
-// (key 13), key FX (10, 11), strumming.
+// releases, Force Same-String hammers, the idle hand reset, palm mute with
+// its detune table, stitched slides (key 12, the last stitch ringing on as
+// the destination) and slide-ins (key 14), fret noise (key 13) and key FX
+// (10, 11).
+// Not yet: slide-out (key 14 over a ringing note), strumming.
 
 name    "Shreddage 3.5 Darkwall"
 vendor  "Impact Soundworks"

@@ -62,7 +62,8 @@ EXTRA_GROUPS = {
     "Fret Squeaks": ("FretSqueak", 1, False),
     "Fret Noise": ("FretNoise", 1, False),
     "Extra Pick": ("ExtraPick", 1, False),
-    "Wide Chokes": ("WideChoke", 1, False),
+    # 16·rr + 64·dir + layer + 1 (L25834): tagged as a hammer's slots
+    "Wide Chokes": ("WideChoke", 2, False),
     "DI Noise": ("DINoise", 1, False),
 }
 # Groups outside TACT whose name is also an articulation's in other

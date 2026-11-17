@@ -202,6 +202,9 @@ impl SampleEngine {
             // and what its notes may become or leave: a hammer, a release
             warm_ids.extend(fb.hammer.as_ref().map(|h| h.articulation.clone()));
             warm_ids.extend(fb.release_layer.as_ref().map(|r| r.articulation.clone()));
+            if let Some(r) = fb.release_layer.as_ref() {
+                warm_ids.extend(r.mapped.iter().map(|m| m.articulation.clone()));
+            }
             warm_ids.extend(fb.slide.as_ref().map(|s| s.articulation.clone()));
             warm_ids.extend(fb.tap.as_ref().map(|t| t.open_as.clone()));
         }
@@ -226,6 +229,7 @@ impl SampleEngine {
                             .and_then(|st| st.squeak.as_ref())
                             .map(|q| q.articulation.clone()),
                     )
+                    .chain(fb.side_keys.iter().map(|k| k.articulation.clone()))
                     .collect()
             })
             .unwrap_or_default();

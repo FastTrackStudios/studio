@@ -3998,6 +3998,70 @@ pub struct FretboardSpec {
     /// Random detune and start shifts on the tracks past the first.
     /// `None` = none.
     pub jitter: Option<FretJitterSpec>,
+    /// A detune per position for one articulation. `None` = none.
+    pub tune_table: Option<FretTuneTableSpec>,
+    /// Articulations placed on only some strings, or below a fret.
+    #[facet(default)]
+    pub limits: Vec<FretLimitSpec>,
+    /// Keys that play a side recording instead of a note.
+    #[facet(default)]
+    pub side_keys: Vec<FretSideKeySpec>,
+}
+
+/// A side key (see [`FretboardSpec::side_keys`]), Shreddage's fret noise
+/// and wide chokes (Argent L25828-25885): a press of `key_lo..=key_hi`
+/// plays, after the onset delay, once per track, `articulation`'s zone at
+/// key `(counter + track) mod cycle` (`cycle` 0: the press's key −
+/// `key_lo`), at its velocity gain for the press's velocity, to the end of
+/// its recording. With `rr` > 0 the zone's round robin is `(counter[dir] +
+/// track) mod rr`; with `alternate` its direction alternates per press
+/// (down first) and keeps its own counter. `jitter` takes the second
+/// track's KSP random() detune and shift. Counters step once per press.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretSideKeySpec {
+    pub key_lo: u8,
+    pub key_hi: u8,
+    pub articulation: String,
+    #[facet(default)]
+    pub cycle: u8,
+    #[facet(default)]
+    pub rr: u8,
+    #[facet(default)]
+    pub alternate: bool,
+    #[facet(default)]
+    pub jitter: bool,
+    /// Each key of the range keeps its own counter (Darkwall's key FX).
+    #[facet(default)]
+    pub counter_per_key: bool,
+}
+
+/// A placement limit (see [`FretboardSpec::limits`]): a note of
+/// `articulation` is placed only on `strings` (0-based; empty = all), at
+/// `max_fret` or below; one that fits nowhere is not played (Shreddage's
+/// `meta[36]` string mask and `meta[41]` fret limit, L16190).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretLimitSpec {
+    pub articulation: String,
+    #[facet(default)]
+    pub strings: Vec<u8>,
+    pub max_fret: u8,
+}
+
+/// A detune table (see [`FretboardSpec::tune_table`]), Shreddage's
+/// `%s3___mute_tuning` (Argent L7591, Darkwall L7474): every voice of
+/// `articulation` is detuned by `values[string_stride·string +
+/// fret_stride·fret + rr_stride·rr + layer_stride·layer + stroke]`
+/// thousandths of a cent, with its own round robin, its velocity layer
+/// (0-based) and the note's pick stroke (0 down, 1 up; counted even when
+/// the articulation is not picked). Past the table: 0.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretTuneTableSpec {
+    pub articulation: String,
+    pub string_stride: u32,
+    pub fret_stride: u32,
+    pub rr_stride: u32,
+    pub layer_stride: u32,
+    pub values: Vec<i32>,
 }
 
 /// A velocity split (see [`FretboardSpec::velocity_splits`]): a note
@@ -4189,6 +4253,11 @@ pub struct FretStitchSpec {
     /// recordings are full-length sustains; engine-model §6).
     #[facet(default)]
     pub keep_last: bool,
+    /// The slide-in key (Shreddage's "Slide In/Out" note): while it is held,
+    /// a note of a slide source on an idle string above fret 0 slides up
+    /// from the open string, one stitch per fret, and always ends on the
+    /// destination (L17301-17769). `None` = no slide-in.
+    pub slide_in_key: Option<u8>,
 }
 
 /// One interval's stitch timing and levels (see [`FretStitchSpec`]).
@@ -4232,6 +4301,18 @@ pub struct FretReleaseSpec {
     /// Whether an open string's release steps its position's counter.
     #[facet(default)]
     pub open_string_counts: bool,
+    /// Sources that leave another release recording instead. It reads its
+    /// own position counter, which never steps: the step always goes to
+    /// `articulation`'s (Shreddage's power chords, L5189-5192, L5550).
+    #[facet(default)]
+    pub mapped: Vec<FretReleaseMapSpec>,
+}
+
+/// A release mapping (see [`FretReleaseSpec::mapped`]).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretReleaseMapSpec {
+    pub sources: Vec<String>,
+    pub articulation: String,
 }
 
 /// Hammer-ons and pull-offs (see [`FretboardSpec::hammer`]): a note of one

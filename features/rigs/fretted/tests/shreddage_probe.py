@@ -31,14 +31,17 @@ LIBS = {
     "argent": dict(ks={"sus": 0, "mute": 1, "stac": 2, "pcsus": 3, "pcmute": 4, "pcstac": 5,
                        "trem": 6, "choke": 7, "tap": 8, "nharm": 9, "aharm": 10, "fx": 11,
                        "rake": 0, "pinch": 0},
-                   slide=21, lo=25, hi=88, vmax={"sus": 115}),
+                   slide=21, lo=25, hi=88, vmax={"sus": 115},
+                   side=[22] * 6 + [12, 13, 14, 15] * 3, slide_in=23),
     "darkwall": dict(ks={"sus": 0, "ssus": 1, "stacl": 2, "stacs": 3, "mute": 4, "harm": 5,
                          "tap": 6, "buzz": 7},
-                     slide=12, lo=16, hi=72, vmax={}),
+                     slide=12, lo=16, hi=72, vmax={},
+                     side=[13] * 6 + [10, 11] * 6, slide_in=14),
 }
 SINGLE = {"sus", "stac", "harm", "fx", "mute", "pcsus", "pcmute", "pcstac", "trem", "choke",
           "nharm", "aharm", "rake", "pinch", "ssus", "stacl", "stacs", "buzz"}
-PHRASE = {"rel", "legato", "slide", "chord", "tap"}
+PHRASE = {"rel", "legato", "slide", "chord", "tap", "slidein", "slideout"}
+# side keys (fret noise, wide chokes, key FX): pressed alone, held 0.3 s
 LIB = LIBS["abyss"]
 PPQ, US_PER_Q = 960, 500_000
 
@@ -94,6 +97,15 @@ def phrases(mode):
                 for v2 in (40, 100):
                     ns = [(0.0, 0.5, base, 90), (0.4, 0.8, base + iv, v2)]
                     out.append((ns, [(-0.05, 1.3, LIB["slide"], 100)]))
+    elif mode == "slidein":
+        # the slide-in key held around a lone note: one stitch per fret from
+        # the open string
+        for k, v in [(41, 90), (43, 60), (47, 110), (52, 80), (36, 100), (45, 40), (57, 90), (50, 70)]:
+            out.append(([(0.0, 1.0, k, v)], [(-0.05, 1.2, LIB["slide_in"], 100)]))
+    elif mode == "slideout":
+        # the slide-in/out key pressed while a note rings (fret 0 cuts it)
+        for k, v in [(41, 90), (47, 70), (52, 110), (38, 90), (45, 60), (57, 100)]:
+            out.append(([(0.0, 1.4, k, v)], [(0.5, 0.6, LIB["slide_in"], 100)]))
     elif mode == "tap":
         # taps from idle strings (open and fretted), then on ringing ones
         for k, v in [(33, 80), (35, 60), (28, 100), (45, 40), (52, 90)]:
@@ -122,7 +134,13 @@ def main():
     ks = LIB["ks"].get(mode, LIB["ks"]["sus"])
     ev = [(tick(0.5), 0x90, ks, 100), (tick(0.6), 0x80, ks, 0)]
     rows, t = [], 1.0
-    if mode == "fx":
+    if mode == "side":
+        for i, k in enumerate(LIB["side"]):
+            v = (25, 60, 90, 120, 45, 100, 75)[i % 7]
+            ev += [(tick(t), 0x90, k, v), (tick(t + 0.3), 0x80, k, 0)]
+            rows.append(f"{i}\t{t:.3f}\t{t + 0.3:.3f}\t{k}\t{v}")
+            t += 1.6
+    elif mode == "fx":
         for i, k in enumerate(range(21, 121, 7)):
             ev += [(tick(t), 0x90, k, 30 + (i * 13) % 97), (tick(t + 0.8), 0x80, k, 0)]
             rows.append(f"{i}\t{t:.3f}\t{t + 0.8:.3f}\t{k}\t{30 + (i * 13) % 97}")

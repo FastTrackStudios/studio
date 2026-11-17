@@ -14,11 +14,12 @@
 // fretting, economy picking, double-tracked "Dbl 1+2" hard left/right,
 // anti-repetition off): single picked notes with their extra pick, pitched
 // and unpitched releases, Force Same-String hammers, the idle hand reset,
-// Rake (velocity 116-126: the rake noise, then Sustain) and Pinch
-// Harmonics (127) on KS 0, and stitched slides (KS 21) with their fret
-// squeaks, all with the second track's KSP random() detune and shift.
-// Not yet: power chords' release mapping, palm-mute tuning, slide-in, wide
-// chokes, fret noise, FX mode, strumming.
+// Rake (velocity 116-126) and Pinch Harmonics (127) on KS 0, palm mute with
+// its detune table, power chords (strings 4-9 below fret 15, their own
+// pitched release), stitched slides (KS 21) and slide-ins (key 23) with
+// fret squeaks, fret noise (key 22), wide chokes (keys 12-15) and FX mode
+// (KS 11), with the second track's KSP random() detune and shift.
+// Not yet: slide-out, strumming; slide levels are open (see the commit log).
 
 name    "Shreddage 3.5 Argent"
 vendor  "Impact Soundworks"
