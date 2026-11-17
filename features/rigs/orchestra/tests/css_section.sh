@@ -5,6 +5,7 @@
 #   features/rigs/orchestra/tests/css_section.sh "2nd Violins"
 #   features/rigs/orchestra/tests/css_section.sh "CSW Solo Flute"   (full NKI name)
 #   features/rigs/orchestra/tests/css_section.sh "CSB Solo Trumpet" (full NKI name)
+#   features/rigs/orchestra/tests/css_section.sh "CSSS Violin I"    (full NKI name)
 #   DECODE_ONLY=1 …  decode into _ksp/ and stop (CSB Full Ensemble: no patch)
 #
 #   1. decode its NKI (zones with sample starts, groups, KSP, persistent
@@ -50,6 +51,18 @@ case "$section" in
     case "$section" in
       "CSB 4 Horns") label="4 French Horns" ;; "CSB Solo Horn") label="Solo French Horn" ;;
       "CSB Solo Tuba") label=Tuba ;; *) label="${section#CSB }" ;;
+    esac
+    flat=(--flat) ;;
+  CSSS\ *)
+    # Solo Strings: the full NKI name; the patch / sample folder is the
+    # solo instrument ("CSSS Violin I" -> "Solo Violin"). Samples sit flat.
+    product="cinematic studio solo strings"
+    root="${CSS_ROOT:-$lib_root/Cinematic Studio Solo Strings}"
+    nki="/run/media/AudioHaven/Kontakt/Orchestral/Cinematic Studio Solo Strings/Instruments/$section.nki"
+    ksp="$root/_ksp/$section"
+    case "$section" in
+      "CSSS Violin I") label="Solo Violin" ;; "CSSS Violin II") label="Solo Violin II" ;;
+      *) label="Solo ${section#CSSS }" ;;
     esac
     flat=(--flat) ;;
   *)
@@ -99,10 +112,14 @@ echo "decoded: $(($(wc -l < "$ksp/zones.tsv") - 1)) zones → $ksp"
 [ -f "$patch/library.styx.pre-$stamp" ] || cp "$patch/library.styx" "$patch/library.styx.pre-$stamp"
 # Build first, on its own: a failed build must stop the run, not pass
 # silently through the output filter below and sync nothing.
-(cd "$repo" && timeout 3000 nix develop -c cargo build -q --profile desktop-dev \
-    --target x86_64-unknown-linux-gnu -p sampler --example signalpack) \
-    || { echo "signalpack build failed" >&2; exit 1; }
-signalpack="$repo/target/x86_64-unknown-linux-gnu/desktop-dev/examples/signalpack"
+# SIGNALPACK_BIN: a prebuilt signalpack (skips the build).
+signalpack="${SIGNALPACK_BIN:-}"
+if [ -z "$signalpack" ]; then
+  (cd "$repo" && timeout 3000 nix develop -c cargo build -q --profile desktop-dev \
+      --target x86_64-unknown-linux-gnu -p sampler --example signalpack) \
+      || { echo "signalpack build failed" >&2; exit 1; }
+  signalpack="$repo/target/x86_64-unknown-linux-gnu/desktop-dev/examples/signalpack"
+fi
 # CSW / CSB tune group by group: fold each group's tune into its zones (the
 # library's master tune is 0). CSS tunes every group alike: its master tune.
 zones_in="$ksp/zones.tsv"
