@@ -81,10 +81,6 @@ package = "midi"
 layer = "L0"
 
 [[row]]
-package = "patchbay"
-layer = "L0"
-
-[[row]]
 package = "sampler"
 layer = "L0"
 
@@ -189,11 +185,6 @@ layer = "L4"
 
 [[row]]
 package = "modulation"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "patchbay"
 features = ["ui"]
 layer = "L4"
 
@@ -397,10 +388,6 @@ layer = "L1"
 
 [[row]]
 package = "patch-list"
-layer = "L1"
-
-[[row]]
-package = "patchbay-driver"
 layer = "L1"
 
 [[row]]

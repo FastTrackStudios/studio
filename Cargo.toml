@@ -21,7 +21,6 @@ members = [
     "features/sync",
     "crates/frame",
     "features/adapters/web/worklet",
-    "features/patchbay",
     "features/midi",
     "features/editor",
     "features/session",
@@ -158,10 +157,6 @@ members = [
     "features/signal/content-library",
     "features/signal/content-client",
     "apps/plugins/sampler",
-    # ── patchbay ──
-    "features/patchbay/driver",
-    "features/patchbay/yamaha-tf",
-    "apps/patchbay",
     # ── frame ──
     "crates/frame/tools/cli",
     "crates/frame/tools/mcp",
@@ -197,8 +192,6 @@ lyrics-ui = { path = "features/ui/lyrics-ui", default-features = false }
 daw-sync = { path = "features/sync" }
 frame = { path = "crates/frame" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }
-patchbay = { path = "features/patchbay" }
-patchbay-yamaha-tf = { path = "features/patchbay/yamaha-tf" }
 midi = { path = "features/midi" }
 editor = { path = "features/editor" }
 session = { path = "features/session" }
