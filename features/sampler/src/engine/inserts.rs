@@ -281,6 +281,9 @@ pub struct InsertState {
     /// Two memories per section per channel.
     mem: [[[[f32; 2]; MAX_SECTIONS]; MAX_STAGES]; 2],
     countdown: u16,
+    /// A voice's amplifier balance inside the chain (`set_pan`): per
+    /// channel gain, and the stage it follows (`None` = ahead of all).
+    pan: Option<([f32; 2], Option<usize>)>,
 }
 
 impl InsertState {
@@ -297,6 +300,7 @@ impl InsertState {
             gain: [1.0; MAX_STAGES],
             mem: [[[[0.0; 2]; MAX_SECTIONS]; MAX_STAGES]; 2],
             countdown: 0,
+            pan: None,
         };
         for (slot, r) in s.envs.iter_mut().zip(&s.plan.routes) {
             if r.env.is_empty() {
@@ -403,6 +407,21 @@ impl InsertState {
 
     /// Filter one stereo frame.
     #[inline]
+    /// The voice's amplifier pan (−1..1, a balance) where Kontakt puts it in
+    /// the group's chain: after its drive stages (a saturation runs on the
+    /// voice before the amplifier), before its stereo stages (a width runs
+    /// after it: KONTRA folds those into the voice's gain matrix after the
+    /// pan). The linear per-channel stages commute with it.
+    pub fn set_pan(&mut self, pan: f32) {
+        let pan = pan.clamp(-1.0, 1.0);
+        let after = self
+            .plan
+            .stages
+            .iter()
+            .rposition(|s| s.kind == StageKind::Saturation);
+        self.pan = (pan != 0.0).then_some(([1.0 - pan.max(0.0), 1.0 + pan.min(0.0)], after));
+    }
+
     pub fn tick(&mut self, l: f32, r: f32) -> (f32, f32) {
         if self.countdown == 0 {
             self.countdown = COEF_EVERY;
@@ -413,6 +432,9 @@ impl InsertState {
         let mut out = [l, r];
         let n = self.plan.stages.len();
         for (ch, x) in out.iter_mut().enumerate() {
+            if let Some((g, None)) = self.pan {
+                *x *= g[ch];
+            }
             for i in 0..n {
                 for (sec, m) in self.sections[i].iter().zip(self.mem[ch][i].iter_mut()) {
                     *x = run(*sec, m, *x);
@@ -422,6 +444,11 @@ impl InsertState {
                     *x = super::kontakt_saturation::enhanced(*x, st.sat);
                 }
                 *x *= self.gain[i];
+                if let Some((g, Some(at))) = self.pan
+                    && at == i
+                {
+                    *x *= g[ch];
+                }
             }
         }
         for st in &self.plan.stages {

@@ -34,6 +34,13 @@ Modes:
             sustain ended by a fall (Falls keyswitch at velocity 127 while held),
             doit / shake releases (release-type keys 97 / 98, then 96 back).
   swells    Swells and crescendos (keys G1 / G#1) at 120 BPM, several keys.
+  players   The Ensemble: the player count by CC15 (2, 3, 5), Auto Divisi by
+            CC16. Stacked: sustains (mid key, the range's top and bottom:
+            the extra players' neighbour keys), a re-strike, a stab, two
+            staccatos. Divisi: one note, chords smaller than, equal to and
+            larger than the count (a steal), a new note over a held chord
+            (a steal), two notes 2 ms apart, a freed player taking a new note,
+            a staccato chord; CC15 changed under held notes (stacked and divisi).
 """
 import os, re, sys
 
@@ -244,7 +251,57 @@ def swells(p, ranges):
                 p.unit(art.upper(), f"{art} key{key} v{vel} hold4", [(0, 4.0, key, vel)], tail=3.0)
 
 
-MODE_FN = {"sustains": sustains, "legato": legato, "stablegato": stablegato, "reltypes": reltypes,
+PLAYERS_CC = {1: 0, 2: 20, 3: 30, 5: 55}  # CC15 bands of 12 (decode-players-divisi §1)
+
+
+def players(p, ranges):
+    lo, hi = ranges["Sus"]
+    sc = scale(lo, hi)
+    mid = sc[4]
+    chord = [sc[0], sc[2], sc[4], sc[6], sc[8], sc[1]]
+
+    def setp(n, divisi):
+        p.m.cc(p.t, 15, PLAYERS_CC[n])
+        p.m.cc(p.t + 0.05, 16, 127 if divisi else 0)
+        p.t += 0.3
+
+    for n in (2, 3, 5):
+        p.ks("Sus")
+        setp(n, False)
+        p.unit("PL-SUS", f"P{n} stacked Sus key{mid}", [(0, 1.5, mid, 100)])
+        p.unit("PL-EDGE", f"P{n} stacked Sus top key{hi}", [(0, 1.0, hi, 90)])
+        p.unit("PL-EDGE", f"P{n} stacked Sus bottom key{lo}", [(0, 1.0, lo, 90)])
+        p.unit("PL-REP", f"P{n} stacked Sus restrike", [(0, 0.5, mid, 90), (0.6, 0.5, mid, 90)])
+        p.ks("Stabs")
+        p.unit("PL-STAB", f"P{n} stacked stab key{mid}", [(0, 0.4, mid, 110)], tail=2.0)
+        p.ks("Stacc")
+        p.unit("PL-STACC", f"P{n} stacked staccatos", [(0, 0.3, mid, 100), (0.5, 0.3, mid + 2, 80)], tail=2.0)
+    p.ks("Sus")
+    for n in (2, 3, 5):
+        setp(n, True)
+        p.unit("DIV-ONE", f"P{n} divisi one note key{mid}", [(0, 1.0, mid, 100)])
+        if n > 2:
+            p.unit("DIV-LT", f"P{n} divisi chord of {n - 1}", [(0, 1.5, k, 100) for k in chord[:n - 1]])
+        p.unit("DIV-EQ", f"P{n} divisi chord of {n}", [(0, 1.5, k, 100) for k in chord[:n]])
+        p.unit("DIV-GT", f"P{n} divisi chord of {n + 1}", [(0, 1.5, k, 100) for k in chord[:n + 1]])
+        p.unit("DIV-STEAL", f"P{n} divisi held chord, new note", [(0, 2.0, k, 100) for k in chord[:n]]
+               + [(0.8, 1.0, chord[n - 1] + 3, 100)])
+        p.unit("DIV-NEAR", f"P{n} divisi two notes 2 ms apart", [(0, 1.2, mid, 100), (0.002, 1.2, mid + 4, 100)])
+        p.unit("DIV-FREE", f"P{n} divisi player freed, new note",
+               [(0, 2.0, chord[0], 100), (0, 0.8, chord[1], 100), (1.2, 0.8, chord[1] + 2, 100)])
+    setp(3, True)
+    p.ks("Stacc")
+    p.unit("DIV-STACC", "P3 divisi staccato chord of 3", [(0, 0.3, k, 100) for k in chord[:3]], tail=2.0)
+    p.ks("Sus")
+    p.unit("DIV-CC15", "P3 divisi chord held, CC15 to 5 players, new note",
+           [(0, 2.0, k, 100) for k in chord[:3]] + [(1.2, 1.0, chord[3], 100)], ccs=[(0.8, 15, PLAYERS_CC[5])])
+    setp(2, False)
+    p.unit("PL-CC15", "P2 stacked note held, CC15 to 3 players, new note",
+           [(0, 2.0, mid, 100), (1.0, 1.0, mid + 4, 100)], ccs=[(0.6, 15, PLAYERS_CC[3])])
+    setp(1, False)
+
+
+MODE_FN = {"players": players, "sustains": sustains, "legato": legato, "stablegato": stablegato, "reltypes": reltypes,
            "keytable": keytable,
            "phrases": phrases,
            "swells": swells}

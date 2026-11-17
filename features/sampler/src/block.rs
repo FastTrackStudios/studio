@@ -423,6 +423,11 @@ impl SamplerBlock {
         self.engine.skip_script_draws(n);
     }
 
+    /// See [`SampleEngine::force_humanize`].
+    pub fn force_humanize(&mut self, v: &[i32]) {
+        self.engine.force_humanize(v);
+    }
+
     /// See [`SampleEngine::set_script_seed`].
     pub fn set_script_seed(&mut self, seed: u32) {
         self.engine.set_script_seed(seed);

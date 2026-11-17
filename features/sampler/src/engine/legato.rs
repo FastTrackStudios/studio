@@ -300,7 +300,15 @@ impl SampleEngine {
             }
             // Within the zone's range, or within pitch-shift tolerance of its
             // recorded key (whole-tone grid → even notes warm their neighbour).
-            let in_range = note >= z.key_min && note <= z.key_max;
+            // An ensemble's extra players play from neighbouring keys
+            // (`players.rs`): warm every key they can reach.
+            let reach = if self.patch.spec.performance.players.is_some() {
+                self.players.count.saturating_sub(1)
+            } else {
+                0
+            };
+            let in_range =
+                note.saturating_add(reach) >= z.key_min && note.saturating_sub(reach) <= z.key_max;
             let near = (z.root_key as i32 - note as i32).unsigned_abs() as u8
                 <= self.patch.spec.performance.zone_pitch_tolerance;
             if !in_range && !near {

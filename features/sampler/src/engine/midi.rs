@@ -428,6 +428,7 @@ impl SampleEngine {
             {
                 self.voices
                     .fade_out_all(ms_to_frames_f(cut, self.sample_rate));
+                self.clear_divisi();
             }
             self.last_note_artic = Some(self.articulation.clone());
         }
@@ -634,8 +635,10 @@ impl SampleEngine {
                 for (artic, dynamic, velocity) in held {
                     self.script_release(cur_line, note, &artic, &dynamic, velocity);
                 }
+                self.divisi_note_off(note);
                 return;
             }
+            self.divisi_note_off(note);
             self.line_mut().order.retain(|&n| n != note);
             // Monophonic legato: releasing the SOUNDING note falls back to the
             // most-recent still-held note via a legato transition; releasing the
@@ -746,7 +749,7 @@ impl SampleEngine {
     /// a note other than the last tried, `random(1, 100) <= chance`, then
     /// the zone of `random(1, 127)`'s band at the spec's key, its own
     /// strike, fading out from its start.
-    fn keynoise(&mut self, artic: &str, note: u8, velocity: u8) {
+    pub(crate) fn keynoise(&mut self, artic: &str, note: u8, velocity: u8, player: usize) {
         let Some(kn) = self
             .patch
             .spec
@@ -758,10 +761,11 @@ impl SampleEngine {
         let forced = kn
             .force_key
             .is_some_and(|k| self.keys_down[usize::from(k & 127)]);
-        if self.keynoise_last == Some(note) && !forced {
+        let last = &mut self.players.keynoise_last[player];
+        if *last == Some(note) && !forced {
             return;
         }
-        self.keynoise_last = Some(note);
+        *last = Some(note);
         if self.script_draw(1, 100) > kn.chance_pct && !forced {
             return;
         }
@@ -863,9 +867,18 @@ impl SampleEngine {
             .and_then(|i| rs.variant_fade_ms.get(i).copied())
             .unwrap_or(rs.fade_ms);
         let fade = ms_to_frames_f(fade_ms, self.sample_rate);
-        match self.release_body_strike[usize::from(note & 127)] {
-            Some(strike) => self.voices.fade_out_strike_bodies(strike, fade),
-            None => self.voices.fade_out_note_bodies(line, note, fade),
+        let ensemble = self.players_active();
+        if ensemble {
+            // every player's body of the key (`%gbku1[10·note + p]`)
+            self.players_fade_bodies(note, fade);
+            if let Some(strike) = self.release_body_strike[usize::from(note & 127)].take() {
+                self.voices.fade_out_strike_bodies(strike, fade);
+            }
+        } else {
+            match self.release_body_strike[usize::from(note & 127)] {
+                Some(strike) => self.voices.fade_out_strike_bodies(strike, fade),
+                None => self.voices.fade_out_note_bodies(line, note, fade),
+            }
         }
         let rr = self
             .short_random_rr(&rs.artic, note)
@@ -873,6 +886,9 @@ impl SampleEngine {
         // Another articulation selected: the release is silent, its round
         // robin drawn all the same (`$12s10`, 36567).
         if muted {
+            if ensemble && self.divisi_applies(artic) {
+                self.divisi_note_off(note);
+            }
             return;
         }
         // its zones: the note-on's layer, the variant's, or any
@@ -893,10 +909,36 @@ impl SampleEngine {
             .gain_db
             .get(usize::from(velocity.min(127)))
             .map_or(1.0, |&db| db_to_gain(db));
+        let saved = (self.spawn_fade_in, self.spawn_delayed_fade);
+        if ensemble {
+            // the release type's range moves the extra players' keys
+            // (`%ArtRange[$jqs2e]`), else the parent articulation's
+            let range = match rs.key_range[..] {
+                [lo, hi] => Some((lo, hi)),
+                _ => self
+                    .patch
+                    .spec
+                    .articulation(artic)
+                    .and_then(|a| match a.key_range[..] {
+                        [lo, hi] => Some((lo, hi)),
+                        _ => None,
+                    }),
+            };
+            if rs.tail_ms > 0.0 {
+                self.spawn_fade_in = fade;
+                self.spawn_delayed_fade =
+                    Some((fade, ms_to_frames_f(rs.tail_ms, self.sample_rate)));
+            }
+            let parent = artic.to_string();
+            self.players_release(
+                &parent, &rs.artic, &dynamic, note, rr, range, gain, start_ms,
+            );
+            (self.spawn_fade_in, self.spawn_delayed_fade) = saved;
+            return;
+        }
         let offset = self.script_offset(idx, kontakt_offset_frames(start_ms, self.sample_rate));
         // its own envelope: fade in over the fade, `wait(fade)`, fade out
         // over the tail (36892-36970)
-        let saved = (self.spawn_fade_in, self.spawn_delayed_fade);
         if rs.tail_ms > 0.0 {
             self.spawn_fade_in = fade;
             self.spawn_delayed_fade = Some((fade, ms_to_frames_f(rs.tail_ms, self.sample_rate)));
@@ -1478,6 +1520,24 @@ impl SampleEngine {
             None if n_dyn > 1 || decoded_law => db_to_gain(css_short_makeup_db(&artic) + velvol_db),
             None => velocity_gain(velocity) * db_to_gain(css_short_makeup_db(&artic) + velvol_db),
         };
+        // More than one player: the ensemble plays it (`players.rs`).
+        if self.players_active() {
+            let plan = super::players::ShortPlan {
+                artic,
+                dynamic,
+                gain,
+                stretch,
+                tune_cents,
+                rr: seq_rr,
+                counter_rr: rr,
+                velocity,
+                line: self.cur_line as u8,
+                parent: note,
+            };
+            self.players_note_on(note, plan);
+            self.spawn_stretch = saved_stretch;
+            return;
+        }
         let idx = match seq_rr {
             Some(r) => self
                 .find_layer_zone_rr_index(&artic, &dynamic, note, r)
@@ -1537,7 +1597,7 @@ impl SampleEngine {
                     velocity,
                 ));
             }
-            self.keynoise(&artic, note, velocity);
+            self.keynoise(&artic, note, velocity, 0);
         }
         self.spawn_stretch = saved_stretch;
     }
@@ -1752,7 +1812,7 @@ impl SampleEngine {
 
     /// The zone of `artic`/`dynamic` covering `note` with round-robin
     /// `rr_index` (passing the solo-mic filter).
-    fn find_layer_zone_rr_index(
+    pub(crate) fn find_layer_zone_rr_index(
         &self,
         artic: &str,
         dynamic: &str,
@@ -2988,6 +3048,13 @@ impl SampleEngine {
         } else {
             gain_scale
         };
+        // a player's volume, pan and key (`players.rs`)
+        let player = self.spawn_player.unwrap_or_default();
+        let gain_scale = if player.gain_db == 0.0 {
+            gain_scale
+        } else {
+            gain_scale * db_to_gain(player.gain_db)
+        };
         // Copy out the zone fields up front so no borrow of `self.patch`
         // outlives the `&mut self` cache-miss bookkeeping below.
         let z = &self.patch.spec.zones[idx];
@@ -3315,7 +3382,7 @@ impl SampleEngine {
             * makeup
             * db_to_gain(piano_db)
             * vel_law
-            * db_to_gain(self.patch.spec.performance.instrument_gain_db);
+            * db_to_gain(self.patch.spec.performance.instrument_gain_db + self.ensemble_db());
         let gain = level * gain_scale;
         let mic_index = self.mic_index_for(&mic);
 
@@ -3544,6 +3611,9 @@ impl SampleEngine {
             .flatten();
         // Unison: spawn N copies spread across ±detune/2 cents + a pan spread,
         // level-compensated. copies == 1 is the normal single-voice path.
+        // a player's pan runs ahead of the layer's inserts when it has any
+        // (Kontakt's group inserts follow the amplifier), else at the output
+        let insert_pan = player.pan != 0.0 && self.insert_plan(idx).is_some();
         let (copies, det_cents, width) = self.unison;
         let copies = copies.max(1);
         let comp = 1.0 / (copies as f32).sqrt();
@@ -3556,8 +3626,11 @@ impl SampleEngine {
             // Source-vs-output sample-rate compensation (see Voice::with_rate_scale).
             let sr_scale = data.sample_rate as f64 / self.sample_rate as f64;
             let u_rate = rate * 2f64.powf((off * det_cents * 0.5) as f64 / 1200.0) * sr_scale;
-            let u_pan =
-                (pan + off * width + self.patch.spec.performance.instrument_pan).clamp(-1.0, 1.0);
+            let u_pan = (pan
+                + off * width
+                + self.patch.spec.performance.instrument_pan
+                + if insert_pan { 0.0 } else { player.pan })
+            .clamp(-1.0, 1.0);
             let mut voice = Voice::with_rate(
                 data.clone(),
                 note,
@@ -3568,6 +3641,7 @@ impl SampleEngine {
             )
             .with_mic_index(mic_index)
             .with_line(line)
+            .with_env_key(player.parent.unwrap_or(note))
             .with_artic_class(artic_class)
             .with_pan(u_pan)
             .with_attack(attack)
@@ -3596,8 +3670,11 @@ impl SampleEngine {
                     self.line_cc(l, cc)
                 })
                 .with_velocity(self.note_strike_vel[usize::from(note & 127)])
-                .with_key(note);
+                .with_key(player.key.unwrap_or(note));
                 voice = voice.with_inserts(Some(chain));
+                if insert_pan {
+                    voice = voice.with_insert_pan(player.pan);
+                }
             }
             // A patch layer's breakpoint amp envelope (not on the release
             // samples, which play after the key).
@@ -4087,6 +4164,7 @@ impl SampleEngine {
     /// level. Document CCs carry their channel; the scheduler resolves it to
     /// a line before calling this.
     pub fn cc_line(&mut self, line: LineId, controller: u8, value: u8) {
+        self.players_cc(controller, value);
         // a fixed controller ignores MIDI (`dynamics.fixed_ccs`)
         if self
             .patch

@@ -573,6 +573,10 @@ pub struct PerformanceSpec {
     /// [`Voice::with_pan`]: crate::engine::voice::Voice::with_pan
     #[facet(default)]
     pub instrument_pan: f32,
+    /// A script's ensemble of players (see [`PlayersSpec`]); `None` = one
+    /// player, nothing of it.
+    #[facet(default)]
+    pub players: Option<PlayersSpec>,
     /// How a note between sampled keys is pitched. `true`: RESAMPLE (rate
     /// change, the note runs shorter/longer) — what Kontakt does, null-tested
     /// on CSS (+100 c at key 72 from the B3 zone, −52.7 dB). `false`/unset:
@@ -782,6 +786,7 @@ impl Default for PerformanceSpec {
             sustain_makeup_db: 0.0,
             instrument_gain_db: 0.0,
             instrument_pan: 0.0,
+            players: None,
             resample_transpose: false,
             release_curve_k: 0.0,
             max_repeat_strikes: None,
@@ -1256,6 +1261,8 @@ pub struct SectionOverlay {
     pub instrument_gain_db: Option<f32>,
     /// See [`PerformanceSpec::instrument_pan`].
     pub instrument_pan: Option<f32>,
+    /// See [`PerformanceSpec::players`].
+    pub players: Option<PlayersSpec>,
     /// See [`DynamicsSpec::vibrato_controller`]: an instrument whose vibrato
     /// control differs from its library's. `""` = none (the CSW clarinets'
     /// `$vkgua = -1`: CC2 never leaves the vibsus slot).
@@ -1540,6 +1547,9 @@ impl SectionOverlay {
         }
         if let Some(v) = self.instrument_pan {
             spec.performance.instrument_pan = v;
+        }
+        if let Some(v) = &self.players {
+            spec.performance.players = Some(v.clone());
         }
         if let Some(v) = &self.vibrato_controller {
             spec.dynamics.vibrato_controller = (!v.is_empty()).then(|| v.clone());
@@ -3044,6 +3054,51 @@ pub struct KeynoiseSpec {
     /// every try clicks (the chance is still drawn): MOJO 2's `$erctx`.
     #[facet(default)]
     pub force_key: Option<u8>,
+}
+
+/// A script's ensemble: one key played by up to ten players
+/// (`engine/players.rs`; MOJO 2's Ensemble, `_notes/decode-players-divisi.md`).
+///
+/// - `count_cc` sets the player count in bands of `count_band` (0..=band →
+///   1, then one more player per band, the last band to 127); `divisi_cc`
+///   switches Auto Divisi (≥ 64 on). Every message of either ends the divisi
+///   voices (`reset_fade_ms`).
+/// - Stacked (divisi off, or a legato on): every note plays one voice per
+///   player. A second voice on one key in one callback is moved to a
+///   neighbouring key inside the articulation's `key_range` (pitched back)
+///   and takes the next round robin.
+/// - Humanize: player p ≥ 1 has a detune (m-cents), volume (mdB) and start
+///   offset (ms) drawn once, uniform in ±`*_max`, scaled by
+///   `humanize`/10000 and truncated at each note.
+/// - Pan: player p at `∓((p/2 + 1)·spread)/(count/2)` (even left), ‰.
+/// - Every voice of the instrument: `−attenuation_mdb·(count − 1)` mdB
+///   beyond the one-player level the articulations' own levels carry.
+/// - Auto Divisi: notes arriving within `buffer_ms` (1 ms ticks of a counter
+///   every waiting note advances) are spread over the free players, lowest
+///   note first, cycling; with every player busy the newest note takes the
+///   closest note's player(s) (`steal_fade_ms`).
+#[derive(Debug, Clone, Facet)]
+pub struct PlayersSpec {
+    pub count_cc: u8,
+    pub divisi_cc: u8,
+    #[facet(default = 12)]
+    pub count_band: u8,
+    /// The shipped count and Auto Divisi switch.
+    #[facet(default = 1)]
+    pub count: u8,
+    #[facet(default)]
+    pub divisi: bool,
+    /// 0..=10000 (100 %).
+    pub humanize: i32,
+    /// 0..=1000 (‰ of full pan).
+    pub spread: i32,
+    pub detune_max_mcents: i32,
+    pub volume_max_mdb: i32,
+    pub offset_max_ms: i32,
+    pub attenuation_mdb: i32,
+    pub buffer_ms: u32,
+    pub steal_fade_ms: f32,
+    pub reset_fade_ms: f32,
 }
 
 /// A script's monophonic legato over a one-layer sustain (MOJO 2's legato
