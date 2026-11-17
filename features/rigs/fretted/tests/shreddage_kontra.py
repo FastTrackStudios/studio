@@ -2,7 +2,7 @@
 """Run a probe through KONTRA (the library's own script) and compare its
 voices with ours, event by event.
 
-usage: shreddage_kontra.py <probe.mid> <instrument.nki> <ours.trace> <outdir>
+usage: shreddage_kontra.py <probe.mid> <instrument.nki> <ours.trace> <outdir> [--seed N]
 
 KONTRA is the reference for what the script commands: it runs the NKI's
 real KSP on its own engine. This renders the probe with
@@ -10,6 +10,9 @@ real KSP on its own engine. This renders the probe with
 into <outdir>/kontra.wav and kontra.json, then pairs each KONTRA voice
 start (frame, sample file, source position) with ours from
 `render_fretted --trace` and prints every difference. Also reports what
+KONTRA could not answer. `--seed` sets KONTRA_KSP_SEED (KSP random()'s
+state at transport start; default 1): render ours with the same
+`render_fretted --ksp-seed`, and Kontakt with the KSP Seed CLAP at it.
 KONTRA could not answer (`unhandled_actions`, `unanswered_pars`): a script
 branch that reads one of those may not be Kontakt's.
 
@@ -90,8 +93,10 @@ def main():
     scn = os.path.join(outdir, "scenario.json")
     json.dump(scenario(mid), open(scn, "w"))
     wav, js = os.path.join(outdir, "kontra.wav"), os.path.join(outdir, "kontra.json")
+    seed = sys.argv[sys.argv.index("--seed") + 1] if "--seed" in sys.argv else "1"
     subprocess.run([KONTRA, "play", nki, "--scenario", scn, "--json", js], check=True, timeout=3600,
-                   env=dict(os.environ, KONTRA_INSPECT_WAV=wav), stdout=subprocess.DEVNULL)
+                   env=dict(os.environ, KONTRA_INSPECT_WAV=wav, KONTRA_KSP_SEED=seed),
+                   stdout=subprocess.DEVNULL)
     r = json.load(open(js))
     r = r.get("result", r)
     print("unhandled_actions:", r.get("unhandled_actions") or "none",

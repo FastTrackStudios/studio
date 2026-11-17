@@ -544,6 +544,7 @@ mod tests {
             intensity: 1.0,
             lag_ms: 120.0,
             points: vec![0.0, 0.0, 0.600_393_7, 0.0, -0.168_918_88, 1.0, 1.0, 0.0],
+            env: vec![],
         };
         let plan = InsertPlan::new(&spec("sv_lp1", 0.0, vec![], vec![route]), 48_000.0).unwrap();
         assert!(gain_at(Arc::clone(&plan), 1000.0, 127) > -0.1);

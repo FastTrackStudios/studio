@@ -45,6 +45,9 @@ pub(crate) struct FretState {
     window: Option<FretWindow>,
     /// Keys sounding a free articulation, and which.
     free: HashMap<u8, String>,
+    /// KSP `random()`'s `rand()` state, and the seed it restarts from.
+    ksp_state: u32,
+    ksp_seed: u32,
 }
 
 /// Notes struck within one poly window: (note, velocity, articulation, line).
@@ -138,6 +141,8 @@ impl FretState {
             gone: HashSet::new(),
             window: None,
             free: HashMap::new(),
+            ksp_state: self.ksp_seed.max(1),
+            ksp_seed: self.ksp_seed.max(1),
         };
     }
 
@@ -197,6 +202,18 @@ impl FretState {
             }
         }
         Some(nearest.0)
+    }
+
+    /// Seed KSP `random()` (restarts its state).
+    pub(crate) fn set_ksp_seed(&mut self, seed: u32) {
+        self.ksp_seed = seed;
+        self.ksp_state = seed;
+    }
+
+    /// KSP `random(low, high)`.
+    #[allow(dead_code)] // the multitrack guitars draw from it (Argent)
+    pub(crate) fn ksp_random(&mut self, low: i32, high: i32) -> i32 {
+        super::ksp_rand::ksp_random(&mut self.ksp_state, low, high)
     }
 
     /// One draw of the borrow generator: `((s >> 8) & 0xFFFFFF)` after

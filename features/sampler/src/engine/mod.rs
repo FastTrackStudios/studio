@@ -227,6 +227,7 @@ mod helpers;
 pub mod inserts;
 mod kontakt_legato;
 mod kontakt_marcato;
+mod ksp_rand;
 mod legato;
 mod midi;
 mod phrase;
@@ -1973,6 +1974,13 @@ impl SampleEngine {
     /// replaying a reference render's draws for a null test.
     pub fn force_random_tunes(&mut self, cents: &[i8]) {
         self.forced_tunes = cents.iter().copied().collect();
+    }
+
+    /// Seed Kontakt's KSP `random()` for the fretboard stage's script draws
+    /// (`ksp_rand.rs`): the state a reference render pins at transport start
+    /// (the KSP Seed CLAP, KONTRA's `KONTRA_KSP_SEED`). Default 1.
+    pub fn set_ksp_seed(&mut self, seed: u32) {
+        self.fret.set_ksp_seed(seed);
     }
 
     /// Use these random pitch-envelope draws `(cents, decay_ms)` in order

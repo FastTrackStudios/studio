@@ -117,6 +117,9 @@ fn main() -> eyre::Result<()> {
     signal_fretted::install_patch(&rig, ID, patch, &instrument, &mic)
         .map_err(|e| eyre::eyre!(e))?;
     rig.set_trace_enabled(ID, trace);
+    // Kontakt's KSP random() seed (the KSP Seed CLAP / KONTRA_KSP_SEED)
+    let seed = flag("--ksp-seed").and_then(|s| s.parse().ok()).unwrap_or(1);
+    rig.set_ksp_seed(ID, seed);
 
     let events = parse_smf(&std::fs::read(inp)?);
     let frame_of = |sec: f64| (sec * f64::from(SR)).round().max(0.0) as usize;

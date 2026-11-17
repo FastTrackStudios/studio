@@ -423,6 +423,11 @@ impl SamplerBlock {
         self.engine.force_random_tunes(cents);
     }
 
+    /// See [`SampleEngine::set_ksp_seed`].
+    pub fn set_ksp_seed(&mut self, seed: u32) {
+        self.engine.set_ksp_seed(seed);
+    }
+
     pub fn force_random_pitch_envs(&mut self, draws: &[(f32, f32)]) {
         self.engine.force_random_pitch_envs(draws);
     }
