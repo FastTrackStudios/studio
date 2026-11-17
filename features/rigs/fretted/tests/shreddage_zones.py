@@ -54,6 +54,8 @@ META_NAMES = {
                "PowerChordStaccato", "Choke", "Tapping", "NaturalHarmonics", "ArtificialHarmonics",
                "PinchHarmonics", "Rake", "Tremolo", "HammerPull", "Slide", "PitchedRelease",
                "PowerChordPitchedRelease", "UnpitchedRelease", "FX"],
+    "darkwall": ["Sustain", "SustainShort", "StaccatoLong", "StaccatoShort", "Mute", "Harmonics",
+                 "Tapping", "BuzzTrill", "HammerPull", "Slide", "PitchedRelease", "UnpitchedRelease"],
 }
 # Groups outside TACT, by the words of their name (after the pickup).
 EXTRA_GROUPS = {
@@ -63,6 +65,10 @@ EXTRA_GROUPS = {
     "Wide Chokes": ("WideChoke", 1, False),
     "DI Noise": ("DINoise", 1, False),
 }
+# Groups outside TACT whose name is also an articulation's in other
+# libraries: only when no TACT articulation claims the group (Darkwall's
+# key FX, keys 10/11).
+EXTRA_FALLBACK = {"FX": ("KeyFX", 1, False)}
 
 
 def load_meta(kdir):
@@ -77,7 +83,7 @@ def load_meta(kdir):
     return None
 
 
-def classify(gidx, name, meta, ngroups):
+def classify(gidx, name, meta, ngroups, npickups=2):
     """[(mic, articulation, trigger, picked, string)] a group's zones play as."""
     g = parse_group(name)
     if not g:
@@ -92,8 +98,9 @@ def classify(gidx, name, meta, ngroups):
         art, trig, picked = TRIGGER[word]
         return [(mic, a, trig, picked, string) for a in [art] + ALSO.get(word, [])]
     lib, vals = meta
-    half = ngroups // 2
-    local = gidx % half
+    # one block of groups per pickup (Argent Neck/Bridge, Darkwall
+    # Neck/Middle/Bridge), each laid out by the meta
+    local = gidx % (ngroups // npickups)
     out = []
     for a, art in enumerate(META_NAMES[lib]):
         m = vals[64 * a: 64 * a + 64]
@@ -101,6 +108,9 @@ def classify(gidx, name, meta, ngroups):
         if first <= local < first + count:
             s = local - first + 1 if m[38] == 1 else 0
             out.append((mic, art, m[21], m[35] == 1, s))
+    if not out and word in EXTRA_FALLBACK:
+        art, trig, picked = EXTRA_FALLBACK[word]
+        out.append((mic, art, trig, picked, string))
     return out
 
 
@@ -219,11 +229,12 @@ def main():
         rows = list(csv.DictReader(f, delimiter="\t"))
     meta = load_meta(kdir)
     ngroups = len(groups)
+    npickups = len({n.split(" ", 1)[0] for n in groups.values() if n})
 
     out, skipped = [], {}
     for r in rows:
         name = groups.get(r["group"], "")
-        kinds = classify(int(r["group"]), name, meta, ngroups)
+        kinds = classify(int(r["group"]), name, meta, ngroups, npickups)
         if not kinds:
             skipped[name or r["group"]] = skipped.get(name or r["group"], 0) + 1
             continue

@@ -116,7 +116,8 @@ def main(root, nki, inst, lib):
         for line in f:
             r = dict(zip(head, line.rstrip("\n").split("\t")))
             groups[int(r["idx"])] = r
-    half = len(groups) // 2
+    npickups = len({r["name"].split(" ", 1)[0] for r in groups.values()})
+    block = len(groups) // npickups
     gjson = json.load(open(os.path.join(k, "groups.json")))
     gjson = {x["index"]: x for x in (gjson if isinstance(gjson, list) else gjson["groups"])}
     slots = {x["group"]: x["slots"] for x in json.load(open(os.path.join(k, "group_fx.json")))}
@@ -134,16 +135,17 @@ def main(root, nki, inst, lib):
     X = lambda a, i: matrix[128 * a + i]
     lists = {n: ksp_list(script, n) for n in LISTS}
 
-    # The pickup the script lets play (engine_pars[3]: 0 Bridge = the upper
-    # half of the groups, L7270) and its Console bus.
-    pickup = 1 - ep[3]
+    # The pickup the script lets play (engine_pars[3] = 0: the last block of
+    # groups, Bridge; `g / block = npickups − 1 − [3]`, Argent L7270,
+    # Darkwall L7131) and its Console bus.
+    pickup = npickups - 1 - ep[3]
     program = json.load(open(os.path.join(k, "program.json")))
     buses = json.load(open(os.path.join(k, "buses.json")))
     bus = next(b for b in buses if b["index"] == pickup)
     gain_db = 20 * math.log10(program["volume"]) + 20 * math.log10(bus["pub"][0])
-    group = lambda a: groups[pickup * half + M(a, 1)]
+    group = lambda a: groups[pickup * block + M(a, 1)]
     gname = lambda word: next(r for r in groups.values()
-                              if int(r["idx"]) >= pickup * half and r["name"].split(" ", 1)[1] == word)
+                              if int(r["idx"]) // block == pickup and r["name"].split(" ", 1)[1] == word)
 
     capo = ep[77]
     if ep[4] <= 0:
@@ -164,12 +166,16 @@ def main(root, nki, inst, lib):
     if ep[20] == 1:
         sys.exit("anti-repetition on: its track rules (L7538) are not modelled yet")
 
-    picked = [names[a] for a in range(na) if M(a, 35) == 1]
+    # picked: their own RR stream per stroke; a release keeps the unpicked
+    # counter whatever its meta says (Darkwall PR: `[1680 + 24s + f]`)
+    picked = [names[a] for a in range(na) if M(a, 35) == 1 and M(a, 21) not in (6, 7)]
     excluded = [names[a] for a in lists["s3__exclude_artic_all_releases"]]
     pr_sources = [names[a] for a in range(na) if M(a, 40) == 1 and names[a] not in excluded
                   and M(a, 21) not in (6, 7)]
     unp = names.index("UnpitchedRelease")
-    offsets = [(names[a], X(a, 3) * M(a, 6) / 10 / 1000) for a in range(na) if X(a, 3) > 0]
+    # a release's x3 is multiplied by engine_pars[14] (0) in its own path
+    offsets = [(names[a], X(a, 3) * M(a, 6) / 10 / 1000) for a in range(na)
+               if X(a, 3) > 0 and M(a, 21) not in (6, 7)]
 
     # the knobs the script holds on controllers (`set_controller`, L9167-9170)
     ccs = list(dict((int(c), ep[int(i)]) for c, i in
@@ -187,7 +193,8 @@ def main(root, nki, inst, lib):
          f"    // fretting mode {mode}: 1 << %str___hierarchy[{6 * mode + 1}..{6 * mode + 5}]",
          f"    weights {{ in_hand {1 << hier[1]}, free {1 << hier[2]}, adjacent {1 << hier[3]}, "
          f"same_string {1 << hier[4]}, same_fret {1 << hier[5]} }}",
-         "    fresh_last_fret 0",
+         # engine_pars[60]: reset_hand on transport start sets %last_frets to −1
+         f"    fresh_last_fret {-1 if ep[60] == 1 else 0}",
          "    rr_slot_stride 24",
          f"    onset_delay_us {51 + 1000 * ep[26]}",
          "    retrigger_fade_ms 400",
@@ -204,12 +211,13 @@ def main(root, nki, inst, lib):
          f"min_held_ms {ep[52]}, max_held_ms {ep[53]}, keys {M(unp, 4)}, gain_scale 0.5 }}",
          # economy picking (engine_pars[10] = 3, L16196-16219): %tact___meta[64·a + 35]
          f"    picking {{ articulations ({' '.join(picked)}) }}",
-         f"    tracks ({' '.join(f'{{pan {fmt(x)}}}' for x in pans)})",
+         *([f"    tracks ({' '.join(f'{{pan {fmt(x)}}}' for x in pans)})"] if len(pans) > 1 else []),
          # x3 · meta[6]/10 µs (L7183)
          f"    start_offsets ({' '.join(f'{{articulation {a}, ms {fmt(ms)}}}' for a, ms in offsets)})",
          # extra attack (L18182-18203): %s3___rr_seed[8192 + …] = the 4-RR
          # order, change_tune (string − 3)·−2000 past string idx 3
-         "    extra_pick { articulation ExtraPick, rr 4, cents_per_string -20, from_string 3 }",
+         *(["    extra_pick { articulation ExtraPick, rr 4, cents_per_string -20, from_string 3 }"]
+           if ep[84] > 0 else []),  # Extra Attack
          ]
     L.append("    rr_orders (")
     for i in range(7):
@@ -239,7 +247,7 @@ def main(root, nki, inst, lib):
               f"        release_ms_by_held ((0 {fmt(stage_ms(X(a, 34), 12501.0))}))"]
         L += group_fx(slots, gjson[int(g["idx"])]) + ["    }"]
     # side recordings outside TACT: their group's saved envelope
-    for aid, word in (("ExtraPick", "Extra Pick"),):
+    for aid, word in ((("ExtraPick", "Extra Pick"),) if ep[84] > 0 else ()):
         g = gname(word)
         att, _, dec, sus, rel, crv = (float(x) for x in g["ahdsr_AHDSRc"].split("/"))
         lag = min(LAG_MS, att)

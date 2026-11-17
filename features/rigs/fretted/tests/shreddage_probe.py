@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Probe MIDI for a Shreddage null test.
 
-usage: shreddage_probe.py <out.mid> <mode> [--notes 1.2:0.4] [--lib abyss|argent]
+usage: shreddage_probe.py <out.mid> <mode> [--notes 1.2:0.4] [--lib abyss|argent|darkwall]
 
 single-note modes (keyswitch = the shipped TACT key):
   sus   Sustain (key 12)      stac  Staccato (key 13)      harm  Harmonics (key 15)
@@ -32,9 +32,12 @@ LIBS = {
                        "trem": 6, "choke": 7, "tap": 8, "nharm": 9, "aharm": 10, "fx": 11,
                        "rake": 0, "pinch": 0},
                    slide=21, lo=25, hi=88, vmax={"sus": 115}),
+    "darkwall": dict(ks={"sus": 0, "ssus": 1, "stacl": 2, "stacs": 3, "mute": 4, "harm": 5,
+                         "tap": 6, "buzz": 7},
+                     slide=12, lo=16, hi=72, vmax={}),
 }
 SINGLE = {"sus", "stac", "harm", "fx", "mute", "pcsus", "pcmute", "pcstac", "trem", "choke",
-          "nharm", "aharm", "rake", "pinch"}
+          "nharm", "aharm", "rake", "pinch", "ssus", "stacl", "stacs", "buzz"}
 PHRASE = {"rel", "legato", "slide", "chord", "tap"}
 LIB = LIBS["abyss"]
 PPQ, US_PER_Q = 960, 500_000

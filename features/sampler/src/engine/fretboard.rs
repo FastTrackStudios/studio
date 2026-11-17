@@ -1495,7 +1495,10 @@ impl SampleEngine {
             let z = &self.patch.spec.zones[i];
             usize::from(z.string) == string + 1
                 && z.rr_index as usize == rr
+                // a picked articulation without stroke zones (Darkwall's
+                // hammers) counts its RR per stroke only
                 && (self.fret.cur_stroke.is_empty()
+                    || z.stroke.is_empty()
                     || z.stroke.eq_ignore_ascii_case(self.fret.cur_stroke))
                 && (interval == 0 || z.interval == interval)
                 && self.zone_passes(z, artic, direction, dynamic)
