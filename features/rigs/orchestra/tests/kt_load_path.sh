@@ -1,5 +1,5 @@
 #!/bin/bash
-# kt_load_path.sh <nki path> <out.rpp>
+# kt_load_path.sh <nki or nkm path> <out.rpp>
 #
 # Load an NKI into the Kontakt instance of the REAPER project that is open (FX window floating at its
 # default spot), save the project and keep a copy at <out.rpp>. Works for any library: no browser rows.
@@ -39,7 +39,9 @@ cancel_panel() { local _; for _ in 1 2 3; do panel_open || return 0; osa 'key co
 [ -f "$nki" ] || { echo "no such NKI: $nki" >&2; exit 1; }
 dir=$(dirname "$nki")
 case "$dir" in *"  "*) echo "folder has a double space, cannot type it: $dir" >&2; exit 1 ;; esac
-link="$dir/_ktload.nki"
+# keep the extension: Kontakt loads a .nkm multi (every slot) as well as an .nki
+ext="${nki##*.}"
+link="$dir/_ktload.$ext"
 ln -f "$nki" "$link"
 trap 'rm -f "$link"' EXIT
 shot start
