@@ -22,7 +22,7 @@ zones the engine plays, one per logical round robin:
   velocity 1..127 into it).
 - gain_db = 20·log10(zvol), tune_cents = 1200·log2(tune), loops verbatim.
 """
-import csv, json, math, os, re, shutil, sys, time
+import csv, json, math, os, re, shutil, struct, sys, time
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else "/run/media/AudioHaven/Sampled/Horns/MOJO 2 Horn Section"
 BUS_MIC = {1: "Mix", 2: "Close", 3: "Near", 4: "Room"}
@@ -140,6 +140,23 @@ def check_starts(nki, groups, starts):
     return bus_of
 
 
+def group_stage(fx_slots, gi):
+    """A group's active kind-9 insert as `(gain_db, param)`: its output gain
+    goes on the zones; its parameter (the float at byte 9, −0.3 on Trumpet
+    Stabs) is NOT a balance — Kontakt's render keeps both channels level
+    (measured: L/R gain 0.98/0.99 against an unpanned voice) — so it is
+    returned for the caller to report, not applied."""
+    gain_db, param = 0.0, 0.0
+    for s in fx_slots.get(gi, []):
+        if s["kind"] != 9 or s.get("bypass", True):
+            continue
+        gain_db += 20 * math.log10(s.get("output_gain") or 1.0)
+        ch = bytes.fromhex(s["children_hex"])
+        if len(ch) >= 13:
+            param += struct.unpack("<f", ch[9:13])[0]
+    return gain_db, param
+
+
 def build(nki, organized):
     ksp = os.path.join(ROOT, "_ksp", nki)
     inst = re.sub(r"\s+2\.0$", "", nki)
@@ -147,6 +164,8 @@ def build(nki, organized):
     pers = persistent(os.path.join(ksp, "persistent_1.tsv"))
     num_rr = int(pers["$1f1tu"][0])
     bus_of = check_starts(nki, groups, [int(x) for x in pers["%hr4to"]])
+    fx_path = os.path.join(ksp, "group_fx.json")
+    fx_slots = {x["group"]: x["slots"] for x in json.load(open(fx_path))} if os.path.exists(fx_path) else {}
 
     by_group = {}
     for r in csv.DictReader(open(os.path.join(ksp, "zones.tsv")), delimiter="\t"):
@@ -160,6 +179,7 @@ def build(nki, organized):
             continue
         art, dyn, bus = cls
         bus = bus_of.get(gi, bus)
+        stage_db, _stage_param = group_stage(fx_slots, gi)
 
         def emit(r, **extra):
             raw = raw_key(r["sample"])
@@ -180,10 +200,11 @@ def build(nki, organized):
             }
             z.update(extra)
             gain = float(r["zvol"])
-            z["gain_db"] = round(20 * math.log10(gain), 6) if gain > 0 else -144.0
+            z["gain_db"] = round(20 * math.log10(gain) + stage_db, 6) if gain > 0 else -144.0
             z["tune_cents"] = round(1200 * math.log2(float(r["tune"])), 6)
-            if int(r["start_mod"]) > 0:
-                z["start_mod"] = int(r["start_mod"])
+            # always written: −1 (no start modulation) means Kontakt ignores
+            # the script's offset, where a missing value would apply it whole
+            z["start_mod"] = int(r["start_mod"])
             ls, le = int(r["loop_start"]), int(r["loop_end"])
             if le > ls >= 0:
                 z["loop_start"], z["loop_end"] = ls, le
