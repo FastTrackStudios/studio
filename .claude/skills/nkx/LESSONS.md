@@ -175,5 +175,32 @@ strings.txt, proj/Kontakt8; scripts/DecompileAt.java decompiles by address).
   ramped one step late; per stage `v ← a + r·v`, `r = q^(1/N)`
   (`NextStage` 0x670bb0), a 5 ms wait when the first stage is > 100 ms, and a
   scaled first-stage time on release.
-- **CSSS Violin I vs seeded Kontakt (KONTRA, block 512)**: probe −56.1, legato
-  −51.4, leg2 −52.6, marcato −59.7, marc2 −52.9 dB strict median.
+- **Volume modulators, per step** (`BContMod::RunForAllTargetsInt` 0x39db1c,
+  `GenSysModScript` 0x4ba038): every volume route multiplies into one value per
+  32-frame step as `1 − (1 − x)·I`, AHDSR and flex included; `ProcessVoice`
+  (0x45aad0) ramps that product linearly, one step late. A lag-0 CC route has
+  no per-frame smoothing. A flex point level is cubed.
+- **AHD-only AHDSR** (`BGroup::SetParEnv` 0x4be268 → `NoteOffLessMode`, +0x120;
+  ni-file's `unknown_flag`): the envelope ignores the key-up and its decay
+  falls to silence, not to the sustain. CSSS sets it on every release group.
+- **Script tune and volume are f32 products** (`setNoteEventPar` 0x3d3b58:
+  tune case 6/0x11, volume 4/0xf, each `(f32)exp2(…)`): relative
+  `change_tune` multiplies an f32 ratio, so a glide back to 0 cents ends ~1 ppm
+  off — a phase drift that reaches −40 dB if you sum millicents instead.
+- **Script fades** (`ScriptFadeOut` 0x3d6aac, `ScriptFadeIn` 0x3d6e14,
+  `BDsp::FadeVoice` 0x3a4598): a new fade replaces the running one, longer or
+  not. `N = trunc(fma(ms·0.001f, rate, 0.5f))`, ≥ 2; frame 1 outputs the current
+  level, then steps by `(target − level)/(N − 1)` in f32; during its event
+  offset the level holds. A fade-in is ≥ 1 ms; a fade-out under 1 ms on a voice
+  that has not played yet zeroes it (CSSS's legato click).
+- **`wait()` is f32 too** (`RunStatementList` 0x2c04c0): units =
+  `(int)((f64)((f32)µs·1e-6f)·1024·rate)`, ≥ 1, in 1/1024 frame — `wait(10000)`
+  is 1/1024 frame short of 480 frames, so a looping script's volume step lands
+  one 512-chunk early every 16th chunk.
+- **A voice's first block** (`ProcessVoice` 0x45aad0): only a voice whose
+  group has a pitch modulator takes the per-frame pitch kernel
+  (`ResampleChannelQuad_L_mod_SSE2`, serial f32 cursor) on its first block;
+  script `change_tune` does not route through it.
+- **CSSS Violin I vs seeded Kontakt (KONTRA, block 512)**, every unit nulled:
+  probe −104.3, legato −102.3, leg2 −102.5, marcato −98.6, marc2 −98.8, shorts
+  −103.8, pizz −98.2, trem −106.5, rebow −110.7, attack −108.6 dB median.
