@@ -428,6 +428,9 @@ pub struct PlayerPatch {
     /// decode per sample, process-wide): offline renderers that run many
     /// engines over the same library. `None`: each engine builds its own.
     pub shared_cache: Option<engine::cache::SampleCache>,
+    /// Its Time Machine II zones' pitch marks (`ZoneSpec::tm2_block`),
+    /// found as their samples are warmed; clones share them.
+    pub tm2_marks: engine::tm2::MarkTable,
 }
 
 /// Resolved zone match: where to read the sample plus how to play it.
@@ -495,6 +498,7 @@ impl PlayerPatch {
             prepared_cache_dir,
             pack: None,
             shared_cache: None,
+            tm2_marks: engine::tm2::MarkTable::default(),
         })
     }
 
@@ -557,6 +561,7 @@ impl PlayerPatch {
             prepared_cache_dir: None,
             pack: None,
             shared_cache: None,
+            tm2_marks: engine::tm2::MarkTable::default(),
         }
     }
 
@@ -630,6 +635,7 @@ impl PlayerPatch {
                     tune_cents: 0.0,
                     sample_start: 0,
                     start_mod: None,
+                    tm2_block: 0,
                     variant_starts: Vec::new(),
                     disabled: false,
                     borrowed: false,
@@ -729,6 +735,7 @@ impl PlayerPatch {
             prepared_cache_dir: None,
             pack: Some(pack),
             shared_cache: None,
+            tm2_marks: engine::tm2::MarkTable::default(),
         })
     }
 

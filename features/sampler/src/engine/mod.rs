@@ -236,6 +236,7 @@ pub mod pitch_shift;
 pub mod resample;
 pub mod rr;
 mod script_legato;
+pub mod tm2;
 pub mod trace;
 pub mod voice;
 
@@ -1578,6 +1579,21 @@ impl SampleEngine {
         let stats = self
             .cache
             .preload(self.patch.sample_paths().map(std::path::PathBuf::as_path));
+        // Time Machine II zones get their pitch marks with their samples.
+        #[cfg(not(target_arch = "wasm32"))]
+        for i in 0..self.patch.spec.zones.len() {
+            if self.patch.spec.zones[i].tm2_block == 0 {
+                continue;
+            }
+            if let Some(data) = self
+                .patch
+                .zone_paths
+                .get(i)
+                .and_then(|p| self.cache.get_loaded(p))
+            {
+                self.analyse_tm2(i, &data);
+            }
+        }
         #[cfg(not(target_arch = "wasm32"))]
         tracing::info!(
             "signal-sampler: preloaded {}/{} samples ({:.1} MiB PCM) in {:.2}s",

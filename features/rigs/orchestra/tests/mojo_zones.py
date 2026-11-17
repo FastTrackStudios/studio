@@ -21,6 +21,9 @@ zones the engine plays, one per logical round robin:
 - the keyclick group keeps its own 11 RR zones (the script plays a random
   velocity 1..127 into it).
 - gain_db = 20·log10(zvol), tune_cents = 1200·log2(tune), loops verbatim.
+- a Time Machine II group's zones (source mode 5: legato, octave, unison
+  tails, swells, crescendos) carry `tm2_block`, the analysis block of the
+  group's source record (`tm2_blocks`).
 """
 import csv, json, math, os, re, shutil, struct, sys, time
 
@@ -118,6 +121,47 @@ SCRIPT_ARTS = ["Sus", "Stacc", "Stabs", "BendDown", "RunDown", "RunUp", "Doits",
                "Rise", "Shakes", "Trills", "Swells", "Cresc", "Falls"]
 
 
+# Time Machine II's analysis setting → its analysis block, frames
+# (`BSampleInfo::FindPitchMarks`, Kontakt 8.7.1 0x43764c; 0 asks a
+# pre-analysis, not decoded).
+TM2_BLOCK = {1: 512, 2: 512, 3: 1024, 4: 2048}
+
+
+def tm2_blocks(nki, ksp, gjson):
+    """Every Time Machine II group's analysis block: `{group index: frames}`.
+
+    A group's source record (`BParSrcMode`, in the group's private data of
+    `inner.bin`) for source mode 5 is `u8 0 · u16 version · u32 5 · f32 ·
+    flag · u32 · flag · f32` (+ `f32 f32 flag` from v0x102), then the mode's
+    own `flag · u32 · u32`: the transient-copy flag, the transient size and
+    the analysis setting (KONTRA af3e766: `BParSrcMode::doRead` 0x7d151c,
+    `BGroup + 0xc18`). The records sit in group order, so the n-th one is
+    the n-th mode-5 group's.
+    """
+    d = open(os.path.join(ksp, "inner.bin"), "rb").read()
+    recs = []
+    for m in re.finditer(rb"\x00[\x00-\x06]\x01\x05\x00\x00\x00", d):
+        e = m.start()
+        if e < 1 or d[e - 1] > 1:
+            continue
+        e -= 1  # the record's leading flag byte
+        ver = struct.unpack_from("<H", d, e + 2)[0]
+        if ver < 0x102 or any(d[e + k] > 1 for k in (12, 17, 30, 31)):
+            continue
+        recs.append((d[e + 31], struct.unpack_from("<I", d, e + 36)[0]))
+    groups = [g["index"] for g in gjson if g.get("source_mode") == 5]
+    if len(recs) != len(groups):
+        raise SystemExit(f"{nki}: {len(groups)} Time Machine II groups, {len(recs)} source records")
+    out = {}
+    for gi, (transient, setting) in zip(groups, recs):
+        if transient:
+            raise SystemExit(f"{nki}: group {gi} copies transients (not modelled)")
+        if setting not in TM2_BLOCK:
+            raise SystemExit(f"{nki}: group {gi} analysis setting {setting} (pre-analysis, not decoded)")
+        out[gi] = TM2_BLOCK[setting]
+    return out
+
+
 def check_starts(nki, groups, starts):
     """The script's group index for every core articulation group → its bus.
 
@@ -164,6 +208,7 @@ def build(nki, organized):
     groups = {g["index"]: g["name"] for g in gjson}
     # the source mode (nkx-extract source_mode): 3 DFD, 5 Time Machine II, …
     modes = {g["index"]: g.get("source_mode") for g in gjson}
+    tm2 = tm2_blocks(nki, ksp, gjson)
     pers = persistent(os.path.join(ksp, "persistent_1.tsv"))
     num_rr = int(pers["$1f1tu"][0])
     bus_of = check_starts(nki, groups, [int(x) for x in pers["%hr4to"]])
@@ -211,6 +256,10 @@ def build(nki, organized):
             # II transitions) take the offset whole
             if modes.get(gi) in (3, None):
                 z["start_mod"] = int(r["start_mod"])
+            # a Time Machine II group's voices play grain by grain, at any
+            # speed, from pitch marks found with its analysis block
+            if gi in tm2:
+                z["tm2_block"] = tm2[gi]
             # the zone's own sample window: a play_note offset counts from
             # sample_start (KONTRA trace: a release 78 ms in starts at frame
             # 3744 + the zone's 1500)

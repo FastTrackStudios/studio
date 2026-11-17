@@ -475,6 +475,48 @@ pub struct Voice {
     /// ([`super::resample`]) instead of the linear one: set by the pool for a
     /// library whose `performance.interpolation` asks for it.
     kt: Option<KontaktVoice>,
+    /// Plays grain by grain through Kontakt's Time Machine II
+    /// ([`super::tm2`]): set for a zone of a Time Machine II group whose
+    /// marks are found. Boxed (its block buffers are ~12 KB): one allocation
+    /// at the spawn, none while it plays.
+    tm2: Option<Box<Tm2Voice>>,
+}
+
+/// A Time Machine II voice: its machine (made at its first frame, from the
+/// voice's start), the engine frame it started at (its blocks lie on the
+/// engine's [`KONTAKT_BLOCK`](super::resample::KONTAKT_BLOCK) grid, as
+/// `BDsp::GetBlockMachine` runs the machine once a host block), and the
+/// block of frames planned.
+#[derive(Clone)]
+struct Tm2Voice {
+    marks: super::tm2::Marks,
+    /// Speed (1 = as recorded) and the sample's rate over the engine's.
+    speed: f64,
+    ratio: f64,
+    origin: u64,
+    machine: Option<super::tm2::Machine>,
+    layout: super::resample::Layout,
+    frames: [super::tm2::Frame; super::resample::KONTAKT_BLOCK],
+    old: [super::resample::Tap; 2 * super::resample::KONTAKT_BLOCK],
+    new: [super::resample::Tap; super::resample::KONTAKT_BLOCK],
+    len: usize,
+    used: usize,
+    /// The step the last frame moved at, which forms the next block's.
+    step: f64,
+    /// The virtual position at the planned block's start, and its move a
+    /// frame: the voice's position.
+    vstart: f64,
+    per: f32,
+}
+
+impl std::fmt::Debug for Tm2Voice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tm2Voice")
+            .field("speed", &self.speed)
+            .field("origin", &self.origin)
+            .field("used", &self.used)
+            .finish_non_exhaustive()
+    }
 }
 
 /// A voice reading through Kontakt's Normal-quality resampler: the engine
@@ -915,6 +957,7 @@ impl Voice {
             stretch: None,
             script_faded: false,
             kt: None,
+            tm2: None,
         }
     }
 
@@ -1009,6 +1052,7 @@ impl Voice {
             stretch: None,
             script_faded: false,
             kt: None,
+            tm2: None,
         }
     }
 
@@ -1049,6 +1093,38 @@ impl Voice {
             heads: [0.0; 2],
             grain: 0,
         });
+        self
+    }
+
+    /// Play through Kontakt's Time Machine II at `speed` (1 = as recorded),
+    /// grain by grain from `marks` (the sample's, [`super::tm2::MarkTable`]);
+    /// `ratio` is the sample's rate over the engine's. Unlike
+    /// [`Self::with_stretch`], unity speed plays grains too, as Kontakt's
+    /// does for every voice of a Time Machine II group.
+    #[must_use]
+    pub fn with_tm2(mut self, marks: super::tm2::Marks, speed: f64, ratio: f64) -> Self {
+        use super::resample::{KONTAKT_BLOCK, Layout, Tap};
+        self.stretch = None;
+        self.tm2 = Some(Box::new(Tm2Voice {
+            marks,
+            speed: if speed.is_finite() { speed } else { 1.0 },
+            ratio,
+            origin: 0,
+            machine: None,
+            layout: Layout {
+                start: 0,
+                end: 0,
+                looped: None,
+            },
+            frames: [super::tm2::Frame::default(); KONTAKT_BLOCK],
+            old: [Tap::default(); 2 * KONTAKT_BLOCK],
+            new: [Tap::default(); KONTAKT_BLOCK],
+            len: 0,
+            used: 0,
+            step: 1.0,
+            vstart: 0.0,
+            per: 0.0,
+        }));
         self
     }
 
@@ -1810,6 +1886,114 @@ impl Voice {
         )
     }
 
+    /// One frame of a Time Machine II voice: plans a block of grain frames
+    /// when the last is used up (from the voice's first frame to the
+    /// engine's next [`KONTAKT_BLOCK`] boundary, then a whole block at a
+    /// time, each at the step its first frame moves at), and plays the next:
+    /// the grain's read at its weight plus the fading grain's at its own,
+    /// each by Normal quality's Lagrange (a copied block reads frames).
+    /// `None` once the grains ran out.
+    ///
+    /// [`KONTAKT_BLOCK`]: super::resample::KONTAKT_BLOCK
+    fn read_tm2(&mut self) -> Option<(f32, f32)> {
+        use super::resample::{KONTAKT_BLOCK, Layout};
+        let now = self.frames_out.saturating_sub(1);
+        let glide = (self.glide_frames > 0).then_some(self.glide_cents);
+        let (bend, rate, end, position) = (self.bend, self.rate, self.end_frame, self.position);
+        let t = self.tm2.as_deref_mut()?;
+        if t.machine.is_none() {
+            t.layout = Layout {
+                start: 0,
+                end: end as i64,
+                looped: None,
+            };
+            t.step = bend * glide.map_or(rate, |g| rate * 2f64.powf(f64::from(g) / 1200.0));
+            t.machine = Some(super::tm2::Machine::new(
+                t.marks.clone(),
+                end as i64,
+                (t.speed, t.ratio),
+                position,
+            ));
+            t.len = 0;
+            t.used = 0;
+        }
+        if t.used >= t.len {
+            let at = t.origin + now;
+            let frames = KONTAKT_BLOCK - (at % KONTAKT_BLOCK as u64) as usize;
+            let layout = t.layout;
+            let step = t.step as f32;
+            let m = t.machine.as_mut()?;
+            t.vstart = m.vpos;
+            t.per = m.per_frame();
+            m.block(
+                &layout,
+                step,
+                &mut t.frames[..frames],
+                &mut t.old,
+                &mut t.new,
+            );
+            t.len = frames;
+            t.used = 0;
+        }
+        let (f, layout) = (t.frames[t.used], t.layout);
+        if f.silent {
+            return None;
+        }
+        let mut out = (0.0, 0.0);
+        for (tap, gain) in [(f.new, f.w), (f.old, f.g)] {
+            if gain != 0.0 {
+                let v = self.read_tap(&layout, tap, f.copy);
+                out = (out.0 + gain * v.0, out.1 + gain * v.1);
+            }
+        }
+        Some(out)
+    }
+
+    /// One planned read of Kontakt's resampler: the frame itself in a copied
+    /// block, else the 4-point Lagrange about it.
+    fn read_tap(
+        &mut self,
+        layout: &super::resample::Layout,
+        tap: super::resample::Tap,
+        copy: bool,
+    ) -> (f32, f32) {
+        use super::resample;
+        let last = self.end_frame.saturating_sub(1);
+        if copy {
+            return match layout.frame(tap.at) {
+                Some(f) => {
+                    self.data
+                        .frame_pair_cursored(f, last, &mut self.stream_cursor)
+                        .0
+                }
+                None => (0.0, 0.0),
+            };
+        }
+        let f = [-1i64, 0, 1, 2].map(|k| layout.frame(tap.at + k));
+        let y = match f {
+            [Some(a), _, _, Some(d)] if d == a + 3 => {
+                let (y0, y1) = self
+                    .data
+                    .frame_pair_cursored(a, last, &mut self.stream_cursor);
+                let (y2, y3) = self
+                    .data
+                    .frame_pair_cursored(a + 2, last, &mut self.stream_cursor);
+                [y0, y1, y2, y3]
+            }
+            _ => f.map(|f| {
+                f.map_or((0.0, 0.0), |f| {
+                    self.data
+                        .frame_pair_cursored(f, last, &mut self.stream_cursor)
+                        .0
+                })
+            }),
+        };
+        (
+            resample::lagrange(tap.frac, y[0].0, y[1].0, y[2].0, y[3].0),
+            resample::lagrange(tap.frac, y[0].1, y[1].1, y[2].1, y[3].1),
+        )
+    }
+
     /// Render one stereo frame. Returns (L, R) and advances internal state.
     #[inline]
     pub fn next_frame(&mut self) -> (f32, f32) {
@@ -1932,7 +2116,15 @@ impl Voice {
             return (0.0, 0.0);
         }
 
-        let (mut l, mut r) = if self.stretch.is_some() {
+        let (mut l, mut r) = if self.tm2.is_some() {
+            match self.read_tm2() {
+                Some(v) => v,
+                None => {
+                    self.state = VoiceState::Done;
+                    return (0.0, 0.0);
+                }
+            }
+        } else if self.stretch.is_some() {
             self.read_stretched()
         } else if self.kt.is_some() {
             self.read_kontakt()
@@ -2092,7 +2284,12 @@ impl Voice {
             }
             None => step,
         };
-        if let Some(kt) = self.kt.as_mut() {
+        if let Some(t) = self.tm2.as_deref_mut() {
+            // The machine's virtual position, frame by frame.
+            t.step = step;
+            t.used += 1;
+            self.position = t.vstart + t.used as f64 * f64::from(t.per);
+        } else if let Some(kt) = self.kt.as_mut() {
             // Kontakt's cursor: the next planned read, folded into the loop.
             kt.step = step;
             kt.used += 1;
@@ -2109,6 +2306,7 @@ impl Voice {
         // sample's abrupt end (which clicks → "note-off noise"). Only a Done
         // voice ignores the loop.
         if self.kt.is_none()
+            && self.tm2.is_none()
             && matches!(
                 self.state,
                 VoiceState::Playing | VoiceState::Releasing { .. }
@@ -2191,6 +2389,7 @@ impl Voice {
             && self.pitch.is_none()
             && self.stretch.is_none()
             && self.kt.is_none()
+            && self.tm2.is_none()
             && self.filter.is_none()
             && self.inserts.is_none()
             && self.release_cut == 0
@@ -2665,7 +2864,10 @@ impl VoicePool {
         // New voices sound at the current wheel position.
         voice.bend = self.bend;
         voice.strike = self.strike;
-        if self.interp == super::resample::Interp::KontaktNormal {
+        if let Some(t) = voice.tm2.as_deref_mut() {
+            // A Time Machine II voice reads through its own machine.
+            t.origin = self.now;
+        } else if self.interp == super::resample::Interp::KontaktNormal {
             voice.kt = Some(KontaktVoice::new(self.now));
         }
         // Remove done voices first
@@ -3611,6 +3813,70 @@ mod stretch_tests {
         assert!(!v.is_done());
         let x = v.position;
         assert!((1000.0..3000.0).contains(&x), "{x}");
+    }
+
+    fn marks(frames: i64, every: i64) -> super::super::tm2::Marks {
+        super::super::tm2::Marks {
+            frames,
+            at: (0..frames / every)
+                .map(|i| i * every)
+                .collect::<Vec<_>>()
+                .into(),
+        }
+    }
+
+    /// A Time Machine II voice at unity speed and pitch walks its sample
+    /// frame by frame (the grains tile it) from the mark nearest its start
+    /// (grains start on marks: 1000 plays from 800), and ends with its
+    /// grains; the pool gives it no other resampler.
+    #[test]
+    fn a_time_machine_2_voice_at_unity_plays_the_sample() {
+        let mut pool = VoicePool::new();
+        pool.set_interp(super::super::resample::Interp::KontaktNormal);
+        pool.set_now(77);
+        pool.spawn(
+            Voice::with_rate(ramp(8192), 60, VoiceKind::Short, 1.0, 1.0, 64)
+                .with_sample_window(1000, None)
+                .with_tm2(marks(8192, 400), 1.0, 1.0),
+        );
+        let v = &mut pool.voices_mut()[0];
+        assert!(v.kt.is_none());
+        for n in 0..6000 {
+            let (l, _) = v.next_frame();
+            // The fading grain reads the same frames as the new one here, so
+            // the crossfade sums to the frame (to rounding).
+            let want = (800 + n) as f32 / 65_536.0;
+            assert!((l - want).abs() <= want * 1e-6, "frame {n}: {l} vs {want}");
+        }
+        for _ in 0..2000 {
+            v.next_frame();
+        }
+        assert!(v.is_done());
+    }
+
+    /// At half speed a Time Machine II voice keeps its pitch (each frame one
+    /// step on from the last, but at the grain seams) and lasts twice as long.
+    #[test]
+    fn a_time_machine_2_voice_at_half_speed_keeps_its_pitch() {
+        let mut v = Voice::with_rate(ramp(8192), 60, VoiceKind::Short, 1.0, 1.0, 64).with_tm2(
+            marks(8192, 400),
+            0.5,
+            1.0,
+        );
+        let out: Vec<f32> = (0..15_000).map(|_| v.next_frame().0).collect();
+        assert!(
+            !v.is_done(),
+            "still playing at twice its length less a grain"
+        );
+        let steady = out
+            .windows(2)
+            .filter(|w| ((w[1] - w[0]) * 65_536.0 - 1.0).abs() < 1e-3)
+            .count();
+        assert!(steady > 7000, "{steady}");
+        for _ in 0..2000 {
+            v.next_frame();
+        }
+        assert!(v.is_done());
     }
 
     /// A voice without the setting never takes Kontakt's path.

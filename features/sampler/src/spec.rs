@@ -2220,6 +2220,7 @@ fn zone_from_sfz(
         tune_cents: tune + transpose,
         sample_start: sfz_u32(group, region, "offset").unwrap_or(0),
         start_mod: None,
+        tm2_block: 0,
         variant_starts: Vec::new(),
         disabled: false,
         borrowed: false,
@@ -3974,6 +3975,14 @@ pub struct ZoneSpec {
     /// `-1` = not at all, the offset is ignored. `None` = no limit.
     #[facet(default)]
     pub start_mod: Option<i64>,
+    /// The zone's group plays through Kontakt's Time Machine II (source
+    /// mode 5, `engine::tm2`): its sample is cut at pitch marks found with
+    /// this analysis block (frames: 512, 1024 or 2048, by the source
+    /// record's analysis setting 1-2, 3, 4), and every voice of it plays
+    /// grain by grain at its speed, unity included. 0 = not a Time Machine
+    /// II zone.
+    #[facet(default)]
+    pub tm2_block: u32,
     /// Kontakt's velocity-2.. zones over this same file (index 0 = velocity
     /// 2): the scripted body VARIANTS — the same recording entered deeper.
     /// CSS plays one for a loud first note (`%v2aqt`), see

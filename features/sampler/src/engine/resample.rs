@@ -135,7 +135,7 @@ pub(crate) fn block(layout: &Layout, cur: &mut Cursor, step: f32, out: &mut [Tap
         }
         return true;
     }
-    resl(layout, cur, step, out);
+    resl(layout, cur, step, out, 0, None);
     false
 }
 
@@ -152,12 +152,23 @@ fn cache_window(layout: &Layout, pos: i64) -> Option<(i64, i64)> {
     Some((pos - rel, limit))
 }
 
-/// One `FillBlock_ResL` call over `out`.
-fn resl(layout: &Layout, cur: &mut Cursor, step: f32, out: &mut [Tap]) {
+/// One `FillBlock_ResL` call over `out[o..]` (the output buffer aligned at
+/// `out[0]`), up to its end position `end` when it has one (its `param_8`:
+/// the kernel's limit is at most `end` less the cache buffer's first frame,
+/// and it reads while the cursor is before `end`); returns the next output
+/// index. Time Machine II reads its grains through it ([`super::tm2`]).
+pub(crate) fn resl(
+    layout: &Layout,
+    cur: &mut Cursor,
+    step: f32,
+    out: &mut [Tap],
+    mut o: usize,
+    end: Option<i64>,
+) -> usize {
     let n = out.len();
-    let mut o = 0;
-    while o < n {
+    while o < n && end.is_none_or(|e| cur.pos < e) {
         if let Some((base, limit)) = cache_window(layout, cur.pos)
+            .map(|(base, limit)| (base, end.map_or(limit, |e| limit.min(e - base))))
             && cur.pos - base < limit
         {
             let mut rel = (cur.pos - base) as i32;
@@ -189,6 +200,7 @@ fn resl(layout: &Layout, cur: &mut Cursor, step: f32, out: &mut [Tap]) {
         cur.frac = p - i as f32;
         cur.pos += i64::from(i - 1);
     }
+    o
 }
 
 /// `ResampleChannelQuad_L_SSE2` from output `o` on: reads into `out` while

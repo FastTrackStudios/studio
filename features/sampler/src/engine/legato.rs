@@ -321,18 +321,35 @@ impl SampleEngine {
                 }
             }
             let path = &self.patch.zone_paths[i];
-            if self.cache.get_loaded(path).is_some() {
+            if let Some(data) = self.cache.get_loaded(path) {
+                self.analyse_tm2(i, &data);
                 continue;
             }
             match self.cache.get(path) {
                 Ok(data) => {
                     stats.loaded += 1;
                     stats.bytes += data.decoded_bytes();
+                    self.analyse_tm2(i, &data);
                 }
                 Err(_) => stats.failed += 1,
             }
         }
         stats
+    }
+
+    /// Find zone `zone`'s Time Machine II pitch marks from its sample
+    /// `data`, once (a no-op for any other zone): where a sample is warmed,
+    /// never on the audio thread ([`super::tm2::MarkTable::analyse`]).
+    pub(crate) fn analyse_tm2(&self, zone: usize, data: &super::cache::SampleData) {
+        let Some(z) = self.patch.spec.zones.get(zone).filter(|z| z.tm2_block > 0) else {
+            return;
+        };
+        let Some(path) = self.patch.zone_paths.get(zone) else {
+            return;
+        };
+        self.patch
+            .tm2_marks
+            .analyse(zone, self.patch.spec.zones.len(), path, data, z.tm2_block);
     }
 
     /// Returns the currently active articulation ID.

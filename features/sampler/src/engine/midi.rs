@@ -3538,6 +3538,10 @@ impl SampleEngine {
         } else {
             None
         };
+        // A Time Machine II zone's pitch marks (found when it was warmed).
+        let tm2_marks = (self.patch.spec.zones[idx].tm2_block > 0)
+            .then(|| self.patch.tm2_marks.get(idx).cloned())
+            .flatten();
         // Unison: spawn N copies spread across ±detune/2 cents + a pan spread,
         // level-compensated. copies == 1 is the normal single-voice path.
         let (copies, det_cents, width) = self.unison;
@@ -3570,8 +3574,17 @@ impl SampleEngine {
             .with_start_hold(start_hold)
             .with_pitch_cents(transpose_cents)
             .with_level(level * comp)
-            .with_sample_window(start_frame, (sample_end > 0).then_some(sample_end as usize))
-            .with_stretch(self.spawn_stretch)
+            .with_sample_window(start_frame, (sample_end > 0).then_some(sample_end as usize));
+            // A Time Machine II zone plays grain by grain at any speed; one
+            // whose marks are not found yet (never warmed) stretches plainly.
+            voice = match tm2_marks.clone() {
+                Some(marks) => voice.with_tm2(
+                    marks,
+                    self.spawn_stretch,
+                    f64::from(data.sample_rate as f32 / self.sample_rate as f32),
+                ),
+                None => voice.with_stretch(self.spawn_stretch),
+            }
             .with_fade_in_under(0, self.spawn_fade_in);
             if let Some((hold, fade)) = self.spawn_delayed_fade {
                 voice = voice.with_delayed_fade(hold, fade);
