@@ -55,6 +55,9 @@ enum StageKind {
     Svf(Law, u8),
     /// 1..=3 bell bands.
     Eq(u8),
+    /// Kontakt's Saturation, Enhanced mode: a memoryless curve at the base
+    /// rate between the linear sections (`super::kontakt_saturation`).
+    Saturation,
     /// Stereo width: the side signal scaled by `1 + width`, mid kept
     /// (Kontakt's kind-9 group insert). Run after the per-channel stages:
     /// those treat both channels alike, so the order does not matter.
@@ -78,6 +81,10 @@ struct PlanStage {
     bands: [[f32; 3]; MAX_SECTIONS],
     /// `Width`: the side gain is `1 + width`.
     width: f32,
+    /// `Saturation`: `[drive, makeup, wet]` at the saved shape.
+    sat: [f32; 3],
+    /// The stage's output gain (linear).
+    out_gain: f32,
 }
 
 /// One route of a plan: the knob it moves and its value at every controller
@@ -161,6 +168,7 @@ fn plan_stage(s: &FxStageSpec) -> Option<PlanStage> {
             StageKind::Eq(n as u8)
         }
         "width" => StageKind::Width,
+        "saturation" => StageKind::Saturation,
         _ => return None,
     };
     let mut bands = [[0.0; 3]; MAX_SECTIONS];
@@ -173,6 +181,8 @@ fn plan_stage(s: &FxStageSpec) -> Option<PlanStage> {
         resonance: s.resonance,
         bands,
         width: s.width,
+        sat: super::kontakt_saturation::enhanced_at(s.shape),
+        out_gain: 10f32.powf(s.output_db / 20.0),
     })
 }
 
@@ -189,7 +199,10 @@ fn plan_route(r: &FxRouteSpec, stage: u8, s: &PlanStage, sample_rate: f32) -> Op
         }
     };
     if matches!(param, Param::Cutoff | Param::Resonance)
-        && matches!(s.kind, StageKind::Eq(_) | StageKind::Width)
+        && matches!(
+            s.kind,
+            StageKind::Eq(_) | StageKind::Width | StageKind::Saturation
+        )
     {
         return None;
     }
@@ -385,6 +398,10 @@ impl InsertState {
                 for (sec, m) in self.sections[i].iter().zip(self.mem[ch][i].iter_mut()) {
                     *x = run(*sec, m, *x);
                 }
+                let st = &self.plan.stages[i];
+                if st.kind == StageKind::Saturation {
+                    *x = super::kontakt_saturation::enhanced(*x, st.sat);
+                }
                 *x *= self.gain[i];
             }
         }
@@ -463,6 +480,7 @@ fn coefficients(
     let r = res.clamp(0.0, 1.0);
     match st.kind {
         StageKind::Width => (out, 1.0),
+        StageKind::Saturation => (out, st.out_gain),
         StageKind::OnePole(law) => {
             let g = warp(cutoff_hz(law, cutoff), fs);
             out[0] = Section::OnePole(g / (1.0 + g));
@@ -538,6 +556,8 @@ mod tests {
                 resonance: 0.0,
                 bands,
                 width: 0.0,
+                shape: 0.0,
+                output_db: 0.0,
             }],
             routes,
         }

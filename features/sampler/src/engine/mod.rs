@@ -226,6 +226,7 @@ mod helpers;
 pub mod inserts;
 mod kontakt_legato;
 mod kontakt_marcato;
+pub mod kontakt_saturation;
 mod legato;
 mod midi;
 mod phrase;

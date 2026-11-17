@@ -24,7 +24,7 @@ articulation (script order, `%ArtGroupStart` = persistent `%hr4to`):
   (`amp_env_release 1`). Hold/decay are 0 and sustain 1 on every shipped
   one-shot group; anything else is reported, not guessed.
 """
-import csv, json, math, os, re, shutil, sys, time
+import csv, json, math, os, re, shutil, struct, sys, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mojo_zones  # noqa: E402  (the group classifier)
@@ -111,7 +111,18 @@ def group_eq(art, start, names, fx_slots, notes, lp_floor):
         for s in sorted(fx_slots.get(gi, []), key=lambda s: s["slot"]):
             if s.get("bypass", True):
                 continue
-            if s["kind"] == 9:
+            if s["kind"] == 6:
+                # Saturation: shape (float, byte 9) and mode (int, byte 13);
+                # Enhanced (2) is decoded (KONTRA b6e0526), Drums (1) not yet
+                ch = bytes.fromhex(s["children_hex"])
+                shape = struct.unpack("<f", ch[9:13])[0] if len(ch) >= 13 else 0.0
+                mode = ch[13] if len(ch) > 13 else 0
+                out_db = 20 * math.log10(s.get("output_gain") or 1.0)
+                if mode == 2:
+                    stages.append(("saturation", {"shape": shape, "output_db": out_db}))
+                else:
+                    notes.append(f"{art} {dyn}: saturation mode {mode} (slot {s['slot']}) not run")
+            elif s["kind"] == 9:
                 _, width = mojo_zones.group_stage({0: [s]}, 0)
                 if width:
                     stages.append(("width", {"width": width}))
@@ -239,6 +250,8 @@ def build(nki):
                         st.append(f"{{ kind eq, bands ({' '.join(fmt(v) for v in p['bands'])}) }}")
                     elif kind == "width":
                         st.append(f"{{ kind width, width {fmt(p['width'])} }}")
+                    elif kind == "saturation":
+                        st.append(f"{{ kind saturation, shape {p['shape']:.7f}, output_db {fmt(p['output_db'])} }}")
                     else:
                         st.append(f"{{ kind {kind}, cutoff {fmt(p['cutoff'])}, resonance {fmt(p['resonance'])} }}")
                         if p.get("velocity_table"):
@@ -272,6 +285,8 @@ def build(nki):
                     st.append(f"{{ kind eq, bands ({' '.join(fmt(v) for v in p['bands'])}) }}")
                 elif kind == "width":
                     st.append(f"{{ kind width, width {fmt(p['width'])} }}")
+                elif kind == "saturation":
+                    st.append(f"{{ kind saturation, shape {p['shape']:.7f}, output_db {fmt(p['output_db'])} }}")
             lines.append(f"            {{ dynamic {dyn}, stages ({' '.join(st)}), routes () }}")
         lines.append("        )")
     lines.append("    }")

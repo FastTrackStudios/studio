@@ -2389,6 +2389,15 @@ pub struct FxStageSpec {
     /// EQ bands, flat: `hz octaves db` per band.
     #[facet(default)]
     pub bands: Vec<f32>,
+    /// `saturation` stage: Kontakt's Saturation insert, Enhanced mode — the
+    /// saved shape (−1..=1) picks the drive/makeup/wet table position
+    /// (`engine::kontakt_saturation`).
+    #[facet(default)]
+    pub shape: f32,
+    /// The stage's output gain, dB (Kontakt's per-slot output level; MOJO 2's
+    /// saturation slots run at −3 dB). 0 = unity.
+    #[facet(default)]
+    pub output_db: f32,
     /// `width` stage: the side signal is scaled by `1 + width` (mid kept).
     /// Kontakt's kind-9 group insert, measured on MOJO 2 Trumpet Stabs:
     /// −0.3 leaves the side at 0.70.
