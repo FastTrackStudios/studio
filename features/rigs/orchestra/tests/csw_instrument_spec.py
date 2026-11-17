@@ -152,6 +152,9 @@ def main():
         gain = INSTRUMENT_GAIN_DB.get(os.path.basename(os.path.normpath(d)))
     if gain is not None:
         print(f"instrument_gain_db {gain}")
+    pan = css.instrument_pan(d)
+    if pan:
+        print(f"instrument_pan {pan}")
     # the vibrato CC ($vkgua; -1 = none: CC2 never leaves the vibsus slot)
     vk = css.one(pers, "$vkgua")
     print(f'vibrato_controller "{"" if vk is None or int(vk) < 0 else f"CC{int(vk)}"}"')

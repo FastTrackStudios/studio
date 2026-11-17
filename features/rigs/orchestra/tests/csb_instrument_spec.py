@@ -93,6 +93,9 @@ def main():
         gain = INSTRUMENT_GAIN_DB.get(os.path.basename(os.path.normpath(d)))
     if gain is not None:
         print(f"instrument_gain_db {gain}")
+    pan = css.instrument_pan(d)
+    if pan:
+        print(f"instrument_pan {pan}")
     print("articulations (")
     done = set()
     for aid, prefix, ccs in BODY_GROUPS:

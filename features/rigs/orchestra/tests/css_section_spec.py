@@ -544,6 +544,32 @@ if __name__ == "__main__":
     main()
 
 
+def instrument_pan(d):
+    """The balance stage (effect kind 9) on the Mix bus — the last bus that
+    carries a gain stage, as instrument_gain_db reads — as −1..1, or None.
+    Its one parameter is the float closing its child chunk (CSB Solo
+    Trombone: 0.22; its left channel measures 2.2 dB under, the balance
+    law's 1 − 0.22)."""
+    import json, struct
+    try:
+        buses = json.load(open(os.path.join(d, "buses.json")))
+    except (OSError, ValueError):
+        return None
+    pan = None
+    for b in buses:
+        if b.get("index") is None:
+            continue
+        slots = [slot for chain in b.get("chains", []) for slot in chain]
+        if not any(slot.get("kind") == 4 for slot in slots):
+            continue
+        pan = None
+        for slot in slots:
+            c = bytes.fromhex(slot.get("children_hex", ""))
+            if slot.get("kind") == 9 and len(c) >= 5:
+                pan = round(struct.unpack("<f", c[-5:-1])[0], 4)
+    return pan
+
+
 def instrument_gain_db(d):
     """Kontakt's level over the raw file, decoded: the program volume
     (program.json) x the Mix bus fader x the gain stages (effect type 4,

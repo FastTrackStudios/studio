@@ -3166,7 +3166,8 @@ impl SampleEngine {
             // Source-vs-output sample-rate compensation (see Voice::with_rate_scale).
             let sr_scale = data.sample_rate as f64 / self.sample_rate as f64;
             let u_rate = rate * 2f64.powf((off * det_cents * 0.5) as f64 / 1200.0) * sr_scale;
-            let u_pan = (pan + off * width).clamp(-1.0, 1.0);
+            let u_pan =
+                (pan + off * width + self.patch.spec.performance.instrument_pan).clamp(-1.0, 1.0);
             let mut voice = Voice::with_rate(
                 data.clone(),
                 note,
@@ -3586,7 +3587,9 @@ impl SampleEngine {
                     let u_rate = rate
                         * 2f64.powf(((off * det_cents * 0.5) as f64 + h_rate) / 1200.0)
                         * sr_scale;
-                    let u_pan = (z.pan + off * width + h_pan).clamp(-1.0, 1.0);
+                    let u_pan =
+                        (z.pan + off * width + h_pan + self.patch.spec.performance.instrument_pan)
+                            .clamp(-1.0, 1.0);
                     let mut voice = Voice::with_rate(
                         data.clone(),
                         note,

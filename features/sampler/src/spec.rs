@@ -565,6 +565,14 @@ pub struct PerformanceSpec {
     /// legato compensation and applies to shorts and releases too.
     #[facet(default)]
     pub instrument_gain_db: f32,
+    /// Balance the host instrument applies to EVERY voice, −1..1 (stereo:
+    /// the far channel × (1 − |pan|), as [`Voice::with_pan`]). CSB Solo
+    /// Trombone's buses carry a balance stage at 0.22 (Kontakt effect kind
+    /// 9): its left channel plays 2.2 dB under its right.
+    ///
+    /// [`Voice::with_pan`]: crate::engine::voice::Voice::with_pan
+    #[facet(default)]
+    pub instrument_pan: f32,
     /// How a note between sampled keys is pitched. `true`: RESAMPLE (rate
     /// change, the note runs shorter/longer) — what Kontakt does, null-tested
     /// on CSS (+100 c at key 72 from the B3 zone, −52.7 dB). `false`/unset:
@@ -751,6 +759,7 @@ impl Default for PerformanceSpec {
             sustain_noteoff_cut_ms: 0.0,
             sustain_makeup_db: 0.0,
             instrument_gain_db: 0.0,
+            instrument_pan: 0.0,
             resample_transpose: false,
             release_curve_k: 0.0,
             max_repeat_strikes: None,
@@ -1184,6 +1193,8 @@ pub struct SectionOverlay {
     /// level differs from its library's (CSW / CSB patches each set their
     /// own instrument volume).
     pub instrument_gain_db: Option<f32>,
+    /// See [`PerformanceSpec::instrument_pan`].
+    pub instrument_pan: Option<f32>,
     /// See [`DynamicsSpec::vibrato_controller`]: an instrument whose vibrato
     /// control differs from its library's. `""` = none (the CSW clarinets'
     /// `$vkgua = -1`: CC2 never leaves the vibsus slot).
@@ -1360,6 +1371,9 @@ impl SectionOverlay {
         }
         if let Some(v) = self.instrument_gain_db {
             spec.performance.instrument_gain_db = v;
+        }
+        if let Some(v) = self.instrument_pan {
+            spec.performance.instrument_pan = v;
         }
         if let Some(v) = &self.vibrato_controller {
             spec.dynamics.vibrato_controller = (!v.is_empty()).then(|| v.clone());
