@@ -136,8 +136,10 @@ impl SampleEngine {
         // forces voice-stealing on every subsequent key press and produces
         // intermittent silence/clicks. 2 s is plenty for any real damper
         // click + decay tail.
-        let release_lifetime_frames =
-            (RELEASE_MAX_LIFETIME_MS as usize) * (self.sample_rate as usize) / 1000;
+        let release_lifetime_frames = (self.patch.spec.performance.voice_timing.release_max_ms
+            as usize)
+            * (self.sample_rate as usize)
+            / 1000;
         // Stem class: releases follow the parent articulation (see
         // `artic_class_for`); direct triggers are classed by their own.
         let artic_class = if matches!(kind, VoiceKind::Release) {
@@ -342,6 +344,89 @@ impl SampleEngine {
         self.patch.spec.dynamics.cc1_expression_gain(cc1)
     }
 
+    /// Kontakt per-group CC volume for one dynamic layer of `artic`: the
+    /// product of its decoded tables at the current CC1/CC2. `None` when the
+    /// articulation declares no `group_curves` — callers then use the legacy
+    /// equal-power crossfade + `cc1_expression`.
+    pub(crate) fn group_curve_gain(&self, artic: &str, dynamic: &str) -> Option<f32> {
+        let a = self.patch.spec.articulation(artic)?;
+        if a.group_curves.is_empty() {
+            return None;
+        }
+        let mut g = 1.0f32;
+        for c in a.group_curves.iter().filter(|c| c.dynamic == dynamic) {
+            let v = match c.cc {
+                1 => self.cc1,
+                // The tremolo/trill transition groups carry only the CC1
+                // table (null test: Leg plays at CC2 0 under a tremolo).
+                2 if self.curves_cc1_only => continue,
+                2 => self.cc2,
+                // The KSP sets CC36 := the last CC1 just before a release
+                // sample plays (script 21422); release groups crossfade on it.
+                36 => self.cc1,
+                _ => continue,
+            };
+            g *= crate::spec::kontakt_table_value(&c.points, f32::from(v) / 127.0);
+        }
+        Some(g)
+    }
+
+    /// Whether `artic`'s decoded group curves carry the vibrato crossfade
+    /// themselves (a CC2 table, CSS). A pair whose groups have none (CSW:
+    /// the script switches nonvib/vib groups on CC2) takes its level from
+    /// the engine's vibrato blend instead (`cc2_blend`).
+    pub(crate) fn curves_carry_vibrato(&self, artic: &str) -> bool {
+        self.patch
+            .spec
+            .articulation(artic)
+            .is_some_and(|a| a.group_curves.iter().any(|c| c.cc == 2))
+    }
+
+    /// The vibrato side's share of `artic`'s level when its group curves do
+    /// not carry the crossfade themselves (see `curves_carry_vibrato`): its
+    /// side of the engine's CC2 blend. 1 for an articulation with no vibrato
+    /// partner or with a CC2 table.
+    pub(crate) fn vibrato_side_gain(&self, artic: &str) -> f32 {
+        if self.curves_carry_vibrato(artic) || self.find_vibrato_pair_id(artic).is_none() {
+            return 1.0;
+        }
+        let (nv, vb) = Self::equal_power(self.cc2_blend());
+        let vib = self
+            .patch
+            .spec
+            .articulation(artic)
+            .is_some_and(crate::spec::ArticulationSpec::is_vibrato);
+        if vib { vb } else { nv }
+    }
+
+    /// A script's start offset (`play_note`'s offset) as Kontakt applies it
+    /// to zone `idx`: clamped to the zone's start-modulation range, ignored
+    /// where the zone allows none.
+    pub(crate) fn script_offset(&self, idx: usize, frames: usize) -> usize {
+        match self.patch.spec.zones.get(idx).and_then(|z| z.start_mod) {
+            Some(m) if m < 0 => 0,
+            Some(m) => frames.min(m as usize),
+            None => frames,
+        }
+    }
+
+    /// Add `artic`'s script start offset (`script_start_ms`) to the body's
+    /// extra start for a fresh note; returns the previous value to restore.
+    pub(crate) fn with_script_start(&mut self, artic: &str) -> usize {
+        let saved = self.spawn_extra_start;
+        if !self.in_transition {
+            let ms = self
+                .patch
+                .spec
+                .articulation(artic)
+                .map_or(0.0, |a| a.script_start_ms);
+            if ms > 0.0 {
+                self.spawn_extra_start += crate::engine::ms_to_frames_f(ms, self.sample_rate);
+            }
+        }
+        saved
+    }
+
     /// The CC1 layer slice for a given articulation (by its dynamics count).
     pub(crate) fn cc1_layers_for(&self, artic_id: &str) -> &[Cc1Layer] {
         let Some(artic) = self.patch.spec.articulation(artic_id) else {
@@ -411,6 +496,13 @@ impl SampleEngine {
         // Band → recorded dynamic: 1:1 when counts match, else TOP-align (the
         // extra softest recorded dynamics sit below the short's %g1qri floor).
         let n_dyn = artic.dynamics.len();
+        if n_dyn == 0 {
+            // No recorded dynamics (CSB Rips): any zone at the key and RR.
+            return (
+                String::new(),
+                self.short_velocity_volume_db(artic_id, velocity),
+            );
+        }
         let offset = n_dyn.saturating_sub(n_bands);
         let dyn_idx = (band + offset).min(n_dyn - 1);
         let velvol = self.short_velocity_volume_db(artic_id, velocity);

@@ -223,8 +223,12 @@ pub use fts_sample::stream_cache;
 mod dispatch;
 pub mod filter;
 mod helpers;
+pub mod inserts;
+mod kontakt_legato;
+mod kontakt_marcato;
 mod legato;
 mod midi;
+mod phrase;
 pub mod pitch_shift;
 pub mod rr;
 pub mod trace;
@@ -249,47 +253,13 @@ use voice::{DynLayer, FlexEnv, Voice, VoiceKind, VoicePool, VoiceStealPolicy};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/// CC1 gain ramp length (ms). Smooths dynamic crossfade to avoid clicks.
-/// CC-mod smoothing lags DECODED from the CSS group modulators
-/// (`GROUP_MODULATORS.md`): every CC1/CC11 volume mod carries `lag_ms = 120`,
-/// every CC2 (vibrato crossfade) mod `lag_ms = 1000`. These are Kontakt's
-/// per-modulator smoothing — the reason CSS CC sweeps are glassy.
-const CC1_RAMP_MS: u32 = 120;
-const CC2_RAMP_MS: u32 = 1000;
-
-/// Default release fade on note-off for sustain voices (ms).
-///
-/// This is the damper-down time: on key-up (sustain pedal NOT held) the note
-/// must stop, not ring out. A short linear fade reads as an immediate cutoff
-/// while avoiding a click. Sustain itself comes only from holding CC64, which
-/// defers the note-off entirely (see `note_off_with_velocity`); the half-pedal
-/// curve still scales this up for partial-pedal positions. Was 500 ms, which
-/// made every key-up sound like a half-second sustain even with the pedal up.
-const RELEASE_MS: u32 = 60;
-/// Extra damping time at the top of the half-pedal range.
-const HALF_PEDAL_MAX_RELEASE_MULTIPLIER: f32 = 4.0;
-
-/// Short de-click fade for sample-playback instruments that have explicit
-/// release/noise samples. The tone should stop on key-up; this only avoids a pop.
-/// Damper-engagement time on note-off when a `release_artic` supplies the
-/// natural tail (e.g. Keyscape pianos). Long enough that the body fades
-/// naturally — short enough that holding the key is what determines note
-/// length. Real Rhodes dampers ring out over ~50–100 ms.
-const KEY_UP_DECLICK_MS: u32 = 80;
-
-/// Cap on the lifetime of a `VoiceKind::Release` voice. The library's
-/// release-tail FLACs can be very long (Keyscape ships 30 s clips) and
-/// release voices play to sample-end, so without a cap each note-off
-/// consumes a voice slot for 30 s and the 64-voice pool fills up after
-/// ~20 key presses — causing voice-stealing and intermittent silence.
-const RELEASE_MAX_LIFETIME_MS: u32 = 2_000;
-
 // The legato/articulation POLICY numbers that used to live here as constants
-// (note-off fades, retire crossfades, CC1 expression curve, legato sustain
+// (note-off and declick timings, CC lags, the transition swell / skip /
+// portamento / AB-dip shape, retire crossfades, CC1 expression curve, legato sustain
 // trim, output makeup, master tune, Overlap-Delay + `$1fvjk` start-offset
 // curves, ENV_FLEX amp-envelope tables) are DATA now: see
-// `crate::spec::{PerformanceSpec, LegatoEngineSpec, DynamicsSpec,
-// Cc1ExpressionSpec, default_amp_env}`. Their defaults equal the historical
+// `crate::spec::{PerformanceSpec, VoiceTimingSpec, LegatoEngineSpec,
+// TransitionShapeSpec, DynamicsSpec, Cc1ExpressionSpec, default_amp_env}`. Their defaults equal the historical
 // hardcoded values, so specs that don't set them play identically; the
 // engine keeps only the mechanism (zone resolution, scheduling,
 // crossfading) and reads every number from `patch.spec`.
@@ -318,101 +288,6 @@ pub(crate) fn loop_debug() -> bool {
     *ON.get_or_init(|| std::env::var_os("SIGNAL_LOOP_DEBUG").is_some())
 }
 
-/// Minimum attack fade (ms) for a synthesized-loop sustain that starts mid-sample
-/// at full level — just enough to avoid an onset click without slowing the attack.
-const SUSTAIN_DECLICK_MS: u32 = 12;
-
-/// CSS Expressive crossfade shape (KSP §3.1/§8, shipped values): the DESTINATION
-/// sustain swells up under the transition, filling the bow-change dip and
-/// reaching full at the arrival tick. Two-stage: a fast stage-1 to ~90 % then a
-/// slow stage-2 swell to full.
-// Exact shipped anchors from persistent_1.tsv (css-ksp-anchor-values.md).
-const CSS_XTIME_MS: u32 = 225; // $a3zg3 (XTime) — FLAT 225 ms (all IOI anchors = 225)
-const CSS_ATK_FADE_PCT: u32 = 50; // $igmiu — stage split %, kbqnb=0 (soft); 60 hard
-/// Low-Latency legato crossfade (`$ocjln=0` standard engine, KSP §3.7): a short
-/// SINGLE-stage fade, no two-stage swell — the snappy, responsive mode selected
-/// by a CC58 0-5 keyswitch (default document legato is Expressive).
-const CSS_LL_XFADE_MS: u32 = 80;
-
-/// `$x444h` (Node-Vol) — the stage-1 fade divisor, and the ONLY IOI-scaled
-/// crossfade param (css-ksp-anchor-values.md §3): 90 for IOI<150 ms, lerp
-/// 90→60 over 150-300 ms, then flat 60. A smaller divisor lengthens stage-1
-/// (`$mlnoy = XTime*igmiu/$x444h`) → a more gradual first stage on slow notes.
-fn css_node_vol_div(ioi_ms: f32) -> u32 {
-    if ioi_ms <= 150.0 {
-        90
-    } else if ioi_ms >= 300.0 {
-        60
-    } else {
-        (90.0 - (90.0 - 60.0) * (ioi_ms - 150.0) / 150.0).round() as u32
-    }
-}
-
-/// Portamento micro-glide (CSS `$ma0b1` on, KSP §3.2/§8, shipped): the incoming
-/// note scoops to true pitch over `$1mwwo`=60 ms with a `$ruv02`=10 base bend
-/// (`$jyttf = $ruv02*1000` millicents ⇒ ~10 cents; `$i1kki`=10 = no interval
-/// scaling in the shipped state).
-const CSS_PORTA_BTIME_MS: u32 = 60; // $1mwwo
-
-/// CSS `$1fvjk` main-transition (`%jcxqm`) sample-start offset (ms) by
-/// (hard-table, interval), css-ksp-anchor-values.md §6: soft/≤12 st = 60,
-/// soft/>12 = 10, hard/≤12 = 20, hard/>12 = 0. How far INTO the transition
-/// recording playback begins, skipping the sharp bow-attack head. Used as a
-/// MINIMUM skip on the document path so the onset is never audible.
-fn css_lt_min_skip_ms(kbqnb_hard: bool, interval: u32) -> u32 {
-    match (kbqnb_hard, interval > 12) {
-        (false, false) => 60,
-        (false, true) => 10,
-        (true, false) => 20,
-        (true, true) => 0,
-    }
-}
-
-/// Portamento bend depth (cents, unsigned) as a function of interval and IOI
-/// (`$ruv02` interp, css-ksp-anchor-values.md §5a). Breakpoints 75/100/500 ms;
-/// per-interval anchors. Notably interval-2 (whole-tone) bend is 0 for IOI ≥
-/// 500 ms — a slow whole-tone line gets NO glide; the glide only appears on
-/// fast and/or small-interval moves.
-fn css_bend_cents(interval: u8, ioi_ms: f32) -> f32 {
-    let (a, b, c) = match interval {
-        0 | 1 => (40.0, 10.0, 10.0),
-        2 => (30.0, 10.0, 0.0),
-        _ => (20.0, 0.0, 0.0),
-    };
-    if ioi_ms <= 75.0 {
-        a
-    } else if ioi_ms <= 100.0 {
-        a + (b - a) * (ioi_ms - 75.0) / 25.0
-    } else if ioi_ms <= 500.0 {
-        b + (c - b) * (ioi_ms - 100.0) / 400.0
-    } else {
-        c
-    }
-}
-
-/// `$xu41m` — the AB-dip window (ms). Shipped persistent: 250.
-const CSS_AB_WINDOW_MS: u32 = 250;
-/// `$4lqhx` — the in-window dip. Shipped persistent −30, in deci-dB → −3.0 dB.
-/// (`$ee3a4`=0 shipped, so the ramp term vanishes and the dip is flat; and
-/// branch B's `$ee3a4 + elapsed*|$ee3a4|/$c2hkn` is identically 0 dB.)
-const CSS_AB_DIP_DB: f32 = -3.0;
-/// `$x0jlu` — the fixed offset a velocity-zone-3 hard attack takes instead of
-/// the AB dip. Shipped persistent 0.
-const CSS_AB_ZONE3_DB: f32 = 0.0;
-
-/// Onset declick (ms) for legato transitions, release tails, and any voice that
-/// starts mid-sample (`start_offset`). Long enough to remove the onset step
-/// click, short enough to be inaudible on a recorded bow-change / release.
-const ONSET_DECLICK_MS: u32 = 6;
-
-/// Note-body peak (linear, ~-54 dBFS) below which a note-off fires NO release
-/// tail: the note has already decayed to near-silence, so a release would just
-/// be a "thump" on a gone note.
-const RELEASE_BODY_FLOOR: f32 = 0.002;
-/// Below this release velocity the release sample is suppressed entirely —
-/// avoids producing an audible click on every note-off when a controller's
-/// release-velocity is effectively 0.
-const RELEASE_SAMPLE_VELOCITY_MIN: u8 = 1;
 const RECENT_MISS_LIMIT: usize = 8;
 
 // ── Legato state ──────────────────────────────────────────────────────────────
@@ -444,7 +319,7 @@ enum LegatoState {
 /// AFTER the new note-on, delayed by its velocity zone. Entry:
 /// `note_on` → (`live_divisi_note_on` |) `note_on_line`'s sounding-line arm
 /// → `start_legato_transition` → a
-/// `LegatoState::Pending` countdown drained by `advance_legato_countdowns`.
+/// `LegatoState::Pending` countdown drained by `render_split`.
 /// `note_off` may synthesise a fallback transition. Every reactive fire
 /// bumps `reactive_legato_fires`. **This path is what the deployed live rig
 /// (CLAP no-schedule branch, strings-TUI keyboard) plays on — do not break
@@ -539,6 +414,16 @@ pub(crate) struct LegatoLine {
     /// path measures the inter-onset interval (IOI) as `now − last_onset_frame`
     /// to drive the Overlap-Delay (spec §2.1 — IOI-driven, not velocity).
     last_onset_frame: u64,
+    /// The IOI (ms) of the CSS marcato transition that reached the sounding
+    /// note — `None` for a phrase's first note. Its note-off fades by it.
+    marcato_ioi: Option<f32>,
+    /// Engine frame the last marcato transition's tick loop ends at (the
+    /// script's crossfade loop, `MarcatoTransitionSpec::busy_tick_ms`); 0 =
+    /// none running.
+    marcato_loop_end: u64,
+    /// The sounding note was reached by a legato connection (its release
+    /// is a phrase end, not a lone first note).
+    connected: bool,
 }
 
 impl Default for LegatoLine {
@@ -553,6 +438,9 @@ impl Default for LegatoLine {
             last_release_frame: 0,
             last_activity: 0,
             last_onset_frame: 0,
+            marcato_ioi: None,
+            marcato_loop_end: 0,
+            connected: false,
         }
     }
 }
@@ -762,6 +650,9 @@ pub struct SampleEngine {
     /// Portamento glide volume [0.0, 1.0] from CC5 (CSS "Portamento Volume").
     cc5_porta_volume: f32,
     cc_values: [u8; 128],
+    /// Each (articulation, dynamic) layer's group insert chain (spec
+    /// `group_fx`), built once for the patch.
+    insert_plans: Vec<(String, String, std::sync::Arc<inserts::InsertPlan>)>,
     channel_aftertouch: u8,
     poly_aftertouch: [u8; 128],
     /// CC64 (sustain pedal) held state.
@@ -827,6 +718,11 @@ pub struct SampleEngine {
     /// CSS two-stage destination swell params `(delay, stage1_run, stage1_denom,
     /// stage2)` in frames (KSP §3). A single-stage fade is `(delay, f, f, 0)`.
     sustain_fade_in: Option<(usize, usize, usize, usize)>,
+    /// Per dynamic layer overrides of `sustain_fade_in` for the voices
+    /// being spawned (`KontaktTransitionSpec::body_handoff`).
+    /// The last field: the layer's entry offset (frames,
+    /// `BodyHandoffSpec::offset_ms`), added to `spawn_extra_start`.
+    sustain_fade_in_by_dyn: Vec<(String, String, (usize, usize, usize, usize), usize)>,
     /// When true, sustain-layer voices spawned during this dispatch carry the
     /// −6 dB `$3tsb0` legato makeup (`LegatoEngineSpec::sustain_trim_db`) — the KSP
     /// `change_vol(%grhcg,$3tsb0*100)` on the held legato tone. Set only around
@@ -875,6 +771,33 @@ pub struct SampleEngine {
     /// starts detuned toward the departed note and scoops to true pitch. Set
     /// around the legato spawn, applied in `spawn_zone_voice_at`.
     legato_glide: Option<(f32, usize)>,
+    /// Gain envelopes (`flex`, `flex2`) for the sustain layers spawned next —
+    /// a CSS marcato transition's CC-driven body envelopes.
+    sustain_flex: Option<(Option<voice::FlexEnv>, Option<voice::FlexEnv>)>,
+    /// `group_curve_gain` ignores CC2 tables while set (see its use).
+    curves_cc1_only: bool,
+    /// `PerformanceSpec::trill_pair`: the first key waiting for its partner
+    /// `(note, velocity, frame)`, and the trill note due `(frame, note,
+    /// velocity, articulation)`.
+    pub(crate) trill_first: Option<(u8, u8, u64)>,
+    pub(crate) trill_due: Option<(u64, u8, u8, String)>,
+    pub(crate) trill_bypass: bool,
+    /// The running `ArticulationSpec::phrase` (see `phrase.rs`), and the
+    /// first RR the last phrase played.
+    pub(crate) phrase: Option<phrase::PhraseRun>,
+    pub(crate) phrase_last_first: u8,
+    /// The 0-based RR index the next short plays (a phrase hit).
+    pub(crate) phrase_rr: Option<usize>,
+    /// Keys a trill pair absorbed without sounding them (their key-up is a
+    /// no-op; the trill note is the lower key's).
+    pub(crate) trill_silent: [bool; 128],
+    /// The marcato overlay switch (CC58 "with overlay" / "no overlay"; the
+    /// shipped default is on), and whether the last marcato transition was
+    /// hard (`$kbqnb`, which picks the overlay type).
+    pub(crate) marcato_overlay: bool,
+    pub(crate) marcato_kbqnb: bool,
+    /// Skip the random short detune (the overlay plays untuned).
+    pub(crate) suppress_random_tune: bool,
     /// CSS `%jcxqm` two-stage transition fade-in `(stage1_run, stage1_denom,
     /// stage2)` in frames — the transition voice EMERGES via the swell, not a
     /// 25 ms declick (the `NVLeg` sample has no silent head; it starts ~-16 dB, so
@@ -1005,6 +928,70 @@ pub struct SampleEngine {
     /// regardless of (note, velocity) so RR cycling within a matching zone set
     /// behaves as expected when the same key is repeatedly struck.
     zone_rr_counter: usize,
+    /// The sustain bodies' round-robin counter (no per-note classes), apart
+    /// from the shorts' `zone_rr_counter`.
+    sustain_rr_counter: usize,
+    /// `LegatoEngineSpec::first_note_variants` counter (KSP `$2ekvq`).
+    pub(crate) variant_counter: usize,
+    /// Velocity whose `ZoneSpec::variant_starts` entry the sustain body being
+    /// spawned right now starts at (set only around a loud first note).
+    pub(crate) spawn_variant: Option<u8>,
+    /// Inside a Kontakt-model legato transition: the body being spawned is the
+    /// DESTINATION body, not a first note (no first-note variant/mute logic).
+    pub(crate) in_transition: bool,
+    /// Per-note-class round-robin counters (`ArticulationSpec::rr_per_note`),
+    /// keyed by zone root key.
+    pub(crate) note_rr: [u8; 128],
+    /// Per-note-class RR counters of the `rr_per_note` shorts (CSS Sfz,
+    /// Bartok pizz: KSP `%nkhtz[%dtnvu[note]]`), reset by CC59.
+    pub(crate) short_key_rr: [u8; 128],
+    /// `ArticulationSpec::rr_sequence` state: the counter per (articulation,
+    /// velocity band) and the last RR per (articulation, band, note-class).
+    pub(crate) seq_rr_counter: HashMap<(String, usize), usize>,
+    pub(crate) seq_rr_last: HashMap<(String, usize, u8), u8>,
+    /// Engine frame each key last struck a short (random-tune gate).
+    pub(crate) short_key_frame: [Option<u64>; 128],
+    /// Random-tune draws to use instead of the generator, in order (tests
+    /// replaying a reference render's draws).
+    pub(crate) forced_tunes: VecDeque<i8>,
+    /// Random pitch-envelope draws `(cents, decay_ms)` to use instead of the
+    /// generator, in order (`RandomPitchEnvSpec`; null-test replay).
+    pub(crate) forced_pitch_envs: VecDeque<(f32, f32)>,
+    /// The current random pitch-envelope draw: `(note, frame)` of the strike
+    /// that drew it (the layers of one strike share it) and `(cents,
+    /// decay_ms)`, kept for strikes the gate skips.
+    pub(crate) pitch_env_draw: Option<((u8, u64), (f32, f32))>,
+    /// Engine frame each key last drew a random pitch envelope (its gate).
+    pub(crate) pitch_env_key_frame: [Option<u64>; 128],
+    /// The detune (cents) of the body being spawned
+    /// (`ArticulationSpec::held_random_tune_cents`); 0 outside a spawn.
+    pub(crate) body_tune_cents: f32,
+    /// Legato zone-2 body-variant draws to use instead of the generator.
+    pub(crate) forced_variants: VecDeque<u8>,
+    /// Forced loud first-note attack draws (index into the zone's range).
+    pub(crate) forced_attacks: VecDeque<u8>,
+    /// `MarcatoTransitionSpec::body_offset_random_ms` draws (ms) to replay.
+    pub(crate) forced_offsets: VecDeque<u16>,
+    /// Forced random short RR draws (0-based, wrapped to the RR count).
+    pub(crate) forced_rrs: VecDeque<u8>,
+    /// `ArticulationSpec::rr_random_avoid_last` history: the RRs each key
+    /// last played, newest first (`u8::MAX` = none).
+    pub(crate) short_rr_hist: [[u8; 4]; 128],
+    pub(crate) tune_rng: u64,
+    /// The short sequence counters' start (`CC59 mod 16`).
+    pub(crate) seq_rr_base: usize,
+    /// Gain for the release sample being spawned right now, replacing the
+    /// held-time law (the in-phrase release's flat level).
+    pub(crate) release_gain_override: Option<f32>,
+    /// The release context a connection sets around its `spawn_release`
+    /// (`ReleaseByHeldSpec`); `None` = decided at note-off.
+    pub(crate) release_context: Option<crate::spec::ReleaseContext>,
+    /// Frames a release spawned now waits beyond `release_delay_ms` (the
+    /// transition's in-phrase release delay).
+    pub(crate) release_extra_hold: usize,
+    /// Extra file frames the sustain body being spawned right now is entered
+    /// at (the >1-octave transition body's 75 ms offset).
+    pub(crate) spawn_extra_start: usize,
     zone_rr_random_state: u64,
     /// Last-used RR slot per (trigger, note, velocity), keyed by a packed
     /// integer so note-on allocates nothing (was a `format!`-built String key).
@@ -1023,6 +1010,9 @@ pub struct SampleEngine {
     /// tick — per round-robin, per mic, per dynamic layer. `None` = live /
     /// legacy dispatch (voices start immediately).
     spawn_align_lead: Option<u64>,
+    /// Extra frames every voice spawned right now is held back (the release
+    /// sample's `release_delay_ms`); 0 otherwise.
+    spawn_extra_hold: usize,
     /// Transition-spawn arrival override (ms of sample time) for the
     /// diagnostic semantics sweep — set by `spawn_transition_voice` so the
     /// alignment hold uses the SAME re-interpreted arrival the prefire lead
@@ -1059,6 +1049,7 @@ impl SampleEngine {
     ) -> Self {
         let section = section_id.into();
         let mic = mic_id.into();
+        let variant_init = usize::from(patch.spec.legato_cfg().first_note_variant_init);
         // An NI Essential Piano pack plays through its instrument's script
         // (Color / Dynamic Range offsets) from load, whichever path built it
         // — a keys layer or the bank. Anything else plays flat.
@@ -1084,12 +1075,18 @@ impl SampleEngine {
 
         let legato_fade_frames =
             ms_to_frames(patch.spec.legato_cfg().transition_fade_ms, sample_rate);
-        let cc1_ramp_frames = ms_to_frames(CC1_RAMP_MS, sample_rate);
+        let cc1_ramp_frames =
+            ms_to_frames(patch.spec.performance.voice_timing.cc1_lag_ms, sample_rate);
         // Library-authored defaults (CSS: 198 ms arco-attack bloom / 400 ms
         // note-off overlap) — callers can still override via
         // `set_attack_frames` / `set_release_frames`.
+        let sord = patch.spec.performance.sordino_filter.clone();
         let release_frames = ms_to_frames(
-            patch.spec.performance.release_ms.unwrap_or(RELEASE_MS),
+            patch
+                .spec
+                .performance
+                .release_ms
+                .unwrap_or(patch.spec.performance.voice_timing.noteoff_fade_ms),
             sample_rate,
         );
         let spec_attack_frames = patch
@@ -1097,9 +1094,10 @@ impl SampleEngine {
             .performance
             .attack_ms
             .map_or(0, |ms| ms_to_frames(ms, sample_rate));
-        let cache = match patch.pack.clone() {
-            Some(pack) => SampleCache::with_pack(pack),
-            _ => {
+        let cache = match (patch.shared_cache.clone(), patch.pack.clone()) {
+            (Some(shared), _) => shared,
+            (None, Some(pack)) => SampleCache::with_pack(pack),
+            (None, None) => {
                 // The prepared-cache dir is a native (on-disk) concept —
                 // `engine-native` only. Wasm patches always carry a pack.
                 #[cfg(not(target_arch = "wasm32"))]
@@ -1151,7 +1149,7 @@ impl SampleEngine {
         let release_keys = zone_key_index(&patch.spec.zones, ZoneTrigger::Release);
         let (zone_mic_rank, mic_rank_names) = zone_mic_ranks(&patch.spec.zones);
 
-        Self {
+        let mut engine = Self {
             zone_keys,
             release_keys,
             zone_mic_rank,
@@ -1213,6 +1211,7 @@ impl SampleEngine {
             // compiled default 0; the shipped preset ships it enabled).
             releases_enabled: true,
             sustain_fade_in: None,
+            sustain_fade_in_by_dyn: Vec::new(),
             legato_sustain: false,
             legato_trim: false,
             piano_voice,
@@ -1228,8 +1227,20 @@ impl SampleEngine {
             legato_attack_dip_db: 0.0,
             ab_anchor_frame: 0,
             legato_glide: None,
+            sustain_flex: None,
+            curves_cc1_only: false,
+            trill_first: None,
+            trill_due: None,
+            trill_bypass: false,
+            phrase: None,
+            phrase_last_first: 0,
+            phrase_rr: None,
+            trill_silent: [false; 128],
+            marcato_overlay: true,
+            marcato_kbqnb: false,
+            suppress_random_tune: false,
             transition_fade: None,
-            sord_filter: BiquadFilter::lowpass(filter::SORD_FC, filter::SORD_Q, sample_rate),
+            sord_filter: BiquadFilter::lowpass(sord.cutoff_hz, sord.q, sample_rate),
             // Pre-size note-keyed maps to the full MIDI range so note-on never
             // reallocates them on the audio thread.
             held_notes: HashMap::with_capacity(128),
@@ -1277,18 +1288,117 @@ impl SampleEngine {
             cutoff_mod_oct: 0.0,
             unison: (1, 0.0, 0.0),
             zone_rr_counter: 0,
+            sustain_rr_counter: 0,
+            variant_counter: variant_init,
+            spawn_variant: None,
+            in_transition: false,
+            note_rr: [0; 128],
+            short_key_rr: [0; 128],
+            seq_rr_counter: HashMap::new(),
+            seq_rr_last: HashMap::new(),
+            short_key_frame: [None; 128],
+            forced_tunes: VecDeque::new(),
+            forced_pitch_envs: VecDeque::new(),
+            pitch_env_draw: None,
+            pitch_env_key_frame: [None; 128],
+            body_tune_cents: 0.0,
+            forced_variants: VecDeque::new(),
+            forced_attacks: VecDeque::new(),
+            forced_offsets: VecDeque::new(),
+            forced_rrs: VecDeque::new(),
+            short_rr_hist: [[u8::MAX; 4]; 128],
+            tune_rng: 0x9E37_79B9_7F4A_7C15,
+            seq_rr_base: 0,
+            release_gain_override: None,
+            release_context: None,
+            release_extra_hold: 0,
+            spawn_extra_start: 0,
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,
             zone_rr_last_slots: HashMap::with_capacity(128),
             forced_rr: None,
             spawn_align_lead: None,
+            spawn_extra_hold: 0,
             spawn_arrival_override_ms: None,
             zone_choked_scratch: Vec::with_capacity(16),
             zone_capped_scratch: Vec::with_capacity(16),
             mic_ids,
+            insert_plans: Vec::new(),
             cache_misses: Cell::new(0),
             sample_misses: Cell::new(0),
             recent_cache_misses: RefCell::new(VecDeque::with_capacity(RECENT_MISS_LIMIT)),
             recent_sample_misses: RefCell::new(VecDeque::with_capacity(RECENT_MISS_LIMIT)),
+        };
+        engine.apply_fixed_ccs();
+        engine.insert_plans = engine
+            .patch
+            .spec
+            .articulations
+            .iter()
+            .flat_map(|a| {
+                a.group_fx.iter().filter_map(move |fx| {
+                    let plan = inserts::InsertPlan::new(fx, sample_rate as f32)?;
+                    Some((a.id.clone(), fx.dynamic.clone(), plan))
+                })
+            })
+            .collect();
+        engine
+    }
+
+    /// The group insert chain of zone `idx`'s layer, if its articulation
+    /// declares one (`group_fx`).
+    pub(crate) fn insert_plan(&self, idx: usize) -> Option<std::sync::Arc<inserts::InsertPlan>> {
+        if self.insert_plans.is_empty() {
+            return None;
+        }
+        let z = self.patch.spec.zones.get(idx)?;
+        self.insert_plans
+            .iter()
+            .find(|(a, d, _)| {
+                a.eq_ignore_ascii_case(&z.articulation) && d.eq_ignore_ascii_case(&z.dynamic)
+            })
+            .map(|(_, _, p)| std::sync::Arc::clone(p))
+    }
+
+    /// Controller `cc` as line `line` hears it: CC1/CC2 are per line, the
+    /// rest engine-wide.
+    pub(crate) fn line_cc(&self, line: usize, cc: u8) -> u8 {
+        line_cc(&self.lines, &self.cc_values, line, cc)
+    }
+
+    /// Hand every insert chain the controllers' current values (once per
+    /// render part; each chain smooths them with its routes' lag).
+    fn feed_insert_ccs(&mut self) {
+        if self.insert_plans.is_empty() {
+            return;
+        }
+        let (lines, ccs) = (&self.lines, &self.cc_values);
+        for v in self.voices.voices_mut() {
+            if v.has_inserts() {
+                let l = usize::from(v.line);
+                v.set_insert_ccs(|cc| line_cc(lines, ccs, l, cc));
+            }
+        }
+    }
+
+    /// Hold the library's fixed controllers (`dynamics.fixed_ccs`) at their
+    /// values: a script that ignores a CC and sets it itself (CSB: CC2 :=
+    /// `$takdp`) leaves the group curves reading that value only.
+    pub(crate) fn apply_fixed_ccs(&mut self) {
+        for f in self.patch.spec.dynamics.fixed_ccs.clone() {
+            if let Some(slot) = self.cc_values.get_mut(usize::from(f.cc)) {
+                *slot = f.value;
+            }
+            match f.cc {
+                1 => {
+                    self.cc1 = f.value;
+                    self.lines.iter_mut().for_each(|l| l.cc1 = f.value);
+                }
+                2 => {
+                    self.cc2 = f.value;
+                    self.lines.iter_mut().for_each(|l| l.cc2 = f.value);
+                }
+                _ => {}
+            }
         }
     }
 
@@ -1570,6 +1680,7 @@ impl SampleEngine {
         self.section = section_id.into().into();
         self.rr.borrow_mut().reset();
         self.zone_rr_counter = 0;
+        self.sustain_rr_counter = 0;
         self.zone_rr_last_slots.clear();
     }
 
@@ -1843,6 +1954,51 @@ impl SampleEngine {
     /// releases) to a specific round-robin slot, or `None` to restore normal
     /// CC59 / cycle / random behaviour. The A/B null harness uses this to sweep
     /// round-robins and align our RR ordering with a deterministic CSS render.
+    /// Use these random-tune draws (cents) in order before the generator —
+    /// replaying a reference render's draws for a null test.
+    pub fn force_random_tunes(&mut self, cents: &[i8]) {
+        self.forced_tunes = cents.iter().copied().collect();
+    }
+
+    /// Use these random pitch-envelope draws `(cents, decay_ms)` in order
+    /// before the generator (`RandomPitchEnvSpec`).
+    pub fn force_random_pitch_envs(&mut self, draws: &[(f32, f32)]) {
+        self.forced_pitch_envs = draws.iter().copied().collect();
+    }
+
+    /// Use these loud first-note attack draws in order: an index into the
+    /// velocity zone's attack range (`FirstNoteAttackSpec`).
+    pub fn force_random_attacks(&mut self, draws: &[u8]) {
+        self.forced_attacks = draws.iter().copied().collect();
+    }
+
+    /// Use these random marcato body-offset draws (ms) in order
+    /// (`MarcatoTransitionSpec::body_offset_random_ms`).
+    pub fn force_random_offsets(&mut self, draws: &[u16]) {
+        self.forced_offsets = draws.iter().copied().collect();
+    }
+
+    /// Use these random short RR draws (0-based) in order
+    /// (`ArticulationSpec::rr_random_avoid_last`).
+    pub fn force_random_rrs(&mut self, draws: &[u8]) {
+        self.forced_rrs = draws.iter().copied().collect();
+    }
+
+    /// Use these legato zone-2 body-variant draws (2..=4) in order.
+    pub fn force_random_variants(&mut self, variants: &[u8]) {
+        self.forced_variants = variants.iter().copied().collect();
+    }
+
+    /// The next uniform draw in `lo..=hi` from the engine's generator.
+    pub(crate) fn draw_uniform(&mut self, lo: u8, hi: u8) -> u8 {
+        let mut x = self.tune_rng;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.tune_rng = x;
+        lo + (x % u64::from(hi - lo + 1)) as u8
+    }
+
     pub fn set_forced_rr(&mut self, slot: Option<u32>) {
         self.forced_rr = slot;
     }
@@ -2085,12 +2241,9 @@ impl SampleEngine {
     /// Also advances the legato countdown and fires legato samples when due.
     pub fn render(&mut self, output: &mut [f32]) {
         let block_frames = output.len() / 2;
-
-        // Advance every line's legato countdown.
-        self.advance_legato_countdowns(block_frames);
-
-        self.voices.render(output);
-        self.frames_rendered += block_frames as u64;
+        self.render_split(block_frames, |voices, start, n| {
+            voices.render(&mut output[start * 2..(start + n) * 2]);
+        });
         self.drain_emitted_markers();
         self.sweep_traced_voice_ends();
 
@@ -2114,12 +2267,9 @@ impl SampleEngine {
     /// desired. No allocation occurs.
     pub fn render_multi(&mut self, outputs: &mut [Vec<f32>]) {
         let block_frames = outputs.first().map_or(0, |b| b.len() / 2);
-
-        // Advance every line's legato countdown.
-        self.advance_legato_countdowns(block_frames);
-
-        self.voices.render_multi(outputs);
-        self.frames_rendered += block_frames as u64;
+        self.render_split(block_frames, |voices, start, n| {
+            voices.render_multi_range(outputs, start, n);
+        });
         self.drain_emitted_markers();
         self.sweep_traced_voice_ends();
 
@@ -2161,10 +2311,9 @@ impl SampleEngine {
         route_shorts: usize,
     ) {
         let block_frames = outputs.first().map_or(0, |b| b.len() / 2);
-        self.advance_legato_countdowns(block_frames);
-        self.voices
-            .render_matrix(outputs, nmics, [route_longs, route_shorts]);
-        self.frames_rendered += block_frames as u64;
+        self.render_split(block_frames, |voices, start, n| {
+            voices.render_matrix_range(outputs, nmics, [route_longs, route_shorts], start, n);
+        });
 
         if self.cc11_volume != 1.0 {
             for buf in outputs.iter_mut() {
@@ -2180,25 +2329,78 @@ impl SampleEngine {
         }
     }
 
-    /// Advance every line's reactive legato countdown by one block, firing
-    /// transitions that elapse (at the head of the block, matching the
-    /// pre-line engine's timing). Lines are visited in ascending [`LineId`]
-    /// order — deterministic when several fire in the same block.
-    fn advance_legato_countdowns(&mut self, block_frames: usize) {
-        for li in 0..self.lines.len() {
-            let fire = match &mut self.lines[li].state {
-                LegatoState::Pending {
+    /// Render `block_frames` through `part(voices, start, n)` in pieces, firing
+    /// each reactive legato countdown on the EXACT frame it elapses (the block
+    /// is split there). Firing at the head of the block put transitions up to
+    /// one block early — 1.3 ms at 64 frames, which a null test against
+    /// Kontakt hears as a phase error on every voice of the transition.
+    fn render_split(
+        &mut self,
+        block_frames: usize,
+        mut part: impl FnMut(&mut VoicePool, usize, usize),
+    ) {
+        let mut done = 0;
+        self.fire_due_legato();
+        while done < block_frames {
+            self.feed_insert_ccs();
+            let trill = self
+                .trill_due
+                .as_ref()
+                .map(|t| t.0.saturating_sub(self.frames_rendered) as usize);
+            let next = self
+                .lines
+                .iter()
+                .filter_map(|l| match l.state {
+                    LegatoState::Pending {
+                        frames_remaining, ..
+                    } => Some(frames_remaining),
+                    LegatoState::Idle => None,
+                })
+                .chain(trill)
+                .chain(self.phrase_due_in())
+                .min()
+                .map_or(block_frames - done, |f| f.clamp(1, block_frames - done));
+            part(&mut self.voices, done, next);
+            self.frames_rendered += next as u64;
+            for l in &mut self.lines {
+                if let LegatoState::Pending {
                     frames_remaining, ..
-                } => {
-                    if *frames_remaining <= block_frames {
-                        true
-                    } else {
-                        *frames_remaining -= block_frames;
-                        false
-                    }
+                } = &mut l.state
+                {
+                    *frames_remaining = frames_remaining.saturating_sub(next);
                 }
-                LegatoState::Idle => false,
-            };
+            }
+            done += next;
+            self.fire_due_legato();
+        }
+    }
+
+    /// Fire every countdown that has reached zero. Lines are visited in
+    /// ascending [`LineId`] order — deterministic when several fire together.
+    fn fire_due_legato(&mut self) {
+        self.fire_phrase();
+        if self
+            .trill_due
+            .as_ref()
+            .is_some_and(|t| t.0 <= self.frames_rendered)
+        {
+            if let Some((_, note, velocity, artic)) = self.trill_due.take() {
+                // The trill's own articulation stays selected: its note-off
+                // plays that trill's release (WTrel for a whole-tone trill).
+                self.articulation = artic;
+                self.trill_bypass = true;
+                self.note_on(note, velocity);
+                self.trill_bypass = false;
+            }
+        }
+        for li in 0..self.lines.len() {
+            let fire = matches!(
+                self.lines[li].state,
+                LegatoState::Pending {
+                    frames_remaining: 0,
+                    ..
+                }
+            );
             if fire {
                 if let LegatoState::Pending {
                     from_note,
@@ -2299,12 +2501,11 @@ pub fn gain_to_db(gain: f32) -> f32 {
 /// per-event velocity term `$arhiq` applies, which is the sample's own dynamic
 /// selection, not a fixed makeup. (Measured Tremolo's −14 dB `$kuqqb` is a
 /// distinct KSP-scripted articulation, not the sampled `Tremolo`.)
-fn css_short_makeup_db(artic_id: &str) -> f32 {
-    if artic_id.eq_ignore_ascii_case("Staccatissimo") {
-        -9.5 // $xfnyt
-    } else {
-        0.0
-    }
+fn css_short_makeup_db(_artic_id: &str) -> f32 {
+    // The decoded `$xfnyt` −9.5 dB on Staccatissimo is not what Kontakt
+    // plays: its staccatissimo notes sit at the zone level like every other
+    // short (null test, 2026-11-12: ours exactly 9.5 dB under).
+    0.0
 }
 
 // ── Amp envelopes ────────────────────────────────────────────────────────────
@@ -2350,8 +2551,21 @@ fn amp_env_for(
         ),
         None => crate::spec::default_amp_env(artic_id, role)?,
     };
+    let release = spec
+        .articulations
+        .iter()
+        .find(|a| a.id.eq_ignore_ascii_case(artic_id))
+        .and_then(|a| a.amp_env_release)
+        .map(|r| r as usize)
+        .or((role == AmpEnvRole::Short).then_some(2));
     let tuples: Vec<(f32, f32, f32)> = segs.iter().map(|s| (s.time_ms, s.level, s.curve)).collect();
-    FlexEnv::from_segments(&tuples, 0.0, sample_rate, hold)
+    FlexEnv::from_segments(&tuples, 0.0, sample_rate, hold).map(|e| e.with_release_segment(release))
+}
+
+/// Fractional milliseconds → frames (rounded) — for sub-ms spec values.
+#[must_use]
+pub fn ms_to_frames_f(ms: f32, sample_rate: u32) -> usize {
+    (f64::from(ms.max(0.0)) * f64::from(sample_rate) / 1000.0).round() as usize
 }
 
 /// Frames → milliseconds (the inverse of [`ms_to_frames`]).
@@ -2772,6 +2986,9 @@ fn zone_key_index(zones: &[crate::spec::ZoneSpec], trigger: ZoneTrigger) -> Box<
 }
 
 fn zone_trigger_matches(zone: &crate::spec::ZoneSpec, trigger: ZoneTrigger) -> bool {
+    if zone.disabled {
+        return false;
+    }
     match trigger {
         ZoneTrigger::Attack => {
             !zone_is_release_trigger(zone)
@@ -2908,12 +3125,7 @@ fn half_pedal_release_frames(
         "sqrt" | "square-root" | "square_root" => position.sqrt(),
         _ => position,
     };
-    let max_multiplier = if max_multiplier > 0.0 {
-        max_multiplier
-    } else {
-        HALF_PEDAL_MAX_RELEASE_MULTIPLIER
-    }
-    .max(1.0);
+    let max_multiplier = max_multiplier.max(1.0);
     let multiplier = 1.0 + (max_multiplier - 1.0) * shaped;
     ((base_frames as f32) * multiplier).round() as usize
 }
@@ -2962,4 +3174,14 @@ pub fn default_articulation(spec: &crate::spec::LibrarySpec) -> Option<String> {
         // caller still has an id to work with.
         .or_else(|| spec.articulations.first())
         .map(|a| a.id.clone())
+}
+
+/// Controller `cc` as line `line` hears it (see [`SampleEngine::line_cc`]).
+fn line_cc(lines: &[LegatoLine], ccs: &[u8; 128], line: usize, cc: u8) -> u8 {
+    let global = ccs.get(usize::from(cc)).copied().unwrap_or(0);
+    match (cc, lines.get(line)) {
+        (1, Some(l)) => l.cc1,
+        (2, Some(l)) => l.cc2,
+        _ => global,
+    }
 }

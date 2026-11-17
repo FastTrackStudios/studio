@@ -611,6 +611,30 @@ impl SamplerRig {
             .load_instrument_with_config(id, config_path, zones_path, samples_root, section, mic)
     }
 
+    /// Install an already-loaded [`PlayerPatch`](crate::PlayerPatch) — the
+    /// spec parsed once, cloned into many rigs (with a
+    /// [`shared_cache`](crate::PlayerPatch::shared_cache), every rig reads the
+    /// same decoded samples): an offline renderer running many takes of one
+    /// instrument.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bank is poisoned.
+    pub fn load_patch(
+        &self,
+        id: impl Into<InstrumentId>,
+        patch: crate::PlayerPatch,
+        name: impl Into<String>,
+        section: impl Into<String>,
+        mic: impl Into<String>,
+    ) -> eyre::Result<()> {
+        self.bank()
+            .lock()
+            .map_err(|_| eyre::eyre!("sampler bank lock poisoned"))?
+            .load_patch(id, patch, name, section, mic);
+        Ok(())
+    }
+
     /// Load a `.signalpack`.
     ///
     /// # Errors
@@ -841,6 +865,53 @@ impl SamplerRig {
     pub fn set_trace_enabled(&self, id: &str, enabled: bool) {
         if let Ok(mut bank) = self.bank().lock() {
             bank.set_trace_enabled(id, enabled);
+        }
+    }
+
+    /// Replay a reference render's loud first-note attack draws (an index
+    /// into the zone's attack velocity range).
+    pub fn force_random_attacks(&self, id: &str, v: &[u8]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_random_attacks(id, v);
+        }
+    }
+
+    /// Replay a reference render's random marcato body-offset draws (ms).
+    pub fn force_random_offsets(&self, id: &str, v: &[u16]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_random_offsets(id, v);
+        }
+    }
+
+    /// Replay a reference render's legato zone-2 body-variant draws.
+    pub fn force_random_variants(&self, id: &str, v: &[u8]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_random_variants(id, v);
+        }
+    }
+
+    /// Replay a reference render's random short RR draws (0-based, in order)
+    /// — see [`crate::engine::SampleEngine::force_random_rrs`].
+    pub fn force_random_rrs(&self, id: &str, draws: &[u8]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_random_rrs(id, draws);
+        }
+    }
+
+    /// Replay a reference render's random-tune draws (cents, in order) —
+    /// see [`crate::engine::SampleEngine::force_random_tunes`].
+    pub fn force_random_tunes(&self, id: &str, cents: &[i8]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_random_tunes(id, cents);
+        }
+    }
+
+    /// Replay a reference render's random pitch-envelope draws `(cents,
+    /// decay_ms)`, in order — see
+    /// [`crate::engine::SampleEngine::force_random_pitch_envs`].
+    pub fn force_random_pitch_envs(&self, id: &str, draws: &[(f32, f32)]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_random_pitch_envs(id, draws);
         }
     }
 

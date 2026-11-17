@@ -1,0 +1,139 @@
+// MOJO 2 Horn Section (Vir2) — library spec.
+//
+// One KSP engine (script_1.ksp, identical in all 17 full instruments) drives
+// every instrument; the instruments differ in their shipped values and zone
+// maps only. Those live per instrument in _patches/<instrument>/:
+// library.styx (zones, tests/mojo_zones.py) and section.styx (shipped knobs,
+// tests/mojo_instrument_spec.py). The decode notes are on AudioHaven:
+// Sampled/Horns/MOJO 2 Horn Section/_notes/ (model-notepath.md,
+// model-transitions.md, gap-analysis.md). Line numbers below are script_1.ksp.
+//
+// Modelled so far, at the shipped defaults (Mix mic, 1 player, era none,
+// velocity dynamics, linear velocity curve, random RR): the one-shot
+// articulations. Not yet: sustain releases (_R groups), release-type keys,
+// keynoise, articulation cutoff, legato, Time Machine (swells, crescendos).
+
+name    "MOJO 2 Horn Section"
+vendor  "Vir2"
+version "2.0"
+
+// Lowest/highest = the instrument's widest shipped articulation range
+// (`%ArtRange`, persistent `%yqd5p`); each articulation's own range is its
+// `key_range` in the instrument's section.styx.
+sections (
+    { id asx, label "Alto Sax", lowest_note C3, highest_note A5 }
+    { id bsx, label "Baritone Sax", lowest_note C3, highest_note G#5 }
+    { id btb, label "Bass Trombone", lowest_note E2, highest_note B5 }
+    { id btbm, label "Bass Trombone Muted (Simulated)", lowest_note E2, highest_note B5 }
+    { id cl, label "Clarinet", lowest_note C3, highest_note G6 }
+    { id flg, label "Flugelhorn", lowest_note E3, highest_note F5 }
+    { id flgm, label "Flugelhorn Muted (Simulated)", lowest_note E3, highest_note F5 }
+    { id hn, label "French Horn", lowest_note C3, highest_note D#5 }
+    { id hnm, label "French Horn Muted (Simulated)", lowest_note C3, highest_note D#5 }
+    { id ptp, label "Piccolo Trumpet", lowest_note D4, highest_note E6 }
+    { id ptpm, label "Piccolo Trumpet Muted (Simulated)", lowest_note D4, highest_note E6 }
+    { id ssx, label "Soprano Sax", lowest_note G#3, highest_note E6 }
+    { id tsx, label "Tenor Sax", lowest_note G#2, highest_note F5 }
+    { id tb, label "Trombone", lowest_note E2, highest_note G#5 }
+    { id tbm, label "Trombone Muted", lowest_note F2, highest_note E5 }
+    { id tp, label "Trumpet", lowest_note D3, highest_note D#6 }
+    { id tpm, label "Trumpet Muted", lowest_note E3, highest_note B5 }
+)
+
+// Bus1..4 (group index mod 4). Only Mix loads at the shipped settings
+// (mic purge `%1iphk` = 1 0 0 0).
+mics (
+    {id Mix,   label "Full Mix", kind blended,  default true}
+    {id Close, label Close,      kind separate}
+    {id Near,  label Near,       kind separate}
+    {id Room,  label Room,       kind separate}
+)
+
+performance {
+    resample_transpose true   // keys between roots are resampled, as Kontakt does
+    strict_key_ranges  true   // a key with no zone plays nothing
+    max_repeat_strikes 0      // every strike rings on (one-shots ship Poly)
+    zone_pitch_tolerance 0    // every key has its own zone or range
+    release_delay_ms   0.0
+}
+
+dynamics {
+    short_note_controller  velocity
+    // Velocity dynamics (`%bskon` = 1): layer = curved velocity / 32
+    // (25186); the shipped curve is LINEAR (`$xhoj1` = 2), so the layer
+    // edges are velocity 32 / 64 / 96 (`vel_thresholds` below).
+    enable_velocity_layers true
+}
+
+articulations (
+    // ── Sustains (not modelled yet: release samples, the 75 ms MARK_3 fade
+    //    of the previous sustain, legato) ─────────────────────────────────
+    {
+        id       Sus
+        label    "Sustain"
+        kind     @Sustain
+        dynamics (v1 v2 v3 v4)
+        rr       3
+        dyn_ctrl velocity
+        notes    full
+        vel_thresholds (32 64 96)
+    }
+
+    // ── One-shots: four velocity layers ──────────────────────────────────
+    {
+        id       Stacc
+        label    "Staccato"
+        kind     @Short
+        dynamics (v1 v2 v3 v4)
+        rr       3
+        dyn_ctrl velocity
+        notes    full
+        vel_thresholds (32 64 96)
+    }
+    {
+        id       Stabs
+        label    "Stabs"
+        kind     @Short
+        dynamics (v1 v2 v3 v4)
+        rr       3
+        dyn_ctrl velocity
+        notes    full
+        vel_thresholds (32 64 96)
+    }
+
+    // ── One-shots: one layer (velocity sets the level and, on Kontakt's
+    //    side, a lowpass `v/127 + $SimDynMinLP` — not modelled yet) ────────
+    { id BendDown, label "Bend Down",       kind @Short, dynamics (v1), rr 3, dyn_ctrl velocity, notes full }
+    { id RunDown,  label "Octave Run Down", kind @Short, dynamics (v1), rr 3, dyn_ctrl velocity, notes full }
+    { id RunUp,    label "Octave Run Up",   kind @Short, dynamics (v1), rr 3, dyn_ctrl velocity, notes full }
+    { id Doits,    label "Doits",           kind @Short, dynamics (v1), rr 3, dyn_ctrl velocity, notes full }
+    { id Rise,     label "Rise To Hit",     kind @Short, dynamics (v1), rr 3, dyn_ctrl velocity, notes full }
+    { id Shakes,   label "Shakes",          kind @Short, dynamics (v1), rr 3, dyn_ctrl velocity, notes full }
+    // The interval knob picks the group (shipped whole tone: `wt`).
+    { id Trills,   label "Trills",          kind @Short, dynamics (wt), rr 3, dyn_ctrl velocity, notes full }
+    // The length menu picks the group (shipped short: Falls_Length_2 = `L2`).
+    { id Falls,    label "Falls",           kind @Short, dynamics (L2), rr 3, dyn_ctrl velocity, notes full }
+)
+
+// Key mode (`%0ect5` = 0): the key sets the articulation (25056-25116),
+// shipped notes `%jqdqz` (identical across instruments); C0 = MIDI 12.
+// Not modelled yet: Swells (G1), Crescendos (G#1), the release-type keys
+// (C7..E7 = 96..100), natural legato (C#2) and force-keynoise (D2), and a
+// keyswitch struck at velocity >= 120 over held notes (a release override).
+keyswitch {
+    velocity_sensitive false
+    user_configurable  true
+    notes (
+        { note "C1",  label "Sustains",        vel_map { 0-127 "Sus" } }
+        { note "C#1", label "Staccato",        vel_map { 0-127 "Stacc" } }
+        { note "D1",  label "Stabs",           vel_map { 0-127 "Stabs" } }
+        { note "D#1", label "Bend Down",       vel_map { 0-127 "BendDown" } }
+        { note "E1",  label "Octave Run Down", vel_map { 0-127 "RunDown" } }
+        { note "F1",  label "Octave Run Up",   vel_map { 0-127 "RunUp" } }
+        { note "F#1", label "Rise To Hit",     vel_map { 0-127 "Rise" } }
+        { note "A1",  label "Doits",           vel_map { 0-127 "Doits" } }
+        { note "A#1", label "Shakes",          vel_map { 0-127 "Shakes" } }
+        { note "B1",  label "Trills",          vel_map { 0-127 "Trills" } }
+        { note "C2",  label "Falls",           vel_map { 0-127 "Falls" } }
+    )
+}

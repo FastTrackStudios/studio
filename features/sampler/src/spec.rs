@@ -538,6 +538,12 @@ pub struct PerformanceSpec {
     /// `$tukcw` = 400): on key-up the looping sustain fades over this window.
     #[facet(default = 400)]
     pub sustain_noteoff_ms: u32,
+    /// A script fade over the key-up release (ms; 0 = none): a held body's
+    /// release envelope is multiplied by a linear fade to silence over this
+    /// time, and the voice ends there — Kontakt's `fade_out` at the note-off
+    /// on top of the group's amp release (CSB `$qxeb4` 200, CSW `$tukcw` 100).
+    #[facet(default)]
+    pub sustain_noteoff_cut_ms: f32,
     /// Output makeup (dB) applied to looping sustain-layer voices — the flat
     /// level offset between a looped-plateau playback and the vendor
     /// instrument's rendered level (CSS: +6 dB, see the A/B calibration).
@@ -553,6 +559,63 @@ pub struct PerformanceSpec {
     /// actually cares sets its own value.
     #[facet(default)]
     pub sustain_makeup_db: f32,
+    /// Level the host instrument adds to EVERY voice (dB). Kontakt plays a
+    /// CSS zone at +2.55 dB over the raw file when every group curve reads
+    /// 1.0 (null-tested). Unlike `sustain_makeup_db` it is not a loop or
+    /// legato compensation and applies to shorts and releases too.
+    #[facet(default)]
+    pub instrument_gain_db: f32,
+    /// Balance the host instrument applies to EVERY voice, −1..1 (stereo:
+    /// the far channel × (1 − |pan|), as [`Voice::with_pan`]). CSB Solo
+    /// Trombone's buses carry a balance stage at 0.22 (Kontakt effect kind
+    /// 9): its left channel plays 2.2 dB under its right.
+    ///
+    /// [`Voice::with_pan`]: crate::engine::voice::Voice::with_pan
+    #[facet(default)]
+    pub instrument_pan: f32,
+    /// How a note between sampled keys is pitched. `true`: RESAMPLE (rate
+    /// change, the note runs shorter/longer) — what Kontakt does, null-tested
+    /// on CSS (+100 c at key 72 from the B3 zone, −52.7 dB). `false`/unset:
+    /// the Cinematic-family default, a time-preserving pitch shift (a delay
+    /// line, which also adds an echo-like double) — kept for libraries not
+    /// yet null-tested.
+    #[facet(default)]
+    pub resample_transpose: bool,
+    /// Curvature `k` of the sustain body's note-off release (0 = linear;
+    /// see `Voice::release_k`). CSS in Kontakt: 2.6 over `release_ms` 580.
+    #[facet(default)]
+    pub release_curve_k: f32,
+    /// Strikes of one key kept ringing when it is struck again (older ones
+    /// fade over 100 ms). `None` = 2 (a pedalled piano's guard); `Some(0)` =
+    /// every strike rings on — Kontakt's CSS (null test: shorts re-struck
+    /// every 300 ms all ring).
+    pub max_repeat_strikes: Option<u32>,
+    /// A key no zone of the articulation covers plays nothing (as Kontakt),
+    /// instead of the nearest recorded pitch.
+    #[facet(default)]
+    pub strict_key_ranges: bool,
+    /// Per-note round robins (`ArticulationSpec::rr_per_note`) count per
+    /// KEY instead of per zone root. CSS keys them by the KSP's note-class
+    /// table `%dtnvu`: the violin patches pair each even key from 60 up with
+    /// the key below (= the zone root), the other sections keep every key
+    /// apart (Cellos Sfz C2/C#2: per key).
+    #[facet(default)]
+    pub rr_per_key: bool,
+    /// Trills from key pairs (CSS script slot 0): with a trill articulation
+    /// selected, two keys a semitone / tone apart struck within
+    /// `window_ms` play ONE note — `half` / `whole` — on the lower key,
+    /// `delay_ms` after the first key. A lone key plays nothing.
+    pub trill_pair: Option<TrillPairSpec>,
+    /// Release-sample level by held time (KSP `%ru5pa`): gain =
+    /// `release_held_db × table[clamp(held_ms/10 − 1, 0, len−1)] / 100`. Empty
+    /// = the legacy −6 dB base + linear held curve.
+    #[facet(default)]
+    pub release_held_table: Vec<u8>,
+    #[facet(default)]
+    pub release_held_db: f32,
+    /// Delay from note-off to the release sample (ms). CSS: 2 (KSP `wait(2000)`).
+    #[facet(default)]
+    pub release_delay_ms: f32,
     /// Global master tune in cents, applied on top of the per-note transpose.
     /// CSS ships `tune=1.00521` ≈ +9.0 cents on every playable group; other
     /// libraries stay at 0.
@@ -594,13 +657,118 @@ pub struct PerformanceSpec {
     /// before the rhythmic peak).
     #[facet(default)]
     pub attack_placement: String,
+    /// Note-off, release and declick timings every voice follows. See
+    /// [`VoiceTimingSpec`].
+    #[facet(default)]
+    pub voice_timing: VoiceTimingSpec,
+    /// The Con Sordino lowpass applied when sordino is on and the library
+    /// has no muted recordings to switch to.
+    #[facet(default)]
+    pub sordino_filter: SordinoFilterSpec,
+}
+
+/// Note-off, release and declick timings (the engine's mechanism reads
+/// every number from here). The defaults are the values the engine used to
+/// hardcode; a library sets its own in `performance { voice_timing { … } }`.
+// r[impl signal.soundsource.declarative]
+#[derive(Debug, Clone, Facet)]
+pub struct VoiceTimingSpec {
+    /// Note-off fade (ms) of a sustain voice when `performance.release_ms`
+    /// is unset: the damper-down time, a short fade that reads as a cutoff.
+    #[facet(default = 60)]
+    pub noteoff_fade_ms: u32,
+    /// The note-off fade's multiplier at the top of the half-pedal range.
+    #[facet(default = 4.0f32)]
+    pub half_pedal_release_mult: f32,
+    /// Note-off fade (ms) when a release articulation supplies the natural
+    /// tail (the body only needs a declick).
+    #[facet(default = 80)]
+    pub key_up_declick_ms: u32,
+    /// Longest a release-tail voice may ring (ms) before it is retired.
+    #[facet(default = 2000)]
+    pub release_max_ms: u32,
+    /// Fade-in (ms) of a looped sustain that starts mid-sample at full level.
+    #[facet(default = 12)]
+    pub sustain_declick_ms: u32,
+    /// Fade-in (ms) of a fresh sustain entered mid-sample (a start offset).
+    #[facet(default = 20)]
+    pub mid_sample_declick_ms: u32,
+    /// Fade-in (ms) of a voice that starts mid-sample (transitions, release
+    /// tails, sample-start offsets).
+    #[facet(default = 6)]
+    pub onset_declick_ms: u32,
+    /// Body peak (linear) below which a note-off fires no release tail.
+    #[facet(default = 0.002f32)]
+    pub release_body_floor: f32,
+    /// Lowest note-off velocity that plays a release sample.
+    #[facet(default = 1)]
+    pub release_min_velocity: u8,
+    /// Fade (ms) of the previous strike when the same key is struck again.
+    #[facet(default = 90)]
+    pub retrigger_fade_ms: u32,
+    /// Smoothing (ms) of a CC1/CC11 level change (Kontakt's modulator lag).
+    #[facet(default = 120)]
+    pub cc1_lag_ms: u32,
+    /// Smoothing (ms) of a CC2 vibrato crossfade.
+    #[facet(default = 1000)]
+    pub cc2_lag_ms: u32,
+}
+
+impl Default for VoiceTimingSpec {
+    fn default() -> Self {
+        Self {
+            noteoff_fade_ms: 60,
+            half_pedal_release_mult: 4.0,
+            key_up_declick_ms: 80,
+            release_max_ms: 2000,
+            sustain_declick_ms: 12,
+            mid_sample_declick_ms: 20,
+            onset_declick_ms: 6,
+            release_body_floor: 0.002,
+            release_min_velocity: 1,
+            retrigger_fade_ms: 90,
+            cc1_lag_ms: 120,
+            cc2_lag_ms: 1000,
+        }
+    }
+}
+
+/// The Con Sordino lowpass (a placeholder until a measured muted response
+/// replaces it).
+#[derive(Debug, Clone, Facet)]
+pub struct SordinoFilterSpec {
+    #[facet(default = 2500.0f32)]
+    pub cutoff_hz: f32,
+    #[facet(default = 0.9f32)]
+    pub q: f32,
+}
+
+impl Default for SordinoFilterSpec {
+    fn default() -> Self {
+        Self {
+            cutoff_hz: 2500.0,
+            q: 0.9,
+        }
+    }
 }
 
 impl Default for PerformanceSpec {
     fn default() -> Self {
         Self {
             sustain_noteoff_ms: 400,
+            sustain_noteoff_cut_ms: 0.0,
             sustain_makeup_db: 0.0,
+            instrument_gain_db: 0.0,
+            instrument_pan: 0.0,
+            resample_transpose: false,
+            release_curve_k: 0.0,
+            max_repeat_strikes: None,
+            strict_key_ranges: false,
+            rr_per_key: false,
+            trill_pair: None,
+            release_held_table: Vec::new(),
+            release_held_db: 0.0,
+            release_delay_ms: 0.0,
             master_tune_cents: 0.0,
             loop_xfade_ms: 150,
             zone_pitch_tolerance: 2,
@@ -608,6 +776,8 @@ impl Default for PerformanceSpec {
             attack_ms: None,
             attack_placement: String::new(),
             release_ms: None,
+            voice_timing: VoiceTimingSpec::default(),
+            sordino_filter: SordinoFilterSpec::default(),
         }
     }
 }
@@ -625,15 +795,851 @@ pub struct EnvSegmentSpec {
     pub curve: f32,
 }
 
+/// A CSS legato transition as Kontakt plays it (KSP §1.2, every number
+/// null-tested). At the transition (after the overlap delay):
+/// - the old body fades out linearly over `old_body_fade_ms`;
+/// - the previous transition voice fades out over 250 → 400 ms by IOI
+///   (low latency; expressive flat 400);
+/// - the old note's in-phrase release plays at `in_phrase_release_db`;
+/// - the new body enters silent, waits `body_wait_ms`, then fades in
+///   linearly over `body_fade_ms`;
+/// - the transition sample of the LOWER note (interval-coded) enters at the
+///   mode/zone offset + the overlap delay, under the envelope `lt_env`, its
+///   first node at `(CC66·CC67)/127²` reached in `lt_seg0_ms`.
+/// Intervals above an octave play no transition sample: the body enters at
+/// `big_leap_body_offset_ms`, fading in over `big_leap_new_fade_ms` while
+/// the old body fades over `big_leap_old_fade_ms`.
+#[derive(Debug, Clone, Facet)]
+pub struct KontaktTransitionSpec {
+    pub old_body_fade_ms: f32,
+    pub body_wait_ms: f32,
+    pub body_fade_ms: f32,
+    pub big_leap_body_offset_ms: f32,
+    pub big_leap_old_fade_ms: f32,
+    pub big_leap_new_fade_ms: f32,
+    pub in_phrase_release_db: f32,
+    /// The in-phrase release starts this long after the transition (on top
+    /// of `release_delay_ms`); 0 = with it. Null-tested on CSB Solo Trumpet:
+    /// Kontakt's starts 5.7 ms after ours did.
+    #[facet(default)]
+    pub in_phrase_release_delay_ms: f32,
+    /// First envelope segment's length: low latency (CC68 = 108), expressive (127).
+    pub lt_seg0_ms_low_latency: f32,
+    pub lt_seg0_ms_expressive: f32,
+    /// The transition envelope after its first node (FlexEnv segments).
+    pub lt_env: Vec<EnvSegmentSpec>,
+    /// The level of `lt_env`'s first segment is `1 − depth·(1 − CC66/127)`
+    /// (measured: 0.90 at CC66 = 100, 0.83 at 82, either mode). 0 = use the
+    /// spec level as is.
+    #[facet(default)]
+    pub lt_node1_cc66_depth: f32,
+    /// Phrase-start dip on the transition voice: within `phrase_dip_window_ms`
+    /// of the phrase anchor it starts `phrase_dip_db` down and recovers over
+    /// `phrase_dip_window_ms`.
+    pub phrase_dip_db: f32,
+    pub phrase_dip_window_ms: f32,
+    /// The dip's measured recovery, as a gain envelope starting at
+    /// `phrase_dip_db` (Kontakt's ramp is slower than the script's nominal
+    /// 0.12 dB / 10 ms: −1.4 dB at 250 ms, 0 dB near 1 s). Empty = a linear
+    /// ramp back over `phrase_dip_window_ms`.
+    #[facet(default)]
+    pub phrase_dip_curve: Vec<EnvSegmentSpec>,
+    /// The transition envelope's first node level, `(CC66 · CC67) / 127²`,
+    /// each CC by IOI per legato mode (CSS KSP 7186-7425). None = 1.0.
+    #[facet(default)]
+    pub lt_node: Option<LtNodeSpec>,
+    /// How the previous transition voice retires on the next transition:
+    /// ms by IOI per legato mode, or by attack class. None = at once.
+    #[facet(default)]
+    pub lt_retire: Option<LtRetireSpec>,
+    /// The destination body's handoff per dynamic layer (CSB `%k1aqh`):
+    /// each layer waits and fades in on its own clock, by velocity zone.
+    /// Empty = `body_wait_ms` / `body_fade_ms` for every layer.
+    #[facet(default)]
+    pub body_handoff: Vec<BodyHandoffSpec>,
+    /// The same for a re-strike of the sounding key (CSB `%wu5b4`).
+    #[facet(default)]
+    pub retrigger_body_handoff: Vec<BodyHandoffSpec>,
+    /// A transition touching a key at or above `min_key` hands every layer
+    /// over with this wait / fade instead (CSB `$vv4qt`).
+    #[facet(default)]
+    pub high_key_handoff: Option<HighKeyHandoffSpec>,
+    /// The old body's fade by velocity zone (1-3); empty = `old_body_fade_ms`.
+    #[facet(default)]
+    pub old_body_fade_by_zone_ms: Vec<f32>,
+    /// The transition voice fades out along this curve (dB, evenly spaced
+    /// points) over its layer's body fade, starting when the body starts
+    /// fading in, then stops (CSB `%jygjv`). Empty = no such fade.
+    #[facet(default)]
+    pub lt_fade_curve_db: Vec<f32>,
+    /// The transition starts this many dB down by IOI and recovers linearly
+    /// over `recover_ms` (CSB `$dwujq`, recovered over `$pgocp`).
+    #[facet(default)]
+    pub lt_ioi_dip: Option<LtIoiDipSpec>,
+}
+
+/// See [`KontaktTransitionSpec::lt_node`].
+#[derive(Debug, Clone, Facet)]
+pub struct LtNodeSpec {
+    pub expressive: LtNodeModeSpec,
+    pub low_latency: LtNodeModeSpec,
+}
+
+/// The two CCs of one legato mode by IOI; `cc67_loud` from velocity zone 2.
+#[derive(Debug, Clone, Facet)]
+pub struct LtNodeModeSpec {
+    pub cc66: IoiCurveSpec,
+    pub cc67: IoiCurveSpec,
+    #[facet(default)]
+    pub cc67_loud: Option<IoiCurveSpec>,
+}
+
+impl LtNodeSpec {
+    /// `(CC66, CC67)` for a transition (IOI floored to whole ms, as the KSP).
+    #[must_use]
+    pub fn ccs(&self, expressive: bool, zone: u8, ioi_ms: f32) -> (f32, f32) {
+        let m = if expressive {
+            &self.expressive
+        } else {
+            &self.low_latency
+        };
+        let ioi = ioi_ms.max(0.0).floor();
+        let cc67 = match &m.cc67_loud {
+            Some(loud) if zone >= 2 => loud,
+            _ => &m.cc67,
+        };
+        (m.cc66.value_at(ioi), cc67.value_at(ioi))
+    }
+}
+
+/// How the previous transition voice retires (ms by IOI).
+#[derive(Debug, Clone, Facet)]
+pub struct LtRetireSpec {
+    pub low_latency: IoiCurveSpec,
+    pub expressive: IoiCurveSpec,
+    /// From velocity zone `loud_from_zone` up, this curve instead (CSB: the
+    /// loud attack class).
+    #[facet(default)]
+    pub loud: Option<IoiCurveSpec>,
+    #[facet(default = 2)]
+    pub loud_from_zone: u8,
+}
+
+/// One dynamic layer's body handoff on a connected note.
+#[derive(Debug, Clone, Facet)]
+pub struct BodyHandoffSpec {
+    /// Only this articulation's layers (CSW: the vibsus and nonvib slots of
+    /// one dynamic wait differently); empty = every articulation's.
+    #[facet(default)]
+    pub articulation: String,
+    pub dynamic: String,
+    /// Wait before fading in (ms), by velocity zone 1-3.
+    pub wait_ms: Vec<f32>,
+    /// Fade-in (ms), by velocity zone 1-3.
+    pub fade_ms: Vec<f32>,
+    /// Beyond an octave: no wait, this fade.
+    pub big_fade_ms: f32,
+    /// How deep the layer enters the recording (ms) by velocity zone 1-3,
+    /// expressive legato (CSW 2-player nonvib "NV Delay", `$wj5ti`/`$bycsx`/
+    /// `$req1g`: no handoff wait, the body starts at once this far in).
+    /// Empty = from the start.
+    #[facet(default)]
+    pub offset_ms: Vec<f32>,
+    /// The same in low-latency legato (`$wrchu`/`$kb2nd`/`$zhqzl`); empty =
+    /// `offset_ms`.
+    #[facet(default)]
+    pub offset_ms_low_latency: Vec<f32>,
+    /// Beyond an octave (`$t5wpo` / `$auf1d`; one value per mode, expressive
+    /// first). Empty = none.
+    #[facet(default)]
+    pub big_offset_ms: Vec<f32>,
+}
+
+/// See [`KontaktTransitionSpec::high_key_handoff`].
+#[derive(Debug, Clone, Facet)]
+pub struct HighKeyHandoffSpec {
+    pub min_key: u8,
+    pub wait_ms: f32,
+    pub fade_ms: f32,
+}
+
+/// See [`KontaktTransitionSpec::lt_ioi_dip`].
+#[derive(Debug, Clone, Facet)]
+pub struct LtIoiDipSpec {
+    /// Starting level (dB) by IOI.
+    pub db: IoiCurveSpec,
+    pub recover_ms: f32,
+}
+
+impl BodyHandoffSpec {
+    /// (wait, fade) in ms for velocity zone `zone` (1-3), or beyond an octave.
+    #[must_use]
+    pub fn for_zone(&self, zone: u8, big_leap: bool) -> (f32, f32) {
+        if big_leap {
+            return (0.0, self.big_fade_ms);
+        }
+        let i = usize::from(zone.clamp(1, 3) - 1);
+        let pick = |v: &[f32]| v.get(i).or_else(|| v.last()).copied().unwrap_or(0.0);
+        (pick(&self.wait_ms), pick(&self.fade_ms))
+    }
+
+    /// The layer's entry offset (ms) for velocity zone `zone` (1-3) in the
+    /// given legato mode, or beyond an octave.
+    #[must_use]
+    pub fn offset_for(&self, zone: u8, big_leap: bool, expressive: bool) -> f32 {
+        if big_leap {
+            let i = usize::from(!expressive);
+            return self
+                .big_offset_ms
+                .get(i)
+                .or_else(|| self.big_offset_ms.first())
+                .copied()
+                .unwrap_or(0.0);
+        }
+        let v = if expressive || self.offset_ms_low_latency.is_empty() {
+            &self.offset_ms
+        } else {
+            &self.offset_ms_low_latency
+        };
+        let i = usize::from(zone.clamp(1, 3) - 1);
+        v.get(i).or_else(|| v.last()).copied().unwrap_or(0.0)
+    }
+}
+
+/// A CSS MARCATO transition as Kontakt plays it (`$ocjln=6`, KSP 18114-20402,
+/// null-tested against Kontakt 8 renders of CSS 1st Violins: −34 to −43 dB
+/// on every probed transition). No overlap delay; at the note-on:
+/// - "hard" = velocity > 75 and IOI > 50 ms (`$kbqnb`);
+/// - the old body fades out linearly over `xfade_ms` (cut at its end),
+///   bending 0 → +glide cents toward the new note, and — CC19 leaving 127
+///   drops its `CC19=127` step mod — sinking toward `old_sink_level` from
+///   `old_sink_start_ms` over `old_sink_ms`;
+/// - the previous transition voice retires over `lt_retire_ms` by IOI;
+/// - the old note's in-phrase release plays at `in_phrase_release_db`;
+/// - the new body (next round-robin) enters `body_offset_ms` deep, muted,
+///   bending from −glide back to 0, fading in in two stages (stage 1 at the
+///   rate of `xfade·split/node_divisor`, until `xfade·split/100` ticks; stage
+///   2 to full over `xfade·(100 − split)/100`), under the body envelopes
+///   `body_env_cc19` / `body_env_cc18` whose negative levels stand for the
+///   CC value the script sets ÷ 127;
+/// - the marc-leg transition sample (the lower note's interval-coded zone of
+///   `lt_articulation`, entered at its `marcato_start` + `lt_offset_ms`)
+///   plays per marcato dynamic layer at that zone's marcato level × `lt_db`
+///   × `lt_group_db` under `lt_env`.
+/// Every IOI table is the script's integer lerp, flat outside its ends.
+#[derive(Debug, Clone, Facet)]
+pub struct MarcatoTransitionSpec {
+    /// The connected body waits this long (ms) after the note-on — the
+    /// transition sample does not (CSW: `wait($5aowl)` = 40 ms between them,
+    /// KSP 12813). 0 = at once.
+    #[facet(default)]
+    pub body_delay_ms: f32,
+    /// The script's crossfade loop ticks this often (ms, `$0cqdq`); a note
+    /// that arrives while the previous transition's loop still runs stops
+    /// it and waits for its next tick, so its whole transition starts one
+    /// tick late (CSS/CSW/CSB `while ($kxgro=1) wait($0cqdq)`, CSB 15338-
+    /// 15355). The loop lasts the XTime, or the bend if longer. 0 = no
+    /// interlock.
+    #[facet(default)]
+    pub busy_tick_ms: f32,
+    /// The controller the script writes its CC19 value to on a connected
+    /// note (`set_controller(19, …)`), so routes that read it follow; 0 =
+    /// not written.
+    #[facet(default)]
+    pub cc19_controller: u8,
+    /// A transition is HARD (`$kbqnb`) above this velocity (`$qm4n3`)…
+    #[facet(default = 75)]
+    pub hard_velocity: u8,
+    /// … and IOI in ms (`$hx3nl`: 50, Cellos 100).
+    #[facet(default = 50.0f32)]
+    pub hard_ioi_ms: f32,
+    /// XTime `$a3zg3`, ms.
+    pub xfade_ms: f32,
+    /// Atk-fade split `$igmiu` %: (soft hard) within an octave; beyond it.
+    pub split: [f32; 2],
+    pub split_big: f32,
+    /// Node-volume divisor `$x444h` by IOI.
+    pub node_divisor: Vec<[f32; 2]>,
+    /// Body entry `$1fvjk`, ms: (soft hard) within an octave / beyond it.
+    pub body_offset_ms: [f32; 2],
+    pub body_offset_big_ms: [f32; 2],
+    /// A random extra body entry, ms: `random(0, n)` on every connection
+    /// (CSSS `$yp2sq + random(0, $a4bsp)`, CSSS 11357 / 12016). 0 = none.
+    #[facet(default)]
+    pub body_offset_random_ms: f32,
+    /// CC19 (`$313em`): soft by IOI; (hard, beyond-octave soft, beyond hard).
+    pub cc19_soft: Vec<[f32; 2]>,
+    pub cc19_other: [f32; 3],
+    /// CC18 (`$eaghu`): soft by IOI for a step (≤ 2 semitones) and a leap;
+    /// (hard, beyond-octave soft, beyond hard).
+    pub cc18_soft_step: Vec<[f32; 2]>,
+    pub cc18_soft_leap: Vec<[f32; 2]>,
+    pub cc18_other: [f32; 3],
+    /// The body's CC-driven volume envelopes (level < 0 = CC ÷ 127).
+    pub body_env_cc19: Vec<EnvSegmentSpec>,
+    pub body_env_cc18: Vec<EnvSegmentSpec>,
+    /// The outgoing body's sink once CC19 leaves 127.
+    pub old_sink_level: f32,
+    pub old_sink_start_ms: f32,
+    pub old_sink_ms: f32,
+    /// Glide depth `$ruv02`, cents by IOI: semitone, tone, wider; over `glide_ms`.
+    pub glide_semitone: Vec<[f32; 2]>,
+    pub glide_tone: Vec<[f32; 2]>,
+    pub glide_wide: Vec<[f32; 2]>,
+    pub glide_ms: f32,
+    /// The transition-sample articulation and its layers: `(marcato dynamic,
+    /// transition dynamic, index into the zone's marcato_gains_db)`.
+    pub lt_articulation: String,
+    pub lt_layers: Vec<MarcLegLayerSpec>,
+    /// LT entry past the zone's marcato start, ms, by IOI.
+    pub lt_offset_ms: Vec<[f32; 2]>,
+    /// By attack class `(soft, hard)` instead of by IOI (CSB `$5ibvn` /
+    /// `$cblef`; level `$b23jt` / `$rlbmz` dB; retire `$pprfd` / `$orqo1`).
+    #[facet(default)]
+    pub lt_offset_ms_by_class: Option<[f32; 2]>,
+    #[facet(default)]
+    pub lt_db_by_class: Option<[f32; 2]>,
+    #[facet(default)]
+    pub lt_retire_ms_by_class: Option<[f32; 2]>,
+    /// LT level "LT Vol" dB by IOI: step (≤ 2) / leap; plus the group volume.
+    pub lt_db_step: Vec<[f32; 2]>,
+    pub lt_db_leap: Vec<[f32; 2]>,
+    pub lt_group_db: f32,
+    /// The LT's velocity law, dB at velocity 0: `(127 − vel)` of it ÷ 127
+    /// (CSSS `(127-$EVENT_VELOCITY)*%lwgt4[51]/10000` from `$0kd5m`,
+    /// CSSS 11771). 0 = none.
+    #[facet(default)]
+    pub lt_vel_db: f32,
+    /// The LT's phrase ramp, deci-dB / ms as the script ships them
+    /// (`$4lqhx`, `$ee3a4`, `$xu41m`, `$c2hkn`; CSSS 11757-11768), see
+    /// [`ksp_phrase_ramp_ddb`]. None = no ramp.
+    #[facet(default)]
+    pub lt_ramp: Option<[i32; 4]>,
+    pub lt_env: Vec<EnvSegmentSpec>,
+    /// The previous transition voice's retire fade, ms by IOI.
+    pub lt_retire_ms: Vec<[f32; 2]>,
+    /// The in-phrase release's level against the zone (it replaces the
+    /// release articulation's held-time level; Kontakt: −8 dB).
+    pub in_phrase_release_db: f32,
+    /// At the note-off of a note reached by a transition its transition
+    /// voice fades over `lt_noteoff_ms` by that transition's IOI (20831-20859);
+    /// the body keeps the articulation's held-time fade (measured — not the
+    /// decode's 225 ms phrase-note fade).
+    pub lt_noteoff_ms: Vec<[f32; 2]>,
+}
+
+/// A connected note on CSS tremolo / trills / harmonics (KSP `$ocjln` 2-4),
+/// null-tested against Kontakt 8: no overlap delay; the old body fades out
+/// linearly over `old_fade_ms[zone]`, the new body enters from its sample
+/// start fading in over `new_fade_ms[zone]` (beyond an octave both use
+/// `big_fade_ms`); the old note's in-phrase release plays at
+/// `in_phrase_release_db`; with `lt_articulation` set, the lower note's
+/// interval-coded transition zone of it enters `lt_offset_ms` deep at
+/// `lt_db` under `lt_env` × a linear fade-out over `lt_fade_out_ms`
+/// (measured: silent 120 ms, then 680 ms up to full).
+#[derive(Debug, Clone, Facet)]
+pub struct SimpleTransitionSpec {
+    pub old_fade_ms: [f32; 3],
+    pub new_fade_ms: [f32; 3],
+    pub big_fade_ms: [f32; 2],
+    pub in_phrase_release_db: f32,
+    #[facet(default)]
+    pub lt_articulation: String,
+    #[facet(default)]
+    pub lt_offset_ms: f32,
+    #[facet(default)]
+    pub lt_db: f32,
+    #[facet(default)]
+    pub lt_env: Vec<EnvSegmentSpec>,
+    #[facet(default)]
+    pub lt_fade_out_ms: f32,
+}
+
+/// A loud first note's attack voice (CSS KSP 17415-17450): in velocity
+/// zone 2 / 3 the first note of a phrase also plays, in every vibsus dynamic
+/// group, the zone at a drawn velocity — `random(5,7)` (Staccato
+/// recordings) / `random(8,9)` (Sfz) — from the sample start, at that
+/// group's own CC1/CC2 curve level (so with vibrato down it is silent).
+/// Null-tested in Kontakt: no delay, no extra trim, the zone's level.
+#[derive(Debug, Clone, Facet)]
+pub struct FirstNoteAttackSpec {
+    /// The zones' articulation (written by `zones sync-tsv`; their
+    /// `rr_index` holds the Kontakt velocity).
+    pub articulation: String,
+    /// The articulation whose dynamic layers carry it (the vibsus side).
+    pub layer_articulation: String,
+    /// Velocity ranges `[lo, hi]` for zone 2 and zone 3.
+    pub velocities: Vec<[u8; 2]>,
+}
+
+/// A held key that plays a timed phrase of one-shot hits instead of one
+/// short (CSB Taka in its "Hold" mode, KSP 10365-10805). `delay_ms` after
+/// the note-on the key plays one of `first_rr` (not the previous phrase's
+/// first); every `tick_ms` while any phrase key is down it plays the next
+/// hit — first one of `second_rr`, then that RR + 1, wrapping to
+/// `step_wrap[0]` past `step_wrap[1]` — fading the key's previous hit over
+/// `fade_ms`; at the first tick after every key is up each key plays one of
+/// `end_rr` (a key released while others hold plays it at its next tick).
+/// RRs are 1-based within the velocity layer. The hits ring to their ends:
+/// note-offs do not release them.
+#[derive(Debug, Clone, Facet)]
+pub struct PhraseSpec {
+    pub delay_ms: f32,
+    pub tick_ms: f32,
+    pub fade_ms: f32,
+    pub first_rr: Vec<u8>,
+    pub second_rr: Vec<u8>,
+    pub step_wrap: [u8; 2],
+    pub end_rr: Vec<u8>,
+}
+
+/// A marcato phrase's first-note overlay (KSP 17620-17855): with the
+/// overlay on (CC58 71-75) the first note also plays a short of
+/// `articulation` at velocity `vel · cc1_scale[CC1] / 100`, through that
+/// short's own layer/level law and RR sequence, untuned.
+#[derive(Debug, Clone, Facet)]
+pub struct OverlaySpec {
+    pub articulation: String,
+    pub cc1_scale: Vec<u8>,
+    /// A first note after a HARD transition plays no overlay (CSS
+    /// `$kbqnb`). CSB plays it on every first note: false.
+    #[facet(default = true)]
+    pub skip_after_hard_transition: bool,
+    /// Connected notes at or above this velocity play the overlay too
+    /// (CSB: 64, `$evk4m`). None = first notes only (CSS).
+    #[facet(default)]
+    pub connected_from_velocity: Option<u8>,
+}
+
+/// A section's decoded numbers over the shared library config (CSS: each
+/// section's NKI ships its own velocity tables, RR counts, group CC curves
+/// and envelopes). Written by `features/rigs/orchestra/tests/css_section_spec.py`
+/// as `section.styx` beside the section's `library.styx`; `load_merged`
+/// applies it by articulation id, field by field.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct SectionOverlay {
+    #[facet(default)]
+    pub articulations: Vec<ArticulationOverlay>,
+    /// The section's legato timing knobs (see [`LegatoOverlay`]).
+    pub legato: Option<LegatoOverlay>,
+    /// See [`PerformanceSpec::rr_per_key`].
+    pub rr_per_key: Option<bool>,
+    /// See [`PerformanceSpec::instrument_gain_db`]: an instrument whose
+    /// level differs from its library's (CSW / CSB patches each set their
+    /// own instrument volume).
+    pub instrument_gain_db: Option<f32>,
+    /// See [`PerformanceSpec::instrument_pan`].
+    pub instrument_pan: Option<f32>,
+    /// See [`DynamicsSpec::vibrato_controller`]: an instrument whose vibrato
+    /// control differs from its library's. `""` = none (the CSW clarinets'
+    /// `$vkgua = -1`: CC2 never leaves the vibsus slot).
+    pub vibrato_controller: Option<String>,
+}
+
+/// The overridable legato-engine fields of a section: the CSS editor knobs
+/// whose shipped values differ between sections.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct LegatoOverlay {
+    pub overlap_delay: Option<OverlapDelaySpec>,
+    pub first_note_variant_init: Option<u8>,
+    pub first_note_fade_ms: Option<Vec<f32>>,
+    /// An instrument's whole transition model (every CSB number is
+    /// per instrument).
+    pub kontakt_transition: Option<KontaktTransitionSpec>,
+    /// Just the per-layer body handoff of the library's
+    /// `kontakt_transition` (CSW: the `%k1aqh` waits differ per instrument).
+    pub body_handoff: Option<Vec<BodyHandoffSpec>>,
+    pub lt_offset_expressive: Option<Vec<u32>>,
+    pub lt_offset_low_latency: Option<Vec<u32>>,
+}
+
+/// A marcato transition's phrase ramp (CSSS `$1z3x0`) at `elapsed_ms` past the phrase anchor, in
+/// deci-dB, and whether the anchor moves to `now − window` — the
+/// script's integer arithmetic line for line (CSSS 11757-11768):
+///
+/// ```text
+/// if (elapsed <= $xu41m)          ; A: start + |mid| over the window
+///     $1z3x0 := $4lqhx*100 - ($ee3a4*100*elapsed/$xu41m)
+/// else
+///     if (elapsed <= $c2hkn)      ; B: mid back toward 0
+///         $1z3x0 := $ee3a4*100 + elapsed*(abs($ee3a4)*100/$c2hkn)
+///     end if                      ; C: 0
+///     $0nind := $ENGINE_UPTIME - $xu41m
+/// end if
+/// $1z3x0 := $1z3x0/100
+/// ```
+#[must_use]
+pub fn ksp_phrase_ramp_ddb(ramp: Option<[i32; 4]>, elapsed_ms: i64) -> (i32, bool) {
+    let Some([start, mid, window, span]) = ramp else {
+        return (0, false);
+    };
+    let (start, mid, window, span) = (
+        i64::from(start),
+        i64::from(mid),
+        i64::from(window),
+        i64::from(span),
+    );
+    let (v, moved) = if elapsed_ms <= window {
+        (start * 100 - mid * 100 * elapsed_ms / window.max(1), false)
+    } else if elapsed_ms <= span {
+        (
+            mid * 100 + elapsed_ms * (mid.abs() * 100 / span.max(1)),
+            true,
+        )
+    } else {
+        (0, true)
+    };
+    ((v / 100) as i32, moved)
+}
+
+/// The overridable [`MarcatoTransitionSpec`] fields of a section.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct MarcatoOverlay {
+    /// The swell's XTime (`$a3zg3`; CSB differs per instrument).
+    pub xfade_ms: Option<f32>,
+    pub lt_offset_ms_by_class: Option<[f32; 2]>,
+    pub lt_db_by_class: Option<[f32; 2]>,
+    pub lt_retire_ms_by_class: Option<[f32; 2]>,
+    pub hard_velocity: Option<u8>,
+    pub hard_ioi_ms: Option<f32>,
+    pub body_offset_ms: Option<[f32; 2]>,
+    /// The body offset past an octave (CSW / CSB: the same `$yp2sq` as
+    /// any connection; CSS has its own `$dztsp` / `$fswjh`).
+    pub body_offset_big_ms: Option<[f32; 2]>,
+    /// See [`MarcatoTransitionSpec::body_offset_random_ms`].
+    pub body_offset_random_ms: Option<f32>,
+    /// See [`MarcatoTransitionSpec::lt_vel_db`].
+    pub lt_vel_db: Option<f32>,
+    /// See [`MarcatoTransitionSpec::lt_ramp`].
+    pub lt_ramp: Option<[i32; 4]>,
+    pub lt_offset_ms: Option<Vec<[f32; 2]>>,
+    pub lt_db_step: Option<Vec<[f32; 2]>>,
+    pub lt_db_leap: Option<Vec<[f32; 2]>>,
+    pub cc18_other: Option<[f32; 3]>,
+    /// The instrument's own marcato-layer → transition-layer pairs (CSB:
+    /// each `marc leg` group plays with the `marcato mod` group of its
+    /// dynamic code, holding that instrument's own recordings).
+    pub lt_layers: Option<Vec<MarcLegLayerSpec>>,
+}
+
+/// A pitch envelope whose depth and decay are drawn per strike (CSW marcato,
+/// KSP 9220-9240): the depth is `±max_cents · |u|^taper` for `u` uniform in
+/// −1..1 (the script draws the raw modulation intensity uniformly; Kontakt's
+/// pitch intensity is its square: taper 2), the decay segment's length
+/// uniform in `decay_ms`. A key struck within `gate_ms` draws nothing and
+/// keeps the last draw (the script leaves the engine parameter set).
+#[derive(Debug, Clone, Facet)]
+pub struct RandomPitchEnvSpec {
+    pub max_cents: f32,
+    pub taper: f32,
+    pub decay_ms: [f32; 2],
+    #[facet(default)]
+    pub gate_ms: f32,
+}
+
+/// The overridable fields of one articulation (see [`SectionOverlay`]).
+#[derive(Debug, Clone, Facet)]
+pub struct ArticulationOverlay {
+    pub id: String,
+    pub dynamics: Option<Vec<String>>,
+    pub rr: Option<usize>,
+    pub vel_thresholds: Option<Vec<u8>>,
+    pub vel_layer_db: Option<Vec<f32>>,
+    pub rr_sequence: Option<Vec<u8>>,
+    pub rr_random_avoid_last: Option<u8>,
+    pub random_tune_cents: Option<u8>,
+    pub random_tune_gate_ms: Option<f32>,
+    pub held_random_tune_cents: Option<u8>,
+    pub release_by_held: Option<ReleaseByHeldSpec>,
+    pub rr_per_note: Option<bool>,
+    pub group_curves: Option<Vec<GroupCurveSpec>>,
+    pub group_fx: Option<Vec<GroupFxSpec>>,
+    pub key_pitch_cents: Option<Vec<f32>>,
+    pub pitch_env: Option<Vec<EnvSegmentSpec>>,
+    pub pitch_env_cents: Option<f32>,
+    pub pitch_env_random: Option<RandomPitchEnvSpec>,
+    pub amp_env: Option<Vec<EnvSegmentSpec>>,
+    pub amp_env_hold: Option<bool>,
+    pub amp_env_release: Option<u32>,
+    pub level_db: Option<f32>,
+    pub script_start_ms: Option<f32>,
+    pub vel_gain_db: Option<Vec<f32>>,
+    pub key_range: Option<Vec<u8>>,
+    pub phrase: Option<PhraseSpec>,
+    /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
+    pub overlay_cc1_scale: Option<Vec<u8>>,
+    pub marcato_transition: Option<MarcatoOverlay>,
+}
+
+impl SectionOverlay {
+    /// Parse a `section.styx`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or parsed.
+    pub fn from_file(path: &Path) -> Result<Self, SamplerError> {
+        let text = std::fs::read_to_string(path).map_err(SamplerError::Io)?;
+        facet_styx::from_str(&text).map_err(|e| SamplerError::SpecParse(e.to_string()))
+    }
+
+    /// Apply to `spec`'s articulations (unknown ids are ignored).
+    pub fn apply(&self, spec: &mut LibrarySpec) {
+        for o in &self.articulations {
+            let Some(a) = spec
+                .articulations
+                .iter_mut()
+                .find(|a| a.id.eq_ignore_ascii_case(&o.id))
+            else {
+                continue;
+            };
+            if let Some(v) = &o.dynamics {
+                a.dynamics.clone_from(v);
+            }
+            if let Some(v) = o.rr {
+                a.rr = v;
+            }
+            if let Some(v) = &o.vel_thresholds {
+                a.vel_thresholds.clone_from(v);
+            }
+            if let Some(v) = &o.vel_layer_db {
+                a.vel_layer_db.clone_from(v);
+            }
+            if let Some(v) = &o.rr_sequence {
+                a.rr_sequence.clone_from(v);
+            }
+            if let Some(v) = o.random_tune_cents {
+                a.random_tune_cents = v;
+            }
+            if let Some(v) = o.held_random_tune_cents {
+                a.held_random_tune_cents = v;
+            }
+            if let Some(v) = o.random_tune_gate_ms {
+                a.random_tune_gate_ms = v;
+            }
+            if let Some(v) = &o.release_by_held {
+                a.release_by_held = Some(v.clone());
+            }
+            if let Some(v) = o.rr_random_avoid_last {
+                a.rr_random_avoid_last = v;
+            }
+            if let Some(v) = o.rr_per_note {
+                a.rr_per_note = v;
+            }
+            if let Some(v) = &o.group_curves {
+                a.group_curves.clone_from(v);
+            }
+            if let Some(v) = &o.group_fx {
+                a.group_fx.clone_from(v);
+            }
+            if let Some(v) = &o.key_pitch_cents {
+                a.key_pitch_cents.clone_from(v);
+            }
+            if let Some(v) = &o.pitch_env {
+                a.pitch_env.clone_from(v);
+            }
+            if let Some(v) = o.pitch_env_cents {
+                a.pitch_env_cents = v;
+            }
+            if let Some(v) = &o.pitch_env_random {
+                a.pitch_env_random = Some(v.clone());
+            }
+            if let Some(v) = &o.amp_env {
+                a.amp_env.clone_from(v);
+            }
+            if let Some(v) = o.amp_env_hold {
+                a.amp_env_hold = Some(v);
+            }
+            if let Some(v) = o.amp_env_release {
+                a.amp_env_release = Some(v);
+            }
+            if let Some(v) = o.level_db {
+                a.level_db = v;
+            }
+            if let Some(v) = o.script_start_ms {
+                a.script_start_ms = v;
+            }
+            if let Some(v) = &o.vel_gain_db {
+                a.vel_gain_db.clone_from(v);
+            }
+            if let Some(v) = &o.key_range {
+                a.key_range.clone_from(v);
+            }
+            if let Some(v) = &o.phrase {
+                a.phrase = Some(v.clone());
+            }
+            if let (Some(v), Some(ov)) = (&o.overlay_cc1_scale, a.overlay.as_mut()) {
+                ov.cc1_scale.clone_from(v);
+            }
+            if let (Some(m), Some(t)) = (&o.marcato_transition, a.marcato_transition.as_mut()) {
+                m.apply(t);
+            }
+        }
+        if let Some(v) = self.rr_per_key {
+            spec.performance.rr_per_key = v;
+        }
+        if let Some(v) = self.instrument_gain_db {
+            spec.performance.instrument_gain_db = v;
+        }
+        if let Some(v) = self.instrument_pan {
+            spec.performance.instrument_pan = v;
+        }
+        if let Some(v) = &self.vibrato_controller {
+            spec.dynamics.vibrato_controller = (!v.is_empty()).then(|| v.clone());
+        }
+        if let (Some(l), Some(cfg)) = (&self.legato, spec.legato_engine.as_mut()) {
+            if let Some(v) = &l.overlap_delay {
+                cfg.overlap_delay = Some(v.clone());
+            }
+            if let Some(v) = l.first_note_variant_init {
+                cfg.first_note_variant_init = v;
+            }
+            if let Some(v) = &l.first_note_fade_ms {
+                cfg.first_note_fade_ms.clone_from(v);
+            }
+            if let Some(v) = &l.kontakt_transition {
+                cfg.kontakt_transition = Some(v.clone());
+            }
+            if let (Some(v), Some(kt)) = (&l.body_handoff, cfg.kontakt_transition.as_mut()) {
+                kt.body_handoff.clone_from(v);
+            }
+            if let Some(v) = &l.lt_offset_expressive {
+                cfg.lt_offset_expressive.clone_from(v);
+            }
+            if let Some(v) = &l.lt_offset_low_latency {
+                cfg.lt_offset_low_latency.clone_from(v);
+            }
+        }
+    }
+}
+
+impl MarcatoOverlay {
+    fn apply(&self, t: &mut MarcatoTransitionSpec) {
+        if let Some(v) = self.xfade_ms {
+            t.xfade_ms = v;
+        }
+        if self.lt_offset_ms_by_class.is_some() {
+            t.lt_offset_ms_by_class = self.lt_offset_ms_by_class;
+        }
+        if self.lt_db_by_class.is_some() {
+            t.lt_db_by_class = self.lt_db_by_class;
+        }
+        if self.lt_retire_ms_by_class.is_some() {
+            t.lt_retire_ms_by_class = self.lt_retire_ms_by_class;
+        }
+        if let Some(v) = self.hard_velocity {
+            t.hard_velocity = v;
+        }
+        if let Some(v) = self.hard_ioi_ms {
+            t.hard_ioi_ms = v;
+        }
+        if let Some(v) = self.body_offset_ms {
+            t.body_offset_ms = v;
+        }
+        if let Some(v) = self.body_offset_big_ms {
+            t.body_offset_big_ms = v;
+        }
+        if let Some(v) = self.body_offset_random_ms {
+            t.body_offset_random_ms = v;
+        }
+        if let Some(v) = self.lt_vel_db {
+            t.lt_vel_db = v;
+        }
+        if self.lt_ramp.is_some() {
+            t.lt_ramp = self.lt_ramp;
+        }
+        if let Some(v) = &self.lt_offset_ms {
+            t.lt_offset_ms.clone_from(v);
+        }
+        if let Some(v) = &self.lt_db_step {
+            t.lt_db_step.clone_from(v);
+        }
+        if let Some(v) = &self.lt_db_leap {
+            t.lt_db_leap.clone_from(v);
+        }
+        if let Some(v) = &self.lt_layers {
+            t.lt_layers.clone_from(v);
+        }
+        if let Some(v) = self.cc18_other {
+            t.cc18_other = v;
+        }
+    }
+}
+
+/// See [`PerformanceSpec::trill_pair`].
+#[derive(Debug, Clone, Facet)]
+pub struct TrillPairSpec {
+    pub half: String,
+    pub whole: String,
+    pub window_ms: f32,
+    pub delay_ms: f32,
+}
+
+/// One marcato dynamic layer's transition sample (see
+/// [`MarcatoTransitionSpec::lt_layers`]).
+#[derive(Debug, Clone, Facet)]
+pub struct MarcLegLayerSpec {
+    pub dynamic: String,
+    pub lt_dynamic: String,
+    pub gain_index: u32,
+}
+
+/// The KSP's integer lerp over IOI breakpoints (`$5agkf*($l022q*10000/$5yyiz)
+/// /10000+base`): the first value below the first breakpoint, the last at or
+/// past the last, truncated toward zero in between.
+#[must_use]
+pub fn ksp_lerp(pts: &[[f32; 2]], x_ms: i64) -> i64 {
+    let Some(first) = pts.first() else { return 0 };
+    if x_ms < first[0] as i64 {
+        return first[1] as i64;
+    }
+    for w in pts.windows(2) {
+        let (x0, y0, x1, y1) = (
+            w[0][0] as i64,
+            w[0][1] as i64,
+            w[1][0] as i64,
+            w[1][1] as i64,
+        );
+        if x_ms < x1 {
+            let span = (x1 - x0).max(1);
+            return y0 + (y1 - y0) * ((x_ms - x0) * 10000 / span) / 10000;
+        }
+    }
+    pts[pts.len() - 1][1] as i64
+}
+
+/// Piecewise-linear `(x, y)` table lookup, clamped at both ends.
+#[must_use]
+pub fn lerp_table(pts: &[[f32; 2]], x: f32) -> f32 {
+    let Some(first) = pts.first() else { return 0.0 };
+    if x <= first[0] {
+        return first[1];
+    }
+    for w in pts.windows(2) {
+        let ([x0, y0], [x1, y1]) = (w[0], w[1]);
+        if x <= x1 {
+            return if x1 > x0 {
+                y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+            } else {
+                y1
+            };
+        }
+    }
+    pts[pts.len() - 1][1]
+}
+
 /// A piecewise-linear curve over the inter-onset interval (IOI, ms): below
 /// `thresholds_ms[0]` → `anchors_ms[0]`, above the last threshold → the last
 /// anchor, linear between.
 ///
 /// Used for the legato Overlap-Delay and the transition sample-start offset.
-#[derive(Debug, Clone, PartialEq, Facet)]
+#[derive(Debug, Clone, Default, PartialEq, Facet)]
 pub struct IoiCurveSpec {
     /// Ascending IOI breakpoints (ms).
     pub thresholds_ms: Vec<f32>,
+    /// Hold each anchor until the next breakpoint instead of interpolating
+    /// (an integer step table, e.g. a KSP value computed with floor / ceil).
+    #[facet(default)]
+    pub step: bool,
     /// Anchor values (ms) at each breakpoint; same length as `thresholds_ms`.
     pub anchors_ms: Vec<f32>,
 }
@@ -646,6 +1652,13 @@ impl IoiCurveSpec {
         if n == 0 {
             return 0.0;
         }
+        if self.step {
+            let i = self.thresholds_ms[..n]
+                .iter()
+                .rposition(|t| *t <= ioi_ms)
+                .unwrap_or(0);
+            return self.anchors_ms[i];
+        }
         if ioi_ms <= self.thresholds_ms[0] {
             return self.anchors_ms[0];
         }
@@ -657,6 +1670,58 @@ impl IoiCurveSpec {
             }
         }
         self.anchors_ms[n - 1]
+    }
+}
+
+/// A body's release level (dB) by how long the note was held (ms), per
+/// release context. Each curve is linear between its points and flat past
+/// either end ([`IoiCurveSpec::value_at`] over the held time). CSB: `%ciooq`
+/// / `%54rxx` (detached and first), `%x1kwp` / `%5gm34` (in phrase),
+/// `%e1dvv` / `%fxjmy` (phrase end), deci-dB in the script.
+#[derive(Debug, Clone, Default, PartialEq, Facet)]
+pub struct ReleaseByHeldSpec {
+    /// Legato off: the note was played detached.
+    pub detached: IoiCurveSpec,
+    /// Added to `detached` (CSB `$b5zq1`, −3 dB).
+    #[facet(default)]
+    pub detached_db: f32,
+    /// Legato on, a phrase's only note released on its own.
+    pub first: IoiCurveSpec,
+    /// The old note of a legato connection (or a retrigger).
+    pub in_phrase: IoiCurveSpec,
+    /// Held longer than this, a connection's old note plays no release
+    /// (CSB `%nuvn3`). `None` = always.
+    #[facet(default)]
+    pub in_phrase_cutoff_ms: Option<f32>,
+    /// The last note of a legato phrase.
+    pub phrase_end: IoiCurveSpec,
+}
+
+/// Which release a note-off or a connection plays (see [`ReleaseByHeldSpec`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseContext {
+    Detached,
+    First,
+    InPhrase,
+    PhraseEnd,
+}
+
+impl ReleaseByHeldSpec {
+    /// The release level (dB) in `ctx` after `held_ms`, or `None` when this
+    /// context plays no release.
+    #[must_use]
+    pub fn db(&self, ctx: ReleaseContext, held_ms: f32) -> Option<f32> {
+        Some(match ctx {
+            ReleaseContext::Detached => self.detached.value_at(held_ms) + self.detached_db,
+            ReleaseContext::First => self.first.value_at(held_ms),
+            ReleaseContext::InPhrase => {
+                if self.in_phrase_cutoff_ms.is_some_and(|c| held_ms > c) {
+                    return None;
+                }
+                self.in_phrase.value_at(held_ms)
+            }
+            ReleaseContext::PhraseEnd => self.phrase_end.value_at(held_ms),
+        })
     }
 }
 
@@ -690,20 +1755,24 @@ impl Default for OverlapDelaySpec {
         Self {
             low_latency: OverlapDelayCurveSpec {
                 soft: IoiCurveSpec {
+                    step: false,
                     thresholds_ms: vec![75.0, 100.0, 800.0, 1100.0],
                     anchors_ms: vec![77.0, 0.0, 0.0, 0.0],
                 },
                 loud: IoiCurveSpec {
+                    step: false,
                     thresholds_ms: vec![75.0, 100.0, 800.0, 1100.0],
                     anchors_ms: z4.clone(),
                 },
             },
             expressive: OverlapDelayCurveSpec {
                 soft: IoiCurveSpec {
+                    step: false,
                     thresholds_ms: vec![200.0, 300.0, 800.0, 800.0],
                     anchors_ms: vec![83.0, 0.0, 0.0, 0.0],
                 },
                 loud: IoiCurveSpec {
+                    step: false,
                     thresholds_ms: vec![200.0, 300.0, 800.0, 800.0],
                     anchors_ms: z4,
                 },
@@ -718,6 +1787,7 @@ impl Default for OverlapDelaySpec {
 /// DEEPER into the transition recording (less audible pre-bow).
 fn default_start_offset_curve() -> IoiCurveSpec {
     IoiCurveSpec {
+        step: false,
         thresholds_ms: vec![100.0, 150.0, 500.0],
         anchors_ms: vec![177.0, 177.0, 117.0],
     }
@@ -1091,6 +2161,12 @@ fn zone_from_sfz(
         pan: (sfz_f32(group, region, "pan").unwrap_or(0.0) / 100.0).clamp(-1.0, 1.0),
         tune_cents: tune + transpose,
         sample_start: sfz_u32(group, region, "offset").unwrap_or(0),
+        start_mod: None,
+        variant_starts: Vec::new(),
+        disabled: false,
+        borrowed: false,
+        marcato_start: 0,
+        marcato_gains_db: Vec::new(),
         sample_end: sfz_u32(group, region, "end").unwrap_or(0),
         loop_start: sfz_u32(group, region, "loop_start").unwrap_or(0),
         loop_end: sfz_u32(group, region, "loop_end").unwrap_or(0),
@@ -1172,6 +2248,13 @@ pub struct MicSpec {
 
 // ── Dynamics ─────────────────────────────────────────────────────────────────
 
+/// A controller held at one value (see [`DynamicsSpec::fixed_ccs`]).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FixedCcSpec {
+    pub cc: u8,
+    pub value: u8,
+}
+
 /// Dynamic control model for the library.
 #[derive(Debug, Clone, Default, Facet)]
 pub struct DynamicsSpec {
@@ -1181,6 +2264,11 @@ pub struct DynamicsSpec {
     pub vibrato_controller: Option<String>,
     /// `"crossfade"` or `"on_off"` (solo strings: vibrato is binary).
     pub vibrato_mode: Option<String>,
+    /// Controllers the instrument holds at a value of its own, ignoring MIDI
+    /// for them: CSB's script ignores CC2 and sets it to its saved vibrato
+    /// knob (`$takdp` = 126), which its release groups' CC2 curves read.
+    #[facet(default)]
+    pub fixed_ccs: Vec<FixedCcSpec>,
     /// Controller for short-note dynamics. `"velocity"` for most libraries.
     pub short_note_controller: Option<String>,
 
@@ -1248,6 +2336,183 @@ pub struct Cc1Layer {
     pub label: String,
     /// `[lo, hi]` inclusive CC1 range for this layer (with crossfade on both edges).
     pub cc_range: [u8; 2],
+}
+
+/// One Kontakt `CC_VOLUME` table on one dynamic layer's group.
+#[derive(Debug, Clone, Facet)]
+pub struct GroupCurveSpec {
+    /// The layer it scales (zone `dynamic` tag: `"p"`, `"mf"`, `"ff"`, …).
+    pub dynamic: String,
+    /// Controller number (1 dynamics, 2 vibrato, …).
+    pub cc: u8,
+    /// Kontakt's table, verbatim: `y0 c0 (x y c)…` — the first point sits at
+    /// x = 0; each point's `c` bends the segment that STARTS at it (see
+    /// [`kontakt_table_value`]).
+    pub points: Vec<f32>,
+}
+
+/// One dynamic layer's group insert chain: Kontakt's filter/EQ slots that
+/// are not bypassed, in slot order, and the controller routes onto them.
+#[derive(Debug, Clone, Facet)]
+pub struct GroupFxSpec {
+    /// The layer it filters (zone `dynamic` tag).
+    pub dynamic: String,
+    pub stages: Vec<FxStageSpec>,
+    #[facet(default)]
+    pub routes: Vec<FxRouteSpec>,
+}
+
+/// One filter or EQ stage. `kind`: `legacy_lp1`, `legacy_lp2` (Kontakt's
+/// legacy filters, types 2 / 6), `sv_lp1`, `sv_lp2`, `sv_lp4` (the
+/// state-variable family, 50 / 52 / 55) or `eq` (1–3 bands, 22–24).
+#[derive(Debug, Clone, Facet)]
+pub struct FxStageSpec {
+    pub kind: String,
+    /// Cutoff knob, 0..1 (the kind's law maps it to Hz).
+    #[facet(default)]
+    pub cutoff: f32,
+    /// Resonance knob, 0..1.
+    #[facet(default)]
+    pub resonance: f32,
+    /// EQ bands, flat: `hz octaves db` per band.
+    #[facet(default)]
+    pub bands: Vec<f32>,
+}
+
+/// A controller route onto one stage's knob: the knob moves by
+/// `intensity × table(cc / 127)` (no table: the controller itself), smoothed
+/// by `lag_ms` (Kontakt's lag: the time to settle within 1 %).
+#[derive(Debug, Clone, Facet)]
+pub struct FxRouteSpec {
+    /// Index into the layer's `stages`.
+    pub stage: u8,
+    /// `cutoff`, `resonance`, `eq_gain1`, `eq_gain2` or `eq_gain3`.
+    pub param: String,
+    pub cc: u8,
+    #[facet(default)]
+    pub intensity: f32,
+    #[facet(default)]
+    pub lag_ms: f32,
+    /// Kontakt's breakpoint table (`y0 c0 (x y c)…`); empty = none.
+    #[facet(default)]
+    pub points: Vec<f32>,
+    /// An envelope as the source instead of `cc` (a flex envelope swept
+    /// across the stage, e.g. CSB marcato's cutoff): its segments, a level
+    /// of −1 meaning `cc`'s value ÷ 127 at the note's start. The route moves
+    /// the knob by `intensity` × the envelope's level.
+    #[facet(default)]
+    pub env: Vec<EnvSegmentSpec>,
+}
+
+/// Evaluate a Kontakt modulation table (`y0 c0 (x y c)…`) at `x` in `[0, 1]`.
+///
+/// Measured against Kontakt 8 renders of CSS (sweeps of CC1 and CC2, every
+/// value within ±0.002): between two points the curve follows
+/// `(e^(k·t) − 1) / (e^k − 1)` with `k = 16·|c|`, where `c` is the curvature
+/// of the segment's START point; `c > 0` bends the segment BELOW its chord,
+/// `c < 0` above it, `c = 0` is a straight line.
+#[must_use]
+pub fn kontakt_table_value(points: &[f32], x: f32) -> f32 {
+    if points.len() < 2 {
+        return 1.0;
+    }
+    let x = x.clamp(0.0, 1.0);
+    // (x, y, c) triples, the implicit first point at x = 0.
+    let mut pts: Vec<(f32, f32, f32)> = vec![(0.0, points[0], points[1])];
+    pts.extend(points[2..].chunks_exact(3).map(|p| (p[0], p[1], p[2])));
+    let Some(seg) = pts.windows(2).find(|w| x <= w[1].0) else {
+        return pts.last().map_or(1.0, |p| p.1);
+    };
+    let ((x0, y0, c), (x1, y1, _)) = (seg[0], seg[1]);
+    if x1 <= x0 {
+        return y1;
+    }
+    let t = (x - x0) / (x1 - x0);
+    let k = 16.0 * c.abs();
+    if k < 1e-6 {
+        return y0 + (y1 - y0) * t;
+    }
+    let g = |u: f32| ((k * u).exp() - 1.0) / (k.exp() - 1.0);
+    // The two curvature shapes; pick the one on the side `c` asks for.
+    let (a, b) = (y0 + (y1 - y0) * g(t), y0 + (y1 - y0) * (1.0 - g(1.0 - t)));
+    let chord = y0 + (y1 - y0) * t;
+    let (below, above) = if a <= chord { (a, b) } else { (b, a) };
+    if c > 0.0 { below } else { above }
+}
+
+#[cfg(test)]
+mod kontakt_table_tests {
+    use super::kontakt_table_value as v;
+
+    // Tables and expected values: CSS 1st Violins Mix groups, measured from
+    // Kontakt 8 renders (orchestra/tests/curve_fit.py).
+    const NV_P: &[f32] = &[
+        0.0,
+        0.067_567_55,
+        0.194_881_89,
+        0.418_918_9,
+        -1.862_645_1e-8,
+        0.360_236_23,
+        1.0,
+        -0.168_918_9,
+        0.480_314_97,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+    ];
+    const NV_FF: &[f32] = &[
+        0.0,
+        0.0,
+        0.421_259_85,
+        0.0,
+        0.067_567_57,
+        0.795_275_57,
+        0.716_216_2,
+        -0.152_027_01,
+        1.0,
+        1.0,
+        0.0,
+    ];
+    const NV_CC2: &[f32] = &[1.0, -0.084_459_47, 1.0, 0.0, 0.0];
+    const VS_CC2: &[f32] = &[0.0, -0.084_459_46, 1.0, 1.0, 0.0];
+    const ZVOL_P: f32 = 1.2599; // the p zones' +2 dB zone volume rides on the measurement
+
+    fn near(a: f32, b: f32, tol: f32) {
+        assert!((a - b).abs() <= tol, "{a} vs {b}");
+    }
+
+    #[test]
+    fn convex_rising_segment() {
+        near(v(NV_P, 4.0 / 127.0) * ZVOL_P, 0.0508, 0.002);
+        near(v(NV_P, 16.0 / 127.0) * ZVOL_P, 0.2734, 0.003);
+    }
+
+    #[test]
+    fn straight_segment() {
+        near(v(NV_P, 32.0 / 127.0) * ZVOL_P, 0.7805, 0.002);
+    }
+
+    #[test]
+    fn concave_falling_segment() {
+        near(v(NV_P, 48.0 / 127.0) * ZVOL_P, 1.2154, 0.003);
+        near(v(NV_P, 52.0 / 127.0) * ZVOL_P, 1.0763, 0.003);
+    }
+
+    #[test]
+    fn concave_rising_segment_and_ends() {
+        near(v(NV_FF, 104.0 / 127.0), 0.7930, 0.002);
+        near(v(NV_FF, 0.0), 0.0, 1e-6);
+        near(v(NV_FF, 1.0), 1.0, 1e-6);
+    }
+
+    #[test]
+    fn vibrato_crossfade() {
+        near(v(NV_CC2, 16.0 / 127.0), 0.9363, 0.002);
+        near(v(VS_CC2, 16.0 / 127.0), 0.2094, 0.002);
+        near(v(NV_CC2, 64.0 / 127.0), 0.6594, 0.003);
+    }
 }
 
 // ── Articulation ─────────────────────────────────────────────────────────────
@@ -1330,10 +2595,138 @@ pub struct ArticulationSpec {
     // r[impl signal.soundsource.declarative]
     #[facet(default)]
     pub amp_env: Vec<EnvSegmentSpec>,
+    /// Kontakt per-group CC volume tables, decoded from the instrument
+    /// (`groups.json` `CC_VOLUME` mods). A dynamic layer's gain is the
+    /// PRODUCT of its curves at the current CC values — this replaces the
+    /// equal-power CC1/CC2 crossfades and `cc1_expression` for any
+    /// articulation that declares it. Empty = the legacy crossfade.
+    #[facet(default)]
+    pub group_curves: Vec<GroupCurveSpec>,
+    /// Kontakt group insert filters and EQs per dynamic layer, decoded from
+    /// the instrument (`group_fx.json`), with the controller routes that
+    /// move them. Each voice of the layer runs its own chain. Empty = none.
+    #[facet(default)]
+    pub group_fx: Vec<GroupFxSpec>,
+    /// A fixed tuning per played key, cents (128 entries; empty = none):
+    /// Kontakt's key-position → pitch table on the articulation's group (CSB
+    /// shorts nudge single keys by up to ~20 cents).
+    #[facet(default)]
+    pub key_pitch_cents: Vec<f32>,
+    /// A second amplitude envelope multiplied with `amp_env`, always one-shot
+    /// (runs through, no hold) — Kontakt's group ENV_AHDSR running alongside
+    /// its ENV_FLEX. CSS release groups: 250 ms attack, 25 s decay to 0.25.
+    #[facet(default)]
+    pub amp_env2: Vec<EnvSegmentSpec>,
+    /// A pitch envelope, one-shot from the note's start: each level (0..1)
+    /// times `pitch_env_cents` detunes the voice — Kontakt's group
+    /// ENV_AHDSR routed to pitch (attack, hold, decay to sustain as
+    /// segments). CSW marcato: +~10 c (intensity 0.008 × 12 st), held
+    /// 333 ms, decaying 333 ms to 0. Empty = none.
+    #[facet(default)]
+    pub pitch_env: Vec<EnvSegmentSpec>,
+    /// Cents at the pitch envelope's level 1 (see `pitch_env`).
+    #[facet(default)]
+    pub pitch_env_cents: f32,
+    /// Draw the pitch envelope's depth and decay per strike instead (the
+    /// last `pitch_env` segment is the decay). `None` = fixed.
+    pub pitch_env_random: Option<RandomPitchEnvSpec>,
+    /// Round-robin counted per NOTE-CLASS (notes sharing a sample zone share
+    /// a counter), not globally — CSS marcato alternates RR 1/2 per class
+    /// (`%fbn4o`, null-tested). CC59 resets every class counter.
+    #[facet(default)]
+    pub rr_per_note: bool,
+    /// This articulation's body fade at note-off, by how long the note was
+    /// held: `(held_ms, release_ms)` pairs, linear between, clamped at the
+    /// ends. Empty = the instrument's `performance.release_ms`. CSS marcato:
+    /// 80 ms (held < 75 ms) → 500 ms (held > 175 ms) (KSP 21723-21751).
+    #[facet(default)]
+    pub release_ms_by_held: Vec<[f32; 2]>,
+    /// Curvature of this articulation's note-off fade (see
+    /// `PerformanceSpec::release_curve_k`); `None` = the instrument's.
+    pub release_curve_k: Option<f32>,
+    /// Level offset (dB) on every voice of this articulation — e.g. CSS
+    /// marcato releases sound 6 dB under their zone volume (null-tested).
+    #[facet(default)]
+    pub level_db: f32,
+    /// Kontakt's short round-robin ORDER (CSS `%5y220`, `%okqzw`, …): a fixed
+    /// sequence of 1-based RR numbers walked by one counter per velocity
+    /// band, reset by CC59 to `CC59 mod 16`. A pick equal to the last RR that
+    /// note-class played in that band advances once more. Empty = the
+    /// engine's own rotation.
+    #[facet(default)]
+    pub rr_sequence: Vec<u8>,
+    /// Random short round robins: each strike draws an RR at random and
+    /// draws again while it equals one of the last `N` this KEY played (the
+    /// history is per key, shared by every short type). 0 = off. CS
+    /// Woodwinds / Brass: 2 (KSP `random(1,n)` against `%h5aha`/`%z0q4q`).
+    #[facet(default)]
+    pub rr_random_avoid_last: u8,
+    /// The release sample's level by how long the note was held, per
+    /// context (CSB `on release`, 17361-17849): replaces the library-wide
+    /// `release_held_db` / `release_held_table` for this body's releases.
+    /// `None` = the library-wide curve.
+    #[facet(default)]
+    pub release_by_held: Option<ReleaseByHeldSpec>,
+    /// The script's start offset (ms) for this articulation's fresh note
+    /// (CSW nonvib sustains: `$0kimq := 333`), which each zone's
+    /// `start_mod` limits (ignored where the zone allows none). 0 = none.
+    #[facet(default)]
+    pub script_start_ms: f32,
+    /// A short note's level by MIDI velocity, dB (128 entries): what the
+    /// script sets the played group's volume to (MOJO 2: `VelGainMin +
+    /// (knob − VelGainMin)·(0.99^(v−1) − 1)/(0.99^126 − 1)` in engine
+    /// units, baked to dB by the generator). Replaces the velocity² and
+    /// intra-band laws. Empty = those laws. On a sustained articulation it
+    /// levels the body by its note's velocity (CSSS marcato:
+    /// `(127 − vel) · $0kd5m / 126`).
+    #[facet(default)]
+    pub vel_gain_db: Vec<f32>,
+    /// The keys this articulation plays, `[lo, hi]` inclusive: a note
+    /// outside them plays nothing (MOJO 2's per-articulation range,
+    /// `%ArtRange`). Empty = every key with a zone.
+    #[facet(default)]
+    pub key_range: Vec<u8>,
+    /// Per velocity band, `(compare, store)`: which band's last-RR memory the
+    /// no-repeat rule reads and which it writes. Empty = each band its own.
+    /// CSS pizzicato reads an unwritten table in bands 2 and 4 and writes
+    /// band 1's (KSP 15139-15241, kept as shipped).
+    #[facet(default)]
+    pub rr_last_slots: Vec<[u8; 2]>,
+    /// Random detune: a uniform integer −n..=n cents per note, unless the
+    /// same key was played within `random_tune_gate_ms` (then 0). CSS
+    /// shorts: 5 cents, 500 ms.
+    #[facet(default)]
+    pub random_tune_cents: u8,
+    #[facet(default)]
+    pub random_tune_gate_ms: f32,
+    /// A body struck while another key is down detunes by a uniform integer
+    /// −n..=n cents, every layer alike (CSB `$q4ous` on, `$yqdot` cents:
+    /// `change_tune` when more than one key is held, KSP 11050-11071).
+    /// 0 = never.
+    #[facet(default)]
+    pub held_random_tune_cents: u8,
+    /// Controllers the script sets on a fresh note of this articulation,
+    /// before its voices start (`set_controller`; CSB/CSW marcato: CC19 :=
+    /// 127, KSP 11018 / 9090), as `(cc, value)`.
+    #[facet(default)]
+    pub note_on_cc: Vec<[u8; 2]>,
+    /// A CSS marcato transition: when set, this articulation plays legato
+    /// (mono line) with Kontakt's marcato two-stage transition.
+    pub marcato_transition: Option<MarcatoTransitionSpec>,
+    /// Tremolo / trills / harmonics legato: see [`SimpleTransitionSpec`].
+    pub simple_transition: Option<SimpleTransitionSpec>,
+    /// Marcato first-note overlay: see [`OverlaySpec`].
+    pub overlay: Option<OverlaySpec>,
+    /// A held key plays a timed phrase: see [`PhraseSpec`].
+    pub phrase: Option<PhraseSpec>,
     /// Whether the envelope freezes at its hold level while the note is held
     /// (sustains) or plays through one-shot (shorts, releases, transitions).
     /// `None` = held for Sustain/Looped/Trill kinds, one-shot otherwise.
     pub amp_env_hold: Option<bool>,
+    /// The `amp_env` segment a note-off jumps to (Kontakt's release stage,
+    /// after the flex sustain loop). `None` = the family default (shorts:
+    /// 2, their group flex `[8 ms, 604 ms hold, 7381 ms release]`).
+    pub amp_env_release: Option<u32>,
 
     /// Which side of the CC2 vibrato crossfade this articulation belongs to.
     /// `None` = infer from the id (CSS convention: `NV`/`Nonvib` in the name
@@ -1480,6 +2873,42 @@ pub struct LegatoEngineSpec {
     // r[impl signal.soundsource.legato.velocity-zones]
     #[facet(default)]
     pub velocity_splits: Vec<u8>,
+    /// Body variant per loud (zone 2/3) first note, cycled by a counter
+    /// (KSP `%v2aqt[$2ekvq]`): the zone velocity whose `variant_starts`
+    /// entry the body starts at. CC59 sets the counter to `value mod len`.
+    /// Empty = the body starts at its own `sample_start`.
+    #[facet(default)]
+    pub first_note_variants: Vec<u8>,
+    /// Initial counter for `first_note_variants` (CSS ships `$2ekvq` = 9).
+    #[facet(default)]
+    pub first_note_variant_init: u8,
+    /// Draw the first note's variant at random from `first_note_variants`'
+    /// values instead of walking the list (CSSS: `random(2,4)`, KSP 8637-8642;
+    /// CSS walks `%v2aqt`). A forced draw (`set_forced_variants`) comes first.
+    #[facet(default)]
+    pub first_note_variant_random: bool,
+    /// Whether a loud first note layers the attack-ornament voice. CSS: no —
+    /// its attack velocities (5–9) have no vibsus zones, so Kontakt plays
+    /// nothing there (null test: silent for the first 38 ms).
+    pub first_note_attack_voice: Option<bool>,
+    /// The loud first note's attack voice (see [`FirstNoteAttackSpec`]).
+    pub first_note_attack: Option<FirstNoteAttackSpec>,
+    /// Silence before a loud first note's body fades in, per velocity zone
+    /// `[zone 2, zone 3]` in ms. Empty = 40 ms (the KSP `wait`). Measured in
+    /// Kontakt: 38.61 / 37.34 ms (the wait lands on a processing block).
+    #[facet(default)]
+    pub first_note_mute_ms: Vec<f32>,
+    /// How long a loud first note's body takes to fade in after the mute,
+    /// per velocity zone `[zone 2, zone 3]` in ms (KSP `$otlef` / `$yqhyd`,
+    /// per section: 1st Violins 230 / 180, the other CSS sections 180 / 180).
+    /// Empty = 230 / 180.
+    #[facet(default)]
+    pub first_note_fade_ms: Vec<f32>,
+    /// The legato transition exactly as Kontakt runs CSS's script, measured
+    /// against Kontakt renders (null −41 dB per transition). When set, a
+    /// mono-legato transition on a zoned patch uses it instead of the older
+    /// fitted model. See [`KontaktTransitionSpec`].
+    pub kontakt_transition: Option<KontaktTransitionSpec>,
     /// Overlap-Delay curves (`legtrans_OD` / `$b0n3s`) — the wait between a
     /// live note-on and the transition firing, IOI-interpolated per legato
     /// mode and velocity range. `None` = the decoded CSS defaults.
@@ -1528,6 +2957,11 @@ pub struct LegatoEngineSpec {
     /// `$ggt00/$v0rbb/$5exar` = 177/177→117 over IOI 100/150/500).
     #[facet(default)]
     pub lt_offset_expressive: Vec<u32>,
+    /// The overlap delay deepens the transition entry only in velocity
+    /// zone 1 (CSW: `$1fvjk := base + $b0n3s` in zone 1 alone); false =
+    /// every zone (CSS).
+    #[facet(default)]
+    pub overlap_offset_zone1_only: bool,
     /// [`Self::lt_offset_expressive`] for LOW-LATENCY mode (KSP:
     /// `$ak2j4/$ixzi1/$cltif`, shipped `100/148/177`).
     #[facet(default)]
@@ -1542,6 +2976,119 @@ pub struct LegatoEngineSpec {
     /// `0` disables the bloom (the pre-model behaviour).
     #[facet(default = 1000)]
     pub sustain_bloom_ms: u32,
+    /// The shape of a transition the library does not measure with
+    /// `kontakt_transition`: the destination swell, the low-latency fade,
+    /// the transition's start skip, portamento, the AB dip and the old
+    /// body's fade. See [`TransitionShapeSpec`].
+    #[facet(default)]
+    pub shape: TransitionShapeSpec,
+}
+
+/// How a legato transition is shaped when the library has no
+/// `kontakt_transition` (and for portamento, which never uses it). The
+/// defaults are the Cinematic Studio Strings KSP values the engine used to
+/// hardcode; `cinematic-strings.styx` writes them out with their KSP names.
+// r[impl signal.soundsource.declarative]
+#[derive(Debug, Clone, Facet)]
+pub struct TransitionShapeSpec {
+    /// Expressive-mode destination swell length (ms), capped at the lead.
+    #[facet(default = 225)]
+    pub swell_ms: u32,
+    /// Share of the swell (%) in its fast first stage: a soft attack, a
+    /// hard attack, and a leap over 12 semitones (whatever the attack).
+    #[facet(default = 50)]
+    pub swell_split_pct: u32,
+    #[facet(default = 60)]
+    pub swell_split_pct_hard: u32,
+    #[facet(default = 50)]
+    pub swell_split_pct_leap: u32,
+    /// First-stage divisor by IOI (smaller = a more gradual first stage).
+    #[facet(default)]
+    pub swell_divisor: IoiCurveSpec,
+    /// Low-latency mode's single-stage fade (ms).
+    #[facet(default = 80)]
+    pub low_latency_fade_ms: u32,
+    /// A velocity-zone-3 transition counts as a hard attack only above this
+    /// IOI (ms).
+    #[facet(default = 50.0f32)]
+    pub hard_ioi_ms: f32,
+    /// Least skip (ms) into a transition recording, by attack and interval:
+    /// `(soft ≤ 12 st, soft > 12, hard ≤ 12, hard > 12)`.
+    #[facet(default)]
+    pub transition_min_skip_ms: Vec<u32>,
+    /// Portamento glide time (ms).
+    #[facet(default = 60)]
+    pub portamento_glide_ms: u32,
+    /// Portamento bend depth (cents) by IOI, one curve per interval class:
+    /// unison/semitone, whole tone, wider.
+    #[facet(default)]
+    pub portamento_bend_cents: Vec<IoiCurveSpec>,
+    /// AB dip: a note within `ab_window_ms` of the last dips by `ab_dip_db`;
+    /// a velocity-zone-3 attack takes `ab_zone3_db` instead.
+    #[facet(default = 250)]
+    pub ab_window_ms: u32,
+    #[facet(default = -3.0f32)]
+    pub ab_dip_db: f32,
+    #[facet(default)]
+    pub ab_zone3_db: f32,
+    /// Fade (ms) of the outgoing body when a new body starts.
+    #[facet(default = 250)]
+    pub old_body_fade_ms: u32,
+}
+
+impl Default for TransitionShapeSpec {
+    fn default() -> Self {
+        Self {
+            swell_ms: 225,
+            swell_split_pct: 50,
+            swell_split_pct_hard: 60,
+            swell_split_pct_leap: 50,
+            swell_divisor: IoiCurveSpec::default(),
+            low_latency_fade_ms: 80,
+            hard_ioi_ms: 50.0,
+            transition_min_skip_ms: Vec::new(),
+            portamento_glide_ms: 60,
+            portamento_bend_cents: Vec::new(),
+            ab_window_ms: 250,
+            ab_dip_db: -3.0,
+            ab_zone3_db: 0.0,
+            old_body_fade_ms: 250,
+        }
+    }
+}
+
+impl TransitionShapeSpec {
+    /// The swell's first-stage divisor at `ioi_ms` (100 = no extra
+    /// lengthening when the library gives no curve).
+    #[must_use]
+    pub fn swell_divisor_at(&self, ioi_ms: f32) -> u32 {
+        if self.swell_divisor.thresholds_ms.is_empty() {
+            return 100;
+        }
+        self.swell_divisor.value_at(ioi_ms).round().max(1.0) as u32
+    }
+
+    /// Least skip into a transition recording (0 when the library gives none).
+    #[must_use]
+    pub fn transition_min_skip(&self, hard: bool, interval: u32) -> u32 {
+        let i = usize::from(hard) * 2 + usize::from(interval > 12);
+        self.transition_min_skip_ms.get(i).copied().unwrap_or(0)
+    }
+
+    /// Portamento bend depth (cents, unsigned) for an interval and IOI (0
+    /// when the library gives no curves).
+    #[must_use]
+    pub fn portamento_bend(&self, interval: u8, ioi_ms: f32) -> f32 {
+        let class = match interval {
+            0 | 1 => 0,
+            2 => 1,
+            _ => 2,
+        };
+        self.portamento_bend_cents
+            .get(class)
+            .or_else(|| self.portamento_bend_cents.last())
+            .map_or(0.0, |c| c.value_at(ioi_ms))
+    }
 }
 
 impl Default for LegatoEngineSpec {
@@ -1557,6 +3104,14 @@ impl Default for LegatoEngineSpec {
             portamento: None,
             retrigger: None,
             velocity_splits: Vec::new(),
+            first_note_variants: Vec::new(),
+            first_note_variant_random: false,
+            first_note_variant_init: 0,
+            first_note_attack_voice: None,
+            first_note_attack: None,
+            first_note_mute_ms: Vec::new(),
+            first_note_fade_ms: Vec::new(),
+            kontakt_transition: None,
             overlap_delay: None,
             start_offset: None,
             transition_fade_ms: 30,
@@ -1566,8 +3121,10 @@ impl Default for LegatoEngineSpec {
             fallback_velocity: 80,
             skip_declick_ms: 25,
             sustain_bloom_ms: 1000,
+            shape: TransitionShapeSpec::default(),
             lt_offset_expressive: Vec::new(),
             lt_offset_low_latency: Vec::new(),
+            overlap_offset_zone1_only: false,
         }
     }
 }
@@ -1778,8 +3335,13 @@ pub struct KeyswitchSpec {
     #[facet(default)]
     pub user_configurable: bool,
 
-    /// CC58 value range → articulation/function label.
-    /// Keys are range strings like `"0-5"`, `"6-10"`, etc.
+    /// CC58 value range → what that value does, written like a keyswitch
+    /// note's value: `+`-joined tokens, each an `@mode` token
+    /// (`@legato-low`, `@legato-expressive`, `@legato-on/off`,
+    /// `@sordino-on/off`, `@overlay-on/off`, `@novib`, `@ignore`) or an
+    /// articulation / keyswitch-group name (`Spiccato`, `Trills`).
+    /// `"Nonvib+@legato-low"` selects Nonvib in low-latency legato. Keys are
+    /// range strings like `"0-5"`, `"6-10"`, etc.
     #[facet(default)]
     pub cc58_map: HashMap<String, String>,
 
@@ -1837,6 +3399,16 @@ impl KeyswitchSpec {
             }
         }
         None
+    }
+
+    /// The articulation / keyswitch-group token of a CC58 value (its one
+    /// non-`@` token), if it names one.
+    #[must_use]
+    pub fn cc58_target(&self, value: u8) -> Option<&str> {
+        self.cc58_function(value)?
+            .split('+')
+            .map(str::trim)
+            .find(|t| !t.is_empty() && !t.starts_with('@'))
     }
 }
 
@@ -2024,6 +3596,35 @@ pub struct ZoneSpec {
     /// First sample frame to play from this zone. 0 = sample start.
     #[facet(default)]
     pub sample_start: u32,
+    /// How far (frames) a script's start offset may move this zone's start
+    /// (Kontakt's sample-start modulation range, `start_mod` in the decode):
+    /// `-1` = not at all, the offset is ignored. `None` = no limit.
+    #[facet(default)]
+    pub start_mod: Option<i64>,
+    /// Kontakt's velocity-2.. zones over this same file (index 0 = velocity
+    /// 2): the scripted body VARIANTS — the same recording entered deeper.
+    /// CSS plays one for a loud first note (`%v2aqt`), see
+    /// `LegatoEngineSpec::first_note_variants`. Empty = no variants.
+    #[facet(default)]
+    pub variant_starts: Vec<u32>,
+    /// A zone the library ships but the instrument never maps (CSS Cellos
+    /// spiccato C1…: Kontakt plays its A#1… zones there). Never played.
+    #[facet(default)]
+    pub disabled: bool,
+    /// A zone the NKI maps into ANOTHER articulation's group (CSS Violas'
+    /// spiccato bands play Staccatissimo recordings; 1st Violins layers a
+    /// quiet Staccatissimo under its top Spiccato notes). Written by
+    /// `zones sync-tsv` from the decoded group column, regenerated each sync.
+    #[facet(default)]
+    pub borrowed: bool,
+    /// A transition zone's MARCATO entry (CSS `marc leg` zones over this same
+    /// file): the sample frame those zones start at (0 = none) …
+    #[facet(default)]
+    pub marcato_start: u32,
+    /// … and their levels in zone order, dB: `(f fff)` on a Leg ff file (the
+    /// f and fff marcato layers both play it), `(mf)` on a Leg mf file.
+    #[facet(default)]
+    pub marcato_gains_db: Vec<f32>,
     /// One-past-last sample frame to play from this zone. 0 = sample end.
     #[facet(default)]
     pub sample_end: u32,

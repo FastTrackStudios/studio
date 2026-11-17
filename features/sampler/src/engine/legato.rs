@@ -90,6 +90,7 @@ impl SampleEngine {
                 self.play_direction = "up".to_string();
                 self.trigger_zoned_sustain(note);
                 self.line_mut().note = Some(note);
+                self.line_mut().connected = false;
                 // The IOI clock runs on the document path too — see below.
                 let now = self.frames_rendered;
                 self.line_mut().last_onset_frame = now;
@@ -220,6 +221,47 @@ impl SampleEngine {
                     }
                 }
             }
+        }
+        // A trill key pair plays the OTHER trill articulation from the one
+        // selected (`PerformanceSpec::trill_pair`: HTrills selected, a
+        // whole-tone pair plays WTrills): warm both sides and their releases,
+        // or the side no keyswitch reaches starts cold and silent.
+        if let Some(tp) = &self.patch.spec.performance.trill_pair {
+            if warm_ids
+                .iter()
+                .any(|id| id.eq_ignore_ascii_case(&tp.half) || id.eq_ignore_ascii_case(&tp.whole))
+            {
+                for id in [tp.half.clone(), tp.whole.clone()] {
+                    if let Some(r) = rel(&id) {
+                        warm_ids.push(r);
+                    }
+                    warm_ids.push(id);
+                }
+            }
+        }
+        // And what an articulation plays besides itself: a marcato first
+        // note's overlay short, a tremolo/marcato transition's legato zones.
+        let extra: Vec<String> = warm_ids
+            .iter()
+            .filter_map(|id| self.patch.spec.articulation(id))
+            .flat_map(|a| {
+                [
+                    a.overlay.as_ref().map(|o| o.articulation.clone()),
+                    a.simple_transition
+                        .as_ref()
+                        .map(|t| t.lt_articulation.clone())
+                        .filter(|s| !s.is_empty()),
+                    a.marcato_transition
+                        .as_ref()
+                        .map(|m| m.lt_articulation.clone()),
+                ]
+            })
+            .flatten()
+            .collect();
+        warm_ids.extend(extra);
+        // A loud first note's attack voice (vibsus groups' attack zones).
+        if let Some(a) = &self.patch.spec.legato_cfg().first_note_attack {
+            warm_ids.push(a.articulation.clone());
         }
         let mut stats = PreloadStats::default();
         for (i, z) in self.patch.spec.zones.iter().enumerate() {
