@@ -237,6 +237,77 @@ def emit_pitch_env(env):
     print(f"        pitch_env_cents {fmt(round(cents, 3))}")
 
 
+def kontakt_table(points, x):
+    """A Kontakt modulation table (`y0 c0 (x y c)…`) at x in 0..1 — the law
+    of sampler::spec::kontakt_table_value."""
+    import math
+    if len(points) < 2:
+        return 1.0
+    x = min(max(x, 0.0), 1.0)
+    pts = [(0.0, points[0], points[1])] + [tuple(points[i:i + 3]) for i in range(2, len(points) - 2, 3)]
+    for (x0, y0, c), (x1, y1, _) in zip(pts, pts[1:]):
+        if x <= x1:
+            if x1 <= x0:
+                return y1
+            t = (x - x0) / (x1 - x0)
+            k = 16.0 * abs(c)
+            if k < 1e-6:
+                return y0 + (y1 - y0) * t
+            g = lambda u: (math.exp(k * u) - 1.0) / (math.exp(k) - 1.0)  # noqa: E731
+            a, b = y0 + (y1 - y0) * g(t), y0 + (y1 - y0) * (1.0 - g(1.0 - t))
+            chord = y0 + (y1 - y0) * t
+            below, above = (a, b) if a <= chord else (b, a)
+            return below if c > 0 else above
+    return pts[-1][1]
+
+
+# The controller each short family's release-time table reads, and the
+# persistent knob the script sets it from (KSP set_short_note_CC: CC22
+# $cgvbg, CC24 $coqwu, CC26 $fsit1, CC28 $hl1hd).
+SHORT_TIME_CC_VAR = {22: "$cgvbg", 24: "$coqwu", 26: "$fsit1", 28: "$hl1hd"}
+# How the table value y scales the flex segment's time: time × y^3.2.
+# Measured, not decoded: CSW's post-note-off decay (Solo Flute, CC 50 / 62
+# / 75: 1290 / 1750 / 2450 ms against 7381) fits y^3.2 within 3 %; y = 1
+# (CSS, CC 127) keeps the decoded 7381 ms.
+SHORT_TIME_POWER = 3.2
+
+
+def short_amp_env(all_groups, family, pers):
+    """The `<mic> <family>` group's volume flex envelope with its release
+    segment's time scaled by the script's short-time knob, as
+    `[(ms, level, tension)]`; None when the knob leaves it unchanged."""
+    for g in all_groups:
+        if not g["name"].endswith(f" {family}") or g["name"].count(" ") != 1:
+            continue
+        env = next((e for e in g["envelopes"] if e["kind"] == "ENV_FLEX" and e["target"] == "volume"
+                    and not e["bypassed"]), None)
+        if env is None:
+            continue
+        segs = [list(s) for s in env["segments"]]
+        changed = False
+        for m in g["mods"]:
+            t = m["target"]
+            if not t.startswith("fm7_time") or m.get("source_kind") != "cc" or m["cc"] not in SHORT_TIME_CC_VAR:
+                continue
+            v = one(pers, SHORT_TIME_CC_VAR[m["cc"]])
+            i = int(t[len("fm7_time"):]) - 1
+            if v is None or not 0 <= i < len(segs):
+                continue
+            y = kontakt_table(m["curve"], v / 127) if m.get("curve") else v / 127
+            if y < 1.0:
+                segs[i][0] *= y ** SHORT_TIME_POWER
+                changed = True
+        return [tuple(s) for s in segs] if changed else None
+    return None
+
+
+def emit_amp_env(segs):
+    """Print `amp_env (...)` (inside an articulation)."""
+    if segs:
+        body = " ".join(f"{{time_ms {fmt(round(t, 1))}, level {fmt(round(lv, 4))}, curve {fmt(round(c, 4))}}}" for t, lv, c in segs)
+        print(f"        amp_env ( {body} )")
+
+
 def emit_group_fx(fx):
     """Print a `group_fx (...)` block (inside an articulation)."""
     if not fx:

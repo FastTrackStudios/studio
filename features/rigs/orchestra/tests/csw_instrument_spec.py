@@ -185,6 +185,7 @@ def main():
             print(f"        random_tune_cents {css.one(pers, '$14yum')}")
             print(f"        random_tune_gate_ms {css.one(pers, '$5i0r1')}")
         css.emit_key_pitch(css.key_pitch_cents(all_groups, family))
+        css.emit_amp_env(css.short_amp_env(all_groups, family, pers))
         print("    }")
     for aid, prefix in RELEASE_GROUPS.items():
         rec = recorded_dynamics(zones, group_names, prefix, aid)
