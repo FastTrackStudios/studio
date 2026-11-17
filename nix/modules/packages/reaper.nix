@@ -4,8 +4,10 @@
 #
 # Built from the vendored reaper-flake recipes (nix/vendor/reaper-flake,
 # subtree-imported — see wrapper/reaper/pkgs/{reaper,sws,reapack}.nix) plus a
-# new `fts-plugins` crane package (this repo's own 17-plugin suite,
-# apps/plugins/*, bundled the same way `just plugins-bundle` does).
+# new `fts-plugins` crane package (the plugins still built in this repo,
+# apps/plugins/{nam,signal,guide}, bundled the same way `just plugins-bundle`
+# does; the effects' plugins are built in FastTrackStudios/fts-fx and are
+# NOT in this package any more, studio#510).
 #
 # Plugin injection follows the exact idiom reaper-flake already used for
 # SWS/ReaPack (idempotent launch-time symlinks into $REAPER_CONFIG/
@@ -24,7 +26,7 @@
       sws = pkgs.callPackage (vendor + "/wrapper/reaper/pkgs/sws.nix") { };
       reapack = pkgs.callPackage (vendor + "/wrapper/reaper/pkgs/reapack.nix") { };
 
-      # The FTS plugin suite (bundler.toml's 17 CLAP+VST3 plugins),
+      # The plugins of this repo (bundler.toml's CLAP+VST3 plugins),
       # bundled via fts-plugin-xtask — same recipe `just plugins-bundle`
       # runs, just inside the crane sandbox (offline: cargoVendorDir
       # already carries every crate). Single-arch only for now (whatever
@@ -42,8 +44,7 @@
         doNotPostBuildInstallCargoBinaries = true;
         doCheck = false;
         buildPhaseCargoCommand = ''
-          for p in eq comp reverb delay tune modulation nam level saturate \
-                   signal guide gate limiter trigger meter pitch unison; do
+          for p in nam signal guide; do
             cargo run -q -p fts-plugin-xtask -- bundle -p "$p-plugin" --release --offline
           done
         '';
