@@ -16,8 +16,13 @@ so the alignment between the two (tracked in short steps, unwrapped)
 traces a ramp whose height is `c` and whose bend is `D`. Each strike — a
 spawn of the articulation's voices in our `--trace` — gets the `(c, D)`
 whose ramp fits its alignment best (D on a grid, c by least squares).
-Prints `c:D,c:D,…` (render_css_live --pitch-envs) and writes our render with
-those draws to <out.wav>.
+The alignment read is only good to a few cents, and a cent off leaves the
+strike's residual a few dB worse (the depth's integral is a phase offset
+that stays): each strike's depth is then searched by rendering, around the
+read value (REFINE_CENTS, and 0), for the least residual against Kontakt up
+to the next strike, every other draw held (REFINE_ROUNDS passes; one
+windowed batch per pass). Prints `c:D,c:D,…` (render_css_live --pitch-envs)
+and writes our render with those draws to <out.wav>.
 
 Env: FIT_EXTRA other forced draws for every render; CS_LIBRARY the library.
 """
@@ -26,7 +31,7 @@ import os, sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fit_draws import render  # noqa: E402
+from fit_draws import render, render_batch, energy  # noqa: E402
 from null_test import SR, load  # noqa: E402
 
 MAX_DRAWS = 400
@@ -35,6 +40,9 @@ WIN = 0.02  # s per read
 SEARCH = 8.0  # frames each read may move from the last
 FIT_SPAN = 1.3  # s after the strike (hold + longest decay + margin)
 A = SR * np.log(2) / 1200  # frames per cent-second
+REFINE_CENTS = (-3.0, -2.0, -1.5, -1.0, -0.5, 0.5, 1.0, 1.5, 2.0, 3.0)
+REFINE_ROUNDS = 2
+REFINE_CHUNK = 32
 
 
 def track(k, o, t0, t1):
@@ -113,6 +121,35 @@ def main():
     for i, t0 in enumerate(strikes):
         t1 = min(strikes[i + 1] if i + 1 < len(strikes) else t0 + FIT_SPAN, t0 + FIT_SPAN)
         draws.append(fit(track(k, o, t0 + 0.01, t1), hold, decays))
+    windows = []
+    for i, t0 in enumerate(strikes):
+        t1 = strikes[i + 1] if i + 1 < len(strikes) else t0 + FIT_SPAN
+        windows.append((int(t0 * SR), min(int(t1 * SR), len(k))))
+    tmp = os.path.dirname(os.path.abspath(out_wav))
+    for _ in range(REFINE_ROUNDS):
+        ours, _ = render_pe(binary, section, mid, flag, fmt(draws), out_wav)
+        best = [(c, energy(k[a:b] - ours[a:b])) for (c, _), (a, b) in zip(draws, windows)]
+        trials = []
+        for i, (c, d) in enumerate(draws):
+            for v in sorted({round(c + dc, 3) for dc in REFINE_CENTS} | {0.0}):
+                if v != round(c, 3):
+                    trials.append((i, v))
+        for n in range(0, len(trials), REFINE_CHUNK):
+            chunk = trials[n:n + REFINE_CHUNK]
+            jobs = []
+            for j, (i, v) in enumerate(chunk):
+                trial = draws[:i] + [(v, draws[i][1])] + draws[i + 1:]
+                jobs.append((trial, f"{tmp}/.pe_{os.getpid()}_{j}.wav", False, windows[i]))
+            for (i, v), (y, _) in zip(chunk, render_pe_batch(binary, section, mid, flag, fmt, jobs)):
+                a, b = windows[i]
+                e = energy(k[a:b] - y[: b - a])
+                if e < best[i][1]:
+                    best[i] = (v, e)
+        changed = [i for i in range(len(draws)) if best[i][0] != draws[i][0]]
+        for i in changed:
+            draws[i] = (best[i][0], draws[i][1])
+        if not changed:
+            break
     render_pe(binary, section, mid, flag, fmt(draws), out_wav)
     print(fmt(draws))
     print(f"{len(draws)} draws", file=sys.stderr)
@@ -126,6 +163,12 @@ def render_pe(binary, section, mid, flag, values, out):
         return render(binary, section, mid, None, None, out, trace=True)
     finally:
         os.environ["FIT_EXTRA"] = extra
+
+
+def render_pe_batch(binary, section, mid, flag, fmt, jobs):
+    """Windowed renders `(draws, out, trace, window)`, each with its own draws
+    forced through `flag` (a one-item values list: the draws string)."""
+    return render_batch(binary, section, mid, flag, [([fmt(d)], o, t, w) for d, o, t, w in jobs], keep=False)
 
 
 if __name__ == "__main__":
