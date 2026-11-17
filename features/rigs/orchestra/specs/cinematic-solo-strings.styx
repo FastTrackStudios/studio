@@ -97,6 +97,9 @@ performance {
 dynamics {
     sustain_controller    CC1
     vibrato_controller    CC2
+    // CC2 switches nonvib / vib (CSSS vibsus groups carry no CC2 volume mod;
+    // $vkgua = 2): no CC2 group curves, the vibsus attack only on the vib side
+    vibrato_mode          "on_off"
     // SHORT-NOTE DYNAMICS — the KSP-confirmed model:
     //
     // Decoded from `script_1.ksp` (~lines 10775–11135) and verified against the

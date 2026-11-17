@@ -268,7 +268,17 @@ impl SampleEngine {
         // (held, not muted while it runs)
         let saved_hold = self.spawn_extra_hold;
         self.spawn_extra_hold += ms(mt.body_delay_ms);
-        self.spawn_extra_start = ms(offs[usize::from(hard)]);
+        // CSSS draws an extra random(0, n) ms of entry per connection
+        let extra = if mt.body_offset_random_ms > 0.0 {
+            let n = mt.body_offset_random_ms as u16;
+            match self.forced_offsets.pop_front() {
+                Some(v) => f32::from(v.min(n)),
+                None => (super::next_zone_random(&mut self.tune_rng) % (usize::from(n) + 1)) as f32,
+            }
+        } else {
+            0.0
+        };
+        self.spawn_extra_start = ms(offs[usize::from(hard)] + extra);
         self.legato_glide = (bend != 0.0).then_some((-bend, glide));
         self.in_transition = true;
         self.play_direction = if to >= from { "up" } else { "down" }.to_string();

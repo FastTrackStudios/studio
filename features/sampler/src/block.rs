@@ -403,6 +403,11 @@ impl SamplerBlock {
         self.engine.force_random_attacks(v);
     }
 
+    /// See [`SampleEngine::force_random_offsets`].
+    pub fn force_random_offsets(&mut self, v: &[u16]) {
+        self.engine.force_random_offsets(v);
+    }
+
     /// See [`SampleEngine::force_random_variants`].
     pub fn force_random_variants(&mut self, v: &[u8]) {
         self.engine.force_random_variants(v);

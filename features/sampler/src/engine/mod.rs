@@ -970,6 +970,8 @@ pub struct SampleEngine {
     pub(crate) forced_variants: VecDeque<u8>,
     /// Forced loud first-note attack draws (index into the zone's range).
     pub(crate) forced_attacks: VecDeque<u8>,
+    /// `MarcatoTransitionSpec::body_offset_random_ms` draws (ms) to replay.
+    pub(crate) forced_offsets: VecDeque<u16>,
     /// Forced random short RR draws (0-based, wrapped to the RR count).
     pub(crate) forced_rrs: VecDeque<u8>,
     /// `ArticulationSpec::rr_random_avoid_last` history: the RRs each key
@@ -1302,6 +1304,7 @@ impl SampleEngine {
             body_tune_cents: 0.0,
             forced_variants: VecDeque::new(),
             forced_attacks: VecDeque::new(),
+            forced_offsets: VecDeque::new(),
             forced_rrs: VecDeque::new(),
             short_rr_hist: [[u8::MAX; 4]; 128],
             tune_rng: 0x9E37_79B9_7F4A_7C15,
@@ -1967,6 +1970,12 @@ impl SampleEngine {
     /// velocity zone's attack range (`FirstNoteAttackSpec`).
     pub fn force_random_attacks(&mut self, draws: &[u8]) {
         self.forced_attacks = draws.iter().copied().collect();
+    }
+
+    /// Use these random marcato body-offset draws (ms) in order
+    /// (`MarcatoTransitionSpec::body_offset_random_ms`).
+    pub fn force_random_offsets(&mut self, draws: &[u16]) {
+        self.forced_offsets = draws.iter().copied().collect();
     }
 
     /// Use these random short RR draws (0-based) in order

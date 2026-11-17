@@ -165,6 +165,10 @@ fn render_one(
             .unwrap_or_default();
         rig.force_random_pitch_envs(ID, &v);
     }
+    // `--offsets a,b,…`: random marcato body-offset draws (ms; CSSS).
+    if let Some(v) = draws::<u16>(args, "--offsets") {
+        rig.force_random_offsets(ID, &v);
+    }
     // `--variants a,b,…`: legato zone-2 body-variant draws (2..=4).
     if let Some(v) = draws::<u8>(args, "--variants") {
         rig.force_random_variants(ID, &v);

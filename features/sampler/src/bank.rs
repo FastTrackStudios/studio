@@ -868,6 +868,10 @@ impl SamplerBank {
         self.with_block(id, |b| b.force_random_attacks(v));
     }
 
+    pub fn force_random_offsets(&mut self, id: &str, v: &[u16]) {
+        self.with_block(id, |b| b.force_random_offsets(v));
+    }
+
     pub fn force_random_variants(&mut self, id: &str, v: &[u8]) {
         self.with_block(id, |b| b.force_random_variants(v));
     }

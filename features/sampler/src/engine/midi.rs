@@ -1069,7 +1069,12 @@ impl SampleEngine {
                 }
             }
         }
-        if fresh_vz >= 2 {
+        // The attack lives in the vibsus groups: where CC2 switches the sides
+        // (`vibrato_mode "on_off"`, CSSS / CSW) it sounds on the vib side only
+        // (a crossfade library levels it by its CC2 group curves instead).
+        let on_off_nonvib = self.patch.spec.dynamics.vibrato_mode.as_deref() == Some("on_off")
+            && self.cc2_blend() < 0.5;
+        if fresh_vz >= 2 && !on_off_nonvib {
             self.spawn_first_note_attack(note, fresh_vz);
         }
     }
@@ -2969,11 +2974,25 @@ impl SampleEngine {
         });
         // Everything but the controller-driven `gain_scale`: what CC
         // re-levelling must keep (`Voice::level`).
-        let artic_level_db = self
+        let artic = self
             .patch
             .spec
-            .articulation(&self.patch.spec.zones[idx].articulation)
-            .map_or(0.0, |a| a.level_db);
+            .articulation(&self.patch.spec.zones[idx].articulation);
+        // A sustained body's level by velocity (`ArticulationSpec::vel_gain_db`;
+        // shorts apply it in `trigger_zoned_short`): CSSS marcato,
+        // `(127 − vel) · $0kd5m / 126` dB.
+        let body_vel_db = if is_sustain_layer {
+            artic
+                .and_then(|a| {
+                    a.vel_gain_db
+                        .get(usize::from(self.last_velocity.min(127)))
+                        .copied()
+                })
+                .unwrap_or(0.0)
+        } else {
+            0.0
+        };
+        let artic_level_db = artic.map_or(0.0, |a| a.level_db) + body_vel_db;
         let level = 10.0f32.powf((gain_db + artic_level_db) / 20.0)
             * makeup
             * db_to_gain(piano_db)

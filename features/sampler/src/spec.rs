@@ -1063,6 +1063,10 @@ pub struct MarcatoTransitionSpec {
     /// Body entry `$1fvjk`, ms: (soft hard) within an octave / beyond it.
     pub body_offset_ms: [f32; 2],
     pub body_offset_big_ms: [f32; 2],
+    /// A random extra body entry, ms: `random(0, n)` on every connection
+    /// (CSSS `$yp2sq + random(0, $a4bsp)`, CSSS 11357 / 12016). 0 = none.
+    #[facet(default)]
+    pub body_offset_random_ms: f32,
     /// CC19 (`$313em`): soft by IOI; (hard, beyond-octave soft, beyond hard).
     pub cc19_soft: Vec<[f32; 2]>,
     pub cc19_other: [f32; 3],
@@ -1253,6 +1257,8 @@ pub struct MarcatoOverlay {
     /// The body offset past an octave (CSW / CSB: the same `$yp2sq` as
     /// any connection; CSS has its own `$dztsp` / `$fswjh`).
     pub body_offset_big_ms: Option<[f32; 2]>,
+    /// See [`MarcatoTransitionSpec::body_offset_random_ms`].
+    pub body_offset_random_ms: Option<f32>,
     pub lt_offset_ms: Option<Vec<[f32; 2]>>,
     pub lt_db_step: Option<Vec<[f32; 2]>>,
     pub lt_db_leap: Option<Vec<[f32; 2]>>,
@@ -1478,6 +1484,9 @@ impl MarcatoOverlay {
         }
         if let Some(v) = self.body_offset_big_ms {
             t.body_offset_big_ms = v;
+        }
+        if let Some(v) = self.body_offset_random_ms {
+            t.body_offset_random_ms = v;
         }
         if let Some(v) = &self.lt_offset_ms {
             t.lt_offset_ms.clone_from(v);
@@ -2608,7 +2617,9 @@ pub struct ArticulationSpec {
     /// script sets the played group's volume to (MOJO 2: `VelGainMin +
     /// (knob − VelGainMin)·(0.99^(v−1) − 1)/(0.99^126 − 1)` in engine
     /// units, baked to dB by the generator). Replaces the velocity² and
-    /// intra-band laws. Empty = those laws.
+    /// intra-band laws. Empty = those laws. On a sustained articulation it
+    /// levels the body by its note's velocity (CSSS marcato:
+    /// `(127 − vel) · $0kd5m / 126`).
     #[facet(default)]
     pub vel_gain_db: Vec<f32>,
     /// The keys this articulation plays, `[lo, hi]` inclusive: a note

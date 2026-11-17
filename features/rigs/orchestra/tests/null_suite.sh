@@ -169,6 +169,10 @@ for mode in "${modes[@]}"; do
     fit_mode=shorts
     export CS_RR_MAX=9
   fi
+  # Solo Strings marcato: each connection draws its body's extra entry
+  if [ "$lib" = solo-strings ] && [ "$mode" = marcato ]; then
+    fit_mode=offsets
+  fi
   # Solo Strings shorts draw among up to 9 RRs (Spiccato)
   [ "$lib" = solo-strings ] && export CS_RR_MAX=9
   # Solo Strings draws a loud first note's body variant at random: fit it
@@ -181,6 +185,12 @@ for mode in "${modes[@]}"; do
     fit_mode=penv
   fi
   case "$fit_mode" in
+    offsets)
+      npy "$here/fit_draws.py" --offsets "$bin" "$section" "$d/$mode.mid" \
+        "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
+      npy "$here/null_test.py" "$d/${mode}_manifest.tsv" "$d/${mode}_ours.wav" \
+        "$d/${mode}_kontakt_r1.wav" --json "$d/null.json" | tail -1
+      ;;
     penv)
       npy "$here/fit_pitch_env.py" "$bin" "$section" "$d/$mode.mid" \
         "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws_penv.txt"

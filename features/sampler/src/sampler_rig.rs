@@ -876,6 +876,13 @@ impl SamplerRig {
         }
     }
 
+    /// Replay a reference render's random marcato body-offset draws (ms).
+    pub fn force_random_offsets(&self, id: &str, v: &[u16]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_random_offsets(id, v);
+        }
+    }
+
     /// Replay a reference render's legato zone-2 body-variant draws.
     pub fn force_random_variants(&self, id: &str, v: &[u8]) {
         if let Ok(mut bank) = self.bank().lock() {

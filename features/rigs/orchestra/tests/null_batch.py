@@ -95,6 +95,8 @@ def draw_files(lib, mode):
     # where CSS walks a sequence: every mode with loud first notes fits it
     if lib == "solo-strings" and mode in ("probe", "legato"):
         return [("--variants", "draws.txt")]
+    if lib == "solo-strings" and mode == "marcato":
+        return [("--offsets", "draws.txt")]
     if lib == "solo-strings" and mode == "attack":
         return [("--attacks", "draws.txt"), ("--variants", "draws_var.txt")]
     fit_mode = "shorts" if lib != "strings" and mode == "marc2" else mode
