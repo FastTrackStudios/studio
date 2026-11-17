@@ -125,6 +125,6 @@ strings.txt, proj/Kontakt8; scripts/DecompileAt.java decompiles by address).
   `USE_CODE_IF_NOT(NO_SYS_SCRIPT_GROUP_START)`. A script that sets the
   condition switches every start option off; the saved criteria are then data
   for `get_engine_par` (CSSS: articulation/dynamic in CC110/CC111 rows).
-- **Classic Limiter**: a fixed 31-sample lookahead delay line (not ms).
+- **Classic Limiter**: a fixed 32-sample lookahead delay line (not ms; the index runs 0..=31, wrapping only from 31).
 - **Saturation (module 0x1d)** is `BEffectShaper`: Classic is a table curve
   at base rate (no oversampling, no delay).
