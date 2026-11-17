@@ -784,9 +784,25 @@ articulations (
         notes    full
         // Census: Tuba ships no Taka.
         instrument_filter (2tb 2tpt 4fh Sbtb Sfh Stb Stpt)
-        // Tempo-syncable phrase engine in the vendor instrument (2–9
-        // repetitions, X = manual mode) — we expose the raw one-shots only;
-        // phrase-engine behaviour is a player concern, not spec data.
+        // Velocity layers %hneka 65 / 105, levels %z4pdd (KSP 10603-10616).
+        vel_thresholds (65 105)
+        vel_layer_db   (-6 -5 -4)
+        // The script's "Hold" phrase ($uoswy = 10, KSP 10365-10805): a held
+        // key plays Ta after the chord time $nh2j5, then a hit per tick
+        // (15000000 / $acd3t us: 166 BPM = 90.361 ms) — one of %1zo2t, then
+        // +1 wrapping 21 -> 4 — each fading the key's last hit over $x53g2;
+        // the tick after the keys are up plays the end hit. Kontakt's renders
+        // play the long End hits (22-24, `random(22,24)`, $vwzan = 3), not
+        // the patch file's $vwzan = 2 ("Ka", RR 20): measured, Solo Trumpet.
+        phrase {
+            delay_ms  30
+            tick_ms   90.361
+            fade_ms   40
+            first_rr  (1 2 3)
+            second_rr (4 6 8 10 12 14 16 18 20)
+            step_wrap (4 21)
+            end_rr    (22 23 24)
+        }
     }
     {
         id       Stoppedsusrel
@@ -988,7 +1004,7 @@ keyswitch {
         26-30 Sfz
         31-40 Mutereps
         41-45 Rips
-        46-50 Trills
+        46-50 HTrills     // trills: trill_pair picks HTrills / WTrills from the key pair (brass has no "Trills" keyswitch note to defer to)
         51-55 Flutter
         56-60 Mutesus
         61-65 Taka

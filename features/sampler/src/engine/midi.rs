@@ -474,8 +474,11 @@ impl SampleEngine {
                 self.trigger_zoned_sustain(note);
             } else if is_short {
                 // One-shot short: velocity picks the dynamic layer, nearest-key
-                // pitch-shift, plays to completion.
-                self.trigger_zoned_short(note, velocity);
+                // pitch-shift, plays to completion (a phrase articulation
+                // schedules its hits instead).
+                if !self.phrase_note_on(note, velocity) {
+                    self.trigger_zoned_short(note, velocity);
+                }
             } else {
                 // Anything unusual: fall back to the generic zoned trigger.
                 self.trigger_zoned(note, velocity, ZoneTrigger::Attack, true);
@@ -559,6 +562,11 @@ impl SampleEngine {
         }
         if self.trill_first.is_some_and(|(n, ..)| n == note) {
             self.trill_first = None;
+            return;
+        }
+        // A phrase key's hits ring to their ends: its key-up only ends the
+        // phrase (see `phrase.rs`).
+        if self.phrase_note_off(note) {
             return;
         }
         let release_frames = self.pedal_release_frames();
@@ -1124,21 +1132,28 @@ impl SampleEngine {
             self.zone_rr_counter = self.zone_rr_counter.wrapping_add(1);
             rr
         };
+        // A phrase hit names its recording by RR index (`phrase.rs`).
         let seq_rr = self
-            .short_sequence_rr(&artic, note, velocity)
+            .phrase_rr
+            .take()
+            .or_else(|| self.short_sequence_rr(&artic, note, velocity))
             .or_else(|| self.short_random_rr(&artic, note));
         let tune_cents = self.short_random_tune(&artic, note);
 
         // VELOCITY → dynamic layer (`%g1qri` band) + intra-band volume (`$arhiq`).
         let (dynamic, velvol_db) = self.short_layer_and_velvol(&artic, velocity);
-        let n_dyn = self
+        let (n_dyn, decoded_law) = self
             .patch
             .spec
             .articulation(&artic)
-            .map_or(0, |a| a.dynamics.len());
+            .map_or((0, false), |a| {
+                (a.dynamics.len(), !a.vel_layer_db.is_empty())
+            });
         // With ≥2 recorded dynamics the loudness IS the sampled layer plus the
-        // `$arhiq` intra-band trim; only single-layer artics use velocity².
-        let gain = if n_dyn > 1 {
+        // `$arhiq` intra-band trim, and so it is for a single layer that
+        // carries the decoded trim (CSB Rips: `(127 − vel) · %tccxl / 126`
+        // dB, nothing else); only other single-layer artics use velocity².
+        let gain = if n_dyn > 1 || decoded_law {
             1.0
         } else {
             velocity_gain(velocity)

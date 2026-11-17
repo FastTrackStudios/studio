@@ -163,6 +163,12 @@ for mode in "${modes[@]}"; do
   if [ "$lib" = brass ] && [ "$mode" = marcato ]; then
     fit_mode=shorts
   fi
+  # brass ext: Mutereps / Rips draw random RRs and a Taka phrase its hits
+  # (up to 9 candidates: the second hit's list) — fitted like the shorts
+  if [ "$lib" = brass ] && [ "$mode" = ext ]; then
+    fit_mode=shorts
+    export CS_RR_MAX=9
+  fi
   # woodwinds marcato draws its pitch envelope per strike (fit_pitch_env.py)
   if [ "$lib" = woodwinds ] && [ "$mode" = marcato ]; then
     fit_mode=penv

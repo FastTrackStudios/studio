@@ -86,6 +86,9 @@ def draw_files(lib, mode):
         return [("--tunes", "draws.txt")]
     if lib == "brass" and mode == "marc2":
         return [("--rrs", "draws_rr.txt"), ("--tunes", "draws.txt")]
+    # brass ext: Mutereps / Rips draw their RRs, a Taka phrase its hits
+    if lib == "brass" and mode == "ext":
+        return [("--rrs", "draws.txt")]
     fit_mode = "shorts" if lib != "strings" and mode == "marc2" else mode
     if fit_mode not in ("shorts", "pizz", "leg2", "attack"):
         return None

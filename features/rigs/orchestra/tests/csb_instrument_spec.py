@@ -148,6 +148,7 @@ def main():
     rips(pers, zones, gnames)
     marcato(pers, marcato_lt_layers(zones, gnames))
     held_detune(pers)
+    taka_phrase(pers)
     release_levels(pers)
     print(")")
     legato(pers, groups, zones, gnames)
@@ -253,6 +254,30 @@ def marcato(pers, lt_layers):
     if lt_layers:
         pairs = " ".join(f"{{dynamic {m}, lt_dynamic {l}, gain_index 0}}" for m, l in lt_layers)
         print(f"            lt_layers ({pairs})")
+    print("        }")
+    print("    }")
+
+
+def taka_phrase(pers):
+    """The Taka phrase's per-instrument numbers (see the library spec's Taka
+    `phrase`): the chord time $nh2j5, the tick 15000000 / $acd3t us, the
+    fade $x53g2, the velocity bands %hneka and levels %z4pdd."""
+    bpm, delay, fade = (css.one(pers, v) for v in ("$acd3t", "$nh2j5", "$x53g2"))
+    th, db = pers.get("%hneka"), pers.get("%z4pdd")
+    if not bpm or delay is None or fade is None or not th or not db:
+        return
+    tick = 15000000 // int(bpm) / 1000
+    print("    {\n        id Taka")
+    print(f"        vel_thresholds ({th[1]} {th[2]})")
+    print(f"        vel_layer_db ({db[0]} {db[1]} {db[2]})")
+    print("        phrase {")
+    print(f"            delay_ms  {delay}")
+    print(f"            tick_ms   {tick:g}")
+    print(f"            fade_ms   {fade}")
+    print("            first_rr  (1 2 3)")
+    print("            second_rr (4 6 8 10 12 14 16 18 20)")
+    print("            step_wrap (4 21)")
+    print("            end_rr    (22 23 24)")
     print("        }")
     print("    }")
 

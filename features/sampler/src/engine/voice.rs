@@ -2302,6 +2302,26 @@ impl VoicePool {
         self.strike = self.strike.wrapping_add(1);
     }
 
+    /// The strike the voices spawned from here on carry (see
+    /// [`begin_strike`](Self::begin_strike)).
+    #[must_use]
+    pub fn current_strike(&self) -> u32 {
+        self.strike
+    }
+
+    /// Fade every still-playing voice of `strike` to silence over
+    /// `fade_frames` (a phrase hit fading the key's previous hit only).
+    pub fn fade_strike(&mut self, strike: u32, fade_frames: usize) {
+        for v in &mut self.voices {
+            if v.strike == strike && matches!(v.state, VoiceState::Playing) {
+                v.ramp_gain(0.0, fade_frames);
+                v.state = VoiceState::Releasing {
+                    frames_remaining: fade_frames,
+                };
+            }
+        }
+    }
+
     pub fn spawn(&mut self, voice: Voice) {
         let mut voice = voice;
         // New voices sound at the current wheel position.

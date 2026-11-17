@@ -222,6 +222,23 @@ impl SampleEngine {
                 }
             }
         }
+        // A trill key pair plays the OTHER trill articulation from the one
+        // selected (`PerformanceSpec::trill_pair`: HTrills selected, a
+        // whole-tone pair plays WTrills): warm both sides and their releases,
+        // or the side no keyswitch reaches starts cold and silent.
+        if let Some(tp) = &self.patch.spec.performance.trill_pair {
+            if warm_ids
+                .iter()
+                .any(|id| id.eq_ignore_ascii_case(&tp.half) || id.eq_ignore_ascii_case(&tp.whole))
+            {
+                for id in [tp.half.clone(), tp.whole.clone()] {
+                    if let Some(r) = rel(&id) {
+                        warm_ids.push(r);
+                    }
+                    warm_ids.push(id);
+                }
+            }
+        }
         // And what an articulation plays besides itself: a marcato first
         // note's overlay short, a tremolo/marcato transition's legato zones.
         let extra: Vec<String> = warm_ids

@@ -1158,6 +1158,27 @@ pub struct FirstNoteAttackSpec {
     pub velocities: Vec<[u8; 2]>,
 }
 
+/// A held key that plays a timed phrase of one-shot hits instead of one
+/// short (CSB Taka in its "Hold" mode, KSP 10365-10805). `delay_ms` after
+/// the note-on the key plays one of `first_rr` (not the previous phrase's
+/// first); every `tick_ms` while any phrase key is down it plays the next
+/// hit — first one of `second_rr`, then that RR + 1, wrapping to
+/// `step_wrap[0]` past `step_wrap[1]` — fading the key's previous hit over
+/// `fade_ms`; at the first tick after every key is up each key plays one of
+/// `end_rr` (a key released while others hold plays it at its next tick).
+/// RRs are 1-based within the velocity layer. The hits ring to their ends:
+/// note-offs do not release them.
+#[derive(Debug, Clone, Facet)]
+pub struct PhraseSpec {
+    pub delay_ms: f32,
+    pub tick_ms: f32,
+    pub fade_ms: f32,
+    pub first_rr: Vec<u8>,
+    pub second_rr: Vec<u8>,
+    pub step_wrap: [u8; 2],
+    pub end_rr: Vec<u8>,
+}
+
 /// A marcato phrase's first-note overlay (KSP 17620-17855): with the
 /// overlay on (CC58 71-75) the first note also plays a short of
 /// `articulation` at velocity `vel · cc1_scale[CC1] / 100`, through that
@@ -1279,6 +1300,7 @@ pub struct ArticulationOverlay {
     pub pitch_env_cents: Option<f32>,
     pub pitch_env_random: Option<RandomPitchEnvSpec>,
     pub amp_env: Option<Vec<EnvSegmentSpec>>,
+    pub phrase: Option<PhraseSpec>,
     /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
     pub overlay_cc1_scale: Option<Vec<u8>>,
     pub marcato_transition: Option<MarcatoOverlay>,
@@ -1358,6 +1380,9 @@ impl SectionOverlay {
             }
             if let Some(v) = &o.amp_env {
                 a.amp_env.clone_from(v);
+            }
+            if let Some(v) = &o.phrase {
+                a.phrase = Some(v.clone());
             }
             if let (Some(v), Some(ov)) = (&o.overlay_cc1_scale, a.overlay.as_mut()) {
                 ov.cc1_scale.clone_from(v);
@@ -2586,6 +2611,8 @@ pub struct ArticulationSpec {
     pub simple_transition: Option<SimpleTransitionSpec>,
     /// Marcato first-note overlay: see [`OverlaySpec`].
     pub overlay: Option<OverlaySpec>,
+    /// A held key plays a timed phrase: see [`PhraseSpec`].
+    pub phrase: Option<PhraseSpec>,
     /// Whether the envelope freezes at its hold level while the note is held
     /// (sustains) or plays through one-shot (shorts, releases, transitions).
     /// `None` = held for Sustain/Looped/Trill kinds, one-shot otherwise.

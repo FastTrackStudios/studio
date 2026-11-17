@@ -228,6 +228,7 @@ mod kontakt_legato;
 mod kontakt_marcato;
 mod legato;
 mod midi;
+mod phrase;
 pub mod pitch_shift;
 pub mod rr;
 pub mod trace;
@@ -781,6 +782,12 @@ pub struct SampleEngine {
     pub(crate) trill_first: Option<(u8, u8, u64)>,
     pub(crate) trill_due: Option<(u64, u8, u8, String)>,
     pub(crate) trill_bypass: bool,
+    /// The running `ArticulationSpec::phrase` (see `phrase.rs`), and the
+    /// first RR the last phrase played.
+    pub(crate) phrase: Option<phrase::PhraseRun>,
+    pub(crate) phrase_last_first: u8,
+    /// The 0-based RR index the next short plays (a phrase hit).
+    pub(crate) phrase_rr: Option<usize>,
     /// Keys a trill pair absorbed without sounding them (their key-up is a
     /// no-op; the trill note is the lower key's).
     pub(crate) trill_silent: [bool; 128],
@@ -1223,6 +1230,9 @@ impl SampleEngine {
             trill_first: None,
             trill_due: None,
             trill_bypass: false,
+            phrase: None,
+            phrase_last_first: 0,
+            phrase_rr: None,
             trill_silent: [false; 128],
             marcato_overlay: true,
             marcato_kbqnb: false,
@@ -2338,6 +2348,7 @@ impl SampleEngine {
                     LegatoState::Idle => None,
                 })
                 .chain(trill)
+                .chain(self.phrase_due_in())
                 .min()
                 .map_or(block_frames - done, |f| f.clamp(1, block_frames - done));
             part(&mut self.voices, done, next);
@@ -2358,6 +2369,7 @@ impl SampleEngine {
     /// Fire every countdown that has reached zero. Lines are visited in
     /// ascending [`LineId`] order — deterministic when several fire together.
     fn fire_due_legato(&mut self) {
+        self.fire_phrase();
         if self
             .trill_due
             .as_ref()
