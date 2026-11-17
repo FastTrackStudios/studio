@@ -32,9 +32,22 @@ import csv, math, os, re, sys
 # group each one's envelope and level are read from.
 NAMES = {0: "Sustain", 1: "Staccato", 2: "Pop", 3: "Tapping", 4: "Harmonics", 5: "FX",
          6: "HammerPull", 7: "Slide", 8: "PitchedRelease"}
-ARTICS = {0: "Sustain", 1: "Staccato", 2: "Pop", 4: "Harmonics", 6: "HammerPull", 8: "PitchedRelease"}
+ARTICS = {0: "Sustain", 1: "Staccato", 2: "Pop", 4: "Harmonics", 6: "HammerPull", 7: "Slide",
+          8: "PitchedRelease"}
 FIRST_GROUP = {"Sustain": "Sustain", "Staccato": "Staccato", "Pop": "Pops", "Harmonics": "Harmonics",
-               "HammerPull": "Hammer-on/Pull-off", "PitchedRelease": "Pitched Release"}
+               "HammerPull": "Hammer-on/Pull-off", "Slide": "Slides", "PitchedRelease": "Pitched Release"}
+
+# Legato (Slide)'s fade bases, `%tact___meta[64·7 + 12..16]` (built at init,
+# not shipped; engine-model §1d): source out (fast), transition in,
+# transition length, transition out / source out, destination in (µs·10).
+SLIDE_META = [500, 500, 4000, 1000, 1000]
+
+
+def slide_time_us(d, length_us):
+    """A slide's transition time (L17640): f = ((clamp(|d|,3,12) − 3)·99/9
+    + 1)/100 of the transition length, truncated to µs."""
+    f = (((min(max(d, 3), 12) - 3) * 99 / 9) + 1) / 100
+    return int(f * length_us)
 
 
 def ksp_list(script, name):
@@ -73,6 +86,18 @@ def attack_k(c):
     c = max(-1.0, min(1.0, c))
     b = math.exp((1 - abs(c)) * math.log(5e5) - math.log(2e4))
     return math.log(b / (1 + b)) if c > 0 else math.log((1 + b) / b)
+
+
+def slide_line(matrix, ep, script):
+    x = matrix[128 * 7 + 6: 128 * 7 + 11]
+    us = [x[i] * SLIDE_META[i] // 10 for i in range(5)]
+    times = " ".join(str(slide_time_us(d, us[2])) for d in range(1, 25))
+    srcs = " ".join(NAMES[a] for a in ksp_list(script, "s3__slidable_artics"))
+    return (f"    slide {{ key {matrix[128 * 7 + 11]}, articulation Slide, sources ({srcs}), "
+            f"from (Sustain Tapping), max_interval 24, time_us ({times}), "
+            f"source_fade_ms {us[3] / 1000}, transition_fade_in_ms {us[1] / 1000}, "
+            f"transition_fade_out_ms {us[3] / 1000}, body_offset_ms 99.999, "
+            f"body_fade_in_ms {us[4] / 1000}, age_db_per_s {-1 * ep[29]} }}")
 
 
 def kontakt_env(attack_ms, curve, release_ms):
@@ -171,6 +196,13 @@ def main():
          f"    hammer {{ articulation HammerPull, sources ({' '.join(NAMES[a] for a in ksp_list(script, 's3__hammer_sources'))}), "
          f"from ({' '.join(NAMES[a] for a in ksp_list(script, 's3__hammerable_artics'))}), "
          f"max_velocity {matrix[128 * 6 + 14]}, range {ep[8]}, gain_db {-5 * ep[27]} }}",
+         # Legato (Slide), L17156-17210, L17524-17660: its KEY rule (held),
+         # %s3__slidable_artics ring, Sustain/Tapping slide (meta[9] and
+         # matrix[5] set), up to 24 semitones (L7472); fades = the shipped
+         # X-fade knobs (matrix[128·7 + 6..10]) × SLIDE_META / 10; the
+         # destination enters 99 999 µs in (100 000 clamped below meta[6]·100);
+         # level −1 dB per second of the origin's age × engine_pars[29]
+         slide_line(matrix, ep, script),
          ]
     if ep[20] == 1:
         L.append(f"    borrow {{ chance_permille {ep[21]}, seed {seed}, multiplier {mult}, frets 2 }}")

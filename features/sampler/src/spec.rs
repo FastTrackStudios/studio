@@ -3951,6 +3951,45 @@ pub struct FretboardSpec {
     pub release_layer: Option<FretReleaseSpec>,
     /// Hammer-ons and pull-offs. `None` = none.
     pub hammer: Option<FretHammerSpec>,
+    /// Slides. `None` = none.
+    pub slide: Option<FretSlideSpec>,
+}
+
+/// Slides (see [`FretboardSpec::slide`]): while `key` is held, a note of
+/// one of `from` that finds a string ringing a note of one of `sources`
+/// within `max_interval` (the nearest such string) slides there: the
+/// ringing note fades over `source_fade_ms`, `articulation`'s transition
+/// zone (by `direction` and `interval`) plays at the new key, fading in
+/// over `transition_fade_in_ms`, and after the interval's `time_us` it
+/// fades over `transition_fade_out_ms` while the new note's own
+/// articulation enters `body_offset_ms` into its recording, fading in over
+/// `body_fade_in_ms`, at the slide's origin's velocity layer. Both are
+/// levelled by the new note's velocity gain plus `age_db_per_s` × the
+/// origin's age (s, truncated to whole mdB) × the slide's place in its
+/// chain. The transition takes its play's borrow draw but never borrows;
+/// its round robin is its position's next without stepping the counter.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretSlideSpec {
+    /// The key held to slide (it sounds nothing).
+    pub key: u8,
+    /// The transition articulation.
+    pub articulation: String,
+    /// The articulations a slide can leave.
+    pub sources: Vec<String>,
+    /// The articulations a new note may be selected as to slide.
+    pub from: Vec<String>,
+    /// The widest slide (semitones).
+    pub max_interval: u8,
+    /// The transition's length by interval: index 0 = 1 semitone (µs).
+    pub time_us: Vec<u32>,
+    pub source_fade_ms: f32,
+    pub transition_fade_in_ms: f32,
+    pub transition_fade_out_ms: f32,
+    pub body_offset_ms: f32,
+    pub body_fade_in_ms: f32,
+    /// Level change per second of the origin's age, per chain step (dB).
+    #[facet(default)]
+    pub age_db_per_s: f32,
 }
 
 /// A release recording (see [`FretboardSpec::release_layer`]): when a

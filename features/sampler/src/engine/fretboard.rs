@@ -37,6 +37,18 @@ pub(crate) struct FretState {
     lcg_mult: Option<u32>,
     /// Script steps waiting for their time.
     pub(crate) due: Vec<FretDue>,
+    /// The slide key is held (`FretSlideSpec::key`).
+    slide_held: bool,
+    /// Keys still down whose note slid away to another.
+    gone: HashSet<u8>,
+    /// The open poly window: its notes in arrival order.
+    window: Option<FretWindow>,
+}
+
+/// Notes struck within one poly window: (note, velocity, articulation, line).
+#[derive(Debug, Clone, Default)]
+pub(crate) struct FretWindow {
+    notes: Vec<(u8, u8, String, u8)>,
 }
 
 /// A note on the fretboard.
@@ -52,6 +64,11 @@ pub(crate) struct Held {
     /// When it started (frame).
     start: u64,
     line: u8,
+    /// Its slide chain: where the chain began (frame), the first note's
+    /// velocity, and this note's place in the chain (0 = not slid to).
+    origin_start: u64,
+    origin_velocity: u8,
+    slide_index: u32,
 }
 
 /// A script step due at frame `at`.
@@ -74,6 +91,25 @@ pub(crate) enum DueKind {
     /// A note let go: its voices release and it may leave a release
     /// recording (`FretReleaseSpec`).
     Release { note: u8, held: Held },
+    /// The poly window closes: its notes play.
+    Window,
+    /// A slide begins: the source fades, the transition plays.
+    SlideStart {
+        note: u8,
+        from: u8,
+        string: usize,
+        interval: i32,
+        gain_db: f32,
+        line: u8,
+    },
+    /// A slide's destination enters (if its key still holds the string).
+    SlideBody {
+        note: u8,
+        string: usize,
+        layer_velocity: u8,
+        gain_db: f32,
+        line: u8,
+    },
 }
 
 impl FretState {
@@ -96,6 +132,9 @@ impl FretState {
             lcg: fb.borrow.as_ref().map_or(0, |b| b.seed),
             lcg_mult: fb.borrow.as_ref().map(|b| b.multiplier),
             due: Vec::new(),
+            slide_held: false,
+            gone: HashSet::new(),
+            window: None,
         };
     }
 
@@ -178,12 +217,258 @@ impl SampleEngine {
         if self.fret.strings != fb.strings.len() {
             self.fret.reset(&self.patch.spec, fb);
         }
+        // The slide key only arms slides.
+        if fb.slide.as_ref().is_some_and(|s| s.key == note) {
+            self.fret.slide_held = true;
+            return true;
+        }
         let artic = self.articulation.clone();
         if !self.fret.fretted.contains(&artic.to_ascii_lowercase()) {
             return false;
         }
-        let Some(string) = self.fret.place(fb, note) else {
-            return true;
+        // Every note waits out the poly window (the script's
+        // `activate_latency`, `wait(50)` µs at latency 0): notes struck
+        // within it are voiced together (`str__voicing`, L16594-16990).
+        let line = self.cur_line as u8;
+        let now = self.frames_rendered;
+        match &mut self.fret.window {
+            Some(w) if w.notes.len() < 6 => w.notes.push((note, velocity, artic, line)),
+            Some(_) => {}
+            None => {
+                let at = now + self.fret_onset_hold() as u64;
+                self.fret.window = Some(FretWindow {
+                    notes: vec![(note, velocity, artic, line)],
+                });
+                self.fret.due.push(FretDue {
+                    at,
+                    kind: DueKind::Window,
+                });
+            }
+        }
+        true
+    }
+
+    /// Play the notes of a closed poly window: alone, a note is placed as
+    /// usual; together, each takes its string from the chord's voicing.
+    fn fret_close_window(&mut self) {
+        let Some(w) = self.fret.window.take() else {
+            return;
+        };
+        let voicing = if w.notes.len() > 1 {
+            self.fret_voicing(&w.notes)
+        } else {
+            Vec::new()
+        };
+        let mut taken = vec![false; voicing.len()];
+        self.fret_no_hold = true;
+        for (note, velocity, artic, line) in w.notes {
+            self.set_active_line(usize::from(line));
+            self.articulation.clone_from(&artic);
+            let forced = if voicing.is_empty() {
+                None
+            } else {
+                let fb = self.patch.spec.fretboard.as_ref();
+                let s = (0..voicing.len()).find(|&s| {
+                    !taken[s]
+                        && fb.is_some_and(|fb| {
+                            voicing[s] == i32::from(note) - i32::from(fb.strings[s])
+                        })
+                });
+                match s {
+                    Some(s) => {
+                        taken[s] = true;
+                        Some(s)
+                    }
+                    None => continue,
+                }
+            };
+            self.fretted_note_now(note, velocity, &artic, forced);
+        }
+        self.fret_no_hold = false;
+    }
+
+    /// The chord voicing the script picks for `notes` (sorted high to
+    /// low): from each start string, fingerings that put every note on the
+    /// first free string at or past it that it has not tried there, scored
+    /// by reach, gaps and distance from the hand (L16687-16912). Per string,
+    /// its fret or −1.
+    fn fret_voicing(&self, notes: &[(u8, u8, String, u8)]) -> Vec<i32> {
+        let Some(fb) = self.patch.spec.fretboard.as_ref() else {
+            return Vec::new();
+        };
+        let ns = fb.strings.len();
+        let n = notes.len();
+        if n < 2 || n > ns {
+            return Vec::new();
+        }
+        let mut sorted: Vec<i32> = notes.iter().map(|x| i32::from(x.0)).collect();
+        sorted.sort_unstable_by(|a, b| b.cmp(a));
+        let limit = i32::from(fb.frets);
+        let hand = i32::from(fb.hand_fret);
+        // the hand's reach: second-lowest open string − lowest − 1
+        let size = if ns >= 2 {
+            i32::from(fb.strings[ns - 2]) - i32::from(fb.strings[ns - 1]) - 1
+        } else {
+            0
+        };
+        let fits = |note: i32, k: usize| {
+            let f = note - i32::from(fb.strings[k]);
+            (0..=limit).contains(&f).then_some(f)
+        };
+        let (sliding, hammering) = self.fret_poly_flags(notes);
+        let mut best: Option<(i32, Vec<i32>)> = None;
+        'starts: for i in 0..=(ns - n) {
+            let mut tested = vec![false; n * ns];
+            loop {
+                let mut fing = vec![-1i32; ns];
+                let (mut min_f, mut max_f, mut assigned) = (25, -1, 0);
+                for (j, &note) in sorted.iter().enumerate() {
+                    for k in i..ns {
+                        let Some(f) = fits(note, k) else { continue };
+                        if fing[k] == -1 && !tested[j * ns + k] {
+                            if f > 0 {
+                                min_f = min_f.min(f);
+                            }
+                            max_f = max_f.max(f);
+                            fing[k] = f;
+                            tested[j * ns + k] = true;
+                            assigned += 1;
+                            break;
+                        }
+                    }
+                }
+                if assigned != n {
+                    break;
+                }
+                let reach = max_f - min_f;
+                // gap: a string unused between used ones
+                let mut gap = -1;
+                for &f in &fing {
+                    if gap == -1 && f > -1 {
+                        gap = 0;
+                    }
+                    if gap == 0 && f == -1 {
+                        gap = 2;
+                    }
+                    if gap == 2 && f > -1 {
+                        gap = 1;
+                    }
+                }
+                if gap == 2 {
+                    gap = 0;
+                }
+                let (slideable, hammerable) = self.fret_voicing_moves(&fing);
+                let score = if (slideable && sliding) || (hammerable && hammering) {
+                    10_000
+                } else {
+                    let s = if reach < size {
+                        if gap == 0 { 2000 } else { 1000 - reach * 100 }
+                    } else {
+                        1000 - (size - reach).abs() * 100
+                    };
+                    s - (min_f - hand).abs() * 10
+                };
+                if best.as_ref().is_none_or(|(b, _)| score > *b) {
+                    best = Some((score, fing));
+                }
+                if score == 10_000 {
+                    break 'starts;
+                }
+            }
+        }
+        best.map(|(_, f)| f).unwrap_or_default()
+    }
+
+    /// Whether a fingering can slide / hammer from what rings: every used
+    /// string ringing, and each a slide source within the widest slide /
+    /// a hammer source within the hammer range of its fret.
+    fn fret_voicing_moves(&self, fing: &[i32]) -> (bool, bool) {
+        let Some(fb) = self.patch.spec.fretboard.as_ref() else {
+            return (false, false);
+        };
+        let (mut slide, mut hammer) = (true, true);
+        for (s, &f) in fing.iter().enumerate() {
+            if f < 0 {
+                continue;
+            }
+            let Some(h) = self.fret.ringing[s].and_then(|n| self.fret.held.get(&n)) else {
+                return (false, false);
+            };
+            let d = (f - h.fret).abs();
+            let is_src = |list: &[String]| list.iter().any(|a| a.eq_ignore_ascii_case(&h.artic));
+            if !fb
+                .slide
+                .as_ref()
+                .is_some_and(|sl| is_src(&sl.sources) && d > 0 && d <= i32::from(sl.max_interval))
+            {
+                slide = false;
+            }
+            if !fb
+                .hammer
+                .as_ref()
+                .is_some_and(|hm| is_src(&hm.sources) && d >= 1 && d <= i32::from(hm.range))
+            {
+                hammer = false;
+            }
+        }
+        (slide, hammer)
+    }
+
+    /// Whether any note of a window could slide (the slide key held, its
+    /// articulation one that slides, a ringing slide source within reach)
+    /// or hammer (its velocity a hammer's, a ringing hammer source within
+    /// range) — the script's `use_poly_slide` / `use_poly_hammer`.
+    fn fret_poly_flags(&self, notes: &[(u8, u8, String, u8)]) -> (bool, bool) {
+        let Some(fb) = self.patch.spec.fretboard.as_ref() else {
+            return (false, false);
+        };
+        let (mut sliding, mut hammering) = (false, false);
+        for (note, vel, artic, _) in notes {
+            for ringing in self.fret.ringing.iter().flatten() {
+                let Some(h) = self.fret.held.get(ringing) else {
+                    continue;
+                };
+                let d = (i32::from(*note) - i32::from(*ringing)).abs();
+                if let Some(s) = &fb.slide {
+                    if self.fret.slide_held
+                        && s.from.iter().any(|a| a.eq_ignore_ascii_case(artic))
+                        && s.sources.iter().any(|a| a.eq_ignore_ascii_case(&h.artic))
+                        && d > 0
+                        && d <= i32::from(s.max_interval)
+                    {
+                        sliding = true;
+                    }
+                }
+                if let Some(hm) = &fb.hammer {
+                    if *vel <= hm.max_velocity
+                        && hm.from.iter().any(|a| a.eq_ignore_ascii_case(artic))
+                        && hm.sources.iter().any(|a| a.eq_ignore_ascii_case(&h.artic))
+                        && d >= 1
+                        && d <= i32::from(hm.range)
+                    {
+                        hammering = true;
+                    }
+                }
+            }
+        }
+        (sliding, hammering)
+    }
+
+    /// A note out of the poly window: slides, hammers, lead-ins and plain
+    /// notes, on `forced` (its voicing's string) or the string it is placed on.
+    fn fretted_note_now(&mut self, note: u8, velocity: u8, artic: &str, forced: Option<usize>) {
+        let artic = artic.to_string();
+        if forced.is_none() {
+            if let Some((string, from, interval)) = self.fret_slide_source(note, &artic) {
+                self.fretted_slide(note, velocity, &artic, string, from, interval);
+                return;
+            }
+        }
+        let Some(fb) = self.patch.spec.fretboard.as_ref() else {
+            return;
+        };
+        let Some(string) = forced.or_else(|| self.fret.place(fb, note)) else {
+            return;
         };
         let fret = i32::from(note) - i32::from(fb.strings[string]);
         let retrigger_ms = fb.retrigger_fade_ms;
@@ -221,7 +506,8 @@ impl SampleEngine {
         let played = match (hammer, lead_in) {
             (Some((h, dist)), _) => {
                 let dir = if dist >= 0 { "up" } else { "down" };
-                self.play_fretted(&h, dir, string, note, velocity, 0.0)
+                let g = self.fret_vel_gain(&h, velocity);
+                self.play_fretted(&h, dir, 0, string, note, velocity, g, 0.0)
                     .map(|zk| (h, zk))
             }
             // The lead first (Shreddage's pop); the body follows when due.
@@ -244,7 +530,16 @@ impl SampleEngine {
                 Some((artic.clone(), zk.unwrap_or(note)))
             }
             (None, None) => self
-                .play_fretted(&artic, MISSING, string, note, velocity, 0.0)
+                .play_fretted(
+                    &artic,
+                    MISSING,
+                    0,
+                    string,
+                    note,
+                    velocity,
+                    self.fret_vel_gain(&artic, velocity),
+                    0.0,
+                )
                 .map(|zk| (artic.clone(), zk)),
         };
 
@@ -265,13 +560,15 @@ impl SampleEngine {
                     gain_db,
                     start: self.frames_rendered,
                     line,
+                    origin_start: self.frames_rendered,
+                    origin_velocity: velocity,
+                    slide_index: 0,
                 },
             );
         }
         st.last_string = Some(string);
         st.last_fret = fret;
         st.last_frets[string] = fret;
-        true
     }
 
     /// The articulation's velocity gain (dB) plus its hammer offset when
@@ -315,15 +612,19 @@ impl SampleEngine {
     /// robin, the borrow draw, then the zone, started `offset_ms` into its
     /// recording, at its velocity gain (`fret_vel_gain`). Returns the key
     /// of the recording it played.
+    #[allow(clippy::too_many_arguments)]
     fn play_fretted(
         &mut self,
         artic: &str,
         direction: &str,
+        interval: u32,
         string: usize,
         note: u8,
-        velocity: u8,
+        layer_velocity: u8,
+        gain_db: f32,
         offset_ms: f32,
     ) -> Option<u8> {
+        let velocity = layer_velocity;
         let fb = self.patch.spec.fretboard.as_ref()?;
         let a = self.patch.spec.articulation(artic)?;
         let open = fb.strings[string];
@@ -333,7 +634,6 @@ impl SampleEngine {
             .unwrap_or_default();
         let rr_n = a.rr.max(1);
         let rr = self.fret_next_rr(artic, rr_n, string, fret, true);
-        let gain_db = self.fret_vel_gain(artic, velocity);
 
         // The recording: this fret's, or a neighbour's retuned to it.
         let fb = self.patch.spec.fretboard.as_ref()?;
@@ -355,7 +655,8 @@ impl SampleEngine {
             i32::from(note)
         };
         let zone_key = u8::try_from(zone_key).ok()?;
-        let Some(idx) = self.find_fret_zone(artic, direction, string, &dynamic, rr, zone_key)
+        let Some(idx) =
+            self.find_fret_zone(artic, direction, interval, string, &dynamic, rr, zone_key)
         else {
             self.fret_miss(note, artic, dynamic, rr);
             return None;
@@ -426,7 +727,7 @@ impl SampleEngine {
         let gain_db = self.fret_vel_gain(lead, velocity);
         let _unused_borrow = self.fret.draw_raw();
         let rr = self.fret.draw_raw().map_or(0, |d| d as usize % rr_n);
-        let Some(idx) = self.find_fret_zone(lead, MISSING, string, "", rr, note) else {
+        let Some(idx) = self.find_fret_zone(lead, MISSING, 0, string, "", rr, note) else {
             self.fret_miss(note, lead, String::new(), rr);
             return None;
         };
@@ -468,6 +769,7 @@ impl SampleEngine {
         let Some(idx) = self.find_fret_zone(
             &rl.articulation,
             MISSING,
+            0,
             held.string,
             "",
             rr,
@@ -487,8 +789,247 @@ impl SampleEngine {
         );
     }
 
+    /// Where `note` slides from, if it slides (the slide key held, `artic`
+    /// one that slides): `(string it plays on, ringing note, interval)`.
+    /// First the nearest string ringing a slide source within the widest
+    /// slide that `note` fits on, played there (`str___get_source_string`,
+    /// L7699); failing that, the nearest such string whether `note` fits on
+    /// it or not: `note` is placed as any other note and the transition's
+    /// interval is the distance clamped to `fret − frets ..= fret` on its
+    /// string (`str___string_selection`, L7653-7720).
+    fn fret_slide_source(&self, note: u8, artic: &str) -> Option<(usize, u8, i32)> {
+        let fb = self.patch.spec.fretboard.as_ref()?;
+        let s = fb.slide.as_ref()?;
+        if !self.fret.slide_held || !s.from.iter().any(|a| a.eq_ignore_ascii_case(artic)) {
+            return None;
+        }
+        let fits = |string: usize| {
+            let fret = i32::from(note) - i32::from(fb.strings[string]);
+            (0..=i32::from(fb.frets)).contains(&fret)
+        };
+        let nearest = |need_fit: bool| {
+            let mut best: Option<(usize, u8, i32)> = None;
+            for (string, ringing) in self.fret.ringing.iter().enumerate() {
+                let Some(old) = *ringing else { continue };
+                let Some(h) = self.fret.held.get(&old) else {
+                    continue;
+                };
+                if !s.sources.iter().any(|a| a.eq_ignore_ascii_case(&h.artic)) {
+                    continue;
+                }
+                let d = i32::from(note) - i32::from(old);
+                if d == 0
+                    || d.unsigned_abs() > u32::from(s.max_interval)
+                    || (need_fit && !fits(string))
+                {
+                    continue;
+                }
+                if best.is_none_or(|(_, _, bd)| d.abs() < bd.abs()) {
+                    best = Some((string, old, d));
+                }
+            }
+            best
+        };
+        if let Some(hit) = nearest(true) {
+            return Some(hit);
+        }
+        let (_, old, d) = nearest(false)?;
+        let string = self.fret.place(fb, note)?;
+        let fret = i32::from(note) - i32::from(fb.strings[string]);
+        Some((string, old, d.clamp(fret - i32::from(fb.frets), fret)))
+    }
+
+    /// `note` slides from `from` on `string`: it takes the string now; the
+    /// source fades and the transition plays after the onset delay, the
+    /// destination after the interval's time.
+    fn fretted_slide(
+        &mut self,
+        note: u8,
+        velocity: u8,
+        artic: &str,
+        string: usize,
+        from: u8,
+        interval: i32,
+    ) {
+        let Some(src) = self.fret.held.remove(&from) else {
+            return;
+        };
+        if self.fret.ringing.get(src.string) == Some(&Some(from)) {
+            self.fret.ringing[src.string] = None;
+        }
+        // a note already on the string it plays on is let go
+        if let Some(old) = self.fret.ringing[string].take() {
+            self.fret_let_go(old);
+        }
+        let Some(fb) = self.patch.spec.fretboard.as_ref() else {
+            return;
+        };
+        let fret = i32::from(note) - i32::from(fb.strings[string]);
+        let age_db = fb.slide.as_ref().map_or(0.0, |s| s.age_db_per_s);
+        let line = self.cur_line as u8;
+        let now = self.frames_rendered;
+        let hold = self.fret_onset_hold() as u64;
+        // Both are levelled by the new note's velocity law under the
+        // source's articulation, plus the origin's age in whole ms × the
+        // chain step (`[29]·int(−1000·age_s)·slide_index`, L17210).
+        let index = src.slide_index + 1;
+        let age_ms = ((now + hold).saturating_sub(src.origin_start) * 1000
+            / u64::from(self.sample_rate)) as f32;
+        let gain_db =
+            self.fret_vel_gain(&src.artic, velocity) + age_db * age_ms / 1000.0 * index as f32;
+        self.fret.gone.insert(from);
+        self.fret.ringing[string] = Some(note);
+        self.fret.held.insert(
+            note,
+            Held {
+                string,
+                fret,
+                zone_key: note,
+                artic: artic.to_string(),
+                gain_db,
+                start: now,
+                line,
+                origin_start: src.origin_start,
+                origin_velocity: src.origin_velocity,
+                slide_index: index,
+            },
+        );
+        self.fret.last_string = Some(string);
+        self.fret.last_fret = fret;
+        self.fret.last_frets[string] = fret;
+        self.fret.due.push(FretDue {
+            at: now + hold,
+            kind: DueKind::SlideStart {
+                note,
+                from,
+                string,
+                interval,
+                gain_db,
+                line,
+            },
+        });
+    }
+
+    /// A slide's first step: the source fades, the transition plays.
+    fn fret_slide_start(
+        &mut self,
+        note: u8,
+        from: u8,
+        string: usize,
+        interval: i32,
+        gain_db: f32,
+        line: u8,
+    ) {
+        let Some(s) = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.slide.clone())
+        else {
+            return;
+        };
+        self.set_active_line(usize::from(line));
+        let fade = ms_to_frames_f(s.source_fade_ms, self.sample_rate);
+        self.voices.fade_out_note_line_any(line, from, fade);
+        let fret = self.fret.held.get(&note).map_or(0, |h| h.fret);
+        let rr_n = self
+            .patch
+            .spec
+            .articulation(&s.articulation)
+            .map_or(1, |a| a.rr.max(1));
+        let rr = self.fret_next_rr(&s.articulation, rr_n, string, fret, false);
+        let _unused_borrow = self.fret.draw_raw();
+        let dir = if interval > 0 { "up" } else { "down" };
+        let iv = interval.unsigned_abs();
+        match self.find_fret_zone(&s.articulation, dir, iv, string, "", rr, note) {
+            Some(idx) => {
+                self.spawn_fade_in = ms_to_frames_f(s.transition_fade_in_ms, self.sample_rate);
+                self.spawn_zone_voice(idx, note, VoiceKind::Zoned, db_to_gain(gain_db), None, 0.0);
+                self.spawn_fade_in = 0;
+            }
+            None => self.fret_miss(note, &s.articulation, String::new(), rr),
+        }
+        let us = s
+            .time_us
+            .get(iv.saturating_sub(1) as usize)
+            .copied()
+            .unwrap_or(0);
+        let layer_velocity = self.fret.held.get(&note).map_or(64, |h| h.origin_velocity);
+        let at = self.frames_rendered + u64::from(us) * u64::from(self.sample_rate) / 1_000_000;
+        self.fret.due.push(FretDue {
+            at,
+            kind: DueKind::SlideBody {
+                note,
+                string,
+                layer_velocity,
+                gain_db,
+                line,
+            },
+        });
+    }
+
+    /// A slide's second step: the transition fades, the destination
+    /// enters (if its key still holds the string).
+    fn fret_slide_body(
+        &mut self,
+        note: u8,
+        string: usize,
+        layer_velocity: u8,
+        gain_db: f32,
+        line: u8,
+    ) {
+        let Some(s) = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.slide.clone())
+        else {
+            return;
+        };
+        let holds = self.fret.ringing.get(string) == Some(&Some(note))
+            && self
+                .fret
+                .held
+                .get(&note)
+                .is_some_and(|h| h.string == string);
+        if !holds {
+            return;
+        }
+        self.set_active_line(usize::from(line));
+        let fade = ms_to_frames_f(s.transition_fade_out_ms, self.sample_rate);
+        self.voices.fade_out_note_line_any(line, note, fade);
+        let artic = self
+            .fret
+            .held
+            .get(&note)
+            .map(|h| h.artic.clone())
+            .unwrap_or_default();
+        self.spawn_fade_in = ms_to_frames_f(s.body_fade_in_ms, self.sample_rate);
+        self.fret_no_hold = true;
+        let zk = self.play_fretted(
+            &artic,
+            MISSING,
+            0,
+            string,
+            note,
+            layer_velocity,
+            gain_db,
+            s.body_offset_ms,
+        );
+        self.fret_no_hold = false;
+        self.spawn_fade_in = 0;
+        if let (Some(zk), Some(h)) = (zk, self.fret.held.get_mut(&note)) {
+            h.zone_key = zk;
+        }
+    }
+
     /// `FretboardSpec::onset_delay_us` in whole frames (floored).
     fn fret_onset_hold(&self) -> usize {
+        if self.fret_no_hold {
+            return 0;
+        }
         self.patch.spec.fretboard.as_ref().map_or(0, |fb| {
             (f64::from(fb.onset_delay_us) * 1e-6 * f64::from(self.sample_rate)).floor() as usize
         })
@@ -496,6 +1037,13 @@ impl SampleEngine {
 
     /// Run every script step that is due.
     pub(crate) fn fire_fret_due(&mut self) {
+        // a due step already waited its delay: nothing it plays waits again
+        let outer = std::mem::replace(&mut self.fret_no_hold, true);
+        self.fire_fret_due_inner();
+        self.fret_no_hold = outer;
+    }
+
+    fn fire_fret_due_inner(&mut self) {
         let now = self.frames_rendered;
         let mut i = 0;
         while i < self.fret.due.len() {
@@ -525,12 +1073,15 @@ impl SampleEngine {
                     let fade = ms_to_frames_f(lead.lead_fade_ms, self.sample_rate);
                     self.voices.fade_out_note_line_any(line, note, fade);
                     let artic = lead.articulation.clone();
+                    let g = self.fret_vel_gain(&artic, velocity);
                     if let Some(zk) = self.play_fretted(
                         &artic,
                         MISSING,
+                        0,
                         string,
                         note,
                         velocity,
+                        g,
                         lead.body_offset_ms,
                     ) {
                         if let Some(h) = self.fret.held.get_mut(&note) {
@@ -539,6 +1090,26 @@ impl SampleEngine {
                         }
                     }
                 }
+                DueKind::SlideStart {
+                    note,
+                    from,
+                    string,
+                    interval,
+                    gain_db,
+                    line,
+                } => {
+                    self.fret_slide_start(note, from, string, interval, gain_db, line);
+                }
+                DueKind::SlideBody {
+                    note,
+                    string,
+                    layer_velocity,
+                    gain_db,
+                    line,
+                } => {
+                    self.fret_slide_body(note, string, layer_velocity, gain_db, line);
+                }
+                DueKind::Window => self.fret_close_window(),
                 DueKind::Release { note, held } => {
                     self.set_active_line(usize::from(held.line));
                     let frames = self.fretted_release_frames(&held.artic);
@@ -584,6 +1155,20 @@ impl SampleEngine {
 
     /// Note-off of a fretted note. `false` = not one.
     pub(crate) fn fretted_note_off(&mut self, note: u8) -> bool {
+        if self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.slide.as_ref())
+            .is_some_and(|s| s.key == note)
+        {
+            self.fret.slide_held = false;
+            return true;
+        }
+        if self.fret.gone.remove(&note) {
+            return true;
+        }
         if !self.fret.held.contains_key(&note) {
             return false;
         }
@@ -607,10 +1192,12 @@ impl SampleEngine {
 
     /// The zone of `artic` on `string` (0-based) at `key`, in `direction`
     /// and `dynamic` (empty = any) and round robin `rr`.
+    #[allow(clippy::too_many_arguments)]
     fn find_fret_zone(
         &self,
         artic: &str,
         direction: &str,
+        interval: u32,
         string: usize,
         dynamic: &str,
         rr: usize,
@@ -621,6 +1208,7 @@ impl SampleEngine {
             let z = &self.patch.spec.zones[i];
             usize::from(z.string) == string + 1
                 && z.rr_index as usize == rr
+                && (interval == 0 || z.interval == interval)
                 && self.zone_passes(z, artic, direction, dynamic)
         })
     }

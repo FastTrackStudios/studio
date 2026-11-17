@@ -3153,7 +3153,10 @@ impl SampleEngine {
         // get a short declick ramp: without it the onset steps from silence to
         // a non-zero sample value and clicks on every note change. Shorts keep
         // their sharp natural attack (they start at true sample-start silence).
-        let attack = if matches!(kind, VoiceKind::Legato) && self.transition_fade.is_some() {
+        let attack = if self.spawn_fade_in > 0 {
+            // A script `fade_in` on this voice (the fretboard's slides).
+            self.spawn_fade_in
+        } else if matches!(kind, VoiceKind::Legato) && self.transition_fade.is_some() {
             // The two-stage transition swell (below) IS the fade-in — no
             // separate declick attack, which would double the onset.
             0

@@ -13,7 +13,7 @@
 // fretting, anti-repetition 25 %, one multitrack guitar, Console empty):
 // single notes of Sustain (with its Pop lead-in at velocity 110-127),
 // Staccato and Harmonics, pitched releases, hammer-ons and pull-offs.
-// Not yet: slides (key 17 held), Tapping, FX, the chord voicing search
+// slides (key 17 held). Not yet: Tapping, FX, the chord voicing search
 // (chords already place like single notes; the poly window is unmodelled).
 
 name    "Shreddage 3.5 Abyss"
@@ -56,6 +56,8 @@ articulations (
     // A soft note on a ringing string within four frets (section.styx
     // `hammer`): never selected by itself.
     { id HammerPull, label "Hammer-on / Pull-off", kind @Sustain, dynamics (v1), rr 2, dyn_ctrl velocity, notes full }
+    // The transition of a slide (section.styx `slide`, key 17 held).
+    { id Slide, label "Slide", kind @Sustain, rr 2, dyn_ctrl velocity, notes full }
     // What a let-go note leaves (section.styx `release_layer`).
     { id PitchedRelease, label "Pitched Release", kind @Sustain, rr 2, dyn_ctrl velocity, notes full }
 )

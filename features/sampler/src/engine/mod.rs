@@ -1019,6 +1019,11 @@ pub struct SampleEngine {
     /// The next spawn's `start_offset` is a script `play_note` offset: no
     /// declick beyond the voice's own envelope (`fretboard.rs`).
     pub(crate) spawn_script_offset: bool,
+    /// The fretboard's current step already waited its onset delay.
+    pub(crate) fret_no_hold: bool,
+    /// A linear fade-in for the next spawn (frames), Kontakt's `fade_in`
+    /// (`fretboard.rs`); 0 = none.
+    pub(crate) spawn_fade_in: usize,
     /// Transition-spawn arrival override (ms of sample time) for the
     /// diagnostic semantics sweep — set by `spawn_transition_voice` so the
     /// alignment hold uses the SAME re-interpreted arrival the prefire lead
@@ -1326,6 +1331,8 @@ impl SampleEngine {
             spawn_align_lead: None,
             spawn_extra_hold: 0,
             spawn_script_offset: false,
+            fret_no_hold: false,
+            spawn_fade_in: 0,
             spawn_arrival_override_ms: None,
             zone_choked_scratch: Vec::with_capacity(16),
             zone_capped_scratch: Vec::with_capacity(16),
