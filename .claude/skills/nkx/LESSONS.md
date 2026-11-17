@@ -128,3 +128,11 @@ strings.txt, proj/Kontakt8; scripts/DecompileAt.java decompiles by address).
 - **Classic Limiter**: a fixed 32-sample lookahead delay line (not ms; the index runs 0..=31, wrapping only from 31).
 - **Saturation (module 0x1d)** is `BEffectShaper`: Classic is a table curve
   at base rate (no oversampling, no delay).
+- **Sample resampler** (KONTRA 46eab28): group `interp_quality` 0 Normal = 4-point
+  Lagrange (`FillBlock_ResL`) with the position accumulated as a float inside
+  512-frame PCM cache windows — the source of a ±2 ppm, step-dependent drift
+  against an exact position; 1 High = 9-tap, 2 Ultra = 25-tap Kaiser sinc
+  (`BWindowedSinc`, Up/Down tables, cutoff scaled by the step when downsampling);
+  `|step−1| ≤ 1e-4` is a plain copy. The step is a float32 product. Render KONTRA
+  with `KONTRA_INSPECT_BLOCK=512` to match REAPER's render blocks. CSSS sustains
+  then null at −98…−109 dB.
