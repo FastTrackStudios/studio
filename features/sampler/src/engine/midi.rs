@@ -3189,6 +3189,11 @@ impl SampleEngine {
                 // what "the piano fades in and has no attack" was.
                 0
             }
+        } else if start_offset > 0 && self.spawn_script_offset {
+            // A script's `play_note` offset (the fretboard's lead-in body):
+            // Kontakt enters there under the group envelope alone, whose
+            // attack the voice's authored `amp_env` already plays.
+            0
         } else if start_offset > 0 {
             // Deep mid-sample entry (skipped-swell Low-Latency prefire): fade
             // in over a longer window, scaled to how far we skipped (capped),
@@ -3254,7 +3259,7 @@ impl SampleEngine {
             .with_mic_index(mic_index)
             .with_line(line)
             .with_artic_class(artic_class)
-            .with_pan(u_pan)
+            .with_pan_law(u_pan, self.patch.spec.performance.mono_balance_pan)
             .with_attack(attack)
             .with_start_hold(start_hold)
             .with_pitch_cents(transpose_cents)
@@ -3677,7 +3682,7 @@ impl SampleEngine {
                     .with_line(line)
                     .with_artic_class(artic_class)
                     .with_choke_group(choke_group)
-                    .with_pan(u_pan)
+                    .with_pan_law(u_pan, self.patch.spec.performance.mono_balance_pan)
                     .with_attack(self.attack_frames)
                     .with_decay(self.decay_frames, self.sustain_level)
                     .with_amp_points(self.amp_points.clone(), self.sample_rate)

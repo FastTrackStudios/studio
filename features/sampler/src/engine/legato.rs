@@ -190,6 +190,16 @@ impl SampleEngine {
         .into_iter()
         .flatten()
         .collect();
+        // A fretted articulation's lead-in (`FretLeadInSpec`: Shreddage's
+        // pop before a loud Sustain) plays first, so it must be resident too.
+        if let (Some(a), Some(fb)) = (artic.as_deref(), self.patch.spec.fretboard.as_ref()) {
+            warm_ids.extend(
+                fb.lead_ins
+                    .iter()
+                    .filter(|l| l.articulation.eq_ignore_ascii_case(a))
+                    .map(|l| l.lead.clone()),
+            );
+        }
         // A pending CC58 velocity-group resolves to its concrete articulation
         // only at note-on (from the note's velocity), so `effective_articulation`
         // above can't see it yet — warm EVERY possible resolution (Trills →

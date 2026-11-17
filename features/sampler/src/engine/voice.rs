@@ -1015,9 +1015,17 @@ impl Voice {
     }
 
     #[must_use]
-    pub fn with_pan(mut self, pan: f32) -> Self {
+    pub fn with_pan(self, pan: f32) -> Self {
+        self.with_pan_law(pan, false)
+    }
+
+    /// [`with_pan`](Self::with_pan), with `mono_balance` putting a mono
+    /// source on the stereo balance law (see
+    /// `PerformanceSpec::mono_balance_pan`).
+    #[must_use]
+    pub fn with_pan_law(mut self, pan: f32, mono_balance: bool) -> Self {
         let pan = pan.clamp(-1.0, 1.0);
-        if self.data.channels >= 2 {
+        if self.data.channels >= 2 || mono_balance {
             // Stereo source: use a *balance* law so a centered (pan=0) stereo
             // sample passes L→L / R→R at unity. An equal-power law would apply
             // a spurious −3 dB at center to material that is already stereo —

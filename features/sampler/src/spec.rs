@@ -591,6 +591,12 @@ pub struct PerformanceSpec {
     /// see `Voice::release_k`). CSS in Kontakt: 2.6 over `release_ms` 580.
     #[facet(default)]
     pub release_curve_k: f32,
+    /// Pan a mono sample with the balance law stereo samples use (unity in
+    /// both channels at centre) instead of equal power (−3 dB each at
+    /// centre). Kontakt plays a centred mono zone at unity: a mono DI
+    /// guitar nulls 2.97 dB quieter without it. Default off.
+    #[facet(default)]
+    pub mono_balance_pan: bool,
     /// Strikes of one key kept ringing when it is struck again (older ones
     /// fade over 100 ms). `None` = 2 (a pedalled piano's guard); `Some(0)` =
     /// every strike rings on — Kontakt's CSS (null test: shorts re-struck
@@ -768,6 +774,7 @@ impl Default for PerformanceSpec {
             instrument_pan: 0.0,
             resample_transpose: false,
             release_curve_k: 0.0,
+            mono_balance_pan: false,
             max_repeat_strikes: None,
             strict_key_ranges: false,
             rr_per_key: false,
@@ -3911,6 +3918,19 @@ pub struct FretboardSpec {
     /// order for its count cycles.
     #[facet(default)]
     pub rr_orders: Vec<RrOrderSpec>,
+    /// When set, a position's RR counter is the slot `stride·string + fret`
+    /// (0-based string), so a fret past the stride shares the next
+    /// string's counter: Shreddage indexes `%s3___string_rr_matrix` as
+    /// `24·string + fret` with frets 0..=24, and fret 24 of one string
+    /// counts with fret 0 of the string below. 0 = one counter per
+    /// (string, fret).
+    #[facet(default)]
+    pub rr_slot_stride: u8,
+    /// Every fretted voice starts this long after its note (µs): Kontakt's
+    /// Shreddage defers each note through a 1 µs phantom note and a 50 µs
+    /// poly-input window. Floored to whole frames. Default 0.
+    #[facet(default)]
+    pub onset_delay_us: f32,
     /// Anti-repetition: sometimes play the recording two frets away,
     /// retuned. `None` = never.
     pub borrow: Option<FretBorrowSpec>,
@@ -3918,6 +3938,32 @@ pub struct FretboardSpec {
     /// over this long (ms); another note on that string releases it.
     #[facet(default)]
     pub retrigger_fade_ms: f32,
+    /// Articulations that open with another recording at high velocity.
+    #[facet(default)]
+    pub lead_ins: Vec<FretLeadInSpec>,
+}
+
+/// A lead-in (see [`FretboardSpec::lead_ins`]): `articulation` played at
+/// `min_velocity` or above first plays `lead` (Shreddage's pop); after
+/// `body_delay_ms`, if the key still holds its string, the lead fades over
+/// `lead_fade_ms` and `articulation` enters `body_offset_ms` into its
+/// recording. Released sooner, the lead alone sounds. The lead's round
+/// robin is a borrow-generator draw mod its RR count, taken after a borrow
+/// draw the lead never uses.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretLeadInSpec {
+    /// The articulation that opens with a lead.
+    pub articulation: String,
+    /// The lowest velocity that plays the lead.
+    pub min_velocity: u8,
+    /// The lead articulation.
+    pub lead: String,
+    /// From the lead's start to the body's (ms).
+    pub body_delay_ms: f32,
+    /// The lead's fade when the body enters (ms).
+    pub lead_fade_ms: f32,
+    /// Where in its recording the body starts (ms).
+    pub body_offset_ms: f32,
 }
 
 /// [`FretboardSpec`] placement weights (each added to a string's score).

@@ -1015,7 +1015,10 @@ pub struct SampleEngine {
     spawn_align_lead: Option<u64>,
     /// Extra frames every voice spawned right now is held back (the release
     /// sample's `release_delay_ms`); 0 otherwise.
-    spawn_extra_hold: usize,
+    pub(crate) spawn_extra_hold: usize,
+    /// The next spawn's `start_offset` is a script `play_note` offset: no
+    /// declick beyond the voice's own envelope (`fretboard.rs`).
+    pub(crate) spawn_script_offset: bool,
     /// Transition-spawn arrival override (ms of sample time) for the
     /// diagnostic semantics sweep — set by `spawn_transition_voice` so the
     /// alignment hold uses the SAME re-interpreted arrival the prefire lead
@@ -1322,6 +1325,7 @@ impl SampleEngine {
             forced_rr: None,
             spawn_align_lead: None,
             spawn_extra_hold: 0,
+            spawn_script_offset: false,
             spawn_arrival_override_ms: None,
             zone_choked_scratch: Vec::with_capacity(16),
             zone_capped_scratch: Vec::with_capacity(16),
@@ -2362,6 +2366,7 @@ impl SampleEngine {
                 })
                 .chain(trill)
                 .chain(self.phrase_due_in())
+                .chain(self.fret_due_in())
                 .min()
                 .map_or(block_frames - done, |f| f.clamp(1, block_frames - done));
             part(&mut self.voices, done, next);
@@ -2383,6 +2388,7 @@ impl SampleEngine {
     /// ascending [`LineId`] order — deterministic when several fire together.
     fn fire_due_legato(&mut self) {
         self.fire_phrase();
+        self.fire_fret_due();
         if self
             .trill_due
             .as_ref()
