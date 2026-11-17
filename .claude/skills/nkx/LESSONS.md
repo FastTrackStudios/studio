@@ -88,3 +88,23 @@ recur.
 - **Fitting one draw kind at a time can settle on the wrong pair**: refit
   RR + detune together (`fit_joint.py`), check a pitch-dip depth by
   rendering (`fit_pitch_env.py`).
+- **An instrument overlay's `kontakt_transition` replaces the library's whole
+  block**: a field added at library level never reaches an instrument that
+  has one. If an A/B comes back byte-identical, check that the change can
+  reach the engine before reading anything into it.
+- **Decoded is not proof that a path runs**: CSSS's `$1z3x0` phrase ramp
+  sits on a shared path, but applied to legato it made 17 of 28 units worse
+  (marcato, the same code, got better). Keep a decode only once a null
+  confirms it.
+
+## Extraction
+
+- **Use nkx-extract ≥ 45dc0be** (local). Older builds wrote one syscall per
+  sample (~95% kernel time, ~2,000 CPU-s/GB; now ~6.5) and left short WAVs
+  when killed, which the next run skipped as "already extracted". Now each
+  WAV is written as `.wav.part` and renamed.
+- **Find short WAVs** from any older run with
+  `nkx-extract/scripts/find_truncated_wavs.py <dir> [--delete]`: hound's
+  placeholder sizes (RIFF 8, data 0) mean a write never finished.
+- **An alphanumeric SNPID** (e.g. CSB `Q46`) is not the archive's set id:
+  read the u32 at byte 6 of the `.nkx` header and pass that (CSB: `9426`).
