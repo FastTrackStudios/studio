@@ -1,5 +1,4 @@
 ---
-"audio" = "patch"
 "daw-standalone" = "minor"
 "session-engine" = "minor"
 "session-ui" = "minor"

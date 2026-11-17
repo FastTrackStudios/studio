@@ -3,11 +3,12 @@
 **studio is FastTrackStudio's audio/music product in one repo**: the DAW
 (`daw`) and everything built on it — **Studio, the one app** (Signal, the
 live rig, and Session, the full DAW, as views of one project behind one
-welcome screen, the library), Patchbay
-(studio routing), the CLAP/VST3 plugins, and frame (the design /
+welcome screen, the library), the CLAP/VST3 plugins, and frame (the design /
 control-surface engine). It is the merger, in October
 2026, of the former session, daw, processor, signal, patchbay and frame
-repos. One Cargo workspace, one lockfile, one `target/`, one flake.
+repos. One Cargo workspace, one lockfile, one `target/`, one flake. Patchbay
+(studio routing) went back to its own repo, FastTrackStudios/patchbay, in
+November 2026 (studio#510).
 
 ## Layout
 
@@ -31,13 +32,15 @@ apps/       studio/desktop                     Studio, THE app (desktop + iOS, o
                                                Studio's extensions compiled in; its node
                                                is the hosted Architect
                                                (docs/architect-distribution.md)
-            patchbay/                          fts-patchbay: app, agent CLI, browser remote
             plugins/*                          the CLAP/VST3 plugins (`<name>-plugin`),
                                                verify/ (bundle load checks)
             themer/
-crates/     daw/*      the DAW alone: the domain core (`daw`), proto, control,
-                       the standalone engine (`daw-standalone`), audio-graph,
-                       allocator, transport-sync, actions, module, utils
+crates/     daw/*      the DAW alone: the domain core (`daw`), the standalone
+                       engine (`daw-standalone`), session-format, actions.
+                       Its base (proto, control, module, transport-sync,
+                       audio-graph, allocator, the test macro, utils, and
+                       `midi`, `audio`, `fts-sample`) is in
+                       FastTrackStudios/daw, taken by git: see "The base"
             studio/    the umbrella over daw: REAPER adapter, project files,
                        UI, CSI, the daw CLI, the integration-test harness —
                        all cargo features of `studio`
@@ -66,8 +69,8 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
                          kept as project notes of an Architect vault with
                          a stage; an Ableton show set's songs as a setlist
                          (`studio productions …`; studio#396)
-            session/, song/, sampler/, plugin-host/, audio/, midi/, input/,
-            sync/, chords/, formats/, patchbay/, control-surfaces/,
+            session/, song/, sampler/, plugin-host/, input/,
+            sync/, chords/, formats/, control-surfaces/,
             dynamic-template/, patch-list/, preset-browser/, …
             ui/*         shared UI: daw-ui, dock, plugin-core, plugin-faces, …
             app/         shell (log ring, crash log, update check), launcher
@@ -75,7 +78,7 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
 vendor/     patched third-party crates (each with UPSTREAM.md or FTS-PATCH.md)
 xtask/      devtools, frame (Figma parity), plugins (the bundler), session-reaper
 docs/       design/ (one-engine.md), per-domain notes (daw, signal, frame,
-            patchbay, …), agents/, guides, specs
+            …), agents/, guides, specs
 nix/        flake modules (toolchain, shells, packages), reaper-config,
             vendored flakes
 scripts/    helper scripts the Justfile calls
@@ -117,14 +120,15 @@ working there.
 
 - **One crate per feature, with cargo features** — not `-proto` / `-ui` /
   `-dsp` sibling crates. A feature's wire types, UI and engine are features
-  of its one crate (`features/dsp/eq`: `native`, `ui`, `profiles`, …;
-  `features/patchbay`: `server`, `ui`, `vox`).
+  of its one crate (`features/dsp/eq`: `native`, `ui`, `profiles`, …).
 - **Path deps inside the repo, declared once** in the root
   `[workspace.dependencies]` and consumed as `x.workspace = true`.
   `default-features = false` cannot be set on a workspace-inherited dep —
   put it on the `[workspace.dependencies]` entry.
 - **Git deps across repos, pinned to a tag** (architect, keyflow, editor,
-  music-convention, neural-amp-modeler-rs, the `vendor` repo). The branch
+  music-convention, neural-amp-modeler-rs, the `vendor` repo). The base
+  crates from FastTrackStudios/daw are pinned to one revision until that
+  repo cuts a tag. The branch
   pins that remain say why in Cargo.toml (nice-plug's `fts-baseview-03`,
   reaper-rs, task's `editor`).
 - **The root `[patch]` tables**, all live: `crates-io` (the vendor repo's
@@ -132,15 +136,50 @@ working there.
   anyrender_* / winit-uikit / wgpu-hal / raw-window-metal forks, the FTS
   blitz tag, pipewire-rs past 0.10.0); `DioxusLabs/dioxus` (the vendor
   repo's dioxus-native{,-dom} and dioxus-core);
-  `FastTrackStudios/daw` (hands keyflow's git dep the in-tree `daw`,
-  `dawfile-reaper` and `fts-sample` — goes when keyflow takes them from
-  studio). There is no architect `[patch]`: studio, keyflow and task@main
+  `FastTrackStudios/daw` (hands keyflow's git dep, which still names the
+  daw repo's old tag, the in-tree `daw` and `dawfile-reaper`, and the
+  `fts-sample` Studio builds, named on the `www.` host because a patch
+  may not point back at its own source: goes when keyflow pins the daw
+  repo at Studio's revision). There is no architect `[patch]`: studio, keyflow and task@main
   pin the same architect tag, so `Cargo.lock` holds one architect source;
   bump them together. A `[patch]` **cannot rename a crate**.
 - **Co-developing across repos**: override with a local checkout —
   `[patch."https://github.com/FastTrackStudios/architect"] architect =
   { path = "../architect/architect" }` — and never commit it; the paths are
   machine-specific.
+- **The base** (`daw-proto`, `daw-control`, `daw-module`,
+  `daw-transport-sync`, `daw-audio-graph`, `daw-allocator`,
+  `daw-test-macro`, `utils`, `midi`, `audio`, `fts-sample`) lives in
+  FastTrackStudios/daw at the paths it had here (`daw:crates/daw/proto`,
+  `daw:features/midi`, …; studio#510). A change to one of them is a PR
+  there, then a bump of the one `rev` in the root `[workspace.dependencies]`
+  (and of `fts-sample`'s in the daw `[patch]` table) here. To work on both
+  at once, check the daw repo out beside this one and add the crates you
+  are changing to the existing daw `[patch]` table in the root
+  `Cargo.toml`, **never committed**:
+
+  ```toml
+  [patch."https://github.com/FastTrackStudios/daw"]
+  # …the three entries already there; for fts-sample, replace its line…
+  daw-proto          = { path = "../daw/crates/daw/proto" }
+  daw-control        = { path = "../daw/crates/daw/control" }
+  daw-module         = { path = "../daw/crates/daw/module" }
+  daw-transport-sync = { path = "../daw/crates/daw/transport-sync" }
+  daw-audio-graph    = { path = "../daw/crates/daw/audio-graph" }
+  daw-allocator      = { path = "../daw/crates/daw/allocator" }
+  daw-test-macro     = { path = "../daw/crates/daw/macros" }
+  utils              = { path = "../daw/crates/daw/utils" }
+  midi               = { path = "../daw/features/midi" }
+  audio              = { path = "../daw/features/audio" }
+  fts-sample         = { path = "../daw/features/audio/sample" }
+  ```
+
+  Patch every crate whose types cross the one you are editing
+  (`daw-control` and `daw-proto` with `daw-transport-sync` and `midi`), or
+  cargo builds two copies and their types do not unify. `cargo check`
+  then rewrites `Cargo.lock`: do not commit that either (`git checkout
+  Cargo.lock` when done). A patch that does get committed fails `PR
+  checks`: the paths do not exist on the runner.
 - **`include_str!` / `@import` across a repo boundary does not work** (a
   git dep has no stable path on disk). Export the bytes from the owning
   crate (`architect_ui::THEME_CSS`), or resolve the path with
@@ -318,9 +357,7 @@ Vendored code keeps the licence of the code it vendors, because it is not
 ours to change: everything under `vendor/` (dioxus-test, facet-swift —
 MIT and/or Apache-2.0) and in FastTrackStudios/vendor (the dioxus crates,
 baseview, anyrender_*, wgpu-hal, winit-uikit, raw-window-metal — MIT
-and/or Apache-2.0; `world`, the WORLD vocoder — BSD-3-Clause), and
-`features/patchbay/driver` (forked from MARS mars-hal:
-`GPL-3.0-or-later AND MIT`). Incoming code must be GPL-compatible (MIT,
+and/or Apache-2.0; `world`, the WORLD vocoder — BSD-3-Clause). Incoming code must be GPL-compatible (MIT,
 BSD, Apache-2.0 — keep the notice and licence text); code cannot go the
 other way.
 
@@ -363,7 +400,7 @@ as a CLAP/VST3 editor and embedded in REAPER, through one pipeline:
   handler, and there is no `placeholder`. Load the **`blitz-design`
   skill** before building or refactoring this UI.
 
-**Processing cores** (`crates/daw/audio-graph`, the engines in
+**Processing cores** (`daw:crates/daw/audio-graph`, the engines in
 `features/dsp/*`, the sampler engine) build for native, WASM/AudioWorklet
 and embedded `no_std`: `#![no_std]` + `alloc` (gate `std` behind an
 additive feature); no heap allocation on the hot path (pre-allocate in
@@ -382,13 +419,15 @@ is text in, text out; each effect's `tests/param_round_trip.rs` holds that
 line. Tempo-synced times use `dsp_core::time` (note values, dotted and
 triplet); do not grow a second table.
 
-**Realtime lints**: `features/{dsp,rigs,audio}/clippy.toml` add the
+**Realtime lints**: `features/{dsp,rigs}/clippy.toml` (and
+`daw:features/audio/clippy.toml` in the daw repo) add the
 audio-thread rules (`disallowed-methods` for locks, `env::var`, sleeps;
 `too-large-for-stack`). Clippy reads the nearest `clippy.toml`, so they hold
 under those trees and nowhere else — keep the three copies identical, and
 keep the shared settings in step with the root one.
 
-**Realtime lints**: `features/{dsp,rigs,audio}/clippy.toml` add the
+**Realtime lints**: `features/{dsp,rigs}/clippy.toml` (and
+`daw:features/audio/clippy.toml` in the daw repo) add the
 audio-thread rules (`disallowed-methods` for locks, `env::var`, sleeps;
 `too-large-for-stack`). Clippy reads the nearest `clippy.toml`, so they hold
 under those trees and nowhere else — keep the three copies identical, and

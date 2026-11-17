@@ -1,5 +1,4 @@
 ---
-"fts-sample" = "patch"
 "sampler" = "patch"
 "signal-orchestra" = "patch"
 ---
