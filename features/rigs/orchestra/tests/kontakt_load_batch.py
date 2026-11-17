@@ -57,7 +57,7 @@ def main():
     rpp = os.environ.get("KT_RPP", "~/orchestra-ab/perc_load.rpp")
     wait = os.environ.get("KT_WAIT", "25")
     os.makedirs(CHAINS, exist_ok=True)
-    done = failed = 0
+    done = failed = streak = 0
     last = None
     for line in open(lst):
         parts = line.rstrip("\n").split("\t")
@@ -74,7 +74,10 @@ def main():
         r = subprocess.run(SSH + [cmd], capture_output=True, text=True, timeout=300)
         if r.returncode != 0:
             print(f"{tag}: load failed: {(r.stderr or r.stdout).strip()[-300:]}", flush=True)
-            failed += 1
+            failed += 1; streak += 1
+            if streak >= 3:
+                print("3 failures in a row: stopping (look at /tmp/kt_*.png on the host)", flush=True)
+                break
             continue
         local = os.path.join(CHAINS, f".{tag}.rpp")
         subprocess.run(["scp", "-q", "-o", "HostKeyAlias=voyager", f"{SCP_HOST}:orchestra-ab/perc_saved/{tag}.rpp",
@@ -84,9 +87,12 @@ def main():
         state = re.sub(r"^\s*(FLOATPOS|FXID|WAK|PRESETNAME|LASTSEL|SHOW).*$", "", blk or "", flags=re.M)
         if not blk or state == last:
             print(f"{tag}: the saved chain is the previous one: the load did not happen", flush=True)
-            failed += 1
+            failed += 1; streak += 1
+            if streak >= 3:
+                print("3 failures in a row: stopping (look at /tmp/kt_*.png on the host)", flush=True)
+                break
             continue
-        last = state
+        last = state; streak = 0
         open(chain, "w").write(blk)
         done += 1
         print(f"{tag}: chain {len(blk) // 1024} KB", flush=True)
