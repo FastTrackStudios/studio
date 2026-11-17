@@ -156,3 +156,17 @@ strings.txt, proj/Kontakt8; scripts/DecompileAt.java decompiles by address).
 - **Marcato body glide** (CSSS KSP 13033–13077): −13.8 cents → 0 over 60 one-ms
   ticks of relative `change_tune`; `setNoteEventPar` 0x11 multiplies the voice's
   tune by exp2(mcent/1.2e6).
+- **KONTRA runs Kontakt instruments events-first** (45bb993): per chunk, every
+  MIDI event and `wait()` resume first, then the chunk renders; voice starts
+  stay at their own frame. `change_vol` follows Kontakt's law (a target more than
+  0.1% away is approached by 1/1800 of the gap per frame, unsmoothed start;
+  mB → `exp2(mB/6000)`; `ProcessVoice` 0x45c3cc). The AHDSR releases at the
+  note-off's own frame (`BEnvelopeAHDSR::Terminate` keeps the offset); the flex
+  envelope releases from the chunk start. `fade_out` starts at its event frame;
+  a fade-out with stop does not count as a note-off.
+- **Flex envelope = BEnvelopeFM7** (ce0988e): one value per 32-frame step,
+  ramped one step late; per stage `v ← a + r·v`, `r = q^(1/N)`
+  (`NextStage` 0x670bb0), a 5 ms wait when the first stage is > 100 ms, and a
+  scaled first-stage time on release.
+- **CSSS Violin I vs seeded Kontakt (KONTRA, block 512)**: probe −56.1, legato
+  −51.4, leg2 −52.6, marcato −59.7, marc2 −52.9 dB strict median.
