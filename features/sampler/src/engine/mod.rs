@@ -232,6 +232,7 @@ mod legato;
 mod midi;
 mod phrase;
 pub mod pitch_shift;
+pub mod resample;
 pub mod rr;
 mod script_legato;
 pub mod trace;
@@ -1381,6 +1382,9 @@ impl SampleEngine {
             recent_cache_misses: RefCell::new(VecDeque::with_capacity(RECENT_MISS_LIMIT)),
             recent_sample_misses: RefCell::new(VecDeque::with_capacity(RECENT_MISS_LIMIT)),
         };
+        engine.voices.set_interp(resample::Interp::parse(
+            &engine.patch.spec.performance.interpolation,
+        ));
         engine.apply_fixed_ccs();
         engine.insert_plans = engine
             .patch
@@ -2443,8 +2447,10 @@ impl SampleEngine {
                 .chain(self.script_leg_due_in())
                 .min()
                 .map_or(block_frames - done, |f| f.clamp(1, block_frames - done));
+            self.voices.set_now(self.frames_rendered);
             part(&mut self.voices, done, next);
             self.frames_rendered += next as u64;
+            self.voices.set_now(self.frames_rendered);
             for l in &mut self.lines {
                 if let LegatoState::Pending {
                     frames_remaining, ..

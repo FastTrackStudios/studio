@@ -60,6 +60,7 @@ performance {
     pedal_ignored      true   // the script reads CC64 (octave legato); key-ups are not held
     rr_random_global   true   // one RR for every articulation and key (UpdateRoundRobinIndex)
     artic_change_fade_ms 100  // a note of another articulation cuts everything ($hrmlz ships on)
+    interpolation      kontakt_normal  // every group of all 17 NKIs ships Normal quality (KONTRA load)
 }
 
 dynamics {
