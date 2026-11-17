@@ -3,11 +3,12 @@
 **studio is FastTrackStudio's audio/music product in one repo**: the DAW
 (`daw`) and everything built on it — **Studio, the one app** (Signal, the
 live rig, and Session, the full DAW, as views of one project behind one
-welcome screen, the library), Patchbay
-(studio routing), the CLAP/VST3 plugins, and frame (the design /
+welcome screen, the library), the CLAP/VST3 plugins, and frame (the design /
 control-surface engine). It is the merger, in October
 2026, of the former session, daw, processor, signal, patchbay and frame
-repos. One Cargo workspace, one lockfile, one `target/`, one flake.
+repos. One Cargo workspace, one lockfile, one `target/`, one flake. Patchbay
+(studio routing) went back to its own repo, FastTrackStudios/patchbay, in
+November 2026 (studio#510).
 
 ## Layout
 
@@ -31,7 +32,6 @@ apps/       studio/desktop                     Studio, THE app (desktop + iOS, o
                                                Studio's extensions compiled in; its node
                                                is the hosted Architect
                                                (docs/architect-distribution.md)
-            patchbay/                          fts-patchbay: app, agent CLI, browser remote
             plugins/*                          the CLAP/VST3 plugins (`<name>-plugin`),
                                                verify/ (bundle load checks)
             themer/
@@ -70,7 +70,7 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
                          a stage; an Ableton show set's songs as a setlist
                          (`studio productions …`; studio#396)
             session/, song/, sampler/, plugin-host/, input/,
-            sync/, chords/, formats/, patchbay/, control-surfaces/,
+            sync/, chords/, formats/, control-surfaces/,
             dynamic-template/, patch-list/, preset-browser/, …
             ui/*         shared UI: daw-ui, dock, plugin-core, plugin-faces, …
             app/         shell (log ring, crash log, update check), launcher
@@ -78,7 +78,7 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
 vendor/     patched third-party crates (each with UPSTREAM.md or FTS-PATCH.md)
 xtask/      devtools, frame (Figma parity), plugins (the bundler), session-reaper
 docs/       design/ (one-engine.md), per-domain notes (daw, signal, frame,
-            patchbay, …), agents/, guides, specs
+            …), agents/, guides, specs
 nix/        flake modules (toolchain, shells, packages), reaper-config,
             vendored flakes
 scripts/    helper scripts the Justfile calls
@@ -120,8 +120,7 @@ working there.
 
 - **One crate per feature, with cargo features** — not `-proto` / `-ui` /
   `-dsp` sibling crates. A feature's wire types, UI and engine are features
-  of its one crate (`features/dsp/eq`: `native`, `ui`, `profiles`, …;
-  `features/patchbay`: `server`, `ui`, `vox`).
+  of its one crate (`features/dsp/eq`: `native`, `ui`, `profiles`, …).
 - **Path deps inside the repo, declared once** in the root
   `[workspace.dependencies]` and consumed as `x.workspace = true`.
   `default-features = false` cannot be set on a workspace-inherited dep —
@@ -358,9 +357,7 @@ Vendored code keeps the licence of the code it vendors, because it is not
 ours to change: everything under `vendor/` (dioxus-test, facet-swift —
 MIT and/or Apache-2.0) and in FastTrackStudios/vendor (the dioxus crates,
 baseview, anyrender_*, wgpu-hal, winit-uikit, raw-window-metal — MIT
-and/or Apache-2.0; `world`, the WORLD vocoder — BSD-3-Clause), and
-`features/patchbay/driver` (forked from MARS mars-hal:
-`GPL-3.0-or-later AND MIT`). Incoming code must be GPL-compatible (MIT,
+and/or Apache-2.0; `world`, the WORLD vocoder — BSD-3-Clause). Incoming code must be GPL-compatible (MIT,
 BSD, Apache-2.0 — keep the notice and licence text); code cannot go the
 other way.
 
