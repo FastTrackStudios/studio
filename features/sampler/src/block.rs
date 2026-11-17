@@ -418,6 +418,11 @@ impl SamplerBlock {
         self.engine.set_host_tempo(bpm);
     }
 
+    /// See [`SampleEngine::skip_script_draws`].
+    pub fn skip_script_draws(&mut self, n: u32) {
+        self.engine.skip_script_draws(n);
+    }
+
     /// See [`SampleEngine::set_script_seed`].
     pub fn set_script_seed(&mut self, seed: u32) {
         self.engine.set_script_seed(seed);

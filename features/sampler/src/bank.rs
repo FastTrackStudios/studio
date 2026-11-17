@@ -880,6 +880,10 @@ impl SamplerBank {
         self.with_block(id, |b| b.set_host_tempo(bpm));
     }
 
+    pub fn skip_script_draws(&mut self, id: &str, n: u32) {
+        self.with_block(id, |b| b.skip_script_draws(n));
+    }
+
     pub fn set_script_seed(&mut self, id: &str, seed: u32) {
         self.with_block(id, |b| b.set_script_seed(seed));
     }

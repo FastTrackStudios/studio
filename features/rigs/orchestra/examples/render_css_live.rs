@@ -160,6 +160,14 @@ fn render_one(
             rig.set_script_seed(ID, seed);
         }
     }
+    // `--ksp-skip N`: N draws the reference's script made before its first
+    // note, after the seed (a probe of where two draw streams part)
+    if let Some(&n) = draws::<u32>(args, "--ksp-skip")
+        .and_then(|v| v.first().copied())
+        .as_ref()
+    {
+        rig.skip_script_draws(ID, n);
+    }
     // `--rrs a,b,…`: random short RR draws (0-based; woodwinds / brass).
     if let Some(v) = draws::<u8>(args, "--rrs") {
         rig.force_random_rrs(ID, &v);

@@ -2031,6 +2031,14 @@ impl SampleEngine {
         }
     }
 
+    /// Discard `n` script draws (a reference render whose script drew them
+    /// before its first note, after the seed was pinned).
+    pub fn skip_script_draws(&mut self, n: u32) {
+        for _ in 0..n {
+            self.script_draw(0, 1);
+        }
+    }
+
     /// One script draw, `lo..=hi`.
     pub(crate) fn script_draw(&mut self, lo: i32, hi: i32) -> i32 {
         match self.ksp_state.as_mut() {

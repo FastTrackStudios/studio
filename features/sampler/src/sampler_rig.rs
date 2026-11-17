@@ -898,6 +898,14 @@ impl SamplerRig {
         }
     }
 
+    /// Discard script draws — see
+    /// [`crate::engine::SampleEngine::skip_script_draws`].
+    pub fn skip_script_draws(&self, id: &str, n: u32) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.skip_script_draws(id, n);
+        }
+    }
+
     /// Draw the script's random numbers from a KSP seed — see
     /// [`crate::engine::SampleEngine::set_script_seed`].
     pub fn set_script_seed(&self, id: &str, seed: u32) {
