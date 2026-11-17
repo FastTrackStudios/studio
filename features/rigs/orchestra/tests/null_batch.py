@@ -42,6 +42,7 @@ ROOTS = {
     "strings": "/run/media/AudioHaven/Sampled/Orchestral/Cinematic Series/Cinematic Studio Strings",
     "woodwinds": "/run/media/AudioHaven/Sampled/Orchestral/Cinematic Series/Cinematic Studio Woodwinds",
     "brass": "/run/media/AudioHaven/Sampled/Orchestral/Cinematic Series/Cinematic Studio Brass",
+    "solo-strings": "/run/media/AudioHaven/Sampled/Orchestral/Cinematic Series/Cinematic Studio Solo Strings",
 }
 MODES = {
     "strings": "probe legato leg2 marcato marc2 shorts pizz trem rebow attack".split(),
@@ -49,6 +50,7 @@ MODES = {
     # test their own (ext)
     "woodwinds": "probe legato leg2 marcato marc2 shorts attack ext".split(),
     "brass": "probe legato leg2 marcato marc2 shorts attack ext".split(),
+    "solo-strings": "probe legato leg2 marcato marc2 shorts pizz trem rebow attack".split(),
 }
 FLAGS = {
     "probe": [], "legato": ["--legato"], "leg2": ["--legato", "--zone2"], "marcato": ["--marcato"],
@@ -86,9 +88,9 @@ def draw_files(lib, mode):
         return [("--tunes", "draws.txt")]
     if lib == "brass" and mode == "marc2":
         return [("--rrs", "draws_rr.txt"), ("--tunes", "draws.txt")]
-    # brass ext: Mutereps / Rips draw their RRs, a Taka phrase its hits
+    # brass ext: Mutereps / Rips draw their RRs (and detune), a Taka phrase its hits
     if lib == "brass" and mode == "ext":
-        return [("--rrs", "draws.txt")]
+        return [("--rrs", "draws_rr.txt"), ("--tunes", "draws.txt")]
     fit_mode = "shorts" if lib != "strings" and mode == "marc2" else mode
     if fit_mode not in ("shorts", "pizz", "leg2", "attack"):
         return None

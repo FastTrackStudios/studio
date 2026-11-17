@@ -196,7 +196,7 @@ for mode in "${modes[@]}"; do
       if [ "$lib" = woodwinds ] && [ "$mode" = marc2 ]; then
         penv0="--pitch-envs $(printf '0:333,%.0s' $(seq 400) | sed 's/,$//')"
       fi
-      if { [ "$lib" = woodwinds ] || { [ "$lib" = brass ] && [ "$mode" = marc2 ]; }; } && [ "$kind" = --rrs ]; then
+      if { [ "$lib" = woodwinds ] || { [ "$lib" = brass ] && { [ "$mode" = marc2 ] || [ "$mode" = ext ]; }; }; } && [ "$kind" = --rrs ]; then
         # woodwinds shorts also detune a note the key has not struck within
         # the gate (KSP $14yum / $5i0r1): fit the RRs with the detune held at
         # 0, then the detune with those RRs held
