@@ -900,6 +900,10 @@ impl SamplerBank {
         self.with_block(id, |b| b.force_random_tunes(cents));
     }
 
+    pub fn set_ksp_seed(&mut self, id: &str, seed: u32) {
+        self.with_block(id, |b| b.set_ksp_seed(seed));
+    }
+
     pub fn force_random_pitch_envs(&mut self, id: &str, draws: &[(f32, f32)]) {
         self.with_block(id, |b| b.force_random_pitch_envs(draws));
     }

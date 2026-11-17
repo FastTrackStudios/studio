@@ -222,6 +222,7 @@ pub use fts_sample::stream_wasm;
 pub use fts_sample::stream_cache;
 mod dispatch;
 pub mod filter;
+mod fretboard;
 mod helpers;
 pub(crate) use helpers::kontakt_offset_frames;
 pub mod inserts;
@@ -953,6 +954,8 @@ pub struct SampleEngine {
     /// Per-note-class RR counters of the `rr_per_note` shorts (CSS Sfz,
     /// Bartok pizz: KSP `%nkhtz[%dtnvu[note]]`), reset by CC59.
     pub(crate) short_key_rr: [u8; 128],
+    /// The fretboard stage's memory (`fretboard.rs`).
+    pub(crate) fret: fretboard::FretState,
     /// `ArticulationSpec::rr_sequence` state: the counter per (articulation,
     /// velocity band) and the last RR per (articulation, band, note-class).
     pub(crate) seq_rr_counter: HashMap<(String, usize), usize>,
@@ -1060,7 +1063,22 @@ pub struct SampleEngine {
     spawn_align_lead: Option<u64>,
     /// Extra frames every voice spawned right now is held back (the release
     /// sample's `release_delay_ms`); 0 otherwise.
-    spawn_extra_hold: usize,
+    pub(crate) spawn_extra_hold: usize,
+    /// The next spawn's `start_offset` is a script `play_note` offset: no
+    /// declick beyond the voice's own envelope (`fretboard.rs`).
+    pub(crate) spawn_script_offset: bool,
+    /// The fretboard's current step already waited its onset delay.
+    pub(crate) fret_no_hold: bool,
+    /// A linear fade-in for the next spawn (frames), Kontakt's `fade_in`
+    /// as the fretboard stage plays it (`fretboard.rs`): the voice's attack
+    /// is this long. 0 = none. Apart from `spawn_fade_in`, a script
+    /// legato's `fade_in`, which ramps the voice's gain under its attack:
+    /// each is matched to its own Kontakt references.
+    pub(crate) spawn_fade_attack: usize,
+    /// The next spawn's pan instead of its zone's (`fretboard.rs` tracks).
+    pub(crate) spawn_pan: Option<f32>,
+    /// Cents added to the next spawn's tune (`fretboard.rs`).
+    pub(crate) spawn_tune_cents: f32,
     /// Transition-spawn arrival override (ms of sample time) for the
     /// diagnostic semantics sweep — set by `spawn_transition_voice` so the
     /// alignment hold uses the SAME re-interpreted arrival the prefire lead
@@ -1342,6 +1360,7 @@ impl SampleEngine {
             in_transition: false,
             note_rr: [0; 128],
             short_key_rr: [0; 128],
+            fret: fretboard::FretState::default(),
             seq_rr_counter: HashMap::new(),
             seq_rr_last: HashMap::new(),
             short_key_frame: [None; 128],
@@ -1382,6 +1401,11 @@ impl SampleEngine {
             forced_rr: None,
             spawn_align_lead: None,
             spawn_extra_hold: 0,
+            spawn_script_offset: false,
+            fret_no_hold: false,
+            spawn_fade_attack: 0,
+            spawn_pan: None,
+            spawn_tune_cents: 0.0,
             spawn_arrival_override_ms: None,
             zone_choked_scratch: Vec::with_capacity(16),
             zone_capped_scratch: Vec::with_capacity(16),
@@ -1432,7 +1456,9 @@ impl SampleEngine {
         self.insert_plans
             .iter()
             .find(|(a, d, _)| {
-                a.eq_ignore_ascii_case(&z.articulation) && d.eq_ignore_ascii_case(&z.dynamic)
+                // an empty `dynamic` serves every layer
+                a.eq_ignore_ascii_case(&z.articulation)
+                    && (d.is_empty() || d.eq_ignore_ascii_case(&z.dynamic))
             })
             .map(|(_, _, p)| std::sync::Arc::clone(p))
     }
@@ -2108,6 +2134,13 @@ impl SampleEngine {
         }
     }
 
+    /// Seed Kontakt's KSP `random()` for the fretboard stage's script draws
+    /// (`ksp_rand.rs`): the state a reference render pins at transport start
+    /// (the KSP Seed CLAP, KONTRA's `KONTRA_KSP_SEED`). Default 1.
+    pub fn set_ksp_seed(&mut self, seed: u32) {
+        self.fret.set_ksp_seed(seed);
+    }
+
     /// Use these random pitch-envelope draws `(cents, decay_ms)` in order
     /// before the generator (`RandomPitchEnvSpec`).
     pub fn force_random_pitch_envs(&mut self, draws: &[(f32, f32)]) {
@@ -2508,6 +2541,7 @@ impl SampleEngine {
                 .chain(self.phrase_due_in())
                 .chain(self.script_leg_due_in())
                 .chain(self.divisi_due_in())
+                .chain(self.fret_due_in())
                 .min()
                 .map_or(block_frames - done, |f| f.clamp(1, block_frames - done));
             self.voices.set_now(self.frames_rendered);
@@ -2533,6 +2567,7 @@ impl SampleEngine {
         self.fire_phrase();
         self.fire_script_legato();
         self.fire_divisi();
+        self.fire_fret_due();
         if self
             .trill_due
             .as_ref()

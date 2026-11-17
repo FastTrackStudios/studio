@@ -63,6 +63,11 @@ pub struct LibrarySpec {
     /// Keyswitch and CC58 articulation switching.
     pub keyswitch: Option<KeyswitchSpec>,
 
+    /// A fretted instrument's strings: when set, every note is placed on
+    /// one string and fret and plays that string's zones
+    /// (`ZoneSpec::string`). `None` = not fretted.
+    pub fretboard: Option<FretboardSpec>,
+
     /// Articulation-selector source — enables the **latched-CC selector**:
     /// a single continuous controller whose latched VALUE selects the
     /// articulation for all subsequent notes (like a keyswitch, but a CC).
@@ -237,6 +242,7 @@ impl LibrarySpec {
             performance: PerformanceSpec::default(),
             short_note_timing: None,
             keyswitch: None,
+            fretboard: None,
             selector: String::new(),
             selector_cc: 0,
             live_legato_interval_max: 2,
@@ -598,6 +604,12 @@ pub struct PerformanceSpec {
     /// see `Voice::release_k`). CSS in Kontakt: 2.6 over `release_ms` 580.
     #[facet(default)]
     pub release_curve_k: f32,
+    /// Pan a mono sample with the balance law stereo samples use (unity in
+    /// both channels at centre) instead of equal power (−3 dB each at
+    /// centre). Kontakt plays a centred mono zone at unity: a mono DI
+    /// guitar nulls 2.97 dB quieter without it. Default off.
+    #[facet(default)]
+    pub mono_balance_pan: bool,
     /// Strikes of one key kept ringing when it is struck again (older ones
     /// fade over 100 ms). `None` = 2 (a pedalled piano's guard); `Some(0)` =
     /// every strike rings on — Kontakt's CSS (null test: shorts re-struck
@@ -807,6 +819,7 @@ impl Default for PerformanceSpec {
             mirror_ccs: Vec::new(),
             resample_transpose: false,
             release_curve_k: 0.0,
+            mono_balance_pan: false,
             max_repeat_strikes: None,
             strict_key_ranges: false,
             rr_per_key: false,
@@ -1290,6 +1303,12 @@ pub struct SectionOverlay {
     /// control differs from its library's. `""` = none (the CSW clarinets'
     /// `$vkgua = -1`: CC2 never leaves the vibsus slot).
     pub vibrato_controller: Option<String>,
+    /// See [`LibrarySpec::fretboard`]: the instrument's strings and its
+    /// shipped placement and round-robin data, which replace the library's.
+    pub fretboard: Option<FretboardSpec>,
+    /// See [`DynamicsSpec::fixed_ccs`]: the instrument's shipped knobs on
+    /// controllers, which replace the library's.
+    pub fixed_ccs: Option<Vec<FixedCcSpec>>,
 }
 
 /// The overridable legato-engine fields of a section: the CSS editor knobs
@@ -1415,8 +1434,12 @@ pub struct ArticulationOverlay {
     pub pitch_env_cents: Option<f32>,
     pub pitch_env_random: Option<RandomPitchEnvSpec>,
     pub amp_env: Option<Vec<EnvSegmentSpec>>,
+    /// See [`ArticulationSpec::amp_env2`].
+    pub amp_env2: Option<Vec<EnvSegmentSpec>>,
     pub amp_env_hold: Option<bool>,
     pub amp_env_release: Option<u32>,
+    /// See [`ArticulationSpec::release_ms_by_held`].
+    pub release_ms_by_held: Option<Vec<[f32; 2]>>,
     pub level_db: Option<f32>,
     pub script_start_ms: Option<f32>,
     pub vel_gain_db: Option<Vec<f32>>,
@@ -1513,8 +1536,14 @@ impl SectionOverlay {
             if let Some(v) = o.amp_env_hold {
                 a.amp_env_hold = Some(v);
             }
+            if let Some(v) = o.amp_env2.clone() {
+                a.amp_env2 = v;
+            }
             if let Some(v) = o.amp_env_release {
                 a.amp_env_release = Some(v);
+            }
+            if let Some(v) = &o.release_ms_by_held {
+                a.release_ms_by_held.clone_from(v);
             }
             if let Some(v) = o.level_db {
                 a.level_db = v;
@@ -1582,6 +1611,12 @@ impl SectionOverlay {
         }
         if let Some(v) = &self.vibrato_controller {
             spec.dynamics.vibrato_controller = (!v.is_empty()).then(|| v.clone());
+        }
+        if let Some(v) = &self.fretboard {
+            spec.fretboard = Some(v.clone());
+        }
+        if let Some(v) = &self.fixed_ccs {
+            spec.dynamics.fixed_ccs.clone_from(v);
         }
         if let (Some(l), Some(cfg)) = (&self.legato, spec.legato_engine.as_mut()) {
             if let Some(v) = &l.overlap_delay {
@@ -2260,6 +2295,7 @@ fn zone_from_sfz(
         sample_start: sfz_u32(group, region, "offset").unwrap_or(0),
         start_mod: None,
         tm2_block: 0,
+        fixed_pitch: false,
         variant_starts: Vec::new(),
         disabled: false,
         borrowed: false,
@@ -2282,6 +2318,8 @@ fn zone_from_sfz(
         dynamic: String::new(),
         direction: String::new(),
         interval: 0,
+        string: 0,
+        stroke: String::new(),
         lead_in_ms: 0.0,
         arrival_ms: 0.0,
         group: group_id.clone(),
@@ -4084,6 +4122,10 @@ pub struct ZoneSpec {
     /// II zone.
     #[facet(default)]
     pub tm2_block: u32,
+    /// Kontakt's source-module Tracking off: the zone plays at its own
+    /// pitch on every key it spans (Shreddage's rake noise). Default false.
+    #[facet(default)]
+    pub fixed_pitch: bool,
     /// Kontakt's velocity-2.. zones over this same file (index 0 = velocity
     /// 2): the scripted body VARIANTS — the same recording entered deeper.
     /// CSS plays one for a loud first note (`%v2aqt`), see
@@ -4198,6 +4240,18 @@ pub struct ZoneSpec {
     /// `N` is this interval. 0 = not a transition (or a `Legzero` re-trigger).
     #[facet(default)]
     pub interval: u32,
+    /// The string a fretted instrument's zone was recorded on, 1 = the
+    /// highest-pitched string (a guitarist's numbering). 0 = not
+    /// string-bound: every zone of a non-fretted library, and a fretted
+    /// library's noises. The fretboard stage (`LibrarySpec::fretboard`)
+    /// plays a note on one string and picks only that string's zones.
+    #[facet(default)]
+    pub string: u8,
+    /// The pick stroke a fretted zone was recorded with: `"down"` / `"up"`.
+    /// Empty = either (a sample recorded with one stroke only, or not
+    /// picked). The fretboard stage alternates strokes as the script does.
+    #[facet(default)]
+    pub stroke: String,
     /// Measured lead-in of a legato transition sample (ms): time from sample
     /// start until the pitch leaves the source note. The document scheduler
     /// prefires the transition by this much so the pitch change lands on the
@@ -4392,4 +4446,534 @@ impl ZoneSpec {
 pub fn parse_range(s: &str) -> Option<(u8, u8)> {
     let (a, b) = s.split_once('-')?;
     Some((a.trim().parse().ok()?, b.trim().parse().ok()?))
+}
+
+/// A fretted instrument: its strings and how a note finds one.
+///
+/// The placement is a score per string, as Impact Soundworks' Shreddage
+/// engine does it (`str___get_best_string`): every string the note fits on
+/// scores `1`, plus a weight for each thing in its favour — the fret is
+/// under the hand, nothing rings on the string, it is next to or the same
+/// as the last string played, its last fret is this fret. The highest score
+/// wins, the higher string on a tie. A winner not under the hand gives way
+/// to the string whose fret is nearest the last fret played.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretboardSpec {
+    /// Open-string MIDI notes, string 1 (the highest) first.
+    pub strings: Vec<u8>,
+    /// The highest fret a note may be placed on.
+    pub frets: u8,
+    /// The hand's fret (a fixed hand position): the window under the hand
+    /// starts here.
+    #[facet(default)]
+    pub hand_fret: u8,
+    /// How many frets above `hand_fret` each string's hand window reaches,
+    /// string 1 first.
+    pub hand_widths: Vec<u8>,
+    /// The placement weights.
+    pub weights: FretWeightsSpec,
+    /// A string's remembered last fret before it is first played (Kontakt
+    /// leaves the array unset: 0). Default 0.
+    #[facet(default)]
+    pub fresh_last_fret: i8,
+    /// Round-robin orders: the RR to play for the n-th note on one
+    /// (articulation, string, fret), per RR count. An articulation with no
+    /// order for its count cycles.
+    #[facet(default)]
+    pub rr_orders: Vec<RrOrderSpec>,
+    /// When set, a position's RR counter is the slot `stride·string + fret`
+    /// (0-based string), so a fret past the stride shares the next
+    /// string's counter: Shreddage indexes `%s3___string_rr_matrix` as
+    /// `24·string + fret` with frets 0..=24, and fret 24 of one string
+    /// counts with fret 0 of the string below. 0 = one counter per
+    /// (string, fret).
+    #[facet(default)]
+    pub rr_slot_stride: u8,
+    /// Every fretted voice starts this long after its note (µs): Kontakt's
+    /// Shreddage defers each note through a 1 µs phantom note and a 50 µs
+    /// poly-input window. Floored to whole frames. Default 0.
+    #[facet(default)]
+    pub onset_delay_us: f32,
+    /// Anti-repetition: sometimes play the recording two frets away,
+    /// retuned. `None` = never.
+    pub borrow: Option<FretBorrowSpec>,
+    /// A note struck again on its own ringing string fades the old voice
+    /// over this long (ms); another note on that string releases it.
+    #[facet(default)]
+    pub retrigger_fade_ms: f32,
+    /// Articulations that open with another recording at high velocity.
+    #[facet(default)]
+    pub lead_ins: Vec<FretLeadInSpec>,
+    /// The recording a released note leaves behind (Shreddage's pitched
+    /// release). `None` = none.
+    pub release_layer: Option<FretReleaseSpec>,
+    /// Hammer-ons and pull-offs. `None` = none.
+    pub hammer: Option<FretHammerSpec>,
+    /// Slides. `None` = none.
+    pub slide: Option<FretSlideSpec>,
+    /// Tapping. `None` = none.
+    pub tap: Option<FretTapSpec>,
+    /// Articulations played by key, not placed on a string, without the
+    /// poly window (Shreddage's FX: `play_note` straight from `on note`).
+    #[facet(default)]
+    pub free_articulations: Vec<String>,
+    /// Pick strokes for picked articulations. `None` = no strokes.
+    pub picking: Option<FretPickingSpec>,
+    /// Doubled takes: every fretted play sounds once per track. Empty = one
+    /// track, centred.
+    #[facet(default)]
+    pub tracks: Vec<FretTrackSpec>,
+    /// Where each articulation's fretted plays start in their recordings.
+    #[facet(default)]
+    pub start_offsets: Vec<FretOffsetSpec>,
+    /// A pick attack under every plain note. `None` = none.
+    pub extra_pick: Option<FretExtraPickSpec>,
+    /// A noise a let-go note leaves, besides its release recording.
+    /// `None` = none.
+    pub noise_release: Option<FretNoiseReleaseSpec>,
+    /// The hand resets after the board falls idle. `None` = never.
+    pub idle_reset: Option<FretIdleResetSpec>,
+    /// Articulations chosen by the note's velocity under a keyswitch's
+    /// articulation (TACT's KEY + VEL rules).
+    #[facet(default)]
+    pub velocity_splits: Vec<FretVelocitySplitSpec>,
+    /// Random detune and start shifts on the tracks past the first.
+    /// `None` = none.
+    pub jitter: Option<FretJitterSpec>,
+    /// A detune per position for one articulation. `None` = none.
+    pub tune_table: Option<FretTuneTableSpec>,
+    /// Articulations placed on only some strings, or below a fret.
+    #[facet(default)]
+    pub limits: Vec<FretLimitSpec>,
+    /// Keys that play a side recording instead of a note.
+    #[facet(default)]
+    pub side_keys: Vec<FretSideKeySpec>,
+}
+
+/// A side key (see [`FretboardSpec::side_keys`]), Shreddage's fret noise
+/// and wide chokes (Argent L25828-25885): a press of `key_lo..=key_hi`
+/// plays, after the onset delay, once per track, `articulation`'s zone at
+/// key `(counter + track) mod cycle` (`cycle` 0: the press's key −
+/// `key_lo`), at its velocity gain for the press's velocity, to the end of
+/// its recording. With `rr` > 0 the zone's round robin is `(counter[dir] +
+/// track) mod rr`; with `alternate` its direction alternates per press
+/// (down first) and keeps its own counter. `jitter` takes the second
+/// track's KSP random() detune and shift. Counters step once per press.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretSideKeySpec {
+    pub key_lo: u8,
+    pub key_hi: u8,
+    pub articulation: String,
+    #[facet(default)]
+    pub cycle: u8,
+    #[facet(default)]
+    pub rr: u8,
+    #[facet(default)]
+    pub alternate: bool,
+    #[facet(default)]
+    pub jitter: bool,
+    /// Each key of the range keeps its own counter (Darkwall's key FX).
+    #[facet(default)]
+    pub counter_per_key: bool,
+}
+
+/// A placement limit (see [`FretboardSpec::limits`]): a note of
+/// `articulation` is placed only on `strings` (0-based; empty = all), at
+/// `max_fret` or below; one that fits nowhere is not played (Shreddage's
+/// `meta[36]` string mask and `meta[41]` fret limit, L16190).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretLimitSpec {
+    pub articulation: String,
+    #[facet(default)]
+    pub strings: Vec<u8>,
+    pub max_fret: u8,
+}
+
+/// A detune table (see [`FretboardSpec::tune_table`]), Shreddage's
+/// `%s3___mute_tuning` (Argent L7591, Darkwall L7474): every voice of
+/// `articulation` is detuned by `values[string_stride·string +
+/// fret_stride·fret + rr_stride·rr + layer_stride·layer + stroke]`
+/// thousandths of a cent, with its own round robin, its velocity layer
+/// (0-based) and the note's pick stroke (0 down, 1 up; counted even when
+/// the articulation is not picked). Past the table: 0.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretTuneTableSpec {
+    pub articulation: String,
+    pub string_stride: u32,
+    pub fret_stride: u32,
+    pub rr_stride: u32,
+    pub layer_stride: u32,
+    pub values: Vec<i32>,
+}
+
+/// A velocity split (see [`FretboardSpec::velocity_splits`]): a note
+/// selected as `articulation` struck at `min_velocity..=max_velocity` plays
+/// `plays` instead.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretVelocitySplitSpec {
+    pub articulation: String,
+    pub min_velocity: u8,
+    pub max_velocity: u8,
+    pub plays: String,
+}
+
+/// Track jitter (see [`FretboardSpec::jitter`]), Shreddage's multitracking
+/// (`s3___play_event`, Argent L7209-7229, L7557-7570): track `t` past the
+/// first draws KSP `random(lo, hi)` for its detune (1/1000 cent), then
+/// again for its start shift (µs), which accumulates over the tracks and
+/// wraps at `offset_wrap_us`. Plays of `articulations` and every lead-in's
+/// lead are jittered; a range of `0..=0` draws nothing.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretJitterSpec {
+    pub articulations: Vec<String>,
+    /// Articulations whose plays draw every track's range, enabled or not
+    /// (Shreddage's trigger types 3 and 4, L7374-7389).
+    #[facet(default)]
+    pub all_tracks: Vec<String>,
+    /// The draw range per track, the first track first.
+    pub ranges: Vec<FretJitterRangeSpec>,
+    pub offset_wrap_us: i32,
+}
+
+/// One track's jitter range (see [`FretJitterSpec`]).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretJitterRangeSpec {
+    pub lo: i32,
+    pub hi: i32,
+}
+
+/// The idle hand reset (see [`FretboardSpec::idle_reset`]), Shreddage's
+/// `s3__engine__reset_hand` from its timer listener: once a key-up leaves no
+/// note held, the first timer tick (every `tick_ms` from the start) at least
+/// `after_ms` later forgets the last string and fret and every string's last
+/// fret (−1); the pick stroke's own memory stays.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretIdleResetSpec {
+    pub after_ms: f32,
+    pub tick_ms: f32,
+}
+
+/// Pick strokes (see [`FretboardSpec::picking`]), economy picking as
+/// Shreddage 3.5 plays it (`$ncb__pick_dir`, Argent script_0.ksp
+/// L16196-16219): the first note after a reset is a down stroke; a note on
+/// a lower string (higher index) than the last note is an up stroke, on a
+/// higher string a down stroke, on the same string the stroke after the
+/// last one. Every placed note moves the stroke on, picked or not. A picked
+/// articulation plays the zones of its stroke (`ZoneSpec::stroke`) and
+/// counts its round robins per stroke.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretPickingSpec {
+    /// The picked articulations.
+    pub articulations: Vec<String>,
+}
+
+/// One take of a doubled part (see [`FretboardSpec::tracks`]): track `t`
+/// plays the round robin `t` places further along the position's order,
+/// at `pan` (−1 left … 1 right), and its own key ahead in the counters of
+/// the side recordings (extra pick, noise release).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretTrackSpec {
+    pub pan: f32,
+}
+
+/// A start offset (see [`FretboardSpec::start_offsets`]).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretOffsetSpec {
+    pub articulation: String,
+    pub ms: f32,
+}
+
+/// A pick attack (see [`FretboardSpec::extra_pick`]): every plain note
+/// (not a hammer, tap or slide) first plays `articulation` at the key the
+/// RR order for `rr` gives at the pick counter (+ the track), at its own
+/// level, detuned `cents_per_string` per string past `from_string`
+/// (0-based); the counter steps once per note.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretExtraPickSpec {
+    pub articulation: String,
+    pub rr: u8,
+    #[facet(default)]
+    pub cents_per_string: f32,
+    #[facet(default)]
+    pub from_string: u8,
+}
+
+/// A release noise (see [`FretboardSpec::noise_release`]): a let-go note
+/// not of `excluded` held `min_held_ms..=max_held_ms` plays
+/// `articulation`'s zone at key `(counter + track) mod keys`, at
+/// `gain_scale` × its velocity gain (dB) and its pan; the counter steps
+/// once per let-go that played one.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretNoiseReleaseSpec {
+    pub articulation: String,
+    #[facet(default)]
+    pub excluded: Vec<String>,
+    #[facet(default)]
+    pub min_held_ms: f32,
+    pub max_held_ms: f32,
+    pub keys: u8,
+    pub gain_scale: f32,
+}
+
+/// Tapping (see [`FretboardSpec::tap`]): every note of `articulation` is a
+/// hammer — up or down by its interval from the note ringing on its string,
+/// or up from an idle string — played from its own zones at its own level;
+/// a tap on an idle open string plays `open_as` instead (L17065-17144,
+/// L17426).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretTapSpec {
+    /// The tapping articulation.
+    pub articulation: String,
+    /// What a tap on an idle open string plays.
+    pub open_as: String,
+}
+
+/// Slides (see [`FretboardSpec::slide`]): while `key` is held, a note of
+/// one of `from` that finds a string ringing a note of one of `sources`
+/// within `max_interval` (the nearest such string) slides there: the
+/// ringing note fades over `source_fade_ms`, `articulation`'s transition
+/// zone (by `direction` and `interval`) plays at the new key, fading in
+/// over `transition_fade_in_ms`, and after the interval's `time_us` it
+/// fades over `transition_fade_out_ms` while the new note's own
+/// articulation enters `body_offset_ms` into its recording, fading in over
+/// `body_fade_in_ms`, at the slide's origin's velocity layer. Both are
+/// levelled by the new note's velocity gain plus `age_db_per_s` × the
+/// origin's age (s, truncated to whole mdB) × the slide's place in its
+/// chain. The transition takes its play's borrow draw but never borrows;
+/// its round robin is its position's next without stepping the counter.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretSlideSpec {
+    /// The key held to slide (it sounds nothing).
+    pub key: u8,
+    /// The transition articulation.
+    pub articulation: String,
+    /// The articulations a slide can leave.
+    pub sources: Vec<String>,
+    /// The articulations a new note may be selected as to slide.
+    pub from: Vec<String>,
+    /// The widest slide (semitones).
+    pub max_interval: u8,
+    /// The transition's length by interval: index 0 = 1 semitone (µs).
+    pub time_us: Vec<u32>,
+    pub source_fade_ms: f32,
+    pub transition_fade_in_ms: f32,
+    pub transition_fade_out_ms: f32,
+    pub body_offset_ms: f32,
+    pub body_fade_in_ms: f32,
+    /// Level change per second of the origin's age, per chain step (dB).
+    #[facet(default)]
+    pub age_db_per_s: f32,
+    /// A slide as a chain of one-fret stitches instead of one transition
+    /// (Shreddage 3.5 Argent/Darkwall). `None` = one transition.
+    pub stitched: Option<FretStitchSpec>,
+}
+
+/// A stitched slide (see [`FretSlideSpec::stitched`]), Shreddage 3.5's
+/// `sti` engine (Argent L16677-17168): after the source fades, a squeak
+/// per track, then for each fret on the way (the destination last) the
+/// transition articulation's one-fret zone into it, `direction` up or down,
+/// at the slide's level plus the interval's `gain_db`; on the last step the
+/// destination enters too, `dest_offset_ms` into its recording, at the
+/// slide's level plus `dest_gain_db`, fading in over the interval's
+/// `dest_fade_in_us`. Each step lasts the interval's `wait_us`, then its
+/// stitch is released; after the last the squeak stops. A key let go or a
+/// string taken mid-slide stops the squeak and the chain.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretStitchSpec {
+    /// Per interval (index 0 = 1 semitone).
+    pub steps: Vec<FretStitchStepSpec>,
+    /// The destination's start: `dest_offset_ms` plus its articulation's
+    /// start offset, at most `dest_offset_max_ms` (Kontakt clamps a
+    /// `play_note` offset below `meta[6]·100` µs).
+    pub dest_offset_ms: f32,
+    pub dest_offset_max_ms: f32,
+    pub dest_gain_db: f32,
+    /// The squeak at the slide's start. `None` = none.
+    pub squeak: Option<FretSqueakSpec>,
+    /// The last stitch is the destination: no destination play, and the
+    /// stitch rings on until the note is let go (Darkwall, whose slide
+    /// recordings are full-length sustains; engine-model §6).
+    #[facet(default)]
+    pub keep_last: bool,
+    /// The slide-in key (Shreddage's "Slide In/Out" note): while it is held,
+    /// a note of a slide source on an idle string above fret 0 slides up
+    /// from the open string, one stitch per fret, and always ends on the
+    /// destination (L17301-17769). `None` = no slide-in.
+    pub slide_in_key: Option<u8>,
+    /// Pressed while notes ring, the slide-in key slides each string down
+    /// by its fret, at most `slide_out_max` frets (a stitched slide whose
+    /// key stays the one that played it); a string at fret 0 is cut over
+    /// `open_cut_ms` (Darkwall L23548-23660). 0 = no slide-out.
+    #[facet(default)]
+    pub slide_out_max: u8,
+    #[facet(default)]
+    pub open_cut_ms: f32,
+}
+
+/// One interval's stitch timing and levels (see [`FretStitchSpec`]).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretStitchStepSpec {
+    pub wait_us: u32,
+    pub gain_db: f32,
+    pub dest_fade_in_us: u32,
+}
+
+/// A slide's fret squeak (see [`FretStitchSpec::squeak`]): `articulation`'s
+/// zone on the string at key `(counter + track) mod keys` (a counter per
+/// string), at `gain_db` plus `vel_gain_from`'s velocity gain at the
+/// chain's first velocity, plus the slide's age change.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretSqueakSpec {
+    pub articulation: String,
+    pub keys: u8,
+    pub gain_db: f32,
+    pub vel_gain_from: String,
+}
+
+/// A release recording (see [`FretboardSpec::release_layer`]): when a
+/// note of one of `sources` is let go (its key comes up, or another note
+/// takes its string) after `min_held_ms..=max_held_ms`, `articulation`
+/// plays on its string at the key the note's recording played, at the
+/// note's velocity gain. Its round robin is its position's next (the RR
+/// orders), and the position's counter steps only on a fretted string
+/// unless `open_string_counts` (Shreddage: `global_var__pitched_rel_fret > 0`).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretReleaseSpec {
+    /// The release articulation.
+    pub articulation: String,
+    /// The articulations whose notes leave it.
+    pub sources: Vec<String>,
+    /// The shortest held time that leaves it (ms).
+    #[facet(default)]
+    pub min_held_ms: f32,
+    /// The longest held time that leaves it (ms).
+    pub max_held_ms: f32,
+    /// Whether an open string's release steps its position's counter.
+    #[facet(default)]
+    pub open_string_counts: bool,
+    /// Sources that leave another release recording instead. It reads its
+    /// own position counter, which never steps: the step always goes to
+    /// `articulation`'s (Shreddage's power chords, L5189-5192, L5550).
+    #[facet(default)]
+    pub mapped: Vec<FretReleaseMapSpec>,
+}
+
+/// A release mapping (see [`FretReleaseSpec::mapped`]).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretReleaseMapSpec {
+    pub sources: Vec<String>,
+    pub articulation: String,
+}
+
+/// Hammer-ons and pull-offs (see [`FretboardSpec::hammer`]): a note of one
+/// of `from` at `max_velocity` or below that lands on a string still
+/// ringing a note of one of `sources`, within `range` frets of it and not
+/// the same note, plays `articulation` instead (`direction` up for a
+/// hammer-on, down for a pull-off), `gain_db` under its velocity gain; the
+/// ringing note is let go.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretHammerSpec {
+    /// The hammer/pull articulation.
+    pub articulation: String,
+    /// The articulations a hammer can follow.
+    pub sources: Vec<String>,
+    /// The articulations a new note may be selected as to become a hammer.
+    pub from: Vec<String>,
+    /// The loudest velocity that hammers.
+    pub max_velocity: u8,
+    /// The widest interval (frets) a hammer spans.
+    pub range: u8,
+    /// Level offset on a hammer (dB).
+    #[facet(default)]
+    pub gain_db: f32,
+    /// Force same string (Shreddage `[28]`): a lone note whose string is
+    /// idle moves to the ringing string within `range` it fits on (the
+    /// nearest; a tie to the higher string) and plays there — a hammer
+    /// when what rings is a source, else a fresh note that releases it.
+    #[facet(default)]
+    pub force: bool,
+}
+
+/// A lead-in (see [`FretboardSpec::lead_ins`]): `articulation` played at
+/// `min_velocity` or above first plays `lead` (Shreddage's pop); after
+/// `body_delay_ms`, if the key still holds its string, the lead fades over
+/// `lead_fade_ms` and `articulation` enters `body_offset_ms` into its
+/// recording. Released sooner, the lead alone sounds. The lead's round
+/// robin is a borrow-generator draw mod its RR count, taken after a borrow
+/// draw the lead never uses; with `draw_modulus`, the draw is first taken
+/// mod it, and track `t` plays `(draw + t) mod` its RR count (Argent's
+/// rake: `(draw mod 10 + t) mod 4`, L7207-7216). Each track draws its own.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretLeadInSpec {
+    /// The articulation that opens with a lead.
+    pub articulation: String,
+    /// The lowest velocity that plays the lead.
+    pub min_velocity: u8,
+    /// The loudest velocity that plays the lead (`None` = 127).
+    #[facet(default)]
+    pub max_velocity: Option<u8>,
+    /// The lead articulation.
+    pub lead: String,
+    /// The articulation the body plays (`None` = `articulation`).
+    #[facet(default)]
+    pub body: Option<String>,
+    /// On a string past this (0-based) the note plays `body` plain, with no
+    /// lead (Argent L16193). `None` = every string leads.
+    #[facet(default)]
+    pub max_string: Option<u8>,
+    /// From the lead's start to the body's (ms).
+    pub body_delay_ms: f32,
+    /// The lead's fade when the body enters (ms; `None` = it rings on).
+    #[facet(default)]
+    pub lead_fade_ms: Option<f32>,
+    /// Where in its recording the body starts (ms).
+    pub body_offset_ms: f32,
+    /// The lead's draw is taken mod this first (0 = not).
+    #[facet(default)]
+    pub draw_modulus: u32,
+    /// The body is levelled by the lead's velocity gain, not its own
+    /// (Argent's rake passes Rake's Vel→Vol to the Sustain, L17343).
+    #[facet(default)]
+    pub body_lead_gain: bool,
+}
+
+/// [`FretboardSpec`] placement weights (each added to a string's score).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretWeightsSpec {
+    /// The fret is inside the hand window.
+    pub in_hand: u32,
+    /// Nothing is ringing on the string.
+    pub free: u32,
+    /// The string is next to the last string played.
+    pub adjacent: u32,
+    /// The string is the last string played.
+    pub same_string: u32,
+    /// The string's last fret is this fret.
+    pub same_fret: u32,
+}
+
+/// One round-robin order (see [`FretboardSpec::rr_orders`]).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct RrOrderSpec {
+    /// The articulation's RR count this order serves.
+    pub rr: u8,
+    /// The RR index to play, by how many notes the position has played.
+    pub order: Vec<u8>,
+}
+
+/// Anti-repetition by a neighbouring recording (see
+/// [`FretboardSpec::borrow`]). A 32-bit LCG `s = a·s + 1` draws
+/// `((s >> 8) & 0xFFFFFF) mod 1000 + 1` once per note; a draw at or under
+/// `chance_permille` plays the zone `frets` higher on the same string (lower
+/// when that is past the neck), retuned to the played pitch.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretBorrowSpec {
+    /// Per-mille chance a note borrows.
+    pub chance_permille: u32,
+    /// The generator's seed (its state when the instrument loads).
+    pub seed: u32,
+    /// The generator's multiplier.
+    pub multiplier: u32,
+    /// How far away the borrowed recording is.
+    pub frets: u8,
 }

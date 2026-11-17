@@ -467,6 +467,10 @@ pub struct Voice {
     /// Render-trace correlation id (set at spawn when tracing) — pairs this
     /// voice's lifetime with its `TraceKind::VoiceSpawn`/`VoiceEnd` events.
     pub trace_id: Option<u64>,
+    /// A script's handle on this voice (0 = none): the fretboard tags the
+    /// voices it must later release or fade by themselves (a stitch, a
+    /// squeak), as Kontakt scripts keep `play_note` event ids.
+    pub script_tag: u32,
     /// Time-preserving pitch shift (L/R), `None` when the note is on the
     /// recorded grid (`pitch_cents == 0`) — those voices pay nothing.
     pitch: Option<[crate::engine::pitch_shift::PitchShifter; 2]>,
@@ -964,6 +968,7 @@ impl Voice {
             env_peak: 0.0,
             max_peak: 0.0,
             trace_id: None,
+            script_tag: 0,
             pitch: None,
             stretch: None,
             script_faded: false,
@@ -1061,6 +1066,7 @@ impl Voice {
             env_peak: 0.0,
             max_peak: 0.0,
             trace_id: None,
+            script_tag: 0,
             pitch: None,
             stretch: None,
             script_faded: false,
@@ -1282,9 +1288,17 @@ impl Voice {
     }
 
     #[must_use]
-    pub fn with_pan(mut self, pan: f32) -> Self {
+    pub fn with_pan(self, pan: f32) -> Self {
+        self.with_pan_law(pan, false)
+    }
+
+    /// [`with_pan`](Self::with_pan), with `mono_balance` putting a mono
+    /// source on the stereo balance law (see
+    /// `PerformanceSpec::mono_balance_pan`).
+    #[must_use]
+    pub fn with_pan_law(mut self, pan: f32, mono_balance: bool) -> Self {
         let pan = pan.clamp(-1.0, 1.0);
-        if self.data.channels >= 2 {
+        if self.data.channels >= 2 || mono_balance {
             // Stereo source: use a *balance* law so a centered (pan=0) stereo
             // sample passes L→L / R→R at unity. An equal-power law would apply
             // a spurious −3 dB at center to material that is already stereo —
@@ -3216,6 +3230,57 @@ impl VoicePool {
     /// for `note`'s transition voices on `line` and `sus_fade` for its body
     /// layers — no gain ramp on top (which made `retire_note_line` a
     /// (1 − t)² curve).
+    /// Kontakt `fade_out` on every voice of `note` on `line`, whatever its
+    /// kind: a linear fade over `frames` from the voice's current level.
+    /// Release the voices tagged `tag` (`Voice::script_tag`): KSP
+    /// `note_off` on a `play_note` id.
+    pub fn release_tagged(&mut self, tag: u32, release_frames: Option<usize>) {
+        for v in &mut self.voices {
+            if tag != 0 && v.script_tag == tag {
+                match release_frames {
+                    Some(frames) => v.note_off_with_release_frames(frames),
+                    None => v.note_off(),
+                }
+            }
+        }
+    }
+
+    /// Kontakt `fade_out` on the voices tagged `tag`: a linear fade over
+    /// `frames` (≤ 1: at once) from the current level.
+    pub fn fade_out_tagged(&mut self, tag: u32, frames: usize) {
+        for v in &mut self.voices {
+            if tag == 0 || v.script_tag != tag {
+                continue;
+            }
+            v.target_gain = v.gain;
+            v.gain_ramp_frames = 0;
+            v.stage1_run = 0;
+            v.stage2_frames = 0;
+            v.release_frames = frames.max(1);
+            v.release_k_active = 0.0;
+            v.state = VoiceState::Releasing {
+                frames_remaining: frames.max(1),
+            };
+        }
+    }
+
+    pub fn fade_out_note_line_any(&mut self, line: u8, note: u8, frames: usize) {
+        for v in &mut self.voices {
+            if v.note != note || v.line != line {
+                continue;
+            }
+            v.target_gain = v.gain;
+            v.gain_ramp_frames = 0;
+            v.stage1_run = 0;
+            v.stage2_frames = 0;
+            v.release_frames = frames.max(1);
+            v.release_k_active = 0.0;
+            v.state = VoiceState::Releasing {
+                frames_remaining: frames.max(1),
+            };
+        }
+    }
+
     pub fn fade_out_note_line(&mut self, line: u8, note: u8, trans_fade: usize, sus_fade: usize) {
         for v in &mut self.voices {
             if v.note != note || v.line != line {

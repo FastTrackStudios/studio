@@ -433,6 +433,11 @@ impl SampleEngine {
             self.last_note_artic = Some(self.articulation.clone());
         }
 
+        // A fretted instrument places the note on a string (`fretboard.rs`).
+        if self.fretted_note_on(note, velocity) {
+            return;
+        }
+
         if self.patch.is_zoned() {
             // CSS-style legato: a legato articulation, with another note already
             // held, plays a delayed directional transition (the famous latency).
@@ -620,6 +625,9 @@ impl SampleEngine {
         self.held_notes.remove(&note);
         self.deferred_note_off_velocities.remove(&note);
         self.trace_push(TraceKind::NoteOff { note });
+        if self.fretted_note_off(note) {
+            return;
+        }
         if self.patch.is_zoned() {
             let cur_line = self.cur_line as u8;
             if self.script_legato_note_off(note) {
@@ -3058,8 +3066,14 @@ impl SampleEngine {
         // Copy out the zone fields up front so no borrow of `self.patch`
         // outlives the `&mut self` cache-miss bookkeeping below.
         let z = &self.patch.spec.zones[idx];
-        let (root_key, tune_cents, gain_db, mic, pan) =
-            (z.root_key, z.tune_cents, z.gain_db, z.mic.clone(), z.pan);
+        // a zone with Kontakt's Tracking off sounds its root on every key
+        let root_key = if z.fixed_pitch { note } else { z.root_key };
+        let (tune_cents, gain_db, mic, pan) = (
+            z.tune_cents,
+            z.gain_db,
+            z.mic.clone(),
+            self.spawn_pan.unwrap_or(z.pan),
+        );
         // Copied out for the same borrow reason: the piano-voice gain below
         // needs it after `self` has been mutably borrowed.
         let zone_artic = z.articulation.clone();
@@ -3178,6 +3192,7 @@ impl SampleEngine {
             .copied()
             .unwrap_or(0.0);
         let tune_cents_total = tune_cents as f64
+            + f64::from(self.spawn_tune_cents)
             + self.master_tune_cents()
             + f64::from(self.piano_key_cents[usize::from(note & 127)])
             + f64::from(key_cents);
@@ -3531,7 +3546,10 @@ impl SampleEngine {
         // get a short declick ramp: without it the onset steps from silence to
         // a non-zero sample value and clicks on every note change. Shorts keep
         // their sharp natural attack (they start at true sample-start silence).
-        let attack = if matches!(kind, VoiceKind::Legato) && self.transition_fade.is_some() {
+        let attack = if self.spawn_fade_attack > 0 {
+            // A script `fade_in` on this voice (the fretboard's slides).
+            self.spawn_fade_attack
+        } else if matches!(kind, VoiceKind::Legato) && self.transition_fade.is_some() {
             // The two-stage transition swell (below) IS the fade-in — no
             // separate declick attack, which would double the onset.
             0
@@ -3567,6 +3585,11 @@ impl SampleEngine {
                 // what "the piano fades in and has no attack" was.
                 0
             }
+        } else if start_offset > 0 && self.spawn_script_offset {
+            // A script's `play_note` offset (the fretboard's lead-in body):
+            // Kontakt enters there under the group envelope alone, whose
+            // attack the voice's authored `amp_env` already plays.
+            0
         } else if start_offset > 0 {
             // Deep mid-sample entry (skipped-swell Low-Latency prefire): fade
             // in over a longer window, scaled to how far we skipped (capped),
@@ -3643,7 +3666,7 @@ impl SampleEngine {
             .with_line(line)
             .with_env_key(player.parent.unwrap_or(note))
             .with_artic_class(artic_class)
-            .with_pan(u_pan)
+            .with_pan_law(u_pan, self.patch.spec.performance.mono_balance_pan)
             .with_attack(attack)
             .with_start_hold(start_hold)
             .with_pitch_cents(transpose_cents)
@@ -3732,7 +3755,8 @@ impl SampleEngine {
                     }
                 }
             }
-            if is_sustain_layer {
+            // A held zoned voice (a fretted note) releases on the same law.
+            if is_sustain_layer || matches!(kind, VoiceKind::Zoned) {
                 let k = self
                     .patch
                     .spec
@@ -3984,11 +4008,12 @@ impl SampleEngine {
             // pitch — the routed note is a trigger selector, not a transpose.
             // Without this a drum routed to any note other than its zone key
             // would detune (e.g. a tom on note 45 vs root 50 = -5 semitones).
-            let semitones = if self.percussion || self.pinned_articulation.is_some() {
-                0.0
-            } else {
-                note as f64 - z.root_key as f64
-            };
+            let semitones =
+                if self.percussion || self.pinned_articulation.is_some() || z.fixed_pitch {
+                    0.0
+                } else {
+                    note as f64 - z.root_key as f64
+                };
             // Same pitch/speed split as spawn_zone_voice_at: transposition →
             // time-preserving shifter; tuning → rate.
             // Resample mode (Spectrasonics sources): the key offset is
@@ -4085,7 +4110,7 @@ impl SampleEngine {
                     .with_line(line)
                     .with_artic_class(artic_class)
                     .with_choke_group(choke_group)
-                    .with_pan(u_pan)
+                    .with_pan_law(u_pan, self.patch.spec.performance.mono_balance_pan)
                     .with_attack(self.attack_frames)
                     .with_decay(self.decay_frames, self.sustain_level)
                     .with_amp_points(self.amp_points.clone(), self.sample_rate)

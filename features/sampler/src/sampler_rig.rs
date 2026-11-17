@@ -938,6 +938,14 @@ impl SamplerRig {
         }
     }
 
+    /// Seed the instrument's KSP `random()` (see
+    /// [`crate::engine::SampleEngine::set_ksp_seed`]).
+    pub fn set_ksp_seed(&self, id: &str, seed: u32) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.set_ksp_seed(id, seed);
+        }
+    }
+
     /// Replay a reference render's random pitch-envelope draws `(cents,
     /// decay_ms)`, in order — see
     /// [`crate::engine::SampleEngine::force_random_pitch_envs`].
