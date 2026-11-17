@@ -53,8 +53,21 @@ def persistent(path):
 
 
 def ep_db(ep):
-    """Kontakt engine volume units → dB (the script's own conversion)."""
+    """Kontakt engine volume units → dB by the script's own conversion: what
+    a `change_vol(..., 18000·log2(ep) − 346768)` applies (millidB, exact)."""
     return (18000.0 * math.log2(ep) - 346768.2342478351) / 1000.0
+
+
+# `$ENGINE_PAR_VOLUME` is cubic in the setting, 0 dB at this value, +12 dB at
+# 1_000_000 (KONTRA par_values::UNITY_VOLUME): 18.06 dB an octave of the
+# setting, not the script's 18.
+UNITY_VOLUME = 629960.5249474361
+
+
+def volume_db(ep):
+    """What Kontakt plays for an `$ENGINE_PAR_VOLUME` setting, dB: a group
+    volume the script sets (unlike `ep_db`, a `change_vol`)."""
+    return 60.0 * math.log10(ep / UNITY_VOLUME)
 
 
 def vel_table(knob, vmin):
@@ -63,7 +76,7 @@ def vel_table(knob, vmin):
     for v in range(128):
         vv = max(v, 1)
         ep = vmin + int((knob - vmin) * ((0.99 ** (vv - 1) - 1.0) / den))  # real_to_int truncates
-        out.append(round(ep_db(ep), 4))
+        out.append(round(volume_db(ep), 4))
     return out
 
 
@@ -86,6 +99,19 @@ def ahdsr_env(groups, start):
     tension = 0.5 - 0.5 * env["curve"]
     return [(max(env["attack_ms"], 0.0), 1.0, tension), (env["release_ms"], 0.0, RELEASE_TENSION)], \
         env.get("intensity", 1.0)
+
+
+def ahdsr_line(groups, start):
+    """`amp_ahdsr { … }`: the Bus1 group's volume ENV_AHDSR as Kontakt runs
+    it at its control rate (engine::kontakt_ahdsr), in place of `amp_env`'s
+    segments; any hold, decay, sustain and AHD-only mode."""
+    g = next(g for g in groups if g["index"] == start)
+    env = next(e for e in g["envelopes"] if e["kind"] == "ENV_AHDSR" and e["target"] == "volume"
+               and not e["bypassed"])
+    return (f"        amp_ahdsr {{ attack_ms {fmt(env['attack_ms'])}, hold_ms {fmt(env['hold_ms'])}, "
+            f"decay_ms {fmt(env['decay_ms'])}, sustain {fmt(env['sustain'])}, "
+            f"release_ms {fmt(env['release_ms'])}, curve {fmt(env['curve'])}, "
+            f"ahd_only {'true' if env['ahd_only'] else 'false'} }}")
 
 
 def layer_depths(art, start, names, groups):
@@ -264,7 +290,7 @@ def release_gain_table(rel_knob, sus_knob, vmin, trim_db):
     out = []
     for v in range(128):
         ep = vmin + (v * (630000 - vmin)) // 127
-        out.append(round(ep_db(630000) + ep_db(rel_knob) + ep_db(sus_knob) + ep_db(max(ep, 1)) + trim_db, 4))
+        out.append(round(volume_db(630000) + ep_db(rel_knob) + ep_db(sus_knob) + ep_db(max(ep, 1)) + trim_db, 4))
     return out
 
 
@@ -311,7 +337,7 @@ def legato_numbers(p0, pers, knob, vmin, num_vels, art="Sus"):
     for v in range(128):
         vc = curved(max(v, 1))
         ep = vmin + int((750000 - vmin) * ((0.99 ** vc - 1.0) / den))
-        gains.append(round(ep_db(ep) + ep_db(trans_vol) + ep_db(knob), 4))
+        gains.append(round(volume_db(ep) + ep_db(trans_vol) + ep_db(knob), 4))
     n_leg = int(p0["$MiscNumLegVels"][0])
     step = 127 // num_vels + 1
     layer = lambda vel: max(0, curved(max(vel, 1)) // step - (num_vels - n_leg))
@@ -526,6 +552,7 @@ def build(nki):
         if env:
             body = " ".join(f"{{time_ms {fmt(t)}, level {fmt(lv)}, curve {fmt(c)}}}" for t, lv, c in env)
             lines += [f"        amp_env ( {body} )", "        amp_env_hold true", "        amp_env_release 1"]
+            lines.append(ahdsr_line(groups, starts[i]))
             if depth is not None:
                 lines.append(f"        amp_env_depth {fmt(depth)}  // the ENV -> volume route's intensity")
             lines += layer_depths(art, starts[i], names, groups)
@@ -548,7 +575,7 @@ def build(nki):
             kg = []
             for v in range(128):
                 ep = 500000 + int(500000 * ((0.99 ** curved(max(v, 1)) - 1.0) / den))
-                kg.append(round(ep_db(ep) + ep_db(zl) + ep_db(knob), 4) if zl > 0 else -144.0)
+                kg.append(round(volume_db(ep) + ep_db(zl) + ep_db(knob), 4) if zl > 0 else -144.0)
             lines.append(f"        keynoise {{ artic Keyclick, key 64, chance_pct {one('$1stdn')}, "
                          f"fade_ms {fmt(g0('$MiscClickFade'))}, force_key {one('$erctx')}, "
                          f"gain_db ({' '.join(fmt(x) for x in kg)}) }}")
@@ -616,8 +643,13 @@ def build(nki):
         if env:
             body = " ".join(f"{{time_ms {fmt(t)}, level {fmt(lv)}, curve {fmt(c)}}}" for t, lv, c in env)
             lines += [f"        amp_env ( {body} )", "        amp_env_hold true", "        amp_env_release 1"]
+            lines.append(ahdsr_line(groups, gstart))
             if why is not None and why < 0.999:
                 lines.append(f"        amp_env_depth {fmt(why)}  // the ENV -> volume route's intensity")
+        elif isinstance(why, str) and "no volume AHDSR" in why:
+            # no volume envelope in the group (the key clicks): full level
+            # from the first frame, not the engine's family default
+            lines += ["        amp_env ( {time_ms 0, level 1, curve 0.5} )", "        amp_env_hold true"]
         lines += fx_lines(fx)
         lines.append("    }")
     # The release articulations (their groups' RR, inserts and AHDSR; the
@@ -632,6 +664,7 @@ def build(nki):
         if env:
             body = " ".join(f"{{time_ms {fmt(t)}, level {fmt(lv)}, curve {fmt(c)}}}" for t, lv, c in env)
             lines += [f"        amp_env ( {body} )", "        amp_env_hold true", "        amp_env_release 1"]
+            lines.append(ahdsr_line(groups, gstart))
         lines += fx_lines(fx)
         lines.append("    }")
     lines.append(")")

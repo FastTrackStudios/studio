@@ -845,6 +845,25 @@ pub struct EnvSegmentSpec {
     pub curve: f32,
 }
 
+/// A group's volume `ENV_AHDSR` as Kontakt runs it, at its control rate
+/// (`engine::kontakt_ahdsr`): times in ms, the sustain level 0..=1, the
+/// attack curve −1..=1, and the AHD-only switch (the key-up ignored, the
+/// decay falling to silence).
+#[derive(Debug, Clone, Copy, PartialEq, Facet)]
+pub struct AmpAhdsrSpec {
+    pub attack_ms: f32,
+    #[facet(default)]
+    pub hold_ms: f32,
+    #[facet(default)]
+    pub decay_ms: f32,
+    pub sustain: f32,
+    pub release_ms: f32,
+    #[facet(default)]
+    pub curve: f32,
+    #[facet(default)]
+    pub ahd_only: bool,
+}
+
 /// A CSS legato transition as Kontakt plays it (KSP §1.2, every number
 /// null-tested). At the transition (after the overlap delay):
 /// - the old body fades out linearly over `old_body_fade_ms`;
@@ -1415,6 +1434,7 @@ pub struct ArticulationOverlay {
     pub pitch_env_cents: Option<f32>,
     pub pitch_env_random: Option<RandomPitchEnvSpec>,
     pub amp_env: Option<Vec<EnvSegmentSpec>>,
+    pub amp_ahdsr: Option<AmpAhdsrSpec>,
     pub amp_env_hold: Option<bool>,
     pub amp_env_release: Option<u32>,
     pub level_db: Option<f32>,
@@ -1509,6 +1529,9 @@ impl SectionOverlay {
             }
             if let Some(v) = &o.amp_env {
                 a.amp_env.clone_from(v);
+            }
+            if let Some(v) = o.amp_ahdsr {
+                a.amp_ahdsr = Some(v);
             }
             if let Some(v) = o.amp_env_hold {
                 a.amp_env_hold = Some(v);
@@ -2735,6 +2758,11 @@ pub struct ArticulationSpec {
     // r[impl signal.soundsource.declarative]
     #[facet(default)]
     pub amp_env: Vec<EnvSegmentSpec>,
+    /// The volume envelope as Kontakt's control-rate AHDSR
+    /// ([`AmpAhdsrSpec`]); it replaces `amp_env` when set, with
+    /// `amp_env_depth(s)` as before.
+    #[facet(default)]
+    pub amp_ahdsr: Option<AmpAhdsrSpec>,
     /// Kontakt per-group CC volume tables, decoded from the instrument
     /// (`groups.json` `CC_VOLUME` mods). A dynamic layer's gain is the
     /// PRODUCT of its curves at the current CC values — this replaces the
