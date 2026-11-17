@@ -143,3 +143,16 @@ strings.txt, proj/Kontakt8; scripts/DecompileAt.java decompiles by address).
   `BGroup::GenSysModScript`); a cube only with the Kontakt 2 compatibility
   byte. The release is re-read at note-off. Fall: state 1.075 → 0.075 by
   `pow(43/3, −1/N)`, silent exactly at N.
+- **Events first, per chunk** (`BInstrument::processAudio` 0x83d78c): Kontakt runs
+  a chunk's MIDI events and `wait()` resumes before it renders the chunk
+  (chunks ≤ 1024 frames; a longer host block splits into ⌈N/1024⌉ equal
+  chunks — REAPER's 512 is one chunk, aligned to the render start). So an
+  event's parameter change (`change_tune`, `change_vol`, key-up release, engine
+  pars) acts from its chunk's START, not its sample. Earlier "CSS waits 2 ms"
+  style fits were probably this. KONTRA catches up from the event (e91a9d3,
+  340e5ca); an events-first chunk mode is the exact fix.
+- **Script offsets** (`DispatchVoice` 0x3dc128): `(int)((float)µs·(float)rate·1e-6f)`,
+  f32 and truncated (447000 µs → 21455 frames). `wait()` is in 1/1024-frame units.
+- **Marcato body glide** (CSSS KSP 13033–13077): −13.8 cents → 0 over 60 one-ms
+  ticks of relative `change_tune`; `setNoteEventPar` 0x11 multiplies the voice's
+  tune by exp2(mcent/1.2e6).
