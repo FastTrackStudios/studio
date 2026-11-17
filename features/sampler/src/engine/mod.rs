@@ -1395,6 +1395,12 @@ impl SampleEngine {
         engine.voices.set_interp(resample::Interp::parse(
             &engine.patch.spec.performance.interpolation,
         ));
+        // controllers that start at a saved value (`performance.start_ccs`)
+        for f in engine.patch.spec.performance.start_ccs.clone() {
+            if let Some(slot) = engine.cc_values.get_mut(usize::from(f.cc)) {
+                *slot = f.value;
+            }
+        }
         engine.apply_fixed_ccs();
         // The ensemble's humanize tables are the instrument's own draws at
         // load, apart from any stream a render pins (`PlayersState::new`).

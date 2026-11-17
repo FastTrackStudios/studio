@@ -202,10 +202,45 @@ def group_eq(art, start, names, fx_slots, notes, lp_floor, envs=None, mods=None)
             else:
                 notes.append(f"{art} {dyn}: insert kind {s['kind']} type {s.get('filter_type')} "
                              f"(slot {s['slot']}) not run")
+        # controller → volume modulators (Kontakt's controller volume law,
+        # run at the voice's amplifier: an insert route, KONTRA ModKind::Volume)
+        for m in mods.get(gi, []):
+            if (m.get("source_kind") != "cc" or m.get("target") != "volume" or m.get("slot") is not None
+                    or not m.get("intensity")):
+                continue
+            if m.get("negative") or m.get("curve_enabled"):
+                notes.append(f"{art} {dyn}: CC{m['cc']} volume (negative/shaped) not run")
+                continue
+            stages.append(("cc_volume", {"cc": m["cc"], "intensity": m["intensity"],
+                                         "lag_ms": m.get("lag_ms") or 0}))
         if stages:
             out.append((dyn, stages))
         k += 1
     return out
+
+
+def cc_starts(groups):
+    """The controllers the modelled groups' volume routes read, at the start
+    value Kontakt saves with the route (`cc_start`: CC113 at 100)."""
+    out = {}
+    for g in groups:
+        for m in g.get("mods", []):
+            if (m.get("source_kind") == "cc" and m.get("target") == "volume" and m.get("intensity")
+                    and m.get("cc_start") is not None and mojo_zones.classify(g["name"])):
+                out.setdefault(m["cc"], m["cc_start"])
+    return sorted(out.items())
+
+
+def cc_mirrors(ksp, pers):
+    """`set_controller(N, %CC[$x])` in the script's `on controller` under
+    `if ($CC_NUM=$x)`: controller $x (its saved value) is copied to N on
+    every event (MOJO 2's CC1 → CC113, 37620-37626)."""
+    src = open(os.path.join(ksp, "script_1.ksp"), errors="replace").read()
+    out = []
+    for to, var in re.findall(r"set_controller\((\d+),%CC\[(\$\w+)\]\)", src):
+        if var in pers:
+            out.append((int(pers[var][0]), int(to)))
+    return sorted(set(out))
 
 
 def release_numbers(ksp, pers):
@@ -395,6 +430,10 @@ def fx_lines(fx):
                 st.append(f"{{ kind width, width {fmt(p['width'])} }}")
             elif kind == "saturation":
                 st.append(f"{{ kind saturation, shape {p['shape']:.7f}, output_db {fmt(p['output_db'])} }}")
+            elif kind == "cc_volume":
+                rt.append(f"{{ stage 0, param volume, cc {p['cc']}, intensity {fmt(p['intensity'])}, "
+                          f"lag_ms {fmt(p['lag_ms'])} }}")
+                continue
             elif kind == "limiter":
                 st.append(f"{{ kind limiter, input_db {fmt(p['input_db'])}, release_ms {fmt(p['release_ms'])}, "
                           f"output_db {fmt(p['output_db'])} }}")
@@ -454,6 +493,10 @@ def build(nki):
         f"humanize {one('$5l4xp')}, spread {one('$nbpgd')}, detune_max_mcents {one('$tiuuq')}, "
         f"volume_max_mdb {one('$fa4bb')}, offset_max_ms {one('$vjiqj')}, "
         f"attenuation_mdb {one('$rvlgn')}, buffer_ms {one('$gyc05')}, steal_fade_ms 200, reset_fade_ms 250 }}",
+        # controllers read at their saved start value until MIDI moves them,
+        # and the ones the script copies (its `on controller`)
+        "start_ccs (" + " ".join(f"{{ cc {c}, value {v} }}" for c, v in cc_starts(groups)) + ")",
+        "mirror_ccs (" + " ".join(f"{{ from {a}, to {b} }}" for a, b in cc_mirrors(ksp, pers)) + ")",
         "articulations (",
     ]
     notes = []

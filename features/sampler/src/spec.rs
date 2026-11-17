@@ -577,6 +577,15 @@ pub struct PerformanceSpec {
     /// player, nothing of it.
     #[facet(default)]
     pub players: Option<PlayersSpec>,
+    /// Controllers that read a saved value until MIDI first sets them
+    /// (Kontakt keeps a start value with a controller's modulation:
+    /// MOJO 2's transitions read CC113 at 100 until it moves).
+    #[facet(default)]
+    pub start_ccs: Vec<FixedCcSpec>,
+    /// Controllers a script copies to others on every event (MOJO 2:
+    /// `set_controller(113, %CC[1])`, its "CC1 to transition volume").
+    #[facet(default)]
+    pub mirror_ccs: Vec<CcMirrorSpec>,
     /// How a note between sampled keys is pitched. `true`: RESAMPLE (rate
     /// change, the note runs shorter/longer) — what Kontakt does, null-tested
     /// on CSS (+100 c at key 72 from the B3 zone, −52.7 dB). `false`/unset:
@@ -794,6 +803,8 @@ impl Default for PerformanceSpec {
             instrument_gain_db: 0.0,
             instrument_pan: 0.0,
             players: None,
+            start_ccs: Vec::new(),
+            mirror_ccs: Vec::new(),
             resample_transpose: false,
             release_curve_k: 0.0,
             max_repeat_strikes: None,
@@ -1271,6 +1282,10 @@ pub struct SectionOverlay {
     pub instrument_pan: Option<f32>,
     /// See [`PerformanceSpec::players`].
     pub players: Option<PlayersSpec>,
+    /// See [`PerformanceSpec::start_ccs`].
+    pub start_ccs: Option<Vec<FixedCcSpec>>,
+    /// See [`PerformanceSpec::mirror_ccs`].
+    pub mirror_ccs: Option<Vec<CcMirrorSpec>>,
     /// See [`DynamicsSpec::vibrato_controller`]: an instrument whose vibrato
     /// control differs from its library's. `""` = none (the CSW clarinets'
     /// `$vkgua = -1`: CC2 never leaves the vibsus slot).
@@ -1558,6 +1573,12 @@ impl SectionOverlay {
         }
         if let Some(v) = &self.players {
             spec.performance.players = Some(v.clone());
+        }
+        if let Some(v) = &self.start_ccs {
+            spec.performance.start_ccs.clone_from(v);
+        }
+        if let Some(v) = &self.mirror_ccs {
+            spec.performance.mirror_ccs.clone_from(v);
         }
         if let Some(v) = &self.vibrato_controller {
             spec.dynamics.vibrato_controller = (!v.is_empty()).then(|| v.clone());
@@ -2325,6 +2346,14 @@ pub struct MicSpec {
 
 // ── Dynamics ─────────────────────────────────────────────────────────────────
 
+/// A controller copied to another on every event (see
+/// [`PerformanceSpec::mirror_ccs`]).
+#[derive(Debug, Clone, Facet)]
+pub struct CcMirrorSpec {
+    pub from: u8,
+    pub to: u8,
+}
+
 /// A controller held at one value (see [`DynamicsSpec::fixed_ccs`]).
 #[derive(Debug, Clone, Default, Facet)]
 pub struct FixedCcSpec {
@@ -2483,7 +2512,10 @@ pub struct FxStageSpec {
 pub struct FxRouteSpec {
     /// Index into the layer's `stages`.
     pub stage: u8,
-    /// `cutoff`, `resonance`, `eq_gain1`, `eq_gain2` or `eq_gain3`.
+    /// `cutoff`, `resonance`, `eq_gain1`, `eq_gain2`, `eq_gain3`, or
+    /// `volume`: the voice's level at its amplifier (after the chain's
+    /// saturation, as its pan), by Kontakt's controller volume law
+    /// `max(0, 1 − (1 − x)·intensity)`, `stage` ignored.
     pub param: String,
     pub cc: u8,
     #[facet(default)]

@@ -4186,6 +4186,15 @@ impl SampleEngine {
         if let Some(slot) = self.cc_values.get_mut(controller as usize) {
             *slot = value;
         }
+        // a script copying this controller to another (`performance.mirror_ccs`)
+        for i in 0..self.patch.spec.performance.mirror_ccs.len() {
+            let m = &self.patch.spec.performance.mirror_ccs[i];
+            if m.from == controller {
+                let to = usize::from(m.to & 127);
+                self.cc_values[to] = value;
+                self.cc_sent[to] = true;
+            }
+        }
         if self.patch.is_zoned() {
             self.trigger_cc_zones(controller, old_value, value);
         }

@@ -72,6 +72,8 @@ enum Param {
     Cutoff,
     Resonance,
     EqGain(u8),
+    /// The voice's level at its amplifier: the route's value is a gain.
+    Volume,
 }
 
 /// One stage of a plan: its kind and saved knobs.
@@ -140,15 +142,21 @@ impl InsertPlan {
                 _ => {}
             }
         }
-        if stages.is_empty() {
+        // a chain of volume routes alone runs too (a layer with no inserts
+        // whose level a controller moves)
+        let volume_only = |r: &FxRouteSpec| r.param == "volume";
+        if stages.is_empty() && !spec.routes.iter().any(volume_only) {
             return None;
         }
         let routes = spec
             .routes
             .iter()
             .filter_map(|r| {
+                if volume_only(r) {
+                    return plan_route(r, 0, None, sample_rate);
+                }
                 let stage = map.iter().find(|(i, _)| *i == usize::from(r.stage))?.1;
-                plan_route(r, stage as u8, &stages[stage], sample_rate)
+                plan_route(r, stage as u8, Some(&stages[stage]), sample_rate)
             })
             .take(MAX_ROUTES)
             .collect();
@@ -196,23 +204,31 @@ fn plan_stage(s: &FxStageSpec) -> Option<PlanStage> {
     })
 }
 
-fn plan_route(r: &FxRouteSpec, stage: u8, s: &PlanStage, sample_rate: f32) -> Option<PlanRoute> {
+fn plan_route(
+    r: &FxRouteSpec,
+    stage: u8,
+    s: Option<&PlanStage>,
+    sample_rate: f32,
+) -> Option<PlanRoute> {
     let param = match r.param.as_str() {
         "cutoff" => Param::Cutoff,
         "resonance" => Param::Resonance,
+        "volume" => Param::Volume,
         p => {
             let n: u8 = p.strip_prefix("eq_gain")?.parse().ok()?;
-            match s.kind {
+            match s?.kind {
                 StageKind::Eq(bands) if (1..=bands).contains(&n) => Param::EqGain(n - 1),
                 _ => return None,
             }
         }
     };
     if matches!(param, Param::Cutoff | Param::Resonance)
-        && matches!(
-            s.kind,
-            StageKind::Eq(_) | StageKind::Width | StageKind::Saturation | StageKind::Limiter
-        )
+        && s.is_none_or(|s| {
+            matches!(
+                s.kind,
+                StageKind::Eq(_) | StageKind::Width | StageKind::Saturation | StageKind::Limiter
+            )
+        })
     {
         return None;
     }
@@ -230,7 +246,13 @@ fn plan_route(r: &FxRouteSpec, stage: u8, s: &PlanStage, sample_rate: f32) -> Op
         } else {
             kontakt_table_value(&r.points, x)
         };
-        *out = r.intensity * span * shaped;
+        *out = if param == Param::Volume {
+            // Kontakt's controller volume law (KONTRA `laws::volume`, plain
+            // power for a controller): a gain, 1 at the top of the source
+            (1.0 - (1.0 - shaped) * r.intensity).max(0.0)
+        } else {
+            r.intensity * span * shaped
+        };
     }
     // a law the script computes, baked per source value
     if r.table.len() == 128 {
@@ -293,6 +315,10 @@ pub struct InsertState {
     /// A voice's amplifier balance inside the chain (`set_pan`): per
     /// channel gain, and the stage it follows (`None` = ahead of all).
     pan: Option<([f32; 2], Option<usize>)>,
+    /// The volume routes' gain (`Param::Volume`), at the amplifier: after
+    /// the stage `amp_at` (`None` = ahead of all), as the pan.
+    volume: f32,
+    amp_at: Option<usize>,
 }
 
 impl InsertState {
@@ -311,7 +337,14 @@ impl InsertState {
             countdown: 0,
             limiter: None,
             pan: None,
+            volume: 1.0,
+            amp_at: None,
         };
+        s.amp_at = s
+            .plan
+            .stages
+            .iter()
+            .rposition(|st| st.kind == StageKind::Saturation);
         s.limiter = s
             .plan
             .stages
@@ -408,11 +441,19 @@ impl InsertState {
             tgt,
             sections,
             gain,
+            volume,
             ..
         } = self;
         for ((c, t), r) in cur.iter_mut().zip(tgt.iter()).zip(&plan.routes) {
             *c += (*t - *c) * r.coef;
         }
+        *volume = plan
+            .routes
+            .iter()
+            .zip(cur.iter())
+            .filter(|(r, _)| r.param == Param::Volume)
+            .map(|(_, v)| *v)
+            .product();
         for (i, st) in plan.stages.iter().enumerate() {
             let mut cutoff = st.cutoff;
             let mut res = st.resonance;
@@ -425,6 +466,7 @@ impl InsertState {
                     Param::Cutoff => cutoff += v,
                     Param::Resonance => res += v,
                     Param::EqGain(b) => db[usize::from(b)] += v,
+                    Param::Volume => {}
                 }
             }
             (sections[i], gain[i]) = coefficients(st, cutoff, res, db, *sample_rate);
@@ -438,12 +480,7 @@ impl InsertState {
     /// pan). The linear per-channel stages commute with it.
     pub fn set_pan(&mut self, pan: f32) {
         let pan = pan.clamp(-1.0, 1.0);
-        let after = self
-            .plan
-            .stages
-            .iter()
-            .rposition(|s| s.kind == StageKind::Saturation);
-        self.pan = (pan != 0.0).then_some(([1.0 - pan.max(0.0), 1.0 + pan.min(0.0)], after));
+        self.pan = (pan != 0.0).then_some(([1.0 - pan.max(0.0), 1.0 + pan.min(0.0)], self.amp_at));
     }
 
     /// Filter one stereo frame.
@@ -460,6 +497,10 @@ impl InsertState {
         if let Some((g, None)) = self.pan {
             out[0] *= g[0];
             out[1] *= g[1];
+        }
+        if self.amp_at.is_none() {
+            out[0] *= self.volume;
+            out[1] *= self.volume;
         }
         // stage by stage, both channels at each (a limiter needs both; the
         // per-channel stages are indifferent to the order)
@@ -484,6 +525,9 @@ impl InsertState {
                     && at == i
                 {
                     *x *= g[ch];
+                }
+                if self.amp_at == Some(i) {
+                    *x *= self.volume;
                 }
             }
         }
@@ -678,6 +722,39 @@ mod tests {
         let fc = cutoff_hz(Law::Sv, 0.5);
         let g = gain_at(plan, fc, 0);
         assert!((g + 3.01).abs() < 0.2, "{g}");
+    }
+
+    #[test]
+    fn a_volume_route_follows_kontakts_controller_law() {
+        // MOJO 2 Trumpet transitions: CC113 → volume at 0.3937, CC113 at its
+        // start value 100: 1 − (27/127)·0.3937 = 0.9163 (−0.76 dB), flat
+        let route = FxRouteSpec {
+            stage: 0,
+            param: "volume".into(),
+            cc: 113,
+            intensity: 0.393_701,
+            lag_ms: 50.0,
+            points: vec![],
+            env: vec![],
+            source: String::new(),
+            table: vec![],
+        };
+        // an EQ with no gain: the volume route alone
+        let plan = InsertPlan::new(
+            &spec("eq", 0.0, vec![1000.0, 1.0, 0.0], vec![route]),
+            48_000.0,
+        )
+        .unwrap();
+        for hz in [200.0, 4000.0] {
+            let g = gain_at(Arc::clone(&plan), hz, 100);
+            assert!((g - 20.0 * 0.916_3f32.log10()).abs() < 0.02, "{hz}: {g}");
+        }
+        assert!(gain_at(Arc::clone(&plan), 1000.0, 127).abs() < 0.02);
+        let g0 = gain_at(plan, 1000.0, 0);
+        assert!(
+            (g0 - 20.0 * (1.0f32 - 0.393_701).log10()).abs() < 0.02,
+            "{g0}"
+        );
     }
 
     #[test]
