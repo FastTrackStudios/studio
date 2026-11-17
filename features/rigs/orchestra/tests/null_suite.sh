@@ -221,6 +221,18 @@ for mode in "${modes[@]}"; do
         # then each note still off searched over (RR, detune) together
         FIT_EXTRA="$penv0" npy "$here/fit_joint.py" "$bin" "$section" "$d/$mode.mid" \
           "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" "$d/draws_rr.txt" "$d/draws.txt"
+      elif [ "$lib" = solo-strings ] && [ "$mode" = attack ]; then
+        # Solo Strings' loud first note draws its attack voice AND its body
+        # variant (random(2,4)): fit each with the other held, twice
+        vz=$(printf '2,%.0s' $(seq 400)); vz=${vz%,}
+        FIT_EXTRA="--variants $vz" npy "$here/fit_draws.py" --attacks "$bin" "$section" "$d/$mode.mid" \
+          "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
+        for _ in 1 2; do
+          FIT_EXTRA="--attacks $(head -1 "$d/draws.txt")" npy "$here/fit_draws.py" --variants "$bin" "$section" \
+            "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws_var.txt"
+          FIT_EXTRA="--variants $(head -1 "$d/draws_var.txt")" npy "$here/fit_draws.py" --attacks "$bin" "$section" \
+            "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
+        done
       else
         npy "$here/fit_draws.py" "$kind" "$bin" "$section" "$d/$mode.mid" \
           "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
