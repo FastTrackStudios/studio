@@ -127,7 +127,7 @@ song.edit_item(&piece, |item| {
   the container records what changed.
 - Over RPC (Facet, ≤ 4 params): an `ItemPatch` struct with `Option`
   fields (`patch_item(project, item, patch)`), or the existing `batch`
-  ops program (`crates/daw/proto/src/batch`, `daw_control::batch`). Never
+  ops program (`daw:crates/daw/proto/src/batch`, `daw_control::batch`). Never
   grow a fifth parameter; never add a setter per field for a new caller.
 - Undo is a scope, not a pair: `song.undo_step("Comp from lane 2", |song| …)`
   (or an RAII `UndoBlock` guard) so `?` cannot skip `end_undo_block`.

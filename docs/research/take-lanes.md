@@ -26,22 +26,22 @@ with `docs/` or `/home/`. The REAPER SDK is cited from the header the
 
 ### Takes
 
-- `TakeRef { Guid(String), Index(u32), Active }` — `crates/daw/proto/src/item/take.rs:12-19`.
-- `Take` — guid, `item_guid`, `index`, `is_active`, name, colour, volume, `play_rate`, pitch, `preserve_pitch`, `channel_mode` (REAPER `CHANMODE`), `start_offset`, `source_type`, `source_file_path`, `source_length`, `source_sample_rate`, `source_channels`, `is_midi`, `midi_note_count` — `crates/daw/proto/src/item/take.rs:23-72`.
+- `TakeRef { Guid(String), Index(u32), Active }` — `daw:crates/daw/proto/src/item/take.rs:12-19`.
+- `Take` — guid, `item_guid`, `index`, `is_active`, name, colour, volume, `play_rate`, pitch, `preserve_pitch`, `channel_mode` (REAPER `CHANMODE`), `start_offset`, `source_type`, `source_file_path`, `source_length`, `source_sample_rate`, `source_channels`, `is_midi`, `midi_note_count` — `daw:crates/daw/proto/src/item/take.rs:23-72`.
 - `SourceType { Audio, Midi, Empty, Video, Unknown }` — `take.rs:77-89`.
 - Take markers: `TakeMarker`, `TakeMarkerCreate`, `TakeMarkerUpdate`, `AddTakeMarkerAtPositionRequest` — `take.rs:141-189`. Positions are in source seconds, not project time (`take.rs:149-150`).
 - Take ratings (REAPER 7.17 up-rank/down-rank, encoded as `:)`/`:))`/`:(` marker names): `TakeRating` with `from_marker_name`/`to_marker_name` — `take.rs:211-256`; the REAPER command IDs as constants in `take_rating_actions` — `take.rs:263-301`.
-- A second, action-shaped surface: `TakeRankScope`, `TakeRankLevel`, the `TakeRankingService::apply_rank` RPC and the `TakeRankingActions` `#[architect::actions]` trait — `crates/daw/proto/src/take_ranking.rs:15-33, 39-50, 63-`.
-- Events: `ItemEvent::ActiveTakeChanged { project_guid, item_guid, old_take_index, new_take_index }` — `crates/daw/proto/src/item/event.rs:62-67`; `TakeEvent::{Created, Deleted, NameChanged, PitchChanged, PlayRateChanged, VolumeChanged, SourceChanged}` — `event.rs:73-120`. Both ride the cross-domain bus as `DawEvent::Take` (`crates/daw/proto/src/event_bus/event.rs:43`).
-- `Item.take_count` and `Item.active_take_index` on the item itself — `crates/daw/proto/src/item/item.rs:84-87`.
-- The capability flag `Capability::Takes` ("multi-take support within items") — `crates/daw/proto/src/capability.rs:65-67`; it is part of the `TIMELINE_FULL` profile (`capability.rs:345-352`).
+- A second, action-shaped surface: `TakeRankScope`, `TakeRankLevel`, the `TakeRankingService::apply_rank` RPC and the `TakeRankingActions` `#[architect::actions]` trait — `daw:crates/daw/proto/src/take_ranking.rs:15-33, 39-50, 63-`.
+- Events: `ItemEvent::ActiveTakeChanged { project_guid, item_guid, old_take_index, new_take_index }` — `daw:crates/daw/proto/src/item/event.rs:62-67`; `TakeEvent::{Created, Deleted, NameChanged, PitchChanged, PlayRateChanged, VolumeChanged, SourceChanged}` — `event.rs:73-120`. Both ride the cross-domain bus as `DawEvent::Take` (`daw:crates/daw/proto/src/event_bus/event.rs:43`).
+- `Item.take_count` and `Item.active_take_index` on the item itself — `daw:crates/daw/proto/src/item/item.rs:84-87`.
+- The capability flag `Capability::Takes` ("multi-take support within items") — `daw:crates/daw/proto/src/capability.rs:65-67`; it is part of the `TIMELINE_FULL` profile (`capability.rs:345-352`).
 
 ### Fixed lanes
 
-- On the track: `lane_count: u32` (0 = lanes disabled), `lane_play_mask: u64` (bit n = lane n audible), `lane_names: Vec<String>` (may be shorter than `lane_count`), `lane_display: LaneDisplay` — `crates/daw/proto/src/track/track.rs:129-139`; `LaneDisplay { Small, Big, One }` mirrors REAPER's lane-button cycle — `track.rs:291-302`.
-- On the item: `fixed_lane: Option<u32>` — "Fixed item lane this item sits on (REAPER 7 comping lanes). `None` when the track has no fixed lanes" — `crates/daw/proto/src/item/item.rs:79-81`.
-- There is **no** lane event, no lane setter on `Tracks` (`crates/daw/proto/src/track/service.rs:31-200` has `set_muted … set_tcp_height`, nothing lane-shaped) and no `set_fixed_lane` on `Items` (`crates/daw/proto/src/item/service.rs:14-140`). The record/comp lane indices (`LANEREC`) are not represented.
-- The "lane" methods that do exist on `Projects` are **ruler** lanes (marker/region lanes, REAPER 7.62), unrelated to item lanes: `ruler_lane_count`, `set_ruler_lane_name`, `get_ruler_lane_name` — `crates/daw/proto/src/project/service.rs:76` and `crates/daw/control/src/project.rs:468-577`. `Marker.lane`/`Region.lane` are ruler lanes too (`crates/daw/proto/src/marker/marker.rs:24`, `crates/daw/proto/src/region/region.rs:24`).
+- On the track: `lane_count: u32` (0 = lanes disabled), `lane_play_mask: u64` (bit n = lane n audible), `lane_names: Vec<String>` (may be shorter than `lane_count`), `lane_display: LaneDisplay` — `daw:crates/daw/proto/src/track/track.rs:129-139`; `LaneDisplay { Small, Big, One }` mirrors REAPER's lane-button cycle — `track.rs:291-302`.
+- On the item: `fixed_lane: Option<u32>` — "Fixed item lane this item sits on (REAPER 7 comping lanes). `None` when the track has no fixed lanes" — `daw:crates/daw/proto/src/item/item.rs:79-81`.
+- There is **no** lane event, no lane setter on `Tracks` (`daw:crates/daw/proto/src/track/service.rs:31-200` has `set_muted … set_tcp_height`, nothing lane-shaped) and no `set_fixed_lane` on `Items` (`daw:crates/daw/proto/src/item/service.rs:14-140`). The record/comp lane indices (`LANEREC`) are not represented.
+- The "lane" methods that do exist on `Projects` are **ruler** lanes (marker/region lanes, REAPER 7.62), unrelated to item lanes: `ruler_lane_count`, `set_ruler_lane_name`, `get_ruler_lane_name` — `daw:crates/daw/proto/src/project/service.rs:76` and `daw:crates/daw/control/src/project.rs:468-577`. `Marker.lane`/`Region.lane` are ruler lanes too (`daw:crates/daw/proto/src/marker/marker.rs:24`, `daw:crates/daw/proto/src/region/region.rs:24`).
 
 ### Comp areas
 
@@ -49,11 +49,11 @@ Nothing. `grep -rn "comp_area\|CompArea\|LINKEDLANE\|ITEMLANES"` over `crates/da
 
 ## What daw-control exposes
 
-`daw-control` is the async handle layer over the `TakesClient`/`ItemsClient` (`crates/daw/control/src/lib.rs:128, 139, 234-235`).
+`daw-control` is the async handle layer over the `TakesClient`/`ItemsClient` (`daw:crates/daw/control/src/lib.rs:128, 139, 234-235`).
 
 | Handle | Method | R/W | Path |
 |---|---|---|---|
-| `ItemHandle` | `info() -> Item` (carries `take_count`, `active_take_index`, `fixed_lane`) | R | `crates/daw/control/src/items.rs:325` |
+| `ItemHandle` | `info() -> Item` (carries `take_count`, `active_take_index`, `fixed_lane`) | R | `daw:crates/daw/control/src/items.rs:325` |
 | `ItemHandle` | `takes() -> Takes`, `active_take() -> TakeHandle` | R | `items.rs:533-548` |
 | `Takes` | `all() -> Vec<Take>`, `by_index(i)`, `active()` | R | `items.rs:595-637` |
 | `Takes` | `add() -> TakeHandle` | W | `items.rs:640-655` |
@@ -62,9 +62,9 @@ Nothing. `grep -rn "comp_area\|CompArea\|LINKEDLANE\|ITEMLANES"` over `crates/da
 | `TakeHandle` | `set_name`, `set_pitch`, `set_play_rate`, `set_volume`, `set_source_file`, `set_color` | W | `items.rs:750-860` |
 | `TakeHandle` | `make_active()` (→ `Takes::set_active_take`) | W | `items.rs:824-830` |
 | `TakeHandle` | `delete()` | W | `items.rs:833-839` |
-| `TrackHandle` | `info() -> Track` (carries `lane_count`, `lane_play_mask`, `lane_names`, `lane_display`) | R | `crates/daw/control/src/tracks.rs:325` |
+| `TrackHandle` | `info() -> Track` (carries `lane_count`, `lane_play_mask`, `lane_names`, `lane_display`) | R | `daw:crates/daw/control/src/tracks.rs:325` |
 
-Nothing on `TrackHandle` or `ItemHandle` touches lanes (`grep -n -i lane crates/daw/control/src/tracks.rs` is empty; `items.rs` has no lane method). The proto-level `Takes` trait — `crates/daw/proto/src/take/service.rs:14-146` — is the full write surface: `get_takes`, `get_take`, `get_active_take`, `take_count`, `add_take`, `delete_take`, `set_active_take`, `set_name`, `set_color`, `set_volume`, `set_play_rate`, `set_pitch`, `set_preserve_pitch`, `set_start_offset`, `set_source_file`, `get_source_type`, `get_take_markers`, `add_take_marker`, `set_take_marker`, `delete_take_marker`, `add_take_marker_at_position`, `run_take_rating_action`. daw-control does not yet wrap the take-marker/rating methods or `set_preserve_pitch`/`set_start_offset`; a caller reaches those through the `TakesClient` directly or the batch layer (`BatchOp::Take(TakesOp)`, `crates/daw/proto/src/batch/op.rs:30-124`).
+Nothing on `TrackHandle` or `ItemHandle` touches lanes (`grep -n -i lane daw:crates/daw/control/src/tracks.rs` is empty; `items.rs` has no lane method). The proto-level `Takes` trait — `daw:crates/daw/proto/src/take/service.rs:14-146` — is the full write surface: `get_takes`, `get_take`, `get_active_take`, `take_count`, `add_take`, `delete_take`, `set_active_take`, `set_name`, `set_color`, `set_volume`, `set_play_rate`, `set_pitch`, `set_preserve_pitch`, `set_start_offset`, `set_source_file`, `get_source_type`, `get_take_markers`, `add_take_marker`, `set_take_marker`, `delete_take_marker`, `add_take_marker_at_position`, `run_take_rating_action`. daw-control does not yet wrap the take-marker/rating methods or `set_preserve_pitch`/`set_start_offset`; a caller reaches those through the `TakesClient` directly or the batch layer (`BatchOp::Take(TakesOp)`, `daw:crates/daw/proto/src/batch/op.rs:30-124`).
 
 ## REAPER backend coverage (`features/adapters/reaper/daw-reaper`)
 

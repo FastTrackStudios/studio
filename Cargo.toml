@@ -19,8 +19,6 @@ members = [
     "features/sync",
     "crates/frame",
     "features/adapters/web/worklet",
-    "features/patchbay",
-    "features/midi",
     "features/editor",
     "features/session",
     "features/rigs/synth",
@@ -32,7 +30,6 @@ members = [
     "features/app/version",
     "features/library",
     "features/account",
-    "features/audio",
     "features/dsp/builtin",
     "features/rigs/keys",
     "features/rigs/ekit",
@@ -63,16 +60,10 @@ members = [
     "features/studio-views",
     "apps/architect",
     # ── daw ──
-    "features/audio/sample",
     "crates/daw/actions",
-    "crates/daw/control",
     "crates/daw/daw",
     "crates/studio",
-    "crates/daw/module",
-    "crates/daw/proto",
     "features/ui/audio-controls",
-    "crates/daw/allocator",
-    "crates/daw/audio-graph",
     "features/adapters/reaper/dawfile-reaper",
     "features/adapters/reaper/daw-bridge",
     "features/adapters/reaper/daw-extension-runtime",
@@ -91,11 +82,8 @@ members = [
     "features/adapters/reaper/reaper-launcher",
     "crates/daw/standalone",
     "features/adapters/reaper/daw-audio-sync",
-    "crates/daw/transport-sync",
-    "crates/daw/macros",
     "xtask/devtools",
     "xtask/workflows",
-    "crates/daw/utils",
     "vendor/dioxus-test",
     "vendor/tone3000",
     # ── processor ──
@@ -138,10 +126,6 @@ members = [
     "features/signal/content-library",
     "features/signal/content-client",
     "apps/plugins/sampler",
-    # ── patchbay ──
-    "features/patchbay/driver",
-    "features/patchbay/yamaha-tf",
-    "apps/patchbay",
     # ── frame ──
     "crates/frame/tools/cli",
     "crates/frame/tools/mcp",
@@ -182,9 +166,6 @@ lyrics-ui = { path = "features/ui/lyrics-ui", default-features = false }
 daw-sync = { path = "features/sync" }
 frame = { path = "crates/frame" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }
-patchbay = { path = "features/patchbay" }
-patchbay-yamaha-tf = { path = "features/patchbay/yamaha-tf" }
-midi = { path = "features/midi" }
 editor = { path = "features/editor" }
 session = { path = "features/session" }
 synth = { path = "features/rigs/synth" }
@@ -197,7 +178,6 @@ interchange = { path = "features/adapters/interchange" }
 session-format = { path = "crates/daw/session-format" }
 daw-ui = { path = "features/ui/daw-ui" }
 dynamic-template = { path = "features/dynamic-template", default-features = false }
-audio = { path = "features/audio" }
 builtin = { path = "features/dsp/builtin" }
 dsp-core = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
 keys = { path = "features/rigs/keys" }
@@ -224,7 +204,6 @@ dsp = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874
 nice-plug = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
 nice-plug-dioxus = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
 nice-plug-xtask = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
-utils = { path = "crates/daw/utils" }
 app-shell = { path = "features/app/shell" }
 # The release version a shipped binary reports (FTS_RELEASE_VERSION at build
 # time). Binaries only: see its Cargo.toml.
@@ -239,10 +218,6 @@ fts-account = { path = "features/account" }
 # (fix/valverig-nam-0.0.2, valverig-nam =0.0.2, nothing else); back to a
 # tag (v0.1.3) once it merges.
 neural-amp-modeler = { git = "https://github.com/FastTrackStudios/neural-amp-modeler-rs", rev = "bd6a156e5280d9ba30a8f50f5d39b0310feb8780" }
-# Defaults OFF at the root so lean consumers (probe-only scanners, the
-# iOS-clean session-guide) don't drag the pack engine in; each consumer
-# names the features it needs ("load" / "write" / "engine").
-fts-sample = { path = "features/audio/sample", default-features = false }
 # Canonical MIDI facade. Defaults OFF at the root: daw-proto re-exports
 # `midicore::MidiEvent` and must not drag midicore's `vox` service traits
 # (nor the `midir` feature — midicore-midir pins midir 0.10/alsa-sys 0.3,
@@ -263,25 +238,40 @@ ropey = "1.6"
 # rig's pedals, amps and Time blocks, a reverb's machine), painted into
 # the host's scene and played by its pointer — the FX view's devices.
 
+# ── The base, from the daw repo ───────────────────────────────────────
+# (FastTrackStudios/daw: the eleven crates that depend on nothing else in
+# Studio, moved there with their history; studio#510.) One revision for
+# all of them, so they move together; a tag once that repo cuts one. Its
+# root manifest declares the same versions, git pins and patches as this
+# one: bump a pin there and here together, or Cargo.lock grows a second
+# copy. Working on both at once: AGENTS.md, "Co-developing across repos".
+daw-proto = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+daw-control = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+daw-module = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+daw-transport-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+daw-audio-graph = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+# RT-aware allocator — offloads RT deallocation to background thread
+daw-allocator = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+daw-test-macro = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+utils = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+midi = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+audio = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+# Defaults OFF at the root so lean consumers (probe-only scanners, the
+# iOS-clean session-guide) don't drag the pack engine in; each consumer
+# names the features it needs ("load" / "write" / "engine").
+fts-sample = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f", default-features = false }
+
 # ── daw domain (wave 2) ───────────────────────────────────────────────
 # Facade crate — the only public API surface for the daw domain.
 # daw-proto, daw-control, daw-standalone, dawfile-* are INTERNAL to the
 # domain; consumers outside it go through the `daw` facade.
 daw = { path = "crates/daw/daw" }
 studio = { path = "crates/studio" }
-daw-proto = { path = "crates/daw/proto" }
 daw-actions = { path = "crates/daw/actions" }
-daw-control = { path = "crates/daw/control" }
-daw-module = { path = "crates/daw/module" }
 fts-devtools = { path = "xtask/devtools" }
 xtask-workflows = { path = "xtask/workflows" }
-daw-test-macro = { path = "crates/daw/macros" }
-daw-audio-graph = { path = "crates/daw/audio-graph" }
-# RT-aware allocator — offloads RT deallocation to background thread
-daw-allocator = { path = "crates/daw/allocator" }
 audio-controls = { path = "features/ui/audio-controls" }
 daw-audio-sync = { path = "features/adapters/reaper/daw-audio-sync" }
-daw-transport-sync = { path = "crates/daw/transport-sync" }
 dawfile-reaper = { path = "features/adapters/reaper/dawfile-reaper" }
 # default = all-formats; the daw facade opts into formats individually,
 # so the root entry keeps defaults OFF and consumers that want every
@@ -1506,12 +1496,19 @@ dioxus-native-dom = { git = "https://www.github.com/FastTrackStudios/vendor", re
 dioxus-vdom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
 
 # keyflow (a git dependency) still takes daw, dawfile-reaper and fts-sample
-# from daw's old repo; this gives it the copies here, so there is one of
-# each. Goes when keyflow takes them from studio.
+# from the daw repo's old tag v0.0.7; this gives it the copies Studio
+# builds, so there is one of each. daw and dawfile-reaper are still here.
+# fts-sample is now in the daw repo itself, and a [patch] may not point
+# back at the source it patches, so it names the same revision on the
+# `www.` host (a different source to cargo, the same repo; the trick the
+# editor table below uses). It replaces every fts-sample from that URL,
+# this workspace's own included: Cargo.lock holds the `www.` one only.
+# Keep its rev equal to the base's above. Goes when keyflow pins the daw
+# repo at the revision Studio does.
 [patch."https://github.com/FastTrackStudios/daw"]
 daw = { path = "crates/daw/daw" }
 dawfile-reaper = { path = "features/adapters/reaper/dawfile-reaper" }
-fts-sample = { path = "features/audio/sample" }
+fts-sample = { git = "https://www.github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
 
 # from processor
 [profile.dev.package.builtin]

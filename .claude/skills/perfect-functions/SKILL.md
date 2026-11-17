@@ -289,7 +289,7 @@ pub fn swipe(daw: &Standalone, project: &ProjectContext, tracks: &[String],
 
 `Span` moves the validation to the caller once (the talk's normalised
 vector); `in_undo_block` makes the pairing impossible to break with a `?`
-(the talk's lock-guard receipt). `daw-control`'s batch already groups edits under one undo label (`crates/daw/control/src/batch.rs:83`
+(the talk's lock-guard receipt). `daw-control`'s batch already groups edits under one undo label (`daw:crates/daw/control/src/batch.rs:83`
 `with_undo`); look there before inventing a new helper.
 
 ### 4. Clear a span from an item — two booleans standing for a shape

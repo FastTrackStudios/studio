@@ -1,5 +1,4 @@
 ---
-"utils" = "minor"
 "app-shell" = "minor"
 "session-ui" = "patch"
 "dock" = "none"
