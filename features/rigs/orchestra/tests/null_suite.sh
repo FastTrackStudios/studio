@@ -169,6 +169,8 @@ for mode in "${modes[@]}"; do
     fit_mode=shorts
     export CS_RR_MAX=9
   fi
+  # Solo Strings shorts draw among up to 9 RRs (Spiccato)
+  [ "$lib" = solo-strings ] && export CS_RR_MAX=9
   # Solo Strings draws a loud first note's body variant at random: fit it
   # like leg2's in the modes with loud first notes
   if [ "$lib" = solo-strings ] && { [ "$mode" = probe ] || [ "$mode" = legato ]; }; then
