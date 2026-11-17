@@ -136,3 +136,10 @@ strings.txt, proj/Kontakt8; scripts/DecompileAt.java decompiles by address).
   `|step−1| ≤ 1e-4` is a plain copy. The step is a float32 product. Render KONTRA
   with `KONTRA_INSPECT_BLOCK=512` to match REAPER's render blocks. CSSS sustains
   then null at −98…−109 dB.
+- **Envelope time modulation** (KONTRA c81bc21): AHDSR knob → ms is
+  `e^(C·u + ln2) − 2` (C 8.9228 attack/hold, 9.4336 decay/release;
+  `BEnvelopeAHDSR::Modulate`). A CC/velocity route on a time scales the knob,
+  not ms: `ms' = 2·((ms+2)/2)^m − 2`, `m = 1 − (1 − x)·I` (generated mod script,
+  `BGroup::GenSysModScript`); a cube only with the Kontakt 2 compatibility
+  byte. The release is re-read at note-off. Fall: state 1.075 → 0.075 by
+  `pow(43/3, −1/N)`, silent exactly at N.
