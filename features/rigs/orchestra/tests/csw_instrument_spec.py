@@ -220,6 +220,8 @@ def marcato(pers, zones=None, group_names=None):
     print("        marcato_transition {")
     print("            hard_velocity 127")  # no hard-attack path in CSW
     print(f"            body_offset_ms ({p('$yp2sq')} {p('$yp2sq')})")
+    # past an octave too: $1fvjk := $yp2sq on every connection (KSP 12955)
+    print(f"            body_offset_big_ms ({p('$yp2sq')} {p('$yp2sq')})")
     print(f"            lt_offset_ms ((0 {off}))")
     print(f"            lt_db_step ((0 {vol}))")
     print(f"            lt_db_leap ((0 {vol}))")

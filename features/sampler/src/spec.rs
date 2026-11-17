@@ -1218,6 +1218,9 @@ pub struct MarcatoOverlay {
     pub hard_velocity: Option<u8>,
     pub hard_ioi_ms: Option<f32>,
     pub body_offset_ms: Option<[f32; 2]>,
+    /// The body offset past an octave (CSW / CSB: the same `$yp2sq` as
+    /// any connection; CSS has its own `$dztsp` / `$fswjh`).
+    pub body_offset_big_ms: Option<[f32; 2]>,
     pub lt_offset_ms: Option<Vec<[f32; 2]>>,
     pub lt_db_step: Option<Vec<[f32; 2]>>,
     pub lt_db_leap: Option<Vec<[f32; 2]>>,
@@ -1409,6 +1412,9 @@ impl MarcatoOverlay {
         }
         if let Some(v) = self.body_offset_ms {
             t.body_offset_ms = v;
+        }
+        if let Some(v) = self.body_offset_big_ms {
+            t.body_offset_big_ms = v;
         }
         if let Some(v) = &self.lt_offset_ms {
             t.lt_offset_ms.clone_from(v);

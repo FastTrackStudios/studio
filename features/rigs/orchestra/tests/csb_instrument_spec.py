@@ -240,6 +240,8 @@ def marcato(pers, lt_layers):
     print("            hard_ioi_ms 0")
     print(f"            xfade_ms {p('$a3zg3')}")  # the swell's XTime, per instrument
     print(f"            body_offset_ms ({p('$yp2sq')} {p('$yp2sq')})")
+    # past an octave too: $1fvjk := $yp2sq on every connection (KSP 12955)
+    print(f"            body_offset_big_ms ({p('$yp2sq')} {p('$yp2sq')})")
     # LT offset, level and previous-LT retire by attack class (soft, hard)
     print(f"            lt_offset_ms_by_class ({p('$5ibvn')} {p('$cblef')})")
     print(f"            lt_db_by_class ({css.fmt(p('$b23jt') / 10)} {css.fmt(p('$rlbmz') / 10)})")
