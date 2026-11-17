@@ -30,6 +30,10 @@ import tempfile
 
 TPQ, US_PER_Q, FRAMES_PER_TICK = 480, 500000, 50  # 120 BPM, 48 kHz
 NOTE_TICKS = 192                                  # 200 ms
+# The first hit waits 2 s: a script that finishes its tables from timers after `on init`
+# (STRIKEFORCE's velocity curves) is done in Kontakt's render only if it had time, and how
+# long Kontakt had since loading varies; KONTRA's pre-roll settles it too.
+LEAD_TICKS = 1920
 RR = re.compile(r"(?i)[_ -]?rr[_ -]?\d+")
 
 
@@ -144,10 +148,10 @@ def main():
     hits, rows = [], []
     for k, v, _ in kept:
         for r in range(hits_per):
-            t = len(hits) * gap
+            t = LEAD_TICKS + len(hits) * gap
             hits.append((t, k, v))
             rows.append((t, k, f"key{k} v{v} rep{r + 1}"))
-    write_mid(os.path.join(out, "probe.mid"), hits, len(hits) * gap)
+    write_mid(os.path.join(out, "probe.mid"), hits, LEAD_TICKS + len(hits) * gap)
     json.dump(scenario(hits), open(os.path.join(out, "scn.json"), "w"))
     win = gap * FRAMES_PER_TICK / 48000
     with open(os.path.join(out, "manifest.tsv"), "w") as m:
