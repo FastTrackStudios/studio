@@ -167,7 +167,7 @@ next domain adopts it):
   (`emit_direct_view`, `emit_scope_views`).
 - Tests: `libs/architect/architect/tests/scoped_router.rs` (direct view,
   scope chain end-to-end; also the unrelated instance-scoped router).
-- Domain handles: `crates/daw/proto/src/handle.rs`.
+- Domain handles: `daw:crates/daw/proto/src/handle.rs`.
 - Showcase call sites: `crates/signal/rig-host/src/lib.rs`,
   `signal_sampler::keys_rig::build_lane_tracks` (TrackTree),
   drums `apply_kit_mixer` (scoped mixer application), `route_to_bus`

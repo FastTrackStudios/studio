@@ -1,6 +1,5 @@
 ---
 "daw-standalone" = "patch"
-"fts-sample" = "patch"
 "session-engine" = "patch"
 ---
 

@@ -56,7 +56,14 @@ instead = "a #[architect::service] trait mounted by EngineHost"
 contract-clean = 14
 ui-reach = 6
 transport-host = 2
-lints = 14
+# 2026-11-17: the base crates moved to FastTrackStudios/daw (studio#510), so
+# the rows for `midi` (L0, and L4 with `ui`) and `audio` (L1) went with them,
+# and two of the members counted under `lints` (utils, fts-sample: no
+# `[lints] workspace = true`) are no longer members. 14 -> 12 is that
+# arithmetic, NOT a measured run; contract-clean and ui-reach are unchanged
+# here and may be lower without the `midi` rows. Re-measure with
+# `just ci-boundaries`.
+lints = 12
 hand-routes = 31
 
 # ── L0 contracts ──
@@ -74,10 +81,6 @@ layer = "L0"
 
 [[row]]
 package = "keys"
-layer = "L0"
-
-[[row]]
-package = "midi"
 layer = "L0"
 
 [[row]]
@@ -179,11 +182,6 @@ features = ["ui"]
 layer = "L4"
 
 [[row]]
-package = "midi"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
 package = "modulation"
 features = ["ui"]
 layer = "L4"
@@ -248,10 +246,6 @@ layer = "L1"
 
 [[row]]
 package = "fts-account"
-layer = "L1"
-
-[[row]]
-package = "audio"
 layer = "L1"
 
 [[row]]
