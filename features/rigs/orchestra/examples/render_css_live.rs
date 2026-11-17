@@ -168,6 +168,12 @@ fn render_one(
     {
         rig.skip_script_draws(ID, n);
     }
+    // `--humanize d1..d9,v1..v9,o1..o9`: an ensemble's humanize tables
+    // (detune m-cents, volume mdB, offset ms of players 1-9), as KONTRA's
+    // instrument drew them at load (MOJO 2).
+    if let Some(v) = draws::<i32>(args, "--humanize") {
+        rig.force_humanize(ID, &v);
+    }
     // `--rrs a,b,…`: random short RR draws (0-based; woodwinds / brass).
     if let Some(v) = draws::<u8>(args, "--rrs") {
         rig.force_random_rrs(ID, &v);
@@ -309,7 +315,14 @@ fn main() -> eyre::Result<()> {
     let lib_name = flag("--library").unwrap_or_else(|| "strings".to_string());
     let library = signal_orchestra::library(&lib_name)
         .ok_or_else(|| eyre::eyre!("unknown library {lib_name:?}"))?;
-    let patch = signal_orchestra::load_patch(library, &section).map_err(|e| eyre::eyre!(e))?;
+    let mut patch = signal_orchestra::load_patch(library, &section).map_err(|e| eyre::eyre!(e))?;
+    // `--overlay FILE`: a further `section.styx` over the instrument's own
+    // (a test of numbers not yet in the shared patch folder).
+    if let Some(path) = flag("--overlay") {
+        sampler::spec::SectionOverlay::from_file(std::path::Path::new(&path))
+            .map_err(|e| eyre::eyre!("{path}: {e}"))?
+            .apply(&mut patch.spec);
+    }
 
     let Some(batch) = flag("--batch") else {
         let inp = all

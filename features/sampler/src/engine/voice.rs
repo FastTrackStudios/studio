@@ -377,6 +377,11 @@ pub struct Voice {
 
     /// MIDI note this voice belongs to (for note-off matching).
     pub note: u8,
+    /// The key whose note-off releases this voice (its envelope, a
+    /// note-off fade): its own note, or the key of the event that played it
+    /// (a script's `play_note(…, −1)` child ends with its parent — MOJO 2's
+    /// divisi plays a chord's voices from one note's callback).
+    pub env_key: u8,
 
     /// Index into the patch's `LibrarySpec.mics` declaration order.
     /// `None` for libraries without explicit mics (folds to mic 0 in
@@ -941,6 +946,7 @@ impl Voice {
             bloom_target: 1.0,
             kind,
             note,
+            env_key: note,
             mic_index: None,
             choke_group: None,
             release_frames,
@@ -1036,6 +1042,7 @@ impl Voice {
             bloom_target: 1.0,
             kind,
             note,
+            env_key: note,
             mic_index: None,
             choke_group: None,
             release_frames,
@@ -1248,6 +1255,12 @@ impl Voice {
         self
     }
 
+    /// The key whose note-off releases this voice (see [`Voice::env_key`]).
+    pub fn with_env_key(mut self, key: u8) -> Self {
+        self.env_key = key;
+        self
+    }
+
     /// Tag this voice with the stem class of its source articulation.
     #[must_use]
     pub fn with_artic_class(mut self, class: ArticClass) -> Self {
@@ -1439,6 +1452,16 @@ impl Voice {
     }
 
     /// Whether the voice runs a group insert chain.
+    /// A balance (−1..1) the insert chain applies after its drive stages
+    /// (see [`super::inserts::InsertState::set_pan`]); none without inserts.
+    #[must_use]
+    pub fn with_insert_pan(mut self, pan: f32) -> Self {
+        if let Some(f) = &mut self.inserts {
+            f.set_pan(pan);
+        }
+        self
+    }
+
     #[must_use]
     pub fn has_inserts(&self) -> bool {
         self.inserts.is_some()
@@ -2979,7 +3002,7 @@ impl VoicePool {
 
     pub fn note_off_line(&mut self, line: u8, note: u8, release_frames: Option<usize>) {
         for v in &mut self.voices {
-            if v.note == note && v.line == line {
+            if v.env_key == note && v.line == line {
                 match release_frames {
                     Some(frames) => v.note_off_with_release_frames(frames),
                     None => v.note_off(),
@@ -3106,7 +3129,7 @@ impl VoicePool {
     /// a script no longer tracks still ends with its envelope).
     pub fn release_note_envelopes(&mut self, line: u8, note: u8) {
         for v in &mut self.voices {
-            if v.note == note && v.line == line && !matches!(v.kind, VoiceKind::Release) {
+            if v.env_key == note && v.line == line && !matches!(v.kind, VoiceKind::Release) {
                 if let Some(f) = &mut v.flex {
                     f.release();
                 }

@@ -421,6 +421,11 @@ impl SampleEngine {
                 .spec
                 .articulation(artic)
                 .map_or(0.0, |a| a.script_start_ms);
+            // a player's humanized offset joins the note's (`players.rs`)
+            let ms = match self.spawn_player {
+                Some(m) if ms > 0.0 => ms + m.start_ms as f32,
+                _ => ms,
+            };
             if ms > 0.0 {
                 self.spawn_extra_start += kontakt_offset_frames(ms, self.sample_rate);
             }

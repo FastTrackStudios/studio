@@ -13,7 +13,8 @@ articulation (script order, `%ArtGroupStart` = persistent `%hr4to`):
   knob = the articulation's volume control (`%aal4d[art]`, read from its
   persistent value) and VelGainMin = `$hcxoq`; engine units → dB by the
   script's own law `(18000·log2(ep) − 346768.23)/1000` (25510).
-- level_db: `change_vol(−$rvlgn · players)` per note (25480), 1 player.
+- level_db: `change_vol(−$rvlgn · players)` per note (25480), 1 player;
+  `players` carries the rest of the Ensemble (more players add −$rvlgn each).
 - script_start_ms: `play_note`'s offset `$wv2n2 + $a0xhd` ms (25232),
   limited by each zone's start_mod (the engine does that).
 - key_range: `%ArtRange` (persistent `%yqd5p`): outside it nothing plays (25170).
@@ -442,6 +443,17 @@ def build(nki):
         f"// fader {bus1_vol}. Not modelled yet: the active instrument insert (slot 7,",
         "// kind 11), the one-layer articulations' velocity lowpass (slot 7, type 50).",
         f"instrument_gain_db {fmt(gain_db)}",
+        # the Ensemble (decode-players-divisi.md): players CC $m2uxz in bands
+        # of 12, Auto Divisi CC $045sg, the shipped count $gl1sy and divisi
+        # $jlrfr, Humanize $5l4xp, Stereo Spread $nbpgd, the humanize maxima
+        # (ReadPGSValues 20838-20840), EnsAttenPerPlayer $rvlgn (the
+        # articulations' level_db carries one player's), DivisiBufferMs
+        # $gyc05; steal / ResetDivisi fades 200 / 250 ms (25340, 22801)
+        f"players {{ count_cc {one('$m2uxz')}, divisi_cc {one('$045sg')}, count_band 12, "
+        f"count {one('$gl1sy')}, divisi {'true' if one('$jlrfr') else 'false'}, "
+        f"humanize {one('$5l4xp')}, spread {one('$nbpgd')}, detune_max_mcents {one('$tiuuq')}, "
+        f"volume_max_mdb {one('$fa4bb')}, offset_max_ms {one('$vjiqj')}, "
+        f"attenuation_mdb {one('$rvlgn')}, buffer_ms {one('$gyc05')}, steal_fade_ms 200, reset_fade_ms 250 }}",
         "articulations (",
     ]
     notes = []

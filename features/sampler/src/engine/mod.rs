@@ -234,6 +234,7 @@ mod legato;
 mod midi;
 mod phrase;
 pub mod pitch_shift;
+mod players;
 pub mod resample;
 pub mod rr;
 mod script_legato;
@@ -1012,8 +1013,10 @@ pub struct SampleEngine {
     pub(crate) ksp_state: Option<u32>,
     /// The last random round robin (`rr_random_global`).
     pub(crate) rr_global_last: u8,
-    /// The note the key noise last tried (`KeynoiseSpec`).
-    pub(crate) keynoise_last: Option<u8>,
+    /// A script's ensemble of players (`PlayersSpec`, `players.rs`).
+    pub(crate) players: players::PlayersState,
+    /// What the player whose voice is being spawned adds (`players.rs`).
+    pub(crate) spawn_player: Option<players::PlayerMods>,
     /// The latched release type once a type key set it (`ReleaseTypesSpec`;
     /// else the shipped one), and a one-shot override for the next release.
     pub(crate) release_type_latched: Option<u8>,
@@ -1364,7 +1367,8 @@ impl SampleEngine {
             cc_sent: [false; 128],
             ksp_state: None,
             rr_global_last: 0,
-            keynoise_last: None,
+            players: players::PlayersState::default(),
+            spawn_player: None,
             release_type_latched: None,
             release_override: None,
             spawn_delayed_fade: None,
@@ -1392,6 +1396,11 @@ impl SampleEngine {
             &engine.patch.spec.performance.interpolation,
         ));
         engine.apply_fixed_ccs();
+        // The ensemble's humanize tables are the instrument's own draws at
+        // load, apart from any stream a render pins (`PlayersState::new`).
+        if let Some(p) = engine.patch.spec.performance.players.as_ref() {
+            engine.players = players::PlayersState::new(p, 0x9E37_79B9_7F4A_7C15);
+        }
         engine.insert_plans = engine
             .patch
             .spec
@@ -2492,6 +2501,7 @@ impl SampleEngine {
                 .chain(trill)
                 .chain(self.phrase_due_in())
                 .chain(self.script_leg_due_in())
+                .chain(self.divisi_due_in())
                 .min()
                 .map_or(block_frames - done, |f| f.clamp(1, block_frames - done));
             self.voices.set_now(self.frames_rendered);
@@ -2516,6 +2526,7 @@ impl SampleEngine {
     fn fire_due_legato(&mut self) {
         self.fire_phrase();
         self.fire_script_legato();
+        self.fire_divisi();
         if self
             .trill_due
             .as_ref()

@@ -906,6 +906,14 @@ impl SamplerRig {
         }
     }
 
+    /// Set an ensemble's humanize tables — see
+    /// [`crate::engine::SampleEngine::force_humanize`].
+    pub fn force_humanize(&self, id: &str, v: &[i32]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_humanize(id, v);
+        }
+    }
+
     /// Draw the script's random numbers from a KSP seed — see
     /// [`crate::engine::SampleEngine::set_script_seed`].
     pub fn set_script_seed(&self, id: &str, seed: u32) {

@@ -109,6 +109,24 @@ impl SampleEngine {
         on.then_some(spec)
     }
 
+    /// Whether `artic`'s legato is switched on (it plays monophonic).
+    pub(crate) fn script_legato_on_for(&self, artic: &str) -> bool {
+        let Some(spec) = self
+            .patch
+            .spec
+            .articulation(artic)
+            .and_then(|a| a.script_legato.as_ref())
+        else {
+            return false;
+        };
+        let cc = usize::from(spec.enable_cc & 127);
+        if self.cc_sent[cc] {
+            self.cc_values[cc] > 63
+        } else {
+            spec.on
+        }
+    }
+
     fn script_natural(&self, spec: &ScriptLegatoSpec) -> bool {
         spec.natural
             .as_ref()
