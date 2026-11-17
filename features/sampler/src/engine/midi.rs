@@ -2978,9 +2978,10 @@ impl SampleEngine {
             .patch
             .spec
             .articulation(&self.patch.spec.zones[idx].articulation);
-        // A sustained body's level by velocity (`ArticulationSpec::vel_gain_db`;
-        // shorts apply it in `trigger_zoned_short`): CSSS marcato,
-        // `(127 − vel) · $0kd5m / 126` dB.
+        // A sustained body's level by velocity (`ArticulationSpec::
+        // vel_gain_db`; shorts apply it in `trigger_zoned_short`): CSSS
+        // marcato, `(127 − vel) · %lwgt4[50] / 100` from `$5n14h` (CSSS
+        // 12036-12037, the connection path that draws the random offset).
         let body_vel_db = if is_sustain_layer {
             artic
                 .and_then(|a| {

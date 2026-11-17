@@ -243,6 +243,18 @@ for mode in "${modes[@]}"; do
           FIT_EXTRA="--variants $(head -1 "$d/draws_var.txt")" npy "$here/fit_draws.py" --attacks "$bin" "$section" \
             "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
         done
+      elif [ "$lib" = solo-strings ] && [ "$mode" = marc2 ]; then
+        # Solo Strings marc2: the overlay shorts draw their RRs and each
+        # marcato connection its body's extra entry: fit each with the
+        # other held (the offsets first at 0), twice
+        zeros=$(printf '0,%.0s' $(seq 400)); zeros=${zeros%,}
+        echo "$zeros" > "$d/draws.txt"
+        for _ in 1 2; do
+          FIT_EXTRA="--offsets $(head -1 "$d/draws.txt")" npy "$here/fit_draws.py" --rrs "$bin" "$section" \
+            "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws_rr.txt"
+          FIT_EXTRA="--rrs $(head -1 "$d/draws_rr.txt")" npy "$here/fit_draws.py" --offsets "$bin" "$section" \
+            "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
+        done
       else
         npy "$here/fit_draws.py" "$kind" "$bin" "$section" "$d/$mode.mid" \
           "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"

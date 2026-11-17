@@ -8,6 +8,18 @@
 use super::*;
 use crate::spec::{EnvSegmentSpec, MarcatoTransitionSpec, ksp_lerp, lerp_table};
 
+/// The LT's velocity term (dB) in the script's integer deci-dB:
+/// `%qgipe[51] := -$0kd5m`, `%lwgt4[51] := %qgipe[51]*-100000/127`,
+/// `$arhiq := (127-$EVENT_VELOCITY)*%lwgt4[51]/10000` (CSSS 6139-6141, 11771).
+fn marcato_lt_vel_db(vel_db: f32, velocity: u8) -> f32 {
+    if vel_db == 0.0 {
+        return 0.0;
+    }
+    let lw = -(vel_db.round() as i64) * -100_000 / 127;
+    let ddb = i64::from(127 - velocity.min(127)) * lw / 10_000;
+    ddb as f32 / 10.0
+}
+
 impl SampleEngine {
     /// The current articulation's tremolo-style transition, if it has one.
     pub(crate) fn simple_transition(&self) -> Option<crate::spec::SimpleTransitionSpec> {
@@ -303,7 +315,9 @@ impl SampleEngine {
             let lt_db = mt
                 .lt_db_by_class
                 .map_or_else(|| lerp_table(lt_db_tab, ioi as f32), |c| c[class])
-                + mt.lt_group_db;
+                + mt.lt_group_db
+                + self.marcato_lt_ramp_db(mt)
+                + marcato_lt_vel_db(mt.lt_vel_db, velocity);
             let lt_env: Vec<(f32, f32, f32)> = mt
                 .lt_env
                 .iter()
@@ -327,6 +341,25 @@ impl SampleEngine {
         l.note = Some(to);
         l.marcato_ioi = Some(ioi as f32);
         l.connected = true;
+    }
+
+    /// The LT's phrase ramp (dB) for a connection now, moving the phrase
+    /// anchor as the script does (`MarcatoTransitionSpec::lt_ramp_ddb`).
+    fn marcato_lt_ramp_db(&mut self, mt: &MarcatoTransitionSpec) -> f32 {
+        if mt.lt_ramp.is_none() {
+            return 0.0;
+        }
+        let now = self.frames_rendered;
+        // `$ENGINE_UPTIME` counts whole ms
+        let elapsed =
+            (frames_to_ms(now.saturating_sub(self.ab_anchor_frame), self.sample_rate)) as i64;
+        let (ddb, moved) = MarcatoTransitionSpec::lt_ramp_ddb(mt.lt_ramp, elapsed);
+        if moved {
+            let window = mt.lt_ramp.map_or(0, |r| r[2].max(0) as u32);
+            self.ab_anchor_frame =
+                now.saturating_sub(ms_to_frames(window, self.sample_rate) as u64);
+        }
+        ddb as f32 / 10.0
     }
 
     /// The marc-leg zones of the LOWER note (interval-coded), one voice per
@@ -417,5 +450,34 @@ impl SampleEngine {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::marcato_lt_vel_db;
+    use crate::spec::MarcatoTransitionSpec;
+
+    #[test]
+    fn lt_velocity_term_is_the_scripts_integer_deci_db() {
+        // CSSS $0kd5m = -9: %lwgt4[51] = -7086
+        assert_eq!(marcato_lt_vel_db(-9.0, 127), 0.0);
+        assert_eq!(marcato_lt_vel_db(-9.0, 40), -6.1); // 87 * -7086 / 10000 = -61
+        assert_eq!(marcato_lt_vel_db(-9.0, 120), -0.4);
+        assert_eq!(marcato_lt_vel_db(0.0, 1), 0.0);
+    }
+
+    #[test]
+    fn lt_ramp_follows_the_scripts_three_branches() {
+        let r = Some([-60, -30, 250, 2000]); // CSSS $4lqhx $ee3a4 $xu41m $c2hkn
+        let at = |t| MarcatoTransitionSpec::lt_ramp_ddb(r, t);
+        assert_eq!(at(0), (-60, false));
+        assert_eq!(at(125), (-45, false));
+        assert_eq!(at(250), (-30, false));
+        // B: (-3000 + t * (3000 / 2000 = 1)) / 100
+        assert_eq!(at(1000), (-20, true));
+        assert_eq!(at(2000), (-10, true));
+        assert_eq!(at(2001), (0, true));
+        assert_eq!(MarcatoTransitionSpec::lt_ramp_ddb(None, 0), (0, false));
     }
 }

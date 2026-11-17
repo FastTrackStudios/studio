@@ -80,10 +80,13 @@ def marcato(pers, zones=None, group_names=None):
     # CC19 = 0, leaving the stored level 1): CSS plays it at full level
     groups = {g["name"][4:]: g for g in ALL_GROUPS if g["name"].startswith("Mix ")}
     flex = css.flex(groups, "marcato mod")
-    # ... and is levelled by its velocity: (127 - vel) * $0kd5m / 126 dB
-    # (measured: v40 -6.2 dB, v120 -0.5 against a velocity-blind body)
-    k = css.one(pers, "$0kd5m")
-    table = " ".join(css.fmt(round((127 - min(max(v, 1), 127)) * k / 126, 4)) for v in range(128))
+    # ... and a fresh one is levelled by its velocity, in the script's
+    # integer millidB: %lwgt4[50] := -$5n14h * -100000 / 127,
+    # change_vol((127 - vel) * %lwgt4[50] / 100) (CSSS 6140, 12036-12037);
+    # a connected body takes none (its transition does: lt_vel_db)
+    k = css.one(pers, "$5n14h")
+    lw = kdiv(-k * -100000, 127)
+    table = " ".join(css.fmt(kdiv((127 - min(v, 127)) * lw, 100) / 1000) for v in range(128))
     print("    {\n        id Marcato")
     if flex:
         css.emit_amp_env([tuple(seg) for seg in flex])
@@ -95,6 +98,12 @@ def marcato(pers, zones=None, group_names=None):
 
 
 csw.marcato = marcato
+
+
+def kdiv(a, b):
+    """KSP integer division (truncates toward zero)."""
+    q = abs(a) // abs(b)
+    return q if (a >= 0) == (b > 0) else -q
 
 
 def main():
@@ -112,8 +121,14 @@ def main():
     # fixed sequence, no per-note alternation (the strings spec has both)
     # the marcato body enters $yp2sq + random(0, $a4bsp) deep (CSSS 11357)
     a4bsp = css.one(css.persistent(sys.argv[1]), "$a4bsp")
+    # the LT's level: + (127 - vel) * %lwgt4[51] from $0kd5m, + the phrase
+    # ramp ($4lqhx $ee3a4 over $xu41m / $c2hkn) (CSSS 11757-11773)
+    pers = css.persistent(sys.argv[1])
+    ramp = " ".join(str(css.one(pers, v)) for v in ("$4lqhx", "$ee3a4", "$xu41m", "$c2hkn"))
     text = re.sub(r"^(            body_offset_big_ms [^\n]*\n)",
-                  r"\1            body_offset_random_ms " + str(a4bsp) + "\n", text, count=1, flags=re.M)
+                  r"\1            body_offset_random_ms " + str(a4bsp) + "\n"
+                  + "            lt_vel_db " + str(css.one(pers, "$0kd5m")) + "\n"
+                  + "            lt_ramp (" + ramp + ")\n", text, count=1, flags=re.M)
     text = re.sub(r"^(        rr_random_avoid_last \d+\n)", r"\1        rr_sequence ()\n        rr_per_note false\n",
                   text, flags=re.M)
     sys.stdout.write(text)

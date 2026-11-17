@@ -1105,6 +1105,16 @@ pub struct MarcatoTransitionSpec {
     pub lt_db_step: Vec<[f32; 2]>,
     pub lt_db_leap: Vec<[f32; 2]>,
     pub lt_group_db: f32,
+    /// The LT's velocity law, dB at velocity 0: `(127 − vel)` of it ÷ 127
+    /// (CSSS `(127-$EVENT_VELOCITY)*%lwgt4[51]/10000` from `$0kd5m`,
+    /// CSSS 11771). 0 = none.
+    #[facet(default)]
+    pub lt_vel_db: f32,
+    /// The LT's phrase ramp, deci-dB / ms as the script ships them
+    /// (`$4lqhx`, `$ee3a4`, `$xu41m`, `$c2hkn`; CSSS 11757-11768), see
+    /// [`MarcatoTransitionSpec::lt_ramp_ddb`]. None = no ramp.
+    #[facet(default)]
+    pub lt_ramp: Option<[i32; 4]>,
     pub lt_env: Vec<EnvSegmentSpec>,
     /// The previous transition voice's retire fade, ms by IOI.
     pub lt_retire_ms: Vec<[f32; 2]>,
@@ -1243,6 +1253,47 @@ pub struct LegatoOverlay {
     pub lt_offset_low_latency: Option<Vec<u32>>,
 }
 
+impl MarcatoTransitionSpec {
+    /// The LT's phrase ramp at `elapsed_ms` past the phrase anchor, in
+    /// deci-dB, and whether the anchor moves to `now − window` — the
+    /// script's integer arithmetic line for line (CSSS 11757-11768):
+    ///
+    /// ```text
+    /// if (elapsed <= $xu41m)          ; A: start + |mid| over the window
+    ///     $1z3x0 := $4lqhx*100 - ($ee3a4*100*elapsed/$xu41m)
+    /// else
+    ///     if (elapsed <= $c2hkn)      ; B: mid back toward 0
+    ///         $1z3x0 := $ee3a4*100 + elapsed*(abs($ee3a4)*100/$c2hkn)
+    ///     end if                      ; C: 0
+    ///     $0nind := $ENGINE_UPTIME - $xu41m
+    /// end if
+    /// $1z3x0 := $1z3x0/100
+    /// ```
+    #[must_use]
+    pub fn lt_ramp_ddb(ramp: Option<[i32; 4]>, elapsed_ms: i64) -> (i32, bool) {
+        let Some([start, mid, window, span]) = ramp else {
+            return (0, false);
+        };
+        let (start, mid, window, span) = (
+            i64::from(start),
+            i64::from(mid),
+            i64::from(window),
+            i64::from(span),
+        );
+        let (v, moved) = if elapsed_ms <= window {
+            (start * 100 - mid * 100 * elapsed_ms / window.max(1), false)
+        } else if elapsed_ms <= span {
+            (
+                mid * 100 + elapsed_ms * (mid.abs() * 100 / span.max(1)),
+                true,
+            )
+        } else {
+            (0, true)
+        };
+        ((v / 100) as i32, moved)
+    }
+}
+
 /// The overridable [`MarcatoTransitionSpec`] fields of a section.
 #[derive(Debug, Clone, Default, Facet)]
 pub struct MarcatoOverlay {
@@ -1259,6 +1310,10 @@ pub struct MarcatoOverlay {
     pub body_offset_big_ms: Option<[f32; 2]>,
     /// See [`MarcatoTransitionSpec::body_offset_random_ms`].
     pub body_offset_random_ms: Option<f32>,
+    /// See [`MarcatoTransitionSpec::lt_vel_db`].
+    pub lt_vel_db: Option<f32>,
+    /// See [`MarcatoTransitionSpec::lt_ramp`].
+    pub lt_ramp: Option<[i32; 4]>,
     pub lt_offset_ms: Option<Vec<[f32; 2]>>,
     pub lt_db_step: Option<Vec<[f32; 2]>>,
     pub lt_db_leap: Option<Vec<[f32; 2]>>,
@@ -1487,6 +1542,12 @@ impl MarcatoOverlay {
         }
         if let Some(v) = self.body_offset_random_ms {
             t.body_offset_random_ms = v;
+        }
+        if let Some(v) = self.lt_vel_db {
+            t.lt_vel_db = v;
+        }
+        if self.lt_ramp.is_some() {
+            t.lt_ramp = self.lt_ramp;
         }
         if let Some(v) = &self.lt_offset_ms {
             t.lt_offset_ms.clone_from(v);
