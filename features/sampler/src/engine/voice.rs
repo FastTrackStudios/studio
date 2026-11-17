@@ -2551,6 +2551,25 @@ impl VoicePool {
     /// for `note`'s transition voices on `line` and `sus_fade` for its body
     /// layers — no gain ramp on top (which made `retire_note_line` a
     /// (1 − t)² curve).
+    /// Kontakt `fade_out` on every voice of `note` on `line`, whatever its
+    /// kind: a linear fade over `frames` from the voice's current level.
+    pub fn fade_out_note_line_any(&mut self, line: u8, note: u8, frames: usize) {
+        for v in &mut self.voices {
+            if v.note != note || v.line != line {
+                continue;
+            }
+            v.target_gain = v.gain;
+            v.gain_ramp_frames = 0;
+            v.stage1_run = 0;
+            v.stage2_frames = 0;
+            v.release_frames = frames.max(1);
+            v.release_k_active = 0.0;
+            v.state = VoiceState::Releasing {
+                frames_remaining: frames.max(1),
+            };
+        }
+    }
+
     pub fn fade_out_note_line(&mut self, line: u8, note: u8, trans_fade: usize, sus_fade: usize) {
         for v in &mut self.voices {
             if v.note != note || v.line != line {

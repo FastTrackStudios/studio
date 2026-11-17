@@ -148,6 +148,7 @@ members = [
     "features/adapters/reaper/signal-extension",
     "features/adapters/reaper/signal-reaper-controller",
     "features/rigs/orchestra",
+    "features/rigs/fretted",
     "features/rigs/synth-rig",
     "features/rigs/keys/wurli",
     "features/rigs/shell",
@@ -985,6 +986,7 @@ signal-macromod = { path = "features/signal/macromod" }
 signal-plugin-host = { path = "features/plugin-host", default-features = false }
 openwurli-dsp = { path = "features/rigs/keys/wurli" }
 signal-orchestra = { path = "features/rigs/orchestra" }
+signal-fretted = { path = "features/rigs/fretted" }
 signal-synth-rig = { path = "features/rigs/synth-rig" }
 
 # ── from patchbay's workspace (joined into studio) ──

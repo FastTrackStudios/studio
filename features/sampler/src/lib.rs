@@ -528,6 +528,7 @@ impl PlayerPatch {
         patch.spec.legato_engine = cfg.legato_engine;
         patch.spec.short_note_timing = cfg.short_note_timing;
         patch.spec.keyswitch = cfg.keyswitch;
+        patch.spec.fretboard = cfg.fretboard;
         patch.spec.performance = cfg.performance;
         // Live legato gating is playing behaviour too — it belongs with the
         // config (CSS sets it so every connected note is a transition, as in
@@ -652,6 +653,8 @@ impl PlayerPatch {
                     dynamic: String::new(),
                     direction: String::new(),
                     interval: 0,
+                    string: 0,
+                    stroke: String::new(),
                     lead_in_ms: 0.0,
                     arrival_ms: 0.0,
                     group: String::new(),

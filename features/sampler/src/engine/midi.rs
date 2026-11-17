@@ -406,6 +406,11 @@ impl SampleEngine {
             return;
         }
 
+        // A fretted instrument places the note on a string (`fretboard.rs`).
+        if self.fretted_note_on(note, velocity) {
+            return;
+        }
+
         if self.patch.is_zoned() {
             // CSS-style legato: a legato articulation, with another note already
             // held, plays a delayed directional transition (the famous latency).
@@ -590,6 +595,9 @@ impl SampleEngine {
         self.held_notes.remove(&note);
         self.deferred_note_off_velocities.remove(&note);
         self.trace_push(TraceKind::NoteOff { note });
+        if self.fretted_note_off(note) {
+            return;
+        }
         if self.patch.is_zoned() {
             let cur_line = self.cur_line as u8;
             self.line_mut().order.retain(|&n| n != note);
@@ -2512,7 +2520,7 @@ impl SampleEngine {
     }
 
     /// Whether zone `z` is one `find_layer_zone` may play for this layer.
-    fn zone_passes(
+    pub(crate) fn zone_passes(
         &self,
         z: &crate::spec::ZoneSpec,
         artic: &str,

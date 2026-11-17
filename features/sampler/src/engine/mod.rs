@@ -222,6 +222,7 @@ pub use fts_sample::stream_wasm;
 pub use fts_sample::stream_cache;
 mod dispatch;
 pub mod filter;
+mod fretboard;
 mod helpers;
 pub mod inserts;
 mod kontakt_legato;
@@ -945,6 +946,8 @@ pub struct SampleEngine {
     /// Per-note-class RR counters of the `rr_per_note` shorts (CSS Sfz,
     /// Bartok pizz: KSP `%nkhtz[%dtnvu[note]]`), reset by CC59.
     pub(crate) short_key_rr: [u8; 128],
+    /// The fretboard stage's memory (`fretboard.rs`).
+    pub(crate) fret: fretboard::FretState,
     /// `ArticulationSpec::rr_sequence` state: the counter per (articulation,
     /// velocity band) and the last RR per (articulation, band, note-class).
     pub(crate) seq_rr_counter: HashMap<(String, usize), usize>,
@@ -1294,6 +1297,7 @@ impl SampleEngine {
             in_transition: false,
             note_rr: [0; 128],
             short_key_rr: [0; 128],
+            fret: fretboard::FretState::default(),
             seq_rr_counter: HashMap::new(),
             seq_rr_last: HashMap::new(),
             short_key_frame: [None; 128],

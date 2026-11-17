@@ -63,6 +63,11 @@ pub struct LibrarySpec {
     /// Keyswitch and CC58 articulation switching.
     pub keyswitch: Option<KeyswitchSpec>,
 
+    /// A fretted instrument's strings: when set, every note is placed on
+    /// one string and fret and plays that string's zones
+    /// (`ZoneSpec::string`). `None` = not fretted.
+    pub fretboard: Option<FretboardSpec>,
+
     /// Articulation-selector source — enables the **latched-CC selector**:
     /// a single continuous controller whose latched VALUE selects the
     /// articulation for all subsequent notes (like a keyswitch, but a CC).
@@ -237,6 +242,7 @@ impl LibrarySpec {
             performance: PerformanceSpec::default(),
             short_note_timing: None,
             keyswitch: None,
+            fretboard: None,
             selector: String::new(),
             selector_cc: 0,
             live_legato_interval_max: 2,
@@ -1224,6 +1230,9 @@ pub struct SectionOverlay {
     /// control differs from its library's. `""` = none (the CSW clarinets'
     /// `$vkgua = -1`: CC2 never leaves the vibsus slot).
     pub vibrato_controller: Option<String>,
+    /// See [`LibrarySpec::fretboard`]: the instrument's strings and its
+    /// shipped placement and round-robin data, which replace the library's.
+    pub fretboard: Option<FretboardSpec>,
 }
 
 /// The overridable legato-engine fields of a section: the CSS editor knobs
@@ -1432,6 +1441,9 @@ impl SectionOverlay {
         }
         if let Some(v) = &self.vibrato_controller {
             spec.dynamics.vibrato_controller = (!v.is_empty()).then(|| v.clone());
+        }
+        if let Some(v) = &self.fretboard {
+            spec.fretboard = Some(v.clone());
         }
         if let (Some(l), Some(cfg)) = (&self.legato, spec.legato_engine.as_mut()) {
             if let Some(v) = &l.overlap_delay {
@@ -2125,6 +2137,8 @@ fn zone_from_sfz(
         dynamic: String::new(),
         direction: String::new(),
         interval: 0,
+        string: 0,
+        stroke: String::new(),
         lead_in_ms: 0.0,
         arrival_ms: 0.0,
         group: group_id.clone(),
@@ -3656,6 +3670,18 @@ pub struct ZoneSpec {
     /// `N` is this interval. 0 = not a transition (or a `Legzero` re-trigger).
     #[facet(default)]
     pub interval: u32,
+    /// The string a fretted instrument's zone was recorded on, 1 = the
+    /// highest-pitched string (a guitarist's numbering). 0 = not
+    /// string-bound: every zone of a non-fretted library, and a fretted
+    /// library's noises. The fretboard stage (`LibrarySpec::fretboard`)
+    /// plays a note on one string and picks only that string's zones.
+    #[facet(default)]
+    pub string: u8,
+    /// The pick stroke a fretted zone was recorded with: `"down"` / `"up"`.
+    /// Empty = either (a sample recorded with one stroke only, or not
+    /// picked). The fretboard stage alternates strokes as the script does.
+    #[facet(default)]
+    pub stroke: String,
     /// Measured lead-in of a legato transition sample (ms): time from sample
     /// start until the pitch leaves the source note. The document scheduler
     /// prefires the transition by this much so the pitch change lands on the
@@ -3850,4 +3876,87 @@ impl ZoneSpec {
 pub fn parse_range(s: &str) -> Option<(u8, u8)> {
     let (a, b) = s.split_once('-')?;
     Some((a.trim().parse().ok()?, b.trim().parse().ok()?))
+}
+
+/// A fretted instrument: its strings and how a note finds one.
+///
+/// The placement is a score per string, as Impact Soundworks' Shreddage
+/// engine does it (`str___get_best_string`): every string the note fits on
+/// scores `1`, plus a weight for each thing in its favour — the fret is
+/// under the hand, nothing rings on the string, it is next to or the same
+/// as the last string played, its last fret is this fret. The highest score
+/// wins, the higher string on a tie. A winner not under the hand gives way
+/// to the string whose fret is nearest the last fret played.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretboardSpec {
+    /// Open-string MIDI notes, string 1 (the highest) first.
+    pub strings: Vec<u8>,
+    /// The highest fret a note may be placed on.
+    pub frets: u8,
+    /// The hand's fret (a fixed hand position): the window under the hand
+    /// starts here.
+    #[facet(default)]
+    pub hand_fret: u8,
+    /// How many frets above `hand_fret` each string's hand window reaches,
+    /// string 1 first.
+    pub hand_widths: Vec<u8>,
+    /// The placement weights.
+    pub weights: FretWeightsSpec,
+    /// A string's remembered last fret before it is first played (Kontakt
+    /// leaves the array unset: 0). Default 0.
+    #[facet(default)]
+    pub fresh_last_fret: i8,
+    /// Round-robin orders: the RR to play for the n-th note on one
+    /// (articulation, string, fret), per RR count. An articulation with no
+    /// order for its count cycles.
+    #[facet(default)]
+    pub rr_orders: Vec<RrOrderSpec>,
+    /// Anti-repetition: sometimes play the recording two frets away,
+    /// retuned. `None` = never.
+    pub borrow: Option<FretBorrowSpec>,
+    /// A note struck again on its own ringing string fades the old voice
+    /// over this long (ms); another note on that string releases it.
+    #[facet(default)]
+    pub retrigger_fade_ms: f32,
+}
+
+/// [`FretboardSpec`] placement weights (each added to a string's score).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretWeightsSpec {
+    /// The fret is inside the hand window.
+    pub in_hand: u32,
+    /// Nothing is ringing on the string.
+    pub free: u32,
+    /// The string is next to the last string played.
+    pub adjacent: u32,
+    /// The string is the last string played.
+    pub same_string: u32,
+    /// The string's last fret is this fret.
+    pub same_fret: u32,
+}
+
+/// One round-robin order (see [`FretboardSpec::rr_orders`]).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct RrOrderSpec {
+    /// The articulation's RR count this order serves.
+    pub rr: u8,
+    /// The RR index to play, by how many notes the position has played.
+    pub order: Vec<u8>,
+}
+
+/// Anti-repetition by a neighbouring recording (see
+/// [`FretboardSpec::borrow`]). A 32-bit LCG `s = a·s + 1` draws
+/// `((s >> 8) & 0xFFFFFF) mod 1000 + 1` once per note; a draw at or under
+/// `chance_permille` plays the zone `frets` higher on the same string (lower
+/// when that is past the neck), retuned to the played pitch.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretBorrowSpec {
+    /// Per-mille chance a note borrows.
+    pub chance_permille: u32,
+    /// The generator's seed (its state when the instrument loads).
+    pub seed: u32,
+    /// The generator's multiplier.
+    pub multiplier: u32,
+    /// How far away the borrowed recording is.
+    pub frets: u8,
 }
