@@ -259,11 +259,14 @@ def marcato(pers, lt_layers):
 
 def held_detune(pers):
     """A body struck while another key is down detunes by random(-$yqdot,
-    $yqdot) cents when `$q4ous` is on (KSP 11050-11071; sustain and marcato
-    modes alike)."""
+    $yqdot) cents when `$q4ous` is on (KSP 11050-11071) — inside `if
+    ($ra4sw=0)` (KSP 9514), the chord-mode path only. Sus plays in legato
+    mode (%crp0r[0] = 1), so its legato bodies never detune (giving Sus the
+    draw left every brass legato pair decorrelated: Solo Bass Trombone
+    -0.0 dB); Marcato's connected strikes do."""
     if not css.one(pers, "$q4ous"):
         return
-    for aid in ("Sus", "Marcato"):
+    for aid in ("Marcato",):
         print(f"    {{\n        id {aid}")
         print(f"        held_random_tune_cents {css.one(pers, '$yqdot')}")
         print("    }")
