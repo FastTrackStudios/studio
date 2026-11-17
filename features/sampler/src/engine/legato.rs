@@ -156,11 +156,18 @@ impl SampleEngine {
         // articulation and its vib pair — otherwise note-off cache-misses and the
         // release tail is silent (CSS rings out ~0.7s). These are separate
         // articulations triggered on key-up by `spawn_release`.
+        // A script release sample (`release_sample`) is the same trap.
         let rel = |a: &str| {
-            self.patch
-                .spec
-                .articulation(a)
-                .and_then(|art| art.release_artic.clone())
+            self.patch.spec.articulation(a).and_then(|art| {
+                art.release_artic
+                    .clone()
+                    .or_else(|| art.release_sample.as_ref().map(|r| r.artic.clone()))
+                    .or_else(|| {
+                        art.release_types
+                            .as_ref()
+                            .and_then(|t| t.types.first().map(|r| r.artic.clone()))
+                    })
+            })
         };
         // And the legato + portamento TRANSITION articulations (Leg/NVLeg/
         // Legzero/NVLegzero/Port), which `spawn_legato_transition` fires on
@@ -190,6 +197,29 @@ impl SampleEngine {
         .into_iter()
         .flatten()
         .collect();
+        // A script legato's transitions (`script_legato`) and key noise
+        // (`keynoise`): cold, they are silent the same way.
+        if let Some(a) = artic
+            .as_deref()
+            .and_then(|a| self.patch.spec.articulation(a))
+        {
+            if let Some(sl) = a.script_legato.as_ref() {
+                warm_ids.extend([sl.up.clone(), sl.down.clone()]);
+                if let Some(o) = &sl.octave {
+                    warm_ids.extend([o.up.clone(), o.down.clone()]);
+                }
+                if let Some(n) = &sl.natural {
+                    warm_ids.push(n.tail.clone());
+                }
+            }
+            if let Some(k) = a.keynoise.as_ref() {
+                warm_ids.push(k.artic.clone());
+            }
+            // every release type's release (the first is warmed above)
+            if let Some(rt) = a.release_types.as_ref() {
+                warm_ids.extend(rt.types.iter().skip(1).map(|r| r.artic.clone()));
+            }
+        }
         // A pending CC58 velocity-group resolves to its concrete articulation
         // only at note-on (from the note's velocity), so `effective_articulation`
         // above can't see it yet — warm EVERY possible resolution (Trills →
@@ -270,7 +300,15 @@ impl SampleEngine {
             }
             // Within the zone's range, or within pitch-shift tolerance of its
             // recorded key (whole-tone grid → even notes warm their neighbour).
-            let in_range = note >= z.key_min && note <= z.key_max;
+            // An ensemble's extra players play from neighbouring keys
+            // (`players.rs`): warm every key they can reach.
+            let reach = if self.patch.spec.performance.players.is_some() {
+                self.players.count.saturating_sub(1)
+            } else {
+                0
+            };
+            let in_range =
+                note.saturating_add(reach) >= z.key_min && note.saturating_sub(reach) <= z.key_max;
             let near = (z.root_key as i32 - note as i32).unsigned_abs() as u8
                 <= self.patch.spec.performance.zone_pitch_tolerance;
             if !in_range && !near {
@@ -291,18 +329,35 @@ impl SampleEngine {
                 }
             }
             let path = &self.patch.zone_paths[i];
-            if self.cache.get_loaded(path).is_some() {
+            if let Some(data) = self.cache.get_loaded(path) {
+                self.analyse_tm2(i, &data);
                 continue;
             }
             match self.cache.get(path) {
                 Ok(data) => {
                     stats.loaded += 1;
                     stats.bytes += data.decoded_bytes();
+                    self.analyse_tm2(i, &data);
                 }
                 Err(_) => stats.failed += 1,
             }
         }
         stats
+    }
+
+    /// Find zone `zone`'s Time Machine II pitch marks from its sample
+    /// `data`, once (a no-op for any other zone): where a sample is warmed,
+    /// never on the audio thread ([`super::tm2::MarkTable::analyse`]).
+    pub(crate) fn analyse_tm2(&self, zone: usize, data: &super::cache::SampleData) {
+        let Some(z) = self.patch.spec.zones.get(zone).filter(|z| z.tm2_block > 0) else {
+            return;
+        };
+        let Some(path) = self.patch.zone_paths.get(zone) else {
+            return;
+        };
+        self.patch
+            .tm2_marks
+            .analyse(zone, self.patch.spec.zones.len(), path, data, z.tm2_block);
     }
 
     /// Returns the currently active articulation ID.

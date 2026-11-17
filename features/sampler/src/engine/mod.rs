@@ -223,14 +223,22 @@ pub use fts_sample::stream_cache;
 mod dispatch;
 pub mod filter;
 mod helpers;
+pub(crate) use helpers::kontakt_offset_frames;
 pub mod inserts;
 mod kontakt_legato;
+mod kontakt_limiter;
 mod kontakt_marcato;
+pub mod kontakt_saturation;
+mod ksp_rand;
 mod legato;
 mod midi;
 mod phrase;
 pub mod pitch_shift;
+mod players;
+pub mod resample;
 pub mod rr;
+mod script_legato;
+pub mod tm2;
 pub mod trace;
 pub mod voice;
 
@@ -992,6 +1000,46 @@ pub struct SampleEngine {
     /// Extra file frames the sustain body being spawned right now is entered
     /// at (the >1-octave transition body's 75 ms offset).
     pub(crate) spawn_extra_start: usize,
+    /// The next spawns' time stretch (1.0 = none) and linear fade-in
+    /// frames (0 = none): a script's `ENGINE_PAR_SPEED` and `fade_in`.
+    pub(crate) spawn_stretch: f64,
+    pub(crate) spawn_fade_in: usize,
+    /// A script's monophonic legato (`script_legato.rs`).
+    pub(crate) script_leg: script_legato::ScriptLegState,
+    /// Which controllers have been sent (else a spec's shipped value holds).
+    pub(crate) cc_sent: [bool; 128],
+    /// Kontakt's KSP `random()` state when a render pins the script's
+    /// draws (`set_script_seed`); `None` draws from the engine's own.
+    pub(crate) ksp_state: Option<u32>,
+    /// The last random round robin (`rr_random_global`).
+    pub(crate) rr_global_last: u8,
+    /// A script's ensemble of players (`PlayersSpec`, `players.rs`).
+    pub(crate) players: players::PlayersState,
+    /// What the player whose voice is being spawned adds (`players.rs`).
+    pub(crate) spawn_player: Option<players::PlayerMods>,
+    /// The latched release type once a type key set it (`ReleaseTypesSpec`;
+    /// else the shipped one), and a one-shot override for the next release.
+    pub(crate) release_type_latched: Option<u8>,
+    pub(crate) release_override: Option<u8>,
+    /// The next spawns' `(hold, fade)` script fade (`Voice::with_delayed_fade`).
+    pub(crate) spawn_delayed_fade: Option<(usize, usize)>,
+    /// The articulation of the last note played (`artic_change_fade_ms`).
+    pub(crate) last_note_artic: Option<String>,
+    /// Which keys are down, whatever they play (`KeynoiseSpec::force_key`).
+    pub(crate) keys_down: [bool; 128],
+    /// The host's tempo, µs per quarter note (`set_host_tempo`).
+    pub(crate) quarter_us: u32,
+    /// Per key, what each of its sounding note-ons played, for a script
+    /// release sample (`ArticulationSpec::release_sample`): (articulation,
+    /// dynamic, velocity). A key's note-off releases every one of them
+    /// (KONTRA running MOJO 2's script: a key struck again while held plays
+    /// two release samples at the first note-off, none at the second).
+    pub(crate) release_sample_notes: Vec<Vec<(String, String, u8)>>,
+    /// Per key, the strike of its latest note-on: the one body a MOJO-style
+    /// script tracks per key (`%gbku1[10·note]`), which every release of
+    /// that key fades; earlier bodies of a re-struck key end with their
+    /// envelope instead.
+    pub(crate) release_body_strike: Vec<Option<u32>>,
     zone_rr_random_state: u64,
     /// Last-used RR slot per (trigger, note, velocity), keyed by a packed
     /// integer so note-on allocates nothing (was a `format!`-built String key).
@@ -1313,6 +1361,22 @@ impl SampleEngine {
             release_context: None,
             release_extra_hold: 0,
             spawn_extra_start: 0,
+            spawn_stretch: 1.0,
+            spawn_fade_in: 0,
+            script_leg: script_legato::ScriptLegState::default(),
+            cc_sent: [false; 128],
+            ksp_state: None,
+            rr_global_last: 0,
+            players: players::PlayersState::default(),
+            spawn_player: None,
+            release_type_latched: None,
+            release_override: None,
+            spawn_delayed_fade: None,
+            last_note_artic: None,
+            quarter_us: 500_000,
+            keys_down: [false; 128],
+            release_sample_notes: vec![Vec::new(); 128],
+            release_body_strike: vec![None; 128],
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,
             zone_rr_last_slots: HashMap::with_capacity(128),
             forced_rr: None,
@@ -1328,7 +1392,21 @@ impl SampleEngine {
             recent_cache_misses: RefCell::new(VecDeque::with_capacity(RECENT_MISS_LIMIT)),
             recent_sample_misses: RefCell::new(VecDeque::with_capacity(RECENT_MISS_LIMIT)),
         };
+        engine.voices.set_interp(resample::Interp::parse(
+            &engine.patch.spec.performance.interpolation,
+        ));
+        // controllers that start at a saved value (`performance.start_ccs`)
+        for f in engine.patch.spec.performance.start_ccs.clone() {
+            if let Some(slot) = engine.cc_values.get_mut(usize::from(f.cc)) {
+                *slot = f.value;
+            }
+        }
         engine.apply_fixed_ccs();
+        // The ensemble's humanize tables are the instrument's own draws at
+        // load, apart from any stream a render pins (`PlayersState::new`).
+        if let Some(p) = engine.patch.spec.performance.players.as_ref() {
+            engine.players = players::PlayersState::new(p, 0x9E37_79B9_7F4A_7C15);
+        }
         engine.insert_plans = engine
             .patch
             .spec
@@ -1517,6 +1595,21 @@ impl SampleEngine {
         let stats = self
             .cache
             .preload(self.patch.sample_paths().map(std::path::PathBuf::as_path));
+        // Time Machine II zones get their pitch marks with their samples.
+        #[cfg(not(target_arch = "wasm32"))]
+        for i in 0..self.patch.spec.zones.len() {
+            if self.patch.spec.zones[i].tm2_block == 0 {
+                continue;
+            }
+            if let Some(data) = self
+                .patch
+                .zone_paths
+                .get(i)
+                .and_then(|p| self.cache.get_loaded(p))
+            {
+                self.analyse_tm2(i, &data);
+            }
+        }
         #[cfg(not(target_arch = "wasm32"))]
         tracing::info!(
             "signal-sampler: preloaded {}/{} samples ({:.1} MiB PCM) in {:.2}s",
@@ -1960,6 +2053,61 @@ impl SampleEngine {
         self.forced_tunes = cents.iter().copied().collect();
     }
 
+    /// Draw the script's random numbers as Kontakt's KSP `random()` from
+    /// this seed (`ksp_rand.rs`): the state the KSP Seed CLAP pins in a
+    /// Kontakt render and `KONTRA_KSP_SEED` in KONTRA, so all three draw
+    /// the same numbers in the same order. (The pin is at transport start:
+    /// draws a script makes in `init`, MOJO 2's humanize seeds, come
+    /// before it and take nothing from a render's draws.)
+    pub fn set_script_seed(&mut self, seed: u32) {
+        self.ksp_state = Some(seed);
+    }
+
+    /// The host's tempo (a script's `$DURATION_QUARTER`, µs per quarter,
+    /// rounded as KONTRA rounds it).
+    pub fn set_host_tempo(&mut self, bpm: f64) {
+        if bpm.is_finite() && bpm > 0.0 {
+            self.quarter_us = (60_000_000.0 / bpm).round() as u32;
+        }
+    }
+
+    /// Discard `n` script draws (a reference render whose script drew them
+    /// before its first note, after the seed was pinned).
+    pub fn skip_script_draws(&mut self, n: u32) {
+        for _ in 0..n {
+            self.script_draw(0, 1);
+        }
+    }
+
+    /// A script's stretch speed in percent as the voice's speed ratio
+    /// (`PerformanceSpec::stretch_speed_ep`).
+    pub(crate) fn stretch_ratio(&self, pct: i32) -> f64 {
+        match self
+            .patch
+            .spec
+            .performance
+            .stretch_speed_ep
+            .get(usize::try_from(pct).unwrap_or(0))
+        {
+            Some(&ep) => {
+                let u = 2.0 * (ep as f32 / 1_000_000.0) - 1.0;
+                f64::from(((7.0f32.powf(u * u * u + 1.0) - 1.0) / 6.0).clamp(0.0, 8.0))
+            }
+            None => f64::from(pct) / 100.0,
+        }
+    }
+
+    /// One script draw, `lo..=hi`.
+    pub(crate) fn script_draw(&mut self, lo: i32, hi: i32) -> i32 {
+        match self.ksp_state.as_mut() {
+            Some(state) => ksp_rand::ksp_random(state, lo, hi),
+            None => {
+                let span = (i64::from(hi) - i64::from(lo) + 1).max(1) as usize;
+                lo + (next_zone_random(&mut self.tune_rng) % span) as i32
+            }
+        }
+    }
+
     /// Use these random pitch-envelope draws `(cents, decay_ms)` in order
     /// before the generator (`RandomPitchEnvSpec`).
     pub fn force_random_pitch_envs(&mut self, draws: &[(f32, f32)]) {
@@ -2358,10 +2506,14 @@ impl SampleEngine {
                 })
                 .chain(trill)
                 .chain(self.phrase_due_in())
+                .chain(self.script_leg_due_in())
+                .chain(self.divisi_due_in())
                 .min()
                 .map_or(block_frames - done, |f| f.clamp(1, block_frames - done));
+            self.voices.set_now(self.frames_rendered);
             part(&mut self.voices, done, next);
             self.frames_rendered += next as u64;
+            self.voices.set_now(self.frames_rendered);
             for l in &mut self.lines {
                 if let LegatoState::Pending {
                     frames_remaining, ..
@@ -2379,6 +2531,8 @@ impl SampleEngine {
     /// ascending [`LineId`] order — deterministic when several fire together.
     fn fire_due_legato(&mut self) {
         self.fire_phrase();
+        self.fire_script_legato();
+        self.fire_divisi();
         if self
             .trill_due
             .as_ref()
@@ -2522,6 +2676,7 @@ fn css_short_makeup_db(_artic_id: &str) -> f32 {
 fn amp_env_for(
     spec: &crate::spec::LibrarySpec,
     artic_id: &str,
+    dynamic: &str,
     kind: &VoiceKind,
     is_sustain_layer: bool,
     sample_rate: u32,
@@ -2558,8 +2713,25 @@ fn amp_env_for(
         .and_then(|a| a.amp_env_release)
         .map(|r| r as usize)
         .or((role == AmpEnvRole::Short).then_some(2));
+    let depth = spec
+        .articulations
+        .iter()
+        .find(|a| a.id.eq_ignore_ascii_case(artic_id))
+        .and_then(|a| {
+            a.amp_env_depths
+                .iter()
+                .find(|d| d.dynamic.eq_ignore_ascii_case(dynamic))
+                .map(|d| d.depth)
+                .or(a.amp_env_depth)
+        });
     let tuples: Vec<(f32, f32, f32)> = segs.iter().map(|s| (s.time_ms, s.level, s.curve)).collect();
-    FlexEnv::from_segments(&tuples, 0.0, sample_rate, hold).map(|e| e.with_release_segment(release))
+    FlexEnv::from_segments(&tuples, 0.0, sample_rate, hold).map(|e| {
+        let e = e.with_release_segment(release);
+        match depth {
+            Some(d) => e.with_depth_and_stop(d),
+            None => e,
+        }
+    })
 }
 
 /// Fractional milliseconds → frames (rounded) — for sub-ms spec values.

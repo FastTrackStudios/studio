@@ -400,13 +400,14 @@ impl SampleEngine {
     }
 
     /// A script's start offset (`play_note`'s offset) as Kontakt applies it
-    /// to zone `idx`: clamped to the zone's start-modulation range, ignored
-    /// where the zone allows none.
+    /// to zone `idx`: none where the zone allows none, and none once the
+    /// zone's start-modulation range is no more than the offset
+    /// (`BEngine::DispatchVoice` 0x3dc128, `(float)range <= offset`).
     pub(crate) fn script_offset(&self, idx: usize, frames: usize) -> usize {
         match self.patch.spec.zones.get(idx).and_then(|z| z.start_mod) {
             Some(m) if m < 0 => 0,
-            Some(m) => frames.min(m as usize),
-            None => frames,
+            Some(m) if m as f32 <= frames as f32 => 0,
+            _ => frames,
         }
     }
 
@@ -420,8 +421,13 @@ impl SampleEngine {
                 .spec
                 .articulation(artic)
                 .map_or(0.0, |a| a.script_start_ms);
+            // a player's humanized offset joins the note's (`players.rs`)
+            let ms = match self.spawn_player {
+                Some(m) if ms > 0.0 => ms + m.start_ms as f32,
+                _ => ms,
+            };
             if ms > 0.0 {
-                self.spawn_extra_start += crate::engine::ms_to_frames_f(ms, self.sample_rate);
+                self.spawn_extra_start += kontakt_offset_frames(ms, self.sample_rate);
             }
         }
         saved
@@ -620,5 +626,30 @@ impl SampleEngine {
             .spec
             .sordino_counterpart(artic_id, active)
             .unwrap_or_else(|| artic_id.to_string())
+    }
+}
+
+/// A script's `play_note` offset in frames as Kontakt forms it
+/// (`BEngine::DispatchVoice` 0x3dc128): the script's microseconds
+/// (`real_to_int(ms · 1000)`) times the rate times 1e-6, all in f32, then
+/// truncated — 375 000 µs at 48 kHz is 17 999 frames, not 18 000.
+#[must_use]
+pub(crate) fn kontakt_offset_frames(ms: f32, sample_rate: u32) -> usize {
+    let us = (ms * 1000.0) as u32;
+    (us as f32 * sample_rate as f32 * 1e-6_f32) as usize
+}
+
+#[cfg(test)]
+mod kontakt_offset_tests {
+    use super::kontakt_offset_frames;
+
+    /// KONTRA's trace of MOJO 2's shake release (375 ms → 17 999) and its
+    /// commit's CSSS case (447 ms → 21 455); 444 ms is exact.
+    #[test]
+    fn offsets_truncate_an_f32_product() {
+        assert_eq!(kontakt_offset_frames(375.0, 48_000), 17_999);
+        assert_eq!(kontakt_offset_frames(447.0, 48_000), 21_455);
+        assert_eq!(kontakt_offset_frames(444.0, 48_000), 21_312);
+        assert_eq!(kontakt_offset_frames(169.0, 48_000), 8_112);
     }
 }

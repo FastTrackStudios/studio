@@ -890,6 +890,38 @@ impl SamplerRig {
         }
     }
 
+    /// The host's tempo — see
+    /// [`crate::engine::SampleEngine::set_host_tempo`].
+    pub fn set_host_tempo(&self, id: &str, bpm: f64) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.set_host_tempo(id, bpm);
+        }
+    }
+
+    /// Discard script draws — see
+    /// [`crate::engine::SampleEngine::skip_script_draws`].
+    pub fn skip_script_draws(&self, id: &str, n: u32) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.skip_script_draws(id, n);
+        }
+    }
+
+    /// Set an ensemble's humanize tables — see
+    /// [`crate::engine::SampleEngine::force_humanize`].
+    pub fn force_humanize(&self, id: &str, v: &[i32]) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.force_humanize(id, v);
+        }
+    }
+
+    /// Draw the script's random numbers from a KSP seed — see
+    /// [`crate::engine::SampleEngine::set_script_seed`].
+    pub fn set_script_seed(&self, id: &str, seed: u32) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.set_script_seed(id, seed);
+        }
+    }
+
     /// Replay a reference render's random short RR draws (0-based, in order)
     /// — see [`crate::engine::SampleEngine::force_random_rrs`].
     pub fn force_random_rrs(&self, id: &str, draws: &[u8]) {

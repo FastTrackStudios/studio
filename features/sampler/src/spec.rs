@@ -573,6 +573,19 @@ pub struct PerformanceSpec {
     /// [`Voice::with_pan`]: crate::engine::voice::Voice::with_pan
     #[facet(default)]
     pub instrument_pan: f32,
+    /// A script's ensemble of players (see [`PlayersSpec`]); `None` = one
+    /// player, nothing of it.
+    #[facet(default)]
+    pub players: Option<PlayersSpec>,
+    /// Controllers that read a saved value until MIDI first sets them
+    /// (Kontakt keeps a start value with a controller's modulation:
+    /// MOJO 2's transitions read CC113 at 100 until it moves).
+    #[facet(default)]
+    pub start_ccs: Vec<FixedCcSpec>,
+    /// Controllers a script copies to others on every event (MOJO 2:
+    /// `set_controller(113, %CC[1])`, its "CC1 to transition volume").
+    #[facet(default)]
+    pub mirror_ccs: Vec<CcMirrorSpec>,
     /// How a note between sampled keys is pitched. `true`: RESAMPLE (rate
     /// change, the note runs shorter/longer) — what Kontakt does, null-tested
     /// on CSS (+100 c at key 72 from the B3 zone, −52.7 dB). `false`/unset:
@@ -616,6 +629,35 @@ pub struct PerformanceSpec {
     /// Delay from note-off to the release sample (ms). CSS: 2 (KSP `wait(2000)`).
     #[facet(default)]
     pub release_delay_ms: f32,
+    /// The sustain pedal (CC64) does not hold key-ups: the instrument's
+    /// script reads the pedal itself (MOJO 2's octave legato), and its
+    /// release callbacks run at the key-ups (KONTRA trace).
+    #[facet(default)]
+    pub pedal_ignored: bool,
+    /// The random round robin avoids the last pick of ANY articulation and
+    /// key (one script global, MOJO 2's `UpdateRoundRobinIndex`), not the
+    /// key's own history.
+    #[facet(default)]
+    pub rr_random_global: bool,
+    /// The first note of another articulation fades every sounding voice
+    /// over this many ms (MOJO 2's articulation cutoff, `DoArticulationCutoff`:
+    /// `fade_out($ALL_EVENTS, 100 ms)`). 0 = none.
+    #[facet(default)]
+    pub artic_change_fade_ms: f32,
+    /// A script's time-stretch parameter per whole speed percent (index =
+    /// percent), as the script computes it (MOJO 2's integer
+    /// `_Speed_to_ep`): the engine plays it through Kontakt's speed law,
+    /// `(7^(u³+1) − 1)/6` with `u = 2·ep/1e6 − 1` (`UnityToNat_Speed`
+    /// 0x412bf8, in f32). Empty = percent / 100.
+    #[facet(default)]
+    pub stretch_speed_ep: Vec<i32>,
+    /// How voices read between sample frames: `"kontakt_normal"` plays
+    /// through Kontakt 8's Normal-quality resampler (a block-formed f32
+    /// step, its cache-relative f32 cursor, the 4-point Lagrange; see
+    /// `engine::resample`), for a library whose groups ship Normal quality
+    /// (MOJO 2). Empty / `"linear"`: the engine's linear read.
+    #[facet(default)]
+    pub interpolation: String,
     /// Global master tune in cents, applied on top of the per-note transpose.
     /// CSS ships `tune=1.00521` ≈ +9.0 cents on every playable group; other
     /// libraries stay at 0.
@@ -760,6 +802,9 @@ impl Default for PerformanceSpec {
             sustain_makeup_db: 0.0,
             instrument_gain_db: 0.0,
             instrument_pan: 0.0,
+            players: None,
+            start_ccs: Vec::new(),
+            mirror_ccs: Vec::new(),
             resample_transpose: false,
             release_curve_k: 0.0,
             max_repeat_strikes: None,
@@ -769,6 +814,11 @@ impl Default for PerformanceSpec {
             release_held_table: Vec::new(),
             release_held_db: 0.0,
             release_delay_ms: 0.0,
+            pedal_ignored: false,
+            rr_random_global: false,
+            artic_change_fade_ms: 0.0,
+            stretch_speed_ep: Vec::new(),
+            interpolation: String::new(),
             master_tune_cents: 0.0,
             loop_xfade_ms: 150,
             zone_pitch_tolerance: 2,
@@ -1230,6 +1280,12 @@ pub struct SectionOverlay {
     pub instrument_gain_db: Option<f32>,
     /// See [`PerformanceSpec::instrument_pan`].
     pub instrument_pan: Option<f32>,
+    /// See [`PerformanceSpec::players`].
+    pub players: Option<PlayersSpec>,
+    /// See [`PerformanceSpec::start_ccs`].
+    pub start_ccs: Option<Vec<FixedCcSpec>>,
+    /// See [`PerformanceSpec::mirror_ccs`].
+    pub mirror_ccs: Option<Vec<CcMirrorSpec>>,
     /// See [`DynamicsSpec::vibrato_controller`]: an instrument whose vibrato
     /// control differs from its library's. `""` = none (the CSW clarinets'
     /// `$vkgua = -1`: CC2 never leaves the vibsus slot).
@@ -1365,6 +1421,14 @@ pub struct ArticulationOverlay {
     pub script_start_ms: Option<f32>,
     pub vel_gain_db: Option<Vec<f32>>,
     pub key_range: Option<Vec<u8>>,
+    pub release_sample: Option<ReleaseSampleSpec>,
+    pub release_types: Option<ReleaseTypesSpec>,
+    pub fade_releases_ms: Option<f32>,
+    pub script_legato: Option<ScriptLegatoSpec>,
+    pub keynoise: Option<KeynoiseSpec>,
+    pub timed_length: Option<TimedLengthSpec>,
+    pub amp_env_depth: Option<f32>,
+    pub amp_env_depths: Option<Vec<DynDepthSpec>>,
     pub phrase: Option<PhraseSpec>,
     /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
     pub overlay_cc1_scale: Option<Vec<u8>>,
@@ -1464,6 +1528,30 @@ impl SectionOverlay {
             if let Some(v) = &o.key_range {
                 a.key_range.clone_from(v);
             }
+            if let Some(v) = &o.release_sample {
+                a.release_sample = Some(v.clone());
+            }
+            if let Some(v) = &o.release_types {
+                a.release_types = Some(v.clone());
+            }
+            if let Some(v) = o.fade_releases_ms {
+                a.fade_releases_ms = v;
+            }
+            if let Some(v) = &o.script_legato {
+                a.script_legato = Some(v.clone());
+            }
+            if let Some(v) = &o.keynoise {
+                a.keynoise = Some(v.clone());
+            }
+            if let Some(v) = &o.timed_length {
+                a.timed_length = Some(v.clone());
+            }
+            if let Some(v) = o.amp_env_depth {
+                a.amp_env_depth = Some(v);
+            }
+            if let Some(v) = &o.amp_env_depths {
+                a.amp_env_depths.clone_from(v);
+            }
             if let Some(v) = &o.phrase {
                 a.phrase = Some(v.clone());
             }
@@ -1482,6 +1570,15 @@ impl SectionOverlay {
         }
         if let Some(v) = self.instrument_pan {
             spec.performance.instrument_pan = v;
+        }
+        if let Some(v) = &self.players {
+            spec.performance.players = Some(v.clone());
+        }
+        if let Some(v) = &self.start_ccs {
+            spec.performance.start_ccs.clone_from(v);
+        }
+        if let Some(v) = &self.mirror_ccs {
+            spec.performance.mirror_ccs.clone_from(v);
         }
         if let Some(v) = &self.vibrato_controller {
             spec.dynamics.vibrato_controller = (!v.is_empty()).then(|| v.clone());
@@ -2162,6 +2259,7 @@ fn zone_from_sfz(
         tune_cents: tune + transpose,
         sample_start: sfz_u32(group, region, "offset").unwrap_or(0),
         start_mod: None,
+        tm2_block: 0,
         variant_starts: Vec::new(),
         disabled: false,
         borrowed: false,
@@ -2247,6 +2345,14 @@ pub struct MicSpec {
 }
 
 // ── Dynamics ─────────────────────────────────────────────────────────────────
+
+/// A controller copied to another on every event (see
+/// [`PerformanceSpec::mirror_ccs`]).
+#[derive(Debug, Clone, Facet)]
+pub struct CcMirrorSpec {
+    pub from: u8,
+    pub to: u8,
+}
 
 /// A controller held at one value (see [`DynamicsSpec::fixed_ccs`]).
 #[derive(Debug, Clone, Default, Facet)]
@@ -2377,6 +2483,26 @@ pub struct FxStageSpec {
     /// EQ bands, flat: `hz octaves db` per band.
     #[facet(default)]
     pub bands: Vec<f32>,
+    /// `saturation` stage: Kontakt's Saturation insert, Enhanced mode — the
+    /// saved shape (−1..=1) picks the drive/makeup/wet table position
+    /// (`engine::kontakt_saturation`).
+    #[facet(default)]
+    pub shape: f32,
+    /// The stage's output gain, dB (Kontakt's per-slot output level; MOJO 2's
+    /// saturation slots run at −3 dB). 0 = unity.
+    #[facet(default)]
+    pub output_db: f32,
+    /// `width` stage: the side signal is scaled by `1 + width` (mid kept).
+    /// Kontakt's kind-9 group insert, measured on MOJO 2 Trumpet Stabs:
+    /// −0.3 leaves the side at 0.70.
+    #[facet(default)]
+    pub width: f32,
+    /// `limiter`: Kontakt's classic Limiter's input gain (dB) and release
+    /// (ms).
+    #[facet(default)]
+    pub input_db: f32,
+    #[facet(default)]
+    pub release_ms: f32,
 }
 
 /// A controller route onto one stage's knob: the knob moves by
@@ -2386,7 +2512,10 @@ pub struct FxStageSpec {
 pub struct FxRouteSpec {
     /// Index into the layer's `stages`.
     pub stage: u8,
-    /// `cutoff`, `resonance`, `eq_gain1`, `eq_gain2` or `eq_gain3`.
+    /// `cutoff`, `resonance`, `eq_gain1`, `eq_gain2`, `eq_gain3`, or
+    /// `volume`: the voice's level at its amplifier (after the chain's
+    /// saturation, as its pan), by Kontakt's controller volume law
+    /// `max(0, 1 − (1 − x)·intensity)`, `stage` ignored.
     pub param: String,
     pub cc: u8,
     #[facet(default)]
@@ -2402,6 +2531,17 @@ pub struct FxRouteSpec {
     /// the knob by `intensity` × the envelope's level.
     #[facet(default)]
     pub env: Vec<EnvSegmentSpec>,
+    /// `velocity`: the note's velocity is the source instead of `cc`, read
+    /// once at the note's start (a script setting a stage per note, e.g.
+    /// MOJO 2's one-layer lowpass); `key`: the note's key (a Key Position
+    /// modulator). Empty = `cc`.
+    #[facet(default)]
+    pub source: String,
+    /// The knob offset at each source value 0..=127, in the param's units,
+    /// replacing `intensity × points` (a law a script computes, baked by
+    /// the generator). Empty = `intensity × points`.
+    #[facet(default)]
+    pub table: Vec<f32>,
 }
 
 /// Evaluate a Kontakt modulation table (`y0 c0 (x y c)…`) at `x` in `[0, 1]`.
@@ -2686,6 +2826,41 @@ pub struct ArticulationSpec {
     /// `%ArtRange`). Empty = every key with a zone.
     #[facet(default)]
     pub key_range: Vec<u8>,
+    /// The volume envelope's modulation intensity (Kontakt's ENV → volume
+    /// route below 1: the gain is `1 − depth·(1 − env)`), and the voice ends
+    /// when the envelope does. `None` = the plain envelope, voice ends as
+    /// before (MOJO 2 sustain groups: 0.043).
+    #[facet(default)]
+    pub amp_env_depth: Option<f32>,
+    /// Per dynamic layer, its own `amp_env_depth` (a library whose layers'
+    /// groups carry different ENV → volume intensities: MOJO 2 Alto Sax's
+    /// sustains are 1, 1, 0, 1). A dynamic not listed takes `amp_env_depth`.
+    #[facet(default)]
+    pub amp_env_depths: Vec<DynDepthSpec>,
+    /// A script-played release sample (see [`ReleaseSampleSpec`]): at the
+    /// note-off the note's voices fade out and a zone of `artic` starts in
+    /// the note-on's layer. `None` = the library's release path.
+    #[facet(default)]
+    pub release_sample: Option<ReleaseSampleSpec>,
+    /// Release types (see [`ReleaseTypesSpec`]); `release_sample` is then
+    /// unused.
+    #[facet(default)]
+    pub release_types: Option<ReleaseTypesSpec>,
+    /// At this articulation's note-on, every sounding release-sample voice
+    /// fades out over this many ms (MOJO 2: `fade_out(by_marks($MARK_3),
+    /// 75 ms)` on each sustain note). 0 = none.
+    #[facet(default)]
+    pub fade_releases_ms: f32,
+    /// A script's monophonic legato (see [`ScriptLegatoSpec`]).
+    #[facet(default)]
+    pub script_legato: Option<ScriptLegatoSpec>,
+    /// A script's key noise on this articulation's notes (see
+    /// [`KeynoiseSpec`]).
+    #[facet(default)]
+    pub keynoise: Option<KeynoiseSpec>,
+    /// A tempo-synced length (see [`TimedLengthSpec`]).
+    #[facet(default)]
+    pub timed_length: Option<TimedLengthSpec>,
     /// Per velocity band, `(compare, store)`: which band's last-RR memory the
     /// no-repeat rule reads and which it writes. Empty = each band its own.
     /// CSS pizzicato reads an unwritten table in bands 2 and 4 and writes
@@ -2802,6 +2977,306 @@ impl ArticulationSpec {
             }
         }
     }
+}
+
+/// A release sample a script plays at the note-off (MOJO 2's sustain
+/// release callback, script_1.ksp 36445-37013): the note's voices fade out
+/// linearly over `fade_ms`, and a zone of `artic` — the dynamic the note-on
+/// played, the next random RR — starts `start_ms` into its sample (limited by
+/// the zone's start range) at `gain_db[note-on velocity]`. Its fade-in and
+/// later fade-out are `artic`'s own `amp_env`.
+#[derive(Debug, Clone, Facet)]
+pub struct ReleaseSampleSpec {
+    /// The release articulation (zones tagged with the same dynamics).
+    pub artic: String,
+    #[facet(default)]
+    pub start_ms: f32,
+    #[facet(default)]
+    pub fade_ms: f32,
+    /// Level by the note-on's MIDI velocity, dB (128 entries; empty = 0 dB).
+    #[facet(default)]
+    pub gain_db: Vec<f32>,
+    /// The release voice's own envelope instead of `artic`'s `amp_env`:
+    /// fade in over `fade_ms`, then fade out over this (MOJO 2: 9950 ms,
+    /// `wait(RelFade)` + `fade_out`). 0 = the articulation's envelope.
+    #[facet(default)]
+    pub tail_ms: f32,
+    /// The release plays in the note-on's dynamic (MOJO 2's normal
+    /// release); otherwise in `variants`' dynamic, or any.
+    #[facet(default)]
+    pub layered: bool,
+    /// The dynamic (zone group) by a controller: `variants[i]` from the
+    /// value's place among `variant_edges`; `variant_default` until the
+    /// controller is sent (MOJO 2: fall length by CC18, trill interval by
+    /// CC42).
+    #[facet(default)]
+    pub variant_cc: Option<u8>,
+    #[facet(default)]
+    pub variant_edges: Vec<u8>,
+    #[facet(default)]
+    pub variants: Vec<String>,
+    #[facet(default)]
+    pub variant_default: u8,
+    /// Per variant, its own `start_ms` / `fade_ms` (empty = the type's).
+    #[facet(default)]
+    pub variant_start_ms: Vec<f32>,
+    #[facet(default)]
+    pub variant_fade_ms: Vec<f32>,
+    /// Keys this type plays on; outside them the first type plays (MOJO 2:
+    /// the type's articulation range). Empty = every key.
+    #[facet(default)]
+    pub key_range: Vec<u8>,
+}
+
+/// A script's release types (MOJO 2, decode-release-types.md): which
+/// release sample a note-off plays.
+#[derive(Debug, Clone, Facet)]
+pub struct ReleaseTypesSpec {
+    /// The types, by the script's type number (`types[0]` is the normal
+    /// release and the fallback).
+    pub types: Vec<ReleaseSampleSpec>,
+    /// `keys[i]` latches type `i` (any velocity, any articulation; it
+    /// sounds nothing).
+    #[facet(default)]
+    pub keys: Vec<u8>,
+    /// The shipped latched type.
+    #[facet(default)]
+    pub latched: u8,
+    /// `(key, type)` pairs: a key struck at `override_velocity` or harder
+    /// while notes of this articulation are held releases them all, lowest
+    /// first, the first with this type, the rest with the latched one; the
+    /// articulation does not change.
+    #[facet(default)]
+    pub overrides: Vec<u8>,
+    #[facet(default)]
+    pub override_velocity: u8,
+    /// The release sample is silent (its round robin still drawn) when
+    /// another articulation is selected at the key-up (MOJO 2's
+    /// articulation cutoff).
+    #[facet(default)]
+    pub cutoff: bool,
+}
+
+/// One dynamic layer's envelope depth (`ArticulationSpec::amp_env_depths`).
+#[derive(Debug, Clone, Facet)]
+pub struct DynDepthSpec {
+    pub dynamic: String,
+    pub depth: f32,
+}
+
+/// A tempo-synced one-shot (MOJO 2's swells and crescendos,
+/// decode-swells-crescendos.md §1): the note wants `beats` at the host
+/// tempo, `desired = ⌊(60e6 / bpm_int)·beats / 1000⌋` ms with `bpm_int =
+/// 60e6 / µs-per-quarter` (integers); the take whose recorded length is
+/// nearest plays (ties to the longer; one longer if its speed would be
+/// under `min_speed_pct`), time-stretched at `⌊rec/desired·100⌋` % so it
+/// lasts the desired length at its own pitch.
+#[derive(Debug, Clone, Facet)]
+pub struct TimedLengthSpec {
+    /// The takes' dynamics (zone groups), shortest first, and their
+    /// recorded lengths in ms.
+    pub takes: Vec<String>,
+    pub rec_ms: Vec<i32>,
+    pub min_speed_pct: i32,
+    /// Beats from a controller, `cc·15/127 + 1`; `beats` until it is sent.
+    pub beats_cc: u8,
+    pub beats: i32,
+}
+
+/// A script's key noise (MOJO 2's keyclicks, script_1.ksp 25520-25557): on
+/// a note that is not the last one it tried, it draws `random(1, 100)`
+/// and, at or under `chance_pct`, plays `artic` at `key` with velocity
+/// `random(1, 127)` (the zone by its velocity band), at `gain_db[note-on
+/// velocity]`, fading out linearly over `fade_ms` from its start.
+#[derive(Debug, Clone, Facet)]
+pub struct KeynoiseSpec {
+    pub artic: String,
+    pub key: u8,
+    pub chance_pct: i32,
+    #[facet(default)]
+    pub gain_db: Vec<f32>,
+    pub fade_ms: f32,
+    /// While this key is down (it sounds nothing), every note tries and
+    /// every try clicks (the chance is still drawn): MOJO 2's `$erctx`.
+    #[facet(default)]
+    pub force_key: Option<u8>,
+}
+
+/// A script's ensemble: one key played by up to ten players
+/// (`engine/players.rs`; MOJO 2's Ensemble, `_notes/decode-players-divisi.md`).
+///
+/// - `count_cc` sets the player count in bands of `count_band` (0..=band →
+///   1, then one more player per band, the last band to 127); `divisi_cc`
+///   switches Auto Divisi (≥ 64 on). Every message of either ends the divisi
+///   voices (`reset_fade_ms`).
+/// - Stacked (divisi off, or a legato on): every note plays one voice per
+///   player. A second voice on one key in one callback is moved to a
+///   neighbouring key inside the articulation's `key_range` (pitched back)
+///   and takes the next round robin.
+/// - Humanize: player p ≥ 1 has a detune (m-cents), volume (mdB) and start
+///   offset (ms) drawn once, uniform in ±`*_max`, scaled by
+///   `humanize`/10000 and truncated at each note.
+/// - Pan: player p at `∓((p/2 + 1)·spread)/(count/2)` (even left), ‰.
+/// - Every voice of the instrument: `−attenuation_mdb·(count − 1)` mdB
+///   beyond the one-player level the articulations' own levels carry.
+/// - Auto Divisi: notes arriving within `buffer_ms` (1 ms ticks of a counter
+///   every waiting note advances) are spread over the free players, lowest
+///   note first, cycling; with every player busy the newest note takes the
+///   closest note's player(s) (`steal_fade_ms`).
+#[derive(Debug, Clone, Facet)]
+pub struct PlayersSpec {
+    pub count_cc: u8,
+    pub divisi_cc: u8,
+    #[facet(default = 12)]
+    pub count_band: u8,
+    /// The shipped count and Auto Divisi switch.
+    #[facet(default = 1)]
+    pub count: u8,
+    #[facet(default)]
+    pub divisi: bool,
+    /// 0..=10000 (100 %).
+    pub humanize: i32,
+    /// 0..=1000 (‰ of full pan).
+    pub spread: i32,
+    pub detune_max_mcents: i32,
+    pub volume_max_mdb: i32,
+    pub offset_max_ms: i32,
+    pub attenuation_mdb: i32,
+    pub buffer_ms: u32,
+    pub steal_fade_ms: f32,
+    pub reset_fade_ms: f32,
+}
+
+/// A script's monophonic legato over a one-layer sustain (MOJO 2's legato
+/// engine, script_1.ksp 25570-28257 and the release callback 33710-37579;
+/// `_notes/decode-legato.md`). With it on, a note within `max_interval` of
+/// the line's last note plays a transition instead of a fresh attack:
+///
+/// - the line's voices fade out over `fade_in_ms`;
+/// - a zone of `up`/`down` (direction from the last note; zone by
+///   destination key and `interval`, dynamic by `layer_thresholds`) starts
+///   `trans_offset_ms` in, fading in over `fade_in_ms / 2`, at
+///   `gain_db[velocity]`, time-stretched by the speed law;
+/// - after the hold it fades over `fade_out_ms` and, if the key is still
+///   down, the sustain starts `target_offset_ms` in, fading in over
+///   `fade_out_ms`.
+///
+/// A fresh note (no last note, or a leap past `max_interval`) also fades the
+/// line's voices over `fade_in_ms` first: the line is monophonic. Releasing
+/// the last note plays the sustain's release sample (and clears it); a key
+/// released while the one before it is held legatos back to it.
+#[derive(Debug, Clone, Facet)]
+pub struct ScriptLegatoSpec {
+    /// The controller that switches it (on above 63), and its shipped state.
+    pub enable_cc: u8,
+    #[facet(default)]
+    pub on: bool,
+    /// Transition articulations by direction (a repeated key goes down).
+    pub up: String,
+    pub down: String,
+    /// The widest interval that connects (MOJO 2: 12).
+    pub max_interval: u8,
+    /// Curved-velocity edges of the transition's dynamics (`up`'s dynamics
+    /// list, in order): below the first edge plays the first dynamic.
+    #[facet(default)]
+    pub layer_thresholds: Vec<u8>,
+    /// The transition's level by MIDI velocity, dB (128 entries).
+    #[facet(default)]
+    pub gain_db: Vec<f32>,
+    pub timing: ScriptLegatoTiming,
+    /// A note connects only within this many ms of the last connection
+    /// (MOJO 2's stab "transition bypass"); 0 = always.
+    #[facet(default)]
+    pub bypass_ms: f32,
+    /// At the last note's key-up, the target voices fade over this many ms
+    /// and the note releases as usual (stabs, 37596-37612), instead of the
+    /// articulation's release sample. 0 = the release sample.
+    #[facet(default)]
+    pub release_fade_ms: f32,
+    /// The transitions' dynamic is always this one (its index in the
+    /// transition articulation's dynamics) instead of by velocity (MOJO 2's
+    /// crescendo legato: `CrescLegTransDynLayer`).
+    #[facet(default)]
+    pub fixed_layer: Option<u8>,
+    /// Octave legato: with the pedal down, a leap of more than three keys
+    /// (or a fresh note) takes this set and these transitions (25595).
+    #[facet(default)]
+    pub octave: Option<ScriptLegatoOctave>,
+    /// Natural legato, switched by a latched key (see its doc).
+    #[facet(default)]
+    pub natural: Option<ScriptLegatoNatural>,
+}
+
+/// Octave legato (`ScriptLegatoSpec::octave`).
+#[derive(Debug, Clone, Facet)]
+pub struct ScriptLegatoOctave {
+    pub up: String,
+    pub down: String,
+    /// The pedal controller (down at 64 and above).
+    pub pedal_cc: u8,
+    /// Octave when `|note − last| >` this (MOJO 2: 3).
+    pub min_leap: u8,
+    /// Curved-velocity edges of its transitions' dynamics; empty = the first.
+    #[facet(default)]
+    pub layer_thresholds: Vec<u8>,
+    pub timing: ScriptLegatoTiming,
+}
+
+/// Natural legato (`ScriptLegatoSpec::natural`, 26088-26100, 26460,
+/// 27112-28249): the transition plays at its recorded speed and IS the
+/// note (no target), at `gain_db`; after `length_ms`, the key still down
+/// and the note still the line's last, it ends with the release sample
+/// and the next note is fresh. With octave legato it hands over to a
+/// unison tail (`tail`, offset 0, the sustain's level) instead of the
+/// target, which ends the same way after `tail_ms`.
+#[derive(Debug, Clone, Facet)]
+pub struct ScriptLegatoNatural {
+    /// The key that toggles it (it sounds nothing), and its shipped state.
+    pub key: u8,
+    #[facet(default)]
+    pub on: bool,
+    pub length_ms: f32,
+    /// The transition's level by MIDI velocity, dB (128 entries).
+    #[facet(default)]
+    pub gain_db: Vec<f32>,
+    pub tail: String,
+    #[facet(default)]
+    pub tail_layer_thresholds: Vec<u8>,
+    pub tail_ms: f32,
+}
+
+/// The legato timing set of one kind of connection (`ScriptLegatoSpec`).
+#[derive(Debug, Clone, Facet)]
+pub struct ScriptLegatoTiming {
+    pub fade_in_ms: f32,
+    pub trans_offset_ms: f32,
+    /// The hold before the target, at interval 1 and 12 (linear between, in
+    /// whole ms, as the script's integer maths), scaled by 100 / speed %.
+    pub hold_small_ms: f32,
+    pub hold_large_ms: f32,
+    pub fade_out_ms: f32,
+    /// Where the target sustain enters its sample (the script's attack
+    /// offset plus its target offset).
+    pub target_offset_ms: f32,
+    /// The transition's speed in percent at the slowest and fastest playing,
+    /// for interval 1 (`small`) and 12 (`large`), linear between.
+    pub slow_small_pct: i32,
+    pub fast_small_pct: i32,
+    pub slow_large_pct: i32,
+    pub fast_large_pct: i32,
+    /// Speed by the time between the line's note-ons: at or above
+    /// `slowest_ms` the slow speed, at or below `fastest_ms` the fast one.
+    pub slowest_ms: i32,
+    pub fastest_ms: i32,
+    /// Instead of that time, a controller sets the speed index (`127 − cc`);
+    /// `cc_default` until it is sent.
+    #[facet(default)]
+    pub speed_cc: Option<u8>,
+    #[facet(default)]
+    pub speed_cc_default: u8,
+    /// Instead, the note's velocity is the speed index.
+    #[facet(default)]
+    pub speed_by_velocity: bool,
 }
 
 /// High-level category for an articulation's playback behaviour.
@@ -3601,6 +4076,14 @@ pub struct ZoneSpec {
     /// `-1` = not at all, the offset is ignored. `None` = no limit.
     #[facet(default)]
     pub start_mod: Option<i64>,
+    /// The zone's group plays through Kontakt's Time Machine II (source
+    /// mode 5, `engine::tm2`): its sample is cut at pitch marks found with
+    /// this analysis block (frames: 512, 1024 or 2048, by the source
+    /// record's analysis setting 1-2, 3, 4), and every voice of it plays
+    /// grain by grain at its speed, unity included. 0 = not a Time Machine
+    /// II zone.
+    #[facet(default)]
+    pub tm2_block: u32,
     /// Kontakt's velocity-2.. zones over this same file (index 0 = velocity
     /// 2): the scripted body VARIANTS — the same recording entered deeper.
     /// CSS plays one for a loud first note (`%v2aqt`), see

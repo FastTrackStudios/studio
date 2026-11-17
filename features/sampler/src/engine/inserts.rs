@@ -55,6 +55,16 @@ enum StageKind {
     Svf(Law, u8),
     /// 1..=3 bell bands.
     Eq(u8),
+    /// Kontakt's Saturation, Enhanced mode: a memoryless curve at the base
+    /// rate between the linear sections (`super::kontakt_saturation`).
+    Saturation,
+    /// Kontakt's classic Limiter (kind-3 group insert,
+    /// `super::kontakt_limiter`): both channels at its place in the chain.
+    Limiter,
+    /// Stereo width: the side signal scaled by `1 + width`, mid kept
+    /// (Kontakt's kind-9 group insert). Run after the per-channel stages:
+    /// those treat both channels alike, so the order does not matter.
+    Width,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +72,8 @@ enum Param {
     Cutoff,
     Resonance,
     EqGain(u8),
+    /// The voice's level at its amplifier: the route's value is a gain.
+    Volume,
 }
 
 /// One stage of a plan: its kind and saved knobs.
@@ -72,6 +84,14 @@ struct PlanStage {
     resonance: f32,
     /// (Hz, octaves, stored dB) per band.
     bands: [[f32; 3]; MAX_SECTIONS],
+    /// `Width`: the side gain is `1 + width`.
+    width: f32,
+    /// `Saturation`: `[drive, makeup, wet]` at the saved shape.
+    sat: [f32; 3],
+    /// `Limiter`: input gain (dB), release (ms).
+    limiter: [f32; 2],
+    /// The stage's output gain (linear).
+    out_gain: f32,
 }
 
 /// One route of a plan: the knob it moves and its value at every controller
@@ -91,6 +111,12 @@ struct PlanRoute {
     env: Vec<(f32, f32, f32)>,
     /// `intensity × span` the envelope's level moves the knob by.
     env_depth: f32,
+    /// The note's velocity is the source (`FxRouteSpec::source`), set once
+    /// at the note's start by [`InsertState::with_velocity`].
+    velocity: bool,
+    /// The note's key is the source (`FxRouteSpec::source` "key"), set once
+    /// at the note's start by [`InsertState::with_key`].
+    key: bool,
 }
 
 /// A dynamic layer's insert chain, shared by its voices.
@@ -116,15 +142,21 @@ impl InsertPlan {
                 _ => {}
             }
         }
-        if stages.is_empty() {
+        // a chain of volume routes alone runs too (a layer with no inserts
+        // whose level a controller moves)
+        let volume_only = |r: &FxRouteSpec| r.param == "volume";
+        if stages.is_empty() && !spec.routes.iter().any(volume_only) {
             return None;
         }
         let routes = spec
             .routes
             .iter()
             .filter_map(|r| {
+                if volume_only(r) {
+                    return plan_route(r, 0, None, sample_rate);
+                }
                 let stage = map.iter().find(|(i, _)| *i == usize::from(r.stage))?.1;
-                plan_route(r, stage as u8, &stages[stage], sample_rate)
+                plan_route(r, stage as u8, Some(&stages[stage]), sample_rate)
             })
             .take(MAX_ROUTES)
             .collect();
@@ -151,6 +183,9 @@ fn plan_stage(s: &FxStageSpec) -> Option<PlanStage> {
             }
             StageKind::Eq(n as u8)
         }
+        "width" => StageKind::Width,
+        "saturation" => StageKind::Saturation,
+        "limiter" => StageKind::Limiter,
         _ => return None,
     };
     let mut bands = [[0.0; 3]; MAX_SECTIONS];
@@ -162,22 +197,39 @@ fn plan_stage(s: &FxStageSpec) -> Option<PlanStage> {
         cutoff: s.cutoff,
         resonance: s.resonance,
         bands,
+        width: s.width,
+        sat: super::kontakt_saturation::enhanced_at(s.shape),
+        limiter: [s.input_db, s.release_ms],
+        out_gain: 10f32.powf(s.output_db / 20.0),
     })
 }
 
-fn plan_route(r: &FxRouteSpec, stage: u8, s: &PlanStage, sample_rate: f32) -> Option<PlanRoute> {
+fn plan_route(
+    r: &FxRouteSpec,
+    stage: u8,
+    s: Option<&PlanStage>,
+    sample_rate: f32,
+) -> Option<PlanRoute> {
     let param = match r.param.as_str() {
         "cutoff" => Param::Cutoff,
         "resonance" => Param::Resonance,
+        "volume" => Param::Volume,
         p => {
             let n: u8 = p.strip_prefix("eq_gain")?.parse().ok()?;
-            match s.kind {
+            match s?.kind {
                 StageKind::Eq(bands) if (1..=bands).contains(&n) => Param::EqGain(n - 1),
                 _ => return None,
             }
         }
     };
-    if matches!(param, Param::Cutoff | Param::Resonance) && matches!(s.kind, StageKind::Eq(_)) {
+    if matches!(param, Param::Cutoff | Param::Resonance)
+        && s.is_none_or(|s| {
+            matches!(
+                s.kind,
+                StageKind::Eq(_) | StageKind::Width | StageKind::Saturation | StageKind::Limiter
+            )
+        })
+    {
         return None;
     }
     // an EQ gain route of depth 1 moves the stored dB by 12
@@ -194,7 +246,17 @@ fn plan_route(r: &FxRouteSpec, stage: u8, s: &PlanStage, sample_rate: f32) -> Op
         } else {
             kontakt_table_value(&r.points, x)
         };
-        *out = r.intensity * span * shaped;
+        *out = if param == Param::Volume {
+            // Kontakt's controller volume law (KONTRA `laws::volume`, plain
+            // power for a controller): a gain, 1 at the top of the source
+            (1.0 - (1.0 - shaped) * r.intensity).max(0.0)
+        } else {
+            r.intensity * span * shaped
+        };
+    }
+    // a law the script computes, baked per source value
+    if r.table.len() == 128 {
+        lut.copy_from_slice(&r.table);
     }
     let dt_ms = f32::from(COEF_EVERY) * 1000.0 / sample_rate.max(1.0);
     let coef = if r.lag_ms > 0.0 {
@@ -215,6 +277,8 @@ fn plan_route(r: &FxRouteSpec, stage: u8, s: &PlanStage, sample_rate: f32) -> Op
             .map(|e| (e.time_ms, e.level, e.curve))
             .collect(),
         env_depth: r.intensity * span,
+        velocity: r.source.eq_ignore_ascii_case("velocity"),
+        key: r.source.eq_ignore_ascii_case("key"),
     })
 }
 
@@ -246,6 +310,15 @@ pub struct InsertState {
     /// Two memories per section per channel.
     mem: [[[[f32; 2]; MAX_SECTIONS]; MAX_STAGES]; 2],
     countdown: u16,
+    /// The chain's limiter stage, if it has one: its index and state.
+    limiter: Option<(usize, super::kontakt_limiter::KontaktLimiter)>,
+    /// A voice's amplifier balance inside the chain (`set_pan`): per
+    /// channel gain, and the stage it follows (`None` = ahead of all).
+    pan: Option<([f32; 2], Option<usize>)>,
+    /// The volume routes' gain (`Param::Volume`), at the amplifier: after
+    /// the stage `amp_at` (`None` = ahead of all), as the pan.
+    volume: f32,
+    amp_at: Option<usize>,
 }
 
 impl InsertState {
@@ -262,7 +335,32 @@ impl InsertState {
             gain: [1.0; MAX_STAGES],
             mem: [[[[0.0; 2]; MAX_SECTIONS]; MAX_STAGES]; 2],
             countdown: 0,
+            limiter: None,
+            pan: None,
+            volume: 1.0,
+            amp_at: None,
         };
+        s.amp_at = s
+            .plan
+            .stages
+            .iter()
+            .rposition(|st| st.kind == StageKind::Saturation);
+        s.limiter = s
+            .plan
+            .stages
+            .iter()
+            .position(|st| st.kind == StageKind::Limiter)
+            .map(|i| {
+                let [input_db, release_ms] = s.plan.stages[i].limiter;
+                let settings = super::kontakt_limiter::KontaktSettings {
+                    input_db,
+                    release_ms,
+                };
+                (
+                    i,
+                    super::kontakt_limiter::KontaktLimiter::new(settings, sample_rate as u32),
+                )
+            });
         for (slot, r) in s.envs.iter_mut().zip(&s.plan.routes) {
             if r.env.is_empty() {
                 continue;
@@ -299,10 +397,40 @@ impl InsertState {
     /// The controllers' current values (read again every block).
     pub fn set_ccs(&mut self, cc: impl Fn(u8) -> u8) {
         for (t, r) in self.tgt.iter_mut().zip(&self.plan.routes) {
-            if r.env.is_empty() {
+            if r.env.is_empty() && !r.velocity && !r.key {
                 *t = r.lut[usize::from(cc(r.cc).min(127))];
             }
         }
+    }
+
+    /// The note's velocity for its velocity routes (fixed for the voice's
+    /// life, as a script sets the knob once at the note's start).
+    #[must_use]
+    pub fn with_velocity(mut self, velocity: u8) -> Self {
+        for (i, r) in self.plan.routes.iter().enumerate() {
+            if r.velocity {
+                let v = r.lut[usize::from(velocity.min(127))];
+                self.tgt[i] = v;
+                self.cur[i] = v;
+            }
+        }
+        self.countdown = 0;
+        self
+    }
+
+    /// The note's key for its key routes (a Key Position modulator: fixed
+    /// for the voice's life).
+    #[must_use]
+    pub fn with_key(mut self, key: u8) -> Self {
+        for (i, r) in self.plan.routes.iter().enumerate() {
+            if r.key {
+                let v = r.lut[usize::from(key.min(127))];
+                self.tgt[i] = v;
+                self.cur[i] = v;
+            }
+        }
+        self.countdown = 0;
+        self
     }
 
     fn update(&mut self) {
@@ -313,11 +441,19 @@ impl InsertState {
             tgt,
             sections,
             gain,
+            volume,
             ..
         } = self;
         for ((c, t), r) in cur.iter_mut().zip(tgt.iter()).zip(&plan.routes) {
             *c += (*t - *c) * r.coef;
         }
+        *volume = plan
+            .routes
+            .iter()
+            .zip(cur.iter())
+            .filter(|(r, _)| r.param == Param::Volume)
+            .map(|(_, v)| *v)
+            .product();
         for (i, st) in plan.stages.iter().enumerate() {
             let mut cutoff = st.cutoff;
             let mut res = st.resonance;
@@ -330,10 +466,21 @@ impl InsertState {
                     Param::Cutoff => cutoff += v,
                     Param::Resonance => res += v,
                     Param::EqGain(b) => db[usize::from(b)] += v,
+                    Param::Volume => {}
                 }
             }
             (sections[i], gain[i]) = coefficients(st, cutoff, res, db, *sample_rate);
         }
+    }
+
+    /// The voice's amplifier pan (−1..1, a balance) where Kontakt puts it in
+    /// the group's chain: after its drive stages (a saturation runs on the
+    /// voice before the amplifier), before its stereo stages (a width runs
+    /// after it: KONTRA folds those into the voice's gain matrix after the
+    /// pan). The linear per-channel stages commute with it.
+    pub fn set_pan(&mut self, pan: f32) {
+        let pan = pan.clamp(-1.0, 1.0);
+        self.pan = (pan != 0.0).then_some(([1.0 - pan.max(0.0), 1.0 + pan.min(0.0)], self.amp_at));
     }
 
     /// Filter one stereo frame.
@@ -347,12 +494,48 @@ impl InsertState {
         self.countdown -= 1;
         let mut out = [l, r];
         let n = self.plan.stages.len();
-        for (ch, x) in out.iter_mut().enumerate() {
-            for i in 0..n {
+        if let Some((g, None)) = self.pan {
+            out[0] *= g[0];
+            out[1] *= g[1];
+        }
+        if self.amp_at.is_none() {
+            out[0] *= self.volume;
+            out[1] *= self.volume;
+        }
+        // stage by stage, both channels at each (a limiter needs both; the
+        // per-channel stages are indifferent to the order)
+        for i in 0..n {
+            if let Some((at, lim)) = self.limiter.as_mut()
+                && *at == i
+            {
+                let mut frame = [out];
+                lim.process(&mut frame);
+                out = frame[0];
+            }
+            for (ch, x) in out.iter_mut().enumerate() {
                 for (sec, m) in self.sections[i].iter().zip(self.mem[ch][i].iter_mut()) {
                     *x = run(*sec, m, *x);
                 }
+                let st = &self.plan.stages[i];
+                if st.kind == StageKind::Saturation {
+                    *x = super::kontakt_saturation::enhanced(*x, st.sat);
+                }
                 *x *= self.gain[i];
+                if let Some((g, Some(at))) = self.pan
+                    && at == i
+                {
+                    *x *= g[ch];
+                }
+                if self.amp_at == Some(i) {
+                    *x *= self.volume;
+                }
+            }
+        }
+        for st in &self.plan.stages {
+            if st.kind == StageKind::Width {
+                let mid = 0.5 * (out[0] + out[1]);
+                let side = 0.5 * (out[0] - out[1]) * (1.0 + st.width);
+                out = [mid + side, mid - side];
             }
         }
         (out[0], out[1])
@@ -422,6 +605,8 @@ fn coefficients(
     let mut out = [Section::Off; MAX_SECTIONS];
     let r = res.clamp(0.0, 1.0);
     match st.kind {
+        StageKind::Width => (out, 1.0),
+        StageKind::Saturation | StageKind::Limiter => (out, st.out_gain),
         StageKind::OnePole(law) => {
             let g = warp(cutoff_hz(law, cutoff), fs);
             out[0] = Section::OnePole(g / (1.0 + g));
@@ -496,6 +681,11 @@ mod tests {
                 cutoff,
                 resonance: 0.0,
                 bands,
+                width: 0.0,
+                input_db: 0.0,
+                release_ms: 0.0,
+                shape: 0.0,
+                output_db: 0.0,
             }],
             routes,
         }
@@ -535,6 +725,39 @@ mod tests {
     }
 
     #[test]
+    fn a_volume_route_follows_kontakts_controller_law() {
+        // MOJO 2 Trumpet transitions: CC113 → volume at 0.3937, CC113 at its
+        // start value 100: 1 − (27/127)·0.3937 = 0.9163 (−0.76 dB), flat
+        let route = FxRouteSpec {
+            stage: 0,
+            param: "volume".into(),
+            cc: 113,
+            intensity: 0.393_701,
+            lag_ms: 50.0,
+            points: vec![],
+            env: vec![],
+            source: String::new(),
+            table: vec![],
+        };
+        // an EQ with no gain: the volume route alone
+        let plan = InsertPlan::new(
+            &spec("eq", 0.0, vec![1000.0, 1.0, 0.0], vec![route]),
+            48_000.0,
+        )
+        .unwrap();
+        for hz in [200.0, 4000.0] {
+            let g = gain_at(Arc::clone(&plan), hz, 100);
+            assert!((g - 20.0 * 0.916_3f32.log10()).abs() < 0.02, "{hz}: {g}");
+        }
+        assert!(gain_at(Arc::clone(&plan), 1000.0, 127).abs() < 0.02);
+        let g0 = gain_at(plan, 1000.0, 0);
+        assert!(
+            (g0 - 20.0 * (1.0f32 - 0.393_701).log10()).abs() < 0.02,
+            "{g0}"
+        );
+    }
+
+    #[test]
     fn cc_route_opens_the_filter() {
         // CSB Solo Trumpet Mix vibsus ff: closed below CC1 ≈ 76, open at 127
         let route = FxRouteSpec {
@@ -545,6 +768,8 @@ mod tests {
             lag_ms: 120.0,
             points: vec![0.0, 0.0, 0.600_393_7, 0.0, -0.168_918_88, 1.0, 1.0, 0.0],
             env: vec![],
+            source: String::new(),
+            table: vec![],
         };
         let plan = InsertPlan::new(&spec("sv_lp1", 0.0, vec![], vec![route]), 48_000.0).unwrap();
         assert!(gain_at(Arc::clone(&plan), 1000.0, 127) > -0.1);
@@ -557,5 +782,55 @@ mod tests {
             InsertPlan::new(&spec("eq", 0.0, vec![1000.0, 1.0, 6.0], vec![]), 48_000.0).unwrap();
         let g = gain_at(plan, 1000.0, 0);
         assert!((g - 12.04).abs() < 0.1, "{g}");
+    }
+
+    #[test]
+    fn width_scales_the_side_only() {
+        let mut g = spec("width", 0.0, vec![], vec![]);
+        g.stages[0].width = -0.3;
+        let plan = InsertPlan::new(&g, 48_000.0).unwrap();
+        let mut st = InsertState::new(plan, 48_000.0, |_| 0);
+        // L = mid + side, R = mid − side with mid 0.5, side 0.25
+        let (l, r) = st.tick(0.75, 0.25);
+        assert!((0.5 * (l + r) - 0.5).abs() < 1e-6, "mid {l} {r}");
+        assert!((0.5 * (l - r) - 0.25 * 0.7).abs() < 1e-6, "side {l} {r}");
+    }
+
+    #[test]
+    fn velocity_route_holds_its_table_value() {
+        // the MOJO 2 law: cutoff = min(1, v/127 + 0.5), as a velocity table
+        let table: Vec<f32> = (0..128)
+            .map(|v| (v as f32 / 127.0 + 0.5).min(1.0))
+            .collect();
+        let route = FxRouteSpec {
+            stage: 0,
+            param: "cutoff".into(),
+            cc: 0,
+            intensity: 0.0,
+            lag_ms: 0.0,
+            points: vec![],
+            env: vec![],
+            source: "velocity".into(),
+            table,
+        };
+        let plan = InsertPlan::new(&spec("sv_lp1", 0.0, vec![], vec![route]), 48_000.0).unwrap();
+        let fs = 48_000.0;
+        let run = |vel: u8| {
+            // controllers move; a velocity route must not follow them
+            let mut st = InsertState::new(Arc::clone(&plan), fs, |_| 127).with_velocity(vel);
+            st.set_ccs(|_| 0);
+            let mut peak = 0.0f32;
+            for i in 0..48_000 {
+                let x = (2.0 * std::f32::consts::PI * 8000.0 * i as f32 / fs).sin();
+                let (y, _) = st.tick(x, x);
+                if i > 24_000 {
+                    peak = peak.max(y.abs());
+                }
+            }
+            20.0 * peak.log10()
+        };
+        let (soft, loud) = (run(10), run(100));
+        assert!(soft < loud - 3.0, "soft {soft} loud {loud}");
+        assert!(loud > -1.0, "loud {loud}");
     }
 }

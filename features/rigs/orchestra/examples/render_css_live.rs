@@ -37,6 +37,16 @@ fn read_vlq(d: &[u8], p: &mut usize) -> u32 {
     v
 }
 
+/// The SMF's first tempo, BPM (120 without one): the host tempo a
+/// tempo-synced articulation reads.
+fn smf_tempo_bpm(d: &[u8]) -> f64 {
+    d.windows(6)
+        .find(|w| w[..3] == [0xFF, 0x51, 0x03])
+        .map(|w| f64::from(u32::from(w[3]) << 16 | u32::from(w[4]) << 8 | u32::from(w[5])))
+        .filter(|&us| us > 0.0)
+        .map_or(120.0, |us| 60_000_000.0 / us)
+}
+
 /// Minimal SMF parse → `(seconds, status, d1, d2)` channel events, in order.
 fn parse_smf(d: &[u8]) -> Vec<(f64, u8, u8, u8)> {
     let div = f64::from(u16::from_be_bytes([d[12], d[13]]));
@@ -140,6 +150,34 @@ fn render_one(
     // from its render, replayed so the rest of the null test is exact.
     if let Some(v) = draws::<i8>(args, "--tunes") {
         rig.force_random_tunes(ID, &v);
+    }
+    // the MIDI file's tempo is the host's (tempo-synced swells, crescendos)
+    rig.set_host_tempo(ID, smf_tempo_bpm(&std::fs::read(inp)?));
+    // `--ksp-seed N`: the script's KSP random() from seed N, as the KSP Seed
+    // CLAP pins Kontakt and KONTRA_KSP_SEED pins KONTRA (MOJO 2).
+    if let Some(v) = draws::<u32>(args, "--ksp-seed") {
+        if let Some(&seed) = v.first() {
+            rig.set_script_seed(ID, seed);
+        }
+    }
+    // `--ksp-skip N`: N draws the reference's script made before its first
+    // note, after the seed (a probe of where two draw streams part)
+    if let Some(&n) = draws::<u32>(args, "--ksp-skip")
+        .and_then(|v| v.first().copied())
+        .as_ref()
+    {
+        rig.skip_script_draws(ID, n);
+    }
+    // `--humanize d1..d9,v1..v9,o1..o9`: an ensemble's humanize tables
+    // (detune m-cents, volume mdB, offset ms of players 1-9), as KONTRA's
+    // instrument drew them at load (MOJO 2).
+    if let Some(v) = draws::<i32>(args, "--humanize") {
+        rig.force_humanize(ID, &v);
+    }
+    // `--solo-notes a,b,…`: only voices of these notes sound (one voice's
+    // part of a render, to take a residual apart)
+    if let Some(v) = draws::<u8>(args, "--solo-notes") {
+        rig.set_solo_notes(ID, Some(v.into_iter().collect()));
     }
     // `--rrs a,b,…`: random short RR draws (0-based; woodwinds / brass).
     if let Some(v) = draws::<u8>(args, "--rrs") {
@@ -282,7 +320,14 @@ fn main() -> eyre::Result<()> {
     let lib_name = flag("--library").unwrap_or_else(|| "strings".to_string());
     let library = signal_orchestra::library(&lib_name)
         .ok_or_else(|| eyre::eyre!("unknown library {lib_name:?}"))?;
-    let patch = signal_orchestra::load_patch(library, &section).map_err(|e| eyre::eyre!(e))?;
+    let mut patch = signal_orchestra::load_patch(library, &section).map_err(|e| eyre::eyre!(e))?;
+    // `--overlay FILE`: a further `section.styx` over the instrument's own
+    // (a test of numbers not yet in the shared patch folder).
+    if let Some(path) = flag("--overlay") {
+        sampler::spec::SectionOverlay::from_file(std::path::Path::new(&path))
+            .map_err(|e| eyre::eyre!("{path}: {e}"))?
+            .apply(&mut patch.spec);
+    }
 
     let Some(batch) = flag("--batch") else {
         let inp = all

@@ -21,6 +21,9 @@ zones the engine plays, one per logical round robin:
 - the keyclick group keeps its own 11 RR zones (the script plays a random
   velocity 1..127 into it).
 - gain_db = 20·log10(zvol), tune_cents = 1200·log2(tune), loops verbatim.
+- a Time Machine II group's zones (source mode 5: legato, octave, unison
+  tails, swells, crescendos) carry `tm2_block`, the analysis block of the
+  group's source record (`tm2_blocks`).
 """
 import csv, json, math, os, re, shutil, struct, sys, time
 
@@ -118,6 +121,47 @@ SCRIPT_ARTS = ["Sus", "Stacc", "Stabs", "BendDown", "RunDown", "RunUp", "Doits",
                "Rise", "Shakes", "Trills", "Swells", "Cresc", "Falls"]
 
 
+# Time Machine II's analysis setting → its analysis block, frames
+# (`BSampleInfo::FindPitchMarks`, Kontakt 8.7.1 0x43764c; 0 asks a
+# pre-analysis, not decoded).
+TM2_BLOCK = {1: 512, 2: 512, 3: 1024, 4: 2048}
+
+
+def tm2_blocks(nki, ksp, gjson):
+    """Every Time Machine II group's analysis block: `{group index: frames}`.
+
+    A group's source record (`BParSrcMode`, in the group's private data of
+    `inner.bin`) for source mode 5 is `u8 0 · u16 version · u32 5 · f32 ·
+    flag · u32 · flag · f32` (+ `f32 f32 flag` from v0x102), then the mode's
+    own `flag · u32 · u32`: the transient-copy flag, the transient size and
+    the analysis setting (KONTRA af3e766: `BParSrcMode::doRead` 0x7d151c,
+    `BGroup + 0xc18`). The records sit in group order, so the n-th one is
+    the n-th mode-5 group's.
+    """
+    d = open(os.path.join(ksp, "inner.bin"), "rb").read()
+    recs = []
+    for m in re.finditer(rb"\x00[\x00-\x06]\x01\x05\x00\x00\x00", d):
+        e = m.start()
+        if e < 1 or d[e - 1] > 1:
+            continue
+        e -= 1  # the record's leading flag byte
+        ver = struct.unpack_from("<H", d, e + 2)[0]
+        if ver < 0x102 or any(d[e + k] > 1 for k in (12, 17, 30, 31)):
+            continue
+        recs.append((d[e + 31], struct.unpack_from("<I", d, e + 36)[0]))
+    groups = [g["index"] for g in gjson if g.get("source_mode") == 5]
+    if len(recs) != len(groups):
+        raise SystemExit(f"{nki}: {len(groups)} Time Machine II groups, {len(recs)} source records")
+    out = {}
+    for gi, (transient, setting) in zip(groups, recs):
+        if transient:
+            raise SystemExit(f"{nki}: group {gi} copies transients (not modelled)")
+        if setting not in TM2_BLOCK:
+            raise SystemExit(f"{nki}: group {gi} analysis setting {setting} (pre-analysis, not decoded)")
+        out[gi] = TM2_BLOCK[setting]
+    return out
+
+
 def check_starts(nki, groups, starts):
     """The script's group index for every core articulation group → its bus.
 
@@ -160,7 +204,11 @@ def group_stage(fx_slots, gi):
 def build(nki, organized):
     ksp = os.path.join(ROOT, "_ksp", nki)
     inst = re.sub(r"\s+2\.0$", "", nki)
-    groups = {g["index"]: g["name"] for g in json.load(open(os.path.join(ksp, "groups.json")))}
+    gjson = json.load(open(os.path.join(ksp, "groups.json")))
+    groups = {g["index"]: g["name"] for g in gjson}
+    # the source mode (nkx-extract source_mode): 3 DFD, 5 Time Machine II, …
+    modes = {g["index"]: g.get("source_mode") for g in gjson}
+    tm2 = tm2_blocks(nki, ksp, gjson)
     pers = persistent(os.path.join(ksp, "persistent_1.tsv"))
     num_rr = int(pers["$1f1tu"][0])
     bus_of = check_starts(nki, groups, [int(x) for x in pers["%hr4to"]])
@@ -202,9 +250,23 @@ def build(nki, organized):
             gain = float(r["zvol"])
             z["gain_db"] = round(20 * math.log10(gain) + stage_db, 6) if gain > 0 else -144.0
             z["tune_cents"] = round(1200 * math.log2(float(r["tune"])), 6)
-            # always written: −1 (no start modulation) means Kontakt ignores
-            # the script's offset, where a missing value would apply it whole
-            z["start_mod"] = int(r["start_mod"])
+            # Kontakt limits a script's offset by S.Mod only in DFD (KSP
+            # manual, play_note): there it is always written (−1, no start
+            # modulation, ignores the offset); other modes (the Time Machine
+            # II transitions) take the offset whole
+            if modes.get(gi) in (3, None):
+                z["start_mod"] = int(r["start_mod"])
+            # a Time Machine II group's voices play grain by grain, at any
+            # speed, from pitch marks found with its analysis block
+            if gi in tm2:
+                z["tm2_block"] = tm2[gi]
+            # the zone's own sample window: a play_note offset counts from
+            # sample_start (KONTRA trace: a release 78 ms in starts at frame
+            # 3744 + the zone's 1500)
+            if int(r["sample_start"]) > 0:
+                z["sample_start"] = int(r["sample_start"])
+            if int(r["sample_end"]) > 0:
+                z["sample_end"] = int(r["sample_end"])
             ls, le = int(r["loop_start"]), int(r["loop_end"])
             if le > ls >= 0:
                 z["loop_start"], z["loop_end"] = ls, le
@@ -218,14 +280,18 @@ def build(nki, organized):
             return [r for r in rs if int(r["vel_lo"]) <= v <= int(r["vel_hi"])]
 
         if art in LEGATO:
+            # play_note's velocity is the interval (26031/26036): up
+            # 1 + ⌊i·126/12⌋, down 127 − ⌊i·126/12⌋; a repeated key is down
+            # at 0 (127, the unison band the tail groups hold)
             up = art in ("LegUp", "OctLegUp")
-            for i in range(1, 13):
-                v = int(1 + i * 10.5) if up else int(127 - i * 10.5)
+            for i in range(0 if not up else 1, 13):
+                v = 1 + (i * 126) // 12 if up else 127 - (i * 126) // 12
                 for r in holding(v):
                     emit(r, direction="up" if up else "down", interval=i)
         elif art == "Keyclick":
+            # play_note(64, random(1, 127)): the zone by its velocity band
             for i, r in enumerate(sorted(rs, key=lambda r: int(r["vel_lo"]))):
-                emit(r, rr_index=i)
+                emit(r, rr_index=i, vel_min=int(r["vel_lo"]), vel_max=int(r["vel_hi"]))
         else:
             for rr in range(num_rr):
                 for r in holding((127 // num_rr) * rr + 3):

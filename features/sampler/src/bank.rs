@@ -876,6 +876,22 @@ impl SamplerBank {
         self.with_block(id, |b| b.force_random_variants(v));
     }
 
+    pub fn set_host_tempo(&mut self, id: &str, bpm: f64) {
+        self.with_block(id, |b| b.set_host_tempo(bpm));
+    }
+
+    pub fn skip_script_draws(&mut self, id: &str, n: u32) {
+        self.with_block(id, |b| b.skip_script_draws(n));
+    }
+
+    pub fn force_humanize(&mut self, id: &str, v: &[i32]) {
+        self.with_block(id, |b| b.force_humanize(v));
+    }
+
+    pub fn set_script_seed(&mut self, id: &str, seed: u32) {
+        self.with_block(id, |b| b.set_script_seed(seed));
+    }
+
     pub fn force_random_rrs(&mut self, id: &str, v: &[u8]) {
         self.with_block(id, |b| b.force_random_rrs(v));
     }
