@@ -59,6 +59,13 @@ recur.
 - **Releases start on the note-off** in CSW/CSB; CSS waits 2 ms.
 - **Timed phrases**: a held key can play a scripted chain of hits on a timer
   (CSB Taka "Hold": delay, tick, fade, end hit) — `PhraseSpec`.
+- **An ignored note is still an event until its note-off.** A note that a
+  script plays and a later script ignores (it plays no voice) stays live in
+  Kontakt; its `note_off` still runs every later script's `on release`.
+  CSSS trills depend on it: script 0 collects the pair within `$dhhc2`
+  (25 ms shipped), plays the lower key tagged half/whole (event par 0), and
+  script 1 ignores that note, plays the trill voices and their release
+  sample when script 0's `note_off` arrives (null −0.3 → −55.8 dB).
 
 ## Pitch
 
