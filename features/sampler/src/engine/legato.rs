@@ -241,7 +241,20 @@ impl SampleEngine {
             .as_ref()
             .and_then(|fb| fb.slide.as_ref())
             .filter(|s| s.stitched.is_some())
-            .map(|s| (s.articulation.clone(), s.max_interval));
+            .map(|s| (s.articulation.clone(), s.max_interval.max(24)));
+        // a slide-out lands a release recording anywhere on the way down
+        let release_reach: Option<String> = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .filter(|fb| {
+                fb.slide
+                    .as_ref()
+                    .and_then(|s| s.stitched.as_ref())
+                    .is_some_and(|st| st.slide_out_max > 0)
+            })
+            .and_then(|fb| fb.release_layer.as_ref().map(|r| r.articulation.clone()));
         // What a fretted note may be chosen as by its velocity (Argent's
         // Rake, Pinch Harmonics), with every lead-in's lead and body.
         if let Some(fb) = self.patch.spec.fretboard.as_ref() {
@@ -342,7 +355,12 @@ impl SampleEngine {
                 z.articulation.eq_ignore_ascii_case(id)
                     && (z.root_key as i32 - note as i32).unsigned_abs() <= u32::from(*reach)
             });
-            if !in_range && !near && !side && !stitch {
+            let landing = release_reach.as_ref().is_some_and(|id| {
+                z.articulation.eq_ignore_ascii_case(id)
+                    && z.root_key <= note
+                    && note - z.root_key <= 24
+            });
+            if !in_range && !near && !side && !stitch && !landing {
                 continue;
             }
             if artic.is_some() {

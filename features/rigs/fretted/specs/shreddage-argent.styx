@@ -19,7 +19,8 @@
 // pitched release), stitched slides (KS 21) and slide-ins (key 23) with
 // fret squeaks, fret noise (key 22), wide chokes (keys 12-15) and FX mode
 // (KS 11), with the second track's KSP random() detune and shift.
-// Not yet: slide-out, strumming; slide levels are open (see the commit log).
+// slide-out (key 23 over ringing strings). Not yet: strumming; slide levels
+// are open (see the commit log).
 
 name    "Shreddage 3.5 Argent"
 vendor  "Impact Soundworks"

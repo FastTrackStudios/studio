@@ -4258,6 +4258,14 @@ pub struct FretStitchSpec {
     /// from the open string, one stitch per fret, and always ends on the
     /// destination (L17301-17769). `None` = no slide-in.
     pub slide_in_key: Option<u8>,
+    /// Pressed while notes ring, the slide-in key slides each string down
+    /// by its fret, at most `slide_out_max` frets (a stitched slide whose
+    /// key stays the one that played it); a string at fret 0 is cut over
+    /// `open_cut_ms` (Darkwall L23548-23660). 0 = no slide-out.
+    #[facet(default)]
+    pub slide_out_max: u8,
+    #[facet(default)]
+    pub open_cut_ms: f32,
 }
 
 /// One interval's stitch timing and levels (see [`FretStitchSpec`]).

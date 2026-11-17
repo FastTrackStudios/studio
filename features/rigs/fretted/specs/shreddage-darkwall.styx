@@ -16,7 +16,7 @@
 // its detune table, stitched slides (key 12, the last stitch ringing on as
 // the destination) and slide-ins (key 14), fret noise (key 13) and key FX
 // (10, 11).
-// Not yet: slide-out (key 14 over a ringing note), strumming.
+// Slide-out (key 14 over ringing strings). Not yet: strumming.
 
 name    "Shreddage 3.5 Darkwall"
 vendor  "Impact Soundworks"

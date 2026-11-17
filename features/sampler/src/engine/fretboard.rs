@@ -76,7 +76,13 @@ pub(crate) struct FretState {
 /// A stitched slide in progress (`FretStitchSpec`).
 #[derive(Debug, Clone)]
 pub(crate) struct Stitch {
+    /// The pitch the slide ends on.
     note: u8,
+    /// The key that holds the note (a slide-out keeps the key it left).
+    key: u8,
+    /// A slide-out landing on the open string plays no destination
+    /// (`not (ncb__fret = 0 and forced_slide_distance # 0)`, L16889).
+    land_open: bool,
     string: usize,
     /// This step (1-based) of `steps`.
     step: u32,
@@ -124,6 +130,11 @@ pub(crate) struct Held {
     /// The articulation whose envelope its voice runs, when not `artic`'s
     /// (a kept stitch: `FretStitchSpec::keep_last`).
     voice_artic: Option<String>,
+    /// The key its voices sound under, when not the held key (a slide-out).
+    voice_note: Option<u8>,
+    /// Slid out: the slide-in key's release lets it go, not its own key's
+    /// (the slide-out's phantom note owns it).
+    slid_out: bool,
 }
 
 /// A script step due at frame `at`.
@@ -160,6 +171,8 @@ pub(crate) enum DueKind {
     },
     /// A stitch's wait ends (see `FretStitchSpec`).
     StitchEnd(Stitch),
+    /// The slide-in key went down over ringing strings: they slide out.
+    SlideOut { line: u8 },
     /// A slide's destination enters (if its key still holds the string).
     SlideBody {
         note: u8,
@@ -351,6 +364,21 @@ impl SampleEngine {
             == Some(note)
         {
             self.fret.slide_in_held = true;
+            // over ringing strings it is a slide-out (after the latency)
+            if fb
+                .slide
+                .as_ref()
+                .and_then(|s| s.stitched.as_ref())
+                .is_some_and(|st| st.slide_out_max > 0)
+                && self.fret.ringing.iter().any(Option::is_some)
+            {
+                let at = self.frames_rendered + self.fret_onset_hold() as u64;
+                let line = self.cur_line as u8;
+                self.fret.due.push(FretDue {
+                    at,
+                    kind: DueKind::SlideOut { line },
+                });
+            }
             return true;
         }
         // The slide key only arms slides.
@@ -806,6 +834,8 @@ impl SampleEngine {
                     origin_velocity: velocity,
                     slide_index: 0,
                     voice_artic: None,
+                    voice_note: None,
+                    slid_out: false,
                 },
             );
         }
@@ -1514,6 +1544,8 @@ impl SampleEngine {
                 origin_velocity: src.origin_velocity,
                 slide_index: index,
                 voice_artic: None,
+                voice_note: None,
+                slid_out: false,
             },
         );
         self.fret.last_string = Some(string);
@@ -1571,6 +1603,8 @@ impl SampleEngine {
         let squeak_tag = self.fret_stitch_squeak(string, origin_velocity, age_db);
         self.fret_stitch_step(Stitch {
             note,
+            key: note,
+            land_open: false,
             string,
             step: 1,
             steps: interval.unsigned_abs(),
@@ -1631,6 +1665,78 @@ impl SampleEngine {
         squeak_tag
     }
 
+    /// A slide-out (`FretStitchSpec::slide_out_max`): each string ringing
+    /// above fret 0 slides down by its fret (at most the maximum) as a
+    /// stitched slide its own key keeps; one at fret 0 is cut.
+    fn fret_slide_out(&mut self, line: u8) {
+        let Some(s) = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.slide.clone())
+        else {
+            return;
+        };
+        let Some(sti) = s.stitched.clone() else {
+            return;
+        };
+        self.set_active_line(usize::from(line));
+        for string in 0..self.fret.ringing.len() {
+            let Some(key) = self.fret.ringing[string] else {
+                continue;
+            };
+            let Some(h) = self.fret.held.get(&key).cloned() else {
+                continue;
+            };
+            let sounding = h.voice_note.unwrap_or(key);
+            if h.fret <= 0 {
+                // cut and unlogged: it leaves no release recording
+                let frames = ms_to_frames_f(sti.open_cut_ms, self.sample_rate);
+                self.voices.fade_out_note_line_any(h.line, sounding, frames);
+                self.fret.held.remove(&key);
+                self.fret.ringing[string] = None;
+                continue;
+            }
+            // the slide-out's phantom note is dispatched like a played one:
+            // it takes a pick stroke on its string
+            self.fret.pick(string);
+            let d = h.fret.min(i32::from(sti.slide_out_max));
+            let fade = ms_to_frames_f(s.source_fade_ms, self.sample_rate);
+            self.voices.fade_out_note_line_any(h.line, sounding, fade);
+            let index = h.slide_index + 1;
+            let age_s = (self.frames_rendered.saturating_sub(h.origin_start)) as f32
+                / self.sample_rate as f32;
+            let age_db = s.age_db_per_s * (age_s * 1000.0).trunc() / 1000.0 * index as f32;
+            let gain_db = self.fret_vel_gain(&h.artic, h.origin_velocity) + age_db;
+            let squeak_tag = self.fret_stitch_squeak(string, h.origin_velocity, age_db);
+            let dest = (i32::from(sounding) - d) as u8;
+            if let Some(m) = self.fret.held.get_mut(&key) {
+                m.fret = h.fret - d;
+                m.slide_index = index;
+                m.voice_note = Some(dest);
+                m.slid_out = true;
+            }
+            self.fret.last_frets[string] = h.fret - d;
+            self.fret_stitch_step(Stitch {
+                note: dest,
+                key,
+                land_open: h.fret - d == 0,
+                string,
+                step: 1,
+                steps: d.unsigned_abs(),
+                up: false,
+                gain_db,
+                origin_velocity: h.origin_velocity,
+                line: h.line,
+                stitch_tag: 0,
+                squeak_tag,
+                slide_in: false,
+                frac: self.fret_onset_frac(),
+            });
+        }
+    }
+
     /// A slide-in (`FretStitchSpec::slide_in_key`): `note` on idle `string`
     /// at `fret` > 0 slides up from the open string. `false` = it does not.
     fn fret_slide_in(
@@ -1677,6 +1783,8 @@ impl SampleEngine {
                 origin_velocity: velocity,
                 slide_index: 0,
                 voice_artic: None,
+                voice_note: None,
+                slid_out: false,
             },
         );
         self.fret.last_string = Some(string);
@@ -1685,6 +1793,8 @@ impl SampleEngine {
         let squeak_tag = self.fret_stitch_squeak(string, velocity, 0.0);
         self.fret_stitch_step(Stitch {
             note,
+            key: note,
+            land_open: false,
             string,
             step: 1,
             steps: fret.unsigned_abs(),
@@ -1753,17 +1863,18 @@ impl SampleEngine {
         }
         self.fret_jitter_rest(&artic, pans.len(), &mut offset_us);
         if st.step == st.steps && sti.keep_last && !st.slide_in {
-            if let Some(h) = self.fret.held.get_mut(&st.note) {
+            if let Some(h) = self.fret.held.get_mut(&st.key) {
                 h.zone_key = key;
+                h.voice_note = Some(key);
                 h.voice_artic = Some(artic.clone());
                 // its release recording copies the sounding voice's level
                 h.gain_db = gain;
             }
-        } else if st.step == st.steps {
+        } else if st.step == st.steps && !st.land_open {
             let dest = self
                 .fret
                 .held
-                .get(&st.note)
+                .get(&st.key)
                 .map(|h| h.artic.clone())
                 .unwrap_or_default();
             self.spawn_fade_in = (u64::from(step.dest_fade_in_us) * u64::from(self.sample_rate)
@@ -1783,7 +1894,7 @@ impl SampleEngine {
             );
             self.fret_no_hold = false;
             self.spawn_fade_in = 0;
-            if let (Some(zk), Some(h)) = (zk, self.fret.held.get_mut(&st.note)) {
+            if let (Some(zk), Some(h)) = (zk, self.fret.held.get_mut(&st.key)) {
                 h.zone_key = zk;
                 h.gain_db = st.gain_db + sti.dest_gain_db;
             }
@@ -1824,12 +1935,19 @@ impl SampleEngine {
         }
         if st.step == st.steps {
             self.voices.fade_out_tagged(st.squeak_tag, 0);
+            // landed on the open string with no destination: nothing sounds
+            if st.land_open && !keep {
+                if self.fret.ringing.get(st.string) == Some(&Some(st.key)) {
+                    self.fret.ringing[st.string] = None;
+                }
+                self.fret.held.remove(&st.key);
+            }
         }
-        let holds = self.fret.ringing.get(st.string) == Some(&Some(st.note))
+        let holds = self.fret.ringing.get(st.string) == Some(&Some(st.key))
             && self
                 .fret
                 .held
-                .get(&st.note)
+                .get(&st.key)
                 .is_some_and(|h| h.string == st.string);
         if !holds {
             self.voices.fade_out_tagged(st.squeak_tag, 0);
@@ -2097,6 +2215,7 @@ impl SampleEngine {
                     }
                 }
                 DueKind::StitchEnd(st) => self.fret_stitch_end(st),
+                DueKind::SlideOut { line } => self.fret_slide_out(line),
                 DueKind::SlideBody {
                     note,
                     string,
@@ -2111,7 +2230,8 @@ impl SampleEngine {
                     self.set_active_line(usize::from(held.line));
                     let frames = self
                         .fretted_release_frames(held.voice_artic.as_deref().unwrap_or(&held.artic));
-                    self.voices.note_off_line(held.line, note, Some(frames));
+                    let voices = held.voice_note.unwrap_or(note);
+                    self.voices.note_off_line(held.line, voices, Some(frames));
                     self.play_fret_release(note, &held);
                     self.play_fret_noise_release(&held);
                 }
@@ -2169,6 +2289,13 @@ impl SampleEngine {
             == Some(note)
         {
             self.fret.slide_in_held = false;
+            let slid: Vec<u8> = (self.fret.held.iter())
+                .filter(|(_, h)| h.slid_out)
+                .map(|(&k, _)| k)
+                .collect();
+            for k in slid {
+                self.fret_let_go(k);
+            }
             return true;
         }
         // a side key's recording plays to its end
@@ -2200,7 +2327,15 @@ impl SampleEngine {
             return true;
         }
         if !self.fret.held.contains_key(&note) {
+            // a key-up with nothing held starts the idle timer, never
+            // restarts it (a key whose note slid out and went: L18127)
+            if self.fret.held.is_empty() && self.fret.idle_since.is_none() {
+                self.fret.idle_since = Some(self.frames_rendered);
+            }
             return false;
+        }
+        if self.fret.held.get(&note).is_some_and(|h| h.slid_out) {
+            return true;
         }
         self.fret_let_go(note);
         if self.fret.held.is_empty() {

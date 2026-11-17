@@ -248,6 +248,11 @@ def main(root, nki, inst, lib):
     # the "Slide In/Out" note (L17301): string_meta[k] − n
     si = re.search(r"\$S3__SLIDE_NOTE := %str___string_meta\[(\d+)\]-(\d+)", script)
     slide_in = smeta[int(si.group(1))] - int(si.group(2)) if si else None
+    # slide-out (L23548ff): down by min(fret, n); fret 0 is cut over
+    # meta[12]·x6/10 µs of the slide artic
+    so = re.search(r"slide_ks_distance := -1\*\(\$ncb__fret\*\(1\+sh_right\((\d+)", script)
+    slide_out = int(so.group(1)) if so else 0
+    open_cut_ms = M(sl, 12) * X(sl, 6) // 10 / 1000
 
     # palm-mute detune (Argent L7591, Darkwall L7474): %s3___mute_tuning by
     # string, fret, the voice's RR, its layer and the pick stroke
@@ -394,7 +399,8 @@ def main(root, nki, inst, lib):
          f"dest_gain_db {fmt(dest_mdb / 1000)}, squeak {{ articulation FretSqueak, keys {sq_keys}, "
          f"gain_db {fmt(squeak_mdb / 1000)}, vel_gain_from {names[0]} }}"
          f"{', keep_last true' if keep_last else ''}"
-         f"{f', slide_in_key {slide_in}' if slide_in is not None else ''} }} }}",
+         f"{f', slide_in_key {slide_in}' if slide_in is not None else ''}"
+         f"{f', slide_out_max {slide_out}, open_cut_ms {fmt(open_cut_ms)}' if slide_out else ''} }} }}",
          *([f"    jitter {{ articulations ({' '.join(jit)}), "
             f"all_tracks ({' '.join(all_tracks)}), "
             f"ranges ({' '.join(f'{{lo {lo}, hi {hi}}}' for lo, hi in ranges)}), "
