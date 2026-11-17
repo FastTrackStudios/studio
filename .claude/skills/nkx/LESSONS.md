@@ -108,3 +108,23 @@ recur.
   placeholder sizes (RIFF 8, data 0) mean a write never finished.
 - **An alphanumeric SNPID** (e.g. CSB `Q46`) is not the archive's set id:
   read the u32 at byte 6 of the `.nkx` header and pass that (CSB: `9426`).
+
+## Kontakt 8.7.1, decoded from the binary (arm64 VST3, C++ symbols kept)
+
+Disassembly and a Ghidra project: /run/media/Development/kontakt-re (nm.txt,
+strings.txt, proj/Kontakt8; scripts/DecompileAt.java decompiles by address).
+
+- **KSP `random(a,b)`** (`BScriptParser::EvalExpression`): `v = ((rand()<<30)|
+  (rand()<<15)|rand()) & 0x7fffffff` (32-bit), `v % (hi−lo+1) + lo`. macOS
+  libc `rand()` = Park–Miller (16807, mod 2^31−1, unseeded state 1).
+  Kontakt seeds `srand(time(NULL))`. Reproducible renders: the KSP Seed CLAP
+  (features/rigs/orchestra/tests/ksp_seed/) pins it; KONTRA `KONTRA_KSP_SEED`.
+- **Group start options are a generated system script**
+  (`BEngine::GenerateSysScript`): key select, `in_range(%CC[n],min,max)`, round
+  robin, random cycles (`random(0,n−1)`, the same rand()), all under
+  `USE_CODE_IF_NOT(NO_SYS_SCRIPT_GROUP_START)`. A script that sets the
+  condition switches every start option off; the saved criteria are then data
+  for `get_engine_par` (CSSS: articulation/dynamic in CC110/CC111 rows).
+- **Classic Limiter**: a fixed 31-sample lookahead delay line (not ms).
+- **Saturation (module 0x1d)** is `BEffectShaper`: Classic is a table curve
+  at base rate (no oversampling, no delay).
