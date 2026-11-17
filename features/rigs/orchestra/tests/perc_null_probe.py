@@ -42,7 +42,8 @@ def vlq(n):
     return bytes(b)
 
 
-def write_mid(path, hits):
+def write_mid(path, hits, end):
+    """`end`: the end-of-track tick; the render stops there, so it must cover the last tail."""
     ev = []
     for tick, key, vel in hits:
         ev += [(tick, bytes([0x90, key, vel])), (tick + NOTE_TICKS, bytes([0x80, key, 0]))]
@@ -51,7 +52,7 @@ def write_mid(path, hits):
     for t, e in ev:
         trk += vlq(t - last) + e
         last = t
-    trk += b"\x00\xff\x2f\x00"
+    trk += vlq(max(end - last, 0)) + b"\xff\x2f\x00"
     with open(path, "wb") as f:
         f.write(b"MThd" + struct.pack(">IHHH", 6, 0, 1, TPQ) + b"MTrk" + struct.pack(">I", len(trk)) + trk)
 
@@ -144,7 +145,7 @@ def main():
             t = len(hits) * gap
             hits.append((t, k, v))
             rows.append((t, k, f"key{k} v{v} rep{r + 1}"))
-    write_mid(os.path.join(out, "probe.mid"), hits)
+    write_mid(os.path.join(out, "probe.mid"), hits, len(hits) * gap)
     json.dump(scenario(hits), open(os.path.join(out, "scn.json"), "w"))
     win = gap * FRAMES_PER_TICK / 48000
     with open(os.path.join(out, "manifest.tsv"), "w") as m:

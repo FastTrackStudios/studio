@@ -6,6 +6,7 @@ assert d[:4]==b'MThd'
 fmt,ntrk,div=struct.unpack('>HHH',d[8:14]); p=14
 evs=[]  # (abs_tick, bytes)
 tempo_us=500000
+track_end=0  # the latest end-of-track: a file may end after its last note to keep a tail
 for _ in range(ntrk):
     assert d[p:p+4]==b'MTrk'; ln=struct.unpack('>I',d[p+4:p+8])[0]; q=p+8; end=q+ln; t=0; run=None
     while q<end:
@@ -31,11 +32,12 @@ for _ in range(ntrk):
         if st&0x80: run=st; q+=1
         n=2 if (run&0xF0) not in (0xC0,0xD0) else 1
         evs.append((t,bytes([run])+d[q:q+n])); q+=n
+    track_end=max(track_end,t)
     p=end
 evs.sort(key=lambda e:e[0])
 bpm=60_000_000/tempo_us
 ppq=div; scale=1  # keep the file's own resolution: exact ticks stay exact
-last=evs[-1][0]*scale
+last=max(evs[-1][0],track_end)*scale
 lines=[]; prev=0
 for t,b in evs:
     tt=round(t*scale); lines.append(f"        E {tt-prev} "+" ".join(f"{x:02x}" for x in b) + (" 00" if len(b)==2 else "")); prev=tt
