@@ -35,7 +35,19 @@ impl Extension for Setlists {
         ext.navigator(nav::SETLISTS, SetlistsNav);
         ext.navigator(nav::LIBRARIES, LibrariesNav);
         ext.view("song", SongView)
-            .view("setlist", SetlistView)
+            .view("setlist", crate::panes::SetlistView)
+            .action("STUDIO_SETLISTS_NOW", |_| now_playing())
+            .action("STUDIO_SETLISTS_SEEK", |a| async move {
+                let item = text(&a, "item")?;
+                let t = a
+                    .get("t")
+                    .and_then(Value::as_f64)
+                    .ok_or("give `t`, seconds")?;
+                crate::now::seek_item(&item, t)
+                    .await
+                    .map(|()| json!({ "item": item, "t": t }))
+            })
+            .action("STUDIO_SETLISTS_OPEN", open_pane)
             .action("STUDIO_SETLISTS_LIST", |_| list())
             .action("STUDIO_SETLISTS_CREATE", create)
             .action("STUDIO_SETLISTS_ADD", add)
@@ -54,6 +66,50 @@ impl Extension for Setlists {
             .action("STUDIO_SETLISTS_SONGS", song_list)
             .action("STUDIO_SETLISTS_LIBRARIES", |_| libraries());
     }
+}
+
+/// What is playing (`studio.setlists`' `now`): the song (its note, its
+/// arrangement, its title), seconds into it at `at` (ms since the epoch),
+/// whether it plays and how fast, and what the clock is (`engine`:
+/// Studio's transport; `playhead`: Architect's own). `null` when nothing
+/// is on the playhead. Lighting follows the same clock by it.
+async fn now_playing() -> Result<Value, String> {
+    #[cfg(all(
+        feature = "engine-clock",
+        not(any(target_arch = "wasm32", target_os = "ios"))
+    ))]
+    crate::engine_clock::start();
+    let Some(now) = crate::now::state().await else {
+        return Ok(Value::Null);
+    };
+    let (note, arrangement) = now.song().unzip();
+    Ok(json!({
+        "item": now.item,
+        "note": note,
+        "arrangement": arrangement.flatten(),
+        "title": now.title,
+        "time": now.time,
+        "at": now.at,
+        "playing": now.playing,
+        "rate": now.rate,
+        "duration": now.duration,
+        "clock": if crate::now::engine_drives() { "engine" } else { "playhead" },
+    }))
+}
+
+/// Opens one of its panes (`view`: `setlist` or `song`), on note `note`
+/// when given (a setlist or a song). The chart and the lyrics are Studio's
+/// Chart and Lyrics extensions' (`STUDIO_CHART_OPEN`, `STUDIO_LYRICS_OPEN`).
+async fn open_pane(a: Value) -> Result<Value, String> {
+    let view = opt(&a, "view").unwrap_or_else(|| "setlist".to_owned());
+    if !["setlist", "song"].contains(&view.as_str()) {
+        return Err(format!("no view `{view}`: setlist or song"));
+    }
+    host::run(
+        "EXT_VIEW_OPEN",
+        json!({ "extension": "studio-setlists", "view": view, "state": opt(&a, "note").unwrap_or_default() }),
+    )
+    .await
 }
 
 fn text(args: &Value, key: &str) -> Result<String, String> {
@@ -377,7 +433,7 @@ fn SongView() -> Element {
 fn SongLoader(path: String, title: String, props: Vec<(String, String)>) -> Element {
     let loaded = use_resource(move || {
         let (path, title, props) = (path.clone(), title.clone(), props.clone());
-        async move { load(&path, &title, &props).await }
+        async move { load(&path, &title, &props, None).await }
     });
     let ready = loaded.read().clone();
     ready.map_or_else(
@@ -389,8 +445,44 @@ fn SongLoader(path: String, title: String, props: Vec<(String, String)>) -> Elem
 /// What a song's workspace needs from its note `path`: its chart's source
 /// (its `.kf`, or the chart its page carries when the file cannot be read)
 /// and its one lyrics source.
-async fn load(path: &str, title: &str, props: &[(String, String)]) -> Loaded {
-    let note = host::run("VAULT_READ", json!({ "path": path })).await.ok();
+pub(crate) async fn load(
+    path: &str,
+    title: &str,
+    props: &[(String, String)],
+    arrangement: Option<&str>,
+) -> Loaded {
+    let Some(h) = host::current() else {
+        return load_on(
+            &architect_extensions::linked::Handle::default(),
+            path,
+            title,
+            props,
+            arrangement,
+            false,
+        )
+        .await;
+    };
+    load_on(&h, path, title, props, arrangement, true).await
+}
+
+/// What a song's panes need from its note `path`, read as the extension
+/// `h` is (`VAULT_READ`, and its chart and lyrics files through the
+/// host's `read_file`): its chart's source (an arrangement's own when
+/// `arrangement` names one), its one lyrics source, its recording, and
+/// (`shared`, which reads the setlists, `BASES_ROWS`) the share links of
+/// the setlists it is in. Studio's Chart and Lyrics extensions read songs
+/// with it, each as itself.
+pub async fn load_on(
+    h: &architect_extensions::linked::Handle,
+    path: &str,
+    title: &str,
+    props: &[(String, String)],
+    arrangement: Option<&str>,
+    shared: bool,
+) -> Loaded {
+    let note = host::run_on(h, "VAULT_READ", json!({ "path": path }))
+        .await
+        .ok();
     let property = |key: &str| {
         note.as_ref()
             .and_then(|n| n.get("properties"))
@@ -410,16 +502,39 @@ async fn load(path: &str, title: &str, props: &[(String, String)]) -> Loaded {
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_owned();
-    let chart_file = property("chart");
+    // An arrangement's chart is its own (`arrangements: [{name, chart}]`,
+    // under Arrangements/<name>/); its lyrics and recording are the song's.
+    let arrangement_chart = arrangement.and_then(|name| {
+        note.as_ref()
+            .and_then(|n| n.get("properties"))
+            .and_then(|p| p.get("arrangements"))
+            .and_then(Value::as_array)?
+            .iter()
+            .find(|a| {
+                a.get("name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|n| n.eq_ignore_ascii_case(name))
+            })
+            .and_then(|a| a.get("chart"))
+            .and_then(Value::as_str)
+            .map(|l| frontmatter::link_target(l).to_owned())
+    });
+    let chart_file = arrangement_chart.or_else(|| property("chart"));
     // The `.kf` when it reads; else the note's copy, read-only (it is never
     // written over the `.kf`: an old copy would overwrite a saved edit).
     let read = match &chart_file {
-        Some(file) => Some(host::read_vault_file(file).await),
+        Some(file) => Some(host::read_vault_file_on(h, file).await),
         None => None,
     };
-    let chart = ChartAccess::open(chart_file, read, chart_fence(&body));
+    // The note's copy is the song's own chart, never an arrangement's.
+    let copy = if arrangement.is_some() {
+        None
+    } else {
+        chart_fence(&body)
+    };
+    let chart = ChartAccess::open(chart_file, read, copy);
     let lrc = match property("lyrics").filter(|f| f.to_ascii_lowercase().ends_with(".lrc")) {
-        Some(file) => host::read_vault_file(&file).await.ok(),
+        Some(file) => host::read_vault_file_on(h, &file).await.ok(),
         None => None,
     };
     let lyrics = lyrics_source(lrc.as_deref(), Some(&chart.text));
@@ -436,7 +551,7 @@ async fn load(path: &str, title: &str, props: &[(String, String)]) -> Loaded {
                 .find(|m| crate::song::is_playable(m))
         });
     // The share links of the setlists the song is in.
-    let shared = match SongRef::from_link_target(path.trim_end_matches(".md")) {
+    let shared = match SongRef::from_link_target(path.trim_end_matches(".md")).filter(|_| shared) {
         Some(at) => host::setlists()
             .await
             .unwrap_or_default()
@@ -450,51 +565,14 @@ async fn load(path: &str, title: &str, props: &[(String, String)]) -> Loaded {
             .collect(),
         None => Vec::new(),
     };
+    let title = property("title").unwrap_or_else(|| title.to_owned());
     Loaded {
-        title: property("title").unwrap_or_else(|| title.to_owned()),
+        title: arrangement.map_or_else(|| title.clone(), |a| format!("{title} ({a})")),
         artist: property("artist"),
         chart,
         lyrics,
         recording,
         shared,
-    }
-}
-
-/// Every setlist and its songs in order: the setlists' own tab. (A
-/// process view is not told which pane it is in; the navigator picks one
-/// setlist, this shows them all.)
-#[allow(non_snake_case)]
-fn SetlistView() -> Element {
-    let data = use_resource(|| async {
-        let sets = host::setlists().await.ok()?;
-        let songs = host::songs().await.unwrap_or_default();
-        Some((sets, songs))
-    });
-    let (sets, songs) = data.read().clone().flatten().unwrap_or_default();
-    let count = sets.len();
-    let empty = sets.is_empty();
-    rsx! {
-        div { "data-studio-setlists": "{count}",
-            style: "height: 100%; overflow-y: scroll; padding: 20px 24px; box-sizing: border-box;",
-            if empty {
-                div { style: "opacity: 0.7;", "No setlists yet: STUDIO_SETLISTS_CREATE makes one." }
-            }
-            for set in sets {
-                div { key: "{set.path}", style: "margin-bottom: 20px;",
-                    h2 { style: "margin: 0 0 8px; font-size: 18px;", "{set.title}" }
-                    for (i, at) in set.songs.iter().enumerate() {
-                        div { key: "{i}", style: "display: flex; gap: 12px; padding: 4px 0; font-size: 13px;",
-                            span { style: "width: 20px; opacity: 0.5;", "{i + 1}" }
-                            span { style: "flex: 1;", "{at.label()}" }
-                            span { style: "opacity: 0.6;",
-                                {songs.iter().find(|s| s.at.library == at.library && s.at.title == at.title).map(SongRow::summary).unwrap_or_default()}
-                            }
-                            span { style: "opacity: 0.45;", "{at.library}" }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

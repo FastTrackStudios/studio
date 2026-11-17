@@ -16,6 +16,47 @@ it always was. `STUDIO_SETLISTS_CREATE`, `_ADD` and `_MOVE` take an
 optional `section` (the set), and the navigator shows the sets under
 their setlist.
 
+## Playing a setlist: one playhead, three extensions
+
+What is playing is setlists' **source on Architect's playhead**
+(`architect.playhead`, `src/now.rs`): the setlist's running order as a
+queue, an item a song (`<song note>.md`, `#<Arrangement>` when the row
+plays one), its title, artist, length and recording. The app's Now
+Playing bar shows it. Its clock is the deck's own, or, while a **Studio
+engine** runs, the engine's transport (`src/engine_clock.rs`, feature
+`engine-clock`, on in Studio Architect): read only, it subscribes to the
+engine's playhead stream and moves the source to the song and time Studio
+plays (by more than 0.15 s, or a song or play state changed), and lets
+the engine go cleanly. A project is matched to a setlist row by title
+(without case, punctuation or spelled-out numbers: the engine's older
+"7 Nation Army" is "Seven Nation Army"), by its folder (the split's slug,
+which is the recording's file name), and by `Title (Arrangement)`; else
+the setlist's row picks the arrangement ("Know Me" plays "Know Me
+(Extended)"). `FTS_SETLISTS_ENGINE_CLOCK=off` leaves it off;
+`STUDIO_ENGINE_SOCKET` names an engine.
+
+Three views follow it, each an ordinary view, the same in the app on a
+desk, on a phone and in the web app (a share link is the web app as its
+guest):
+
+- **Setlist** (`setlist`, this extension's): the running order, its sets
+  as labels, each song a row (number, its key's tile, title over artist,
+  length), the song playing marked; a row pressed plays it.
+- **Chart** (`studio-chart`, `features/chart`): the song playing's chart,
+  engraved, the bar and the beat at the playhead marked.
+- **Lyrics** (`studio-lyrics`, `features/lyrics`): its timed lyrics,
+  Session's stage display.
+
+Chart, Lyrics and Lighting hear only their own sources on the playhead,
+so they read this one as the service `studio.setlists`: `now`
+(`STUDIO_SETLISTS_NOW`: `{item, note, arrangement, title, time, at,
+playing, rate, duration, clock}`, `clock` `engine` or `playhead`) and
+`seek` (`STUDIO_SETLISTS_SEEK {item, t}`, refused while Studio is the
+clock). A setlist note's favourites are Setlist (its view) and Chart,
+Lyrics and Lighting (`STUDIO_CHART_OPEN`, `STUDIO_LYRICS_OPEN`,
+`IGNITION_SHOW_OPEN`: a favourite opens only its own extension's views,
+architect#658).
+
 ## A song's workspace (the song view)
 
 A song note opens (`SongView`, `src/ext.rs`) as Session's Overview

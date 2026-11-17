@@ -1,0 +1,85 @@
+# Studio's DAW view, an Architect extension (src/ext.rs;
+# docs/design/studio-in-architect.md). One Rust value
+# (`studio_daw::ext::Daw`): linked into Studio Architect, and a process
+# (src/main.rs, [entry]) that a development copy (EXT_CLONE
+# {"id":"studio-daw"}) swaps in under the same id.
+#
+# Entering a setlist or a song: its songs' sessions (each song note's
+# `session:` property) opened as the set by the Studio engine, and the DAW
+# view (Session's shell) zoomed over the workspace, attached to that
+# engine. The engine is another process (`<this binary> --session-engine`,
+# or `$FTS_STUDIO_BIN engine`), found or spawned, outliving the window.
+id = "studio-daw"
+name = "DAW"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "The DAW view: a setlist or a song entered into Session's shell, its songs' sessions open in Studio's engine, transport and all; Back returns to the library."
+authors = ["FastTrackStudios"]
+
+[entry]
+# bin/studio-daw: `cargo build -p studio-daw --bin studio-daw`.
+path = "bin/studio-daw"
+
+[source]
+git = "https://github.com/FastTrackStudios/studio"
+rev = "main"
+path = "features/studio-daw"
+
+[capabilities]
+# The note and its songs' notes (VAULT_READ), the vault's root
+# (VAULT_STATUS), the view (EXT_VIEW_OPEN), Back (WORKSPACE_ZOOM,
+# WORKSPACE_CLOSE).
+actions = ["VAULT_READ", "VAULT_STATUS", "EXT_VIEW_OPEN", "WORKSPACE_LAYOUT", "WORKSPACE_ZOOM", "WORKSPACE_CLOSE"]
+effect = "mutating"
+reads = ["documents"]
+# The sessions are files on this device (a song's `session:`), opened by
+# the engine, which this extension starts.
+folders = ["~"]
+
+[[actions]]
+id = "STUDIO_DAW_ENTER"
+name = "Enter the DAW"
+description = "Enters the DAW view on `note` (a setlist's or a song's vault path; none: the note on show): the songs' sessions (each song note's `session:` property: an absolute or `~` path, a path relative to the song's note, or a wiki-link into the vault) opened as the set in Studio's engine, in running order, and Session's shell zoomed over the workspace. Answers the sessions opened and the songs that have none."
+group = "DAW"
+effect = "mutating"
+params = '{"type":"object","properties":{"note":{"type":"string"}}}'
+
+[[actions]]
+id = "STUDIO_DAW_LEAVE"
+name = "Leave the DAW"
+description = "Leaves the DAW view for the library: the transport stopped, the view closed. The engine keeps running (its set stays open) for the next entry."
+group = "DAW"
+effect = "mutating"
+
+[[views]]
+id = "daw"
+title = "DAW"
+icon = "audio-lines"
+placement = "zoomed"
+
+# A `.session` opened from the navigator enters it.
+[[openers]]
+id = "session"
+title = "Studio session"
+files = ["*.session"]
+action = "STUDIO_DAW_ENTER"
+
+# A setlist note's DAW tab beside Setlist, Chart, Lyrics and Lighting.
+[[favourites]]
+note_type = "setlist"
+
+[[favourites.tabs]]
+id = "daw"
+label = "DAW"
+icon = "audio-lines"
+target = { action = "STUDIO_DAW_ENTER" }
+
+[[favourites]]
+note_type = "song"
+
+[[favourites.tabs]]
+id = "daw"
+label = "DAW"
+icon = "audio-lines"
+target = { action = "STUDIO_DAW_ENTER" }

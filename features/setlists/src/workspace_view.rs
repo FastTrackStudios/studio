@@ -89,7 +89,7 @@ pub fn page_sources(song: &Song) -> Vec<String> {
 
 /// Engrave `text`: the song, its pages as images, and its chart's lyric
 /// lane as LRC.
-fn engrave(text: &str) -> Result<(Song, Vec<String>, Option<String>), String> {
+pub fn engrave(text: &str) -> Result<(Song, Vec<String>, Option<String>), String> {
     let song = Song::engrave(text).map_err(|e| e.to_string())?;
     let pages = page_sources(&song);
     let lane = crate::follow::chart_lrc(text).ok().flatten();
@@ -137,7 +137,7 @@ fn start(reply: UnboundedSender<Reply>) -> std::sync::mpsc::Sender<String> {
 }
 
 /// A wait of `d`, natively on a timer thread, on a page the browser's.
-async fn sleep(d: Duration) {
+pub async fn sleep(d: Duration) {
     #[cfg(not(target_arch = "wasm32"))]
     futures_timer::Delay::new(d).await;
     #[cfg(target_arch = "wasm32")]
@@ -159,9 +159,9 @@ fn ticks(every: Duration) -> futures_channel::mpsc::UnboundedReceiver<()> {
 /// resizes when a divider or the window moves, and nothing says so). Stays
 /// (0, 0) where a view cannot measure (a process view drawn remotely).
 /// A node to measure, once mounted.
-type Node = Signal<Option<Rc<MountedData>>>;
+pub type Node = Signal<Option<Rc<MountedData>>>;
 
-fn use_measured() -> (Signal<(f64, f64)>, Node) {
+pub fn use_measured() -> (Signal<(f64, f64)>, Node) {
     let mut size = use_signal(|| (0.0_f64, 0.0_f64));
     let node = use_signal(|| None::<Rc<MountedData>>);
     use_future(move || async move {
@@ -286,7 +286,7 @@ const fn stacked(p: Pane) -> &'static str {
 }
 
 /// `seconds` as `m:ss`.
-fn clock_text(seconds: f64) -> String {
+pub fn clock_text(seconds: f64) -> String {
     let whole = seconds.max(0.0).floor();
     let minutes = (whole / 60.0).floor();
     format!("{minutes:.0}:{:02.0}", minutes.mul_add(-60.0, whole))
@@ -447,7 +447,12 @@ fn same_box(a: &PlacedBar, b: &PlacedBar) -> bool {
 /// The song's progress: its parts, coloured, the playhead through them;
 /// a click on a part plays from it. Session's progress bar.
 #[component]
-fn Progress(song: Option<Engraved>, now: f64, on_seek: EventHandler<f64>, labels: bool) -> Element {
+pub fn Progress(
+    song: Option<Engraved>,
+    now: f64,
+    on_seek: EventHandler<f64>,
+    labels: bool,
+) -> Element {
     let Some(Engraved(song, _)) = song else {
         return rsx! { div { style: "height:56px;" } };
     };
@@ -489,21 +494,21 @@ fn Progress(song: Option<Engraved>, now: f64, on_seek: EventHandler<f64>, labels
 /// remotely).
 #[derive(Clone, PartialEq, Eq)]
 pub struct Palette {
-    desk: String,
-    sheet: String,
-    ink: String,
-    ink_2: String,
-    rule: String,
-    pill: String,
-    brand: String,
-    brand_ink: String,
-    danger: String,
+    pub desk: String,
+    pub sheet: String,
+    pub ink: String,
+    pub ink_2: String,
+    pub rule: String,
+    pub pill: String,
+    pub brand: String,
+    pub brand_ink: String,
+    pub danger: String,
     /// The sheet is light: the editor's syntax colours for it.
-    light: bool,
+    pub light: bool,
 }
 
 impl Palette {
-    fn of(r: &architect_theme::Resolved) -> Self {
+    pub fn of(r: &architect_theme::Resolved) -> Self {
         let v = |token: &str| format!("var(--{token}, {})", r.value(token));
         Self {
             desk: v("desk"),
@@ -528,7 +533,7 @@ impl Palette {
         )
     }
 
-    fn button(&self) -> String {
+    pub fn button(&self) -> String {
         format!(
             "display:flex; align-items:center; justify-content:center; gap:4px; height:22px; \
              min-width:22px; padding:0 8px; border-radius:5px; border:1px solid {}; \
@@ -541,7 +546,7 @@ impl Palette {
 /// `lyrics` as the panel shows them, against `song`'s parts when it is
 /// engraved; without a chart, the whole song as one part, so the lines
 /// still show and follow.
-fn words_of(
+pub fn words_of(
     lyrics: Option<&LyricsSource>,
     song: Option<&Song>,
     title: &str,
@@ -581,7 +586,7 @@ fn words_of(
 }
 
 /// How long the last lyric line is held without a chart to end it.
-const LAST_LINE_HOLD: f64 = 6.0;
+pub const LAST_LINE_HOLD: f64 = 6.0;
 
 /// What a reply to an edit leaves the workspace saying.
 fn note(status: &mut Signal<(ChartTextStatus, String)>, kind: ChartTextStatus, text: String) {

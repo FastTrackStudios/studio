@@ -1,0 +1,67 @@
+[package]
+name = "studio-peers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Studio engines as peers of one account: found and admitted through Architect's devices (the account pass, iroh on the LAN), each saying what it runs, any one following another's song and transport, the rig books synced between them"
+
+# docs/design/peers.md. The default set is the wire (`StudioPeer`, what an
+# engine runs and what it plays now) and the follow rules (`follow`), pure
+# and wasm-clean. `mesh` (native) is the node: an iroh endpoint on the
+# account's mesh, the account pass, the gated router each admitted peer
+# gets, the rig books' peer sync and following a peer.
+
+[lints]
+workspace = true
+
+[features]
+default = ["vox"]
+# The wire's clients and dispatchers (the rpc macro gates them on it).
+vox = []
+mesh = [
+    "vox",
+    "dep:architect-devices",
+    "architect-devices/account",
+    "architect-devices/iroh",
+    "dep:architect-permissions",
+    "dep:auth-proto",
+    "dep:crdt",
+    "crdt/vox",
+    "dep:iroh",
+    "dep:tokio",
+    "dep:uuid",
+    "dep:vox-core",
+    "architect/iroh",
+    "architect/iroh-lan",
+    "architect/connect",
+    "architect/platform",
+]
+
+[dependencies]
+architect = { workspace = true, features = ["vox"] }
+vox = { workspace = true }
+vox-core = { workspace = true, optional = true }
+facet.workspace = true
+tracing.workspace = true
+architect-devices = { workspace = true, optional = true }
+architect-permissions = { workspace = true, optional = true }
+auth-proto = { workspace = true, optional = true }
+crdt = { workspace = true, optional = true }
+iroh = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["sync", "time", "macros", "rt"] }
+uuid = { workspace = true, optional = true }
+
+[dev-dependencies]
+studio-peers = { path = ".", features = ["mesh"] }
+architect = { workspace = true, features = ["vox", "local", "iroh"] }
+auth = { workspace = true, features = ["backend-db", "vox"] }
+crdt = { workspace = true, features = ["vox"] }
+chrono.workspace = true
+sea-orm.workspace = true
+sea-orm-migration.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+auth-proto.workspace = true
+iroh.workspace = true
+uuid = { workspace = true, features = ["v4"] }

@@ -19,6 +19,12 @@ pub fn connect(handle: Handle) {
     *HANDLE.lock().unwrap_or_else(PoisonError::into_inner) = Some(handle);
 }
 
+/// The setlists extension's own handle, once it runs.
+#[must_use]
+pub fn current() -> Option<Handle> {
+    handle()
+}
+
 fn handle() -> Option<Handle> {
     HANDLE
         .lock()
@@ -33,6 +39,16 @@ fn handle() -> Option<Handle> {
 /// The extension is not running, or the action refused.
 pub async fn run(action: &str, args: Value) -> Result<Value, String> {
     let h = handle().ok_or("the setlists extension is not running")?;
+    run_on(&h, action, args).await
+}
+
+/// Runs app action `action` with `args` as the extension `h` is (another
+/// Studio extension reading a song: `studio-chart`, `studio-lyrics`).
+///
+/// # Errors
+///
+/// The action refused.
+pub async fn run_on(h: &Handle, action: &str, args: Value) -> Result<Value, String> {
     h.host(HostRequest::Run {
         action: action.to_owned(),
         args,
@@ -116,7 +132,7 @@ pub fn rows_of(out: &Value) -> Vec<Row> {
 }
 
 /// The base every song is in.
-pub const SONGS_BASE: &str = "filters:\n  and:\n    - type == \"song\"\nviews:\n  - type: table\n    name: Songs\n    order:\n      - file.name\n      - title\n      - key\n      - tempo\n      - meter\n      - categories\n      - artist\n      - arrangements\n      - media\n";
+pub const SONGS_BASE: &str = "filters:\n  and:\n    - type == \"song\"\nviews:\n  - type: table\n    name: Songs\n    order:\n      - file.name\n      - title\n      - key\n      - tempo\n      - meter\n      - categories\n      - artist\n      - arrangements\n      - media\n      - length\n      - key_end\n      - key_outside\n";
 
 /// The base every setlist is in.
 pub const SETLISTS_BASE: &str = "filters:\n  and:\n    - type == \"setlist\"\nviews:\n  - type: table\n    name: Setlists\n    order:\n      - file.name\n      - title\n      - date\n      - songs\n      - sets\n      - share\n";
@@ -334,7 +350,17 @@ pub async fn setlists() -> Result<Vec<SetlistRow>, String> {
 ///
 /// `VAULT_STATUS` refused or named no folder.
 pub async fn vault_root() -> Result<String, String> {
-    let out = run("VAULT_STATUS", json!({})).await?;
+    let h = handle().ok_or("the setlists extension is not running")?;
+    vault_root_on(&h).await
+}
+
+/// [`vault_root`] as the extension `h` is.
+///
+/// # Errors
+///
+/// `VAULT_STATUS` refused or named no folder.
+pub async fn vault_root_on(h: &Handle) -> Result<String, String> {
+    let out = run_on(h, "VAULT_STATUS", json!({})).await?;
     out.get("root")
         .and_then(Value::as_str)
         .map(|r| r.trim_end_matches('/').to_owned())
@@ -343,12 +369,17 @@ pub async fn vault_root() -> Result<String, String> {
 
 /// File `path` of the vault (a vault path: `Libraries/…/Song.kf`) on disk.
 async fn vault_file(path: &str) -> Result<String, String> {
+    let h = handle().ok_or("the setlists extension is not running")?;
+    vault_file_on(&h, path).await
+}
+
+async fn vault_file_on(h: &Handle, path: &str) -> Result<String, String> {
     if path.split('/').any(|p| p == "..") {
         return Err(format!("{path}: not a vault path"));
     }
     Ok(format!(
         "{}/{}",
-        vault_root().await?,
+        vault_root_on(h).await?,
         path.trim_start_matches('/')
     ))
 }
@@ -364,8 +395,28 @@ async fn vault_file(path: &str) -> Result<String, String> {
 ///
 /// The host refused or the file is not there.
 pub async fn read_vault_file(path: &str) -> Result<String, String> {
-    let file = vault_file(path).await?;
     let h = handle().ok_or("the setlists extension is not running")?;
+    read_vault_file_on(&h, path).await
+}
+
+/// [`read_vault_file`] as the extension `h` is (its `capabilities.folders`).
+///
+/// # Errors
+///
+/// The host refused or the file is not there.
+pub async fn read_vault_file_on(h: &Handle, path: &str) -> Result<String, String> {
+    // The app's documents first (`reads = ["documents"]`): a vault's file
+    // by its vault path, wherever the vault is on disk, and in a browser
+    // (the web vault) too. Then the disk, in the folders it may reach.
+    let as_document = h
+        .host(HostRequest::ReadDocument {
+            path: path.trim_start_matches('/').to_owned(),
+        })
+        .await;
+    if let Ok(Value::String(text)) = as_document {
+        return Ok(text);
+    }
+    let file = vault_file_on(h, path).await?;
     h.host(HostRequest::ReadFile { path: file })
         .await
         .map_err(|e| e.to_string())?
@@ -447,12 +498,23 @@ pub async fn link_on_path(path: &str) -> Result<Option<String>, String> {
 ///
 /// The person did not pick it, or the host cannot ask.
 pub async fn allow_vault() -> Result<(), String> {
-    use architect_extensions::hostcall::{Pick, PickKind};
-    let root = vault_root().await?;
     let h = handle().ok_or("the setlists extension is not running")?;
+    allow_vault_on(&h, "Allow Setlists to save charts in this vault").await
+}
+
+/// [`allow_vault`] for the extension `h` is, asking with `title` (Chart and
+/// Lyrics read a song's `.kf` and `.lrc` from a vault outside the folders
+/// they may reach).
+///
+/// # Errors
+///
+/// The person did not pick it, or the host cannot ask.
+pub async fn allow_vault_on(h: &Handle, title: &str) -> Result<(), String> {
+    use architect_extensions::hostcall::{Pick, PickKind};
+    let root = vault_root_on(h).await?;
     h.host(HostRequest::Pick(Pick {
         kind: PickKind::Folder,
-        title: Some("Allow Setlists to save charts in this vault".to_owned()),
+        title: Some(title.to_owned()),
         folder: Some(root),
         ..Pick::default()
     }))

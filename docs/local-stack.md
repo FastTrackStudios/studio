@@ -1,97 +1,184 @@
 # Run it all locally
 
-Studio's share page, its extensions, the issuer, the web app and the site,
-on one machine, nothing from the network at run time. Change Studio,
-Keyflow or Architect and see it in a browser (or on your phone) in
-seconds, before anything is merged, tagged or deployed.
+ONE command brings up the whole local setup — the Studio engine, Studio
+(the app, its own server), and Studio Web — rebuilt on every save:
 
 ```sh
-just dev       # everything, rebuilt on save
-just demo      # the quickest look: issuer + node + share link, nothing watched
-just website   # the public site (Architect's apps/site), hot reload
-just phone     # the running node on your tailnet over HTTPS, for a phone
+devenv up        # or: just dev
+just up          # the same, as a systemd user unit that survives its terminal
+just down        # stop that unit
+just dev-status  # what runs, the share link
+just dev-sync    # the vault copy, again from its source (`just dev-sync watch` follows it)
+just phone       # Studio Web on your tailnet over HTTPS, for a phone
 ```
 
-The same three recipes mean the same in Architect and Keyflow: standing
-there, `just dev` runs this stack with that checkout as the local piece.
-`devenv up` (processes in `devenv.nix`) is the engine underneath;
-`scripts/local-stack.sh` is each process, `local-stack.toml` its settings.
+## What `devenv up` starts
 
-## What `just dev` starts
+Three processes (`devenv.nix`, each `scripts/studio-dev.sh run <name>`),
+rebuilt on a save:
 
-| Process | URL | What it is |
+| Process | Where | What it is |
 | --- | --- | --- |
-| `mock-oauth` | http://127.0.0.1:7420 | Architect's stand-in for GitHub, Google and TONE3000 |
-| `auth` | http://127.0.0.1:7421 | Architect's auth server: the fixed dev cast (`ada@local.test`, `grace@local.test`, `alan@local.test`; password `development-password`), never a mirror of production |
-| `node` | http://127.0.0.1:7422 | Studio Architect's headless node (`studio-architect serve`) built from this tree, its island beside it as the release ships it, signed in to the local issuer as Ada, hosting `acme` with a **copy** of the test vault and a share link of its setlist |
-| `web` | http://127.0.0.1:7423/app/ | Architect's web app with Studio Architect's `distribution.json`, its issuer the local one |
-| `site` | http://127.0.0.1:7424 | Architect's public site (`apps/site`), Vite with hot reload |
-| `desktop` | a window | Studio Architect's app, off unless `just dev desktop=on` |
+| `engine` | its Action List on http://127.0.0.1:47821/mcp | **The Studio engine**, headless (`studio engine`, from a stable copy of the `studio` binary). Every window attaches to it (`FTS_ENGINE=attach`), so a rebuild of a window never takes the audio down. When it is up it opens `[studio] open` (`studio open`) |
+| `studio` | a window; its server on http://127.0.0.1:7412 | **Studio**: Studio Architect (`apps/architect`: Architect with Studio's extensions, Lighting and the DAW view linked in), `dx serve -p studio-architect --platform desktop --renderer native --profile desktop-dev --target <host>`. It is the server too (`STUDIO_SERVE=1`: its node runs in the app's process, holding a copy of the test vault and its share link) |
+| `web` | http://127.0.0.1:7413/app/ | **Studio Web**: Architect's web app under `dx serve --platform web` (`cargo xtask dev run web` in the Architect checkout, as Architect's own dev runs it), with Studio Architect's `distribution.json`. Its dev server proxies the node's paths (`/s`, `/vox`, `/org`, `/node`, `/_ext`; WebSockets too) to Studio |
+| `studio-desktop-legacy` | a window, **off** | TEMPORARY: the old Studio window (`studio-desktop`, the DAW view), attached to the same engine, opening `[studio] open`, until Studio desktop is merged into Studio Architect (the DAW view becomes the view you enter inside it). `devenv up engine studio studio-desktop-legacy web` adds it |
 
-The share link is fixed, so it is the same on every start and machine:
+A share link is the web app's page (Architect #646): the node answers
+`/s/<code>/` with a page that loads `/app/start.js` and the app's bundle
+from its own origin. Opened on Studio Web's origin, it gets both: the page
+from Studio (proxied), the app from dx. That is the same-origin
+pair Architect's dev uses (its `apps/web/Dioxus.toml`); the node is told so
+with `ARCHITECT_WEB_APP=beside`. The share link (`just dev-status`, the
+studio process's log):
 
 ```
-http://127.0.0.1:7422/s/merrybrightstack/setlists/merry-bright--cbu-christmas-2026/
+http://127.0.0.1:7413/s/<share_code>/<setlist page>/
 ```
 
-The node's log prints it when the node is up; `just dev-status` prints it,
-the versions and every URL. The test vault is
-`../setlists/merry-and-bright/vault` (`[vault]` in `local-stack.toml`,
-`LOCAL_STACK_VAULT` names another); the stack copies it once into its
-state and writes the share note there, so nothing done while testing
-reaches the source. Without it the node holds Architect's demo seed
-(setlist Fall Show, `/s/ksqx75iaaaaaaaae/`).
+There is no issuer: Studio runs signed out, on its local vault, and
+a share link needs no account. Signing in to the web app is not covered
+(its `config.json` names Architect's dev issuer, which this stack does not
+run; `just dev-legacy` does).
 
-The issuer, the node's environment, its sign-in and the guard that keeps
-everything on loopback are Architect's own `cargo xtask dev`, run from the
-Architect checkout the stack resolves, given this stack's ports and state.
-Nothing of it is copied here.
+**The engine.** The engine and every window of the stack use the XDG
+data/config home in `[studio] profile` (default: the stack's own, under
+`.devenv/state/studio-dev/profile`): the engine registers there, so the
+stack's windows find it and never the engine of a Studio started some
+other way (and that one never finds the stack's). The `engine` process
+refuses to start when an engine already runs in that profile. Its Action
+List is on `[studio] engine_mcp_port` (47821), apart from a normal
+Studio's 47811. Stopping the stack (`just down`, or Ctrl-C) stops it.
 
-## Which pieces are local
+**Lighting** is a Studio extension (`ignition`), not a process of the
+stack: it comes up inside Studio (⌘K "Lighting: show the room")
+and runs its own renderer (`ignition --process-view`, built by the stack:
+`IGNITION_BIN`). Its settings (`ignition.*`, Settings → Lighting) say what
+it runs; `[studio] live_set` is its live set while `ignition.live_set` is
+empty.
 
-Studio is always this tree. Architect and Keyflow are pinned (the tags
-`Cargo.lock` names) unless you say otherwise:
+## This machine's settings: `local-stack.local.toml`
+
+Which vault, setlist and share link, which set Studio opens, and whether
+Architect and Keyflow are local go in `local-stack.local.toml` beside
+`local-stack.toml` (gitignored): any table or key of `local-stack.toml`,
+merged over it. Never edit the committed file for a machine's choice. The
+`LOCAL_STACK_*` variables (`LOCAL_STACK_VAULT`, `LOCAL_STACK_SETLIST`,
+`LOCAL_STACK_SHARE_CODE`, `LOCAL_STACK_OPEN`, `LOCAL_STACK_LIVE_SET`,
+`LOCAL_STACK_PROFILE_DIR`, `LOCAL_STACK_ARCHITECT_PATH`, …) win over both,
+but a bare `devenv up` from a unit does not see a shell's variables: put
+lasting choices in the file.
+
+```toml
+# local-stack.local.toml
+[choose]
+architect = "local"        # Lighting and STUDIO_SERVE need Architect's main
+keyflow = "local"
+
+[sources]
+architect = "/run/media/Development/architect"
+keyflow = "/run/media/Development/fts/keyflow"
+
+[vault]
+source = "/run/media/Development/fts-dev/recital/vault"
+setlist = "Setlists/JT's Senior Recital.md"
+share_code = "jtsrecitazxmas26"
+
+[studio]
+profile = "/run/media/Development/fts-dev/recital/profile"
+open = "/run/media/Development/fts-dev/recital/songs/JT's Senior Recital.setlist"
+live_set = "/run/media/Development/fts-dev/recital/show/Sr. Recital Showcase Project/Sr. Recital Showcase.als"
+```
+
+**The vault** is a COPY of `[vault] source`, made once into the stack's
+state (`.devenv/state/studio-dev/vault`), so nothing done while testing
+reaches the source. Studio opens it and its node serves it, with
+the share link of `[vault] setlist` (`share_code`, fixed: the link is the
+same on every start). The source changes while you work: `just dev-sync`
+copies it again (what changed comes in, what was deleted goes; what
+Architect keeps in the vault, `_architect/` and `.architect/`, stays), and
+`just dev-sync watch` keeps following it. `just dev-reset` drops the whole
+state (stop the stack first).
+
+**A local Architect or Keyflow** goes under the build as a `[patch]` in a
+generated cargo config (`.devenv/state/studio-dev/overrides.toml`, passed
+to dx as `--cargo-args=--config=…`), never in `Cargo.toml`. Cargo
+writes the patched sources into `Cargo.lock` while it builds; every build
+of the stack puts the committed lock back (`studio`: when dx stops). Studio Web runs from
+that Architect checkout (or a clone at the pinned tag), its builds in this
+checkout's `target/local-stack/architect/target`.
+
+## Surviving the terminal: `just up`
+
+A process started from a terminal or an agent's shell dies with it (an
+agent host restart once stopped everything). `just up` runs `devenv up` as
+a systemd user unit instead:
 
 ```sh
-just dev                                   # Studio's tree; Architect, Keyflow pinned
-just dev keyflow=local                     # + ../keyflow
-just dev architect=local                   # + ../architect
-just dev architect=local keyflow=local     # all three
-just dev keyflow=/path/to/keyflow          # any checkout
-just dev desktop=on watch=off              # the window; no rebuilds
+systemd-run --user --unit=studio-dev --collect --same-dir --setenv=PATH="$PATH" "$(command -v devenv)" up
 ```
 
-`local` means the sibling checkout (`[sources]` in `local-stack.toml`,
-tried from this checkout, then from the main checkout of a worktree;
-`LOCAL_STACK_ARCHITECT_PATH` / `LOCAL_STACK_KEYFLOW_PATH` name another).
-When it is missing the stack says so and keeps the pinned tag.
+It takes the user manager's environment (`WAYLAND_DISPLAY`, `DISPLAY`, the
+session bus), which is what the windows need: nothing there is overridden.
+`journalctl --user -fu studio-dev` follows it, and each process logs to
+`.devenv/run/processes/logs/<name>.std{out,err}.log` (`devenv processes
+list` sees only a detached `devenv up -d`, not this one). `just down` stops
+it, engine and all.
 
-A local checkout goes under the build as a `[patch]` in a generated cargo
-config (`.devenv/state/local-stack/overrides.toml`, passed with
-`--config`), never in `Cargo.toml`. Cargo writes the patched sources into
-`Cargo.lock` while it builds; the stack puts the committed lock back after
-every build (do not edit `Cargo.lock` while a build of the stack runs).
+## Ports and the running Architect stack
 
-**One Architect.** Studio and Keyflow must build against the same
-Architect. `architect=local` patches it for both, so a pinned Keyflow
-compiles against your Architect (v0.5.3 does against Architect's `main`
-today); if it does not, take `keyflow=local` on a branch that does.
-`keyflow=local` with a pinned Architect needs your Keyflow on the
-Architect tag Studio pins: the stack checks and stops with what to do
-when they differ.
+Studio's server is on 7412 because Architect's web app proxies the
+node's paths there (its `apps/web/Dioxus.toml`, which Studio Web runs
+from): this stack cannot run beside Architect's own dev stack (7410–7414).
+A `studio-architect-web` package with Studio's extensions and its own
+`Dioxus.toml` removes that (a gap in `docs/design/studio-in-architect.md`).
+`[studio] web_port` moves Studio Web; `STUDIO_DEV_STATE` puts a second
+stack of the same checkout in another state folder.
 
-The stack prints, at the top of every process's log, exactly what it
-runs:
+## On your phone
 
-```
-  STUDIO'S LOCAL STACK (dev; watch on; desktop off)
-  studio     THE TREE …/studio @ v26.11.3-2-g49eae882-dirty (feat/local-stack)
-  architect  LOCAL …/architect @ v0.12.5-1-g5426159d-dirty
-  keyflow    pinned v0.5.3 (b71833eddacf), Cargo.lock
-  overrides  …/.devenv/state/local-stack/overrides.toml (cargo --config; never committed)
+The share page needs a secure context (it checks the island's files with
+`crypto.subtle`), so plain `http://<lan-ip>` will not do. With the stack
+running and the phone on the same tailnet:
+
+```sh
+just phone        # prints https://<this machine>.<tailnet>.ts.net:10000/s/<code>/…
+just phone off
 ```
 
-## What a save costs
+It is `tailscale serve` of Studio Web (HTTPS with the tailnet's
+certificate, reachable from the tailnet only), never `tailscale funnel`.
+Tailscale serves HTTPS on 443, 8443 and 10000; set `[phone] https_port`
+when 10000 is taken. The first time, Tailscale may refuse a user who is not
+its operator: run `sudo tailscale set --operator=$USER` once.
+
+## The legacy stack
+
+Before Studio served itself, the stack was six processes:
+Architect's issuer (`mock-oauth`, `auth`), Studio's headless node
+(`studio-architect serve`), the static web app, a **front** (Caddy) that
+puts node and web app on one origin, and the site
+(`scripts/local-stack.sh`, `devenv --profile legacy-stack up`). It stays
+until nothing needs it:
+
+```sh
+just dev-legacy                            # all of it, rebuilt on save
+just dev-legacy architect=local keyflow=local watch=off
+just demo                                  # issuer + node + web + front, last build
+just website                               # the public site, hot reload
+just dev-smoke                             # its end-to-end check (Firefox)
+```
+
+Its share link is on the front, `http://127.0.0.1:7425/s/<code>/…`: the
+front sends `/app/*`, the bundle's `/assets/app-*` and `/auth/callback` to
+the web app and everything else, WebSockets too, to the node, which runs
+with `ARCHITECT_WEB_APP=beside`. The issuer and the node's lane are told
+the front is the web app's origin; the bundle's CSP names the local issuer
+there. It reads the same settings (`[ports]`, `[sources]`, `[vault]`,
+`[choose]`); its state is `.devenv/state/local-stack`.
+
+### What a save costs (legacy stack)
+
 
 Measured on THEBATTLESHIP on 2026-11-12, with other builds running (load
 10 to 70), the node in the `dev` profile. A one-line change, from the save
@@ -128,27 +215,12 @@ second).
 Nothing here needs a release to be seen: the share page, its player, the
 island and the charts are all built from your trees.
 
-## On your phone
+### Its phone link
 
-The share page needs a secure context (it checks the island's files with
-`crypto.subtle`), so plain `http://<lan-ip>` will not do. With the stack
-running and the phone on the same tailnet:
+`scripts/local-stack.sh phone` serves its front on the tailnet
+(`scripts/local-stack.sh phone off`), as `just phone` serves Studio Web.
 
-```sh
-just phone        # prints https://<this machine>.<tailnet>.ts.net:10000/s/merrybrightstack/…
-just phone off
-```
-
-It is `tailscale serve` (HTTPS with the tailnet's certificate, reachable
-from the tailnet only), never `tailscale funnel`. Tailscale serves HTTPS on
-443, 8443 and 10000; set `[phone] https_port` when 10000 is taken. The
-first time, Tailscale may refuse a user who is not its operator: run
-`sudo tailscale set --operator=$USER` once. The node needs no idea of its
-public name for a share page: its redirects are relative, its CSP is
-`'self'`, a link share sets no cookies. Signing in from the phone is not
-covered: the issuer and the web app stay on loopback.
-
-## Checking it
+### Checking it (legacy stack)
 
 ```sh
 just dev-smoke    # SCREENSHOTS=<dir> keeps the browser's shots at 390 px
@@ -166,14 +238,15 @@ namespace the check refuses to run.
 It is not a CI job: it needs the private test vault and a node build
 (177 s cold on THEBATTLESHIP), which no free runner has.
 
-## Running next to other work
+### Running next to other work (legacy stack)
 
-- Ports 7420 to 7424 (`local-stack.toml`, `LOCAL_STACK_PORT_<NAME>` moves
+- Ports 7420 to 7425 (`local-stack.toml`, `LOCAL_STACK_PORT_<NAME>` moves
   one) are clear of Architect's own stack (7410 to 7414), so both run at
   once.
 - State is `.devenv/state/local-stack` in this checkout: the vault copy,
   the issuer's database, the node's data, the staged node, the overrides.
-  `just dev-reset` removes it (stop the stack first).
+  `scripts/local-stack.sh reset` removes it (stop the stack first);
+  `scripts/local-stack.sh sync` copies the vault again from its source.
 - Builds go to this checkout's target dir. A local Architect's builds for
   the stack (its xtask, the issuer, the web app) go to
   `target/local-stack/architect/target`; the pinned Architect is a clone

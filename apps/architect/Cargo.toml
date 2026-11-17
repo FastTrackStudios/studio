@@ -16,8 +16,20 @@ path = "src/main.rs"
 [features]
 # The window, as the Architect app has it. Off (`--no-default-features`),
 # the binary is the headless node alone: no Blitz, wgpu or wayland in it.
-default = ["gui"]
+default = ["gui", "lighting"]
 gui = ["architect-desktop/gui"]
+# Lighting (features/lighting/pane), linked in: the show in 3D, its pane
+# drawn by `ignition --process-view` (Linux). Built in and on by default;
+# a development copy of the extension (`studio-architect extensions dev
+# <folder>`) shadows it live. Needs Architect's process views
+# (architect#641, main after v0.12.6): until the tag carries them, a
+# build against the tag turns it off (`--no-default-features --features gui`).
+lighting = ["gui", "architect-desktop/process-views", "dep:ignition-pane"]
+# The DAW view (features/studio-daw), linked in: a setlist or a song
+# entered into Session's shell, attached to the Studio engine. The binary
+# is then its own headless engine too (`--session-engine`), linked as the
+# window launches (docs/design/studio-in-architect.md).
+daw = ["gui", "dep:studio-daw"]
 
 [dependencies]
 # `vox` (the node's services) and no window, from the workspace entry.
@@ -25,12 +37,31 @@ architect-desktop = { workspace = true }
 # Song libraries and setlists, linked in (`setlists::ext::Setlists`), and
 # `share`: the renderer that draws a song's chart as Keyflow's follow SVG
 # on a share link (`setlists::share::blocks`, studio#406).
-setlists = { workspace = true, features = ["extension", "share"] }
+# `engine-clock`: Studio's playback drives the playhead the panes follow.
+setlists = { workspace = true, features = ["extension", "share", "engine-clock"] }
+# Studio's Chart and Lyrics, linked in: the song playing's chart and its
+# timed lyrics, following the playhead setlists keeps.
+studio-chart = { workspace = true }
+studio-lyrics = { workspace = true }
 # Productions in other DAWs, linked in (`productions::ext::Productions`).
 productions = { workspace = true, features = ["extension"] }
 # Studio's views and the Views toolbar that opens them, linked in
 # (`studio_views::ext::StudioViews`, studio#409).
 studio-views = { workspace = true, features = ["extension"] }
+# `dev-source`: a built-in's crate written into the app's development
+# folder for EXT_CLONE (`architect_extensions::source::write_crate`).
+architect-extensions = { workspace = true, features = ["host"] }
+# Lighting, linked in with its GPU pane (the `lighting` feature).
+ignition-pane = { workspace = true, optional = true, features = ["pane"] }
+
+# The DAW view, linked in (the `daw` feature).
+studio-daw = { workspace = true, optional = true }
+# One process-wide crypto provider: linking Session in (`daw`) switches
+# on both of rustls's backends, and rustls then refuses to pick one, so
+# main installs ring before any TLS (src/main.rs).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+# `STUDIO_SERVE=1`: the node in the window's process (src/main.rs).
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 # Its island (#445): `SiteIsland`, the node serves it; its folder is
 # checked against its lock (sha256, base64) before it is (src/island.rs).

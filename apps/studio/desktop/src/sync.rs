@@ -42,6 +42,10 @@ pub fn rig_doc_id(org: Uuid, rel: &str) -> Uuid {
 /// Start sync for this process's rigs, signed in; nothing otherwise. Call
 /// it from the engine's runtime, after `books::enable` and before the
 /// first rig makes its home.
+#[expect(
+    dead_code,
+    reason = "no Task: the books sync between the account's Studio engines (peers.rs)"
+)]
 pub async fn start() {
     let Some(account) = fts_account::signed_in() else {
         return;
@@ -79,17 +83,30 @@ pub async fn start() {
 /// The books handed out, by their doc's id: told when their doc has
 /// caught up with the account's.
 #[derive(Clone, Default)]
-struct Books(Arc<Mutex<HashMap<Uuid, std::sync::Weak<RigBook>>>>);
+pub(crate) struct Books(Arc<Mutex<HashMap<Uuid, std::sync::Weak<RigBook>>>>);
 
 impl Books {
-    fn keep(&self, id: Uuid, book: &Arc<RigBook>) {
+    pub(crate) fn keep(&self, id: Uuid, book: &Arc<RigBook>) {
         self.0
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .insert(id, Arc::downgrade(book));
     }
 
-    fn get(&self, id: Uuid) -> Option<Arc<RigBook>> {
+    /// Let every book handed out take the shipped defaults.
+    pub(crate) fn allow_all(&self) {
+        for book in self
+            .0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .values()
+            .filter_map(std::sync::Weak::upgrade)
+        {
+            book.allow_seeding();
+        }
+    }
+
+    pub(crate) fn get(&self, id: Uuid) -> Option<Arc<RigBook>> {
         self.0
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -101,7 +118,7 @@ impl Books {
 /// A rig's book may take the shipped defaults once its doc has caught up
 /// with the account's library (a session attached: the host's history is
 /// here) — never before, or they would land on top of it.
-async fn seed_when_caught_up(
+pub(crate) async fn seed_when_caught_up(
     mut events: tokio::sync::broadcast::Receiver<DocSyncEvent>,
     books: Books,
 ) {
@@ -130,7 +147,7 @@ async fn seed_when_caught_up(
 /// The book for the rig library at `dir`: its doc, made or opened in the
 /// driver (off the caller's thread: a rig makes its home from wherever it
 /// is, async or not).
-fn rig_book(
+pub(crate) fn rig_book(
     handle: &tokio::runtime::Handle,
     driver: &DocsDriver,
     files: &Files,

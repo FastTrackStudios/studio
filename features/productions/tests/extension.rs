@@ -69,7 +69,13 @@ fn app() -> App {
     architect_vault::actions::register(&app, &open).unwrap();
     let types: &'static architect_bases::model::ViewTypes =
         Box::leak(Box::new(architect_bases::model::ViewTypes::new()));
-    architect_bases::actions::register(&app, &open, types).unwrap();
+    architect_bases::actions::register(
+        &app,
+        &open,
+        types,
+        architect_bases::actions::local_queries(&open),
+    )
+    .unwrap();
 
     let list = ActionList::new();
     let host = Host::new(list.clone(), SharedSections::new(Registry::new()));

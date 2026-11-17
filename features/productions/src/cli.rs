@@ -63,7 +63,13 @@ fn connect(vault: &Path) -> Result<(), String> {
     // The list keeps the view types for as long as it runs: the process.
     let types: &'static architect_bases::model::ViewTypes =
         Box::leak(Box::new(architect_bases::model::ViewTypes::new()));
-    architect_bases::actions::register(&list, &open, types).map_err(|e| e.to_string())?;
+    architect_bases::actions::register(
+        &list,
+        &open,
+        types,
+        architect_bases::actions::local_queries(&open),
+    )
+    .map_err(|e| e.to_string())?;
     host::connect_with(Arc::new(move |action, args: Value| {
         let list = Arc::clone(&list);
         Box::pin(async move {

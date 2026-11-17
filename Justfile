@@ -24,31 +24,54 @@ default:
     @just --list --unsorted
 
 # ── Run it: the local stack (docs/local-stack.md) ─────────────────
-# The same three recipes, with the same meaning, in Studio, Architect and
-# Keyflow. `devenv up` (processes in devenv.nix, scripts/local-stack.sh)
-# is the engine underneath; `just dev-status` says what runs and where.
+# `devenv up` is the whole of it: the Studio engine, Studio (Studio Architect,
+# its own server) and Studio Web (the web app, proxied to it), dx serve;
+# what is local and which vault/set: local-stack.local.toml.
 
-# Everything locally, rebuilt on save: issuer, Studio's node + share link on the test vault, web app, site (architect=local keyflow=local desktop=on)
+# The complete local setup: the Studio engine, Studio (app + server) and Studio Web, rebuilt on save
 dev *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
-    # `just dev local` and `just dev --fresh` were the DAW loop, now `just daw-dev`.
     case " {{ARGS}} " in
         *" local "* | *" --"*)
             echo "just: the DAW loop is \`just daw-dev\` now (\`just dev\` is the local stack): running \`just daw-dev {{ARGS}}\`" >&2
             exec just daw-dev {{ARGS}} ;;
     esac
-    scripts/local-stack.sh choose mode=dev {{ARGS}}
-    # shellcheck disable=SC2046 # the process names, split on purpose
-    exec devenv up $(scripts/local-stack.sh procs)
+    exec devenv up {{ARGS}}
 
-# See it working, quickly: issuer + Studio's node on the test vault with its share link, last build, no watchers
+# `just dev` as a systemd user unit (studio-dev): survives the terminal or agent host that started it; `just down` stops it
+up:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if systemctl --user is-active --quiet studio-dev; then
+        echo "studio-dev is running: journalctl --user -fu studio-dev (just down stops it)"; exit 0
+    fi
+    # The user manager's environment (WAYLAND_DISPLAY, DISPLAY, the session
+    # bus) is the windows'; nothing is overridden here.
+    systemd-run --user --unit=studio-dev --collect --same-dir --setenv=PATH="$PATH" \
+        -p KillMode=control-group -p TimeoutStopSec=30 \
+        "$(command -v devenv)" up
+    echo "started: journalctl --user -fu studio-dev; just dev-status; just down"
+
+# Stop the systemd unit `just up` started (the engine with it)
+down:
+    systemctl --user stop studio-dev
+
+# See it working, quickly: the legacy server stack (issuer + node + web + front), last build, no watchers
 demo *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
     scripts/local-stack.sh choose mode=demo watch=off {{ARGS}}
     # shellcheck disable=SC2046
-    exec devenv up $(scripts/local-stack.sh procs)
+    exec devenv --profile legacy-stack up $(scripts/local-stack.sh procs)
+
+# The legacy stack: separate issuer, headless node, static web app, front (Caddy), site (scripts/local-stack.sh)
+dev-legacy *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    scripts/local-stack.sh choose mode=dev {{ARGS}}
+    # shellcheck disable=SC2046 # the process names, split on purpose
+    exec devenv --profile legacy-stack up $(scripts/local-stack.sh procs)
 
 # The public website (Architect's apps/site: landing, download, changelog, extensions, docs), hot reload
 website *ARGS:
@@ -56,23 +79,28 @@ website *ARGS:
     set -euo pipefail
     echo "just: the website is Architect's (apps/site); running it from the Architect the stack resolves (architect=local for your checkout)" >&2
     scripts/local-stack.sh choose mode=dev {{ARGS}}
-    exec devenv up site
+    exec devenv --profile legacy-stack up site
 
-# The running stack's node on this tailnet over HTTPS for a phone (tailscale serve, never funnel); `just phone off`
+# Studio Web on this tailnet over HTTPS for a phone (tailscale serve, never funnel); `just phone off`
 phone *ARGS:
-    scripts/local-stack.sh phone {{ARGS}}
+    scripts/studio-dev.sh phone {{ARGS}}
 
-# What the local stack runs, from where (studio/architect/keyflow versions), its URLs
+# What the local stack runs and its URLs (the share link)
 dev-status:
-    scripts/local-stack.sh status
+    @scripts/studio-dev.sh status
+    @systemctl --user is-active --quiet studio-dev && echo "  unit        studio-dev (just up)" || true
 
-# The local stack, checked end to end: share page, songs, island files, Firefox plays and the playhead moves
+# The stack's vault copy, again from the source (`just dev-sync watch` keeps following it)
+dev-sync *ARGS:
+    scripts/studio-dev.sh sync {{ARGS}}
+
+# The legacy stack, checked end to end: share page, songs, island files, Firefox plays and the playhead moves
 dev-smoke:
     scripts/local-stack.sh smoke
 
-# Remove the local stack's state (its vault copy, issuer database, staged node); stop it first
+# Remove the local stack's state (its vault copy, node data, profile); stop it first
 dev-reset:
-    scripts/local-stack.sh reset
+    scripts/studio-dev.sh reset
 
 # ── Tailwind (app UI sheet) ──────────────────────────────────────────────
 # The single compiled sheet (assets/tailwind-signal.css) is inlined by
@@ -867,6 +895,8 @@ signal-web-preview: signal-web-build
 # `just reaper log`, `just reaper daw-test [FILTER]`. Session's own REAPER
 # suites are `just reaper-test` below.
 mod reaper 'features/adapters/reaper/reaper.just'
+# Lighting (Ignition): the show runner, the recital's show, the visualizer.
+mod lighting 'features/lighting/lighting.just'
 
 # ── Build ────────────────────────────────────────────────────────────────
 
@@ -884,7 +914,7 @@ check:
 # build and run exactly these; building the workspace's ~200 crates with no
 # tests left would only link empty harnesses. Add a crate here when it gains
 # tests worth running on every change.
-test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp dioxus-test dock studio-architect patchbay patchbay-yamaha-tf"
+test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp dioxus-test dock studio-architect patchbay patchbay-yamaha-tf ignition-proto ignition-daw-proto ignition-colour ignition-rig ignition-show ignition-effects ignition-playback ignition-core ignition-dmx ignition-daw ignition-fixture"
 
 # Run the core test set (test_packages above).
 test:

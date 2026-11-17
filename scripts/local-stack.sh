@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
-# The local stack (docs/local-stack.md): Studio's node, its issuer,
-# the web app and the site on this machine, nothing from the network at
-# run time. `devenv up` runs each process through this script; the just
-# recipes (`just dev`, `just demo`, `just website`) choose what is local
-# and start it.
+# THE LEGACY LOCAL STACK (docs/local-stack.md, "The legacy stack"): Studio's
+# headless node, Architect's issuer, the static web app, the front that
+# puts node and web app on one origin, and the site, as separate
+# processes (`devenv --profile legacy-stack up`, `just dev-legacy`). The
+# local stack is now the engine, Studio and Studio Web (scripts/studio-dev.sh);
+# this stays until nothing needs it.
 #
 #   local-stack.sh choose [architect=pinned|local|PATH] [keyflow=…]
-#                         [desktop=on|off] [watch=on|off] [mode=dev|demo]
+#                         [watch=on|off] [mode=dev|demo]
 #                                         what the next `devenv up` runs
 #   local-stack.sh plan                   resolve it, write the overrides, say it
 #   local-stack.sh procs                  the devenv processes the choice starts
-#   local-stack.sh run mock-oauth|auth|node|web|site|desktop
+#   local-stack.sh run mock-oauth|auth|node|web|front|site
 #                                         one process, as devenv.nix starts it
 #   local-stack.sh status                 what runs, from where, the URLs
-#   local-stack.sh phone [off]            the node on the tailnet over HTTPS
+#   local-stack.sh sync [watch]           the vault copies, again from the source
+#   local-stack.sh phone [off]            the front on the tailnet over HTTPS
 #   local-stack.sh smoke                  the stack, checked end to end
 #   local-stack.sh reset                  remove the stack's state
+#
+# Settings: local-stack.toml, with this machine's local-stack.local.toml
+# (gitignored; `LOCAL_STACK_LOCAL` names another) merged over it, and the
+# LOCAL_STACK_* variables over both.
 #
 # What is Architect's stays Architect's: mock-oauth, the auth server, the
 # node's environment, its sign-in and the guard are `cargo xtask dev run`
@@ -40,18 +46,30 @@ devenv_state="$root/.devenv/state"
 if [ "${DEVENV_ROOT:-}" = "$root" ] && [ -n "${DEVENV_STATE:-}" ]; then
     devenv_state="$DEVENV_STATE"
 fi
-state="$devenv_state/local-stack"
+# `LOCAL_STACK_STATE` puts a second stack of this checkout beside the first.
+state="${LOCAL_STACK_STATE:-$devenv_state/local-stack}"
 mkdir -p "$state"
 
 say() { printf 'local-stack: %s\n' "$*" >&2; }
 die() { say "$*"; exit 1; }
 py() { python3 "$root/scripts/local-stack.py" "$@"; }
+py_local() { echo "${LOCAL_STACK_LOCAL:-$root/local-stack.local.toml}"; }
+
+# A setting: the variable VAR when set, else KEY (local-stack.local.toml
+# over local-stack.toml), else DEFAULT.
+setting() {
+    local var="$1" key="$2"
+    if [ -n "${!var:-}" ]; then echo "${!var}"; else py get "$key" "${@:3}"; fi
+}
 
 port() {
-    local name="$1" var
-    var="LOCAL_STACK_PORT_$(tr '[:lower:]' '[:upper:]' <<<"$name")"
-    echo "${!var:-$(py get "ports.$name")}"
+    local name="$1"
+    setting "LOCAL_STACK_PORT_$(tr '[:lower:]' '[:upper:]' <<<"$name")" "ports.$name"
 }
+
+# The one origin a browser uses: the front (the node, with the web app
+# beside it at /app/).
+origin() { echo "http://127.0.0.1:$(port front)"; }
 
 target_dir() {
     [ -n "${_target:-}" ] || _target="$(cargo metadata --format-version 1 --no-deps --offline 2>/dev/null \
@@ -79,36 +97,39 @@ locate() {
 choice_file="$state/choice.env"
 
 choose() {
-    local architect=pinned keyflow=pinned desktop=off watch=on mode=dev arg key value
+    local architect keyflow watch mode=dev arg key value
+    architect="$(py get choose.architect pinned)"
+    keyflow="$(py get choose.keyflow pinned)"
+    watch="$(py get choose.watch on)"
     for arg in "$@"; do
         [ -n "$arg" ] || continue
         key="${arg%%=*}"
         value="${arg#*=}"
-        [ "$key" != "$arg" ] || die "\`$arg\`: give key=value (architect=local, keyflow=pinned, desktop=on, watch=off)"
+        [ "$key" != "$arg" ] || die "\`$arg\`: give key=value (architect=local, keyflow=pinned, watch=off)"
         case "$key" in
             architect) architect="$value" ;;
             keyflow) keyflow="$value" ;;
-            desktop) desktop="$value" ;;
             watch) watch="$value" ;;
             mode) mode="$value" ;;
-            *) die "unknown choice \`$key\` (architect, keyflow, desktop, watch, mode)" ;;
+            *) die "unknown choice \`$key\` (architect, keyflow, watch, mode; the windows are Studio now: just dev)" ;;
         esac
     done
-    for v in "$desktop" "$watch"; do
-        case "$v" in on | off) ;; *) die "\`$v\`: on or off" ;; esac
-    done
+    case "$watch" in on | off) ;; *) die "\`$watch\`: on or off" ;; esac
     case "$mode" in dev | demo) ;; *) die "mode: dev or demo" ;; esac
     {
         printf 'c_architect=%q\n' "$architect"
         printf 'c_keyflow=%q\n' "$keyflow"
-        printf 'c_desktop=%q\n' "$desktop"
         printf 'c_watch=%q\n' "$watch"
         printf 'c_mode=%q\n' "$mode"
     } >"$choice_file"
 }
 
+# The last choice; before any, local-stack(.local).toml's [choose].
 load_choice() {
-    c_architect=pinned c_keyflow=pinned c_desktop=off c_watch=on c_mode=dev
+    c_architect="$(py get choose.architect pinned)"
+    c_keyflow="$(py get choose.keyflow pinned)"
+    c_watch="$(py get choose.watch on)"
+    c_mode=dev
     # shellcheck source=/dev/null
     [ -f "$choice_file" ] && . "$choice_file"
     return 0
@@ -117,11 +138,9 @@ load_choice() {
 procs() {
     load_choice
     if [ "$c_mode" = demo ]; then
-        echo "mock-oauth auth node"
-    elif [ "$c_desktop" = on ]; then
-        echo "mock-oauth auth node web site desktop"
+        echo "mock-oauth auth node legacy-web front"
     else
-        echo "mock-oauth auth node web site"
+        echo "mock-oauth auth node legacy-web front site"
     fi
 }
 
@@ -135,9 +154,9 @@ local_source() {
         pinned) return 0 ;;
         local)
             var="LOCAL_STACK_$(tr '[:lower:]' '[:upper:]' <<<"$name")_PATH"
-            path="$(locate "${!var:-$(py get "sources.$name")}")"
+            path="$(locate "$(setting "$var" "sources.$name")")"
             if [ -z "$path" ] || [ ! -f "$path/Cargo.toml" ]; then
-                say "NOTICE: $name=local, but there is no $name checkout at ${!var:-$(py get "sources.$name")} (from $root or $(main_checkout)): $name stays at the tag Studio pins"
+                say "NOTICE: $name=local, but there is no $name checkout at $(setting "$var" "sources.$name") (from $root or $(main_checkout)): $name stays at the tag Studio pins"
                 return 0
             fi
             echo "$path"
@@ -163,7 +182,7 @@ pinned_architect() {
     if [ ! -d "$src/.git" ] || [ "$(git -C "$src" rev-parse HEAD 2>/dev/null)" != "$rev" ]; then
         rm -rf "$src"
         mkdir -p "$(dirname "$src")"
-        sibling="$(locate "${LOCAL_STACK_ARCHITECT_PATH:-$(py get sources.architect)}")"
+        sibling="$(locate "$(setting LOCAL_STACK_ARCHITECT_PATH sources.architect)")"
         if [ -n "$sibling" ] && git -C "$sibling" cat-file -e "$rev^{commit}" 2>/dev/null; then
             say "the pinned Architect ($tag): a clone of $sibling sharing its objects"
             git clone --quiet --shared --no-checkout "$sibling" "$src" >&2
@@ -244,7 +263,9 @@ load_plan() {
     . "$state/plan.env"
 }
 
-share_code() { py get vault.share_code; }
+share_code() { setting LOCAL_STACK_SHARE_CODE vault.share_code; }
+vault_source() { setting LOCAL_STACK_VAULT vault.source ''; }
+vault_setlist() { setting LOCAL_STACK_SETLIST vault.setlist; }
 
 banner() {
     load_choice
@@ -254,12 +275,14 @@ banner() {
     rule="$(printf '=%.0s' {1..72})"
     {
         echo "$rule"
-        echo "  STUDIO'S LOCAL STACK ($c_mode; watch $c_watch; desktop $c_desktop)"
+        echo "  STUDIO'S LEGACY LOCAL STACK ($c_mode; watch $c_watch)"
         echo "  studio     $studio_desc"
         echo "  architect  $arch_desc"
         echo "  keyflow    $kf_desc"
         [ -s "$overrides" ] && echo "  overrides  $overrides (cargo --config; never committed)"
         echo "  issuer     $arch_src (cargo xtask dev)"
+        echo "  vault      $(vault_source) ($(vault_setlist))"
+        [ -f "$(py_local)" ] && echo "  settings   $(py_local) over local-stack.toml"
         echo "  state      $state"
         echo "$rule"
     } >&2
@@ -351,19 +374,19 @@ node_vault() { echo "$state/stack/node/data/vaults/$vault_id"; }
 # xtask seeds Architect's demo vault.
 seed_vault() {
     local src dst setlist code out
-    src="$(locate "${LOCAL_STACK_VAULT:-$(py get vault.source)}")"
+    src="$(locate "$(vault_source)")"
     dst="$(node_vault)"
-    setlist="$(py get vault.setlist)"
+    setlist="$(vault_setlist)"
     code="$(share_code)"
     if [ -z "$src" ]; then
-        say "NOTICE: no test vault at ${LOCAL_STACK_VAULT:-$(py get vault.source)}: the node holds Architect's demo seed (setlist Fall Show, /s/ksqx75iaaaaaaaae/)"
+        say "NOTICE: no test vault at $(vault_source): the node holds Architect's demo seed (setlist Fall Show, /s/ksqx75iaaaaaaaae/)"
         echo "ksqx75iaaaaaaaae setlists/fall-show" >"$state/share"
         return 0
     fi
     if [ ! -d "$dst" ]; then
         mkdir -p "$(dirname "$dst")"
         chmod 700 "$state/stack" "$state/stack/node" "$(dirname "$(dirname "$dst")")" 2>/dev/null || true
-        say "copying the test vault $src into $dst (once; just dev-reset drops it)"
+        say "copying the test vault $src into $dst (once; just dev-sync copies it again, just dev-reset drops it)"
         cp -a --reflink=auto "$src/." "$dst.tmp/" 2>/dev/null || { mkdir -p "$dst.tmp" && cp -a --reflink=auto "$src/." "$dst.tmp/"; }
         mv "$dst.tmp" "$dst"
     fi
@@ -371,10 +394,39 @@ seed_vault() {
     echo "$code ${out#* }" >"$state/share"
 }
 
+# The share link, on the front (or ORIGIN).
 share_url() {
-    local origin="${1:-http://127.0.0.1:$(port node)}" code page
+    local origin="${1:-$(origin)}" code page
     read -r code page <"$state/share"
     echo "$origin/s/$code/$page/"
+}
+
+# The copies, again from the source: what changed there comes in, what
+# was deleted there goes, the share note is written again. What Architect
+# keeps in a vault (_architect/, .architect/) stays the copy's own.
+sync_vaults() {
+    local src dst
+    src="$(locate "$(vault_source)")"
+    [ -n "$src" ] || die "no test vault at $(vault_source)"
+    dst="$(node_vault)"
+    if [ -d "$dst" ]; then
+        rsync -a --delete --exclude=/_architect/ --exclude=/.architect/ --exclude=/.obsidian/workspace* "$src/" "$dst/"
+        say "synced $src -> $dst"
+    fi
+    [ -d "$(node_vault)" ] && seed_vault
+    return 0
+}
+
+sync_cmd() {
+    if [ "${1:-}" = watch ]; then
+        local src
+        src="$(locate "$(vault_source)")"
+        [ -n "$src" ] || die "no test vault at $(vault_source)"
+        sync_vaults
+        say "watching $src: every change is synced (Ctrl-C stops)"
+        exec cargo watch -q --postpone --delay 1 -w "$src" -s "'$self' sync"
+    fi
+    sync_vaults
 }
 
 # ── Processes ────────────────────────────────────────────────────────────
@@ -391,7 +443,9 @@ xdev() {
         DEV_STACK_PORT_MOCK_OAUTH="$(port mock_oauth)"
         DEV_STACK_PORT_AUTH="$(port auth)"
         DEV_STACK_PORT_NODE="$(port node)"
-        DEV_STACK_PORT_WEB="$(port web)"
+        # The web app's origin, to the issuer (its redirect, CORS) and the
+        # node (its lane origins): the front, where the browser has it.
+        DEV_STACK_PORT_WEB="$(port front)"
         DEV_STACK_PORT_SITE="$(port site)"
         DEV_STACK_BIN_NODE="$state/node-wrapper"
     )
@@ -423,6 +477,10 @@ write_wrapper() {
             # than that, or a release build, ignores it.
             printf 'export ARCHITECT_SITES_ASSETS_DIR=%q\n' "$arch_local/features/sites/assets"
         fi
+        # A share link opens the web app (#646): the front serves it at
+        # /app/ on the node's origin. xtask says so too, from Architect's
+        # main on; this covers an Architect from before.
+        echo 'export ARCHITECT_WEB_APP=beside'
         printf 'exec %q "$@"\n' "$state/bin/studio-architect"
     } >"$state/node-wrapper"
     chmod +x "$state/node-wrapper"
@@ -553,30 +611,46 @@ run_web() {
     (
         cd "$arch_src"
         [ -n "$issuer_target" ] && export CARGO_TARGET_DIR="$issuer_target"
-        ARCHITECT_DISTRIBUTION="$json" ARCHITECT_WEB_URL="http://127.0.0.1:$web" WASM_BINDGEN="$bindgen" \
+        ARCHITECT_DISTRIBUTION="$json" ARCHITECT_WEB_URL="$(origin)" WASM_BINDGEN="$bindgen" \
             bash scripts/web-bundle.sh "$out" >&2
     )
     printf '{"issuer":"http://127.0.0.1:%s","client_id":"architect"}' "$auth" >"$out/app/config.json"
-    say "web: http://127.0.0.1:$web/app/ (sign in as ada@local.test, password development-password)"
+    say "web: $(origin)/app/ through the front (sign in as ada@local.test, password development-password)"
     exec static-web-server --config-file "$arch_src/apps/web/sws.toml" --root "$out" --host 127.0.0.1 --port "$web"
 }
 
-run_desktop() {
-    plan_locked
-    load_plan
-    local vars=() line cfg=() bin
-    while IFS= read -r line; do vars+=("$line"); done < <(
-        cd "$arch_src" && env DEV_STACK_ROOT="$arch_src" DEV_STACK_STATE="$state/stack" DEVENV_STATE="$state" \
-            DEV_STACK_PORT_AUTH="$(port auth)" DEV_STACK_PORT_NODE="$(port node)" \
-            ${issuer_target:+CARGO_TARGET_DIR="$issuer_target"} cargo run -q -p xtask -- dev env app
-    )
-    [ -s "$overrides" ] && cfg=(--config "$overrides")
-    # Built under the overrides (and Cargo.lock put back), then run apart
-    # from them, so the node's rebuilds do not wait on the window.
-    with_overrides cargo build --profile desktop-dev -p studio-architect "${cfg[@]}"
-    bin="$(target_dir)/desktop-dev/studio-architect"
-    say "desktop: Studio Architect (the window), its issuer and org node the stack's"
-    exec env "${vars[@]}" "$bin"
+# The front: the node and the web app on one origin, as production's web
+# front end has them. A share link (/s/<code>/) is the web app's page
+# (Architect #646), loading /app/start.js and the bundle's /assets/app-*
+# from its own origin; the sign-in comes back to /auth/callback. Those go
+# to the web app, everything else (and its WebSockets) to the node.
+# Caddy, as nothing in Architect's dev stack is a front of its own there
+# (dx serve's proxy does it in the other direction).
+run_front() {
+    local cfg="$state/Caddyfile" auth
+    auth="http://127.0.0.1:$(port auth)"
+    cat >"$cfg" <<CADDY
+# Written by scripts/local-stack.sh (run front); every start writes it again.
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+http://127.0.0.1:$(port front), http://localhost:$(port front) {
+	@webapp path /app /app/* /assets/app-* /auth/callback /auth/callback/
+	handle @webapp {
+		reverse_proxy 127.0.0.1:$(port web) {
+			# The bundle's CSP names production's issuer: here, the stack's.
+			header_down Content-Security-Policy "https://auth.fasttrackstudio.app" "$auth"
+		}
+	}
+	handle {
+		reverse_proxy 127.0.0.1:$(port node)
+	}
+}
+CADDY
+    say "front: $(origin) (/app/ the web app, the rest the node)"
+    exec caddy run --config "$cfg" --adapter caddyfile
 }
 
 # ── Status, phone, reset ─────────────────────────────────────────────────
@@ -585,12 +659,12 @@ up() { curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$1/" 2>/dev/null; }
 status() {
     [ -f "$state/plan.env" ] && banner
     local name p
-    for name in mock_oauth auth node web site; do
+    for name in mock_oauth auth node web front site; do
         p="$(port "$name")"
         printf '  %-11s http://127.0.0.1:%-6s %s\n' "$name" "$p" "$(up "$p" && echo running || echo 'not running')"
     done
     [ -f "$state/share" ] && echo "  share link  $(share_url)"
-    echo "  web app     http://127.0.0.1:$(port web)/app/  (ada@local.test / development-password)"
+    echo "  web app     $(origin)/app/  (ada@local.test / development-password)"
     echo "  site        http://127.0.0.1:$(port site)/"
 }
 
@@ -602,7 +676,8 @@ phone() {
     command -v tailscale >/dev/null || die "no tailscale on this machine"
     local https name node
     https="$(py get phone.https_port)"
-    node="$(port node)"
+    # The front: the share page needs the web app beside the node.
+    node="$(port front)"
     if [ "${1:-}" = off ]; then
         tailscale serve --https="$https" off
         say "phone: off (https port $https no longer served)"
@@ -614,7 +689,7 @@ phone() {
         && ! tailscale serve status | grep -A1 "^https://$name:$https" | grep -q "127.0.0.1:$node"; then
         die "https://$name:$https already serves something else: set [phone] https_port (Tailscale serves 443, 8443, 10000)"
     fi
-    up "$node" || die "the node is not running (just dev or just demo first)"
+    up "$node" || die "the front is not running (just dev or just demo first)"
     # Tailnet only: serve, never funnel.
     local out
     if ! out="$(tailscale serve --bg --https="$https" "http://127.0.0.1:$node" 2>&1)"; then
@@ -629,7 +704,7 @@ phone() {
 }
 
 reset() {
-    if up "$(port node)" || up "$(port auth)"; then die "the stack is running: stop devenv up first"; fi
+    if up "$(port node)" || up "$(port auth)" || up "$(port front)"; then die "the stack is running: stop devenv up first"; fi
     rm -rf "$state"
     say "removed $state"
 }
@@ -645,14 +720,15 @@ case "$cmd" in
             mock-oauth) plan_locked && xdev run mock-oauth ;;
             auth) run_auth ;;
             node) run_node ;;
-            web) run_web ;;
+            web | legacy-web) run_web ;;
+            front) run_front ;;
             site) plan_locked && xdev run site ;;
-            desktop) run_desktop ;;
-            *) die "run: mock-oauth, auth, node, web, site or desktop" ;;
+            *) die "run: mock-oauth, auth, node, web, front or site" ;;
         esac
         ;;
     rebuild) load_choice && load_plan && rebuild "$@" ;;
     status) status ;;
+    sync) sync_cmd "$@" ;;
     ready)
         # devenv's readiness probe: the process answers on its port.
         case "${1:-}" in
@@ -666,9 +742,10 @@ case "$cmd" in
     reset) reset ;;
     url) share_url "$@" ;;
     _xdev) xdev "$@" ;;
+    _pinned-architect) pinned_architect ;;
     _touch-shares) touch_shares ;;
     *)
-        sed -n '2,18p' "$0" >&2
+        sed -n '2,25p' "$0" >&2
         exit 64
         ;;
 esac

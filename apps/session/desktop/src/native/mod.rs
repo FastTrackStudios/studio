@@ -357,6 +357,18 @@ pub fn prepare_hosted() -> Prepared {
     }
 }
 
+/// [`prepare_hosted`] for a host that must outlive a failed attach
+/// (Architect's DAW view, `studio-daw`): `None` when no engine could be
+/// had or the person chose to quit at the dialog, where
+/// [`prepare_hosted`] ends the process. Nothing opened by itself.
+#[must_use]
+pub fn prepare_in_host() -> Option<Prepared> {
+    prepare().map(|prepared| Prepared {
+        open: None,
+        ..prepared
+    })
+}
+
 /// Session inside another app's window: Studio's, once something on its
 /// welcome screen opened a song or a set. Takes the [`Prepared`] the host
 /// provides ([`prepare_hosted`]), else prepares as [`launch`] does (on the

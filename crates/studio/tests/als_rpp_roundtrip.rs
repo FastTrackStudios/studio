@@ -349,6 +349,7 @@ fn rpp_to_ableton(project: &dawfile_reaper::types::ReaperProject) -> AbletonLive
         locators,
         scenes: Vec::new(),
         tempo_automation,
+        time_signature_automation: Vec::new(),
         transport: TransportState::default(),
         furthest_bar: 0.0,
         groove_pool: Vec::new(),

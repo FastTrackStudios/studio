@@ -38,6 +38,32 @@ use crate::view::{
 /// ending ([`follow`]) say the engine went away.
 const CALL: Duration = Duration::from_secs(20);
 
+/// The most of the window's calls that wait on the engine at once. vox lets
+/// a connection have 64 requests in flight (the window's streams and its
+/// playheads among them) and the engine closes it on the 65th
+/// (`max_concurrent_requests exceeded`), which dropped the window when a
+/// song change made the engine slow to answer: past this many, a call waits
+/// its turn.
+const MAX_CALLS_IN_FLIGHT: usize = 40;
+
+/// The turns [`in_turn`] hands out.
+static CALLS_IN_FLIGHT: tokio::sync::Semaphore =
+    tokio::sync::Semaphore::const_new(MAX_CALLS_IN_FLIGHT);
+
+/// `call` once fewer than [`MAX_CALLS_IN_FLIGHT`] are waiting on the engine,
+/// bounded by `within`, the wait for a turn included.
+async fn in_turn<T>(
+    within: Duration,
+    call: impl std::future::Future<Output = T>,
+) -> Result<T, tokio::time::error::Elapsed> {
+    tokio::time::timeout(within, async {
+        // The semaphore is never closed: a turn always comes.
+        let _turn = CALLS_IN_FLIGHT.acquire().await.ok();
+        call.await
+    })
+    .await
+}
+
 /// How long an action may take: some run long on purpose (a quantize
 /// waits up to half a minute for the window to land its edits).
 const RUN: Duration = Duration::from_secs(120);
@@ -172,7 +198,7 @@ pub fn offer_window_actions() {
         .collect();
     let view = link.view.clone();
     rt.spawn(async move {
-        match tokio::time::timeout(CALL, view.window_actions(actions)).await {
+        match in_turn(CALL, view.window_actions(actions)).await {
             Ok(Ok(_)) => {}
             Ok(Err(e)) => tracing::warn!(error = ?e, "view link: the engine did not take the window's actions"),
             Err(_) => tracing::warn!("view link: offering the window's actions timed out"),
@@ -802,10 +828,7 @@ async fn send_edits(mut rx: watch::Receiver<Option<crate::view::EditShown>>) {
             forget_shown_edit();
             continue;
         };
-        if tokio::time::timeout(CALL, link.view.show_edit(shown))
-            .await
-            .is_err()
-        {
+        if in_turn(CALL, link.view.show_edit(shown)).await.is_err() {
             forget_shown_edit();
             tracing::warn!(
                 view.call = "show_edit",
@@ -843,8 +866,7 @@ fn take_asked(link: &Link) {
     let view = link.view.clone();
     let Some(rt) = runtime() else { return };
     rt.spawn(async move {
-        match tokio::time::timeout(CALL, view.take_window(crate::window_queue::window_name())).await
-        {
+        match in_turn(CALL, view.take_window(crate::window_queue::window_name())).await {
             Ok(Ok(asked)) => crate::window_queue::receive(asked, |id, args, ticket| {
                 run_asked(view.clone(), id.to_owned(), args.to_owned(), ticket);
             }),
@@ -896,7 +918,7 @@ fn run_asked(view: EngineViewClient, id: String, args: String, ticket: u64) {
                 json: e.to_string(),
             },
         };
-        if let Err(e) = tokio::time::timeout(CALL, view.answer(answer)).await {
+        if let Err(e) = in_turn(CALL, view.answer(answer)).await {
             tracing::warn!(action.id = %id, error = ?e, "view link: answering the engine's ask timed out");
         }
     });
@@ -965,7 +987,7 @@ where
     // polled: a scoped thread below has no span of its own, and the call's
     // trace context comes from the span it is made in.
     let bounded = tracing::Instrument::instrument(
-        async move { tokio::time::timeout(within, asked).await.ok() },
+        async move { in_turn(within, asked).await.ok() },
         tracing::info_span!("view.call", view.call = what),
     );
     // Blocking on the runtime from inside one panics: a thread of its own.
@@ -1015,8 +1037,14 @@ pub fn ran_in_window(id: &str, args: &[u8]) {
         id: id.to_owned(),
         args: String::from_utf8_lossy(args).into_owned(),
     };
+    // A notice for the engine's watchers: skipped while the window already
+    // has its most calls in flight, never queued behind them.
+    let Ok(turn) = CALLS_IN_FLIGHT.try_acquire() else {
+        return;
+    };
     let view = link.view.clone();
     rt.spawn(async move {
+        let _turn = turn;
         if tokio::time::timeout(CALL, view.ran_in_window(call))
             .await
             .is_err()
@@ -1029,7 +1057,7 @@ pub fn ran_in_window(id: &str, args: &[u8]) {
 /// The window's edits, carried out by the engine in order.
 pub async fn apply(song: String, edits: Vec<crate::engine::Edit>) -> Option<Applied> {
     let link = link()?;
-    match tokio::time::timeout(CALL, link.view.apply(EditBatch { song, edits })).await {
+    match in_turn(CALL, link.view.apply(EditBatch { song, edits })).await {
         Ok(Ok(applied)) => Some(applied),
         Ok(Err(e)) => {
             tracing::warn!(error = ?e, "view link: the engine refused the window's edits");
@@ -1064,7 +1092,7 @@ pub async fn waves_of(song: &str, items: Vec<String>) -> Option<Vec<WaveRead>> {
         song: song.to_owned(),
         items,
     };
-    match tokio::time::timeout(CALL, link.view.waves(ask)).await {
+    match in_turn(CALL, link.view.waves(ask)).await {
         Ok(read) => read.ok(),
         Err(_) => {
             tracing::warn!(
@@ -1101,7 +1129,7 @@ pub fn automation(song: &str) -> Option<AutomationRead> {
 /// `song`'s automation, awaited.
 pub async fn automation_of(song: &str) -> Option<AutomationRead> {
     let link = link()?;
-    tokio::time::timeout(CALL, link.view.automation(song.to_owned()))
+    in_turn(CALL, link.view.automation(song.to_owned()))
         .await
         .ok()?
         .ok()
@@ -1132,7 +1160,7 @@ pub fn journal_now() -> Option<u64> {
 /// What the window needs of `song` beside the facade, awaited.
 pub async fn song_facts(song: &str) -> Option<SongFacts> {
     let link = link()?;
-    tokio::time::timeout(CALL, link.view.song_facts(song.to_owned()))
+    in_turn(CALL, link.view.song_facts(song.to_owned()))
         .await
         .ok()?
         .ok()
@@ -1200,7 +1228,7 @@ impl LinkedAudio {
         let client = Self::client()?;
         let rt = runtime()?;
         let asked = call(client);
-        let bounded = async move { tokio::time::timeout(CALL, asked).await.ok().flatten() };
+        let bounded = async move { in_turn(CALL, asked).await.ok().flatten() };
         let answered = if tokio::runtime::Handle::try_current().is_err() {
             rt.block_on(bounded)
         } else {

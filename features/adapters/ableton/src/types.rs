@@ -33,6 +33,10 @@ pub struct AbletonLiveSet {
     pub scenes: Vec<Scene>,
     /// Tempo automation events.
     pub tempo_automation: Vec<AutomationPoint>,
+    /// Time-signature changes on the arrangement, `(beat, signature)` in
+    /// order. Empty when the set never changes its signature; the first
+    /// change sits at beat 0 when the automation has one.
+    pub time_signature_automation: Vec<(f64, TimeSignature)>,
     /// Transport state (loop, punch, metronome).
     pub transport: TransportState,
     /// Furthest bar position (derived from max CurrentEnd values).

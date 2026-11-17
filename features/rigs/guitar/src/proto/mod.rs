@@ -1099,7 +1099,7 @@ pub mod rig {
         Applied, Artwork, CaptureImport, CompTrace, CompositionModel, DiClip, ImportOutcome,
         LevelProgress, LibraryModel, LiveBlock, LiveNode, LocalCapture, MacroKnobView, MacroResult,
         MacroSave, MacroTune, PartOverride, PatchInfo, PerformanceModel, PresetInfo, RigStatus,
-        SetupModel, SongChange, SwitchTuning, TunerReading,
+        SetupModel, SwitchTuning, TunerReading,
     };
 
     /// One live rig change. Every variant carries **full state** (idempotent

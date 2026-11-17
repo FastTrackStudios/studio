@@ -1,0 +1,59 @@
+# Studio's Chart, an Architect extension (src/ext.rs). One Rust value
+# (`studio_chart::ext::Chart`) runs it two ways: linked into Studio
+# Architect (a built-in), and as a process (src/main.rs, [entry]), which a
+# development copy (EXT_CLONE {"id":"studio-chart"}) swaps in under the
+# same id.
+#
+# It follows the one playhead: setlists' source on `architect.playhead`
+# (a setlist's running order), driven by a running Studio engine's
+# transport, else Architect's own clock. It reads it, and seeks it, as
+# `studio.setlists`' `now` and `seek` (an extension hears only its own
+# source on the playhead), and reads the song (its note, its `.kf`) as
+# itself.
+id = "studio-chart"
+name = "Chart"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "The chart of the song playing, engraved, following the playhead bar by bar and beat by beat (an arrangement's own chart when the setlist plays one), Session's progress bar over it. A bar or a section pressed plays from there."
+authors = ["FastTrackStudios"]
+
+[entry]
+# bin/studio-chart: `cargo build -p studio-chart --bin studio-chart`.
+path = "bin/studio-chart"
+
+[source]
+git = "https://github.com/FastTrackStudios/studio"
+rev = "main"
+path = "features/chart"
+
+# Optional: without Setlists (no provider) the pane shows the song it was
+# opened on, unsynced. The song playing and where (`now`), and play from a bar (`seek`).
+[uses]
+"studio.setlists" = "^0.1"
+
+[capabilities]
+actions = ["VAULT_READ", "VAULT_STATUS", "EXT_VIEW_OPEN"]
+effect = "mutating"
+# A song's `.kf` is a file beside its note (the host's `read_file`, in the
+# vault's folder: VAULT_STATUS's root), not a note.
+folders = ["~"]
+# It reads the vault's notes (`VAULT_READ`, `BASES_ROWS`): Architect asks
+# an extension that does to say so.
+reads = ["documents"]
+# A vault elsewhere (not under the home folder): the person picks its
+# folder once a run ("Let Chart read this vault").
+ui = ["pickers"]
+
+[[actions]]
+id = "STUDIO_CHART_OPEN"
+name = "Chart: show the chart"
+description = "Opens (or focuses) the Chart pane: the chart of the song playing, following the playhead; with nothing playing, the song `note` (a song note's vault path, `#Arrangement` for one of its arrangements) when given."
+group = "Chart"
+effect = "mutating"
+params = '{"type":"object","properties":{"note":{"type":"string"}}}'
+
+[[views]]
+id = "chart"
+title = "Chart"
+icon = "file-music"

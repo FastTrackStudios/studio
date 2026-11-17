@@ -56,12 +56,21 @@ pub mod share;
 #[cfg(feature = "workspace")]
 pub mod workspace;
 
+#[cfg(all(
+    feature = "engine-clock",
+    not(any(target_arch = "wasm32", target_os = "ios"))
+))]
+pub mod engine_clock;
 #[cfg(feature = "extension")]
 pub mod ext;
 #[cfg(feature = "extension")]
 pub mod host;
 #[cfg(feature = "extension")]
 pub mod nav;
+#[cfg(feature = "extension")]
+pub mod now;
+#[cfg(feature = "extension")]
+pub mod panes;
 #[cfg(feature = "extension")]
 pub mod workspace_view;
 

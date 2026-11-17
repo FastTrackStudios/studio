@@ -46,6 +46,9 @@ pub fn parse_live_set(xml: &str) -> AbletonResult<AbletonLiveSet> {
     } else {
         (120.0, TimeSignature::default(), Vec::new())
     };
+    let time_signature_automation = master_node
+        .map(tempo::parse_time_signature_automation)
+        .unwrap_or_default();
 
     // 5. Parse tracks
     let (audio_tracks, midi_tracks, group_tracks) = child(live_set, "Tracks")
@@ -126,6 +129,7 @@ pub fn parse_live_set(xml: &str) -> AbletonResult<AbletonLiveSet> {
         locators,
         scenes,
         tempo_automation,
+        time_signature_automation,
         transport,
         furthest_bar,
         groove_pool,

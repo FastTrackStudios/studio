@@ -1,0 +1,28 @@
+[package]
+name = "studio-lyrics"
+description = "Studio's Lyrics, an Architect extension: the timed lyrics of the song playing as Session's stage display, the line sung marked, following the one playhead. Linked into Studio Architect, or run as a process extension."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+# The extension as a process (extension.toml's [entry]).
+name = "studio-lyrics"
+path = "src/main.rs"
+
+[dependencies]
+# The song's model (its one lyrics source, its sections as played) and the
+# panes' pieces: loading a song as this extension, the playhead reader.
+setlists = { workspace = true, features = ["extension"] }
+# Session's lyrics panel (what Session's Performer view draws).
+lyrics-ui = { workspace = true, features = ["view"] }
+architect-extensions = { workspace = true, features = ["guest"] }
+architect-theme = { workspace = true, features = ["dioxus"] }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

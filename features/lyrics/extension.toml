@@ -1,0 +1,57 @@
+# Studio's Lyrics, an Architect extension (src/ext.rs). One Rust value
+# (`studio_lyrics::ext::Lyrics`) runs it two ways: linked into Studio
+# Architect (a built-in), and as a process (src/main.rs, [entry]), which a
+# development copy (EXT_CLONE {"id":"studio-lyrics"}) swaps in under the
+# same id.
+#
+# It follows the one playhead: setlists' source on `architect.playhead`,
+# driven by a running Studio engine's transport, else Architect's own
+# clock, read and sought as `studio.setlists`' `now` and `seek`; it reads
+# the song (its note, its `.lrc`, its chart's sections) as itself.
+id = "studio-lyrics"
+name = "Lyrics"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "The timed lyrics of the song playing, as Session's stage display: the line sung marked, the next coming up, following the playhead. A line pressed plays from there."
+authors = ["FastTrackStudios"]
+
+[entry]
+# bin/studio-lyrics: `cargo build -p studio-lyrics --bin studio-lyrics`.
+path = "bin/studio-lyrics"
+
+[source]
+git = "https://github.com/FastTrackStudios/studio"
+rev = "main"
+path = "features/lyrics"
+
+# Optional: without Setlists (no provider) the pane shows the song it was
+# opened on, unsynced. The song playing and where (`now`), and play from a line (`seek`).
+[uses]
+"studio.setlists" = "^0.1"
+
+[capabilities]
+actions = ["VAULT_READ", "VAULT_STATUS", "EXT_VIEW_OPEN"]
+effect = "mutating"
+# A song's `.lrc` and `.kf` are files beside its note (the host's
+# `read_file`, in the vault's folder), not notes.
+folders = ["~"]
+# It reads the vault's notes (`VAULT_READ`, `BASES_ROWS`): Architect asks
+# an extension that does to say so.
+reads = ["documents"]
+# A vault elsewhere (not under the home folder): the person picks its
+# folder once a run ("Let Lyrics read this vault").
+ui = ["pickers"]
+
+[[actions]]
+id = "STUDIO_LYRICS_OPEN"
+name = "Lyrics: show the lyrics"
+description = "Opens (or focuses) the Lyrics pane: the timed lyrics of the song playing, following the playhead; with nothing playing, the song `note` (a song note's vault path) when given."
+group = "Lyrics"
+effect = "mutating"
+params = '{"type":"object","properties":{"note":{"type":"string"}}}'
+
+[[views]]
+id = "lyrics"
+title = "Lyrics"
+icon = "mic-vocal"

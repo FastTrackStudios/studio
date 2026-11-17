@@ -1,0 +1,29 @@
+[package]
+name = "studio-chart"
+description = "Studio's Chart, an Architect extension: the engraved chart of the song playing (its arrangement's own when the setlist plays one), following the one playhead bar by bar and beat by beat, Session's progress bar over it. Linked into Studio Architect, or run as a process extension."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+# The extension as a process (extension.toml's [entry]).
+name = "studio-chart"
+path = "src/main.rs"
+
+[dependencies]
+# The song's model and the panes' pieces: loading a song as this
+# extension, the engraving, the playhead reader (`studio.setlists`).
+setlists = { workspace = true, features = ["extension"] }
+architect-extensions = { workspace = true, features = ["guest"] }
+architect-theme = { workspace = true, features = ["dioxus"] }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+architect-extensions = { workspace = true, features = ["guest", "host"] }
+
+[lints]
+workspace = true

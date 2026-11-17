@@ -77,6 +77,10 @@ mod rigs;
 /// Sync after sign-in: the rig books kept in step through Task.
 #[cfg(all(feature = "doc-sync", not(target_arch = "wasm32")))]
 mod sync;
+/// This engine on the account's mesh: the account's other Studio engines,
+/// following one, the rig books synced with them directly.
+#[cfg(all(feature = "doc-sync", not(target_arch = "wasm32")))]
+mod peers;
 // Browser keys rig (/rigs/keys/:profile): the keys AudioWorklet + streamed
 // packs cached in OPFS + WebMIDI/demo MIDI. Wasm-only — the desktop app
 // plays rigs through the engine instead.

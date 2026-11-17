@@ -29,7 +29,13 @@ path = "features/setlists"
 "studio.setlists" = "0.1.0"
 
 [capabilities]
-actions = ["VAULT_", "BASES_", "SHARE_CREATE", "EXT_VIEW_OPEN"]
+# `PLAYHEAD_`: its source on Architect's playhead (the running order),
+# what its panes follow and Studio's engine moves (architect#589).
+# `STUDIO_CHART_OPEN`, `STUDIO_LYRICS_OPEN`, `IGNITION_SHOW_OPEN`: what its
+# favourites' Chart, Lyrics and Lighting tabs press (a favourite opens
+# only its own extension's views, architect#658; another's through an
+# action it may run).
+actions = ["VAULT_", "BASES_", "SHARE_CREATE", "EXT_VIEW_OPEN", "PLAYHEAD_", "STUDIO_CHART_OPEN", "STUDIO_LYRICS_OPEN", "IGNITION_SHOW_OPEN"]
 effect = "mutating"
 # A song's workspace reads its `.kf` and `.lrc` and saves an edited chart
 # back to its `.kf`: files beside the song's note, which the vault's
@@ -39,6 +45,11 @@ effect = "mutating"
 # its folder ("Allow saving", `pickers`), for the run. Until the app has
 # an action for a vault's files (FastTrackStudios/architect#492).
 folders = ["~"]
+# It reads the vault's notes (`VAULT_READ`, `BASES_ROWS`): Architect asks
+# an extension that does to say so.
+reads = ["documents"]
+# It writes setlists' notes (`VAULT_CREATE`, `VAULT_SET_PROPERTY`).
+writes = ["documents"]
 ui = ["pickers"]
 
 [[actions]]
@@ -89,6 +100,29 @@ effect = "mutating"
 params = '{"type":"object","properties":{"setlist":{"type":"string"},"audience":{"type":"string"}},"required":["setlist"]}'
 
 [[actions]]
+id = "STUDIO_SETLISTS_NOW"
+name = "Setlists: what is playing"
+description = "The song playing on the setlist's playhead (its note, `arrangement`, `title`), `time` seconds into it at `at` (ms since the epoch), `playing`, `rate`, `duration`, and `clock`: `engine` while a running Studio engine's transport drives it (read only), else `playhead` (Architect's own clock). null when nothing is on it. What Chart, Lyrics and Lighting follow."
+group = "Setlists"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_SETLISTS_SEEK"
+name = "Setlists: play from"
+description = "Moves the setlist's playhead to `t` seconds of item `item` (a song's note path, `#Arrangement` when it plays one): a seek when it is the song playing, else that song of the queue from there. Refused while a Studio engine is the clock (play and seek in Studio). `studio.setlists`' `seek`: what Chart and Lyrics run when a bar or a line is pressed."
+group = "Setlists"
+effect = "mutating"
+params = '{"type":"object","properties":{"item":{"type":"string"},"t":{"type":"number"}},"required":["item","t"]}'
+
+[[actions]]
+id = "STUDIO_SETLISTS_OPEN"
+name = "Setlists: open a pane"
+description = "Opens pane `view` (`setlist`: the running order, the song playing marked, a row plays it; `song`: the song's workspace), on note `note` (a setlist's or a song's vault path) when given. The chart and the lyrics are Studio's Chart and Lyrics extensions' (STUDIO_CHART_OPEN, STUDIO_LYRICS_OPEN)."
+group = "Setlists"
+effect = "mutating"
+params = '{"type":"object","properties":{"view":{"type":"string","enum":["setlist","song"]},"note":{"type":"string"}}}'
+
+[[actions]]
 id = "STUDIO_SETLISTS_SONGS"
 name = "Songs: list"
 description = "The songs of every library (notes of type song under Libraries/), or of `library`, or of `category` in it: categories, arrangements, key, tempo and meter."
@@ -122,13 +156,13 @@ id = "song"
 title = "Song"
 icon = "music"
 
+# The running order of a setlist (the one opened on, else the one
+# playing), its sets as labels, each song a row; a row plays it.
 [[views]]
 id = "setlist"
-title = "Setlists"
+title = "Setlist"
 icon = "list-music"
 
-# The two-stage sidebar: setlists (or libraries and their categories) on
-# the left, their songs on the right.
 [[navigator_providers]]
 id = "setlists"
 title = "Setlists"
@@ -165,7 +199,50 @@ title = "Setlist"
 icon = "list-music"
 views = ["setlist"]
 
-# A setlist's favourites are declared beside the view they open, in the
-# island's manifest (apps/architect/island/extension.toml): a favourite may
-# open only its own extension's views and run only actions in its reach
-# (architect#658), and the playlist view is the island's web bundle's.
+# Its source on Architect's playhead.
+[uses]
+"architect.playhead" = "^0.1"
+
+# A setlist's favourites (architect#607, #658): the bottom tabs while a
+# setlist note is open, in the one shell everyone uses (the app on a desk
+# and a phone, the web app, a share link's guest in it). Setlist opens
+# this extension's view; Chart, Lyrics and Lighting are other extensions'
+# (`studio-chart`, `studio-lyrics`, `ignition`), which a favourite cannot
+# name as views (its own only, architect#658), so each presses the action
+# that opens its view (in this extension's reach, `capabilities.actions`).
+# A shell leaves out a tab whose action it has not (the web app until
+# Studio's linked extensions run there).
+[[favourites]]
+note_type = "setlist"
+
+[[favourites.tabs]]
+id = "setlist"
+label = "Setlist"
+icon = "list-music"
+target = { view = "setlist" }
+
+[[favourites.tabs]]
+id = "chart"
+label = "Chart"
+icon = "file-music"
+target = { action = "STUDIO_CHART_OPEN" }
+
+[[favourites.tabs]]
+id = "lyrics"
+label = "Lyrics"
+icon = "mic-vocal"
+target = { action = "STUDIO_LYRICS_OPEN" }
+
+[[favourites.tabs]]
+id = "lighting"
+label = "Lighting"
+icon = "lightbulb"
+target = { action = "IGNITION_SHOW_OPEN" }
+
+[favourites.primary]
+id = "play"
+label = "Play"
+icon = "play"
+target = { action = "PLAYHEAD_TOGGLE" }
+state = "playing"
+on = { label = "Pause", icon = "pause" }

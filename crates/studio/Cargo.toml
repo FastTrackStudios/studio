@@ -109,6 +109,9 @@ required-features = ["cli"]
 [dev-dependencies]
 ableton = { workspace = true }
 dawfile-reaper = { workspace = true }
+# A synthetic Live set written as Live writes one (gzipped XML).
+flate2 = { workspace = true }
+tempfile = { workspace = true }
 # CLI integration tests: the in-process standalone backend over a real vox
 # memory link + local wire probes.
 daw = { workspace = true, features = ["standalone-bootstrap"] }

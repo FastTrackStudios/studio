@@ -60,6 +60,8 @@ default = ["signal", "session-app", "tts", "doc-sync"]
 # commands from session-desktop's `cli` feature.
 cli = [
     "session-desktop/cli",
+    "dep:ableton",
+    "dep:studio-peers",
     "dep:builtin",
     "dep:clap",
     "dep:guitar",
@@ -122,7 +124,7 @@ session-app = ["dep:session-desktop", "dep:dock"]
 # Sync after sign-in (sync.rs): the rig books kept in step with the
 # account's other devices through Task (architect's crdt::docs). On by
 # default, and in every iOS build's feature list.
-doc-sync = ["signal-guitar", "fts-account/sync", "dep:crdt", "dep:session-format", "dep:uuid"]
+doc-sync = ["signal-guitar", "fts-account/sync", "dep:crdt", "dep:session-format", "dep:uuid", "dep:studio-peers", "dep:auth-client"]
 # Session's spoken section cues (Chatterbox TTS over ONNX Runtime). ort has
 # no prebuilt binary for aarch64-apple-ios, so the iOS build leaves this off
 # and the guide falls back to its synthesized cues, as Session's own did.
@@ -283,6 +285,15 @@ signal-rig-host = { workspace = true, features = ["book"] }
 crdt = { workspace = true, features = ["vox", "turso"], optional = true }
 session-format = { workspace = true, features = ["store", "sync"], optional = true }
 uuid = { workspace = true, optional = true }
+# The account's mesh (peers.rs, feature `doc-sync`): this engine found and
+# admitted by the account's other Studio engines through Architect's
+# devices, following one, syncing the rig books with them directly.
+studio-peers = { workspace = true, features = ["mesh"], optional = true }
+# `studio peers cues`: a Live show's cue track read as the rig's song cues
+# (feature `cli`).
+ableton = { workspace = true, optional = true }
+# This install's id and name, for the engine's row on the account.
+auth-client = { workspace = true, optional = true }
 # The Blitz native renderer — the desktop path and the iPhone's.
 #
 # `dioxus::desktop` puts WebKit/WRY behind the same components, and a WebView

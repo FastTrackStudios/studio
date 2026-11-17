@@ -126,6 +126,7 @@ fn load_project_file(
             tracing::warn!(
                 failed = audio.failed.len(),
                 loaded = audio.loaded,
+                first_error = audio.failed.first().map_or("", |(_, e)| e.as_str()),
                 "some sources did not materialize"
             );
         }

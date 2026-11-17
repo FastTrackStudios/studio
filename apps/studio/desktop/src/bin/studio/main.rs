@@ -16,6 +16,7 @@
 //! studio engine                       # Session's engine with no window
 //! studio tone3000 search "vox ac30"
 //! studio rig level Metal --dry-run
+//! studio peers follow iPad
 //! ```
 //!
 //! The tone library and the rig's library are files and an OAuth session on
@@ -28,6 +29,7 @@
 //! What a command finds is printed to stdout; diagnostics go to stderr
 //! through `tracing` (`RUST_LOG=info` for each command's wide event).
 
+mod peers;
 mod rig;
 mod tone3000;
 
@@ -51,6 +53,12 @@ enum Command {
     Tone3000 {
         #[command(subcommand)]
         command: tone3000::Command,
+    },
+    /// This machine's engine on the account's mesh: the other Studio
+    /// engines, following one, the rig's setlists and cues.
+    Peers {
+        #[command(subcommand)]
+        command: Option<peers::Command>,
     },
     /// The guitar rig's library on disk — profiles, patches.
     Rig {
@@ -91,5 +99,8 @@ fn main() -> ExitCode {
         },
         Command::Tone3000 { command } => runtime.block_on(tone3000::run(command)),
         Command::Rig { command } => rig::run(command),
+        Command::Peers { command } => {
+            runtime.block_on(peers::run(command.unwrap_or(peers::Command::Status)))
+        }
     }
 }

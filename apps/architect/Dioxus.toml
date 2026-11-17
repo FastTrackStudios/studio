@@ -1,0 +1,7 @@
+# Studio Desktop (Studio Architect) under `dx serve`
+# (docs/design/studio-in-architect.md):
+#   dx serve -p studio-architect --bin studio-architect --platform native \
+#     --profile desktop-dev --target x86_64-unknown-linux-gnu
+[application]
+name = "studio-architect"
+default_platform = "native"

@@ -276,23 +276,40 @@ fn import_ableton(path: &str) -> Result<String, Box<dyn std::error::Error>> {
     // placed on the timeline goes through the set's tempo map.
     let map = ableton::tempo::TempoMap::of(&set);
 
-    // The tempo it starts at: its automation's, when it has any (the
-    // set's own `Manual` tempo is then only where the knob was left).
+    // Every change of tempo or metre (`TempoMap::changes`), one square
+    // point each: Live's tempo step is two breakpoints at one beat, and two
+    // points at one moment read as either tempo — the engine took the one
+    // a step leaves. A point names a time signature only where the metre
+    // changes (in REAPER a signature on a point starts a bar there). The
+    // first is the tempo and metre it starts in: its automation's, when it
+    // has any (the set's own `Manual` tempo and signature are then only
+    // where the knobs were left).
+    let changes = map.changes(set.time_signature, &set.time_signature_automation);
+    let (start_bpm, start_sig) = changes
+        .first()
+        .map_or((map.bpm_at(0.0), set.time_signature), |c| {
+            (c.bpm, c.signature.unwrap_or(set.time_signature))
+        });
     let mut builder = ReaperProjectBuilder::new();
     builder = builder.tempo_with_time_sig(
-        map.bpm_at(0.0),
-        set.time_signature.numerator as i32,
-        set.time_signature.denominator as i32,
+        start_bpm,
+        i32::from(start_sig.numerator),
+        i32::from(start_sig.denominator),
     );
-
-    // Tempo automation, one square point per change (`TempoMap::steps`):
-    // Live's step is two breakpoints at one beat, and two points at one
-    // moment read as either tempo — the engine took the one a step leaves.
-    if !set.tempo_automation.is_empty() {
+    if changes.len() > 1 {
         builder = builder.tempo_envelope(|env| {
-            map.steps()
-                .into_iter()
-                .fold(env, |env, (beat, bpm)| env.point(map.seconds_at(beat), bpm))
+            changes.iter().fold(env, |env, c| {
+                let at = map.seconds_at(c.beat);
+                match c.signature {
+                    Some(s) => env.point_with_time_sig(
+                        at,
+                        c.bpm,
+                        i32::from(s.numerator),
+                        i32::from(s.denominator),
+                    ),
+                    None => env.point(at, c.bpm),
+                }
+            })
         });
     }
 
