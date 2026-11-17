@@ -15,6 +15,8 @@ T=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$T/../../../.." && pwd)
 KB=${KONTRA:-/run/media/Development/KONTRA-perc/target/release/kontra-inspect}
 SEED=${SEED:-777}
+# Kontakt's instrument had run long before the render: KONTRA settles 2 s before frame 0 too
+export KONTRA_INSPECT_PREROLL=${KONTRA_INSPECT_PREROLL:-96000}
 NPY=${NPY_PYTHON:-$(cat /tmp/kstate-tools/npy_python)}
 case $lib in
   "Symphony Series Percussion") inst="/run/media/AudioHaven/Kontakt/Orchestral/Percussion/Symphony Series Percussion Library/Instruments" ;;
