@@ -30,8 +30,9 @@ pub(crate) struct FretState {
     ringing: Vec<Option<u8>>,
     /// Each held note: where and what it plays.
     held: HashMap<u8, Held>,
-    /// Notes played per (articulation, string, fret): the RR order's index.
-    rr_count: HashMap<(String, usize, i32), usize>,
+    /// Notes played per (articulation, string, fret, stroke): the RR
+    /// order's index.
+    rr_count: HashMap<(String, usize, i32, u8), usize>,
     /// The borrow generator's state and multiplier (`None` = no borrow).
     lcg: u32,
     lcg_mult: Option<u32>,
@@ -48,6 +49,14 @@ pub(crate) struct FretState {
     /// KSP `random()`'s `rand()` state, and the seed it restarts from.
     ksp_state: u32,
     ksp_seed: u32,
+    /// The last pick stroke (0 down, 1 up) and the current note's.
+    pick_dir: Option<u8>,
+    cur_pd: u8,
+    /// The stroke the next zone lookup wants ("" = any).
+    cur_stroke: &'static str,
+    /// The extra pick's and the release noise's counters.
+    pick_counter: usize,
+    noise_counter: usize,
 }
 
 /// Notes struck within one poly window: (note, velocity, articulation, line).
@@ -143,6 +152,11 @@ impl FretState {
             free: HashMap::new(),
             ksp_state: self.ksp_seed.max(1),
             ksp_seed: self.ksp_seed.max(1),
+            pick_dir: None,
+            cur_pd: 0,
+            cur_stroke: MISSING,
+            pick_counter: 0,
+            noise_counter: 0,
         };
     }
 
@@ -202,6 +216,18 @@ impl FretState {
             }
         }
         Some(nearest.0)
+    }
+
+    /// The pick stroke of a note on `string`: see `SampleEngine::fret_pick`.
+    fn pick(&mut self, string: usize) {
+        let pd = match self.last_string {
+            None => 0,
+            Some(l) if string > l => 1,
+            Some(l) if string < l => 0,
+            Some(_) => 1 - self.pick_dir.unwrap_or(1),
+        };
+        self.pick_dir = Some(pd);
+        self.cur_pd = pd;
     }
 
     /// Seed KSP `random()` (restarts its state).
@@ -506,6 +532,7 @@ impl SampleEngine {
             .find(|l| l.articulation.eq_ignore_ascii_case(&artic) && velocity >= l.min_velocity)
             .cloned();
         let line = self.cur_line as u8;
+        self.fret.pick(string);
 
         // What rings on this string decides a hammer, then is let go: a
         // repeat of its note fades, another note releases it.
@@ -582,8 +609,9 @@ impl SampleEngine {
                 // 63): the note still holds its string and its body enters
                 Some((artic.clone(), zk.unwrap_or(note)))
             }
-            (None, None) => self
-                .play_fretted(
+            (None, None) => {
+                self.fret_extra_pick(string);
+                self.play_fretted(
                     &artic,
                     MISSING,
                     0,
@@ -593,7 +621,8 @@ impl SampleEngine {
                     self.fret_vel_gain(&artic, velocity),
                     0.0,
                 )
-                .map(|zk| (artic.clone(), zk)),
+                .map(|zk| (artic.clone(), zk))
+            }
         };
 
         let gain_db = self.fret_vel_gain(
@@ -686,7 +715,7 @@ impl SampleEngine {
             .and_then(|(band, ..)| a.dynamics.get(band).cloned())
             .unwrap_or_default();
         let rr_n = a.rr.max(1);
-        let rr = self.fret_next_rr(artic, rr_n, string, fret, true);
+        let n = self.fret_rr_count(artic, string, fret, true);
 
         // The recording: this fret's, or a neighbour's retuned to it.
         let fb = self.patch.spec.fretboard.as_ref()?;
@@ -708,17 +737,166 @@ impl SampleEngine {
             i32::from(note)
         };
         let zone_key = u8::try_from(zone_key).ok()?;
-        let Some(idx) =
-            self.find_fret_zone(artic, direction, interval, string, &dynamic, rr, zone_key)
-        else {
-            self.fret_miss(note, artic, dynamic, rr);
-            return None;
+        let offset_ms = offset_ms + self.fret_start_offset(artic);
+        self.fret.cur_stroke = self.fret_stroke(artic);
+        let mut played = None;
+        for (t, pan) in self.fret_track_pans().into_iter().enumerate() {
+            let rr = self.fret_rr_order(rr_n, n + t);
+            let Some(idx) =
+                self.find_fret_zone(artic, direction, interval, string, &dynamic, rr, zone_key)
+            else {
+                self.fret_miss(note, artic, dynamic.clone(), rr);
+                continue;
+            };
+            // Spawned under the played key: a neighbour's recording plays at
+            // the played pitch (Kontakt: ±2 frets, `change_tune` ∓200 cents).
+            let start = self.fret_offset_frames(idx, offset_ms);
+            self.spawn_pan = pan;
+            self.fret_spawn(idx, note, VoiceKind::Zoned, gain_db, start);
+            self.spawn_pan = None;
+            played = Some(zone_key);
+        }
+        self.fret.cur_stroke = MISSING;
+        played
+    }
+
+    /// The pick stroke of a note on `string` (0-based), economy picking
+    /// (`FretPickingSpec`); every placed note moves it on.
+    fn fret_pick(&mut self, string: usize) {
+        self.fret.pick(string);
+    }
+
+    /// Whether `artic` is picked (`FretPickingSpec::articulations`).
+    fn fret_picked(&self, artic: &str) -> bool {
+        self.patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.picking.as_ref())
+            .is_some_and(|p| {
+                p.articulations
+                    .iter()
+                    .any(|a| a.eq_ignore_ascii_case(artic))
+            })
+    }
+
+    /// The zones' stroke `artic` plays now ("" = not picked).
+    fn fret_stroke(&self, artic: &str) -> &'static str {
+        match (self.fret_picked(artic), self.fret.cur_pd) {
+            (false, _) => MISSING,
+            (true, 0) => "down",
+            (true, _) => "up",
+        }
+    }
+
+    /// Each track's pan (`FretboardSpec::tracks`; one centred when none).
+    fn fret_track_pans(&self) -> Vec<Option<f32>> {
+        match self.patch.spec.fretboard.as_ref() {
+            Some(fb) if !fb.tracks.is_empty() => fb.tracks.iter().map(|t| Some(t.pan)).collect(),
+            _ => vec![None],
+        }
+    }
+
+    /// `artic`'s start offset (`FretboardSpec::start_offsets`, ms).
+    fn fret_start_offset(&self, artic: &str) -> f32 {
+        self.patch.spec.fretboard.as_ref().map_or(0.0, |fb| {
+            fb.start_offsets
+                .iter()
+                .find(|o| o.articulation.eq_ignore_ascii_case(artic))
+                .map_or(0.0, |o| o.ms)
+        })
+    }
+
+    /// The pick attack under a plain note (`FretExtraPickSpec`), one per
+    /// track; its counter steps once.
+    fn fret_extra_pick(&mut self, string: usize) {
+        let Some(fb) = self.patch.spec.fretboard.as_ref() else {
+            return;
         };
-        // Spawned under the played key: a neighbour's recording plays at
-        // the played pitch (Kontakt: ±2 frets, `change_tune` ∓200 cents).
-        let start = self.fret_offset_frames(idx, offset_ms);
-        self.fret_spawn(idx, note, VoiceKind::Zoned, gain_db, start);
-        Some(zone_key)
+        let Some(ep) = fb.extra_pick.clone() else {
+            return;
+        };
+        let order = fb
+            .rr_orders
+            .iter()
+            .find(|o| o.rr == ep.rr)
+            .map(|o| o.order.clone())
+            .unwrap_or_default();
+        let cents = if string > usize::from(ep.from_string) {
+            (string - usize::from(ep.from_string)) as f32 * ep.cents_per_string
+        } else {
+            0.0
+        };
+        let n = self.fret.pick_counter;
+        for (t, pan) in self.fret_track_pans().into_iter().enumerate() {
+            let Some(&key) = order.get((n + t % 2) % order.len().max(1)) else {
+                continue;
+            };
+            let Some(idx) = self.find_free_zone(&ep.articulation, key, 0) else {
+                self.fret_miss(key, &ep.articulation, String::new(), 0);
+                continue;
+            };
+            self.spawn_pan = pan;
+            self.spawn_tune_cents = cents;
+            self.fret_spawn(idx, key, VoiceKind::Short, 0.0, 0);
+            self.spawn_tune_cents = 0.0;
+            self.spawn_pan = None;
+        }
+        self.fret.pick_counter = (n + 1) % order.len().max(1);
+    }
+
+    /// The release noise a let-go note leaves (`FretNoiseReleaseSpec`).
+    fn play_fret_noise_release(&mut self, held: &Held) {
+        let Some(nr) = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.noise_release.clone())
+        else {
+            return;
+        };
+        if nr
+            .excluded
+            .iter()
+            .any(|a| a.eq_ignore_ascii_case(&held.artic))
+        {
+            return;
+        }
+        let age_ms = (self.frames_rendered.saturating_sub(held.start)) as f32 * 1000.0
+            / self.sample_rate as f32;
+        if age_ms < nr.min_held_ms || age_ms > nr.max_held_ms {
+            return;
+        }
+        let n = self.fret.noise_counter;
+        let keys = usize::from(nr.keys.max(1));
+        for (t, pan) in self.fret_track_pans().into_iter().enumerate() {
+            let key = ((n + t) % keys) as u8;
+            let Some(idx) = self.find_free_zone(&nr.articulation, key, 0) else {
+                self.fret_miss(key, &nr.articulation, String::new(), 0);
+                continue;
+            };
+            self.spawn_pan = pan;
+            self.spawn_zone_voice(
+                idx,
+                key,
+                VoiceKind::Short,
+                db_to_gain(held.gain_db * nr.gain_scale),
+                None,
+                0.0,
+            );
+            self.spawn_pan = None;
+        }
+        self.fret.noise_counter = n + 1;
+    }
+
+    /// A zone of `artic` not bound to a string, at `key`, round robin `rr`.
+    fn find_free_zone(&self, artic: &str, key: u8, rr: usize) -> Option<usize> {
+        let cands = self.zone_keys.get(usize::from(key))?;
+        cands.iter().map(|&i| i as usize).find(|&i| {
+            let z = &self.patch.spec.zones[i];
+            z.string == 0 && z.rr_index as usize == rr && self.zone_passes(z, artic, MISSING, "")
+        })
     }
 
     /// The position's next round robin of `artic` (RR orders, slot
@@ -731,28 +909,50 @@ impl SampleEngine {
         fret: i32,
         step: bool,
     ) -> usize {
+        let n = self.fret_rr_count(artic, string, fret, step);
+        self.fret_rr_order(rr_n, n)
+    }
+
+    /// How many notes the position has played (its counter, before
+    /// stepping it when `step`): per stroke for a picked articulation.
+    fn fret_rr_count(&mut self, artic: &str, string: usize, fret: i32, step: bool) -> usize {
         let Some(fb) = self.patch.spec.fretboard.as_ref() else {
             return 0;
         };
+        let pd = if self.fret_picked(artic) {
+            self.fret.cur_pd
+        } else {
+            0
+        };
         let key = match fb.rr_slot_stride {
-            0 => (artic.to_ascii_lowercase(), string, fret),
+            0 => (artic.to_ascii_lowercase(), string, fret, pd),
             s => (
                 artic.to_ascii_lowercase(),
                 0,
                 i32::from(s) * string as i32 + fret,
+                pd,
             ),
         };
         let n = self.fret.rr_count.get(&key).copied().unwrap_or(0);
-        let rr = fb
-            .rr_orders
-            .iter()
-            .find(|o| usize::from(o.rr) == rr_n)
-            .filter(|o| !o.order.is_empty())
-            .map_or(n % rr_n, |o| usize::from(o.order[n % o.order.len()]));
         if step {
             self.fret.rr_count.insert(key, n + 1);
         }
-        rr
+        n
+    }
+
+    /// The round robin the order for `rr_n` plays at count `n`.
+    fn fret_rr_order(&self, rr_n: usize, n: usize) -> usize {
+        self.patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| {
+                fb.rr_orders
+                    .iter()
+                    .find(|o| usize::from(o.rr) == rr_n)
+                    .filter(|o| !o.order.is_empty())
+            })
+            .map_or(n % rr_n, |o| usize::from(o.order[n % o.order.len()]))
     }
 
     /// Spawn zone `idx` under `note` after the onset delay.
@@ -818,28 +1018,33 @@ impl SampleEngine {
             .articulation(&rl.articulation)
             .map_or(1, |a| a.rr.max(1));
         let step = rl.open_string_counts || held.fret > 0;
-        let rr = self.fret_next_rr(&rl.articulation, rr_n, held.string, held.fret, step);
-        let Some(idx) = self.find_fret_zone(
-            &rl.articulation,
-            MISSING,
-            0,
-            held.string,
-            "",
-            rr,
-            held.zone_key,
-        ) else {
-            self.fret_miss(note, &rl.articulation, String::new(), rr);
-            return;
-        };
-        // No onset hold: the release step already waited it out.
-        self.spawn_zone_voice(
-            idx,
-            note,
-            VoiceKind::Short,
-            db_to_gain(held.gain_db),
-            None,
-            0.0,
-        );
+        let n = self.fret_rr_count(&rl.articulation, held.string, held.fret, step);
+        for (t, pan) in self.fret_track_pans().into_iter().enumerate() {
+            let rr = self.fret_rr_order(rr_n, n + t);
+            let Some(idx) = self.find_fret_zone(
+                &rl.articulation,
+                MISSING,
+                0,
+                held.string,
+                "",
+                rr,
+                held.zone_key,
+            ) else {
+                self.fret_miss(note, &rl.articulation, String::new(), rr);
+                continue;
+            };
+            // No onset hold: the release step already waited it out.
+            self.spawn_pan = pan;
+            self.spawn_zone_voice(
+                idx,
+                note,
+                VoiceKind::Short,
+                db_to_gain(held.gain_db),
+                None,
+                0.0,
+            );
+            self.spawn_pan = None;
+        }
     }
 
     /// Where `note` slides from, if it slides (the slide key held, `artic`
@@ -907,6 +1112,7 @@ impl SampleEngine {
         let Some(src) = self.fret.held.remove(&from) else {
             return;
         };
+        self.fret_pick(string);
         if self.fret.ringing.get(src.string) == Some(&Some(from)) {
             self.fret.ringing[src.string] = None;
         }
@@ -1189,6 +1395,7 @@ impl SampleEngine {
                     let frames = self.fretted_release_frames(&held.artic);
                     self.voices.note_off_line(held.line, note, Some(frames));
                     self.play_fret_release(note, &held);
+                    self.play_fret_noise_release(&held);
                 }
             }
         }
@@ -1288,6 +1495,8 @@ impl SampleEngine {
             let z = &self.patch.spec.zones[i];
             usize::from(z.string) == string + 1
                 && z.rr_index as usize == rr
+                && (self.fret.cur_stroke.is_empty()
+                    || z.stroke.eq_ignore_ascii_case(self.fret.cur_stroke))
                 && (interval == 0 || z.interval == interval)
                 && self.zone_passes(z, artic, direction, dynamic)
         })

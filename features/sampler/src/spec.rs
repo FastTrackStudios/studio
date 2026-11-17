@@ -1240,6 +1240,9 @@ pub struct SectionOverlay {
     /// See [`LibrarySpec::fretboard`]: the instrument's strings and its
     /// shipped placement and round-robin data, which replace the library's.
     pub fretboard: Option<FretboardSpec>,
+    /// See [`DynamicsSpec::fixed_ccs`]: the instrument's shipped knobs on
+    /// controllers, which replace the library's.
+    pub fixed_ccs: Option<Vec<FixedCcSpec>>,
 }
 
 /// The overridable legato-engine fields of a section: the CSS editor knobs
@@ -1456,6 +1459,9 @@ impl SectionOverlay {
         }
         if let Some(v) = &self.fretboard {
             spec.fretboard = Some(v.clone());
+        }
+        if let Some(v) = &self.fixed_ccs {
+            spec.dynamics.fixed_ccs.clone_from(v);
         }
         if let (Some(l), Some(cfg)) = (&self.legato, spec.legato_engine.as_mut()) {
             if let Some(v) = &l.overlap_delay {
@@ -3959,6 +3965,82 @@ pub struct FretboardSpec {
     /// poly window (Shreddage's FX: `play_note` straight from `on note`).
     #[facet(default)]
     pub free_articulations: Vec<String>,
+    /// Pick strokes for picked articulations. `None` = no strokes.
+    pub picking: Option<FretPickingSpec>,
+    /// Doubled takes: every fretted play sounds once per track. Empty = one
+    /// track, centred.
+    #[facet(default)]
+    pub tracks: Vec<FretTrackSpec>,
+    /// Where each articulation's fretted plays start in their recordings.
+    #[facet(default)]
+    pub start_offsets: Vec<FretOffsetSpec>,
+    /// A pick attack under every plain note. `None` = none.
+    pub extra_pick: Option<FretExtraPickSpec>,
+    /// A noise a let-go note leaves, besides its release recording.
+    /// `None` = none.
+    pub noise_release: Option<FretNoiseReleaseSpec>,
+}
+
+/// Pick strokes (see [`FretboardSpec::picking`]), economy picking as
+/// Shreddage 3.5 plays it (`$ncb__pick_dir`, Argent script_0.ksp
+/// L16196-16219): the first note after a reset is a down stroke; a note on
+/// a lower string (higher index) than the last note is an up stroke, on a
+/// higher string a down stroke, on the same string the stroke after the
+/// last one. Every placed note moves the stroke on, picked or not. A picked
+/// articulation plays the zones of its stroke (`ZoneSpec::stroke`) and
+/// counts its round robins per stroke.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretPickingSpec {
+    /// The picked articulations.
+    pub articulations: Vec<String>,
+}
+
+/// One take of a doubled part (see [`FretboardSpec::tracks`]): track `t`
+/// plays the round robin `t` places further along the position's order,
+/// at `pan` (−1 left … 1 right), and its own key ahead in the counters of
+/// the side recordings (extra pick, noise release).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretTrackSpec {
+    pub pan: f32,
+}
+
+/// A start offset (see [`FretboardSpec::start_offsets`]).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretOffsetSpec {
+    pub articulation: String,
+    pub ms: f32,
+}
+
+/// A pick attack (see [`FretboardSpec::extra_pick`]): every plain note
+/// (not a hammer, tap or slide) first plays `articulation` at the key the
+/// RR order for `rr` gives at the pick counter (+ the track), at its own
+/// level, detuned `cents_per_string` per string past `from_string`
+/// (0-based); the counter steps once per note.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretExtraPickSpec {
+    pub articulation: String,
+    pub rr: u8,
+    #[facet(default)]
+    pub cents_per_string: f32,
+    #[facet(default)]
+    pub from_string: u8,
+}
+
+/// A release noise (see [`FretboardSpec::noise_release`]): a let-go note
+/// not of `excluded` held `min_held_ms..=max_held_ms` plays
+/// `articulation`'s zone at key `(counter + track) mod keys`, at
+/// `gain_scale` × its velocity gain (dB) and its pan; the counter steps
+/// once per let-go that played one.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretNoiseReleaseSpec {
+    pub articulation: String,
+    #[facet(default)]
+    pub excluded: Vec<String>,
+    #[facet(default)]
+    pub min_held_ms: f32,
+    pub max_held_ms: f32,
+    pub keys: u8,
+    pub gain_scale: f32,
 }
 
 /// Tapping (see [`FretboardSpec::tap`]): every note of `articulation` is a

@@ -22,7 +22,7 @@ script can play, tagged the way the engine's fretboard stage looks them up:
     0  pop: 1 + rr;  6  pitched release: 1 + 16·rr
   each zone is written once per slot with velocity 0..127 (the engine picks
   layer and RR itself).
-- gain_db = 20·log10(zvol), tune_cents = 1200·log2(tune), start_mod and
+- gain_db = 20·log10(zvol), tune_cents = 1200·log2(tune), sample_start, start_mod and
   loops verbatim.
 """
 import csv, json, math, os, re, sys
@@ -197,6 +197,8 @@ def zones_of(r, inst, organized, nki, mic, art, trig, picked, string):
         gain = float(r["zvol"])
         z["gain_db"] = round(20 * math.log10(gain), 6) if gain > 0 else -144.0
         z["tune_cents"] = round(1200 * math.log2(float(r["tune"])), 6)
+        if int(r["sample_start"]) > 0:
+            z["sample_start"] = int(r["sample_start"])
         if int(r["start_mod"]) > 0:
             z["start_mod"] = int(r["start_mod"])
         ls, le = int(r["loop_start"]), int(r["loop_end"])

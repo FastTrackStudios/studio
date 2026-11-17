@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Probe MIDI for a Shreddage null test.
 
-usage: shreddage_probe.py <out.mid> <mode> [--notes 1.2:0.4]
+usage: shreddage_probe.py <out.mid> <mode> [--notes 1.2:0.4] [--lib abyss|argent]
 
 single-note modes (keyswitch = the shipped TACT key):
   sus   Sustain (key 12)      stac  Staccato (key 13)      harm  Harmonics (key 15)
@@ -22,9 +22,21 @@ first key, first velocity.
 """
 import struct, sys
 
-KS = {"sus": 12, "stac": 13, "harm": 15, "fx": 16}
-PHRASE_KS = {"tap": 14}
-SLIDE_KS = 17
+# Per library: the shipped TACT keyswitches, the slide key, the playable
+# range and the loudest velocity a mode's articulation keeps (Argent's KS 0
+# plays Rake at 116-126 and Pinch Harmonics at 127, engine-model §1b).
+LIBS = {
+    "abyss": dict(ks={"sus": 12, "stac": 13, "harm": 15, "fx": 16, "tap": 14}, slide=17,
+                  lo=21, hi=72, vmax={}),
+    "argent": dict(ks={"sus": 0, "mute": 1, "stac": 2, "pcsus": 3, "pcmute": 4, "pcstac": 5,
+                       "trem": 6, "choke": 7, "tap": 8, "nharm": 9, "aharm": 10, "fx": 11,
+                       "rake": 0, "pinch": 0},
+                   slide=21, lo=25, hi=88, vmax={"sus": 115}),
+}
+SINGLE = {"sus", "stac", "harm", "fx", "mute", "pcsus", "pcmute", "pcstac", "trem", "choke",
+          "nharm", "aharm", "rake", "pinch"}
+PHRASE = {"rel", "legato", "slide", "chord", "tap"}
+LIB = LIBS["abyss"]
 PPQ, US_PER_Q = 960, 500_000
 
 
@@ -39,11 +51,24 @@ def vlq(n):
 
 def notes():
     """(key, velocity): the walk the single-note modes play."""
-    keys = list(range(21, 73, 3)) + list(range(72, 20, -5))
+    lo, hi = LIB["lo"], LIB["hi"]
+    if LIB is not LIBS["abyss"]:
+        hi = min(hi, lo + 51)
+    keys = list(range(lo, hi + 1, 3)) + list(range(hi, lo - 1, -5))
     vels = [20, 50, 80, 110, 100, 40, 70, 127, 10, 60]
     seq = [(k, vels[i % len(vels)]) for i, k in enumerate(keys)]
     seq += [(40, 90)] * 6 + [(57, 64)] * 4 + [(33, 30)] * 4
     return seq
+
+
+def velocities(mode, seq):
+    """Fit a walk's velocities to the mode's articulation (KS 0 splits)."""
+    if mode == "rake":
+        return [(k, 116 + v % 11) for k, v in seq]
+    if mode == "pinch":
+        return [(k, 127) for k, v in seq]
+    top = LIB["vmax"].get(mode)
+    return [(k, min(v, top)) for k, v in seq] if top else seq
 
 
 def phrases(mode):
@@ -65,7 +90,7 @@ def phrases(mode):
             for iv in (1, -1, 3, -3, 5, -5, 7, 12, -12):
                 for v2 in (40, 100):
                     ns = [(0.0, 0.5, base, 90), (0.4, 0.8, base + iv, v2)]
-                    out.append((ns, [(-0.05, 1.3, SLIDE_KS, 100)]))
+                    out.append((ns, [(-0.05, 1.3, LIB["slide"], 100)]))
     elif mode == "tap":
         # taps from idle strings (open and fretted), then on ringing ones
         for k, v in [(33, 80), (35, 60), (28, 100), (45, 40), (52, 90)]:
@@ -83,12 +108,15 @@ def phrases(mode):
 
 
 def main():
+    global LIB
     out, mode = sys.argv[1], sys.argv[2]
+    if "--lib" in sys.argv:
+        LIB = LIBS[sys.argv[sys.argv.index("--lib") + 1]]
     on, gap = 1.2, 0.4
     if "--notes" in sys.argv:
         on, gap = (float(x) for x in sys.argv[sys.argv.index("--notes") + 1].split(":"))
     tick = lambda s: round(s * PPQ * 1_000_000 / US_PER_Q)
-    ks = KS.get(mode, PHRASE_KS.get(mode, KS["sus"]))
+    ks = LIB["ks"].get(mode, LIB["ks"]["sus"])
     ev = [(tick(0.5), 0x90, ks, 100), (tick(0.6), 0x80, ks, 0)]
     rows, t = [], 1.0
     if mode == "fx":
@@ -96,8 +124,8 @@ def main():
             ev += [(tick(t), 0x90, k, 30 + (i * 13) % 97), (tick(t + 0.8), 0x80, k, 0)]
             rows.append(f"{i}\t{t:.3f}\t{t + 0.8:.3f}\t{k}\t{30 + (i * 13) % 97}")
             t += 2.5
-    elif mode in KS:
-        for i, (k, v) in enumerate(notes()):
+    elif mode in SINGLE:
+        for i, (k, v) in enumerate(velocities(mode, notes())):
             ev += [(tick(t), 0x90, k, v), (tick(t + on), 0x80, k, 0)]
             rows.append(f"{i}\t{t:.3f}\t{t + on:.3f}\t{k}\t{v}")
             t += on + gap

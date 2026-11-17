@@ -205,6 +205,23 @@ impl SampleEngine {
             warm_ids.extend(fb.slide.as_ref().map(|s| s.articulation.clone()));
             warm_ids.extend(fb.tap.as_ref().map(|t| t.open_as.clone()));
         }
+        // Side recordings every fretted note may play at keys of their own
+        // (the extra pick, the release noise): every zone of theirs.
+        let side_ids: Vec<String> = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .map(|fb| {
+                fb.extra_pick
+                    .as_ref()
+                    .map(|e| e.articulation.clone())
+                    .into_iter()
+                    .chain(fb.noise_release.as_ref().map(|n| n.articulation.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        warm_ids.extend(side_ids.iter().cloned());
         // A pending CC58 velocity-group resolves to its concrete articulation
         // only at note-on (from the note's velocity), so `effective_articulation`
         // above can't see it yet — warm EVERY possible resolution (Trills →
@@ -288,7 +305,10 @@ impl SampleEngine {
             let in_range = note >= z.key_min && note <= z.key_max;
             let near = (z.root_key as i32 - note as i32).unsigned_abs() as u8
                 <= self.patch.spec.performance.zone_pitch_tolerance;
-            if !in_range && !near {
+            let side = side_ids
+                .iter()
+                .any(|id| z.articulation.eq_ignore_ascii_case(id));
+            if !in_range && !near && !side {
                 continue;
             }
             if artic.is_some() {

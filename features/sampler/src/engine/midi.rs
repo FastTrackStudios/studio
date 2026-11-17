@@ -2682,8 +2682,13 @@ impl SampleEngine {
         // Copy out the zone fields up front so no borrow of `self.patch`
         // outlives the `&mut self` cache-miss bookkeeping below.
         let z = &self.patch.spec.zones[idx];
-        let (root_key, tune_cents, gain_db, mic, pan) =
-            (z.root_key, z.tune_cents, z.gain_db, z.mic.clone(), z.pan);
+        let (root_key, tune_cents, gain_db, mic, pan) = (
+            z.root_key,
+            z.tune_cents,
+            z.gain_db,
+            z.mic.clone(),
+            self.spawn_pan.unwrap_or(z.pan),
+        );
         // Copied out for the same borrow reason: the piano-voice gain below
         // needs it after `self` has been mutably borrowed.
         let zone_artic = z.articulation.clone();
@@ -2802,6 +2807,7 @@ impl SampleEngine {
             .copied()
             .unwrap_or(0.0);
         let tune_cents_total = tune_cents as f64
+            + f64::from(self.spawn_tune_cents)
             + self.master_tune_cents()
             + f64::from(self.piano_key_cents[usize::from(note & 127)])
             + f64::from(key_cents);

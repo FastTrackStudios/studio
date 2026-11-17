@@ -1025,6 +1025,10 @@ pub struct SampleEngine {
     /// A linear fade-in for the next spawn (frames), Kontakt's `fade_in`
     /// (`fretboard.rs`); 0 = none.
     pub(crate) spawn_fade_in: usize,
+    /// The next spawn's pan instead of its zone's (`fretboard.rs` tracks).
+    pub(crate) spawn_pan: Option<f32>,
+    /// Cents added to the next spawn's tune (`fretboard.rs`).
+    pub(crate) spawn_tune_cents: f32,
     /// Transition-spawn arrival override (ms of sample time) for the
     /// diagnostic semantics sweep — set by `spawn_transition_voice` so the
     /// alignment hold uses the SAME re-interpreted arrival the prefire lead
@@ -1334,6 +1338,8 @@ impl SampleEngine {
             spawn_script_offset: false,
             fret_no_hold: false,
             spawn_fade_in: 0,
+            spawn_pan: None,
+            spawn_tune_cents: 0.0,
             spawn_arrival_override_ms: None,
             zone_choked_scratch: Vec::with_capacity(16),
             zone_capped_scratch: Vec::with_capacity(16),
@@ -1370,7 +1376,9 @@ impl SampleEngine {
         self.insert_plans
             .iter()
             .find(|(a, d, _)| {
-                a.eq_ignore_ascii_case(&z.articulation) && d.eq_ignore_ascii_case(&z.dynamic)
+                // an empty `dynamic` serves every layer
+                a.eq_ignore_ascii_case(&z.articulation)
+                    && (d.is_empty() || d.eq_ignore_ascii_case(&z.dynamic))
             })
             .map(|(_, _, p)| std::sync::Arc::clone(p))
     }

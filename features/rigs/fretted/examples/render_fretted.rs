@@ -3,7 +3,7 @@
 //! against the same MIDI rendered by Kontakt.
 //!
 //! ```text
-//! render_fretted <in.mid> <out.wav> --library abyss --instrument Abyss [--mic Blend] [--trace]
+//! render_fretted <in.mid> <out.wav> --library abyss --instrument Abyss [--mic <id>, default the spec's default mic] [--trace]
 //! ```
 //!
 //! `--trace` prints every voice the engine spawned (file, root, rate, gain,
@@ -109,10 +109,17 @@ fn main() -> eyre::Result<()> {
     let library = signal_fretted::library(&lib_name)
         .ok_or_else(|| eyre::eyre!("unknown library {lib_name:?}"))?;
     let instrument = flag("--instrument").unwrap_or_else(|| "Abyss".into());
-    let mic = flag("--mic").unwrap_or_else(|| "Blend".into());
     let trace = args.iter().any(|a| a == "--trace");
 
     let patch = signal_fretted::load_patch(library, &instrument).map_err(|e| eyre::eyre!(e))?;
+    // the spec's default mic (the pickup the shipped patch plays)
+    let mic = flag("--mic").unwrap_or_else(|| {
+        let mics = &patch.spec.mics;
+        mics.iter()
+            .find(|m| m.default)
+            .or(mics.first())
+            .map_or_else(|| "Blend".into(), |m| m.id.clone())
+    });
     let rig = SamplerRig::new_offline_with_cache_budget(SR, Some(8 * 1024 * 1024 * 1024));
     signal_fretted::install_patch(&rig, ID, patch, &instrument, &mic)
         .map_err(|e| eyre::eyre!(e))?;

@@ -124,6 +124,11 @@ def fmt(x):
 def main():
     root, nki, inst = sys.argv[1:4]
     k = os.path.join(root, "_ksp", nki)
+    from shreddage_zones import load_meta
+    m = load_meta(k)
+    if m:
+        import shreddage_section_meta
+        return shreddage_section_meta.main(root, nki, inst, m[0])
     p = persistent(os.path.join(k, "persistent_0.tsv"))
     script = open(os.path.join(k, "script_0.ksp")).read()
     groups = {r["name"]: r for r in csv.DictReader(open(os.path.join(k, "groups.tsv")), delimiter="\t")}
