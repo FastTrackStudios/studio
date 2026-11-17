@@ -205,6 +205,9 @@ for mode in "${modes[@]}"; do
           "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws_rr.txt"
         FIT_EXTRA="--rrs $(head -1 "$d/draws_rr.txt") $penv0" npy "$here/fit_draws.py" --tunes "$bin" "$section" \
           "$d/$mode.mid" "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
+        # then each note still off searched over (RR, detune) together
+        FIT_EXTRA="$penv0" npy "$here/fit_joint.py" "$bin" "$section" "$d/$mode.mid" \
+          "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" "$d/draws_rr.txt" "$d/draws.txt"
       else
         npy "$here/fit_draws.py" "$kind" "$bin" "$section" "$d/$mode.mid" \
           "$d/${mode}_kontakt_r1.wav" "$d/${mode}_ours.wav" > "$d/draws.txt"
