@@ -1112,7 +1112,7 @@ pub struct MarcatoTransitionSpec {
     pub lt_vel_db: f32,
     /// The LT's phrase ramp, deci-dB / ms as the script ships them
     /// (`$4lqhx`, `$ee3a4`, `$xu41m`, `$c2hkn`; CSSS 11757-11768), see
-    /// [`MarcatoTransitionSpec::lt_ramp_ddb`]. None = no ramp.
+    /// [`ksp_phrase_ramp_ddb`]. None = no ramp.
     #[facet(default)]
     pub lt_ramp: Option<[i32; 4]>,
     pub lt_env: Vec<EnvSegmentSpec>,
@@ -1253,45 +1253,43 @@ pub struct LegatoOverlay {
     pub lt_offset_low_latency: Option<Vec<u32>>,
 }
 
-impl MarcatoTransitionSpec {
-    /// The LT's phrase ramp at `elapsed_ms` past the phrase anchor, in
-    /// deci-dB, and whether the anchor moves to `now − window` — the
-    /// script's integer arithmetic line for line (CSSS 11757-11768):
-    ///
-    /// ```text
-    /// if (elapsed <= $xu41m)          ; A: start + |mid| over the window
-    ///     $1z3x0 := $4lqhx*100 - ($ee3a4*100*elapsed/$xu41m)
-    /// else
-    ///     if (elapsed <= $c2hkn)      ; B: mid back toward 0
-    ///         $1z3x0 := $ee3a4*100 + elapsed*(abs($ee3a4)*100/$c2hkn)
-    ///     end if                      ; C: 0
-    ///     $0nind := $ENGINE_UPTIME - $xu41m
-    /// end if
-    /// $1z3x0 := $1z3x0/100
-    /// ```
-    #[must_use]
-    pub fn lt_ramp_ddb(ramp: Option<[i32; 4]>, elapsed_ms: i64) -> (i32, bool) {
-        let Some([start, mid, window, span]) = ramp else {
-            return (0, false);
-        };
-        let (start, mid, window, span) = (
-            i64::from(start),
-            i64::from(mid),
-            i64::from(window),
-            i64::from(span),
-        );
-        let (v, moved) = if elapsed_ms <= window {
-            (start * 100 - mid * 100 * elapsed_ms / window.max(1), false)
-        } else if elapsed_ms <= span {
-            (
-                mid * 100 + elapsed_ms * (mid.abs() * 100 / span.max(1)),
-                true,
-            )
-        } else {
-            (0, true)
-        };
-        ((v / 100) as i32, moved)
-    }
+/// A marcato transition's phrase ramp (CSSS `$1z3x0`) at `elapsed_ms` past the phrase anchor, in
+/// deci-dB, and whether the anchor moves to `now − window` — the
+/// script's integer arithmetic line for line (CSSS 11757-11768):
+///
+/// ```text
+/// if (elapsed <= $xu41m)          ; A: start + |mid| over the window
+///     $1z3x0 := $4lqhx*100 - ($ee3a4*100*elapsed/$xu41m)
+/// else
+///     if (elapsed <= $c2hkn)      ; B: mid back toward 0
+///         $1z3x0 := $ee3a4*100 + elapsed*(abs($ee3a4)*100/$c2hkn)
+///     end if                      ; C: 0
+///     $0nind := $ENGINE_UPTIME - $xu41m
+/// end if
+/// $1z3x0 := $1z3x0/100
+/// ```
+#[must_use]
+pub fn ksp_phrase_ramp_ddb(ramp: Option<[i32; 4]>, elapsed_ms: i64) -> (i32, bool) {
+    let Some([start, mid, window, span]) = ramp else {
+        return (0, false);
+    };
+    let (start, mid, window, span) = (
+        i64::from(start),
+        i64::from(mid),
+        i64::from(window),
+        i64::from(span),
+    );
+    let (v, moved) = if elapsed_ms <= window {
+        (start * 100 - mid * 100 * elapsed_ms / window.max(1), false)
+    } else if elapsed_ms <= span {
+        (
+            mid * 100 + elapsed_ms * (mid.abs() * 100 / span.max(1)),
+            true,
+        )
+    } else {
+        (0, true)
+    };
+    ((v / 100) as i32, moved)
 }
 
 /// The overridable [`MarcatoTransitionSpec`] fields of a section.

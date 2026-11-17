@@ -344,7 +344,7 @@ impl SampleEngine {
     }
 
     /// The LT's phrase ramp (dB) for a connection now, moving the phrase
-    /// anchor as the script does (`MarcatoTransitionSpec::lt_ramp_ddb`).
+    /// anchor as the script does (`spec::ksp_phrase_ramp_ddb`).
     fn marcato_lt_ramp_db(&mut self, mt: &MarcatoTransitionSpec) -> f32 {
         if mt.lt_ramp.is_none() {
             return 0.0;
@@ -353,7 +353,7 @@ impl SampleEngine {
         // `$ENGINE_UPTIME` counts whole ms
         let elapsed =
             (frames_to_ms(now.saturating_sub(self.ab_anchor_frame), self.sample_rate)) as i64;
-        let (ddb, moved) = MarcatoTransitionSpec::lt_ramp_ddb(mt.lt_ramp, elapsed);
+        let (ddb, moved) = crate::spec::ksp_phrase_ramp_ddb(mt.lt_ramp, elapsed);
         if moved {
             let window = mt.lt_ramp.map_or(0, |r| r[2].max(0) as u32);
             self.ab_anchor_frame =
@@ -456,7 +456,7 @@ impl SampleEngine {
 #[cfg(test)]
 mod tests {
     use super::marcato_lt_vel_db;
-    use crate::spec::MarcatoTransitionSpec;
+    use crate::spec::ksp_phrase_ramp_ddb;
 
     #[test]
     fn lt_velocity_term_is_the_scripts_integer_deci_db() {
@@ -470,7 +470,7 @@ mod tests {
     #[test]
     fn lt_ramp_follows_the_scripts_three_branches() {
         let r = Some([-60, -30, 250, 2000]); // CSSS $4lqhx $ee3a4 $xu41m $c2hkn
-        let at = |t| MarcatoTransitionSpec::lt_ramp_ddb(r, t);
+        let at = |t| ksp_phrase_ramp_ddb(r, t);
         assert_eq!(at(0), (-60, false));
         assert_eq!(at(125), (-45, false));
         assert_eq!(at(250), (-30, false));
@@ -478,6 +478,6 @@ mod tests {
         assert_eq!(at(1000), (-20, true));
         assert_eq!(at(2000), (-10, true));
         assert_eq!(at(2001), (0, true));
-        assert_eq!(MarcatoTransitionSpec::lt_ramp_ddb(None, 0), (0, false));
+        assert_eq!(ksp_phrase_ramp_ddb(None, 0), (0, false));
     }
 }
