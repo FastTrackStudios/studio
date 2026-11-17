@@ -476,6 +476,11 @@ pub struct Voice {
     stretch: Option<Stretch>,
     /// A script's `fade_out` owns this voice's end (see `script_fade`).
     script_faded: bool,
+    /// Its key went up (a note-off reached it). A script's fade is not a
+    /// key-up: Kontakt's `fade_out` ramps the voice's level and leaves its
+    /// envelopes held, so a script-faded voice's envelopes release only
+    /// with the key.
+    key_up: bool,
     /// Reads through Kontakt's Normal-quality resampler
     /// ([`super::resample`]) instead of the linear one: set by the pool for a
     /// library whose `performance.interpolation` asks for it.
@@ -962,6 +967,7 @@ impl Voice {
             pitch: None,
             stretch: None,
             script_faded: false,
+            key_up: false,
             kt: None,
             tm2: None,
         }
@@ -1058,6 +1064,7 @@ impl Voice {
             pitch: None,
             stretch: None,
             script_faded: false,
+            key_up: false,
             kt: None,
             tm2: None,
         }
@@ -1720,6 +1727,7 @@ impl Voice {
     }
 
     pub fn note_off_with_release_frames(&mut self, release_frames: usize) {
+        self.key_up = true;
         match self.kind {
             // A one-shot plays to its end — unless a breakpoint amp envelope
             // shapes it, which releases with the key like any other voice.
@@ -1776,6 +1784,14 @@ impl Voice {
                 }
             }
         }
+    }
+
+    /// Whether the voice's envelopes walk past their hold: it is fading
+    /// (`state`, the state the frame plays in) by its key-up or by anything
+    /// but a script.
+    #[inline]
+    fn envelopes_released(state: &VoiceState, key_up: bool, script_faded: bool) -> bool {
+        !matches!(state, VoiceState::Playing) && (key_up || !script_faded)
     }
 
     /// Returns true when this voice should be removed from the pool.
@@ -2207,7 +2223,7 @@ impl Voice {
         // Decoded ENV_FLEX amplitude envelope. Freezes at the sustain-hold
         // point while Playing (held note stays steady); advances through the
         // decay once Releasing. Multiplied on top of the note-off release fade.
-        let released = !matches!(self.state, VoiceState::Playing);
+        let released = Self::envelopes_released(&self.state, self.key_up, self.script_faded);
         let flex = match &mut self.flex {
             Some(f) => f.next(released),
             None => 1.0,
@@ -2517,7 +2533,7 @@ impl Voice {
             furthest = b;
             let (l, r) = (l0 + (l1 - l0) * frac, r0 + (r1 - r0) * frac);
             // The envelopes, as `next_frame` steps them.
-            let released = !matches!(state, VoiceState::Playing);
+            let released = Self::envelopes_released(&state, self.key_up, self.script_faded);
             let flex = match &mut self.flex {
                 Some(f) => f.next(released),
                 None => 1.0,
@@ -3900,6 +3916,32 @@ mod stretch_tests {
             v.next_frame();
         }
         assert!(v.is_done());
+    }
+
+    /// A script's fade is not a key-up: the voice's held envelope stays at
+    /// its hold while the fade runs (Kontakt's `fade_out` ramps the level
+    /// alone), so the fade is linear; the key-up then releases it.
+    #[test]
+    fn a_script_fade_leaves_the_envelope_held() {
+        let ones = Arc::new(SampleData::from_f32(vec![0.5; 48_000], 1, 48_000, 48_000));
+        let env = FlexEnv::from_segments(&[(1.0, 1.0, 0.5), (100.0, 0.0, 0.5)], 0.0, 48_000, true)
+            .map(|e| e.with_release_segment(Some(1)));
+        let mut pool = VoicePool::new();
+        let mut v = Voice::with_rate(ones, 60, VoiceKind::Short, 1.0, 1.0, 64);
+        if let Some(e) = env {
+            v = v.with_flex_env(e);
+        }
+        pool.spawn(v);
+        let v = &mut pool.voices_mut()[0];
+        for _ in 0..1000 {
+            v.next_frame();
+        }
+        VoicePool::script_fade(v, 1000);
+        for k in 0..900 {
+            let (l, _) = v.next_frame();
+            let want = 0.5 * (1.0 - k as f32 / 1000.0);
+            assert!((l - want).abs() < 1e-3, "frame {k}: {l} vs {want}");
+        }
     }
 
     /// A voice without the setting never takes Kontakt's path.

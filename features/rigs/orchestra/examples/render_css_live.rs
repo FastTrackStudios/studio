@@ -174,6 +174,11 @@ fn render_one(
     if let Some(v) = draws::<i32>(args, "--humanize") {
         rig.force_humanize(ID, &v);
     }
+    // `--solo-notes a,b,…`: only voices of these notes sound (one voice's
+    // part of a render, to take a residual apart)
+    if let Some(v) = draws::<u8>(args, "--solo-notes") {
+        rig.set_solo_notes(ID, Some(v.into_iter().collect()));
+    }
     // `--rrs a,b,…`: random short RR draws (0-based; woodwinds / brass).
     if let Some(v) = draws::<u8>(args, "--rrs") {
         rig.force_random_rrs(ID, &v);
