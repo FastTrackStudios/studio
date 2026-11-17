@@ -2464,7 +2464,8 @@ pub struct FxRouteSpec {
     pub env: Vec<EnvSegmentSpec>,
     /// `velocity`: the note's velocity is the source instead of `cc`, read
     /// once at the note's start (a script setting a stage per note, e.g.
-    /// MOJO 2's one-layer lowpass). Empty = `cc`.
+    /// MOJO 2's one-layer lowpass); `key`: the note's key (a Key Position
+    /// modulator). Empty = `cc`.
     #[facet(default)]
     pub source: String,
     /// The knob offset at each source value 0..=127, in the param's units,

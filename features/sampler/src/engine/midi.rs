@@ -3581,7 +3581,8 @@ impl SampleEngine {
                 let chain = super::inserts::InsertState::new(plan, self.sample_rate as f32, |cc| {
                     self.line_cc(l, cc)
                 })
-                .with_velocity(self.note_strike_vel[usize::from(note & 127)]);
+                .with_velocity(self.note_strike_vel[usize::from(note & 127)])
+                .with_key(note);
                 voice = voice.with_inserts(Some(chain));
             }
             // A patch layer's breakpoint amp envelope (not on the release

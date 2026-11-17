@@ -107,6 +107,9 @@ struct PlanRoute {
     /// The note's velocity is the source (`FxRouteSpec::source`), set once
     /// at the note's start by [`InsertState::with_velocity`].
     velocity: bool,
+    /// The note's key is the source (`FxRouteSpec::source` "key"), set once
+    /// at the note's start by [`InsertState::with_key`].
+    key: bool,
 }
 
 /// A dynamic layer's insert chain, shared by its voices.
@@ -246,6 +249,7 @@ fn plan_route(r: &FxRouteSpec, stage: u8, s: &PlanStage, sample_rate: f32) -> Op
             .collect(),
         env_depth: r.intensity * span,
         velocity: r.source.eq_ignore_ascii_case("velocity"),
+        key: r.source.eq_ignore_ascii_case("key"),
     })
 }
 
@@ -330,7 +334,7 @@ impl InsertState {
     /// The controllers' current values (read again every block).
     pub fn set_ccs(&mut self, cc: impl Fn(u8) -> u8) {
         for (t, r) in self.tgt.iter_mut().zip(&self.plan.routes) {
-            if r.env.is_empty() && !r.velocity {
+            if r.env.is_empty() && !r.velocity && !r.key {
                 *t = r.lut[usize::from(cc(r.cc).min(127))];
             }
         }
@@ -343,6 +347,21 @@ impl InsertState {
         for (i, r) in self.plan.routes.iter().enumerate() {
             if r.velocity {
                 let v = r.lut[usize::from(velocity.min(127))];
+                self.tgt[i] = v;
+                self.cur[i] = v;
+            }
+        }
+        self.countdown = 0;
+        self
+    }
+
+    /// The note's key for its key routes (a Key Position modulator: fixed
+    /// for the voice's life).
+    #[must_use]
+    pub fn with_key(mut self, key: u8) -> Self {
+        for (i, r) in self.plan.routes.iter().enumerate() {
+            if r.key {
+                let v = r.lut[usize::from(key.min(127))];
                 self.tgt[i] = v;
                 self.cur[i] = v;
             }

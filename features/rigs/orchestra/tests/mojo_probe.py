@@ -28,6 +28,8 @@ Modes:
             lengths (CC18 0/64/127) and trill intervals (CC42), the
             >= 120 keyswitch override over a held chord, a note outside a
             type's range (Alto), back to Normal.
+  keytable  Sustains on every key of the range at one velocity (the sax
+            groups' Key Position EQ routes move a band on some keys).
   phrases   Musical horn lines mixing articulations: stabs into staccato, a
             sustain ended by a fall (Falls keyswitch at velocity 127 while held),
             doit / shake releases (release-type keys 97 / 98, then 96 back).
@@ -196,6 +198,13 @@ def reltypes(p, ranges):
     p.t += 0.5
 
 
+def keytable(p, ranges):
+    lo, hi = ranges["Sus"]
+    p.ks("Sus")
+    for key in range(lo, min(hi, lo + 24) + 1):
+        p.unit("KEYTAB", f"Sus key{key} v100", [(0, 0.8, key, 100)], tail=1.2)
+
+
 def phrases(p, ranges):
     lo, hi = ranges["Sus"]
     sc = scale(lo, hi)
@@ -236,6 +245,7 @@ def swells(p, ranges):
 
 
 MODE_FN = {"sustains": sustains, "legato": legato, "stablegato": stablegato, "reltypes": reltypes,
+           "keytable": keytable,
            "phrases": phrases,
            "swells": swells}
 
