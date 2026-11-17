@@ -169,6 +169,11 @@ for mode in "${modes[@]}"; do
     fit_mode=shorts
     export CS_RR_MAX=9
   fi
+  # Solo Strings draws a loud first note's body variant at random: fit it
+  # like leg2's in the modes with loud first notes
+  if [ "$lib" = solo-strings ] && { [ "$mode" = probe ] || [ "$mode" = legato ]; }; then
+    fit_mode=leg2
+  fi
   # woodwinds marcato draws its pitch envelope per strike (fit_pitch_env.py)
   if [ "$lib" = woodwinds ] && [ "$mode" = marcato ]; then
     fit_mode=penv
@@ -188,7 +193,7 @@ for mode in "${modes[@]}"; do
         kind=--rrs
       fi
       [ "$lib" = brass ] && [ "$mode" = marcato ] && kind=--tunes
-      [ "$mode" = leg2 ] && kind=--variants
+      [ "$fit_mode" = leg2 ] && kind=--variants
       [ "$mode" = attack ] && kind=--attacks
       # woodwinds marc2: its marcato strikes draw a pitch envelope too —
       # held at 0 while the shorts' draws are fitted, fitted after them

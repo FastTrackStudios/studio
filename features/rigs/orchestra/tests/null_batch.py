@@ -91,6 +91,10 @@ def draw_files(lib, mode):
     # brass ext: Mutereps / Rips draw their RRs (and detune), a Taka phrase its hits
     if lib == "brass" and mode == "ext":
         return [("--rrs", "draws_rr.txt"), ("--tunes", "draws.txt")]
+    # CSSS draws a loud first note's body variant at random (random(2,4)),
+    # where CSS walks a sequence: every mode with loud first notes fits it
+    if lib == "solo-strings" and mode in ("probe", "legato"):
+        return [("--variants", "draws.txt")]
     fit_mode = "shorts" if lib != "strings" and mode == "marc2" else mode
     if fit_mode not in ("shorts", "pizz", "leg2", "attack"):
         return None

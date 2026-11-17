@@ -990,7 +990,16 @@ impl SampleEngine {
             // The body is a scripted VARIANT of the recording (KSP
             // `%v2aqt[$2ekvq]`, then `$2ekvq++`).
             let n = cfg.first_note_variants.len();
-            if n > 0 {
+            if n > 0 && cfg.first_note_variant_random {
+                // a forced draw (null-test replay) is the variant itself
+                let v = self.forced_variants.pop_front().unwrap_or_else(|| {
+                    let lo = cfg.first_note_variants.iter().copied().min().unwrap_or(2);
+                    let hi = cfg.first_note_variants.iter().copied().max().unwrap_or(lo);
+                    lo + (super::next_zone_random(&mut self.tune_rng) % usize::from(hi - lo + 1))
+                        as u8
+                });
+                self.spawn_variant = Some(v);
+            } else if n > 0 {
                 self.spawn_variant = Some(cfg.first_note_variants[self.variant_counter % n]);
                 self.variant_counter = (self.variant_counter + 1) % n;
             }

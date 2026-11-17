@@ -910,6 +910,11 @@ fn tsv_zone_fields(z: &TsvZone) -> Vec<(&'static str, String)> {
     if cs_is_rip(&z.articulation) {
         v.push(("rr_index", z.rr_index.to_string()));
     }
+    // A transition's interval is its velocity code (the decoded zone map's);
+    // a zone map written from file names alone carries none (CSSS).
+    if z.direction.is_some() {
+        v.push(("interval", z.interval.to_string()));
+    }
     if let Some(s) = z.sample_start {
         v.push(("sample_start", s.to_string()));
     }

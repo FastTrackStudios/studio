@@ -919,9 +919,10 @@ legato_engine {
     // delay (null −34..−37 dB per attack, gen_probe.py --attack).
     first_note_variants     (2 3 4 2 3 2 4 3 4 2 3 4 2 4 3 2 4 3)
     first_note_variant_init 9
+    first_note_variant_random true   // CSSS draws the body variant random(2,4) (CSSS 8637-8642)
     first_note_attack_voice false
     first_note_attack { articulation VibsusAtk, layer_articulation Vibsus, velocities ((5 7) (8 9)) }
-    first_note_mute_ms      (38.61 37.34)
+    first_note_mute_ms      (0 0)   // no "F. wait": the body fades in at once over $2krfe (CSSS 9047-9092)
 
     // The transition as Kontakt runs it — every number null-tested against
     // Kontakt renders of the legato probe (gen_probe.py --legato; each

@@ -42,30 +42,27 @@ csw.SLOT_ALSO = dict(csw.SLOT_ALSO, Nonvib={"Nonvib", "NVsus"})
 
 
 def legato(pers, zones=None, group_names=None, two_player=False):
-    p = lambda v: css.one(pers, v)  # noqa: E731
-    standard = f"({p('$n4tyf')} {p('$5vo4f')} {p('$3mu55')})"
-    print("legato {")
-    # the transition's entry by velocity zone: Standard (CSSS 8714-8731);
-    # Advanced ($lttts/$pdeco/$ezee1) only when the patch's toggle is on
-    print(f"    lt_offset_low_latency {standard}")
-    print(f"    lt_offset_expressive {standard}")
-    if zones is not None:
-        rows = csw.body_handoff(pers, zones, group_names, two_player)
-        if rows:
-            print("    body_handoff (")
-            print("\n".join(rows))
-            print("    )")
-    # no overlap delay in CSSS (no legtrans_OD, no $b0n3s)
-    print("    overlap_delay {")
-    for mode in css.OVERLAP_DELAY:
-        print(f"        {mode} {{")
-        print("            soft { thresholds_ms (0), anchors_ms (0) }")
-        print("            loud { thresholds_ms (0), anchors_ms (0) }")
-        print("        }")
-    print("    }")
-    # zones 2-3: the body fades in over "Alt. attack" $2krfe after the mute
-    print(f"    first_note_fade_ms ({p('$2krfe')} {p('$2krfe')})")
-    print("}")
+    """CSSS's legato is CSB's (the same knobs: old-body fades $mhmq3 / $qkgxg /
+    $yn5xm, the LT retire table $w4sb3 / $elc3z / $h3l3o / $4wrso, the body
+    handoffs %k1aqh / %wu5b4), with the transition entry by velocity zone in
+    Standard's $n4tyf / $5vo4f / $3mu55 (CSB: $k2afl / $xem4t / $yds0m) and
+    no overlap delay; plus the first note's fade after the mute ($2krfe)."""
+    import contextlib, io  # noqa: PLC0415
+
+    import csb_instrument_spec as csb  # noqa: PLC0415
+
+    aliased = dict(pers)
+    for csb_name, csss_name in (("$k2afl", "$n4tyf"), ("$xem4t", "$5vo4f"), ("$yds0m", "$3mu55")):
+        aliased[csb_name] = pers[csss_name]
+    # CSB-only knobs CSSS lacks, at their off values: "HighRange" $vv4qt 127
+    aliased.setdefault("$vv4qt", [127])
+    groups = {g["name"][4:]: g for g in ALL_GROUPS if g["name"].startswith("Mix ")}
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        csb.legato(aliased, groups, zones, group_names)
+    text = out.getvalue().rstrip()
+    assert text.endswith("}")
+    print(text[:-1] + f"    first_note_fade_ms ({css.one(pers, '$2krfe')} {css.one(pers, '$2krfe')})\n}}")
 
 
 csw.legato = legato

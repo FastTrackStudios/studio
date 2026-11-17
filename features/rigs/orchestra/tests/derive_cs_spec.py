@@ -196,6 +196,10 @@ LIBS["solo-strings"] = {
     # library-wide differences (tests/csss_ksp_var_map.tsv; CSSS Violin I
     # script_1.ksp): an older build of the engine
     "subs": [
+        (r"(first_note_variant_init\s+\S+[^\n]*)", "\\1\n    first_note_variant_random true   // CSSS draws the body variant random(2,4) (CSSS 8637-8642)",
+         "CSSS random first-note variant"),
+        (r"first_note_mute_ms[^\n]*", "first_note_mute_ms      (0 0)   // no \"F. wait\": the body fades in at once over $2krfe (CSSS 9047-9092)",
+         "CSSS no first-note wait"),
         (r"master_tune_cents\s+\S+[^\n]*", "master_tune_cents    0  // every CSSS group has tune 1.0 (CSS: 1.0052122); null: Kontakt plays the zone tune alone",
          "CSSS groups are untuned"),
         (r"cc19_soft\s+\([^\n]*", "cc19_soft       ((0 0))                 // set_controller(19, $313em = 0) on every marcato note (CSSS 11951-11954)",

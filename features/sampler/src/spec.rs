@@ -2776,6 +2776,11 @@ pub struct LegatoEngineSpec {
     /// Initial counter for `first_note_variants` (CSS ships `$2ekvq` = 9).
     #[facet(default)]
     pub first_note_variant_init: u8,
+    /// Draw the first note's variant at random from `first_note_variants`'
+    /// values instead of walking the list (CSSS: `random(2,4)`, KSP 8637-8642;
+    /// CSS walks `%v2aqt`). A forced draw (`set_forced_variants`) comes first.
+    #[facet(default)]
+    pub first_note_variant_random: bool,
     /// Whether a loud first note layers the attack-ornament voice. CSS: no —
     /// its attack velocities (5–9) have no vibsus zones, so Kontakt plays
     /// nothing there (null test: silent for the first 38 ms).
@@ -2994,6 +2999,7 @@ impl Default for LegatoEngineSpec {
             retrigger: None,
             velocity_splits: Vec::new(),
             first_note_variants: Vec::new(),
+            first_note_variant_random: false,
             first_note_variant_init: 0,
             first_note_attack_voice: None,
             first_note_attack: None,
