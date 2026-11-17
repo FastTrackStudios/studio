@@ -87,6 +87,29 @@ def ahdsr_env(groups, start):
         env.get("intensity", 1.0)
 
 
+def layer_depths(art, start, names, groups):
+    """`amp_env_depths ( … )` lines: each layer's Bus1 group volume-AHDSR
+    intensity (the layers of one articulation can differ: Alto Sax sustains
+    1, 1, 0, 1; Kontakt ends a voice with its envelope whatever the depth),
+    or nothing when every layer is at 1."""
+    by_index = {g["index"]: g for g in groups}
+    out, k = [], 0
+    while True:
+        gi = start + 4 * k
+        cls = mojo_zones.classify(names.get(gi, "")) if gi in names else None
+        if cls is None or cls[0] != art:
+            break
+        env = next((e for e in by_index[gi]["envelopes"] if e["kind"] == "ENV_AHDSR"
+                    and e["target"] == "volume" and not e["bypassed"]), None)
+        if env is not None:
+            out.append((cls[1], env.get("intensity", 1.0)))
+        k += 1
+    if not out or all(d >= 0.999 for _, d in out):
+        return []
+    body = " ".join(f"{{dynamic {d}, depth {fmt(v)}}}" for d, v in out)
+    return [f"        amp_env_depths ( {body} )  // per layer: the ENV -> volume intensity"]
+
+
 def key_tables(mods, slot, bands):
     """Key Position routes on an EQ slot's band gains, as `(param, table)`:
     Kontakt reads a shaped Key source centred, frange_bi(table) = 2y − 1
@@ -438,6 +461,7 @@ def build(nki):
             lines += [f"        amp_env ( {body} )", "        amp_env_hold true", "        amp_env_release 1"]
             if depth is not None:
                 lines.append(f"        amp_env_depth {fmt(depth)}  // the ENV -> volume route's intensity")
+            lines += layer_depths(art, starts[i], names, groups)
         if art in TIMED:
             pre, cc, ship = TIMED[art]
             bpm = int(p0[f"${pre}BPM"][0])

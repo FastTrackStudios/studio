@@ -3327,6 +3327,7 @@ impl SampleEngine {
         let flex_env = amp_env_for(
             &self.patch.spec,
             &flex_artic,
+            &self.patch.spec.zones[idx].dynamic,
             &kind,
             is_sustain_layer,
             self.sample_rate,

@@ -1398,6 +1398,7 @@ pub struct ArticulationOverlay {
     pub keynoise: Option<KeynoiseSpec>,
     pub timed_length: Option<TimedLengthSpec>,
     pub amp_env_depth: Option<f32>,
+    pub amp_env_depths: Option<Vec<DynDepthSpec>>,
     pub phrase: Option<PhraseSpec>,
     /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
     pub overlay_cc1_scale: Option<Vec<u8>>,
@@ -1517,6 +1518,9 @@ impl SectionOverlay {
             }
             if let Some(v) = o.amp_env_depth {
                 a.amp_env_depth = Some(v);
+            }
+            if let Some(v) = &o.amp_env_depths {
+                a.amp_env_depths.clone_from(v);
             }
             if let Some(v) = &o.phrase {
                 a.phrase = Some(v.clone());
@@ -2771,6 +2775,11 @@ pub struct ArticulationSpec {
     /// before (MOJO 2 sustain groups: 0.043).
     #[facet(default)]
     pub amp_env_depth: Option<f32>,
+    /// Per dynamic layer, its own `amp_env_depth` (a library whose layers'
+    /// groups carry different ENV → volume intensities: MOJO 2 Alto Sax's
+    /// sustains are 1, 1, 0, 1). A dynamic not listed takes `amp_env_depth`.
+    #[facet(default)]
+    pub amp_env_depths: Vec<DynDepthSpec>,
     /// A script-played release sample (see [`ReleaseSampleSpec`]): at the
     /// note-off the note's voices fade out and a zone of `artic` starts in
     /// the note-on's layer. `None` = the library's release path.
@@ -2989,6 +2998,13 @@ pub struct ReleaseTypesSpec {
     /// articulation cutoff).
     #[facet(default)]
     pub cutoff: bool,
+}
+
+/// One dynamic layer's envelope depth (`ArticulationSpec::amp_env_depths`).
+#[derive(Debug, Clone, Facet)]
+pub struct DynDepthSpec {
+    pub dynamic: String,
+    pub depth: f32,
 }
 
 /// A tempo-synced one-shot (MOJO 2's swells and crescendos,

@@ -2623,6 +2623,7 @@ fn css_short_makeup_db(_artic_id: &str) -> f32 {
 fn amp_env_for(
     spec: &crate::spec::LibrarySpec,
     artic_id: &str,
+    dynamic: &str,
     kind: &VoiceKind,
     is_sustain_layer: bool,
     sample_rate: u32,
@@ -2663,7 +2664,13 @@ fn amp_env_for(
         .articulations
         .iter()
         .find(|a| a.id.eq_ignore_ascii_case(artic_id))
-        .and_then(|a| a.amp_env_depth);
+        .and_then(|a| {
+            a.amp_env_depths
+                .iter()
+                .find(|d| d.dynamic.eq_ignore_ascii_case(dynamic))
+                .map(|d| d.depth)
+                .or(a.amp_env_depth)
+        });
     let tuples: Vec<(f32, f32, f32)> = segs.iter().map(|s| (s.time_ms, s.level, s.curve)).collect();
     FlexEnv::from_segments(&tuples, 0.0, sample_rate, hold).map(|e| {
         let e = e.with_release_segment(release);
