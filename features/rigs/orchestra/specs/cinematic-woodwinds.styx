@@ -616,8 +616,8 @@ articulations (
         // against Kontakt with tests/marcato_fit.py --model: −34..−43 dB.
         marcato_transition {
             body_delay_ms   40                      // wait($5aowl) = 40 ms on every CSW patch before the body plays (KSP 12301-12814); the transition sample does not wait
-            busy_tick_ms    1                       // the crossfade loop ticks $0cqdq = 1 ms: a note inside it waits a tick (KSP 13616-13632)
             xfade_ms        70                      // $a3zg3 = 70 on every CSW patch (KSP 14666)
+            busy_tick_ms    1                       // the crossfade loop ticks $0cqdq = 1 ms: a note inside it waits a tick (KSP 13616-13632)
             split           (50 50)                 // $igmiu 50, no hard table in CSW
             split_big       50
             node_divisor    ((0 65))                // $x444h 65, flat
