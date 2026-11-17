@@ -155,6 +155,7 @@ def main(root, nki, inst, lib):
     hier = [int(x) for x in re.search(r"declare %str___hierarchy\[24\] := \(([^)]*)\)", script)
             .group(1).split(",")][6 * mode: 6 * mode + 6]
     widths = [4] + [opens[s - 1] - opens[s] - 1 for s in range(1, len(opens))]
+    timer_ms = int(re.search(r"set_listener\(\$NI_SIGNAL_TIMER_MS,(\d+)\)", script).group(1)) / 1000
     seed = int(re.search(r"declare \$math__rand_seed := (\d+)", script).group(1))
     mult = int(re.search(r"\$math__rand_seed := (\d+)\*\$math__rand_seed\+1", script).group(1))
 
@@ -198,6 +199,9 @@ def main(root, nki, inst, lib):
          "    rr_slot_stride 24",
          f"    onset_delay_us {51 + 1000 * ep[26]}",
          "    retrigger_fade_ms 400",
+         # s3__engine__reset_hand from the timer listener once nothing is held
+         # for engine_pars[59] ms (on release L18127, on listener L25632)
+         f"    idle_reset {{ after_ms {ep[59]}, tick_ms {timer_ms} }}",
          # anti-repetition off (engine_pars[20] = 0): the LCG still steps once
          # per play_event (L7199), never borrowing
          f"    borrow {{ chance_permille 0, seed {seed}, multiplier {mult}, frets 2 }}",
@@ -211,6 +215,19 @@ def main(root, nki, inst, lib):
          f"min_held_ms {ep[52]}, max_held_ms {ep[53]}, keys {M(unp, 4)}, gain_scale 0.5 }}",
          # economy picking (engine_pars[10] = 3, L16196-16219): %tact___meta[64·a + 35]
          f"    picking {{ articulations ({' '.join(picked)}) }}",
+         # hammer (Abyss model §5; Argent/Darkwall §5): %s3__hammer_sources
+         # ring, the new note's articulation in %s3__hammerable_artics, its
+         # velocity within Legato (Hammer/Pull)'s VEL rule (matrix x14),
+         # |interval| ≤ engine_pars[8]; volume_offset engine_pars[27]·−5000
+         # mdB; engine_pars[28] forces the ringing string
+         f"    hammer {{ articulation HammerPull, "
+         f"sources ({' '.join(names[a] for a in lists['s3__hammer_sources'])}), "
+         f"from ({' '.join(names[a] for a in lists['s3__hammerable_artics'])}), "
+         f"max_velocity {X(names.index('HammerPull'), 14)}, range {ep[8]}, gain_db {-5 * ep[27]}, "
+         f"force {'true' if ep[28] == 1 else 'false'} }}",
+         # Tapping (trigger type 8): a hammer from the ringing note or the
+         # fret; an idle open string plays Sustain
+         "    tap { articulation Tapping, open_as Sustain }",
          *([f"    tracks ({' '.join(f'{{pan {fmt(x)}}}' for x in pans)})"] if len(pans) > 1 else []),
          # x3 · meta[6]/10 µs (L7183)
          f"    start_offsets ({' '.join(f'{{articulation {a}, ms {fmt(ms)}}}' for a, ms in offsets)})",
@@ -243,7 +260,12 @@ def main(root, nki, inst, lib):
               f"        // group {g['name']}",
               f"        level_db {fmt(float(g['vol_db']))}",
               f"        amp_env ( {env_line(segs)} )",
-              "        amp_env_hold true",
+              # an AHDSR holds at its sustain; a sustain of 0 decays to silence
+              f"        amp_env_hold {'true' if segs[-1][1] > 0.01 else 'false'}",
+              # no release segment: a short voice would otherwise take its third
+              # (the decay) as one and hold before it; the release is the
+              # voice's own note-off fade (release_ms_by_held)
+              f"        amp_env_release {len(segs)}",
               f"        release_ms_by_held ((0 {fmt(stage_ms(X(a, 34), 12501.0))}))"]
         L += group_fx(slots, gjson[int(g["idx"])]) + ["    }"]
     # side recordings outside TACT: their group's saved envelope
@@ -257,7 +279,12 @@ def main(root, nki, inst, lib):
         L += ["    {", f"        id {aid}",
               f"        level_db {fmt(float(g['vol_db']))}",
               f"        amp_env ( {env_line(segs)} )",
-              "        amp_env_hold true",
+              # an AHDSR holds at its sustain; a sustain of 0 decays to silence
+              f"        amp_env_hold {'true' if segs[-1][1] > 0.01 else 'false'}",
+              # no release segment: a short voice would otherwise take its third
+              # (the decay) as one and hold before it; the release is the
+              # voice's own note-off fade (release_ms_by_held)
+              f"        amp_env_release {len(segs)}",
               f"        release_ms_by_held ((0 {fmt(rel)}))"]
         L += group_fx(slots, gjson[int(g["idx"])]) + ["    }"]
     L.append(")")

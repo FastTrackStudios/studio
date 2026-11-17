@@ -152,6 +152,7 @@ def main():
     widths = [4] + [opens[s - 1] - opens[s] - 1 for s in range(1, len(opens))]
     if mode == 2:
         sys.exit("Moving Lead's sliding hand window: not modelled yet")
+    timer_ms = int(re.search(r"set_listener\(\$NI_SIGNAL_TIMER_MS,(\d+)\)", script).group(1)) / 1000
     seed = int(re.search(r"declare \$math__rand_seed := (\d+)", script).group(1))
     mult = int(re.search(r"\$math__rand_seed := (\d+)\*\$math__rand_seed\+1", script).group(1))
     rr_seed = ints(p, "%s3___rr_seed", 4096 * 7)
@@ -184,6 +185,9 @@ def main():
          # poly window `wait(50)` µs at latency 0 (L7452)
          f"    onset_delay_us {51 + 1000 * ep[26]}",
          "    retrigger_fade_ms 400",
+         # s3__engine__reset_hand from the timer listener once nothing is held
+         # for engine_pars[59] ms (on release L18127, on listener L25632)
+         f"    idle_reset {{ after_ms {ep[59]}, tick_ms {timer_ms} }}",
          # Pop opens a Sustain whose velocity passes Pop's VEL rule
          # (%tact___matrix[128·2 + 13]); the body follows after
          # wait(engine_pars[54]·100 + 10 µs), the pop fading over 50 ms

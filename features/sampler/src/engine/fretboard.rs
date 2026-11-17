@@ -57,6 +57,10 @@ pub(crate) struct FretState {
     /// The extra pick's and the release noise's counters.
     pick_counter: usize,
     noise_counter: usize,
+    /// The string the last stroke was picked on (kept through a hand reset).
+    last_picked: Option<usize>,
+    /// When the last key-up left nothing held (frame).
+    idle_since: Option<u64>,
 }
 
 /// Notes struck within one poly window: (note, velocity, articulation, line).
@@ -157,6 +161,8 @@ impl FretState {
             cur_stroke: MISSING,
             pick_counter: 0,
             noise_counter: 0,
+            last_picked: None,
+            idle_since: None,
         };
     }
 
@@ -220,14 +226,15 @@ impl FretState {
 
     /// The pick stroke of a note on `string`: see `SampleEngine::fret_pick`.
     fn pick(&mut self, string: usize) {
-        let pd = match self.last_string {
-            None => 0,
-            Some(l) if string > l => 1,
-            Some(l) if string < l => 0,
-            Some(_) => 1 - self.pick_dir.unwrap_or(1),
+        let pd = match (self.last_string, self.last_picked) {
+            (None, _) | (_, None) => 0,
+            (Some(_), Some(l)) if string > l => 1,
+            (Some(_), Some(l)) if string < l => 0,
+            (Some(_), Some(_)) => 1 - self.pick_dir.unwrap_or(1),
         };
         self.pick_dir = Some(pd);
         self.cur_pd = pd;
+        self.last_picked = Some(string);
     }
 
     /// Seed KSP `random()` (restarts its state).
@@ -263,6 +270,18 @@ impl SampleEngine {
         if self.fret.strings != fb.strings.len() {
             self.fret.reset(&self.patch.spec, fb);
         }
+        // the idle hand reset, if a timer tick passed it since the board fell idle
+        if let (Some(r), Some(t0)) = (fb.idle_reset.as_ref(), self.fret.idle_since) {
+            let ms = |f: u64| f as f64 * 1000.0 / f64::from(self.sample_rate);
+            let due = ms(t0) + f64::from(r.after_ms);
+            let tick = f64::from(r.tick_ms.max(0.001));
+            if (due / tick).ceil() * tick <= ms(self.frames_rendered) {
+                self.fret.last_string = None;
+                self.fret.last_fret = -1;
+                self.fret.last_frets.fill(-1);
+            }
+        }
+        self.fret.idle_since = None;
         // The slide key only arms slides.
         if fb.slide.as_ref().is_some_and(|s| s.key == note) {
             self.fret.slide_held = true;
@@ -521,9 +540,32 @@ impl SampleEngine {
         let Some(fb) = self.patch.spec.fretboard.as_ref() else {
             return;
         };
-        let Some(string) = forced.or_else(|| self.fret.place(fb, note)) else {
+        let Some(mut string) = forced.or_else(|| self.fret.place(fb, note)) else {
             return;
         };
+        // Force same string (Argent/Darkwall L15983-16001): a lone note on
+        // an idle string moves to the nearest ringing one within range.
+        if let Some(h) = fb.hammer.as_ref().filter(|h| h.force) {
+            if forced.is_none() && self.fret.ringing[string].is_none() {
+                let mut best: Option<(usize, i32)> = None;
+                for (s, open) in fb.strings.iter().enumerate() {
+                    let Some(old) = self.fret.ringing[s] else {
+                        continue;
+                    };
+                    let d = (i32::from(note) - i32::from(old)).abs();
+                    let fret = i32::from(note) - i32::from(*open);
+                    if d <= i32::from(h.range)
+                        && (0..=i32::from(fb.frets)).contains(&fret)
+                        && best.is_none_or(|(_, b)| d < b)
+                    {
+                        best = Some((s, d));
+                    }
+                }
+                if let Some((s, _)) = best {
+                    string = s;
+                }
+            }
+        }
         let fret = i32::from(note) - i32::from(fb.strings[string]);
         let retrigger_ms = fb.retrigger_fade_ms;
         let lead_in = fb
@@ -580,6 +622,10 @@ impl SampleEngine {
         let played = match (hammer, lead_in) {
             _ if tap.is_some() => {
                 let (a, dir) = tap.clone().unwrap_or_default();
+                // an idle open string's tap is a plain note: its pick attack too
+                if dir.is_empty() {
+                    self.fret_extra_pick(string);
+                }
                 let g = self.fret_vel_gain(&a, velocity);
                 self.play_fretted(&a, dir, 0, string, note, velocity, g, 0.0)
                     .map(|zk| (a, zk))
@@ -1460,6 +1506,9 @@ impl SampleEngine {
             return false;
         }
         self.fret_let_go(note);
+        if self.fret.held.is_empty() {
+            self.fret.idle_since = Some(self.frames_rendered);
+        }
         true
     }
 

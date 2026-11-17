@@ -3979,6 +3979,19 @@ pub struct FretboardSpec {
     /// A noise a let-go note leaves, besides its release recording.
     /// `None` = none.
     pub noise_release: Option<FretNoiseReleaseSpec>,
+    /// The hand resets after the board falls idle. `None` = never.
+    pub idle_reset: Option<FretIdleResetSpec>,
+}
+
+/// The idle hand reset (see [`FretboardSpec::idle_reset`]), Shreddage's
+/// `s3__engine__reset_hand` from its timer listener: once a key-up leaves no
+/// note held, the first timer tick (every `tick_ms` from the start) at least
+/// `after_ms` later forgets the last string and fret and every string's last
+/// fret (−1); the pick stroke's own memory stays.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretIdleResetSpec {
+    pub after_ms: f32,
+    pub tick_ms: f32,
 }
 
 /// Pick strokes (see [`FretboardSpec::picking`]), economy picking as
@@ -4137,6 +4150,12 @@ pub struct FretHammerSpec {
     /// Level offset on a hammer (dB).
     #[facet(default)]
     pub gain_db: f32,
+    /// Force same string (Shreddage `[28]`): a lone note whose string is
+    /// idle moves to the ringing string within `range` it fits on (the
+    /// nearest; a tie to the higher string) and plays there — a hammer
+    /// when what rings is a source, else a fresh note that releases it.
+    #[facet(default)]
+    pub force: bool,
 }
 
 /// A lead-in (see [`FretboardSpec::lead_ins`]): `articulation` played at
