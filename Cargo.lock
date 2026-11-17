@@ -6045,6 +6045,7 @@ dependencies = [
  "nom 8.0.0",
  "rayon",
  "serde",
+ "session-format",
  "thiserror 2.0.20",
  "tracing",
 ]
@@ -11308,6 +11309,7 @@ dependencies = [
  "interchange",
  "loro",
  "roxmltree 0.20.0",
+ "session-format",
  "tempfile",
  "thiserror 2.0.20",
  "uuid",
