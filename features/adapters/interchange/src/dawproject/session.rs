@@ -51,11 +51,11 @@
 //!   item abuts exactly, where such a point would collide with that
 //!   item's first.
 
-use crate::document::{DawDocument, MarkerNode, TrackNode};
-use crate::error::DawResult;
-use crate::id::EntityId;
+use crate::dawproject::types as dp;
 use daw_proto::automation::EnvelopeType;
-use interchange::dawproject::types as dp;
+use session_format::document::{DawDocument, MarkerNode, TrackNode};
+use session_format::error::DawResult;
+use session_format::id::EntityId;
 
 /// Convert a `.session` document into a DAWproject.
 pub fn to_dawproject(document: &DawDocument) -> dp::DawProject {
@@ -144,7 +144,7 @@ fn automation_arrangement(document: &DawDocument) -> Option<dp::Arrangement> {
         // Only the items that actually carry a composite matter here: an
         // item with no volume ride contributes nothing to the lane, so it
         // cannot conflict with one that does.
-        let mut riding: Vec<(f64, f64, &crate::document::EnvelopeNode)> = node
+        let mut riding: Vec<(f64, f64, &session_format::document::EnvelopeNode)> = node
             .items
             .iter()
             .filter_map(|item| {
@@ -244,7 +244,9 @@ fn automation_arrangement(document: &DawDocument) -> Option<dp::Arrangement> {
 /// volume envelopes exist and none is named as the composite: there is
 /// no way to know which describes the item, and exporting a guess hands
 /// the other DAW a mix that is quietly wrong.
-fn composite_of(item: &crate::document::ItemNode) -> Option<&crate::document::EnvelopeNode> {
+fn composite_of(
+    item: &session_format::document::ItemNode,
+) -> Option<&session_format::document::EnvelopeNode> {
     if let Some(named) = item.envelopes.iter().find(|e| e.envelope.name == COMPOSITE) {
         return (!named.points.is_empty()).then_some(named);
     }
