@@ -392,6 +392,10 @@ enum LoopsCmd {
         /// Section label used in extracted WAV paths (e.g. "1st Violins").
         #[arg(long)]
         section: String,
+        /// Samples sit flat, `<mic>/<section>/<artic>/…` (CSW, CSB, CSSS),
+        /// not under the strings' category folders.
+        #[arg(long)]
+        flat: bool,
         /// Compare against loops already present instead of writing.
         #[arg(long)]
         check: bool,
@@ -482,10 +486,11 @@ pub fn cli_main(argv: impl IntoIterator<Item = OsString>) -> Result<()> {
                     target,
                     from_tsv,
                     section,
+                    flat,
                     check,
                     dry_run,
                 },
-        } => loops_inject(&target, &from_tsv, &section, check, dry_run),
+        } => loops_inject(&target, &from_tsv, &section, flat, check, dry_run),
         Cmd::Check { pack, src_root } => {
             if run_check(&pack, src_root.as_deref())? {
                 Ok(())
@@ -1842,7 +1847,11 @@ fn cs_category(artic: &str) -> Option<&'static str> {
 
 /// wav-relative-path → (`loop_start`, `loop_end`) for looped NKI zones.
 /// First-wins on per-file loop variants (matches nki-styx accumulation).
-fn load_loop_map(tsv: &Path, section_label: &str) -> Result<BTreeMap<String, (u64, u64)>> {
+fn load_loop_map(
+    tsv: &Path,
+    section_label: &str,
+    flat: bool,
+) -> Result<BTreeMap<String, (u64, u64)>> {
     let text = std::fs::read_to_string(tsv)?;
     let mut lines = text.lines();
     let header: Vec<&str> = lines
@@ -1884,12 +1893,16 @@ fn load_loop_map(tsv: &Path, section_label: &str) -> Result<BTreeMap<String, (u6
             continue;
         }
         let (artic, mic) = (parts[1], parts[2]);
-        let Some(cat) = cs_category(artic) else {
-            eprintln!("  WARNING: looped zone with unmapped articulation {artic:?}: {base}");
-            continue;
-        };
         let rest = parts[3..].join("_");
-        let wav = format!("{mic}/{section_label}/{cat}/{artic}/{rest}.wav");
+        let wav = if flat {
+            format!("{mic}/{section_label}/{artic}/{rest}.wav")
+        } else {
+            let Some(cat) = cs_category(artic) else {
+                eprintln!("  WARNING: looped zone with unmapped articulation {artic:?}: {base}");
+                continue;
+            };
+            format!("{mic}/{section_label}/{cat}/{artic}/{rest}.wav")
+        };
         if loops.contains_key(&wav) {
             if loops[&wav] != (ls, le) {
                 conflicts += 1;
@@ -1908,10 +1921,11 @@ fn loops_inject(
     target: &Path,
     from_tsv: &Path,
     section: &str,
+    flat: bool,
     check: bool,
     dry_run: bool,
 ) -> Result<()> {
-    let loops = load_loop_map(from_tsv, section)?;
+    let loops = load_loop_map(from_tsv, section, flat)?;
     println!(
         "{section}: {} looped file(s) mapped from {}",
         loops.len(),

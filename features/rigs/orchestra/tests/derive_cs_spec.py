@@ -187,6 +187,37 @@ LIBS["brass"] = {
     ],
 }
 
+LIBS["solo-strings"] = {
+    "title": "Cinematic Studio Solo Strings",
+    # the same articulations and slots as the strings (CSSS NKIs, groups.json)
+    "rename": {},
+    "drop": [],
+    "drop_blocks": [],
+    # library-wide differences (tests/csss_ksp_var_map.tsv; CSSS Violin I
+    # script_1.ksp): an older build of the engine
+    "subs": [
+        (r"master_tune_cents\s+\S+[^\n]*", "master_tune_cents    0  // every CSSS group has tune 1.0 (CSS: 1.0052122); null: Kontakt plays the zone tune alone",
+         "CSSS groups are untuned"),
+        (r"cc19_soft\s+\([^\n]*", "cc19_soft       ((0 0))                 // set_controller(19, $313em = 0) on every marcato note (CSSS 11951-11954)",
+         "CSSS CC19 = $313em"),
+        (r"cc19_other\s+\([^\n]*", "cc19_other      (0 0 0)",
+         "CSSS CC19 (other)"),
+        (r"cc18_soft_step\s+\([^\n]*", "cc18_soft_step  ((0 127))               // CSSS never sets CC18: its marcato groups have no CC18 route",
+         "CSSS no CC18 (step)"),
+        (r"cc18_soft_leap\s+\([^\n]*", "cc18_soft_leap  ((0 127))",
+         "CSSS no CC18 (leap)"),
+        (r"cc18_other\s+\([^\n]*", "cc18_other      (127 127 127)",
+         "CSSS no CC18 (other)"),
+        (r"body_env_cc19 \([^)]*\)", "body_env_cc19 ( {time_ms 4.0, level -1, curve 0.505}   // the marcato mod groups' one ENV_FLEX: CC19 -> level 1\n                            {time_ms 916.0, level 1.0, curve 0.7} )",
+         "CSSS marcato group flex"),
+        (r"old_sink_level\s+\S+", "old_sink_level    1.0   // no CC19 step mod in CSSS: the old body does not sink",
+         "CSSS old body has no step mod"),
+        (r"overlay \{ articulation Spiccato, cc1_scale \([^)]*\)",
+         "overlay { articulation Spiccato, cc1_scale (" + " ".join(["100"] * 128) + ")",
+         "CSSS overlay: no Velocomp, the raw velocity (CSSS 12053-12131)"),
+    ],
+}
+
 TAKE_FROM_STRINGS = ["performance", "dynamics", "articulations", "legato_engine", "short_note_timing"]
 TAKE_FROM_OWN = ["sections", "mics", "keyswitch"]
 

@@ -25,3 +25,7 @@ Solo French Horn	brass	br_hn	-3
 Solo Trombone	brass	br_tb	-10
 Solo Trumpet	brass	br_tpt	0
 Tuba	brass	br_tuba	-11
+Solo Violin	solo-strings	ss_v1	0
+Solo Violin II	solo-strings	ss_v2	0
+Solo Viola	solo-strings	ss_va	-7
+Solo Cello	solo-strings	ss_vc	-19

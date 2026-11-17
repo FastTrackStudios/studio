@@ -135,6 +135,16 @@ timeout 1800 "$signalpack" zones sync-tsv "$patch/library.styx" --from-tsv "$zon
 grep -E "matched|edited|wrote|borrowed|unreachable" "$sync_log" || true
 rm -f "$sync_log"
 case "$section" in
+  CSSS\ *)
+    # loop points: sync-tsv leaves them; inject the decoded ones (flat paths)
+    timeout 600 "$signalpack" loops inject "$patch/library.styx" --from-tsv "$ksp/zones.tsv" \
+        --section "$label" --flat | tail -1
+    # Cello names its non-vibrato recordings NVsus: they play as Nonvib
+    sed -i 's/^\(\s*articulation\) "NVsus"$/\1 "Nonvib"/' "$patch/library.styx"
+    # 3. the solo instrument's numbers
+    python3 -I "$here/csss_instrument_spec.py" "$ksp" > "$patch/section.styx"
+    echo "wrote $patch/section.styx ($(grep -c '^        id ' "$patch/section.styx") articulations)"
+    exit 0 ;;
   CSW\ *)
     # zones play as the Kontakt slot that holds them (the vibrato-less
     # instruments keep their NVsus recordings in the vibsus groups)
