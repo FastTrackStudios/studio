@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+"""MOJO 2 Horn Section: one instrument's decoded NKI → `_patches/<instrument>/library.styx`.
+
+usage: mojo_zones.py <library root> [<NKI name> …]   (default: every full instrument)
+
+Reads `_ksp/<NKI name>/{zones.tsv, groups.json, persistent_1.tsv}` and
+`_notes/raw_to_organized.tsv` (zone sample path → organized WAV). Writes the
+zones the engine plays, one per logical round robin:
+
+- articulation / dynamic / mic come from the zone's GROUP ("<Art>_<Layer> - BusN";
+  Bus1..4 = Mix/Close/Near/Room), never from the file name — a few groups play
+  another mic's file, and Kontakt plays what the group holds.
+- MOJO's `play_note` velocity is a round-robin index, not a dynamic: the
+  script plays `(127 / NumRR) * rr + 3` (script_1.ksp:25228, NumRR = `$1f1tu`
+  in persistent_1), so the zone whose velocity range holds that value is
+  logical RR `rr`. Each is written with `rr_index rr` and velocity 0..127.
+  (Trumpet ships NumRR 4 over 3 recorded zones: RR 0 and 1 share a file.)
+- legato groups encode the interval in the velocity: up `1 + i·10.5`,
+  down `127 − i·10.5` for i = 1..12 (script_1.ksp:26029-26050); written with
+  `direction` and `interval`.
+- the keyclick group keeps its own 11 RR zones (the script plays a random
+  velocity 1..127 into it).
+- gain_db = 20·log10(zvol), tune_cents = 1200·log2(tune), loops verbatim.
+"""
+import csv, json, math, os, re, shutil, sys, time
+
+ROOT = sys.argv[1] if len(sys.argv) > 1 else "/run/media/AudioHaven/Sampled/Horns/MOJO 2 Horn Section"
+BUS_MIC = {1: "Mix", 2: "Close", 3: "Near", 4: "Room"}
+TRILL = {1: "ht", 2: "wt", 3: "min3", 4: "maj3"}
+
+RULES = [
+    (r"^Sustains_Non_Vibrato_Velocity_(\d)_R$", "SusRel", "v{}"),
+    (r"^Sustains_Vibrato_Velocity_(\d)_R$", "SusVibRel", "v{}"),
+    (r"^Sustains_Non_Vibrato_Velocity_(\d)$", "Sus", "v{}"),
+    (r"^Sustains_Vibrato_Velocity_(\d)$", "SusVib", "v{}"),
+    (r"^Staccato_Velocity_(\d)_AttkAcnt$", "AttkAcnt", "v{}"),
+    (r"^Staccato_Velocity_(\d)$", "Stacc", "v{}"),
+    (r"^Stabs_Velocity_(\d)$", "Stabs", "v{}"),
+    (r"^Bend_Downs?$", "BendDown", "v1"),
+    (r"^Octave_Run_Down$", "RunDown", "v1"),
+    (r"^Octave_Run_Up$", "RunUp", "v1"),
+    (r"^Doits$", "Doits", "v1"),
+    (r"^Rise_[Tt]o_Hit$", "Rise", "v1"),
+    (r"^Shakes$", "Shakes", "v1"),
+    (r"^Trills \((\d)\)$", "Trills", "trill"),
+    (r"^Swells_Length_(\d)$", "Swells", "L{}"),
+    (r"^Crescendo(?:e)?s_Length_(\d)$", "Cresc", "L{}"),
+    (r"^Falls_Length_(\d)$", "Falls", "L{}"),
+    (r"^Doits_Releases$", "DoitRel", "v1"),
+    (r"^Shakes_Releases$", "ShakeRel", "v1"),
+    (r"^Falls_Length_(\d)_Releases$", "FallRel", "L{}"),
+    (r"^Trills \((\d)\)_Releases$", "TrillRel", "trill"),
+    (r"^Key(?:clicks?|noise)$", "Keyclick", "v1"),
+    (r"^Legato_Up_Velocity_(\d)$", "LegUp", "v{}"),
+    (r"^Legato_Down_Velocity_(\d)$", "LegDown", "v{}"),
+    (r"^Legato_UpDown_Unison_Tails_Velocity_(\d)$", "LegTail", "v{}"),
+    (r"^Octave_Legato_Up_Velocity_(\d)$", "OctLegUp", "v{}"),
+    (r"^Octave_Legato_Down_Velocity_(\d)$", "OctLegDown", "v{}"),
+]
+LEGATO = ("LegUp", "LegDown", "LegTail", "OctLegUp", "OctLegDown")
+
+
+def classify(group_name):
+    """Group name → (articulation id, dynamic, bus), or None for the dummy group."""
+    m = re.match(r"^(.*?)(?:\s*-\s*|_)Bu[sa]\s*(\d+)$", group_name.strip())
+    if not m:
+        if group_name.upper().startswith("DUMMY"):
+            return None
+        raise SystemExit(f"unrecognised group name {group_name!r}")
+    base, bus = m.group(1).strip(), int(m.group(2))
+    # The library's own group-name typos (the script addresses groups by
+    # index, so the names are labels only; check_starts cross-checks them).
+    base = re.sub(r"Val?ocity|Velovity", "Velocity", base)
+    base = re.sub(r"^Sustain_", "Sustains_", base)
+    base = re.sub(r"Velocity (\d)", r"Velocity_\1", base)
+    base = re.sub(r"_Release$", "_Releases", base)
+    for pat, art, dyn in RULES:
+        mm = re.match(pat, base)
+        if mm:
+            if dyn == "trill":
+                return art, TRILL[int(mm.group(1))], bus
+            return art, dyn.format(*mm.groups()), bus
+    raise SystemExit(f"unrecognised group base {base!r} (group {group_name!r})")
+
+
+def persistent(path):
+    out = {}
+    for row in csv.reader(open(path), delimiter="\t"):
+        if len(row) >= 2 and row[0] != "name":
+            out[row[0]] = row[1].split()
+    return out
+
+
+def raw_key(sample):
+    """Zone sample path → the raw path used in raw_to_organized.tsv."""
+    rel = sample.split("Samples/", 1)[1]  # <C>.nkx/Samples/<name>.ncw
+    c = rel.split(".nkx/")[0]
+    return os.path.join(c + ".nkx", c, rel.split(".nkx/", 1)[1])[:-4] + ".wav"
+
+
+def fmt(v):
+    if isinstance(v, str):
+        return json.dumps(v)
+    if isinstance(v, float):
+        s = f"{v:.6f}".rstrip("0").rstrip(".")
+        return s if "." in s else s + ".0"
+    return str(v)
+
+
+def zone_block(z):
+    body = "\n".join(f"        {k:<12} {fmt(v)}" for k, v in z.items())
+    return f"    {{\n{body}\n    }}"
+
+
+# Script articulation order (script_1.ksp:185-197) → our id; `%hr4to[i]` is
+# its first group, and group = start + 4·index + (bus − 1).
+SCRIPT_ARTS = ["Sus", "Stacc", "Stabs", "BendDown", "RunDown", "RunUp", "Doits",
+               "Rise", "Shakes", "Trills", "Swells", "Cresc", "Falls"]
+
+
+def check_starts(nki, groups, starts):
+    """The script's group index for every core articulation group → its bus.
+
+    The script addresses a group as start + 4·index + (bus − 1), never by
+    name, so the index decides the mic. A name naming another articulation is
+    an error; a name naming another bus is a label slip (Trumpet Muted group
+    96 "Rise_To_Hit - Bus2" holds the Mix files) — reported, index wins.
+    """
+    bus_of = {}
+    for i, art in enumerate(SCRIPT_ARTS):
+        lo = starts[i]
+        for gi in range(lo, lo + 4):
+            cls = classify(groups.get(gi, "?"))
+            if cls is None or cls[0] != art:
+                raise SystemExit(f"{nki}: group {gi} {groups.get(gi)!r} is not {art} "
+                                 f"(%hr4to[{i}] = {lo})")
+            if cls[2] != gi - lo + 1:
+                print(f"  {nki}: group {gi} {groups[gi]!r} plays as Bus{gi - lo + 1} (by index)")
+            bus_of[gi] = gi - lo + 1
+    return bus_of
+
+
+def build(nki, organized):
+    ksp = os.path.join(ROOT, "_ksp", nki)
+    inst = re.sub(r"\s+2\.0$", "", nki)
+    groups = {g["index"]: g["name"] for g in json.load(open(os.path.join(ksp, "groups.json")))}
+    pers = persistent(os.path.join(ksp, "persistent_1.tsv"))
+    num_rr = int(pers["$1f1tu"][0])
+    bus_of = check_starts(nki, groups, [int(x) for x in pers["%hr4to"]])
+
+    by_group = {}
+    for r in csv.DictReader(open(os.path.join(ksp, "zones.tsv")), delimiter="\t"):
+        by_group.setdefault(int(r["group"]), []).append(r)
+
+    out, skipped = [], 0
+    for gi, rs in sorted(by_group.items()):
+        cls = classify(groups[gi])
+        if cls is None:
+            skipped += len(rs)
+            continue
+        art, dyn, bus = cls
+        bus = bus_of.get(gi, bus)
+
+        def emit(r, **extra):
+            raw = raw_key(r["sample"])
+            if raw not in organized:
+                raise SystemExit(f"{nki}: no organized file for {raw}")
+            z = {
+                "section": inst,
+                "file": organized[raw],
+                "key_min": int(r["key_lo"]),
+                "key_max": int(r["key_hi"]),
+                "root_key": int(r["root"]),
+                "vel_min": 0,
+                "vel_max": 127,
+                "rr_index": 0,
+                "mic": BUS_MIC[bus],
+                "articulation": art,
+                "dynamic": dyn,
+            }
+            z.update(extra)
+            gain = float(r["zvol"])
+            z["gain_db"] = round(20 * math.log10(gain), 6) if gain > 0 else -144.0
+            z["tune_cents"] = round(1200 * math.log2(float(r["tune"])), 6)
+            if int(r["start_mod"]) > 0:
+                z["start_mod"] = int(r["start_mod"])
+            ls, le = int(r["loop_start"]), int(r["loop_end"])
+            if le > ls >= 0:
+                z["loop_start"], z["loop_end"] = ls, le
+            out.append(z)
+
+        # Each zone keeps its own key range: within one group the velocity
+        # slots of a note can span different keys (Alto Sax vibrato G3:
+        # slots 1-2 cover 67-68, slot 3 covers 67-69). Where no zone holds a
+        # key at the played velocity, Kontakt plays nothing; so do we.
+        def holding(v):
+            return [r for r in rs if int(r["vel_lo"]) <= v <= int(r["vel_hi"])]
+
+        if art in LEGATO:
+            up = art in ("LegUp", "OctLegUp")
+            for i in range(1, 13):
+                v = int(1 + i * 10.5) if up else int(127 - i * 10.5)
+                for r in holding(v):
+                    emit(r, direction="up" if up else "down", interval=i)
+        elif art == "Keyclick":
+            for i, r in enumerate(sorted(rs, key=lambda r: int(r["vel_lo"]))):
+                emit(r, rr_index=i)
+        else:
+            for rr in range(num_rr):
+                for r in holding((127 // num_rr) * rr + 3):
+                    emit(r, rr_index=rr)
+
+    patch = os.path.join(ROOT, "_patches", inst)
+    os.makedirs(patch, exist_ok=True)
+    dst = os.path.join(patch, "library.styx")
+    if os.path.exists(dst):
+        shutil.copy2(dst, dst + time.strftime(".pre-%Y-%m-%d-%H%M%S"))
+    with open(dst, "w") as f:
+        f.write(f"// MOJO 2 Horn Section — {inst} sample zones.\n")
+        f.write("// Generated by features/rigs/orchestra/tests/mojo_zones.py from the decoded NKI — do not edit.\n")
+        f.write("// Load specs/mojo2-horns.styx alongside for the engine config.\n\n")
+        f.write(f'name "MOJO 2 Horn Section — {inst}"\nvendor "Vir2"\nversion "2.0"\n\nzones (\n')
+        f.write("\n".join(zone_block(z) for z in out))
+        f.write("\n)\n")
+    arts = sorted({z["articulation"] for z in out})
+    print(f"{inst}: {len(out)} zones (NumRR {num_rr}, {skipped} dummy rows skipped), "
+          f"{len(arts)} articulations: {' '.join(arts)}")
+
+
+def main():
+    organized = {}
+    with open(os.path.join(ROOT, "_notes", "raw_to_organized.tsv")) as f:
+        for row in csv.DictReader(f, delimiter="\t"):
+            organized[row["raw"]] = row["organized"]
+    names = sys.argv[2:] or sorted(
+        d for d in os.listdir(os.path.join(ROOT, "_ksp")) if " - " not in d and d.endswith("2.0")
+    )
+    for n in names:
+        build(n, organized)
+
+
+if __name__ == "__main__":
+    main()

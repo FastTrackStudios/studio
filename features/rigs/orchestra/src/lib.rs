@@ -141,6 +141,11 @@ pub const LIBRARIES: &[Library] = &[
         config: concat!(env!("CARGO_MANIFEST_DIR"), "/specs/cinematic-brass.styx"),
     },
     Library {
+        name: "mojo",
+        root: "/run/media/AudioHaven/Sampled/Horns/MOJO 2 Horn Section",
+        config: concat!(env!("CARGO_MANIFEST_DIR"), "/specs/mojo2-horns.styx"),
+    },
+    Library {
         name: "solo-strings",
         root: "/run/media/AudioHaven/Sampled/Orchestral/Cinematic Series/Cinematic Studio Solo Strings",
         config: concat!(

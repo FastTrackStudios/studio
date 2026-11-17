@@ -396,6 +396,16 @@ impl SampleEngine {
 
         self.resolve_pending_cc58(velocity);
 
+        // A key outside the articulation's playable range plays nothing
+        // (MOJO 2: the whole note callback sits in `if in_range(note,
+        // %ArtRange[art])`, script_1.ksp:25170).
+        if let Some(a) = self.patch.spec.articulation(&self.articulation)
+            && let [lo, hi] = a.key_range[..]
+            && !(lo..=hi).contains(&note)
+        {
+            return;
+        }
+
         if self.patch.is_zoned() {
             // CSS-style legato: a legato articulation, with another note already
             // held, plays a delayed directional transition (the famous latency).
@@ -1151,22 +1161,28 @@ impl SampleEngine {
 
         // VELOCITY → dynamic layer (`%g1qri` band) + intra-band volume (`$arhiq`).
         let (dynamic, velvol_db) = self.short_layer_and_velvol(&artic, velocity);
-        let (n_dyn, decoded_law) = self
-            .patch
-            .spec
-            .articulation(&artic)
-            .map_or((0, false), |a| {
-                (a.dynamics.len(), !a.vel_layer_db.is_empty())
-            });
-        // With ≥2 recorded dynamics the loudness IS the sampled layer plus the
-        // `$arhiq` intra-band trim, and so it is for a single layer that
-        // carries the decoded trim (CSB Rips: `(127 − vel) · %tccxl / 126`
-        // dB, nothing else); only other single-layer artics use velocity².
-        let gain = if n_dyn > 1 || decoded_law {
-            1.0
-        } else {
-            velocity_gain(velocity)
-        } * db_to_gain(css_short_makeup_db(&artic) + velvol_db);
+        let (n_dyn, decoded_law, table_db) =
+            self.patch
+                .spec
+                .articulation(&artic)
+                .map_or((0, false, None), |a| {
+                    (
+                        a.dynamics.len(),
+                        !a.vel_layer_db.is_empty(),
+                        a.vel_gain_db.get(usize::from(velocity.min(127))).copied(),
+                    )
+                });
+        // A velocity table is the whole level law (MOJO 2: the group volume
+        // the script sets by velocity). Otherwise: with ≥2 recorded dynamics
+        // the loudness IS the sampled layer plus the `$arhiq` intra-band
+        // trim, and so it is for a single layer that carries the decoded trim
+        // (CSB Rips: `(127 − vel) · %tccxl / 126` dB, nothing else); only
+        // other single-layer artics use velocity².
+        let gain = match table_db {
+            Some(db) => db_to_gain(css_short_makeup_db(&artic) + db),
+            None if n_dyn > 1 || decoded_law => db_to_gain(css_short_makeup_db(&artic) + velvol_db),
+            None => velocity_gain(velocity) * db_to_gain(css_short_makeup_db(&artic) + velvol_db),
+        };
         let idx = match seq_rr {
             Some(r) => self
                 .find_layer_zone_rr_index(&artic, &dynamic, note, r)
@@ -1196,6 +1212,9 @@ impl SampleEngine {
                 })
                 .map(|(i, _)| i)
                 .collect();
+            // The script's `play_note` offset (`script_start_ms`), as on the
+            // sustain path; 0 for every short that sets none.
+            let saved = self.with_script_start(&artic);
             for i in std::iter::once(idx).chain(layers) {
                 self.spawn_zone_voice(
                     i,
@@ -1206,6 +1225,7 @@ impl SampleEngine {
                     f64::from(tune_cents) / 100.0,
                 );
             }
+            self.spawn_extra_start = saved;
         }
     }
 
@@ -3092,6 +3112,10 @@ impl SampleEngine {
                     })
                     .map_or(0, |(_, _, _, o)| *o);
                 self.script_offset(idx, self.spawn_extra_start + layer)
+            } else if matches!(kind, VoiceKind::Short) && self.spawn_extra_start > 0 {
+                // a short's `play_note` offset (`script_start_ms`, set by
+                // `trigger_zoned_short`), limited by the zone the same way
+                self.script_offset(idx, self.spawn_extra_start)
             } else {
                 0
             };

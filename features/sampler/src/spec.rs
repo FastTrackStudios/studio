@@ -1300,6 +1300,12 @@ pub struct ArticulationOverlay {
     pub pitch_env_cents: Option<f32>,
     pub pitch_env_random: Option<RandomPitchEnvSpec>,
     pub amp_env: Option<Vec<EnvSegmentSpec>>,
+    pub amp_env_hold: Option<bool>,
+    pub amp_env_release: Option<u32>,
+    pub level_db: Option<f32>,
+    pub script_start_ms: Option<f32>,
+    pub vel_gain_db: Option<Vec<f32>>,
+    pub key_range: Option<Vec<u8>>,
     pub phrase: Option<PhraseSpec>,
     /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
     pub overlay_cc1_scale: Option<Vec<u8>>,
@@ -1380,6 +1386,24 @@ impl SectionOverlay {
             }
             if let Some(v) = &o.amp_env {
                 a.amp_env.clone_from(v);
+            }
+            if let Some(v) = o.amp_env_hold {
+                a.amp_env_hold = Some(v);
+            }
+            if let Some(v) = o.amp_env_release {
+                a.amp_env_release = Some(v);
+            }
+            if let Some(v) = o.level_db {
+                a.level_db = v;
+            }
+            if let Some(v) = o.script_start_ms {
+                a.script_start_ms = v;
+            }
+            if let Some(v) = &o.vel_gain_db {
+                a.vel_gain_db.clone_from(v);
+            }
+            if let Some(v) = &o.key_range {
+                a.key_range.clone_from(v);
             }
             if let Some(v) = &o.phrase {
                 a.phrase = Some(v.clone());
@@ -2580,6 +2604,18 @@ pub struct ArticulationSpec {
     /// `start_mod` limits (ignored where the zone allows none). 0 = none.
     #[facet(default)]
     pub script_start_ms: f32,
+    /// A short note's level by MIDI velocity, dB (128 entries): what the
+    /// script sets the played group's volume to (MOJO 2: `VelGainMin +
+    /// (knob − VelGainMin)·(0.99^(v−1) − 1)/(0.99^126 − 1)` in engine
+    /// units, baked to dB by the generator). Replaces the velocity² and
+    /// intra-band laws. Empty = those laws.
+    #[facet(default)]
+    pub vel_gain_db: Vec<f32>,
+    /// The keys this articulation plays, `[lo, hi]` inclusive: a note
+    /// outside them plays nothing (MOJO 2's per-articulation range,
+    /// `%ArtRange`). Empty = every key with a zone.
+    #[facet(default)]
+    pub key_range: Vec<u8>,
     /// Per velocity band, `(compare, store)`: which band's last-RR memory the
     /// no-repeat rule reads and which it writes. Empty = each band its own.
     /// CSS pizzicato reads an unwritten table in bands 2 and 4 and writes
