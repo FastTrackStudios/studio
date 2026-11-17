@@ -486,7 +486,9 @@ impl SampleEngine {
                 // One-shot short: velocity picks the dynamic layer, nearest-key
                 // pitch-shift, plays to completion (a phrase articulation
                 // schedules its hits instead).
-                if !self.phrase_note_on(note, velocity) {
+                if !self.phrase_note_on(note, velocity)
+                    && !self.script_legato_note_on(note, velocity)
+                {
                     self.trigger_zoned_short(note, velocity);
                 }
             } else {
@@ -592,6 +594,10 @@ impl SampleEngine {
         self.trace_push(TraceKind::NoteOff { note });
         if self.patch.is_zoned() {
             let cur_line = self.cur_line as u8;
+            if self.script_legato_note_off(note) {
+                self.line_mut().order.retain(|&n| n != note);
+                return;
+            }
             let held = std::mem::take(&mut self.release_sample_notes[usize::from(note & 127)]);
             if !held.is_empty() {
                 self.line_mut().order.retain(|&n| n != note);
@@ -755,6 +761,7 @@ impl SampleEngine {
             l.last_release_frame = 0;
             l.last_activity = 0;
         }
+        self.script_leg = Default::default();
         self.live_last_onset = None;
     }
 
@@ -2585,7 +2592,7 @@ impl SampleEngine {
     }
 
     /// Whether zone `z` is one `find_layer_zone` may play for this layer.
-    fn zone_passes(
+    pub(crate) fn zone_passes(
         &self,
         z: &crate::spec::ZoneSpec,
         artic: &str,
@@ -3325,7 +3332,9 @@ impl SampleEngine {
             .with_start_hold(start_hold)
             .with_pitch_cents(transpose_cents)
             .with_level(level * comp)
-            .with_sample_window(start_frame, (sample_end > 0).then_some(sample_end as usize));
+            .with_sample_window(start_frame, (sample_end > 0).then_some(sample_end as usize))
+            .with_stretch(self.spawn_stretch)
+            .with_fade_in_under(0, self.spawn_fade_in);
             // the layer's Kontakt group insert filters/EQs (`group_fx`)
             if let Some(plan) = self.insert_plan(idx) {
                 let l = usize::from(line);
@@ -3835,6 +3844,7 @@ impl SampleEngine {
             return;
         }
         self.set_active_line(line);
+        self.cc_sent[usize::from(controller & 127)] = true;
         let old_value = self
             .cc_values
             .get(controller as usize)

@@ -465,6 +465,34 @@ pub struct Voice {
     /// Time-preserving pitch shift (L/R), `None` when the note is on the
     /// recorded grid (`pitch_cents == 0`) — those voices pay nothing.
     pitch: Option<[crate::engine::pitch_shift::PitchShifter; 2]>,
+    /// Time stretch (a script's `ENGINE_PAR_SPEED` on a time-machine
+    /// group): the playhead moves at `speed` × the pitch's rate while two
+    /// read heads play the sample at its pitch. `None` plays it plainly.
+    stretch: Option<Stretch>,
+}
+
+/// A stretching voice's grain, output frames (43 ms at 48 kHz).
+pub const STRETCH_GRAIN: u64 = 2048;
+
+/// The state of a time-stretched voice: two read heads, each a pitch-rate
+/// cursor that restarts at the playhead once a grain, half a grain apart,
+/// crossfaded by triangles that sum to one — KONTRA's model of Kontakt's
+/// time machine (head 0 plays the note's start in full).
+#[derive(Clone, Copy, Debug)]
+pub struct Stretch {
+    speed: f64,
+    heads: [f64; 2],
+    /// Output frames since the stretch began, which place its grains.
+    grain: u64,
+}
+
+/// Catmull-Rom between `y1` and `y2` at `t` (KONTRA's stretched read).
+#[inline]
+fn hermite(y0: f32, y1: f32, y2: f32, y3: f32, t: f32) -> f32 {
+    let c1 = 0.5 * (y2 - y0);
+    let c2 = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3;
+    let c3 = 0.5 * (y3 - y0) + 1.5 * (y1 - y2);
+    ((c3 * t + c2) * t + c1) * t + y1
 }
 
 /// Kontakt `ENV_FLEX` segment shape: `a = (0.5 − tension)·FLEX_CURVE_SCALE`,
@@ -835,6 +863,7 @@ impl Voice {
             max_peak: 0.0,
             trace_id: None,
             pitch: None,
+            stretch: None,
         }
     }
 
@@ -926,6 +955,7 @@ impl Voice {
             max_peak: 0.0,
             trace_id: None,
             pitch: None,
+            stretch: None,
         }
     }
 
@@ -954,6 +984,55 @@ impl Voice {
             self.pitch = Some([PitchShifter::new(cents), PitchShifter::new(cents)]);
         }
         self
+    }
+
+    /// Stretch time by `speed` (1.0 = as recorded) at the voice's pitch: the
+    /// playhead advances `speed` × faster while the pitch holds. A unity
+    /// speed is a no-op.
+    #[must_use]
+    pub fn with_stretch(mut self, speed: f64) -> Self {
+        self.stretch = ((speed - 1.0).abs() > 1e-9 && speed.is_finite()).then_some(Stretch {
+            speed: speed.clamp(0.0, 8.0),
+            heads: [0.0; 2],
+            grain: 0,
+        });
+        self
+    }
+
+    /// One stretched frame: the two heads at the playhead's grain, each read
+    /// through a four-point Hermite, crossfaded by their triangles.
+    fn read_stretched(&mut self) -> (f32, f32) {
+        let pos = self.position;
+        let Some(st) = self.stretch.as_mut() else {
+            return (0.0, 0.0);
+        };
+        let half = STRETCH_GRAIN / 2;
+        let g = st.grain % STRETCH_GRAIN;
+        if st.grain == 0 {
+            st.heads = [pos; 2];
+        } else if g == half {
+            st.heads[0] = pos;
+        } else if g == 0 {
+            st.heads[1] = pos;
+        }
+        let phase = ((st.grain + half) % STRETCH_GRAIN) as f32 / STRETCH_GRAIN as f32;
+        let w = 1.0 - (2.0 * phase - 1.0).abs();
+        let heads = st.heads;
+        let (a, b) = (self.read_hermite(heads[0]), self.read_hermite(heads[1]));
+        (w * a.0 + (1.0 - w) * b.0, w * a.1 + (1.0 - w) * b.1)
+    }
+
+    /// A four-point Hermite read at `pos`, the frames clamped to the sample.
+    fn read_hermite(&self, pos: f64) -> (f32, f32) {
+        let i = pos.floor() as i64;
+        let t = (pos - i as f64) as f32;
+        let last = self.end_frame.saturating_sub(1) as i64;
+        let f = |k: i64| self.data.frame((i + k).clamp(0, last.max(0)) as usize);
+        let (y0, y1, y2, y3) = (f(-1), f(0), f(1), f(2));
+        (
+            hermite(y0.0, y1.0, y2.0, y3.0, t),
+            hermite(y0.1, y1.1, y2.1, y3.1, t),
+        )
     }
 
     /// Compensate the pitch shifter's startup latency, so the voice's intended
@@ -1680,7 +1759,11 @@ impl Voice {
             return (0.0, 0.0);
         }
 
-        let (mut l, mut r) = self.read_interp(self.position);
+        let (mut l, mut r) = if self.stretch.is_some() {
+            self.read_stretched()
+        } else {
+            self.read_interp(self.position)
+        };
 
         // Seamless forward-loop crossfade. As the read approaches `loop_end`,
         // blend in the pre-`loop_start` material so the wrap has no
@@ -1824,6 +1907,16 @@ impl Voice {
             } else {
                 self.rate
             };
+        let step = match self.stretch.as_mut() {
+            Some(st) => {
+                for h in &mut st.heads {
+                    *h += step;
+                }
+                st.grain += 1;
+                step * st.speed
+            }
+            None => step,
+        };
         if self.reverse {
             self.position -= step;
         } else {
@@ -1912,6 +2005,7 @@ impl Voice {
             && self.bloom_frames == 0
             && self.decay_left == 0
             && self.pitch.is_none()
+            && self.stretch.is_none()
             && self.filter.is_none()
             && self.inserts.is_none()
             && self.release_cut == 0
@@ -2610,6 +2704,20 @@ impl VoicePool {
         }
     }
 
+    /// A script's `fade_out` of every voice on `line` but the release
+    /// samples (a monophonic legato's `MARK_1 + MARK_2 + MARK_7`), linear
+    /// from the current level over `frames`.
+    pub fn fade_out_line_bodies(&mut self, line: u8, frames: usize) {
+        for v in &mut self.voices {
+            if v.line == line
+                && !matches!(v.kind, VoiceKind::Release)
+                && !matches!(v.state, VoiceState::Releasing { .. })
+            {
+                Self::script_fade(v, frames.max(1));
+            }
+        }
+    }
+
     /// A script's `fade_out` of the voices of one strike (its note-on), from
     /// their current level, linear over `frames`.
     pub fn fade_out_strike_bodies(&mut self, strike: u32, frames: usize) {
@@ -3228,4 +3336,38 @@ pub static NOTE_STEALS: std::sync::atomic::AtomicU64 = std::sync::atomic::Atomic
 #[must_use]
 pub fn note_steals() -> u64 {
     NOTE_STEALS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+#[cfg(test)]
+mod stretch_tests {
+    use super::*;
+
+    fn ramp(n: usize) -> Arc<SampleData> {
+        let pcm: Vec<f32> = (0..n).map(|i| i as f32 / 65_536.0).collect();
+        Arc::new(SampleData::from_f32(pcm, 1, 48_000, n))
+    }
+
+    /// A stretched voice plays its start as recorded (head 0 alone, at the
+    /// pitch's step) and lasts the sample's length over its speed.
+    #[test]
+    fn a_stretching_voice_keeps_its_pitch_and_takes_its_speeds_time() {
+        for (speed, ends) in [(2.0, 4096usize), (0.5, 16_384)] {
+            let mut v =
+                Voice::new(ramp(8192), 60, VoiceKind::Short, 0, 1.0, 64).with_stretch(speed);
+            let first: Vec<f32> = (0..4).map(|_| v.next_frame().0).collect();
+            assert_eq!(
+                first[1] - first[0],
+                1.0 / 65_536.0,
+                "speed {speed}: pitch holds"
+            );
+            for _ in 4..ends - 512 {
+                v.next_frame();
+            }
+            assert!(!v.is_done(), "speed {speed}: still playing before its end");
+            for _ in 0..1024 {
+                v.next_frame();
+            }
+            assert!(v.is_done(), "speed {speed}: ended on time");
+        }
+    }
 }

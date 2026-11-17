@@ -232,6 +232,7 @@ mod midi;
 mod phrase;
 pub mod pitch_shift;
 pub mod rr;
+mod script_legato;
 pub mod trace;
 pub mod voice;
 
@@ -993,6 +994,14 @@ pub struct SampleEngine {
     /// Extra file frames the sustain body being spawned right now is entered
     /// at (the >1-octave transition body's 75 ms offset).
     pub(crate) spawn_extra_start: usize,
+    /// The next spawns' time stretch (1.0 = none) and linear fade-in
+    /// frames (0 = none): a script's `ENGINE_PAR_SPEED` and `fade_in`.
+    pub(crate) spawn_stretch: f64,
+    pub(crate) spawn_fade_in: usize,
+    /// A script's monophonic legato (`script_legato.rs`).
+    pub(crate) script_leg: script_legato::ScriptLegState,
+    /// Which controllers have been sent (else a spec's shipped value holds).
+    pub(crate) cc_sent: [bool; 128],
     /// Per key, what each of its sounding note-ons played, for a script
     /// release sample (`ArticulationSpec::release_sample`): (articulation,
     /// dynamic, velocity). A key's note-off releases every one of them
@@ -1325,6 +1334,10 @@ impl SampleEngine {
             release_context: None,
             release_extra_hold: 0,
             spawn_extra_start: 0,
+            spawn_stretch: 1.0,
+            spawn_fade_in: 0,
+            script_leg: script_legato::ScriptLegState::default(),
+            cc_sent: [false; 128],
             release_sample_notes: vec![Vec::new(); 128],
             release_body_strike: vec![None; 128],
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,
@@ -2372,6 +2385,7 @@ impl SampleEngine {
                 })
                 .chain(trill)
                 .chain(self.phrase_due_in())
+                .chain(self.script_leg_due_in())
                 .min()
                 .map_or(block_frames - done, |f| f.clamp(1, block_frames - done));
             part(&mut self.voices, done, next);
@@ -2393,6 +2407,7 @@ impl SampleEngine {
     /// ascending [`LineId`] order — deterministic when several fire together.
     fn fire_due_legato(&mut self) {
         self.fire_phrase();
+        self.fire_script_legato();
         if self
             .trill_due
             .as_ref()

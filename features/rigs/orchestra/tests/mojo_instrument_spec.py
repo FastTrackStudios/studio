@@ -86,7 +86,7 @@ def ahdsr_env(groups, start):
         env.get("intensity", 1.0)
 
 
-def group_eq(art, start, names, fx_slots, notes, lp_floor):
+def group_eq(art, start, names, fx_slots, notes, lp_floor, envs=None):
     """`(dynamic, stages)` per layer of `art`: the active inserts of each
     layer's Bus1 group (the group the shipped Mix mic plays), as spec
     stages `(kind, params)` in slot order. Layers are the articulation's
@@ -101,6 +101,7 @@ def group_eq(art, start, names, fx_slots, notes, lp_floor):
       (mojo_zones.py).
     Anything else is noted, not run."""
     out, k = [], 0
+    envs = envs or {}
     while True:
         gi = start + 4 * k
         cls = mojo_zones.classify(names.get(gi, "")) if gi in names else None
@@ -128,6 +129,17 @@ def group_eq(art, start, names, fx_slots, notes, lp_floor):
                     stages.append(("width", {"width": width}))
             elif s["kind"] == 7 and s.get("filter_type") in (22, 23, 24) and s.get("eq_bands"):
                 stages.append(("eq", {"bands": [v for b in s["eq_bands"] for v in b]}))
+            elif s["kind"] == 7 and s.get("filter_type") == 50 and art in mojo_zones.LEGATO:
+                # the transition groups' lowpass: the script leaves it (only
+                # octave legato sets it, 26112-26121) at its saved cutoff,
+                # swept open by the group's ENV_FLEX on that slot
+                flex = next((e for e in envs.get(gi, []) if e["kind"] == "ENV_FLEX"
+                             and e["target"] == "filterCutoff" and e.get("slot") == s["slot"]
+                             and not e["bypassed"]), None)
+                stages.append(("sv_lp1", {"cutoff": float(s.get("cutoff") or 0.0),
+                                          "resonance": float(s.get("resonance") or 0.0),
+                                          "env": flex and [tuple(x) for x in flex["segments"][:3]],
+                                          "intensity": flex and flex["intensity"]}))
             elif s["kind"] == 7 and s.get("filter_type") == 50:
                 table = [min(1.0, v / 127.0 + lp_floor) for v in range(128)]
                 stages.append(("sv_lp1", {"cutoff": 0.0, "resonance": float(s.get("resonance") or 0.0),
@@ -166,15 +178,90 @@ def release_gain_table(rel_knob, sus_knob, vmin, trim_db):
     return out
 
 
+def curved(vel):
+    """The shipped LINEAR velocity curve: v′ = 1 + ⌊vel·126/127⌋."""
+    return 1 + (vel * 126) // 127
+
+
+def legato_numbers(p0, pers, knob, vmin, num_vels):
+    """The sustain legato (decode-legato.md): its switch and speed mode
+    (persistent_1), the timing set (persistent_0 `$LegSus*`), the
+    transition's level by velocity and its layer edges.
+
+    Level, dB: the transition groups' VOLUME `VelGainMin + (750000 −
+    VelGainMin)·(0.99^v′ − 1)/(0.99^127 − 1)` (26102-26109) + TransVol +
+    the sustain's volume knob (change_vol, 26445-26458). Layer: `v′/(⌊127/
+    nVel⌋ + 1) − (nVel − NumLegVels)`, ≥ 0 (26048-26052), as MIDI velocity
+    edges."""
+    g = lambda k: float(p0[k][0])
+    one = lambda k: int(pers[k][0])
+    den = 0.99 ** 127 - 1.0
+    trans_vol = one("$a5z5e")
+    gains = []
+    for v in range(128):
+        vc = curved(max(v, 1))
+        ep = vmin + int((750000 - vmin) * ((0.99 ** vc - 1.0) / den))
+        gains.append(round(ep_db(ep) + ep_db(trans_vol) + ep_db(knob), 4))
+    n_leg = int(p0["$MiscNumLegVels"][0])
+    step = 127 // num_vels + 1
+    layer = lambda vel: max(0, curved(max(vel, 1)) // step - (num_vels - n_leg))
+    edges = [next(v for v in range(128) if layer(v) >= k) for k in range(1, n_leg)]
+    mode = "cc" if one("$nf4pv") else "velocity" if one("$mbwiu") else "speed"
+    t = {
+        "fade_in_ms": g("$LegSusFadeIn"), "trans_offset_ms": g("$LegSusTransOffset"),
+        "hold_small_ms": g("$LegSusTransHoldSmall"), "hold_large_ms": g("$LegSusTransHoldLarge"),
+        "fade_out_ms": g("$LegSusFadeOut"),
+        "target_offset_ms": g("$MiscInstAttackOffsetMS") + g("$LegSusTargetOffset"),
+        "slow_small_pct": int(g("$LegSusSlowSpeedSmall")), "fast_small_pct": int(g("$LegSusFastSpeedSmall")),
+        "slow_large_pct": int(g("$LegSusSlowSpeedLarge")), "fast_large_pct": int(g("$LegSusFastSpeedLarge")),
+        "slowest_ms": int(g("$LegSusSlowPlayingSpeed")), "fastest_ms": int(g("$LegSusFastPlayingSpeed")),
+    }
+    if mode == "cc":
+        t["speed_cc"] = 28
+        t["speed_cc_default"] = one("$trtal")
+    elif mode == "velocity":
+        t["speed_by_velocity"] = "true"
+    return {"on": one("$ecwxx") == 1, "gains": gains, "edges": edges, "timing": t, "mode": mode,
+            "trans_vol": trans_vol, "max_interval": int(p0["$MiscNumLegIntervals"][0]) - 1}
+
+
 def fmt(v):
     s = f"{v:.4f}".rstrip("0").rstrip(".")
     return s if s not in ("-0", "") else "0"
+
+
+def fx_lines(fx):
+    """A `group_fx` block for `group_eq`'s layers."""
+    if not fx:
+        return []
+    out = ["        group_fx ("]
+    for dyn, stages in fx:
+        st, rt = [], []
+        for n, (kind, p) in enumerate(stages):
+            if kind == "eq":
+                st.append(f"{{ kind eq, bands ({' '.join(fmt(v) for v in p['bands'])}) }}")
+            elif kind == "width":
+                st.append(f"{{ kind width, width {fmt(p['width'])} }}")
+            elif kind == "saturation":
+                st.append(f"{{ kind saturation, shape {p['shape']:.7f}, output_db {fmt(p['output_db'])} }}")
+            else:
+                st.append(f"{{ kind {kind}, cutoff {fmt(p['cutoff'])}, resonance {fmt(p['resonance'])} }}")
+                if p.get("env"):
+                    segs = " ".join(f"{{time_ms {fmt(t)}, level {fmt(lv)}, curve {fmt(c)}}}" for t, lv, c in p["env"])
+                    rt.append(f"{{ stage {n}, param cutoff, cc 0, intensity {fmt(p['intensity'])}, env ({segs}) }}")
+                if p.get("velocity_table"):
+                    rt.append(f"{{ stage {n}, param cutoff, cc 0, source velocity, "
+                              f"table ({' '.join(fmt(v) for v in p['velocity_table'])}) }}")
+        out.append(f"            {{ dynamic {dyn}, stages ({' '.join(st)}), routes ({' '.join(rt)}) }}")
+    out.append("        )")
+    return out
 
 
 def build(nki):
     ksp = os.path.join(ROOT, "_ksp", nki)
     inst = re.sub(r"\s+2\.0$", "", nki)
     pers = persistent(os.path.join(ksp, "persistent_1.tsv"))
+    p0 = persistent(os.path.join(ksp, "persistent_0.tsv"))
     groups = json.load(open(os.path.join(ksp, "groups.json")))
     program = json.load(open(os.path.join(ksp, "program.json")))
     one = lambda k: int(pers[k][0])
@@ -232,6 +319,16 @@ def build(nki):
             if depth is not None:
                 lines.append(f"        amp_env_depth {fmt(depth)}  // the ENV -> volume route's intensity")
         if art == "Sus":
+            leg = legato_numbers(p0, pers, knob, vmin, 4)
+            timing = ", ".join(f"{k} {fmt(v) if isinstance(v, float) else v}" for k, v in leg["timing"].items())
+            lines += [
+                "        // the sustain legato (25570-28257; decode-legato.md), CC26 > 63 on;",
+                f"        // speed by {leg['mode']}; TransVol {leg['trans_vol']}",
+                f"        script_legato {{ enable_cc 26, on {'true' if leg['on'] else 'false'}, up LegUp, down LegDown,",
+                f"            max_interval {leg['max_interval']}, layer_thresholds ({' '.join(map(str, leg['edges']))}),",
+                f"            gain_db ({' '.join(fmt(x) for x in leg['gains'])}),",
+                f"            timing {{ {timing} }} }}",
+            ]
             off, fade = release_numbers(ksp, pers)
             gains = release_gain_table(one("$ues0b"), knob, vmin, level_db)
             lines += [
@@ -241,30 +338,30 @@ def build(nki):
                 f"        release_sample {{ artic SusRel, start_ms {fmt(off)}, fade_ms {fmt(fade)},",
                 f"            gain_db ({' '.join(fmt(x) for x in gains)}) }}",
             ]
-        if fx:
-            lines.append("        group_fx (")
-            for dyn, stages in fx:
-                st, rt = [], []
-                for n, (kind, p) in enumerate(stages):
-                    if kind == "eq":
-                        st.append(f"{{ kind eq, bands ({' '.join(fmt(v) for v in p['bands'])}) }}")
-                    elif kind == "width":
-                        st.append(f"{{ kind width, width {fmt(p['width'])} }}")
-                    elif kind == "saturation":
-                        st.append(f"{{ kind saturation, shape {p['shape']:.7f}, output_db {fmt(p['output_db'])} }}")
-                    else:
-                        st.append(f"{{ kind {kind}, cutoff {fmt(p['cutoff'])}, resonance {fmt(p['resonance'])} }}")
-                        if p.get("velocity_table"):
-                            rt.append(f"{{ stage {n}, param cutoff, cc 0, source velocity, "
-                                      f"table ({' '.join(fmt(v) for v in p['velocity_table'])}) }}")
-                lines.append(f"            {{ dynamic {dyn}, stages ({' '.join(st)}), routes ({' '.join(rt)}) }}")
-            lines.append("        )")
+        lines += fx_lines(fx)
         lines.append("    }")
     # The normal release articulation (`$MiscLongNVNormalRelGroupStart`): its
     # zones' RR, the release groups' inserts, and its envelope — fade_in over
     # RelFade from the note-off, then fade_out over 2^(SusRel/73477+1) − 2 ms.
     off, fade = release_numbers(ksp, pers)
     tail_ms = 2 ** (one("$q1stw") / 73477 + 1) - 2
+    # The legato transition groups: their envelope, inserts and the
+    # ensemble trim (the transition's level is its `script_legato` table).
+    for art, var in (("LegUp", "$MiscLegUpGroupStart"), ("LegDown", "$MiscLegDownGroupStart")):
+        gstart = int(p0[var][0])
+        env, why = ahdsr_env(groups, gstart)
+        if isinstance(why, str):
+            notes.append(f"{art}: {why}")
+        envs = {g["index"]: g.get("envelopes", []) for g in groups}
+        fx = group_eq(art, gstart, names, fx_slots, notes, one("$lrshn") / 1e6, envs)
+        lines += ["    {", f"        id {art}", f"        level_db {fmt(level_db)}"]
+        if env:
+            body = " ".join(f"{{time_ms {fmt(t)}, level {fmt(lv)}, curve {fmt(c)}}}" for t, lv, c in env)
+            lines += [f"        amp_env ( {body} )", "        amp_env_hold true", "        amp_env_release 1"]
+            if why is not None and why < 0.999:
+                lines.append(f"        amp_env_depth {fmt(why)}  // the ENV -> volume route's intensity")
+        lines += fx_lines(fx)
+        lines.append("    }")
     rel_start = int(persistent(os.path.join(ksp, "persistent_0.tsv")).get(
         "$MiscLongNVNormalRelGroupStart", [one("$ywa0p")])[0])
     rel_fx = group_eq("SusRel", rel_start, names, fx_slots, notes, one("$lrshn") / 1e6)

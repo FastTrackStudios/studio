@@ -192,6 +192,16 @@ impl SampleEngine {
         .into_iter()
         .flatten()
         .collect();
+        // A script legato's transitions (`script_legato`): cold, they are
+        // silent the same way.
+        if let Some(sl) = artic
+            .as_deref()
+            .and_then(|a| self.patch.spec.articulation(a))
+            .and_then(|a| a.script_legato.as_ref())
+        {
+            warm_ids.push(sl.up.clone());
+            warm_ids.push(sl.down.clone());
+        }
         // A pending CC58 velocity-group resolves to its concrete articulation
         // only at note-on (from the note's velocity), so `effective_articulation`
         // above can't see it yet — warm EVERY possible resolution (Trills →

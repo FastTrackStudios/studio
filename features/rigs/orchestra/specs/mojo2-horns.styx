@@ -10,8 +10,9 @@
 //
 // Modelled so far, at the shipped defaults (Mix mic, 1 player, era none,
 // velocity dynamics, linear velocity curve, random RR): the one-shot
-// articulations. Not yet: sustain releases (_R groups), release-type keys,
-// keynoise, articulation cutoff, legato, Time Machine (swells, crescendos).
+// articulations, sustain releases, the sustain legato (regular). Not yet:
+// release-type keys, keynoise, articulation cutoff, octave/natural legato,
+// stab and crescendo legato, Time Machine (swells, crescendos).
 
 name    "MOJO 2 Horn Section"
 vendor  "Vir2"
@@ -90,6 +91,23 @@ articulations (
         dynamics (v1 v2 v3 v4)
         rr       3
         dyn_ctrl velocity
+        notes    full
+    }
+    // The sustain legato's transitions (`script_legato` on Sus, per
+    // instrument): played by the script only, never selected. A zone per
+    // destination key and interval (its `interval`); dynamics by velocity.
+    {
+        id       LegUp
+        label    "Legato up"
+        kind     @Special
+        dynamics (v1 v2 v3 v4)
+        notes    full
+    }
+    {
+        id       LegDown
+        label    "Legato down"
+        kind     @Special
+        dynamics (v1 v2 v3 v4)
         notes    full
     }
 

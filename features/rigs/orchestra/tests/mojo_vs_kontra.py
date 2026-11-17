@@ -114,7 +114,8 @@ def main():
         f = ours_file(e["sample"])
         g = e.get("gain") or [[0.0]]
         kvoices.append((e["frame"], f, float(e.get("position") or 0), 20 * math.log10(abs(g[0][0]) or 1e-9)))
-        if f and "Keyclick" not in f:
+        # a legato transition draws no RR (its zone is the interval's)
+        if f and "Keyclick" not in f and "/Legato_" not in f and "/Octave_Legato_" not in f:
             rrs.append(zone_rr.get(f, "0"))
 
     # 3. ours, replaying KONTRA's picks

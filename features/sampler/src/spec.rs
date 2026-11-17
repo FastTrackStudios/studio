@@ -1367,6 +1367,7 @@ pub struct ArticulationOverlay {
     pub key_range: Option<Vec<u8>>,
     pub release_sample: Option<ReleaseSampleSpec>,
     pub fade_releases_ms: Option<f32>,
+    pub script_legato: Option<ScriptLegatoSpec>,
     pub amp_env_depth: Option<f32>,
     pub phrase: Option<PhraseSpec>,
     /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
@@ -1472,6 +1473,9 @@ impl SectionOverlay {
             }
             if let Some(v) = o.fade_releases_ms {
                 a.fade_releases_ms = v;
+            }
+            if let Some(v) = &o.script_legato {
+                a.script_legato = Some(v.clone());
             }
             if let Some(v) = o.amp_env_depth {
                 a.amp_env_depth = Some(v);
@@ -2738,6 +2742,9 @@ pub struct ArticulationSpec {
     /// 75 ms)` on each sustain note). 0 = none.
     #[facet(default)]
     pub fade_releases_ms: f32,
+    /// A script's monophonic legato (see [`ScriptLegatoSpec`]).
+    #[facet(default)]
+    pub script_legato: Option<ScriptLegatoSpec>,
     /// Per velocity band, `(compare, store)`: which band's last-RR memory the
     /// no-repeat rule reads and which it writes. Empty = each band its own.
     /// CSS pizzicato reads an unwritten table in bands 2 and 4 and writes
@@ -2873,6 +2880,79 @@ pub struct ReleaseSampleSpec {
     /// Level by the note-on's MIDI velocity, dB (128 entries; empty = 0 dB).
     #[facet(default)]
     pub gain_db: Vec<f32>,
+}
+
+/// A script's monophonic legato over a one-layer sustain (MOJO 2's legato
+/// engine, script_1.ksp 25570-28257 and the release callback 33710-37579;
+/// `_notes/decode-legato.md`). With it on, a note within `max_interval` of
+/// the line's last note plays a transition instead of a fresh attack:
+///
+/// - the line's voices fade out over `fade_in_ms`;
+/// - a zone of `up`/`down` (direction from the last note; zone by
+///   destination key and `interval`, dynamic by `layer_thresholds`) starts
+///   `trans_offset_ms` in, fading in over `fade_in_ms / 2`, at
+///   `gain_db[velocity]`, time-stretched by the speed law;
+/// - after the hold it fades over `fade_out_ms` and, if the key is still
+///   down, the sustain starts `target_offset_ms` in, fading in over
+///   `fade_out_ms`.
+///
+/// A fresh note (no last note, or a leap past `max_interval`) also fades the
+/// line's voices over `fade_in_ms` first: the line is monophonic. Releasing
+/// the last note plays the sustain's release sample (and clears it); a key
+/// released while the one before it is held legatos back to it.
+#[derive(Debug, Clone, Facet)]
+pub struct ScriptLegatoSpec {
+    /// The controller that switches it (on above 63), and its shipped state.
+    pub enable_cc: u8,
+    #[facet(default)]
+    pub on: bool,
+    /// Transition articulations by direction (a repeated key goes down).
+    pub up: String,
+    pub down: String,
+    /// The widest interval that connects (MOJO 2: 12).
+    pub max_interval: u8,
+    /// Curved-velocity edges of the transition's dynamics (`up`'s dynamics
+    /// list, in order): below the first edge plays the first dynamic.
+    #[facet(default)]
+    pub layer_thresholds: Vec<u8>,
+    /// The transition's level by MIDI velocity, dB (128 entries).
+    #[facet(default)]
+    pub gain_db: Vec<f32>,
+    pub timing: ScriptLegatoTiming,
+}
+
+/// The legato timing set of one kind of connection (`ScriptLegatoSpec`).
+#[derive(Debug, Clone, Facet)]
+pub struct ScriptLegatoTiming {
+    pub fade_in_ms: f32,
+    pub trans_offset_ms: f32,
+    /// The hold before the target, at interval 1 and 12 (linear between, in
+    /// whole ms, as the script's integer maths), scaled by 100 / speed %.
+    pub hold_small_ms: f32,
+    pub hold_large_ms: f32,
+    pub fade_out_ms: f32,
+    /// Where the target sustain enters its sample (the script's attack
+    /// offset plus its target offset).
+    pub target_offset_ms: f32,
+    /// The transition's speed in percent at the slowest and fastest playing,
+    /// for interval 1 (`small`) and 12 (`large`), linear between.
+    pub slow_small_pct: i32,
+    pub fast_small_pct: i32,
+    pub slow_large_pct: i32,
+    pub fast_large_pct: i32,
+    /// Speed by the time between the line's note-ons: at or above
+    /// `slowest_ms` the slow speed, at or below `fastest_ms` the fast one.
+    pub slowest_ms: i32,
+    pub fastest_ms: i32,
+    /// Instead of that time, a controller sets the speed index (`127 − cc`);
+    /// `cc_default` until it is sent.
+    #[facet(default)]
+    pub speed_cc: Option<u8>,
+    #[facet(default)]
+    pub speed_cc_default: u8,
+    /// Instead, the note's velocity is the speed index.
+    #[facet(default)]
+    pub speed_by_velocity: bool,
 }
 
 /// High-level category for an articulation's playback behaviour.
