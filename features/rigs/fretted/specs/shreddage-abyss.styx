@@ -12,9 +12,9 @@
 // Modelled so far, at the shipped settings (hand fixed at fret 0, Natural
 // fretting, anti-repetition 25 %, one multitrack guitar, Console empty):
 // single notes of Sustain (with its Pop lead-in at velocity 110-127),
-// Staccato and Harmonics. Not yet: hammer-on / pull-off (velocity 1-60 on a
-// ringing string), slides (key 17 held), Tapping, the pitched release, FX,
-// chords (the poly-window voicing search).
+// Staccato and Harmonics, pitched releases, hammer-ons and pull-offs.
+// Not yet: slides (key 17 held), Tapping, FX, the chord voicing search
+// (chords already place like single notes; the poly window is unmodelled).
 
 name    "Shreddage 3.5 Abyss"
 vendor  "Impact Soundworks"
@@ -53,6 +53,11 @@ articulations (
     // The pop that opens a loud Sustain (section.styx `lead_ins`): never
     // selected by itself.
     { id Pop,       label "Pop",       kind @Sustain, rr 2, dyn_ctrl velocity, notes full }
+    // A soft note on a ringing string within four frets (section.styx
+    // `hammer`): never selected by itself.
+    { id HammerPull, label "Hammer-on / Pull-off", kind @Sustain, dynamics (v1), rr 2, dyn_ctrl velocity, notes full }
+    // What a let-go note leaves (section.styx `release_layer`).
+    { id PitchedRelease, label "Pitched Release", kind @Sustain, rr 2, dyn_ctrl velocity, notes full }
 )
 
 // TACT keyswitches as shipped (latched; `%tact___matrix[128·a + 11]`).

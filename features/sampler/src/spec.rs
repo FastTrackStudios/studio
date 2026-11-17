@@ -3946,6 +3946,57 @@ pub struct FretboardSpec {
     /// Articulations that open with another recording at high velocity.
     #[facet(default)]
     pub lead_ins: Vec<FretLeadInSpec>,
+    /// The recording a released note leaves behind (Shreddage's pitched
+    /// release). `None` = none.
+    pub release_layer: Option<FretReleaseSpec>,
+    /// Hammer-ons and pull-offs. `None` = none.
+    pub hammer: Option<FretHammerSpec>,
+}
+
+/// A release recording (see [`FretboardSpec::release_layer`]): when a
+/// note of one of `sources` is let go (its key comes up, or another note
+/// takes its string) after `min_held_ms..=max_held_ms`, `articulation`
+/// plays on its string at the key the note's recording played, at the
+/// note's velocity gain. Its round robin is its position's next (the RR
+/// orders), and the position's counter steps only on a fretted string
+/// unless `open_string_counts` (Shreddage: `global_var__pitched_rel_fret > 0`).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretReleaseSpec {
+    /// The release articulation.
+    pub articulation: String,
+    /// The articulations whose notes leave it.
+    pub sources: Vec<String>,
+    /// The shortest held time that leaves it (ms).
+    #[facet(default)]
+    pub min_held_ms: f32,
+    /// The longest held time that leaves it (ms).
+    pub max_held_ms: f32,
+    /// Whether an open string's release steps its position's counter.
+    #[facet(default)]
+    pub open_string_counts: bool,
+}
+
+/// Hammer-ons and pull-offs (see [`FretboardSpec::hammer`]): a note of one
+/// of `from` at `max_velocity` or below that lands on a string still
+/// ringing a note of one of `sources`, within `range` frets of it and not
+/// the same note, plays `articulation` instead (`direction` up for a
+/// hammer-on, down for a pull-off), `gain_db` under its velocity gain; the
+/// ringing note is let go.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretHammerSpec {
+    /// The hammer/pull articulation.
+    pub articulation: String,
+    /// The articulations a hammer can follow.
+    pub sources: Vec<String>,
+    /// The articulations a new note may be selected as to become a hammer.
+    pub from: Vec<String>,
+    /// The loudest velocity that hammers.
+    pub max_velocity: u8,
+    /// The widest interval (frets) a hammer spans.
+    pub range: u8,
+    /// Level offset on a hammer (dB).
+    #[facet(default)]
+    pub gain_db: f32,
 }
 
 /// A lead-in (see [`FretboardSpec::lead_ins`]): `articulation` played at

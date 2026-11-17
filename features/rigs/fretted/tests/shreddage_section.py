@@ -28,8 +28,19 @@ follows is `_notes/engine-model.md` (Abyss). Nothing is typed in by hand.
 import csv, math, os, re, sys
 
 # Abyss TACT articulation index → (our id, RR count from the zones).
-ARTICS = {0: "Sustain", 1: "Staccato", 2: "Pop", 4: "Harmonics"}
-FIRST_GROUP = {"Sustain": "Sustain", "Staccato": "Staccato", "Pop": "Pops", "Harmonics": "Harmonics"}
+# Abyss TACT articulation index → our id (`!abyss_artic_names`), and the
+# group each one's envelope and level are read from.
+NAMES = {0: "Sustain", 1: "Staccato", 2: "Pop", 3: "Tapping", 4: "Harmonics", 5: "FX",
+         6: "HammerPull", 7: "Slide", 8: "PitchedRelease"}
+ARTICS = {0: "Sustain", 1: "Staccato", 2: "Pop", 4: "Harmonics", 6: "HammerPull", 8: "PitchedRelease"}
+FIRST_GROUP = {"Sustain": "Sustain", "Staccato": "Staccato", "Pop": "Pops", "Harmonics": "Harmonics",
+               "HammerPull": "Hammer-on/Pull-off", "PitchedRelease": "Pitched Release"}
+
+
+def ksp_list(script, name):
+    """A `declare %name[n] := (a, b, …)` list's entries (−1 = unused)."""
+    m = re.search(rf"declare %{name}\[\d+\] := \(([^)]*)\)", script)
+    return [int(x) for x in m.group(1).split(",") if int(x) >= 0]
 
 
 def persistent(path):
@@ -116,6 +127,9 @@ def main():
     table = ints(p, "%tact___table_matrix", 512 * 9)
     matrix = ints(p, "%tact___matrix", 128 * 9)
     matrix_pop_min = matrix[128 * 2 + 13]
+    # the articulations with a pitched release: %tact___meta[64·a + 40] is
+    # built at init, not shipped; the decode lists them (engine-model §1d)
+    rel_sources = [0, 3, 6, 7]
     vel_db = ints(p, "%vel_db", 1408)
     curve = ints(p, "%s3__engine_par_vel_curve", 128)
 
@@ -145,6 +159,18 @@ def main():
          # and the Sustain entering 15 ms in (script_0.ksp L18075-18240).
          f"    lead_ins ({{ articulation Sustain, min_velocity {matrix_pop_min}, lead Pop, "
          f"body_delay_ms {fmt((ep[54] * 100 + 10) / 1000)}, lead_fade_ms 50, body_offset_ms 15 }})",
+         # release_event (L6946-6990): articulations with %tact___meta[64·a + 40]
+         # leave a pitched release when held engine_pars[50]..[51] ms; the
+         # counter steps only on a fretted string (L17301 `pitched_rel_fret > 0`)
+         f"    release_layer {{ articulation PitchedRelease, sources ({' '.join(NAMES[a] for a in rel_sources)}), "
+         f"min_held_ms {ep[50]}, max_held_ms {ep[51]} }}",
+         # hammer (L17065-17144, L17839): %s3__hammer_sources rings, the new
+         # note's articulation in %s3__hammerable_artics, velocity within
+         # Legato (Hammer/Pull)'s VEL rule, |interval| 1..engine_pars[8];
+         # volume offset engine_pars[27]·−5000 mdB
+         f"    hammer {{ articulation HammerPull, sources ({' '.join(NAMES[a] for a in ksp_list(script, 's3__hammer_sources'))}), "
+         f"from ({' '.join(NAMES[a] for a in ksp_list(script, 's3__hammerable_artics'))}), "
+         f"max_velocity {matrix[128 * 6 + 14]}, range {ep[8]}, gain_db {-5 * ep[27]} }}",
          ]
     if ep[20] == 1:
         L.append(f"    borrow {{ chance_permille {ep[21]}, seed {seed}, multiplier {mult}, frets 2 }}")

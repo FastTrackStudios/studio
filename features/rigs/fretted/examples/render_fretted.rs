@@ -173,9 +173,11 @@ fn main() -> eyre::Result<()> {
                     articulation,
                     dynamic,
                     rr,
-                    ..
+                    reason,
                 } => {
-                    println!("{t:9.4}s MISS note {note} {articulation} {dynamic} rr {rr}");
+                    println!(
+                        "{t:9.4}s MISS note {note} {articulation} {dynamic} rr {rr} {reason:?}"
+                    );
                 }
                 _ => {}
             }
