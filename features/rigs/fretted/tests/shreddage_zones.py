@@ -45,6 +45,64 @@ TRIGGER = {
 # the hammer's velocity layout): those zones again under its name.
 ALSO = {"Hammer-on/Pull-off": ["Tapping"]}
 
+# Libraries that ship their TACT meta (`%_<lib>_meta`, loaded from the NKI's
+# resources and kept in persistent_0): the groups, trigger type, RR count and
+# picking of every articulation come from it, by TACT index → our id (the
+# order of `!<lib>_artic_names`, engine-model.md §1b).
+META_NAMES = {
+    "argent": ["Sustain", "Mute", "Staccato", "PowerChordSustain", "PowerChordMute",
+               "PowerChordStaccato", "Choke", "Tapping", "NaturalHarmonics", "ArtificialHarmonics",
+               "PinchHarmonics", "Rake", "Tremolo", "HammerPull", "Slide", "PitchedRelease",
+               "PowerChordPitchedRelease", "UnpitchedRelease", "FX"],
+}
+# Groups outside TACT, by the words of their name (after the pickup).
+EXTRA_GROUPS = {
+    "Fret Squeaks": ("FretSqueak", 1, False),
+    "Fret Noise": ("FretNoise", 1, False),
+    "Extra Pick": ("ExtraPick", 1, False),
+    "Wide Chokes": ("WideChoke", 1, False),
+    "DI Noise": ("DINoise", 1, False),
+}
+
+
+def load_meta(kdir):
+    """(lib, meta ints) when the instrument ships `%_<lib>_meta`, else None."""
+    with open(os.path.join(kdir, "persistent_0.tsv")) as f:
+        for line in f:
+            k, _, v = line.rstrip("\n").partition("\t")
+            m = re.match(r"^%_([a-z]+)_meta$", k)
+            if m and m.group(1) in META_NAMES:
+                vals = [int(x) for x in v.split()]
+                return m.group(1), vals + [0] * (64 * len(META_NAMES[m.group(1)]) - len(vals))
+    return None
+
+
+def classify(gidx, name, meta, ngroups):
+    """[(mic, articulation, trigger, picked, string)] a group's zones play as."""
+    g = parse_group(name)
+    if not g:
+        return []
+    mic, word, string = g
+    if word in EXTRA_GROUPS:
+        art, trig, picked = EXTRA_GROUPS[word]
+        return [(mic, art, trig, picked, string)]
+    if meta is None:
+        if word not in TRIGGER:
+            return []
+        art, trig, picked = TRIGGER[word]
+        return [(mic, a, trig, picked, string) for a in [art] + ALSO.get(word, [])]
+    lib, vals = meta
+    half = ngroups // 2
+    local = gidx % half
+    out = []
+    for a, art in enumerate(META_NAMES[lib]):
+        m = vals[64 * a: 64 * a + 64]
+        first, count = m[1], m[0]
+        if first <= local < first + count:
+            s = local - first + 1 if m[38] == 1 else 0
+            out.append((mic, art, m[21], m[35] == 1, s))
+    return out
+
 
 def fmt(v):
     if isinstance(v, str):
@@ -71,7 +129,13 @@ def parse_group(name):
 def decode_slot(trig, picked, v):
     """Velocity slot → the zone's tags (engine-model.md §1d)."""
     i = v - 1
-    if trig == 1:
+    if trig == 10:
+        # layer + 1 + 8·rr (+64 up stroke when picked), L7600
+        tags = {"dynamic": f"v{i % 8 + 1}", "rr_index": (i % 64) // 8}
+        if picked:
+            tags["stroke"] = "up" if i >= 64 else "down"
+        return tags
+    if trig in (1, 5, 9):
         tags = {"dynamic": f"v{i % 16 + 1}"}
         if picked:
             tags["rr_index"] = (i % 64) // 16
@@ -79,7 +143,7 @@ def decode_slot(trig, picked, v):
         else:
             tags["rr_index"] = i // 16
         return tags
-    if trig == 2:
+    if trig in (2, 8):
         return {"dynamic": f"v{i % 16 + 1}", "rr_index": (i % 64) // 16,
                 "direction": "up" if i >= 64 else "down"}
     if trig == 3:
@@ -87,9 +151,59 @@ def decode_slot(trig, picked, v):
                 "direction": "up" if v >= 64 else "down"}
     if trig == 0:
         return {"rr_index": i}
-    if trig == 6:
+    if trig in (6, 7):
         return {"rr_index": i // 16}
     raise ValueError(trig)
+
+
+def reachable(trig, picked, v):
+    """Whether the script can send velocity slot `v` (engine-model §2):
+    a release (6) plays layer 0 down-stroke only; an unpicked one-shot never
+    sends the +64 up stroke."""
+    i = v - 1
+    if trig == 6:
+        return i % 16 == 0 and i < 64
+    return True
+
+
+def zones_of(r, inst, organized, nki, mic, art, trig, picked, string):
+    """The zones one decoded zone row becomes for one articulation."""
+    raw = r["sample"].split("Samples/", 1)[1]  # <C>.nkx/Samples/<name>
+    raw = os.path.splitext(raw)[0] + ".wav"
+    if raw not in organized:
+        sys.exit(f"{nki}: no organized file for {raw}")
+    lo, hi = int(r["vel_lo"]), int(r["vel_hi"])
+    slots = [None] if (lo, hi) == (1, 127) else range(lo, hi + 1)
+    out = []
+    for v in slots:
+        if v is not None and not reachable(trig, picked, v):
+            continue
+        z = {
+            "section": inst,
+            "file": organized[raw],
+            "key_min": int(r["key_lo"]),
+            "key_max": int(r["key_hi"]),
+            "root_key": int(r["root"]),
+            "vel_min": 0,
+            "vel_max": 127,
+            "rr_index": 0,
+            "mic": mic,
+            "articulation": art,
+        }
+        if string:
+            z["string"] = string
+        if v is not None:
+            z.update(decode_slot(trig, picked, v))
+        gain = float(r["zvol"])
+        z["gain_db"] = round(20 * math.log10(gain), 6) if gain > 0 else -144.0
+        z["tune_cents"] = round(1200 * math.log2(float(r["tune"])), 6)
+        if int(r["start_mod"]) > 0:
+            z["start_mod"] = int(r["start_mod"])
+        ls, le = int(r["loop_start"]), int(r["loop_end"])
+        if le > ls >= 0:
+            z["loop_start"], z["loop_end"] = ls, le
+        out.append(z)
+    return out
 
 
 def main():
@@ -101,50 +215,18 @@ def main():
         groups = {r["idx"]: r["name"] for r in csv.DictReader(f, delimiter="\t")}
     with open(os.path.join(kdir, "zones.tsv")) as f:
         rows = list(csv.DictReader(f, delimiter="\t"))
+    meta = load_meta(kdir)
+    ngroups = len(groups)
 
     out, skipped = [], {}
     for r in rows:
-        g = parse_group(groups.get(r["group"], ""))
-        if not g or g[1] not in TRIGGER:
-            skipped[groups.get(r["group"], r["group"])] = skipped.get(groups.get(r["group"], r["group"]), 0) + 1
+        name = groups.get(r["group"], "")
+        kinds = classify(int(r["group"]), name, meta, ngroups)
+        if not kinds:
+            skipped[name or r["group"]] = skipped.get(name or r["group"], 0) + 1
             continue
-        mic, word, string = g
-        art, trig, picked = TRIGGER[word]
-        raw = r["sample"].split("Samples/", 1)[1]  # <C>.nkx/Samples/<name>
-        raw = os.path.splitext(raw)[0] + ".wav"
-        if raw not in organized:
-            sys.exit(f"{nki}: no organized file for {raw}")
-        lo, hi = int(r["vel_lo"]), int(r["vel_hi"])
-        slots = [None] if (lo, hi) == (1, 127) else range(lo, hi + 1)
-        for v in slots:
-            z = {
-                "section": inst,
-                "file": organized[raw],
-                "key_min": int(r["key_lo"]),
-                "key_max": int(r["key_hi"]),
-                "root_key": int(r["root"]),
-                "vel_min": 0,
-                "vel_max": 127,
-                "rr_index": 0,
-                "mic": mic,
-                "articulation": art,
-            }
-            if string:
-                z["string"] = string
-            if v is not None:
-                z.update(decode_slot(trig, picked, v))
-            for other in ALSO.get(word, []):
-                out.append(dict(z, articulation=other))
-            gain = float(r["zvol"])
-            z["gain_db"] = round(20 * math.log10(gain), 6) if gain > 0 else -144.0
-            z["tune_cents"] = round(1200 * math.log2(float(r["tune"])), 6)
-            if int(r["start_mod"]) > 0:
-                z["start_mod"] = int(r["start_mod"])
-            ls, le = int(r["loop_start"]), int(r["loop_end"])
-            if le > ls >= 0:
-                z["loop_start"], z["loop_end"] = ls, le
-            out.append(z)
-
+        for mic, art, trig, picked, string in kinds:
+            out.extend(zones_of(r, inst, organized, nki, mic, art, trig, picked, string))
     pdir = os.path.join(root, "_patches", inst)
     os.makedirs(pdir, exist_ok=True)
     path = os.path.join(pdir, "library.styx")
