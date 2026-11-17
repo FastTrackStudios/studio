@@ -354,7 +354,7 @@ impl SampleEngine {
                 self.spawn_stretch,
                 self.spawn_fade_in,
             );
-            self.spawn_extra_start = ms_to_frames_f(t.trans_offset_ms, sr);
+            self.spawn_extra_start = kontakt_offset_frames(t.trans_offset_ms, sr);
             self.spawn_stretch = f64::from(play_speed) / 100.0;
             self.spawn_fade_in = ms_to_frames_f(t.fade_in_ms / 2.0, sr);
             self.spawn_zone_voice(idx, to, VoiceKind::Short, gain, None, 0.0);
@@ -390,7 +390,7 @@ impl SampleEngine {
             None => ScriptLegStage::Target {
                 artic: sustain,
                 fade_out,
-                target_offset: ms_to_frames_f(t.target_offset_ms, sr),
+                target_offset: kontakt_offset_frames(t.target_offset_ms, sr),
             },
         };
         self.script_leg.pending = Some(ScriptLegPending {

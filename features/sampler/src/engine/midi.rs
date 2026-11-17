@@ -893,7 +893,7 @@ impl SampleEngine {
             .gain_db
             .get(usize::from(velocity.min(127)))
             .map_or(1.0, |&db| db_to_gain(db));
-        let offset = self.script_offset(idx, ms_to_frames_f(start_ms, self.sample_rate));
+        let offset = self.script_offset(idx, kontakt_offset_frames(start_ms, self.sample_rate));
         // its own envelope: fade in over the fade, `wait(fade)`, fade out
         // over the tail (36892-36970)
         let saved = (self.spawn_fade_in, self.spawn_delayed_fade);

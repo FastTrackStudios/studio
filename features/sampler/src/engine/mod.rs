@@ -223,6 +223,7 @@ pub use fts_sample::stream_cache;
 mod dispatch;
 pub mod filter;
 mod helpers;
+pub(crate) use helpers::kontakt_offset_frames;
 pub mod inserts;
 mod kontakt_legato;
 mod kontakt_marcato;
