@@ -222,8 +222,8 @@ articulations (
 // Key mode (`%0ect5` = 0): the key sets the articulation (25056-25116),
 // shipped notes `%jqdqz` (identical across instruments); C0 = MIDI 12.
 // The release-type keys (C7..E7 = 96..100) and the >= 120 release override
-// are Sus's `release_types`; natural legato (C#2) its `script_legato`. Not
-// modelled yet: force-keynoise (D2).
+// are Sus's `release_types`; natural legato (C#2) its `script_legato`;
+// force-keynoise (D2) the articulations' `keynoise` `force_key`.
 keyswitch {
     velocity_sensitive false
     user_configurable  true

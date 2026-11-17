@@ -384,6 +384,7 @@ impl SampleEngine {
         // proxy for current playing dynamic — used to scale note-independent
         // ambience (pedal/mechanical noise). Also remember this note's strike
         // velocity so its release tail can match it.
+        self.keys_down[usize::from(note & 127)] = true;
         self.recent_velocity =
             (((self.recent_velocity as u16 * 3 + velocity as u16) / 4) as u8).max(1);
         self.note_strike_vel[note as usize] = velocity;
@@ -593,6 +594,7 @@ impl SampleEngine {
     }
 
     pub(crate) fn note_off_with_velocity_on_line(&mut self, note: u8, release_velocity: u8) {
+        self.keys_down[usize::from(note & 127)] = false;
         // A key a trill pair absorbed sounds nothing, so its key-up neither.
         if std::mem::take(&mut self.trill_silent[usize::from(note & 127)]) {
             return;
@@ -753,11 +755,14 @@ impl SampleEngine {
         else {
             return;
         };
-        if self.keynoise_last == Some(note) {
+        let forced = kn
+            .force_key
+            .is_some_and(|k| self.keys_down[usize::from(k & 127)]);
+        if self.keynoise_last == Some(note) && !forced {
             return;
         }
         self.keynoise_last = Some(note);
-        if self.script_draw(1, 100) > kn.chance_pct {
+        if self.script_draw(1, 100) > kn.chance_pct && !forced {
             return;
         }
         let v = self.script_draw(1, 127) as u8;

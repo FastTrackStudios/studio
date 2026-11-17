@@ -1018,6 +1018,8 @@ pub struct SampleEngine {
     pub(crate) spawn_delayed_fade: Option<(usize, usize)>,
     /// The articulation of the last note played (`artic_change_fade_ms`).
     pub(crate) last_note_artic: Option<String>,
+    /// Which keys are down, whatever they play (`KeynoiseSpec::force_key`).
+    pub(crate) keys_down: [bool; 128],
     /// The host's tempo, µs per quarter note (`set_host_tempo`).
     pub(crate) quarter_us: u32,
     /// Per key, what each of its sounding note-ons played, for a script
@@ -1364,6 +1366,7 @@ impl SampleEngine {
             spawn_delayed_fade: None,
             last_note_artic: None,
             quarter_us: 500_000,
+            keys_down: [false; 128],
             release_sample_notes: vec![Vec::new(); 128],
             release_body_strike: vec![None; 128],
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,

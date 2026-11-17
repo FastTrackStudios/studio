@@ -434,7 +434,8 @@ def build(nki):
                 ep = 500000 + int(500000 * ((0.99 ** curved(max(v, 1)) - 1.0) / den))
                 kg.append(round(ep_db(ep) + ep_db(zl) + ep_db(knob), 4) if zl > 0 else -144.0)
             lines.append(f"        keynoise {{ artic Keyclick, key 64, chance_pct {one('$1stdn')}, "
-                         f"fade_ms {fmt(g0('$MiscClickFade'))}, gain_db ({' '.join(fmt(x) for x in kg)}) }}")
+                         f"fade_ms {fmt(g0('$MiscClickFade'))}, force_key {one('$erctx')}, "
+                         f"gain_db ({' '.join(fmt(x) for x in kg)}) }}")
         if art in LEGATO_VARS:
             leg = legato_numbers(p0, pers, knob, vmin, 4, art)
             timing = ", ".join(f"{k} {fmt(v) if isinstance(v, float) else v}" for k, v in leg["timing"].items())

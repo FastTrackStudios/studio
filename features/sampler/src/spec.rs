@@ -3014,6 +3014,10 @@ pub struct KeynoiseSpec {
     #[facet(default)]
     pub gain_db: Vec<f32>,
     pub fade_ms: f32,
+    /// While this key is down (it sounds nothing), every note tries and
+    /// every try clicks (the chance is still drawn): MOJO 2's `$erctx`.
+    #[facet(default)]
+    pub force_key: Option<u8>,
 }
 
 /// A script's monophonic legato over a one-layer sustain (MOJO 2's legato
