@@ -115,6 +115,8 @@ def classify(gidx, name, meta, ngroups, npickups=2):
 
 
 def fmt(v):
+    if isinstance(v, bool):
+        return "true" if v else "false"
     if isinstance(v, str):
         return json.dumps(v)
     if isinstance(v, float):
@@ -209,7 +211,7 @@ def zones_of(r, inst, organized, nki, mic, art, trig, picked, string):
         z["tune_cents"] = round(1200 * math.log2(float(r["tune"])), 6)
         if int(r["sample_start"]) > 0:
             z["sample_start"] = int(r["sample_start"])
-        if int(r["start_mod"]) > 0:
+        if int(r["start_mod"]) != 0:  # −1: no start offset (the script's is ignored)
             z["start_mod"] = int(r["start_mod"])
         ls, le = int(r["loop_start"]), int(r["loop_end"])
         if le > ls >= 0:
@@ -228,6 +230,10 @@ def main():
     with open(os.path.join(kdir, "zones.tsv")) as f:
         rows = list(csv.DictReader(f, delimiter="\t"))
     meta = load_meta(kdir)
+    # source-module Tracking per group (groups.json `key_tracking`)
+    gj = json.load(open(os.path.join(kdir, "groups.json")))
+    fixed = {str(g["index"]) for g in (gj if isinstance(gj, list) else gj["groups"])
+             if not g.get("key_tracking", True)}
     ngroups = len(groups)
     npickups = len({n.split(" ", 1)[0] for n in groups.values() if n})
 
@@ -239,7 +245,11 @@ def main():
             skipped[name or r["group"]] = skipped.get(name or r["group"], 0) + 1
             continue
         for mic, art, trig, picked, string in kinds:
-            out.extend(zones_of(r, inst, organized, nki, mic, art, trig, picked, string))
+            zs = zones_of(r, inst, organized, nki, mic, art, trig, picked, string)
+            if r["group"] in fixed:
+                for z in zs:
+                    z["fixed_pitch"] = True
+            out.extend(zs)
     pdir = os.path.join(root, "_patches", inst)
     os.makedirs(pdir, exist_ok=True)
     path = os.path.join(pdir, "library.styx")

@@ -61,6 +61,31 @@ pub(crate) struct FretState {
     last_picked: Option<usize>,
     /// When the last key-up left nothing held (frame).
     idle_since: Option<u64>,
+    /// The last voice tag handed out (`Voice::script_tag`).
+    tag_next: u32,
+    /// Each string's fret-squeak counter (`FretSqueakSpec`).
+    squeak_counter: HashMap<usize, usize>,
+}
+
+/// A stitched slide in progress (`FretStitchSpec`).
+#[derive(Debug, Clone)]
+pub(crate) struct Stitch {
+    note: u8,
+    string: usize,
+    /// This step (1-based) of `steps`.
+    step: u32,
+    steps: u32,
+    up: bool,
+    /// The slide's level (dB): the new note's velocity gain plus its age
+    /// change; and the age change alone.
+    gain_db: f32,
+    origin_velocity: u8,
+    line: u8,
+    stitch_tag: u32,
+    squeak_tag: u32,
+    /// The part of a frame the script's clock is past this step's start:
+    /// Kontakt keeps it across `wait`s (KONTRA `wake`).
+    frac: f64,
 }
 
 /// Notes struck within one poly window: (note, velocity, articulation, line).
@@ -87,6 +112,9 @@ pub(crate) struct Held {
     origin_start: u64,
     origin_velocity: u8,
     slide_index: u32,
+    /// The articulation whose envelope its voice runs, when not `artic`'s
+    /// (a kept stitch: `FretStitchSpec::keep_last`).
+    voice_artic: Option<String>,
 }
 
 /// A script step due at frame `at`.
@@ -118,8 +146,11 @@ pub(crate) enum DueKind {
         string: usize,
         interval: i32,
         gain_db: f32,
+        age_db: f32,
         line: u8,
     },
+    /// A stitch's wait ends (see `FretStitchSpec`).
+    StitchEnd(Stitch),
     /// A slide's destination enters (if its key still holds the string).
     SlideBody {
         note: u8,
@@ -163,6 +194,8 @@ impl FretState {
             noise_counter: 0,
             last_picked: None,
             idle_since: None,
+            tag_next: 0,
+            squeak_counter: HashMap::new(),
         };
     }
 
@@ -244,7 +277,6 @@ impl FretState {
     }
 
     /// KSP `random(low, high)`.
-    #[allow(dead_code)] // the multitrack guitars draw from it (Argent)
     pub(crate) fn ksp_random(&mut self, low: i32, high: i32) -> i32 {
         super::ksp_rand::ksp_random(&mut self.ksp_state, low, high)
     }
@@ -287,7 +319,15 @@ impl SampleEngine {
             self.fret.slide_held = true;
             return true;
         }
-        let artic = self.articulation.clone();
+        // TACT's VEL rules under the keyswitch's articulation
+        let artic = fb
+            .velocity_splits
+            .iter()
+            .find(|v| {
+                v.articulation.eq_ignore_ascii_case(&self.articulation)
+                    && (v.min_velocity..=v.max_velocity).contains(&velocity)
+            })
+            .map_or_else(|| self.articulation.clone(), |v| v.plays.clone());
         if fb
             .free_articulations
             .iter()
@@ -532,8 +572,21 @@ impl SampleEngine {
     fn fretted_note_now(&mut self, note: u8, velocity: u8, artic: &str, forced: Option<usize>) {
         let artic = artic.to_string();
         if forced.is_none() {
-            if let Some((string, from, interval)) = self.fret_slide_source(note, &artic) {
-                self.fretted_slide(note, velocity, &artic, string, from, interval);
+            // a lead-in slides as its body (Argent's rake as Sustain, L16678)
+            let sartic = self
+                .patch
+                .spec
+                .fretboard
+                .as_ref()
+                .and_then(|fb| {
+                    fb.lead_ins
+                        .iter()
+                        .find(|l| l.articulation.eq_ignore_ascii_case(&artic))
+                        .and_then(|l| l.body.clone())
+                })
+                .unwrap_or_else(|| artic.clone());
+            if let Some((string, from, interval)) = self.fret_slide_source(note, &sartic) {
+                self.fretted_slide(note, velocity, &sartic, string, from, interval);
                 return;
             }
         }
@@ -568,11 +621,23 @@ impl SampleEngine {
         }
         let fret = i32::from(note) - i32::from(fb.strings[string]);
         let retrigger_ms = fb.retrigger_fade_ms;
-        let lead_in = fb
+        let mut lead_in = fb
             .lead_ins
             .iter()
-            .find(|l| l.articulation.eq_ignore_ascii_case(&artic) && velocity >= l.min_velocity)
+            .find(|l| {
+                l.articulation.eq_ignore_ascii_case(&artic)
+                    && (l.min_velocity..=l.max_velocity.unwrap_or(127)).contains(&velocity)
+            })
             .cloned();
+        // past its strings a lead-in is its body, played plain (L16193)
+        let mut artic = artic;
+        if let Some(l) = lead_in
+            .as_ref()
+            .filter(|l| l.max_string.is_some_and(|m| string > usize::from(m)))
+        {
+            artic = l.body.clone().unwrap_or_else(|| l.articulation.clone());
+            lead_in = None;
+        }
         let line = self.cur_line as u8;
         self.fret.pick(string);
 
@@ -638,9 +703,11 @@ impl SampleEngine {
             }
             // The lead first (Shreddage's pop); the body follows when due.
             (None, Some(l)) => {
-                let zk = self.play_fretted_lead(&l.lead, string, note, velocity);
-                let at =
-                    self.frames_rendered + ms_to_frames_f(l.body_delay_ms, self.sample_rate) as u64;
+                let zk = self.play_fretted_lead(&l, string, note, velocity);
+                // the script's clock keeps the onset's part of a frame
+                let exact = self.fret_onset_frac()
+                    + f64::from(l.body_delay_ms) * f64::from(self.sample_rate) / 1000.0;
+                let at = self.frames_rendered + exact.floor() as u64;
                 self.fret.due.push(FretDue {
                     at,
                     kind: DueKind::Body {
@@ -691,6 +758,7 @@ impl SampleEngine {
                     origin_start: self.frames_rendered,
                     origin_velocity: velocity,
                     slide_index: 0,
+                    voice_artic: None,
                 },
             );
         }
@@ -784,9 +852,17 @@ impl SampleEngine {
         };
         let zone_key = u8::try_from(zone_key).ok()?;
         let offset_ms = offset_ms + self.fret_start_offset(artic);
+        let jittered = self.fret_jittered(artic);
+        let mut offset_us = (offset_ms * 1000.0).round() as i32;
         self.fret.cur_stroke = self.fret_stroke(artic);
         let mut played = None;
         for (t, pan) in self.fret_track_pans().into_iter().enumerate() {
+            let (cents, offset_ms) = if jittered {
+                let c = self.fret_jitter(t, &mut offset_us);
+                (c, offset_us as f32 / 1000.0)
+            } else {
+                (0.0, offset_ms)
+            };
             let rr = self.fret_rr_order(rr_n, n + t);
             let Some(idx) =
                 self.find_fret_zone(artic, direction, interval, string, &dynamic, rr, zone_key)
@@ -798,7 +874,9 @@ impl SampleEngine {
             // the played pitch (Kontakt: ±2 frets, `change_tune` ∓200 cents).
             let start = self.fret_offset_frames(idx, offset_ms);
             self.spawn_pan = pan;
+            self.spawn_tune_cents = cents;
             self.fret_spawn(idx, note, VoiceKind::Zoned, gain_db, start);
+            self.spawn_tune_cents = 0.0;
             self.spawn_pan = None;
             played = Some(zone_key);
         }
@@ -1012,26 +1090,98 @@ impl SampleEngine {
     }
 
     /// A lead-in (see `FretLeadInSpec`): its own play takes a borrow draw
-    /// it never uses, then its round robin is the next draw mod its RR
-    /// count (Shreddage pops, `s3___play_event` L7952, L7963).
+    /// it never uses, then each track draws its round robin, `(draw [mod
+    /// draw_modulus] + track) mod` its RR count, and its jitter (Shreddage's
+    /// trigger type 0, `s3___play_event` L7199-7229).
     fn play_fretted_lead(
         &mut self,
-        lead: &str,
+        l: &FretLeadInSpec,
         string: usize,
         note: u8,
         velocity: u8,
     ) -> Option<u8> {
+        let lead = l.lead.as_str();
         let a = self.patch.spec.articulation(lead)?;
         let rr_n = a.rr.max(1);
         let gain_db = self.fret_vel_gain(lead, velocity);
         let _unused_borrow = self.fret.draw_raw();
-        let rr = self.fret.draw_raw().map_or(0, |d| d as usize % rr_n);
-        let Some(idx) = self.find_fret_zone(lead, MISSING, 0, string, "", rr, note) else {
-            self.fret_miss(note, lead, String::new(), rr);
-            return None;
+        let mut offset_us = (self.fret_start_offset(lead) * 1000.0).round() as i32;
+        let mut played = None;
+        for (t, pan) in self.fret_track_pans().into_iter().enumerate() {
+            let d = self.fret.draw_raw().unwrap_or(0);
+            let d = if l.draw_modulus > 0 {
+                d % l.draw_modulus
+            } else {
+                d
+            };
+            let rr = (d as usize + t) % rr_n;
+            let cents = self.fret_jitter(t, &mut offset_us);
+            let Some(idx) = self.find_fret_zone(lead, MISSING, 0, string, "", rr, note) else {
+                self.fret_miss(note, lead, String::new(), rr);
+                continue;
+            };
+            let start = self.fret_offset_frames(idx, offset_us as f32 / 1000.0);
+            self.spawn_pan = pan;
+            self.spawn_tune_cents = cents;
+            self.fret_spawn(idx, note, VoiceKind::Zoned, gain_db, start);
+            self.spawn_tune_cents = 0.0;
+            self.spawn_pan = None;
+            played = Some(note);
+        }
+        played
+    }
+
+    /// Track `t`'s jitter (`FretJitterSpec`): its detune (cents), with its
+    /// start shift accumulated into `offset_us`. No spec, or a `0..=0`
+    /// range, draws nothing.
+    fn fret_jitter(&mut self, t: usize, offset_us: &mut i32) -> f32 {
+        let Some(j) = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.jitter.as_ref())
+        else {
+            return 0.0;
         };
-        self.fret_spawn(idx, note, VoiceKind::Zoned, gain_db, 0);
-        Some(note)
+        let Some(r) = j.ranges.get(t).filter(|r| (r.lo, r.hi) != (0, 0)) else {
+            return 0.0;
+        };
+        let (lo, hi, wrap) = (r.lo, r.hi, j.offset_wrap_us.max(1));
+        let tune = self.fret.ksp_random(lo, hi);
+        let shift = self.fret.ksp_random(lo, hi);
+        *offset_us = (*offset_us + shift).rem_euclid(wrap);
+        tune as f32 / 1000.0
+    }
+
+    /// The draws a play of `artic` takes for the tracks past `played`
+    /// when it draws every track's range (`FretJitterSpec::all_tracks`).
+    fn fret_jitter_rest(&mut self, artic: &str, played: usize, offset_us: &mut i32) {
+        let n = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.jitter.as_ref())
+            .filter(|j| j.all_tracks.iter().any(|a| a.eq_ignore_ascii_case(artic)))
+            .map_or(0, |j| j.ranges.len());
+        for t in played..n {
+            let _ = self.fret_jitter(t, offset_us);
+        }
+    }
+
+    /// Whether plain plays of `artic` are jittered (`FretJitterSpec`).
+    fn fret_jittered(&self, artic: &str) -> bool {
+        self.patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.jitter.as_ref())
+            .is_some_and(|j| {
+                j.articulations
+                    .iter()
+                    .any(|a| a.eq_ignore_ascii_case(artic))
+            })
     }
 
     /// The release recording a let-go note leaves, if any
@@ -1180,8 +1330,8 @@ impl SampleEngine {
         let index = src.slide_index + 1;
         let age_ms = ((now + hold).saturating_sub(src.origin_start) * 1000
             / u64::from(self.sample_rate)) as f32;
-        let gain_db =
-            self.fret_vel_gain(&src.artic, velocity) + age_db * age_ms / 1000.0 * index as f32;
+        let age_db = age_db * age_ms / 1000.0 * index as f32;
+        let gain_db = self.fret_vel_gain(&src.artic, velocity) + age_db;
         self.fret.gone.insert(from);
         self.fret.ringing[string] = Some(note);
         self.fret.held.insert(
@@ -1197,6 +1347,7 @@ impl SampleEngine {
                 origin_start: src.origin_start,
                 origin_velocity: src.origin_velocity,
                 slide_index: index,
+                voice_artic: None,
             },
         );
         self.fret.last_string = Some(string);
@@ -1210,9 +1361,232 @@ impl SampleEngine {
                 string,
                 interval,
                 gain_db,
+                age_db,
                 line,
             },
         });
+    }
+
+    /// A stitched slide's start (`FretStitchSpec`): the source fades, the
+    /// squeak plays per track, then the first stitch. `false` = the slide
+    /// is not stitched.
+    #[allow(clippy::too_many_arguments)]
+    fn fret_stitch_start(
+        &mut self,
+        note: u8,
+        from: u8,
+        string: usize,
+        interval: i32,
+        gain_db: f32,
+        age_db: f32,
+        line: u8,
+    ) -> bool {
+        let Some(s) = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.slide.clone())
+        else {
+            return false;
+        };
+        let Some(st) = s.stitched.clone() else {
+            return false;
+        };
+        self.set_active_line(usize::from(line));
+        let fade = ms_to_frames_f(s.source_fade_ms, self.sample_rate);
+        self.voices.fade_out_note_line_any(line, from, fade);
+        let (origin_velocity, artic) = self.fret.held.get(&note).map_or((64, String::new()), |h| {
+            (h.origin_velocity, h.artic.clone())
+        });
+        // levelled by the chain's first velocity: KONTRA's `$args__event_vel`
+        // stays the origin's through a stitched slide
+        let gain_db = self.fret_vel_gain(&artic, origin_velocity) + age_db;
+        self.fret.tag_next += 1;
+        let squeak_tag = self.fret.tag_next;
+        if let Some(sq) = st.squeak.as_ref() {
+            let n = self.fret.squeak_counter.get(&string).copied().unwrap_or(0);
+            let gain = sq.gain_db + self.fret_vel_gain(&sq.vel_gain_from, origin_velocity) + age_db;
+            for (t, pan) in self.fret_track_pans().into_iter().enumerate() {
+                let key = ((n + t) % usize::from(sq.keys.max(1))) as u8;
+                let mut offset_us = 0;
+                let cents = self.fret_jitter(t, &mut offset_us);
+                let Some(idx) =
+                    self.find_fret_zone(&sq.articulation, MISSING, 0, string, "", 0, key)
+                else {
+                    self.fret_miss(key, &sq.articulation, String::new(), 0);
+                    continue;
+                };
+                let start = self.fret_offset_frames(idx, offset_us as f32 / 1000.0);
+                self.spawn_pan = pan;
+                self.spawn_tune_cents = cents;
+                self.fret_spawn(idx, key, VoiceKind::Zoned, gain, start);
+                self.spawn_tune_cents = 0.0;
+                self.spawn_pan = None;
+                if let Some(v) = self.voices.last_spawned_mut() {
+                    v.script_tag = squeak_tag;
+                }
+            }
+            self.fret
+                .squeak_counter
+                .insert(string, (n + 1) % usize::from(sq.keys.max(1)));
+        }
+        self.fret_stitch_step(Stitch {
+            note,
+            string,
+            step: 1,
+            steps: interval.unsigned_abs(),
+            up: interval > 0,
+            gain_db,
+            origin_velocity,
+            line,
+            stitch_tag: 0,
+            squeak_tag,
+            frac: self.fret_onset_frac(),
+        });
+        true
+    }
+
+    /// One stitch (`FretStitchSpec`): the transition's one-fret zone into
+    /// this step's fret, per track; on the last step the destination too.
+    fn fret_stitch_step(&mut self, mut st: Stitch) {
+        let Some(s) = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.slide.clone())
+        else {
+            return;
+        };
+        let Some(sti) = s.stitched.clone() else {
+            return;
+        };
+        let Some(step) = sti.steps.get(st.steps.saturating_sub(1) as usize).cloned() else {
+            return;
+        };
+        self.set_active_line(usize::from(st.line));
+        let dir: i32 = if st.up { 1 } else { -1 };
+        let key = i32::from(st.note) - dir * (st.steps - st.step) as i32;
+        let Ok(key) = u8::try_from(key) else {
+            return;
+        };
+        let artic = s.articulation.clone();
+        let direction = if st.up { "up" } else { "down" };
+        // its own play_event: the borrow draw, then a jitter draw per track
+        let _unused_borrow = self.fret.draw_raw();
+        self.fret.tag_next += 1;
+        st.stitch_tag = self.fret.tag_next;
+        let mut offset_us = (self.fret_start_offset(&artic) * 1000.0).round() as i32;
+        let pans = self.fret_track_pans();
+        let gain = st.gain_db + step.gain_db;
+        for (t, pan) in pans.iter().copied().enumerate() {
+            let cents = self.fret_jitter(t, &mut offset_us);
+            let Some(idx) = self.find_fret_zone(&artic, direction, 1, st.string, "", 0, key) else {
+                self.fret_miss(key, &artic, String::new(), 0);
+                continue;
+            };
+            let start = self.fret_offset_frames(idx, offset_us as f32 / 1000.0);
+            self.spawn_pan = pan;
+            self.spawn_tune_cents = cents;
+            self.fret_no_hold = true;
+            self.fret_spawn(idx, key, VoiceKind::Zoned, gain, start);
+            self.fret_no_hold = false;
+            self.spawn_tune_cents = 0.0;
+            self.spawn_pan = None;
+            if let Some(v) = self.voices.last_spawned_mut() {
+                v.script_tag = st.stitch_tag;
+            }
+        }
+        self.fret_jitter_rest(&artic, pans.len(), &mut offset_us);
+        if st.step == st.steps && sti.keep_last {
+            if let Some(h) = self.fret.held.get_mut(&st.note) {
+                h.zone_key = key;
+                h.voice_artic = Some(artic.clone());
+                // its release recording copies the sounding voice's level
+                h.gain_db = gain;
+            }
+        } else if st.step == st.steps {
+            let dest = self
+                .fret
+                .held
+                .get(&st.note)
+                .map(|h| h.artic.clone())
+                .unwrap_or_default();
+            self.spawn_fade_in = (u64::from(step.dest_fade_in_us) * u64::from(self.sample_rate)
+                / 1_000_000) as usize;
+            let own = self.fret_start_offset(&dest);
+            let offset = (sti.dest_offset_ms + own).min(sti.dest_offset_max_ms) - own;
+            self.fret_no_hold = true;
+            let zk = self.play_fretted(
+                &dest,
+                MISSING,
+                0,
+                st.string,
+                st.note,
+                st.origin_velocity,
+                st.gain_db + sti.dest_gain_db,
+                offset,
+            );
+            self.fret_no_hold = false;
+            self.spawn_fade_in = 0;
+            if let (Some(zk), Some(h)) = (zk, self.fret.held.get_mut(&st.note)) {
+                h.zone_key = zk;
+                h.gain_db = st.gain_db + sti.dest_gain_db;
+            }
+        }
+        let exact = st.frac + f64::from(step.wait_us) * f64::from(self.sample_rate) / 1e6;
+        let at = self.frames_rendered + exact.floor() as u64;
+        st.frac = exact.fract();
+        self.fret.due.push(FretDue {
+            at,
+            kind: DueKind::StitchEnd(st),
+        });
+    }
+
+    /// A stitch's wait is over: it is released; after the last the squeak
+    /// stops; a key let go or a string taken ends the slide, else the next
+    /// stitch plays.
+    fn fret_stitch_end(&mut self, st: Stitch) {
+        let artic = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.slide.as_ref())
+            .map(|s| s.articulation.clone())
+            .unwrap_or_default();
+        let keep = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.slide.as_ref())
+            .and_then(|s| s.stitched.as_ref())
+            .is_some_and(|s| s.keep_last);
+        if !(keep && st.step == st.steps) {
+            let frames = self.fretted_release_frames(&artic);
+            self.voices.release_tagged(st.stitch_tag, Some(frames));
+        }
+        if st.step == st.steps {
+            self.voices.fade_out_tagged(st.squeak_tag, 0);
+        }
+        let holds = self.fret.ringing.get(st.string) == Some(&Some(st.note))
+            && self
+                .fret
+                .held
+                .get(&st.note)
+                .is_some_and(|h| h.string == st.string);
+        if !holds {
+            self.voices.fade_out_tagged(st.squeak_tag, 0);
+            return;
+        }
+        if st.step < st.steps {
+            self.fret_stitch_step(Stitch {
+                step: st.step + 1,
+                ..st
+            });
+        }
     }
 
     /// A slide's first step: the source fades, the transition plays.
@@ -1361,6 +1735,14 @@ impl SampleEngine {
         })
     }
 
+    /// The part of a frame the onset delay leaves past the frame a fretted
+    /// note plays on (`onset_delay_us` is floored to whole frames there).
+    fn fret_onset_frac(&self) -> f64 {
+        self.patch.spec.fretboard.as_ref().map_or(0.0, |fb| {
+            (f64::from(fb.onset_delay_us) * 1e-6 * f64::from(self.sample_rate)).fract()
+        })
+    }
+
     /// Run every script step that is due.
     pub(crate) fn fire_fret_due(&mut self) {
         // a due step already waited its delay: nothing it plays waits again
@@ -1396,10 +1778,18 @@ impl SampleEngine {
                         continue;
                     }
                     self.set_active_line(usize::from(line));
-                    let fade = ms_to_frames_f(lead.lead_fade_ms, self.sample_rate);
-                    self.voices.fade_out_note_line_any(line, note, fade);
-                    let artic = lead.articulation.clone();
-                    let g = self.fret_vel_gain(&artic, velocity);
+                    if let Some(ms) = lead.lead_fade_ms {
+                        let fade = ms_to_frames_f(ms, self.sample_rate);
+                        self.voices.fade_out_note_line_any(line, note, fade);
+                    }
+                    let artic = lead.body.clone().unwrap_or(lead.articulation.clone());
+                    let g = if lead.body_lead_gain {
+                        self.fret_vel_gain(&lead.lead, velocity)
+                    } else {
+                        self.fret_vel_gain(&artic, velocity)
+                    };
+                    // the body is a plain play: its pick attack first
+                    self.fret_extra_pick(string);
                     if let Some(zk) = self.play_fretted(
                         &artic,
                         MISSING,
@@ -1422,10 +1812,15 @@ impl SampleEngine {
                     string,
                     interval,
                     gain_db,
+                    age_db,
                     line,
                 } => {
-                    self.fret_slide_start(note, from, string, interval, gain_db, line);
+                    if !self.fret_stitch_start(note, from, string, interval, gain_db, age_db, line)
+                    {
+                        self.fret_slide_start(note, from, string, interval, gain_db, line);
+                    }
                 }
+                DueKind::StitchEnd(st) => self.fret_stitch_end(st),
                 DueKind::SlideBody {
                     note,
                     string,
@@ -1438,7 +1833,8 @@ impl SampleEngine {
                 DueKind::Window => self.fret_close_window(),
                 DueKind::Release { note, held } => {
                     self.set_active_line(usize::from(held.line));
-                    let frames = self.fretted_release_frames(&held.artic);
+                    let frames = self
+                        .fretted_release_frames(held.voice_artic.as_deref().unwrap_or(&held.artic));
                     self.voices.note_off_line(held.line, note, Some(frames));
                     self.play_fret_release(note, &held);
                     self.play_fret_noise_release(&held);
@@ -1466,8 +1862,12 @@ impl SampleEngine {
             .get_loaded(&self.patch.zone_paths[idx])
             .map_or(self.sample_rate, |d| d.sample_rate);
         // Kontakt floors a `play_note` offset to whole source frames
-        // (15 ms at 44.1 kHz starts at 661, KONTRA's trace)
-        (f64::from(ms) / 1000.0 * f64::from(rate)).floor() as usize
+        // (15 ms at 44.1 kHz starts at 661, KONTRA's trace), within the
+        // zone's start-modulation range (none: Argent's rake noise)
+        self.script_offset(
+            idx,
+            (f64::from(ms) / 1000.0 * f64::from(rate)).floor() as usize,
+        )
     }
 
     fn fret_miss(&mut self, note: u8, artic: &str, dynamic: String, rr: usize) {

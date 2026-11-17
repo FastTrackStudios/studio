@@ -206,7 +206,8 @@ impl SampleEngine {
             warm_ids.extend(fb.tap.as_ref().map(|t| t.open_as.clone()));
         }
         // Side recordings every fretted note may play at keys of their own
-        // (the extra pick, the release noise): every zone of theirs.
+        // (the extra pick, the release noise, the slide squeak): every zone
+        // of theirs.
         let side_ids: Vec<String> = self
             .patch
             .spec
@@ -218,10 +219,34 @@ impl SampleEngine {
                     .map(|e| e.articulation.clone())
                     .into_iter()
                     .chain(fb.noise_release.as_ref().map(|n| n.articulation.clone()))
+                    .chain(
+                        fb.slide
+                            .as_ref()
+                            .and_then(|s| s.stitched.as_ref())
+                            .and_then(|st| st.squeak.as_ref())
+                            .map(|q| q.articulation.clone()),
+                    )
                     .collect()
             })
             .unwrap_or_default();
         warm_ids.extend(side_ids.iter().cloned());
+        let stitch_reach: Option<(String, u8)> = self
+            .patch
+            .spec
+            .fretboard
+            .as_ref()
+            .and_then(|fb| fb.slide.as_ref())
+            .filter(|s| s.stitched.is_some())
+            .map(|s| (s.articulation.clone(), s.max_interval));
+        // What a fretted note may be chosen as by its velocity (Argent's
+        // Rake, Pinch Harmonics), with every lead-in's lead and body.
+        if let Some(fb) = self.patch.spec.fretboard.as_ref() {
+            warm_ids.extend(fb.velocity_splits.iter().map(|v| v.plays.clone()));
+            for l in &fb.lead_ins {
+                warm_ids.push(l.lead.clone());
+                warm_ids.extend(l.body.clone());
+            }
+        }
         // A pending CC58 velocity-group resolves to its concrete articulation
         // only at note-on (from the note's velocity), so `effective_articulation`
         // above can't see it yet — warm EVERY possible resolution (Trills →
@@ -308,7 +333,12 @@ impl SampleEngine {
             let side = side_ids
                 .iter()
                 .any(|id| z.articulation.eq_ignore_ascii_case(id));
-            if !in_range && !near && !side {
+            // a stitched slide plays its one-fret zones at every key on its way
+            let stitch = stitch_reach.as_ref().is_some_and(|(id, reach)| {
+                z.articulation.eq_ignore_ascii_case(id)
+                    && (z.root_key as i32 - note as i32).unsigned_abs() <= u32::from(*reach)
+            });
+            if !in_range && !near && !side && !stitch {
                 continue;
             }
             if artic.is_some() {

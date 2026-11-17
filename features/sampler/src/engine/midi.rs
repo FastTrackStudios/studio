@@ -2682,8 +2682,9 @@ impl SampleEngine {
         // Copy out the zone fields up front so no borrow of `self.patch`
         // outlives the `&mut self` cache-miss bookkeeping below.
         let z = &self.patch.spec.zones[idx];
-        let (root_key, tune_cents, gain_db, mic, pan) = (
-            z.root_key,
+        // a zone with Kontakt's Tracking off sounds its root on every key
+        let root_key = if z.fixed_pitch { note } else { z.root_key };
+        let (tune_cents, gain_db, mic, pan) = (
             z.tune_cents,
             z.gain_db,
             z.mic.clone(),
@@ -3591,11 +3592,12 @@ impl SampleEngine {
             // pitch — the routed note is a trigger selector, not a transpose.
             // Without this a drum routed to any note other than its zone key
             // would detune (e.g. a tom on note 45 vs root 50 = -5 semitones).
-            let semitones = if self.percussion || self.pinned_articulation.is_some() {
-                0.0
-            } else {
-                note as f64 - z.root_key as f64
-            };
+            let semitones =
+                if self.percussion || self.pinned_articulation.is_some() || z.fixed_pitch {
+                    0.0
+                } else {
+                    note as f64 - z.root_key as f64
+                };
             // Same pitch/speed split as spawn_zone_voice_at: transposition →
             // time-preserving shifter; tuning → rate.
             // Resample mode (Spectrasonics sources): the key offset is

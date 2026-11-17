@@ -1325,6 +1325,8 @@ pub struct ArticulationOverlay {
     pub pitch_env_cents: Option<f32>,
     pub pitch_env_random: Option<RandomPitchEnvSpec>,
     pub amp_env: Option<Vec<EnvSegmentSpec>>,
+    /// See [`ArticulationSpec::amp_env2`].
+    pub amp_env2: Option<Vec<EnvSegmentSpec>>,
     pub amp_env_hold: Option<bool>,
     pub amp_env_release: Option<u32>,
     /// See [`ArticulationSpec::release_ms_by_held`].
@@ -1416,6 +1418,9 @@ impl SectionOverlay {
             }
             if let Some(v) = o.amp_env_hold {
                 a.amp_env_hold = Some(v);
+            }
+            if let Some(v) = o.amp_env2.clone() {
+                a.amp_env2 = v;
             }
             if let Some(v) = o.amp_env_release {
                 a.amp_env_release = Some(v);
@@ -2133,6 +2138,7 @@ fn zone_from_sfz(
         tune_cents: tune + transpose,
         sample_start: sfz_u32(group, region, "offset").unwrap_or(0),
         start_mod: None,
+        fixed_pitch: false,
         variant_starts: Vec::new(),
         disabled: false,
         borrowed: false,
@@ -3574,6 +3580,10 @@ pub struct ZoneSpec {
     /// `-1` = not at all, the offset is ignored. `None` = no limit.
     #[facet(default)]
     pub start_mod: Option<i64>,
+    /// Kontakt's source-module Tracking off: the zone plays at its own
+    /// pitch on every key it spans (Shreddage's rake noise). Default false.
+    #[facet(default)]
+    pub fixed_pitch: bool,
     /// Kontakt's velocity-2.. zones over this same file (index 0 = velocity
     /// 2): the scripted body VARIANTS — the same recording entered deeper.
     /// CSS plays one for a loud first note (`%v2aqt`), see
@@ -3981,6 +3991,49 @@ pub struct FretboardSpec {
     pub noise_release: Option<FretNoiseReleaseSpec>,
     /// The hand resets after the board falls idle. `None` = never.
     pub idle_reset: Option<FretIdleResetSpec>,
+    /// Articulations chosen by the note's velocity under a keyswitch's
+    /// articulation (TACT's KEY + VEL rules).
+    #[facet(default)]
+    pub velocity_splits: Vec<FretVelocitySplitSpec>,
+    /// Random detune and start shifts on the tracks past the first.
+    /// `None` = none.
+    pub jitter: Option<FretJitterSpec>,
+}
+
+/// A velocity split (see [`FretboardSpec::velocity_splits`]): a note
+/// selected as `articulation` struck at `min_velocity..=max_velocity` plays
+/// `plays` instead.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretVelocitySplitSpec {
+    pub articulation: String,
+    pub min_velocity: u8,
+    pub max_velocity: u8,
+    pub plays: String,
+}
+
+/// Track jitter (see [`FretboardSpec::jitter`]), Shreddage's multitracking
+/// (`s3___play_event`, Argent L7209-7229, L7557-7570): track `t` past the
+/// first draws KSP `random(lo, hi)` for its detune (1/1000 cent), then
+/// again for its start shift (µs), which accumulates over the tracks and
+/// wraps at `offset_wrap_us`. Plays of `articulations` and every lead-in's
+/// lead are jittered; a range of `0..=0` draws nothing.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretJitterSpec {
+    pub articulations: Vec<String>,
+    /// Articulations whose plays draw every track's range, enabled or not
+    /// (Shreddage's trigger types 3 and 4, L7374-7389).
+    #[facet(default)]
+    pub all_tracks: Vec<String>,
+    /// The draw range per track, the first track first.
+    pub ranges: Vec<FretJitterRangeSpec>,
+    pub offset_wrap_us: i32,
+}
+
+/// One track's jitter range (see [`FretJitterSpec`]).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretJitterRangeSpec {
+    pub lo: i32,
+    pub hi: i32,
 }
 
 /// The idle hand reset (see [`FretboardSpec::idle_reset`]), Shreddage's
@@ -4104,6 +4157,58 @@ pub struct FretSlideSpec {
     /// Level change per second of the origin's age, per chain step (dB).
     #[facet(default)]
     pub age_db_per_s: f32,
+    /// A slide as a chain of one-fret stitches instead of one transition
+    /// (Shreddage 3.5 Argent/Darkwall). `None` = one transition.
+    pub stitched: Option<FretStitchSpec>,
+}
+
+/// A stitched slide (see [`FretSlideSpec::stitched`]), Shreddage 3.5's
+/// `sti` engine (Argent L16677-17168): after the source fades, a squeak
+/// per track, then for each fret on the way (the destination last) the
+/// transition articulation's one-fret zone into it, `direction` up or down,
+/// at the slide's level plus the interval's `gain_db`; on the last step the
+/// destination enters too, `dest_offset_ms` into its recording, at the
+/// slide's level plus `dest_gain_db`, fading in over the interval's
+/// `dest_fade_in_us`. Each step lasts the interval's `wait_us`, then its
+/// stitch is released; after the last the squeak stops. A key let go or a
+/// string taken mid-slide stops the squeak and the chain.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretStitchSpec {
+    /// Per interval (index 0 = 1 semitone).
+    pub steps: Vec<FretStitchStepSpec>,
+    /// The destination's start: `dest_offset_ms` plus its articulation's
+    /// start offset, at most `dest_offset_max_ms` (Kontakt clamps a
+    /// `play_note` offset below `meta[6]·100` µs).
+    pub dest_offset_ms: f32,
+    pub dest_offset_max_ms: f32,
+    pub dest_gain_db: f32,
+    /// The squeak at the slide's start. `None` = none.
+    pub squeak: Option<FretSqueakSpec>,
+    /// The last stitch is the destination: no destination play, and the
+    /// stitch rings on until the note is let go (Darkwall, whose slide
+    /// recordings are full-length sustains; engine-model §6).
+    #[facet(default)]
+    pub keep_last: bool,
+}
+
+/// One interval's stitch timing and levels (see [`FretStitchSpec`]).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretStitchStepSpec {
+    pub wait_us: u32,
+    pub gain_db: f32,
+    pub dest_fade_in_us: u32,
+}
+
+/// A slide's fret squeak (see [`FretStitchSpec::squeak`]): `articulation`'s
+/// zone on the string at key `(counter + track) mod keys` (a counter per
+/// string), at `gain_db` plus `vel_gain_from`'s velocity gain at the
+/// chain's first velocity, plus the slide's age change.
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretSqueakSpec {
+    pub articulation: String,
+    pub keys: u8,
+    pub gain_db: f32,
+    pub vel_gain_from: String,
 }
 
 /// A release recording (see [`FretboardSpec::release_layer`]): when a
@@ -4164,21 +4269,41 @@ pub struct FretHammerSpec {
 /// `lead_fade_ms` and `articulation` enters `body_offset_ms` into its
 /// recording. Released sooner, the lead alone sounds. The lead's round
 /// robin is a borrow-generator draw mod its RR count, taken after a borrow
-/// draw the lead never uses.
+/// draw the lead never uses; with `draw_modulus`, the draw is first taken
+/// mod it, and track `t` plays `(draw + t) mod` its RR count (Argent's
+/// rake: `(draw mod 10 + t) mod 4`, L7207-7216). Each track draws its own.
 #[derive(Debug, Clone, Default, Facet)]
 pub struct FretLeadInSpec {
     /// The articulation that opens with a lead.
     pub articulation: String,
     /// The lowest velocity that plays the lead.
     pub min_velocity: u8,
+    /// The loudest velocity that plays the lead (`None` = 127).
+    #[facet(default)]
+    pub max_velocity: Option<u8>,
     /// The lead articulation.
     pub lead: String,
+    /// The articulation the body plays (`None` = `articulation`).
+    #[facet(default)]
+    pub body: Option<String>,
+    /// On a string past this (0-based) the note plays `body` plain, with no
+    /// lead (Argent L16193). `None` = every string leads.
+    #[facet(default)]
+    pub max_string: Option<u8>,
     /// From the lead's start to the body's (ms).
     pub body_delay_ms: f32,
-    /// The lead's fade when the body enters (ms).
-    pub lead_fade_ms: f32,
+    /// The lead's fade when the body enters (ms; `None` = it rings on).
+    #[facet(default)]
+    pub lead_fade_ms: Option<f32>,
     /// Where in its recording the body starts (ms).
     pub body_offset_ms: f32,
+    /// The lead's draw is taken mod this first (0 = not).
+    #[facet(default)]
+    pub draw_modulus: u32,
+    /// The body is levelled by the lead's velocity gain, not its own
+    /// (Argent's rake passes Rake's Vel→Vol to the Sustain, L17343).
+    #[facet(default)]
+    pub body_lead_gain: bool,
 }
 
 /// [`FretboardSpec`] placement weights (each added to a string's score).

@@ -631,6 +631,7 @@ impl PlayerPatch {
                     tune_cents: 0.0,
                     sample_start: 0,
                     start_mod: None,
+                    fixed_pitch: false,
                     variant_starts: Vec::new(),
                     disabled: false,
                     borrowed: false,
