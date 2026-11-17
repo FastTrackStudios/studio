@@ -41,7 +41,7 @@ Path shorthand used below:
   `RENDER_TARGETS` (`SDK.h:3087-3089`).
 - **The whole REAPER surface is already reachable from the daw facade
   today** — `Projects::run_command` + `get/set_project_info(_string)`
-  (`crates/daw/proto/src/project/service.rs:55,65-68`), implemented in
+  (`daw:crates/daw/proto/src/project/service.rs:55,65-68`), implemented in
   daw-reaper over `GetSetProjectInfo_String`
   (`features/adapters/reaper/daw-reaper/src/project.rs:563-600`) — and a legacy
   FTS driver already rendered this way (`legacy-offline.rs:167-225`). What is
@@ -65,7 +65,7 @@ Path shorthand used below:
   *envelope* does (`standalone/audio_engine/render/mod.rs:771-777`). The
   loop decided in #38 ("set the language VCAs' mute") must therefore mute
   through the mute gang (`TrackGrouping::mute_lead/mute_follow`,
-  `crates/daw/proto/src/track/track.rs:268-269`) or set each source's
+  `daw:crates/daw/proto/src/track/track.rs:268-269`) or set each source's
   mute directly, not rely on VCA mute propagation.
 
 ---
@@ -170,7 +170,7 @@ removes that class of mistake.
   channels (`SDK.h:6250-6255`). Not wrapped anywhere in `daw/` today (no
   hits for `SetRegionRenderMatrix` under `features/adapters/reaper/daw-reaper/src`
   or `crates/daw/standalone/src`); the region service doc
-  only *mentions* "render matrix" (`crates/daw/proto/src/region/service.rs:9`).
+  only *mentions* "render matrix" (`daw:crates/daw/proto/src/region/service.rs:9`).
 - `RenderFileSection(source, target, start_pct, end_pct, playrate)` renders
   a section of a *media file*, "not available while playing back"
   (`SDK.h:5656-5661`) — a file utility, not a project render.
@@ -264,7 +264,7 @@ writes unknown keys into ext-state (`sync/project.rs:420-432`);
 persists a string and renders nothing.
 
 **Time selection** exists on the transport service
-(`crates/daw/proto/src/transport/service.rs:69-76`). No project-length
+(`daw:crates/daw/proto/src/transport/service.rs:69-76`). No project-length
 helper was found in the standalone crate (grep for `project_length|
 length_seconds|project_end` under `standalone/` returns nothing), so
 "entire project" bounds must be derived from the last item end.
@@ -276,15 +276,15 @@ output *after* the project block (`standalone/audio_engine/aux_render.rs:1-16`)
 ## 3. What the daw facade has for render today
 
 **No render service.** Every `render` hit in daw-proto/daw-control/daw-reaper
-is a UI-render or renderer comment (`crates/daw/proto/src/dock_host/service.rs:30-31`,
+is a UI-render or renderer comment (`daw:crates/daw/proto/src/dock_host/service.rs:30-31`,
 `peak/types.rs:25`, `automation/envelope.rs:69`, `handle.rs:201`,
 `region/service.rs:9`, `midi/service.rs:123`, `stretch_marker/types.rs:83`,
-`crates/daw/control/src/project.rs:497-522`). No trait named `Render`
+`daw:crates/daw/control/src/project.rs:497-522`). No trait named `Render`
 exists among the `#[architect::rpc]` traits (`grep "pub trait"` over
-`crates/daw/proto/src`).
+`daw:crates/daw/proto/src`).
 
 **The raw surface is wrapped.** `Projects`
-(`crates/daw/proto/src/project/service.rs:8-9`,
+(`daw:crates/daw/proto/src/project/service.rs:8-9`,
 `#[architect::rpc(ops(ProjectContext as ProjectArg))]`) carries:
 
 - `run_command(project, command: &str) -> bool` (`service.rs:55`)
@@ -293,7 +293,7 @@ exists among the `#[architect::rpc]` traits (`grep "pub trait"` over
   (`service.rs:69-70`).
 
 daw-control exposes them as `Project::run_command`
-(`crates/daw/control/src/project.rs:456-465`) and
+(`daw:crates/daw/control/src/project.rs:456-465`) and
 `get_info_string / set_info_string / get_info / set_info`
 (`project.rs:498-535`) — whose doc comments already name
 `"RENDER_FILE"`, `"RENDER_PATTERN"` (`project.rs:497,509`) and
@@ -310,20 +310,20 @@ rendered through exactly these calls: `set_info_string("RENDER_FILE", dir)`
 `run_command("42230")` (`:219-224`), then polled for completion
 (`:233-261`). It also used `project.regions().set_render_track(...)`
 (`:198,206`), which no longer exists in daw-control (no `set_render_track`
-under `crates/daw/control/src`) — the matrix wrapper was lost in the
+under `daw:crates/daw/control/src`) — the matrix wrapper was lost in the
 architect port.
 
 **Adjacent services the per-language loop needs**, all present:
-`Tracks::selected` (`crates/daw/proto/src/track/service.rs:44`),
+`Tracks::selected` (`daw:crates/daw/proto/src/track/service.rs:44`),
 `set_muted(project, track, muted)` (`:51`),
 `set_group_membership(project, track, slot, member)` (`:112-118`),
 `set_selected` (`:122`); `Track.muted` / `.selected`
-(`crates/daw/proto/src/track/track.rs:86,92`); `TrackRef::{Guid, Index,
+(`daw:crates/daw/proto/src/track/track.rs:86,92`); `TrackRef::{Guid, Index,
 Master}` (`track.rs:13-20`); `TrackGrouping` with `mute_lead/mute_follow`
 and `vca_lead/vca_follow/vca_prefx_follow` (`track.rs:263-282`);
 `Transport::get_time_selection -> Option<LoopRegion>` and
 `set_time_selection(project, start, end)`
-(`crates/daw/proto/src/transport/service.rs:69-75`).
+(`daw:crates/daw/proto/src/transport/service.rs:69-75`).
 
 **Constraint on the shape:** `#[architect::rpc]` methods take at most 4
 params (Facet) (`CLAUDE.md:224`; `daw/CLAUDE.md:223`).
@@ -376,10 +376,10 @@ tool deliberately *preserves* a project's render settings.
 
 One `RenderJob` value per call keeps every method at ≤ 2 params
 (`CLAUDE.md:224`); all types `#[derive(Facet)]` like the rest of daw-proto
-(`crates/daw/proto/src/transport/transport.rs:12,23,32`).
+(`daw:crates/daw/proto/src/transport/transport.rs:12,23,32`).
 
 ```rust
-// crates/daw/proto/src/render/service.rs
+// daw:crates/daw/proto/src/render/service.rs
 #[architect::rpc(ops(ProjectContext as ProjectArg))]
 pub trait Render {
     /// Render `job` and return the files written (+ stats when the
@@ -399,7 +399,7 @@ pub trait Render {
 ```
 
 ```rust
-// crates/daw/proto/src/render/types.rs
+// daw:crates/daw/proto/src/render/types.rs
 pub struct RenderJob {
     pub preset: RenderPreset,            // format + quality + post, AS DATA
     pub bounds: RenderBounds,
@@ -539,7 +539,7 @@ should be checked in a `#[reaper_test]` before choosing.
 
 | gap | where | what to do |
 |---|---|---|
-| No `Render` trait, types, or hub in daw-proto | `crates/daw/proto/src` (no hit for `pub trait Render`) | add `render/{service,types}.rs` per §5.1 |
+| No `Render` trait, types, or hub in daw-proto | `daw:crates/daw/proto/src` (no hit for `pub trait Render`) | add `render/{service,types}.rs` per §5.1 |
 | Standalone has no render-to-file loop and no WAV writer | `standalone/audio_engine/render/mod.rs:416`; `source.rs:225` (test-only writer) | offline loop + encoder adapter, §5.3 |
 | Standalone stems are solo-via-master only; per-track buses not exposed | `render/mod.rs:416-417,801` | add a per-track output mode to `render_block` |
 | Standalone has no project-length helper | grep under `standalone/` empty | derive from last item end |

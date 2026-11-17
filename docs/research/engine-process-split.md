@@ -347,7 +347,7 @@ over Wi-Fi or USB, with the Mac accepting the connection [logic-remote].
 - Push streams already exist: `Peaks::meters` (one `MeterFrame` per
   project, ~30 Hz) and `TransportSync::positions` (clock-stamped playhead
   at least every ~20 ms, plus `clock_now` for NTP-style offset
-  estimation) (`crates/daw/proto/src/peak/service.rs`,
+  estimation) (`daw:crates/daw/proto/src/peak/service.rs`,
   `transport_sync/service.rs`). Each object type also has a `#[subscribe]`
   event stream (tracks, markers, regions, tempo map, transport, event bus).
 - Peaks: `Peaks::take_peaks` plus a `.reapeaks` mipmap sidecar store in
@@ -614,8 +614,8 @@ Primary unless marked.
 
 Repo sources: `docs/design/one-engine.md`, `docs/design/set-engine.md`,
 `docs/research/item-peaks.md`, `crates/daw/standalone/src/bootstrap.rs`,
-`crates/daw/proto/src/peak/service.rs`,
-`crates/daw/proto/src/transport_sync/{service,types}.rs`,
+`daw:crates/daw/proto/src/peak/service.rs`,
+`daw:crates/daw/proto/src/transport_sync/{service,types}.rs`,
 `apps/session/desktop/src/{engine_server,session_engine}.rs`,
 `apps/session/desktop/src/cli/mod.rs`,
 `apps/studio/desktop/src/{engines,engine_main}.rs`,

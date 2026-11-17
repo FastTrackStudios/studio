@@ -255,7 +255,7 @@ site, don't build a shared wrapper on spec.
 
 Selection, lookup, and tree-navigation helpers that aren't specific to
 any one feature's business logic belong in
-`crates/daw/proto/src/track/ext.rs` (`daw::service::TracksExt`,
+`daw:crates/daw/proto/src/track/ext.rs` (`daw::service::TracksExt`,
 blanket-impl'd for any `D: Tracks + Items + Projects`), not reimplemented
 per action module:
 

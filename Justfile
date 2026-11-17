@@ -883,8 +883,10 @@ check:
 # effect's parameter round-trip. `just test`, local CI and CI's Tests job
 # build and run exactly these; building the workspace's ~200 crates with no
 # tests left would only link empty harnesses. Add a crate here when it gains
-# tests worth running on every change.
-test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp dioxus-test dock studio-architect patchbay patchbay-yamaha-tf"
+# tests worth running on every change. The wire types' tests (daw-proto,
+# daw-control, daw-transport-sync, utils) run in FastTrackStudios/daw, where
+# those crates live (studio#510).
+test_packages := "dsp-core session-format daw-standalone timeline studio frame gate-plugin studio-desktop dsp dioxus-test dock studio-architect patchbay patchbay-yamaha-tf"
 
 # Run the core test set (test_packages above).
 test:

@@ -185,17 +185,17 @@ per-track `Arc<[Item]>`. Wire ids: `Arc<str>`-backed newtypes.
 - `crates/frame/src/document/proto/model.rs:21-55` — `NodeId(Uuid)` and
   `AssetId(String)` with `#[facet(transparent)]`: typed ids already cross
   the Facet wire in this repo.
-- `crates/daw/proto/src/handle.rs` — `DawHandle`/`ProjectHandle`/
+- `daw:crates/daw/proto/src/handle.rs` — `DawHandle`/`ProjectHandle`/
   `TrackHandle`/`SendBuilder`: the handle layer exists for tracks; items
   and takes need the same.
-- `crates/daw/proto/src/track/service.rs:39` —
+- `daw:crates/daw/proto/src/track/service.rs:39` —
   `#[architect::rpc(…, scopes(project: ProjectContext, track: TrackRef))]`
   generates leveled scope views; `Items` (`item/service.rs:29`) and
   `Takes` (`take/service.rs:13`) do not declare `scopes` yet. The macro
   (architect `macros/architect-rpc-derive/src/lib.rs`, `emit_scope_views`)
   clones the bound scope values on every call.
 - `crates/daw/standalone/src/journal.rs` — `Journaled<K, V>`.
-- `crates/daw/control/src/batch.rs` and `crates/daw/proto/src/batch` —
+- `daw:crates/daw/control/src/batch.rs` and `daw:crates/daw/proto/src/batch` —
   reified ops (`ops(ProjectContext as ProjectArg, …)`) for multi-call
   programs over RPC; the remote analogue of `edit_item`.
 - `.claude/skills/perfect-functions` — function-level rules this skill
