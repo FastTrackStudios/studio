@@ -390,6 +390,12 @@ impl SampleEngine {
 
         // Velocity-sensitive keyswitches (CSS-style): a keyswitch note selects
         // an articulation / mode and does NOT sound.
+        // A release-type key latches a type, sounding nothing; an override
+        // key struck hard releases the held notes (`ReleaseTypesSpec`).
+        if self.release_type_key(note, velocity) {
+            return;
+        }
+
         if self.try_keyswitch(note, velocity) {
             return;
         }
@@ -409,6 +415,20 @@ impl SampleEngine {
             && !(lo..=hi).contains(&note)
         {
             return;
+        }
+        // The first note of another articulation cuts everything sounding
+        // (MOJO 2's DoArticulationCutoff, 25171).
+        let cut = self.patch.spec.performance.artic_change_fade_ms;
+        if cut > 0.0 {
+            if self
+                .last_note_artic
+                .as_deref()
+                .is_some_and(|a| !a.eq_ignore_ascii_case(&self.articulation))
+            {
+                self.voices
+                    .fade_out_all(ms_to_frames_f(cut, self.sample_rate));
+            }
+            self.last_note_artic = Some(self.articulation.clone());
         }
 
         if self.patch.is_zoned() {
@@ -707,6 +727,19 @@ impl SampleEngine {
         self.do_note_off_with_release_frames(note, release_velocity, release_frames);
     }
 
+    /// A tempo-synced length's take and stretch (`TimedLengthSpec`).
+    fn timed_take(&self, artic: &str) -> Option<(String, f64)> {
+        let t = self.patch.spec.articulation(artic)?.timed_length.clone()?;
+        let c = usize::from(t.beats_cc & 127);
+        let beats = if self.cc_sent[c] {
+            i32::from(self.cc_values[c]) * 15 / 127 + 1
+        } else {
+            t.beats
+        };
+        let (take, pct) = timed_length_take(&t, self.quarter_us, beats)?;
+        Some((t.takes.get(take)?.clone(), f64::from(pct) / 100.0))
+    }
+
     /// The articulation's key noise after a note (`KeynoiseSpec`): tried on
     /// a note other than the last tried, `random(1, 100) <= chance`, then
     /// the zone of `random(1, 127)`'s band at the spec's key, its own
@@ -774,15 +807,57 @@ impl SampleEngine {
         dynamic: &str,
         velocity: u8,
     ) {
-        let Some(rs) = self
-            .patch
-            .spec
-            .articulation(artic)
-            .and_then(|a| a.release_sample.clone())
-        else {
+        let Some(a) = self.patch.spec.articulation(artic) else {
             return;
         };
-        let fade = ms_to_frames_f(rs.fade_ms, self.sample_rate);
+        // The release type (`ReleaseTypesSpec`): a pending override first,
+        // else the latched one; a key outside the type's range plays the
+        // normal release (36448-36481).
+        let (rs, muted) = match a.release_types.clone() {
+            Some(rt) => {
+                let t = self
+                    .release_override
+                    .take()
+                    .unwrap_or_else(|| self.release_type_latched.unwrap_or(rt.latched));
+                let pick = rt.types.get(usize::from(t)).filter(|r| {
+                    let [lo, hi] = r.key_range[..] else {
+                        return true;
+                    };
+                    (lo..=hi).contains(&note)
+                });
+                let Some(rs) = pick.or(rt.types.first()).cloned() else {
+                    return;
+                };
+                (
+                    rs,
+                    rt.cutoff && !self.articulation.eq_ignore_ascii_case(artic),
+                )
+            }
+            None => match a.release_sample.clone() {
+                Some(rs) => (rs, false),
+                None => return,
+            },
+        };
+        // the variant (a controller's choice of zone group), and its own
+        // offset and fade
+        let variant = rs.variant_cc.map(|cc| {
+            let c = usize::from(cc & 127);
+            if self.cc_sent[c] {
+                rs.variant_edges
+                    .iter()
+                    .filter(|&&e| self.cc_values[c] >= e)
+                    .count()
+            } else {
+                usize::from(rs.variant_default)
+            }
+        });
+        let start_ms = variant
+            .and_then(|i| rs.variant_start_ms.get(i).copied())
+            .unwrap_or(rs.start_ms);
+        let fade_ms = variant
+            .and_then(|i| rs.variant_fade_ms.get(i).copied())
+            .unwrap_or(rs.fade_ms);
+        let fade = ms_to_frames_f(fade_ms, self.sample_rate);
         match self.release_body_strike[usize::from(note & 127)] {
             Some(strike) => self.voices.fade_out_strike_bodies(strike, fade),
             None => self.voices.fade_out_note_bodies(line, note, fade),
@@ -790,9 +865,22 @@ impl SampleEngine {
         let rr = self
             .short_random_rr(&rs.artic, note)
             .unwrap_or_else(|| self.forced_rr.map_or(self.zone_rr_counter, |f| f as usize));
+        // Another articulation selected: the release is silent, its round
+        // robin drawn all the same (`$12s10`, 36567).
+        if muted {
+            return;
+        }
+        // its zones: the note-on's layer, the variant's, or any
+        let dynamic = if rs.layered {
+            dynamic.to_string()
+        } else {
+            variant
+                .and_then(|i| rs.variants.get(i).cloned())
+                .unwrap_or_default()
+        };
         let Some(idx) = self
-            .find_layer_zone_rr_index(&rs.artic, dynamic, note, rr)
-            .or_else(|| self.find_layer_zone(&rs.artic, "", dynamic, note, rr))
+            .find_layer_zone_rr_index(&rs.artic, &dynamic, note, rr)
+            .or_else(|| self.find_layer_zone(&rs.artic, "", &dynamic, note, rr))
         else {
             return;
         };
@@ -800,8 +888,68 @@ impl SampleEngine {
             .gain_db
             .get(usize::from(velocity.min(127)))
             .map_or(1.0, |&db| db_to_gain(db));
-        let offset = self.script_offset(idx, ms_to_frames_f(rs.start_ms, self.sample_rate));
+        let offset = self.script_offset(idx, ms_to_frames_f(start_ms, self.sample_rate));
+        // its own envelope: fade in over the fade, `wait(fade)`, fade out
+        // over the tail (36892-36970)
+        let saved = (self.spawn_fade_in, self.spawn_delayed_fade);
+        if rs.tail_ms > 0.0 {
+            self.spawn_fade_in = fade;
+            self.spawn_delayed_fade = Some((fade, ms_to_frames_f(rs.tail_ms, self.sample_rate)));
+        }
         self.spawn_zone_voice_at(idx, note, VoiceKind::Release, gain, None, 0.0, offset);
+        (self.spawn_fade_in, self.spawn_delayed_fade) = saved;
+    }
+
+    /// A release-type key (`ReleaseTypesSpec`): a type key latches its type;
+    /// an override key struck hard while notes of the articulation are held
+    /// releases them all now, lowest first, the first with its type
+    /// (25057-25110, 25162-25169). `true` when the key was taken.
+    fn release_type_key(&mut self, note: u8, velocity: u8) -> bool {
+        let Some((artic, rt)) = self
+            .patch
+            .spec
+            .articulations
+            .iter()
+            .find_map(|a| a.release_types.clone().map(|rt| (a.id.clone(), rt)))
+        else {
+            return false;
+        };
+        if let Some(t) = rt.keys.iter().position(|&k| k == note) {
+            self.release_type_latched = Some(t as u8);
+            return true;
+        }
+        if velocity < rt.override_velocity.max(1) {
+            return false;
+        }
+        let Some(t) = rt
+            .overrides
+            .chunks_exact(2)
+            .find(|p| p[0] == note)
+            .map(|p| p[1])
+        else {
+            return false;
+        };
+        let held: Vec<u8> = (0..128u8)
+            .filter(|&n| {
+                self.release_sample_notes[usize::from(n)]
+                    .iter()
+                    .any(|(a, ..)| a.eq_ignore_ascii_case(&artic))
+            })
+            .collect();
+        if held.is_empty() {
+            return false;
+        }
+        self.release_override = Some(t);
+        let line = self.cur_line as u8;
+        for n in held {
+            let records = std::mem::take(&mut self.release_sample_notes[usize::from(n)]);
+            self.voices.release_note_envelopes(line, n);
+            for (a, dynamic, v) in records {
+                self.script_release(line, n, &a, &dynamic, v);
+            }
+        }
+        self.release_override = None;
+        true
     }
 
     /// Release every held/sounding note and reset pedal-deferred state.
@@ -1297,6 +1445,12 @@ impl SampleEngine {
 
         // VELOCITY → dynamic layer (`%g1qri` band) + intra-band volume (`$arhiq`).
         let (dynamic, velvol_db) = self.short_layer_and_velvol(&artic, velocity);
+        // A tempo-synced length picks its take (the dynamic) and stretch.
+        let (dynamic, stretch) = match self.timed_take(&artic) {
+            Some((take, speed)) => (take, speed),
+            None => (dynamic, self.spawn_stretch),
+        };
+        let saved_stretch = std::mem::replace(&mut self.spawn_stretch, stretch);
         let (n_dyn, decoded_law, table_db) =
             self.patch
                 .spec
@@ -1368,7 +1522,7 @@ impl SampleEngine {
                 .patch
                 .spec
                 .articulation(&artic)
-                .is_some_and(|a| a.release_sample.is_some());
+                .is_some_and(|a| a.release_sample.is_some() || a.release_types.is_some());
             if wants_release {
                 self.release_body_strike[usize::from(note & 127)] =
                     Some(self.voices.current_strike());
@@ -1380,6 +1534,7 @@ impl SampleEngine {
             }
             self.keynoise(&artic, note, velocity);
         }
+        self.spawn_stretch = saved_stretch;
     }
 
     /// A marcato phrase's first-note overlay (see `OverlaySpec`). After a
@@ -3412,6 +3567,9 @@ impl SampleEngine {
             .with_sample_window(start_frame, (sample_end > 0).then_some(sample_end as usize))
             .with_stretch(self.spawn_stretch)
             .with_fade_in_under(0, self.spawn_fade_in);
+            if let Some((hold, fade)) = self.spawn_delayed_fade {
+                voice = voice.with_delayed_fade(hold, fade);
+            }
             // the layer's Kontakt group insert filters/EQs (`group_fx`)
             if let Some(plan) = self.insert_plan(idx) {
                 let l = usize::from(line);
@@ -4103,5 +4261,71 @@ impl SampleEngine {
         if self.patch.is_zoned() {
             self.trigger_aftertouch_zones(Some(note), old_value, value);
         }
+    }
+}
+
+/// A tempo-synced length's take and speed % at `quarter_us` µs per quarter
+/// (MOJO 2's GetDesiredSwellOrCrescLengthMS, GetBestCrescOrSwellNum and
+/// the speed, 20249-20328, all in the script's integers).
+pub(crate) fn timed_length_take(
+    t: &crate::spec::TimedLengthSpec,
+    quarter_us: u32,
+    beats: i32,
+) -> Option<(usize, i32)> {
+    let bpm = 60_000_000 / i64::from(quarter_us.max(1));
+    let desired = ((60_000_000 / bpm.max(1)) * i64::from(beats)) as f64 / 1000.0;
+    let desired = desired as i64;
+    if t.rec_ms.is_empty() || desired <= 0 {
+        return None;
+    }
+    let mut best = 0;
+    for (i, &r) in t.rec_ms.iter().enumerate() {
+        if (i64::from(r) - desired).abs() <= (i64::from(t.rec_ms[best]) - desired).abs() {
+            best = i;
+        }
+    }
+    let pct = |i: usize| (f64::from(t.rec_ms[i]) / desired as f64 * 100.0) as i32;
+    if pct(best) < t.min_speed_pct && best + 1 < t.rec_ms.len() {
+        best += 1;
+    }
+    Some((best, pct(best).max(1)))
+}
+
+#[cfg(test)]
+mod timed_tests {
+    use super::timed_length_take;
+    use crate::spec::TimedLengthSpec;
+
+    fn spec(rec: &[i32], min: i32) -> TimedLengthSpec {
+        TimedLengthSpec {
+            takes: vec!["L1".into(), "L2".into(), "L3".into()],
+            rec_ms: rec.to_vec(),
+            min_speed_pct: min,
+            beats_cc: 20,
+            beats: 4,
+        }
+    }
+
+    /// The decode's table at 120 BPM (KONTRA's trace): Trumpet swell 4 beats
+    /// L2 115 %, Trumpet crescendo 5 beats L2 106 %, Alto swell L1 76 %,
+    /// Alto crescendo 7 beats L3 153 % (L2 at 65 % is under 70, bumped).
+    #[test]
+    fn swell_and_crescendo_takes_at_120() {
+        assert_eq!(
+            timed_length_take(&spec(&[769, 2307, 5384], 65), 500_000, 4),
+            Some((1, 115))
+        );
+        assert_eq!(
+            timed_length_take(&spec(&[1333, 2666, 5333], 65), 500_000, 5),
+            Some((1, 106))
+        );
+        assert_eq!(
+            timed_length_take(&spec(&[1538, 3076, 6153], 70), 500_000, 4),
+            Some((0, 76))
+        );
+        assert_eq!(
+            timed_length_take(&spec(&[769, 2307, 5384], 70), 500_000, 7),
+            Some((2, 153))
+        );
     }
 }

@@ -37,6 +37,16 @@ fn read_vlq(d: &[u8], p: &mut usize) -> u32 {
     v
 }
 
+/// The SMF's first tempo, BPM (120 without one): the host tempo a
+/// tempo-synced articulation reads.
+fn smf_tempo_bpm(d: &[u8]) -> f64 {
+    d.windows(6)
+        .find(|w| w[..3] == [0xFF, 0x51, 0x03])
+        .map(|w| f64::from(u32::from(w[3]) << 16 | u32::from(w[4]) << 8 | u32::from(w[5])))
+        .filter(|&us| us > 0.0)
+        .map_or(120.0, |us| 60_000_000.0 / us)
+}
+
 /// Minimal SMF parse → `(seconds, status, d1, d2)` channel events, in order.
 fn parse_smf(d: &[u8]) -> Vec<(f64, u8, u8, u8)> {
     let div = f64::from(u16::from_be_bytes([d[12], d[13]]));
@@ -141,6 +151,8 @@ fn render_one(
     if let Some(v) = draws::<i8>(args, "--tunes") {
         rig.force_random_tunes(ID, &v);
     }
+    // the MIDI file's tempo is the host's (tempo-synced swells, crescendos)
+    rig.set_host_tempo(ID, smf_tempo_bpm(&std::fs::read(inp)?));
     // `--ksp-seed N`: the script's KSP random() from seed N, as the KSP Seed
     // CLAP pins Kontakt and KONTRA_KSP_SEED pins KONTRA (MOJO 2).
     if let Some(v) = draws::<u32>(args, "--ksp-seed") {

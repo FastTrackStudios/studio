@@ -890,6 +890,14 @@ impl SamplerRig {
         }
     }
 
+    /// The host's tempo — see
+    /// [`crate::engine::SampleEngine::set_host_tempo`].
+    pub fn set_host_tempo(&self, id: &str, bpm: f64) {
+        if let Ok(mut bank) = self.bank().lock() {
+            bank.set_host_tempo(id, bpm);
+        }
+    }
+
     /// Draw the script's random numbers from a KSP seed — see
     /// [`crate::engine::SampleEngine::set_script_seed`].
     pub fn set_script_seed(&self, id: &str, seed: u32) {

@@ -287,8 +287,18 @@ impl SampleEngine {
         let t = oct.map_or(&spec.timing, |o| &o.timing);
         let interval = from.abs_diff(to);
         let down = from >= to;
+        // a fixed layer: as many edges as its index, all passed (layer 0:
+        // one no velocity reaches, so the first dynamic, not any)
+        let fixed: Vec<u8> = match spec.fixed_layer {
+            Some(0) => vec![u8::MAX],
+            Some(l) => vec![0; usize::from(l)],
+            None => Vec::new(),
+        };
         let (artic, thresholds) = match oct {
             Some(o) => (if down { &o.down } else { &o.up }, &o.layer_thresholds),
+            None if spec.fixed_layer.is_some() => {
+                (if down { &spec.down } else { &spec.up }, &fixed)
+            }
             None => (
                 if down { &spec.down } else { &spec.up },
                 &spec.layer_thresholds,
@@ -365,7 +375,7 @@ impl SampleEngine {
             .patch
             .spec
             .articulation(&sustain)
-            .is_some_and(|a| a.release_sample.is_some());
+            .is_some_and(|a| a.release_sample.is_some() || a.release_types.is_some());
         if has_release {
             let (dynamic_of, _) = self.short_layer_and_velvol(&sustain, velocity);
             self.release_sample_notes[k].push((sustain.clone(), dynamic_of, velocity));

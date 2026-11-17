@@ -1549,6 +1549,18 @@ impl Voice {
         }
     }
 
+    /// A script's `wait(hold)` + `fade_out(fade)` on a voice it just
+    /// started: full for `hold_frames` (its fade-in included), then a
+    /// linear fade to silence over `fade_frames`.
+    #[must_use]
+    pub fn with_delayed_fade(mut self, hold_frames: usize, fade_frames: usize) -> Self {
+        self.release_hold = hold_frames.max(1);
+        self.pending_fade = fade_frames.max(1);
+        self.release_k_active = 0.0;
+        self.script_faded = true;
+        self
+    }
+
     pub fn ramp_gain(&mut self, target: f32, frames: usize) {
         self.target_gain = target;
         self.gain_ramp_frames = frames;
@@ -2717,6 +2729,16 @@ impl VoicePool {
             // fades by marks, key up or down); one already fading by a
             // script keeps its fade
             if v.line == line && !matches!(v.kind, VoiceKind::Release) && !v.script_faded {
+                Self::script_fade(v, frames.max(1));
+            }
+        }
+    }
+
+    /// A script's `fade_out($ALL_EVENTS)`: every voice not already fading
+    /// by a script, linear from its current level over `frames`.
+    pub fn fade_out_all(&mut self, frames: usize) {
+        for v in &mut self.voices {
+            if !v.script_faded {
                 Self::script_fade(v, frames.max(1));
             }
         }

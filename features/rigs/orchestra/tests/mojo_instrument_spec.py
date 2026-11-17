@@ -39,7 +39,8 @@ ARTS = [
     ("Shakes", "$jzee2"), ("Trills", "$egrpi"), ("Swells", "$rekbd"), ("Cresc", "$yoa4p"),
     ("Falls", "$5naxv"),
 ]
-MODELLED = {"Sus", "Stacc", "Stabs", "BendDown", "RunDown", "RunUp", "Doits", "Rise", "Shakes", "Trills", "Falls"}
+MODELLED = {"Sus", "Stacc", "Stabs", "BendDown", "RunDown", "RunUp", "Doits", "Rise", "Shakes", "Trills", "Falls",
+            "Swells", "Cresc"}
 
 
 def persistent(path):
@@ -185,7 +186,7 @@ def curved(vel):
 
 # The articulations whose notes roll the key noise (sustain, staccato, stab,
 # crescendo; not the FX one-shots: KONTRA, oneshots probe, 30 tries for 30 notes).
-KEYNOISE_ARTS = ("Sus", "Stacc", "Stabs")
+KEYNOISE_ARTS = ("Sus", "Stacc", "Stabs", "Swells", "Cresc")
 
 # The legato's knobs per articulation (persistent_1, names from the
 # script's own rename table, readable-script_1/ren.txt): on, mode CC,
@@ -193,7 +194,13 @@ KEYNOISE_ARTS = ("Sus", "Stacc", "Stabs")
 LEGATO_VARS = {
     "Sus": ("Sus", "$ecwxx", "$nf4pv", "$mbwiu", "$a5z5e", "$trtal", 28),
     "Stabs": ("Stab", "$eptsj", "$5nxil", "$tqwmj", "$zgicz", "$pscdl", 34),
+    "Cresc": ("Cresc", "$5aghd", "$yg3qb", "$32bfr", "$vkcb3", "$gvbqa", 37),
 }
+LEGATO_SWITCH_CC = {"Sus": 26, "Stabs": 32, "Cresc": 35}
+
+# Tempo-synced lengths (decode-swells-crescendos.md §1): persistent_0 prefix,
+# the beats controller, the shipped beats (persistent_1).
+TIMED = {"Swells": ("Swell", 20, "$mrp0d"), "Cresc": ("Cresc", 19, "$szm1z")}
 
 
 def legato_numbers(p0, pers, knob, vmin, num_vels, art="Sus"):
@@ -267,6 +274,49 @@ def legato_numbers(p0, pers, knob, vmin, num_vels, art="Sus"):
     return {"on": one(on_var) == 1, "gains": gains, "edges": edges, "timing": t, "mode": mode,
             "octave": octave, "natural": natural,
             "trans_vol": trans_vol, "max_interval": int(p0["$MiscNumLegIntervals"][0]) - 1}
+
+
+def release_types_lines(p0, pers, sus_knob, vmin, trim_db, ranges, one):
+    """Sus's `release_types` (decode-release-types.md): the five types by
+    the script's number (0 Normal, 1 Doit, 2 Fall, 3 Trill, 4 Shake), the
+    purple keys (%nuppg), the orange keyswitches at velocity >= 120, the
+    articulation cutoff ($hrmlz). Offsets/fades from persistent_0 (the
+    persistent_1 copies can be cut short); gain = 630000 + type knob +
+    SusVol + VelGainMin law − ensemble (release_gain_table)."""
+    g = lambda k: float(p0[k][0])
+    tail = 2 ** (one("$q1stw") / 73477 + 1) - 2
+    rng = lambda i: f"key_range ({ranges[2 * i]} {ranges[2 * i + 1]}), "
+    gains = lambda knob: " ".join(fmt(x) for x in release_gain_table(knob, sus_knob, vmin, trim_db))
+    radio = lambda names: next((i for i, v in enumerate(names) if one(v) == 1), 0)
+    fall_len = radio(("$pf4p2", "$3c0io", "$230ly"))
+    trill_i = radio(("$qnlfz", "$nrvwv", "$nzt41", "$tw4id"))
+    types = [
+        # Normal: the note-on's layer; its range is the sustain's
+        f"{{ artic SusRel, layered true, start_ms {fmt(g('$RelNormOffset'))}, fade_ms {fmt(g('$RelNormFade'))}, "
+        f"tail_ms {fmt(tail)},\n                gain_db ({gains(one('$ues0b'))}) }}",
+        f"{{ artic DoitRel, {rng(6)}start_ms {fmt(g('$RelDoitOffset'))}, fade_ms {fmt(g('$RelDoitFade'))}, "
+        f"tail_ms {fmt(tail)},\n                gain_db ({gains(one('$5gpp0'))}) }}",
+        # Fall: the length by CC18 (0-42 / 43-84 / 85-127), each its own offset and fade
+        f"{{ artic FallRel, {rng(12)}start_ms {fmt(g('$RelFallOffset1'))}, fade_ms {fmt(g('$RelFallFade1'))}, "
+        f"tail_ms {fmt(tail)}, variant_cc 18, variant_edges (43 85), variants (L2 L3 L4), "
+        f"variant_default {fall_len},\n                variant_start_ms ({fmt(g('$RelFallOffset1'))} "
+        f"{fmt(g('$RelFallOffset2'))} {fmt(g('$RelFallOffset3'))}), variant_fade_ms ({fmt(g('$RelFallFade1'))} "
+        f"{fmt(g('$RelFallFade2'))} {fmt(g('$RelFallFade3'))}),\n                gain_db ({gains(one('$tawxh'))}) }}",
+        # Trill: the interval by CC42 (0-31 / 32-63 / 64-95 / 96-127)
+        f"{{ artic TrillRel, {rng(9)}start_ms {fmt(g('$RelTrillOffset'))}, fade_ms {fmt(g('$RelTrillFade'))}, "
+        f"tail_ms {fmt(tail)}, variant_cc 42, variant_edges (32 64 96), variants (ht wt min3 maj3), "
+        f"variant_default {trill_i},\n                gain_db ({gains(one('$oh1rm'))}) }}",
+        f"{{ artic ShakeRel, {rng(8)}start_ms {fmt(g('$RelShakeOffset'))}, fade_ms {fmt(g('$RelShakeFade'))}, "
+        f"tail_ms {fmt(tail)},\n                gain_db ({gains(one('$4oqce'))}) }}",
+    ]
+    keys = " ".join(str(int(x)) for x in pers["%nuppg"]) if "%nuppg" in pers else "96 97 100 99 98"
+    return [
+        "        // the release types (36445-37013, decode-release-types.md): latched by the",
+        "        // purple keys, one-shot by Doits/Falls/Trills/Shakes keyswitches at >= 120",
+        f"        release_types {{ latched {one('$x2fxp')}, keys ({keys}), override_velocity 120,",
+        "            overrides (33 1 36 2 35 3 34 4), cutoff " + ("true" if one("$hrmlz") == 1 else "false") + ",",
+        "            types (",
+    ] + [f"                {t}" for t in types] + ["            ) }"]
 
 
 def fmt(v):
@@ -363,6 +413,16 @@ def build(nki):
             lines += [f"        amp_env ( {body} )", "        amp_env_hold true", "        amp_env_release 1"]
             if depth is not None:
                 lines.append(f"        amp_env_depth {fmt(depth)}  // the ENV -> volume route's intensity")
+        if art in TIMED:
+            pre, cc, ship = TIMED[art]
+            bpm = int(p0[f"${pre}BPM"][0])
+            beats = [int(p0[f"${pre}{i}NumBeats"][0]) for i in range(1, 6)]
+            beats = [b for b in beats if b > 0]
+            rec = [int((60000000 // bpm) * b / 1000.0) for b in beats]
+            lines.append(f"        // tempo-synced (20249-20328): recorded at {bpm} BPM, {beats} beats")
+            lines.append(f"        timed_length {{ takes ({' '.join(f'L{i + 1}' for i in range(len(rec)))}), "
+                         f"rec_ms ({' '.join(map(str, rec))}), min_speed_pct {int(p0[f'${pre}MinSpeed'][0])}, "
+                         f"beats_cc {cc}, beats {one(ship)} }}")
         if art in KEYNOISE_ARTS:
             # the key noise (25520-25557): chance $1stdn, level $zlhlf (0 =
             # silent, still drawn), the art's knob, the click groups' volume
@@ -378,8 +438,14 @@ def build(nki):
         if art in LEGATO_VARS:
             leg = legato_numbers(p0, pers, knob, vmin, 4, art)
             timing = ", ".join(f"{k} {fmt(v) if isinstance(v, float) else v}" for k, v in leg["timing"].items())
-            # the switch: CC26 (sustain) / CC32 (stab) above 63 (37912-37918)
+            # the switch: CC26 / CC32 / CC35 above 63 (37912-37918, 38259, 38304)
             extra = ""
+            if art == "Cresc":
+                # no bypass; the transition layer fixed; key-up fades the
+                # target over Exp2(cresc release knob) (30965, 37596-37612)
+                rel = 2 ** (one("$ukiha") / 73477 + 1) - 2
+                extra = (f", fixed_layer {int(p0['$MiscCrescLegTransitionDynLayer'][0])}, "
+                         f"release_fade_ms {fmt(rel)}")
             if art == "Stabs":
                 # stab legato only within the bypass of the last connection
                 # (28665); its key-up fades the target over Exp2(release knob)
@@ -400,22 +466,16 @@ def build(nki):
                           f"                gain_db ({' '.join(fmt(x) for x in n['gains'])}) }}")
             lines += [
                 f"        // the {art} legato (decode-legato.md); speed by {leg['mode']}; TransVol {leg['trans_vol']}",
-                f"        script_legato {{ enable_cc {26 if art == 'Sus' else 32}, on {'true' if leg['on'] else 'false'}, "
+                f"        script_legato {{ enable_cc {LEGATO_SWITCH_CC[art]}, on {'true' if leg['on'] else 'false'}, "
                 f"up LegUp, down LegDown{extra},",
                 f"            max_interval {leg['max_interval']}, layer_thresholds ({' '.join(map(str, leg['edges']))}),",
                 f"            gain_db ({' '.join(fmt(x) for x in leg['gains'])}),",
                 f"            timing {{ {timing} }} }}",
             ]
         if art == "Sus":
-            off, fade = release_numbers(ksp, pers)
-            gains = release_gain_table(one("$ues0b"), knob, vmin, level_db)
-            lines += [
-                "        // the release callback (36445-37013): body fade_out + the normal",
-                "        // release sample; each new sustain note fades sounding releases (25218)",
-                "        fade_releases_ms 75",
-                f"        release_sample {{ artic SusRel, start_ms {fmt(off)}, fade_ms {fmt(fade)},",
-                f"            gain_db ({' '.join(fmt(x) for x in gains)}) }}",
-            ]
+            lines += ["        // each new sustain note fades sounding releases (25218)",
+                      "        fade_releases_ms 75"]
+            lines += release_types_lines(p0, pers, knob, vmin, level_db, ranges, one)
         lines += fx_lines(fx)
         lines.append("    }")
     # The normal release articulation (`$MiscLongNVNormalRelGroupStart`): its
@@ -443,31 +503,20 @@ def build(nki):
                 lines.append(f"        amp_env_depth {fmt(why)}  // the ENV -> volume route's intensity")
         lines += fx_lines(fx)
         lines.append("    }")
-    rel_start = int(persistent(os.path.join(ksp, "persistent_0.tsv")).get(
-        "$MiscLongNVNormalRelGroupStart", [one("$ywa0p")])[0])
-    rel_fx = group_eq("SusRel", rel_start, names, fx_slots, notes, one("$lrshn") / 1e6)
-    lines += [
-        "    {",
-        "        id SusRel",
-        f"        rr {num_rr}",
-        f"        rr_random_avoid_last {rr_avoid}",
-        f"        amp_env ( {{time_ms {fmt(fade)}, level 1, curve 0.5}} {{time_ms {fmt(tail_ms)}, level 0, curve 0.5}} )",
-        "        amp_env_hold false",
-    ]
-    if rel_fx:
-        lines.append("        group_fx (")
-        for dyn, stages in rel_fx:
-            st = []
-            for kind, p in stages:
-                if kind == "eq":
-                    st.append(f"{{ kind eq, bands ({' '.join(fmt(v) for v in p['bands'])}) }}")
-                elif kind == "width":
-                    st.append(f"{{ kind width, width {fmt(p['width'])} }}")
-                elif kind == "saturation":
-                    st.append(f"{{ kind saturation, shape {p['shape']:.7f}, output_db {fmt(p['output_db'])} }}")
-            lines.append(f"            {{ dynamic {dyn}, stages ({' '.join(st)}), routes () }}")
-        lines.append("        )")
-    lines.append("    }")
+    # The release articulations (their groups' RR, inserts and AHDSR; the
+    # fades and the 9950 ms tail are the release type's own, release_types)
+    for art, var in (("SusRel", "$MiscLongNVNormalRelGroupStart"), ("DoitRel", "$MiscLongDoitRelGroupStart"),
+                     ("FallRel", "$MiscLongFallRelGroupStart"), ("TrillRel", "$MiscLongTrillRelGroupStart"),
+                     ("ShakeRel", "$MiscLongShakeRelGroupStart")):
+        gstart = int(p0[var][0])
+        env, why = ahdsr_env(groups, gstart)
+        fx = group_eq(art, gstart, names, fx_slots, notes, one("$lrshn") / 1e6)
+        lines += ["    {", f"        id {art}", f"        rr {num_rr}", f"        rr_random_avoid_last {rr_avoid}"]
+        if env:
+            body = " ".join(f"{{time_ms {fmt(t)}, level {fmt(lv)}, curve {fmt(c)}}}" for t, lv, c in env)
+            lines += [f"        amp_env ( {body} )", "        amp_env_hold true", "        amp_env_release 1"]
+        lines += fx_lines(fx)
+        lines.append("    }")
     lines.append(")")
 
     patch = os.path.join(ROOT, "_patches", inst)

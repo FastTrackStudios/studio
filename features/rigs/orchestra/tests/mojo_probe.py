@@ -24,6 +24,10 @@ Modes:
             overlapping stabs within the 273/291 ms bypass at several
             intervals, a fast stab line, and stabs further apart (fresh,
             still monophonic).
+  reltypes  Sustain release types: each latched type (keys 96-100), fall
+            lengths (CC18 0/64/127) and trill intervals (CC42), the
+            >= 120 keyswitch override over a held chord, a note outside a
+            type's range (Alto), back to Normal.
   phrases   Musical horn lines mixing articulations: stabs into staccato, a
             sustain ended by a fall (Falls keyswitch at velocity 127 while held),
             doit / shake releases (release-type keys 97 / 98, then 96 back).
@@ -163,6 +167,35 @@ def stablegato(p, ranges):
     p.m.cc(p.t, 32, 0)
 
 
+def reltypes(p, ranges):
+    lo, hi = ranges["Sus"]
+    sc = scale(lo, hi)
+    k = sc[5]
+    p.ks("Sus")
+    for name in ("doit", "shake", "trill", "fall"):
+        p.m.note(p.t, 0.1, RELEASE_KEY[name], 100)
+        p.t += 0.5
+        p.unit("REL-TYPE", f"Sus with {name} release", [(0, 1.0, k, 100)], tail=3.0)
+    for cc18 in (64, 127):
+        p.m.cc(p.t, 18, cc18)
+        p.t += 0.3
+        p.unit("REL-FALL", f"Fall release CC18 {cc18}", [(0, 1.0, k, 100)], tail=3.0)
+    p.m.note(p.t, 0.1, RELEASE_KEY["trill"], 100)
+    p.t += 0.5
+    for cc42 in (0, 80):
+        p.m.cc(p.t, 42, cc42)
+        p.t += 0.3
+        p.unit("REL-TRILL", f"Trill release CC42 {cc42}", [(0, 1.0, k, 100)], tail=3.0)
+    p.m.note(p.t, 0.1, RELEASE_KEY["normal"], 100)
+    p.t += 0.5
+    p.unit("REL-LOW", f"Doit/fall outside range at key {lo}", [(0, 1.0, lo, 100)], tail=3.0)
+    # the orange override: a two-note chord, Shakes keyswitch at 127 while held
+    p.m.note(p.t + 1.0, 0.1, KEYSWITCH["Shakes"], 127)
+    p.unit("REL-OVR", "Chord, Shakes KS v127 while held", [(0, 2.0, k, 100), (0, 2.0, k + 4, 100)], tail=3.0)
+    p.m.note(p.t, 0.1, KEYSWITCH["Sus"], 100)
+    p.t += 0.5
+
+
 def phrases(p, ranges):
     lo, hi = ranges["Sus"]
     sc = scale(lo, hi)
@@ -202,7 +235,8 @@ def swells(p, ranges):
                 p.unit(art.upper(), f"{art} key{key} v{vel} hold4", [(0, 4.0, key, vel)], tail=3.0)
 
 
-MODE_FN = {"sustains": sustains, "legato": legato, "stablegato": stablegato, "phrases": phrases,
+MODE_FN = {"sustains": sustains, "legato": legato, "stablegato": stablegato, "reltypes": reltypes,
+           "phrases": phrases,
            "swells": swells}
 
 

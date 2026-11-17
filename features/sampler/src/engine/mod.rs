@@ -1010,6 +1010,16 @@ pub struct SampleEngine {
     pub(crate) rr_global_last: u8,
     /// The note the key noise last tried (`KeynoiseSpec`).
     pub(crate) keynoise_last: Option<u8>,
+    /// The latched release type once a type key set it (`ReleaseTypesSpec`;
+    /// else the shipped one), and a one-shot override for the next release.
+    pub(crate) release_type_latched: Option<u8>,
+    pub(crate) release_override: Option<u8>,
+    /// The next spawns' `(hold, fade)` script fade (`Voice::with_delayed_fade`).
+    pub(crate) spawn_delayed_fade: Option<(usize, usize)>,
+    /// The articulation of the last note played (`artic_change_fade_ms`).
+    pub(crate) last_note_artic: Option<String>,
+    /// The host's tempo, µs per quarter note (`set_host_tempo`).
+    pub(crate) quarter_us: u32,
     /// Per key, what each of its sounding note-ons played, for a script
     /// release sample (`ArticulationSpec::release_sample`): (articulation,
     /// dynamic, velocity). A key's note-off releases every one of them
@@ -1349,6 +1359,11 @@ impl SampleEngine {
             ksp_state: None,
             rr_global_last: 0,
             keynoise_last: None,
+            release_type_latched: None,
+            release_override: None,
+            spawn_delayed_fade: None,
+            last_note_artic: None,
+            quarter_us: 500_000,
             release_sample_notes: vec![Vec::new(); 128],
             release_body_strike: vec![None; 128],
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,
@@ -2006,6 +2021,14 @@ impl SampleEngine {
     /// before it and take nothing from a render's draws.)
     pub fn set_script_seed(&mut self, seed: u32) {
         self.ksp_state = Some(seed);
+    }
+
+    /// The host's tempo (a script's `$DURATION_QUARTER`, µs per quarter,
+    /// rounded as KONTRA rounds it).
+    pub fn set_host_tempo(&mut self, bpm: f64) {
+        if bpm.is_finite() && bpm > 0.0 {
+            self.quarter_us = (60_000_000.0 / bpm).round() as u32;
+        }
     }
 
     /// One script draw, `lo..=hi`.

@@ -162,6 +162,11 @@ impl SampleEngine {
                 art.release_artic
                     .clone()
                     .or_else(|| art.release_sample.as_ref().map(|r| r.artic.clone()))
+                    .or_else(|| {
+                        art.release_types
+                            .as_ref()
+                            .and_then(|t| t.types.first().map(|r| r.artic.clone()))
+                    })
             })
         };
         // And the legato + portamento TRANSITION articulations (Leg/NVLeg/
@@ -209,6 +214,10 @@ impl SampleEngine {
             }
             if let Some(k) = a.keynoise.as_ref() {
                 warm_ids.push(k.artic.clone());
+            }
+            // every release type's release (the first is warmed above)
+            if let Some(rt) = a.release_types.as_ref() {
+                warm_ids.extend(rt.types.iter().skip(1).map(|r| r.artic.clone()));
             }
         }
         // A pending CC58 velocity-group resolves to its concrete articulation

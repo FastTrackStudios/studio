@@ -413,6 +413,11 @@ impl SamplerBlock {
         self.engine.force_random_variants(v);
     }
 
+    /// See [`SampleEngine::set_host_tempo`].
+    pub fn set_host_tempo(&mut self, bpm: f64) {
+        self.engine.set_host_tempo(bpm);
+    }
+
     /// See [`SampleEngine::set_script_seed`].
     pub fn set_script_seed(&mut self, seed: u32) {
         self.engine.set_script_seed(seed);

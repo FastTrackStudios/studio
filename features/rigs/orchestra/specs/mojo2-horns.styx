@@ -59,6 +59,7 @@ performance {
     release_delay_ms   0.0
     pedal_ignored      true   // the script reads CC64 (octave legato); key-ups are not held
     rr_random_global   true   // one RR for every articulation and key (UpdateRoundRobinIndex)
+    artic_change_fade_ms 100  // a note of another articulation cuts everything ($hrmlz ships on)
 }
 
 dynamics {
@@ -93,6 +94,40 @@ articulations (
         dynamics (v1 v2 v3 v4)
         rr       3
         dyn_ctrl velocity
+        notes    full
+    }
+    // The sustain's other release types (`release_types` on Sus, per
+    // instrument): fall length and trill interval are their dynamics.
+    {
+        id       DoitRel
+        label    "Doit release"
+        kind     @Release
+        dynamics (v1)
+        rr       3
+        notes    full
+    }
+    {
+        id       FallRel
+        label    "Fall release"
+        kind     @Release
+        dynamics (L2 L3 L4)
+        rr       3
+        notes    full
+    }
+    {
+        id       TrillRel
+        label    "Trill release"
+        kind     @Release
+        dynamics (ht wt min3 maj3)
+        rr       3
+        notes    full
+    }
+    {
+        id       ShakeRel
+        label    "Shake release"
+        kind     @Release
+        dynamics (v1)
+        rr       3
         notes    full
     }
     // The sustain legato's transitions (`script_legato` on Sus, per
@@ -166,8 +201,8 @@ articulations (
         vel_thresholds (32 64 96)
     }
 
-    // ── One-shots: one layer (velocity sets the level and, on Kontakt's
-    //    side, a lowpass `v/127 + $SimDynMinLP` — not modelled yet) ────────
+    // ── One-shots: one layer (velocity sets the level and a lowpass
+    //    `v/127 + $SimDynMinLP`, the overlay's velocity route) ────────────
     { id BendDown, label "Bend Down",       kind @Short, dynamics (v1), rr 3, dyn_ctrl velocity, notes full }
     { id RunDown,  label "Octave Run Down", kind @Short, dynamics (v1), rr 3, dyn_ctrl velocity, notes full }
     { id RunUp,    label "Octave Run Up",   kind @Short, dynamics (v1), rr 3, dyn_ctrl velocity, notes full }
@@ -178,13 +213,17 @@ articulations (
     { id Trills,   label "Trills",          kind @Short, dynamics (wt), rr 3, dyn_ctrl velocity, notes full }
     // The length menu picks the group (shipped short: Falls_Length_2 = `L2`).
     { id Falls,    label "Falls",           kind @Short, dynamics (L2), rr 3, dyn_ctrl velocity, notes full }
+    // Tempo-synced (`timed_length`, per instrument): the take is the
+    // dynamic, stretched to the host tempo; crescendo legato on Alto.
+    { id Swells,   label "Swells",          kind @Short, dynamics (L1 L2 L3), rr 3, dyn_ctrl velocity, notes full }
+    { id Cresc,    label "Crescendos",      kind @Short, dynamics (L1 L2 L3), rr 3, dyn_ctrl velocity, notes full }
 )
 
 // Key mode (`%0ect5` = 0): the key sets the articulation (25056-25116),
 // shipped notes `%jqdqz` (identical across instruments); C0 = MIDI 12.
-// Not modelled yet: Swells (G1), Crescendos (G#1), the release-type keys
-// (C7..E7 = 96..100), natural legato (C#2) and force-keynoise (D2), and a
-// keyswitch struck at velocity >= 120 over held notes (a release override).
+// The release-type keys (C7..E7 = 96..100) and the >= 120 release override
+// are Sus's `release_types`; natural legato (C#2) its `script_legato`. Not
+// modelled yet: force-keynoise (D2).
 keyswitch {
     velocity_sensitive false
     user_configurable  true
@@ -196,6 +235,8 @@ keyswitch {
         { note "E1",  label "Octave Run Down", vel_map { 0-127 "RunDown" } }
         { note "F1",  label "Octave Run Up",   vel_map { 0-127 "RunUp" } }
         { note "F#1", label "Rise To Hit",     vel_map { 0-127 "Rise" } }
+        { note "G1",  label "Swells",          vel_map { 0-127 "Swells" } }
+        { note "G#1", label "Crescendos",      vel_map { 0-127 "Cresc" } }
         { note "A1",  label "Doits",           vel_map { 0-127 "Doits" } }
         { note "A#1", label "Shakes",          vel_map { 0-127 "Shakes" } }
         { note "B1",  label "Trills",          vel_map { 0-127 "Trills" } }
