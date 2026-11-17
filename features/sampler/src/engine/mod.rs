@@ -992,6 +992,9 @@ pub struct SampleEngine {
     /// Extra file frames the sustain body being spawned right now is entered
     /// at (the >1-octave transition body's 75 ms offset).
     pub(crate) spawn_extra_start: usize,
+    /// Per key, what its note-on played for a script release sample
+    /// (`ArticulationSpec::release_sample`): (articulation, dynamic, velocity).
+    pub(crate) release_sample_notes: Vec<Option<(String, String, u8)>>,
     zone_rr_random_state: u64,
     /// Last-used RR slot per (trigger, note, velocity), keyed by a packed
     /// integer so note-on allocates nothing (was a `format!`-built String key).
@@ -1313,6 +1316,7 @@ impl SampleEngine {
             release_context: None,
             release_extra_hold: 0,
             spawn_extra_start: 0,
+            release_sample_notes: vec![None; 128],
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,
             zone_rr_last_slots: HashMap::with_capacity(128),
             forced_rr: None,

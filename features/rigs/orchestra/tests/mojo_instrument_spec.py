@@ -39,7 +39,7 @@ ARTS = [
     ("Shakes", "$jzee2"), ("Trills", "$egrpi"), ("Swells", "$rekbd"), ("Cresc", "$yoa4p"),
     ("Falls", "$5naxv"),
 ]
-MODELLED = {"Stacc", "Stabs", "BendDown", "RunDown", "RunUp", "Doits", "Rise", "Shakes", "Trills", "Falls"}
+MODELLED = {"Sus", "Stacc", "Stabs", "BendDown", "RunDown", "RunUp", "Doits", "Rise", "Shakes", "Trills", "Falls"}
 
 
 def persistent(path):
@@ -126,6 +126,31 @@ def group_eq(art, start, names, fx_slots, notes, lp_floor):
     return out
 
 
+def release_numbers(ksp, pers):
+    """Normal release (offset ms, fade ms): script_0 hands them over at load
+    (persistent_0 `$RelNormOffset` / `$RelNormFade`); persistent_1's copies
+    (`%ej4i2` / `%eg214`) can be cut short (Alto)."""
+    p0 = {}
+    path = os.path.join(ksp, "persistent_0.tsv")
+    if os.path.exists(path):
+        p0 = persistent(path)
+    off = p0.get("$RelNormOffset", [pers["%ej4i2"][0]])[0]
+    fade = p0.get("$RelNormFade", [pers["%eg214"][0]])[0]
+    return float(off), float(fade)
+
+
+def release_gain_table(rel_knob, sus_knob, vmin, trim_db):
+    """The normal release sample's level by the note-on's raw velocity, dB
+    (release callback 36892-36970): the release groups at 630000 (0 dB),
+    + dB(release volume knob) + dB(sustain volume knob)
+    + dB(VelGainMin + ⌊v·(630000 − VelGainMin)/127⌋) − the per-note trim."""
+    out = []
+    for v in range(128):
+        ep = vmin + (v * (630000 - vmin)) // 127
+        out.append(round(ep_db(630000) + ep_db(rel_knob) + ep_db(sus_knob) + ep_db(max(ep, 1)) + trim_db, 4))
+    return out
+
+
 def fmt(v):
     s = f"{v:.4f}".rstrip("0").rstrip(".")
     return s if s not in ("-0", "") else "0"
@@ -186,6 +211,16 @@ def build(nki):
         if env:
             body = " ".join(f"{{time_ms {fmt(t)}, level {fmt(lv)}, curve {fmt(c)}}}" for t, lv, c in env)
             lines += [f"        amp_env ( {body} )", "        amp_env_hold true", "        amp_env_release 1"]
+        if art == "Sus":
+            off, fade = release_numbers(ksp, pers)
+            gains = release_gain_table(one("$ues0b"), knob, vmin, level_db)
+            lines += [
+                "        // the release callback (36445-37013): body fade_out + the normal",
+                "        // release sample; each new sustain note fades sounding releases (25218)",
+                "        fade_releases_ms 75",
+                f"        release_sample {{ artic SusRel, start_ms {fmt(off)}, fade_ms {fmt(fade)},",
+                f"            gain_db ({' '.join(fmt(x) for x in gains)}) }}",
+            ]
         if fx:
             lines.append("        group_fx (")
             for dyn, stages in fx:
@@ -203,6 +238,34 @@ def build(nki):
                 lines.append(f"            {{ dynamic {dyn}, stages ({' '.join(st)}), routes ({' '.join(rt)}) }}")
             lines.append("        )")
         lines.append("    }")
+    # The normal release articulation (`$MiscLongNVNormalRelGroupStart`): its
+    # zones' RR, the release groups' inserts, and its envelope — fade_in over
+    # RelFade from the note-off, then fade_out over 2^(SusRel/73477+1) − 2 ms.
+    off, fade = release_numbers(ksp, pers)
+    tail_ms = 2 ** (one("$q1stw") / 73477 + 1) - 2
+    rel_start = int(persistent(os.path.join(ksp, "persistent_0.tsv")).get(
+        "$MiscLongNVNormalRelGroupStart", [one("$ywa0p")])[0])
+    rel_fx = group_eq("SusRel", rel_start, names, fx_slots, notes, one("$lrshn") / 1e6)
+    lines += [
+        "    {",
+        "        id SusRel",
+        f"        rr {num_rr}",
+        f"        rr_random_avoid_last {rr_avoid}",
+        f"        amp_env ( {{time_ms {fmt(fade)}, level 1, curve 0.5}} {{time_ms {fmt(tail_ms)}, level 0, curve 0.5}} )",
+        "        amp_env_hold false",
+    ]
+    if rel_fx:
+        lines.append("        group_fx (")
+        for dyn, stages in rel_fx:
+            st = []
+            for kind, p in stages:
+                if kind == "eq":
+                    st.append(f"{{ kind eq, bands ({' '.join(fmt(v) for v in p['bands'])}) }}")
+                elif kind == "width":
+                    st.append(f"{{ kind width, width {fmt(p['width'])} }}")
+            lines.append(f"            {{ dynamic {dyn}, stages ({' '.join(st)}), routes () }}")
+        lines.append("        )")
+    lines.append("    }")
     lines.append(")")
 
     patch = os.path.join(ROOT, "_patches", inst)

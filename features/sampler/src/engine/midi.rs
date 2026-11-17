@@ -592,6 +592,13 @@ impl SampleEngine {
         self.trace_push(TraceKind::NoteOff { note });
         if self.patch.is_zoned() {
             let cur_line = self.cur_line as u8;
+            if let Some((artic, dynamic, velocity)) =
+                self.release_sample_notes[usize::from(note & 127)].take()
+            {
+                self.line_mut().order.retain(|&n| n != note);
+                self.script_release(cur_line, note, &artic, &dynamic, velocity);
+                return;
+            }
             self.line_mut().order.retain(|&n| n != note);
             // Monophonic legato: releasing the SOUNDING note falls back to the
             // most-recent still-held note via a legato transition; releasing the
@@ -683,6 +690,38 @@ impl SampleEngine {
             return;
         }
         self.do_note_off_with_release_frames(note, release_velocity, release_frames);
+    }
+
+    /// A script's release (`ArticulationSpec::release_sample`): `note`'s
+    /// voices fade out over `fade_ms` and a zone of the release articulation
+    /// in the note-on's `dynamic` starts `start_ms` in, at
+    /// `gain_db[velocity]` (its own `amp_env` fades it in and out).
+    fn script_release(&mut self, line: u8, note: u8, artic: &str, dynamic: &str, velocity: u8) {
+        let Some(rs) = self
+            .patch
+            .spec
+            .articulation(artic)
+            .and_then(|a| a.release_sample.clone())
+        else {
+            return;
+        };
+        self.voices
+            .fade_out_note_bodies(line, note, ms_to_frames_f(rs.fade_ms, self.sample_rate));
+        let rr = self
+            .short_random_rr(&rs.artic, note)
+            .unwrap_or_else(|| self.forced_rr.map_or(self.zone_rr_counter, |f| f as usize));
+        let Some(idx) = self
+            .find_layer_zone_rr_index(&rs.artic, dynamic, note, rr)
+            .or_else(|| self.find_layer_zone(&rs.artic, "", dynamic, note, rr))
+        else {
+            return;
+        };
+        let gain = rs
+            .gain_db
+            .get(usize::from(velocity.min(127)))
+            .map_or(1.0, |&db| db_to_gain(db));
+        let offset = self.script_offset(idx, ms_to_frames_f(rs.start_ms, self.sample_rate));
+        self.spawn_zone_voice_at(idx, note, VoiceKind::Release, gain, None, 0.0, offset);
     }
 
     /// Release every held/sounding note and reset pedal-deferred state.
@@ -1137,6 +1176,17 @@ impl SampleEngine {
     /// even-split dynamic with the velocity² loudness curve (non-CSS libraries).
     pub(crate) fn trigger_zoned_short(&mut self, note: u8, velocity: u8) {
         let artic = self.articulation.clone();
+        // A note of this articulation fades every sounding release sample
+        // (MOJO 2 sustains: `fade_out(by_marks($MARK_3), 75 ms)`).
+        let fade_rel = self
+            .patch
+            .spec
+            .articulation(&artic)
+            .map_or(0.0, |a| a.fade_releases_ms);
+        if fade_rel > 0.0 {
+            self.voices
+                .fade_out_releases(ms_to_frames_f(fade_rel, self.sample_rate));
+        }
         let per_key = self.forced_rr.is_none()
             && self
                 .patch
@@ -1231,6 +1281,15 @@ impl SampleEngine {
                 );
             }
             self.spawn_extra_start = saved;
+            // a script release sample at this key's note-off plays the
+            // layer this note-on played
+            let wants_release = self
+                .patch
+                .spec
+                .articulation(&artic)
+                .is_some_and(|a| a.release_sample.is_some());
+            self.release_sample_notes[usize::from(note & 127)] =
+                wants_release.then(|| (artic.clone(), dynamic_of.clone(), velocity));
         }
     }
 

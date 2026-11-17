@@ -2547,6 +2547,41 @@ impl VoicePool {
         }
     }
 
+    /// A script's `fade_out` of every voice `note` sounds on `line` except
+    /// release voices: linear from the current level over `frames`.
+    pub fn fade_out_note_bodies(&mut self, line: u8, note: u8, frames: usize) {
+        for v in &mut self.voices {
+            if v.note != note || v.line != line || matches!(v.kind, VoiceKind::Release) {
+                continue;
+            }
+            Self::script_fade(v, frames.max(1));
+        }
+    }
+
+    /// A script's `fade_out` of every sounding release voice (MOJO 2's
+    /// `by_marks($MARK_3)`): linear from the current level over `frames`.
+    pub fn fade_out_releases(&mut self, frames: usize) {
+        for v in &mut self.voices {
+            if matches!(v.kind, VoiceKind::Release)
+                && !matches!(v.state, VoiceState::Releasing { .. })
+            {
+                Self::script_fade(v, frames.max(1));
+            }
+        }
+    }
+
+    fn script_fade(v: &mut Voice, fade: usize) {
+        v.target_gain = v.gain;
+        v.gain_ramp_frames = 0;
+        v.stage1_run = 0;
+        v.stage2_frames = 0;
+        v.release_frames = fade;
+        v.release_k_active = 0.0;
+        v.state = VoiceState::Releasing {
+            frames_remaining: fade,
+        };
+    }
+
     /// Kontakt `fade_out`: a LINEAR fade to silence over `trans_fade` frames
     /// for `note`'s transition voices on `line` and `sus_fade` for its body
     /// layers — no gain ramp on top (which made `retire_note_line` a

@@ -1365,6 +1365,8 @@ pub struct ArticulationOverlay {
     pub script_start_ms: Option<f32>,
     pub vel_gain_db: Option<Vec<f32>>,
     pub key_range: Option<Vec<u8>>,
+    pub release_sample: Option<ReleaseSampleSpec>,
+    pub fade_releases_ms: Option<f32>,
     pub phrase: Option<PhraseSpec>,
     /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
     pub overlay_cc1_scale: Option<Vec<u8>>,
@@ -1463,6 +1465,12 @@ impl SectionOverlay {
             }
             if let Some(v) = &o.key_range {
                 a.key_range.clone_from(v);
+            }
+            if let Some(v) = &o.release_sample {
+                a.release_sample = Some(v.clone());
+            }
+            if let Some(v) = o.fade_releases_ms {
+                a.fade_releases_ms = v;
             }
             if let Some(v) = &o.phrase {
                 a.phrase = Some(v.clone());
@@ -2701,6 +2709,16 @@ pub struct ArticulationSpec {
     /// `%ArtRange`). Empty = every key with a zone.
     #[facet(default)]
     pub key_range: Vec<u8>,
+    /// A script-played release sample (see [`ReleaseSampleSpec`]): at the
+    /// note-off the note's voices fade out and a zone of `artic` starts in
+    /// the note-on's layer. `None` = the library's release path.
+    #[facet(default)]
+    pub release_sample: Option<ReleaseSampleSpec>,
+    /// At this articulation's note-on, every sounding release-sample voice
+    /// fades out over this many ms (MOJO 2: `fade_out(by_marks($MARK_3),
+    /// 75 ms)` on each sustain note). 0 = none.
+    #[facet(default)]
+    pub fade_releases_ms: f32,
     /// Per velocity band, `(compare, store)`: which band's last-RR memory the
     /// no-repeat rule reads and which it writes. Empty = each band its own.
     /// CSS pizzicato reads an unwritten table in bands 2 and 4 and writes
@@ -2817,6 +2835,25 @@ impl ArticulationSpec {
             }
         }
     }
+}
+
+/// A release sample a script plays at the note-off (MOJO 2's sustain
+/// release callback, script_1.ksp 36445-37013): the note's voices fade out
+/// linearly over `fade_ms`, and a zone of `artic` — the dynamic the note-on
+/// played, the next random RR — starts `start_ms` into its sample (limited by
+/// the zone's start range) at `gain_db[note-on velocity]`. Its fade-in and
+/// later fade-out are `artic`'s own `amp_env`.
+#[derive(Debug, Clone, Facet)]
+pub struct ReleaseSampleSpec {
+    /// The release articulation (zones tagged with the same dynamics).
+    pub artic: String,
+    #[facet(default)]
+    pub start_ms: f32,
+    #[facet(default)]
+    pub fade_ms: f32,
+    /// Level by the note-on's MIDI velocity, dB (128 entries; empty = 0 dB).
+    #[facet(default)]
+    pub gain_db: Vec<f32>,
 }
 
 /// High-level category for an articulation's playback behaviour.

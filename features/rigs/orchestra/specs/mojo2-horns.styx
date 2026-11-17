@@ -54,6 +54,7 @@ performance {
     strict_key_ranges  true   // a key with no zone plays nothing
     max_repeat_strikes 0      // every strike rings on (one-shots ship Poly)
     zone_pitch_tolerance 0    // every key has its own zone or range
+    loop_xfade_ms      0      // the sustain zones loop hard (no crossfade decoded)
     release_delay_ms   0.0
 }
 
@@ -66,17 +67,30 @@ dynamics {
 }
 
 articulations (
-    // ── Sustains (not modelled yet: release samples, the 75 ms MARK_3 fade
-    //    of the previous sustain, legato) ─────────────────────────────────
+    // ── Sustains, legato off (shipped on Trumpet) ─────────────────────────
+    // One velocity-picked layer that loops (no CC crossfade: the layer is
+    // fixed at note-on, 25183-25200), so it plays through the short path;
+    // the note-off is the script's release (`release_sample`, per
+    // instrument): the body fades and a SusRel zone starts in its layer.
+    // Not modelled yet: legato, release types other than normal, keynoise.
     {
         id       Sus
         label    "Sustain"
-        kind     @Sustain
+        kind     @Short
         dynamics (v1 v2 v3 v4)
         rr       3
         dyn_ctrl velocity
         notes    full
         vel_thresholds (32 64 96)
+    }
+    {
+        id       SusRel
+        label    "Sustain release"
+        kind     @Release
+        dynamics (v1 v2 v3 v4)
+        rr       3
+        dyn_ctrl velocity
+        notes    full
     }
 
     // ── One-shots: four velocity layers ──────────────────────────────────
