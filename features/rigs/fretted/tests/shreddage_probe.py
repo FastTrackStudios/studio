@@ -22,7 +22,8 @@ first key, first velocity.
 """
 import struct, sys
 
-KS = {"sus": 12, "stac": 13, "harm": 15}
+KS = {"sus": 12, "stac": 13, "harm": 15, "fx": 16}
+PHRASE_KS = {"tap": 14}
 SLIDE_KS = 17
 PPQ, US_PER_Q = 960, 500_000
 
@@ -65,6 +66,13 @@ def phrases(mode):
                 for v2 in (40, 100):
                     ns = [(0.0, 0.5, base, 90), (0.4, 0.8, base + iv, v2)]
                     out.append((ns, [(-0.05, 1.3, SLIDE_KS, 100)]))
+    elif mode == "tap":
+        # taps from idle strings (open and fretted), then on ringing ones
+        for k, v in [(33, 80), (35, 60), (28, 100), (45, 40), (52, 90)]:
+            out.append(([(0.0, 0.8, k, v)], []))
+        for base in (40, 52):
+            for iv in (1, -1, 2, -3, 5):
+                out.append(([(0.0, 0.5, base, 90), (0.4, 0.8, base + iv, 70)], []))
     elif mode == "chord":
         for ch in ([33, 40, 45], [28, 35, 40, 43], [45, 52], [38, 45, 50, 55, 59],
                    [21, 28, 33], [43, 47, 50, 55], [52, 57, 62, 67]):
@@ -80,10 +88,15 @@ def main():
     if "--notes" in sys.argv:
         on, gap = (float(x) for x in sys.argv[sys.argv.index("--notes") + 1].split(":"))
     tick = lambda s: round(s * PPQ * 1_000_000 / US_PER_Q)
-    ks = KS.get(mode, KS["sus"])
+    ks = KS.get(mode, PHRASE_KS.get(mode, KS["sus"]))
     ev = [(tick(0.5), 0x90, ks, 100), (tick(0.6), 0x80, ks, 0)]
     rows, t = [], 1.0
-    if mode in KS:
+    if mode == "fx":
+        for i, k in enumerate(range(21, 121, 7)):
+            ev += [(tick(t), 0x90, k, 30 + (i * 13) % 97), (tick(t + 0.8), 0x80, k, 0)]
+            rows.append(f"{i}\t{t:.3f}\t{t + 0.8:.3f}\t{k}\t{30 + (i * 13) % 97}")
+            t += 2.5
+    elif mode in KS:
         for i, (k, v) in enumerate(notes()):
             ev += [(tick(t), 0x90, k, v), (tick(t + on), 0x80, k, 0)]
             rows.append(f"{i}\t{t:.3f}\t{t + on:.3f}\t{k}\t{v}")

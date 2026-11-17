@@ -43,6 +43,8 @@ pub(crate) struct FretState {
     gone: HashSet<u8>,
     /// The open poly window: its notes in arrival order.
     window: Option<FretWindow>,
+    /// Keys sounding a free articulation, and which.
+    free: HashMap<u8, String>,
 }
 
 /// Notes struck within one poly window: (note, velocity, articulation, line).
@@ -135,6 +137,7 @@ impl FretState {
             slide_held: false,
             gone: HashSet::new(),
             window: None,
+            free: HashMap::new(),
         };
     }
 
@@ -223,6 +226,14 @@ impl SampleEngine {
             return true;
         }
         let artic = self.articulation.clone();
+        if fb
+            .free_articulations
+            .iter()
+            .any(|a| a.eq_ignore_ascii_case(&artic))
+        {
+            self.fret_play_free(&artic, note, velocity);
+            return true;
+        }
         if !self.fret.fretted.contains(&artic.to_ascii_lowercase()) {
             return false;
         }
@@ -482,6 +493,24 @@ impl SampleEngine {
         // What rings on this string decides a hammer, then is let go: a
         // repeat of its note fades, another note releases it.
         let ringing = self.fret.ringing[string].take();
+        // Tapping (dispatched before a hammer): a hammer by the interval from
+        // the ringing note, or up by the fret from an idle string; on an idle
+        // open string it is `open_as`.
+        let tap = fb
+            .tap
+            .as_ref()
+            .filter(|t| t.articulation.eq_ignore_ascii_case(&artic))
+            .map(|t| {
+                let dist = ringing.map_or(fret, |old| i32::from(note) - i32::from(old));
+                if fret == 0 && dist == 0 {
+                    (t.open_as.clone(), MISSING)
+                } else {
+                    (
+                        t.articulation.clone(),
+                        if dist >= 0 { "up" } else { "down" },
+                    )
+                }
+            });
         let hammer = ringing.and_then(|old| {
             let h = fb.hammer.as_ref()?;
             let src = self.fret.held.get(&old)?;
@@ -503,7 +532,14 @@ impl SampleEngine {
             }
         }
 
+        let hammer = if tap.is_some() { None } else { hammer };
         let played = match (hammer, lead_in) {
+            _ if tap.is_some() => {
+                let (a, dir) = tap.clone().unwrap_or_default();
+                let g = self.fret_vel_gain(&a, velocity);
+                self.play_fretted(&a, dir, 0, string, note, velocity, g, 0.0)
+                    .map(|zk| (a, zk))
+            }
             (Some((h, dist)), _) => {
                 let dir = if dist >= 0 { "up" } else { "down" };
                 let g = self.fret_vel_gain(&h, velocity);
@@ -1025,6 +1061,27 @@ impl SampleEngine {
         }
     }
 
+    /// A free articulation (FX): the zone at `note`, at its velocity gain,
+    /// at once (no window, no draw), released with its key (`play_note`
+    /// duration −1).
+    fn fret_play_free(&mut self, artic: &str, note: u8, velocity: u8) {
+        let gain_db = self.fret_vel_gain(artic, velocity);
+        let Some(cands) = self.zone_keys.get(usize::from(note)) else {
+            return;
+        };
+        let idx = cands
+            .iter()
+            .map(|&i| i as usize)
+            .find(|&i| self.zone_passes(&self.patch.spec.zones[i], artic, "", ""));
+        match idx {
+            Some(idx) => {
+                self.spawn_zone_voice(idx, note, VoiceKind::Zoned, db_to_gain(gain_db), None, 0.0);
+                self.fret.free.insert(note, artic.to_string());
+            }
+            None => self.fret_miss(note, artic, String::new(), 0),
+        }
+    }
+
     /// `FretboardSpec::onset_delay_us` in whole frames (floored).
     fn fret_onset_hold(&self) -> usize {
         if self.fret_no_hold {
@@ -1167,6 +1224,12 @@ impl SampleEngine {
             return true;
         }
         if self.fret.gone.remove(&note) {
+            return true;
+        }
+        if let Some(artic) = self.fret.free.remove(&note) {
+            let frames = self.fretted_release_frames(&artic);
+            let line = self.cur_line as u8;
+            self.voices.note_off_line(line, note, Some(frames));
             return true;
         }
         if !self.fret.held.contains_key(&note) {

@@ -13,8 +13,8 @@
 // fretting, anti-repetition 25 %, one multitrack guitar, Console empty):
 // single notes of Sustain (with its Pop lead-in at velocity 110-127),
 // Staccato and Harmonics, pitched releases, hammer-ons and pull-offs.
-// slides (key 17 held). Not yet: Tapping, FX, the chord voicing search
-// (chords already place like single notes; the poly window is unmodelled).
+// slides (key 17 held), chords (the poly-window voicing), Tapping and FX.
+// Not yet: strumming, picking keys, force-string/hand keys, ringing, DI noise.
 
 name    "Shreddage 3.5 Abyss"
 vendor  "Impact Soundworks"
@@ -50,6 +50,10 @@ articulations (
     { id Sustain,   label "Sustain",   kind @Sustain, dynamics (v1 v2 v3 v4), rr 4, dyn_ctrl velocity, notes full }
     { id Staccato,  label "Staccato",  kind @Sustain, dynamics (v1 v2 v3),    rr 8, dyn_ctrl velocity, notes full }
     { id Harmonics, label "Harmonics", kind @Sustain, dynamics (v1 v2),       rr 4, dyn_ctrl velocity, notes full }
+    // Every note a hammer (section.styx `tap`), from the hammer groups.
+    { id Tapping,   label "Tapping",   kind @Sustain, dynamics (v1), rr 2, dyn_ctrl velocity, notes full }
+    // Decorative one-shots, one per key 21-120 (section.styx `free_articulations`).
+    { id FX,        label "FX",        kind @OneShot, rr 1, dyn_ctrl velocity, notes full }
     // The pop that opens a loud Sustain (section.styx `lead_ins`): never
     // selected by itself.
     { id Pop,       label "Pop",       kind @Sustain, rr 2, dyn_ctrl velocity, notes full }
@@ -70,6 +74,8 @@ keyswitch {
     notes (
         { note "C0",  label "Sustain",   vel_map { 0-127 "Sustain" } }
         { note "C#0", label "Staccato",  vel_map { 0-127 "Staccato" } }
+        { note "D0",  label "Tapping",   vel_map { 0-127 "Tapping" } }
         { note "D#0", label "Harmonics", vel_map { 0-127 "Harmonics" } }
+        { note "E0",  label "FX",        vel_map { 0-127 "FX" } }
     )
 }

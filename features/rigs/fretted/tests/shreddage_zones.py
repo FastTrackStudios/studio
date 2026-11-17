@@ -40,6 +40,10 @@ TRIGGER = {
     "FX": ("FX", 1, False),
     "DI Noise": ("DINoise", 1, False),
 }
+# Groups another articulation plays as its own (Abyss Tapping: TACT 3's
+# group lookup is the Hammer-on/Pull-off groups 24-29, trigger type 8 =
+# the hammer's velocity layout): those zones again under its name.
+ALSO = {"Hammer-on/Pull-off": ["Tapping"]}
 
 
 def fmt(v):
@@ -129,6 +133,8 @@ def main():
                 z["string"] = string
             if v is not None:
                 z.update(decode_slot(trig, picked, v))
+            for other in ALSO.get(word, []):
+                out.append(dict(z, articulation=other))
             gain = float(r["zvol"])
             z["gain_db"] = round(20 * math.log10(gain), 6) if gain > 0 else -144.0
             z["tune_cents"] = round(1200 * math.log2(float(r["tune"])), 6)

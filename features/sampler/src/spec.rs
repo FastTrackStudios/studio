@@ -3953,6 +3953,25 @@ pub struct FretboardSpec {
     pub hammer: Option<FretHammerSpec>,
     /// Slides. `None` = none.
     pub slide: Option<FretSlideSpec>,
+    /// Tapping. `None` = none.
+    pub tap: Option<FretTapSpec>,
+    /// Articulations played by key, not placed on a string, without the
+    /// poly window (Shreddage's FX: `play_note` straight from `on note`).
+    #[facet(default)]
+    pub free_articulations: Vec<String>,
+}
+
+/// Tapping (see [`FretboardSpec::tap`]): every note of `articulation` is a
+/// hammer — up or down by its interval from the note ringing on its string,
+/// or up from an idle string — played from its own zones at its own level;
+/// a tap on an idle open string plays `open_as` instead (L17065-17144,
+/// L17426).
+#[derive(Debug, Clone, Default, Facet)]
+pub struct FretTapSpec {
+    /// The tapping articulation.
+    pub articulation: String,
+    /// What a tap on an idle open string plays.
+    pub open_as: String,
 }
 
 /// Slides (see [`FretboardSpec::slide`]): while `key` is held, a note of

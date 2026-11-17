@@ -203,6 +203,7 @@ impl SampleEngine {
             warm_ids.extend(fb.hammer.as_ref().map(|h| h.articulation.clone()));
             warm_ids.extend(fb.release_layer.as_ref().map(|r| r.articulation.clone()));
             warm_ids.extend(fb.slide.as_ref().map(|s| s.articulation.clone()));
+            warm_ids.extend(fb.tap.as_ref().map(|t| t.open_as.clone()));
         }
         // A pending CC58 velocity-group resolves to its concrete articulation
         // only at note-on (from the note's velocity), so `effective_articulation`

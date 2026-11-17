@@ -32,10 +32,11 @@ import csv, math, os, re, sys
 # group each one's envelope and level are read from.
 NAMES = {0: "Sustain", 1: "Staccato", 2: "Pop", 3: "Tapping", 4: "Harmonics", 5: "FX",
          6: "HammerPull", 7: "Slide", 8: "PitchedRelease"}
-ARTICS = {0: "Sustain", 1: "Staccato", 2: "Pop", 4: "Harmonics", 6: "HammerPull", 7: "Slide",
-          8: "PitchedRelease"}
+ARTICS = {0: "Sustain", 1: "Staccato", 2: "Pop", 3: "Tapping", 4: "Harmonics", 5: "FX",
+          6: "HammerPull", 7: "Slide", 8: "PitchedRelease"}
 FIRST_GROUP = {"Sustain": "Sustain", "Staccato": "Staccato", "Pop": "Pops", "Harmonics": "Harmonics",
-               "HammerPull": "Hammer-on/Pull-off", "Slide": "Slides", "PitchedRelease": "Pitched Release"}
+               "HammerPull": "Hammer-on/Pull-off", "Slide": "Slides", "PitchedRelease": "Pitched Release",
+               "Tapping": "Hammer-on/Pull-off", "FX": "FX"}
 
 # Legato (Slide)'s fade bases, `%tact___meta[64·7 + 12..16]` (built at init,
 # not shipped; engine-model §1d): source out (fast), transition in,
@@ -203,6 +204,11 @@ def main():
          # destination enters 99 999 µs in (100 000 clamped below meta[6]·100);
          # level −1 dB per second of the origin's age × engine_pars[29]
          slide_line(matrix, ep, script),
+         # Tapping (L17426, trigger type 8): a hammer from the ringing note or
+         # the fret; an idle open string plays Sustain (L17138)
+         "    tap { articulation Tapping, open_as Sustain }",
+         # FX plays straight from `on note` (L10434-10474)
+         "    free_articulations (FX)",
          ]
     if ep[20] == 1:
         L.append(f"    borrow {{ chance_permille {ep[21]}, seed {seed}, multiplier {mult}, frets 2 }}")
@@ -222,7 +228,7 @@ def main():
             hi = lo + (0 if lo == 10 else 1)
             mdb = int(((100 - fr) * vel_db[c * 11 + lo] + fr * vel_db[c * 11 + hi]) / 100) - 1
             law.append(fmt(mdb / 1000))
-        g = groups[f"Blend {FIRST_GROUP[aid]} Str 1"]
+        g = groups.get(f"Blend {FIRST_GROUP[aid]} Str 1") or groups[f"Blend {FIRST_GROUP[aid]}"]
         att, _, _, _, rel, crv = g["ahdsr_AHDSRc"].split("/")
         env = kontakt_env(float(att), float(crv), float(rel))
         L += ["    {",
