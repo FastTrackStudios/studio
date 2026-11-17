@@ -48,6 +48,37 @@ def ints(p, k, n=None):
     return v
 
 
+# Kontakt's AHDSR, as KONTRA (Apache-2.0) measured it on Kontakt 8.13:
+# an attack is silent its first 33 frames at 48 kHz and runs its curve in
+# the time left; segments follow expm1(k·t)/expm1(k), with the attack's k
+# from its stored curve c (law/src/formula.rs attack_shape, SPAN 5e5,
+# FLOOR 2e4) and decay/release k = −2.662588 (format/kontakt/src/laws.rs
+# FALL). Our flex segments use the same law with a = (0.5 − tension)·15.
+LAG_MS = 33 / 48.0
+FALL_K = -2.662588
+
+
+def attack_k(c):
+    c = max(-1.0, min(1.0, c))
+    b = math.exp((1 - abs(c)) * math.log(5e5) - math.log(2e4))
+    return math.log(b / (1 + b)) if c > 0 else math.log((1 + b) / b)
+
+
+def kontakt_env(attack_ms, curve, release_ms):
+    """[(time_ms, level, tension)]: lag, attack, release."""
+    tension = lambda k: 0.5 - k / 15.0
+    segs = []
+    if attack_ms > 0:
+        lag = min(LAG_MS, attack_ms)
+        segs.append((lag, 0.0, 0.5))
+        segs.append((attack_ms - lag, 1.0, tension(attack_k(curve))))
+    else:
+        segs.append((0.0, 1.0, 0.5))
+    # the release is the voice's own note-off fade (release_ms_by_held on
+    # Kontakt's fall law, the spec's release_curve_k): not an envelope segment
+    return segs
+
+
 def fmt(x):
     s = f"{x:.4f}".rstrip("0").rstrip(".")
     return s if s not in ("-0", "") else "0"
@@ -135,6 +166,7 @@ def main():
             law.append(fmt(mdb / 1000))
         g = groups[f"Blend {FIRST_GROUP[aid]} Str 1"]
         att, _, _, _, rel, crv = g["ahdsr_AHDSRc"].split("/")
+        env = kontakt_env(float(att), float(crv), float(rel))
         L += ["    {",
               f"        id {aid}",
               f"        // %tact___table_matrix[{512 * a}..]: layer edges",
@@ -143,10 +175,11 @@ def main():
               f"        vel_gain_db ({' '.join(law)})",
               f"        // group volume {g['vol_lin']}",
               f"        level_db {fmt(float(g['vol_db']))}",
-              f"        amp_env ( {{time_ms {fmt(float(att))}, level 1, curve {fmt(0.5 - float(crv) / 2)}}} "
-              f"{{time_ms {fmt(float(rel))}, level 0, curve 0.5}} )",
+              "        // Kontakt AHDSR: 33-frame silent lag, attack curve and release fall as",
+              "        // KONTRA measured them (format/kontakt/src/laws.rs, law/src/formula.rs)",
+              f"        amp_env ( {' '.join(f'{{time_ms {fmt(a)}, level {fmt(b)}, curve {c:.4f}}}' for a, b, c in env)} )",
               "        amp_env_hold true",
-              "        amp_env_release 1",
+              f"        release_ms_by_held ((0 {fmt(float(rel))}))",
               "    }"]
     L.append(")")
     path = os.path.join(root, "_patches", inst, "section.styx")

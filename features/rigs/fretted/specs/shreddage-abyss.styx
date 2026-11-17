@@ -31,6 +31,9 @@ mics (
 performance {
     resample_transpose true   // a key between two sampled frets is resampled, as Kontakt does
     mono_balance_pan   true   // the DI is mono; Kontakt plays it at unity in both channels
+    // Kontakt's AHDSR release law (KONTRA format/kontakt/src/laws.rs FALL:
+    // expm1(k·t)/expm1(k), k = −2.662588), the voice's release curve
+    release_curve_k    2.662588
     strict_key_ranges  true
     max_repeat_strikes 0
     zone_pitch_tolerance 0

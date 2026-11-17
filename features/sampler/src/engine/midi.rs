@@ -3329,7 +3329,8 @@ impl SampleEngine {
                     }
                 }
             }
-            if is_sustain_layer {
+            // A held zoned voice (a fretted note) releases on the same law.
+            if is_sustain_layer || matches!(kind, VoiceKind::Zoned) {
                 let k = self
                     .patch
                     .spec

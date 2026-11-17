@@ -1324,6 +1324,8 @@ pub struct ArticulationOverlay {
     pub amp_env: Option<Vec<EnvSegmentSpec>>,
     pub amp_env_hold: Option<bool>,
     pub amp_env_release: Option<u32>,
+    /// See [`ArticulationSpec::release_ms_by_held`].
+    pub release_ms_by_held: Option<Vec<[f32; 2]>>,
     pub level_db: Option<f32>,
     pub script_start_ms: Option<f32>,
     pub vel_gain_db: Option<Vec<f32>>,
@@ -1414,6 +1416,9 @@ impl SectionOverlay {
             }
             if let Some(v) = o.amp_env_release {
                 a.amp_env_release = Some(v);
+            }
+            if let Some(v) = &o.release_ms_by_held {
+                a.release_ms_by_held.clone_from(v);
             }
             if let Some(v) = o.level_db {
                 a.level_db = v;

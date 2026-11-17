@@ -363,7 +363,9 @@ impl SampleEngine {
             .cache
             .get_loaded(&self.patch.zone_paths[idx])
             .map_or(self.sample_rate, |d| d.sample_rate);
-        (f64::from(ms) / 1000.0 * f64::from(rate)).round() as usize
+        // Kontakt floors a `play_note` offset to whole source frames
+        // (15 ms at 44.1 kHz starts at 661, KONTRA's trace)
+        (f64::from(ms) / 1000.0 * f64::from(rate)).floor() as usize
     }
 
     fn fret_miss(&mut self, note: u8, artic: &str, dynamic: String, rr: usize) {
@@ -390,17 +392,16 @@ impl SampleEngine {
         true
     }
 
-    /// The articulation's release: its amp envelope's release segment.
+    /// The articulation's release time (`release_ms_by_held`; the voice's
+    /// own note-off fade runs it, on `release_curve_k`). The authored
+    /// envelope must not carry a release too: a released flex envelope plays
+    /// its remaining segments, so both would fade the note.
     fn fretted_release_frames(&self) -> usize {
         let ms = self
             .patch
             .spec
             .articulation(&self.articulation)
-            .and_then(|a| {
-                a.amp_env_release
-                    .and_then(|i| a.amp_env.get(i as usize))
-                    .map(|s| s.time_ms)
-            })
+            .and_then(|a| a.release_ms_by_held.first().map(|p| p[1]))
             .unwrap_or(self.patch.spec.performance.sustain_noteoff_ms as f32);
         ms_to_frames_f(ms, self.sample_rate).max(1)
     }
