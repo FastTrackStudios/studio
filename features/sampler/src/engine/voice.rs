@@ -471,6 +471,53 @@ pub struct Voice {
     stretch: Option<Stretch>,
     /// A script's `fade_out` owns this voice's end (see `script_fade`).
     script_faded: bool,
+    /// Reads through Kontakt's Normal-quality resampler
+    /// ([`super::resample`]) instead of the linear one: set by the pool for a
+    /// library whose `performance.interpolation` asks for it.
+    kt: Option<KontaktVoice>,
+}
+
+/// A voice reading through Kontakt's Normal-quality resampler: the engine
+/// frame it started at (its blocks lie on the engine's absolute
+/// [`KONTAKT_BLOCK`](super::resample::KONTAKT_BLOCK) grid), what it plays,
+/// its float cursor and the block of reads planned. Inline, so spawning one
+/// allocates nothing.
+#[derive(Clone, Copy, Debug)]
+struct KontaktVoice {
+    origin: u64,
+    started: bool,
+    layout: super::resample::Layout,
+    /// The cursor after the planned block.
+    cursor: super::resample::Cursor,
+    /// The planned block: `taps[used..len]` are the next frames' reads.
+    taps: super::resample::Plan,
+    len: usize,
+    used: usize,
+    /// The block was copied whole (`|step − 1| ≤ 1e-4`): each read is its
+    /// frame, its fraction ignored.
+    copy: bool,
+    /// The step the last frame moved at, which forms the next block's.
+    step: f64,
+}
+
+impl KontaktVoice {
+    fn new(origin: u64) -> Self {
+        Self {
+            origin,
+            started: false,
+            layout: super::resample::Layout {
+                start: 0,
+                end: 0,
+                looped: None,
+            },
+            cursor: super::resample::Cursor::default(),
+            taps: [super::resample::Tap::default(); super::resample::KONTAKT_BLOCK],
+            len: 0,
+            used: 0,
+            copy: false,
+            step: 1.0,
+        }
+    }
 }
 
 /// A stretching voice's grain, output frames (43 ms at 48 kHz).
@@ -867,6 +914,7 @@ impl Voice {
             pitch: None,
             stretch: None,
             script_faded: false,
+            kt: None,
         }
     }
 
@@ -960,6 +1008,7 @@ impl Voice {
             pitch: None,
             stretch: None,
             script_faded: false,
+            kt: None,
         }
     }
 
@@ -1653,6 +1702,114 @@ impl Voice {
         (l0 + (l1 - l0) * frac, r0 + (r1 - r0) * frac)
     }
 
+    /// One frame read through Kontakt's Normal-quality resampler: plans a
+    /// block of reads when the last is used up (from the voice's first frame
+    /// to the engine's next [`KONTAKT_BLOCK`] boundary, then a whole block
+    /// at a time, each at the step its first frame moves at), and plays the
+    /// next read — the frame itself in a copied block, else the 4-point
+    /// Lagrange about it. A voice Kontakt's path does not model (reversed,
+    /// ping-pong, stretched, pitch-shifted, crossfaded loop) falls back to
+    /// the linear read at its first frame.
+    ///
+    /// [`KONTAKT_BLOCK`]: super::resample::KONTAKT_BLOCK
+    fn read_kontakt(&mut self) -> (f32, f32) {
+        use super::resample::{self, Cursor, KONTAKT_BLOCK, Layout};
+        let modelled = !self.reverse
+            && !self.alternating_loop
+            && self.stretch.is_none()
+            && self.pitch.is_none()
+            && self.loop_xfade == 0;
+        let now = self.frames_out.saturating_sub(1);
+        let (bend, rate, glide) = (self.bend, self.rate, self.glide_cents);
+        let glide_on = self.glide_frames > 0;
+        let (start, end, looped, position) = (
+            self.start_frame as i64,
+            self.end_frame as i64,
+            self.loop_range,
+            self.position,
+        );
+        let Some(kt) = self.kt.as_mut() else {
+            return (0.0, 0.0);
+        };
+        if !kt.started {
+            if !modelled {
+                self.kt = None;
+                return self.read_interp(self.position);
+            }
+            let pos = position.floor();
+            kt.cursor = Cursor {
+                pos: pos as i64,
+                frac: (position - pos) as f32,
+            };
+            kt.layout = Layout {
+                start,
+                end,
+                // Kontakt takes a loop while the playhead is before its end.
+                looped: looped
+                    .map(|(a, b)| (a as i64, b as i64))
+                    .filter(|&(_, le)| kt.cursor.pos < le),
+            };
+            kt.step = bend
+                * if glide_on {
+                    rate * 2f64.powf(f64::from(glide) / 1200.0)
+                } else {
+                    rate
+                };
+            kt.started = true;
+            kt.len = 0;
+            kt.used = 0;
+        }
+        if kt.used >= kt.len {
+            let at = kt.origin + now;
+            let frames = KONTAKT_BLOCK - (at % KONTAKT_BLOCK as u64) as usize;
+            let layout = kt.layout;
+            kt.copy = resample::block(
+                &layout,
+                &mut kt.cursor,
+                kt.step as f32,
+                &mut kt.taps[..frames],
+            );
+            kt.len = frames;
+            kt.used = 0;
+        }
+        let (tap, copy, layout) = (kt.taps[kt.used], kt.copy, kt.layout);
+        let last = self.end_frame.saturating_sub(1);
+        if copy {
+            return match layout.frame(tap.at) {
+                Some(f) => {
+                    self.data
+                        .frame_pair_cursored(f, last, &mut self.stream_cursor)
+                        .0
+                }
+                None => (0.0, 0.0),
+            };
+        }
+        let f = [-1i64, 0, 1, 2].map(|k| layout.frame(tap.at + k));
+        let y = match f {
+            // The common case: four frames in a row, two cursored reads.
+            [Some(a), _, _, Some(d)] if d == a + 3 => {
+                let (y0, y1) = self
+                    .data
+                    .frame_pair_cursored(a, last, &mut self.stream_cursor);
+                let (y2, y3) = self
+                    .data
+                    .frame_pair_cursored(a + 2, last, &mut self.stream_cursor);
+                [y0, y1, y2, y3]
+            }
+            _ => f.map(|f| {
+                f.map_or((0.0, 0.0), |f| {
+                    self.data
+                        .frame_pair_cursored(f, last, &mut self.stream_cursor)
+                        .0
+                })
+            }),
+        };
+        (
+            resample::lagrange(tap.frac, y[0].0, y[1].0, y[2].0, y[3].0),
+            resample::lagrange(tap.frac, y[0].1, y[1].1, y[2].1, y[3].1),
+        )
+    }
+
     /// Render one stereo frame. Returns (L, R) and advances internal state.
     #[inline]
     pub fn next_frame(&mut self) -> (f32, f32) {
@@ -1777,6 +1934,8 @@ impl Voice {
 
         let (mut l, mut r) = if self.stretch.is_some() {
             self.read_stretched()
+        } else if self.kt.is_some() {
+            self.read_kontakt()
         } else {
             self.read_interp(self.position)
         };
@@ -1933,7 +2092,14 @@ impl Voice {
             }
             None => step,
         };
-        if self.reverse {
+        if let Some(kt) = self.kt.as_mut() {
+            // Kontakt's cursor: the next planned read, folded into the loop.
+            kt.step = step;
+            kt.used += 1;
+            let next = kt.taps.get(kt.used).filter(|_| kt.used < kt.len);
+            let (at, frac) = next.map_or((kt.cursor.pos, kt.cursor.frac), |t| (t.at, t.frac));
+            self.position = kt.layout.map(at) as f64 + f64::from(frac);
+        } else if self.reverse {
             self.position -= step;
         } else {
             self.position += step;
@@ -1942,10 +2108,12 @@ impl Voice {
         // fade out over its loop, not stop looping and run forward into the
         // sample's abrupt end (which clicks → "note-off noise"). Only a Done
         // voice ignores the loop.
-        if matches!(
-            self.state,
-            VoiceState::Playing | VoiceState::Releasing { .. }
-        ) {
+        if self.kt.is_none()
+            && matches!(
+                self.state,
+                VoiceState::Playing | VoiceState::Releasing { .. }
+            )
+        {
             if let Some((loop_start, loop_end)) = self.loop_range {
                 if self.alternating_loop {
                     if !self.reverse && self.position >= loop_end as f64 {
@@ -2022,6 +2190,7 @@ impl Voice {
             && self.decay_left == 0
             && self.pitch.is_none()
             && self.stretch.is_none()
+            && self.kt.is_none()
             && self.filter.is_none()
             && self.inserts.is_none()
             && self.release_cut == 0
@@ -2373,6 +2542,12 @@ pub struct VoicePool {
     /// sounding keys and whether each is all released. At most one entry per
     /// MIDI key, so 128 is the bound.
     room_notes: Vec<(u8, bool)>,
+    /// How spawned voices read between frames (the library's
+    /// `performance.interpolation`).
+    interp: super::resample::Interp,
+    /// The engine frame the next rendered frame is (and a voice spawned now
+    /// starts at): the grid Kontakt's resampler plans its blocks on.
+    now: u64,
 }
 
 impl Default for VoicePool {
@@ -2395,6 +2570,8 @@ impl VoicePool {
             strike: 0,
             room_strikes: Vec::with_capacity(MAX_VOICES),
             room_notes: Vec::with_capacity(128),
+            interp: super::resample::Interp::Linear,
+            now: 0,
         }
     }
 
@@ -2412,7 +2589,19 @@ impl VoicePool {
             strike: 0,
             room_strikes: Vec::with_capacity(MAX_VOICES),
             room_notes: Vec::with_capacity(128),
+            interp: super::resample::Interp::Linear,
+            now: 0,
         }
+    }
+
+    /// How voices spawned from now on read between frames.
+    pub fn set_interp(&mut self, interp: super::resample::Interp) {
+        self.interp = interp;
+    }
+
+    /// The engine frame the next rendered frame is.
+    pub fn set_now(&mut self, now: u64) {
+        self.now = now;
     }
 
     pub fn set_max_voices(&mut self, max_voices: usize) {
@@ -2476,6 +2665,9 @@ impl VoicePool {
         // New voices sound at the current wheel position.
         voice.bend = self.bend;
         voice.strike = self.strike;
+        if self.interp == super::resample::Interp::KontaktNormal {
+            voice.kt = Some(KontaktVoice::new(self.now));
+        }
         // Remove done voices first
         self.voices.retain(|v| !v.is_done());
 
@@ -3372,6 +3564,78 @@ mod stretch_tests {
     fn ramp(n: usize) -> Arc<SampleData> {
         let pcm: Vec<f32> = (0..n).map(|i| i as f32 / 65_536.0).collect();
         Arc::new(SampleData::from_f32(pcm, 1, 48_000, n))
+    }
+
+    /// Kontakt's Normal quality plays a ramp along its line (a copy at
+    /// unity, the Lagrange at another step), across cache seams and blocks,
+    /// and ends when the sample does (KONTRA's
+    /// `kontakts_resampler_reads_a_ramp_along_its_line_at_every_quality`).
+    #[test]
+    fn kontakts_resampler_reads_a_ramp_along_its_line() {
+        for step in [1.0, 1.25, 0.8, 0.943_874_3] {
+            for origin in [0u64, 77] {
+                let mut v = Voice::with_rate(ramp(4096), 60, VoiceKind::Short, step, 1.0, 64);
+                v.kt = Some(KontaktVoice::new(origin));
+                let out: Vec<f32> = (0..2000).map(|_| v.next_frame().0).collect();
+                for (n, x) in out.iter().enumerate().skip(4).take(1500) {
+                    let want = n as f64 * step / 65_536.0;
+                    let tol = if step == 1.0 { 0.0 } else { 2e-4 * want + 1e-7 };
+                    assert!(
+                        (f64::from(*x) - want).abs() <= tol,
+                        "step {step} origin {origin} frame {n}: {x} vs {want}"
+                    );
+                }
+                for _ in 0..(4096.0 / step) as usize {
+                    v.next_frame();
+                }
+                assert!(v.is_done(), "step {step}: ends with its sample");
+            }
+        }
+    }
+
+    /// A looped voice keeps reading the loop through Kontakt's path.
+    #[test]
+    fn a_kontakt_voice_loops() {
+        let mut v = Voice::with_rate(ramp(4096), 60, VoiceKind::Short, 1.5, 1.0, 64)
+            .with_forward_loop(1000, 3000);
+        v.kt = Some(KontaktVoice::new(0));
+        for i in 0..20_000 {
+            // The Lagrange about the fold reads both sides of the jump, so
+            // it may overshoot the loop's end a little (as Kontakt does).
+            let (l, _) = v.next_frame();
+            assert!(
+                i < 2000 || (800.0 / 65_536.0..3300.0 / 65_536.0).contains(&l),
+                "{l}"
+            );
+        }
+        assert!(!v.is_done());
+        let x = v.position;
+        assert!((1000.0..3000.0).contains(&x), "{x}");
+    }
+
+    /// A voice without the setting never takes Kontakt's path.
+    #[test]
+    fn a_default_pool_spawns_linear_voices() {
+        let mut pool = VoicePool::new();
+        pool.spawn(Voice::with_rate(
+            ramp(64),
+            60,
+            VoiceKind::Short,
+            1.25,
+            1.0,
+            64,
+        ));
+        assert!(pool.voices_mut()[0].kt.is_none());
+        pool.set_interp(super::super::resample::Interp::KontaktNormal);
+        pool.spawn(Voice::with_rate(
+            ramp(64),
+            60,
+            VoiceKind::Short,
+            1.25,
+            1.0,
+            64,
+        ));
+        assert!(pool.voices_mut()[1].kt.is_some());
     }
 
     /// A stretched voice plays its start as recorded (head 0 alone, at the

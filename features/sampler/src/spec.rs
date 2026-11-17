@@ -631,6 +631,13 @@ pub struct PerformanceSpec {
     /// `fade_out($ALL_EVENTS, 100 ms)`). 0 = none.
     #[facet(default)]
     pub artic_change_fade_ms: f32,
+    /// How voices read between sample frames: `"kontakt_normal"` plays
+    /// through Kontakt 8's Normal-quality resampler (a block-formed f32
+    /// step, its cache-relative f32 cursor, the 4-point Lagrange; see
+    /// `engine::resample`), for a library whose groups ship Normal quality
+    /// (MOJO 2). Empty / `"linear"`: the engine's linear read.
+    #[facet(default)]
+    pub interpolation: String,
     /// Global master tune in cents, applied on top of the per-note transpose.
     /// CSS ships `tune=1.00521` ≈ +9.0 cents on every playable group; other
     /// libraries stay at 0.
@@ -787,6 +794,7 @@ impl Default for PerformanceSpec {
             pedal_ignored: false,
             rr_random_global: false,
             artic_change_fade_ms: 0.0,
+            interpolation: String::new(),
             master_tune_cents: 0.0,
             loop_xfade_ms: 150,
             zone_pitch_tolerance: 2,
