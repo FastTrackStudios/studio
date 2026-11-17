@@ -156,11 +156,13 @@ impl SampleEngine {
         // articulation and its vib pair — otherwise note-off cache-misses and the
         // release tail is silent (CSS rings out ~0.7s). These are separate
         // articulations triggered on key-up by `spawn_release`.
+        // A script release sample (`release_sample`) is the same trap.
         let rel = |a: &str| {
-            self.patch
-                .spec
-                .articulation(a)
-                .and_then(|art| art.release_artic.clone())
+            self.patch.spec.articulation(a).and_then(|art| {
+                art.release_artic
+                    .clone()
+                    .or_else(|| art.release_sample.as_ref().map(|r| r.artic.clone()))
+            })
         };
         // And the legato + portamento TRANSITION articulations (Leg/NVLeg/
         // Legzero/NVLegzero/Port), which `spawn_legato_transition` fires on

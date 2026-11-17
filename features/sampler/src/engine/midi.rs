@@ -592,11 +592,15 @@ impl SampleEngine {
         self.trace_push(TraceKind::NoteOff { note });
         if self.patch.is_zoned() {
             let cur_line = self.cur_line as u8;
-            if let Some((artic, dynamic, velocity)) =
-                self.release_sample_notes[usize::from(note & 127)].take()
-            {
+            let held = std::mem::take(&mut self.release_sample_notes[usize::from(note & 127)]);
+            if !held.is_empty() {
                 self.line_mut().order.retain(|&n| n != note);
-                self.script_release(cur_line, note, &artic, &dynamic, velocity);
+                // the key-up reaches every voice's envelope; the script's
+                // fade only the key's tracked body (below)
+                self.voices.release_note_envelopes(cur_line, note);
+                for (artic, dynamic, velocity) in held {
+                    self.script_release(cur_line, note, &artic, &dynamic, velocity);
+                }
                 return;
             }
             self.line_mut().order.retain(|&n| n != note);
@@ -705,8 +709,11 @@ impl SampleEngine {
         else {
             return;
         };
-        self.voices
-            .fade_out_note_bodies(line, note, ms_to_frames_f(rs.fade_ms, self.sample_rate));
+        let fade = ms_to_frames_f(rs.fade_ms, self.sample_rate);
+        match self.release_body_strike[usize::from(note & 127)] {
+            Some(strike) => self.voices.fade_out_strike_bodies(strike, fade),
+            None => self.voices.fade_out_note_bodies(line, note, fade),
+        }
         let rr = self
             .short_random_rr(&rs.artic, note)
             .unwrap_or_else(|| self.forced_rr.map_or(self.zone_rr_counter, |f| f as usize));
@@ -1288,8 +1295,15 @@ impl SampleEngine {
                 .spec
                 .articulation(&artic)
                 .is_some_and(|a| a.release_sample.is_some());
-            self.release_sample_notes[usize::from(note & 127)] =
-                wants_release.then(|| (artic.clone(), dynamic_of.clone(), velocity));
+            if wants_release {
+                self.release_body_strike[usize::from(note & 127)] =
+                    Some(self.voices.current_strike());
+                self.release_sample_notes[usize::from(note & 127)].push((
+                    artic.clone(),
+                    dynamic_of.clone(),
+                    velocity,
+                ));
+            }
         }
     }
 

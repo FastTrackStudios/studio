@@ -1367,6 +1367,7 @@ pub struct ArticulationOverlay {
     pub key_range: Option<Vec<u8>>,
     pub release_sample: Option<ReleaseSampleSpec>,
     pub fade_releases_ms: Option<f32>,
+    pub amp_env_depth: Option<f32>,
     pub phrase: Option<PhraseSpec>,
     /// The first-note overlay's velocity scale per CC1 (KSP `%fizyd`).
     pub overlay_cc1_scale: Option<Vec<u8>>,
@@ -1471,6 +1472,9 @@ impl SectionOverlay {
             }
             if let Some(v) = o.fade_releases_ms {
                 a.fade_releases_ms = v;
+            }
+            if let Some(v) = o.amp_env_depth {
+                a.amp_env_depth = Some(v);
             }
             if let Some(v) = &o.phrase {
                 a.phrase = Some(v.clone());
@@ -2709,6 +2713,12 @@ pub struct ArticulationSpec {
     /// `%ArtRange`). Empty = every key with a zone.
     #[facet(default)]
     pub key_range: Vec<u8>,
+    /// The volume envelope's modulation intensity (Kontakt's ENV → volume
+    /// route below 1: the gain is `1 − depth·(1 − env)`), and the voice ends
+    /// when the envelope does. `None` = the plain envelope, voice ends as
+    /// before (MOJO 2 sustain groups: 0.043).
+    #[facet(default)]
+    pub amp_env_depth: Option<f32>,
     /// A script-played release sample (see [`ReleaseSampleSpec`]): at the
     /// note-off the note's voices fade out and a zone of `artic` starts in
     /// the note-on's layer. `None` = the library's release path.

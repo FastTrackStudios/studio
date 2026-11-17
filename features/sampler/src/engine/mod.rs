@@ -992,9 +992,17 @@ pub struct SampleEngine {
     /// Extra file frames the sustain body being spawned right now is entered
     /// at (the >1-octave transition body's 75 ms offset).
     pub(crate) spawn_extra_start: usize,
-    /// Per key, what its note-on played for a script release sample
-    /// (`ArticulationSpec::release_sample`): (articulation, dynamic, velocity).
-    pub(crate) release_sample_notes: Vec<Option<(String, String, u8)>>,
+    /// Per key, what each of its sounding note-ons played, for a script
+    /// release sample (`ArticulationSpec::release_sample`): (articulation,
+    /// dynamic, velocity). A key's note-off releases every one of them
+    /// (KONTRA running MOJO 2's script: a key struck again while held plays
+    /// two release samples at the first note-off, none at the second).
+    pub(crate) release_sample_notes: Vec<Vec<(String, String, u8)>>,
+    /// Per key, the strike of its latest note-on: the one body a MOJO-style
+    /// script tracks per key (`%gbku1[10·note]`), which every release of
+    /// that key fades; earlier bodies of a re-struck key end with their
+    /// envelope instead.
+    pub(crate) release_body_strike: Vec<Option<u32>>,
     zone_rr_random_state: u64,
     /// Last-used RR slot per (trigger, note, velocity), keyed by a packed
     /// integer so note-on allocates nothing (was a `format!`-built String key).
@@ -1316,7 +1324,8 @@ impl SampleEngine {
             release_context: None,
             release_extra_hold: 0,
             spawn_extra_start: 0,
-            release_sample_notes: vec![None; 128],
+            release_sample_notes: vec![Vec::new(); 128],
+            release_body_strike: vec![None; 128],
             zone_rr_random_state: 0x9e37_79b9_7f4a_7c15,
             zone_rr_last_slots: HashMap::with_capacity(128),
             forced_rr: None,
@@ -2562,8 +2571,19 @@ fn amp_env_for(
         .and_then(|a| a.amp_env_release)
         .map(|r| r as usize)
         .or((role == AmpEnvRole::Short).then_some(2));
+    let depth = spec
+        .articulations
+        .iter()
+        .find(|a| a.id.eq_ignore_ascii_case(artic_id))
+        .and_then(|a| a.amp_env_depth);
     let tuples: Vec<(f32, f32, f32)> = segs.iter().map(|s| (s.time_ms, s.level, s.curve)).collect();
-    FlexEnv::from_segments(&tuples, 0.0, sample_rate, hold).map(|e| e.with_release_segment(release))
+    FlexEnv::from_segments(&tuples, 0.0, sample_rate, hold).map(|e| {
+        let e = e.with_release_segment(release);
+        match depth {
+            Some(d) => e.with_depth_and_stop(d),
+            None => e,
+        }
+    })
 }
 
 /// Fractional milliseconds → frames (rounded) — for sub-ms spec values.

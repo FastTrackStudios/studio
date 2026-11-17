@@ -205,6 +205,13 @@ def build(nki, organized):
             # always written: −1 (no start modulation) means Kontakt ignores
             # the script's offset, where a missing value would apply it whole
             z["start_mod"] = int(r["start_mod"])
+            # the zone's own sample window: a play_note offset counts from
+            # sample_start (KONTRA trace: a release 78 ms in starts at frame
+            # 3744 + the zone's 1500)
+            if int(r["sample_start"]) > 0:
+                z["sample_start"] = int(r["sample_start"])
+            if int(r["sample_end"]) > 0:
+                z["sample_end"] = int(r["sample_end"])
             ls, le = int(r["loop_start"]), int(r["loop_end"])
             if le > ls >= 0:
                 z["loop_start"], z["loop_end"] = ls, le

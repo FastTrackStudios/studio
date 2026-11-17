@@ -508,6 +508,15 @@ pub struct FlexEnv {
     /// The segment a note-off jumps to (from the current level) — Kontakt's
     /// release stage after the sustain loop. `None` = keep walking.
     release_seg: Option<usize>,
+    /// Modulation intensity: the gain is `1 − depth·(1 − level)` (Kontakt's
+    /// volume envelope routed at less than full intensity sits above a
+    /// floor of `1 − depth`). 1 = the plain envelope.
+    depth: f32,
+    /// Once released and past its last segment the envelope is off: silent,
+    /// and its voice is done (Kontakt stops a voice when its volume envelope
+    /// ends, whatever the intensity).
+    stops_voice: bool,
+    released: bool,
 }
 
 impl FlexEnv {
@@ -560,7 +569,25 @@ impl FlexEnv {
             t: 0.0,
             eat: 1.0,
             release_seg: None,
+            depth: 1.0,
+            stops_voice: false,
+            released: false,
         })
+    }
+
+    /// Run at `depth` intensity (see [`FlexEnv::depth`]); the voice ends
+    /// with the envelope.
+    #[must_use]
+    pub fn with_depth_and_stop(mut self, depth: f32) -> Self {
+        self.depth = depth.clamp(0.0, 1.0);
+        self.stops_voice = true;
+        self
+    }
+
+    /// Released and run past its last segment, with `stops_voice` set.
+    #[must_use]
+    pub fn ended(&self) -> bool {
+        self.stops_voice && self.released && self.settled()
     }
 
     /// Declare the release segment (see [`Self::release`]).
@@ -573,10 +600,15 @@ impl FlexEnv {
     /// Note-off: jump to the release segment from the current level (once;
     /// a no-op when there is none or the envelope is already past it).
     pub fn release(&mut self) {
+        self.released = true;
         let Some(rs) = self.release_seg.take() else {
             return;
         };
         if self.seg >= rs {
+            // Already at (or past) the release segment — a held envelope
+            // frozen at its hold point sits on the release segment's first
+            // frame. The key-up still lifts the freeze, so it walks on.
+            self.hold_end = None;
             return;
         }
         let lvl = self.level_here();
@@ -681,12 +713,19 @@ impl FlexEnv {
     /// level. `released` = the voice has received note-off (freeze lifts).
     #[inline]
     pub(crate) fn next(&mut self, released: bool) -> f32 {
+        if self.ended() {
+            return 0.0;
+        }
         let lvl = self.level_here();
         let frozen = !released && self.hold_end.is_some_and(|h| self.pos >= h);
         if !frozen {
             self.step();
         }
-        lvl
+        if self.depth < 1.0 {
+            1.0 - self.depth * (1.0 - lvl)
+        } else {
+            lvl
+        }
     }
 
     /// The walk is past the last segment: the level holds from here on.
@@ -1499,7 +1538,7 @@ impl Voice {
     /// Returns true when this voice should be removed from the pool.
     #[must_use]
     pub fn is_done(&self) -> bool {
-        self.state == VoiceState::Done
+        self.state == VoiceState::Done || self.flex.as_ref().is_some_and(FlexEnv::ended)
     }
 
     /// Linearly-interpolated stereo read at fractional frame `pos`. Does not
@@ -2555,6 +2594,29 @@ impl VoicePool {
                 continue;
             }
             Self::script_fade(v, frames.max(1));
+        }
+    }
+
+    /// The key-up of `note` on `line` as the engine's envelopes take it:
+    /// every non-release voice's flex envelope enters its release (a voice
+    /// a script no longer tracks still ends with its envelope).
+    pub fn release_note_envelopes(&mut self, line: u8, note: u8) {
+        for v in &mut self.voices {
+            if v.note == note && v.line == line && !matches!(v.kind, VoiceKind::Release) {
+                if let Some(f) = &mut v.flex {
+                    f.release();
+                }
+            }
+        }
+    }
+
+    /// A script's `fade_out` of the voices of one strike (its note-on), from
+    /// their current level, linear over `frames`.
+    pub fn fade_out_strike_bodies(&mut self, strike: u32, frames: usize) {
+        for v in &mut self.voices {
+            if v.strike == strike && !matches!(v.kind, VoiceKind::Release) {
+                Self::script_fade(v, frames.max(1));
+            }
         }
     }
 

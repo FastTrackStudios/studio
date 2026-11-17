@@ -65,6 +65,9 @@ def vel_table(knob, vmin):
     return out
 
 
+RELEASE_TENSION = 0.5 + 2.662588 / 15.0
+
+
 def ahdsr_env(groups, start):
     """The articulation's Bus1 group volume AHDSR → flex segments, or None."""
     g = next((g for g in groups if g["index"] == start), None)
@@ -76,10 +79,11 @@ def ahdsr_env(groups, start):
         return None, (f"group {start}: AHDSR H {env['hold_ms']} D {env['decay_ms']} S {env['sustain']} "
                       f"ahd_only {env['ahd_only']} — not a plain attack/release")
     # curve 0 on every shipped one-shot group: a linear attack (tension 0.5).
-    # Kontakt's AHDSR release is curved; its shape over 9950 ms is measured,
-    # not decoded — linear here until the null test says otherwise.
+    # The release is Kontakt's fall (KONTRA laws.rs FALL, k = ln(3/43)):
+    # 1.075·(3/43)^t − 0.075, our flex shape at tension 0.5 + 2.6626/15.
     tension = 0.5 - 0.5 * env["curve"]
-    return [(max(env["attack_ms"], 0.0), 1.0, tension), (env["release_ms"], 0.0, 0.5)], None
+    return [(max(env["attack_ms"], 0.0), 1.0, tension), (env["release_ms"], 0.0, RELEASE_TENSION)], \
+        env.get("intensity", 1.0)
 
 
 def group_eq(art, start, names, fx_slots, notes, lp_floor):
@@ -193,8 +197,11 @@ def build(nki):
             continue
         knob = one(knob_var)
         env, why = ahdsr_env(groups, starts[i])
-        if why:
+        depth = None
+        if isinstance(why, str):
             notes.append(f"{art}: {why}")
+        elif why is not None and why < 0.999:
+            depth = why
         fx = group_eq(art, starts[i], names, fx_slots, notes, one("$lrshn") / 1e6)
         table = vel_table(knob, vmin)
         lines += [
@@ -211,6 +218,8 @@ def build(nki):
         if env:
             body = " ".join(f"{{time_ms {fmt(t)}, level {fmt(lv)}, curve {fmt(c)}}}" for t, lv, c in env)
             lines += [f"        amp_env ( {body} )", "        amp_env_hold true", "        amp_env_release 1"]
+            if depth is not None:
+                lines.append(f"        amp_env_depth {fmt(depth)}  // the ENV -> volume route's intensity")
         if art == "Sus":
             off, fade = release_numbers(ksp, pers)
             gains = release_gain_table(one("$ues0b"), knob, vmin, level_db)
