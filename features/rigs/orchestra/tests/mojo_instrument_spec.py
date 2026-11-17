@@ -183,7 +183,16 @@ def curved(vel):
     return 1 + (vel * 126) // 127
 
 
-def legato_numbers(p0, pers, knob, vmin, num_vels):
+# The legato's knobs per articulation (persistent_1, names from the
+# script's own rename table, readable-script_1/ren.txt): on, mode CC,
+# mode velocity, transition volume, transition length, its CC (37617+).
+LEGATO_VARS = {
+    "Sus": ("Sus", "$ecwxx", "$nf4pv", "$mbwiu", "$a5z5e", "$trtal", 28),
+    "Stabs": ("Stab", "$eptsj", "$5nxil", "$tqwmj", "$zgicz", "$pscdl", 34),
+}
+
+
+def legato_numbers(p0, pers, knob, vmin, num_vels, art="Sus"):
     """The sustain legato (decode-legato.md): its switch and speed mode
     (persistent_1), the timing set (persistent_0 `$LegSus*`), the
     transition's level by velocity and its layer edges.
@@ -195,8 +204,9 @@ def legato_numbers(p0, pers, knob, vmin, num_vels):
     edges."""
     g = lambda k: float(p0[k][0])
     one = lambda k: int(pers[k][0])
+    pre, on_var, cc_var, vel_var, vol_var, len_var, len_cc = LEGATO_VARS[art]
     den = 0.99 ** 127 - 1.0
-    trans_vol = one("$a5z5e")
+    trans_vol = one(vol_var)
     gains = []
     for v in range(128):
         vc = curved(max(v, 1))
@@ -206,22 +216,23 @@ def legato_numbers(p0, pers, knob, vmin, num_vels):
     step = 127 // num_vels + 1
     layer = lambda vel: max(0, curved(max(vel, 1)) // step - (num_vels - n_leg))
     edges = [next(v for v in range(128) if layer(v) >= k) for k in range(1, n_leg)]
-    mode = "cc" if one("$nf4pv") else "velocity" if one("$mbwiu") else "speed"
+    mode = "cc" if one(cc_var) else "velocity" if one(vel_var) else "speed"
+    L = lambda k: g(f"$Leg{pre}{k}")
     t = {
-        "fade_in_ms": g("$LegSusFadeIn"), "trans_offset_ms": g("$LegSusTransOffset"),
-        "hold_small_ms": g("$LegSusTransHoldSmall"), "hold_large_ms": g("$LegSusTransHoldLarge"),
-        "fade_out_ms": g("$LegSusFadeOut"),
-        "target_offset_ms": g("$MiscInstAttackOffsetMS") + g("$LegSusTargetOffset"),
-        "slow_small_pct": int(g("$LegSusSlowSpeedSmall")), "fast_small_pct": int(g("$LegSusFastSpeedSmall")),
-        "slow_large_pct": int(g("$LegSusSlowSpeedLarge")), "fast_large_pct": int(g("$LegSusFastSpeedLarge")),
-        "slowest_ms": int(g("$LegSusSlowPlayingSpeed")), "fastest_ms": int(g("$LegSusFastPlayingSpeed")),
+        "fade_in_ms": L("FadeIn"), "trans_offset_ms": L("TransOffset"),
+        "hold_small_ms": L("TransHoldSmall"), "hold_large_ms": L("TransHoldLarge"),
+        "fade_out_ms": L("FadeOut"),
+        "target_offset_ms": g("$MiscInstAttackOffsetMS") + L("TargetOffset"),
+        "slow_small_pct": int(L("SlowSpeedSmall")), "fast_small_pct": int(L("FastSpeedSmall")),
+        "slow_large_pct": int(L("SlowSpeedLarge")), "fast_large_pct": int(L("FastSpeedLarge")),
+        "slowest_ms": int(L("SlowPlayingSpeed")), "fastest_ms": int(L("FastPlayingSpeed")),
     }
     if mode == "cc":
-        t["speed_cc"] = 28
-        t["speed_cc_default"] = one("$trtal")
+        t["speed_cc"] = len_cc
+        t["speed_cc_default"] = one(len_var)
     elif mode == "velocity":
         t["speed_by_velocity"] = "true"
-    return {"on": one("$ecwxx") == 1, "gains": gains, "edges": edges, "timing": t, "mode": mode,
+    return {"on": one(on_var) == 1, "gains": gains, "edges": edges, "timing": t, "mode": mode,
             "trans_vol": trans_vol, "max_interval": int(p0["$MiscNumLegIntervals"][0]) - 1}
 
 
@@ -318,17 +329,25 @@ def build(nki):
             lines += [f"        amp_env ( {body} )", "        amp_env_hold true", "        amp_env_release 1"]
             if depth is not None:
                 lines.append(f"        amp_env_depth {fmt(depth)}  // the ENV -> volume route's intensity")
-        if art == "Sus":
-            leg = legato_numbers(p0, pers, knob, vmin, 4)
+        if art in LEGATO_VARS:
+            leg = legato_numbers(p0, pers, knob, vmin, 4, art)
             timing = ", ".join(f"{k} {fmt(v) if isinstance(v, float) else v}" for k, v in leg["timing"].items())
+            # the switch: CC26 (sustain) / CC32 (stab) above 63 (37912-37918)
+            extra = ""
+            if art == "Stabs":
+                # stab legato only within the bypass of the last connection
+                # (28665); its key-up fades the target over Exp2(release knob)
+                rel = 2 ** (one("$oumez") / 73477 + 1) - 2
+                extra = f", bypass_ms {one('$cbfyl')}, release_fade_ms {fmt(rel)}"
             lines += [
-                "        // the sustain legato (25570-28257; decode-legato.md), CC26 > 63 on;",
-                f"        // speed by {leg['mode']}; TransVol {leg['trans_vol']}",
-                f"        script_legato {{ enable_cc 26, on {'true' if leg['on'] else 'false'}, up LegUp, down LegDown,",
+                f"        // the {art} legato (decode-legato.md); speed by {leg['mode']}; TransVol {leg['trans_vol']}",
+                f"        script_legato {{ enable_cc {26 if art == 'Sus' else 32}, on {'true' if leg['on'] else 'false'}, "
+                f"up LegUp, down LegDown{extra},",
                 f"            max_interval {leg['max_interval']}, layer_thresholds ({' '.join(map(str, leg['edges']))}),",
                 f"            gain_db ({' '.join(fmt(x) for x in leg['gains'])}),",
                 f"            timing {{ {timing} }} }}",
             ]
+        if art == "Sus":
             off, fade = release_numbers(ksp, pers)
             gains = release_gain_table(one("$ues0b"), knob, vmin, level_db)
             lines += [

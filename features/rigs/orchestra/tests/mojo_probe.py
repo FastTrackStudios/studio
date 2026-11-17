@@ -20,6 +20,10 @@ Modes:
   legato    Sustains with legato on (CC26 = 127): overlapping pairs at several
             intervals and speeds, a fast run, natural legato (key C#2 = 37,
             latched), octave legato (CC64 held), a held note under a line.
+  stablegato  Stabs with stab legato on (CC32 = 127; Alto ships it on):
+            overlapping stabs within the 273/291 ms bypass at several
+            intervals, a fast stab line, and stabs further apart (fresh,
+            still monophonic).
   phrases   Musical horn lines mixing articulations: stabs into staccato, a
             sustain ended by a fall (Falls keyswitch at velocity 127 while held),
             doit / shake releases (release-type keys 97 / 98, then 96 back).
@@ -142,6 +146,23 @@ def legato(p, ranges):
     p.m.cc(p.t, 26, 0)
 
 
+def stablegato(p, ranges):
+    lo, hi = ranges["Stabs"]
+    sc = scale(lo, hi)
+    base = sc[3]
+    p.ks("Stabs")
+    p.m.cc(p.t, 32, 127)  # stab legato on
+    p.t += 0.5
+    for iv in (1, 3, -2, 7):
+        for ioi, vel in ((0.15, 100), (0.25, 70)):
+            p.unit("STLEG", f"Stab leg {base}->{base + iv} ioi{int(ioi*1000)} v{vel}",
+                   [(0, ioi + 0.05, base, vel), (ioi, 0.4, base + iv, vel)])
+    p.unit("STLEG-RUN", "Stab line 6 notes ioi120", [(i * 0.12, 0.15, k, 105) for i, k in enumerate(sc[2:8])])
+    p.unit("STLEG-FRESH", "Stabs 400 ms apart (beyond the bypass)",
+           [(i * 0.4, 0.2, k, 100) for i, k in enumerate((base, base + 2, base + 4))])
+    p.m.cc(p.t, 32, 0)
+
+
 def phrases(p, ranges):
     lo, hi = ranges["Sus"]
     sc = scale(lo, hi)
@@ -181,7 +202,8 @@ def swells(p, ranges):
                 p.unit(art.upper(), f"{art} key{key} v{vel} hold4", [(0, 4.0, key, vel)], tail=3.0)
 
 
-MODE_FN = {"sustains": sustains, "legato": legato, "phrases": phrases, "swells": swells}
+MODE_FN = {"sustains": sustains, "legato": legato, "stablegato": stablegato, "phrases": phrases,
+           "swells": swells}
 
 
 def main():

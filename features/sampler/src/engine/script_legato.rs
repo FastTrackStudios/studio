@@ -25,6 +25,8 @@ pub(crate) struct ScriptLegState {
     last_vel: u8,
     /// The transition holding before its target.
     pending: Option<ScriptLegPending>,
+    /// The voices of the last target (`MARK_7`).
+    target_strike: Option<u32>,
 }
 
 /// A transition waiting out its hold.
@@ -98,7 +100,12 @@ impl SampleEngine {
         let prev = self.script_leg.prev;
         self.script_leg.back = prev;
         self.script_leg.last_vel = velocity;
-        let connects = prev.is_some_and(|p| p.abs_diff(note) <= spec.max_interval);
+        let since_ms = frames_to_ms(
+            self.frames_rendered.saturating_sub(self.script_leg.last_on),
+            self.sample_rate,
+        );
+        let connects = prev.is_some_and(|p| p.abs_diff(note) <= spec.max_interval)
+            && (spec.bypass_ms <= 0.0 || since_ms <= spec.bypass_ms);
         match prev {
             Some(from) if connects => self.script_transition(&spec, from, note, velocity),
             _ => {
@@ -205,9 +212,16 @@ impl SampleEngine {
         // body: the holding transition is not faded (37014-37579).
         let k = usize::from(to & 127);
         self.release_body_strike[k] = Some(u32::MAX);
-        let (dynamic_of, _) = self.short_layer_and_velvol(&sustain, velocity);
         self.release_sample_notes[k].clear();
-        self.release_sample_notes[k].push((sustain.clone(), dynamic_of, velocity));
+        let has_release = self
+            .patch
+            .spec
+            .articulation(&sustain)
+            .is_some_and(|a| a.release_sample.is_some());
+        if has_release {
+            let (dynamic_of, _) = self.short_layer_and_velvol(&sustain, velocity);
+            self.release_sample_notes[k].push((sustain.clone(), dynamic_of, velocity));
+        }
         self.script_leg.pending = Some(ScriptLegPending {
             due: self.frames_rendered + ms_to_frames_f(hold_ms as f32, sr) as u64,
             strike,
@@ -231,6 +245,15 @@ impl SampleEngine {
             return true;
         }
         self.script_leg.prev = None;
+        if spec.release_fade_ms > 0.0 {
+            // `fade_out(MARK_7, Exp2(release knob))`; the key-up runs the
+            // rest of the note's release as usual.
+            if let Some(strike) = self.script_leg.target_strike.take() {
+                let fade = ms_to_frames_f(spec.release_fade_ms, self.sample_rate);
+                self.voices.fade_out_strike_bodies(strike, fade);
+            }
+            return false;
+        }
         let back = self
             .script_leg
             .back
@@ -293,6 +316,7 @@ impl SampleEngine {
         self.in_transition = true;
         self.release_sample_notes[usize::from(p.note & 127)].clear();
         self.voices.begin_strike();
+        self.script_leg.target_strike = Some(self.voices.current_strike());
         self.trigger_zoned_short(p.note, p.velocity);
         (
             self.spawn_extra_start,

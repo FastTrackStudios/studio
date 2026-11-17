@@ -115,7 +115,7 @@ def main():
         g = e.get("gain") or [[0.0]]
         kvoices.append((e["frame"], f, float(e.get("position") or 0), 20 * math.log10(abs(g[0][0]) or 1e-9)))
         # a legato transition draws no RR (its zone is the interval's)
-        if f and "Keyclick" not in f and "/Legato_" not in f and "/Octave_Legato_" not in f:
+        if f and "keyclick" not in f.lower() and "/Legato_" not in f and "/Octave_Legato_" not in f:
             rrs.append(zone_rr.get(f, "0"))
 
     # 3. ours, replaying KONTRA's picks
@@ -131,8 +131,8 @@ def main():
             ovoices.append((round(float(m[1]) * 48000), m[2], float(m[4]), 20 * math.log10(float(m[3]) or 1e-9)))
 
     # 4. voice lists side by side (keyclicks apart: not modelled yet), and the audio null
-    clicks = [k for k in kvoices if k[1] and "Keyclick" in k[1]]
-    kvoices = [k for k in kvoices if not (k[1] and "Keyclick" in k[1])]
+    clicks = [k for k in kvoices if k[1] and "keyclick" in k[1].lower()]
+    kvoices = [k for k in kvoices if not (k[1] and "keyclick" in k[1].lower())]
     out = [f"KONTRA voices {len(kvoices)} (+{len(clicks)} keyclicks, not modelled), ours {len(ovoices)}"]
     for i in range(max(len(kvoices), len(ovoices))):
         k = kvoices[i] if i < len(kvoices) else None

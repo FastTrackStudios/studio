@@ -469,6 +469,8 @@ pub struct Voice {
     /// group): the playhead moves at `speed` × the pitch's rate while two
     /// read heads play the sample at its pitch. `None` plays it plainly.
     stretch: Option<Stretch>,
+    /// A script's `fade_out` owns this voice's end (see `script_fade`).
+    script_faded: bool,
 }
 
 /// A stretching voice's grain, output frames (43 ms at 48 kHz).
@@ -864,6 +866,7 @@ impl Voice {
             trace_id: None,
             pitch: None,
             stretch: None,
+            script_faded: false,
         }
     }
 
@@ -956,6 +959,7 @@ impl Voice {
             trace_id: None,
             pitch: None,
             stretch: None,
+            script_faded: false,
         }
     }
 
@@ -2709,10 +2713,10 @@ impl VoicePool {
     /// from the current level over `frames`.
     pub fn fade_out_line_bodies(&mut self, line: u8, frames: usize) {
         for v in &mut self.voices {
-            if v.line == line
-                && !matches!(v.kind, VoiceKind::Release)
-                && !matches!(v.state, VoiceState::Releasing { .. })
-            {
+            // a released note still ringing is faded too (the script
+            // fades by marks, key up or down); one already fading by a
+            // script keeps its fade
+            if v.line == line && !matches!(v.kind, VoiceKind::Release) && !v.script_faded {
                 Self::script_fade(v, frames.max(1));
             }
         }
@@ -2741,6 +2745,7 @@ impl VoicePool {
     }
 
     fn script_fade(v: &mut Voice, fade: usize) {
+        v.script_faded = true;
         v.target_gain = v.gain;
         v.gain_ramp_frames = 0;
         v.stage1_run = 0;

@@ -2919,6 +2919,15 @@ pub struct ScriptLegatoSpec {
     #[facet(default)]
     pub gain_db: Vec<f32>,
     pub timing: ScriptLegatoTiming,
+    /// A note connects only within this many ms of the last connection
+    /// (MOJO 2's stab "transition bypass"); 0 = always.
+    #[facet(default)]
+    pub bypass_ms: f32,
+    /// At the last note's key-up, the target voices fade over this many ms
+    /// and the note releases as usual (stabs, 37596-37612), instead of the
+    /// articulation's release sample. 0 = the release sample.
+    #[facet(default)]
+    pub release_fade_ms: f32,
 }
 
 /// The legato timing set of one kind of connection (`ScriptLegatoSpec`).

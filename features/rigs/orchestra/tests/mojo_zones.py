@@ -160,7 +160,10 @@ def group_stage(fx_slots, gi):
 def build(nki, organized):
     ksp = os.path.join(ROOT, "_ksp", nki)
     inst = re.sub(r"\s+2\.0$", "", nki)
-    groups = {g["index"]: g["name"] for g in json.load(open(os.path.join(ksp, "groups.json")))}
+    gjson = json.load(open(os.path.join(ksp, "groups.json")))
+    groups = {g["index"]: g["name"] for g in gjson}
+    # the source mode (nkx-extract source_mode): 3 DFD, 5 Time Machine II, …
+    modes = {g["index"]: g.get("source_mode") for g in gjson}
     pers = persistent(os.path.join(ksp, "persistent_1.tsv"))
     num_rr = int(pers["$1f1tu"][0])
     bus_of = check_starts(nki, groups, [int(x) for x in pers["%hr4to"]])
@@ -202,9 +205,12 @@ def build(nki, organized):
             gain = float(r["zvol"])
             z["gain_db"] = round(20 * math.log10(gain) + stage_db, 6) if gain > 0 else -144.0
             z["tune_cents"] = round(1200 * math.log2(float(r["tune"])), 6)
-            # always written: −1 (no start modulation) means Kontakt ignores
-            # the script's offset, where a missing value would apply it whole
-            z["start_mod"] = int(r["start_mod"])
+            # Kontakt limits a script's offset by S.Mod only in DFD (KSP
+            # manual, play_note): there it is always written (−1, no start
+            # modulation, ignores the offset); other modes (the Time Machine
+            # II transitions) take the offset whole
+            if modes.get(gi) in (3, None):
+                z["start_mod"] = int(r["start_mod"])
             # the zone's own sample window: a play_note offset counts from
             # sample_start (KONTRA trace: a release 78 ms in starts at frame
             # 3744 + the zone's 1500)
