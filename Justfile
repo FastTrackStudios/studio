@@ -295,6 +295,7 @@ alias gd := guitar-design
 
 # Every visualiser in the rig, in one window, on the design rig's fake
 # guitar. Stills of one effect at a time, rendered offline with no window:
+# (in a FastTrackStudios/fts-fx checkout)
 #   cargo run -p dsp --features delay-ui,delay-viz --example delay_family_sheet -- out/
 #   cargo run -p dsp --features reverb-ui,reverb-viz --example reverb_family_sheet -- out/
 #   cargo run -p dsp --features modulation-ui,modulation-viz --example engine_sheet -- out/
@@ -546,33 +547,21 @@ macos-pkg:
 macos-install: macos-pkg
     installer -pkg "target/Session-$(cargo pkgid -p session-desktop | sed 's/.*[#@]//')-macos.pkg" -target CurrentUserHomeDirectory
 
-# The FX editors' embedded Tailwind sheets (the editor include_str!s
-# assets/tailwind.css). Rebuild after class changes in the editor or in
-# architect-ui.
-tailwind-eq: _lumen-link
-    tailwindcss -i features/dsp/eq/tailwind.css -o features/dsp/eq/assets/tailwind.css --minify
+# The FX editors' Tailwind sheets (`tailwind-eq`, `-comp`, `-limiter`,
+# `-trigger`, `-eq-standalone`) are recipes of FastTrackStudios/fts-fx, where
+# the effects live.
 
-tailwind-comp: _lumen-link
-    tailwindcss -i features/dsp/comp/tailwind.css -o features/dsp/comp/assets/tailwind.css --minify
-
-tailwind-limiter: _lumen-link
-    tailwindcss -i features/dsp/comp/ui_limiter-tailwind.css -o features/dsp/comp/ui_limiter-assets/tailwind.css --minify
-
-tailwind-trigger: _lumen-link
-    tailwindcss -i features/dsp/trigger/tailwind.css -o features/dsp/trigger/assets/tailwind.css --minify
-
-tailwind-eq-standalone: _lumen-link
-    tailwindcss -i apps/plugins/eq-standalone/tailwind.css -o apps/plugins/eq-standalone/assets/tailwind.css --minify
-
-# THE plugin suite — the one list every plugin recipe iterates. A name here
-# is `<name>-plugin` as a cargo package and "FTS <Name>" as a bundle (see
-# bundler.toml); adding a plugin means touching this line and that file.
-fts_plugins := "eq comp reverb delay tune modulation nam level saturate signal guide gate limiter trigger meter pitch unison"
+# The plugins still built here — the one list every plugin recipe iterates. A
+# name here is `<name>-plugin` as a cargo package and "FTS <Name>" as a bundle
+# (see bundler.toml); adding a plugin means touching this line and that file.
+# The effects (eq, comp, reverb, delay, …) are bundled by
+# FastTrackStudios/fts-fx's `just plugins-bundle`, the same recipe.
+fts_plugins := "nam signal guide"
 
 # Bundle every FTS plugin as .clap + .vst3 (target/bundled/, names from
 # bundler.toml). Pass a subset to bundle only those:
-#   just plugins-bundle "eq comp"
-# Debug of a single plugin: cargo run -p fts-plugin-xtask -- bundle -p eq-plugin
+#   just plugins-bundle "nam guide"
+# Debug of a single plugin: cargo run -p fts-plugin-xtask -- bundle -p nam-plugin
 #
 # On macOS this uses nice-plug-xtask's `bundle-universal` instead of
 # `bundle`: it builds both aarch64-apple-darwin and x86_64-apple-darwin and
@@ -596,11 +585,11 @@ plugins-bundle plugins=fts_plugins:
 # is live in REAPER (and anything else that scans them) without reinstalling.
 #
 # Points at `target/bundled` rather than copying it. The bundler rewrites each bundle in place at a stable path, so the link stays
-# valid across rebuilds — `just plugins-bundle eq` and the next plugin scan
+# valid across rebuilds — `just plugins-bundle nam` and the next plugin scan
 # sees the new binary.
 #
 #   just plugins-link              # every bundle currently in target/bundled
-#   just plugins-bundle eq && ...  # rebuild one; the link already points at it
+#   just plugins-bundle nam && ... # rebuild one; the link already points at it
 #
 # Idempotent, and deliberately conservative: it replaces its own symlinks but
 # refuses to delete a REAL directory of the same name, which would be a copy
@@ -717,7 +706,7 @@ mic-models-install:
 plugins-package: plugins-bundle
     #!/usr/bin/env bash
     set -euo pipefail
-    version="$(cargo pkgid -p eq-plugin | sed 's/.*[#@]//')"
+    version="$(cargo pkgid -p nam-plugin | sed 's/.*[#@]//')"
     case "$(uname)-$(uname -m)" in
         Darwin-*)        plat=macos ;;
         Linux-x86_64)    plat=x86_64-linux ;;
@@ -884,7 +873,7 @@ check:
 # build and run exactly these; building the workspace's ~200 crates with no
 # tests left would only link empty harnesses. Add a crate here when it gains
 # tests worth running on every change.
-test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp dioxus-test dock studio-architect patchbay patchbay-yamaha-tf"
+test_packages := "session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame studio-desktop dioxus-test dock studio-architect patchbay patchbay-yamaha-tf"
 
 # Run the core test set (test_packages above).
 test:

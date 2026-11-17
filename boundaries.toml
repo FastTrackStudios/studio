@@ -158,11 +158,6 @@ features = ["ui"]
 layer = "L4"
 
 [[row]]
-package = "fts-audio-ui"
-layer = "L4"
-note = "sibling ui crate; fold in as a ui flag"
-
-[[row]]
 package = "guitar"
 features = ["ui"]
 layer = "L4"
@@ -194,11 +189,6 @@ layer = "L4"
 
 [[row]]
 package = "patchbay"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "preset-browser"
 features = ["ui"]
 layer = "L4"
 
@@ -316,10 +306,6 @@ package = "dock"
 layer = "L1"
 
 [[row]]
-package = "dsp-core"
-layer = "L1"
-
-[[row]]
 package = "dynamic-template"
 layer = "L1"
 
@@ -408,15 +394,7 @@ package = "pitch"
 layer = "L1"
 
 [[row]]
-package = "plugin-core"
-layer = "L1"
-
-[[row]]
 package = "plugin-faces"
-layer = "L1"
-
-[[row]]
-package = "preset-browser"
 layer = "L1"
 
 [[row]]

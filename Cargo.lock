@@ -464,12 +464,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
-name = "anymap2"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d301b3b94cb4b2f23d7917810addbbaff90738e0ca2be692bd027e70d7e0330c"
-
-[[package]]
 name = "anymap3"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2415,7 +2409,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "rand_chacha 0.9.0",
  "rand_core 0.6.4",
- "rand_distr 0.5.1",
+ "rand_distr",
  "raw-window-handle 0.6.2",
  "rayon",
  "rayon-core",
@@ -3389,7 +3383,7 @@ dependencies = [
  "csv",
  "num-traits",
  "rand 0.9.5",
- "rand_distr 0.5.1",
+ "rand_distr",
  "rayon",
 ]
 
@@ -3872,6 +3866,7 @@ checksum = "56ed6191a7e78c36abdb16ab65341eefd73d64d303fffccdbb00d51e4205967b"
 name = "builtin"
 version = "26.10.3"
 dependencies = [
+ "anyhow",
  "builtin",
  "comp-plugin",
  "crossbeam-channel",
@@ -3884,6 +3879,7 @@ dependencies = [
  "eq-plugin",
  "fts-sample",
  "gate-plugin",
+ "hound",
  "level-plugin",
  "limiter-plugin",
  "meter-plugin",
@@ -3893,10 +3889,13 @@ dependencies = [
  "nice-plug",
  "num-traits",
  "pitch-plugin",
+ "realfft",
  "reverb-plugin",
  "saturate-plugin",
  "serde",
  "serde_json",
+ "signal-import",
+ "signal-plugin-host",
  "tracing",
  "tune-plugin",
  "unison-plugin",
@@ -4611,6 +4610,7 @@ dependencies = [
 [[package]]
 name = "comp-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "dsp",
  "nice-plug",
@@ -6126,6 +6126,7 @@ checksum = "ac6b926516df9c60bfa16e107b21086399f8285a44ca9711344b9e553c5146e2"
 [[package]]
 name = "delay-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "dsp",
  "dsp-core",
@@ -6175,17 +6176,6 @@ name = "derivative"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "derive-new"
-version = "0.5.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3418329ca0ad70234b9735dc4ceed10af4df60eff9c8e7b06cb5e520d92c3535"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7351,34 +7341,23 @@ dependencies = [
 [[package]]
 name = "dsp"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
- "anyhow",
  "anyrender",
- "anyrender_vello_cpu",
- "approx",
  "architect-ui",
  "atomic_float",
  "blitz-dom",
  "blitz-traits",
- "builtin",
  "bytemuck",
- "criterion",
  "crossbeam-channel",
- "daw",
  "dioxus",
  "dioxus-native",
  "dioxus-native-dom",
- "dioxus-ssr",
- "dioxus-test",
- "dsp",
  "dsp-core",
  "fts-audio-ui",
- "fts-sample",
  "futures-timer",
- "hound",
  "kurbo 0.13.1",
  "libm",
- "naga 30.0.1",
  "nice-plug",
  "nice-plug-dioxus",
  "num-traits",
@@ -7386,39 +7365,26 @@ dependencies = [
  "parking_lot",
  "peniko 0.6.1",
  "plugin-core",
- "png 0.18.1",
- "pollster",
  "preset-browser",
  "rayon",
  "realfft",
- "reqwest 0.12.28",
  "rtrb",
  "rustfft",
  "serde",
- "serde_json",
- "sha2 0.10.9",
- "signal-import",
- "signal-plugin-host",
  "smallvec 1.16.4",
- "symphonia",
  "symphonium",
- "test-that",
  "thiserror 2.0.20",
- "tokio",
- "tracing",
- "tract-onnx",
  "vello",
  "web-time",
- "wgpu 30.0.1",
  "world-sys",
 ]
 
 [[package]]
 name = "dsp-core"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "atomic_float",
- "dsp-core",
  "ebur128",
  "nice-plug",
  "parking_lot",
@@ -7451,12 +7417,6 @@ name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
-
-[[package]]
-name = "dyn-hash"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15401da73a9ed8c80e3b2d4dc05fe10e7b72d7243b9f614e516a44fa99986e88"
 
 [[package]]
 name = "dynamic-template"
@@ -7939,31 +7899,12 @@ dependencies = [
 [[package]]
 name = "eq-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "dsp",
  "dsp-core",
  "nice-plug",
  "plugin-core",
-]
-
-[[package]]
-name = "eq-standalone"
-version = "26.10.3"
-dependencies = [
- "anyhow",
- "atomic_float",
- "blitz-shell",
- "cpal",
- "dioxus-native",
- "dioxus-signals",
- "dioxus-vdom",
- "dsp",
- "manganis",
- "nice-plug",
- "nice-plug-dioxus",
- "pipewire",
- "plugin-core",
- "winit 0.30.13",
 ]
 
 [[package]]
@@ -9004,6 +8945,7 @@ dependencies = [
 [[package]]
 name = "fts-audio-ui"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "anyrender",
  "anyrender_vello",
@@ -9013,13 +8955,10 @@ dependencies = [
  "bytemuck",
  "dioxus",
  "dioxus-native-dom",
- "dioxus-test",
  "dsp-core",
  "gloo-timers 0.3.0",
  "kurbo 0.13.1",
  "peniko 0.6.1",
- "pollster",
- "tokio",
  "tracing",
  "vello",
  "wasm-bindgen",
@@ -9322,6 +9261,7 @@ dependencies = [
 [[package]]
 name = "gate-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "dsp",
  "nice-plug",
@@ -10047,7 +9987,7 @@ dependencies = [
  "crunchy",
  "num-traits",
  "rand 0.9.5",
- "rand_distr 0.5.1",
+ "rand_distr",
  "zerocopy",
 ]
 
@@ -12130,16 +12070,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kstring"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "558bf9508a558512042d3095138b1f7b8fe90c5467d94f9f1da28b3731c5dbd1"
-dependencies = [
- "serde",
- "static_assertions",
-]
-
-[[package]]
 name = "kuchiki"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12302,6 +12232,7 @@ checksum = "7a79a3332a6609480d7d0c9eab957bca6b455b91bb84e66d19f5ff66294b85b8"
 [[package]]
 name = "level-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "dsp",
  "nice-plug",
@@ -12558,6 +12489,7 @@ dependencies = [
 [[package]]
 name = "limiter-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "dsp",
  "nice-plug",
@@ -12658,63 +12590,6 @@ name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
-
-[[package]]
-name = "liquid"
-version = "0.26.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e9338405fdbc0bce9b01695b2a2ef6b20eca5363f385d47bce48ddf8323cc25"
-dependencies = [
- "doc-comment",
- "liquid-core",
- "liquid-derive",
- "liquid-lib",
- "serde",
-]
-
-[[package]]
-name = "liquid-core"
-version = "0.26.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "feb8fed70857010ed9016ed2ce5a7f34e7cc51d5d7255c9c9dc2e3243e490b42"
-dependencies = [
- "anymap2",
- "itertools 0.13.0",
- "kstring",
- "liquid-derive",
- "num-traits",
- "pest",
- "pest_derive",
- "regex",
- "serde",
- "time",
-]
-
-[[package]]
-name = "liquid-derive"
-version = "0.26.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b51f1d220e3fa869e24cfd75915efe3164bd09bb11b3165db3f37f57bf673e3"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "liquid-lib"
-version = "0.26.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee1794b5605e9f8864a8a4f41aa97976b42512cc81093f8c885d29fb94c6c556"
-dependencies = [
- "itertools 0.13.0",
- "liquid-core",
- "once_cell",
- "percent-encoding",
- "regex",
- "time",
- "unicode-segmentation",
-]
 
 [[package]]
 name = "litemap"
@@ -13327,12 +13202,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "maplit"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
-
-[[package]]
 name = "margin"
 version = "0.10.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13513,6 +13382,7 @@ dependencies = [
 [[package]]
 name = "meter-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "dioxus",
  "dsp-core",
@@ -13525,6 +13395,7 @@ dependencies = [
 [[package]]
 name = "mic-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "crossbeam-channel",
  "dsp",
@@ -13733,6 +13604,7 @@ dependencies = [
 [[package]]
 name = "modulation-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "atomic_float",
  "dsp",
@@ -17092,6 +16964,7 @@ dependencies = [
 [[package]]
 name = "pitch-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "dsp",
  "dsp-core",
@@ -17210,6 +17083,7 @@ dependencies = [
 [[package]]
 name = "plugin-core"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "architect-ui",
  "atomic_float",
@@ -17445,14 +17319,12 @@ dependencies = [
 [[package]]
 name = "preset-browser"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "dioxus",
- "dioxus-test",
  "fts-audio-ui",
- "preset-browser",
  "serde",
  "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -17723,16 +17595,6 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.11.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b82eaa1d779e9a4bc1c3217db8ffbeabaae1dca241bf70183242128d48681cd"
-dependencies = [
- "bytes",
- "prost-derive 0.11.9",
-]
-
-[[package]]
-name = "prost"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2796faa41db3ec313a31f7624d9286acf277b52de526150b7e69f3debf891ee5"
@@ -17749,19 +17611,6 @@ checksum = "528ac67416ff8646872a3c02cad9cc4ee5dc9f9540c9b10771855c95cb2e5ae1"
 dependencies = [
  "bytes",
  "prost-derive 0.14.4",
-]
-
-[[package]]
-name = "prost-derive"
-version = "0.11.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5d2d8d10f3c6ded6da8b05b5fb3b8a5082514344d56c9f871412d29b4e075b4"
-dependencies = [
- "anyhow",
- "itertools 0.10.5",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -18140,16 +17989,6 @@ name = "rand_core"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
-
-[[package]]
-name = "rand_distr"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32cb0b9bc82b0a0876c2dd994a7e7a2683d3e7390ca40e6886785ef0c7e3ee31"
-dependencies = [
- "num-traits",
- "rand 0.8.8",
-]
 
 [[package]]
 name = "rand_distr"
@@ -18973,6 +18812,7 @@ dependencies = [
 [[package]]
 name = "reverb-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "crossbeam-channel",
  "dsp",
@@ -19638,20 +19478,12 @@ dependencies = [
 [[package]]
 name = "saturate-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "atomic_float",
  "dsp",
  "nice-plug",
  "plugin-core",
-]
-
-[[package]]
-name = "scan_fmt"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b53b0a5db882a8e2fdaae0a43f7b39e7e9082389e978398bdf223a55b581248"
-dependencies = [
- "regex",
 ]
 
 [[package]]
@@ -22264,17 +22096,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "string-interner"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07f9fdfdd31a0ff38b59deb401be81b73913d76c9cc5b1aed4e1330a223420b9"
-dependencies = [
- "cfg-if",
- "hashbrown 0.14.5",
- "serde",
-]
-
-[[package]]
 name = "string_cache"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -23003,11 +22824,9 @@ dependencies = [
  "symphonia-bundle-flac",
  "symphonia-bundle-mp3",
  "symphonia-codec-aac",
- "symphonia-codec-adpcm",
  "symphonia-codec-pcm",
  "symphonia-codec-vorbis",
  "symphonia-core",
- "symphonia-format-mkv",
  "symphonia-format-ogg",
  "symphonia-format-riff",
  "symphonia-metadata",
@@ -23049,16 +22868,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "symphonia-codec-adpcm"
-version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dddc50e2bbea4cfe027441eece77c46b9f319748605ab8f3443350129ddd07f"
-dependencies = [
- "log",
- "symphonia-core",
-]
-
-[[package]]
 name = "symphonia-codec-pcm"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -23090,19 +22899,6 @@ dependencies = [
  "bytemuck",
  "lazy_static",
  "log",
-]
-
-[[package]]
-name = "symphonia-format-mkv"
-version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "122d786d2c43a49beb6f397551b4a050d8229eaa54c7ddf9ee4b98899b8742d0"
-dependencies = [
- "lazy_static",
- "log",
- "symphonia-core",
- "symphonia-metadata",
- "symphonia-utils-xiph",
 ]
 
 [[package]]
@@ -24347,143 +24143,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tract-core"
-version = "0.21.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7b5347639690871b124593a8c8903f1f369531498b8abaebd18eb5c58163971"
-dependencies = [
- "anyhow",
- "anymap3",
- "bit-set 0.5.3",
- "derive-new",
- "downcast-rs",
- "dyn-clone",
- "lazy_static",
- "log",
- "maplit",
- "ndarray",
- "num-complex",
- "num-integer",
- "num-traits",
- "paste",
- "rustfft",
- "smallvec 1.16.4",
- "tract-data",
- "tract-linalg",
-]
-
-[[package]]
-name = "tract-data"
-version = "0.21.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0a3f476a1804e05708e9bc5e2d29dcab82bad531e357d3d14d7da80fbba0b6d"
-dependencies = [
- "anyhow",
- "downcast-rs",
- "dyn-clone",
- "dyn-hash",
- "half",
- "itertools 0.12.1",
- "lazy_static",
- "maplit",
- "ndarray",
- "nom 7.1.3",
- "num-integer",
- "num-traits",
- "parking_lot",
- "scan_fmt",
- "smallvec 1.16.4",
- "string-interner",
-]
-
-[[package]]
-name = "tract-hir"
-version = "0.21.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dca047ba1151fe3446fb0194d4b6ddb9ae8f361337c47a267870c53605fbafb"
-dependencies = [
- "derive-new",
- "log",
- "tract-core",
-]
-
-[[package]]
-name = "tract-linalg"
-version = "0.21.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb8e0703eb53ef1bbf77050ff261675818dd5f0d6c27044c6e48ede9b845f9e0"
-dependencies = [
- "byteorder",
- "cc",
- "derive-new",
- "downcast-rs",
- "dyn-clone",
- "dyn-hash",
- "half",
- "lazy_static",
- "liquid",
- "liquid-core",
- "liquid-derive",
- "log",
- "num-traits",
- "paste",
- "rayon",
- "scan_fmt",
- "smallvec 1.16.4",
- "time",
- "tract-data",
- "unicode-normalization",
- "walkdir",
-]
-
-[[package]]
-name = "tract-nnef"
-version = "0.21.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72cb88a4367ec2c695610223cf886f01fc1deb5c9a82c7a74b1a5d32dc0b1466"
-dependencies = [
- "byteorder",
- "flate2",
- "log",
- "nom 7.1.3",
- "tar",
- "tract-core",
- "walkdir",
-]
-
-[[package]]
-name = "tract-onnx"
-version = "0.21.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5830aa672b2aa4dc98a97a36e5988eaf77b3ecee65e2601619588d2ca557008"
-dependencies = [
- "bytes",
- "derive-new",
- "log",
- "memmap2",
- "num-integer",
- "prost 0.11.9",
- "smallvec 1.16.4",
- "tract-hir",
- "tract-nnef",
- "tract-onnx-opl",
-]
-
-[[package]]
-name = "tract-onnx-opl"
-version = "0.21.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "121d3d224c806ba3d941f4bb50943ad33b59d1da5ae704d0e4e76d2808221f96"
-dependencies = [
- "getrandom 0.2.17",
- "log",
- "rand 0.8.8",
- "rand_distr 0.4.3",
- "rustfft",
- "tract-nnef",
-]
-
-[[package]]
 name = "transform-stream"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -24538,15 +24197,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
-name = "trigger-plugin"
-version = "26.10.3"
-dependencies = [
- "dsp",
- "nice-plug",
- "nice-plug-dioxus",
-]
-
-[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -24570,6 +24220,7 @@ dependencies = [
 [[package]]
 name = "tune-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "dsp",
  "dsp-core",
@@ -25060,6 +24711,7 @@ checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
 [[package]]
 name = "unison-plugin"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
 dependencies = [
  "dsp",
  "dsp-core",
