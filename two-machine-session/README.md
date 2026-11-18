@@ -1,5 +1,7 @@
 # Two machines, one session, through the org
 
+> **Superseded by [daw-engine/](daw-engine/README.md)** (the same day, 06:58): Studio's engine leads the transport, not Keyflow.
+
 Captured 2026-11-18. Builds: Architect `main` `9d1f2f48`, Keyflow `main` `a283559` and Ignition `main` `a540496`. For 07–10, the fixes that are now merged were also installed (keyflow#110, keyflow#111, Ignition#24).
 
 ## The setup
