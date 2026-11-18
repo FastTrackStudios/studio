@@ -227,7 +227,11 @@ strip past them keeps its meter in the picture (the golden template's
      docked: its rows show no mute or solo until expanded, and only a
      touch swipe or the window's toolbar switch expands it, neither of
      which a pane has.
-   - A key in the mixer pane is still the mixer's.
+   - **A key in the mixer pane** runs Studio's keymap, as the window's
+     arrangement reads the keys pressed in its mixer
+     (`HostedMixer::key`, `window::key_alone`): Space plays, `x` hides
+     the mixer, the arrangement's own actions are asked of it through the
+     engine. Each runs behind the window, so none holds a frame.
    The visibility manager is no longer one of them: a mixer on its own
    keeps every track and plans its strips again when one is shown or
    hidden (`SESSION_SHOW_GROUP` takes a group out of both panes).

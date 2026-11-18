@@ -157,11 +157,16 @@ impl PaintView for Hosted {
                     KeyState::Released
                 };
                 let e = input::key(name, mods, state);
-                self.widget(&if *down {
+                let event = if *down {
                     UiEvent::KeyDown(e)
                 } else {
                     UiEvent::KeyUp(e)
-                });
+                };
+                self.widget(&event);
+                // Studio's keymap, as the window's arrangement reads the
+                // keys pressed in its mixer.
+                let mixer = &self.mixer;
+                self.scope.run(|| mixer.key(&event));
             }
             ViewInput::Focus(false) => {
                 self.held = MouseEventButtons::empty();
