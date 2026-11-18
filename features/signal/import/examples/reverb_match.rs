@@ -6,17 +6,17 @@
 //!
 //! ```text
 //! # Compare a Valhalla factory preset against our reverb
-//! cargo run -p builtin --example reverb_match -- \
+//! cargo run -p signal-import --example reverb_match -- \
 //!     --plugin "$HOME/.vst3/yabridge/ValhallaVintageVerb.vst3" \
 //!     --preset "$HOME/.wine-audiohaven/drive_c/ProgramData/Valhalla DSP, LLC/\
 //! ValhallaVintageVerb/Presets/Factory/Plates/A Plate.vpreset"
 //!
 //! # Tune our reverb to the reference's measured decay, then compare
-//! cargo run -p builtin --example reverb_match -- \
+//! cargo run -p signal-import --example reverb_match -- \
 //!     --plugin ... --preset ... --tune
 //!
 //! # Enumerate a parameter's menu, by sweeping it and reading the display text
-//! cargo run -p builtin --example reverb_match -- \
+//! cargo run -p signal-import --example reverb_match -- \
 //!     --plugin "$HOME/.vst3/yabridge/ValhallaVintageVerb.vst3" \
 //!     --enumerate ReverbMode
 //! ```

@@ -36,7 +36,7 @@
 //! stimulus for comparison against readings taken before this.
 //!
 //! ```sh
-//! cargo run --release -p builtin --example eq_match -- \
+//! cargo run --release -p signal-import --example eq_match -- \
 //!     --plugin ~/.vst3/yabridge/"FabFilter Pro-Q 4.vst3" \
 //!     --preset "/path/to/Vocals/Bright Vocal.ffp"
 //! ```

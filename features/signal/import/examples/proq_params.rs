@@ -11,9 +11,9 @@
 //! That is the same technique the Valhalla mode tables were recovered with.
 //!
 //! ```sh
-//! cargo run -p builtin --example proq_params -- \
+//! cargo run -p signal-import --example proq_params -- \
 //!     --plugin ~/.vst3/yabridge/"FabFilter Pro-Q 4.vst3" --list
-//! cargo run -p builtin --example proq_params -- \
+//! cargo run -p signal-import --example proq_params -- \
 //!     --plugin ... --param "Band 1 Threshold" --steps 20
 //! ```
 

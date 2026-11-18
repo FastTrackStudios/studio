@@ -1,7 +1,7 @@
 //! Run `reverb_match --tune` across a whole preset library, in parallel.
 //!
 //! ```text
-//! cargo build -p builtin --example reverb_match --example preset_sweep
+//! cargo build -p signal-import --example reverb_match --example preset_sweep
 //! ./target/debug/examples/preset_sweep \
 //!     --plugin "$HOME/.vst3/yabridge/ValhallaVintageVerb.vst3" \
 //!     --presets "$HOME/.wine-audiohaven/drive_c/ProgramData/Valhalla DSP, LLC/ValhallaVintageVerb" \
@@ -172,7 +172,7 @@ fn main() {
     );
     if !binary.exists() {
         eprintln!("reverb_match not found at {}", binary.display());
-        eprintln!("build it first: cargo build -p builtin --example reverb_match");
+        eprintln!("build it first: cargo build -p signal-import --example reverb_match");
         std::process::exit(1);
     }
 

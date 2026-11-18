@@ -8,7 +8,7 @@
 //! the library worse.
 //!
 //! ```sh
-//! cargo build --release -p builtin --example eq_match --example eq_sweep
+//! cargo build --release -p signal-import --example eq_match --example eq_sweep
 //! ./target/release/examples/eq_sweep \
 //!     --plugin ~/.vst3/yabridge/"FabFilter Pro-Q 4.vst3" \
 //!     --presets ~/Documents/FabFilter/Presets/"Pro-Q 4" \
@@ -161,7 +161,7 @@ fn main() {
         .unwrap_or_else(|| PathBuf::from("eq_match"));
     if !binary.exists() {
         eprintln!("eq_match not found at {}", binary.display());
-        eprintln!("build it first: cargo build --release -p builtin --example eq_match");
+        eprintln!("build it first: cargo build --release -p signal-import --example eq_match");
         std::process::exit(1);
     }
 
