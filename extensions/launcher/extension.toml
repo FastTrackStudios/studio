@@ -1,0 +1,88 @@
+# studio.launcher (src/lib.rs): Studio's project launcher
+# (docs/design/project-launcher.md). It reads the vault's setlist and song
+# notes through the host, finds each song's session in the org's project
+# root, and opens a setlist or a song in Studio's engine (the daw
+# extension's DAW_OPEN). It draws nothing of Session's.
+id = "studio.launcher"
+name = "Launcher"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "Studio's project launcher: the vault's setlists and songs, what each is ready with, what was opened lately and the rigs; a press opens one in Studio's engine."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "studio-launcher"
+
+[source]
+git = "https://github.com/FastTrackStudios/studio"
+rev = "main"
+path = "extensions/launcher"
+
+[uses]
+"fts.session" = "^0.1"
+
+[capabilities]
+# The setlist and song notes, through the vault's index.
+reads = ["documents"]
+# The engine (DAW_OPEN, DAW_STATE, DAW_RUN SESSION_RECENT), the vault's
+# folder (VAULT_STATUS: where the org's project root is), and the panes.
+actions = ["DAW_", "VAULT_STATUS", "EXT_VIEW_OPEN", "WORKSPACE_OPEN"]
+effect = "mutating"
+
+[[views]]
+id = "launcher"
+title = "Launcher"
+icon = "folder-open"
+
+[[actions]]
+id = "STUDIO_LAUNCHER_SHOW"
+name = "Launcher: open"
+description = "Opens the launcher as a pane: the vault's setlists and songs, recent projects and rigs."
+group = "Launcher"
+shortcut = "⇧⌘O"
+effect = "mutating"
+
+[[actions]]
+id = "STUDIO_LAUNCHER_WINDOW"
+name = "Launcher: open in its own window"
+description = "Opens the launcher in a window of its own, as a project chooser."
+group = "Launcher"
+effect = "mutating"
+
+[[actions]]
+id = "STUDIO_LAUNCHER_LIST"
+name = "Launcher: setlists"
+description = "Every setlist of the vault: its sets and songs in order, each song's key, tempo and length, what it is ready with (chart, lyrics, recording, reference, session) and the session found for it in the org's project root."
+group = "Launcher"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_LAUNCHER_OPEN_SETLIST"
+name = "Launcher: open a setlist"
+description = "Opens setlist `setlist` (its title or its note's path) in Studio's engine: the setlist's own session file when its note names one, else every song of it that has a session, in the setlist's order. Says which songs were left out."
+group = "Launcher"
+effect = "mutating"
+params = '{"type":"object","properties":{"setlist":{"type":"string"}},"required":["setlist"]}'
+
+[[actions]]
+id = "STUDIO_LAUNCHER_OPEN_SONG"
+name = "Launcher: open a song"
+description = "Opens song `song` (its title or its note's path) in Studio's engine by its session; `setlist` names the setlist whose project its session is looked for in."
+group = "Launcher"
+effect = "mutating"
+params = '{"type":"object","properties":{"song":{"type":"string"},"setlist":{"type":"string"}},"required":["song"]}'
+
+[[actions]]
+id = "STUDIO_LAUNCHER_RECENT"
+name = "Launcher: recent projects"
+description = "What Studio's engine opened lately, the newest first: each one's name, when, and its path (the engine's SESSION_RECENT)."
+group = "Launcher"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_LAUNCHER_RIGS"
+name = "Launcher: rigs"
+description = "The rigs on this machine: each instrument's saved profiles (Signal's, in its config folder). Listing only: loading one into the engine is not built yet."
+group = "Launcher"
+effect = "read_only"

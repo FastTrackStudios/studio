@@ -1,0 +1,24 @@
+[package]
+name = "studio-launcher"
+description = "Studio's project launcher as an extension: the vault's setlists and their songs, what each song is ready with, what was opened lately and the rigs, with a press that opens a setlist or a song in Studio's engine (the daw extension). Reads notes through the host and draws with nothing of Session's, so it builds in seconds (docs/design/project-launcher.md)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "studio-launcher"
+path = "src/main.rs"
+
+[dependencies]
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+futures-timer = { workspace = true }
+dirs = { workspace = true }
+
+[lints]
+workspace = true
