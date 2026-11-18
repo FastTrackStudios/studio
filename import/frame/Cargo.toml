@@ -95,7 +95,7 @@ taffy = { version = "0.7", default-features = false, features = ["std", "flexbox
 thiserror = "2.0"
 tokio = { version = "1.48", features = ["full"] }
 uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
-vello_cpu = { version = "0.0.9", default-features = false }
+vello_cpu = { version = "0.3", default-features = false }
 vox = { version = "0.10.0-rc.7", default-features = false, features = ["runtime"] }
 vox-core = { version = "0.10.0-rc.7" }
 vox-websocket = { version = "0.10.0-rc.5" }
