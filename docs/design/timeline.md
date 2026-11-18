@@ -398,7 +398,7 @@ as properties of the layout.
 
 **A.** `mousemap.rs`:
 - A hard-coded `match` (`verb` :129–211) over
-  `keybinds::proto::MouseModifierContext` (`features/keybinds/src/proto/context.rs:45`),
+  `keybinds::proto::MouseModifierContext` (`studio-adapters:features/keybinds/src/proto/context.rs:45`),
   plus `Custom("razor-area")` and `Custom("razor-edge")`.
 - `Mods {shift, ctrl, alt}`, `Gesture {Click, DoubleClick, Drag}`.
 - `resolve` returns `Bound {action, snap}`, where

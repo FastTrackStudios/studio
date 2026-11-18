@@ -197,20 +197,15 @@ pub fn folder_depths(tracks: &[Track]) -> Vec<u32> {
 /// below.
 pub const ENVELOPE_LANE_MIN_H: f32 = 27.0;
 
-/// Where the checked-in keybind profiles live — `reaper-input`'s own
-/// config directory, a sibling crate in this same repo. Found from the
-/// checkout the process runs from (`utils::paths::checkout_path`) rather
-/// than the working directory, which is whatever the host app happened to
-/// start in.
-fn profiles_root() -> std::path::PathBuf {
-    utils::paths::checkout_path("features/adapters/reaper/reaper-input/config/config")
-}
-
-/// Load one profile's keymap by slug — falls back to an empty (no
-/// bindings) config if the profile is missing/unparseable rather than
-/// erroring, matching `KeybindProfile::list`'s own quiet-skip behavior.
+/// Load one profile's keymap by slug, from the profiles `keybinds`
+/// compiles in (`reaper-input`'s config; no checkout needed) — falls back
+/// to an empty (no bindings) config if the profile is missing/unparseable
+/// rather than erroring, matching `KeybindProfile::embedded`'s own quiet-skip
+/// behavior.
 fn load_keymap(slug: &str) -> architect_input::KeymapConfig {
-    keybinds::load_profile_keymap(&profiles_root().join(slug)).unwrap_or_default()
+    keybinds::embedded::profile(slug)
+        .map(|profile| profile.keymap)
+        .unwrap_or_default()
 }
 
 /// The ruler's band, above the lanes.
@@ -1273,9 +1268,9 @@ pub fn ArrangementView(
     let mut vzoom = use_signal(|| 1.0f32);
     let row_h = crate::art::geometry::tcp::ROW_H * vzoom();
     // The keybind profile picker — real `profile.styx` data (name +
-    // description) `reaper-input` also loads, from the SAME checked-in
-    // config directory (see `profiles_root`).
-    let profiles = use_signal(|| KeybindProfile::list(&profiles_root()));
+    // description) `reaper-input` also loads: the same files, compiled
+    // into `keybinds` (`keybinds::embedded`).
+    let profiles = use_signal(|| KeybindProfile::embedded());
     let mut active_profile = use_signal(|| "fasttrackstudio".to_string());
 
     // The real input engine, loaded from the active profile's ACTUAL

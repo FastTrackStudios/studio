@@ -2,10 +2,10 @@
 //! app's list holds the vault's and Bases' actions over a folder, and the
 //! extension reaches them only through the host service.
 //!
-//! The DAW files are the adapters' own fixtures, copied into the vault at
-//! test time (none is kept here): an Ableton set from
-//! `features/adapters/ableton/tests/fixtures` and a Pro Tools session
-//! from `features/adapters/protools/tests/fixtures` (ptformat's, LGPL).
+//! The DAW files are copies of two of the adapters' fixtures
+//! (`tests/fixtures`; the adapters are in FastTrackStudios/studio-adapters),
+//! copied into the vault at test time: an Ableton set (`LucidDreaming.als`)
+//! and a Pro Tools session (`RegionTest.ptx`, ptformat's, LGPL).
 //! The show set is that Ableton set with locators added, written to a
 //! temporary folder by the adapter's writer.
 #![cfg(feature = "extension")]
@@ -38,12 +38,12 @@ static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
 
 fn fixture(rel: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../adapters")
+        .join("tests/fixtures")
         .join(rel)
 }
 
-const LIVE_SET: &str = "ableton/tests/fixtures/ableton/LucidDreaming.als";
-const PT_SESSION: &str = "protools/tests/fixtures/protools/RegionTest.ptx";
+const LIVE_SET: &str = "LucidDreaming.als";
+const PT_SESSION: &str = "RegionTest.ptx";
 
 /// An app over a new vault with the extension linked in: the list its
 /// actions are run on, the vault's folder, and what keeps both alive.

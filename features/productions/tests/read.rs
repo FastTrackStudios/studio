@@ -1,5 +1,7 @@
-//! What each adapter reads, over the adapters' own fixtures in place
-//! (read only): one production per DAW.
+//! What each adapter reads, one production per DAW, over copies of the
+//! adapters' own fixtures (`tests/fixtures`, read only: the adapters are in
+//! FastTrackStudios/studio-adapters and the .rpp reader in
+//! FastTrackStudios/daw).
 #![allow(clippy::unwrap_used, clippy::panic, clippy::indexing_slicing)]
 
 use std::path::{Path, PathBuf};
@@ -8,13 +10,13 @@ use productions::{Daw, find, read};
 
 fn fixture(rel: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../adapters")
+        .join("tests/fixtures")
         .join(rel)
 }
 
 #[test]
 fn an_ableton_set_gives_everything_but_a_save_time() {
-    let found = find(&fixture("ableton/tests/fixtures/ableton/LucidDreaming.als"));
+    let found = find(&fixture("LucidDreaming.als"));
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].daw, Daw::Ableton);
     let facts = read(&found[0]);
@@ -30,7 +32,7 @@ fn an_ableton_set_gives_everything_but_a_save_time() {
 
 #[test]
 fn a_pro_tools_session_gives_no_key() {
-    let found = find(&fixture("protools/tests/fixtures/protools/RegionTest.ptx"));
+    let found = find(&fixture("RegionTest.ptx"));
     let facts = read(&found[0]);
     assert_eq!(facts.error, None);
     assert_eq!(found[0].daw, Daw::ProTools);
@@ -44,9 +46,7 @@ fn a_pro_tools_session_gives_no_key() {
 
 #[test]
 fn a_reaper_project_gives_tempo_and_tracks() {
-    let found = find(&fixture(
-        "reaper/dawfile-reaper/resources/Template-with-takes-lanes.RPP",
-    ));
+    let found = find(&fixture("Template-with-takes-lanes.RPP"));
     assert_eq!(found.len(), 1, "an .RPP in capitals is a REAPER project");
     assert_eq!(found[0].daw, Daw::Reaper);
     let facts = read(&found[0]);
@@ -59,7 +59,7 @@ fn a_reaper_project_gives_tempo_and_tracks() {
 
 #[test]
 fn a_logic_project_gives_tempo_key_and_tracks_only() {
-    let found = find(&fixture("logic/tests/fixtures/logic/FileDecrypt.logicx"));
+    let found = find(&fixture("FileDecrypt.logicx"));
     assert_eq!(found.len(), 1, "the bundle is one project, not walked into");
     assert_eq!(found[0].daw, Daw::Logic);
     assert_eq!(found[0].name, "FileDecrypt");

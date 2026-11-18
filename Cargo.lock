@@ -35,16 +35,13 @@ checksum = "366ffbaa4442f4684d91e2cd7c5ea7c4ed8add41959a31447066e279e432b618"
 [[package]]
 name = "ableton"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "daw-proto",
- "dawfile-reaper",
  "flate2",
- "loro",
  "quick-xml 0.41.0",
  "roxmltree 0.20.0",
- "tempfile",
  "thiserror 2.0.20",
- "uuid",
 ]
 
 [[package]]
@@ -5611,6 +5608,7 @@ dependencies = [
 [[package]]
 name = "daw-actions"
 version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "daw",
@@ -5622,13 +5620,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "daw-allocator"
-version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
-
-[[package]]
 name = "daw-audio-sync"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "bincode",
  "daw-transport-sync",
@@ -5639,37 +5633,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
-]
-
-[[package]]
-name = "daw-bridge"
-version = "26.10.3"
-dependencies = [
- "ableton",
- "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
- "crossbeam-channel",
- "daw",
- "daw-allocator",
- "daw-audio-sync",
- "daw-proto",
- "daw-sync",
- "dawfile-reaper",
- "eyre",
- "fragile",
- "interchange",
- "protools",
- "reaper-dioxus",
- "reaper-high",
- "reaper-low",
- "reaper-macros",
- "reaper-medium",
- "studio",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "vox",
- "vox-stream",
 ]
 
 [[package]]
@@ -5694,6 +5657,7 @@ dependencies = [
 [[package]]
 name = "daw-extension-runtime"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "crossbeam-channel",
@@ -5720,27 +5684,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "daw-perf-test"
-version = "26.10.3"
-dependencies = [
- "crossbeam-channel",
- "daw",
- "daw-reaper",
- "eyre",
- "fragile",
- "reaper-high",
- "reaper-low",
- "reaper-macros",
- "reaper-medium",
- "studio",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "vox",
- "vox-stream",
-]
-
-[[package]]
 name = "daw-proto"
 version = "0.1.0"
 source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
@@ -5758,20 +5701,19 @@ dependencies = [
 [[package]]
 name = "daw-reaper"
 version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "ableton",
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "base64 0.22.1",
  "camino",
  "crossbeam-channel",
- "daw",
  "daw-audio-sync",
  "daw-control",
  "daw-proto",
  "daw-transport-sync",
  "dawfile-reaper",
  "display-info",
- "editor",
  "enumflags2",
  "eyre",
  "facet-json",
@@ -5781,7 +5723,6 @@ dependencies = [
  "reaper-high",
  "reaper-low",
  "reaper-medium",
- "studio",
  "swell-ui",
  "tokio",
  "tracing",
@@ -5822,14 +5763,6 @@ dependencies = [
  "reaper-low",
  "reaper-macros",
  "tracing",
-]
-
-[[package]]
-name = "daw-reaper-xtask"
-version = "26.10.3"
-dependencies = [
- "daw",
- "studio",
 ]
 
 [[package]]
@@ -5874,7 +5807,6 @@ source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef6
 dependencies = [
  "daw",
  "facet",
- "facet-postcard",
  "tokio",
  "tokio-util",
  "tracing",
@@ -5926,7 +5858,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
- "utils",
  "wasm-bindgen",
  "web-sys",
 ]
@@ -7316,15 +7247,6 @@ dependencies = [
  "tracing",
  "utils",
  "vox",
-]
-
-[[package]]
-name = "dynamic-template-extension"
-version = "26.10.3"
-dependencies = [
- "eyre",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -8735,21 +8657,6 @@ dependencies = [
 [[package]]
 name = "fts-devtools"
 version = "26.10.3"
-
-[[package]]
-name = "fts-icons"
-version = "26.10.3"
-dependencies = [
- "anyhow",
- "clap",
- "daw-proto",
- "dirs 6.0.0",
- "resvg",
- "serde",
- "serde_json",
- "toml 0.8.2",
- "ureq 2.12.1",
-]
 
 [[package]]
 name = "fts-plugin-xtask"
@@ -10888,17 +10795,12 @@ dependencies = [
 [[package]]
 name = "interchange"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "cfb 0.10.0",
  "daw-proto",
- "dawfile-reaper",
- "interchange",
- "loro",
  "roxmltree 0.20.0",
- "session-format",
- "tempfile",
  "thiserror 2.0.20",
- "uuid",
  "zip 2.4.2",
 ]
 
@@ -11442,10 +11344,9 @@ dependencies = [
 [[package]]
 name = "keybinds"
 version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "architect-input",
- "architect-ui",
- "dioxus",
  "facet",
  "facet-styx",
  "thiserror 2.0.20",
@@ -12231,14 +12132,11 @@ dependencies = [
 [[package]]
 name = "logic"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "daw-proto",
- "dawfile-reaper",
- "loro",
  "plist",
- "tempfile",
  "thiserror 2.0.20",
- "uuid",
 ]
 
 [[package]]
@@ -16959,13 +16857,10 @@ dependencies = [
 [[package]]
 name = "protools"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "daw-proto",
- "dawfile-reaper",
- "loro",
- "tempfile",
  "thiserror 2.0.20",
- "uuid",
 ]
 
 [[package]]
@@ -17566,18 +17461,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "reaper-config"
-version = "26.10.3"
-dependencies = [
- "bitflags 2.13.2",
- "facet",
- "serde",
- "thiserror 2.0.20",
-]
-
-[[package]]
 name = "reaper-dioxus"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "anyrender_vello",
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
@@ -17599,7 +17485,6 @@ dependencies = [
  "reaper-high",
  "reaper-low",
  "reaper-medium",
- "tempfile",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
@@ -17610,6 +17495,7 @@ dependencies = [
 [[package]]
 name = "reaper-embed"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "cocoa",
  "objc",
@@ -17651,59 +17537,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "reaper-hwnd"
-version = "26.10.3"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "reaper-input"
-version = "26.10.3"
-dependencies = [
- "architect-input",
- "architect-ui",
- "camino",
- "daw",
- "dioxus-native",
- "enumflags2",
- "facet",
- "facet-json",
- "facet-styx",
- "figue",
- "helgoboss-midi",
- "keybinds",
- "once_cell",
- "reaper-config",
- "reaper-dioxus",
- "reaper-embed",
- "reaper-high",
- "reaper-hwnd",
- "reaper-kbd",
- "reaper-low",
- "reaper-medium",
- "swell-ui",
- "tokio",
- "tracing",
- "vello",
-]
-
-[[package]]
-name = "reaper-input-config"
-version = "26.10.3"
-
-[[package]]
-name = "reaper-kbd"
-version = "26.10.3"
-dependencies = [
- "bitflags 2.13.2",
- "serde",
- "thiserror 2.0.20",
-]
-
-[[package]]
 name = "reaper-launcher"
 version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -19881,7 +19717,6 @@ name = "signal"
 version = "26.10.3"
 source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
- "daw",
  "signal-controller",
  "signal-daw-bridge",
  "signal-import",
@@ -19972,26 +19807,6 @@ dependencies = [
  "serde",
  "signal-import",
  "signal-proto",
-]
-
-[[package]]
-name = "signal-extension"
-version = "26.10.3"
-dependencies = [
- "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
- "daw",
- "daw-extension-runtime",
- "eyre",
- "fragile",
- "reaper-low",
- "reaper-macros",
- "serde_json",
- "signal",
- "signal-macromod",
- "studio",
- "tokio",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -20175,26 +19990,6 @@ dependencies = [
  "utils",
  "uuid",
  "vox",
-]
-
-[[package]]
-name = "signal-reaper-controller"
-version = "26.10.3"
-dependencies = [
- "atomic_float",
- "crossbeam-channel",
- "daw",
- "daw-extension-runtime",
- "eyre",
- "nice-plug",
- "plugin-core",
- "serde",
- "serde_json",
- "signal-proto",
- "studio",
- "tokio",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -21316,26 +21111,20 @@ dependencies = [
 [[package]]
 name = "studio"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
- "ableton",
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "clap",
- "control-surfaces",
  "daw",
  "daw-control",
  "daw-proto",
  "daw-reaper",
- "daw-standalone",
  "daw-test-macro",
- "daw-ui",
  "dawfile-reaper",
  "eyre",
  "facet",
  "facet-json",
- "interchange",
  "libc",
- "logic",
- "protools",
  "reaper-dioxus",
  "reaper-launcher",
  "serde_json",
@@ -21807,6 +21596,7 @@ dependencies = [
 [[package]]
 name = "swell-ui"
 version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=81f267958a1223f0c8b41964427b56e26e8c4514#81f267958a1223f0c8b41964427b56e26e8c4514"
 dependencies = [
  "fragile",
  "libloading 0.9.0",

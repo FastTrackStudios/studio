@@ -22,7 +22,7 @@
 
 contract-target = "wasm32-unknown-unknown"
 host-dirs = ["apps"]
-unmapped-ok = ["features/adapters/reaper/tests", "features/adapters/reaper/session-extension/xtask", "features/adapters/reaper/daw-reaper/xtask"]
+unmapped-ok = ["features/adapters/reaper/tests", "features/adapters/reaper/session-extension/xtask", "studio-adapters:features/adapters/reaper/daw-reaper/xtask"]
 single-source = ["architect", "architect-*", "auth", "auth-*", "crdt", "crdt-*", "ui-snapshot"]
 
 [forbidden]
@@ -69,7 +69,12 @@ transport-host = 2
 # members. 12 -> 10 is that arithmetic, NOT a measured run; the other
 # baselines may be lower without the rigs' rows. Re-measure with
 # `just ci-boundaries`.
-lints = 10
+# 2026-11-17: the adapters moved to FastTrackStudios/studio-adapters
+# (studio#510); their rows went with them, and three members counted
+# under `lints` (reaper-dioxus, reaper-embed, swell-ui: no `[lints]
+# workspace = true`) are no longer members. 10 -> 7 is that arithmetic,
+# NOT a measured run. Re-measure with `just ci-boundaries`.
+lints = 7
 hand-routes = 31
 
 # ── L0 contracts ──
@@ -109,11 +114,6 @@ features = ["ui"]
 layer = "L4"
 
 [[row]]
-package = "keybinds"
-features = ["dioxus"]
-layer = "L4"
-
-[[row]]
 package = "mic"
 features = ["ui"]
 layer = "L4"
@@ -145,10 +145,6 @@ layer = "L4"
 
 # ── L1 engine / DSP / adapters ──
 [[row]]
-package = "ableton"
-layer = "L1"
-
-[[row]]
 package = "align-dsp"
 layer = "L1"
 
@@ -173,22 +169,6 @@ package = "control-surfaces"
 layer = "L1"
 
 [[row]]
-package = "daw-audio-sync"
-layer = "L1"
-
-[[row]]
-package = "daw-bridge"
-layer = "L1"
-
-[[row]]
-package = "daw-extension-runtime"
-layer = "L1"
-
-[[row]]
-package = "daw-reaper"
-layer = "L1"
-
-[[row]]
 package = "daw-reaper-dioxus-ext"
 layer = "L1"
 
@@ -205,10 +185,6 @@ package = "dynamic-template"
 layer = "L1"
 
 [[row]]
-package = "dynamic-template-extension"
-layer = "L1"
-
-[[row]]
 package = "editing"
 layer = "L1"
 
@@ -218,10 +194,6 @@ layer = "L1"
 
 [[row]]
 package = "eq"
-layer = "L1"
-
-[[row]]
-package = "fts-icons"
 layer = "L1"
 
 [[row]]
@@ -241,23 +213,11 @@ package = "hits"
 layer = "L1"
 
 [[row]]
-package = "keybinds"
-layer = "L1"
-
-[[row]]
-package = "interchange"
-layer = "L1"
-
-[[row]]
 package = "launcher"
 layer = "L1"
 
 [[row]]
 package = "level"
-layer = "L1"
-
-[[row]]
-package = "logic"
 layer = "L1"
 
 [[row]]
@@ -285,42 +245,6 @@ package = "plugin-faces"
 layer = "L1"
 
 [[row]]
-package = "protools"
-layer = "L1"
-
-[[row]]
-package = "reaper-config"
-layer = "L1"
-
-[[row]]
-package = "reaper-dioxus"
-layer = "L1"
-
-[[row]]
-package = "reaper-embed"
-layer = "L1"
-
-[[row]]
-package = "reaper-hwnd"
-layer = "L1"
-
-[[row]]
-package = "reaper-input"
-layer = "L1"
-
-[[row]]
-package = "reaper-input-config"
-layer = "L1"
-
-[[row]]
-package = "reaper-kbd"
-layer = "L1"
-
-[[row]]
-package = "reaper-launcher"
-layer = "L1"
-
-[[row]]
 package = "reverb"
 layer = "L1"
 
@@ -337,14 +261,6 @@ package = "signal-analyzer"
 layer = "L1"
 
 [[row]]
-package = "signal-extension"
-layer = "L1"
-
-[[row]]
-package = "signal-reaper-controller"
-layer = "L1"
-
-[[row]]
 package = "signal-separator"
 layer = "L1"
 
@@ -354,10 +270,6 @@ layer = "L1"
 
 [[row]]
 package = "stretch"
-layer = "L1"
-
-[[row]]
-package = "swell-ui"
 layer = "L1"
 
 [[row]]

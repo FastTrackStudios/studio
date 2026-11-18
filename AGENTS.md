@@ -10,7 +10,9 @@ Patchbay (studio routing) went back to its own repo, FastTrackStudios/patchbay,
 in November 2026 (studio#510). Frame (the design / control-surface engine) is
 its own repo again too, a git dependency here (`docs/frame.md`), and so is
 Signal's library side — the rigs, the sampler, NAM and the nam, signal and
-sampler plugins, FastTrackStudios/signal (studio#510).
+sampler plugins, FastTrackStudios/signal (studio#510) — and the adapters:
+the REAPER backend and extensions, the project formats, keybinds and the
+`studio` umbrella crate, FastTrackStudios/studio-adapters (studio#510).
 
 ## Layout
 
@@ -42,8 +44,9 @@ apps/       studio/desktop                     Studio, THE app (desktop + iOS, o
                                                signal and sampler plugins in
                                                FastTrackStudios/signal
             themer/
-crates/     daw/*      what is left of the DAW here: `daw-actions` (they drive
-                       a live REAPER) and the DAW's notes (docs/). The DAW
+crates/     daw/*      what is left of the DAW here: the DAW's notes (docs/).
+                       `daw-actions` (they drive a live REAPER) is in
+                       FastTrackStudios/studio-adapters. The DAW
                        itself (its base: proto, control, module,
                        transport-sync, audio-graph, allocator, the test
                        macro, utils, `midi`, `audio`, `fts-sample`; and the
@@ -52,9 +55,10 @@ crates/     daw/*      what is left of the DAW here: `daw-actions` (they drive
                        `signal-plugin-host`, `builtin`, `daw-sync`) is in
                        FastTrackStudios/daw, taken by git: see "The base
                        and the engine"
-            studio/    the umbrella over daw: REAPER adapter, project files,
-                       UI, CSI, the daw CLI, the integration-test harness —
-                       all cargo features of `studio`
+            (`studio`, the umbrella over daw — the REAPER adapter,
+                       project files, the daw CLI, the integration-test
+                       harness, all cargo features of it — is in
+                       FastTrackStudios/studio-adapters, taken by git)
 features/   one crate per feature, sub-folders allowed. Name a feature for what
             it is; anything host-specific goes under adapters/<host>.
             Signal's domain (features/signal: rigs, presets, scenes,
@@ -88,7 +92,15 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
             ui/*         shared UI: daw-ui, dock, plugin-faces, … (fts-audio-ui
                          and plugin-core are in fts-fx)
             app/         shell (log ring, crash log, update check), launcher
-            adapters/    reaper/ (everything REAPER), web/ (the AudioWorklet)
+            adapters/    reaper/: the product's own REAPER extensions
+                         (session-extension, daw-reaper-dioxus-ext); web/
+                         (the AudioWorklet). Everything else REAPER, the
+                         project formats (DAWproject/AAF, Ableton, Logic,
+                         Pro Tools) and `keybinds` are in
+                         FastTrackStudios/studio-adapters, taken by git
+                         at one `rev`; to work on both, patch
+                         `[patch."https://github.com/FastTrackStudios/studio-adapters"]`
+                         with paths (never committed; its README)
 vendor/     patched third-party crates (each with UPSTREAM.md or FTS-PATCH.md)
 xtask/      devtools, plugins (the bundler), session-reaper
 docs/       design/ (one-engine.md), per-domain notes (daw, signal, frame,
@@ -104,9 +116,12 @@ working there.
 
 ## The model
 
-- **daw is the DAW alone; `studio` is the umbrella.** The DAW
+- **daw is the DAW alone; `studio` (FastTrackStudios/studio-adapters) is
+  the umbrella.** The DAW
   (FastTrackStudios/daw) knows nothing of REAPER or of any product. REAPER, the project formats, the
-  UI, control surfaces and the daw CLI are features of `crates/studio`.
+  UI, control surfaces and the daw CLI are the adapters' and the
+  product's: `studio`'s features (`reaper`, `file`, `cli`, `test-harness`)
+  in studio-adapters, `daw-ui` and `control-surfaces` here.
 - **One engine.** A process runs ONE daw engine: one `Standalone`, one
   project, one realtime audio engine on one device. A rig is a folder of
   tracks in that project (`signal_rig_host::engine::{Engine, Rig}`), not an
@@ -244,7 +259,7 @@ just app [PROJECT]         # Session (session-desktop, the shared dev build)
 just guitar / just keys    # the rig view (studio-desktop --guitar/--keys skip the welcome screen; FTS_STUDIO_OPEN=<path|setlist|rig> too)
 just signal-engine         # studio-desktop --engine: the headless rig engine (ws://:4040/vox)
 just reaper-test [FILTER]  # Session's #[reaper_test] suites in a real REAPER
-just reaper daw-test       # daw-reaper's suites (module: features/adapters/reaper/reaper.just)
+# daw-reaper's REAPER suites: `just reaper daw-test` in FastTrackStudios/studio-adapters
 just plugins-bundle [names] && just plugins-link   # .clap/.vst3 into target/bundled, linked into ~/.clap, ~/.vst3
 just faces                 # generate the plugin faces
 just assets                # link the big binaries (see Assets)
@@ -407,7 +422,8 @@ proto, live, storage, controller, rig-host, grid, tone3000, …, with its
 docs in `signal:features/signal/docs/` —, the sampler, NAM and the nam,
 signal and sampler plugins) are in **FastTrackStudios/signal** since
 studio#510, pinned here by one `rev` (every crate of that repo at the same
-revision, root `Cargo.toml`). Here: `features/adapters/reaper/signal-*`,
+revision, root `Cargo.toml`). Its REAPER extensions (`signal-extension`,
+`signal-reaper-controller`) are in FastTrackStudios/studio-adapters. Here:
 `apps/signal/*` (the site and the Android app) and Studio's Signal side
 (`apps/studio/desktop`). `docs/signal/domain-model.md` explains the rig
 model. A change to a signal crate is a PR there, then a bump of the `rev`

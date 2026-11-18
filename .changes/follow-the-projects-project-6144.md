@@ -1,5 +1,4 @@
 ---
-"daw-reaper" = "none"
 "session" = "none"
 ---
 
