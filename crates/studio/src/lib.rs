@@ -3,9 +3,9 @@
 //! `studio` re-exports the [`daw`] crate — the DAW's control API, protocol
 //! and its own engine — and adds, each behind a feature, what sits on top:
 //! the REAPER adapter (`reaper`, `reaper-ui`), project files (`file`,
-//! `convert`, the source-format parsers), the UI components (`ui`), control
-//! surfaces (`csi`), the `daw` command line (`cli`) and the integration-test
-//! harness (`test-harness`).
+//! `convert`, the source-format parsers), the `daw` command line (`cli`) and
+//! the integration-test harness (`test-harness`). The UI components are
+//! `daw-ui`'s and the control surfaces `control-surfaces`', taken directly.
 
 pub use daw::*;
 
@@ -52,15 +52,6 @@ pub fn init(raw_host_context: Option<*const std::ffi::c_void>) -> bool {
 #[cfg(feature = "reaper")]
 pub fn main_thread_daw() -> Option<daw_reaper::DawMainThread> {
     daw_reaper::DawMainThread::try_new()
-}
-
-// ── CSI: hardware control surfaces ──────────────────────────────────────────
-#[cfg(feature = "csi")]
-/// Control Surface Integration — Mackie Control / Behringer X-Touch
-/// driver fed by the event bus. `studio::csi::run(daw, config)` connects
-/// a surface to any backend reachable through `daw_control::Daw`.
-pub mod csi {
-    pub use control_surfaces::*;
 }
 
 // ── REAPER backend re-export ────────────────────────────────────────────────
@@ -219,8 +210,7 @@ pub mod cli;
 // feature is on.
 //
 // This is REAPER-specific UI plumbing (dock host, HWND-embedded views,
-// overlays). The portable, vector-themeable component library lives under
-// `studio::ui` (the `ui` feature) instead.
+// overlays). The portable, vector-themeable component library is `daw-ui`.
 #[cfg(feature = "reaper-ui")]
 pub mod reaper_ui {
     /// Dock host implementation backed by REAPER's docker + Dioxus.
@@ -261,19 +251,4 @@ pub mod reaper_ui {
     /// Dioxus prelude — re-exported for component authors so they don't have
     /// to depend on `dioxus-native` directly.
     pub use reaper_dioxus::prelude;
-}
-
-// ── UI components (portable, vector-themeable) ─────────────────────────────
-//
-// Enabled via `features = ["ui"]`. Re-exports the `daw-ui` component library —
-// theming tokens, widgets, and the native components family (`studio::ui::
-// components` — the traced vector TCP/arrange/mixer of PR #279's main
-// window; the WALTER `panels` family was deleted 2026-08-19, see
-// `daw_ui::panels`' tombstone). Renderer-agnostic: drives equally under
-// `dioxus-native` (Blitz/GPU) on desktop and dioxus-web in the browser. Apps
-// consume the components through `studio::ui` rather than depending on
-// `daw-ui` directly.
-#[cfg(feature = "ui")]
-pub mod ui {
-    pub use daw_ui::*;
 }

@@ -25,10 +25,6 @@ daw-reaper = { workspace = true, optional = true, default-features = false }
 reaper-dioxus = { workspace = true, optional = true }
 # The RPP project file (`file`).
 dawfile-reaper = { workspace = true, optional = true }
-# The reusable, vector-themeable UI component library (`ui`).
-daw-ui = { workspace = true, optional = true }
-# Control Surface Integration — Mackie Control / X-Touch (`csi`).
-control-surfaces = { workspace = true, optional = true }
 # Source-format parsers, each under `studio::<format>`. None pulls in REAPER;
 # the RPP conversion is `convert`.
 protools = { workspace = true, optional = true }
@@ -52,11 +48,6 @@ tokio.workspace = true
 
 [features]
 reaper = ["dep:daw-reaper"]
-# Reusable UI components (`studio::ui` — widgets / theming / panels). `web`
-# brings in dioxus (the components render under any dioxus renderer).
-ui = ["dep:daw-ui", "daw-ui/web"]
-# REAPER theme import: `studio::ui::theming::theme_from_reaper`.
-ui-reaper-theme = ["ui", "daw-ui/reaper-theme"]
 file = ["dep:dawfile-reaper"]
 # Cross-format project conversion (`studio::file::convert`, format → RPP),
 # with the importers from `daw-reaper`: every one, or a single format.
@@ -77,8 +68,6 @@ cli = [
     "dep:vox-stream",
     "dep:tracing-subscriber",
 ]
-# Control surfaces (`studio::csi`) — Mackie Control / Behringer X-Touch.
-csi = ["dep:control-surfaces"]
 protools = ["dep:protools"]
 ableton = ["dep:ableton"]
 logic = ["dep:logic"]
