@@ -27,10 +27,13 @@ thiserror = { workspace = true }
 zip = { workspace = true, features = ["deflate"], optional = true }
 
 [dev-dependencies]
-interchange = { path = ".", features = ["aaf", "dawproject"] }
+interchange = { path = ".", features = ["aaf", "dawproject", "session"] }
 # required-features): a plain `cargo test` of the workspace builds them all.
 daw-proto = { workspace = true }
-dawfile-reaper = { workspace = true }
+# The bridge's tests (`tests/dawproject_*.rs`, `tests/composite_envelope.rs`)
+# build a session document, some of them from a `.rpp`.
+dawfile-reaper = { workspace = true, features = ["session"] }
+session-format = { workspace = true }
 loro = { workspace = true }
 tempfile = { workspace = true }
 uuid = { workspace = true }
