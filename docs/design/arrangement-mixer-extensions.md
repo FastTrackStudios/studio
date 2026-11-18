@@ -105,58 +105,83 @@ All additive. The window draws as before.
     turn);
   - the engine follows the deck's pause (6.031 against 6.0306 s), its
     seek (60 s) and its play.
-- **Across machines (not yet).** The transport is the session document's
-  `lead/play` presence (session#186), stamped in the shared clock
-  (architect#845's `Here::play_now`; at this pin,
-  `session::clock::SharedClock::play_state`). At the Architect pin
-  (`runtime-compositor` 2f2fb1d1) a process extension has no presence API,
-  and FastTrackStudios/session is not in this build: the `session` crate
-  here is Studio's own `features/session`. What it takes:
-  1. an Architect host service through which an extension publishes and
-     reads presence on a document it holds;
-  2. FastTrackStudios/session pinned by rev in `daw`;
-  3. `lead/play` published from the same transport moves the deck gets;
-  4. `session::sync::Follower` driving the engine when another peer leads.
-- **The chart's offset** (the chart's bar 1 is the verse; the tracks have
-  a 4-bar intro) is the session's structure, not a view's (the session
-  thread).
+- **One session (done, studio#522).** The song's session document is
+  `<song stem>.fts-session` beside the song (Studio's `Song.session` is
+  its project and is never opened as one): an Architect document file of
+  kind `fts.session` (FastTrackStudios/session `SessionFile`), opened or
+  made, never imported. The engine writes its timing into it on every
+  open (tempo changes with their meters, markers, sections as regions,
+  `bar_one`: a `SONGSTART` marker, else the first section after an intro
+  or count-in, else `FTS_DAW_BAR_ONE`), provides `fts.session` for it
+  (`DAW_READ/WRITE/STRUCTURE`), and leads its transport as presence
+  (`session::lead::Leader` on `FTS_DAW_LEAD_PORT`, 4142: `lead/play` in the
+  host's clock, on every move the deck gets). `DAW_STATE.session = {path,
+  id, url}`; a launcher then runs `EXT_SERVICE_USE {"service":
+  "fts.session", "provider": "daw"}`, `KEYFLOW_SESSION_FOLLOW {url, id,
+  chart_path}`, the chart on `session:<id>`, `IGNITION_SESSION_SONG {…,
+  "tempo": false}` and `IGNITION_SESSION_ROOM {url, doc, song, lane}`.
+  Proved in one 5120 px window: play, seek to 66 s and 93 s, and the
+  arrangement playhead, the mixer meters, the chart's playhead (bar 1 the
+  Verse), the room and the cue list land on the same bar
+  (`pr-media/arrangement-mixer`, `one-transport/`).
+- **Bar 1 of the recital songs** is a launcher setting today
+  (`FTS_DAW_BAR_ONE=5` for Drive To LA): the project marks it with neither
+  a `SONGSTART` marker nor named regions (studio#524).
 
 ## 5. Measured
+
+**The arrangement** (`extensions/arrangement/tests/frames.rs`, the golden
+template played at 60 Hz through the layer protocol; live: Drive To LA in
+one 5120 px window with the chart, room and cue list, the machine at a
+load of ~148 from other builds):
 
 | | 1280 px | 2 924 px |
 |---|---|---|
 | Opening batch | 1.22 MB | 1.29 MB |
 | A playing frame, before `paint_layers` | 462 KB | 535 KB |
 | A playing frame, now (test) | 694 B | 694 B |
-| The view's work a frame, p50 / p99 (test) | 0.23 / 0.86 ms | 0.35 / 0.67 ms |
-| Live, the picture's layer changes over 5 s of playback | | 0 |
-| Live, the view's work a frame, p50 / p99 | 0.55 / 1.8 ms | 1.6 / 3.8 ms |
-| The mixer's work a frame, p50 / p99 (live; a 639 px pane, then 2 924) | 0.55 / 2.5 ms | 0.62 / 1.8 ms |
+| The view's work a frame, p50 / p99 (test) | 0.33 / 1.1 ms | 0.65 / 2.9 ms |
+| Live, the picture's changes over 8 s of playback | 0 | |
+| Live, the view's work a frame, p50 / p99 | 2.1 / 65 ms (loaded machine) | |
 
-`extensions/arrangement/tests/frames.rs` plays the golden template at 60
-Hz through the layer protocol. The live numbers are
-`STUDIO_ARRANGEMENT_STATE` / `STUDIO_MIXER_STATE` in a dev Architect on a
-headless GPU session. The setlist window's sizes hold: the arrangement at
-2 924 × 759, and the mixer docked under it at 400 px (its pane 360 px
-under the dock's header).
+**The mixer** (`extensions/mixer/tests/parity.rs`, 30 playing frames
+through the protocol, levels from the simulated signal):
+
+| | mixer 1280×400 | strip 120×640 |
+|---|---|---|
+| A playing frame (tracks with values) | 0 B | 0 B |
+| Stopped: pixels past a step of 24 / largest step | 0 / 3 | 0 / 7 |
+| Playing: pixels past 24 / largest step | 260 of 512 000 / 63 | 18 of 76 800 / 52 |
+| Live: the picture's changes over 8 s of playback | 0 | |
+| Live: work a frame p50 / p99 | 3.8 / 80 ms (loaded machine; 2.2 / 23 alone) | |
+
+The meters are the engine's values (`engine.meter.<track>.{pl,pr,hl,hr,pk}`,
+written by `daw` into its shared table, 204 tracks in its 1024 slots):
+the pane draws them once as parts the host moves (`overlay::Apart`). What
+is left playing is where a cover's soft edge meets the level and the order
+two transparent paints blend in a cap's pane. The golden template's four
+strips past 204 tracks keep their meters in the picture (63 KB a playing
+frame for them).
 
 ## 6. Behaviour gaps, biggest first
 
-1. **The transport across machines** (§4).
-2. **The arrangement and the mixer are two processes.** In the window,
-   one `Links` ties them together:
-   - the visibility manager hides a group in both;
-   - an edit in either shows in the other on the same frame;
-   - `x` opens the docked mixer;
-   - `MIXER_VIEW` reaches the mixer;
-   - keys pressed with the mixer focused go to the arrangement's keymap.
-
-   Here each follows the engine on its own. An edit reaches the other
-   view through the engine's change stream, a frame or more later. A
-   hidden group stays in the mixer, and `MIXER_VIEW` is asked of the
-   arrangement's process, which has no mixer.
-3. **Rack close-ups.** The mixer pane provides no `closeup::Closeups`, so
-   asking for a rack's close-up does nothing.
+1. **The arrangement and the mixer are two processes.** In the window, one
+   `Links` ties them: an edit in either shows in the other on the same
+   frame, `x` opens the docked mixer, `MIXER_VIEW` reaches the mixer, and
+   keys pressed with the mixer focused go to the arrangement's keymap.
+   Here each follows the engine: an edit reaches the other view through
+   the engine's change stream, a frame or more later; `MIXER_VIEW` is
+   asked of the arrangement's process (the window that takes window
+   asks), which has no mixer; a key in the mixer pane is the mixer's.
+   The visibility manager is no longer one of them: a mixer on its own
+   keeps every track and plans its strips again when one is shown or
+   hidden (`SESSION_SHOW_GROUP` takes a group out of both panes).
+2. **Rack close-ups.** A close-up is Studio's rack widget as a native
+   Blitz widget (`CustomWidgetAttr`), its Escape a winit window event:
+   neither exists in a process view's document. It needs the rack widget
+   hosted in a pane of its own, as the mixer is.
+3. **Meters past 204 tracks** stay in the mixer's picture (a shared value
+   table's 1024 slots, five values a track).
 4. **Out by decision:** Studio's window chrome beyond the views (the
    browser, navigator, editor, chart, lyrics and quantize panels, the
    bottom bar). The transport and Folded are `STUDIO_ARRANGEMENT_*`
@@ -164,6 +189,9 @@ under the dock's header).
 5. **Peers' ghosts and the touch grip and handle** are drawn after the
    play cursor in the window and before it in the pane: they differ only
    where they overlap the cursor.
+6. **The mixer is as wide as its strips.** At 5120 px it fills about half
+   its dock: `studio-desktop` does the same (fixed-width strips from the
+   left).
 
 ## 7. Building and loading
 
@@ -173,7 +201,7 @@ From the repo root, in the dev shell:
 ARCHITECT=/path/to/architect-desktop FTS_DAW_OPEN="song.rpp" extensions/dev.sh --hide all
 ```
 
-- `ARCHITECT`: `architect-desktop` at `runtime-compositor` 2f2fb1d1.
+- `ARCHITECT`: `architect-desktop` at Architect `main` `e976a706` or later (`5016300a` has `EXT_SERVICE_USE`).
 - `dev.sh` builds `daw-extension`, `studio-arrangement` and `studio-mixer`
   (the `desktop-dev` profile for the host, as studio-desktop's recipes
   build) and installs each into its package (`extensions/{daw,arrangement,mixer}`).
