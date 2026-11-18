@@ -875,7 +875,7 @@ check:
 # tests worth running on every change. The wire types' tests (daw-proto,
 # daw-control, daw-transport-sync, utils) run in FastTrackStudios/daw, where
 # those crates live (studio#510).
-test_packages := "session-format daw-standalone timeline studio frame studio-desktop dioxus-test dock studio-architect"
+test_packages := "session-format daw-standalone timeline studio studio-desktop dioxus-test dock studio-architect"
 
 # Run the core test set (test_packages above).
 test:
@@ -2474,15 +2474,6 @@ worktree-setup:
 faces *ONLY:
     cargo run -q --release -p plugin-faces -- features/ui/plugin-faces/generated {{ if ONLY != "" { "--only " + ONLY } else { "" } }}
 
-# The face library: every plugin face rendered with frame's GPU effects
-# stage to OUT/<set>/<face>.webp, indexed by kind in OUT/index.json
-# (placeholders marked). Run `just faces` first; needs ImageMagick.
-#   just faces-gallery /tmp/gallery --only saturate
-faces-gallery OUT *ARGS:
-    cargo build --release -p frame-cli --features anyrender --bin render_surface
-    python3 scripts/face_gallery.py {{OUT}} {{ARGS}}
-
-# Frame's Figma parity: import → render → pixel + SVG diff against Figma's
-# own output (xtask/frame/scripts/run_parity_render_and_diff.sh).
-frame-parity *ARGS="--all":
-    cargo run -p xtask -- parity_test {{ARGS}}
+# The face gallery and Frame's Figma parity suite are the frame repo's
+# (FastTrackStudios/frame: `just faces-gallery`, `just parity`); Frame is a git
+# dependency here (docs/frame.md).

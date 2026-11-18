@@ -1,8 +1,5 @@
 ---
 "editor" = "patch"
-"frame" = "patch"
-"frame-cli" = "patch"
-"frame-desktop" = "patch"
 "keybinds" = "patch"
 "keys" = "patch"
 "launcher" = "patch"
