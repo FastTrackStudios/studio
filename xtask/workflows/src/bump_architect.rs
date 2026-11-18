@@ -13,7 +13,9 @@
 //!   release; the bot never reopens or re-pushes it). Runs the script,
 //!   stages ONLY the paths a bump may touch, and hands the diff on as an
 //!   artifact. Exit 3 (needs a person) still opens the PR, unmarked; exit 4
-//!   (waiting on keyflow) opens nothing, and the hourly run retries. When
+//!   (waiting on keyflow, or on daw / fts-fx, which pin Architect on
+//!   Studio's own source and must move first) opens nothing, and the
+//!   hourly run retries. When
 //!   an open bot PR already carries exactly this diff, nothing happens: no
 //!   push, no new CI run (no hourly churn).
 //! - `open` (environment `pin-bump`): pushes `bump/architect-<tag>` with
@@ -115,7 +117,7 @@ case "$status" in
   0|3) ;;
   4)
     echo "changed=false" >> "$GITHUB_OUTPUT"
-    { echo "### Waiting on keyflow"; cat "$RUNNER_TEMP/report.md"; } >> "$GITHUB_STEP_SUMMARY"
+    { echo "### Waiting on other repos"; cat "$RUNNER_TEMP/report.md"; } >> "$GITHUB_STEP_SUMMARY"
     exit 0 ;;
   *)
     echo "::error::bump-architect refused $TAG (exit $status)"

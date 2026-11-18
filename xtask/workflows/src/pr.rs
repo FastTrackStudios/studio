@@ -88,8 +88,8 @@ fn pr_checks() -> Result<Job> {
         // environment's own key (scripts/check-token-mints.py's ALLOWED).
         .step(
             Step::run(
-                "Release bots: token mints, sums, facts, queue, www patch",
-                "set -euo pipefail\npython3 scripts/check-token-mints.py --self-test\npython3 scripts/check-token-mints.py\nbash scripts/release-facts-test.sh\nbash scripts/release-sums-test.sh\nbash scripts/bump-verify-test.sh\npython3 scripts/check-www-patch.py --self-test\npython3 scripts/check-www-patch.py\nbash scripts/lock-sources-test.sh\n",
+                "Release bots: token mints, sums, facts, queue, bump dependents, www patch",
+                "set -euo pipefail\npython3 scripts/check-token-mints.py --self-test\npython3 scripts/check-token-mints.py\nbash scripts/release-facts-test.sh\nbash scripts/release-sums-test.sh\nbash scripts/bump-verify-test.sh\npython3 scripts/bump-architect-deps-test.py\npython3 scripts/check-www-patch.py --self-test\npython3 scripts/check-www-patch.py\nbash scripts/lock-sources-test.sh\n",
             )
             .cond(NOT_CANCELLED),
         ))

@@ -135,7 +135,7 @@ jobs:
           0|3) ;;
           4)
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            { echo "### Waiting on keyflow"; cat "$RUNNER_TEMP/report.md"; } >> "$GITHUB_STEP_SUMMARY"
+            { echo "### Waiting on other repos"; cat "$RUNNER_TEMP/report.md"; } >> "$GITHUB_STEP_SUMMARY"
             exit 0 ;;
           *)
             echo "::error::bump-architect refused $TAG (exit $status)"

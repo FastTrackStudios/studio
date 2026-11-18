@@ -75,7 +75,7 @@ jobs:
     - name: rail config
       if: ${{ !cancelled() }}
       run: cargo rail config validate --strict
-    - name: 'Release bots: token mints, sums, facts, queue, www patch'
+    - name: 'Release bots: token mints, sums, facts, queue, bump dependents, www patch'
       if: ${{ !cancelled() }}
       run: |
         set -euo pipefail
@@ -84,6 +84,7 @@ jobs:
         bash scripts/release-facts-test.sh
         bash scripts/release-sums-test.sh
         bash scripts/bump-verify-test.sh
+        python3 scripts/bump-architect-deps-test.py
         python3 scripts/check-www-patch.py --self-test
         python3 scripts/check-www-patch.py
         bash scripts/lock-sources-test.sh

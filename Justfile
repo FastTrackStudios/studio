@@ -2259,7 +2259,8 @@ release-hotfix +COMMITS:
 # architect) moves to TAG: the manifests and the comments naming the tags,
 # Cargo.lock (cargo resolves; nothing compiles), add-only lines in
 # .config/duplicate-deps.toml, the change file. Exit 3: needs a person;
-# exit 4: no keyflow release on TAG yet. The bot runs exactly this.
+# exit 4: no keyflow release on TAG yet, or daw / fts-fx (pinned by rev)
+# still on Studio's current architect tag. The bot runs exactly this.
 # Move the architect and keyflow pins to architect TAG (e.g. v0.12.5)
 bump-architect TAG *ARGS:
     python3 scripts/bump-architect.py "{{TAG}}" {{ARGS}}
@@ -2277,10 +2278,12 @@ check-token-mints:
     python3 scripts/check-token-mints.py --self-test
     python3 scripts/check-token-mints.py
 
-# What `sums` signs, the queue's API check, the www [patch] guard (PR checks run them)
+# What `sums` signs, the queue's API check, the bump's wait on daw/fts-fx,
+# the www [patch] guard (PR checks run them)
 release-bots-test:
     bash scripts/release-sums-test.sh
     bash scripts/bump-verify-test.sh
+    python3 scripts/bump-architect-deps-test.py
     bash scripts/release-facts-test.sh
     python3 scripts/check-www-patch.py --self-test
     python3 scripts/check-www-patch.py

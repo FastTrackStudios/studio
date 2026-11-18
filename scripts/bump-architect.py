@@ -18,6 +18,17 @@ Studio's own tag. So:
 Either way `Cargo.lock` must end with ONE architect source, Studio's tag on
 the plain URL (task@main's own older one aside), and none on www.
 
+Studio also takes git dependencies (by `rev`) from repos that pin Architect
+themselves: FastTrackStudios/daw and FastTrackStudios/fts-fx (studio#510),
+on the plain URL, the source Studio's own pins are. No [patch] can move
+them (a patch may not point at its own source), so while one of them still
+pins Studio's current tag, a bump of Studio alone leaves a second architect
+source in the lock. The script checks each such repo at the revision Studio
+pins BEFORE changing anything and waits (exit 4), naming them: bump
+Architect there first, merge, then move Studio's `rev` of that repo onto
+the commit that carries it (by hand: it brings that repo's other changes),
+and run this again.
+
 What it changes, and nothing else:
   - every `tag = "<old>"` on a FastTrackStudios/architect (and keyflow) git
     dependency in every tracked Cargo.toml, the www [patch] table included;
@@ -39,8 +50,10 @@ Exit status:
      (or keyflow's) own lock did not move; a major change or a minor jump
      of more than one; Architect's release declares a data migration, or
      its signed release-facts.json cannot be read ("unknown").
-  4  waiting on Keyflow: no keyflow release on main fits the new Architect
-     yet. Nothing is left changed.
+  4  waiting on another repo: no keyflow release on main fits the new
+     Architect yet, or a repo Studio pins (daw, fts-fx, ...) still pins
+     Studio's current Architect tag. The report names each. Nothing is
+     left changed.
   1  refused: not a stable tag, a downgrade (Architect or an explicit
      --keyflow), split pins, the fts-dev link on, or a tag whose commit is
      not on its repo's main.
@@ -184,6 +197,39 @@ def keyflow_fits(text: str, architect: str) -> bool:
     if www and not plain:
         return all(STABLE.match(t) and version(t)[:2] == version(architect)[:2] for t in www)
     return (www | plain) == {architect}
+
+
+def dependents_behind(manifest_texts: list[str], old: str, new: str,
+                      read=None) -> tuple[list[str], list[str]]:
+    """Repos Studio pins by git that pin Architect themselves and would be
+    left on Studio's current tag: (waits, problems).
+
+    Every FastTrackStudios git pin in Studio's manifests other than
+    Architect, Keyflow (handled on its own) and the repos that follow
+    Architect, at the ref Studio names, both spellings as one repo. A repo
+    whose Cargo.toml pins architect `old` on the plain URL (Studio's own
+    source today, which no patch can move) is a wait; one we cannot read is a problem for a person.
+    `read(repo, ref, path)` defaults to raw() (tests pass their own)."""
+    read = read or raw
+    skip = {ARCHITECT.lower(), KEYFLOW.lower(), *FOLLOWED}
+    refs: dict[str, set[str]] = defaultdict(set)
+    for text in manifest_texts:
+        for repo, ref in GIT_PIN.findall(text):
+            if repo.lower().startswith("fasttrackstudios/") and repo.lower() not in skip:
+                refs[repo].add(ref)
+    waits, problems = [], []
+    for repo in sorted(refs, key=str.lower):
+        for ref in sorted(refs[repo]):
+            text = read(repo, ref, "Cargo.toml")
+            if text is None:
+                problems.append(f"cannot read {repo}'s Cargo.toml at {ref}: whether it pins architect "
+                                f"{old} (and so must move first) is unknown")
+                continue
+            plain = {m.group(1) for m in ref_pin(ARCHITECT, www=False).finditer(text)}
+            if old in plain:
+                waits.append(f"{repo} (Studio pins {ref[:12]}) pins architect {old}: bump it to {new} there "
+                             f"and merge, then move Studio's {repo} pin onto that commit")
+    return waits, problems
 
 
 def keyflow_for(architect: str, at_least: str) -> str | None:
@@ -407,14 +453,18 @@ def main() -> int:
     kf_text = raw(KEYFLOW, kf_new, "Cargo.toml")
     if kf_text is None:
         sys.exit(f"bump-architect: no {KEYFLOW} {kf_new}")
+    waits, problems = ([], []) if old == new else dependents_behind(
+        [p.read_text() for p in manifests()], old, new)
     if not keyflow_fits(kf_text, new):
         need = ("a keyflow release on the www spelling at the same minor" if kind == "patch"
                 else f"a keyflow release on architect {new.rsplit('.', 1)[0]}")
-        return report(args, [f"keyflow {kf_new} does not fit architect {new} ({kind}); "
-                             f"{need} is needed: `just bump-architect {new} --version auto` there, merge, "
-                             "`just release-tag`"], 4, "Waiting on keyflow:")
+        waits.insert(0, f"keyflow {kf_new} does not fit architect {new} ({kind}); "
+                        f"{need} is needed: `just bump-architect {new} --version auto` there, merge, "
+                        "`just release-tag`")
+    if waits:
+        return report(args, waits, 4, "Waiting on other repos to move to architect " + new + " first:")
 
-    problems = followed_moves(root_manifest.read_text(), arch_old or "", arch_new)
+    problems += followed_moves(root_manifest.read_text(), arch_old or "", arch_new)
     if old != new and (why := jump(old, new)):
         problems.append(why)
     migrations: list[str] = []

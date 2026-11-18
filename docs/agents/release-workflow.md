@@ -148,6 +148,16 @@ Cargo.toml) hands those crates Studio's own tag. So:
   break keyflow's code; every minor so far also moved the editor, dioxus and
   blitz revisions): keyflow's bot bumps it with the next version, a person
   runs `just release-tag` there, then Studio's bump takes that release.
+- **The repos split out of Studio go first.** Studio takes the daw and
+  fts-fx repos by `rev` (studio#510), and both pin Architect on the plain
+  URL: the very source Studio's own pins are, which no `[patch]` can move
+  (a patch may not point at its own source). While either still pins
+  Studio's current tag, a bump of Studio alone would leave two architect
+  sources in the lock, so the script reads each FastTrackStudios repo
+  Studio pins (at the ref Studio pins) before changing anything and waits
+  (exit 4), naming them. Bump Architect in that repo, merge, move Studio's
+  `rev` of it onto that commit (a person: it brings that repo's other
+  changes too), then bump Studio.
 - `Cargo.lock` must end with **one** architect source: Studio's tag on the
   plain URL (task@main's own older one aside), none on www. Package ids are
   unchanged by the www table, so kache keys are the same as before (the
@@ -176,7 +186,12 @@ patch), carrying Architect's `Data-Migration:` lines.
   - the bump is a major change or a minor jump of more than one;
   - Architect's signed `release-facts.json` declares a data migration, or
     cannot be read ("unknown").
-- **Exit 4:** no keyflow release on keyflow's main fits yet; nothing changed.
+- **Exit 4:** waiting on another repo, nothing changed: no keyflow release
+  on keyflow's main fits yet, or a repo Studio pins (daw, fts-fx) still pins
+  Studio's current Architect tag. The report names each; the bot opens
+  nothing and retries hourly. The fuller answer, not built: the bot bumps
+  those repos in order (their own bump, merged, then Studio's `rev` moved
+  with the Architect tag in one PR); today a person does the middle step.
 - **Exit 1:** refused. That covers a tag whose commit is not on its repo's
   `main`, a downgrade, and the fts-dev link being on.
 
