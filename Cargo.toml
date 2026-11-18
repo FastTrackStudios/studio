@@ -383,6 +383,7 @@ architect-extensions = { git = "https://github.com/FastTrackStudios/architect", 
 architect-extension-wasi = { git = "https://github.com/FastTrackStudios/architect", rev = "2f2fb1d149d6b252e5b5a59bcad729ccfb1778e8" }
 architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", rev = "2f2fb1d149d6b252e5b5a59bcad729ccfb1778e8" }
 architect-workspace = { git = "https://github.com/FastTrackStudios/architect", rev = "2f2fb1d149d6b252e5b5a59bcad729ccfb1778e8" }
+architect-scene = { git = "https://github.com/FastTrackStudios/architect", rev = "2f2fb1d149d6b252e5b5a59bcad729ccfb1778e8" }
 # The app's theme as data (`use_resolved`): what a Studio view in Architect
 # colours itself from.
 architect-theme = { git = "https://github.com/FastTrackStudios/architect", rev = "2f2fb1d149d6b252e5b5a59bcad729ccfb1778e8" }
@@ -1512,6 +1513,7 @@ architect-threads = { git = "https://www.github.com/FastTrackStudios/architect",
 architect-time-tracker = { git = "https://www.github.com/FastTrackStudios/architect", rev = "2f2fb1d149d6b252e5b5a59bcad729ccfb1778e8" }
 architect-ui = { git = "https://www.github.com/FastTrackStudios/architect", rev = "2f2fb1d149d6b252e5b5a59bcad729ccfb1778e8" }
 architect-updates = { git = "https://www.github.com/FastTrackStudios/architect", rev = "2f2fb1d149d6b252e5b5a59bcad729ccfb1778e8" }
+architect-scene = { git = "https://www.github.com/FastTrackStudios/architect", rev = "2f2fb1d149d6b252e5b5a59bcad729ccfb1778e8" }
 architect-workspace = { git = "https://www.github.com/FastTrackStudios/architect", rev = "2f2fb1d149d6b252e5b5a59bcad729ccfb1778e8" }
 architect-workspace-hack = { git = "https://www.github.com/FastTrackStudios/architect", rev = "2f2fb1d149d6b252e5b5a59bcad729ccfb1778e8" }
 auth-client = { git = "https://www.github.com/FastTrackStudios/architect", rev = "2f2fb1d149d6b252e5b5a59bcad729ccfb1778e8" }

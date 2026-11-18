@@ -27,5 +27,12 @@ serde_json = { workspace = true }
 futures-timer = { workspace = true }
 web-time = { workspace = true }
 
+[dev-dependencies]
+architect = { workspace = true, features = ["action-list"] }
+architect-scene = { workspace = true }
+anyrender_vello_cpu = { workspace = true }
+peniko = { workspace = true }
+png = { workspace = true }
+
 [lints]
 workspace = true
