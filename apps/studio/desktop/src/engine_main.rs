@@ -92,13 +92,16 @@ async fn start_mcp(guitar: &GuitarRigBackend) {
     };
     let actions = list.len();
     let token = guitar::signal_commands::mint_token();
-    let serving = match guitar::signal_commands::serve_mcp(list, port, token).await {
-        Ok(serving) => serving,
-        Err(error) => {
-            tracing::warn!(%error, port, "mcp: not served");
-            return;
-        }
-    };
+    let serving =
+        match guitar::signal_commands::serve_mcp(list, app_shell::version::current(), port, token)
+            .await
+        {
+            Ok(serving) => serving,
+            Err(error) => {
+                tracing::warn!(%error, port, "mcp: not served");
+                return;
+            }
+        };
     match serving.publish(MCP_DISCOVERY_NAME) {
         Ok(path) => tracing::info!(
             mcp.url = %serving.url,

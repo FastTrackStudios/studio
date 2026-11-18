@@ -8,7 +8,9 @@ October 2026, of the former session, daw, processor, signal, patchbay and
 frame repos. One Cargo workspace, one lockfile, one `target/`, one flake.
 Patchbay (studio routing) went back to its own repo, FastTrackStudios/patchbay,
 in November 2026 (studio#510). Frame (the design / control-surface engine) is
-its own repo again too, a git dependency here (`docs/frame.md`).
+its own repo again too, a git dependency here (`docs/frame.md`), and so is
+Signal's library side — the rigs, the sampler, NAM and the nam, signal and
+sampler plugins, FastTrackStudios/signal (studio#510).
 
 ## Layout
 
@@ -27,15 +29,18 @@ apps/       studio/desktop                     Studio, THE app (desktop + iOS, o
                                                nothing), its window (`session-ui`: the
                                                DAW view, a view of the engine), the
                                                site, the DAW in a browser
-            signal/{mobile,web}                Signal: Android, the site
+            signal/{mobile,web}                Signal: Android, the site (the rigs they
+                                               show are FastTrackStudios/signal's)
             architect/                         Studio Architect: the Architect app with
                                                Studio's extensions compiled in; its node
                                                is the hosted Architect
                                                (docs/architect-distribution.md)
-            plugins/*                          the plugins that need Studio (nam,
-                                               signal, guide, sampler, host), verify/
-                                               (bundle load checks); the effects'
-                                               plugins are in FastTrackStudios/fts-fx
+            plugins/*                          the plugins that need Studio (guide,
+                                               host), verify/ (bundle load checks);
+                                               the effects' plugins are in
+                                               FastTrackStudios/fts-fx, the nam,
+                                               signal and sampler plugins in
+                                               FastTrackStudios/signal
             themer/
 crates/     daw/*      what is left of the DAW here: `daw-actions` (they drive
                        a live REAPER) and the DAW's notes (docs/). The DAW
@@ -52,15 +57,16 @@ crates/     daw/*      what is left of the DAW here: `daw-actions` (they drive
                        all cargo features of `studio`
 features/   one crate per feature, sub-folders allowed. Name a feature for what
             it is; anything host-specific goes under adapters/<host>.
-            signal/      Signal's domain: rigs, presets, scenes, its browser,
-                         storage, controller, grid, macros (facade at the root)
-            rigs/        the instruments — guitar, keys, drums, ekit, synth,
-                         orchestra — plus host/ (rigs on the one engine) and
-                         proto/ (the shared RigCore service)
-            dsp/*        nam; the effects themselves (`dsp`, `dsp-core`) are
-                         in FastTrackStudios/fts-fx (docs/fts-fx.md), and
-                         `builtin` (the effects as engine blocks) is in
-                         FastTrackStudios/daw with the engine
+            Signal's domain (features/signal: rigs, presets, scenes,
+                         its browser, storage, controller, grid, macros),
+                         the instruments (features/rigs: guitar, keys,
+                         drums, ekit, synth, orchestra, the rig host, the
+                         RigCore proto, the rig frame, `kontrol`), the
+                         sampler and NAM are in FastTrackStudios/signal,
+                         taken by git (see "Signal"). The effects (`dsp`,
+                         `dsp-core`) are in FastTrackStudios/fts-fx
+                         (docs/fts-fx.md), `builtin` (the effects as engine
+                         blocks) in FastTrackStudios/daw with the engine.
             editor/      the editor: piano roll, drum lanes, curves
             timeline/    the editing engine the arrangement and the editor
                          share (docs/design/timeline.md)
@@ -76,7 +82,7 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
                          kept as project notes of an Architect vault with
                          a stage; an Ableton show set's songs as a setlist
                          (`studio productions …`; studio#396)
-            session/, song/, sampler/, input/,
+            session/, song/, input/,
             chords/, formats/, control-surfaces/,
             dynamic-template/, patch-list/, …
             ui/*         shared UI: daw-ui, dock, plugin-faces, … (fts-audio-ui
@@ -366,7 +372,9 @@ fills up. The short version:
 Big binaries (test fixtures over 1 MB, research captures, the rigs' NAM
 captures and IRs) are not in git. They live in the private repos
 `studio-assets` and `rig-models`; `assets.txt` lists each file or
-directory and where it goes, and `just assets` clones those repos into
+directory and where it goes (the rigs' captures into `rig-library/`, which
+also holds the guitar's frozen Cores: the guitar crate is in a public repo
+and reads them from there, `rig-library/README.md`), and `just assets` clones those repos into
 `.assets/` and symlinks everything into place (relative links). A new
 worktree gets them by itself: after `git worktree add`, prek's
 post-checkout hook (`just install-hooks`) runs `scripts/worktree-setup.sh`,
@@ -394,16 +402,25 @@ other way.
 
 ## Signal, plugin and DSP rules
 
-Signal is the live-rig domain: `features/rigs/*` (the domain core in
-`features/signal/*` — proto, live, storage, controller, rig-host, grid,
-tone3000, …; docs in `features/signal/docs/`), the effects in
-`features/dsp/*`, `features/adapters/reaper/signal-*`, `apps/signal/*` and
-Studio's Signal side (`apps/studio/desktop`).
-`docs/signal/domain-model.md` explains the rig model. The effects' own
-code (`dsp`, `dsp-core`, the effect plugins, `fts-audio-ui`, `plugin-core`,
-`preset-browser`) is in FastTrackStudios/fts-fx since studio#510; the rules
-below that speak of `features/dsp/*` hold there, and here for `builtin` and
-`nam`. `docs/fts-fx.md` says how to work on both at once.
+Signal is the live-rig domain. Its crates (the rigs, the domain core —
+proto, live, storage, controller, rig-host, grid, tone3000, …, with its
+docs in `signal:features/signal/docs/` —, the sampler, NAM and the nam,
+signal and sampler plugins) are in **FastTrackStudios/signal** since
+studio#510, pinned here by one `rev` (every crate of that repo at the same
+revision, root `Cargo.toml`). Here: `features/adapters/reaper/signal-*`,
+`apps/signal/*` (the site and the Android app) and Studio's Signal side
+(`apps/studio/desktop`). `docs/signal/domain-model.md` explains the rig
+model. A change to a signal crate is a PR there, then a bump of the `rev`
+here; to work on both, check signal out beside this repo and patch
+`[patch."https://github.com/FastTrackStudios/signal"]` with paths to every
+crate Studio builds from it (never committed; its README has the table).
+The rigs' private captures reach the guitar crate's build through
+`SIGNAL_RIG_LIBRARY` (`.cargo/config.toml` → `rig-library/`, linked by
+`just assets`). The effects' own code (`dsp`, `dsp-core`, the effect
+plugins, `fts-audio-ui`, `plugin-core`, `preset-browser`) is in
+FastTrackStudios/fts-fx; the rules below that speak of `features/dsp/*`
+hold there and in signal (`nam`). `docs/fts-fx.md`
+says how to work on both at once.
 
 **Detachable GUI (strict)**: the rig engine is headless; every GUI —
 desktop, phone, browser, plugin editor — is a vox client of it.
@@ -454,14 +471,7 @@ is text in, text out; each effect's `tests/param_round_trip.rs` holds that
 line. Tempo-synced times use `dsp_core::time` (note values, dotted and
 triplet); do not grow a second table.
 
-**Realtime lints**: `features/{dsp,rigs}/clippy.toml` (and
-`daw:features/audio/clippy.toml` in the daw repo) add the
-audio-thread rules (`disallowed-methods` for locks, `env::var`, sleeps;
-`too-large-for-stack`). Clippy reads the nearest `clippy.toml`, so they hold
-under those trees and nowhere else — keep the three copies identical, and
-keep the shared settings in step with the root one.
-
-**Realtime lints**: `features/{dsp,rigs}/clippy.toml` (and
+**Realtime lints**: `signal:features/{dsp,rigs}/clippy.toml` (and
 `daw:features/audio/clippy.toml` in the daw repo) add the
 audio-thread rules (`disallowed-methods` for locks, `env::var`, sleeps;
 `too-large-for-stack`). Clippy reads the nearest `clippy.toml`, so they hold

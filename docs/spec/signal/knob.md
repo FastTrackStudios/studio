@@ -4,7 +4,7 @@ How a knob (and any drag-valued control — slider, XY pad, envelope node) behav
 under the pointer. This is a UI contract, binding on every knob in every signal
 GUI (synth, keys, sampler, guitar rig, FX). A knob edits one
 [Parameter](parameter.md); this spec covers only the *interaction*, not the value
-model. Reference the drag pattern in `features/rigs/synth/ui` (`MiniKnob`).
+model. Reference the drag pattern in `signal:features/rigs/synth/ui` (`MiniKnob`).
 
 ## Drag capture (the core rule)
 

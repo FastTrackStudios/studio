@@ -1,5 +1,5 @@
 // The switches: the footswitch grid with the macro bar above it — a port of
-// the Signal app's PerformGrid (features/rigs/guitar/ui/src/perform.rs) and
+// the Signal app's PerformGrid (signal:features/rigs/guitar/ui/src/perform.rs) and
 // MacroBar (macro_bar.rs), look and jobs kept.
 //
 //   macro bar   the rig's macro knobs, turned by a drag

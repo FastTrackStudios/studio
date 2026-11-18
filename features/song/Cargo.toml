@@ -31,6 +31,9 @@ sha2 = { workspace = true }
 tokio = { workspace = true, features = ["rt", "macros"] }
 # `migrate_flat_songs` example reads the legacy `manifest.json`.
 serde_json = { workspace = true }
+# `import_gig_songs` example: a Gig Performer gig's songs (`synth::gig`)
+# into a song library.
+synth = { workspace = true }
 
 [lints]
 workspace = true

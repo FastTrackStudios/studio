@@ -121,7 +121,7 @@ and a host sized by its content has no content to size it.
 - **Design mode** — the real UI over a synthesised rig, no audio/MIDI/DSP:
   `open "/Volumes/dev-drive/bin/Signal Rig.app" --args --guitar --design`
   (macOS dev bundle; keeps config on the dev drive) or `just guitar --design`.
-- **Headless PNG** — `just guitar-shot OUT W H` renders the rig UI with no
+- **Headless PNG** — `just guitar-shot OUT W H` (in FastTrackStudios/signal, with `RIG_SHOT_TAILWIND` naming Studio's sheet) renders the rig UI with no
   window, no compositor and no device (`signal-guitar-ui` example
   `rig_shot`). Render at the **smallest** supported size (1760×1100) as well
   as the desk size (2560×1440): an overflow only shows at the small one.

@@ -128,7 +128,7 @@ KEYCHAIN=fts-build.keychain KEYCHAIN_PW=fts-build SKIP_BUILD=1 MARKETING_VER=<ta
   GIG_BUNDLE=/Volumes/build-disk/development/gigs/ipad/CAA-2026 bash ios/deploy-testflight.sh
 ```
 
-- A release build needs the rig's captures: `features/rigs/guitar/default-config{,-bass}/models`
+- A release build needs the rig's captures: `signal:features/rigs/guitar/default-config{,-bass}/models`
   link to a current `rig-models` clone. For a manual build or upload, run
   `just assets` in the checkout first: it clones or `pull --ff-only`s rig-models
   over https into `.assets/` and links the captures. The release workflows

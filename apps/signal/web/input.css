@@ -18,8 +18,10 @@
  * a landing page should not need a CSS toolchain to build.
  */
 @source "./src/**/*.rs";
-@source "../../../features/rigs/guitar/src/**/*.rs";
-@source "../../../features/rigs/keys/src/**/*.rs";
-@source "../../../features/signal/widgets/src/**/*.rs";
+/* The rigs are FastTrackStudios/signal's (a git dep: `.signal` is a symlink
+   to the checkout cargo resolved, refreshed by `just signal-web-tailwind`). */
+@source "../../../features/ui/.signal/features/rigs/guitar/src/**/*.rs";
+@source "../../../features/ui/.signal/features/rigs/keys/src/**/*.rs";
+@source "../../../features/ui/.signal/features/signal/widgets/src/**/*.rs";
 @source "../../../features/ui/**/*.rs";
 @source "../../../features/ui/.architect-ui/src/**/*.rs";

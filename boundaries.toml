@@ -63,56 +63,18 @@ transport-host = 2
 # arithmetic, NOT a measured run; contract-clean and ui-reach are unchanged
 # here and may be lower without the `midi` rows. Re-measure with
 # `just ci-boundaries`.
-lints = 12
+# 2026-11-17: Signal's crates moved to FastTrackStudios/signal (studio#510);
+# their rows went with them, and two members counted under `lints`
+# (openwurli-dsp, tone3000: no `[lints] workspace = true`) are no longer
+# members. 12 -> 10 is that arithmetic, NOT a measured run; the other
+# baselines may be lower without the rigs' rows. Re-measure with
+# `just ci-boundaries`.
+lints = 10
 hand-routes = 31
 
 # ── L0 contracts ──
 [[row]]
-package = "drums"
-layer = "L0"
-
-[[row]]
-package = "ekit"
-layer = "L0"
-
-[[row]]
-package = "guitar"
-layer = "L0"
-
-[[row]]
-package = "keys"
-layer = "L0"
-
-[[row]]
-package = "sampler"
-layer = "L0"
-
-[[row]]
 package = "session"
-layer = "L0"
-
-[[row]]
-package = "signal-content-proto"
-layer = "L0"
-
-[[row]]
-package = "signal-proto"
-layer = "L0"
-
-[[row]]
-package = "signal-rigs-proto"
-layer = "L0"
-
-[[row]]
-package = "signal-space"
-layer = "L0"
-
-[[row]]
-package = "signal-tone3000"
-layer = "L0"
-
-[[row]]
-package = "synth"
 layer = "L0"
 
 # ── L4 ui ──
@@ -137,17 +99,7 @@ features = ["ui"]
 layer = "L4"
 
 [[row]]
-package = "drums"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
 package = "editor"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "ekit"
 features = ["ui"]
 layer = "L4"
 
@@ -157,18 +109,8 @@ features = ["ui"]
 layer = "L4"
 
 [[row]]
-package = "guitar"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
 package = "keybinds"
 features = ["dioxus"]
-layer = "L4"
-
-[[row]]
-package = "keys"
-features = ["ui"]
 layer = "L4"
 
 [[row]]
@@ -193,26 +135,6 @@ layer = "L4"
 
 [[row]]
 package = "session"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "signal-grid-ui"
-layer = "L4"
-note = "sibling ui crate; fold in as a ui flag"
-
-[[row]]
-package = "signal-rig-perform-ui"
-layer = "L4"
-note = "sibling ui crate; fold in as a ui flag"
-
-[[row]]
-package = "signal-tone3000"
-features = ["ui"]
-layer = "L4"
-
-[[row]]
-package = "synth"
 features = ["ui"]
 layer = "L4"
 
@@ -351,10 +273,6 @@ package = "multiband-dsp"
 layer = "L1"
 
 [[row]]
-package = "openwurli-dsp"
-layer = "L1"
-
-[[row]]
 package = "patch-list"
 layer = "L1"
 
@@ -415,31 +333,7 @@ package = "session-extension"
 layer = "L1"
 
 [[row]]
-package = "signal"
-layer = "L1"
-
-[[row]]
 package = "signal-analyzer"
-layer = "L1"
-
-[[row]]
-package = "signal-browser"
-layer = "L1"
-
-[[row]]
-package = "signal-content-client"
-layer = "L1"
-
-[[row]]
-package = "signal-content-library"
-layer = "L1"
-
-[[row]]
-package = "signal-controller"
-layer = "L1"
-
-[[row]]
-package = "signal-daw-bridge"
 layer = "L1"
 
 [[row]]
@@ -447,63 +341,11 @@ package = "signal-extension"
 layer = "L1"
 
 [[row]]
-package = "signal-fx"
-layer = "L1"
-
-[[row]]
-package = "signal-grid"
-layer = "L1"
-
-[[row]]
-package = "signal-import"
-layer = "L1"
-
-[[row]]
-package = "signal-live"
-layer = "L1"
-
-[[row]]
-package = "signal-macromod"
-layer = "L1"
-
-[[row]]
-package = "signal-nam"
-layer = "L1"
-
-[[row]]
-package = "signal-orchestra"
-layer = "L1"
-
-[[row]]
 package = "signal-reaper-controller"
 layer = "L1"
 
 [[row]]
-package = "signal-rig-host"
-layer = "L1"
-
-[[row]]
-package = "signal-rig-perform-store"
-layer = "L1"
-
-[[row]]
-package = "signal-rig-shell"
-layer = "L1"
-
-[[row]]
 package = "signal-separator"
-layer = "L1"
-
-[[row]]
-package = "signal-storage"
-layer = "L1"
-
-[[row]]
-package = "signal-synth-rig"
-layer = "L1"
-
-[[row]]
-package = "signal-widgets"
 layer = "L1"
 
 [[row]]

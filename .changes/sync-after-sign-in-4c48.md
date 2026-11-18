@@ -1,5 +1,4 @@
 ---
-"signal-rig-host" = "minor"
 "studio-desktop" = "minor"
 ---
 

@@ -13,7 +13,7 @@ What stays here:
   surface kit; `just faces` generates them into
   `features/ui/plugin-faces/generated`.
 - The hosts that draw them: `apps/session/ui` (`faces`, `fx_view`, the
-  themed mixer in `skin`; `docs/frame-themes.md`) and `features/rigs/guitar`
+  themed mixer in `skin`; `docs/frame-themes.md`) and `signal:features/rigs/guitar`
   (`ui/frame_surface`, `ui/tablet/routing_canvas`).
 
 What is the frame repo's: the engine, its tools (`frame-cli`,

@@ -408,7 +408,7 @@ pub fn cargo_deps_save() -> [Step; 3] {
 
 /// Link a self-hosted runner's rig-models clone into the tree, per
 /// assets.txt: the guitar rig's release build refuses to compile without
-/// its captures (features/rigs/guitar/build.rs), and they are in the private
+/// its captures (signal:features/rigs/guitar/build.rs), and they are in the private
 /// rig-models repo, which the release runners keep one clone of beside their
 /// other projects.
 ///

@@ -11,7 +11,7 @@ loss.
 | M1 | `signal-space` core (analyze/classify/project/knn/store/CLI) | **DONE** `ba1b45827` |
 | — | Piece granularity (a multisampled piece = ONE node) | **DONE** `f743b5914` |
 | M2 | `signal-space-proto` + `SpaceBackend` + app "Samples" view | **DONE** `aeb3ca50a` |
-| M3 | Electronic Kit rig (`features/rigs/ekit`) | **DONE** — backend `5782d0847`, engine mount + pad grid `012a2a73b` |
+| M3 | Electronic Kit rig (`signal:features/rigs/ekit`) | **DONE** — backend `5782d0847`, engine mount + pad grid `012a2a73b` |
 | M4 | Acoustic piece subspaces (`signal_drums::piece_space`) | **DONE** `27b59d25a` — RPCs shipped, drums UI list still to render |
 | M5 | NAM space (`signal_nam::space`) | **DONE** `b8c1e63d4` / `ae1a7d8ba` — prober + similar/partner; guitar UI still to render |
 
@@ -92,7 +92,7 @@ from a clean tree). M1/M2 are already on main.
   `#[dispatch(CurrentThreadDispatcher)]`, `impl Services` with `layers![…
   ::Service, …::StreamService]`, and `architect` with features
   `["vox", "rig"]` for `architect::rig::events_hub()`.
-- Rig crates: `features/rigs/<name>/{Cargo.toml,src/…}` + `proto/` + `ui/`
+- Rig crates: `signal:features/rigs/<name>/{Cargo.toml,src/…}` + `proto/` + `ui/`
   (synth splits `rig/` for the backend — the closest sibling to copy).
   Register in root `Cargo.toml` members AND `[workspace.dependencies]`.
   Mount in `engine_main.rs`: `.merge_router(x.router())` then
@@ -104,8 +104,8 @@ from a clean tree). M1/M2 are already on main.
 
 ## M3 plan — Electronic Kit rig
 
-New crates: `features/rigs/ekit` (backend, crate `signal-ekit`),
-`features/rigs/ekit/proto` (`signal-ekit-proto`), `features/rigs/ekit/ui`
+New crates: `signal:features/rigs/ekit` (backend, crate `signal-ekit`),
+`signal:features/rigs/ekit/proto` (`signal-ekit-proto`), `signal:features/rigs/ekit/ui`
 (`signal-ekit-ui`).
 
 Model:

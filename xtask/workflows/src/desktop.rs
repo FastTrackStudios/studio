@@ -206,7 +206,7 @@ fi
         )
         .step(stamp("${{ env.TAG }}").cond(STAMPED))
         // The guitar rig's release build refuses to compile without its
-        // captures (features/rigs/guitar/build.rs): airlock's rig-models
+        // captures (signal:features/rigs/guitar/build.rs): airlock's rig-models
         // clone, fast-forwarded first (as studio-ios does).
         .step(Step::run(
             "Rig captures (rig-models) linked into the tree",

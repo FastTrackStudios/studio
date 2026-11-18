@@ -167,7 +167,7 @@ df -h /Volumes/build-disk | tail -1
         // check); deploy-testflight.sh also takes it from MARKETING_VER.
         .step(stamp("${{ env.TAG }}"))
         // The guitar rig's release build refuses to compile without its
-        // captures (features/rigs/guitar/build.rs). They are in the private
+        // captures (signal:features/rigs/guitar/build.rs). They are in the private
         // rig-models repo, which airlock keeps one clone of beside its other
         // projects. The clone is fast-forwarded to origin/main first, so a
         // capture pushed to rig-models ships in the next build; a failed

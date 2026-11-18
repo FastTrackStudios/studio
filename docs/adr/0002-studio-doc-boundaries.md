@@ -97,7 +97,7 @@ set with holes in it.
 
 ## Consequences
 
-- `features/signal/proto/src/doc` keeps its codec; its layouts become the
+- `signal:features/signal/proto/src/doc` keeps its codec; its layouts become the
   docs above (a rig doc holds its patches and profiles; `library:settings`
   moves into the owner's space).
 - The rigs' own perform files (`perform-store`'s `.styx`, the guitar rig's

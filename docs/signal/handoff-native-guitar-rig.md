@@ -75,7 +75,7 @@ patches** writes per-patch offsets the same way.
 identical project/track/slots/probe/chains as `open` and renders through the
 same `ProjectRenderer`, pulled by `render_offline` (no device). Input is the
 probe's test signal (`start_test_signal`), output the new `OutputTap` after
-the chain (`measure_output`). `features/rigs/guitar/src/measure.rs`:
+the chain (`measure_output`). `signal:features/rigs/guitar/src/measure.rs`:
 `patch_lufs` (cached via `patch_level::level_cached`, engine key `rig-v3`),
 `apply_chain_bypass` (the switch-in step both live and offline call). The old
 hand-rolled `render_lufs` is no longer used by the guitar rig. Every
@@ -303,7 +303,7 @@ Plan from this session (research, no code): mirror the keys rig —
 `apps/desktop/src/web_keys_rig.rs` + `web_keys_backend.rs` — as
 `web_guitar_rig.rs` (route `/rigs/guitar`) + `web_guitar_backend.rs`: an
 in-page `Rig` implementation over `rig.json` (`studio rig web-bundle`)
-driving `features/rigs/guitar/worklet`, mounting the real
+driving `signal:features/rigs/guitar/worklet`, mounting the real
 `GuitarRigRemote`. `GuitarRigBackend` itself is too native to compile for
 wasm. Phase 1: stacks into the bundle, `setParamByName` in the worklet, the
 ~22 `Rig` methods the UI calls to play, web-stage wiring, COOP/COEP

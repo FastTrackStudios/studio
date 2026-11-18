@@ -151,7 +151,7 @@ low zoom, expand on zoom-in). Class colors, hover = audition
 length, main-freq, favorites), similarity side-list for the selection.
 Inline styles only; component takes no props it can get from context.
 
-### Electronic Kit rig (`features/rigs/ekit`)
+### Electronic Kit rig (`signal:features/rigs/ekit`)
 
 Separate rig crate (backend + proto + ui), mirroring the synth rig layout,
 mounted scoped like the others; implements `RigCore`.

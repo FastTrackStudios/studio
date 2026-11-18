@@ -101,6 +101,11 @@ _lumen-link:
     ui=$(cargo metadata --locked --format-version 1 2>/dev/null \
         | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="architect-ui"))')
     ln -sfn "$ui" features/ui/.architect-ui
+    # The rigs' UI crates are FastTrackStudios/signal's: the checkout cargo
+    # resolved (the repo root, three up from the guitar crate).
+    guitar=$(cargo metadata --locked --format-version 1 2>/dev/null \
+        | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="guitar"))')
+    ln -sfn "$(cd "$guitar/../../.." && pwd)" features/ui/.signal
 
 # Build Tailwind CSS (v4)
 tailwind: _lumen-link
@@ -293,45 +298,19 @@ guitar-design *ARGS:
 
 alias gd := guitar-design
 
-# Every visualiser in the rig, in one window, on the design rig's fake
-# guitar. Stills of one effect at a time, rendered offline with no window:
-# (in a FastTrackStudios/fts-fx checkout)
-#   cargo run -p dsp --features delay-ui,delay-viz --example delay_family_sheet -- out/
-#   cargo run -p dsp --features reverb-ui,reverb-viz --example reverb_family_sheet -- out/
-#   cargo run -p dsp --features modulation-ui,modulation-viz --example engine_sheet -- out/
-viz-gallery:
-    cargo run --release -p guitar --features ui --example viz_gallery
-
 # A picture of the rig as it is ACTUALLY running, shaders and all.
 #
 #   just guitar-grab                    rig-live.png
 #   just guitar-grab /tmp/eq.png 2560   refuse anything but a 2560px-wide window
 #
-# Unlike `guitar-shot` this needs a rig on screen: the headless renderer
+# Unlike `guitar-shot` (FastTrackStudios/signal's Justfile) this needs a rig on screen: the headless renderer
 # hands out no GPU device, so it can only ever draw the vector fallback.
 # KWin raises the rig and captures that window alone.
 guitar-grab OUT="rig-live.png" EXPECT_W="":
     ./scripts/signal/rig-grab.sh {{OUT}} {{EXPECT_W}}
 
-# Render the rig UI to a PNG — no window, no compositor, no device. Design
-# mode is forced, so this can be taken while the rig is playing; it draws
-# the VECTOR fallback for any painted panel.
-#   just guitar-shot /tmp/rig.png 2560 1440
-guitar-shot OUT="rig.png" W="1600" H="1000":
-    cargo run --release -p guitar --features ui --example rig_shot -- {{OUT}} {{W}} {{H}}
-
-# What the rig costs to run, measured on the real device (silent + ephemeral).
-guitar-bench SECONDS="10":
-    cargo run --release -p guitar --features sampler/pipewire \
-        --example rig_bench -- {{SECONDS}}
-
-# How long a patch switch takes, and where the time goes.
-guitar-switch-bench SWITCHES="12":
-    cargo run --release -p guitar --features sampler/pipewire \
-        --example switch_bench -- {{SWITCHES}}
-
 # Stage the browser keys rig's AudioWorklet bundle (W4 of
-# features/signal/docs/browser-keys-rig.md) into the web bundle:
+# signal:features/signal/docs/browser-keys-rig.md) into the web bundle:
 # a RELEASE wasm build of web-audio-worklet --features keys (KeysWorklet =
 # WebRenderer + headless KeysRig), wasm-bindgen'd `--target web`, plus
 # the keys-specific processor + worklet polyfill (AudioWorkletGlobalScope
@@ -411,7 +390,7 @@ keys-worklet-wasm-threads out='apps/studio/desktop/web-dist/worklet':
     cp features/adapters/web/worklet/js/keys_decoder_worker.js {{out}}/keys_decoder_worker.js
     cp features/adapters/web/worklet/js/keys_streamer_worker.js {{out}}/keys_streamer_worker.js
 
-# Stage the browser guitar rig (features/signal/docs/browser-guitar-rig.md):
+# Stage the browser guitar rig (signal:features/signal/docs/browser-guitar-rig.md):
 # one wasm module with two entry points — GuitarWorklet on the AudioWorklet
 # thread, NamWorker on each NAM Web Worker — plus the processor, the worker,
 # the page-side orchestrator and the worklet polyfill (shared with keys).
@@ -555,13 +534,14 @@ macos-install: macos-pkg
 # name here is `<name>-plugin` as a cargo package and "FTS <Name>" as a bundle
 # (see bundler.toml); adding a plugin means touching this line and that file.
 # The effects (eq, comp, reverb, delay, …) are bundled by
-# FastTrackStudios/fts-fx's `just plugins-bundle`, the same recipe.
-fts_plugins := "nam signal guide"
+# FastTrackStudios/fts-fx's `just plugins-bundle`, and the nam, signal and
+# sampler plugins by FastTrackStudios/signal's, the same recipe.
+fts_plugins := "guide"
 
 # Bundle every FTS plugin as .clap + .vst3 (target/bundled/, names from
 # bundler.toml). Pass a subset to bundle only those:
-#   just plugins-bundle "nam guide"
-# Debug of a single plugin: cargo run -p fts-plugin-xtask -- bundle -p nam-plugin
+#   just plugins-bundle guide
+# Debug of a single plugin: cargo run -p fts-plugin-xtask -- bundle -p guide-plugin
 #
 # On macOS this uses nice-plug-xtask's `bundle-universal` instead of
 # `bundle`: it builds both aarch64-apple-darwin and x86_64-apple-darwin and
@@ -575,7 +555,7 @@ plugins-bundle plugins=fts_plugins:
     [ "$(uname)" = "Darwin" ] && cmd=bundle-universal
     for p in {{plugins}}; do
         # `export` (the CLAP/VST3 entry points) is a feature of the FX
-        # plugins; nam, signal and guide have no such feature.
+        # plugins; guide has no such feature.
         feat=(); grep -q '^export *=' "apps/plugins/$p/Cargo.toml" && feat=(--features export)
         cargo run -q -p fts-plugin-xtask -- "$cmd" -p "$p-plugin" --release "${feat[@]}"
     done
@@ -706,7 +686,7 @@ mic-models-install:
 plugins-package: plugins-bundle
     #!/usr/bin/env bash
     set -euo pipefail
-    version="$(cargo pkgid -p nam-plugin | sed 's/.*[#@]//')"
+    version="$(cargo pkgid -p guide-plugin | sed 's/.*[#@]//')"
     case "$(uname)-$(uname -m)" in
         Darwin-*)        plat=macos ;;
         Linux-x86_64)    plat=x86_64-linux ;;
@@ -719,32 +699,11 @@ plugins-package: plugins-bundle
     (cd dist && sha256sum "$tarball" >> SHA256SUMS 2>/dev/null || sha256sum "$tarball" > SHA256SUMS)
     echo "packaged: dist/$tarball"
 
-# Symlink the live rig config (~/.config/signal/rig) to the repo's
-# in-tree default config, so realtime edits — text editor or the rig's
-# own auto-save — are working-tree diffs you commit like any change.
-# The previous config dir is moved aside as rig.bak-<date>.
-rig-link:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    target="$(pwd)/features/rigs/guitar/default-config"
-    rig="$HOME/.config/signal/rig"
-    if [ -L "$rig" ]; then echo "already linked: $rig -> $(readlink "$rig")"; exit 0; fi
-    if [ -e "$rig" ]; then mv "$rig" "$rig.bak-$(date +%Y%m%d-%H%M%S)"; fi
-    mkdir -p "$(dirname "$rig")"
-    ln -s "$target" "$rig"
-    echo "linked: $rig -> $target"
-
 # The guitar rig as a TUI (meters + patch switching in a terminal).
 #
 # Was `just guitar` until the Signal app became the rig's real surface;
 # that name now opens the app. This is still the way in over ssh, or when
 # you want the rig without a window.
-
-# The guitar rig as a TUI (was `just guitar`)
-guitar-tui: (rig "Guitar Rig")
-
-# Open the default drums rig (needs `just rig-setup "Drum Rig" ...` first)
-drums: (rig "Drum Rig")
 
 # Built then run separately. This used to go through `pw-jack`: midir's MIDI
 # backend on Linux was JACK-over-pipewire-jack, and the dev shell links the
@@ -765,56 +724,6 @@ keys log="/tmp/fts-keys.log":
     PIPEWIRE_PROPS='{ application.name = FTS-Signal }' \
     RUST_LOG="${RUST_LOG:-info,keys=debug,sampler=debug,vox_core=warn,schema_deser=off}" \
         ./target/release/studio-desktop --keys 2>&1 | tee "{{log}}"
-
-# A terminal surface over the composition-tree presets, no GUI. This was
-# `just keys` before the app grew a keys mode.
-#
-# Nord Stage-style keys TUI — play a preset from a MIDI keyboard
-keys-tui preset="Nord Stage" midi="all":
-    PIPEWIRE_PROPS='{ application.name = FTS-Signal }' cargo run --release -p keys --features pipewire --example keys_tui -- --preset "{{preset}}" --midi "{{midi}}"
-
-# Keys rig integration test: open the rig headless, inject MIDI through the
-# ALSA loopback, and assert the rig both saw the events and made sound
-# (midi_recent + master_peak). Needs pipewire + the sample libraries; exits
-# nonzero on a deaf or silent rig.
-keys-test:
-    cargo build --release -p keys --example midi_probe
-    PIPEWIRE_PROPS='{ application.name = FTS-KeysTest }' ./target/release/examples/midi_probe
-
-# Play the City Grand physically-modeled piano from a MIDI keyboard.
-# Voice loads its param table from ~/.config/signal/city-grand/table.json
-# (regenerate with `pm sweep` in research/piano-model).
-# NOTE: --midi targets ONE port by name (substring). "all" used to be a trap —
-# midir allocated an ALSA sequencer queue per port (~24 on this rig), past
-# ALSA's ~32-queue limit — but the native PipeWire backend opens ONE node
-# however many devices are linked. `just piano <name>` picks a keyboard.
-piano midi="KONTROL":
-    PIPEWIRE_PROPS='{ application.name = FTS-Signal }' cargo run --release -p keys --features pipewire --example keys_tui -- --preset "City Grand" --midi "{{midi}}"
-
-# Play City Wurli — the vendored physically-modeled Wurlitzer 200A (openwurli,
-# GPL, personal use) from a MIDI keyboard (TUI). Same ALSA-queue caveat as
-# `just piano`: --midi targets ONE port by name, never "all".
-wurli midi="KONTROL":
-    PIPEWIRE_PROPS='{ application.name = FTS-Signal }' cargo run --release -p keys --features pipewire --example keys_tui -- --preset "City Wurli" --midi "{{midi}}"
-
-# Play Cinematic Studio Strings — 1st Violins from a MIDI keyboard (TUI).
-strings lib="" midi="all" artic="Leg" mic="Mix":
-    PIPEWIRE_PROPS='{ application.name = FTS-Signal }' cargo run --release -p sampler --features pipewire --example strings_tui -- {{ if lib != "" { "--lib '" + lib + "'" } else { "" } }} --midi "{{midi}}" --artic "{{artic}}" --mic "{{mic}}"
-
-# Open a saved rig by name (TUI with meters + patch switching).
-# --release is REQUIRED for real-time (the vendored NAM C++ core xruns in
-# unoptimized builds; the dev profile optimizes deps, release is safest).
-rig name:
-    PIPEWIRE_PROPS='{ application.name = FTS-Signal }' cargo run --release -p sampler --features pipewire --example guitar_tui -- --rig "{{name}}"
-
-# List audio devices + channel counts (find your interface name)
-rig-devices:
-    cargo run -p sampler --example guitar_rig -- --list
-
-# Configure + remember a rig's interface / channel / profile, e.g.:
-#   just rig-setup "Guitar Rig" --input "Yamaha TF" --channel 3 --profile /path/to.styx
-rig-setup name *args:
-    cargo run --release -p sampler --example guitar_rig -- --rig "{{name}}" {{args}} --write-config
 
 # ── Signal site (apps/signal/web → signal.fasttrackstudio.app) ─────────
 # The guide is statically generated: `--ssg` builds the app's server,
@@ -998,23 +907,6 @@ graph-serve:
 # The browser setlist player's AudioWorklet bundle (daw-standalone's `web`
 # renderer, committed in the task repo) is built in FastTrackStudios/daw,
 # where the engine lives: its README has the command (studio#510).
-
-# ── CSS A/B (orchestral sampling) ────────────────────────────────────────
-
-css_pack := '/run/media/AudioHaven/Signal/Libraries/Proxy/Orchestral/Cinematic Studio Strings/1st Violins/Legato/1st Violins - Legato - Mix.signalpack'
-
-# Score the CSS legato engine against the real Kontakt reference render.
-css-ab *ARGS:
-    cargo build -p fts-cli --bin fts
-    # Score the binary we just BUILT. score.py defaults to ./target/debug/fts,
-    # so under a CARGO_TARGET_DIR override it would silently score a stale one.
-    python3 features/sampler/tests/css-ab/score.py \
-        --fts "${CARGO_TARGET_DIR:-target}/debug/fts" \
-        --pack {{quote(css_pack)}} --json scratch/css-ab/score.json {{ARGS}}
-
-# Same, restricted to sections (e.g. `just css-ab-sections S10,S13`).
-css-ab-sections SECTIONS:
-    just css-ab --sections {{SECTIONS}}
 
 # ── Expression editor ────────────────────────────────────────────────────
 

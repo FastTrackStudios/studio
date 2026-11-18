@@ -156,7 +156,7 @@ stable, and how to diagnose a miss. What it means in this tree:
   outside tests — kache keys that by its absolute path, so every worktree
   would recompile the crate and everything above it.
 - **Build scripts** write generated `include_*!` paths relative to the
-  generated file (`features/rigs/guitar/build.rs`) or copy into `OUT_DIR`
+  generated file (`signal:features/rigs/guitar/build.rs`) or copy into `OUT_DIR`
   (`fts-fx:apps/plugins/mic/build.rs`).
 - **Target dirs are named `target`** (or live outside the checkout): kache
   keeps any other in-checkout name in the key.

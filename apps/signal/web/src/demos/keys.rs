@@ -14,7 +14,7 @@
 //! # Why these names
 //!
 //! The mixer below is the shape of the actual Worship profile
-//! (`features/rigs/keys/src/profile.rs::worship_profile`): four engines —
+//! (`signal:features/rigs/keys/src/profile.rs::worship_profile`): four engines —
 //! Keys, Pad, Organ, Bass, plus Aux — with the lanes and patches that
 //! profile really defines, down to the fader trims (`Pad` at −7.1 dB,
 //! `Shimmer` at −10.5). It is the UI and the *layout* of a real rig with

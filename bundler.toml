@@ -1,12 +1,8 @@
-# nice-plug bundler metadata for the FTS plugin suite —
+# nice-plug bundler metadata for the FTS plugins built here —
 # `cargo run -p fts-plugin-xtask -- bundle <package> --release` reads this
-# to name the .clap/.vst3 bundles (see apps/plugins/).
-
-[nam-plugin]
-name = "FTS NAM"
-
-[signal-plugin]
-name = "FTS Signal"
+# to name the .clap/.vst3 bundles (see apps/plugins/). The nam and signal
+# plugins are bundled in FastTrackStudios/signal, the effects in
+# FastTrackStudios/fts-fx.
 
 [guide-plugin]
 name = "FTS Guide"

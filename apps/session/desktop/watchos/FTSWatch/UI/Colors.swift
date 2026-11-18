@@ -1,5 +1,5 @@
 // Color mapping — a 1:1 mirror of the Dioxus web perform grid
-// (`features/rigs/guitar/ui/src/perform.rs`): `folder_color()` for stack
+// (`signal:features/rigs/guitar/ui/src/perform.rs`): `folder_color()` for stack
 // tiles, the hardcoded function-tile colors for the hold layer.
 
 import SwiftUI

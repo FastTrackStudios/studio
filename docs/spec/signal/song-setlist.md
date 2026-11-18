@@ -5,7 +5,7 @@ recalls tones as it plays, and a **Setlist** is an ordered run of songs for a
 service/show. This spec covers the data model and the **switch semantics** (what
 happens on recall); [setlist-navigation.md](setlist-navigation.md) covers the
 runtime strategies (full-load mute/unmute vs dynamic load). Reference:
-`features/rigs/guitar/src/profiles.rs` (`SongDef`, `SetlistDef`,
+`signal:features/rigs/guitar/src/profiles.rs` (`SongDef`, `SetlistDef`,
 `SetlistEntryDef`, `StackDefaultDef`).
 
 ## Songs

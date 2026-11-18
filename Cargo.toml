@@ -8,8 +8,6 @@
 resolver = "3"
 
 members = [
-    "features/signal/space",
-    "features/signal/tone3000",
     "features/timeline",
     "features/editing",
     "features/ui/dock",
@@ -19,25 +17,18 @@ members = [
     "features/adapters/web/worklet",
     "features/editor",
     "features/session",
-    "features/rigs/synth",
-    "features/sampler",
-    "features/rigs/guitar",
     "features/ui/daw-ui",
     "features/dynamic-template",
     "features/app/shell",
     "features/app/version",
     "features/library",
     "features/account",
-    "features/rigs/keys",
-    "features/rigs/ekit",
-    "features/rigs/drums",
     "features/keybinds",
     "features/ui/themer",
     "features/app/launcher",
     "features/control-surfaces",
     # ── session ──
     "xtask/session-reaper",
-    "features/rigs/fx",
     "apps/themer",
     "features/adapters/reaper/daw-reaper-dioxus-ext",
     "features/adapters/reaper/tests/daw-reaper-dioxus-ext-test",
@@ -79,7 +70,6 @@ members = [
     "xtask/devtools",
     "xtask/workflows",
     "vendor/dioxus-test",
-    "vendor/tone3000",
     # ── processor ──
     "apps/plugins/host",
     "xtask/plugins",
@@ -89,36 +79,8 @@ members = [
     "apps/signal/mobile",
     "apps/signal/web",
     "apps/plugins/guide",
-    "apps/plugins/nam",
-    "apps/plugins/signal",
-    "features/signal/browser",
-    "features/signal/controller",
-    "features/signal/daw-bridge",
-    "features/signal/grid",
-    "features/signal/grid-ui",
-    "features/signal/import",
-    "features/signal/live",
-    "features/signal/proto",
-    "features/rigs/host",
-    "features/rigs/proto",
-    "features/signal",
-    "features/signal/storage",
-    "features/signal/widgets",
-    "features/signal/macromod",
-    "features/dsp/nam",
     "features/adapters/reaper/signal-extension",
     "features/adapters/reaper/signal-reaper-controller",
-    "features/rigs/orchestra",
-    "features/rigs/fretted",
-    "features/rigs/synth-rig",
-    "features/rigs/keys/wurli",
-    "features/rigs/shell",
-    "features/rigs/perform-ui",
-    "features/rigs/perform-store",
-    "features/signal/content-proto",
-    "features/signal/content-library",
-    "features/signal/content-client",
-    "apps/plugins/sampler",
     # ── frame's plugin faces (frame itself is a git dependency) ──
     "features/ui/plugin-faces",
     "features/adapters/protools",
@@ -136,8 +98,8 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/FastTrackStudios/session"
 
 [workspace.dependencies]
-signal-space = { path = "features/signal/space" }
-signal-tone3000 = { path = "features/signal/tone3000" }
+signal-space = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-tone3000 = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 # The effects live in FastTrackStudios/fts-fx (studio#510): `dsp-core`,
 # `dsp`, `fts-audio-ui`, `plugin-core`, `preset-browser` and the plugin
 # crates `builtin` runs in-process, all at ONE rev (move every line
@@ -158,9 +120,9 @@ frame = { git = "https://github.com/FastTrackStudios/frame", rev = "1f6311abc5ee
 web-audio-worklet = { path = "features/adapters/web/worklet" }
 editor = { path = "features/editor" }
 session = { path = "features/session" }
-synth = { path = "features/rigs/synth" }
-sampler = { path = "features/sampler" }
-guitar = { path = "features/rigs/guitar" }
+synth = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+sampler = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+guitar = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 protools = { path = "features/adapters/protools" }
 ableton = { path = "features/adapters/ableton" }
 logic = { path = "features/adapters/logic" }
@@ -168,9 +130,9 @@ interchange = { path = "features/adapters/interchange" }
 daw-ui = { path = "features/ui/daw-ui" }
 dynamic-template = { path = "features/dynamic-template", default-features = false }
 dsp-core = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
-keys = { path = "features/rigs/keys" }
-ekit = { path = "features/rigs/ekit" }
-drums = { path = "features/rigs/drums" }
+keys = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+ekit = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+drums = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 keybinds = { path = "features/keybinds" }
 themer = { path = "features/ui/themer", default-features = false }
 launcher = { path = "features/app/launcher" }
@@ -190,7 +152,6 @@ dsp = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874
 # rich track-info, param rescan). The ONE sanctioned exception to
 # path-deps-only — it left the tree so it can track upstream.
 nice-plug = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
-nice-plug-dioxus = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
 nice-plug-xtask = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
 app-shell = { path = "features/app/shell" }
 # The release version a shipped binary reports (FTS_RELEASE_VERSION at build
@@ -198,20 +159,11 @@ app-shell = { path = "features/app/shell" }
 fts-version = { path = "features/app/version" }
 library = { path = "features/library" }
 fts-account = { path = "features/account" }
-# The grid that follows the zoom. Pure arithmetic and no dependencies, so
-# the arrange view and the expression editor can agree on it without
-# either depending on the other.
-# Pinned to a commit, not a tag: v0.1.2 needs valverig-nam =0.0.1, which is
-# gone from crates.io, so no lockfile change resolves. bd6a156e is PR #3
-# (fix/valverig-nam-0.0.2, valverig-nam =0.0.2, nothing else); back to a
-# tag (v0.1.3) once it merges.
-neural-amp-modeler = { git = "https://github.com/FastTrackStudios/neural-amp-modeler-rs", rev = "bd6a156e5280d9ba30a8f50f5d39b0310feb8780" }
 # Canonical MIDI facade. Defaults OFF at the root: daw-proto re-exports
 # `midicore::MidiEvent` and must not drag midicore's `vox` service traits
 # (nor the `midir` feature — midicore-midir pins midir 0.10/alsa-sys 0.3,
 # colliding with daw's midir 0.11/alsa-sys 0.4 via `links = "alsa"`).
 # Consumers that want the vox surface set `features = ["vox"]` themselves.
-# NI Komplete Kontrol keyboard driver (Light Guide / per-key RGB LEDs).
 arborium ={ version = "2.16.0", default-features = false }
 arborium-theme = "2.16.0"
 arborium-tree-sitter = "2.16.0"
@@ -242,7 +194,6 @@ daw-allocator = { git = "https://github.com/FastTrackStudios/daw", rev = "862637
 daw-test-macro = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
 utils = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
 midi = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-audio = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
 # Defaults OFF at the root so lean consumers (probe-only scanners, the
 # iOS-clean session-guide) don't drag the pack engine in; each consumer
 # names the features it needs ("load" / "write" / "engine").
@@ -334,7 +285,6 @@ studio-views = { path = "features/studio-views" }
 keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
 keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
 keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
-keyflow-annotate = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
 keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
 keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
 keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
@@ -383,7 +333,7 @@ world-sys = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1"
 # The saturator's five circuits and their profiles — what its selector
 # picks from, applied through the plugin's own `apply`.
 # signal's rigs in the session engine: the bass rig, the kit's voices.
-signal-fx = { path = "features/rigs/fx" }
+signal-fx = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 # signal's in-process rig engine (NAM, convolver, the sampler), from the
 # sibling checkout as daw is: both resolve daw to ../daw, so its
 # processors are the session engine's `PluginInstance`s.
@@ -396,7 +346,6 @@ facet = { version = "0.50.0-rc.5", features = ["reflect", "chrono", "uuid"] }
 facet-json = { version = "0.50.0-rc.7" }
 facet-postcard = { version = "0.50.0-rc.5" }
 facet-styx = { version = "5.0.0-rc.7" }
-facet-toml = { version = "0.50.0-rc.5" }
 # figue pairs with facet-styx 5.0 (reaper-input keybind config parsing).
 figue = { version = "5.0.0-rc.5" }
 vox = { version = "0.10.0-rc.5", default-features = false, features = ["runtime"] }
@@ -607,9 +556,6 @@ dioxus-mcp-probe = { git = "https://github.com/tonybierman/dioxus-mcp" }
 # tests on blitz-dom (no browser). See libs/vendor/dioxus-test.
 dioxus-test = { path = "vendor/dioxus-test" }
 dioxus-devtools = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
-# FTS fork tags carrying the dioxus-0.8 bumps until upstream moves (the
-# tags architect v0.12.6 pins).
-lumen-blocks = { git = "https://github.com/FastTrackStudios/lumen-blocks", tag = "v0.3.1" }
 dioxus-primitives = { git = "https://github.com/FastTrackStudios/dioxus-components", package = "dioxus-primitives", tag = "fts-upstream-2026-11", default-features = false }
 lucide-dioxus = { git = "https://github.com/FastTrackStudios/lucide", tag = "fts-upstream-2026-11", features = ["all-icons"] }
 clsx = "0.1.1"
@@ -725,7 +671,6 @@ proc-macro2 = "1"
 # ── fts-story tooling ─────────────────────────────────────────────────
 dssim-core = "3"
 png = "0.17"
-proptest = "1"
 tempfile = "3.8"
 
 # ── Audio / plugin framework externals (nice-plug + audiocore) ───────
@@ -757,7 +702,6 @@ eyre = "0.6"
 uuid = { version = "1", features = ["v4", "v5", "v7", "serde"] }
 futures-timer = "3"
 clap = { version = "4", features = ["derive"] }
-memmap2 = "0.9"
 camino = "1.2"
 # Fuzzy PNG diffing (ui-snapshot; same lib Blitz's WPT runner uses).
 dify = "0.8"
@@ -766,13 +710,6 @@ enumflags2 = "0.7"
 fragile = "2"
 # Hardware MIDI I/O — 0.11 to share one alsa-sys across the stack.
 midir = "0.11"
-# libusb bindings for the NI Komplete Kontrol Light Guide (USB bulk transfer,
-# not MIDI). Bundles/builds libusb via its build script, so no system lib is
-# required. Used only by the `kontrol` crate.
-rusb = "0.9"
-# HID (hidraw) access for the NI Komplete Kontrol Light Guide — the LEDs are
-# HID output reports, not bulk USB. Bundles hidapi; coexists with usbhid.
-hidapi = "2"
 # Audio I/O host abstraction — the signal rigs run on cpal's native
 # pipewire host (via daw-audio-io); the `pipewire`/`jack` backends are
 # feature-gated per consumer.
@@ -845,7 +782,6 @@ keybindings = "0.0.2"
 editor-types = "0.0.2"
 rrule = "0.11"
 octocrab = "0.46"
-walkdir = "2"
 indexmap = "2"
 regex = "1"
 serde_yaml = "0.9"
@@ -888,20 +824,13 @@ vox-codegen = "0.10.0-rc.5"
 # ── from daw's workspace (joined into studio) ──
 
 # ── from processor's workspace (joined into studio) ──
-tone3000 = "0.1"
-signal-nam = { path = "features/dsp/nam" }
+signal-nam = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 web-time = "1"
 
 # ── from signal's workspace (joined into studio) ──
-signal = { path = "features/signal" }
-signal-proto = { path = "features/signal/proto" }
-signal-browser = { path = "features/signal/browser", default-features = false }
-signal-grid = { path = "features/signal/grid" }
-signal-grid-ui = { path = "features/signal/grid-ui" }
-signal-controller = { path = "features/signal/controller" }
-signal-live = { path = "features/signal/live" }
-signal-storage = { path = "features/signal/storage" }
-signal-import = { path = "features/signal/import" }
+signal = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-import = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-web = { path = "apps/signal/web" }
 # Session's app as a library: Studio (apps/studio/desktop) mounts it behind
 # its front screen. No default features: Studio picks the iOS-clean set.
@@ -912,26 +841,19 @@ session-engine = { path = "apps/session/engine", default-features = false }
 # Its host-neutral runtime: no window, no shell, no Dioxus (studio#400).
 session-runtime = { path = "apps/session/runtime" }
 session-ui = { path = "apps/session/ui", default-features = false }
-signal-daw-bridge = { path = "features/signal/daw-bridge" }
-signal-rig-host = { path = "features/rigs/host" }
-signal-rigs-proto = { path = "features/rigs/proto" }
-signal-widgets = { path = "features/signal/widgets" }
-signal-rig-shell = { path = "features/rigs/shell" }
-signal-rig-perform-ui = { path = "features/rigs/perform-ui" }
-signal-rig-perform-store = { path = "features/rigs/perform-store" }
-signal-content-proto = { path = "features/signal/content-proto" }
-signal-content-library = { path = "features/signal/content-library" }
-signal-content-client = { path = "features/signal/content-client" }
+signal-rig-host = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-rigs-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-rig-shell = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-rig-perform-ui = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-content-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-content-library = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-content-client = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-extension = { path = "features/adapters/reaper/signal-extension" }
-signal-macromod = { path = "features/signal/macromod" }
-openwurli-dsp = { path = "features/rigs/keys/wurli" }
-signal-orchestra = { path = "features/rigs/orchestra" }
-signal-fretted = { path = "features/rigs/fretted" }
-signal-synth-rig = { path = "features/rigs/synth-rig" }
+signal-macromod = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+signal-synth-rig = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 
 # ── from patchbay's workspace (joined into studio) ──
 socket2 = { version = "0.6", features = ["all"] }
-
 
 # ── from frame's workspace (joined into studio) ──
 anyrender_svg = "0.15"
@@ -942,12 +864,9 @@ winit = "0.30"
 # manifests; a member says `x = { workspace = true }` and adds its features) ──
 ab_glyph = "0.2"
 android-activity = "0.6"
-arc-swap = "1.7"
 baseview = "0.2.2"
-bhtsne = "0.5"
 bincode = "1"
 block2 = "0.6"
-bytemuck = "1"
 cfb = "0.10"
 chatterbox-rs = { git = "https://github.com/bearcove/cbx" }
 claxon = "0.4"
@@ -1000,7 +919,6 @@ plist = "1"
 pprof = "0.15"
 pretty_assertions = "1.4"
 quick-xml = "0.41"
-ratatui = "0.30"
 resvg = "0.45"
 # resvg's SVG reader alone, its text drawn as outlines from fonts given it
 # (no system fonts, no memory maps): what builds for wasm (setlists' `follow`).
@@ -1023,15 +941,10 @@ ureq = "2"
 url = "2"
 vello_cpu = { version = "0.3", default-features = false }
 vorbis_rs = "0.5"
-wiremock = "0.6"
 x11-dl = "2.21"
 zip = { version = "2", default-features = false }
 zstd = "0.13"
 
-# ── external dependencies, declared once (moved up from the member
-# manifests; a member says `x = { workspace = true }` and adds its features) ──
-naga = "30"
-wasm-bindgen-test = "0.3"
 wgpu_context = "0.10"
 
 # ── external dependencies, declared once (moved up from the member
@@ -1048,7 +961,7 @@ test-that = { version = "0.5.2", default-features = false }
 # the critical path. tone3000 was the only crate in the graph asking for it.
 # See vendor/tone3000/FTS-PATCH.md; drop it once upstream lets a consumer
 # pick the TLS backend.
-tone3000 = { path = "vendor/tone3000" }
+tone3000 = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 # Vendored one-line fix: parse_schema_bytes rejected every real schema
 # exchange with "schema decode consumed N of M bytes" — it compared
 # phon_schema::schema_from_bytes's owned-allocation byte count (added in

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Screenshot the running rig window — and nothing else on the screen.
 #
-# The headless renderer (`just guitar-shot`) cannot show this: its
+# The headless renderer (`just guitar-shot`, in FastTrackStudios/signal) cannot show this: its
 # `VelloImageRenderer` hands out no wgpu device, so every painted panel falls
 # back to vectors there and the WGSL never runs. The only place the shaders
 # actually execute is the live window, so the only honest picture of them is a
@@ -19,7 +19,7 @@ EXPECT_W="${2:-}"
 MATCH="${3:-studio-desktop}"
 
 if ! pgrep -x "$MATCH" >/dev/null; then
-    echo "rig-grab: no $MATCH is running — start one with 'just guitar --design' (or 'just viz-gallery')" >&2
+    echo "rig-grab: no $MATCH is running — start one with 'just guitar --design' (or 'just viz-gallery' in a signal checkout)" >&2
     exit 1
 fi
 

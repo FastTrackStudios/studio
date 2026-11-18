@@ -1,5 +1,5 @@
 // The macro bar, for fingers. The bank is the Signal app's
-// (features/rigs/guitar/src/macros.rs): built from the chain by block type,
+// (signal:features/rigs/guitar/src/macros.rs): built from the chain by block type,
 // in its order and colours — for this rig's chain, sixteen knobs (Input is
 // left out: the chain has no Input block). A knob sits where the patch puts
 // it, so the bar shows what the patch is doing, and it reads one of three

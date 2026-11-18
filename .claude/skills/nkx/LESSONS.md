@@ -125,7 +125,7 @@ strings.txt, proj/Kontakt8; scripts/DecompileAt.java decompiles by address).
   (rand()<<15)|rand()) & 0x7fffffff` (32-bit), `v % (hi−lo+1) + lo`. macOS
   libc `rand()` = Park–Miller (16807, mod 2^31−1, unseeded state 1).
   Kontakt seeds `srand(time(NULL))`. Reproducible renders: the KSP Seed CLAP
-  (features/rigs/orchestra/tests/ksp_seed/) pins it; KONTRA `KONTRA_KSP_SEED`.
+  (signal:features/rigs/orchestra/tests/ksp_seed/) pins it; KONTRA `KONTRA_KSP_SEED`.
 - **Group start options are a generated system script**
   (`BEngine::GenerateSysScript`): key select, `in_range(%CC[n],min,max)`, round
   robin, random cycles (`random(0,n−1)`, the same rand()), all under

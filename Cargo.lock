@@ -582,6 +582,7 @@ dependencies = [
  "objc2 0.6.5",
  "objc2-foundation 0.3.2",
  "objc2-ui-kit 0.3.2",
+ "signal-rig-shell",
  "tempfile",
  "tokio",
  "tracing",
@@ -2628,16 +2629,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3df27b8d5ddb458c5fb1bbc1ce172d4a38c614a97d550b0ac89003897fb01de4"
 
 [[package]]
-name = "assert-json-diff"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47e4f2b81832e72834d7518d8487a0396a28cc408186a2e8854c0f98011faf12"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "assoc"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3449,15 +3440,6 @@ dependencies = [
 
 [[package]]
 name = "bit-set"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0700ddab506f33b20a03b13996eccd309a48e5ff77d0d95926aa0210fb4e95f1"
-dependencies = [
- "bit-vec 0.6.3",
-]
-
-[[package]]
-name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08807e080ed7f9d5433fa9b275196cfc35414f66a0c79d864dc51a0d825231a3"
@@ -3482,12 +3464,6 @@ checksum = "09ec2f926cc3060f09db9ebc5b52823d85268d24bb917e472c0c4bea35780a7d"
 dependencies = [
  "bit-vec 0.9.1",
 ]
-
-[[package]]
-name = "bit-vec"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
 name = "bit-vec"
@@ -4097,12 +4073,6 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.20",
 ]
-
-[[package]]
-name = "cast"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "castaway"
@@ -4776,17 +4746,13 @@ dependencies = [
 name = "control-surfaces"
 version = "26.10.3"
 dependencies = [
- "control-surfaces",
  "daw-control",
  "daw-proto",
  "daw-standalone",
  "eyre",
  "facet",
  "facet-styx",
- "hidapi",
- "midi",
  "midir",
- "rusb",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -5054,7 +5020,6 @@ dependencies = [
  "dasp_sample",
  "futures-channel",
  "futures-util",
- "jack",
  "jni 0.22.4",
  "js-sys",
  "libc",
@@ -5306,16 +5271,6 @@ dependencies = [
  "getrandom 0.4.3",
  "hybrid-array",
  "rand_core 0.10.1",
-]
-
-[[package]]
-name = "csscolorparser"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb2a7d3066da2de787b7f032c736763eb7ae5d355f81a68bab2675a96008b0bf"
-dependencies = [
- "lab",
- "phf 0.11.3",
 ]
 
 [[package]]
@@ -5899,7 +5854,6 @@ dependencies = [
  "futures",
  "gloo-timers 0.3.0",
  "js-sys",
- "libloading 0.8.9",
  "midi",
  "raw-window-handle 0.6.2",
  "rtrb",
@@ -5909,7 +5863,6 @@ dependencies = [
  "tracing",
  "uuid",
  "vox",
- "vst3",
  "wasm-bindgen",
  "web-time",
 ]
@@ -6024,24 +5977,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadpool"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0be2b1d1d6ec8d846f05e137292d0b89133caf95ef33695424c09568bdd39b1b"
-dependencies = [
- "deadpool-runtime",
- "lazy_static",
- "num_cpus",
- "tokio",
-]
-
-[[package]]
-name = "deadpool-runtime"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "092966b41edc516079bdf31ec78a2e0588d1d0c08f78b91d8307215928642b2b"
-
-[[package]]
 name = "debug_timer"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6078,12 +6013,6 @@ dependencies = [
  "nice-plug",
  "plugin-core",
 ]
-
-[[package]]
-name = "deltae"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5729f5117e208430e437df2f4843f5e5952997175992d1414f94c57d61e270b4"
 
 [[package]]
 name = "der"
@@ -6869,7 +6798,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "inventory",
- "lru 0.18.4",
+ "lru",
  "parking_lot",
  "pin-project",
  "rustc-hash 2.1.3",
@@ -7262,13 +7191,14 @@ dependencies = [
 [[package]]
 name = "drums"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "builtin",
- "control-surfaces",
  "daw",
  "dioxus",
  "facet",
+ "kontrol",
  "midi",
  "sampler",
  "signal-plugin-host",
@@ -7277,9 +7207,7 @@ dependencies = [
  "signal-rigs-proto",
  "signal-space",
  "signal-widgets",
- "tokio",
  "tracing",
- "tracing-subscriber",
  "vox",
 ]
 
@@ -7620,10 +7548,10 @@ dependencies = [
 [[package]]
 name = "ekit"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "daw",
- "dioxus",
  "facet",
  "midi",
  "sampler",
@@ -7631,9 +7559,7 @@ dependencies = [
  "signal-rig-perform-store",
  "signal-rigs-proto",
  "signal-space",
- "tokio",
  "tracing",
- "tracing-subscriber",
  "vox",
 ]
 
@@ -8249,16 +8175,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
 
 [[package]]
-name = "fancy-regex"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b95f7c0680e4142284cf8b22c14a476e87d61b004a3a0861872b32ef7ead40a2"
-dependencies = [
- "bit-set 0.5.3",
- "regex",
-]
-
-[[package]]
 name = "fast-interleave"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8354,17 +8270,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "filedescriptor"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e40758ed24c9b2eeb76c35fb0aebc66c626084edd827e07e1552279814c6682d"
-dependencies = [
- "libc",
- "thiserror 1.0.69",
- "winapi",
-]
-
-[[package]]
 name = "files-client"
 version = "26.10.1"
 source = "git+https://github.com/FastTrackStudios/task?branch=main#7b90e40fc221e331fafffb2bd375981fefdf9f72"
@@ -8421,12 +8326,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "finl_unicode"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80bb028c8b4148c9ee0cca68fcd9add6044e81d3619f48577ddf13a263d047a2"
-
-[[package]]
 name = "fixed"
 version = "1.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8448,12 +8347,6 @@ dependencies = [
  "fast-interleave",
  "rubato",
 ]
-
-[[package]]
-name = "fixedbitset"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
 name = "fixedbitset"
@@ -9699,24 +9592,21 @@ dependencies = [
 [[package]]
 name = "guitar"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "anyrender",
- "anyrender_vello",
  "anyrender_vello_hybrid",
- "app-shell",
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "architect-mcp",
  "audio",
  "base64 0.22.1",
  "blake3",
  "blitz-dom",
- "blitz-paint",
  "blitz-traits",
  "builtin",
  "bytemuck",
  "chrono",
  "dioxus",
- "dioxus-native",
  "dioxus-native-dom",
  "drums",
  "dsp",
@@ -9725,18 +9615,13 @@ dependencies = [
  "facet-styx",
  "frame",
  "fts-audio-ui",
- "futures",
- "guitar",
  "hound",
  "image",
  "kurbo 0.13.1",
  "libc",
- "loro",
  "lumen-blocks",
  "memmap2",
  "midi",
- "naga 30.0.1",
- "neural-amp-modeler",
  "parley 0.12.0",
  "rustc-hash 2.1.3",
  "sampler",
@@ -9752,7 +9637,6 @@ dependencies = [
  "signal-rigs-proto",
  "signal-tone3000",
  "signal-widgets",
- "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -9762,7 +9646,6 @@ dependencies = [
  "vello_gpu",
  "vox",
  "wasm-bindgen",
- "wasm-bindgen-test",
  "web-sys",
  "wgpu 30.0.1",
  "wgpu_context",
@@ -10827,7 +10710,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
 dependencies = [
  "byteorder-lite",
- "quick-error 2.0.1",
+ "quick-error",
 ]
 
 [[package]]
@@ -11000,19 +10883,6 @@ dependencies = [
  "once_cell",
  "similar",
  "tempfile",
-]
-
-[[package]]
-name = "instability"
-version = "0.3.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6778b0196eefee7df739db78758e5cf9b37412268bfa5650bfeed028aed20d9c"
-dependencies = [
- "darling 0.20.11",
- "indoc",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]
@@ -11235,7 +11105,7 @@ dependencies = [
  "iroh-base",
  "iroh-dns",
  "iroh-metrics",
- "lru 0.18.4",
+ "lru",
  "n0-error",
  "n0-future",
  "noq",
@@ -11348,33 +11218,6 @@ name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
-
-[[package]]
-name = "jack"
-version = "0.13.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7811b07bcac5dafabf814ab52c4b0ca9b7948aa1e279f572f03aa6544d47d27"
-dependencies = [
- "bitflags 2.13.2",
- "jack-sys",
- "lazy_static",
- "libc",
- "log",
-]
-
-[[package]]
-name = "jack-sys"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6013b7619b95a22b576dfb43296faa4ecbe40abbdb97dfd22ead520775fc86ab"
-dependencies = [
- "bitflags 1.3.2",
- "lazy_static",
- "libc",
- "libloading 0.7.4",
- "log",
- "pkg-config",
-]
 
 [[package]]
 name = "java-locator"
@@ -11588,17 +11431,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kasuari"
-version = "0.4.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bde5057d6143cc94e861d90f591b9303d6716c6b9602309150bd068853c10899"
-dependencies = [
- "hashbrown 0.16.1",
- "portable-atomic",
- "thiserror 2.0.20",
-]
-
-[[package]]
 name = "keccak"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11688,13 +11520,10 @@ dependencies = [
  "facet-json",
  "fts-sample",
  "hound",
- "keyflow-annotate",
  "keyflow-proto",
  "midly",
- "musicxml",
  "thiserror 2.0.20",
  "tracing",
- "zip 2.4.2",
 ]
 
 [[package]]
@@ -11732,6 +11561,7 @@ dependencies = [
 [[package]]
 name = "keys"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "architect-telemetry",
@@ -11743,10 +11573,7 @@ dependencies = [
  "facet-json",
  "facet-styx",
  "fts-audio-ui",
- "fts-sample",
- "libc",
  "midi",
- "ratatui",
  "sampler",
  "signal-browser",
  "signal-plugin-host",
@@ -11757,10 +11584,7 @@ dependencies = [
  "synth",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "vox",
- "vox-core",
- "vox-websocket",
 ]
 
 [[package]]
@@ -11828,6 +11652,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4933f3f57a8e9d9da04db23fb153356ecaf00cbd14aee46279c33dc80925c37"
 
 [[package]]
+name = "kontrol"
+version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
+dependencies = [
+ "eyre",
+ "hidapi",
+ "midi",
+ "tracing",
+]
+
+[[package]]
 name = "kqueue"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11891,12 +11726,6 @@ checksum = "0de8b303297635ad57c9f5059fd9cee7a47f8e8daa09df0fcd07dd39fb22977f"
 dependencies = [
  "log",
 ]
-
-[[package]]
-name = "lab"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf36173d4167ed999940f804952e6b08197cae5ad5d572eb4db150ce8ad5d58f"
 
 [[package]]
 name = "lalrpop"
@@ -12242,18 +12071,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libusb1-sys"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da050ade7ac4ff1ba5379af847a10a10a8e284181e060105bf8d86960ce9ce0f"
-dependencies = [
- "cc",
- "libc",
- "pkg-config",
- "vcpkg",
-]
-
-[[package]]
 name = "libz-sys"
 version = "1.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12272,15 +12089,6 @@ dependencies = [
  "dsp",
  "nice-plug",
  "nice-plug-dioxus",
-]
-
-[[package]]
-name = "line-clipping"
-version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e752191d037c44ad111a8caa762921926658402f01cc1253f7bef2020ece4f5e"
-dependencies = [
- "bitflags 2.13.2",
 ]
 
 [[package]]
@@ -12683,15 +12491,6 @@ dependencies = [
  "once_cell",
  "rand 0.8.8",
  "serde",
-]
-
-[[package]]
-name = "lru"
-version = "0.16.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f66e8d5d03f609abc3a39e6f08e4164ebf1447a732906d39eb9b99b7919ef39"
-dependencies = [
- "hashbrown 0.16.1",
 ]
 
 [[package]]
@@ -13129,12 +12928,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "memmem"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a64a92489e2744ce060c349162be1c5f33c6969234104dbd99ddb5feb08b8c15"
-
-[[package]]
 name = "memoffset"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13265,16 +13058,6 @@ checksum = "f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e"
 dependencies = [
  "mime",
  "unicase",
-]
-
-[[package]]
-name = "minicov"
-version = "0.3.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3aa3aa12b448ac225b3102217d1ac5cc717908f02722926524b0599c933c7a0"
-dependencies = [
- "cc",
- "walkdir",
 ]
 
 [[package]]
@@ -13514,36 +13297,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "musicxml"
-version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "335bf6a8b110bc88d0bf2ba66d31e2d508816430c5cdd566b70505735965b866"
-dependencies = [
- "crc32fast",
- "miniz_oxide 0.8.9",
- "musicxml_internal",
- "musicxml_macros",
- "regex",
-]
-
-[[package]]
-name = "musicxml_internal"
-version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e4097e51ea86c37057b75bbe8ba98080ea6474387f7bafcd6a0d2fe464b1252"
-
-[[package]]
-name = "musicxml_macros"
-version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b191126817b79753855d079efa1edde8df37223073e7119de466e33eea83005"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "mutants"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13664,21 +13417,6 @@ dependencies = [
  "indexmap",
  "rustc-hash 1.1.0",
  "thiserror 2.0.20",
-]
-
-[[package]]
-name = "nam-plugin"
-version = "26.10.3"
-dependencies = [
- "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
- "neural-amp-modeler",
- "nice-plug",
- "plugin-core",
- "sampler",
- "signal-nam",
- "signal-tone3000",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -15169,12 +14907,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "oorandom"
-version = "11.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
-
-[[package]]
 name = "opaque-debug"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15322,10 +15054,7 @@ dependencies = [
 [[package]]
 name = "openwurli-dsp"
 version = "0.5.2"
-dependencies = [
- "hound",
- "midly",
-]
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 
 [[package]]
 name = "option-ext"
@@ -16241,7 +15970,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
 dependencies = [
- "fixedbitset 0.5.7",
+ "fixedbitset",
  "indexmap",
 ]
 
@@ -16251,7 +15980,7 @@ version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8701b58ea97060d5e5b155d383a69952a60943f0e6dfe30b04c287beb0b27455"
 dependencies = [
- "fixedbitset 0.5.7",
+ "fixedbitset",
  "hashbrown 0.15.5",
  "indexmap",
  "serde",
@@ -16289,16 +16018,6 @@ dependencies = [
 
 [[package]]
 name = "phf"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fd6780a80ae0c52cc120a26a1a42c1ae51b247a253e4e06113d23d2c2edd078"
-dependencies = [
- "phf_macros 0.11.3",
- "phf_shared 0.11.3",
-]
-
-[[package]]
-name = "phf"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1562dc717473dbaa4c1f85a36410e03c047b2e7df7f45ee938fbef64ae7fadf"
@@ -16327,16 +16046,6 @@ checksum = "cbffee61585b0411840d3ece935cce9cb6321f01c45477d30066498cd5e1a815"
 dependencies = [
  "phf_generator 0.8.0",
  "phf_shared 0.8.0",
-]
-
-[[package]]
-name = "phf_codegen"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aef8048c789fa5e851558d709946d6d79a8ff88c0440c587967f8e94bfb1216a"
-dependencies = [
- "phf_generator 0.11.3",
- "phf_shared 0.11.3",
 ]
 
 [[package]]
@@ -16411,19 +16120,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "phf_macros"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f84ac04429c13a7ff43785d75ad27569f2951ce0ffd30a3321230db2fc727216"
-dependencies = [
- "phf_generator 0.11.3",
- "phf_shared 0.11.3",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]
@@ -17215,25 +16911,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proptest"
-version = "1.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b45fcc2344c680f5025fe57779faef368840d0bd1f42f216291f0dc4ace4744"
-dependencies = [
- "bit-set 0.8.0",
- "bit-vec 0.8.0",
- "bitflags 2.13.2",
- "num-traits",
- "rand 0.9.5",
- "rand_chacha 0.9.0",
- "rand_xorshift",
- "regex-syntax",
- "rusty-fork",
- "tempfile",
- "unarray",
-]
-
-[[package]]
 name = "prost"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17374,12 +17051,6 @@ checksum = "7f6d64c71eb498fe9eae14ce4ec935c555749aef511cca85b5568910d6e48001"
 dependencies = [
  "bytemuck",
 ]
-
-[[package]]
-name = "quick-error"
-version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quick-error"
@@ -17677,15 +17348,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rand_xorshift"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a"
-dependencies = [
- "rand_core 0.9.5",
-]
-
-[[package]]
 name = "rand_xoshiro"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17713,91 +17375,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5da7e78a036ce858e8d55b7e7dc8ba3a88b78350fd2155d3591bbd966b58589e"
 dependencies = [
  "rustversion",
-]
-
-[[package]]
-name = "ratatui"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1ce67fb8ba4446454d1c8dbaeda0557ff5e94d39d5e5ed7f10a65eb4c8266bc"
-dependencies = [
- "instability",
- "ratatui-core",
- "ratatui-crossterm",
- "ratatui-macros",
- "ratatui-termwiz",
- "ratatui-widgets",
-]
-
-[[package]]
-name = "ratatui-core"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ef8dea09a92caaf73bff7adb70b76162e5937524058a7e5bff37869cbbec293"
-dependencies = [
- "bitflags 2.13.2",
- "compact_str 0.9.1",
- "hashbrown 0.16.1",
- "indoc",
- "itertools 0.14.0",
- "kasuari",
- "lru 0.16.4",
- "strum 0.27.2",
- "thiserror 2.0.20",
- "unicode-segmentation",
- "unicode-truncate",
- "unicode-width 0.2.2",
-]
-
-[[package]]
-name = "ratatui-crossterm"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "577c9b9f652b4c121fb25c6a391dd06406d3b092ba68827e6d2f09550edc54b3"
-dependencies = [
- "cfg-if",
- "crossterm",
- "instability",
- "ratatui-core",
-]
-
-[[package]]
-name = "ratatui-macros"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7f1342a13e83e4bb9d0b793d0ea762be633f9582048c892ae9041ef39c936f4"
-dependencies = [
- "ratatui-core",
- "ratatui-widgets",
-]
-
-[[package]]
-name = "ratatui-termwiz"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f76fe0bd0ed4295f0321b1676732e2454024c15a35d01904ddb315afd3d545c"
-dependencies = [
- "ratatui-core",
- "termwiz",
-]
-
-[[package]]
-name = "ratatui-widgets"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7dbfa023cd4e604c2553483820c5fe8aa9d71a42eea5aa77c6e7f35756612db"
-dependencies = [
- "bitflags 2.13.2",
- "hashbrown 0.16.1",
- "indoc",
- "instability",
- "itertools 0.14.0",
- "line-clipping",
- "ratatui-core",
- "strum 0.27.2",
- "time",
- "unicode-segmentation",
- "unicode-width 0.2.2",
 ]
 
 [[package]]
@@ -17844,7 +17421,7 @@ dependencies = [
  "avif-serialize",
  "imgref",
  "loop9",
- "quick-error 2.0.1",
+ "quick-error",
  "rav1e",
  "rayon",
  "rgb",
@@ -18658,16 +18235,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rusb"
-version = "0.9.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab9f9ff05b63a786553a4c02943b74b34a988448671001e9a27e2f0565cc05a4"
-dependencies = [
- "libc",
- "libusb1-sys",
-]
-
-[[package]]
 name = "rust-fontconfig"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18866,18 +18433,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
-name = "rusty-fork"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc6bf79ff24e648f6da1f8d1f011e9cac26491b619e6b9280f2b47f1774e6ee2"
-dependencies = [
- "fnv",
- "quick-error 1.2.3",
- "tempfile",
- "wait-timeout",
-]
-
-[[package]]
 name = "rustybuzz"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19058,6 +18613,7 @@ dependencies = [
 [[package]]
 name = "sampler"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "architect-telemetry",
@@ -19074,30 +18630,22 @@ dependencies = [
  "facet-styx",
  "facet-toml",
  "fts-sample",
- "futures-util",
  "hound",
  "keyflow-annotate",
- "keyflow-lang",
- "libc",
- "memmap2",
  "midi",
  "neural-amp-modeler",
  "openwurli-dsp",
- "ratatui",
  "rayon",
  "realfft",
- "sampler",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "signal-plugin-host",
  "signal-proto",
  "signal-rig-host",
- "tempfile",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "utils",
  "uuid",
  "vox",
@@ -20331,37 +19879,31 @@ dependencies = [
 [[package]]
 name = "signal"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
- "base64 0.22.1",
  "daw",
- "eyre",
- "futures",
- "serde_json",
  "signal-controller",
  "signal-daw-bridge",
- "signal-extension",
  "signal-import",
  "signal-live",
  "signal-nam",
  "signal-proto",
  "signal-storage",
- "studio",
  "tokio",
  "tracing",
  "utils",
- "uuid",
 ]
 
 [[package]]
 name = "signal-browser"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "rayon",
  "sampler",
  "signal",
  "signal-grid",
  "signal-proto",
- "tokio",
  "uuid",
  "walkdir",
 ]
@@ -20369,15 +19911,13 @@ dependencies = [
 [[package]]
 name = "signal-content-client"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
- "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "futures-channel",
  "futures-util",
  "reqwest 0.12.28",
  "sha2 0.10.9",
- "signal-content-library",
  "signal-content-proto",
- "tempfile",
  "tokio",
  "tracing",
  "vox",
@@ -20386,14 +19926,13 @@ dependencies = [
 [[package]]
 name = "signal-content-library"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "sha2 0.10.9",
  "signal-content-proto",
- "tempfile",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "vox",
  "walkdir",
 ]
@@ -20401,6 +19940,7 @@ dependencies = [
 [[package]]
 name = "signal-content-proto"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "facet",
@@ -20412,6 +19952,7 @@ dependencies = [
 [[package]]
 name = "signal-controller"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "signal-live",
  "signal-proto",
@@ -20425,6 +19966,7 @@ dependencies = [
 [[package]]
 name = "signal-daw-bridge"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "daw",
  "serde",
@@ -20453,18 +19995,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "signal-fretted"
-version = "26.10.3"
-dependencies = [
- "eyre",
- "hound",
- "sampler",
- "utils",
-]
-
-[[package]]
 name = "signal-fx"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "daw-proto",
  "daw-standalone",
@@ -20480,6 +20013,7 @@ dependencies = [
 [[package]]
 name = "signal-grid"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "signal-proto",
  "uuid",
@@ -20488,10 +20022,10 @@ dependencies = [
 [[package]]
 name = "signal-grid-ui"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "architect-ui",
- "audio-controls",
  "dioxus",
  "lumen-blocks",
  "signal-grid",
@@ -20534,17 +20068,14 @@ dependencies = [
 [[package]]
 name = "signal-import"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "base64 0.22.1",
- "builtin",
  "dsp",
  "eyre",
- "hound",
- "realfft",
  "serde",
  "serde_json",
  "signal-controller",
- "signal-plugin-host",
  "signal-proto",
  "thiserror 2.0.20",
  "tracing",
@@ -20554,6 +20085,7 @@ dependencies = [
 [[package]]
 name = "signal-live"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "base64 0.22.1",
  "daw",
@@ -20574,6 +20106,7 @@ dependencies = [
 [[package]]
 name = "signal-macromod"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "dsp-core",
  "facet",
@@ -20601,6 +20134,7 @@ dependencies = [
 [[package]]
 name = "signal-nam"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "base64 0.22.1",
  "fts-sample",
@@ -20611,34 +20145,9 @@ dependencies = [
  "sha2 0.10.9",
  "signal-proto",
  "signal-space",
- "tempfile",
  "thiserror 2.0.20",
  "tracing",
  "walkdir",
-]
-
-[[package]]
-name = "signal-orchestra"
-version = "26.10.3"
-dependencies = [
- "eyre",
- "hound",
- "keyflow-lang",
- "sampler",
- "session",
-]
-
-[[package]]
-name = "signal-plugin"
-version = "26.10.3"
-dependencies = [
- "eyre",
- "facet",
- "facet-styx",
- "nice-plug",
- "sampler",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -20652,18 +20161,16 @@ dependencies = [
 [[package]]
 name = "signal-proto"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "base64 0.22.1",
  "facet",
- "facet-styx",
  "getrandom 0.2.17",
  "loro",
- "proptest",
  "serde",
  "serde_json",
  "signal-macromod",
- "signal-proto",
  "thiserror 2.0.20",
  "utils",
  "uuid",
@@ -20693,6 +20200,7 @@ dependencies = [
 [[package]]
 name = "signal-rig-host"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "audio",
  "blake3",
@@ -20707,8 +20215,6 @@ dependencies = [
  "serde_json",
  "session-format",
  "signal-proto",
- "signal-rig-host",
- "tempfile",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
@@ -20717,6 +20223,7 @@ dependencies = [
 [[package]]
 name = "signal-rig-perform-store"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "facet",
@@ -20728,28 +20235,29 @@ dependencies = [
 [[package]]
 name = "signal-rig-perform-ui"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "chrono",
  "dioxus",
- "dioxus-test",
  "signal-rig-shell",
  "signal-rigs-proto",
  "signal-widgets",
- "tokio",
 ]
 
 [[package]]
 name = "signal-rig-shell"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
- "app-shell",
  "dioxus",
+ "utils",
 ]
 
 [[package]]
 name = "signal-rigs-proto"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "facet",
@@ -20757,26 +20265,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "signal-sampler-clap"
-version = "26.10.3"
-dependencies = [
- "arc-swap",
- "eyre",
- "facet",
- "facet-styx",
- "hound",
- "nice-plug",
- "plugin-core",
- "sampler",
- "serde",
- "serde_json",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "signal-space"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "bhtsne",
@@ -20794,6 +20285,7 @@ dependencies = [
 [[package]]
 name = "signal-storage"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -20804,7 +20296,6 @@ dependencies = [
  "serde_json",
  "signal-proto",
  "thiserror 2.0.20",
- "tokio",
  "utils",
  "uuid",
 ]
@@ -20812,15 +20303,14 @@ dependencies = [
 [[package]]
 name = "signal-synth-rig"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "audio",
- "daw",
  "keys",
  "midi",
  "sampler",
  "signal-browser",
- "signal-plugin-host",
  "signal-rig-host",
  "signal-rigs-proto",
  "synth",
@@ -20830,6 +20320,7 @@ dependencies = [
 [[package]]
 name = "signal-tone3000"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "auth-client",
@@ -20843,15 +20334,12 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "signal-nam",
- "tempfile",
  "thiserror 2.0.20",
  "tokio",
  "tone3000",
  "tracing",
- "tracing-subscriber",
  "url",
  "vox",
- "wiremock",
 ]
 
 [[package]]
@@ -20877,14 +20365,13 @@ dependencies = [
 [[package]]
 name = "signal-widgets"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "dioxus",
- "dioxus-test",
  "nice-plug-dioxus",
  "plugin-core",
  "signal-proto",
- "tokio",
 ]
 
 [[package]]
@@ -21257,6 +20744,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2 0.10.9",
+ "synth",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -21793,15 +21281,6 @@ dependencies = [
 
 [[package]]
 name = "strum"
-version = "0.27.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
-dependencies = [
- "strum_macros 0.27.2",
-]
-
-[[package]]
-name = "strum"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
@@ -21819,18 +21298,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.27.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
-dependencies = [
- "heck 0.5.0",
- "proc-macro2",
- "quote",
  "syn 2.0.119",
 ]
 
@@ -22607,9 +22074,9 @@ dependencies = [
 [[package]]
 name = "synth"
 version = "26.10.3"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
- "daw",
  "dioxus",
  "facet",
  "facet-styx",
@@ -22617,13 +22084,9 @@ dependencies = [
  "fts-audio-ui",
  "midi",
  "sampler",
- "signal-plugin-host",
  "signal-proto",
  "signal-widgets",
- "song",
  "tracing",
- "tracing-subscriber",
- "uuid",
  "vox",
 ]
 
@@ -22901,69 +22364,6 @@ dependencies = [
  "crossterm",
  "thiserror 2.0.20",
  "xterm-query",
-]
-
-[[package]]
-name = "terminfo"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4ea810f0692f9f51b382fff5893887bb4580f5fa246fde546e0b13e7fcee662"
-dependencies = [
- "fnv",
- "nom 7.1.3",
- "phf 0.11.3",
- "phf_codegen 0.11.3",
-]
-
-[[package]]
-name = "termios"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "411c5bf740737c7918b8b1fe232dca4dc9f8e754b8ad5e20966814001ed0ac6b"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "termwiz"
-version = "0.23.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4676b37242ccbd1aabf56edb093a4827dc49086c0ffd764a5705899e0f35f8f7"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "bitflags 2.13.2",
- "fancy-regex",
- "filedescriptor",
- "finl_unicode",
- "fixedbitset 0.4.2",
- "hex",
- "lazy_static",
- "libc",
- "log",
- "memmem",
- "nix 0.29.0",
- "num-derive",
- "num-traits",
- "ordered-float 4.6.0",
- "pest",
- "pest_derive",
- "phf 0.11.3",
- "sha2 0.10.9",
- "signal-hook",
- "siphasher 1.0.3",
- "terminfo",
- "termios",
- "thiserror 1.0.69",
- "ucd-trie",
- "unicode-segmentation",
- "vtparse",
- "wezterm-bidi",
- "wezterm-blob-leases",
- "wezterm-color-types",
- "wezterm-dynamic",
- "wezterm-input-types",
- "winapi",
 ]
 
 [[package]]
@@ -23481,6 +22881,7 @@ checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
 [[package]]
 name = "tone3000"
 version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -23493,7 +22894,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "url",
- "wiremock",
 ]
 
 [[package]]
@@ -24099,12 +23499,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "unarray"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
-
-[[package]]
 name = "uncased"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -24226,17 +23620,6 @@ name = "unicode-segmentation"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
-
-[[package]]
-name = "unicode-truncate"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16b380a1238663e5f8a691f9039c73e1cdae598a30e9855f541d29b08b53e9a5"
-dependencies = [
- "itertools 0.14.0",
- "unicode-segmentation",
- "unicode-width 0.2.2",
-]
 
 [[package]]
 name = "unicode-vo"
@@ -25047,24 +24430,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vtparse"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d9b2acfb050df409c972a37d3b8e08cdea3bddb0c09db9d53137e504cfabed0"
-dependencies = [
- "utf8parse",
-]
-
-[[package]]
-name = "wait-timeout"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09ac3b126d3914f9849036f826e054cbabdc8519970b8998ddaf3b5bd3c65f11"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -25187,45 +24552,6 @@ checksum = "7ef64dbcc55df09c7e5a46182d181c2cfa3e925f3da937ea764728b4bbb9dcbf"
 dependencies = [
  "unicode-ident",
 ]
-
-[[package]]
-name = "wasm-bindgen-test"
-version = "0.3.77"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "895a2607575412a4eda1df892084a375ea10dfeadc4d7d2ab87b854e4ddc7ba1"
-dependencies = [
- "async-trait",
- "cast",
- "js-sys",
- "libm",
- "minicov",
- "nu-ansi-term",
- "num-traits",
- "oorandom",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test-macro",
- "wasm-bindgen-test-shared",
-]
-
-[[package]]
-name = "wasm-bindgen-test-macro"
-version = "0.3.77"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4288cb0ebe215033bf949ae1fd046726daa4c32a157f24b9dc6ac387a52aa759"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "wasm-bindgen-test-shared"
-version = "0.2.127"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33ff1c1b360982e93b6d8ea9c04836f71dba0817a16f91e229cf3a51bdd9d987"
 
 [[package]]
 name = "wasm-encoder"
@@ -25692,78 +25018,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "wezterm-bidi"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c0a6e355560527dd2d1cf7890652f4f09bb3433b6aadade4c9b5ed76de5f3ec"
-dependencies = [
- "log",
- "wezterm-dynamic",
-]
-
-[[package]]
-name = "wezterm-blob-leases"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "692daff6d93d94e29e4114544ef6d5c942a7ed998b37abdc19b17136ea428eb7"
-dependencies = [
- "getrandom 0.3.4",
- "mac_address",
- "sha2 0.10.9",
- "thiserror 1.0.69",
- "uuid",
-]
-
-[[package]]
-name = "wezterm-color-types"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7de81ef35c9010270d63772bebef2f2d6d1f2d20a983d27505ac850b8c4b4296"
-dependencies = [
- "csscolorparser",
- "deltae",
- "lazy_static",
- "wezterm-dynamic",
-]
-
-[[package]]
-name = "wezterm-dynamic"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f2ab60e120fd6eaa68d9567f3226e876684639d22a4219b313ff69ec0ccd5ac"
-dependencies = [
- "log",
- "ordered-float 4.6.0",
- "strsim 0.11.1",
- "thiserror 1.0.69",
- "wezterm-dynamic-derive",
-]
-
-[[package]]
-name = "wezterm-dynamic-derive"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46c0cf2d539c645b448eaffec9ec494b8b19bd5077d9e58cb1ae7efece8d575b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "wezterm-input-types"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7012add459f951456ec9d6c7e6fc340b1ce15d6fc9629f8c42853412c029e57e"
-dependencies = [
- "bitflags 1.3.2",
- "euclid",
- "lazy_static",
- "serde",
- "wezterm-dynamic",
 ]
 
 [[package]]
@@ -27032,29 +26286,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "wiremock"
-version = "0.6.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08db1edfb05d9b3c1542e521aea074442088292f00b5f28e435c714a98f85031"
-dependencies = [
- "assert-json-diff",
- "base64 0.22.1",
- "deadpool",
- "futures",
- "http",
- "http-body-util",
- "hyper",
- "hyper-util",
- "log",
- "once_cell",
- "regex",
- "serde",
- "serde_json",
- "tokio",
- "url",
 ]
 
 [[package]]
