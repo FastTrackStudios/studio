@@ -191,19 +191,16 @@ fn the_pane_shows_the_pixels_studio_s_window_paints() {
     }
 
     // In-app: what the widget hands Blitz, painted now at the same state.
-    let in_app = scope.runtime.in_scope(scope.scope, || {
+    let in_app = scope.run(|| {
         panel.handle(PanelEvent::Frame { play_at: 0.0 });
         widget.borrow_mut().paint_scene(W, H, 1.0)
     });
     assert!(!in_app.commands.is_empty(), "the widget painted nothing");
 
-    // Runtime: the pane's layers through the protocol a process uses.
+    // Runtime: the pane's layers (the picture, the play cursor over it)
+    // through the protocol a process uses.
     let layers = hosted.layers(&ctx).unwrap();
-    assert_eq!(
-        layers[0].1.commands.as_slice(),
-        in_app.commands.as_slice(),
-        "the pane's layer is the widget's scene, command for command"
-    );
+    assert_eq!(layers.len(), 2, "the picture and the play cursor");
     let mut sender = Sender::default();
     let batch = sender.frame(&layers).unwrap();
     let mut receiver = Receiver::new();

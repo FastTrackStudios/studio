@@ -6,8 +6,10 @@
 //! other hosts do on theirs: tells the panel the frame and where the play
 //! cursor is (`PanelEvent::Frame`, from the same `engine::Transport` the
 //! desktop window reads), and asks the widget for its scene
-//! (`ArrangementWidget::paint_scene`), which becomes the pane's layer. A
-//! frame that paints the same scene sends nothing (the web host's rule).
+//! (`ArrangementWidget::paint_layers`: the picture, and the play cursor
+//! apart), which become the pane's two layers. A layer that paints the
+//! same as last frame sends nothing (the web host's rule), so a song
+//! playing in a still view moves the cursor's layer alone.
 //! Input arrives as Architect's `ViewInput` and goes where Blitz and winit
 //! send it in the desktop window: pointer and keys to the widget as Blitz
 //! `UiEvent`s, and the panel's own events (the pointer's place, buttons,
@@ -26,8 +28,12 @@ use session_ui::widget::ArrangementWidget;
 pub use studio_view_link::{InScope, Stats};
 use studio_view_link::{SceneLayer, input};
 
-/// The pane's one layer: the widget's scene as it paints it.
+/// The pane's picture but the play cursor: what crosses only when the
+/// view changes.
 pub const SCENE: LayerKey = 1;
+/// The play cursor over it: all that crosses while the song plays and the
+/// view stands still.
+pub const CURSOR: LayerKey = 2;
 
 /// The widget hosted in a pane.
 pub struct Hosted {
@@ -35,8 +41,12 @@ pub struct Hosted {
     panel: ArrangementPanel,
     scope: InScope,
     layer: SceneLayer,
+    cursor: SceneLayer,
     /// The buttons held now: a move carries them, as Blitz's do.
     held: MouseEventButtons,
+    /// Where the play cursor is now, seconds: the engine's transport (the
+    /// same `engine::Transport` the desktop window reads), or a test's.
+    play_at: Box<dyn Fn() -> f64>,
 }
 
 impl Hosted {
@@ -52,8 +62,21 @@ impl Hosted {
             panel,
             scope,
             layer: SceneLayer::new(SCENE, stats),
+            cursor: SceneLayer::new(CURSOR, Arc::default()),
             held: MouseEventButtons::empty(),
+            play_at: Box::new(|| {
+                // Read each frame: the transport is there once the link is.
+                session_ui::engine::Transport::shared().map_or(0.0, |t| t.read().0)
+            }),
         }
+    }
+
+    /// The play cursor from `play_at` rather than the engine's transport:
+    /// a measurement driving the pane as playback does.
+    #[must_use]
+    pub fn with_play_at(mut self, play_at: impl Fn() -> f64 + 'static) -> Self {
+        self.play_at = Box::new(play_at);
+        self
     }
 
     fn panel(&self, event: PanelEvent) {
@@ -166,8 +189,7 @@ impl PaintView for Hosted {
 
     fn layers(&mut self, ctx: &ViewCtx) -> Option<Vec<(LayerKey, Layer)>> {
         let began = web_time::Instant::now();
-        // Read each frame: the transport is there once the link is.
-        let play_at = session_ui::engine::Transport::shared().map_or(0.0, |t| t.read().0);
+        let play_at = (self.play_at)();
         self.panel(PanelEvent::Frame { play_at });
         let (w, h) = studio_view_link::pane_size(ctx);
         // The panel's rectangle is the pane: it fills it, and the pane is
@@ -185,11 +207,13 @@ impl PaintView for Hosted {
                 }
             });
         }
-        let scene = {
+        let (scene, cursor) = {
             let widget = &self.widget;
             self.scope
-                .run(|| widget.borrow_mut().paint_scene(w, h, 1.0))
+                .run(|| widget.borrow_mut().paint_layers(w, h, 1.0))
         };
-        Some(self.layer.frame(scene, (w, h), began))
+        let mut layers = self.cursor.frame(cursor, (w, h), began);
+        layers.splice(0..0, self.layer.frame(scene, (w, h), began));
+        Some(layers)
     }
 }
