@@ -19964,6 +19964,7 @@ dependencies = [
  "session 0.1.0",
  "tempfile",
  "thiserror 2.0.20",
+ "tracing",
  "usvg 0.45.1",
  "vault",
  "wasm-bindgen-futures",

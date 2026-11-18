@@ -137,7 +137,7 @@ fn start(reply: UnboundedSender<Reply>) -> std::sync::mpsc::Sender<String> {
 }
 
 /// A wait of `d`, natively on a timer thread, on a page the browser's.
-async fn sleep(d: Duration) {
+pub(crate) async fn sleep(d: Duration) {
     #[cfg(not(target_arch = "wasm32"))]
     futures_timer::Delay::new(d).await;
     #[cfg(target_arch = "wasm32")]

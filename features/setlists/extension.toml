@@ -29,7 +29,9 @@ path = "features/setlists"
 "studio.setlists" = "0.1.0"
 
 [capabilities]
-actions = ["VAULT_", "BASES_", "SHARE_CREATE", "EXT_VIEW_OPEN"]
+# SCOPE_LIST: the song a process's Song view shows (the scope tab on show);
+# WORKSPACE_OPEN, WORKSPACE_NAVIGATE: the song's note, opened beside it.
+actions = ["VAULT_", "BASES_", "SHARE_CREATE", "EXT_VIEW_OPEN", "SCOPE_LIST", "WORKSPACE_OPEN", "WORKSPACE_NAVIGATE"]
 effect = "mutating"
 # The vault's and the bases' actions are the documents (Architect
 # v0.14.0): the read-only ones need `reads`, the rest `writes`.
