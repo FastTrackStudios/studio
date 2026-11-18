@@ -1,0 +1,53 @@
+# studio.arrangement (src/lib.rs): Studio's arrangement view, installed into
+# a stock Architect as a process. It reads the session (fts.session) and,
+# when an engine is there, the DAW's data (fts.daw); it names no other
+# view, so the mixer may be installed or not, and the engine may be any
+# provider of fts.daw (docs/design/arrangement-mixer-extensions.md).
+id = "studio.arrangement"
+name = "Arrangement"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "The session's tracks and clips on a timeline with waveforms, its ruler, markers and regions, and a playhead the host moves; the wheel scrolls, Ctrl-wheel zooms, a click in the ruler seeks, Space plays."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "studio-arrangement"
+
+# Optional: without an engine it draws a session's lanes and items alone.
+[uses]
+"fts.session" = "^0.1"
+"fts.daw" = "^0.1"
+
+# The engine's values (a playing engine's meters) are read at compose.
+[capabilities]
+effect = "mutating"
+ui = ["engine"]
+
+[[views]]
+id = "arrangement"
+title = "Arrangement"
+icon = "rows-3"
+
+[[actions]]
+id = "ARRANGEMENT_STATE"
+name = "Arrangement: state"
+description = "Every open arrangement: its session, rows, clips, waveforms held, camera (left, top, zoom), selection, layers and its view's frame times."
+group = "Arrangement"
+effect = "read_only"
+
+[[actions]]
+id = "ARRANGEMENT_VIEW"
+name = "Arrangement: set the view"
+description = "Moves the open arrangements' camera: `left` (seconds), `top` (pixels), `zoom` (pixels a second)."
+group = "Arrangement"
+effect = "mutating"
+params = '{"type":"object","properties":{"left":{"type":"number"},"top":{"type":"number"},"zoom":{"type":"number"}}}'
+
+[[actions]]
+id = "ARRANGEMENT_FIXTURE"
+name = "Arrangement: show a fixture"
+description = "Shows a synthetic arrangement of `tracks` rows of `clips` each (a measurement's size); with neither, the session again."
+group = "Arrangement"
+effect = "mutating"
+params = '{"type":"object","properties":{"tracks":{"type":"integer"},"clips":{"type":"integer"}}}'

@@ -1,0 +1,5 @@
+/target
+# The programs `dev.sh` installs into each package (its manifest's [entry]).
+/daw/daw-extension
+/arrangement/studio-arrangement
+/mixer/studio-mixer

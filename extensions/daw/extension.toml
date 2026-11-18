@@ -1,0 +1,113 @@
+# daw (src/lib.rs): the engine as an Architect extension. It holds the open
+# session, plays it with the daw engine, and provides fts.session (the
+# session primitive's service) and fts.daw (the DAW's) to every view.
+# Draws nothing: Studio's arrangement and mixer, or replacements for them,
+# are views of it (docs/design/arrangement-mixer-extensions.md).
+id = "daw"
+name = "DAW engine"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "Plays a session: multitrack audio through the daw engine, its transport driving the app's playhead, its meters and faders shared with the views lock-free."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "daw-extension"
+
+[provides]
+"fts.session" = "0.1.0"
+"fts.daw" = "0.1.0"
+
+[requires]
+"architect.playhead" = "^0.1"
+
+[capabilities]
+effect = "mutating"
+events = ["playhead.changed"]
+
+# fts.session: the session primitive's three methods.
+[[actions]]
+id = "DAW_SESSION_READ"
+name = "Session: read"
+description = "fts.session read: a caller's namespace, the timeline (others' payloads null), the song's structure."
+group = "DAW"
+effect = "read_only"
+
+[[actions]]
+id = "DAW_SESSION_WRITE"
+name = "Session: write"
+description = "fts.session write: the caller's namespace, lanes and items."
+group = "DAW"
+effect = "mutating"
+
+[[actions]]
+id = "DAW_SESSION_STRUCTURE"
+name = "Session: structure"
+description = "fts.session structure: tempo, markers, regions."
+group = "DAW"
+effect = "mutating"
+
+# fts.daw.
+[[actions]]
+id = "DAW_STATE"
+name = "DAW: state"
+description = "The open session, its revision, the transport, the shared value table and any problem."
+group = "DAW"
+effect = "read_only"
+
+[[actions]]
+id = "DAW_TRACKS"
+name = "DAW: tracks"
+description = "Every track: its lane, slot, name, colour, depth, fader, pan, mute and solo."
+group = "DAW"
+effect = "read_only"
+
+[[actions]]
+id = "DAW_CLIPS"
+name = "DAW: clips"
+description = "Every clip: its lane, start, end, name, gain, source offset and its peaks' hash."
+group = "DAW"
+effect = "read_only"
+
+[[actions]]
+id = "DAW_PEAKS"
+name = "DAW: peaks"
+description = "A source's peaks by hash."
+group = "DAW"
+effect = "read_only"
+params = '{"type":"object","properties":{"hash":{"type":"string"}},"required":["hash"]}'
+
+[[actions]]
+id = "DAW_TRANSPORT"
+name = "DAW: transport"
+description = "Play, pause, stop, toggle or seek: {\"do\": \"play\"} … {\"do\": \"seek\", \"seconds\": 12}."
+group = "DAW"
+effect = "mutating"
+params = '{"type":"object","properties":{"do":{"type":"string","enum":["play","pause","stop","toggle","seek"]},"seconds":{"type":"number"}},"required":["do"]}'
+
+[[actions]]
+id = "DAW_SET"
+name = "DAW: set a track"
+description = "A track's volume (fader 0..1), pan (-1..1), mute or solo (0/1), written to the session and applied."
+group = "DAW"
+effect = "mutating"
+params = '{"type":"object","properties":{"lane":{"type":"string"},"field":{"type":"string","enum":["volume","pan","mute","solo"]},"value":{"type":"number"}},"required":["lane","field","value"]}'
+
+[[actions]]
+id = "DAW_OPEN"
+name = "DAW: open a session"
+description = "Opens a session file and plays it."
+group = "DAW"
+effect = "mutating"
+params = '{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}'
+
+[[actions]]
+id = "DAW_DECK"
+name = "DAW: follow the playhead"
+description = "The app's playhead moved: the engine follows (its hook)."
+group = "DAW"
+effect = "mutating"
+
+[[hooks]]
+on = "app:playhead.changed"
+action = "DAW_DECK"

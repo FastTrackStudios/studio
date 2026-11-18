@@ -1,0 +1,34 @@
+[package]
+name = "studio-arrangement"
+description = "Studio's arrangement view as a runtime extension: the session's lanes and items, the DAW's tracks, clips and waveforms, ruler, markers and regions, and a playhead the host runs. Reads fts.session and fts.daw; names no other view."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "studio-arrangement"
+path = "src/main.rs"
+
+[dependencies]
+daw-view = { workspace = true }
+paint-kit = { workspace = true }
+session = { workspace = true, features = ["extension"] }
+architect-extensions = { workspace = true, features = ["guest", "linked-core", "paint-pane"] }
+architect-workspace = { workspace = true, features = ["paint-ui"] }
+anyrender = { workspace = true }
+dioxus = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+futures-channel = "0.3"
+futures-util = "0.3"
+futures-timer = "3"
+
+[dev-dependencies]
+architect-scene = { workspace = true }
+
+[lints]
+workspace = true
