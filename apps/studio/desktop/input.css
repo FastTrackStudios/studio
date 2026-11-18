@@ -17,7 +17,9 @@
 /* The UI crates, by folder: the rigs (signal's views, the grid, the guitar
    rig's UI), Session's views, the shared UI (daw-ui with its theme art,
    dock, the audio widgets), the chord tool and the key-binding overlay. */
-@source "../../../features/rigs/**/*.rs";
+/* The rigs are FastTrackStudios/signal's (a git dep: `.signal` is a symlink
+   to the checkout cargo resolved, refreshed by `just signal-tailwind`). */
+@source "../../../features/ui/.signal/features/rigs/**/*.rs";
 @source "../../../features/session/src/**/*.rs";
 @source "../../../features/ui/**/*.rs";
 @source "../../../features/editor/src/harmony/**/*.rs";

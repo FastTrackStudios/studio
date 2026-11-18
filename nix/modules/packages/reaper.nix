@@ -4,10 +4,11 @@
 #
 # Built from the vendored reaper-flake recipes (nix/vendor/reaper-flake,
 # subtree-imported — see wrapper/reaper/pkgs/{reaper,sws,reapack}.nix) plus a
-# new `fts-plugins` crane package (the plugins still built in this repo,
-# apps/plugins/{nam,signal,guide}, bundled the same way `just plugins-bundle`
-# does; the effects' plugins are built in FastTrackStudios/fts-fx and are
-# NOT in this package any more, studio#510).
+# new `fts-plugins` crane package (the plugin still built in this repo,
+# apps/plugins/guide, bundled the same way `just plugins-bundle` does; the
+# effects' plugins are built in FastTrackStudios/fts-fx and the nam and
+# signal plugins in FastTrackStudios/signal, and they are NOT in this
+# package any more, studio#510).
 #
 # Plugin injection follows the exact idiom reaper-flake already used for
 # SWS/ReaPack (idempotent launch-time symlinks into $REAPER_CONFIG/
@@ -44,7 +45,7 @@
         doNotPostBuildInstallCargoBinaries = true;
         doCheck = false;
         buildPhaseCargoCommand = ''
-          for p in nam signal guide; do
+          for p in guide; do
             cargo run -q -p fts-plugin-xtask -- bundle -p "$p-plugin" --release --offline
           done
         '';

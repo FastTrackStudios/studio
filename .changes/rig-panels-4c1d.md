@@ -1,6 +1,5 @@
 ---
 "studio-desktop" = "minor"
-"guitar" = "minor"
 "session-desktop" = "patch"
 "session-ui" = "patch"
 ---

@@ -36,13 +36,38 @@ fn within(secs: u64, what: &str, check: impl Fn() -> bool) -> Result<(), String>
     Err(format!("{what}: not within {secs} s"))
 }
 
-/// A song of one track with one audio item (a committed DI recording).
+/// Two seconds of a 220 Hz tone at 48 kHz, as a 16-bit mono WAV: the
+/// song's audio. Written beside the song, so reading it writes its peaks
+/// there.
+fn write_tone(path: &Path) -> Result<(), String> {
+    const RATE: u32 = 48_000;
+    let frames = RATE * 2;
+    let data_len = frames * 2;
+    let mut wav = Vec::with_capacity(44 + data_len as usize);
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&(36 + data_len).to_le_bytes());
+    wav.extend_from_slice(b"WAVEfmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    wav.extend_from_slice(&1u16.to_le_bytes()); // mono
+    wav.extend_from_slice(&RATE.to_le_bytes());
+    wav.extend_from_slice(&(RATE * 2).to_le_bytes());
+    wav.extend_from_slice(&2u16.to_le_bytes());
+    wav.extend_from_slice(&16u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_len.to_le_bytes());
+    for i in 0..frames {
+        let t = f64::from(i) / f64::from(RATE);
+        let s = (0.5 * (2.0 * std::f64::consts::PI * 220.0 * t).sin() * f64::from(i16::MAX)) as i16;
+        wav.extend_from_slice(&s.to_le_bytes());
+    }
+    std::fs::write(path, wav).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// A song of one track with one audio item (a two-second tone).
 fn song(dir: &Path) -> Result<PathBuf, String> {
-    // A copy beside the song: reading it writes its peaks beside it.
-    let committed = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../features/rigs/guitar/default-config/di/riff.wav");
     let wav = dir.join("riff.wav");
-    std::fs::copy(&committed, &wav).map_err(|e| format!("{}: {e}", committed.display()))?;
+    write_tone(&wav)?;
     let text = format!(
         r#"<REAPER_PROJECT 0.1 "7.0/test" 1700000000
   SAMPLERATE 48000 0 0

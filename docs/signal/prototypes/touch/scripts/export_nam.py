@@ -9,7 +9,7 @@ the prototype's browser:
                        algorithm; block presets -> their algorithm (delay
                        style, reverb algorithm, modulation engine)
 
-Algorithm names follow the Signal app's tables (features/rigs/guitar/ui/
+Algorithm names follow the Signal app's tables (signal:features/rigs/guitar/ui/
 src/control.rs DELAY_ALGOS, VERB_ALGOS, MOD_ENGINES)."""
 
 import json, os, re

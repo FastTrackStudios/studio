@@ -1,7 +1,6 @@
 ---
 "app-shell" = "patch"
 "fts-version" = "patch"
-"guitar" = "patch"
 "session-desktop" = "patch"
 "session-engine" = "patch"
 "studio-desktop" = "patch"

@@ -5,7 +5,7 @@ instrument (Keyscape, Omnisphere soundsources, drum kits, CSS-class orchestral
 libraries) is described. This spec defines the three axes a real library needs:
 **Multi-Mics**, **Articulations**, and **SoundLayers**. It refines the sample
 requirements in [soundsource.md](soundsource.md) (`signal.soundsource.sample.*`).
-Reference types: `features/rigs/synth/proto/` (`SynthZone`, `SynthMic`,
+Reference types: `signal:features/rigs/synth/proto/` (`SynthZone`, `SynthMic`,
 `SynthArticulation`).
 
 ## Zones — the atom

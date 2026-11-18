@@ -1,7 +1,4 @@
 ---
-"guitar" = "minor"
-"signal-rig-host" = "minor"
-"signal-rig-perform-store" = "minor"
 "studio-desktop" = "minor"
 ---
 

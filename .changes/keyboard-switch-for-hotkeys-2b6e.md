@@ -3,7 +3,6 @@
 "session-ui" = "patch"
 "dock" = "none"
 "library" = "patch"
-"guitar" = "patch"
 "session-desktop" = "patch"
 "studio-desktop" = "patch"
 ---

@@ -1,5 +1,4 @@
 ---
-"guitar" = "none"
 "xtask-workflows" = "none"
 ---
 

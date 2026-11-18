@@ -3,7 +3,7 @@
 // over port messages; the NAM models it cannot afford run on Web Workers
 // (nam_worker.js) reached through SharedArrayBuffers it is handed.
 //
-// Same constraints as the keys worklet (features/rigs/keys/worklet): the
+// Same constraints as the keys worklet (signal:features/rigs/keys/worklet): the
 // glue is STATICALLY imported (no dynamic import() in this scope), the
 // polyfill must come first (no TextDecoder/performance/crypto here), and
 // the wasm BYTES arrive in the init message (no fetch here).

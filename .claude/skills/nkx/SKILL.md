@@ -31,7 +31,7 @@ CS-specific procedure (chains on voyager, score A/B) is
   `null_suite.sh`, the fitters, batch renders — even ones expected to be cached.
 - **The engine holds no library numbers.** A library needs something the
   spec can't express → add a generic mechanism with a neutral default
-  (`features/sampler`), put the values in the spec or overlay. After any
+  (`signal:features/sampler`), put the values in the spec or overlay. After any
   engine change, rerun `null_batch.py strings` and compare: every strings
   pair unchanged (mean −38.7 dB as of 2026-11-16).
 - **Commit each measured step** through `nix develop --offline -c git commit`
@@ -86,7 +86,7 @@ commands; our model must issue the same events. Use the extended build
 `get_engine_par`, the variable watch):
 
 ```sh
-python3 -I features/rigs/orchestra/tests/analysis/mid2kontra.py probe.mid > scn.json
+python3 -I signal:features/rigs/orchestra/tests/analysis/mid2kontra.py probe.mid > scn.json
 KONTRA_INSPECT_VARS='1:$x,1:%arr[3]' \
   kontra-inspect play <instrument.nki> --scenario scn.json --json out.json
 ```
@@ -101,10 +101,10 @@ KONTRA falls short, extend it on a local branch of your own (from
 `local/inspect-vars`), never pushed upstream.
 
 ### 4. Spec, overlays, registration
-- Library spec: `features/rigs/orchestra/specs/<library>.styx` (shared
+- Library spec: `signal:features/rigs/orchestra/specs/<library>.styx` (shared
   structure: articulations, keyswitch `cc58_map`, legato engine, defaults).
 - Register it in `signal_orchestra::LIBRARIES`
-  (`features/rigs/orchestra/src/lib.rs`: name, install root, spec).
+  (`signal:features/rigs/orchestra/src/lib.rs`: name, install root, spec).
 - A generator script per library (templates: `tests/css_section_spec.py`,
   `tests/csw_instrument_spec.py`, `tests/csb_instrument_spec.py`, run by
   `tests/css_section.sh`) turns each instrument's decode into its
@@ -145,7 +145,7 @@ has a named cause (fixed, or listed as open in the PR).
 - **flat level ratio from sample 0** → gain or pan (check per channel).
 - **ratio diverging after the note-off** → the release / envelope model.
 
-Tools in `features/rigs/orchestra/tests/analysis/`: `findseg.py` (which file
+Tools in `signal:features/rigs/orchestra/tests/analysis/`: `findseg.py` (which file
 and offset a render segment comes from), `slide.py` (per window, each file's
 implied start), `resprof.py` (residual and levels through one unit),
 `pitchtrack.py` (cents over time), `lsfit.py` (joint least squares of a

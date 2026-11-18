@@ -1,6 +1,4 @@
 ---
-"guitar" = "minor"
-"signal-rig-shell" = "minor"
 "studio-desktop" = "minor"
 ---
 

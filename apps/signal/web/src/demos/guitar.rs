@@ -197,7 +197,7 @@ const BOARD: &[BoardEntry] = &[
 ];
 
 /// The Worship profile's five footswitch stacks and their real patch
-/// rotations, from `features/rigs/guitar/src/profiles.rs::worship_def`:
+/// rotations, from `signal:features/rigs/guitar/src/profiles.rs::worship_def`:
 ///
 ///   Clean   -> Clean, Clean Dry, Clean Verb
 ///   Crunch  -> Crunch, Crunch Edge

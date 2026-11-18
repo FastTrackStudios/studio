@@ -7,7 +7,7 @@ description: Bring a Cinematic Studio instrument (CSS strings section, CSW woodw
 
 Goal: an instrument played through our sampler sounds like the factory
 Kontakt patch, note for note. 1st Violins was matched by hand; everything
-else follows this loop. Tools live in `features/rigs/orchestra/tests/`.
+else follows this loop. Tools live in `signal:features/rigs/orchestra/tests/`.
 
 ## Rules
 
@@ -31,7 +31,7 @@ else follows this loop. Tools live in `features/rigs/orchestra/tests/`.
 ## The engine holds no library numbers
 
 Everything an instrument does is data: the library spec
-(`features/rigs/orchestra/specs/<library>.styx`) and the instrument's patch
+(`signal:features/rigs/orchestra/specs/<library>.styx`) and the instrument's patch
 folder (`<root>/_patches/<instrument>/library.styx` zones + `section.styx`
 numbers). The engine has only mechanisms. When matching a library needs
 something the spec cannot express, add the GENERIC mechanism to the engine
@@ -102,7 +102,7 @@ log is buffered). `SKIP_KONTAKT=1` reuses renders, `BIN=` swaps the renderer.
 ## 4. Render a score (and A/B with Kontakt)
 
 ```bash
-KONTAKT=1 features/rigs/orchestra/tests/score_render.sh score.mxl /tmp/out "Song - Quartet" \
+KONTAKT=1 signal:features/rigs/orchestra/tests/score_render.sh score.mxl /tmp/out "Song - Quartet" \
   P1="1st Violins":-0.55 P2="2nd Violins":-0.2 P3=Violas:0.2 P4=Cellos:0.5
 ```
 

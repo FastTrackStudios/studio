@@ -204,7 +204,7 @@
           buildInputs = config.fts.buildInputs;
           # The rig's NAM captures (rig-models, `just assets`) are not in
           # the source: nothing here ships a rig, so the guitar crate's
-          # release check for them stands down (features/rigs/guitar/build.rs).
+          # release check for them stands down (signal:features/rigs/guitar/build.rs).
           SIGNAL_RIG_NO_CAPTURES = "1";
         };
         # pipewire's -sys crates (cpal, in that host half) run bindgen:
@@ -361,7 +361,7 @@
         env = {
           # Nothing here ships a rig's NAM captures (rig-models, `just
           # assets`): the guitar crate's release check stands down
-          # (features/rigs/guitar/build.rs).
+          # (signal:features/rigs/guitar/build.rs).
           SIGNAL_RIG_NO_CAPTURES = "1";
           # The release version its Settings shows (fts-version reads it,
           # and only it): the stamp's FTS_RELEASE_VERSION under --impure,

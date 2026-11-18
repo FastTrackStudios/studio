@@ -37,7 +37,7 @@ transport for iOS/macOS Swift clients.
 ## Generated types
 
 `FTSWatch/Generated/WatchState.generated.swift` mirrors the facet DTOs in
-`features/rigs/guitar/proto/src/watch.rs`. Regenerate after a proto change:
+`signal:features/rigs/guitar/proto/src/watch.rs`. Regenerate after a proto change:
 
 ```bash
 cargo run -p signal-guitar-proto --example gen_watch_swift \

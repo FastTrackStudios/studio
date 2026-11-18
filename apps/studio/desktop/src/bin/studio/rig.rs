@@ -693,9 +693,9 @@ fn reload(timeout: u64) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// The NAM trainer script, written next to each freeze.
-const TRAIN_SCRIPT: &str =
-    include_str!("../../../../../../features/rigs/guitar/scripts/nam_freeze_train.py");
+/// The NAM trainer script, written next to each freeze (the guitar
+/// crate's: FastTrackStudios/signal).
+const TRAIN_SCRIPT: &str = guitar::freeze::TRAIN_SCRIPT;
 
 fn freeze(
     preset: &str,

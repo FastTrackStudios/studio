@@ -43,7 +43,7 @@ ssg-ui = { workspace = true }
 # module docs in src/demos/. Both build for wasm32 and both read their rig
 # through `try_consume_context`, so they render read-only with no engine.
 guitar = { workspace = true, features = ["ui"] }
-# `BlockType` is signal-proto's; features/rigs/guitar/proto imports it
+# `BlockType` is signal-proto's; signal:features/rigs/guitar/proto imports it
 # privately, so the block types have to come from the owning crate.
 signal-proto = { workspace = true }
 keys = { workspace = true, features = ["ui"] }

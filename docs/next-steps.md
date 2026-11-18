@@ -5,8 +5,8 @@ comes next, in order. The design docs this points at are in `docs/design/`.
 
 ## Done
 
-- **Step 1 — the feature layout** (`11e12c7`): `features/signal` (Signal's
-  domain) vs `features/rigs` (the instruments, `rigs/host`, `rigs/proto`);
+- **Step 1 — the feature layout** (`11e12c7`): `signal:features/signal` (Signal's
+  domain) vs `signal:features/rigs` (the instruments, `rigs/host`, `rigs/proto`);
   `adapters/<host>` (`reaper`, `protools`, `ableton`, `logic`,
   `interchange`, `web`); the daw's own file is `daw:crates/daw/session-format`;
   the REAPER overlay forks are merged (`reaper-dioxus`, `reaper-embed`);

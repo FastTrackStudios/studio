@@ -85,7 +85,7 @@ ls target/bundled/
 # running the command, so grab only the LAST line (cargo pkgid's own
 # output) rather than the whole captured stream — otherwise the banner
 # text ends up baked into $VERSION (and then the zip filename).
-VERSION="$("$NIX" develop "$ROOT" --accept-flake-config -c cargo pkgid -p nam-plugin | tail -1 | sed 's/.*[#@]//')"
+VERSION="$("$NIX" develop "$ROOT" --accept-flake-config -c cargo pkgid -p guide-plugin | tail -1 | sed 's/.*[#@]//')"
 echo "=== plugin bundle version: $VERSION ==="
 
 # ── Sign every bundle (inside-out: nested code first, then the bundle) ──────

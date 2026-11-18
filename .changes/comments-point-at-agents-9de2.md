@@ -1,5 +1,4 @@
 ---
-"openwurli-dsp" = "none"
 "session-web" = "none"
 "signal-web" = "none"
 ---

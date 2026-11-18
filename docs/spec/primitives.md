@@ -142,8 +142,8 @@ map for implementers, not part of the contract.
 - SPA web serving — `engine_main.rs:41-160` (`WebBundle`/`web_bundle`/
   `content_type_for`/`embedded_asset`).
 - `RigBackend` trait/macro — `router()`, `events_hub()`, `PubSub::sliding(64)`,
-  and `spawn_meter_pump` across `features/rigs/keys/src/backend.rs:201`,
-  `features/rigs/drums/src/backend.rs:502`, `features/rigs/guitar/src/session.rs:222`.
+  and `spawn_meter_pump` across `signal:features/rigs/keys/src/backend.rs:201`,
+  `signal:features/rigs/drums/src/backend.rs:502`, `signal:features/rigs/guitar/src/session.rs:222`.
 
 **midicore:**
 - Delete the orphaned duplicate `features/audio/daw-midi-io` (zero real consumers;

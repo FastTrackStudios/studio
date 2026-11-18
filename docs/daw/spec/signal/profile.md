@@ -3,7 +3,7 @@
 The performance-configuration layer over the [hierarchy](hierarchy.md): a
 **Profile** is a curated pool of tones plus the **patches** that recall them, and
 **Stacks** are the footswitch groupings that step through those patches live.
-Reference: `features/rigs/guitar/src/profiles.rs` (`ProfileDef`, `PresetDef`,
+Reference: `signal:features/rigs/guitar/src/profiles.rs` (`ProfileDef`, `PresetDef`,
 `PatchDef`, `StackDef`).
 
 ## Profiles
