@@ -194,19 +194,33 @@ async fn get(node: SocketAddr, path: &str) -> (u16, String) {
     (status, body.to_owned())
 }
 
-/// `page` of the share, once the node has built it with `marker` on it
-/// (bounded).
-async fn page(node: SocketAddr, page: &str, marker: &str, code: &str) -> String {
+/// Page `rest` of share `code` as the node built it into `data`, once it
+/// has `marker` on it (bounded).
+///
+/// Since Architect's #646 a link's page is the web app's, served only
+/// with the web app beside the node, and the page the share's build
+/// writes (`<data>/shares/<code>/site/<rest>index.html`) is never served
+/// on the link: it is the source of its guests' blocks. What the node
+/// draws (Studio's chart as the follow SVG, the islands it offers) is on
+/// that page.
+async fn page(node: SocketAddr, data: &Path, code: &str, rest: &str, marker: &str) -> String {
+    let file = data
+        .join("shares")
+        .join(code)
+        .join("site")
+        .join(rest)
+        .join("index.html");
     let deadline = Instant::now() + Duration::from_secs(90);
     loop {
-        let (status, body) = get(node, page).await;
-        if status == 200 && body.contains(marker) {
-            return body;
+        let html = std::fs::read_to_string(&file).unwrap_or_default();
+        if html.contains(marker) {
+            return html;
         }
         assert!(
             Instant::now() < deadline,
-            "{page} was not built within 90 s: last {status}\n{}\nthe link's index: {:?}",
-            &body[..body.len().min(2000)],
+            "{} was not built within 90 s:\n{}\nthe link's index: {:?}",
+            file.display(),
+            &html[..html.len().min(2000)],
             get(node, &format!("/s/{code}/")).await,
         );
         tokio::time::sleep(Duration::from_millis(250)).await;
@@ -237,7 +251,7 @@ async fn shared_page_on(dist: &Distribution, rest: &str, marker: &str) -> String
     }
     let code = shared_setlist(&vault, &files);
     let node = serve(dist, &data, &vault).await;
-    let html = page(node.http, &format!("/s/{code}/{rest}"), marker, &code).await;
+    let html = page(node.http, &data, &code, rest, marker).await;
     node.stop().await;
     html
 }
@@ -360,27 +374,31 @@ fn it_is_studio_architect_with_studios_extensions_compiled_in() {
 // node writes it on a page with recordings, its `islands` list empty when
 // it has none) and draws Architect's own bar and controls without one.
 
-/// The islands the page offers its now-playing view: their ids.
-fn islands_on(html: &str) -> Vec<String> {
-    let open = "<script type=\"application/json\" id=\"site-islands\">";
-    let Some(at) = html.find(open) else {
-        return Vec::new();
-    };
-    let rest = &html[at + open.len()..];
-    let json: serde_json::Value =
-        serde_json::from_str(&rest[..rest.find("</script>").unwrap()].replace("<\\/", "</"))
-            .unwrap();
+/// The islands `dist`'s node offers the web app's now-playing view, by
+/// id: its `/_ext/islands.json`, where the web app reads them since
+/// Architect's #646 (what a share page carried embedded before).
+async fn islands_offered_by(dist: &Distribution) -> Vec<String> {
+    let dir = tempfile::tempdir().unwrap();
+    let (data, vault, files) = (
+        dir.path().join("data"),
+        dir.path().join("vault"),
+        dir.path().join("files"),
+    );
+    for d in [&data, &vault, &files] {
+        std::fs::create_dir_all(d).unwrap();
+    }
+    shared_setlist(&vault, &files);
+    let node = serve(dist, &data, &vault).await;
+    let (status, body) = get(node.http, "/_ext/islands.json").await;
+    node.stop().await;
+    assert_eq!(status, 200, "the islands' listing: {body}");
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
     json["islands"]
         .as_array()
-        .unwrap()
+        .unwrap_or_else(|| panic!("no islands in the listing: {body}"))
         .iter()
         .map(|i| i["id"].as_str().unwrap().to_owned())
         .collect()
-}
-
-/// The setlist's page (a playlist: it has recordings) on `dist`'s node.
-async fn setlist_page_on(dist: &Distribution) -> String {
-    shared_page_on(dist, "setlists/tree-lighting/", "Silent Night").await
 }
 
 /// A built island folder as `build-web` writes it: its files and a lock
@@ -565,8 +583,7 @@ async fn a_node_with_the_island_offers_it_to_the_now_playing_view() {
     let dir = tempfile::tempdir().unwrap();
     island_folder(dir.path());
     let dist = studio_architect::distribution_with(studio_architect::island::at(dir.path()).ok());
-    let html = setlist_page_on(&dist).await;
-    assert_eq!(islands_on(&html), ["studio.transport"], "{html}");
+    assert_eq!(islands_offered_by(&dist).await, ["studio.transport"]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -574,12 +591,10 @@ async fn a_node_without_the_folder_offers_no_island() {
     // The test binary has no `studio-island/` beside it: as a node shipped
     // without one.
     assert!(studio_architect::island().is_none());
-    let html = setlist_page_on(&studio_architect::distribution()).await;
-    assert!(
-        html.contains("id=\"site-islands\""),
-        "not a page with recordings:\n{html}"
+    assert_eq!(
+        islands_offered_by(&studio_architect::distribution()).await,
+        Vec::<String>::new()
     );
-    assert_eq!(islands_on(&html), Vec::<String>::new());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -592,10 +607,5 @@ async fn a_node_whose_folder_was_altered_offers_no_island() {
     )
     .unwrap();
     let dist = studio_architect::distribution_with(studio_architect::island::at(dir.path()).ok());
-    let html = setlist_page_on(&dist).await;
-    assert!(
-        html.contains("id=\"site-islands\""),
-        "not a page with recordings:\n{html}"
-    );
-    assert_eq!(islands_on(&html), Vec::<String>::new());
+    assert_eq!(islands_offered_by(&dist).await, Vec::<String>::new());
 }
