@@ -14,12 +14,12 @@ use std::path::Path;
 /// # Example
 ///
 /// ```no_run
-/// let set = crate::read_live_set("project.als")?;
+/// let set = ableton::read_live_set("project.als")?;
 /// println!("Version: {}", set.version);
 /// println!("Tempo: {:.1} BPM", set.tempo);
 /// println!("Audio tracks: {}", set.audio_tracks.len());
 /// println!("MIDI tracks: {}", set.midi_tracks.len());
-/// # Ok::<(), crate::AbletonError>(())
+/// # Ok::<(), ableton::AbletonError>(())
 /// ```
 pub fn read_live_set(path: impl AsRef<Path>) -> AbletonResult<AbletonLiveSet> {
     let data = std::fs::read(path.as_ref())?;

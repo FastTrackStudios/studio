@@ -25,7 +25,7 @@
 //! # Example
 //!
 //! ```no_run
-//! let session = crate::read_session("session.ptx", 48000)?;
+//! let session = protools::read_session("session.ptx", 48000)?;
 //!
 //! for track in &session.audio_tracks {
 //!     println!("Track: {} ({} regions)", track.name, track.regions.len());
@@ -34,13 +34,13 @@
 //! for region in &session.midi_regions {
 //!     println!("MIDI region: {} ({} events)", region.name, region.events.len());
 //! }
-//! # Ok::<(), crate::PtError>(())
+//! # Ok::<(), protools::PtError>(())
 //! ```
 //!
 //! # Capability declaration
 //!
 //! ```rust
-//! let support = crate::feature_support();
+//! let support = protools::feature_support();
 //! assert!(support.can_read(daw_proto::Capability::Tracks));
 //! assert!(!support.can_write(daw_proto::Capability::Tracks)); // read-only format
 //! ```

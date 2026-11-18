@@ -17,12 +17,12 @@ use std::path::Path;
 /// # Example
 ///
 /// ```no_run
-/// let project = crate::dawproject::read_project("project.dawproject")?;
+/// let project = interchange::dawproject::read_project("project.dawproject")?;
 ///
 /// println!("Version: {}", project.version);
 /// println!("Tempo: {:.1} BPM", project.transport.tempo);
 /// println!("Tracks: {}", project.tracks.len());
-/// # Ok::<(), crate::dawproject::DawProjectError>(())
+/// # Ok::<(), interchange::dawproject::DawProjectError>(())
 /// ```
 pub fn read_project(path: impl AsRef<Path>) -> DawProjectResult<DawProject> {
     let data = std::fs::read(path.as_ref())?;
@@ -62,7 +62,7 @@ pub fn parse_project_bytes(data: &[u8]) -> DawProjectResult<DawProject> {
 /// # Example
 ///
 /// ```no_run
-/// use crate::dawproject::{DawProject, Transport, write_project};
+/// use interchange::dawproject::{DawProject, Transport, write_project};
 ///
 /// let project = DawProject {
 ///     version: "1.0".to_string(),
@@ -75,7 +75,7 @@ pub fn parse_project_bytes(data: &[u8]) -> DawProjectResult<DawProject> {
 /// };
 ///
 /// write_project(&project, "output.dawproject")?;
-/// # Ok::<(), crate::dawproject::DawProjectError>(())
+/// # Ok::<(), interchange::dawproject::DawProjectError>(())
 /// ```
 pub fn write_project(project: &DawProject, path: impl AsRef<Path>) -> DawProjectResult<()> {
     let bytes = serialize_project_bytes(project)?;

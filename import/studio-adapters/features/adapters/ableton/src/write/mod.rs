@@ -14,9 +14,9 @@
 //! # Usage
 //!
 //! ```no_run
-//! use crate::write::write_live_set;
+//! use ableton::write::write_live_set;
 //!
-//! let set = crate::read_live_set("input.als").unwrap();
+//! let set = ableton::read_live_set("input.als").unwrap();
 //! // ... modify set ...
 //! write_live_set(&set, "output.als").unwrap();
 //! ```

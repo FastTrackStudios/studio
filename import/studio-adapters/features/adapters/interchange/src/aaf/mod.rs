@@ -39,7 +39,7 @@
 //!
 //! ```no_run
 //! // Read
-//! let session = crate::aaf::read_session("session.aaf")?;
+//! let session = interchange::aaf::read_session("session.aaf")?;
 //!
 //! println!("Sample rate: {} Hz", session.session_sample_rate);
 //! for track in &session.tracks {
@@ -51,14 +51,14 @@
 //! }
 //!
 //! // Write (round-trip)
-//! crate::aaf::write_session("output.aaf", &session)?;
-//! # Ok::<(), crate::aaf::AafError>(())
+//! interchange::aaf::write_session("output.aaf", &session)?;
+//! # Ok::<(), interchange::aaf::AafError>(())
 //! ```
 //!
 //! # Capability declaration
 //!
 //! ```rust
-//! let support = crate::aaf::feature_support();
+//! let support = interchange::aaf::feature_support();
 //! assert!(support.can_read(daw_proto::Capability::Tracks));
 //! assert!(support.can_write(daw_proto::Capability::Tracks));
 //! ```

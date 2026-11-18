@@ -49,19 +49,19 @@
 //! # Example
 //!
 //! ```no_run
-//! let session = crate::read_session("MyProject.logicx")?;
+//! let session = logic::read_session("MyProject.logicx")?;
 //!
-//! println!("{}", crate::session_summary(&session));
+//! println!("{}", logic::session_summary(&session));
 //! for chunk in &session.chunks {
 //!     println!("  {:?} @ {:#x} ({} bytes)", chunk.type_name, chunk.offset, chunk.data_len);
 //! }
-//! # Ok::<(), crate::LogicError>(())
+//! # Ok::<(), logic::LogicError>(())
 //! ```
 //!
 //! # Capability declaration
 //!
 //! ```rust
-//! let support = crate::feature_support();
+//! let support = logic::feature_support();
 //! assert!(support.can_read(daw_proto::Capability::Tracks));
 //! ```
 

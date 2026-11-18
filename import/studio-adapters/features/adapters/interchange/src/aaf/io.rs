@@ -17,13 +17,13 @@ use std::path::Path;
 /// # Example
 ///
 /// ```no_run
-/// let session = crate::aaf::read_session("session.aaf")?;
+/// let session = interchange::aaf::read_session("session.aaf")?;
 ///
 /// println!("Sample rate: {} Hz", session.session_sample_rate);
 /// for track in &session.tracks {
 ///     println!("  Track {:>3}: {} ({} clips)", track.slot_id, track.name, track.clips.len());
 /// }
-/// # Ok::<(), crate::aaf::AafError>(())
+/// # Ok::<(), interchange::aaf::AafError>(())
 /// ```
 pub fn read_session(path: impl AsRef<Path>) -> AafResult<AafSession> {
     parse::parse_session(path.as_ref())

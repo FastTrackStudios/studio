@@ -33,7 +33,7 @@
 //! # Example — Read
 //!
 //! ```no_run
-//! let set = crate::read_live_set("project.als")?;
+//! let set = ableton::read_live_set("project.als")?;
 //!
 //! println!("Ableton Live {}", set.version);
 //! println!("Tempo: {:.1} BPM", set.tempo);
@@ -41,16 +41,16 @@
 //! for track in &set.audio_tracks {
 //!     println!("Audio: {} ({} clips)", track.common.effective_name, track.arrangement_clips.len());
 //! }
-//! # Ok::<(), crate::AbletonError>(())
+//! # Ok::<(), ableton::AbletonError>(())
 //! ```
 //!
 //! # Example — Write
 //!
 //! ```no_run
-//! let set = crate::read_live_set("input.als")?;
+//! let set = ableton::read_live_set("input.als")?;
 //! // ... modify set ...
-//! crate::write_live_set(&set, "output.als")?;
-//! # Ok::<(), crate::AbletonError>(())
+//! ableton::write_live_set(&set, "output.als")?;
+//! # Ok::<(), ableton::AbletonError>(())
 //! ```
 
 #![deny(unsafe_code)]

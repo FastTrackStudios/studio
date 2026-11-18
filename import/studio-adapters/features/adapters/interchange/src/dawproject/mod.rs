@@ -33,7 +33,7 @@
 //! # Example
 //!
 //! ```no_run
-//! let project = crate::dawproject::read_project("session.dawproject")?;
+//! let project = interchange::dawproject::read_project("session.dawproject")?;
 //!
 //! println!("Version: {}", project.version);
 //! println!("Tempo: {:.1} BPM", project.transport.tempo);
@@ -46,13 +46,13 @@
 //! for track in &project.tracks {
 //!     println!("Track: {} ({:?})", track.name, track.content_types);
 //! }
-//! # Ok::<(), crate::dawproject::DawProjectError>(())
+//! # Ok::<(), interchange::dawproject::DawProjectError>(())
 //! ```
 //!
 //! # Capability declaration
 //!
 //! ```rust
-//! let support = crate::dawproject::feature_support();
+//! let support = interchange::dawproject::feature_support();
 //! assert!(support.can_read(daw_proto::Capability::Tracks));
 //! assert!(support.can_read(daw_proto::Capability::Midi));
 //! assert!(support.can_write(daw_proto::Capability::Tracks)); // read-write

@@ -18,11 +18,11 @@ use std::path::Path;
 /// # Example
 ///
 /// ```no_run
-/// let session = crate::read_session("session.ptx", 48000)?;
+/// let session = protools::read_session("session.ptx", 48000)?;
 /// println!("PT version: {}", session.version);
 /// println!("Tracks: {}", session.audio_tracks.len());
 /// println!("Regions: {}", session.audio_regions.len());
-/// # Ok::<(), crate::PtError>(())
+/// # Ok::<(), protools::PtError>(())
 /// ```
 pub fn read_session(path: impl AsRef<Path>, target_sample_rate: u32) -> PtResult<ProToolsSession> {
     let mut data = std::fs::read(path.as_ref())?;

@@ -13,13 +13,13 @@ use std::path::Path;
 /// # Example
 ///
 /// ```no_run
-/// let session = crate::read_session("MyProject.logicx")?;
+/// let session = logic::read_session("MyProject.logicx")?;
 ///
 /// println!("Tempo: {} BPM @ {}Hz", session.bpm, session.sample_rate);
 /// for track in &session.tracks {
 ///     println!("  {}: {:?}", track.name, track.kind);
 /// }
-/// # Ok::<(), crate::LogicError>(())
+/// # Ok::<(), logic::LogicError>(())
 /// ```
 pub fn read_session(path: impl AsRef<Path>) -> LogicResult<LogicSession> {
     parse::parse_session(path.as_ref())
