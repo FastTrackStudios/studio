@@ -42,6 +42,12 @@ impl Hosted {
         }
     }
 
+    /// The scene the widget last painted, as it painted it.
+    #[must_use]
+    pub const fn last_scene(&self) -> Option<&Scene> {
+        self.layer.last()
+    }
+
     fn widget(&self, event: &UiEvent) {
         let widget = &self.mixer.widget;
         self.scope.run(|| widget.borrow_mut().event(event));

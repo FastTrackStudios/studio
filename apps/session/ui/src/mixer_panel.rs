@@ -718,6 +718,15 @@ impl HostedMixer {
         }
     }
 
+    /// A signal where there is none, as `FTS_SIMULATE=1` gives the
+    /// window's mixer: the meters and the racks fed on the clock from now,
+    /// as a playing engine would feed them. For a measurement or a test of
+    /// a playing mixer with no audio.
+    pub fn simulate(&self) {
+        self.widget.borrow_mut().simulated =
+            Some((web_time::Instant::now(), crate::simulate::Feed::new()));
+    }
+
     /// The wheel over a mixer `width` wide: either direction runs along
     /// the strips (winit's sign, as [`Mixer`] reads it).
     pub fn wheel(&self, dx: f64, dy: f64, width: f64) {

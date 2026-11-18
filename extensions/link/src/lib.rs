@@ -257,6 +257,13 @@ impl SceneLayer {
         }
     }
 
+    /// The scene last painted: the widget's own picture, before it
+    /// crossed.
+    #[must_use]
+    pub const fn last(&self) -> Option<&Scene> {
+        self.last.as_ref()
+    }
+
     /// The layer for `scene`, painted at `size` after `began`.
     pub fn frame(
         &mut self,

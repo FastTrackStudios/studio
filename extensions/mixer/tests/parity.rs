@@ -218,6 +218,82 @@ fn same_pixels(view: &str, song: &StudioSession, inspector: bool, size: (u32, u3
     );
 }
 
+/// One view at `size`, playing: the widget fed a moving signal (the
+/// meters, the racks) as a playing engine feeds it, painted frame after
+/// frame, each frame's batch applied to one receiver as the host applies
+/// them. Every frame's composed pixels are the widget's own picture of
+/// that frame; and the frames moved (the meters are not still).
+fn same_pixels_playing(view: &str, song: &StudioSession, inspector: bool, size: (u32, u32)) {
+    let got = Got::default();
+    let mut vdom = VirtualDom::new_with_props(
+        Root,
+        RootProps {
+            song: Song(song.clone()),
+            inspector,
+            got: got.clone(),
+        },
+    );
+    vdom.rebuild_in_place();
+    let (mixer, scope) = got.0.borrow().clone().expect("the widget built");
+    mixer.simulate();
+    let stats = Arc::new(Mutex::new(Stats::default()));
+    let mut hosted = Hosted::new(Rc::clone(&mixer), scope, stats);
+    let ctx = ctx(size);
+    let mut sender = Sender::default();
+    let mut receiver = Receiver::new();
+    let (mut crossed, mut bytes, mut worst) = (0, 0, 0);
+    let mut first: Option<Vec<u8>> = None;
+    let mut moved = 0;
+    let frames = 30;
+    for i in 0..frames {
+        std::thread::sleep(Duration::from_millis(16));
+        let layers = hosted.layers(&ctx).unwrap();
+        if let Some(batch) = sender.frame(&layers) {
+            crossed += 1;
+            bytes += batch.len();
+            receiver.apply(&batch).unwrap();
+        }
+        let own = hosted.last_scene().expect("painted").clone();
+        let a = raster(size, |p| p.append_scene(own, Affine::IDENTITY));
+        let b = raster(size, |p| {
+            receiver
+                .layers()
+                .compose_at(p, Affine::IDENTITY, &Readings::NONE, receiver.values());
+        });
+        let differing = a
+            .chunks_exact(4)
+            .zip(b.chunks_exact(4))
+            .filter(|(x, y)| x != y)
+            .count();
+        worst = worst.max(differing);
+        match &first {
+            None => first = Some(a.clone()),
+            Some(f) if *f != a => moved += 1,
+            Some(_) => {}
+        }
+        if i == frames - 1
+            && let Ok(base) = std::env::var("PARITY_OUT")
+        {
+            let out = std::path::Path::new(&base).join(format!("{view}-playing"));
+            std::fs::create_dir_all(&out).unwrap();
+            write_png(&out.join("in-app.png"), size, &a);
+            write_png(&out.join("runtime.png"), size, &b);
+        }
+    }
+    println!(
+        "{view} {}x{} playing: {frames} frames, {crossed} crossed ({} bytes a crossing on average), \
+         {moved} looked different from the first, the most pixels apart in a frame: {worst}",
+        size.0,
+        size.1,
+        bytes / crossed.max(1)
+    );
+    assert!(moved > frames / 2, "{view}: the meters did not move");
+    assert_eq!(
+        worst, 0,
+        "{view}: a playing frame's pixels differ from the window's"
+    );
+}
+
 #[test]
 fn the_panes_show_the_pixels_studio_s_window_paints() {
     let song = session();
@@ -225,4 +301,6 @@ fn the_panes_show_the_pixels_studio_s_window_paints() {
     // it; and the inspector's column.
     same_pixels("mixer", &song, false, (1280, 400));
     same_pixels("strip", &song, true, (120, 640));
+    same_pixels_playing("mixer", &song, false, (1280, 400));
+    same_pixels_playing("strip", &song, true, (120, 640));
 }
