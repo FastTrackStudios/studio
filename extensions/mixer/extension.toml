@@ -38,6 +38,13 @@ id = "strip"
 title = "Track strip"
 icon = "sliders-horizontal"
 
+# One rack panel of a track, as studio-desktop's close-up shows it: its
+# state is `<track GUID>/<panel>` (eq, comp, …).
+[[views]]
+id = "closeup"
+title = "Rack close-up"
+icon = "zoom-in"
+
 [[actions]]
 id = "STUDIO_MIXER_STATE"
 name = "Mixer: state"

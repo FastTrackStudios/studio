@@ -18,6 +18,7 @@
 //! the engine ([`claim`]).
 
 pub mod claim;
+pub mod closeup;
 pub mod host;
 
 use std::rc::Rc;
@@ -52,6 +53,7 @@ impl Extension for Mixer {
         claim::claim(ext.handle());
         ext.view("mixer", MixerPane)
             .view("strip", StripPane)
+            .view("closeup", closeup::CloseupPane)
             .action("STUDIO_MIXER_STATE", |_| async { Ok(state()) })
             .action("STUDIO_MIXER_RACKS", |args| async move {
                 let on = args
@@ -62,6 +64,16 @@ impl Extension for Mixer {
                 Ok(json!({ "racks": on }))
             });
     }
+}
+
+/// A new pane's frame statistics, kept for `STUDIO_MIXER_STATE` as
+/// `view`'s (the last pane of each view).
+pub(crate) fn pane_stats(view: &'static str) -> Arc<Mutex<Stats>> {
+    let stats = Arc::new(Mutex::new(Stats::default()));
+    let mut all = STATS.lock().unwrap_or_else(PoisonError::into_inner);
+    all.retain(|(v, _)| *v != view);
+    all.push((view, Arc::clone(&stats)));
+    stats
 }
 
 fn state() -> Json {
@@ -131,7 +143,7 @@ fn SongPane(shown: Shown) -> Element {
 
 /// A song's session as a prop (keyed by the pane, so never compared).
 #[derive(Clone)]
-struct Song(StudioSession);
+pub(crate) struct Song(pub(crate) StudioSession);
 
 impl PartialEq for Song {
     fn eq(&self, _: &Self) -> bool {
@@ -159,13 +171,7 @@ fn Strips(session: Song, shown: Shown) -> Element {
         }
         std::rc::Rc::new(HostedMixer::new(links))
     });
-    let stats = use_hook(|| {
-        let stats = Arc::new(Mutex::new(Stats::default()));
-        let mut all = STATS.lock().unwrap_or_else(PoisonError::into_inner);
-        all.retain(|(view, _)| *view != shown.name());
-        all.push((shown.name(), Arc::clone(&stats)));
-        stats
-    });
+    let stats = use_hook(|| pane_stats(shown.name()));
     let mount = use_hook(|| {
         let scope = InScope::here();
         let (mixer, stats) = (std::rc::Rc::clone(&mixer), Arc::clone(&stats));
