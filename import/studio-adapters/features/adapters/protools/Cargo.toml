@@ -1,0 +1,23 @@
+[package]
+name = "protools"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Pro Tools sessions (.ptx): reading them into the daw's project model, and writing them back"
+
+[lints]
+workspace = true
+
+[dependencies]
+daw-proto = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# required-features): a plain `cargo test` of the workspace builds them all.
+daw-proto = { workspace = true }
+dawfile-reaper = { workspace = true }
+loro = { workspace = true }
+tempfile = { workspace = true }
+uuid = { workspace = true }
