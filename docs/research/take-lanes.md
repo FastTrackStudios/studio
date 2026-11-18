@@ -45,7 +45,7 @@ with `docs/` or `/home/`. The REAPER SDK is cited from the header the
 
 ### Comp areas
 
-Nothing. `grep -rn "comp_area\|CompArea\|LINKEDLANE\|ITEMLANES"` over `crates/daw` and the two dawfile crates returns no type, no field and no parser branch; the only hits for `LINKEDLANE` in the whole checkout are mouse-modifier context names in `features/adapters/reaper/reaper-input/src/input/mouse_modifiers/types.rs:272-278, 489-495`.
+Nothing. `grep -rn "comp_area\|CompArea\|LINKEDLANE\|ITEMLANES"` over `crates/daw` and the two dawfile crates returns no type, no field and no parser branch; the only hits for `LINKEDLANE` in the whole checkout are mouse-modifier context names in `studio-adapters:features/adapters/reaper/reaper-input/src/input/mouse_modifiers/types.rs:272-278, 489-495`.
 
 ## What daw-control exposes
 
@@ -66,7 +66,7 @@ Nothing. `grep -rn "comp_area\|CompArea\|LINKEDLANE\|ITEMLANES"` over `crates/da
 
 Nothing on `TrackHandle` or `ItemHandle` touches lanes (`grep -n -i lane daw:crates/daw/control/src/tracks.rs` is empty; `items.rs` has no lane method). The proto-level `Takes` trait — `daw:crates/daw/proto/src/take/service.rs:14-146` — is the full write surface: `get_takes`, `get_take`, `get_active_take`, `take_count`, `add_take`, `delete_take`, `set_active_take`, `set_name`, `set_color`, `set_volume`, `set_play_rate`, `set_pitch`, `set_preserve_pitch`, `set_start_offset`, `set_source_file`, `get_source_type`, `get_take_markers`, `add_take_marker`, `set_take_marker`, `delete_take_marker`, `add_take_marker_at_position`, `run_take_rating_action`. daw-control does not yet wrap the take-marker/rating methods or `set_preserve_pitch`/`set_start_offset`; a caller reaches those through the `TakesClient` directly or the batch layer (`BatchOp::Take(TakesOp)`, `daw:crates/daw/proto/src/batch/op.rs:30-124`).
 
-## REAPER backend coverage (`features/adapters/reaper/daw-reaper`)
+## REAPER backend coverage (`studio-adapters:features/adapters/reaper/daw-reaper`)
 
 **Takes — complete.** `src/take.rs` implements every `Takes` method against the live API: `get_takes` iterates `count_takes`/`get_take` (`take.rs:38-54`); `set_active_take` resolves the take and calls `SetActiveTake` (`take.rs:147-160`); the setters at `take.rs:162-334`; take markers at `take.rs:336-481`; `run_take_rating_action` saves the selection, selects the item, activates the take, fires `Main_OnCommand(command_id)` and restores the selection (`take.rs:483-528`). `media_take_to_take` reads guid, name, vol, playrate, pitch, preserve-pitch, start offset, colour, source path and `GetMediaSourceType` tag (`src/item.rs:1055-1125`); `source_length/sample_rate/channels` stay `None` ("deferred to #25", `item.rs:1101-1104`). The item poller diffs `active_take_index` and publishes `ActiveTakeChanged` (`src/item.rs:169-194, 349-355`). Integration tests: `tests/reaper_takes.rs:50-380` (delete, preserve-pitch round trip, `set_source_file`, take markers, ratings).
 

@@ -10,7 +10,7 @@ what does a strip subscribe to for the values that change continuously?
 
 **Method.** Read against the source in this tree — `daw:crates/daw/proto` (the
 service traits), `daw:crates/daw/control` (the async facade), and the two backends
-`features/adapters/reaper/daw-reaper` and `features/standalone/daw-standalone` — plus the
+`studio-adapters:features/adapters/reaper/daw-reaper` and `features/standalone/daw-standalone` — plus the
 one existing consumer, `apps/fasttrackstudio/src/mixer_view.rs`. Every claim
 below cites the file and line it came from.
 
@@ -83,7 +83,7 @@ the full `TrackGrouping` VCA + gang matrix (`track/track.rs:99-142`,
    mixer never populates. Folding it onto `Track` would be one line per backend.
 
 5. **Meters are 2 channels and active-project-only in REAPER.** The REAPER poll
-   reads channels 0 and 1 only (`features/adapters/reaper/daw-reaper/src/peak.rs:200-209`)
+   reads channels 0 and 1 only (`studio-adapters:features/adapters/reaper/daw-reaper/src/peak.rs:200-209`)
    and covers `reaper.current_project()` only (`peak.rs:193`). Fine for a stereo
    strip; a surround or multichannel meter would need the frame widened.
 
@@ -108,13 +108,13 @@ The contract (`peak/service.rs:26-32`, `peak/types.rs:36-46`):
   mixer at 30 Hz is ~15 KB/s of payload. That is not a flood.
 - **Peak-hold is computed publisher-side** so both backends produce byte-identical
   ballistics — standalone decays per audio block, REAPER decays `0.873` per tick
-  to match (`features/adapters/reaper/daw-reaper/src/peak.rs:121-125`).
+  to match (`studio-adapters:features/adapters/reaper/daw-reaper/src/peak.rs:121-125`).
 
 Both backends implement it:
 
 | Backend | Pump | Line |
 | --- | --- | --- |
-| REAPER | `poll_and_broadcast_meters`, called from the extension's ~30 Hz main-thread timer (`Track_GetPeakInfo` is main-thread-only) | `features/adapters/reaper/daw-reaper/src/peak.rs:186` |
+| REAPER | `poll_and_broadcast_meters`, called from the extension's ~30 Hz main-thread timer (`Track_GetPeakInfo` is main-thread-only) | `studio-adapters:features/adapters/reaper/daw-reaper/src/peak.rs:186` |
 | Standalone | `spawn_meter_pump`, a 33 ms loop reading the meter bank's atomics — RT-safe, the audio callback never blocks | `features/standalone/daw-standalone/src/sync/daw.rs:547` |
 
 Two properties make it safe over RPC, and both are already there:

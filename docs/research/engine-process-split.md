@@ -357,7 +357,7 @@ over Wi-Fi or USB, with the Mac accepting the connection [logic-remote].
   `vox-fdpass` (SCM_RIGHTS fd passing), `vox-websocket`, `vox-iroh`. The
   SHM transport was removed (`vox-core/CHANGELOG.md:89`). The REAPER
   bridge already serves vox on a Unix socket
-  (`features/adapters/reaper/daw-bridge/src/lib.rs`).
+  (`studio-adapters:features/adapters/reaper/daw-bridge/src/lib.rs`).
 - **The coupling that has to go:** the Action List and the MCP server (47811)
   are in the window crate `session-daw` (Dioxus/Blitz). The list has
   two kinds of action: *window* actions (transport keys, selection, edit
@@ -620,5 +620,5 @@ Repo sources: `docs/design/one-engine.md`, `docs/design/set-engine.md`,
 `apps/session/desktop/src/cli/mod.rs`,
 `apps/studio/desktop/src/{engines,engine_main}.rs`,
 `apps/session/daw/src/{actions,mcp_server}.rs`,
-`features/adapters/reaper/daw-bridge/src/lib.rs`; vox at `08db2c4`
+`studio-adapters:features/adapters/reaper/daw-bridge/src/lib.rs`; vox at `08db2c4`
 (`rust/vox-{stream,local,fdpass}`, `rust/vox-core/CHANGELOG.md`).

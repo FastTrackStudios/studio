@@ -153,7 +153,7 @@ Limits that matter here:
   into a headless `DioxusDocument` is therefore an existing, working
   path.
 - Keys: `keys.rs` maps the FTS keybind profile (styx files under
-  `features/adapters/reaper/reaper-input/config/`) to window `Action`s.
+  `studio-adapters:features/adapters/reaper/reaper-input/config/`) to window `Action`s.
 
 ### 2.3 The Action List over MCP
 

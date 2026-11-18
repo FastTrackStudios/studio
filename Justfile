@@ -759,12 +759,11 @@ signal-web-build:
 signal-web-preview: signal-web-build
     cd target/dx/signal-web/release/web/public && python3 -m http.server 8080
 
-# ── REAPER (features/adapters/reaper) ────────────────────────────────────
-# The daw-bridge cdylib (the thin host the integration harness stands up)
-# and the daw-reaper integration suites: `just reaper install`,
-# `just reaper log`, `just reaper daw-test [FILTER]`. Session's own REAPER
-# suites are `just reaper-test` below.
-mod reaper 'features/adapters/reaper/reaper.just'
+# ── REAPER ───────────────────────────────────────────────────────────────
+# The daw-bridge cdylib and the daw-reaper integration suites (`just reaper
+# install`, `just reaper daw-test [FILTER]`) are FastTrackStudios/
+# studio-adapters' (its Justfile's `reaper` module), with the crates.
+# Session's own REAPER suites are `just reaper-test` below.
 
 # ── Build ────────────────────────────────────────────────────────────────
 
@@ -785,7 +784,7 @@ check:
 # daw-control, daw-transport-sync, utils) and the engine's and the session
 # format's (daw-standalone, session-format) run in FastTrackStudios/daw,
 # where those crates live (studio#510).
-test_packages := "timeline studio studio-desktop dioxus-test dock studio-architect"
+test_packages := "timeline studio-desktop dioxus-test dock studio-architect"
 
 # Run the core test set (test_packages above).
 test:
@@ -1853,7 +1852,7 @@ studio-song PROJECT CHART="" SIZE="2560x1440":
 # daw-bridge in its UserPlugins (built from the sibling ../daw), then
 # runs the suites that attach the window to it. Not part of `just ci`
 # and not run by CI at all: it needs a licensed REAPER, so it is checked
-# locally (this, and `just reaper daw-test` for daw-reaper's suites).
+# locally (this, and `just reaper daw-test` in studio-adapters for daw-reaper's suites).
 
 # Run the REAPER integration suites against a real REAPER
 reaper-test FILTER="":
@@ -2087,8 +2086,8 @@ studio-architect-release TAG DIR:
 # the notes from the change files added since the previous tag). Nothing
 # is committed for a release: each build stamps the tag's version into its
 # checkout, so the version committed on main is not the released one.
-# (The REAPER suites are not in CI: run `just reaper-test` and `just reaper
-# daw-test` locally.) Production = the latest `v*` tag.
+# (The REAPER suites are not in CI: run `just reaper-test` here and `just
+# reaper daw-test` in studio-adapters, locally.) Production = the latest `v*` tag.
 
 # The version the tree carries (a release build's stamped version, else
 # [workspace.package] in Cargo.toml): NOT the released version, which is
