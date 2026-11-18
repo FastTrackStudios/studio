@@ -13,11 +13,16 @@ workspace = true
 [features]
 aaf = ["dep:cfb"]
 dawproject = ["dep:roxmltree", "dep:zip"]
+# DAWproject in and out of the `.session` document:
+# `dawproject::session::{to_dawproject, from_dawproject}`. The adapter
+# depends on the document; the document does not know DAWproject.
+session = ["dawproject", "dep:session-format"]
 
 [dependencies]
 cfb = { workspace = true, optional = true }
 daw-proto = { workspace = true }
 roxmltree = { workspace = true, optional = true }
+session-format = { workspace = true, optional = true }
 thiserror = { workspace = true }
 zip = { workspace = true, features = ["deflate"], optional = true }
 
