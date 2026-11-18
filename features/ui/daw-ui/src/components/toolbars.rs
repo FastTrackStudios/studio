@@ -321,11 +321,10 @@ pub struct KeybindProfile {
 
 #[cfg(feature = "web")]
 impl KeybindProfile {
-    /// List every profile under `root` (one subdirectory per profile,
-    /// each with its own `profile.styx`) — see
-    /// `keybinds::list_profiles`, which this wraps.
-    pub fn list(root: &std::path::Path) -> Vec<Self> {
-        keybinds::list_profiles(root)
+    /// Every profile `keybinds` compiles in (`keybinds::embedded::list`),
+    /// sorted by name.
+    pub fn embedded() -> Vec<Self> {
+        keybinds::embedded::list()
             .into_iter()
             .map(|(slug, cfg)| Self {
                 slug,
