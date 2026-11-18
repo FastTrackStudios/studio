@@ -56,6 +56,9 @@ all = { level = "warn", priority = -1 }
 
 [profile.dev]
 debug = "line-tables-only"
+# The views record scenes and the engine ticks in a dev build too: our own
+# crates at 2, so a measurement of a dev build is not a measurement of -O0.
+opt-level = 2
 
 [profile.dev.package."*"]
 opt-level = 1
