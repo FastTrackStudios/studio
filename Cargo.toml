@@ -14,6 +14,7 @@ members = [
     "extensions/mixer",
     "extensions/lyrics",
     "extensions/navigator",
+    "extensions/launcher",
     "extensions/link",
     "features/timeline",
     "features/editing",
@@ -802,6 +803,7 @@ studio-arrangement = { path = "extensions/arrangement" }
 studio-mixer = { path = "extensions/mixer" }
 studio-lyrics = { path = "extensions/lyrics" }
 studio-navigator = { path = "extensions/navigator" }
+studio-launcher = { path = "extensions/launcher" }
 # Keyflow's chart extension and Ignition's lighting extension, linked into
 # the distribution the same way (`pane`: Ignition's room as the GPU
 # process view the app hosts).

@@ -22149,6 +22149,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "studio-launcher"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "dioxus",
+ "dirs 6.0.0",
+ "futures-timer",
+ "serde_json",
+]
+
+[[package]]
 name = "studio-lyrics"
 version = "26.10.3"
 dependencies = [
