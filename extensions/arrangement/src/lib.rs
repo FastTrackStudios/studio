@@ -36,6 +36,13 @@ pub const MANIFEST: &str = include_str!("../extension.toml");
 /// The latest pane's frame statistics, for `STUDIO_ARRANGEMENT_STATE`.
 static STATS: Mutex<Option<Arc<Mutex<Stats>>>> = Mutex::new(None);
 
+/// The track panel's shape: compact (the track's name) or expanded (its
+/// controls), as the pane last drew it ([`host::Hosted`] keeps it), and a
+/// shape `STUDIO_ARRANGEMENT_PANEL` asked for, which the pane takes up on
+/// its next frame (the window's toolbar switch, or a swipe).
+pub(crate) static COMPACT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+pub(crate) static ASKED_COMPACT: Mutex<Option<bool>> = Mutex::new(None);
+
 pub struct Arrangement;
 
 impl Extension for Arrangement {
@@ -59,6 +66,14 @@ impl Extension for Arrangement {
                     .unwrap_or_else(|| !session_ui::folds::tops());
                 session_ui::folds::set_tops(on);
                 Ok(json!({ "folded": on }))
+            })
+            .action("STUDIO_ARRANGEMENT_PANEL", |args| async move {
+                let compact = args
+                    .get("compact")
+                    .and_then(Json::as_bool)
+                    .unwrap_or_else(|| !COMPACT.load(std::sync::atomic::Ordering::Acquire));
+                *ASKED_COMPACT.lock().unwrap_or_else(PoisonError::into_inner) = Some(compact);
+                Ok(json!({ "compact": compact }))
             });
     }
 }
@@ -76,6 +91,7 @@ fn state() -> Json {
         "song": song.as_ref().map(|(k, _)| k.clone()),
         "tracks": song.as_ref().map(|(_, n)| *n),
         "folded": session_ui::folds::tops(),
+        "compact": COMPACT.load(std::sync::atomic::Ordering::Acquire),
         "frames": stats,
     })
 }
