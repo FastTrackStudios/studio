@@ -56,9 +56,15 @@ fn state() -> Json {
     })
 }
 
-/// Runs action `id` of the engine's Action List.
-fn run(id: &str, args: &Json) -> Result<Json, String> {
-    let out = session_engine::actions::run(id, args.to_string().as_bytes())?;
+/// Runs action `id` of the engine's Action List, awaited: an async one
+/// (`SESSION_ZOOM`, the arrangement's gestures) as much as any.
+/// `session_engine::actions::run` would refuse those here, where a
+/// runtime is current.
+async fn run(id: &str, args: &Json) -> Result<Json, String> {
+    let out = session_engine::actions::list()
+        .run_json_async(id, args.to_string().as_bytes())
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(serde_json::from_slice(&out)
         .unwrap_or_else(|_| Json::String(String::from_utf8_lossy(&out).into_owned())))
 }
@@ -74,11 +80,11 @@ impl Extension for Daw {
         ext.action("DAW_STATE", |_| async { Ok(state()) })
             .action("DAW_OPEN", |args| async move {
                 let path = args.get("path").and_then(Json::as_str).ok_or("no path")?;
-                run("SESSION_OPEN", &json!({ "path": path }))
+                run("SESSION_OPEN", &json!({ "path": path })).await
             })
             .action("DAW_RUN", |args| async move {
                 let id = args.get("id").and_then(Json::as_str).ok_or("no id")?;
-                run(id, args.get("args").unwrap_or(&Json::Null))
+                run(id, args.get("args").unwrap_or(&Json::Null)).await
             });
     }
 }

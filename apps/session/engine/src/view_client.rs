@@ -270,7 +270,12 @@ async fn follow(link: Link, which: Stream) {
             let (tx, rx) = vox::channel::<crate::view::Queued>();
             let taker = link.clone();
             drain(link.streams.queued(tx), rx, move |queued| {
-                if queued.pending > 0 {
+                // Only a window with window actions of its own takes what
+                // the engine asks of one: a process that follows the
+                // engine without them (a mixer pane in a process of its
+                // own) would answer every ask "no action", in place of
+                // the window that has it.
+                if queued.pending > 0 && !crate::window_queue::window_action_ids().is_empty() {
                     take_asked(&taker);
                 }
             })
