@@ -295,6 +295,13 @@ impl PartialEq for Slot {
     }
 }
 
+/// Provided above the panel by a host that wants it to open compact (the
+/// track panel at its narrow width) although no mixer is docked beside it
+/// in this process: an Architect pane whose mixer is another extension's
+/// pane below it. Studio's own window provides none.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct StartCompact(pub bool);
+
 /// Build the panel and its widget, once. `host` wraps the widget the way
 /// the host mounts it (dioxus-native's `CustomWidgetAttr`, or the web
 /// canvas's handle), and what it returns comes back with the panel.
@@ -331,7 +338,11 @@ pub fn use_arrangement_panel<H: Clone + 'static>(
     let touch = crate::touch::use_touch();
     // A finger's screen starts compact too: at touch size the full panel
     // would take half an iPad's width from the lanes.
-    let compact = use_hook(|| Rc::new(Cell::new(docked || small || touch)));
+    // A host that shows the panel beside a mixer it is not linked to (an
+    // Architect pane next to the mixer's) starts it compact as a docked
+    // one starts: [`StartCompact`].
+    let start_compact = try_use_context::<StartCompact>().is_some_and(|c| c.0);
+    let compact = use_hook(|| Rc::new(Cell::new(docked || small || touch || start_compact)));
     // The window's mode, read every render (so a change re-renders):
     // the track panel's arm only in Record mode. No mode to read — a
     // panel outside the window's shell — and it stays as it was.

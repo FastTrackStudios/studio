@@ -1,66 +1,110 @@
-//! `studio.arrangement`: Studio's arrangement view as a runtime extension.
+//! `studio.arrangement`: Studio's arrangement view, the one `studio-desktop`
+//! shows, running in an Architect pane as a process extension.
 //!
-//! It reads the session through `fts.session` (every lane and item,
-//! whoever owns them: an Ignition cue lane shows as well as a track) and,
-//! when an engine provides it, the DAW's own data through `fts.daw`
-//! (names, colours, mixer state, waveform peaks by hash). It names no
-//! other view: the mixer may be installed or not, and anything that
-//! provides the two services can stand in for the engine.
-//!
-//! The view itself is [`view::ArrangeView`], a paint view of layers the
-//! host keeps; this file is the pane around it and the reads that feed it.
+//! Nothing is redrawn or re-modelled here. The process is a Studio window
+//! on Studio's engine: it attaches to the engine the `daw` extension runs
+//! exactly as `studio-desktop`'s window attaches to a `studio engine`
+//! (`session_engine::studio_engine::link`, `session_engine::open::attach`),
+//! reads the song through the window protocol's replicas
+//! (`session_engine::view_client`), and mounts the arrangement panel
+//! (`session_ui::panel::use_arrangement_panel`, its widget and its DOM
+//! chrome, `PanelChrome`) with an Architect pane as the panel's host
+//! ([`host`]): the panel's third host, beside dioxus-native and the
+//! browser.
 
-pub mod model;
-pub mod view;
+pub mod host;
 
-use std::collections::{BTreeMap, HashSet};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use architect_extensions::hostcall::HostError;
-use architect_extensions::linked::{Builder, Extension, Handle, PaintPane, use_pane_state};
-use architect_workspace::HostData;
-use architect_workspace::paint::{FrameStats, PaintMount, PaintWake};
-use daw_view::{SERVICE as DAW, State, method};
+use architect_extensions::linked::{Builder, Extension, PaintPane};
+use architect_workspace::paint::PaintMount;
 use dioxus::prelude::*;
-use futures_channel::mpsc::{UnboundedSender, unbounded};
-use futures_util::StreamExt as _;
 use serde_json::{Value as Json, json};
-use session::service::Request;
+use session_engine::studio_engine::link;
+use session_ui::song_model::StudioSession;
 
-use crate::model::{Model, Wave};
-use crate::view::{ArrangeView, Camera, Intent, Shared};
+use crate::host::{Hosted, InScope, Stats};
 
 pub const MANIFEST: &str = include_str!("../extension.toml");
-pub const ID: &str = "studio.arrangement";
-const SESSION: &str = "fts.session";
 
-/// How often the view asks whether anything moved.
-pub const POLL: std::time::Duration = std::time::Duration::from_millis(250);
+/// How long a pane waits for an engine before it says so (it keeps
+/// trying after).
+const WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
-static HANDLE: Mutex<Option<Handle>> = Mutex::new(None);
+static ATTACHING: AtomicBool = AtomicBool::new(false);
+static PROBLEM: Mutex<Option<String>> = Mutex::new(None);
+/// The latest pane's frame statistics, for `STUDIO_ARRANGEMENT_STATE`.
+static STATS: Mutex<Option<Arc<Mutex<Stats>>>> = Mutex::new(None);
 
-fn handle() -> Option<Handle> {
-    HANDLE
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .clone()
+fn problem(why: Option<String>) {
+    *PROBLEM.lock().unwrap_or_else(PoisonError::into_inner) = why;
 }
 
-/// A pane showing the arrangement.
-#[derive(Clone)]
-struct Open {
-    model: HostData<Model>,
-    shared: HostData<Shared>,
-    stats: FrameStats,
-    wake: PaintWake,
+/// Attach this process, a Studio window, to the engine: what
+/// `studio-desktop`'s window does with `FTS_ENGINE=attach`
+/// (`session_desktop::native::attach_engine`). Once per process, on a
+/// thread of its own; it keeps the link after (an engine that restarts is
+/// attached to again).
+pub fn attach() {
+    if ATTACHING.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let _ = std::thread::Builder::new()
+        .name("studio-attach".to_owned())
+        .spawn(|| {
+            loop {
+                match link::choose(link::Mode::Attach, WAIT).and_then(|found| attach_to(&found)) {
+                    Ok(()) => {
+                        problem(None);
+                        link::keep_linked(link::Mode::Attach, attach_to);
+                        return;
+                    }
+                    Err(e) => problem(Some(format!("waiting for Studio's engine: {e}"))),
+                }
+            }
+        });
 }
 
-static OPEN: Mutex<BTreeMap<u64, Open>> = Mutex::new(BTreeMap::new());
-static NEXT: AtomicU64 = AtomicU64::new(0);
+fn attach_to(found: &link::Found) -> Result<(), String> {
+    let target = session_engine::open::RemoteTarget::Engine {
+        socket: found.socket.clone(),
+    };
+    session_engine::open::set_mode(session_engine::open::ModeState::remote(
+        target.clone(),
+        false,
+    ));
+    session_engine::open::attach(&target).map_err(|e| e.to_string())?;
+    link::set_linked(found.clone());
+    Ok(())
+}
 
-fn open_panes() -> std::sync::MutexGuard<'static, BTreeMap<u64, Open>> {
-    OPEN.lock().unwrap_or_else(PoisonError::into_inner)
+/// The song the engine has current, as the window lays it out, with what
+/// names it (a new song or a new set mounts the panel again).
+fn current() -> Option<(String, StudioSession)> {
+    session_engine::view_client::peek_set(|view| {
+        let set = view.setlist.as_ref()?;
+        let song = set.songs.get(set.at)?;
+        Some((
+            format!("{}:{}", view.epoch, song.project),
+            song.session.clone(),
+        ))
+    })
+}
+
+/// The window's mode as Studio's shell has it: `FTS_SESSION_MODE`, else
+/// Live (`session_desktop::native::shell`).
+fn mode_from_env() -> session::modes::Mode {
+    std::env::var("FTS_SESSION_MODE")
+        .ok()
+        .and_then(|name| {
+            session::modes::Mode::ALL
+                .into_iter()
+                .find(|m| m.display_name().eq_ignore_ascii_case(&name))
+        })
+        .unwrap_or(session::modes::Mode::Live)
 }
 
 pub struct Arrangement;
@@ -71,287 +115,161 @@ impl Extension for Arrangement {
     }
 
     fn build(&self, ext: &mut Builder) {
-        *HANDLE.lock().unwrap_or_else(PoisonError::into_inner) = Some(ext.handle());
         ext.view("arrangement", ArrangementPane)
             .action("STUDIO_ARRANGEMENT_STATE", |_| async { Ok(state()) })
-            .action(
-                "STUDIO_ARRANGEMENT_VIEW",
-                |args| async move { set_view(&args) },
-            )
-            .action("STUDIO_ARRANGEMENT_FIXTURE", |args| async move {
-                fixture(&args)
+            .action("STUDIO_ARRANGEMENT_PLAY_PAUSE", |_| async {
+                run("SESSION_PLAY_PAUSE", &Json::Null)
+            })
+            .action("STUDIO_ARRANGEMENT_STOP", |_| async {
+                run("SESSION_STOP", &Json::Null)
+            })
+            .action("STUDIO_ARRANGEMENT_FOLDED", |args| async move {
+                let on = args
+                    .get("on")
+                    .and_then(Json::as_bool)
+                    .unwrap_or(!session_ui::folds::tops());
+                session_ui::folds::set_tops(on);
+                Ok(json!({ "folded": on }))
             });
     }
 }
 
-async fn call(service: &str, method: &str, args: Json) -> Result<Json, String> {
-    let h = handle().ok_or("not running")?;
-    h.service(service, method, args).await.map_err(|e| match e {
-        HostError::Failed { message } => message,
-        other => format!("{other:?}"),
+/// An action of the engine's Action List, run over this window's link.
+fn run(id: &str, args: &Json) -> Result<Json, String> {
+    let out = session_engine::view_client::run(id, args.to_string().as_bytes())?;
+    Ok(serde_json::from_str(&out).unwrap_or(Json::String(out)))
+}
+
+fn state() -> Json {
+    let song = current().map(|(key, s)| (key, s.project.tracks.len()));
+    let stats = STATS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .map(|s| s.lock().unwrap_or_else(PoisonError::into_inner).clone());
+    let pct = |v: &std::collections::VecDeque<f64>, p: usize| {
+        let mut s: Vec<f64> = v.iter().copied().collect();
+        s.sort_by(f64::total_cmp);
+        s.get((s.len().saturating_sub(1) * p) / 100)
+            .copied()
+            .unwrap_or(0.0)
+    };
+    json!({
+        "linked": session_engine::view_client::is_linked(),
+        "problem": PROBLEM.lock().unwrap_or_else(PoisonError::into_inner).clone(),
+        "song": song.as_ref().map(|(k, _)| k.clone()),
+        "tracks": song.as_ref().map(|(_, n)| *n),
+        "folded": session_ui::folds::tops(),
+        "frames": stats.as_ref().map(|s| json!({
+            "count": s.frames,
+            "changed": s.changed,
+            "size": [s.size.0, s.size.1],
+            "commands": s.commands,
+            "work_p50_ms": pct(&s.work_ms, 50),
+            "work_p99_ms": pct(&s.work_ms, 99),
+        })),
     })
 }
 
-async fn daw<T: serde::de::DeserializeOwned>(method: &str, args: Json) -> Result<T, String> {
-    let v = call(DAW, method, args).await?;
-    serde_json::from_value(v).map_err(|e| e.to_string())
-}
-
-async fn session_read(doc: &str, request: Request) -> Result<session::service::Response, String> {
-    let args = session::extension::call_json(doc, request)?;
-    let args: Json = serde_json::from_str(&args).map_err(|e| e.to_string())?;
-    let v = call(SESSION, "read", args).await?;
-    session::extension::response_of(&v.to_string())
-}
-
-/// Reads everything again: the session's timeline and structure, the
-/// engine's tracks and clips, and peaks for hashes not held yet.
-async fn read_all(doc: &str, engine: bool, held: &HashSet<String>) -> Result<Model, String> {
-    let timeline = session_read(doc, Request::ReadTimeline).await?;
-    let structure = session_read(doc, Request::ReadStructure).await?;
-    let mut m = model::generic(&timeline, &structure);
-    if engine {
-        let tracks: Vec<daw_view::Track> = daw(method::TRACKS, json!({})).await?;
-        let clips: Vec<daw_view::Clip> = daw(method::CLIPS, json!({})).await?;
-        let wanted: HashSet<String> = clips
-            .iter()
-            .filter_map(|c| c.peaks.clone())
-            .filter(|h| !held.contains(h))
-            .collect();
-        for hash in wanted {
-            if let Ok(p) = daw::<daw_view::Peaks>(method::PEAKS, json!({ "hash": hash })).await
-                && let Ok(bytes) = daw_view::peaks::decode(&p.data)
-            {
-                m.waves.insert(
-                    hash,
-                    Arc::new(Wave {
-                        per_second: f64::from(p.sample_rate) / f64::from(daw_view::PEAK_FRAMES),
-                        pairs: daw_view::peaks::pairs(&bytes),
-                    }),
-                );
-            }
-        }
-        model::with_daw(&mut m, &tracks, &clips);
-    }
-    Ok(m)
-}
-
-/// Keeps `model` current: asks the engine's revision every [`POLL`] and
-/// reads again when it moved; without an engine, reads the session
-/// `pane_doc` names every few polls.
-async fn follow(
-    model: HostData<Model>,
-    shared: HostData<Shared>,
-    wake: PaintWake,
-    pane_doc: String,
-) {
-    let mut seen: Option<u64> = None;
-    let mut polls = 0_u64;
-    let mut was_fixture = false;
-    loop {
-        let fixture = model.read(|m| m.fixture);
-        // A fixture taken away: read the session again.
-        if was_fixture && !fixture {
-            seen = None;
-        }
-        was_fixture = fixture;
-        if !fixture {
-            let state: Result<State, String> = daw(method::STATE, json!({})).await;
-            if let Ok(s) = &state {
-                let page = shared.update(|sh| {
-                    sh.transport = Some((s.playing, s.position));
-                    sh.off_page()
-                });
-                if page.is_some() {
-                    wake.wake();
-                }
-            }
-            let (engine, doc, revision, problem) = match &state {
-                Ok(s) => (true, s.session.clone(), Some(s.revision), s.problem.clone()),
-                Err(e) => (
-                    false,
-                    Some(pane_doc.clone()).filter(|d| !d.is_empty()),
-                    None,
-                    Some(e.clone()),
-                ),
-            };
-            let due = match revision {
-                Some(r) => seen != Some(r),
-                None => polls % 8 == 0,
-            };
-            if let Some(doc) = doc.filter(|_| due) {
-                let held: HashSet<String> = model.read(|m| m.waves.keys().cloned().collect());
-                match read_all(&doc, engine, &held).await {
-                    Ok(mut fresh) => {
-                        model.update(|m| {
-                            // Waves are kept by hash: what was fetched stays.
-                            for (h, w) in m.waves.drain() {
-                                fresh.waves.entry(h).or_insert(w);
-                            }
-                            fresh.revision = m.revision + 1;
-                            fresh.session = Some(doc.clone());
-                            fresh.name = if fresh.name.is_empty() {
-                                state.as_ref().map(|s| s.name.clone()).unwrap_or_default()
-                            } else {
-                                fresh.name.clone()
-                            };
-                            fresh.problem = problem.clone();
-                            *m = fresh;
-                        });
-                        seen = revision;
-                        wake.wake();
-                    }
-                    Err(e) => model.update(|m| m.problem = Some(e)),
-                }
-            } else if problem != model.read(|m| m.problem.clone()) {
-                model.update(|m| m.problem = problem);
-            }
-        }
-        polls += 1;
-        futures_timer::Delay::new(POLL).await;
-    }
-}
-
-/// What a press in the view asks of the engine.
-async fn ask(intent: Intent) {
-    let t = match intent {
-        Intent::Seek(s) => json!({ "do": "seek", "seconds": s }),
-        Intent::Toggle => json!({ "do": "toggle" }),
-        Intent::Stop => json!({ "do": "stop" }),
-    };
-    let _ = call(DAW, method::TRANSPORT, t).await;
-}
-
+/// The pane: the arrangement once the engine has a song, a line saying
+/// what it waits for until then.
 #[component]
 fn ArrangementPane() -> Element {
-    // A pane's state may name a session to read without an engine.
-    let pane_doc = use_pane_state().map(|(_, s)| s).unwrap_or_default();
-    let key = use_hook(|| NEXT.fetch_add(1, Ordering::Relaxed));
-    let (mount, open, tx) = use_hook(|| {
-        let model = HostData::new(Model::default());
-        let shared = HostData::new(Shared::default());
-        let (tx, rx) = unbounded::<Intent>();
-        let mount = {
-            let (model, shared, tx) = (model.clone(), shared.clone(), tx.clone());
-            PaintMount::new(move |_| {
-                let tx: UnboundedSender<Intent> = tx.clone();
-                ArrangeView::new(
-                    model.clone(),
-                    shared.clone(),
-                    Box::new(move |i| {
-                        let _ = tx.unbounded_send(i);
-                    }),
-                )
-            })
-        };
-        let open = Open {
-            model,
-            shared,
-            stats: mount.frame_stats(),
-            wake: mount.wake_handle(),
-        };
-        open_panes().insert(key, open.clone());
-        (mount, open, Arc::new(Mutex::new(Some(rx))))
-    });
-    use_hook(|| {
-        let (model, shared, wake) = (open.model.clone(), open.shared.clone(), open.wake.clone());
-        spawn(follow(model, shared, wake, pane_doc.clone()));
-        if let Some(mut rx) = tx.lock().unwrap_or_else(PoisonError::into_inner).take() {
-            spawn(async move {
-                while let Some(intent) = rx.next().await {
-                    ask(intent).await;
-                }
-            });
+    attach();
+    let mut song = use_signal(current);
+    use_future(move || async move {
+        loop {
+            futures_timer::Delay::new(std::time::Duration::from_millis(200)).await;
+            let now = current();
+            if now.as_ref().map(|(k, _)| k) != song.peek().as_ref().map(|(k, _)| k) {
+                song.set(now);
+            }
         }
     });
-    use_drop(move || {
-        open_panes().remove(&key);
+    let colors = daw_ui::studio::lanes::Colors::from_theme(&daw_ui::theming::Theme::dark());
+    let surface = colors.surface.clone();
+    match song() {
+        Some((key, session)) => rsx! {
+            div { style: "position:relative; width:100%; height:100%; background:{surface};",
+                Panel { key: "{key}", session: Song(session) }
+            }
+        },
+        None => {
+            let why = PROBLEM
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone()
+                .unwrap_or_else(|| "Waiting for Studio's engine to open a song…".to_owned());
+            rsx! {
+                div { style: "padding:16px; font-size:13px; opacity:0.7; color:#ccc; background:{surface}; height:100%;",
+                    "{why}"
+                }
+            }
+        }
+    }
+}
+
+/// A song's session as a prop (keyed by the pane, so never compared).
+#[derive(Clone)]
+struct Song(StudioSession);
+
+impl PartialEq for Song {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+/// Studio's arrangement panel over `session`, hosted in the pane: what
+/// `session_ui::studio::Arrangement` is in the desktop window, with the
+/// pane in place of the window.
+#[component]
+fn Panel(session: Song) -> Element {
+    use_context_provider(|| session.0.clone());
+    use_context_provider(|| Signal::new(mode_from_env()));
+    // Beside a mixer pane it is not linked to: compact, as docked.
+    use_context_provider(|| session_ui::panel::StartCompact(true));
+    let applier = use_hook(|| Rc::new(session_ui::engine::Applier::start()));
+    let engine: session_ui::panel::Engine = {
+        let applier = Rc::clone(&applier);
+        Rc::new(move |edit| {
+            if let Some(applier) = applier.as_ref() {
+                applier.send(edit);
+            }
+        })
+    };
+    let (panel, widget) =
+        session_ui::panel::use_arrangement_panel(None, engine, |w| Rc::new(RefCell::new(w)));
+    let stats = use_hook(|| {
+        let stats = Arc::new(Mutex::new(Stats::default()));
+        *STATS.lock().unwrap_or_else(PoisonError::into_inner) = Some(Arc::clone(&stats));
+        stats
     });
+    let mount = use_hook(|| {
+        let scope = InScope {
+            runtime: dioxus::core::Runtime::current(),
+            scope: dioxus::core::current_scope_id(),
+        };
+        let (widget, panel, stats) = (Rc::clone(&widget), panel.clone(), Arc::clone(&stats));
+        PaintMount::new(move |_| {
+            Hosted::new(
+                Rc::clone(&widget),
+                panel.clone(),
+                scope.clone(),
+                Arc::clone(&stats),
+            )
+        })
+    });
+    let mounted = Rc::clone(&panel.mounted);
     rsx! {
-        div { style: "display:flex; flex-direction:column; width:100%; height:100%; min-height:0;",
-            div { style: "flex:1; min-height:0;",
+        div {
+            style: "position:absolute; top:0; left:0; right:0; bottom:0; overflow:hidden;",
+            onmounted: move |event| {
+                *mounted.borrow_mut() = Some(event.data());
+            },
+            div { style: "position:absolute; left:0; top:0; width:100%; height:100%;",
                 PaintPane { mount: mount.clone() }
             }
+            session_ui::panel::PanelChrome { panel: panel.clone() }
         }
     }
-}
-
-fn ms(d: std::time::Duration) -> f64 {
-    (d.as_secs_f64() * 100_000.0).round() / 100.0
-}
-
-/// Every open arrangement: its camera, size, selection, and its frames.
-fn state() -> Json {
-    let panes: Vec<Json> = open_panes()
-        .values()
-        .map(|o| {
-            let f = o.stats.summary();
-            let (rows, clips, revision, engine, problem, waves, session) = o.model.read(|m| {
-                (
-                    m.rows.len(),
-                    m.clip_count(),
-                    m.revision,
-                    m.engine,
-                    m.problem.clone(),
-                    m.waves.len(),
-                    m.session.clone(),
-                )
-            });
-            o.shared.read(|s| {
-                json!({
-                    "session": session,
-                    "rows": rows,
-                    "clips": clips,
-                    "waves": waves,
-                    "revision": revision,
-                    "engine": engine,
-                    "problem": problem,
-                    "camera": s.camera.map(|c| json!({"left": c.left, "top": c.top, "zoom": c.zoom})),
-                    "selection": s.selection,
-                    "records": s.records,
-                    "layers": s.layers,
-                    "frames": {"count": f.frames, "p50_ms": ms(f.p50), "p99_ms": ms(f.p99), "max_ms": ms(f.max)},
-                })
-            })
-        })
-        .collect();
-    json!({ "panes": panes })
-}
-
-/// Moves every open arrangement's camera (a script's pan and zoom).
-fn set_view(args: &Json) -> Result<Json, String> {
-    for o in open_panes().values() {
-        let now = o.shared.read(|s| s.camera).unwrap_or_default();
-        let get = |k: &str, d: f64| args.get(k).and_then(Json::as_f64).unwrap_or(d);
-        let asked = Camera {
-            left: get("left", now.left),
-            top: get("top", now.top),
-            zoom: get("zoom", now.zoom),
-        };
-        o.shared.update(|s| s.asked = Some(asked));
-        o.wake.wake();
-    }
-    Ok(state())
-}
-
-/// Shows a synthetic arrangement (`{tracks, clips}`), or the session
-/// again (`{}`).
-fn fixture(args: &Json) -> Result<Json, String> {
-    let n = |k: &str| {
-        args.get(k)
-            .and_then(Json::as_u64)
-            .and_then(|v| u32::try_from(v).ok())
-    };
-    for o in open_panes().values() {
-        match (n("tracks"), n("clips")) {
-            (Some(t), Some(c)) => {
-                let mut m = model::fixture(t, c);
-                m.revision = o.model.read(|m| m.revision) + 1;
-                o.model.set(m);
-            }
-            _ => o.model.update(|m| m.fixture = false),
-        }
-        o.wake.wake();
-    }
-    Ok(state())
 }

@@ -1,6 +1,6 @@
 [package]
 name = "daw-extension"
-description = "The daw engine as an Architect extension: it holds the open session, plays it, and provides fts.session and fts.daw to the views (Studio's arrangement and mixer, or anything else)."
+description = "Studio's engine as an Architect extension: the same engine `studio engine` runs (session-engine, its daw, its Action List), in the extension's process, the song it is asked to open playing. Studio's views (studio.arrangement, studio.mixer) attach to it the way studio-desktop's window does."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,25 +13,11 @@ doctest = false
 name = "daw-extension"
 path = "src/main.rs"
 
-[features]
-default = ["audio"]
-# The engine itself: without it the extension serves the session and its
-# data, and plays nothing.
-audio = ["dep:daw-standalone", "dep:daw-proto"]
-
 [dependencies]
-daw-view = { workspace = true }
-session = { workspace = true, features = ["extension"] }
-loro = { version = "1.12", default-features = false }
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
-architect-scene = { workspace = true }
-serde = { workspace = true }
+session-desktop = { workspace = true, features = ["session", "native"] }
+session-engine = { workspace = true, features = ["native"] }
 serde_json = { workspace = true }
-blake3 = { workspace = true }
-hound = "3.5"
-tokio = { workspace = true, features = ["rt-multi-thread", "time", "macros"] }
-daw-standalone = { workspace = true, optional = true, features = ["rpp-loader"] }
-daw-proto = { workspace = true, optional = true }
 
 [lints]
 workspace = true
