@@ -19,6 +19,10 @@ session-desktop = { workspace = true, features = ["session", "native"] }
 session-engine = { workspace = true, features = ["native"] }
 serde_json = { workspace = true }
 tracing = { workspace = true }
+fts-session = { workspace = true }
+daw-ui = { workspace = true }
+uuid = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

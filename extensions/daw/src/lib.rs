@@ -15,6 +15,7 @@
 //! action.
 
 pub mod deck;
+pub mod session_doc;
 
 use std::sync::OnceLock;
 
@@ -28,7 +29,17 @@ static STARTED: OnceLock<Result<(), String>> = OnceLock::new();
 
 /// Starts the engine on a thread of its own (it blocks on its runtime
 /// until the process ends), opening `open` as it comes up.
+/// What the engine was asked to open at start (`FTS_DAW_OPEN`).
+static OPENED: OnceLock<Option<String>> = OnceLock::new();
+
+/// What the engine was asked to open at start, when anything.
+#[must_use]
+pub fn opened() -> Option<&'static str> {
+    OPENED.get().and_then(Option::as_deref)
+}
+
 pub fn start_engine(open: Option<String>) {
+    let _ = OPENED.set(open.clone());
     let args = session_desktop::engine_host::Args {
         open,
         ..session_desktop::engine_host::Args::default()
@@ -55,6 +66,7 @@ fn state() -> Json {
         "socket": found.as_ref().map(|f| f.socket.display().to_string()),
         "mcp": found.as_ref().map(|f| f.mcp.clone()),
         "failed": STARTED.get().and_then(|r| r.as_ref().err().cloned()),
+        "session": session_doc::state(),
         "deck": {
             "sent": deck::SENT.load(std::sync::atomic::Ordering::Relaxed),
             "followed": deck::FOLLOWED.load(std::sync::atomic::Ordering::Relaxed),
@@ -84,20 +96,29 @@ impl Extension for Daw {
 
     fn build(&self, ext: &mut Builder) {
         deck::set_handle(ext.handle());
-        ext.action("DAW_STATE", |_| async { Ok(state()) })
-            .action("DAW_OPEN", |args| async move {
-                let path = args.get("path").and_then(Json::as_str).ok_or("no path")?;
-                run("SESSION_OPEN", &json!({ "path": path })).await
-            })
-            .action("DAW_DECK", |args| async move {
-                // The app's playhead moved (its hook): the engine follows
-                // a move that was not its own.
-                deck::heard(&args);
-                Ok(json!({ "ok": true }))
-            })
-            .action("DAW_RUN", |args| async move {
-                let id = args.get("id").and_then(Json::as_str).ok_or("no id")?;
-                run(id, args.get("args").unwrap_or(&Json::Null)).await
-            });
+        ext.action_in("DAW_READ", |args, cx| async move {
+            session_doc::call(fts_session::service::READ, &args, &cx).await
+        })
+        .action_in("DAW_WRITE", |args, cx| async move {
+            session_doc::call(fts_session::service::WRITE, &args, &cx).await
+        })
+        .action_in("DAW_STRUCTURE", |args, cx| async move {
+            session_doc::call(fts_session::service::STRUCTURE, &args, &cx).await
+        })
+        .action("DAW_STATE", |_| async { Ok(state()) })
+        .action("DAW_OPEN", |args| async move {
+            let path = args.get("path").and_then(Json::as_str).ok_or("no path")?;
+            run("SESSION_OPEN", &json!({ "path": path })).await
+        })
+        .action("DAW_DECK", |args| async move {
+            // The app's playhead moved (its hook): the engine follows
+            // a move that was not its own.
+            deck::heard(&args);
+            Ok(json!({ "ok": true }))
+        })
+        .action("DAW_RUN", |args| async move {
+            let id = args.get("id").and_then(Json::as_str).ok_or("no id")?;
+            run(id, args.get("args").unwrap_or(&Json::Null)).await
+        });
     }
 }

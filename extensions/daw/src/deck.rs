@@ -126,6 +126,7 @@ fn told() {
 
 /// The engine's transport moved: the deck follows.
 fn moved(playing: bool, at: f64) {
+    crate::session_doc::publish(playing, at, 1.0);
     told();
     call("seek", json!({ "t": at.max(0.0) }));
     call(if playing { "play" } else { "pause" }, json!({}));
@@ -150,7 +151,22 @@ pub fn lead() {
                     continue;
                 };
                 if song.as_deref() != Some(project.as_str()) {
+                    // Its session document, opened with the engine's timing
+                    // and led from here.
+                    // Copied out of the set's lock first: opening the file
+                    // waits on the engine's runtime.
+                    let opening = session_engine::studio_engine::set::peek(|view| {
+                        let set = view.setlist.as_ref()?;
+                        let current = set.songs.get(set.at)?;
+                        Some((current.saved.clone(), current.session.project.clone()))
+                    });
+                    if let Some((saved, model)) = opening {
+                        let source =
+                            saved.or_else(|| crate::opened().map(std::path::PathBuf::from));
+                        crate::session_doc::song(&project, source.as_deref(), &model);
+                    }
                     publish(&title, length, at, playing);
+                    crate::session_doc::publish(playing, at, 1.0);
                     song = Some(project);
                     last = Some((at, playing, Instant::now()));
                     continue;
