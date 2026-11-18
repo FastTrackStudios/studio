@@ -1,5 +1,5 @@
-# frame — run inside `nix develop` (the flake provides the toolchain, the
-# GUI libraries and the Vulkan loader the renders need).
+# frame — run inside the devenv shell (`devenv shell`, or direnv): it provides
+# the fleet toolchain, the GUI libraries and the Vulkan loader the renders need.
 
 default:
     @just --list

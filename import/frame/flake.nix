@@ -1,28 +1,35 @@
 {
-  description = "frame — dev and CI shells with the toolchain and everything the workspace links against";
+  description = "frame — nix develop shells (the dev shell and CI are devenv: devenv.nix) with the toolchain and everything the workspace links against";
 
   inputs = {
-    # The same nixpkgs and rust-overlay Studio locks, so the fleet's
-    # caches already hold the shell.
+    # The libraries' nixpkgs, as before (5e11f7ac). Not the fleet's newer one:
+    # on it, a GTK/WebKit shell's -isystem/-L/-rpath flags can pass the
+    # 128 KiB Linux allows COLLECT_GCC_OPTIONS, and every link fails with
+    # "Argument list too long" (measured on patchbay's flake). The dev shell
+    # and CI are devenv (devenv.nix); this flake stays for `nix develop`.
     nixpkgs.url = "github:nixos/nixpkgs/5e11f7acce6c3469bef9df154d78534fa7ae8b6c";
-    rust-overlay.url = "github:oxalica/rust-overlay/6ecf534a7c16e7c969f26838fdd8c93597ae93f3";
-    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    # The toolchain: devenv-fleet at the revision devenv.yaml imports,
+    # evaluated on ITS pinned nixpkgs and rust-overlay, so rustc is the
+    # devenv shell's store path. Move it with devenv.yaml.
+    devenv-fleet.url = "github:FastTrackStudios/devenv-fleet/c4ddec850ad97b5da74c746bff39a988f02b13a4";
   };
 
-  outputs = { self, nixpkgs, rust-overlay }:
+  outputs = { self, nixpkgs, devenv-fleet }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ];
       forAll = f: nixpkgs.lib.genAttrs systems (system:
-        f (import nixpkgs { inherit system; overlays = [ rust-overlay.overlays.default ]; }));
+        f (import nixpkgs { inherit system; }));
     in
     {
       devShells = forAll (pkgs:
         let
           inherit (pkgs) lib stdenv;
-          # The fleet's pin (Studio's nix/modules/toolchain.nix).
-          toolchain = pkgs.rust-bin.stable."1.99.1".default.override {
-            extensions = [ "rust-src" "rust-analyzer" "clippy" "rustfmt" ];
-          };
+          # The fleet toolchain: the expression devenv-fleet's `rust` module
+          # uses, so the same rustc store path as `devenv shell`.
+          toolchain = devenv-fleet.lib.toolchainFor (import devenv-fleet.inputs.nixpkgs {
+            inherit (stdenv.hostPlatform) system;
+            overlays = [ devenv-fleet.overlays.default ];
+          });
           linux = with pkgs; lib.optionals stdenv.hostPlatform.isLinux [
             # The architect/Dioxus crates link the native GUI stack even in
             # unit tests.

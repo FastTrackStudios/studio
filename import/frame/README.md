@@ -35,8 +35,18 @@ docs                         design notes, parity specs and reports
 
 ## Develop
 
+Builds go through the fleet's devenv shell (`devenv.yaml`, `devenv.nix`): the
+toolchain (Rust 1.99.1, the same nixpkgs store path as every FastTrackStudios
+repo, so kache shares builds across them), mold, the GUI libraries and the
+Vulkan loader. Enter it with `devenv shell`, or let direnv do it (`direnv allow`;
+`.envrc` loads it). `devenv shell -- fleet-doctor` prints the rustc path, the
+compiler wrapper (kache) and the linker, and fails if rustc is off the fleet
+pin. `nix develop` still works and gives the same rustc (`flake.nix` takes its
+toolchain from devenv-fleet), but devenv is the shell CI uses.
+
 ```sh
-nix develop          # the toolchain (1.99.1), GUI libraries, Vulkan loader, mold
+devenv shell         # or direnv
+devenv shell -- fleet-doctor
 just check           # what CI checks (with fmt, clippy and `just boundary`)
 just test
 just parity          # the Figma parity suite (needs a GPU)

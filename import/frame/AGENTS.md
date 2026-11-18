@@ -6,8 +6,11 @@
   architect goes in `crates/frame-architect` (the `SurfaceEngine` vox service, the mock engine,
   `remote`, `library`). The tools are in `crates/frame/tools`, the plugin faces in
   `examples/plugin-faces`, the parity harness in `xtask`.
-- Build inside `nix develop` and through the `just` recipes (`just check`, `just test`,
-  `just parity`). Don't set `RUSTFLAGS` or `CARGO_TARGET_DIR`: the rustflags tables in
+- Build inside the devenv shell (`devenv shell -- <cmd>`, or direnv via `.envrc`) and through
+  the `just` recipes (`just check`, `just test`, `just parity`). `devenv shell -- fleet-doctor`
+  shows the rustc store path, the kache wrapper and the linker; it must be the fleet's pin
+  (devenv-fleet's `rust` module). Never set or unset `RUSTC_WRAPPER` or `CARGO_HOME`. Move the
+  pins only with devenv-fleet's `scripts/fleet-pins --write .`, never by hand. Don't set `RUSTFLAGS` or `CARGO_TARGET_DIR`: the rustflags tables in
   `.cargo/config.toml` are Studio's on purpose, so kache shares builds across the fleet's repos.
 - The pins (architect, Dioxus, Blitz, vox, the `[patch]` tables) follow architect's release tags;
   consumers repeat the same `[patch]` tables.
