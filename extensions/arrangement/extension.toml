@@ -58,3 +58,11 @@ description = "Folds every top-level folder (`on`: true) or opens them all (fals
 group = "Arrangement"
 effect = "mutating"
 params = '{"type":"object","properties":{"on":{"type":"boolean"}}}'
+
+[[actions]]
+id = "STUDIO_ARRANGEMENT_PANEL"
+name = "Arrangement: expand the track panel"
+description = "The track panel compact (`compact`: true: each track's name) or expanded (false: its mute, solo, arm, volume, pan, FX and routing); with neither, the other way: the window's toolbar switch, or a swipe across the panel."
+group = "Arrangement"
+effect = "mutating"
+params = '{"type":"object","properties":{"compact":{"type":"boolean"}}}'

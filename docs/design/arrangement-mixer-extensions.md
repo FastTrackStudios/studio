@@ -224,9 +224,11 @@ strip past them keeps its meter in the picture (the golden template's
        each costs a slot a track, and the table's 1024 are spent, so the
        next step is Architect's `MAX_SLOTS`.
    - The arrangement's track panel starts compact beside the mixer, as
-     docked: its rows show no mute or solo until expanded, and only a
-     touch swipe or the window's toolbar switch expands it, neither of
-     which a pane has.
+     docked: its rows show no mute or solo until expanded.
+     `STUDIO_ARRANGEMENT_PANEL` is the window's toolbar switch (and the
+     swipe across the panel): expanded, a mute clicked in the
+     arrangement 16 times lit the mixer's in the same frame 16 of 16
+     times.
    - **A key in the mixer pane** runs Studio's keymap, as the window's
      arrangement reads the keys pressed in its mixer
      (`HostedMixer::key`, `window::key_alone`): Space plays, `x` hides
@@ -243,8 +245,8 @@ strip past them keeps its meter in the picture (the golden template's
    shared value table's 1024 slots, seven values a track).
 4. **Out by decision:** Studio's window chrome beyond the views (the
    browser, navigator, editor, chart, lyrics and quantize panels, the
-   bottom bar). The transport and Folded are `STUDIO_ARRANGEMENT_*`
-   actions, Racks is `STUDIO_MIXER_RACKS`.
+   bottom bar). The transport, Folded and the track panel's shape are
+   `STUDIO_ARRANGEMENT_*` actions, Racks is `STUDIO_MIXER_RACKS`.
 5. **Peers' ghosts and the touch grip and handle** are drawn after the
    play cursor in the window and before it in the pane: they differ only
    where they overlap the cursor.

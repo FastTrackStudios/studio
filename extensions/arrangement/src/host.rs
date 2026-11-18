@@ -245,6 +245,26 @@ impl PaintView for Hosted {
             self.lit_by_values = studio_view_link::engine_lights_buttons();
         }
         let buttons = self.lit_by_values;
+        // The panel's shape, as asked (`STUDIO_ARRANGEMENT_PANEL`): set as
+        // the toolbar sets it, the widget drawing it from the next paint.
+        let asked = crate::ASKED_COMPACT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(compact) = asked {
+            let mut shape = self.panel.shape;
+            let cell = std::rc::Rc::clone(&self.panel.compact);
+            self.scope.run(|| {
+                cell.set(compact);
+                if *shape.peek() != compact {
+                    shape.set(compact);
+                }
+            });
+        }
+        crate::COMPACT.store(
+            self.panel.compact.get(),
+            std::sync::atomic::Ordering::Release,
+        );
         let (scene, cursor, parts) = {
             let widget = &self.widget;
             self.scope
