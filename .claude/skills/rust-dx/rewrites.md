@@ -209,7 +209,7 @@ static, and the read is one lock.
 
 ## 5. The engine's own setter plumbing — two locks and a guid clone per call
 
-`crates/daw/standalone/src/item.rs:31-60` (`mutate_item_evt`, `resolve_project`)
+`daw:crates/daw/standalone/src/item.rs:31-60` (`mutate_item_evt`, `resolve_project`)
 
 ```rust
 fn mutate_item_evt<F>(daw: &Standalone, project: &ProjectContext, item: &ItemRef, f: F) -> DawResult<()>
@@ -263,7 +263,7 @@ an identity.
 
 ## 6. Undo snapshots and the take→item scan
 
-`crates/daw/standalone/src/sync/daw.rs:524-543` (`EditSnapshot::capture`) and
+`daw:crates/daw/standalone/src/sync/daw.rs:524-543` (`EditSnapshot::capture`) and
 `:1478-1486` (in `item_changes_since`)
 
 ```rust

@@ -365,12 +365,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anes"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
-
-[[package]]
 name = "annotate-snippets"
 version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2989,7 +2983,7 @@ dependencies = [
 [[package]]
 name = "audio"
 version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/daw?rev=3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f#3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "anyhow",
  "atomic_float",
@@ -3864,9 +3858,8 @@ checksum = "56ed6191a7e78c36abdb16ab65341eefd73d64d303fffccdbb00d51e4205967b"
 [[package]]
 name = "builtin"
 version = "26.10.3"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
- "anyhow",
- "builtin",
  "comp-plugin",
  "crossbeam-channel",
  "daw",
@@ -3878,22 +3871,18 @@ dependencies = [
  "eq-plugin",
  "fts-sample",
  "gate-plugin",
- "hound",
  "level-plugin",
  "limiter-plugin",
  "meter-plugin",
  "mic-plugin",
- "midi",
  "modulation-plugin",
  "nice-plug",
  "num-traits",
  "pitch-plugin",
- "realfft",
  "reverb-plugin",
  "saturate-plugin",
  "serde",
  "serde_json",
- "signal-plugin-host",
  "tracing",
  "tune-plugin",
  "unison-plugin",
@@ -5203,42 +5192,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "criterion"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b12d017a929603d80db1831cd3a24082f8137ce19c69e6447f54f5fc8d692f"
-dependencies = [
- "anes",
- "cast",
- "ciborium",
- "clap",
- "criterion-plot",
- "is-terminal",
- "itertools 0.10.5",
- "num-traits",
- "once_cell",
- "oorandom",
- "plotters",
- "rayon",
- "regex",
- "serde",
- "serde_derive",
- "serde_json",
- "tinytemplate",
- "walkdir",
-]
-
-[[package]]
-name = "criterion-plot"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
-dependencies = [
- "cast",
- "itertools 0.10.5",
-]
-
-[[package]]
 name = "critical-section"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5688,13 +5641,13 @@ checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 [[package]]
 name = "daw"
 version = "26.10.3"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "daw-control",
  "daw-module",
  "daw-proto",
  "daw-standalone",
- "eyre",
  "facet",
  "tokio",
  "vox",
@@ -5716,7 +5669,7 @@ dependencies = [
 [[package]]
 name = "daw-allocator"
 version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/daw?rev=3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f#3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 
 [[package]]
 name = "daw-audio-sync"
@@ -5767,7 +5720,7 @@ dependencies = [
 [[package]]
 name = "daw-control"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/daw?rev=3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f#3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "daw-proto",
@@ -5805,7 +5758,7 @@ dependencies = [
 [[package]]
 name = "daw-module"
 version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/daw?rev=3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f#3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "tokio",
  "tracing",
@@ -5835,7 +5788,7 @@ dependencies = [
 [[package]]
 name = "daw-proto"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/daw?rev=3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f#3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "daw-transport-sync",
@@ -5927,6 +5880,7 @@ dependencies = [
 [[package]]
 name = "daw-standalone"
 version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "arc-swap",
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
@@ -5937,7 +5891,6 @@ dependencies = [
  "cpal",
  "daw-control",
  "daw-proto",
- "daw-standalone",
  "daw-transport-sync",
  "dawfile-reaper",
  "dsp",
@@ -5951,11 +5904,9 @@ dependencies = [
  "raw-window-handle 0.6.2",
  "rtrb",
  "session-format",
- "tempfile",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
- "ureq 2.12.1",
  "uuid",
  "vox",
  "vst3",
@@ -5966,13 +5917,11 @@ dependencies = [
 [[package]]
 name = "daw-sync"
 version = "26.10.3"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "daw",
- "daw-sync",
- "eyre",
  "facet",
  "facet-postcard",
- "rusty_link",
  "tokio",
  "tokio-util",
  "tracing",
@@ -5981,7 +5930,7 @@ dependencies = [
 [[package]]
 name = "daw-test-macro"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/daw?rev=3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f#3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5991,7 +5940,7 @@ dependencies = [
 [[package]]
 name = "daw-transport-sync"
 version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/daw?rev=3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f#3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "web-time",
 ]
@@ -6032,12 +5981,11 @@ dependencies = [
 [[package]]
 name = "dawfile-reaper"
 version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "base64 0.22.1",
- "criterion",
  "daw-proto",
  "fts-sample",
- "libc",
  "nom 8.0.0",
  "rayon",
  "serde",
@@ -8920,7 +8868,7 @@ dependencies = [
 [[package]]
 name = "fts-sample"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f#3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "arc-swap",
  "claxon",
@@ -13223,7 +13171,7 @@ dependencies = [
 [[package]]
 name = "midi"
 version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/daw?rev=3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f#3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "core-foundation 0.10.1",
@@ -16773,34 +16721,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "plotters"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aeb6f403d7a4911efb1e33402027fc44f29b5bf6def3effcc22d7bb75f2b747"
-dependencies = [
- "num-traits",
- "plotters-backend",
- "plotters-svg",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "plotters-backend"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df42e13c12958a16b3f7f4386b9ab1f3e7933914ecea48da7139435263a4172a"
-
-[[package]]
-name = "plotters-svg"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51bae2ac328883f7acdfea3d66a7c35751187f870bc81f94563733a154d7a670"
-dependencies = [
- "plotters-backend",
-]
-
-[[package]]
 name = "plugin-core"
 version = "26.10.3"
 source = "git+https://github.com/FastTrackStudios/fts-fx?rev=5bae622f5d874ce58ab04916ab29a8100e883012#5bae622f5d874ce58ab04916ab29a8100e883012"
@@ -18958,16 +18878,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rusty_link"
-version = "0.4.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4169045a50ee3c874ee11128b8f06a46947776b23e3ee5f4bca293b6f3bb6f07"
-dependencies = [
- "bindgen 0.72.1",
- "cmake",
-]
-
-[[package]]
 name = "rustybuzz"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -20105,22 +20015,19 @@ dependencies = [
 [[package]]
 name = "session-format"
 version = "26.10.3"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "async-trait",
  "crdt",
  "daw-proto",
- "dawfile-reaper",
  "facet",
  "facet-styx",
  "loro",
  "pollster",
  "ruzstd",
- "session-format",
  "sha2 0.10.9",
  "styx-format",
- "tempfile",
  "thiserror 2.0.20",
- "tokio",
  "tracing",
  "turso",
  "uuid",
@@ -20737,9 +20644,9 @@ dependencies = [
 [[package]]
 name = "signal-plugin-host"
 version = "26.10.3"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "daw",
- "hound",
 ]
 
 [[package]]
@@ -23293,16 +23200,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinytemplate"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "tinyvec"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -24573,7 +24470,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 [[package]]
 name = "utils"
 version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/daw?rev=3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f#3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
 dependencies = [
  "facet",
  "facet-styx",

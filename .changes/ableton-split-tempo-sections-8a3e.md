@@ -1,7 +1,6 @@
 ---
 "ableton" = "patch"
 "daw-reaper" = "patch"
-"daw-standalone" = "patch"
 "session" = "patch"
 "session-engine" = "patch"
 ---

@@ -1,8 +1,5 @@
 ---
-"session-format" = "none"
-"dawfile-reaper" = "none"
 "interchange" = "none"
-"daw-standalone" = "none"
 "session-web" = "none"
 "daw-actions" = "none"
 ---

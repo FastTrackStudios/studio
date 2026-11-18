@@ -1,5 +1,4 @@
 ---
-"session-format" = "minor"
 "session-engine" = "patch"
 ---
 

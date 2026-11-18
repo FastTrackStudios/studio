@@ -1,5 +1,4 @@
 ---
-"daw-standalone" = "patch"
 "session" = "patch"
 ---
 

@@ -194,7 +194,7 @@ per-track `Arc<[Item]>`. Wire ids: `Arc<str>`-backed newtypes.
   `Takes` (`take/service.rs:13`) do not declare `scopes` yet. The macro
   (architect `macros/architect-rpc-derive/src/lib.rs`, `emit_scope_views`)
   clones the bound scope values on every call.
-- `crates/daw/standalone/src/journal.rs` — `Journaled<K, V>`.
+- `daw:crates/daw/standalone/src/journal.rs` — `Journaled<K, V>`.
 - `daw:crates/daw/control/src/batch.rs` and `daw:crates/daw/proto/src/batch` —
   reified ops (`ops(ProjectContext as ProjectArg, …)`) for multi-call
   programs over RPC; the remote analogue of `edit_item`.
