@@ -74,8 +74,8 @@ features/dynamic-template/fixtures/golden/media/
 
 # Large binaries linked in by `just assets` (see assets.txt)
 /.assets
-/features/rigs/guitar/default-config/models
-/features/rigs/guitar/default-config-bass/models
+/rig-library/guitar/models
+/rig-library/bass/models
 /features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/000/ProjectData
 /features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/001/ProjectData
 /features/adapters/logic/tests/fixtures/logic/Fire.logicx/Alternatives/002/ProjectData

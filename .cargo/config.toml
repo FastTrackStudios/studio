@@ -35,3 +35,12 @@ rustflags = [
 # same way `git` does outside cargo.
 [net]
 git-fetch-with-cli = true
+
+# The guitar and bass rigs' captures and frozen Cores, for the `guitar`
+# crate's build script to embed (it lives in FastTrackStudios/signal, a
+# public repository, and these are private): `rig-library/<rig>/models` is
+# linked in from the rig-models repo by `just assets`, and
+# `rig-library/guitar/frozen` is here. Relative to this checkout, so every
+# worktree builds from its own.
+[env]
+SIGNAL_RIG_LIBRARY = { value = "rig-library", relative = true }
