@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+    # A draft runs nothing; marking it ready starts the run.
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 # WHO CANCELS WHOM:
@@ -40,6 +42,7 @@ env:
 jobs:
   lint:
     name: Lint (fmt + clippy + boundary)
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
     timeout-minutes: 120
     steps:
@@ -67,6 +70,7 @@ jobs:
 
   check:
     name: Check
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
     timeout-minutes: 120
     steps:
@@ -90,6 +94,7 @@ jobs:
   # commit: the snippet and its [patch] tables stay true.
   consumer:
     name: Consumer
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
     timeout-minutes: 120
     steps:
@@ -108,10 +113,12 @@ jobs:
         run: devenv shell -- just consumer
 
   # The one status to require on main: it passes only when every job above
-  # succeeded; a skipped or cancelled job fails it.
+  # succeeded; a skipped or cancelled job fails it. On a draft PR every job,
+  # this one included, is skipped (a skipped required status passes);
+  # marking the PR ready runs them all.
   ci:
     name: ci
-    if: ${{ always() }}
+    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     needs: [lint, check, consumer]
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","thebattleship"]') }}
     steps:
