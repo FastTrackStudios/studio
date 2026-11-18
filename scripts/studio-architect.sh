@@ -77,8 +77,8 @@ node() {
     [ -x "$bin" ] || { echo "studio-architect: no node at $bin" >&2; exit 1; }
     # It is the node of this distribution, and says so.
     "$bin" serve --help >/dev/null
-    "$bin" distribution | grep -q '"bundle_id": "app.fasttrackstudio.studio-architect"' \
-        || { echo "studio-architect: $bin is not Studio Architect" >&2; exit 1; }
+    "$bin" distribution | grep -q '"bundle_id": "app.fasttrackstudio.studio"' \
+        || { echo "studio-architect: $bin is not Studio" >&2; exit 1; }
     echo "node=$bin"
 }
 
@@ -125,7 +125,7 @@ web() {
     )
     rm -f "$json"
     grep -q '"name": "Studio Architect"' "$out/app/distribution.json" \
-        || { echo "studio-architect: $out/app/distribution.json is not Studio Architect's" >&2; exit 1; }
+        || { echo "studio-architect: $out/app/distribution.json is not Studio's" >&2; exit 1; }
     echo "web=$(cd "$out" && pwd)"
 }
 
