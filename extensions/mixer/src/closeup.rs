@@ -36,6 +36,11 @@ pub struct HostedRack {
     layer: SceneLayer,
     /// The buttons held now: a move carries them, as Blitz's do.
     held: MouseEventButtons,
+    /// The fingers down, the first the primary one (`input::touch`).
+    fingers: Vec<u64>,
+    /// The racks' settings a panel asked for later is drawn over, and the
+    /// asks seen ([`ask`]): `None`, the pane keeps its panel.
+    follows: Option<(Rc<session_ui::tone::Shared>, u64)>,
 }
 
 impl HostedRack {
@@ -46,6 +51,34 @@ impl HostedRack {
             scope,
             layer: SceneLayer::new(SCENE, stats),
             held: MouseEventButtons::empty(),
+            fingers: Vec::new(),
+            follows: None,
+        }
+    }
+
+    /// From now on the pane shows the panel `SESSION_CLOSEUP` asks for
+    /// ([`ask`]), over `tone`, from the frame after the ask.
+    #[must_use]
+    pub fn following_asks(mut self, tone: Rc<session_ui::tone::Shared>) -> Self {
+        self.follows = Some((tone, asked().0));
+        self
+    }
+
+    /// A panel asked for since the last frame: the pane's widget, for it.
+    fn take_ask(&mut self) {
+        let Some((tone, seen)) = self.follows.as_mut() else {
+            return;
+        };
+        let (now, rack) = asked();
+        if now == *seen {
+            return;
+        }
+        *seen = now;
+        if let Some((guid, which)) = rack {
+            let tone = Rc::clone(tone);
+            let widget = &self.rack;
+            self.scope
+                .run(|| *widget.borrow_mut() = RackWidget::new(tone, guid, which, false));
         }
     }
 
@@ -85,6 +118,13 @@ impl PaintView for HostedRack {
                 let e = input::pointer((*x, *y), b, self.held, input::modifiers(mods));
                 self.widget(&UiEvent::PointerUp(e));
             }
+            // A finger: the widget takes a grip under it, as on a phone.
+            ViewInput::Touch { id, x, y, phase } => {
+                let Some(event) = input::touch(&mut self.fingers, *id, (*x, *y), phase) else {
+                    return false;
+                };
+                self.widget(&event);
+            }
             ViewInput::Focus(false) => {
                 self.held = MouseEventButtons::empty();
             }
@@ -101,6 +141,7 @@ impl PaintView for HostedRack {
 
     fn layers(&mut self, ctx: &ViewCtx) -> Option<Vec<(LayerKey, Layer)>> {
         let began = web_time::Instant::now();
+        self.take_ask();
         let (w, h) = studio_view_link::pane_size(ctx);
         let scene = {
             let rack = &self.rack;
@@ -119,15 +160,42 @@ pub fn settings(session: &StudioSession) -> Rc<session_ui::tone::Shared> {
     tone
 }
 
-/// The pane: the panel its state names, once the engine has a song.
+/// The rack panel `SESSION_CLOSEUP` asked for last in this process, and how
+/// many asks there have been (`crate::claim`).
+static ASKED: std::sync::Mutex<(u64, Option<(String, Which)>)> = std::sync::Mutex::new((0, None));
+
+/// Show track `guid`'s `which` panel in the close-up pane: what the pane
+/// shows from its next look, over the state its pane was opened with.
+pub fn ask(guid: &str, which: Which) {
+    let mut asked = ASKED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    asked.0 = asked.0.wrapping_add(1);
+    asked.1 = Some((guid.to_owned(), which));
+}
+
+fn asked() -> (u64, Option<(String, Which)>) {
+    ASKED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+}
+
+/// The pane: the panel last asked for in this process, else the one its
+/// state names (a layout opened again), once the engine has a song.
 #[component]
 pub fn CloseupPane() -> Element {
     let song = studio_view_link::use_song();
     let state = architect_extensions::linked::use_pane_state().map(|(_, s)| s);
     let surface = studio_view_link::surface();
-    let rack = state
-        .as_deref()
-        .and_then(session_ui::closeup::rack_of_state);
+    // An ask made before the pane opened is what it opens on (its state
+    // says the same); a later one the pane's host takes up on its next
+    // frame (`HostedRack::following_asks`).
+    let rack = use_hook(asked).1.or_else(|| {
+        state
+            .as_deref()
+            .and_then(session_ui::closeup::rack_of_state)
+    });
     match (song(), rack) {
         (Some((key, session)), Some((guid, which))) => rsx! {
             div { style: "position:relative; width:100%; height:100%; background:{surface};",
@@ -150,9 +218,10 @@ pub fn CloseupPane() -> Element {
 
 #[component]
 fn Rack(session: crate::Song, guid: String, which: Which) -> Element {
+    let tone = use_hook(|| settings(&session.0));
     let rack = use_hook(|| {
         Rc::new(RefCell::new(RackWidget::new(
-            settings(&session.0),
+            Rc::clone(&tone),
             guid.clone(),
             which,
             false,
@@ -161,9 +230,10 @@ fn Rack(session: crate::Song, guid: String, which: Which) -> Element {
     let stats = use_hook(|| crate::pane_stats("closeup"));
     let mount = use_hook(|| {
         let scope = InScope::here();
-        let (rack, stats) = (Rc::clone(&rack), Arc::clone(&stats));
+        let (rack, stats, tone) = (Rc::clone(&rack), Arc::clone(&stats), Rc::clone(&tone));
         PaintMount::new(move |_| {
             HostedRack::new(Rc::clone(&rack), scope.clone(), Arc::clone(&stats))
+                .following_asks(Rc::clone(&tone))
         })
     });
     let surface = studio_view_link::surface();

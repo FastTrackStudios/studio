@@ -246,10 +246,18 @@ strip past them keeps its meter in the picture (the golden template's
    The visibility manager is no longer one of them: a mixer on its own
    keeps every track and plans its strips again when one is shown or
    hidden (`SESSION_SHOW_GROUP` takes a group out of both panes).
-2. **Rack close-ups.** A close-up is Studio's rack widget as a native
-   Blitz widget (`CustomWidgetAttr`), its Escape a winit window event:
-   neither exists in a process view's document. It needs the rack widget
-   hosted in a pane of its own, as the mixer is.
+2. **Rack close-ups** (studio#525). The close-up is a pane of its own,
+   `studio.mixer`'s `closeup` view (state `<track GUID>/<panel>`),
+   hosting Studio's own `closeup::RackWidget`, the widget the window's
+   close-up layer mounts (parity with its paint: 0 pixels; a capture pair
+   against `studio-desktop`'s). `studio.mixer` claims `SESSION_CLOSEUP`:
+   a strip's expand mark, ⌘K or MCP opens the pane on that panel, moves
+   an open one to another, and closes it. Still the window's, not the
+   pane's: the close-up's chrome (header, tabs, back, Escape, swipe) and
+   its settings kept in step with the mixer pane's in memory (each view
+   is a thread of its own; they meet through the engine). A pane given
+   another state by `WORKSPACE_NAVIGATE` does not show it (architect#896):
+   the mixer's process tells its pane the panel itself.
 3. **Meters and buttons past 146 tracks** stay in the panes' pictures (a
    shared value table's 1024 slots, seven values a track).
 4. **Out by decision:** Studio's window chrome beyond the views (the
