@@ -9,6 +9,13 @@
 //! - **Opened** with `SessionFile::open` when it is there, else made
 //!   (`SessionFile::create`), and saved as a document file: what Keyflow
 //!   and the org's sync read (studio#522).
+//! - **Or, as a vault document** (`FTS_DAW_DOCUMENT=<its path in the
+//!   vault>`, the song's folder in a vault): made on disk when it is not
+//!   there, then opened through the host as the node's copy, a replica
+//!   kept in step (architect#864). The node is then its file's only
+//!   writer, and every edit (the timing, a caller's write) reaches the
+//!   org's other devices as the document syncs. Its kind is declared in
+//!   the manifest, as Keyflow declares it.
 //! - **Its timing is the engine's.** On open the engine writes into it the
 //!   song's tempo changes (with their meters), its markers, its sections
 //!   as regions, and `bar_one`: a `SONGSTART` marker, else the first
@@ -27,6 +34,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
 
+use architect_extensions::live::Replica;
+use fts_session::doc::SessionDoc;
 use fts_session::file::SessionFile;
 use fts_session::lead::Leader;
 use fts_session::service::Sessions;
@@ -34,13 +43,29 @@ use fts_session::time::{Position, TempoPoint, TimePosition, TimeSignature};
 use fts_session::{MarkId, Marker, Region, TempoMap, Time};
 use serde_json::{Value as Json, json};
 
+/// Where the open session is kept.
+enum Backing {
+    /// `<song stem>.fts-session` on disk, this process its one writer.
+    File(SessionFile),
+    /// The vault document of that name, the node's copy, kept in step by
+    /// this replica (`FTS_DAW_DOCUMENT`).
+    Document(Replica),
+}
+
 /// The session open now.
 struct Open {
     song: String,
+    /// Its file, or its path in the vault for a vault document.
     path: PathBuf,
     id: String,
-    file: SessionFile,
+    session: SessionDoc,
+    backing: Backing,
 }
+
+/// How long the vault document is asked for while the extension is not
+/// connected to its host yet (the engine opens its song as the process
+/// starts): 40 tries a quarter second apart.
+const DOCUMENT_TRIES: u32 = 40;
 
 static OPEN: Mutex<Option<Open>> = Mutex::new(None);
 static LEADER: Mutex<Option<Leader>> = Mutex::new(None);
@@ -134,12 +159,9 @@ fn seconds_at_bar(project: &daw_ui::studio::project::Project, bar: u32) -> f64 {
     at + (want - bars) * beats * 60.0 / bpm.max(1.0)
 }
 
-/// The engine's timing for `project`, written into `file`'s session.
-async fn write_timing(
-    file: &SessionFile,
-    project: &daw_ui::studio::project::Project,
-) -> Result<(), String> {
-    let doc = file.session();
+/// The engine's timing for `project`, written into session `doc` (kept
+/// by [`keep`]).
+fn write_timing(doc: &SessionDoc, project: &daw_ui::studio::project::Project) -> Result<(), String> {
     let mut changes: Vec<_> = project.tempo.iter().collect();
     changes.sort_by(|a, b| a.at.total_cmp(&b.at));
     let first = changes.first();
@@ -194,8 +216,49 @@ async fn write_timing(
         .map_err(|e| err(&e))?;
     }
     doc.set_bar_one(bar_one(project).map(Time::Seconds))
-        .map_err(|e| err(&e))?;
-    file.save().await.map_err(|e| err(&e))
+        .map_err(|e| err(&e))
+}
+
+/// Keeps what was written into `session`: its file saved, or, for a vault
+/// document, committed, which its replica sends to the node.
+async fn keep(backing: &Backing, session: &SessionDoc) -> Result<(), String> {
+    match backing {
+        Backing::File(file) => file.save().await.map_err(|e| e.to_string()),
+        Backing::Document(_) => {
+            session.doc().commit();
+            Ok(())
+        }
+    }
+}
+
+/// The vault document `vault_path` (`file` on disk) as the node's copy:
+/// made on disk first when it is not there (the node opens a document
+/// file, it makes none), then asked of the host, again while the
+/// extension is not yet connected to it.
+async fn open_document(
+    vault_path: &str,
+    file: &Path,
+) -> Result<(String, SessionDoc, Replica), String> {
+    if !file.exists() {
+        let made = SessionFile::create(file).await.map_err(|e| e.to_string())?;
+        made.save().await.map_err(|e| e.to_string())?;
+    }
+    let mut tries = 0_u32;
+    let lane = loop {
+        match architect_extensions::guest::document(vault_path).await {
+            Ok(lane) => break lane,
+            Err(e) if tries >= DOCUMENT_TRIES => return Err(format!("{vault_path}: {e:?}")),
+            Err(_) => {
+                tries = tries.saturating_add(1);
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            }
+        }
+    };
+    let id = lane.doc().doc_id.to_string();
+    let replica = lane.replica();
+    replica.attached().await?;
+    let session = SessionDoc::from_doc(replica.doc().loro().clone());
+    Ok((id, session, replica))
 }
 
 /// Song `song` (the engine's project id) is current: its session
@@ -223,39 +286,60 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
         problem(Some("no runtime to open the session on".to_owned()));
         return;
     };
+    // The song in a vault: its session as the vault document of that path.
+    let document = std::env::var("FTS_DAW_DOCUMENT")
+        .ok()
+        .filter(|p| !p.trim().is_empty());
     let opened = rt.block_on(async {
-        // Its own file only, never Studio's `Song.session` (studio#522):
-        // opened when it is there, else made.
-        let file = if path.exists() {
-            SessionFile::open(&path).await
-        } else {
-            SessionFile::create(&path).await
-        }
-        .map_err(|e| e.to_string())?;
-        write_timing(&file, project).await?;
-        Ok::<_, String>(file)
+        let (id, session, backing) = match &document {
+            Some(vault_path) => {
+                let (id, session, replica) = open_document(vault_path, &path).await?;
+                (id, session, Backing::Document(replica))
+            }
+            None => {
+                // Its own file only, never Studio's `Song.session`
+                // (studio#522): opened when it is there, else made.
+                let file = if path.exists() {
+                    SessionFile::open(&path).await
+                } else {
+                    SessionFile::create(&path).await
+                }
+                .map_err(|e| e.to_string())?;
+                let session = file.session().clone();
+                (file.id().to_string(), session, Backing::File(file))
+            }
+        };
+        write_timing(&session, project)?;
+        keep(&backing, &session).await?;
+        Ok::<_, String>((id, session, backing))
     });
-    let file = match opened {
-        Ok(file) => {
+    let (id, session, backing) = match opened {
+        Ok(opened) => {
             problem(None);
-            file
+            opened
         }
         Err(e) => {
             problem(Some(format!("{}: {e}", path.display())));
             return;
         }
     };
-    let id = file.id().to_string();
+    let path = document.map_or(path, PathBuf::from);
     if let Some(was) = open.take() {
         sessions().close(&was.id);
     }
-    sessions().open(id.clone(), file.session().clone());
-    tracing::info!(session.id = %id, session.path = %path.display(), "daw: the session document is open");
+    sessions().open(id.clone(), session.clone());
+    tracing::info!(
+        session.id = %id,
+        session.path = %path.display(),
+        session.document = matches!(backing, Backing::Document(_)),
+        "daw: the session document is open"
+    );
     *open = Some(Open {
         song: song.to_owned(),
         path,
         id,
-        file,
+        session,
+        backing,
     });
     drop(open);
     lead();
@@ -317,12 +401,17 @@ pub fn publish(playing: bool, at: f64, rate: f64) {
 /// transport is led from.
 #[must_use]
 pub fn state() -> Json {
-    let (path, id) = OPEN
+    let (path, id, document) = OPEN
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
-        .map(|o| (o.path.display().to_string(), o.id.clone()))
-        .unzip();
+        .map_or((None, None, false), |o| {
+            (
+                Some(o.path.display().to_string()),
+                Some(o.id.clone()),
+                matches!(o.backing, Backing::Document(_)),
+            )
+        });
     let url = LEADER
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -331,6 +420,7 @@ pub fn state() -> Json {
     json!({
         "path": path,
         "id": id,
+        "document": document,
         "url": url,
         "problem": PROBLEM.lock().unwrap_or_else(PoisonError::into_inner).clone(),
     })
@@ -346,26 +436,23 @@ pub async fn call(method: &str, args: &Json, cx: &Json) -> Result<Json, String> 
     let caller = cx.get("caller").and_then(Json::as_str);
     let reply = fts_session::extension::answer(sessions(), method, &args.to_string(), caller)?;
     if method != fts_session::service::READ {
-        // The file to save, out of the lock: a save awaits.
-        let saving = OPEN
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .as_ref()
-            .map(|o| o.path.clone());
-        if saving.is_some() {
+        // Kept out of the lock: a save awaits.
+        let open = OPEN.lock().unwrap_or_else(PoisonError::into_inner).is_some();
+        if open {
             save().await;
         }
     }
     serde_json::from_str(&reply).map_err(|e| e.to_string())
 }
 
-/// Saves the open session to its file.
+/// Keeps the open session's edits: its file saved, a vault document's
+/// committed ([`keep`]).
 async fn save() {
     // Taken out for the save (a save awaits; the lock is not held across
     // it), and put back.
     let open = OPEN.lock().unwrap_or_else(PoisonError::into_inner).take();
     if let Some(open) = open {
-        if let Err(e) = open.file.save().await {
+        if let Err(e) = keep(&open.backing, &open.session).await {
             tracing::warn!(error = %e, "daw: the session document did not save");
         }
         let mut slot = OPEN.lock().unwrap_or_else(PoisonError::into_inner);

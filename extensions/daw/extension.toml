@@ -23,6 +23,19 @@ path = "daw-extension"
 [capabilities]
 effect = "mutating"
 events = ["playhead.changed"]
+# The song's session as a vault document (`FTS_DAW_DOCUMENT`): the node's
+# copy, opened and edited through the host (src/session_doc.rs).
+reads = ["documents"]
+writes = ["documents"]
+
+# A song's session document, `<song stem>.fts-session` (studio#522): the
+# same kind Keyflow declares, so a song in a vault syncs through the org
+# and the engine may open it through the host.
+[[doc_kinds]]
+id = "fts.session"
+name = "Session"
+files = ["fts-session"]
+schema = 1
 
 # fts.session for the song's session document (src/session_doc.rs): a
 # service's method m is the provider's action DAW_<M>.

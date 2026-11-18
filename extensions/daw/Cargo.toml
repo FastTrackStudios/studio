@@ -14,7 +14,7 @@ name = "daw-extension"
 path = "src/main.rs"
 
 [dependencies]
-architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+architect-extensions = { workspace = true, features = ["guest", "linked-core", "doc-sync"] }
 session-desktop = { workspace = true, features = ["session", "native"] }
 session-engine = { workspace = true, features = ["native"] }
 serde_json = { workspace = true }
