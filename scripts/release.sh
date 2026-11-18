@@ -194,22 +194,21 @@ next_version() {
     fi
 }
 
-# ── the iOS apps (Studio, Patchbay) ──────────────────────────────────────
-# Studio (Signal and Session in one app, apps/studio/desktop) and Patchbay
-# (apps/patchbay `patchbay-ios`, a controller of other machines' engines),
-# each with its `<app>-ios` workflow; Signal's and Session's own App Store
+# ── the iOS app (Studio) ────────────────────────────────────────────────
+# Studio (Signal and Session in one app, apps/studio/desktop), with its
+# `<app>-ios` workflow (Patchbay's iOS app ships from its own repo); Signal's and Session's own App Store
 # records get no new builds. Each is built from the one `v<version>` tag:
 # its marketing version is the tag's (deploy-testflight.sh writes
 # MARKETING_VER into the Info.plist) and Studio reports it in-app through
 # fts-version (FTS_RELEASE_VERSION, which `stamp` exported). The tag guard
 # and the TestFlight gate prove the checkout was stamped with the tag's
 # version.
-IOS_APPS="studio patchbay"
+IOS_APPS="studio"
 
 ios_check() {
-    case "${1:-}" in studio | patchbay) ;; *) die "unknown iOS app '${1:-}' (studio, patchbay)" ;; esac
+    case "${1:-}" in studio) ;; *) die "unknown iOS app '${1:-}' (studio)" ;; esac
 }
-ios_title() { case "$1" in studio) echo Studio ;; patchbay) echo Patchbay ;; esac; }
+ios_title() { case "$1" in studio) echo Studio ;; esac; }
 ios_bundle_id() { echo "app.fasttrackstudio.$1"; }
 
 # Git dependencies whose locked commit moved in a range — behaviour can

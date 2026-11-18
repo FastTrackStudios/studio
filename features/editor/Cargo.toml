@@ -58,7 +58,7 @@ guitarpro = { workspace = true, optional = true }
 hound = { workspace = true, optional = true }
 architect-input = { workspace = true, optional = true }
 keybinds = { workspace = true, optional = true }
-keyflow = { workspace = true, optional = true }
+keyflow = { workspace = true, optional = true, features = ["text", "engraver"] }
 keyflow-proto = { workspace = true }
 kurbo = { workspace = true, optional = true }
 midly = { workspace = true, optional = true }
@@ -91,7 +91,7 @@ dioxus-ssr = { workspace = true }
 dioxus-test = { workspace = true }
 eyre = { workspace = true }
 facet-styx = { workspace = true }
-keyflow = { workspace = true }
+keyflow = { workspace = true, features = ["text", "engraver"] }
 session-format = { workspace = true }
 guitarpro = { workspace = true }
 hound = { workspace = true }

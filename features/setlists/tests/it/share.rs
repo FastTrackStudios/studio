@@ -557,17 +557,16 @@ fn a_rows_key_is_on_its_tile_and_a_setlists_key_moves_it() {
     assert!(row("C", "F#").contains(">+6</span>"));
     let enharmonic = row("F#", "Gb");
     assert!(!enharmonic.contains("data-track-transposed") && enharmonic.contains(">F#</span>"));
-    // Another mode is no transposition: the played key, no number, and
-    // the chart's key said.
-    let mode = row("E", "Em");
-    assert!(
-        !mode.contains("data-track-transposed") && mode.contains(">Em</span>"),
-        "{mode}"
-    );
-    assert!(
-        mode.contains("aria-label=\"Key of E minor; its chart is in E\""),
-        "{mode}"
-    );
+    // A setlist's key keeps the chart's mode: the other mode, or a key
+    // that is not a key's name, is refused and the row is as charted.
+    for play in ["Em", "E (capo 2)", "Emaj"] {
+        let refused = row("E", play);
+        assert!(
+            !refused.contains("data-track-transposed") && refused.contains(">E</span>"),
+            "{play}: {refused}"
+        );
+        assert!(refused.contains("aria-label=\"Key of E\""), "{play}");
+    }
     // The longest a label gets, smallest type.
     let longest = row("Eb→F#m", "");
     assert!(longest.contains(">Eb→F#m</span>") && longest.contains("data-key-size=\"xs\""));

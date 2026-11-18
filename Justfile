@@ -295,6 +295,7 @@ alias gd := guitar-design
 
 # Every visualiser in the rig, in one window, on the design rig's fake
 # guitar. Stills of one effect at a time, rendered offline with no window:
+# (in a FastTrackStudios/fts-fx checkout)
 #   cargo run -p dsp --features delay-ui,delay-viz --example delay_family_sheet -- out/
 #   cargo run -p dsp --features reverb-ui,reverb-viz --example reverb_family_sheet -- out/
 #   cargo run -p dsp --features modulation-ui,modulation-viz --example engine_sheet -- out/
@@ -546,33 +547,21 @@ macos-pkg:
 macos-install: macos-pkg
     installer -pkg "target/Session-$(cargo pkgid -p session-desktop | sed 's/.*[#@]//')-macos.pkg" -target CurrentUserHomeDirectory
 
-# The FX editors' embedded Tailwind sheets (the editor include_str!s
-# assets/tailwind.css). Rebuild after class changes in the editor or in
-# architect-ui.
-tailwind-eq: _lumen-link
-    tailwindcss -i features/dsp/eq/tailwind.css -o features/dsp/eq/assets/tailwind.css --minify
+# The FX editors' Tailwind sheets (`tailwind-eq`, `-comp`, `-limiter`,
+# `-trigger`, `-eq-standalone`) are recipes of FastTrackStudios/fts-fx, where
+# the effects live.
 
-tailwind-comp: _lumen-link
-    tailwindcss -i features/dsp/comp/tailwind.css -o features/dsp/comp/assets/tailwind.css --minify
-
-tailwind-limiter: _lumen-link
-    tailwindcss -i features/dsp/comp/ui_limiter-tailwind.css -o features/dsp/comp/ui_limiter-assets/tailwind.css --minify
-
-tailwind-trigger: _lumen-link
-    tailwindcss -i features/dsp/trigger/tailwind.css -o features/dsp/trigger/assets/tailwind.css --minify
-
-tailwind-eq-standalone: _lumen-link
-    tailwindcss -i apps/plugins/eq-standalone/tailwind.css -o apps/plugins/eq-standalone/assets/tailwind.css --minify
-
-# THE plugin suite — the one list every plugin recipe iterates. A name here
-# is `<name>-plugin` as a cargo package and "FTS <Name>" as a bundle (see
-# bundler.toml); adding a plugin means touching this line and that file.
-fts_plugins := "eq comp reverb delay tune modulation nam level saturate signal guide gate limiter trigger meter pitch unison"
+# The plugins still built here — the one list every plugin recipe iterates. A
+# name here is `<name>-plugin` as a cargo package and "FTS <Name>" as a bundle
+# (see bundler.toml); adding a plugin means touching this line and that file.
+# The effects (eq, comp, reverb, delay, …) are bundled by
+# FastTrackStudios/fts-fx's `just plugins-bundle`, the same recipe.
+fts_plugins := "nam signal guide"
 
 # Bundle every FTS plugin as .clap + .vst3 (target/bundled/, names from
 # bundler.toml). Pass a subset to bundle only those:
-#   just plugins-bundle "eq comp"
-# Debug of a single plugin: cargo run -p fts-plugin-xtask -- bundle -p eq-plugin
+#   just plugins-bundle "nam guide"
+# Debug of a single plugin: cargo run -p fts-plugin-xtask -- bundle -p nam-plugin
 #
 # On macOS this uses nice-plug-xtask's `bundle-universal` instead of
 # `bundle`: it builds both aarch64-apple-darwin and x86_64-apple-darwin and
@@ -596,11 +585,11 @@ plugins-bundle plugins=fts_plugins:
 # is live in REAPER (and anything else that scans them) without reinstalling.
 #
 # Points at `target/bundled` rather than copying it. The bundler rewrites each bundle in place at a stable path, so the link stays
-# valid across rebuilds — `just plugins-bundle eq` and the next plugin scan
+# valid across rebuilds — `just plugins-bundle nam` and the next plugin scan
 # sees the new binary.
 #
 #   just plugins-link              # every bundle currently in target/bundled
-#   just plugins-bundle eq && ...  # rebuild one; the link already points at it
+#   just plugins-bundle nam && ... # rebuild one; the link already points at it
 #
 # Idempotent, and deliberately conservative: it replaces its own symlinks but
 # refuses to delete a REAL directory of the same name, which would be a copy
@@ -717,7 +706,7 @@ mic-models-install:
 plugins-package: plugins-bundle
     #!/usr/bin/env bash
     set -euo pipefail
-    version="$(cargo pkgid -p eq-plugin | sed 's/.*[#@]//')"
+    version="$(cargo pkgid -p nam-plugin | sed 's/.*[#@]//')"
     case "$(uname)-$(uname -m)" in
         Darwin-*)        plat=macos ;;
         Linux-x86_64)    plat=x86_64-linux ;;
@@ -883,8 +872,10 @@ check:
 # effect's parameter round-trip. `just test`, local CI and CI's Tests job
 # build and run exactly these; building the workspace's ~200 crates with no
 # tests left would only link empty harnesses. Add a crate here when it gains
-# tests worth running on every change.
-test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp dioxus-test dock studio-architect patchbay patchbay-yamaha-tf"
+# tests worth running on every change. The wire types' tests (daw-proto,
+# daw-control, daw-transport-sync, utils) run in FastTrackStudios/daw, where
+# those crates live (studio#510).
+test_packages := "session-format daw-standalone timeline studio frame studio-desktop dioxus-test dock studio-architect"
 
 # Run the core test set (test_packages above).
 test:
@@ -2492,111 +2483,3 @@ faces-gallery OUT *ARGS:
 # own output (xtask/frame/scripts/run_parity_render_and_diff.sh).
 frame-parity *ARGS="--all":
     cargo run -p xtask -- parity_test {{ARGS}}
-
-# ── Patchbay (apps/patchbay) ──────────────────────────────────────────
-# One crate, two platforms: the desktop app (default) and the browser
-# remote (`--platform web` turns on `web` and the defaults off).
-
-# Stage the browser remote for embedding: dx web build of fts-patchbay →
-# apps/patchbay/web-dist/, which `--features embed-web` compiles into the
-# binary via include_dir!. web-dist/ is gitignored. dx never cleans its
-# output (every past build's hashed wasm stays in public/assets and would
-# be embedded too), so it is removed first.
-patchbay-web-stage:
-    rm -rf target/dx/fts-patchbay/release/web/public
-    cd apps/patchbay && dx build --platform web --release
-    rm -rf apps/patchbay/web-dist
-    cp -r target/dx/fts-patchbay/release/web/public apps/patchbay/web-dist
-
-# Install Patchbay on this machine and (re)start it — the one command
-# after any change. macOS: build + sign + install Patchbay.app, relaunch
-# it, wait until it answers (apps/patchbay/packaging/macos/deploy.sh; the
-# running engine drops for a couple of seconds). Linux:
-# `patchbay-install-linux`.
-patchbay-install:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    case "$(uname -s)" in
-        Darwin) apps/patchbay/packaging/macos/deploy.sh ;;
-        *) {{just_executable()}} patchbay-install-linux ;;
-    esac
-
-# Linux: release binary (web bundle EMBEDDED) in ~/.local/lib/fts,
-# `patchbay` on PATH, launcher entry + icon. Does not restart a running
-# app.
-patchbay-install-linux: patchbay-web-stage
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build --release -p fts-patchbay --features embed-web
-    install -d ~/.local/lib/fts
-    install -m 755 target/release/fts-patchbay ~/.local/lib/fts/patchbay-app.new
-    mv -T ~/.local/lib/fts/patchbay-app.new ~/.local/lib/fts/patchbay-app
-    install -m 755 target/release/patchbay ~/.local/lib/fts/patchbay.new
-    mv -T ~/.local/lib/fts/patchbay.new ~/.local/lib/fts/patchbay
-    install -d ~/.local/bin
-    ln -sf ~/.local/lib/fts/patchbay ~/.local/bin/patchbay
-    install -d ~/.local/share/icons/hicolor/scalable/apps
-    install -m 644 apps/patchbay/assets/icon.svg \
-        ~/.local/share/icons/hicolor/scalable/apps/patchbay.svg
-    install -d ~/.local/share/applications
-    sed "s|@BIN@|$HOME/.local/lib/fts/patchbay-app|" \
-        apps/patchbay/assets/patchbay.desktop \
-        > ~/.local/share/applications/patchbay.desktop
-    update-desktop-database ~/.local/share/applications 2>/dev/null || true
-    gtk-update-icon-cache ~/.local/share/icons/hicolor 2>/dev/null || true
-    # KDE keeps its own per-environment menu cache; rebuild it in the
-    # session's env (a dev-shell kbuildsycoca updates the wrong cache).
-    systemd-run --user --collect kbuildsycoca6 2>/dev/null || kbuildsycoca6 2>/dev/null || true
-    echo "installed: Patchbay CLI ('patchbay health') and desktop app (launch from the app menu or run 'patchbay-app')"
-
-# Run the Patchbay app from source.
-patchbay:
-    cargo run -p fts-patchbay
-
-# Run the Patchbay distribution of Architect (patchbay-app: Architect's
-# window with the Patchbay extension), joining this machine's engine.
-patchbay-app *args:
-    cargo run -p fts-patchbay --features app --bin patchbay-app -- {{args}}
-
-# Run Patchbay's agent CLI from source, e.g. `just patchbay-cli health --json`.
-patchbay-cli *args:
-    cargo run -p fts-patchbay --bin patchbay -- {{args}}
-
-# macOS: Patchbay.app. The engine runs inside Patchbay.app, which owns the
-# privacy grants (System Audio Recording for Core Audio taps, Microphone);
-# the `patchbay` CLI stays a plain RPC client.
-
-# Build target/macos/Patchbay.app (release, unsigned).
-patchbay-macos-app:
-    apps/patchbay/packaging/macos/build-app.sh
-
-# Build + sign (hardened runtime, Developer ID; PATCHBAY_SIGN_ID overrides) + verify.
-patchbay-macos-sign: patchbay-macos-app
-    apps/patchbay/packaging/macos/sign.sh
-
-# Build + sign + install to ~/Applications (PATCHBAY_APP_DIR overrides); CLI → ~/.local/bin/patchbay.
-# Quits a running Patchbay but does not relaunch it — `just patchbay-install` does.
-patchbay-macos-install: patchbay-macos-sign
-    apps/patchbay/packaging/macos/install.sh
-
-# Notarize + staple the signed app for other Macs (profile: PATCHBAY_NOTARY_PROFILE, default patchbay-notary).
-patchbay-macos-notarize:
-    apps/patchbay/packaging/macos/notarize.sh
-
-# Regenerate AppIcon.icns from apps/patchbay/assets/icon.svg (needs rsvg-convert).
-patchbay-macos-icon:
-    apps/patchbay/packaging/macos/make-icon.sh
-
-# Crate-layout boundaries + ratcheted idioms (boundaries.toml), checked by
-# architect's xtask at a pinned release tag. Resolves graphs, compiles nothing
-# of studio's. Bump the tag with architect releases.
-architect_xtask_tag := "v0.9.10"
-ci-boundaries:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    bin="${CI_CACHE_DIR:-$HOME/.cache}/architect-xtask/{{architect_xtask_tag}}"
-    if [ ! -x "$bin/bin/xtask" ]; then
-        cargo install --locked --quiet --git https://github.com/FastTrackStudios/architect \
-            --tag {{architect_xtask_tag}} xtask --root "$bin"
-    fi
-    "$bin/bin/xtask" boundaries

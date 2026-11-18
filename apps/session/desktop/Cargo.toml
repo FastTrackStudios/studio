@@ -151,7 +151,7 @@ fts-audio-ui = { workspace = true }
 # The in-process player crates (session facade, daw-standalone, the guide)
 # are native-only and live in the cfg(not wasm) table below.
 session = { workspace = true, optional = true }
-keyflow = { workspace = true, optional = true }
+keyflow = { workspace = true, optional = true, features = ["text", "engraver"] }
 # `studio setlist …`: song libraries and setlists in a vault, shared by link.
 setlists = { workspace = true, optional = true, features = ["cli"] }
 # `studio productions …`: the Ableton sets, Pro Tools sessions, REAPER and

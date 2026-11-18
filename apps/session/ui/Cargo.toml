@@ -60,7 +60,7 @@ session = { workspace = true, features = ["library", "ui", "web"] }
 # transport draws with.
 lucide-dioxus = { workspace = true }
 # The chord items' numbers and names — `arrangement::Lettering`.
-keyflow = { workspace = true }
+keyflow = { workspace = true, features = ["text", "engraver"] }
 # The guide engine the Click / Count / Guide MIDI tracks play through —
 # see `src/guide_instrument.rs`.
 # The visual presets. Which tracks a preset shows, and how large, is a

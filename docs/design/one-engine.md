@@ -51,7 +51,7 @@ app (Session / Signal / phone / browser) ── connects to 1..N engines
   What `RigProject`/`RigHost` do now, minus owning a daw.
 - **Meters** follow the track set and are read **by track** through the
   daw's Peaks / TrackLevels service — no rig-private banks.
-- **MIDI** comes through one hub (`features/midi`) into the engine's live
+- **MIDI** comes through one hub (`daw:features/midi`) into the engine's live
   MIDI, routed to a track by its MIDI input — the same path for Session's
   instrument tracks and the rigs.
 - **Tempo** is the transport's.
@@ -75,7 +75,7 @@ app (Session / Signal / phone / browser) ── connects to 1..N engines
    (vox) are mounted on it beside the daw facade.
 5. **Session hosts rigs the same way**: a rig is tracks in Session's own
    project; `signal-fx`'s nested renderer goes.
-6. **MIDI hub → `features/midi`**, `LiveMidi for Standalone` on it (Session
+6. **MIDI hub → `daw:features/midi`**, `LiveMidi for Standalone` on it (Session
    gets hardware MIDI); control surfaces through `midi`.
 7. **Many engines**: an engine list in the app shell; Signal/Session dial
    1..N engines (`EngineAddr` already parses ws/iroh connect strings).

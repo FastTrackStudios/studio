@@ -44,8 +44,8 @@
       ++ [
         pkgs.just
       ]
-      # Patchbay's integration tests stand up a private PipeWire graph
-      # (features/patchbay/tests/common): the daemon and pw-* tools come
+      # Sandboxed audio tests stand up a private PipeWire graph (Patchbay's
+      # did, before it moved to its own repo; kept for the engine's): the daemon and pw-* tools come
       # with pipewire (buildInputs), the session manager and the
       # pulse-side pactl/parec from these. Without them the sandbox tests
       # skip themselves rather than fail.

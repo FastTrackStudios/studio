@@ -157,7 +157,7 @@ stable, and how to diagnose a miss. What it means in this tree:
   would recompile the crate and everything above it.
 - **Build scripts** write generated `include_*!` paths relative to the
   generated file (`features/rigs/guitar/build.rs`) or copy into `OUT_DIR`
-  (`apps/plugins/mic/build.rs`).
+  (`fts-fx:apps/plugins/mic/build.rs`).
 - **Target dirs are named `target`** (or live outside the checkout): kache
   keeps any other in-checkout name in the key.
 - **A worktree builds what the main checkout builds** only with the same

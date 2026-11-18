@@ -14,11 +14,9 @@ devenv.local.nix
 devenv.local.yaml
 .claude/worktrees/
 
-# Staged web bundles embedded into the native binaries (just web-stage,
-# just patchbay-web-stage)
+# Staged web bundles embedded into the native binaries (just web-stage)
 apps/session/desktop/web-dist/
 apps/studio/desktop/web-dist/
-apps/patchbay/web-dist/
 
 # graphify knowledge graph — regenerable via `just graph`, machine-local.
 # Un-ignore graph.json/GRAPH_REPORT.md if you want to share a prebuilt graph.
@@ -280,7 +278,6 @@ features/dynamic-template/fixtures/golden/media/
 /features/ui/plugin-faces/generated
 
 # FTS Mic's models, linked by `just assets` from the private mic-models repo
-/apps/plugins/mic/models
 
 # A release build's version (scripts/release.sh stamp): never committed.
 /.release-version

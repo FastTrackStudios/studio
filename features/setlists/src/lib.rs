@@ -40,13 +40,16 @@ pub mod keys;
 pub mod layout;
 pub mod lyrics;
 pub mod media;
+pub mod row;
 pub mod setlist;
 pub mod song;
 pub mod vault;
 
 #[cfg(feature = "engrave")]
 pub mod chart;
-#[cfg(feature = "engrave")]
+#[cfg(feature = "follow")]
+mod engraving;
+#[cfg(feature = "follow")]
 pub mod follow;
 #[cfg(feature = "share")]
 pub mod share;
@@ -87,6 +90,9 @@ pub enum Error {
     Position { at: usize, len: usize },
     #[error("the chart did not engrave: {0}")]
     Engrave(String),
+    /// What `studio setlist check` found.
+    #[error("{0}")]
+    Check(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

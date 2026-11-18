@@ -39,7 +39,7 @@ ableton = { workspace = true, optional = true }
 # The mix phases the mixer's left rail lists.
 session = { workspace = true, features = ["library", "ui", "web"] }
 # The chord items' numbers and names — `arrangement::Lettering`.
-keyflow = { workspace = true }
+keyflow = { workspace = true, features = ["text", "engraver"] }
 # The host-neutral runtime moved out of this crate (studio#400): song
 # sources, the listening cap, the reference, the guide instrument
 # (`guide_instrument`), the browser's audio out — re-exported from the

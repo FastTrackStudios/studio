@@ -45,7 +45,7 @@ use architect_sites::{
 };
 
 use crate::follow::follow_chart;
-use crate::keys::{KeyLabel, Played};
+pub use crate::row::{RowKey, row_key, signed, tile_hue};
 use crate::setlist::{Line, SETLIST_FENCE};
 use crate::song::{CHART_FENCE, unescape_info};
 
@@ -157,69 +157,6 @@ const MORE_ICON: &str = "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" f
 /// (the page's icon set), never letters.
 const NOTE_ICON: &str = "<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M9 18V5l12-2v13\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><circle cx=\"18\" cy=\"16\" r=\"3\"/></svg>";
 
-/// What a row's tile says of the song's key.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RowKey {
-    /// The key as played (`E`, `E*`, `E→F`).
-    pub label: KeyLabel,
-    /// Transposed: from the chart's own key, by this many semitones (the
-    /// shorter way, −5…+6, never 0).
-    pub moved: Option<(String, i32)>,
-    /// Played in another mode (`E` as `Em`), no transposition: the
-    /// chart's own key.
-    pub charted: Option<String>,
-}
-
-/// The key a row says, played in the setlist's key when it names another:
-/// its column, or the first part of its summary on a page written before
-/// keys had one ([`KeyLabel::played`]).
-#[must_use]
-pub fn row_key(line: &Line) -> Option<RowKey> {
-    let own = line.key.as_deref().and_then(KeyLabel::parse).or_else(|| {
-        line.summary
-            .split(" · ")
-            .next()
-            .filter(|k| !k.is_empty() && !k.contains("bpm") && !k.contains('/'))
-            .map(KeyLabel::plain)
-    })?;
-    let as_charted = |label| RowKey {
-        label,
-        moved: None,
-        charted: None,
-    };
-    Some(match line.play.as_deref().map(|p| own.played(p)) {
-        Some(Played::Moved { label, semitones }) => RowKey {
-            label,
-            moved: Some((own.start, semitones)),
-            charted: None,
-        },
-        Some(Played::OtherMode(label)) => RowKey {
-            label,
-            moved: None,
-            charted: Some(own.start),
-        },
-        Some(Played::AsCharted) | None => as_charted(own),
-    })
-}
-
-/// `+4`, `−3` (a minus sign, U+2212).
-#[must_use]
-pub fn signed(semitones: i32) -> String {
-    if semitones < 0 {
-        format!("\u{2212}{}", semitones.unsigned_abs())
-    } else {
-        format!("+{semitones}")
-    }
-}
-
-/// A key's name in words (`E flat minor`).
-fn key_words(key: &str) -> String {
-    KeyLabel::plain(key)
-        .spoken()
-        .trim_start_matches("Key of ")
-        .to_owned()
-}
-
 /// A row's tile, on a colour from the song's title (the page's player lays
 /// its art under, dimmed): the song's key, the only text on it, and in its
 /// corner by how far the setlist moves it (`+4`); with no key, a music
@@ -230,26 +167,16 @@ fn tile(line: &Line, hue: u32) -> String {
             "<span data-track-art=\"\" data-hue=\"{hue}\" aria-hidden=\"true\" style=\"background:hsl({hue} 42% 40%)\">{NOTE_ICON}</span>"
         );
     };
-    let mut said = key.label.spoken();
-    let mut mark = String::new();
-    if let Some((from, semitones)) = &key.moved {
-        let n = semitones.unsigned_abs();
-        let _ = write!(
-            said,
-            ", transposed {} {n} semitone{} from {}",
-            if *semitones < 0 { "down" } else { "up" },
-            if n == 1 { "" } else { "s" },
-            key_words(from)
-        );
-        let _ = write!(
-            mark,
-            "<span data-track-transposed=\"\" aria-hidden=\"true\">{}</span>",
-            signed(*semitones)
-        );
-    }
-    if let Some(charted) = &key.charted {
-        let _ = write!(said, "; its chart is in {}", key_words(charted));
-    }
+    let said = key.spoken();
+    let mark = key
+        .moved
+        .as_ref()
+        .map_or_else(String::new, |(_, semitones)| {
+            format!(
+                "<span data-track-transposed=\"\" aria-hidden=\"true\">{}</span>",
+                signed(*semitones)
+            )
+        });
     let size = key.label.size();
     let size = if size.is_empty() {
         String::new()
@@ -261,19 +188,6 @@ fn tile(line: &Line, hue: u32) -> String {
         escape(&said),
         escape(&key.label.text()),
     )
-}
-
-/// The hue of a song's tile, from its title (any case): FNV-1a, so the
-/// same title is the same colour everywhere (Architect's player draws a
-/// tile for a song with no row the same way).
-#[must_use]
-pub fn tile_hue(title: &str) -> u32 {
-    let mut hash: u32 = 0x811c_9dc5;
-    for unit in title.to_lowercase().encode_utf16() {
-        hash ^= u32::from(unit);
-        hash = hash.wrapping_mul(0x0100_0193);
-    }
-    hash % 360
 }
 
 /// A setlist's fence, as one playlist (Architect's `[data-playlist]`):

@@ -10,10 +10,8 @@ resolver = "3"
 members = [
     "features/signal/space",
     "features/signal/tone3000",
-    "features/ui/fts-audio-ui",
     "features/timeline",
     "features/editing",
-    "features/ui/plugin-core",
     "features/ui/dock",
     "features/ui/transport-ui",
     "features/ui/lyrics-ui",
@@ -21,8 +19,6 @@ members = [
     "features/sync",
     "crates/frame",
     "features/adapters/web/worklet",
-    "features/patchbay",
-    "features/midi",
     "features/editor",
     "features/session",
     "features/rigs/synth",
@@ -34,18 +30,14 @@ members = [
     "features/app/version",
     "features/library",
     "features/account",
-    "features/audio",
     "features/dsp/builtin",
-    "features/dsp/core",
     "features/rigs/keys",
     "features/rigs/ekit",
     "features/rigs/drums",
     "features/keybinds",
     "features/ui/themer",
     "features/app/launcher",
-    "features/preset-browser",
     "features/control-surfaces",
-    "features/dsp",
     # ── session ──
     "xtask/session-reaper",
     "features/rigs/fx",
@@ -68,16 +60,10 @@ members = [
     "features/studio-views",
     "apps/architect",
     # ── daw ──
-    "features/audio/sample",
     "crates/daw/actions",
-    "crates/daw/control",
     "crates/daw/daw",
     "crates/studio",
-    "crates/daw/module",
-    "crates/daw/proto",
     "features/ui/audio-controls",
-    "crates/daw/allocator",
-    "crates/daw/audio-graph",
     "features/adapters/reaper/dawfile-reaper",
     "features/adapters/reaper/daw-bridge",
     "features/adapters/reaper/daw-extension-runtime",
@@ -96,32 +82,13 @@ members = [
     "features/adapters/reaper/reaper-launcher",
     "crates/daw/standalone",
     "features/adapters/reaper/daw-audio-sync",
-    "crates/daw/transport-sync",
-    "crates/daw/macros",
     "xtask/devtools",
     "xtask/workflows",
-    "crates/daw/utils",
     "vendor/dioxus-test",
     "vendor/tone3000",
     # ── processor ──
-    "apps/plugins/comp",
-    "apps/plugins/delay",
-    "apps/plugins/eq",
-    "apps/plugins/gate",
     "apps/plugins/host",
-    "apps/plugins/level",
-    "apps/plugins/mic",
-    "apps/plugins/limiter",
-    "apps/plugins/meter",
-    "apps/plugins/modulation",
-    "apps/plugins/pitch",
-    "apps/plugins/reverb",
-    "apps/plugins/saturate",
-    "apps/plugins/trigger",
-    "apps/plugins/tune",
-    "apps/plugins/unison",
     "xtask/plugins",
-    "apps/plugins/eq-standalone",
     "xtask/kit-sheet",
     # ── signal ──
     "apps/studio/desktop",
@@ -149,6 +116,7 @@ members = [
     "features/adapters/reaper/signal-extension",
     "features/adapters/reaper/signal-reaper-controller",
     "features/rigs/orchestra",
+    "features/rigs/fretted",
     "features/rigs/synth-rig",
     "features/rigs/keys/wurli",
     "features/rigs/shell",
@@ -158,10 +126,6 @@ members = [
     "features/signal/content-library",
     "features/signal/content-client",
     "apps/plugins/sampler",
-    # ── patchbay ──
-    "features/patchbay/driver",
-    "features/patchbay/yamaha-tf",
-    "apps/patchbay",
     # ── frame ──
     "crates/frame/tools/cli",
     "crates/frame/tools/mcp",
@@ -187,19 +151,21 @@ repository = "https://github.com/FastTrackStudios/session"
 [workspace.dependencies]
 signal-space = { path = "features/signal/space" }
 signal-tone3000 = { path = "features/signal/tone3000" }
-fts-audio-ui = { path = "features/ui/fts-audio-ui" }
+# The effects live in FastTrackStudios/fts-fx (studio#510): `dsp-core`,
+# `dsp`, `fts-audio-ui`, `plugin-core`, `preset-browser` and the plugin
+# crates `builtin` runs in-process, all at ONE rev (move every line
+# together). Working on both at once: a local [patch], never committed
+# (docs/fts-fx.md has the table).
+fts-audio-ui = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
 timeline = { path = "features/timeline" }
 editing = { path = "features/editing" }
-plugin-core = { path = "features/ui/plugin-core" }
+plugin-core = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
 dock = { path = "features/ui/dock" }
 transport-ui = { path = "features/ui/transport-ui" }
 lyrics-ui = { path = "features/ui/lyrics-ui", default-features = false }
 daw-sync = { path = "features/sync" }
 frame = { path = "crates/frame" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }
-patchbay = { path = "features/patchbay" }
-patchbay-yamaha-tf = { path = "features/patchbay/yamaha-tf" }
-midi = { path = "features/midi" }
 editor = { path = "features/editor" }
 session = { path = "features/session" }
 synth = { path = "features/rigs/synth" }
@@ -212,18 +178,17 @@ interchange = { path = "features/adapters/interchange" }
 session-format = { path = "crates/daw/session-format" }
 daw-ui = { path = "features/ui/daw-ui" }
 dynamic-template = { path = "features/dynamic-template", default-features = false }
-audio = { path = "features/audio" }
 builtin = { path = "features/dsp/builtin" }
-dsp-core = { path = "features/dsp/core" }
+dsp-core = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
 keys = { path = "features/rigs/keys" }
 ekit = { path = "features/rigs/ekit" }
 drums = { path = "features/rigs/drums" }
 keybinds = { path = "features/keybinds" }
 themer = { path = "features/ui/themer", default-features = false }
 launcher = { path = "features/app/launcher" }
-preset-browser = { path = "features/preset-browser" }
+preset-browser = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
 control-surfaces = { path = "features/control-surfaces" }
-dsp = { path = "features/dsp" }
+dsp = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
 # Razor edit areas: a rectangle of time by row, and the set algebra over
 # it. Dependency-free and shared by the expression editor and the
 # arrangement, so the two cannot disagree about what an area is.
@@ -239,7 +204,6 @@ dsp = { path = "features/dsp" }
 nice-plug = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
 nice-plug-dioxus = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
 nice-plug-xtask = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
-utils = { path = "crates/daw/utils" }
 app-shell = { path = "features/app/shell" }
 # The release version a shipped binary reports (FTS_RELEASE_VERSION at build
 # time). Binaries only: see its Cargo.toml.
@@ -249,11 +213,11 @@ fts-account = { path = "features/account" }
 # The grid that follows the zoom. Pure arithmetic and no dependencies, so
 # the arrange view and the expression editor can agree on it without
 # either depending on the other.
-neural-amp-modeler = { git = "https://github.com/FastTrackStudios/neural-amp-modeler-rs", tag = "v0.1.2" }
-# Defaults OFF at the root so lean consumers (probe-only scanners, the
-# iOS-clean session-guide) don't drag the pack engine in; each consumer
-# names the features it needs ("load" / "write" / "engine").
-fts-sample = { path = "features/audio/sample", default-features = false }
+# Pinned to a commit, not a tag: v0.1.2 needs valverig-nam =0.0.1, which is
+# gone from crates.io, so no lockfile change resolves. bd6a156e is PR #3
+# (fix/valverig-nam-0.0.2, valverig-nam =0.0.2, nothing else); back to a
+# tag (v0.1.3) once it merges.
+neural-amp-modeler = { git = "https://github.com/FastTrackStudios/neural-amp-modeler-rs", rev = "bd6a156e5280d9ba30a8f50f5d39b0310feb8780" }
 # Canonical MIDI facade. Defaults OFF at the root: daw-proto re-exports
 # `midicore::MidiEvent` and must not drag midicore's `vox` service traits
 # (nor the `midir` feature — midicore-midir pins midir 0.10/alsa-sys 0.3,
@@ -274,25 +238,40 @@ ropey = "1.6"
 # rig's pedals, amps and Time blocks, a reverb's machine), painted into
 # the host's scene and played by its pointer — the FX view's devices.
 
+# ── The base, from the daw repo ───────────────────────────────────────
+# (FastTrackStudios/daw: the eleven crates that depend on nothing else in
+# Studio, moved there with their history; studio#510.) One revision for
+# all of them, so they move together; a tag once that repo cuts one. Its
+# root manifest declares the same versions, git pins and patches as this
+# one: bump a pin there and here together, or Cargo.lock grows a second
+# copy. Working on both at once: AGENTS.md, "Co-developing across repos".
+daw-proto = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+daw-control = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+daw-module = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+daw-transport-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+daw-audio-graph = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+# RT-aware allocator — offloads RT deallocation to background thread
+daw-allocator = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+daw-test-macro = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+utils = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+midi = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+audio = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
+# Defaults OFF at the root so lean consumers (probe-only scanners, the
+# iOS-clean session-guide) don't drag the pack engine in; each consumer
+# names the features it needs ("load" / "write" / "engine").
+fts-sample = { git = "https://github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f", default-features = false }
+
 # ── daw domain (wave 2) ───────────────────────────────────────────────
 # Facade crate — the only public API surface for the daw domain.
 # daw-proto, daw-control, daw-standalone, dawfile-* are INTERNAL to the
 # domain; consumers outside it go through the `daw` facade.
 daw = { path = "crates/daw/daw" }
 studio = { path = "crates/studio" }
-daw-proto = { path = "crates/daw/proto" }
 daw-actions = { path = "crates/daw/actions" }
-daw-control = { path = "crates/daw/control" }
-daw-module = { path = "crates/daw/module" }
 fts-devtools = { path = "xtask/devtools" }
 xtask-workflows = { path = "xtask/workflows" }
-daw-test-macro = { path = "crates/daw/macros" }
-daw-audio-graph = { path = "crates/daw/audio-graph" }
-# RT-aware allocator — offloads RT deallocation to background thread
-daw-allocator = { path = "crates/daw/allocator" }
 audio-controls = { path = "features/ui/audio-controls" }
 daw-audio-sync = { path = "features/adapters/reaper/daw-audio-sync" }
-daw-transport-sync = { path = "crates/daw/transport-sync" }
 dawfile-reaper = { path = "features/adapters/reaper/dawfile-reaper" }
 # default = all-formats; the daw facade opts into formats individually,
 # so the root entry keeps defaults OFF and consumers that want every
@@ -353,7 +332,9 @@ studio-views = { path = "features/studio-views" }
 # `chordpro`, `midi`, `orchestra`, `sync`, …), `engraver` (layout +
 # render, `score` included) and the `keyflow` facade. `keyflow-lang`
 # defaults OFF here; consumers name the formats they use.
-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
+# The facade defaults OFF too: each consumer names its tier (`text`,
+# `svg` for wasm, `engraver` for the full engraver with the GPU renderer).
+keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
 keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
 keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
 keyflow-annotate = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
@@ -406,20 +387,20 @@ world-sys = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.6.1"
 # picks from, applied through the plugin's own `apply`.
 # The FTS plugins themselves, run in-process as the engine's built-in FX
 # (`builtin-fx`): their CLAP/VST3 exports off (`default-features`).
-comp-plugin = { path = "apps/plugins/comp", default-features = false }
-delay-plugin = { path = "apps/plugins/delay", default-features = false }
-eq-plugin = { path = "apps/plugins/eq", default-features = false }
-gate-plugin = { path = "apps/plugins/gate", default-features = false }
-level-plugin = { path = "apps/plugins/level", default-features = false }
-limiter-plugin = { path = "apps/plugins/limiter", default-features = false }
-meter-plugin = { path = "apps/plugins/meter", default-features = false }
-modulation-plugin = { path = "apps/plugins/modulation", default-features = false }
-reverb-plugin = { path = "apps/plugins/reverb", default-features = false }
-saturate-plugin = { path = "apps/plugins/saturate", default-features = false }
-pitch-plugin = { path = "apps/plugins/pitch", default-features = false }
-tune-plugin = { path = "apps/plugins/tune", default-features = false }
-unison-plugin = { path = "apps/plugins/unison", default-features = false }
-mic-plugin = { path = "apps/plugins/mic", default-features = false }
+comp-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+delay-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+eq-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+gate-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+level-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+limiter-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+meter-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+modulation-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+reverb-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+saturate-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+pitch-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+tune-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+unison-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
+mic-plugin = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012", default-features = false }
 # signal's rigs in the session engine: the bass rig, the kit's voices.
 signal-fx = { path = "features/rigs/fx" }
 # signal's in-process rig engine (NAM, convolver, the sampler), from the
@@ -989,6 +970,7 @@ signal-macromod = { path = "features/signal/macromod" }
 signal-plugin-host = { path = "features/plugin-host", default-features = false }
 openwurli-dsp = { path = "features/rigs/keys/wurli" }
 signal-orchestra = { path = "features/rigs/orchestra" }
+signal-fretted = { path = "features/rigs/fretted" }
 signal-synth-rig = { path = "features/rigs/synth-rig" }
 
 # ── from patchbay's workspace (joined into studio) ──
@@ -1068,6 +1050,9 @@ quick-xml = "0.41"
 ratatui = "0.30"
 raw-window-handle-06 = { version = "0.6", package = "raw-window-handle" }
 resvg = "0.45"
+# resvg's SVG reader alone, its text drawn as outlines from fonts given it
+# (no system fonts, no memory maps): what builds for wasm (setlists' `follow`).
+usvg = { version = "0.45", default-features = false, features = ["text"] }
 rfd = "0.17"
 roxmltree = "0.20"
 rustc-hash = "2"
@@ -1443,13 +1428,9 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.symphonia-codec-pcm]
 opt-level = 3
-[profile.dev.package.symphonia-codec-adpcm]
-opt-level = 3
 [profile.dev.package.symphonia-codec-aac]
 opt-level = 3
 [profile.dev.package.symphonia-format-riff]
-opt-level = 3
-[profile.dev.package.symphonia-format-mkv]
 opt-level = 3
 # Sample-pack streaming: packs are zstd-framed, so decompression is on
 # the voice-start path, and blake3 hashes pack content on load.
@@ -1515,12 +1496,19 @@ dioxus-native-dom = { git = "https://www.github.com/FastTrackStudios/vendor", re
 dioxus-vdom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
 
 # keyflow (a git dependency) still takes daw, dawfile-reaper and fts-sample
-# from daw's old repo; this gives it the copies here, so there is one of
-# each. Goes when keyflow takes them from studio.
+# from the daw repo's old tag v0.0.7; this gives it the copies Studio
+# builds, so there is one of each. daw and dawfile-reaper are still here.
+# fts-sample is now in the daw repo itself, and a [patch] may not point
+# back at the source it patches, so it names the same revision on the
+# `www.` host (a different source to cargo, the same repo; the trick the
+# editor table below uses). It replaces every fts-sample from that URL,
+# this workspace's own included: Cargo.lock holds the `www.` one only.
+# Keep its rev equal to the base's above. Goes when keyflow pins the daw
+# repo at the revision Studio does.
 [patch."https://github.com/FastTrackStudios/daw"]
 daw = { path = "crates/daw/daw" }
 dawfile-reaper = { path = "features/adapters/reaper/dawfile-reaper" }
-fts-sample = { path = "features/audio/sample" }
+fts-sample = { git = "https://www.github.com/FastTrackStudios/daw", rev = "3fdf2d6fa78a07e29380d7a486f207f1cc4f6f7f" }
 
 # from processor
 [profile.dev.package.builtin]

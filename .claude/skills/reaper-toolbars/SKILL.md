@@ -18,8 +18,8 @@ Nothing here needs REAPER's UI. Don't tell the user to "right-click the toolbar
 
 | Piece | Path |
 |---|---|
-| Service trait + types | `crates/daw/proto/src/toolbar/{service,types}.rs` |
-| Client handle | `crates/daw/control/src/toolbar.rs` |
+| Service trait + types | `daw:crates/daw/proto/src/toolbar/{service,types}.rs` |
+| Client handle | `daw:crates/daw/control/src/toolbar.rs` |
 | REAPER implementation | `features/adapters/reaper/daw-reaper/src/toolbar.rs` |
 | CLI verbs | `crates/daw/daw/src/cli/{command,ops}.rs` (`Toolbar*`) |
 | Offline ini **reader** | `features/adapters/reaper/dawfile-reaper/src/toolbar_config.rs` |

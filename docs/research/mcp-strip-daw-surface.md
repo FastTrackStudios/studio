@@ -8,8 +8,8 @@ arm, input monitoring, record input, FX chain state, sends and receives, and
 meter levels. Which `daw` services carry those today, which are missing, and
 what does a strip subscribe to for the values that change continuously?
 
-**Method.** Read against the source in this tree — `crates/daw/proto` (the
-service traits), `crates/daw/control` (the async facade), and the two backends
+**Method.** Read against the source in this tree — `daw:crates/daw/proto` (the
+service traits), `daw:crates/daw/control` (the async facade), and the two backends
 `features/adapters/reaper/daw-reaper` and `features/standalone/daw-standalone` — plus the
 one existing consumer, `apps/fasttrackstudio/src/mixer_view.rs`. Every claim
 below cites the file and line it came from.
@@ -30,7 +30,7 @@ most of a strip in a single round trip.
 
 | Strip field | Carried by | Where |
 | --- | --- | --- |
-| Name | `Track.name`; write via `Tracks::rename` | `crates/daw/proto/src/track/track.rs:80`, `crates/daw/proto/src/track/service.rs:149` |
+| Name | `Track.name`; write via `Tracks::rename` | `daw:crates/daw/proto/src/track/track.rs:80`, `daw:crates/daw/proto/src/track/service.rs:149` |
 | Colour | `Track.color` (`Option<u32>`, `0xRRGGBB`); write via `Tracks::set_color` | `track/track.rs:82`, `track/service.rs:151` |
 | Volume | `Track.volume` (normalized, 1.0 = 0 dB); write via `Tracks::set_volume` | `track/track.rs:96`, `track/service.rs:63` |
 | Pan | `Track.pan` (−1..1); write via `Tracks::set_pan` | `track/track.rs:98`, `track/service.rs:65` |
@@ -129,8 +129,8 @@ Two properties make it safe over RPC, and both are already there:
   meter frame has no value, so dropping is the *right* failure mode.
 
 **Recommendation: change nothing.** The MCP strip subscribes to
-`Daw::meter_events()` (`crates/daw/control/src/lib.rs:382`) for all projects, or
-`Project::meter_events()` (`crates/daw/control/src/project.rs:215`) for one, and
+`Daw::meter_events()` (`daw:crates/daw/control/src/lib.rs:382`) for all projects, or
+`Project::meter_events()` (`daw:crates/daw/control/src/project.rs:215`) for one, and
 indexes `frame.tracks[i]` into per-strip `Signal<f32>`s. `mixer_view.rs:216-247`
 is a working reference implementation. Do **not** invent a per-strip meter
 subscription — it would be N times the messages for the same bytes, and would
@@ -161,7 +161,7 @@ the UI never blocks on the write. Three refinements the MCP should make:
    in-process, wasteful over a WebSocket. Coalesce to ~30 Hz with a trailing
    edge so the final value always lands.
 2. **Suppress echo during the drag.** `TrackEvent::VolumeChanged`
-   (`crates/daw/proto/src/track/event.rs:28`) comes back from the backend,
+   (`daw:crates/daw/proto/src/track/event.rs:28`) comes back from the backend,
    including from your own write. Applying it mid-drag fights the user's finger.
    The strip needs a "locally owned" flag per control, released shortly after
    the drag ends, during which inbound `VolumeChanged` for that track is ignored.

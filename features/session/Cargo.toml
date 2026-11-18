@@ -72,7 +72,7 @@ fts-sample = { workspace = true, features = ["load"] }
 futures = { workspace = true, optional = true }
 futures-util = { workspace = true, optional = true }
 hound = { workspace = true }
-keyflow = { workspace = true, features = ["text"] }
+keyflow = { workspace = true, features = ["text", "engraver"] }
 keyflow-daw-analysis = { workspace = true }
 links-proto = { workspace = true, optional = true }
 loro = { workspace = true }
