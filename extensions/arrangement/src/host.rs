@@ -57,6 +57,8 @@ pub struct Hosted {
     forced: Option<bool>,
     /// The buttons held now: a move carries them, as Blitz's do.
     held: MouseEventButtons,
+    /// The fingers down, the first the primary one (`input::touch`).
+    fingers: Vec<u64>,
     /// Where the play cursor is now, seconds: the engine's transport (the
     /// same `engine::Transport` the desktop window reads), or a test's.
     play_at: Box<dyn Fn() -> f64>,
@@ -81,6 +83,7 @@ impl Hosted {
             looked: None,
             forced: None,
             held: MouseEventButtons::empty(),
+            fingers: Vec::new(),
             play_at: Box::new(|| {
                 // Read each frame: the transport is there once the link is.
                 session_ui::engine::Transport::shared().map_or(0.0, |t| t.read().0)
@@ -195,6 +198,30 @@ impl PaintView for Hosted {
                 } else {
                     UiEvent::KeyUp(e)
                 });
+            }
+            // A finger: to the panel as the window's touch comes (its
+            // place, a press of the left button), to the widget as a
+            // finger, which its gestures (a swipe across the track panel,
+            // a scroll, a scrub) tell from a mouse.
+            ViewInput::Touch { id, x, y, phase } => {
+                let Some(event) = input::touch(&mut self.fingers, *id, (*x, *y), phase) else {
+                    return false;
+                };
+                self.panel(self.pointer_at(*x, *y));
+                match &event {
+                    UiEvent::PointerDown(_) => self.panel(PanelEvent::Button {
+                        button: session_ui::panel::Button::Left,
+                        pressed: true,
+                    }),
+                    UiEvent::PointerUp(_) | UiEvent::PointerCancel(_) => {
+                        self.panel(PanelEvent::Button {
+                            button: session_ui::panel::Button::Left,
+                            pressed: false,
+                        });
+                    }
+                    _ => {}
+                }
+                self.widget(&event);
             }
             ViewInput::Focus(false) => {
                 self.held = MouseEventButtons::empty();

@@ -102,6 +102,50 @@ pub fn pointer(
     }
 }
 
+/// A finger's touch as Blitz hands one to a widget.
+///
+/// `ViewInput::Touch` (`phase` `start`, `move`, `end` or `cancel`) at
+/// `(x, y)` in the pane, as the pointer event of finger `id`, the way
+/// `studio-desktop`'s window and the browser host hand a touch on (a
+/// finger is told apart by its id, so two faders move at once).
+/// `fingers` holds the fingers down, the first of them the primary one.
+/// `None` for a phase it does not know.
+#[must_use]
+pub fn touch(
+    fingers: &mut Vec<u64>,
+    id: u64,
+    (x, y): (f32, f32),
+    phase: &str,
+) -> Option<blitz_traits::events::UiEvent> {
+    use blitz_traits::events::UiEvent;
+    let event = |buttons: MouseEventButtons, primary: bool| BlitzPointerEvent {
+        id: BlitzPointerId::Finger(id),
+        is_primary: primary,
+        ..pointer((x, y), MouseEventButton::Main, buttons, Modifiers::empty())
+    };
+    let primary = |fingers: &[u64]| fingers.first().is_none_or(|first| *first == id);
+    Some(match phase {
+        "start" => {
+            if !fingers.contains(&id) {
+                fingers.push(id);
+            }
+            UiEvent::PointerDown(event(MouseEventButtons::Primary, primary(fingers)))
+        }
+        "move" => UiEvent::PointerMove(event(MouseEventButtons::Primary, primary(fingers))),
+        "end" | "cancel" => {
+            let was = primary(fingers);
+            fingers.retain(|f| *f != id);
+            let e = event(MouseEventButtons::empty(), was);
+            if phase == "end" {
+                UiEvent::PointerUp(e)
+            } else {
+                UiEvent::PointerCancel(e)
+            }
+        }
+        _ => return None,
+    })
+}
+
 /// A key as Blitz hands one to a widget: by its W3C names. A letter's code
 /// is its key's (`z` is `KeyZ`), which is what Studio's keys read.
 #[must_use]

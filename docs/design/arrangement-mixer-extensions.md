@@ -234,6 +234,10 @@ strip past them keeps its meter in the picture (the golden template's
      (`HostedMixer::key`, `window::key_alone`): Space plays, `x` hides
      the mixer, the arrangement's own actions are asked of it through the
      engine. Each runs behind the window, so none holds a frame.
+   - **A finger** in a pane reaches the widget as a finger
+     (`input::touch`, from Architect's `ViewInput::Touch`), as in the
+     window: a swipe across the track panel expands it, a drag scrolls
+     the strips, a fader is taken by its cap (`tests/touch.rs` in both).
    The visibility manager is no longer one of them: a mixer on its own
    keeps every track and plans its strips again when one is shown or
    hidden (`SESSION_SHOW_GROUP` takes a group out of both panes).

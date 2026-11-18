@@ -51,6 +51,8 @@ pub struct Hosted {
     kept: Option<Kept>,
     /// The buttons held now: a move carries them, as Blitz's do.
     held: MouseEventButtons,
+    /// The fingers down, the first the primary one (`input::touch`).
+    fingers: Vec<u64>,
     /// The pane's width, for the wheel's end.
     width: f64,
     /// The engine's values light the tracks' mute and solo
@@ -73,6 +75,7 @@ impl Hosted {
             sent: HashMap::new(),
             kept: None,
             held: MouseEventButtons::empty(),
+            fingers: Vec::new(),
             width: 0.0,
             buttons: false,
             looked: None,
@@ -167,6 +170,14 @@ impl PaintView for Hosted {
                 // keys pressed in its mixer.
                 let mixer = &self.mixer;
                 self.scope.run(|| mixer.key(&event));
+            }
+            // A finger: to the widget as a finger, which takes a fader by
+            // its cap and scrolls the strips under a drag, as on a phone.
+            ViewInput::Touch { id, x, y, phase } => {
+                let Some(event) = input::touch(&mut self.fingers, *id, (*x, *y), phase) else {
+                    return false;
+                };
+                self.widget(&event);
             }
             ViewInput::Focus(false) => {
                 self.held = MouseEventButtons::empty();
