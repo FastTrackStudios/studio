@@ -38,7 +38,9 @@ worktree with its own `target/` costs a cold build.
 | push of a `v*` tag (`just release`) | `Images`, `studio-ios`, `desktop`, `release` | `studio-release` / `studio-release-mac` / hosted | the release builds, from the tag alone, in parallel, never cancelled; no tests (the tag guard checks `CI passed`) |
 
 **Main requires:** `PR checks` only (ruleset 25572127). `Local CI` is an
-indicator, not a gate. `just release` separately requires `CI passed` green on the
+indicator, not a gate. GitHub runs nothing on a draft PR (`PR checks`,
+`CI` and `release-dry-run` report skipped): to get checks, mark the PR
+ready; it runs then and on every push after. `just release` separately requires `CI passed` green on the
 commit it tags.
 
 **`just ci-local`, in order** (`scripts/ci-local.sh`):

@@ -25,6 +25,11 @@
 //!
 //! Its own workflow, not a job of `CI`: a PR shows `PR checks` and `Local
 //! CI`, not a row of skipped CI jobs (Task, 2026-10).
+//!
+//! A DRAFT PR runs nothing: both jobs are skipped (`NOT_DRAFT`), and a
+//! skipped `PR checks` still reports, so nothing waits on it. Marking the PR
+//! ready for review (`ready_for_review`) starts the run; every push after
+//! that runs it again and cancels the run before it.
 
 use crate::checks::LOCKFILE;
 use crate::model::{Job, Step, UBUNTU, Workflow, yaml};
@@ -34,6 +39,12 @@ use anyhow::Result;
 /// From the change files on, a step runs even when fmt failed, so one run
 /// reports every problem; the job still fails.
 const NOT_CANCELLED: &str = "${{ !cancelled() }}";
+
+/// Every job here: skipped while the PR is a draft. A job skipped by its
+/// `if:` reports as skipped, which satisfies a required check; a workflow
+/// that never triggered reports nothing and would leave `PR checks` pending.
+const NOT_DRAFT: &str =
+    "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}";
 
 pub fn workflow() -> Result<Workflow> {
     Ok(
@@ -62,6 +73,7 @@ fn pr_checks() -> Result<Job> {
     );
     Ok(Job::new(UBUNTU)
         .name("PR checks")
+        .cond(NOT_DRAFT)
         .timeout(15)
         .permissions(yaml("contents: read\n")?)
         // The merge commit and its parents: the change check diffs against
@@ -160,6 +172,7 @@ fn studio_architect() -> Result<Job> {
     );
     Ok(Job::new(UBUNTU)
         .name("Studio Architect node (cargo check, Linux)")
+        .cond(NOT_DRAFT)
         .timeout(45)
         .permissions(yaml("contents: read\n")?)
         .step(checkout().with("fetch-depth", 2))
