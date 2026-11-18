@@ -28,14 +28,13 @@ events = ["playhead.changed"]
 reads = ["documents"]
 writes = ["documents"]
 
-# A song's session document, `<song stem>.fts-session` (studio#522): the
-# same kind Keyflow declares, with Keyflow's `session` files too (a host
-# keeps the last manifest's declaration of a kind id, not both), so a song in a vault syncs through the org
-# and the engine may open it through the host.
+# A song's session document (studio#522): the kind Keyflow declares, with
+# its one file type, `session` (a host keeps one file type per kind, the
+# first, and the last manifest's declaration of a kind id).
 [[doc_kinds]]
 id = "fts.session"
 name = "Session"
-files = ["fts-session", "session"]
+files = ["session"]
 schema = 1
 
 # fts.session for the song's session document (src/session_doc.rs): a
