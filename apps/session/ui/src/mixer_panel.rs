@@ -1204,6 +1204,20 @@ impl MixerWidget {
             }
             crate::engine::apply_event(&mut self.tracks, event);
             crate::engine::apply_event(&mut self.targets, event);
+            // A name and a colour are recorded chrome (the strip's label
+            // is fitted, its ground tinted, as the mixer is recorded):
+            // recorded again. Beside an arrangement it echoes them
+            // (`Links::to_mixer`); alone, they come only as here.
+            if matches!(event, E::Renamed { .. } | E::ColorChanged { .. }) {
+                // The strips are laid out from the rows.
+                let mut laid: Vec<daw_proto::Track> =
+                    self.rows.iter().map(|(t, _)| t.clone()).collect();
+                crate::engine::apply_event(&mut laid, event);
+                for ((row, _), now) in self.rows.iter_mut().zip(laid) {
+                    *row = now;
+                }
+                self.mixer = None;
+            }
             // On its own, every track kept: a track shown or hidden plans
             // the strips again.
             if self.links.alone
