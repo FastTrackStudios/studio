@@ -3842,6 +3842,10 @@ impl ArrangementWidget {
                     "SESSION_FOLD",
                     &serde_json::json!({ "track": guid, "open": open }),
                 );
+                // The folds are this process's (the view's). An engine in
+                // another process (Studio's distribution) settles its own
+                // and has no window to tell: set here too, the same value.
+                crate::folds::toggle(&guid, !open);
                 return;
             }
             // What the track can automate, to show in lanes: a menu, whose
