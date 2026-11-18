@@ -168,6 +168,9 @@ pub fn offer_window_actions() {
             shortcut: info.shortcut,
             params_schema: info.params_schema,
             result_schema: info.result_schema,
+            window: crate::window_queue::claimed_as()
+                .unwrap_or_default()
+                .to_owned(),
         })
         .collect();
     let view = link.view.clone();

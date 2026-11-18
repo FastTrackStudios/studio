@@ -739,9 +739,22 @@ pub fn patch_with(
 }
 
 /// The open project, as the engine has it.
+///
+/// It blocks on a runtime of its own: on a thread that is driving one
+/// already (an Architect process view paints inside its runtime), it
+/// reads on a thread of its own, which it waits for.
 #[cfg(feature = "native")]
 #[must_use]
 pub fn fetch() -> Option<daw_ui::studio::project::Project> {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return std::thread::scope(|s| s.spawn(fetch_here).join().ok().flatten());
+    }
+    fetch_here()
+}
+
+/// [`fetch`], on a thread driving no runtime.
+#[cfg(feature = "native")]
+fn fetch_here() -> Option<daw_ui::studio::project::Project> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

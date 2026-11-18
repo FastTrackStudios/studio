@@ -169,10 +169,36 @@ frame for them).
    `Links` ties them: an edit in either shows in the other on the same
    frame, `x` opens the docked mixer, `MIXER_VIEW` reaches the mixer, and
    keys pressed with the mixer focused go to the arrangement's keymap.
-   Here each follows the engine: an edit reaches the other view through
-   the engine's change stream, a frame or more later; `MIXER_VIEW` is
-   asked of the arrangement's process (the window that takes window
-   asks), which has no mixer; a key in the mixer pane is the mixer's.
+   Here each follows the engine, and the engine routes the mixer's window
+   actions to the mixer:
+   - **Window actions by name.** `studio.mixer` claims `MIXER_VIEW`,
+     `SESSION_MIXER_FX` and `SESSION_TOGGLE_MIXER` as the window
+     `studio.mixer` (`window_queue::claim_as`, the offer's `window`); the
+     engine asks them of it alone, and it takes no other ask. The
+     arrangement's process hands them over (`window_queue::hand_over`), so
+     its `x` runs the toggle on the engine, which asks the mixer. The
+     toggle closes the mixer's pane and opens it again where it was (a
+     dock, a float, or split under the pane that was above it). After the
+     layout changes, the arrangement keeps being the active pane but gets
+     no keys until it is clicked (architect#889).
+   - **An edit in the arrangement** reaches the mixer as the engine's
+     track event. A process view records on its own 16.7 ms timer, so the
+     mixer waited for its next tick; it now draws as the event lands
+     (`engine::on_track_event` wakes its pane). Selecting a track in the
+     arrangement, 60 fps recording, frames until the mixer shows it:
+
+     | | mean | same frame |
+     |---|---|---|
+     | before | 1.50 | 5 of 26 |
+     | after | 0.92 | 9 of 25 |
+
+     What is left is the round trip: the arrangement draws its own
+     prediction on the click's frame, and the mixer the engine's answer
+     (apply, then the event), which lands after the next vsync about two
+     times in three. The same frame every time needs the host to hold the
+     arrangement's frame for the engine's answer, or both panes to draw
+     the selection from one engine value.
+   - A key in the mixer pane is still the mixer's.
    The visibility manager is no longer one of them: a mixer on its own
    keeps every track and plans its strips again when one is shown or
    hidden (`SESSION_SHOW_GROUP` takes a group out of both panes).

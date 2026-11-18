@@ -242,7 +242,9 @@ fn id_and_args(action: &Action) -> Option<(&'static str, String)> {
 
 /// Whether a key's action runs behind the window rather than on its
 /// thread: one that reads the whole song or writes its file (an undo, a
-/// save) would hold the window still while it did.
+/// save) would hold the window still while it did, and one this window
+/// handed to another (`window_queue::hand_over`: the mixer pane's) waits
+/// on that window.
 #[cfg(feature = "native")]
 fn behind_the_window(id: &str) -> bool {
     [
@@ -251,6 +253,7 @@ fn behind_the_window(id: &str) -> bool {
         crate::actions::SAVE.id,
     ]
     .contains(&id)
+        || crate::window_queue::handed_over(id)
 }
 
 #[cfg(not(feature = "native"))]
@@ -465,7 +468,7 @@ static TRACK_STEP: ActionMeta = meta(
     "",
 );
 
-static TOGGLE_MIXER: ActionMeta = meta(
+pub static TOGGLE_MIXER: ActionMeta = meta(
     "SESSION_TOGGLE_MIXER",
     "toggle_mixer",
     "Mixer",

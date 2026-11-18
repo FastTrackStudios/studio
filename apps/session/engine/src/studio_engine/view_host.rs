@@ -596,6 +596,11 @@ impl EngineView for ViewHost {
         let list = crate::actions::list();
         let mut added = 0;
         for action in actions {
+            // A window that claims it is asked it from now on, whoever
+            // offered it first.
+            if !action.window.is_empty() {
+                crate::window_queue::set_owner(&action.id, &action.window);
+            }
             if list.info(&action.id).is_some() {
                 continue;
             }

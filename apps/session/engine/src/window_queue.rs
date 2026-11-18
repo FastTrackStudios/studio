@@ -368,14 +368,97 @@ pub fn seen_windows() -> Vec<String> {
     SEEN.lock().map(|s| s.clone()).unwrap_or_default()
 }
 
-/// This window's name, as it gives it to its engine (`FTS_WINDOW_NAME`,
-/// else `main`): what `SESSION_WINDOW_TARGET` names it by.
+/// This window's name, as it gives it to its engine (the one it
+/// [`claim_as`], else `FTS_WINDOW_NAME`, else `main`): what
+/// `SESSION_WINDOW_TARGET` names it by.
 #[must_use]
 pub fn window_name() -> String {
+    if let Some(name) = CLAIMED_AS.get() {
+        return name.clone();
+    }
     std::env::var("FTS_WINDOW_NAME")
         .ok()
         .filter(|n| !n.trim().is_empty())
         .unwrap_or_else(|| "main".to_owned())
+}
+
+// ── Actions a window claims ──────────────────────────────────────────
+//
+// A window that shows one part of Studio (an Architect pane: the mixer
+// alone) claims the window actions that part carries out (`MIXER_VIEW`,
+// the mixer's toggle): the engine asks them of it by name, and it takes
+// nothing else. Another window in the same session hands them over: a
+// key of its that runs one goes to the engine, which asks the claimer.
+
+/// The name this window claims its actions under, once it does.
+static CLAIMED_AS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// This window claims its own actions as the window `name`: it offers
+/// them under that name, and the engine asks them of it alone and asks it
+/// nothing else. Once per process (the first name stays).
+pub fn claim_as(name: &str) {
+    let _ = CLAIMED_AS.set(name.to_owned());
+}
+
+/// The name this window claims its actions under, when it does.
+#[must_use]
+pub fn claimed_as() -> Option<&'static str> {
+    CLAIMED_AS.get().map(String::as_str)
+}
+
+/// The window actions another window claims, handed over by this one:
+/// pressed here, they run on the engine, which asks the claimer.
+static HANDED_OVER: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// This window leaves the actions `ids` to the window that claims them:
+/// it neither offers them nor runs them itself.
+pub fn hand_over(ids: &[&str]) {
+    if let Ok(mut over) = HANDED_OVER.lock() {
+        for id in ids {
+            if !over.iter().any(|o| o == id) {
+                over.push((*id).to_owned());
+            }
+        }
+    }
+}
+
+/// Whether this window handed `id` over to the window that claims it.
+#[must_use]
+pub fn handed_over(id: &str) -> bool {
+    HANDED_OVER
+        .lock()
+        .is_ok_and(|over| over.iter().any(|o| o == id))
+}
+
+/// Engine side: the window that claimed each window action, by its id.
+static OWNERS: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+
+/// Engine side: the window `window` claimed the action `id`; the last
+/// claim stands.
+pub fn set_owner(id: &str, window: &str) {
+    if let Ok(mut owners) = OWNERS.lock() {
+        owners.retain(|(i, _)| i != id);
+        owners.push((id.to_owned(), window.to_owned()));
+    }
+}
+
+/// Engine side: the window that claimed the action `id`, if one did.
+#[must_use]
+pub fn owner(id: &str) -> Option<String> {
+    OWNERS
+        .lock()
+        .ok()?
+        .iter()
+        .find(|(i, _)| i == id)
+        .map(|(_, w)| w.clone())
+}
+
+/// Engine side: whether the window `window` claimed actions, and so takes
+/// only what is asked of it by name.
+fn claims(window: &str) -> bool {
+    OWNERS
+        .lock()
+        .is_ok_and(|owners| owners.iter().any(|(_, w)| w == window))
 }
 
 /// How many windows follow this engine over a link (the engine's view
@@ -405,13 +488,19 @@ pub fn on_ask(notify: fn(usize)) {
 /// Ask a window to do `asked`; refused (`false`) when no window follows
 /// the engine — nobody would ever take it.
 pub fn ask(asked: Asked) -> bool {
+    ask_of(target(), asked)
+}
+
+/// [`ask`] of the window `window` (by name; `None`: whichever takes it
+/// first).
+fn ask_of(window: Option<String>, asked: Asked) -> bool {
     if !engine_has_window() {
         tracing::debug!(?asked, "engine ask dropped: no window follows the engine");
         return false;
     }
     let pending = match ASKED.lock() {
         Ok(mut q) => {
-            q.push_back((target(), asked));
+            q.push_back((window, asked));
             q.len()
         }
         Err(_) => return false,
@@ -424,8 +513,10 @@ pub fn ask(asked: Asked) -> bool {
 
 /// What has been asked of the window `window` (by name), taken: one
 /// window carries each out — the one it was for, else the first to ask.
+/// A window that claimed actions takes only what was asked of it.
 #[must_use]
 pub fn take_asked(window: &str) -> Vec<Asked> {
+    let only_its_own = claims(window);
     if let Ok(mut seen) = SEEN.lock() {
         seen.retain(|w| w != window);
         seen.push(window.to_owned());
@@ -435,7 +526,7 @@ pub fn take_asked(window: &str) -> Vec<Asked> {
     };
     let (mine, others): (Vec<_>, Vec<_>) = q
         .drain(..)
-        .partition(|(for_window, _)| for_window.as_deref().is_none_or(|w| w == window));
+        .partition(|(for_window, _)| for_window.as_deref().map_or(!only_its_own, |w| w == window));
     q.extend(others);
     mine.into_iter().map(|(_, asked)| asked).collect()
 }
@@ -507,7 +598,8 @@ pub async fn ask_window_action(id: String, args: String) -> Answer {
             map.remove(&ticket);
         }
     };
-    if !ask(Asked::Run { id, args, ticket }) {
+    let to = owner(&id).or_else(target);
+    if !ask_of(to, Asked::Run { id, args, ticket }) {
         forget();
         return Err("no window follows the engine".to_owned());
     }
@@ -552,10 +644,13 @@ pub fn a_window_follows() -> Result<(), String> {
 }
 
 /// The ids of the window's own actions, once registered: what a window
-/// offers its engine's list.
+/// offers its engine's list (not those it handed over).
 #[must_use]
 pub fn window_action_ids() -> Vec<String> {
-    WINDOW_IDS.get().cloned().unwrap_or_default()
+    WINDOW_IDS
+        .get()
+        .map(|ids| ids.iter().filter(|id| !handed_over(id)).cloned().collect())
+        .unwrap_or_default()
 }
 
 // ── The windows attached ─────────────────────────────────────────────
@@ -572,9 +667,10 @@ pub fn window_actions(ids: Vec<String>) {
 /// window's process even when the engine is in another.
 #[must_use]
 pub fn is_window_action(id: &str) -> bool {
-    WINDOW_IDS
-        .get()
-        .is_some_and(|ids| ids.iter().any(|i| i == id))
+    !handed_over(id)
+        && WINDOW_IDS
+            .get()
+            .is_some_and(|ids| ids.iter().any(|i| i == id))
 }
 
 /// How many windows are attached to this engine.
@@ -696,5 +792,48 @@ mod window_action_tests {
         answered(ticket, Err("bad args".to_owned()));
         assert_eq!(asking.await.expect("joined"), Err("bad args".to_owned()));
         set_linked_windows(0);
+    }
+
+    /// The ids of the `Run`s in `asked`.
+    fn runs(asked: &[Asked]) -> Vec<String> {
+        asked
+            .iter()
+            .filter_map(|a| match a {
+                Asked::Run { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_claimed_action_is_asked_of_the_window_that_claimed_it_alone() {
+        set_linked_windows(2);
+        super::set_owner("MIXER_VIEW", "studio.mixer");
+        let mixer = tokio::spawn(ask_window_action("MIXER_VIEW".into(), "{}".into()));
+        let zoom = tokio::spawn(ask_window_action("SESSION_ZOOM".into(), "{}".into()));
+        while super::asked_pending() < 2 {
+            tokio::task::yield_now().await;
+        }
+        // The claimer takes only what was asked of it by name, so the
+        // arrangement's zoom waits for a window that takes any ask.
+        assert_eq!(runs(&take_asked("studio.mixer")), ["MIXER_VIEW"]);
+        assert_eq!(runs(&take_asked("studio.mixer")), Vec::<String>::new());
+        assert_eq!(runs(&take_asked("main")), ["SESSION_ZOOM"]);
+        mixer.abort();
+        zoom.abort();
+        set_linked_windows(0);
+    }
+}
+
+#[cfg(test)]
+mod hand_over_tests {
+    #[test]
+    fn a_handed_over_action_is_not_this_windows_own() {
+        super::window_actions(vec!["SESSION_ZOOM".into(), "MIXER_VIEW".into()]);
+        assert!(super::is_window_action("MIXER_VIEW"));
+        super::hand_over(&["MIXER_VIEW"]);
+        assert!(!super::is_window_action("MIXER_VIEW"));
+        assert!(super::is_window_action("SESSION_ZOOM"));
+        assert_eq!(super::window_action_ids(), ["SESSION_ZOOM"]);
     }
 }

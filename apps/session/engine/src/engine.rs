@@ -2268,6 +2268,56 @@ pub struct Watch {
     alive: Alive,
 }
 
+/// What is woken when a track event arrives, by key: a pane that draws
+/// at its own pace (an Architect process view's, every 16.7 ms) draws as
+/// the event lands instead, so an edit made in another pane shows in the
+/// same frame as there.
+static ON_EVENT: std::sync::Mutex<Vec<(u64, Wake)>> = std::sync::Mutex::new(Vec::new());
+
+/// What [`on_track_event`] wakes.
+pub type Wake = std::sync::Arc<dyn Fn() + Send + Sync>;
+
+/// The last key [`on_track_event`] gave.
+static ON_EVENT_KEYS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Wake `wake` (from the watch's thread) whenever a track event arrives,
+/// for as long as the returned guard is held.
+#[must_use]
+pub fn on_track_event(wake: Wake) -> OnTrackEvent {
+    let key = ON_EVENT_KEYS.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    ON_EVENT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .push((key, wake));
+    OnTrackEvent(key)
+}
+
+/// Held while [`on_track_event`]'s wake is: dropping it stops the wakes.
+#[derive(Debug)]
+pub struct OnTrackEvent(u64);
+
+impl Drop for OnTrackEvent {
+    fn drop(&mut self) {
+        ON_EVENT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|(key, _)| *key != self.0);
+    }
+}
+
+/// Wake whoever [`on_track_event`] asked to be.
+fn track_event_arrived() {
+    let wakes: Vec<_> = ON_EVENT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .map(|(_, wake)| std::sync::Arc::clone(wake))
+        .collect();
+    for wake in wakes {
+        wake();
+    }
+}
+
 impl Watch {
     /// Subscribe. `None` if the facade is not up.
     ///
@@ -2330,6 +2380,7 @@ impl Watch {
                         if tx.send(event.get().event.clone()).is_err() {
                             break;
                         }
+                        track_event_arrived();
                     }
                 });
             })

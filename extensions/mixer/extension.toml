@@ -20,9 +20,13 @@ path = "studio-mixer"
 [uses]
 "fts.session" = "^0.1"
 
+# The mixer's toggle (`SESSION_TOGGLE_MIXER`, claimed from the engine)
+# closes its pane and opens it again where it was, the keyboard left with
+# the pane that had it.
 [capabilities]
 effect = "mutating"
 ui = ["engine"]
+actions = ["WORKSPACE_LAYOUT", "WORKSPACE_PANE_GET", "WORKSPACE_NEIGHBOR", "WORKSPACE_FOCUS", "WORKSPACE_CLOSE", "WORKSPACE_MOVE", "EXT_VIEW_OPEN"]
 
 [[views]]
 id = "mixer"
