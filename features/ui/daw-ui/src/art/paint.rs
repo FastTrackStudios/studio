@@ -650,8 +650,9 @@ pub mod tcp {
         drawing
     }
 
-    /// The meter's two channel columns in a fader column `w` × `h`: where
-    /// each starts and how wide it is, and the span a level runs up (a
+    /// The meter's two channel columns in a fader column `w` × `h`.
+    ///
+    /// Where each starts and how wide it is, and the span a level runs up (a
     /// level `v` lights `span × v` up from `h − 0.5`). For a host that
     /// draws the meter in parts and moves them by values: what
     /// [`fader_track`] draws, measured the same way.
@@ -671,7 +672,9 @@ pub mod tcp {
     pub const ZONE_KNEE: f64 = 0.75;
 
     /// [`fader_track`] lit to full scale, with no peak hold and no clip
-    /// latch: the meter's still part, for a host that covers what is not
+    /// latch.
+    ///
+    /// The meter's still part, for a host that covers what is not
     /// lit and moves the holds by values. Where a level is, it is the
     /// same picture: the lit column's gradient is pinned to the column's
     /// height ([`level_brush`]), not to the level.
@@ -906,11 +909,17 @@ pub mod tcp {
     }
 
     /// [`fader_through`] for one channel (`channel` 0 the left), lit to
-    /// full scale: the whole pane's share of that channel, for a host that
+    /// full scale.
+    ///
+    /// The whole pane's share of that channel, for a host that
     /// covers it above the level. With where the pane is: its top and
     /// bottom (`from`, `to`) and the channel's part of it (`left`,
     /// `right`), in the drawing's units.
     #[must_use]
+    #[expect(
+        clippy::suboptimal_flops,
+        reason = "the same arithmetic as fader_through: the pane's place must agree with it to the bit"
+    )]
     pub fn fader_through_channel(
         zones: [Color; 3],
         w: f64,

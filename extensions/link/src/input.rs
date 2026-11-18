@@ -19,8 +19,13 @@ pub fn modifiers(mods: &[&str]) -> Modifiers {
             "Shift" => Modifiers::SHIFT,
             "Alt" => Modifiers::ALT,
             "Ctrl" => Modifiers::CONTROL,
-            "Mod" if cfg!(target_os = "macos") => Modifiers::META,
-            "Mod" => Modifiers::CONTROL,
+            "Mod" => {
+                if cfg!(target_os = "macos") {
+                    Modifiers::META
+                } else {
+                    Modifiers::CONTROL
+                }
+            }
             "Meta" => Modifiers::META,
             _ => Modifiers::empty(),
         };

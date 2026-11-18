@@ -56,7 +56,7 @@ impl Extension for Arrangement {
                 let on = args
                     .get("on")
                     .and_then(Json::as_bool)
-                    .unwrap_or(!session_ui::folds::tops());
+                    .unwrap_or_else(|| !session_ui::folds::tops());
                 session_ui::folds::set_tops(on);
                 Ok(json!({ "folded": on }))
             });
@@ -153,9 +153,9 @@ fn Panel(session: Song) -> Element {
                 *mounted.borrow_mut() = Some(event.data());
             },
             div { style: "position:absolute; left:0; top:0; width:100%; height:100%;",
-                PaintPane { mount: mount.clone() }
+                PaintPane { mount }
             }
-            session_ui::panel::PanelChrome { panel: panel.clone() }
+            session_ui::panel::PanelChrome { panel }
         }
     }
 }

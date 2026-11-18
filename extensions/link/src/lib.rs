@@ -47,8 +47,9 @@ pub fn problem() -> Option<String> {
         .clone()
 }
 
-/// Attach this process, a Studio window, to the engine: what
-/// `studio-desktop`'s window does with `FTS_ENGINE=attach`
+/// Attach this process, a Studio window, to the engine.
+///
+/// What `studio-desktop`'s window does with `FTS_ENGINE=attach`
 /// (`session_desktop::native::attach_engine`). Once per process, on a
 /// thread of its own; it keeps the link after (an engine that restarts is
 /// attached to again).
@@ -118,7 +119,10 @@ pub fn use_song() -> Signal<Option<(String, StudioSession)>> {
 }
 
 /// What a pane shows until there is a song: what it waits for.
-#[must_use]
+///
+/// # Errors
+///
+/// None: it renders.
 pub fn waiting() -> Element {
     let surface = surface();
     let why = problem().unwrap_or_else(|| "Waiting for Studio's engine to open a song…".to_owned());
@@ -136,18 +140,25 @@ pub fn surface() -> String {
     daw_ui::studio::lanes::Colors::from_theme(&daw_ui::theming::Theme::dark()).surface
 }
 
+/// The class a view's root takes for Studio's box sizing.
+///
 /// Studio's window sizes every box by its border (`*{box-sizing:
 /// border-box}`, `studio-desktop`'s root style). A view's root takes this
 /// class, and [`studio_style`] gives it the rule: the view's own, not the
 /// Architect window's around it.
 pub const ROOT_CLASS: &str = "studio-view";
 
-/// The rule [`ROOT_CLASS`] names, to render once in a view: a `style`
-/// element in the view's own tree. A process view is a Blitz sub-document
+/// The rule [`ROOT_CLASS`] names, to render once in a view.
+///
+/// A `style` element in the view's own tree. A process view is a Blitz
+/// sub-document
 /// of the host's (`architect_extensions::remote`), which takes a `style`
 /// element as a sheet; `document::Style` goes to a document provider the
 /// guest has none of.
-#[must_use]
+///
+/// # Errors
+///
+/// None: it renders.
 pub fn studio_style() -> Element {
     rsx! {
         style { {".studio-view, .studio-view * { box-sizing: border-box; }"} }
@@ -221,9 +232,15 @@ impl Stats {
         let pct = |p: usize| {
             let mut s: Vec<f64> = self.work_ms.iter().copied().collect();
             s.sort_by(f64::total_cmp);
-            s.get((s.len().saturating_sub(1) * p) / 100)
-                .copied()
-                .unwrap_or(0.0)
+            s.get(
+                s.len()
+                    .saturating_sub(1)
+                    .saturating_mul(p)
+                    .checked_div(100)
+                    .unwrap_or(0),
+            )
+            .copied()
+            .unwrap_or(0.0)
         };
         serde_json::json!({
             "count": self.frames,
@@ -271,19 +288,25 @@ impl SceneLayer {
         size: (u32, u32),
         began: web_time::Instant,
     ) -> Vec<(LayerKey, Layer)> {
-        let mut stats = self.stats.lock().unwrap_or_else(PoisonError::into_inner);
-        stats.frames += 1;
-        stats.size = size;
-        if self.last.as_ref() != Some(&scene) {
-            stats.changed += 1;
-            stats.commands = scene.commands.len();
+        let changed = self.last.as_ref() != Some(&scene);
+        let commands = scene.commands.len();
+        if changed {
             self.content = Arc::new(scene.commands.clone());
             self.last = Some(scene);
         }
         let work = began.elapsed().as_secs_f64() * 1000.0;
-        stats.work_ms.push_back(work);
-        if stats.work_ms.len() > 600 {
-            stats.work_ms.pop_front();
+        {
+            let mut stats = self.stats.lock().unwrap_or_else(PoisonError::into_inner);
+            stats.frames = stats.frames.saturating_add(1);
+            stats.size = size;
+            if changed {
+                stats.changed = stats.changed.saturating_add(1);
+                stats.commands = commands;
+            }
+            stats.work_ms.push_back(work);
+            if stats.work_ms.len() > 600 {
+                stats.work_ms.pop_front();
+            }
         }
         vec![(self.key, Layer::new(Arc::clone(&self.content)))]
     }
@@ -291,8 +314,9 @@ impl SceneLayer {
 
 /// A pane's size in whole logical pixels.
 #[must_use]
-pub fn pane_size(ctx: &architect_workspace::ViewCtx) -> (u32, u32) {
+pub const fn pane_size(ctx: &architect_workspace::ViewCtx) -> (u32, u32) {
     #[expect(
+        clippy::as_conversions,
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "a pane's size in logical pixels"

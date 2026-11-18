@@ -17,7 +17,14 @@
     clippy::expect_used,
     clippy::print_stdout,
     clippy::cast_possible_truncation,
-    clippy::cast_precision_loss
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::as_conversions,
+    clippy::arithmetic_side_effects,
+    clippy::indexing_slicing,
+    clippy::chunks_exact_to_as_chunks,
+    clippy::too_many_lines,
+    reason = "a test: measuring, with pixel arithmetic over a raster it made"
 )]
 
 use std::cell::RefCell;

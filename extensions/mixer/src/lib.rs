@@ -30,8 +30,11 @@ use crate::host::Hosted;
 
 pub const MANIFEST: &str = include_str!("../extension.toml");
 
+/// One pane's frame statistics, and which view it is.
+type PaneStats = (&'static str, Arc<Mutex<Stats>>);
+
 /// Each pane's frame statistics, by view, for `STUDIO_MIXER_STATE`.
-static STATS: Mutex<Vec<(&'static str, Arc<Mutex<Stats>>)>> = Mutex::new(Vec::new());
+static STATS: Mutex<Vec<PaneStats>> = Mutex::new(Vec::new());
 
 pub struct Mixer;
 
@@ -48,7 +51,7 @@ impl Extension for Mixer {
                 let on = args
                     .get("on")
                     .and_then(Json::as_bool)
-                    .unwrap_or(!session_ui::mixer_panel::racks_shown());
+                    .unwrap_or_else(|| !session_ui::mixer_panel::racks_shown());
                 session_ui::mixer_panel::set_racks_shown(on);
                 Ok(json!({ "racks": on }))
             });
@@ -175,7 +178,7 @@ fn Strips(session: Song, shown: Shown) -> Element {
             class: studio_view_link::ROOT_CLASS,
             style: "position:absolute; top:0; left:0; right:0; bottom:0; overflow:hidden; \
                     background:{surface};",
-            PaintPane { mount: mount.clone() }
+            PaintPane { mount }
         }
     }
 }

@@ -119,7 +119,7 @@ fn seconds_at_bar(project: &daw_ui::studio::project::Project, bar: u32) -> f64 {
     let (mut bpm, mut beats) = changes.first().map_or((project.bpm, 4.0), |c| {
         (c.bpm, f64::from(c.beats_per_bar.max(1)))
     });
-    let want = f64::from(bar.max(1) - 1);
+    let want = f64::from(bar.max(1).saturating_sub(1));
     for c in changes.iter().skip(1) {
         let bar_len = beats * 60.0 / bpm.max(1.0);
         let span = (c.at - at) / bar_len;
@@ -198,9 +198,11 @@ async fn write_timing(
     file.save().await.map_err(|e| err(&e))
 }
 
-/// Song `song` (the engine's project id) is current, from `source` (its
-/// file), laid out as `project`: its session document opened, given the
-/// engine's timing and provided. Once a song: the same song again does
+/// Song `song` (the engine's project id) is current: its session
+/// document opened.
+///
+/// From `source` (its file), laid out as `project`: the document given
+/// the engine's timing and provided. Once a song: the same song again does
 /// nothing.
 pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project::Project) {
     let mut open = OPEN.lock().unwrap_or_else(PoisonError::into_inner);
@@ -315,15 +317,20 @@ pub fn publish(playing: bool, at: f64, rate: f64) {
 /// transport is led from.
 #[must_use]
 pub fn state() -> Json {
-    let open = OPEN.lock().unwrap_or_else(PoisonError::into_inner);
+    let (path, id) = OPEN
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .map(|o| (o.path.display().to_string(), o.id.clone()))
+        .unzip();
     let url = LEADER
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
         .map(|l| l.url().to_owned());
     json!({
-        "path": open.as_ref().map(|o| o.path.display().to_string()),
-        "id": open.as_ref().map(|o| o.id.clone()),
+        "path": path,
+        "id": id,
         "url": url,
         "problem": PROBLEM.lock().unwrap_or_else(PoisonError::into_inner).clone(),
     })

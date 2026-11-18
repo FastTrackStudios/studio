@@ -32,6 +32,13 @@ pub const ABOVE: LayerKey = 2;
 /// The meters' parts, from here up, one key each.
 pub const PARTS: LayerKey = 1000;
 
+/// The picture and what is over the meters, and the layers made for them.
+type Kept = (
+    Arc<Vec<RenderCommand>>,
+    Vec<RenderCommand>,
+    Vec<(LayerKey, Layer)>,
+);
+
 pub struct Hosted {
     mixer: Rc<HostedMixer>,
     scope: InScope,
@@ -42,11 +49,7 @@ pub struct Hosted {
     /// The layers last given, with the picture and what is over the
     /// meters they were made for: the parts only change with the layout,
     /// which the picture shows, so the same two keep them.
-    kept: Option<(
-        Arc<Vec<RenderCommand>>,
-        Vec<RenderCommand>,
-        Vec<(LayerKey, Layer)>,
-    )>,
+    kept: Option<Kept>,
     /// The buttons held now: a move carries them, as Blitz's do.
     held: MouseEventButtons,
     /// The pane's width, for the wheel's end.
@@ -190,9 +193,12 @@ impl PaintView for Hosted {
             return Some(kept.clone());
         }
         let picture = layers.first().map(|(_, l)| Arc::clone(&l.commands));
-        let mut keep = Vec::with_capacity(apart.layers.len() + 1);
+        let mut keep = Vec::with_capacity(apart.layers.len().saturating_add(1));
         for (i, part) in apart.layers.iter().enumerate() {
-            let key = PARTS + LayerKey::try_from(i).unwrap_or(LayerKey::MAX - PARTS);
+            let key = LayerKey::try_from(i)
+                .ok()
+                .and_then(|i| PARTS.checked_add(i))
+                .unwrap_or(LayerKey::MAX);
             let mut layer = Layer::new(self.content(key, &part.scene.commands))
                 .animated(part.moves.iter().filter_map(animation).collect::<Vec<_>>());
             let at = part.transform.unwrap_or(apart.transform);
