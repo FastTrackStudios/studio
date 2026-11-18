@@ -98,7 +98,7 @@ fts-audio-ui = { workspace = true }
 # The delay's style families and the reverb's rendered impulse — the
 # Depth panels draw the machine, not a picture of its knob.
 # Their painted pictures, for the FX view's devices.
-frame = { workspace = true, features = ["anyrender-blitz", "live", "theme"] }
+frame = { workspace = true, features = ["host-scene", "live", "theme"] }
 
 # `standalone-rpp` = the standalone backend plus the `.rpp` loader and
 # source decoding — what makes a real project openable with no REAPER in

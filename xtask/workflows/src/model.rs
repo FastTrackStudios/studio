@@ -328,3 +328,30 @@ impl Step {
         self
     }
 }
+
+/// Third-party actions the release bots use, pinned by full commit SHA
+/// (the version they were in the comment). A tag can be moved; a SHA cannot.
+pub mod pinned {
+    /// actions/checkout v4.4.0
+    pub const CHECKOUT: &str = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262";
+    /// actions/cache/restore v4.3.0
+    pub const CACHE_RESTORE: &str =
+        "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830";
+    /// actions/upload-artifact v4.6.2
+    pub const UPLOAD_ARTIFACT: &str =
+        "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02";
+    /// actions/download-artifact v4.3.0
+    pub const DOWNLOAD_ARTIFACT: &str =
+        "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093";
+    /// actions/create-github-app-token v2.2.2
+    pub const CREATE_APP_TOKEN: &str =
+        "actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349";
+    /// actions/cache/save v4.3.0
+    pub const CACHE_SAVE: &str = "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830";
+    /// taiki-e/install-action v2 (as of 2026-11-12)
+    pub const INSTALL_ACTION: &str =
+        "taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39";
+    /// dtolnay/rust-toolchain, branch 1.99.1 (rust-toolchain.toml's pin)
+    pub const RUST_TOOLCHAIN: &str =
+        "dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8";
+}

@@ -182,7 +182,7 @@ per-track `Arc<[Item]>`. Wire ids: `Arc<str>`-backed newtypes.
 
 ## 9. In-repo precedent
 
-- `crates/frame/src/document/proto/model.rs:21-55` — `NodeId(Uuid)` and
+- `frame:crates/frame/src/document/proto/model.rs` (the frame repo) — `NodeId(Uuid)` and
   `AssetId(String)` with `#[facet(transparent)]`: typed ids already cross
   the Facet wire in this repo.
 - `daw:crates/daw/proto/src/handle.rs` — `DawHandle`/`ProjectHandle`/

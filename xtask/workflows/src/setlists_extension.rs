@@ -37,7 +37,9 @@ use anyhow::Result;
 
 /// Architect's reusable workflow and the ref whose `cargo xtask ext-*`
 /// pack and sign: one pin.
-const ARCHITECT_REF: &str = "main";
+// Pinned by commit (architect main, 2026-11-12): a branch can move under a
+// release; move this with the extension tooling it needs.
+const ARCHITECT_REF: &str = "26f7f590f4b39529c59e8ae507cca9912e7d507c";
 
 /// The platforms the program is built for.
 const PLATFORMS: &str = r#"["x86_64-unknown-linux-gnu","aarch64-apple-darwin"]"#;

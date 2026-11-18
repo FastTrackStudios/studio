@@ -875,7 +875,7 @@ check:
 # tests worth running on every change. The wire types' tests (daw-proto,
 # daw-control, daw-transport-sync, utils) run in FastTrackStudios/daw, where
 # those crates live (studio#510).
-test_packages := "session-format daw-standalone timeline studio frame studio-desktop dioxus-test dock studio-architect"
+test_packages := "session-format daw-standalone timeline studio studio-desktop dioxus-test dock studio-architect"
 
 # Run the core test set (test_packages above).
 test:
@@ -2255,6 +2255,39 @@ release *ARGS:
 release-hotfix +COMMITS:
     bash scripts/release.sh hotfix {{COMMITS}}
 
+# Every architect pin (and keyflow's, to the newest keyflow release on that
+# architect) moves to TAG: the manifests and the comments naming the tags,
+# Cargo.lock (cargo resolves; nothing compiles), add-only lines in
+# .config/duplicate-deps.toml, the change file. Exit 3: needs a person;
+# exit 4: no keyflow release on TAG yet, or daw / fts-fx (pinned by rev)
+# still on Studio's current architect tag. The bot runs exactly this.
+# Move the architect and keyflow pins to architect TAG (e.g. v0.12.5)
+bump-architect TAG *ARGS:
+    python3 scripts/bump-architect.py "{{TAG}}" {{ARGS}}
+
+# studio#457's replay must equal the merged commit (Cargo.lock included);
+# a keyflow behind the tag must exit 4, an editor move exit 3.
+# Test the bump script against real bumps
+bump-architect-test:
+    bash scripts/bump-architect-replay.sh
+
+# Every workflow's App token: one repository, its hop's permissions, its
+# environment's own key (scripts/check-token-mints.py; PR checks run it).
+# Check the App token mints of every workflow
+check-token-mints:
+    python3 scripts/check-token-mints.py --self-test
+    python3 scripts/check-token-mints.py
+
+# What `sums` signs, the queue's API check, the bump's wait on daw/fts-fx,
+# the www [patch] guard (PR checks run them)
+release-bots-test:
+    bash scripts/release-sums-test.sh
+    bash scripts/bump-verify-test.sh
+    python3 scripts/bump-architect-deps-test.py
+    bash scripts/release-facts-test.sh
+    python3 scripts/check-www-patch.py --self-test
+    python3 scripts/check-www-patch.py
+
 # The release notes of a tag (default: the draft for origin/main).
 release-notes *ARGS:
     @bash scripts/release.sh notes {{ARGS}}
@@ -2441,15 +2474,6 @@ worktree-setup:
 faces *ONLY:
     cargo run -q --release -p plugin-faces -- features/ui/plugin-faces/generated {{ if ONLY != "" { "--only " + ONLY } else { "" } }}
 
-# The face library: every plugin face rendered with frame's GPU effects
-# stage to OUT/<set>/<face>.webp, indexed by kind in OUT/index.json
-# (placeholders marked). Run `just faces` first; needs ImageMagick.
-#   just faces-gallery /tmp/gallery --only saturate
-faces-gallery OUT *ARGS:
-    cargo build --release -p frame-cli --features anyrender --bin render_surface
-    python3 scripts/face_gallery.py {{OUT}} {{ARGS}}
-
-# Frame's Figma parity: import → render → pixel + SVG diff against Figma's
-# own output (xtask/frame/scripts/run_parity_render_and_diff.sh).
-frame-parity *ARGS="--all":
-    cargo run -p xtask -- parity_test {{ARGS}}
+# The face gallery and Frame's Figma parity suite are the frame repo's
+# (FastTrackStudios/frame: `just faces-gallery`, `just parity`); Frame is a git
+# dependency here (docs/frame.md).

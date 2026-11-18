@@ -205,6 +205,3 @@ studio-assets  features/rigs/synth/tools/omni_probe/exp_x0y0.wav
 studio-assets  features/rigs/synth/tools/omni_probe/exp_x0y1.wav
 studio-assets  features/rigs/synth/tools/omni_probe/exp_x1y0.wav
 studio-assets  features/rigs/synth/tools/omni_probe/exp_x1y1.wav
-
-# frame: the render-parity scenario too large for the repo
-studio-assets  crates/frame/render/tests/parity/scenarios/regression.tough-1176-blue-face

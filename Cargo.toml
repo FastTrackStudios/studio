@@ -17,7 +17,6 @@ members = [
     "features/ui/lyrics-ui",
     "apps/architect/island",
     "features/sync",
-    "crates/frame",
     "features/adapters/web/worklet",
     "features/editor",
     "features/session",
@@ -126,13 +125,8 @@ members = [
     "features/signal/content-library",
     "features/signal/content-client",
     "apps/plugins/sampler",
-    # ── frame ──
-    "crates/frame/tools/cli",
-    "crates/frame/tools/mcp",
-    "crates/frame/tools/desktop",
-    "crates/frame/tools/library-server",
+    # ── frame's plugin faces (frame itself is a git dependency) ──
     "features/ui/plugin-faces",
-    "xtask/frame",
     "features/adapters/protools",
     "features/adapters/ableton",
     "features/adapters/logic",
@@ -164,7 +158,11 @@ dock = { path = "features/ui/dock" }
 transport-ui = { path = "features/ui/transport-ui" }
 lyrics-ui = { path = "features/ui/lyrics-ui", default-features = false }
 daw-sync = { path = "features/sync" }
-frame = { path = "crates/frame" }
+# Frame, the design and control-surface engine, from its own repo
+# (FastTrackStudios/frame), pinned by rev: the core crate, which has no
+# architect, vox or Dioxus dependency. A local checkout goes under the build
+# as a never-committed [patch] (docs/frame.md).
+frame = { git = "https://github.com/FastTrackStudios/frame", rev = "1f6311abc5eeef87c5226155a4838a6f58984410" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }
 editor = { path = "features/editor" }
 session = { path = "features/session" }
@@ -231,9 +229,7 @@ ropey = "1.6"
 # ── frame themes ──────────────────────────────────────────────────────
 # The mixer (then the TCP, then the arrangement) drawn from frame
 # documents — runtime-swappable, hot-reloaded themes. See
-# docs/frame-themes.md. A path dep on a local checkout of
-# github.com/FastTrackStudios/frame while the theme runtime is built out;
-# becomes a tagged git dep once frame cuts one.
+# docs/frame-themes.md. Frame is the git dependency declared above.
 # A frame face running live: a control surface designed in frame (the
 # rig's pedals, amps and Time blocks, a reverb's machine), painted into
 # the host's scene and played by its pointer — the FX view's devices.
@@ -978,7 +974,6 @@ socket2 = { version = "0.6", features = ["all"] }
 
 
 # ── from frame's workspace (joined into studio) ──
-figma-api = { git = "https://github.com/gridaco/figma-api-rust.git" }
 anyrender_svg = "0.15"
 taffy = { version = "0.7", default-features = false, features = ["std", "flexbox", "taffy_tree"] }
 winit = "0.30"
@@ -1637,3 +1632,29 @@ editor-syntax = { git = "https://www.github.com/FastTrackStudios/editor", rev = 
 editor-view = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
 editor-vim = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
 editor-crdt = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
+
+# Keyflow's Architect, retargeted to Studio's own (keyflow names every
+# Architect dependency on the `www.` spelling on purpose: cargo treats it as
+# a different source from the plain URL above, which is what lets this
+# table hand keyflow's crates Studio's Architect tag). So an Architect PATCH
+# release needs no keyflow release: `just bump-architect vX.Y.Z` moves the
+# tags below with every other architect pin. Limits:
+# - An Architect MINOR still goes through keyflow (it may break keyflow's
+#   code, and every minor so far moved the editor/dioxus/blitz revisions):
+#   `just bump-architect` waits (exit 4) for a keyflow release on that minor.
+# - Every Architect crate a keyflow crate depends on DIRECTLY must be listed
+#   here (their own dependencies then resolve inside Studio's source). A
+#   missing one lands as a second architect source in Cargo.lock: `just
+#   bump-architect` refuses any `www.github.com/FastTrackStudios/architect`
+#   source in the lock.
+# - Until Studio pins a keyflow release on the www spelling, these entries
+#   are unused (`[[patch.unused]]` in Cargo.lock).
+# - Local dev overrides (the dev stack's links to local checkouts) must
+#   patch BOTH spellings, from a cargo CONFIG file: a config [patch] wins
+#   over this manifest table for the same source and crate, while a second
+#   `[patch."https://www.github.com/…"]` table in this file is a TOML
+#   duplicate-key error (docs/agents/release-workflow.md).
+[patch."https://www.github.com/FastTrackStudios/architect"]
+architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }

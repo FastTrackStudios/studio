@@ -3,12 +3,12 @@
 **studio is FastTrackStudio's audio/music product in one repo**: the DAW
 (`daw`) and everything built on it — **Studio, the one app** (Signal, the
 live rig, and Session, the full DAW, as views of one project behind one
-welcome screen, the library), the CLAP/VST3 plugins, and frame (the design /
-control-surface engine). It is the merger, in October
-2026, of the former session, daw, processor, signal, patchbay and frame
-repos. One Cargo workspace, one lockfile, one `target/`, one flake. Patchbay
-(studio routing) went back to its own repo, FastTrackStudios/patchbay, in
-November 2026 (studio#510).
+welcome screen, the library) and the CLAP/VST3 plugins. It is the merger, in
+October 2026, of the former session, daw, processor, signal, patchbay and
+frame repos. One Cargo workspace, one lockfile, one `target/`, one flake.
+Patchbay (studio routing) went back to its own repo, FastTrackStudios/patchbay,
+in November 2026 (studio#510). Frame (the design / control-surface engine) is
+its own repo again too, a git dependency here (`docs/frame.md`).
 
 ## Layout
 
@@ -46,8 +46,6 @@ crates/     daw/*      the DAW alone: the domain core (`daw`), the standalone
             studio/    the umbrella over daw: REAPER adapter, project files,
                        UI, CSI, the daw CLI, the integration-test harness —
                        all cargo features of `studio`
-            frame/     the design / control-surface engine (+ tools/: cli,
-                       desktop, mcp, library-server)
 features/   one crate per feature, sub-folders allowed. Name a feature for what
             it is; anything host-specific goes under adapters/<host>.
             signal/      Signal's domain: rigs, presets, scenes, its browser,
@@ -81,7 +79,7 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
             app/         shell (log ring, crash log, update check), launcher
             adapters/    reaper/ (everything REAPER), web/ (the AudioWorklet)
 vendor/     patched third-party crates (each with UPSTREAM.md or FTS-PATCH.md)
-xtask/      devtools, frame (Figma parity), plugins (the bundler), session-reaper
+xtask/      devtools, plugins (the bundler), session-reaper
 docs/       design/ (one-engine.md), per-domain notes (daw, signal, frame,
             …), agents/, guides, specs
 nix/        flake modules (toolchain, shells, packages), reaper-config,
@@ -117,7 +115,8 @@ working there.
   are `features/app/shell`; prefs are `utils::prefs`. Session and Signal
   do not keep copies.
 - **Faces are frame documents.** Control surfaces and plugin faces are
-  `.frame` documents rendered by `crates/frame`. `just faces` generates the
+  `.frame` documents rendered by `frame` (FastTrackStudios/frame, pinned by
+  `rev` in the root `Cargo.toml`; `docs/frame.md`). `just faces` generates the
   plugin faces into `features/ui/plugin-faces/generated` (not kept in git; the apps
   read them at runtime).
 
@@ -146,9 +145,18 @@ working there.
   daw repo's old tag, the in-tree `daw` and `dawfile-reaper`, and the
   `fts-sample` Studio builds, named on the `www.` host because a patch
   may not point back at its own source: goes when keyflow pins the daw
-  repo at Studio's revision). There is no architect `[patch]`: studio, keyflow and task@main
-  pin the same architect tag, so `Cargo.lock` holds one architect source;
-  bump them together. A `[patch]` **cannot rename a crate**.
+  repo at Studio's revision). One architect `[patch]`, on the
+  `www.github.com` spelling (end of Cargo.toml): keyflow names Architect
+  there, and the table hands those crates Studio's own tag, so an
+  Architect PATCH release needs no keyflow release (a minor still goes
+  through keyflow). The daw and fts-fx repos (pinned by `rev`) pin
+  Architect on the plain URL, the same source as Studio, so they move
+  first: `Cargo.lock` holds one architect source besides task@main's own
+  older one, none on www. Bump with `just bump-architect vX.Y.Z`
+  (docs/agents/release-workflow.md, "Moving the Architect and Keyflow
+  pins", which also says how local dev overrides must patch both
+  spellings, from a cargo config file); it waits (exit 4) while daw or
+  fts-fx is behind. A `[patch]` **cannot rename a crate**.
 - **Co-developing across repos**: override with a local checkout —
   `[patch."https://github.com/FastTrackStudios/architect"] architect =
   { path = "../architect/architect" }` — and never commit it; the paths are

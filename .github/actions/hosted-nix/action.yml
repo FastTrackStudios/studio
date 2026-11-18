@@ -41,14 +41,14 @@ runs:
           /usr/local/share/boost /opt/microsoft /opt/google \
           </dev/null >/dev/null 2>&1 &
     - name: Install nix
-      uses: cachix/install-nix-action@v31
+      uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
       with:
         # Flake inputs come from the GitHub API; unauthenticated, 60/h per IP.
         github_access_token: ${{ github.token }}
         extra_nix_config: |
           accept-flake-config = true
     - name: fasttrackstudio cachix
-      uses: cachix/cachix-action@v17
+      uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
       with:
         name: fasttrackstudio
         authToken: ${{ inputs.cachix-auth-token }}

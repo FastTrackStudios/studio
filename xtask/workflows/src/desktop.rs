@@ -77,6 +77,7 @@ workflow_dispatch:
     .jobs(crate::sums::jobs(
         &["publish"],
         "inputs.mode != 'validate' && inputs.mode != 'build-only' && needs.publish.result == 'success'",
+        "${{ needs.publish.outputs.digests }}",
     )?))
 }
 
@@ -131,11 +132,21 @@ fi
             .cond("${{ env.MODE != 'build-only' }}")
             .env("GH_TOKEN", "${{ github.token }}"),
         )
+        // A build-only run builds on the self-hosted release runners: only a
+        // commit already on main or a release/v* line may get there (the
+        // self-hosted runner gate), never any SHA a dispatcher names.
         .step(
             Step::run(
                 "Build-only ref",
-                r#"echo "version=$(bash scripts/release.sh version)" >> "$GITHUB_OUTPUT"
-echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+                r#"set -euo pipefail
+sha="$(git rev-parse HEAD)"
+git fetch -q origin '+refs/heads/main:refs/remotes/origin/main' '+refs/heads/release/v*:refs/remotes/origin/release/v*'
+if [ -z "$(git branch -r --contains "$sha" --format='%(refname:short)' | grep -E '^origin/(main|release/v.*)$' || true)" ]; then
+  echo "::error::build-only: $sha is on neither main nor a release/v* line: refused (the release runners build only reviewed commits)"
+  exit 1
+fi
+echo "version=$(bash scripts/release.sh version)" >> "$GITHUB_OUTPUT"
+echo "sha=$sha" >> "$GITHUB_OUTPUT"
 "#,
             )
             .id("ref")
@@ -219,7 +230,7 @@ ls -l target/desktop
             .env("VERSION", "${{ needs.resolve.outputs.version }}"),
         )
         .step(
-            Step::uses("Keep the .dmg", "actions/upload-artifact@v4")
+            Step::uses("Keep the .dmg", crate::model::pinned::UPLOAD_ARTIFACT)
                 .with("name", "desktop-macos")
                 .with("path", "target/desktop/*.dmg\n")
                 .with("if-no-files-found", "error")
@@ -319,7 +330,7 @@ echo "target dir after: $(du -sh "$dir" | cut -f1)"
             .cond("always()"),
         )
         .step(
-            Step::uses("Keep the AppImage", "actions/upload-artifact@v4")
+            Step::uses("Keep the AppImage", crate::model::pinned::UPLOAD_ARTIFACT)
                 .with("name", "desktop-linux")
                 .with(
                     "path",
@@ -373,8 +384,9 @@ fn publish() -> Result<Job> {
         )
         .timeout(15)
         .permissions(yaml("contents: write\n")?)
+        .output("digests", "${{ steps.attach.outputs.digests }}")
         .step(
-            Step::uses("The installers", "actions/download-artifact@v4")
+            Step::uses("The installers", crate::model::pinned::DOWNLOAD_ARTIFACT)
                 .with("path", "installers")
                 .with("merge-multiple", true),
         )
@@ -392,9 +404,12 @@ gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber ./*.dmg ./*.AppIm
 for f in ./*.dmg ./*.AppImage; do
   name="$(basename "$f")"
   want="sha256:$(sha256sum "$f" | cut -d' ' -f1)"
-  got="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq ".assets[] | select(.name == \"$name\") | .digest")"
+  # The Release is a draft until `sums` publishes it: find it in the list.
+  got="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50" --jq ".[] | select(.tag_name == \"$TAG\") | .assets[] | select(.name == \"$name\") | .digest")"
   [ "$got" = "$want" ] || { echo "::error::$name: GitHub's digest is '$got', the file is $want"; exit 1; }
 done
+# What `sums` may sign for this workflow: exactly these files.
+{ echo "digests<<EOF"; sha256sum ./*.dmg ./*.AppImage | sed 's|  \./|  |'; echo "EOF"; } >> "$GITHUB_OUTPUT"
 {
   echo "### Attached to $TAG"
   # shellcheck disable=SC2016 # the backticks are markdown, for jq's output
@@ -402,6 +417,7 @@ done
 } >> "$GITHUB_STEP_SUMMARY"
 "####,
             )
+            .id("attach")
             .env("GH_TOKEN", "${{ github.token }}")
             .env("VERSION", "${{ needs.resolve.outputs.version }}"),
         ))

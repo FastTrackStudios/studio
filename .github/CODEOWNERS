@@ -1,0 +1,9 @@
+# Changes to what the release chain trusts need the owner's review once the
+# `codeowners` ruleset is applied (architect's scripts/github-rulesets.sh
+# codeowners studio --apply). Without it this file only requests the review.
+/.github/ @Codys-Wright
+/xtask/workflows/ @Codys-Wright
+/scripts/release.sh @Codys-Wright
+/scripts/bump-architect.py @Codys-Wright
+/scripts/check-token-mints.py @Codys-Wright
+/scripts/check-duplicate-deps.py @Codys-Wright

@@ -730,7 +730,7 @@ fn tests() -> Job {
 
 /// The full nextest log as an artifact (see [`NEXTEST`] for why it is a file).
 fn test_log(artifact: &str) -> Step {
-    Step::uses("Test log", "actions/upload-artifact@v4")
+    Step::uses("Test log", crate::model::pinned::UPLOAD_ARTIFACT)
         .cond("${{ always() }}")
         .with("name", artifact)
         .with("path", "${{ runner.temp }}/nextest-ci.log")
@@ -793,7 +793,7 @@ fi
 fn assets_token() -> Step {
     Step::uses(
         "Asset repo token (main runs only)",
-        "actions/create-github-app-token@v2",
+        crate::model::pinned::CREATE_APP_TOKEN,
     )
     .id("assets-token")
     .cond("${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}")
