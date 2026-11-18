@@ -1,8 +1,12 @@
-//! REAPER `.rpp` interop.
+//! REAPER `.rpp` interop for the `.session` document (`session-format`).
+//!
+//! The document crate knows no file format but its own; this module is the
+//! REAPER adapter over it: [`from_rpp`] / [`to_rpp`] on a document, and
+//! [`RppProject`] for the same on an open `DawProject`.
 //!
 //! ## The fidelity mechanism, in one paragraph
 //!
-//! `dawfile_reaper::rpp_tree` already reads any `.RPP` into a generic
+//! [`crate::rpp_tree`] already reads any `.RPP` into a generic
 //! token tree and writes it back; it is *not* rebuilt here. Import keeps the
 //! original bytes as a content-addressed object ([`Provenance`]) and reads
 //! the modelled entities out of the tree alongside. Export therefore has two
@@ -33,7 +37,84 @@ mod import;
 pub use export::{ExportReport, to_rpp, to_rpp_patched};
 pub use import::{ImportReport, from_rpp};
 
-use dawfile_reaper::rpp_tree::{RChunk, RNode, RNodeTree};
+use crate::rpp_tree::{RChunk, RNode, RNodeTree};
+
+use std::path::Path;
+
+use session_format::document::SourceFormat;
+use session_format::error::{DawError, DawResult};
+use session_format::objects::ObjectStore;
+use session_format::project::DawProject;
+
+/// REAPER text in and out of an open project.
+///
+/// These were `DawProject`'s own methods while the document crate linked
+/// this one; they are an extension trait now that the dependency points
+/// the other way. Bring it into scope and the calls read as before:
+/// `DawProject::import_rpp(text, name)`, `project.to_rpp()`.
+pub trait RppProject: Sized {
+    /// Import a REAPER project.
+    fn import_rpp(text: &str, name: impl Into<String>) -> DawResult<(Self, ImportReport)>;
+
+    /// Import a REAPER project from disk. The project name comes from the
+    /// file stem.
+    fn import_rpp_file(path: impl AsRef<Path>) -> DawResult<(Self, ImportReport)>;
+
+    /// Export back to REAPER project text.
+    ///
+    /// Untouched projects come back **byte-identical**: the original bytes
+    /// are in `objects/`, and there is no honest reason to regenerate them.
+    /// A touched project is exported by patching that original, so the parts
+    /// the schema never modelled survive too.
+    fn to_rpp(&self) -> DawResult<String>;
+
+    /// Export, and report every token the patch rewrote.
+    fn to_rpp_patched(&self) -> DawResult<(String, ExportReport)>;
+}
+
+impl RppProject for DawProject {
+    fn import_rpp(text: &str, name: impl Into<String>) -> DawResult<(Self, ImportReport)> {
+        let mut objects = ObjectStore::new();
+        let (document, report) = from_rpp(text, name, &mut objects)?;
+        Ok((Self::new(document, objects), report))
+    }
+
+    fn import_rpp_file(path: impl AsRef<Path>) -> DawResult<(Self, ImportReport)> {
+        let path = path.as_ref();
+        let text = std::fs::read_to_string(path)?;
+        let name = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Untitled".to_string());
+        Self::import_rpp(&text, name)
+    }
+
+    fn to_rpp(&self) -> DawResult<String> {
+        let document = self.document();
+        let provenance = document.provenance.as_ref().ok_or_else(|| {
+            DawError::Rpp("document has no .rpp provenance to export against".into())
+        })?;
+        if provenance.format != SourceFormat::Rpp {
+            return Err(DawError::Rpp(format!(
+                "document was imported from {:?}, not REAPER",
+                provenance.format
+            )));
+        }
+        // The verbatim shortcut is only honest while the document still
+        // *is* the source. `modified` alone would not do: saving clears
+        // it, and a reopened project would then export the bytes it came
+        // from rather than the session it now holds.
+        if !self.is_modified() && !provenance.edited {
+            let bytes = self.objects().get(&provenance.source)?;
+            return Ok(String::from_utf8_lossy(bytes).into_owned());
+        }
+        to_rpp(document, self.objects())
+    }
+
+    fn to_rpp_patched(&self) -> DawResult<(String, ExportReport)> {
+        to_rpp_patched(self.document(), self.objects())
+    }
+}
 
 /// Read a node's tokens without the `&mut` dance `RNode::get_tokens` wants.
 ///
@@ -42,7 +123,7 @@ use dawfile_reaper::rpp_tree::{RChunk, RNode, RNodeTree};
 pub(crate) fn tokens(node: &RNode) -> Vec<String> {
     match &node.tokens {
         Some(tokens) => tokens.iter().map(|token| token.token.clone()).collect(),
-        None => dawfile_reaper::rpp_tree::tokenize(node.line.as_deref().unwrap_or_default())
+        None => crate::rpp_tree::tokenize(node.line.as_deref().unwrap_or_default())
             .into_iter()
             .map(|token| token.token)
             .collect(),

@@ -10,16 +10,14 @@
 mod sources;
 
 use super::*;
-use crate::document::{DawDocument, EnvelopeNode, ItemNode, TakeNode, TrackNode};
-use crate::error::{DawError, DawResult};
-use crate::objects::ObjectStore;
+use crate::rpp_tree::RToken;
+use crate::types::track::{FixedLaneFields, comping_from_lines, comping_lines, lane_settings};
 use daw_proto::automation::EnvelopeShape;
 use daw_proto::item::{FadeShape, Item};
 use daw_proto::track::{LaneComping, LaneDisplay, Track};
-use dawfile_reaper::rpp_tree::RToken;
-use dawfile_reaper::types::track::{
-    FixedLaneFields, comping_from_lines, comping_lines, lane_settings,
-};
+use session_format::document::{DawDocument, EnvelopeNode, ItemNode, TakeNode, TrackNode};
+use session_format::error::{DawError, DawResult};
+use session_format::objects::ObjectStore;
 
 /// What an export changed.
 ///
@@ -45,7 +43,7 @@ impl ExportReport {
 /// Requires the document's verbatim source object, because that is what is
 /// being patched. A document with no provenance cannot be exported this way
 /// — creating an `.rpp` from nothing is a different job (project scaffolding
-/// already lives in `dawfile_reaper::scaffold`).
+/// already lives in `crate::scaffold`).
 pub fn to_rpp(document: &DawDocument, store: &ObjectStore) -> DawResult<String> {
     Ok(to_rpp_patched(document, store)?.0)
 }
@@ -62,8 +60,8 @@ pub fn to_rpp_patched(
 
     let source = store.get(&provenance.source)?;
     let text = String::from_utf8_lossy(source).into_owned();
-    let mut root = dawfile_reaper::rpp_tree::read_rpp_chunk(&text)
-        .map_err(|error| DawError::Rpp(error.to_string()))?;
+    let mut root =
+        crate::rpp_tree::read_rpp_chunk(&text).map_err(|error| DawError::Rpp(error.to_string()))?;
 
     let mut report = ExportReport::default();
     patch_project(&mut root, document, &mut report);
@@ -75,8 +73,7 @@ pub fn to_rpp_patched(
     patch_markers(&mut root, document, &mut report);
     sources::write_missing_sources(&mut root, document, store, &mut report)?;
 
-    let mut rendered =
-        dawfile_reaper::rpp_tree::stringify_rpp_node(&RNodeTree::Chunk(root.clone()));
+    let mut rendered = crate::rpp_tree::stringify_rpp_node(&RNodeTree::Chunk(root.clone()));
     if !rendered.ends_with('\n') {
         rendered.push('\n');
     }
@@ -305,9 +302,11 @@ fn patch_receives(root: &mut RChunk, document: &DawDocument, report: &mut Export
         // schema does not model — a pan law of `-1:U`, a trailing `''` —
         // and re-emitting a line that already says the right thing would
         // silently normalise them away on every save.
-        let order_ids: Vec<crate::id::EntityId> =
-            order.iter().map(crate::id::EntityId::adopt).collect();
-        let decoded: Vec<crate::document::ReceiveNode> = existing
+        let order_ids: Vec<session_format::id::EntityId> = order
+            .iter()
+            .map(session_format::id::EntityId::adopt)
+            .collect();
+        let decoded: Vec<session_format::document::ReceiveNode> = existing
             .iter()
             .filter_map(|line| super::import::read_receive(line, &order_ids))
             .collect();
@@ -1667,7 +1666,7 @@ type MarkerFacts = (
     String,
 );
 
-fn marker_facts(node: &crate::document::MarkerNode) -> MarkerFacts {
+fn marker_facts(node: &session_format::document::MarkerNode) -> MarkerFacts {
     (
         node.id.to_string(),
         node.marker.id,
