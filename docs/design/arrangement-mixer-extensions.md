@@ -238,6 +238,11 @@ strip past them keeps its meter in the picture (the golden template's
      (`input::touch`, from Architect's `ViewInput::Touch`), as in the
      window: a swipe across the track panel expands it, a drag scrolls
      the strips, a fader is taken by its cap (`tests/touch.rs` in both).
+   - **A rename or a colour** made in another pane (the arrangement's)
+     reaches a mixer on its own as the engine's track event, and its
+     strips are laid out again. (A rename made outside every pane, by an
+     action, shows in neither the window's arrangement nor its mixer:
+     `studio-desktop` does the same.)
    The visibility manager is no longer one of them: a mixer on its own
    keeps every track and plans its strips again when one is shown or
    hidden (`SESSION_SHOW_GROUP` takes a group out of both panes).
