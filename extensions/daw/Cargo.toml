@@ -1,0 +1,31 @@
+[package]
+name = "daw-extension"
+description = "Studio's engine as an Architect extension: the same engine `studio engine` runs (session-engine, its daw, its Action List), in the extension's process, the song it is asked to open playing. Studio's views (studio.arrangement, studio.mixer) attach to it the way studio-desktop's window does."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "daw-extension"
+path = "src/main.rs"
+
+[dependencies]
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+session-desktop = { workspace = true, features = ["session", "native"] }
+session-engine = { workspace = true, features = ["native"] }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+fts-session = { workspace = true }
+daw-ui = { workspace = true }
+uuid = { workspace = true }
+tokio = { workspace = true }
+architect-scene = { workspace = true }
+daw = { workspace = true }
+daw-proto = { workspace = true }
+
+[lints]
+workspace = true

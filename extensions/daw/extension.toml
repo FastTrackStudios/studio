@@ -1,0 +1,86 @@
+# daw (src/lib.rs): Studio's engine as an Architect extension: the engine
+# `studio engine` runs, in this process, serving its window protocol on a
+# Unix socket. Studio's views (studio.arrangement, studio.mixer) attach to
+# it as studio-desktop's window attaches to a `studio engine`. Draws
+# nothing (docs/design/arrangement-mixer-extensions.md).
+id = "daw"
+name = "Studio engine"
+version = "0.2.0"
+kind = "process"
+api = "0.1"
+description = "Studio's engine: plays the song or set it opens; Studio's arrangement and mixer extensions attach to it."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "daw-extension"
+
+[provides]
+"fts.session" = "0.1.0"
+
+[requires]
+"architect.playhead" = "^0.1"
+
+[capabilities]
+effect = "mutating"
+events = ["playhead.changed"]
+
+# fts.session for the song's session document (src/session_doc.rs): a
+# service's method m is the provider's action DAW_<M>.
+[[actions]]
+id = "DAW_READ"
+name = "Session: read"
+description = "fts.session read: a caller's own data, the timeline (others' payloads left out), the song's structure."
+group = "DAW"
+effect = "read_only"
+params = '{"type":"object","properties":{"doc":{"type":"string"},"request":{}},"required":["doc","request"]}'
+
+[[actions]]
+id = "DAW_WRITE"
+name = "Session: write"
+description = "fts.session write: the caller's own data, lanes and items."
+group = "DAW"
+effect = "mutating"
+params = '{"type":"object","properties":{"doc":{"type":"string"},"request":{}},"required":["doc","request"]}'
+
+[[actions]]
+id = "DAW_STRUCTURE"
+name = "Session: structure"
+description = "fts.session structure: tempo, markers, regions, bar 1."
+group = "DAW"
+effect = "mutating"
+params = '{"type":"object","properties":{"doc":{"type":"string"},"request":{}},"required":["doc","request"]}'
+
+[[actions]]
+id = "DAW_STATE"
+name = "Studio engine: state"
+description = "Whether the engine is up, its socket and its Action List's MCP address; the song's session document (`session`: its path, id and the URL its transport is led from, for KEYFLOW_SESSION_FOLLOW and IGNITION_SESSION_ROOM); the deck."
+group = "DAW"
+effect = "read_only"
+
+[[actions]]
+id = "DAW_OPEN"
+name = "Studio engine: open"
+description = "Opens a song, a .session or a setlist (SESSION_OPEN)."
+group = "DAW"
+effect = "mutating"
+params = '{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}'
+
+[[actions]]
+id = "DAW_RUN"
+name = "Studio engine: run an action"
+description = "Runs action `id` of the engine's own Action List with `args`."
+group = "DAW"
+effect = "mutating"
+params = '{"type":"object","properties":{"id":{"type":"string"},"args":{}},"required":["id"]}'
+
+[[actions]]
+id = "DAW_DECK"
+name = "Studio engine: follow the playhead"
+description = "The app's playhead moved: the engine plays, pauses or seeks with it when it was not the engine's own move (its hook on app:playhead.changed)."
+group = "DAW"
+effect = "mutating"
+params = '{"type":"object"}'
+
+[[hooks]]
+on = "app:playhead.changed"
+action = "DAW_DECK"

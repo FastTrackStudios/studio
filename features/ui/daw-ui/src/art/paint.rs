@@ -650,6 +650,140 @@ pub mod tcp {
         drawing
     }
 
+    /// The meter's two channel columns in a fader column `w` × `h`.
+    ///
+    /// Where each starts and how wide it is, and the span a level runs up (a
+    /// level `v` lights `span × v` up from `h − 0.5`). For a host that
+    /// draws the meter in parts and moves them by values: what
+    /// [`fader_track`] draws, measured the same way.
+    #[must_use]
+    pub fn meter_columns(w: f64, h: f64) -> ([(f64, f64); 2], f64) {
+        let groove = groove_w(w);
+        let groove_x = (w - groove) / 2.0;
+        let [a, b] = channels(groove_x, groove, (0.0, 0.0));
+        ([(a.0, a.1), (b.0, b.1)], (h - 1.0).max(0.0))
+    }
+
+    /// How thick [`fader_track`]'s peak-hold line is.
+    pub const HOLD_LINE: f64 = HOLD;
+
+    /// Where the hold line turns from the first zone's blend to the
+    /// second's ([`zone_at`]'s knee).
+    pub const ZONE_KNEE: f64 = 0.75;
+
+    /// [`fader_track`] lit to full scale, with no peak hold and no clip
+    /// latch.
+    ///
+    /// The meter's still part, for a host that covers what is not
+    /// lit and moves the holds by values. Where a level is, it is the
+    /// same picture: the lit column's gradient is pinned to the column's
+    /// height ([`level_brush`]), not to the level.
+    #[must_use]
+    pub fn fader_track_lit(chrome: &Chrome, zones: [Color; 3], w: f64, h: f64) -> Drawing {
+        fader_track(chrome, (1.0, 1.0), (0.0, 0.0), false, zones, w, h)
+    }
+
+    /// [`fader_track`] with nothing lit: the groove's seam alone, as it is
+    /// drawn where no level is (for what covers the unlit column).
+    #[must_use]
+    pub fn fader_track_unlit(chrome: &Chrome, w: f64, h: f64) -> Drawing {
+        let black = Color::rgb(0, 0, 0);
+        fader_track(chrome, (0.0, 0.0), (0.0, 0.0), false, [black; 3], w, h)
+    }
+
+    /// One channel's bar of [`fader_track`], lit to full scale (`channel`
+    /// 0 is the left): for a host that shows it while there is a level and
+    /// covers what is not lit.
+    #[must_use]
+    pub fn fader_track_bar(zones: [Color; 3], w: f64, h: f64, channel: usize) -> Drawing {
+        let groove = groove_w(w);
+        let groove_x = (w - groove) / 2.0;
+        let mut drawing = Drawing::new(w, h);
+        let span = (h - 1.0).max(0.0);
+        if let Some((at, wide, _)) = channels(groove_x, groove, (1.0, 1.0)).get(channel) {
+            drawing.fill(
+                rect(*at, h - 0.5 - span, *wide, span, 0.0),
+                level_brush(zones, h),
+            );
+        }
+        drawing
+    }
+
+    /// The seam [`fader_track`] draws again over its bars, alone: over a
+    /// host's bars, as it is over the meter's own.
+    #[must_use]
+    pub fn fader_track_over_seam(chrome: &Chrome, w: f64, h: f64) -> Drawing {
+        let groove = groove_w(w);
+        let groove_x = (w - groove) / 2.0;
+        let mut drawing = Drawing::new(w, h);
+        let span = (h - 1.0).max(0.0);
+        drawing.fill(
+            rect(divider_x(groove_x, groove), 0.5, SEAM, span, 0.0),
+            chrome.surface_sunken.shade(-0.5).with_alpha(210),
+        );
+        drawing
+    }
+
+    /// [`fader_track`]'s clip latch alone, for a host drawing the meter in
+    /// parts (it sits over the column, so over what covers it too).
+    #[must_use]
+    pub fn fader_clip_latch(zones: [Color; 3], w: f64, h: f64) -> Drawing {
+        let groove = groove_w(w);
+        let groove_x = (w - groove) / 2.0;
+        let mut drawing = Drawing::new(w, h);
+        drawing.fill(
+            rect(groove_x, 0.5, groove, CLIP_H, CLIP_H / 3.0),
+            over(zones[2]),
+        );
+        drawing
+    }
+
+    /// [`fader_scale`]'s marks one by one, each as it is drawn lit and
+    /// unlit, with where it lights (`level >= at`): for a host that shows
+    /// one or the other by a value. The same marks, thinned the same way.
+    #[must_use]
+    pub fn fader_scale_marks(
+        w: f64,
+        h: f64,
+        ink: Color,
+        zones: [Color; 3],
+        size: f32,
+    ) -> Vec<(f64, Drawing, Drawing)> {
+        let mut out = Vec::new();
+        let mut last = f64::NEG_INFINITY;
+        for db in FADER_MARKS {
+            let at = meter_norm(db);
+            let y = h * (1.0 - at);
+            if y - last < f64::from(size) + 2.0 {
+                continue;
+            }
+            last = y;
+            let mark = |passed: bool| {
+                let colour = if passed { zone_at(zones, at) } else { ink };
+                let mut drawing = Drawing::new(w, h);
+                drawing.fill(
+                    rect(w - TICK, y - 0.5, TICK, 1.0, 0.0),
+                    colour.with_alpha(if passed { 200 } else { 90 }),
+                );
+                drawing.text(
+                    if db > 0.0 {
+                        format!("+{db:.0}")
+                    } else {
+                        format!("{:.0}", db.abs())
+                    },
+                    (w - TICK - 2.0) / 2.0,
+                    y + f64::from(size) / 3.0,
+                    size,
+                    colour,
+                    Align::Centre,
+                );
+                drawing
+            };
+            out.push((at, mark(true), mark(false)));
+        }
+        out
+    }
+
     /// The pane cut in the cap, as fractions of the cap's own cell.
     ///
     /// Public because two drawings have to agree about it: the cap
@@ -772,6 +906,46 @@ pub mod tcp {
             );
         }
         drawing
+    }
+
+    /// [`fader_through`] for one channel (`channel` 0 the left), lit to
+    /// full scale.
+    ///
+    /// The whole pane's share of that channel, for a host that
+    /// covers it above the level. With where the pane is: its top and
+    /// bottom (`from`, `to`) and the channel's part of it (`left`,
+    /// `right`), in the drawing's units.
+    #[must_use]
+    #[expect(
+        clippy::suboptimal_flops,
+        reason = "the same arithmetic as fader_through: the pane's place must agree with it to the bit"
+    )]
+    pub fn fader_through_channel(
+        zones: [Color; 3],
+        w: f64,
+        h: f64,
+        (cap_y, cap_h): (f64, f64),
+        channel: usize,
+    ) -> (Drawing, (f64, f64, f64, f64)) {
+        let groove = groove_w(w);
+        let groove_x = (w - groove) / 2.0;
+        let (from, to) = (
+            cap_y + cap_h * CAP_PANE_Y0,
+            (cap_y + cap_h * CAP_PANE_Y1).min(h - 0.5),
+        );
+        let cap_left = (w - cap_w(w)) / 2.0;
+        let pane_x0 = cap_left + cap_w(w) * CAP_PANE_X;
+        let pane_x1 = pane_x0 + cap_w(w) * CAP_PANE_W;
+        let level = if channel == 0 { (1.0, 0.0) } else { (0.0, 1.0) };
+        let drawing = fader_through(level, zones, w, h, cap_y, cap_h);
+        let (at, wide, _) = channels(groove_x, groove, level)
+            .get(channel)
+            .copied()
+            .unwrap_or((0.0, 0.0, 0.0));
+        (
+            drawing,
+            (from, to, at.max(pane_x0), (at + wide).min(pane_x1)),
+        )
     }
 
     /// How much of the level survives the cap.

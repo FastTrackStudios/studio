@@ -291,9 +291,13 @@ pub fn controls(
     scroll_x: f64,
     width: f64,
     transform: Affine,
+    mut apart: Option<&mut Apart>,
 ) -> crate::profile::Counts {
     let mut counts = crate::profile::Counts::default();
     let mut scene = anyrender::Scene::new();
+    if let Some(apart) = apart.as_deref_mut() {
+        apart.transform = transform;
+    }
     for row in mixer.visible(scroll_x, width) {
         let Some(track) = live.live(tracks, row) else {
             continue;
@@ -334,6 +338,7 @@ pub fn controls(
             mixer.live,
             mixer.touch,
             mixer.themed(row).is_some(),
+            apart.as_deref_mut(),
         );
         // A theme's strip: its live parts, over its recording.
         if let Some(theme) = mixer.themed(row) {
@@ -421,6 +426,9 @@ fn draw_strip_controls(
     touch: bool,
     // A theme draws the strip's own controls: only the rack is drawn here.
     themed: bool,
+    // The meter's moving parts apart, for a host that moves them by
+    // values ([`Apart`]); `None` (the window's): drawn here.
+    apart: Option<&mut Apart>,
 ) {
     let strip = crate::strip::Strip::laid_out(
         width,
@@ -715,6 +723,27 @@ fn draw_strip_controls(
                 crate::engine::meter_fraction(level.hold_right),
             )
         });
+        // A host that moves the meter by values: its parts apart, for a
+        // track the engine publishes values for (a track past them is
+        // drawn here, as the window draws it).
+        if let Some(apart) = apart
+            .filter(|_| usize::try_from(track.index).is_ok_and(|i| i < crate::engine::METER_TRACKS))
+        {
+            meter_apart(
+                apart,
+                scene,
+                (palette, font),
+                track,
+                &strip,
+                (x, y, left),
+                pointer.state(crate::pointer::Spot {
+                    row,
+                    control: Control::Volume,
+                }) == daw_ui::art::mixer_controls::Interaction::Pressed,
+                clipped,
+            );
+            return;
+        }
         // The scale, against the meter and lighting with it.
         if let Some(scale) = strip.scale_rect() {
             crate::art::place(
@@ -813,6 +842,371 @@ fn draw_strip_controls(
             font,
             x,
             y,
+        );
+    }
+}
+
+/// The meters drawn apart, for a host that moves them by values (an
+/// Architect pane over an engine's value table): what a playing mixer
+/// changes, so the picture's own layer does not.
+///
+/// The picture keeps each meter fully lit (its gradient is pinned to the
+/// column's height, so a lit column is the same picture at any level);
+/// the parts here cover what is not lit, put the holds where they are and
+/// light the scale, each moved by one of the engine's values
+/// ([`crate::engine::meter_value`]). The cap, its readout and the clip
+/// latch are drawn over all of it ([`Apart::above`]). Composed in order,
+/// it is [`controls`]' picture at the levels the values hold.
+#[derive(Default)]
+pub struct Apart {
+    pub layers: Vec<ValueLayer>,
+    pub above: anyrender::Scene,
+    /// What places all of it in the pane (as [`controls`]' own drawing).
+    pub transform: Affine,
+}
+
+/// One part a value moves: its drawing, where it is cut (in the pane),
+/// and what moves it.
+#[derive(Clone)]
+pub struct ValueLayer {
+    pub scene: anyrender::Scene,
+    pub clip: Option<vello::kurbo::Rect>,
+    pub moves: Vec<ValueMove>,
+    /// What places it in the pane, when not [`Apart::transform`].
+    pub transform: Option<Affine>,
+    /// Over [`Apart::above`] (the caps), not under it.
+    pub over: bool,
+}
+
+/// `property` of a [`ValueLayer`], from value `name`: `scale × value +
+/// offset`, clamped to `[min, max]`. `Visible` shows it at 0.5 or more.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ValueMove {
+    pub property: ValueProperty,
+    pub name: String,
+    pub scale: f64,
+    pub offset: f64,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValueProperty {
+    /// Down, in the drawing's own units.
+    Y,
+    Opacity,
+    Visible,
+}
+
+impl ValueMove {
+    #[must_use]
+    pub fn new(property: ValueProperty, name: &str, scale: f64, offset: f64) -> Self {
+        Self {
+            property,
+            name: name.to_owned(),
+            scale,
+            offset,
+            min: None,
+            max: None,
+        }
+    }
+
+    #[must_use]
+    pub const fn clamped(mut self, min: f64, max: f64) -> Self {
+        self.min = Some(min);
+        self.max = Some(max);
+        self
+    }
+}
+
+/// A rectangle filled in `color`, as a scene.
+fn filled(color: vello::peniko::Color, rect: vello::kurbo::Rect) -> anyrender::Scene {
+    let mut scene = anyrender::Scene::new();
+    scene.fill(
+        vello::peniko::Fill::NonZero,
+        Affine::IDENTITY,
+        color,
+        None,
+        &rect,
+    );
+    scene
+}
+
+/// The meter of `track`'s strip apart (see [`Apart`]): its still part into
+/// `scene`, its moving parts into `apart`.
+#[allow(clippy::too_many_arguments)]
+fn meter_apart(
+    apart: &mut Apart,
+    scene: &mut anyrender::Scene,
+    (palette, font): (&Palette, &Font),
+    track: &Track,
+    strip: &crate::strip::Strip,
+    (x, y, left): (f64, f64, f64),
+    pressed: bool,
+    clipped: bool,
+) {
+    use vello::kurbo::Rect;
+    let travel = strip.travel();
+    let fader_w = strip.columns.fader_w;
+    let zones = [
+        crate::tcp::to_theme(palette.meter_safe),
+        crate::tcp::to_theme(palette.meter_warn),
+        crate::tcp::to_theme(palette.meter_danger),
+    ];
+    let Ok(index) = usize::try_from(track.index) else {
+        return;
+    };
+    let value = |part: &str| crate::engine::meter_value(index, part);
+    // The scale: each mark lit or not by the louder channel.
+    if let Some(scale) = strip.scale_rect() {
+        for (at, lit, unlit) in art::fader_scale_marks(
+            scale.width(),
+            scale.height(),
+            crate::tcp::to_theme(palette.text_faint),
+            zones,
+            8.0,
+        ) {
+            for (drawing, gate) in [
+                // Lit at the level or above it: `v - at + 0.5 >= 0.5`.
+                (
+                    lit,
+                    ValueMove::new(ValueProperty::Visible, &value("pk"), 1.0, 0.5 - at),
+                ),
+                // Unlit below it.
+                (
+                    unlit,
+                    ValueMove::new(ValueProperty::Visible, &value("pk"), -1.0, 0.5 + at),
+                ),
+            ] {
+                let mut part = anyrender::Scene::new();
+                crate::art::place(&mut part, &drawing, font, left + scale.x0, scale.y0);
+                apart.layers.push(ValueLayer {
+                    scene: part,
+                    clip: None,
+                    moves: vec![gate],
+                    transform: None,
+                    over: false,
+                });
+            }
+        }
+    }
+    // The column as the window draws it with nothing lit: still. Each
+    // channel's bar is a part, shown while it is lit (as the window draws
+    // one only past half a pixel), with what is not lit covered.
+    crate::art::place(
+        scene,
+        &art::fader_track_unlit(&palette.chrome, fader_w, travel),
+        font,
+        x,
+        y,
+    );
+    let ([left_ch, right_ch], span) = art::meter_columns(fader_w, travel);
+    let ground = crate::mcp::strip_ground(palette, track);
+    let hold_h = art::HOLD_LINE;
+    // What is not lit: the strip's ground (a wash over the panel's
+    // backdrop) across the whole groove out to whole pixels, so the lit
+    // column's soft edges are covered too, with the groove's seam
+    // drawn on it as the meter draws it (the seam is the same all the way
+    // up, so raising it changes nothing). One cover a channel, each cut to
+    // its half of the groove (to the middle of the seam) and raised by its
+    // own level.
+    let groove = Rect::new(
+        (x + left_ch.0).floor(),
+        y + 0.5,
+        (x + right_ch.0 + right_ch.1).ceil(),
+        y + 0.5 + span,
+    );
+    let seam_mid = x + (left_ch.0 + left_ch.1 + right_ch.0) / 2.0;
+    // What a cover paints: the groove with nothing lit, as it is drawn.
+    let cover_of = || {
+        let mut cover = filled(palette.surface, groove);
+        cover.fill(
+            vello::peniko::Fill::NonZero,
+            Affine::IDENTITY,
+            ground,
+            None,
+            &groove,
+        );
+        crate::art::place(
+            &mut cover,
+            &art::fader_track_unlit(&palette.chrome, fader_w, travel),
+            font,
+            x,
+            y,
+        );
+        cover
+    };
+    // Each channel's half of the groove: from its edge to the middle of
+    // the seam.
+    let half_of = |channel: usize| {
+        if channel == 0 {
+            Rect::new(groove.x0, groove.y0, seam_mid, groove.y1)
+        } else {
+            Rect::new(seam_mid, groove.y0, groove.x1, groove.y1)
+        }
+    };
+    for (channel, peak) in ["pl", "pr"].into_iter().enumerate() {
+        let mut bar = anyrender::Scene::new();
+        crate::art::place(
+            &mut bar,
+            &art::fader_track_bar(zones, fader_w, travel, channel),
+            font,
+            x,
+            y,
+        );
+        apart.layers.push(ValueLayer {
+            scene: bar,
+            clip: None,
+            // Shown past half a pixel: `span × v > 0.5`.
+            moves: vec![ValueMove::new(
+                ValueProperty::Visible,
+                &value(peak),
+                span,
+                0.0,
+            )],
+            transform: None,
+            over: false,
+        });
+        let half = half_of(channel);
+        let cover = cover_of();
+        apart.layers.push(ValueLayer {
+            scene: cover,
+            clip: Some(half),
+            moves: vec![
+                ValueMove::new(ValueProperty::Y, &value(peak), -span, 0.0).clamped(-span, 0.0),
+            ],
+            transform: None,
+            over: false,
+        });
+    }
+    for ((cx, cw), hold) in [left_ch, right_ch].into_iter().zip(["hl", "hr"]) {
+        // The hold: a line where the signal has been, coloured as the
+        // meter is at that height (the first zone, the second over it as
+        // the hold rises to the knee, the third over that above it). Made
+        // below the column, so with no value it is not seen.
+        let park = hold_h;
+        let line = Rect::new(
+            x + cx,
+            y + travel - 0.5 - hold_h / 2.0 + park,
+            x + cx + cw,
+            y + travel - 0.5 + hold_h / 2.0 + park,
+        );
+        // The highest a line goes: its top at the column's top.
+        let top = 1.0 - travel + hold_h / 2.0 - park;
+        let lift = ValueMove::new(ValueProperty::Y, &value(hold), -span, -park).clamped(top, 0.0);
+        let shown = ValueMove::new(ValueProperty::Visible, &value(hold), 1.0, 0.499);
+        let knee = art::ZONE_KNEE;
+        for (color, fade) in [
+            (palette.meter_safe, None),
+            (palette.meter_warn, Some((1.0 / knee, 0.0))),
+            (
+                palette.meter_danger,
+                Some((1.0 / (1.0 - knee), -knee / (1.0 - knee))),
+            ),
+        ] {
+            let mut moves = vec![lift.clone(), shown.clone()];
+            if let Some((scale, offset)) = fade {
+                moves.push(
+                    ValueMove::new(ValueProperty::Opacity, &value(hold), scale, offset)
+                        .clamped(0.0, 1.0),
+                );
+            }
+            apart.layers.push(ValueLayer {
+                scene: filled(color, line),
+                clip: Some(Rect::new(x + cx, y + 0.5, x + cx + cw, y + travel - 0.5)),
+                moves,
+                transform: None,
+                over: false,
+            });
+        }
+    }
+    // The seam again over the bars, as the meter draws it over its own.
+    let mut seam = anyrender::Scene::new();
+    crate::art::place(
+        &mut seam,
+        &art::fader_track_over_seam(&palette.chrome, fader_w, travel),
+        font,
+        x,
+        y,
+    );
+    apart.layers.push(ValueLayer {
+        scene: seam,
+        clip: None,
+        moves: Vec::new(),
+        transform: None,
+        over: false,
+    });
+    // Over all of it: the clip latch, the cap and what it is set to.
+    if clipped {
+        crate::art::place(
+            &mut apart.above,
+            &art::fader_clip_latch(zones, fader_w, travel),
+            font,
+            x,
+            y,
+        );
+    }
+    let Some(cap) = strip.cap(track.volume) else {
+        return;
+    };
+    let (cap_y, cap_h) = (cap.y0 - y, cap.height());
+    crate::art::scaled(
+        &mut apart.above,
+        &art::fader_cap_through(&palette.chrome, palette.chrome.hardware_mark, CAP_GLASS),
+        font,
+        left + cap.x0,
+        cap.y0,
+        cap_h / 53.0,
+    );
+    // Through the cap's pane: the level seen through it, as the meter draws
+    // it over the cap (its own gradient, part transparent). The window cuts
+    // it at the level; here it is the pane's one-pixel rows, each its share
+    // of that drawing, over the cap, as opaque as the lit part covers it:
+    // `row's foot − lit top`, clamped to 0..1, which is linear in the level
+    // (and the window's own soft edge where the level crosses a row).
+    for (channel, peak) in ["pl", "pr"].into_iter().enumerate() {
+        let (through, (from, to, pane_l, pane_r)) =
+            art::fader_through_channel(zones, fader_w, travel, (cap_y, cap_h), channel);
+        if to - from < 0.5 || pane_r - pane_l < 0.5 {
+            continue;
+        }
+        let mut seen = anyrender::Scene::new();
+        crate::art::place(&mut seen, &through, font, x, y);
+        let (x0, x1) = ((x + pane_l).floor(), (x + pane_r).ceil());
+        let mut row = (y + from).floor();
+        while row < y + to {
+            // The lit top in the drawing is `travel - 0.5 - span v`; the
+            // row's foot `row + 1` (in the pane, less `y`).
+            let foot = row + 1.0 - y;
+            apart.layers.push(ValueLayer {
+                scene: seen.clone(),
+                clip: Some(Rect::new(x0, row, x1, row + 1.0)),
+                moves: vec![
+                    ValueMove::new(
+                        ValueProperty::Opacity,
+                        &value(peak),
+                        span,
+                        foot - travel + 0.5,
+                    )
+                    .clamped(0.0, 1.0),
+                ],
+                transform: None,
+                over: true,
+            });
+            row += 1.0;
+        }
+    }
+    if pressed {
+        readout(
+            &mut apart.above,
+            palette,
+            font,
+            track.volume,
+            x,
+            y,
+            fader_w,
+            cap_y,
+            cap_h,
         );
     }
 }

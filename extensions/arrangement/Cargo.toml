@@ -1,0 +1,39 @@
+[package]
+name = "studio-arrangement"
+description = "Studio's arrangement view as a runtime extension: the arrangement panel studio-desktop shows (session-ui's panel, widget and chrome), in an Architect pane, attached to Studio's engine (the daw extension) as studio-desktop's window attaches to `studio engine`."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "studio-arrangement"
+path = "src/main.rs"
+
+[dependencies]
+studio-view-link = { workspace = true }
+architect-extensions = { workspace = true, features = ["guest", "linked-core", "paint-pane"] }
+architect-workspace = { workspace = true, features = ["paint-ui"] }
+session-ui = { workspace = true, features = ["native"] }
+session-engine = { workspace = true, features = ["native"] }
+session = { workspace = true }
+daw-ui = { workspace = true }
+dioxus = { workspace = true }
+blitz-traits = { workspace = true }
+anyrender = { workspace = true }
+serde_json = { workspace = true }
+futures-timer = { workspace = true }
+web-time = { workspace = true }
+
+[dev-dependencies]
+architect = { workspace = true, features = ["action-list"] }
+architect-scene = { workspace = true }
+anyrender_vello_cpu = { workspace = true }
+peniko = { workspace = true }
+png = { workspace = true }
+
+[lints]
+workspace = true

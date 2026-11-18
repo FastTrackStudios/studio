@@ -684,6 +684,70 @@ pub fn WebMixer(hidden: bool) -> Element {
     }
 }
 
+/// The mixer for a host of its own — an Architect pane, beside the
+/// window's [`Mixer`] and the browser's [`WebMixer`]: the widget over
+/// `links` (from [`Links::alone`], or an inspector's), and what the host
+/// scrolls it with. The host paints it ([`MixerWidget::paint_scene`]),
+/// hands it its input ([`MixerWidget::event`]) and turns the wheel into
+/// [`HostedMixer::wheel`], as the other two do.
+pub struct HostedMixer {
+    pub widget: Rc<RefCell<MixerWidget>>,
+    scroll: Rc<Cell<f64>>,
+    content_w: Rc<Cell<f64>>,
+    /// Touch mode, as the host has it (bigger strips).
+    pub touch: Rc<Cell<bool>>,
+}
+
+impl HostedMixer {
+    #[must_use]
+    pub fn new(links: Links) -> Self {
+        let scroll = Rc::new(Cell::new(0.0_f64));
+        let content_w = Rc::new(Cell::new(0.0_f64));
+        let touch = Rc::new(Cell::new(false));
+        let widget = MixerWidget::new(
+            links,
+            Rc::clone(&scroll),
+            Rc::clone(&content_w),
+            Rc::clone(&touch),
+        );
+        Self {
+            widget: Rc::new(RefCell::new(widget)),
+            scroll,
+            content_w,
+            touch,
+        }
+    }
+
+    /// A signal where there is none, as `FTS_SIMULATE=1` gives the
+    /// window's mixer: the meters and the racks fed on the clock from now,
+    /// as a playing engine would feed them. For a measurement or a test of
+    /// a playing mixer with no audio.
+    pub fn simulate(&self) {
+        self.widget.borrow_mut().simulated =
+            Some((web_time::Instant::now(), crate::simulate::Feed::new()));
+    }
+
+    /// The simulated signal ([`Self::simulate`]) held at `at` seconds, so
+    /// one moment can be drawn twice; `None` lets it run.
+    pub fn hold_simulation(&self, at: Option<f64>) {
+        self.widget.borrow_mut().simulated_at = at;
+    }
+
+    /// The levels the last picture was drawn at, by project track index.
+    #[must_use]
+    pub fn painted_levels(&self) -> Vec<daw_proto::TrackLevels> {
+        self.widget.borrow().painted_levels.clone()
+    }
+
+    /// The wheel over a mixer `width` wide: either direction runs along
+    /// the strips (winit's sign, as [`Mixer`] reads it).
+    pub fn wheel(&self, dx: f64, dy: f64, width: f64) {
+        let most = (self.content_w.get() - width).max(0.0);
+        self.scroll
+            .set((self.scroll.get() - dx - dy).clamp(0.0, most));
+    }
+}
+
 #[cfg(feature = "web")]
 impl crate::web_host::Hosted for MixerWidget {
     fn paint(&mut self, width: u32, height: u32, scale: f64) -> Scene {
@@ -744,7 +808,7 @@ enum Hold {
 }
 
 /// The widget: the recorded strips and what the pointer is doing to them.
-struct MixerWidget {
+pub struct MixerWidget {
     links: Links,
     palette: crate::arrangement::Palette,
     font: crate::text::Font,
@@ -816,10 +880,27 @@ struct MixerWidget {
     built_racks: bool,
     /// Whether the racks were shown at the last paint, built or not.
     racks_seen: Cell<bool>,
+    /// Where the meters' moving parts are drawn when a host asked for
+    /// them apart ([`MixerWidget::paint_layers`]); `None` (the window's):
+    /// into the picture.
+    apart: Option<crate::overlay::Apart>,
+    /// The levels the last picture was drawn at: what a host's values
+    /// must say for the parts apart to show the same.
+    painted_levels: Vec<daw_proto::TrackLevels>,
+    /// The simulated signal's clock held at this many seconds (a test
+    /// drawing one moment twice); `None`: it runs.
+    simulated_at: Option<f64>,
     /// The last `MIXER_VIEW` ask taken up (`view_actions::MIXER_ASKS`).
     view_seen: u64,
     /// The folds the rows were planned at ([`crate::folds::generation`]).
     folds_seen: u64,
+    /// A mixer on its own: the song's tracks as the engine has them now,
+    /// every track (the ones not shown too), kept by its events, and
+    /// whether a track's visibility changed since the rows were planned
+    /// (the visibility manager, run in an arrangement elsewhere: the
+    /// window's mixer is handed the arrangement's rows instead).
+    raw_now: Option<daw_ui::studio::project::Project>,
+    replan: bool,
     /// Whether the rows were last planned for Mix mode (`Links::mix`);
     /// `None` before the first plan.
     mix_seen: Option<bool>,
@@ -952,8 +1033,13 @@ impl MixerWidget {
             built_open: None,
             built_racks: racks_shown(),
             racks_seen: Cell::new(racks_shown()),
+            apart: None,
+            painted_levels: Vec::new(),
+            simulated_at: None,
             view_seen: 0,
             folds_seen: crate::folds::generation(),
+            raw_now: None,
+            replan: false,
             mix_seen: None,
             rails: RailState::default(),
             // None followed yet: the first frame tells the rest of the
@@ -982,23 +1068,25 @@ impl MixerWidget {
         // the plan is the song as it opened.
         let folds = crate::folds::generation();
         let mix = self.links.mix.get();
-        if folds != self.folds_seen || Some(mix) != self.mix_seen {
+        if folds != self.folds_seen || Some(mix) != self.mix_seen || self.replan {
             self.folds_seen = folds;
             self.mix_seen = Some(mix);
+            self.replan = false;
             if self.links.alone
                 && let Some(planner) = &self.links.planner
             {
                 // Mixing, the scene's own layout for the mixer; otherwise
                 // the scene's strips, folded as the window has them.
+                let raw = self.raw_now.as_ref().unwrap_or(&planner.raw);
                 let planned = if mix {
                     planner.plan_mixer(
-                        &planner.raw,
+                        raw,
                         self.rails.scene,
                         self.rails.settings,
                         self.extent.get(),
                     )
                 } else {
-                    planner.plan_strips(&planner.raw)
+                    planner.plan_strips(raw)
                 };
                 let now: std::collections::HashMap<&str, &daw_proto::Track> =
                     self.tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
@@ -1099,6 +1187,21 @@ impl MixerWidget {
             }
             crate::engine::apply_event(&mut self.tracks, event);
             crate::engine::apply_event(&mut self.targets, event);
+            // On its own, every track kept: a track shown or hidden plans
+            // the strips again.
+            if self.links.alone
+                && let Some(planner) = &self.links.planner
+            {
+                let raw = self.raw_now.get_or_insert_with(|| (*planner.raw).clone());
+                let shown = |tracks: &[daw_proto::Track]| -> Vec<bool> {
+                    tracks.iter().map(|t| t.visible_in_mixer).collect()
+                };
+                let was = shown(&raw.tracks);
+                crate::engine::apply_event(&mut raw.tracks, event);
+                if shown(&raw.tracks) != was {
+                    self.replan = true;
+                }
+            }
             if self.links.inspector {
                 let mut all: Vec<daw_proto::Track> =
                     self.all.iter().map(|(t, _)| t.clone()).collect();
@@ -1775,7 +1878,13 @@ impl MixerWidget {
     /// track's number on its track's colour, and the part of the mixer on screen
     /// outlined — where a mixer wider than the screen is found, and, with
     /// a press, gone to. In CSS pixels, `width` by `band`.
-    fn overview(&self, levels: &[daw_proto::TrackLevels], width: f64, band: f64) -> Scene {
+    fn overview(
+        &self,
+        levels: &[daw_proto::TrackLevels],
+        width: f64,
+        band: f64,
+        (mut apart, scale): (Option<&mut crate::overlay::Apart>, f64),
+    ) -> Scene {
         use anyrender::PaintScene as _;
         use vello::kurbo::Rect;
         use vello::peniko::{Color, Fill};
@@ -1832,12 +1941,71 @@ impl MixerWidget {
             let meter_w = (cell * 0.3).clamp(2.0, 5.0);
             let mx = x + (cell - meter_w) / 2.0;
             let top = 3.0;
-            fill(
-                &mut out,
-                Rect::new(mx, top, mx + meter_w, meter_bottom),
-                Color::from_rgba8(0x0c, 0x0d, 0x0f, 0xb0),
-            );
-            if level > 0.0 {
+            let well = Color::from_rgba8(0x0c, 0x0d, 0x0f, 0xb0);
+            let column = Rect::new(mx, top, mx + meter_w, meter_bottom);
+            fill(&mut out, column, well);
+            // A host moving the meters by values: the sliver fully lit
+            // here, and what is over it where it is not lit (the band,
+            // the cell's colour, the well, as they are drawn) raised by
+            // the level.
+            if let (Some(apart), Some(index)) = (
+                apart.as_deref_mut(),
+                usize::try_from(track.index)
+                    .ok()
+                    .filter(|i| *i < crate::engine::METER_TRACKS),
+            ) {
+                let level = crate::engine::meter_value(index, "pk");
+                // The sliver lit, shown while there is a level (as the
+                // window draws one only above 0).
+                apart.layers.push(crate::overlay::ValueLayer {
+                    scene: {
+                        let mut lit = Scene::new();
+                        fill(&mut lit, column, Color::from_rgb8(0x4a, 0xde, 0x80));
+                        lit
+                    },
+                    clip: None,
+                    moves: vec![crate::overlay::ValueMove::new(
+                        crate::overlay::ValueProperty::Visible,
+                        &level,
+                        1.0,
+                        0.5 - 1e-9,
+                    )],
+                    transform: Some(Affine::scale(scale)),
+                    over: false,
+                });
+                // What is over it where it is not lit, a pixel past it each
+                // side so its soft edges are covered: the band, the cell's
+                // colour, and the well where it is.
+                let wide = Rect::new(
+                    (mx - 1.0).floor().max(x + 0.5),
+                    (top - 1.0).floor(),
+                    (mx + meter_w + 1.0).ceil().min(x + cell - 0.5),
+                    meter_bottom,
+                );
+                let mut cover = Scene::new();
+                fill(&mut cover, wide, Color::from_rgb8(0x0c, 0x0d, 0x0f));
+                fill(&mut cover, wide, ground.multiply_alpha(0.55));
+                fill(&mut cover, column, well);
+                let span = meter_bottom - top;
+                apart.layers.push(crate::overlay::ValueLayer {
+                    scene: cover,
+                    clip: Some(wide),
+                    moves: vec![
+                        crate::overlay::ValueMove::new(
+                            crate::overlay::ValueProperty::Y,
+                            &level,
+                            -span,
+                            0.0,
+                        )
+                        .clamped(-span, 0.0),
+                    ],
+                    transform: Some(Affine::scale(scale)),
+                    over: false,
+                });
+            }
+            let split = apart.is_some()
+                && usize::try_from(track.index).is_ok_and(|i| i < crate::engine::METER_TRACKS);
+            if !split && level > 0.0 {
                 let lit_top = meter_bottom - (meter_bottom - top) * level.clamp(0.0, 1.0);
                 fill(
                     &mut out,
@@ -1867,14 +2035,27 @@ impl MixerWidget {
         let left = self.scroll.get() / content * width;
         let shown = (width / content * width).min(width);
         let window = Rect::new(left, 0.5, (left + shown).min(width), band - 0.5);
-        fill(&mut out, window, Color::from_rgba8(0xff, 0xff, 0xff, 0x14));
-        out.stroke(
+        // Over the meters, so with them apart it is a layer over their
+        // parts, as it is over the band here.
+        let mut over = Scene::new();
+        fill(&mut over, window, Color::from_rgba8(0xff, 0xff, 0xff, 0x14));
+        over.stroke(
             &vello::kurbo::Stroke::new(1.0),
             Affine::IDENTITY,
             Color::from_rgba8(0xff, 0xff, 0xff, 0x66),
             None,
             &window,
         );
+        match apart {
+            Some(apart) => apart.layers.push(crate::overlay::ValueLayer {
+                scene: over,
+                clip: None,
+                moves: Vec::new(),
+                transform: Some(Affine::scale(scale)),
+                over: true,
+            }),
+            None => anyrender::PaintScene::append_scene(&mut out, over, Affine::IDENTITY),
+        }
         out
     }
 
@@ -2324,6 +2505,22 @@ impl MixerWidget {
 
     /// The picture: what Blitz's `Widget::paint` returns, and what the web
     /// host draws into its canvas.
+    /// The picture with the meters' moving parts apart
+    /// ([`crate::overlay::Apart`]): for a host that moves them by an
+    /// engine's values, so a playing mixer changes none of the picture.
+    /// Composed (the picture, the parts, what is over them) at the levels
+    /// the values hold, it is [`Self::paint_scene`]'s picture.
+    pub fn paint_layers(
+        &mut self,
+        width: u32,
+        height: u32,
+        scale: f64,
+    ) -> (Scene, crate::overlay::Apart) {
+        self.apart = Some(crate::overlay::Apart::default());
+        let picture = self.paint_scene(width, height, scale);
+        (picture, self.apart.take().unwrap_or_default())
+    }
+
     pub fn paint_scene(&mut self, width: u32, height: u32, scale: f64) -> Scene {
         self.follow_phase();
         self.take_view();
@@ -2514,10 +2711,11 @@ impl MixerWidget {
         let screen_scroll = self.scroll.get().clamp(0.0, most);
         self.scroll.set(screen_scroll);
         let scroll = screen_scroll / zoom;
+        let held = self.simulated_at;
         let levels = match &mut self.simulated {
             // On screen only: what is not drawn is not fed.
             Some((since, feed)) => feed.feed(
-                since.elapsed().as_secs_f64(),
+                held.unwrap_or_else(|| since.elapsed().as_secs_f64()),
                 &self.rows,
                 mixer.visible(scroll, w),
                 &store,
@@ -2564,9 +2762,13 @@ impl MixerWidget {
             scroll,
             w,
             at,
+            self.apart.as_mut(),
         );
+        self.painted_levels.clone_from(&levels);
         if band > 0.0 {
-            let overview = self.overview(&levels, css_w, band);
+            let mut apart = self.apart.take();
+            let overview = self.overview(&levels, css_w, band, (apart.as_mut(), scale));
+            self.apart = apart;
             anyrender::PaintScene::append_scene(&mut out, overview, Affine::scale(scale));
         }
         // Mixing: the phase rails around the strips, over them — the frame
