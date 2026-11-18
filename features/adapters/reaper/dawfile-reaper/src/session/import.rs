@@ -1,13 +1,7 @@
 //! `.rpp` → `.session`.
 
 use super::*;
-use crate::document::{
-    DawDocument, EnvelopeNode, ItemNode, MarkerNode, Provenance, ReceiveNode, SourceFormat,
-    SourceRef, TakeNode, TrackNode,
-};
-use crate::error::{DawError, DawResult};
-use crate::id::EntityId;
-use crate::objects::ObjectStore;
+use crate::types::track::{FixedLaneFields, comping_from_lines};
 use daw_proto::automation::{Envelope, EnvelopePoint, EnvelopeShape};
 use daw_proto::item::{FadeShape, Item, SourceType, Take};
 use daw_proto::marker::Marker;
@@ -15,7 +9,13 @@ use daw_proto::primitives::{AutomationMode, Duration, Position, PositionInSecond
 use daw_proto::stretch_marker::StretchMarker;
 use daw_proto::tempo_map::TempoPoint;
 use daw_proto::track::Track;
-use dawfile_reaper::types::track::{FixedLaneFields, comping_from_lines};
+use session_format::document::{
+    DawDocument, EnvelopeNode, ItemNode, MarkerNode, Provenance, ReceiveNode, SourceFormat,
+    SourceRef, TakeNode, TrackNode,
+};
+use session_format::error::{DawError, DawResult};
+use session_format::id::EntityId;
+use session_format::objects::ObjectStore;
 use std::collections::BTreeMap;
 
 /// What an import saw that it did not model.
@@ -67,8 +67,8 @@ pub fn from_rpp(
     name: impl Into<String>,
     store: &mut ObjectStore,
 ) -> DawResult<(DawDocument, ImportReport)> {
-    let root = dawfile_reaper::rpp_tree::read_rpp_chunk(text)
-        .map_err(|error| DawError::Rpp(error.to_string()))?;
+    let root =
+        crate::rpp_tree::read_rpp_chunk(text).map_err(|error| DawError::Rpp(error.to_string()))?;
 
     let name = name.into();
     let mut report = ImportReport::default();
@@ -844,7 +844,7 @@ fn count_fx(chunk: &RChunk) -> u32 {
 }
 
 fn stringify(chunk: &RChunk) -> String {
-    dawfile_reaper::rpp_tree::stringify_rpp_node(&RNodeTree::Chunk(chunk.clone()))
+    crate::rpp_tree::stringify_rpp_node(&RNodeTree::Chunk(chunk.clone()))
 }
 
 fn automation_mode(raw: i64) -> AutomationMode {

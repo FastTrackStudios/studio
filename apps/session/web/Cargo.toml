@@ -15,14 +15,8 @@ session = { workspace = true, features = ["ui", "web"] }
 # player UI, `#[cfg(target_arch = "wasm32")]`-split throughout.
 architect-ui = { workspace = true }
 
-# In-process backend bootstrap for /demo — same shape as
-# apps/desktop/src/session_engine.rs, minus RPP loading and the audio
-# engine (the demo has no real audio files; the transport's soft clock
-# already advances the playhead on wall-clock ticks with no device
-# attached — proven wasm-safe, see daw-standalone/src/transport.rs).
-daw = { workspace = true }
-daw-proto = { workspace = true }
-daw-standalone = { workspace = true, features = ["bootstrap"] }
+# No DAW here: /demo's player is the `session-daw-web` bundle the image
+# serves under `/app/`, which owns the engine. This crate is the site.
 architect = { workspace = true, features = ["vox", "platform"] }
 vox = { workspace = true }
 

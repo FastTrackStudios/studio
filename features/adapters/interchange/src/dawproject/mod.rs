@@ -64,6 +64,9 @@ pub mod convert;
 pub mod error;
 pub mod io;
 pub mod parse;
+/// DAWproject in and out of the `.session` document (`session-format`).
+#[cfg(feature = "session")]
+pub mod session;
 pub mod types;
 pub mod write;
 

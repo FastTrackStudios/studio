@@ -99,7 +99,7 @@ struct Target {
 }
 
 fn apply(scope: Scope, rating: TakeRating) {
-    let daw = studio::reaper::Reaper;
+    let daw = daw_reaper::Reaper;
     let marker_name = rating.to_marker_name();
 
     let targets: Vec<Target> = match scope {

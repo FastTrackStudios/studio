@@ -1,6 +1,6 @@
 //! Supply source chunks for newly built items and takes. Existing chunks stay intact.
 use super::*;
-use crate::document::SourceRef;
+use session_format::document::SourceRef;
 
 pub(super) fn write_missing_sources(
     root: &mut RChunk,
@@ -50,7 +50,7 @@ pub(super) fn write_missing_sources(
                         let bytes = store.get(object)?;
                         let text = std::str::from_utf8(bytes)
                             .map_err(|error| DawError::Rpp(error.to_string()))?;
-                        dawfile_reaper::rpp_tree::read_rpp_chunk(text)
+                        crate::rpp_tree::read_rpp_chunk(text)
                             .map_err(|error| DawError::Rpp(error.to_string()))?
                     }
                 };
