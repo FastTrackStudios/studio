@@ -36,6 +36,10 @@ path = "features/productions"
 [capabilities]
 actions = ["VAULT_", "BASES_"]
 effect = "mutating"
+# The vault's and the bases' actions are the documents (Architect
+# v0.14.0): the read-only ones need `reads`, the rest `writes`.
+reads = ["documents"]
+writes = ["documents"]
 
 [[actions]]
 id = "STUDIO_PRODUCTIONS_SCAN"
