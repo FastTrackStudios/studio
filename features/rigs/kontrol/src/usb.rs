@@ -11,7 +11,7 @@
 //! A keybed frame is `[0x82] + 88 palette bytes`; key index = `note - 21`
 //! (A0 = MIDI 21 = index 0). No init/handshake is needed — keys light on the
 //! first report. Color is a palette byte (hue base + intensity); see
-//! [`crate::kontrol::LightColor`].
+//! [`crate::LightColor`].
 //!
 //! We speak this over `hidapi` (hidraw on Linux), which coexists with the
 //! kernel `usbhid`/`snd-usb-audio` drivers — so lighting keys does NOT disturb
@@ -21,7 +21,7 @@
 use eyre::{Result, eyre};
 use hidapi::{HidApi, HidDevice};
 
-use crate::kontrol::LightColor;
+use crate::LightColor;
 
 /// Native Instruments USB vendor id.
 pub const NI_VID: u16 = 0x17cc;

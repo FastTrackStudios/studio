@@ -31,6 +31,7 @@ members = [
     "features/rigs/keys",
     "features/rigs/ekit",
     "features/rigs/drums",
+    "features/rigs/kontrol",
     "features/keybinds",
     "features/ui/themer",
     "features/app/launcher",
@@ -176,6 +177,9 @@ themer = { path = "features/ui/themer", default-features = false }
 launcher = { path = "features/app/launcher" }
 preset-browser = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
 control-surfaces = { path = "features/control-surfaces" }
+# NI Komplete Kontrol keyboard driver (Light Guide / per-key RGB LEDs): the
+# drum rig mirrors its kit onto the keybed.
+kontrol = { path = "features/rigs/kontrol" }
 dsp = { git = "https://github.com/FastTrackStudios/fts-fx", rev = "5bae622f5d874ce58ab04916ab29a8100e883012" }
 # Razor edit areas: a rectangle of time by row, and the set algebra over
 # it. Dependency-free and shared by the expression editor and the
@@ -211,7 +215,6 @@ neural-amp-modeler = { git = "https://github.com/FastTrackStudios/neural-amp-mod
 # (nor the `midir` feature — midicore-midir pins midir 0.10/alsa-sys 0.3,
 # colliding with daw's midir 0.11/alsa-sys 0.4 via `links = "alsa"`).
 # Consumers that want the vox surface set `features = ["vox"]` themselves.
-# NI Komplete Kontrol keyboard driver (Light Guide / per-key RGB LEDs).
 arborium ={ version = "2.16.0", default-features = false }
 arborium-theme = "2.16.0"
 arborium-tree-sitter = "2.16.0"

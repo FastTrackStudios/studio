@@ -11,7 +11,7 @@
 use std::thread::sleep;
 use std::time::Duration;
 
-use control_surfaces::kontrol::output::MidiOut;
+use kontrol::output::MidiOut;
 
 const HELLO: u8 = 0x01;
 const GOODBYE: u8 = 0x02;
