@@ -894,6 +894,13 @@ pub struct MixerWidget {
     view_seen: u64,
     /// The folds the rows were planned at ([`crate::folds::generation`]).
     folds_seen: u64,
+    /// A mixer on its own: the song's tracks as the engine has them now,
+    /// every track (the ones not shown too), kept by its events, and
+    /// whether a track's visibility changed since the rows were planned
+    /// (the visibility manager, run in an arrangement elsewhere: the
+    /// window's mixer is handed the arrangement's rows instead).
+    raw_now: Option<daw_ui::studio::project::Project>,
+    replan: bool,
     /// Whether the rows were last planned for Mix mode (`Links::mix`);
     /// `None` before the first plan.
     mix_seen: Option<bool>,
@@ -1031,6 +1038,8 @@ impl MixerWidget {
             simulated_at: None,
             view_seen: 0,
             folds_seen: crate::folds::generation(),
+            raw_now: None,
+            replan: false,
             mix_seen: None,
             rails: RailState::default(),
             // None followed yet: the first frame tells the rest of the
@@ -1059,23 +1068,25 @@ impl MixerWidget {
         // the plan is the song as it opened.
         let folds = crate::folds::generation();
         let mix = self.links.mix.get();
-        if folds != self.folds_seen || Some(mix) != self.mix_seen {
+        if folds != self.folds_seen || Some(mix) != self.mix_seen || self.replan {
             self.folds_seen = folds;
             self.mix_seen = Some(mix);
+            self.replan = false;
             if self.links.alone
                 && let Some(planner) = &self.links.planner
             {
                 // Mixing, the scene's own layout for the mixer; otherwise
                 // the scene's strips, folded as the window has them.
+                let raw = self.raw_now.as_ref().unwrap_or(&planner.raw);
                 let planned = if mix {
                     planner.plan_mixer(
-                        &planner.raw,
+                        raw,
                         self.rails.scene,
                         self.rails.settings,
                         self.extent.get(),
                     )
                 } else {
-                    planner.plan_strips(&planner.raw)
+                    planner.plan_strips(raw)
                 };
                 let now: std::collections::HashMap<&str, &daw_proto::Track> =
                     self.tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
@@ -1176,6 +1187,21 @@ impl MixerWidget {
             }
             crate::engine::apply_event(&mut self.tracks, event);
             crate::engine::apply_event(&mut self.targets, event);
+            // On its own, every track kept: a track shown or hidden plans
+            // the strips again.
+            if self.links.alone
+                && let Some(planner) = &self.links.planner
+            {
+                let raw = self.raw_now.get_or_insert_with(|| (*planner.raw).clone());
+                let shown = |tracks: &[daw_proto::Track]| -> Vec<bool> {
+                    tracks.iter().map(|t| t.visible_in_mixer).collect()
+                };
+                let was = shown(&raw.tracks);
+                crate::engine::apply_event(&mut raw.tracks, event);
+                if shown(&raw.tracks) != was {
+                    self.replan = true;
+                }
+            }
             if self.links.inspector {
                 let mut all: Vec<daw_proto::Track> =
                     self.all.iter().map(|(t, _)| t.clone()).collect();
