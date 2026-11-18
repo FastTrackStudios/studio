@@ -308,7 +308,10 @@ ci-boundaries` is manual). `cache-devshell` still seeds
 fasttrackstudio.cachix.org, for developers' `nix develop`; no CI job
 depends on it.
 
-`PR checks` is the only required check (the `main` ruleset). `Local CI`
+`PR checks` is the only required check (the `main` ruleset). On a draft PR
+every job of `PR`, `CI` and `release-dry-run` is skipped (a skipped job
+satisfies the check); marking the PR ready runs them, and so does every
+push after that. `Local CI`
 says a change's tests passed on a warm machine; it is an indicator, not a
 gate. `CI passed` is the aggregate of a run: it requires
 `Gates` and `Rail plan`, and `Check`, `Wasm` and `Tests` green or skipped by

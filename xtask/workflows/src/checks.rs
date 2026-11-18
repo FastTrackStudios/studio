@@ -76,6 +76,9 @@ pub fn workflow() -> Result<Workflow> {
             r#"
 pull_request:
   branches: ["release/**"]
+  # ready_for_review: a draft runs nothing (`plan` and `CI passed` are
+  # skipped, see NOT_DRAFT); marking it ready starts the run.
+  types: [opened, synchronize, reopened, ready_for_review]
 push:
   # release/v*: the hotfix lines, released from their own green commits.
   branches: [main, "release/v*"]
@@ -109,11 +112,19 @@ workflow_dispatch:
     .job("ci-passed", ci_passed()?))
 }
 
+/// Not a draft PR. Skipped on a draft, `plan` skips every job that needs
+/// it (all but main's `deps-cache`), and `CI passed` is skipped with it: a
+/// job skipped by its `if:` reports as skipped, which a required check
+/// accepts. Pushes, tags and dispatches always pass.
+const NOT_DRAFT: &str =
+    "github.event_name != 'pull_request' || github.event.pull_request.draft == false";
+
 /// What this run is, and a fork PR refused. Bash only: no checkout, no
 /// toolchain.
 fn plan() -> Result<Job> {
     Ok(Job::new(UBUNTU)
         .name("Plan")
+        .cond(&format!("${{{{ {NOT_DRAFT} }}}}"))
         .timeout(10)
         .permissions(yaml("contents: read\n")?)
         .step(
@@ -867,7 +878,7 @@ fn ci_passed() -> Result<Job> {
             "web-image",
             "apple",
         ])
-        .cond("${{ always() }}")
+        .cond(&format!("${{{{ always() && ({NOT_DRAFT}) }}}}"))
         .timeout(5)
         .permissions(yaml("statuses: write\n")?)
         .step(

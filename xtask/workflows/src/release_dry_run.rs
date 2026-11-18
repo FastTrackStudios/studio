@@ -8,6 +8,8 @@
 //!
 //! On every PR that touches those mechanics (hosted runner, the workflow's
 //! own token; a fork's PR gets no write token and is skipped), and by hand.
+//! Not on a draft PR: it runs when the PR is marked ready for review, and on
+//! every push after that.
 
 use crate::model::{Job, Step, UBUNTU, Workflow, pinned, yaml};
 use anyhow::Result;
@@ -16,7 +18,7 @@ pub fn workflow() -> Result<Workflow> {
     Ok(Workflow::new(
         "release-dry-run",
         yaml(
-            "pull_request:\n  paths:\n  - scripts/release.sh\n  - scripts/release-sums.sh\n  - scripts/release-publish.sh\n  - scripts/release-dry-run.sh\n  - xtask/workflows/src/sums.rs\n  - xtask/workflows/src/release_dry_run.rs\nworkflow_dispatch: null\n",
+            "pull_request:\n  types:\n  - opened\n  - synchronize\n  - reopened\n  - ready_for_review\n  paths:\n  - scripts/release.sh\n  - scripts/release-sums.sh\n  - scripts/release-publish.sh\n  - scripts/release-dry-run.sh\n  - xtask/workflows/src/sums.rs\n  - xtask/workflows/src/release_dry_run.rs\nworkflow_dispatch: null\n",
         )?,
     )
     .permissions(yaml("{}")?)
@@ -30,7 +32,7 @@ pub fn workflow() -> Result<Workflow> {
 fn dry_run() -> Result<Job> {
     Ok(Job::new(UBUNTU)
         .name("Release mechanics on a throwaway draft")
-        .cond("${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}")
+        .cond("${{ (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository) && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}")
         .timeout(10)
         .permissions(yaml("contents: write\n")?)
         .step(

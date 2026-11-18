@@ -6,6 +6,11 @@ on:
   pull_request:
     branches:
     - release/**
+    types:
+    - opened
+    - synchronize
+    - reopened
+    - ready_for_review
   push:
     branches:
     - main
@@ -17,6 +22,7 @@ concurrency:
 jobs:
   plan:
     name: Plan
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -696,7 +702,7 @@ jobs:
     - release-macos
     - web-image
     - apple
-    if: ${{ always() }}
+    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

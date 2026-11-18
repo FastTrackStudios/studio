@@ -266,7 +266,9 @@ the CI prep.
 **What GitHub runs.** A PR into `main` gets one free job, **`PR checks`**
 (`pr.yml`: fmt, change files, the lockfile, the rail config — compiles
 nothing). `main` requires only `PR checks`; `Local CI` (the pre-push
-hook's status) is an indicator, not a gate. **`CI`**
+hook's status) is an indicator, not a gate. A DRAFT PR runs no job (each
+reports skipped); marking it ready starts the run, and every push after
+that runs again, so mark a PR ready before waiting on its checks. **`CI`**
 (`checks.yml`: `Gates`, `Rail plan`, `Check` + advisory clippy, `Wasm`,
 `Tests`, `Web image evaluates` (the studio-web image's nix evaluation and
 crate vendoring) and `Apple builds` (on airlock: the macOS app linked and held
