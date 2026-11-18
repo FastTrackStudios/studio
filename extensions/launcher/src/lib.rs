@@ -11,9 +11,11 @@
 pub mod find;
 pub mod host;
 pub mod model;
+pub mod nav;
 mod view;
 
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
 
 use architect_extensions::linked::{Builder, Extension};
 use serde_json::{Value, json};
@@ -26,6 +28,24 @@ pub const MANIFEST: &str = include_str!("../extension.toml");
 pub const ID: &str = "studio.launcher";
 pub const VIEW: &str = "launcher";
 
+/// The setlist the view shows (its note's path): chosen in the navigator,
+/// in the view, or by `STUDIO_LAUNCHER_CHOOSE`.
+static CHOSEN: Mutex<Option<String>> = Mutex::new(None);
+
+/// The setlist the view shows, when one was chosen.
+#[must_use]
+pub fn chosen() -> Option<String> {
+    CHOSEN
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
+}
+
+/// Shows setlist `path` in the view.
+pub fn choose(path: String) {
+    *CHOSEN.lock().unwrap_or_else(PoisonError::into_inner) = Some(path);
+}
+
 pub struct Launcher;
 
 impl Extension for Launcher {
@@ -35,7 +55,16 @@ impl Extension for Launcher {
 
     fn build(&self, ext: &mut Builder) {
         host::connect(ext.handle());
+        ext.navigator(nav::PREFIX, nav::LauncherNav);
         ext.view(VIEW, view::LauncherView)
+            .action("STUDIO_LAUNCHER_CHOOSE", |args| async move {
+                let name = text(&args, "setlist")?;
+                let found = load().await?;
+                let list = &found.named(&name)?.setlist;
+                choose(list.path.clone());
+                host::run("EXT_VIEW_OPEN", json!({ "extension": ID, "view": VIEW })).await?;
+                Ok(json!({ "showing": list.title }))
+            })
             .action("STUDIO_LAUNCHER_SHOW", |_| async {
                 host::run("EXT_VIEW_OPEN", json!({ "extension": ID, "view": VIEW })).await
             })
@@ -144,6 +173,25 @@ impl Found {
         }
     }
 
+    /// How many of its places are ready on every count: a chart, lyrics,
+    /// a recording, tracks and lights.
+    #[must_use]
+    pub fn ready(&self) -> usize {
+        self.setlist
+            .entries()
+            .zip(&self.sessions)
+            .zip(&self.lights)
+            .filter(|((entry, session), lights)| {
+                session.is_some()
+                    && **lights
+                    && entry
+                        .song
+                        .as_ref()
+                        .is_some_and(|s| s.chart && s.lyrics && (s.reference || s.recording))
+            })
+            .count()
+    }
+
     /// How many of its places have a session.
     #[must_use]
     pub fn playable(&self) -> usize {
@@ -151,7 +199,7 @@ impl Found {
     }
 
     fn json(&self) -> Value {
-        let mut at = 0;
+        let mut places = self.sessions.iter().zip(&self.lights);
         let sets: Vec<Value> = self
             .setlist
             .sets
@@ -161,10 +209,8 @@ impl Found {
                     .entries
                     .iter()
                     .map(|entry| {
-                        let session = self.sessions.get(at).and_then(Option::as_ref);
-                        let lights = self.lights.get(at).copied().unwrap_or(false);
-                        at += 1;
-                        model::entry_json(entry, session.and_then(|p| p.to_str()), lights)
+                        let (session, lights) = places.next().unwrap_or((&None, &false));
+                        model::entry_json(entry, session.as_deref().and_then(Path::to_str), *lights)
                     })
                     .collect();
                 json!({ "set": set.name, "songs": songs })
@@ -180,6 +226,7 @@ impl Found {
             "length": length,
             "length_unknown": unknown,
             "playable": self.playable(),
+            "ready": self.ready(),
             "sets": sets,
         })
     }
@@ -256,19 +303,18 @@ pub async fn open_setlist(found: &Found) -> Result<Value, String> {
         .filter(|(_, s)| s.is_none())
         .map(|(e, _)| e.label.as_str())
         .collect();
-    let (path, left_out) = match &found.file {
-        Some(file) => (file.clone(), Vec::new()),
-        None => {
-            let sessions: Vec<PathBuf> = found.sessions.iter().flatten().cloned().collect();
-            if sessions.is_empty() {
-                return Err(format!(
-                    "{title}: none of its songs has a session in {} yet",
-                    found.setlist.project
-                ));
-            }
-            let file = find::write_setlist(title, &sessions).map_err(|e| e.to_string())?;
-            (file, left_out)
+    let (path, left_out) = if let Some(file) = &found.file {
+        (file.clone(), Vec::new())
+    } else {
+        let sessions: Vec<PathBuf> = found.sessions.iter().flatten().cloned().collect();
+        if sessions.is_empty() {
+            return Err(format!(
+                "{title}: none of its songs has a session in {} yet",
+                found.setlist.project
+            ));
         }
+        let file = find::write_setlist(title, &sessions).map_err(|e| e.to_string())?;
+        (file, left_out)
     };
     let said = host::run("DAW_OPEN", json!({ "path": path })).await?;
     Ok(json!({ "opened": path, "setlist": title, "left_out": left_out, "engine": said }))

@@ -8,7 +8,7 @@ name = "Launcher"
 version = "0.1.0"
 kind = "process"
 api = "0.1"
-description = "Studio's project launcher: the vault's setlists and songs, what each is ready with, what was opened lately and the rigs; a press opens one in Studio's engine."
+description = "Studio's project launcher: the vault's setlists as song lists, what was opened lately and the rigs; a press opens a set or a song in Studio's engine."
 authors = ["FastTrackStudios"]
 
 [entry]
@@ -34,6 +34,32 @@ effect = "mutating"
 id = "launcher"
 title = "Launcher"
 icon = "folder-open"
+
+# Its place in Architect's navigator: what was opened lately, the setlists
+# (each shows the launcher's page for it) and the rigs. The vault's own
+# setlists and libraries trees stay the setlists extension's.
+[[navigator_providers]]
+id = "open"
+title = "Open"
+icon = "folder-open"
+views = ["launcher"]
+actions = "STUDIO_LAUNCHER_NAV"
+section = "top"
+
+[[actions]]
+id = "STUDIO_LAUNCHER_NAV_SNAPSHOT"
+name = "Launcher: the navigator's tree"
+description = "Its navigator provider's snapshot: recent projects, the setlists and the rigs' profiles."
+group = "Launcher"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_LAUNCHER_CHOOSE"
+name = "Launcher: show a setlist"
+description = "Shows setlist `setlist` (its title or its note's path) in the launcher's view: its song list. Opens nothing in the engine."
+group = "Launcher"
+effect = "mutating"
+params = '{"type":"object","properties":{"setlist":{"type":"string"}},"required":["setlist"]}'
 
 [[actions]]
 id = "STUDIO_LAUNCHER_SHOW"

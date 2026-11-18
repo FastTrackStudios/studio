@@ -1,8 +1,18 @@
-//! The launcher's view: the vault's setlists down the left with what was
-//! opened lately and the rigs, the chosen setlist's running order on the
-//! right. Two columns that wrap into one where the pane is narrow (a
-//! phone, a side dock), with no media query: Blitz draws it as a browser
-//! does.
+//! The launcher's view: one setlist as a list of songs, in the grammar of
+//! Architect's media list (`architect_media::ui::MediaList`, the list a
+//! setlist's own page plays from): each set's name, then each row's
+//! number, tile, title over artist, and length. The tile is the song's
+//! key on the song's colour, as the setlist's share page draws it
+//! (`setlists::row::tile_hue`). Nothing else is on a row: it is a list to
+//! look at and load from. What differs from the media list is what a
+//! press does: it opens the song in Studio's engine instead of playing
+//! its recording, so a song with no tracks on this machine is greyed, as
+//! a row with nothing to play is there.
+//!
+//! The view draws no navigation of its own. Which setlist it shows is
+//! chosen in Architect's navigator (`crate::nav`) or in the row of
+//! setlist names at its head, so the same view is the desk's pane, the
+//! window's and the phone's page inside Architect's shell.
 //!
 //! Inline styles over the host's theme variables only (a linked view may
 //! hold no `style` node).
@@ -12,17 +22,15 @@ use std::time::Duration;
 use dioxus::prelude::*;
 use serde_json::{Value, json};
 
-use crate::find::Rigs;
-use crate::model::{Recent, clock};
-use crate::{Found, Loaded};
+use crate::Found;
+use crate::model::clock;
 
 const INK: &str = "var(--foreground, #e6e8eb)";
 const DIM: &str = "var(--muted-foreground, #8b9099)";
 const LINE: &str = "var(--border, #23262b)";
 const WASH: &str = "var(--accent, #26292f)";
 const GROUND: &str = "var(--background, #101114)";
-const SIDE: &str = "var(--sidebar, #17181c)";
-/// Ready: the theme's "safe" green. Not ready: a dim outline.
+/// The pill and the open song: the theme's "safe" green.
 const READY: &str = "var(--signal-safe, #3ecf8e)";
 
 /// What the engine has open, as the view says it.
@@ -57,38 +65,46 @@ enum Said {
 
 #[component]
 pub fn LauncherView() -> Element {
-    let mut loaded = use_signal(|| None::<Result<Loaded, String>>);
+    let mut loaded = use_signal(|| None::<Result<Vec<Found>, String>>);
     let mut engine = use_signal(Engine::default);
-    let mut recent = use_signal(Vec::<Recent>::new);
-    let rigs = use_signal(crate::find::rigs);
-    let mut chosen = use_signal(|| None::<String>);
+    let mut chosen = use_signal(crate::chosen);
     let mut said = use_signal(|| Said::Nothing);
 
-    // The vault read again every few seconds; a signal set only when what
-    // was read differs, so an unchanged vault redraws nothing.
+    // The choice made elsewhere (the navigator, an action) twice a second;
+    // the vault and the engine every few. A signal is set only when what
+    // was read differs, so nothing redraws while nothing changes.
     use_future(move || async move {
+        let mut tick = 0u32;
         loop {
-            let now = crate::load().await;
-            if loaded.peek().as_ref() != Some(&now) {
-                loaded.set(Some(now));
+            let now = crate::chosen();
+            if *chosen.peek() != now {
+                chosen.set(now);
             }
-            let now = engine_now().await;
-            if *engine.peek() != now {
-                engine.set(now);
+            if tick.is_multiple_of(8) {
+                let now = crate::load().await.map(|l| l.setlists);
+                if loaded.peek().as_ref() != Some(&now) {
+                    loaded.set(Some(now));
+                }
+                let now = engine_now().await;
+                if *engine.peek() != now {
+                    engine.set(now);
+                }
             }
-            let now = crate::recent().await.unwrap_or_default();
-            if *recent.peek() != now {
-                recent.set(now);
-            }
-            futures_timer::Delay::new(Duration::from_secs(4)).await;
+            tick = tick.wrapping_add(1);
+            futures_timer::Delay::new(Duration::from_millis(500)).await;
         }
     });
 
     let lists: Vec<Found> = match loaded() {
         None => return rsx! { Note { text: "Reading the vault…" } },
         Some(Err(why)) => return rsx! { Note { text: "The vault could not be read: {why}" } },
-        Some(Ok(l)) => l.setlists,
+        Some(Ok(lists)) => lists,
     };
+    if lists.is_empty() {
+        return rsx! {
+            Note { text: "No setlist in this vault yet. A setlist is a note of type setlist in Setlists/." }
+        };
+    }
     let open = chosen()
         .and_then(|path| lists.iter().find(|f| f.setlist.path == path).cloned())
         .or_else(|| lists.first().cloned());
@@ -111,62 +127,41 @@ pub fn LauncherView() -> Element {
             style: "width:100%; height:100%; display:flex; flex-direction:column; min-width:0; min-height:0; \
                     background:{GROUND}; color:{INK}; font-size:13px; line-height:1.35;",
             div {
-                style: "flex:1; min-height:0; overflow-y:scroll; display:flex; flex-wrap:wrap; align-content:flex-start;",
-                // The left column: what there is to open.
-                div {
-                    style: "flex:1 1 250px; min-width:0; max-width:100%; background:{SIDE}; \
-                            padding:14px 0 18px; box-sizing:border-box; align-self:stretch;",
-                    Heading { text: "Setlists" }
-                    if lists.is_empty() {
-                        Quiet { text: "No setlist in this vault yet. A setlist is a note of type setlist in Setlists/." }
-                    }
-                    for found in lists.iter() {
-                        SetlistRow {
-                            key: "{found.setlist.path}",
-                            found: found.clone(),
-                            on: open_path.as_deref() == Some(found.setlist.path.as_str()),
-                            onpick: move |path: String| chosen.set(Some(path)),
-                        }
-                    }
-                    Heading { text: "Recent" }
-                    if recent().is_empty() {
-                        Quiet {
-                            text: if engine().up {
-                                "Nothing opened yet."
-                            } else {
-                                "Studio's engine is not running, so it cannot say."
+                style: "flex:1; min-height:0; overflow-y:scroll; padding:16px 20px 24px; box-sizing:border-box;",
+                // The setlists, to switch between where the navigator is not showing.
+                if lists.len() > 1 {
+                    div { style: "display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px;",
+                        for found in lists.iter() {
+                            {
+                                let on = open_path.as_deref() == Some(found.setlist.path.as_str());
+                                let (fill, ink) = if on { (WASH, INK) } else { ("transparent", DIM) };
+                                let path = found.setlist.path.clone();
+                                rsx! {
+                                    button {
+                                        key: "{found.setlist.path}",
+                                        style: "height:28px; padding:0 12px; border:1px solid {LINE}; border-radius:999px; \
+                                                background:{fill}; color:{ink}; font-size:12px; font-weight:600; cursor:pointer;",
+                                        onclick: move |_| {
+                                            crate::choose(path.clone());
+                                            chosen.set(Some(path.clone()));
+                                        },
+                                        "{found.setlist.title}"
+                                    }
+                                }
                             }
                         }
                     }
-                    for (i, r) in recent().into_iter().take(8).enumerate() {
-                        RecentRow {
-                            key: "{i}",
-                            recent: r.clone(),
-                            onopen: move |r: Recent| {
-                                press(r.name.clone(), "DAW_OPEN", json!({ "path": r.path }));
-                            },
-                        }
-                    }
-                    Heading { text: "Rigs" }
-                    RigList { rigs: rigs() }
                 }
-                // The right column: the chosen setlist.
-                div {
-                    style: "flex:3 1 420px; min-width:0; max-width:100%; padding:14px 0 24px; box-sizing:border-box;",
-                    match open {
-                        Some(found) => rsx! {
-                            SetlistPage {
-                                found: found.clone(),
-                                playing: engine().path,
-                                onsetlist: move |title: String| {
-                                    press(title.clone(), "STUDIO_LAUNCHER_OPEN_SETLIST", json!({ "setlist": title }));
-                                },
-                                onsong: move |(setlist, song): (String, String)| {
-                                    press(song.clone(), "STUDIO_LAUNCHER_OPEN_SONG", json!({ "song": song, "setlist": setlist }));
-                                },
-                            }
+                if let Some(found) = open {
+                    SetlistPage {
+                        found,
+                        playing: engine().path,
+                        onsetlist: move |title: String| {
+                            press(title.clone(), "STUDIO_LAUNCHER_OPEN_SETLIST", json!({ "setlist": title }));
                         },
-                        None => rsx! { Quiet { text: "Choose a setlist." } },
+                        onsong: move |(setlist, song): (String, String)| {
+                            press(song.clone(), "STUDIO_LAUNCHER_OPEN_SONG", json!({ "song": song, "setlist": setlist }));
+                        },
                     }
                 }
             }
@@ -188,7 +183,7 @@ fn done(what: &str, out: &Value) -> String {
         format!("Opening {what} in the engine.")
     } else {
         format!(
-            "Opening {what} without {} with no session: {}.",
+            "Opening {what} without {} with no tracks: {}.",
             left.len(),
             left.join(", ")
         )
@@ -207,88 +202,6 @@ fn Note(text: String) -> Element {
 }
 
 #[component]
-fn Heading(text: String) -> Element {
-    rsx! {
-        div { style: "padding:14px 16px 6px; font-size:11px; font-weight:600; color:{DIM};", "{text}" }
-    }
-}
-
-#[component]
-fn Quiet(text: String) -> Element {
-    rsx! {
-        div { style: "padding:2px 16px 8px; color:{DIM}; font-size:12px;", "{text}" }
-    }
-}
-
-#[component]
-fn SetlistRow(found: Found, on: bool, onpick: EventHandler<String>) -> Element {
-    let list = &found.setlist;
-    let count = list.entries().count();
-    let (length, unknown) = list.length();
-    let fill = if on { WASH } else { "transparent" };
-    let mut facts = vec![format!("{count} songs")];
-    if length > 0.0 {
-        facts.push(if unknown == 0 {
-            clock(length)
-        } else {
-            format!("{} and {unknown} untimed", clock(length))
-        });
-    }
-    facts.push(format!("{} with a session", found.playable()));
-    let facts = facts.join(", ");
-    let path = list.path.clone();
-    rsx! {
-        div {
-            style: "margin:0 8px; padding:7px 8px; border-radius:6px; background:{fill}; cursor:pointer;",
-            onclick: move |_| onpick.call(path.clone()),
-            div { style: "display:flex; align-items:baseline; gap:8px; min-width:0;",
-                div { style: "flex:1; min-width:0; font-weight:600; overflow:hidden; white-space:nowrap;", "{list.title}" }
-                if let Some(date) = &list.date {
-                    div { style: "flex:none; color:{DIM}; font-size:11px;", "{date}" }
-                }
-            }
-            div { style: "color:{DIM}; font-size:11px; margin-top:1px;", "{facts}" }
-        }
-    }
-}
-
-#[component]
-fn RecentRow(recent: Recent, onopen: EventHandler<Recent>) -> Element {
-    let r = recent.clone();
-    rsx! {
-        div {
-            style: "margin:0 8px; padding:5px 8px; border-radius:6px; cursor:pointer; display:flex; align-items:baseline; gap:8px; min-width:0;",
-            onclick: move |_| onopen.call(r.clone()),
-            div { style: "flex:1; min-width:0; overflow:hidden; white-space:nowrap;", "{recent.name}" }
-            div { style: "flex:none; color:{DIM}; font-size:11px;", "{recent.when}" }
-        }
-    }
-}
-
-#[component]
-fn RigList(rigs: Vec<Rigs>) -> Element {
-    rsx! {
-        if rigs.is_empty() {
-            Quiet { text: "No saved rig on this machine (Signal keeps them in its config folder)." }
-        }
-        for rig in rigs.iter() {
-            div { key: "{rig.instrument}", style: "padding:3px 16px;",
-                div { style: "font-weight:600;", "{rig.instrument}" }
-                div { style: "color:{DIM}; font-size:11px;",
-                    if rig.profiles.is_empty() { "no profile saved" } else { "{rig.profiles.join(\", \")}" }
-                }
-            }
-        }
-        if !rigs.is_empty() {
-            Quiet { text: "Listed only: loading a rig into the engine is not built yet." }
-        }
-    }
-}
-
-/// The five things a song is ready with, in the order of the marks.
-const MARKS: [&str; 5] = ["Chart", "Lyrics", "Ref", "Tracks", "Lights"];
-
-#[component]
 fn SetlistPage(
     found: Found,
     playing: Option<String>,
@@ -299,10 +212,8 @@ fn SetlistPage(
     let count = list.entries().count();
     let playable = found.playable();
     let (length, unknown) = list.length();
+    // The media list's summary line: items, time, how many open.
     let mut facts = vec![format!("{count} songs")];
-    if list.sets.len() > 1 {
-        facts.push(format!("{} sets", list.sets.len()));
-    }
     if length > 0.0 {
         facts.push(if unknown == 0 {
             clock(length)
@@ -310,116 +221,93 @@ fn SetlistPage(
             format!("{} timed, {unknown} not", clock(length))
         });
     }
-    let facts = facts.join(", ");
+    if let Some(date) = &list.date {
+        facts.push(date.clone());
+    }
+    let facts = facts.join(" · ");
     let can = found.file.is_some() || playable > 0;
     let button = if can {
-        format!("background:{INK}; color:{GROUND}; cursor:pointer;")
+        format!("background:{READY}; color:#06140d; cursor:pointer;")
     } else {
         format!("background:{WASH}; color:{DIM};")
     };
     let label = if found.file.is_some() || playable == count {
-        "Open setlist".to_owned()
+        "Open set".to_owned()
     } else if playable > 0 {
-        format!("Open the {playable} with a session")
+        format!("Open {playable} with tracks")
     } else {
-        "No session yet".to_owned()
+        "No tracks yet".to_owned()
     };
     let title = list.title.clone();
     let mut at = 0usize;
     rsx! {
-        div { style: "padding:4px 20px 12px; display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 16px;",
-            div { style: "flex:1 1 220px; min-width:0;",
-                div { style: "font-size:20px; font-weight:650; line-height:1.2;", "{list.title}" }
-                div { style: "color:{DIM}; margin-top:3px;",
-                    "{facts}"
-                    if let Some(date) = &list.date { ", {date}" }
-                }
-            }
+        div { style: "font-size:22px; font-weight:700; line-height:1.2;", "{list.title}" }
+        // The list's head: its pill, then what it holds.
+        div { style: "display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:10px 0 6px; min-width:0;",
             button {
-                style: "flex:none; height:30px; padding:0 14px; border:none; border-radius:6px; font-size:13px; font-weight:600; {button}",
+                style: "flex:none; height:36px; padding:0 16px; border:none; border-radius:999px; font-size:14px; font-weight:600; {button}",
                 disabled: !can,
                 onclick: move |_| onsetlist.call(title.clone()),
                 "{label}"
             }
-        }
-        // What the marks are, once, over their columns.
-        div { style: "display:flex; align-items:center; gap:10px; padding:0 20px 4px; color:{DIM}; font-size:10px;",
-            div { style: "flex:1; min-width:0;" }
-            div { style: "flex:none; display:flex; gap:2px;",
-                for mark in MARKS {
-                    div { key: "{mark}", style: "width:38px; text-align:center;", "{mark}" }
-                }
-            }
+            div { style: "flex:1 1 160px; min-width:0; color:{DIM};", "{facts}" }
         }
         for (s, set) in list.sets.iter().enumerate() {
             div { key: "{s}",
                 if let Some(name) = &set.name {
-                    div {
-                        style: "margin:10px 20px 2px; padding-bottom:5px; border-bottom:1px solid {LINE}; \
-                                font-size:12px; font-weight:600; color:{DIM};",
-                        "{name}"
-                    }
+                    div { style: "padding:18px 0 6px; font-size:13px; font-weight:650; color:{DIM};", "{name}" }
                 }
                 for entry in set.entries.iter() {
                     {
                         let number = at + 1;
                         let session = found.sessions.get(at).cloned().flatten();
-                        let lights = found.lights.get(at).copied().unwrap_or(false);
                         at += 1;
                         let song = entry.song.as_ref();
-                        let ready = [
-                            song.is_some_and(|x| x.chart),
-                            song.is_some_and(|x| x.lyrics),
-                            song.is_some_and(|x| x.reference || x.recording),
-                            session.is_some(),
-                            lights,
-                        ];
                         let now = session.is_some()
                             && session.as_ref().and_then(|p| p.to_str()) == playing.as_deref();
+                        let key = song.and_then(crate::model::Song::keys);
+                        let hue = setlists::row::tile_hue(&entry.label);
                         let about = [
                             song.and_then(|x| x.artist.clone()),
-                            song.and_then(crate::model::Song::keys),
                             song.and_then(|x| x.tempo).map(|t| format!("{t:.0} bpm")),
-                            song.and_then(|x| x.length).map(clock),
                         ]
                         .into_iter()
                         .flatten()
                         .collect::<Vec<_>>()
-                        .join("  ");
+                        .join(" · ");
+                        let length = song.and_then(|x| x.length).map(clock).unwrap_or_default();
                         let fill = if now { WASH } else { "transparent" };
-                        let ink = if song.is_some() { INK } else { DIM };
+                        let ink = if now { READY } else { INK };
+                        // A song with no tracks is greyed, as a row with
+                        // nothing to play is in the media list.
+                        let fade = if session.is_some() { "1" } else { "0.55" };
                         let cursor = if session.is_some() { "pointer" } else { "default" };
+                        let tile_size = if key.as_ref().is_some_and(|k| k.chars().count() > 2) { 12 } else { 16 };
                         let (name, label) = (list.title.clone(), entry.label.clone());
                         rsx! {
                             div {
                                 key: "{number}",
-                                style: "margin:0 12px; padding:6px 8px; border-radius:6px; background:{fill}; \
-                                        display:flex; align-items:center; gap:10px; min-width:0; cursor:{cursor};",
+                                style: "display:flex; align-items:center; gap:12px; min-width:0; min-height:56px; \
+                                        padding:4px; border-radius:8px; background:{fill}; cursor:{cursor};",
                                 onclick: move |_| {
                                     if session.is_some() {
                                         onsong.call((name.clone(), label.clone()));
                                     }
                                 },
-                                div { style: "flex:none; width:20px; text-align:right; color:{DIM}; font-size:12px;", "{number}" }
-                                div { style: "flex:1; min-width:0;",
-                                    div { style: "color:{ink}; font-weight:550; overflow:hidden; white-space:nowrap;", "{entry.label}" }
-                                    div { style: "color:{DIM}; font-size:11px; overflow:hidden; white-space:nowrap;",
+                                div { style: "flex:none; width:22px; text-align:right; color:{DIM}; font-size:13px; opacity:{fade};", "{number}" }
+                                div {
+                                    style: "flex:none; width:48px; height:48px; border-radius:6px; background:hsl({hue} 42% 40%); \
+                                            color:#ffffff; display:flex; align-items:center; justify-content:center; \
+                                            font-size:{tile_size}px; font-weight:700; opacity:{fade};",
+                                    {key.unwrap_or_else(|| "♪".to_owned())}
+                                }
+                                div { style: "flex:1; min-width:0; opacity:{fade};",
+                                    div { style: "color:{ink}; font-size:16px; font-weight:500; line-height:1.3; overflow:hidden; white-space:nowrap;", "{entry.label}" }
+                                    div { style: "color:{DIM}; font-size:13px; overflow:hidden; white-space:nowrap;",
                                         if song.is_none() { "its note is not in the library" } else { "{about}" }
                                     }
                                 }
-                                div { style: "flex:none; display:flex; gap:2px;",
-                                    for (i, is) in ready.into_iter().enumerate() {
-                                        div { key: "{i}", style: "width:38px; display:flex; justify-content:center;",
-                                            div {
-                                                style: if is {
-                                                    format!("width:8px; height:8px; border-radius:4px; background:{READY};")
-                                                } else {
-                                                    format!("width:6px; height:6px; border-radius:4px; border:1px solid {DIM}; opacity:0.5;")
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                div { style: "flex:none; color:{DIM}; font-size:13px; opacity:{fade};", "{length}" }
                             }
                         }
                     }
@@ -438,10 +326,14 @@ fn Foot(said: Said, engine: Engine) -> Element {
         Said::Refused(why) => (why.clone(), "var(--destructive, #e5534b)"),
     };
     let state = if engine.up {
-        match engine.path.as_deref().and_then(|p| p.rsplit('/').next()) {
-            Some(name) => format!("Engine: {name}"),
-            None => "Engine: nothing open".to_owned(),
-        }
+        engine
+            .path
+            .as_deref()
+            .and_then(|p| p.rsplit('/').next())
+            .map_or_else(
+                || "Engine: nothing open".to_owned(),
+                |name| format!("Engine: {name}"),
+            )
     } else {
         "Engine: not running".to_owned()
     };
