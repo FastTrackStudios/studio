@@ -5797,6 +5797,7 @@ dependencies = [
  "serde_json",
  "session-desktop",
  "session-engine",
+ "tracing",
 ]
 
 [[package]]

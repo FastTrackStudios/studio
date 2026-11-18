@@ -14,8 +14,12 @@ authors = ["FastTrackStudios"]
 [entry]
 path = "daw-extension"
 
+[requires]
+"architect.playhead" = "^0.1"
+
 [capabilities]
 effect = "mutating"
+events = ["playhead.changed"]
 
 [[actions]]
 id = "DAW_STATE"
@@ -39,3 +43,15 @@ description = "Runs action `id` of the engine's own Action List with `args`."
 group = "DAW"
 effect = "mutating"
 params = '{"type":"object","properties":{"id":{"type":"string"},"args":{}},"required":["id"]}'
+
+[[actions]]
+id = "DAW_DECK"
+name = "Studio engine: follow the playhead"
+description = "The app's playhead moved: the engine plays, pauses or seeks with it when it was not the engine's own move (its hook on app:playhead.changed)."
+group = "DAW"
+effect = "mutating"
+params = '{"type":"object"}'
+
+[[hooks]]
+on = "app:playhead.changed"
+action = "DAW_DECK"
