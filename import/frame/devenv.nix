@@ -1,8 +1,9 @@
 # frame's dev environment. The toolchain (rust 1.99.1, the
 # rust-toolchain.toml pin), mold, cargo-hakari, cargo-rail and prek come
 # from devenv-fleet's `rust` module (devenv.yaml); this file adds what this
-# workspace links against and runs. flake.nix's `ci` shell is what CI uses,
-# so the two package lists must stay in step.
+# workspace links against and runs. CI enters this shell (`devenv shell --`);
+# flake.nix keeps a `nix develop` shell with the same toolchain (devenv-fleet's
+# `toolchainFor`) and package list: keep the two lists in step.
 { pkgs, lib, ... }:
 let
   # The architect/Dioxus crates link the native GUI stack even in unit
