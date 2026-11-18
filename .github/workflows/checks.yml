@@ -57,7 +57,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: '0'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
         persist-credentials: false
         fetch-depth: 64
@@ -147,12 +147,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
     - name: Rust 1.99.1
-      uses: dtolnay/rust-toolchain@1.99.1
+      uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8
     - name: Restore cargo's dependencies
       id: deps
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: |
           ~/.cargo/registry/index
@@ -165,7 +165,7 @@ jobs:
       run: cargo fetch
     - name: Save cargo's dependencies
       if: ${{ steps.deps.outputs.cache-hit != 'true' }}
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: |
           ~/.cargo/registry/index
@@ -180,16 +180,16 @@ jobs:
     env:
       CARGO_INCREMENTAL: '0'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
     - name: Rust 1.99.1
-      uses: dtolnay/rust-toolchain@1.99.1
+      uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8
       with:
         components: rustfmt
     - name: mold
       run: |
         sudo apt-get install -y --no-install-recommends mold
     - name: just
-      uses: taiki-e/install-action@v2
+      uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39
       with:
         tool: just@1.48.1
     - name: cargo-rail 0.32.0
@@ -217,7 +217,7 @@ jobs:
         cp .cargo/ci-config.toml ../.cargo/config.toml
     - name: Restore cargo's dependencies
       id: deps
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
       with:
         path: |
           ~/.cargo/registry/index
@@ -280,7 +280,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: '0'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
         persist-credentials: false
     - name: Hosted hotfix setup
@@ -346,7 +346,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: '0'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
         persist-credentials: false
     - name: Hosted hotfix setup
@@ -401,7 +401,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: '0'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
         persist-credentials: false
     - name: Hosted hotfix setup
@@ -464,7 +464,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: '0'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
         persist-credentials: false
     - name: Hosted hotfix setup
@@ -503,7 +503,7 @@ jobs:
     - name: Asset repo token (main runs only)
       id: assets-token
       if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
-      uses: actions/create-github-app-token@v2
+      uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
       with:
         app-id: ${{ vars.FORGE_APP_ID }}
         private-key: ${{ secrets.FORGE_APP_PRIVATE_KEY }}
@@ -566,7 +566,7 @@ jobs:
         EOF
     - name: Test log
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: nextest-ci
         path: ${{ runner.temp }}/nextest-ci.log
@@ -583,7 +583,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
     - name: Release tooling (sandbox, macOS system tools only)
       run: |
         env -i HOME="$HOME" TMPDIR="$RUNNER_TEMP" PATH=/usr/bin:/bin:/usr/sbin:/sbin \
@@ -599,7 +599,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: '0'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
         persist-credentials: false
     - name: Hosted hotfix setup
@@ -661,7 +661,7 @@ jobs:
     - studio-release-mac
     timeout-minutes: 120
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
         clean: false
         persist-credentials: false

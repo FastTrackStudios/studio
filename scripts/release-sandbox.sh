@@ -67,10 +67,18 @@ case "$1 $2" in
        if [ -n "${SHIM_CHECK:-}" ]; then echo "$SHIM_CHECK"
        elif grep -qx "$sha" "$SHIM_GREEN" 2>/dev/null; then echo "completed success"
        else echo "${SHIM_OTHER:-in_progress null}"; fi ;; esac ;;
-  "api --paginate") : ;;
+  "api --paginate") case "$*" in *"/releases"*"tag_name =="*)
+       # release_id / release_dedupe: one release per tag in the shim (id 1).
+       t="$(printf '%s\n' "$*" | sed -n 's/.*tag_name == "\([^"]*\)".*/\1/p')"
+       [ -f "$SHIM_REL/$t.body" ] && echo 1 ;; esac ;;
+  "release upload") tag="$3"; shift 3
+     for f in "$@"; do case "$f" in --*) ;; *) [ -f "$f" ] && basename "$f" >> "$SHIM_REL/$tag.assets" ;; esac; done ;;
+  *) case "$1 $2" in "api repos/"*"/assets"*) cat "$SHIM_REL"/*.assets 2>/dev/null || true ;; esac ;;
 esac
 EOF
 chmod +x "$S/shim/gh"
+# ios-release waits for release.yml's draft; in the sandbox nothing else creates it.
+export PUBLISH_WAIT_TRIES=0
 export SHIM_LOG="$S/gh.log" SHIM_REL="$S/releases" SHIM_PRS="$S/prs" SHIM_GREEN="$S/green"; : > "$SHIM_LOG"; : > "$SHIM_GREEN"
 green() { local r; for r in "$@"; do git rev-parse "$r^{commit}" >> "$SHIM_GREEN"; done; } # mark commits' CI passed green
 
@@ -293,6 +301,8 @@ expect_out "release notes: the image" "$S/releases/v26.10.1.body" 'studio-web:26
 expect_out "release notes: the full diff" "$S/releases/v26.10.1.body" 'compare/v26\.10\.0\.\.\.v26\.10\.1'
 expect_out "release notes: TestFlight block" "$S/releases/v26.10.1.body" '^- Studio .*pending'
 eq "release title" "$(cat "$S/releases/v26.10.1.title")" "studio 26.10.1"
+expect_out "the draft carries release-facts.json" "$S/releases/v26.10.1.assets" '^release-facts\.json$'
+expect_out "  ...created as a draft" "$S/gh.log" 'release create v26\.10\.1 .*--draft' 
 expect_ok "publish again: nothing to do" env GITHUB_REF=refs/tags/v26.10.1 bash scripts/release.sh publish
 expect_ok "ios-release v26.10.0 (another tag, by argument)" R ios-release v26.10.0
 expect_out "v26.10.0's Release: its own notes" "$S/releases/v26.10.0.body" '^### Breaking / Migration'

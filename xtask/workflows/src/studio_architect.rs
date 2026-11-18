@@ -77,6 +77,7 @@ workflow_dispatch:
     .jobs(crate::sums::jobs(
         &["publish"],
         "inputs.mode != 'build-only' && needs.publish.result == 'success'",
+        "${{ needs.publish.outputs.digests }}",
     )?))
 }
 
@@ -193,7 +194,7 @@ echo "cache after: $(du -sh "$cache" | cut -f1)"
             .cond("always()"),
         )
         .step(
-            Step::uses("Keep the tarballs", "actions/upload-artifact@v4")
+            Step::uses("Keep the tarballs", crate::model::pinned::UPLOAD_ARTIFACT)
                 .with("name", "studio-architect")
                 .with("path", "${{ runner.temp }}/studio-architect/*.tar.gz*\n")
                 .with("if-no-files-found", "error")
@@ -211,8 +212,9 @@ fn publish() -> Result<Job> {
         .cond("${{ inputs.mode != 'build-only' && needs.build.result == 'success' }}")
         .timeout(15)
         .permissions(yaml("contents: write\n")?)
+        .output("digests", "${{ steps.attach.outputs.digests }}")
         .step(
-            Step::uses("The tarballs", "actions/download-artifact@v4")
+            Step::uses("The tarballs", crate::model::pinned::DOWNLOAD_ARTIFACT)
                 .with("name", "studio-architect")
                 .with("path", "dist"),
         )
@@ -230,15 +232,19 @@ done
 gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber ./*.tar.gz ./*.tar.gz.sha256
 for f in "${files[@]}"; do
   want="sha256:$(sha256sum "$f" | cut -d' ' -f1)"
-  got="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq ".assets[] | select(.name == \"$f\") | .digest")"
+  # The Release is a draft until `sums` publishes it: find it in the list.
+  got="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50" --jq ".[] | select(.tag_name == \"$TAG\") | .assets[] | select(.name == \"$f\") | .digest")"
   [ "$got" = "$want" ] || { echo "::error::$f: GitHub's digest is '$got', the file is $want"; exit 1; }
 done
+# What `sums` may sign for this workflow: exactly these files (and their sidecars).
+{ echo "digests<<EOF"; sha256sum ./*.tar.gz ./*.tar.gz.sha256 | sed 's|  \./|  |'; echo "EOF"; } >> "$GITHUB_OUTPUT"
 {
   echo "### Attached to $TAG"
   for f in "${files[@]}"; do echo "- \`$f\` ($(du -h "$f" | cut -f1))"; done
 } >> "$GITHUB_STEP_SUMMARY"
 "####,
             )
+            .id("attach")
             .env("GH_TOKEN", "${{ github.token }}"),
         ))
 }

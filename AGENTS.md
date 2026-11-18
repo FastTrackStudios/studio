@@ -146,9 +146,18 @@ working there.
   daw repo's old tag, the in-tree `daw` and `dawfile-reaper`, and the
   `fts-sample` Studio builds, named on the `www.` host because a patch
   may not point back at its own source: goes when keyflow pins the daw
-  repo at Studio's revision). There is no architect `[patch]`: studio, keyflow and task@main
-  pin the same architect tag, so `Cargo.lock` holds one architect source;
-  bump them together. A `[patch]` **cannot rename a crate**.
+  repo at Studio's revision). One architect `[patch]`, on the
+  `www.github.com` spelling (end of Cargo.toml): keyflow names Architect
+  there, and the table hands those crates Studio's own tag, so an
+  Architect PATCH release needs no keyflow release (a minor still goes
+  through keyflow). The daw and fts-fx repos (pinned by `rev`) pin
+  Architect on the plain URL, the same source as Studio, so they move
+  first: `Cargo.lock` holds one architect source besides task@main's own
+  older one, none on www. Bump with `just bump-architect vX.Y.Z`
+  (docs/agents/release-workflow.md, "Moving the Architect and Keyflow
+  pins", which also says how local dev overrides must patch both
+  spellings, from a cargo config file); it waits (exit 4) while daw or
+  fts-fx is behind. A `[patch]` **cannot rename a crate**.
 - **Co-developing across repos**: override with a local checkout —
   `[patch."https://github.com/FastTrackStudios/architect"] architect =
   { path = "../architect/architect" }` — and never commit it; the paths are

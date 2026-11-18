@@ -13,7 +13,7 @@ jobs:
   extension:
     name: Setlists extension
     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-    uses: FastTrackStudios/architect/.github/workflows/extension-release.yml@main
+    uses: FastTrackStudios/architect/.github/workflows/extension-release.yml@26f7f590f4b39529c59e8ae507cca9912e7d507c
     with:
       package: features/setlists
       build: |
@@ -25,7 +25,7 @@ jobs:
       binary: target/$TARGET/release/studio-setlists
       platforms: '["x86_64-unknown-linux-gnu","aarch64-apple-darwin"]'
       runners: '{"x86_64-unknown-linux-gnu":"ubuntu-24.04","aarch64-apple-darwin":"macos-15"}'
-      architect-ref: main
+      architect-ref: 26f7f590f4b39529c59e8ae507cca9912e7d507c
       registry: FastTrackStudios/architect
       registry-dir: extensions
     secrets:
