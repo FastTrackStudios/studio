@@ -21676,6 +21676,7 @@ dependencies = [
  "session-engine",
  "session-ui",
  "studio-view-link",
+ "tracing",
  "web-time",
 ]
 

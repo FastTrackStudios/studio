@@ -848,10 +848,20 @@ impl Previews {
     /// and exiting has no later to redraw in, so an empty cache would
     /// mean every MIDI item drawn blank — a worse picture than the one
     /// this replaced.
+    ///
+    /// On a thread that is driving a runtime already (an Architect process
+    /// view paints inside its runtime), it reads on a thread of its own,
+    /// which it waits for.
     pub fn fill_blocking(&self, wanted: Vec<(String, f64)>) {
         let Some(runtime) = crate::open::runtime() else {
             return;
         };
+        if tokio::runtime::Handle::try_current().is_ok() {
+            std::thread::scope(|s| {
+                s.spawn(|| runtime.block_on(self.fill(wanted)));
+            });
+            return;
+        }
         runtime.block_on(self.fill(wanted));
     }
 

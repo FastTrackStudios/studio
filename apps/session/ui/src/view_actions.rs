@@ -290,9 +290,19 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
         option.set(on);
         Ok::<_, String>(format!("{name}: {}", if on { "on" } else { "off" }))
     })?;
-    list.register(&MIXER_VIEW, Effect::Mutating, mixer_view)?;
     list.register(&FX_VIEW, Effect::Mutating, fx_view)?;
     list.register(&CLOSEUP, Effect::Mutating, closeup)?;
+    register_mixer(list)
+}
+
+/// The mixer's own view actions (`MIXER_VIEW`, `SESSION_MIXER_FX`) on
+/// `list`: what [`register`] puts there with the rest, and what a window
+/// that shows the mixer alone registers (the `studio.mixer` pane).
+///
+/// # Errors
+/// The first registration the list refuses (a duplicate id).
+pub fn register_mixer(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    list.register(&MIXER_VIEW, Effect::Mutating, mixer_view)?;
     list.register(&MIXER_FX, Effect::Mutating, |a: MixerFxArg| {
         let on = a
             .shown

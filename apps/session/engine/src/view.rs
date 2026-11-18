@@ -515,6 +515,11 @@ pub struct WindowAction {
     /// What it takes and gives back, as JSON Schema.
     pub params_schema: Option<String>,
     pub result_schema: Option<String>,
+    /// The window that claims it, by name: the engine asks it of that
+    /// window alone (`crate::window_queue::claim_as`). Empty: whichever
+    /// window takes the engine's asks.
+    #[facet(default)]
+    pub window: String,
 }
 
 /// What a window's action came to ([`EngineView::answer`]): its result as

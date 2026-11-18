@@ -25,9 +25,10 @@ architect-scene = { workspace = true }
 anyrender = { workspace = true }
 serde_json = { workspace = true }
 web-time = { workspace = true }
+architect = { workspace = true, features = ["action-list"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
-architect = { workspace = true, features = ["action-list"] }
 anyrender_vello_cpu = { workspace = true }
 peniko = { workspace = true }
 png = { workspace = true }

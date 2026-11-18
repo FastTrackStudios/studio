@@ -12,10 +12,15 @@
 //! - `strip`: the selected track's strip and the folder it goes out
 //!   through, as the window's inspector shows them (`Links::inspector`).
 //!
-//! `STUDIO_MIXER_RACKS` is the window's Racks switch.
+//! `STUDIO_MIXER_RACKS` is the window's Racks switch. The window actions
+//! the mixer carries out in `studio-desktop` (`MIXER_VIEW`, the racks
+//! switch, the mixer's toggle) are this process's: it claims them from
+//! the engine ([`claim`]).
 
+pub mod claim;
 pub mod host;
 
+use std::rc::Rc;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use architect_extensions::linked::{Builder, Extension, PaintPane};
@@ -44,6 +49,7 @@ impl Extension for Mixer {
     }
 
     fn build(&self, ext: &mut Builder) {
+        claim::claim(ext.handle());
         ext.view("mixer", MixerPane)
             .view("strip", StripPane)
             .action("STUDIO_MIXER_STATE", |_| async { Ok(state()) })
@@ -170,6 +176,17 @@ fn Strips(session: Song, shown: Shown) -> Element {
                 Arc::clone(&stats),
             )
         })
+    });
+    // An edit made elsewhere (the arrangement's) comes as a track event:
+    // drawn as it lands, not at the pane's next tick, so it shows in the
+    // same frame as there.
+    use_hook(|| {
+        let wake = mount.wake_handle();
+        Rc::new(session_engine::engine::on_track_event(Arc::new(
+            move || {
+                wake.wake();
+            },
+        )))
     });
     let surface = studio_view_link::surface();
     rsx! {
