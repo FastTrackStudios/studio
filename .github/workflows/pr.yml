@@ -180,3 +180,41 @@ jobs:
     - name: The island's sheet passes Architect's cleanSheet
       if: ${{ steps.reach.outputs.island == 'true' }}
       run: bash scripts/island-sheet.sh
+  architect-pin:
+    name: 'Architect pin: main''s full set'
+    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        fetch-depth: 2
+    - name: Does this PR move the Architect pin?
+      id: pin
+      run: |
+        set -euo pipefail
+        moved="$(git diff HEAD^1 HEAD -- Cargo.toml | grep -E '^[+-][^+-].*FastTrackStudios/architect' || true)"
+        if [ -n "$moved" ]; then
+          echo "moved=true" >> "$GITHUB_OUTPUT"
+          echo "architect-pin: this PR moves the Architect pin:"
+          echo "$moved"
+        else
+          echo "moved=false" >> "$GITHUB_OUTPUT"
+          echo "architect-pin: the Architect pin stays where it is"
+        fi
+    - name: Start CI on this branch
+      if: ${{ steps.pin.outputs.moved == 'true' }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+        HEAD_REF: ${{ github.head_ref }}
+      run: |
+        set -euo pipefail
+        gh workflow run checks.yml --repo "$GITHUB_REPOSITORY" --ref "$HEAD_REF"
+        {
+          echo "### The Architect pin moves: main's full set runs on this branch"
+          echo
+          echo "CI (checks.yml) was started on $HEAD_REF: its jobs report on this PR's head commit."
+        } >> "$GITHUB_STEP_SUMMARY"

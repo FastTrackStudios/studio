@@ -23,6 +23,9 @@
 //! reaches it; and, when the PR reaches Studio's island's sheet, compiles
 //! that sheet and puts it through Architect's `cleanSheet`. Not required.
 //!
+//! And one job hands a PR to the full set: `architect-pin`, when the PR
+//! moves the Architect pin, starts `CI` on its branch (below).
+//!
 //! Its own workflow, not a job of `CI`: a PR shows `PR checks` and `Local
 //! CI`, not a row of skipped CI jobs (Task, 2026-10).
 //!
@@ -58,7 +61,8 @@ pub fn workflow() -> Result<Workflow> {
         )
         .concurrency("pr-${{ github.event.pull_request.number }}", true)
         .job("pr-checks", pr_checks()?)
-        .job("studio-architect", studio_architect()?),
+        .job("studio-architect", studio_architect()?)
+        .job("architect-pin", architect_pin()?),
     )
 }
 
@@ -196,5 +200,64 @@ fn studio_architect() -> Result<Job> {
                 "bash scripts/island-sheet.sh",
             )
             .cond(ISLAND),
+        ))
+}
+
+/// The PR moves the Architect pin: a line of the root manifest that names
+/// FastTrackStudios/architect changed (a rev, a tag, the `www.` patch).
+const PIN_MOVED: &str = r#"set -euo pipefail
+moved="$(git diff HEAD^1 HEAD -- Cargo.toml | grep -E '^[+-][^+-].*FastTrackStudios/architect' || true)"
+if [ -n "$moved" ]; then
+  echo "moved=true" >> "$GITHUB_OUTPUT"
+  echo "architect-pin: this PR moves the Architect pin:"
+  echo "$moved"
+else
+  echo "moved=false" >> "$GITHUB_OUTPUT"
+  echo "architect-pin: the Architect pin stays where it is"
+fi
+"#;
+
+/// Start `CI` (checks.yml, the full set main runs) on the PR's branch.
+const RUN_CI: &str = r####"set -euo pipefail
+gh workflow run checks.yml --repo "$GITHUB_REPOSITORY" --ref "$HEAD_REF"
+{
+  echo "### The Architect pin moves: main's full set runs on this branch"
+  echo
+  echo "CI (checks.yml) was started on $HEAD_REF: its jobs report on this PR's head commit."
+} >> "$GITHUB_STEP_SUMMARY"
+"####;
+
+/// A PR that moves the Architect pin runs what main runs, before it merges.
+///
+/// A PR's own jobs compile nothing but the node (`studio-architect`, `cargo
+/// check`), while main runs the duplicate-version gate, every crate's test
+/// targets and the core test set. A pin move reaches 27 of the workspace's
+/// 52 crates, and studio#519's did break main on all three: an Architect
+/// function's arguments in two test targets, five node tests against
+/// Architect's #646, two new duplicate versions (fixed in studio#532).
+///
+/// So when the PR moves the pin, this job starts `CI` itself on the PR's
+/// branch: a `workflow_dispatch` run, the full set on THEBATTLESHIP's warm
+/// pool (checks.yml), whose jobs report on the PR's head commit. Not
+/// required, like everything here but `PR checks`; the PR is merged once
+/// its `CI passed` is green. Not for a PR from a fork (no token to start a
+/// run with; the pool runs only this repo's branches).
+fn architect_pin() -> Result<Job> {
+    const MOVED: &str = "${{ steps.pin.outputs.moved == 'true' }}";
+    Ok(Job::new(UBUNTU)
+        .name("Architect pin: main's full set")
+        .cond(
+            "${{ (github.event_name != 'pull_request' || github.event.pull_request.draft == false) \
+             && github.event.pull_request.head.repo.full_name == github.repository }}",
+        )
+        .timeout(5)
+        .permissions(yaml("contents: read\nactions: write\n")?)
+        .step(checkout().with("fetch-depth", 2))
+        .step(Step::run("Does this PR move the Architect pin?", PIN_MOVED).id("pin"))
+        .step(
+            Step::run("Start CI on this branch", RUN_CI)
+                .cond(MOVED)
+                .env("GH_TOKEN", "${{ github.token }}")
+                .env("HEAD_REF", "${{ github.head_ref }}"),
         ))
 }
