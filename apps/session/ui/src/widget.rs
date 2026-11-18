@@ -595,11 +595,12 @@ pub struct ArrangementWidget {
     hidden_seen: Option<(u64, bool)>,
     /// When this paint began ([`Passes::prep`]).
     paint_began: web_time::Instant,
-    /// Where the play cursor is drawn when a host asks for it apart
+    /// Where what moves while the song plays (the play cursor, the track
+    /// panel's level meters) is drawn when a host asks for it apart
     /// ([`ArrangementWidget::paint_layers`]): its own scene, so the rest
-    /// of the picture stays the same while only the cursor moves. `None`
-    /// (the window's): drawn into the picture.
-    cursor_apart: Option<Scene>,
+    /// of the picture stays the same while they move. `None` (the
+    /// window's): drawn into the picture.
+    live_apart: Option<Scene>,
     /// The folds the rows were planned at ([`crate::folds::generation`]).
     folds_seen: u64,
     /// The outside edits the rows were planned at ([`edit_song`]).
@@ -922,7 +923,7 @@ impl ArrangementWidget {
             hidden: std::collections::HashSet::new(),
             hidden_seen: None,
             paint_began: web_time::Instant::now(),
-            cursor_apart: None,
+            live_apart: None,
             folds_seen: crate::folds::generation(),
             edited_seen: EDITED.with(Cell::get),
             previews,
@@ -5404,16 +5405,17 @@ impl ArrangementWidget {
         scene
     }
 
-    /// The picture as two scenes: everything but the play cursor, and the
-    /// play cursor (with its trail), each at the device's scale. Composed
+    /// The picture as two scenes: everything but what moves while the
+    /// song plays, and that (the play cursor with its trail, the track
+    /// panel's level meters), each at the device's scale. Composed
     /// in that order they are [`Self::paint_scene`]'s picture; a host
     /// that keeps a layer per scene sends the first again only when it
     /// changes, so playing moves the cursor alone (an Architect pane's
     /// host, `studio.arrangement`). The window keeps one picture.
     pub fn paint_layers(&mut self, width: u32, height: u32, scale: f64) -> (Scene, Scene) {
-        self.cursor_apart = Some(Scene::new());
+        self.live_apart = Some(Scene::new());
         let content = self.paint_scene(width, height, scale);
-        let drawn = self.cursor_apart.take().unwrap_or_default();
+        let drawn = self.live_apart.take().unwrap_or_default();
         let scale = scale.max(f64::EPSILON) * self.ui.get().max(f64::EPSILON);
         let cursor = if (scale - 1.0).abs() < f64::EPSILON {
             drawn
@@ -6573,10 +6575,25 @@ impl ArrangementWidget {
                 at,
             ),
         };
-        // The levels, in the name fields.
+        // The levels, in the name fields: into the picture, or with the
+        // play cursor when a host asked for what moves apart (under the
+        // same clip).
         if let Some(meters) = &self.meters {
+            let mut apart = self.live_apart.take();
+            let into = match apart.as_mut() {
+                Some(live) => {
+                    anyrender::PaintScene::push_clip_layer(
+                        live,
+                        vello::peniko::Fill::NonZero,
+                        Affine::IDENTITY,
+                        &under_ruler,
+                    );
+                    live
+                }
+                None => &mut out,
+            };
             let lit = crate::overlay::row_meters(
-                &mut out,
+                into,
                 &self.palette,
                 &self.scene,
                 &self.rows,
@@ -6586,6 +6603,10 @@ impl ArrangementWidget {
                 &meters.levels(),
                 at,
             );
+            if let Some(live) = apart.as_mut() {
+                anyrender::PaintScene::pop_layer(live);
+            }
+            self.live_apart = apart;
             self.meters_lit.set(lit);
         }
         anyrender::PaintScene::pop_layer(&mut out);
@@ -6620,9 +6641,9 @@ impl ArrangementWidget {
             let look = crate::cursor::Look::default();
             look.trailing(self.trail.length(now, view.pps, look.trail))
         };
-        // Into the picture, or into its own scene when a host asked for
-        // it apart.
-        let mut apart = self.cursor_apart.take();
+        // Into the picture, or with the meters when a host asked for what
+        // moves apart.
+        let mut apart = self.live_apart.take();
         crate::cursor::paint(
             apart.as_mut().unwrap_or(&mut out),
             look,
@@ -6633,7 +6654,7 @@ impl ArrangementWidget {
             view.height,
             self.scene.tcp.width(),
         );
-        self.cursor_apart = apart;
+        self.live_apart = apart;
         // A touchscreen's grip on the track panel's edge: the panel slides
         // (a swipe, or a drag of this), and this says so.
         self.grip.set(None);
