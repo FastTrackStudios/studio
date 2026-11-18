@@ -15,6 +15,7 @@
 //! action.
 
 pub mod deck;
+pub mod meters;
 pub mod session_doc;
 
 use std::sync::OnceLock;

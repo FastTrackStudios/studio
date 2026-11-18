@@ -14,8 +14,15 @@ authors = ["FastTrackStudios"]
 [entry]
 path = "studio-mixer"
 
+# The engine's meters as values: its panes read the shared value table of
+# the provider of a service they use (the `daw` extension provides
+# fts.session), and the host moves the meters by it.
+[uses]
+"fts.session" = "^0.1"
+
 [capabilities]
 effect = "mutating"
+ui = ["engine"]
 
 [[views]]
 id = "mixer"

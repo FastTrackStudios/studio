@@ -5822,6 +5822,9 @@ name = "daw-extension"
 version = "26.10.3"
 dependencies = [
  "architect-extensions",
+ "architect-scene",
+ "daw",
+ "daw-proto",
  "daw-ui",
  "serde_json",
  "session 0.1.0 (git+https://github.com/FastTrackStudios/session?rev=84530a1297c2038eb70f62f0b2ef541d6a6a13e7)",
@@ -21648,6 +21651,8 @@ dependencies = [
  "architect-scene",
  "architect-workspace",
  "blitz-traits",
+ "daw-proto",
+ "daw-ui",
  "dioxus",
  "peniko 0.6.1",
  "png 0.17.16",

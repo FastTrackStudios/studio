@@ -1,5 +1,6 @@
 ---
 "daw-extension" = "minor"
+"daw-ui" = "minor"
 "productions" = "minor"
 "session-engine" = "patch"
 "session-ui" = "minor"

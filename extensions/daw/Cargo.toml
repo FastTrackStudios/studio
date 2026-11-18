@@ -23,6 +23,9 @@ fts-session = { workspace = true }
 daw-ui = { workspace = true }
 uuid = { workspace = true }
 tokio = { workspace = true }
+architect-scene = { workspace = true }
+daw = { workspace = true }
+daw-proto = { workspace = true }
 
 [lints]
 workspace = true

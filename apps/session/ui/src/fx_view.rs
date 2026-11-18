@@ -1233,6 +1233,7 @@ impl DeviceRow {
             0.0,
             width,
             at,
+            None,
         );
         width
     }

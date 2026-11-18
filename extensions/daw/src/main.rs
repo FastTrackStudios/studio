@@ -3,5 +3,6 @@
 fn main() -> Result<(), architect_extensions::guest::GuestError> {
     daw_extension::start_engine(std::env::var("FTS_DAW_OPEN").ok());
     daw_extension::deck::lead();
+    daw_extension::meters::publish();
     architect_extensions::guest::Guest::extension(&daw_extension::Daw).serve()
 }

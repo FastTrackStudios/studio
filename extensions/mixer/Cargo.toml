@@ -21,17 +21,19 @@ session-ui = { workspace = true, features = ["native"] }
 session-engine = { workspace = true, features = ["native"] }
 dioxus = { workspace = true }
 blitz-traits = { workspace = true }
+architect-scene = { workspace = true }
+anyrender = { workspace = true }
 serde_json = { workspace = true }
 web-time = { workspace = true }
 
 [dev-dependencies]
 architect = { workspace = true, features = ["action-list"] }
-architect-scene = { workspace = true }
-anyrender = { workspace = true }
 anyrender_vello_cpu = { workspace = true }
 peniko = { workspace = true }
 png = { workspace = true }
 session = { workspace = true }
+daw-proto = { workspace = true }
+daw-ui = { workspace = true }
 
 [lints]
 workspace = true

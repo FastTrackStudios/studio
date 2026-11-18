@@ -2735,6 +2735,27 @@ impl Meters {
     }
 }
 
+/// The tracks whose meters an engine publishes as values
+/// ([`meter_value`]): the first this many of the project, by index. Five
+/// values a track, inside a shared value table's 1024 slots
+/// (`architect_scene::engine::MAX_SLOTS`); a track past them keeps its
+/// meter drawn into the mixer's picture.
+pub const METER_TRACKS: usize = 204;
+
+/// The engine value a host moves track `index`'s meter by: `part` is `pl`
+/// and `pr` (the channels' peaks), `hl` and `hr` (their holds), and `pk`
+/// (the louder peak, which lights the scale), each [`meter_fraction`] of
+/// its level. The `daw` extension writes them; a mixer pane in an
+/// Architect host draws its meters from them (`studio.mixer`), so a
+/// playing meter costs no frame.
+#[must_use]
+pub fn meter_value(index: usize, part: &str) -> String {
+    format!("engine.meter.{index}.{part}")
+}
+
+/// The parts of a meter [`meter_value`] names.
+pub const METER_PARTS: [&str; 5] = ["pl", "pr", "hl", "hr", "pk"];
+
 /// A meter's height, from a linear peak.
 ///
 /// The meter is drawn from a fraction of its own height, so the level
