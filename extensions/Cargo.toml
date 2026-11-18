@@ -19,13 +19,13 @@ repository = "https://github.com/FastTrackStudios/studio"
 daw-view = { path = "daw-view" }
 paint-kit = { path = "paint-kit" }
 
-# Architect at FastTrackStudios/architect runtime-compositor-arrangement
+# Architect at FastTrackStudios/architect runtime-compositor-arrangement f39ce235
 # (the compositor, plus an engine's values shared across processes).
-architect = { git = "https://github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
-architect-extensions = { git = "https://github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3", default-features = false }
-architect-workspace = { git = "https://github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3", default-features = false }
-architect-theme = { git = "https://github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3", default-features = false }
-architect-scene = { git = "https://github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect = { git = "https://github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
+architect-extensions = { git = "https://github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc", default-features = false }
+architect-workspace = { git = "https://github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc", default-features = false }
+architect-theme = { git = "https://github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc", default-features = false }
+architect-scene = { git = "https://github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
 
 # The session primitive (FastTrackStudios/session main): fts.session's
 # rules and types.
@@ -96,15 +96,15 @@ dioxus-vdom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.
 # v0.12.6 tag; the www. host is another source to cargo, so it may patch
 # the plain one.
 [patch."https://github.com/FastTrackStudios/architect"]
-architect = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
-architect-action-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
-architect-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
-architect-permissions = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
-architect-rpc-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
-architect-story-core = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
-architect-story-macros = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
-architect-story-runtime = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
-architect-ui = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
-architect-theme = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
-architect-workspace-hack = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
-crdt = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
+architect-action-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
+architect-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
+architect-permissions = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
+architect-rpc-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
+architect-story-core = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
+architect-story-macros = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
+architect-story-runtime = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
+architect-ui = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
+architect-theme = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
+architect-workspace-hack = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }
+crdt = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f39ce235545ff524400766d8023d0d4b3c53d9bc" }

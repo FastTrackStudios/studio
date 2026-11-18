@@ -37,6 +37,9 @@ use crate::model::{Model, Row, Wave};
 
 pub const ROW_H: f64 = 52.0;
 pub const HEADER_W: f64 = 180.0;
+/// The track header on a narrow pane (under [`NARROW`] wide).
+pub const HEADER_NARROW: f64 = 116.0;
+pub const NARROW: f64 = 600.0;
 pub const RULER_H: f64 = 36.0;
 /// Rows a band holds.
 pub const BAND_ROWS: usize = 16;
@@ -115,6 +118,7 @@ impl Shared {
 /// What it recorded, at which zoom.
 struct Recorded {
     at_zoom: f64,
+    header: f64,
     model: u64,
     dark: bool,
     height: f64,
@@ -148,6 +152,8 @@ pub struct ArrangeView {
     selection_dirty: bool,
     panning: Option<(f64, f64)>,
     size: (f64, f64),
+    /// The track header's width now: narrower on a narrow pane.
+    header: f64,
 }
 
 fn commands(scene: Scene) -> Arc<Vec<RenderCommand>> {
@@ -367,7 +373,7 @@ fn record_grid(
     (commands(g), commands(ruler))
 }
 
-fn record_headers(m: &Model, p: &Palette) -> Arc<Vec<RenderCommand>> {
+fn record_headers(m: &Model, p: &Palette, hw: f64) -> Arc<Vec<RenderCommand>> {
     let mut s = Scene::new();
     for (i, row) in m.rows.iter().enumerate() {
         #[expect(clippy::cast_precision_loss, reason = "a row")]
@@ -377,10 +383,10 @@ fn record_headers(m: &Model, p: &Palette) -> Arc<Vec<RenderCommand>> {
         } else {
             mix(p.surface, p.ink, 0.03)
         };
-        rect(&mut s, Rect::new(0.0, y, HEADER_W, y + ROW_H), shade);
+        rect(&mut s, Rect::new(0.0, y, hw, y + ROW_H), shade);
         rect(
             &mut s,
-            Rect::new(0.0, y + ROW_H - 1.0, HEADER_W, y + ROW_H),
+            Rect::new(0.0, y + ROW_H - 1.0, hw, y + ROW_H),
             p.border,
         );
         let indent = f64::from(row.depth.min(6)) * 10.0;
@@ -390,7 +396,7 @@ fn record_headers(m: &Model, p: &Palette) -> Arc<Vec<RenderCommand>> {
             row.color.map_or(p.border, rgb),
         );
         #[expect(clippy::cast_possible_truncation, reason = "a width")]
-        let room = (HEADER_W - indent - 48.0) as f32;
+        let room = (hw - indent - 48.0) as f32;
         text(
             &mut s,
             &row.name,
@@ -418,7 +424,7 @@ fn record_headers(m: &Model, p: &Palette) -> Arc<Vec<RenderCommand>> {
         .enumerate()
         {
             #[expect(clippy::cast_precision_loss, reason = "two buttons")]
-            let x = HEADER_W - 40.0 + k as f64 * 18.0;
+            let x = hw - 40.0 + k as f64 * 18.0;
             let b = Rect::new(x, y + 8.0, x + 15.0, y + 23.0);
             rect(&mut s, b, if on { lit } else { mix(p.surface, p.ink, 0.1) });
             text(
@@ -433,12 +439,7 @@ fn record_headers(m: &Model, p: &Palette) -> Arc<Vec<RenderCommand>> {
     }
     rect(
         &mut s,
-        Rect::new(
-            HEADER_W - 1.0,
-            0.0,
-            HEADER_W,
-            m.rows.len().max(1) as f64 * ROW_H,
-        ),
+        Rect::new(hw - 1.0, 0.0, hw, m.rows.len().max(1) as f64 * ROW_H),
         p.border,
     );
     commands(s)
@@ -463,6 +464,7 @@ impl ArrangeView {
             selection_dirty: false,
             panning: None,
             size: (0.0, 0.0),
+            header: HEADER_W,
         }
     }
 
@@ -483,7 +485,7 @@ impl ArrangeView {
     }
 
     fn second_at(&self, x: f64) -> f64 {
-        self.camera.left + (x - HEADER_W) / self.camera.zoom
+        self.camera.left + (x - self.header) / self.camera.zoom
     }
 
     /// The clip under `(x, y)`, if any.
@@ -555,17 +557,17 @@ impl ArrangeView {
             let mut corner = Scene::new();
             rect(
                 &mut corner,
-                Rect::new(0.0, 0.0, HEADER_W, RULER_H),
+                Rect::new(0.0, 0.0, self.header, RULER_H),
                 p.surface,
             );
             rect(
                 &mut corner,
-                Rect::new(0.0, RULER_H - 1.0, HEADER_W, RULER_H),
+                Rect::new(0.0, RULER_H - 1.0, self.header, RULER_H),
                 p.border,
             );
             rect(
                 &mut corner,
-                Rect::new(HEADER_W - 1.0, 0.0, HEADER_W, RULER_H),
+                Rect::new(self.header - 1.0, 0.0, self.header, RULER_H),
                 p.border,
             );
             #[expect(clippy::cast_possible_truncation, reason = "a width")]
@@ -574,7 +576,7 @@ impl ArrangeView {
                 &m.name,
                 12.0,
                 (10.0, 22.0),
-                (HEADER_W - 20.0) as f32,
+                (self.header - 20.0) as f32,
                 p.ink,
             );
             let mut line = Scene::new();
@@ -590,6 +592,7 @@ impl ArrangeView {
                 self.model.version(),
                 Recorded {
                     at_zoom: r,
+                    header: self.header,
                     model: 0,
                     dark: p.dark,
                     height,
@@ -597,7 +600,7 @@ impl ArrangeView {
                     grid,
                     ruler,
                     ruler_bg: commands(ruler_bg),
-                    headers: record_headers(m, p),
+                    headers: record_headers(m, p, self.header),
                     corner: commands(corner),
                     playhead: commands(line),
                     tiles: std::collections::HashMap::new(),
@@ -658,10 +661,10 @@ impl PaintView for ArrangeView {
             } => {
                 let (dx, dy, x) = (f64::from(*dx), f64::from(*dy), f64::from(*x));
                 if mods.iter().any(|m| *m == "Mod" || *m == "Ctrl") {
-                    let at = self.second_at(x.max(HEADER_W));
+                    let at = self.second_at(x.max(self.header));
                     self.camera.zoom *= (-dy * 0.002).exp();
                     self.clamp();
-                    self.camera.left = at - (x.max(HEADER_W) - HEADER_W) / self.camera.zoom;
+                    self.camera.left = at - (x.max(self.header) - self.header) / self.camera.zoom;
                     self.zoomed_at = Some(Instant::now());
                 } else if mods.contains(&"Shift") {
                     self.camera.left += dy / self.camera.zoom;
@@ -672,11 +675,11 @@ impl PaintView for ArrangeView {
             }
             ViewInput::PointerDown { x, y, button, mods } => {
                 let (x, y) = (f64::from(*x), f64::from(*y));
-                if x >= HEADER_W && y < RULER_H {
+                if x >= self.header && y < RULER_H {
                     (self.intents)(Intent::Seek(self.second_at(x).max(0.0)));
                     return false;
                 }
-                if x >= HEADER_W && *button == architect_workspace::Button::Primary {
+                if x >= self.header && *button == architect_workspace::Button::Primary {
                     match self.clip_at(x, y) {
                         Some(id) if mods.contains(&"Shift") || mods.contains(&"Mod") => {
                             if let Some(at) = self.selection.iter().position(|s| *s == id) {
@@ -741,6 +744,11 @@ impl PaintView for ArrangeView {
             f64::from(ctx.geometry.width),
             f64::from(ctx.geometry.height),
         );
+        self.header = if self.size.0 > 0.0 && self.size.0 < NARROW {
+            HEADER_NARROW
+        } else {
+            HEADER_W
+        };
         if let Some(asked) = self.shared.update(|s| s.asked.take()) {
             if (asked.zoom - self.camera.zoom).abs() > 1e-9 {
                 self.zoomed_at = Some(
@@ -756,13 +764,14 @@ impl PaintView for ArrangeView {
         if self.panning.is_none()
             && let Some(at) = self.shared.read(Shared::off_page)
         {
-            let seen = (self.size.0 - HEADER_W).max(1.0) / self.camera.zoom;
+            let seen = (self.size.0 - self.header).max(1.0) / self.camera.zoom;
             self.camera.left = (at - seen * 0.05).max(0.0);
             self.clamp();
         }
         let stale = self.recorded.as_ref().is_none_or(|r| {
             r.model != self.model.version()
                 || r.dark != p.dark
+                || (r.header - self.header).abs() > 0.5
                 || (r.height - self.content_height().max(ROW_H)).abs() > 0.5
         });
         let rested = self.zoomed_at.is_some_and(|t| t.elapsed() >= SETTLE);
@@ -777,10 +786,10 @@ impl PaintView for ArrangeView {
         let (w, h) = self.size;
         let c = self.camera;
         let k = c.zoom / rec.at_zoom;
-        let lanes = Rect::new(HEADER_W, RULER_H, w.max(HEADER_W), h.max(RULER_H));
-        let camera = Affine::translate((HEADER_W - c.left * c.zoom, RULER_H - c.top))
+        let lanes = Rect::new(self.header, RULER_H, w.max(self.header), h.max(RULER_H));
+        let camera = Affine::translate((self.header - c.left * c.zoom, RULER_H - c.top))
             * Affine::scale_non_uniform(k, 1.0);
-        let along = Affine::translate((HEADER_W - c.left * c.zoom, 0.0))
+        let along = Affine::translate((self.header - c.left * c.zoom, 0.0))
             * Affine::scale_non_uniform(k, 1.0);
         let down = Affine::translate((0.0, RULER_H - c.top));
         let mut out = vec![
@@ -807,22 +816,22 @@ impl PaintView for ArrangeView {
                 RULER,
                 Layer::new(Arc::clone(&rec.ruler))
                     .at(along)
-                    .clipped(Rect::new(HEADER_W, 0.0, w.max(HEADER_W), RULER_H))
+                    .clipped(Rect::new(self.header, 0.0, w.max(self.header), RULER_H))
                     .z(11),
             ),
             (
                 HEADERS,
                 Layer::new(Arc::clone(&rec.headers))
                     .at(down)
-                    .clipped(Rect::new(0.0, RULER_H, HEADER_W, h.max(RULER_H)))
+                    .clipped(Rect::new(0.0, RULER_H, self.header, h.max(RULER_H)))
                     .z(12),
             ),
             (CORNER, Layer::new(Arc::clone(&rec.corner)).z(13)),
             (
                 PLAYHEAD,
                 Layer::new(Arc::clone(&rec.playhead))
-                    .at(Affine::translate((HEADER_W - c.left * c.zoom, 0.0)))
-                    .clipped(Rect::new(HEADER_W, 0.0, w.max(HEADER_W), h))
+                    .at(Affine::translate((self.header - c.left * c.zoom, 0.0)))
+                    .clipped(Rect::new(self.header, 0.0, w.max(self.header), h))
                     .z(20)
                     // The host runs it: seconds of the app's playhead
                     // times pixels a second. A zoom sends this again.
@@ -834,7 +843,7 @@ impl PaintView for ArrangeView {
             ),
         ];
         // The tiles near the view: recorded when first needed, kept after.
-        let seen = (w - HEADER_W).max(0.0) / c.zoom;
+        let seen = (w - self.header).max(0.0) / c.zoom;
         #[expect(
             clippy::cast_possible_truncation,
             clippy::cast_sign_loss,
@@ -904,7 +913,7 @@ impl PaintView for ArrangeView {
                 Layer::new(Arc::clone(tile)).at(camera).clipped(lanes).z(2),
             ));
         }
-        let lanes_width = (w - HEADER_W).max(0.0);
+        let lanes_width = (w - self.header).max(0.0);
         self.shared.update(|s| {
             s.camera = Some(self.camera);
             s.layers = out.len();

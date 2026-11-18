@@ -293,3 +293,65 @@ extension if third parties are to replace them).
   so a schema change moves one provider.
 - The engine builds what it plays from the session's `daw` data on each
   document change, off the audio thread.
+
+## 8. As built (2026-11-17)
+
+`extensions/` holds five crates: `daw-view` (the `fts.daw` contract), `paint-kit` (glyph text, theme palette), `daw` (the engine extension), `arrangement` (`studio.arrangement`), `mixer` (`studio.mixer`, views `mixer` and `tcp`). `extensions/dev.sh` builds them, installs each program into its package and starts an isolated stock Architect (`architect-desktop dev`) with only them and the playhead. Architect is pinned at `runtime-compositor-arrangement` `f39ce235`.
+
+Differences from the plan, and why:
+
+- **A service's methods share its provider's prefix.** `fts.session`'s `read` is the engine's action `DAW_READ`, `fts.daw`'s `state` is `DAW_STATE`: one prefix (`DAW_`) for both services. Action ids must be in the extension's namespace (`STUDIO_ARRANGEMENT_*`, `STUDIO_MIXER_*`).
+- **The engine builds what it plays through REAPER text.** It writes the session's `daw` tracks, clips and mixer state as `.rpp` text and hands it to `daw-standalone`'s loader, which decodes the sources. The session is the source of truth (an import from `.rpp`, the `daw` extension's `import`); the RPP text is the loader's input format only. A direct builder is the `daw` repo's step 4 of `session` §5.3.
+- **The arrangement is tiled.** Its clips are recorded in tiles (sixteen rows by about 2,048 px of time), only near the view, kept by the view and held by the host by hash. Recorded whole, a 300-track, 20,100-clip arrangement was a 54.6 MB first paint, and a re-record after a zoom exceeded the host's 64 MB batch.
+- **Transport echoes.** The engine leads the deck; the deck's `playhead.changed` comes back to it through a hook. The engine ignores the deck's events for 600 ms after its own reports, or a seek's `pause` echoed after a `play` stops it.
+
+### Measured
+
+Bytes are what the real view sends through the `ops::Sender` a process uses (`tests/measure.rs` in each view); "host" is the host's `Receiver` composing the pane into a scene (CPU, the GPU's raster not included). Dev build: the extensions at opt-level 2, their dependencies at 1. THEBATTLESHIP.
+
+Arrangement, 8 tracks / 320 clips, 1280×800 (synthetic waveforms):
+
+| | bytes | view work p50 / p99 | host compose p50 / p99 |
+|---|---|---|---|
+| first paint (font 740 KB included) | 1,190,386 | 0.66 ms | 2.5 ms with decode |
+| a frame of playback (the host runs the playhead) | 0 | 0.001 ms | 0.13 / 0.33 ms |
+| a frame of panning | ~400 (transforms) | 0.001 ms | 0.13 / 0.22 ms |
+| a frame of a zoom gesture | ~435 | 0.001 ms | 0.12 / 0.15 ms |
+| the zoom at rest (re-recorded once) | 423,013 | 0.9 ms | 0.32 ms |
+
+Arrangement, 300 tracks / 20,100 clips, 3440×1440:
+
+| | bytes | view work p50 / p99 | host compose p50 / p99 |
+|---|---|---|---|
+| first paint | 3,309,941 | 7.4 ms | 23 ms with decode |
+| playback | 0 | 0.007 ms | 1.4 / 4.3 ms |
+| panning, into tiles not yet sent | 6,920 a frame | 0.006 ms | 1.1 / 4.1 ms |
+| panning back over tiles already sent | 646 a frame | 0.007 ms | 1.4 / 4.0 ms |
+| scrolling into new tiles / back | 10,333 / 704 a frame | 0.011 ms | 2.7 / 4.9 ms |
+| zoom gesture | 39,227 a frame (tiles the wider view reveals) | 0.007 ms | 1.1 / 3.5 ms |
+| zoom at rest | 2,284,454 once | 4.7 ms | 1.9 ms |
+
+Mixer and track panel:
+
+| tracks | view | first paint | layers | 240 frames of meters | 120 frames of a fader drag | scroll a frame | host compose (drag) |
+|---|---|---|---|---|---|---|---|
+| 8 | mixer | 774,688 B | 35 | 0 B | 0 B | 0 B | 0.02 ms |
+| 300 | mixer | 1,304,098 B | 1,207 | 0 B | 0 B | 38 B | 1.0 ms |
+| 8 | tcp | 773,854 B | 35 | 0 B | 0 B | 0 B | 0.02 ms |
+| 300 | tcp | 1,267,868 B | 1,207 | 0 B | 0 B | 38 B | 1.0 ms |
+
+Live, in a stock Architect in a GPU Loft session (RTX 4080, a 60 Hz output), the engine playing "Drive To LA" from the owner's recital set into a private PipeWire null sink:
+
+- **The playhead against the engine's clock**, sampled with `grim` every ~25 ms: median 0.10 px, max 0.9 px at 20 px/s (5 ms, 45 ms); at 200 px/s median 0.86 px, p95 4.9 px, max 6.4 px (4 ms, 24 ms, 32 ms), within a frame or two of a 60 Hz output. The same with the 20,100-clip fixture on screen: median 0.10 px, max 1.05 px.
+- **A fader held at the bottom**: the engine's post-fader meter reads 0.0 while the document still holds the old value; one write on release.
+- **What capped it, and what is unproven**: the session's output is 60 Hz, so nothing above 60 frames a second was presented. The work a frame (view ≤ 0.01 ms, host compose 0.1–4 ms for the scene, GPU raster not measured) leaves room for 240 Hz on the 8-track song and is borderline at 20,000 clips (host compose p99 4.3–4.9 ms against a 4.2 ms frame). **240 fps on an ultrawide is not shown**: it needs a high-refresh output and a measurement of the window's whole frame (scene, raster, present), which Architect does not report yet.
+- **Found and fixed on the way** (Architect `f39ce235`): the development watcher read and hashed every file of a development copy's folder on the window's thread every poll. A debug program is hundreds of megabytes, so the window drew nothing for ~1.1 s every ~1.5 s, and the playhead held and jumped. Large files are now known by size and time.
+
+### Not done yet
+
+- Recording, item editing (move, trim, split), automation, sends, FX, folders collapsing; selection is the view's (not presence); markers and regions are read-only.
+- The track panel does not follow the arrangement's vertical scroll (§6).
+- The engine re-reads the whole session on open only: a track or clip added by another device reaches the views (by the revision) but not the engine until the session is opened again. Mixer fields do reach it.
+- Beats in the ruler hold each tempo change as a step (ramps drawn as steps).
+- A source that is not a WAV gets no peaks.
+- The tab strip of the window is under Loft's bar in the "with chrome" capture (a window-mode artefact of the test session, not the views).

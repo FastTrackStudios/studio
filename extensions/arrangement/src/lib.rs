@@ -147,8 +147,15 @@ async fn follow(
 ) {
     let mut seen: Option<u64> = None;
     let mut polls = 0_u64;
+    let mut was_fixture = false;
     loop {
-        if !model.read(|m| m.fixture) {
+        let fixture = model.read(|m| m.fixture);
+        // A fixture taken away: read the session again.
+        if was_fixture && !fixture {
+            seen = None;
+        }
+        was_fixture = fixture;
+        if !fixture {
             let state: Result<State, String> = daw(method::STATE, json!({})).await;
             if let Ok(s) = &state {
                 let page = shared.update(|sh| {
