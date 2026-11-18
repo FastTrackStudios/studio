@@ -5386,15 +5386,28 @@ pub fn run(id: &str, args: &[u8]) -> Result<Vec<u8>, String> {
         // awaited here, off any runtime — a window with no link (driving
         // a REAPER) runs the engine's actions itself.
         Err(architect::action::ActionError::Failed { message, .. })
-            if message.contains("run_json_async")
-                && tokio::runtime::Handle::try_current().is_err() =>
+            if message.contains("run_json_async") =>
         {
-            crate::open::runtime()
-                .ok_or_else(|| "no runtime to run it on".to_owned())
-                .and_then(|rt| {
-                    rt.block_on(list().run_json_async(id, args))
-                        .map_err(|e| e.to_string())
+            let block = || {
+                crate::open::runtime()
+                    .ok_or_else(|| "no runtime to run it on".to_owned())
+                    .and_then(|rt| {
+                        rt.block_on(list().run_json_async(id, args))
+                            .map_err(|e| e.to_string())
+                    })
+            };
+            // On a thread driving a runtime already (an Architect process
+            // view's paint, where a control presses a window action the
+            // view claims): on a thread of its own, waited for.
+            if tokio::runtime::Handle::try_current().is_ok() {
+                std::thread::scope(|s| {
+                    s.spawn(block)
+                        .join()
+                        .unwrap_or_else(|_| Err("the action's thread panicked".to_owned()))
                 })
+            } else {
+                block()
+            }
         }
         other => other.map_err(|e| e.to_string()),
     };

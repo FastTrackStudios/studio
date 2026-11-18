@@ -182,7 +182,12 @@ pub fn mode_from_env() -> session::modes::Mode {
 /// The window actions the mixer pane carries out (`studio.mixer` claims
 /// them from the engine; a window showing the arrangement hands them
 /// over): what `studio-desktop`'s one window runs itself.
-pub const MIXER_ACTIONS: [&str; 3] = ["MIXER_VIEW", "SESSION_MIXER_FX", "SESSION_TOGGLE_MIXER"];
+pub const MIXER_ACTIONS: [&str; 4] = [
+    "MIXER_VIEW",
+    "SESSION_MIXER_FX",
+    "SESSION_TOGGLE_MIXER",
+    "SESSION_CLOSEUP",
+];
 
 /// Whether the `daw` extension's value table carries the tracks' mute and
 /// solo ([`session_engine::engine::track_value`]).

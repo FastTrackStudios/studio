@@ -48,7 +48,12 @@ const SIZE: (u32, u32) = (1280, 752);
 fn session() -> StudioSession {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../features/dynamic-template/fixtures/golden/template.rpp");
-    session_engine::open::open_silent(&path).expect("open the golden template");
+    // Once a process: the engine opens one song (`cargo test` runs both
+    // tests in one process, nextest each in its own).
+    static OPEN: std::sync::Once = std::sync::Once::new();
+    OPEN.call_once(|| {
+        session_engine::open::open_silent(&path).expect("open the golden template");
+    });
     let raw = session_ui::studio::fetch().expect("read it back");
     let planner = session_ui::studio::Planner {
         raw: Arc::new(raw),
@@ -189,4 +194,65 @@ fn the_pane_shows_the_pixels_studio_s_close_up_paints() {
             "{which:?}: the pane's pixels differ from the window's"
         );
     }
+}
+
+/// `SESSION_CLOSEUP` asking another panel of an open pane (`closeup::ask`,
+/// what studio.mixer's handler calls): the pane's host shows it from its
+/// next frame, the very pixels the window's widget paints for that panel.
+#[test]
+fn a_panel_asked_for_later_is_the_panes_to_the_pixel() {
+    let song = session();
+    let got = Got::default();
+    let mut vdom = VirtualDom::new_with_props(Root, RootProps { got: got.clone() });
+    vdom.rebuild_in_place();
+    let scope = got.0.borrow().clone().expect("a scope");
+    let rows = song.planner.plan_strips(&song.planner.raw);
+    let tone = studio_mixer::closeup::settings(&song);
+    let guid = rows
+        .as_slice()
+        .iter()
+        .map(|(t, _)| t.guid.clone())
+        .find(|g| tone.store.borrow().get(g).is_some())
+        .expect("a track with a rack");
+    // Open on the EQ, following asks as the pane does.
+    let pane = Rc::new(RefCell::new(RackWidget::new(
+        Rc::clone(&tone),
+        guid.clone(),
+        Which::Eq,
+        false,
+    )));
+    let mut hosted = HostedRack::new(
+        Rc::clone(&pane),
+        scope.clone(),
+        Arc::new(Mutex::new(Stats::default())),
+    )
+    .following_asks(Rc::clone(&tone));
+    let mut sender = Sender::default();
+    let mut receiver = Receiver::new();
+    receiver
+        .apply(&sender.frame(&hosted.layers(&ctx()).unwrap()).unwrap())
+        .unwrap();
+    // Asked the compressor: the next frame is it.
+    studio_mixer::closeup::ask(&guid, Which::Comp);
+    if let Some(batch) = sender.frame(&hosted.layers(&ctx()).unwrap()) {
+        receiver.apply(&batch).unwrap();
+    }
+    let mut window = RackWidget::new(Rc::clone(&tone), guid, Which::Comp, false);
+    let in_app = scope.run(|| window.paint_scene(SIZE.0, SIZE.1, 1.0));
+    let a = raster(|p| p.append_scene(in_app.clone(), Affine::IDENTITY));
+    let b = raster(|p| {
+        receiver
+            .layers()
+            .compose_at(p, Affine::IDENTITY, &Readings::NONE, receiver.values());
+    });
+    let differing = a
+        .chunks_exact(4)
+        .zip(b.chunks_exact(4))
+        .filter(|(x, y)| x != y)
+        .count();
+    println!(
+        "close-up asked comp after eq: {differing} of {} pixels differ",
+        SIZE.0 * SIZE.1
+    );
+    assert_eq!(differing, 0, "the pane did not show the panel asked for");
 }
