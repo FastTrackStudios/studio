@@ -6,8 +6,6 @@
 "keybinds" = "patch"
 "keys" = "patch"
 "launcher" = "patch"
-"meter-plugin" = "patch"
-"plugin-core" = "patch"
 "reaper-dioxus" = "patch"
 "reaper-embed" = "patch"
 "reaper-input" = "patch"

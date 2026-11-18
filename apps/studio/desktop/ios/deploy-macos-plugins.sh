@@ -30,7 +30,7 @@ cd "$ROOT"
 # notarization. See deploy-macos.sh for why a test machine must not mint a
 # Developer ID cert.
 if [ "${ADHOC_SIGN:-}" != "1" ]; then
-    # shellcheck disable=SC1090
+    # shellcheck disable=SC1090,SC1091
     source "$HOME/.appstoreconnect/config.env"
 fi
 
@@ -85,7 +85,7 @@ ls target/bundled/
 # running the command, so grab only the LAST line (cargo pkgid's own
 # output) rather than the whole captured stream — otherwise the banner
 # text ends up baked into $VERSION (and then the zip filename).
-VERSION="$("$NIX" develop "$ROOT" --accept-flake-config -c cargo pkgid -p eq-plugin | tail -1 | sed 's/.*[#@]//')"
+VERSION="$("$NIX" develop "$ROOT" --accept-flake-config -c cargo pkgid -p nam-plugin | tail -1 | sed 's/.*[#@]//')"
 echo "=== plugin bundle version: $VERSION ==="
 
 # ── Sign every bundle (inside-out: nested code first, then the bundle) ──────

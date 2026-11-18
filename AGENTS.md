@@ -32,8 +32,10 @@ apps/       studio/desktop                     Studio, THE app (desktop + iOS, o
                                                Studio's extensions compiled in; its node
                                                is the hosted Architect
                                                (docs/architect-distribution.md)
-            plugins/*                          the CLAP/VST3 plugins (`<name>-plugin`),
-                                               verify/ (bundle load checks)
+            plugins/*                          the plugins that need Studio (nam,
+                                               signal, guide, sampler, host), verify/
+                                               (bundle load checks); the effects'
+                                               plugins are in FastTrackStudios/fts-fx
             themer/
 crates/     daw/*      the DAW alone: the domain core (`daw`), the standalone
                        engine (`daw-standalone`), session-format, actions.
@@ -53,7 +55,9 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
             rigs/        the instruments — guitar, keys, drums, ekit, synth,
                          orchestra — plus host/ (rigs on the one engine) and
                          proto/ (the shared RigCore service)
-            dsp/*        the effects and their engines (+ nam, analyzer, …)
+            dsp/*        builtin (the effects as engine blocks) and nam; the
+                         effects themselves (`dsp`, `dsp-core`) are in
+                         FastTrackStudios/fts-fx (docs/fts-fx.md)
             editor/      the editor: piano roll, drum lanes, curves
             timeline/    the editing engine the arrangement and the editor
                          share (docs/design/timeline.md)
@@ -71,8 +75,9 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
                          (`studio productions …`; studio#396)
             session/, song/, sampler/, plugin-host/, input/,
             sync/, chords/, formats/, control-surfaces/,
-            dynamic-template/, patch-list/, preset-browser/, …
-            ui/*         shared UI: daw-ui, dock, plugin-core, plugin-faces, …
+            dynamic-template/, patch-list/, …
+            ui/*         shared UI: daw-ui, dock, plugin-faces, … (fts-audio-ui
+                         and plugin-core are in fts-fx)
             app/         shell (log ring, crash log, update check), launcher
             adapters/    reaper/ (everything REAPER), web/ (the AudioWorklet)
 vendor/     patched third-party crates (each with UPSTREAM.md or FTS-PATCH.md)
@@ -120,13 +125,14 @@ working there.
 
 - **One crate per feature, with cargo features** — not `-proto` / `-ui` /
   `-dsp` sibling crates. A feature's wire types, UI and engine are features
-  of its one crate (`features/dsp/eq`: `native`, `ui`, `profiles`, …).
+  of its one crate (fts-fx's `dsp`: `eq-native`, `eq-ui`, `eq-profiles`, …).
 - **Path deps inside the repo, declared once** in the root
   `[workspace.dependencies]` and consumed as `x.workspace = true`.
   `default-features = false` cannot be set on a workspace-inherited dep —
   put it on the `[workspace.dependencies]` entry.
 - **Git deps across repos, pinned to a tag** (architect, keyflow, editor,
-  music-convention, neural-amp-modeler-rs, the `vendor` repo). The base
+  music-convention, neural-amp-modeler-rs, the `vendor` repo), or to a
+  `rev` (fts-fx: the effects, every crate at one rev; `docs/fts-fx.md`). The base
   crates from FastTrackStudios/daw are pinned to one revision until that
   repo cuts a tag. The branch
   pins that remain say why in Cargo.toml (nice-plug's `fts-baseview-03`,
@@ -368,7 +374,11 @@ Signal is the live-rig domain: `features/rigs/*` (the domain core in
 tone3000, …; docs in `features/signal/docs/`), the effects in
 `features/dsp/*`, `features/adapters/reaper/signal-*`, `apps/signal/*` and
 Studio's Signal side (`apps/studio/desktop`).
-`docs/signal/domain-model.md` explains the rig model.
+`docs/signal/domain-model.md` explains the rig model. The effects' own
+code (`dsp`, `dsp-core`, the effect plugins, `fts-audio-ui`, `plugin-core`,
+`preset-browser`) is in FastTrackStudios/fts-fx since studio#510; the rules
+below that speak of `features/dsp/*` hold there, and here for `builtin` and
+`nam`. `docs/fts-fx.md` says how to work on both at once.
 
 **Detachable GUI (strict)**: the rig engine is headless; every GUI —
 desktop, phone, browser, plugin editor — is a vox client of it.

@@ -2,7 +2,6 @@
 "daw-ui" = "patch"
 "dynamic-template" = "patch"
 "guitar" = "patch"
-"mic-plugin" = "patch"
 "sampler" = "patch"
 "session-ui" = "patch"
 "studio" = "patch"
