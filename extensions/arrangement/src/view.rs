@@ -80,8 +80,8 @@ pub enum Intent {
     Stop,
 }
 
-/// What the view says of itself (`ARRANGEMENT_STATE`), and what an
-/// action asks of it (`ARRANGEMENT_VIEW`).
+/// What the view says of itself (`STUDIO_ARRANGEMENT_STATE`), and what an
+/// action asks of it (`STUDIO_ARRANGEMENT_VIEW`).
 #[derive(Debug, Clone, Default)]
 pub struct Shared {
     pub camera: Option<Camera>,

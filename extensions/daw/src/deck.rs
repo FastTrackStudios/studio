@@ -92,7 +92,9 @@ pub fn moved(playing: bool, position: f64) {
 
 /// The deck moved (`app:playhead.changed`, this extension's source): the
 /// engine follows when it was someone else's move.
-pub fn heard(state: &Json) {
+pub fn heard(args: &Json) {
+    // A hook is given `{event, detail}`: the detail is the source's state.
+    let state = args.get("detail").unwrap_or(args);
     let playing = state.get("playing").and_then(Json::as_bool);
     let time = state.get("time").and_then(Json::as_f64);
     #[cfg(feature = "audio")]

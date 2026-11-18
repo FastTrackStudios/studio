@@ -25,27 +25,33 @@ path = "daw-extension"
 effect = "mutating"
 events = ["playhead.changed"]
 
-# fts.session: the session primitive's three methods.
+# fts.session: the session primitive's three methods. A service's method m is
+# the provider's action DAW_<M>, one prefix for both services: fts.session's
+# read, write, structure; fts.daw's state, tracks, clips, peaks, transport,
+# set, open.
 [[actions]]
-id = "DAW_SESSION_READ"
+id = "DAW_READ"
 name = "Session: read"
 description = "fts.session read: a caller's namespace, the timeline (others' payloads null), the song's structure."
 group = "DAW"
 effect = "read_only"
+params = '{"type":"object","properties":{"doc":{"type":"string"},"request":{}},"required":["doc","request"]}'
 
 [[actions]]
-id = "DAW_SESSION_WRITE"
+id = "DAW_WRITE"
 name = "Session: write"
 description = "fts.session write: the caller's namespace, lanes and items."
 group = "DAW"
 effect = "mutating"
+params = '{"type":"object","properties":{"doc":{"type":"string"},"request":{}},"required":["doc","request"]}'
 
 [[actions]]
-id = "DAW_SESSION_STRUCTURE"
+id = "DAW_STRUCTURE"
 name = "Session: structure"
 description = "fts.session structure: tempo, markers, regions."
 group = "DAW"
 effect = "mutating"
+params = '{"type":"object","properties":{"doc":{"type":"string"},"request":{}},"required":["doc","request"]}'
 
 # fts.daw.
 [[actions]]
@@ -107,6 +113,7 @@ name = "DAW: follow the playhead"
 description = "The app's playhead moved: the engine follows (its hook)."
 group = "DAW"
 effect = "mutating"
+params = '{"type":"object","properties":{"event":{"type":"string"},"detail":{}}}'
 
 [[hooks]]
 on = "app:playhead.changed"

@@ -30,14 +30,14 @@ title = "Arrangement"
 icon = "rows-3"
 
 [[actions]]
-id = "ARRANGEMENT_STATE"
+id = "STUDIO_ARRANGEMENT_STATE"
 name = "Arrangement: state"
 description = "Every open arrangement: its session, rows, clips, waveforms held, camera (left, top, zoom), selection, layers and its view's frame times."
 group = "Arrangement"
 effect = "read_only"
 
 [[actions]]
-id = "ARRANGEMENT_VIEW"
+id = "STUDIO_ARRANGEMENT_VIEW"
 name = "Arrangement: set the view"
 description = "Moves the open arrangements' camera: `left` (seconds), `top` (pixels), `zoom` (pixels a second)."
 group = "Arrangement"
@@ -45,7 +45,7 @@ effect = "mutating"
 params = '{"type":"object","properties":{"left":{"type":"number"},"top":{"type":"number"},"zoom":{"type":"number"}}}'
 
 [[actions]]
-id = "ARRANGEMENT_FIXTURE"
+id = "STUDIO_ARRANGEMENT_FIXTURE"
 name = "Arrangement: show a fixture"
 description = "Shows a synthetic arrangement of `tracks` rows of `clips` each (a measurement's size); with neither, the session again."
 group = "Arrangement"

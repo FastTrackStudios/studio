@@ -71,7 +71,7 @@ pub struct Model {
     /// Whether an engine (`fts.daw`) answered.
     pub engine: bool,
     pub problem: Option<String>,
-    /// A synthetic model (`ARRANGEMENT_FIXTURE`): no reads replace it.
+    /// A synthetic model (`STUDIO_ARRANGEMENT_FIXTURE`): no reads replace it.
     pub fixture: bool,
 }
 
