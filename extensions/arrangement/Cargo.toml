@@ -28,7 +28,10 @@ futures-util = "0.3"
 futures-timer = "3"
 
 [dev-dependencies]
+# tests/measure.rs: the sender a process uses, the receiver and composer
+# a host uses, a view context.
 architect-scene = { workspace = true }
+architect = { workspace = true, features = ["action-list"] }
 
 [lints]
 workspace = true
