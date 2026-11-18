@@ -1,0 +1,37 @@
+[package]
+name = "studio-mixer"
+description = "Studio's mixer and its selected-track strip as a runtime extension: the mixer studio-desktop docks under its arrangement and the inspector strip beside it (session-ui's mixer widget), in Architect panes, attached to Studio's engine (the daw extension) as studio-desktop's window attaches to `studio engine`."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "studio-mixer"
+path = "src/main.rs"
+
+[dependencies]
+studio-view-link = { workspace = true }
+architect-extensions = { workspace = true, features = ["guest", "linked-core", "paint-pane"] }
+architect-workspace = { workspace = true, features = ["paint-ui"] }
+session-ui = { workspace = true, features = ["native"] }
+session-engine = { workspace = true, features = ["native"] }
+dioxus = { workspace = true }
+blitz-traits = { workspace = true }
+serde_json = { workspace = true }
+web-time = { workspace = true }
+
+[dev-dependencies]
+architect = { workspace = true, features = ["action-list"] }
+architect-scene = { workspace = true }
+anyrender = { workspace = true }
+anyrender_vello_cpu = { workspace = true }
+peniko = { workspace = true }
+png = { workspace = true }
+session = { workspace = true }
+
+[lints]
+workspace = true

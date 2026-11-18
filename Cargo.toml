@@ -11,6 +11,8 @@ members = [
     # Studio's views and engine as Architect runtime extensions (studio#519).
     "extensions/daw",
     "extensions/arrangement",
+    "extensions/mixer",
+    "extensions/link",
     "features/timeline",
     "features/editing",
     "features/ui/dock",
@@ -782,6 +784,7 @@ session-engine = { path = "apps/session/engine", default-features = false }
 # Its host-neutral runtime: no window, no shell, no Dioxus (studio#400).
 session-runtime = { path = "apps/session/runtime" }
 session-ui = { path = "apps/session/ui", default-features = false }
+studio-view-link = { path = "extensions/link" }
 signal-rig-host = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-rigs-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-rig-shell = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }

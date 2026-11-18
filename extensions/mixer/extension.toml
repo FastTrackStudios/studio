@@ -1,0 +1,43 @@
+# studio.mixer (src/lib.rs): Studio's mixer, the one studio-desktop docks
+# under its arrangement, and its selected-track strip (the inspector), in
+# a stock Architect as a process. A Studio window attached to Studio's
+# engine (the `daw` extension runs it), as studio-desktop's window
+# attaches to `studio engine`. It names no other view.
+id = "studio.mixer"
+name = "Mixer"
+version = "0.2.0"
+kind = "process"
+api = "0.1"
+description = "Studio's mixer: every track's strip — fader, pan, mute, solo, arm, meters, its FX rack — and the selected track's strip, as studio-desktop shows them."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "studio-mixer"
+
+[capabilities]
+effect = "mutating"
+
+[[views]]
+id = "mixer"
+title = "Mixer"
+icon = "sliders-vertical"
+
+[[views]]
+id = "strip"
+title = "Track strip"
+icon = "sliders-horizontal"
+
+[[actions]]
+id = "STUDIO_MIXER_STATE"
+name = "Mixer: state"
+description = "Whether this window is linked to Studio's engine, the song it shows, whether the racks show, and each pane's frames (how many, how many changed, the view's work)."
+group = "Mixer"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_MIXER_RACKS"
+name = "Mixer: show the FX racks"
+description = "Shows the FX racks over the strips' faders (`on`: true) or hides them (false), the faders then taking the whole height; with neither, the other way: the bottom bar's Racks switch."
+group = "Mixer"
+effect = "mutating"
+params = '{"type":"object","properties":{"on":{"type":"boolean"}}}'

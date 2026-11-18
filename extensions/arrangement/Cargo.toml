@@ -14,6 +14,7 @@ name = "studio-arrangement"
 path = "src/main.rs"
 
 [dependencies]
+studio-view-link = { workspace = true }
 architect-extensions = { workspace = true, features = ["guest", "linked-core", "paint-pane"] }
 architect-workspace = { workspace = true, features = ["paint-ui"] }
 session-ui = { workspace = true, features = ["native"] }

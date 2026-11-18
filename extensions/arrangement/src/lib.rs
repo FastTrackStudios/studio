@@ -2,110 +2,39 @@
 //! shows, running in an Architect pane as a process extension.
 //!
 //! Nothing is redrawn or re-modelled here. The process is a Studio window
-//! on Studio's engine: it attaches to the engine the `daw` extension runs
-//! exactly as `studio-desktop`'s window attaches to a `studio engine`
-//! (`session_engine::studio_engine::link`, `session_engine::open::attach`),
-//! reads the song through the window protocol's replicas
-//! (`session_engine::view_client`), and mounts the arrangement panel
+//! on Studio's engine (`studio_view_link`: attached as `studio-desktop`'s
+//! window attaches to a `studio engine`, the song read through the window
+//! protocol's replicas), and mounts the arrangement panel
 //! (`session_ui::panel::use_arrangement_panel`, its widget and its DOM
 //! chrome, `PanelChrome`) with an Architect pane as the panel's host
 //! ([`host`]): the panel's third host, beside dioxus-native and the
 //! browser.
+//!
+//! Its actions are the arrangement window's controls Architect has no
+//! chrome for: the transport (`STUDIO_ARRANGEMENT_PLAY_PAUSE`, `_STOP`)
+//! and the Folded switch (`STUDIO_ARRANGEMENT_FOLDED`), on keys, ⌘K and
+//! MCP as every action is.
 
 pub mod host;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use architect_extensions::linked::{Builder, Extension, PaintPane};
 use architect_workspace::paint::PaintMount;
 use dioxus::prelude::*;
 use serde_json::{Value as Json, json};
-use session_engine::studio_engine::link;
 use session_ui::song_model::StudioSession;
+pub use studio_view_link::attach;
+use studio_view_link::{InScope, Stats};
 
-use crate::host::{Hosted, InScope, Stats};
+use crate::host::Hosted;
 
 pub const MANIFEST: &str = include_str!("../extension.toml");
 
-/// How long a pane waits for an engine before it says so (it keeps
-/// trying after).
-const WAIT: std::time::Duration = std::time::Duration::from_secs(5);
-
-static ATTACHING: AtomicBool = AtomicBool::new(false);
-static PROBLEM: Mutex<Option<String>> = Mutex::new(None);
 /// The latest pane's frame statistics, for `STUDIO_ARRANGEMENT_STATE`.
 static STATS: Mutex<Option<Arc<Mutex<Stats>>>> = Mutex::new(None);
-
-fn problem(why: Option<String>) {
-    *PROBLEM.lock().unwrap_or_else(PoisonError::into_inner) = why;
-}
-
-/// Attach this process, a Studio window, to the engine: what
-/// `studio-desktop`'s window does with `FTS_ENGINE=attach`
-/// (`session_desktop::native::attach_engine`). Once per process, on a
-/// thread of its own; it keeps the link after (an engine that restarts is
-/// attached to again).
-pub fn attach() {
-    if ATTACHING.swap(true, Ordering::AcqRel) {
-        return;
-    }
-    let _ = std::thread::Builder::new()
-        .name("studio-attach".to_owned())
-        .spawn(|| {
-            loop {
-                match link::choose(link::Mode::Attach, WAIT).and_then(|found| attach_to(&found)) {
-                    Ok(()) => {
-                        problem(None);
-                        link::keep_linked(link::Mode::Attach, attach_to);
-                        return;
-                    }
-                    Err(e) => problem(Some(format!("waiting for Studio's engine: {e}"))),
-                }
-            }
-        });
-}
-
-fn attach_to(found: &link::Found) -> Result<(), String> {
-    let target = session_engine::open::RemoteTarget::Engine {
-        socket: found.socket.clone(),
-    };
-    session_engine::open::set_mode(session_engine::open::ModeState::remote(
-        target.clone(),
-        false,
-    ));
-    session_engine::open::attach(&target).map_err(|e| e.to_string())?;
-    link::set_linked(found.clone());
-    Ok(())
-}
-
-/// The song the engine has current, as the window lays it out, with what
-/// names it (a new song or a new set mounts the panel again).
-fn current() -> Option<(String, StudioSession)> {
-    session_engine::view_client::peek_set(|view| {
-        let set = view.setlist.as_ref()?;
-        let song = set.songs.get(set.at)?;
-        Some((
-            format!("{}:{}", view.epoch, song.project),
-            song.session.clone(),
-        ))
-    })
-}
-
-/// The window's mode as Studio's shell has it: `FTS_SESSION_MODE`, else
-/// Live (`session_desktop::native::shell`).
-fn mode_from_env() -> session::modes::Mode {
-    std::env::var("FTS_SESSION_MODE")
-        .ok()
-        .and_then(|name| {
-            session::modes::Mode::ALL
-                .into_iter()
-                .find(|m| m.display_name().eq_ignore_ascii_case(&name))
-        })
-        .unwrap_or(session::modes::Mode::Live)
-}
 
 pub struct Arrangement;
 
@@ -118,10 +47,10 @@ impl Extension for Arrangement {
         ext.view("arrangement", ArrangementPane)
             .action("STUDIO_ARRANGEMENT_STATE", |_| async { Ok(state()) })
             .action("STUDIO_ARRANGEMENT_PLAY_PAUSE", |_| async {
-                run("SESSION_PLAY_PAUSE", &Json::Null)
+                studio_view_link::run("SESSION_PLAY_PAUSE", &Json::Null)
             })
             .action("STUDIO_ARRANGEMENT_STOP", |_| async {
-                run("SESSION_STOP", &Json::Null)
+                studio_view_link::run("SESSION_STOP", &Json::Null)
             })
             .action("STUDIO_ARRANGEMENT_FOLDED", |args| async move {
                 let on = args
@@ -134,40 +63,20 @@ impl Extension for Arrangement {
     }
 }
 
-/// An action of the engine's Action List, run over this window's link.
-fn run(id: &str, args: &Json) -> Result<Json, String> {
-    let out = session_engine::view_client::run(id, args.to_string().as_bytes())?;
-    Ok(serde_json::from_str(&out).unwrap_or(Json::String(out)))
-}
-
 fn state() -> Json {
-    let song = current().map(|(key, s)| (key, s.project.tracks.len()));
+    let song = studio_view_link::current().map(|(key, s)| (key, s.project.tracks.len()));
     let stats = STATS
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
-        .map(|s| s.lock().unwrap_or_else(PoisonError::into_inner).clone());
-    let pct = |v: &std::collections::VecDeque<f64>, p: usize| {
-        let mut s: Vec<f64> = v.iter().copied().collect();
-        s.sort_by(f64::total_cmp);
-        s.get((s.len().saturating_sub(1) * p) / 100)
-            .copied()
-            .unwrap_or(0.0)
-    };
+        .map(|s| s.lock().unwrap_or_else(PoisonError::into_inner).json());
     json!({
         "linked": session_engine::view_client::is_linked(),
-        "problem": PROBLEM.lock().unwrap_or_else(PoisonError::into_inner).clone(),
+        "problem": studio_view_link::problem(),
         "song": song.as_ref().map(|(k, _)| k.clone()),
         "tracks": song.as_ref().map(|(_, n)| *n),
         "folded": session_ui::folds::tops(),
-        "frames": stats.as_ref().map(|s| json!({
-            "count": s.frames,
-            "changed": s.changed,
-            "size": [s.size.0, s.size.1],
-            "commands": s.commands,
-            "work_p50_ms": pct(&s.work_ms, 50),
-            "work_p99_ms": pct(&s.work_ms, 99),
-        })),
+        "frames": stats,
     })
 }
 
@@ -175,37 +84,15 @@ fn state() -> Json {
 /// what it waits for until then.
 #[component]
 fn ArrangementPane() -> Element {
-    attach();
-    let mut song = use_signal(current);
-    use_future(move || async move {
-        loop {
-            futures_timer::Delay::new(std::time::Duration::from_millis(200)).await;
-            let now = current();
-            if now.as_ref().map(|(k, _)| k) != song.peek().as_ref().map(|(k, _)| k) {
-                song.set(now);
-            }
-        }
-    });
-    let colors = daw_ui::studio::lanes::Colors::from_theme(&daw_ui::theming::Theme::dark());
-    let surface = colors.surface.clone();
+    let song = studio_view_link::use_song();
+    let surface = studio_view_link::surface();
     match song() {
         Some((key, session)) => rsx! {
             div { style: "position:relative; width:100%; height:100%; background:{surface};",
                 Panel { key: "{key}", session: Song(session) }
             }
         },
-        None => {
-            let why = PROBLEM
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .clone()
-                .unwrap_or_else(|| "Waiting for Studio's engine to open a song…".to_owned());
-            rsx! {
-                div { style: "padding:16px; font-size:13px; opacity:0.7; color:#ccc; background:{surface}; height:100%;",
-                    "{why}"
-                }
-            }
-        }
+        None => studio_view_link::waiting(),
     }
 }
 
@@ -225,7 +112,7 @@ impl PartialEq for Song {
 #[component]
 fn Panel(session: Song) -> Element {
     use_context_provider(|| session.0.clone());
-    use_context_provider(|| Signal::new(mode_from_env()));
+    use_context_provider(|| Signal::new(studio_view_link::mode_from_env()));
     // Beside a mixer pane it is not linked to: compact, as docked.
     use_context_provider(|| session_ui::panel::StartCompact(true));
     let applier = use_hook(|| Rc::new(session_ui::engine::Applier::start()));
@@ -245,10 +132,7 @@ fn Panel(session: Song) -> Element {
         stats
     });
     let mount = use_hook(|| {
-        let scope = InScope {
-            runtime: dioxus::core::Runtime::current(),
-            scope: dioxus::core::current_scope_id(),
-        };
+        let scope = InScope::here();
         let (widget, panel, stats) = (Rc::clone(&widget), panel.clone(), Arc::clone(&stats));
         PaintMount::new(move |_| {
             Hosted::new(
@@ -261,7 +145,9 @@ fn Panel(session: Song) -> Element {
     });
     let mounted = Rc::clone(&panel.mounted);
     rsx! {
+        {studio_view_link::studio_style()}
         div {
+            class: studio_view_link::ROOT_CLASS,
             style: "position:absolute; top:0; left:0; right:0; bottom:0; overflow:hidden;",
             onmounted: move |event| {
                 *mounted.borrow_mut() = Some(event.data());

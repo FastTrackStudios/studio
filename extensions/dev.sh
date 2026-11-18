@@ -15,7 +15,7 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
-packages=${EXTENSIONS:-"daw arrangement"}
+packages=${EXTENSIONS:-"daw arrangement mixer"}
 declare -A program=([daw]=daw-extension [arrangement]=studio-arrangement [mixer]=studio-mixer)
 declare -A id=([daw]=daw [arrangement]=studio.arrangement [mixer]=studio.mixer)
 host=$(rustc -vV | sed -n 's/^host: //p')

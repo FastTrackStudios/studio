@@ -684,6 +684,49 @@ pub fn WebMixer(hidden: bool) -> Element {
     }
 }
 
+/// The mixer for a host of its own — an Architect pane, beside the
+/// window's [`Mixer`] and the browser's [`WebMixer`]: the widget over
+/// `links` (from [`Links::alone`], or an inspector's), and what the host
+/// scrolls it with. The host paints it ([`MixerWidget::paint_scene`]),
+/// hands it its input ([`MixerWidget::event`]) and turns the wheel into
+/// [`HostedMixer::wheel`], as the other two do.
+pub struct HostedMixer {
+    pub widget: Rc<RefCell<MixerWidget>>,
+    scroll: Rc<Cell<f64>>,
+    content_w: Rc<Cell<f64>>,
+    /// Touch mode, as the host has it (bigger strips).
+    pub touch: Rc<Cell<bool>>,
+}
+
+impl HostedMixer {
+    #[must_use]
+    pub fn new(links: Links) -> Self {
+        let scroll = Rc::new(Cell::new(0.0_f64));
+        let content_w = Rc::new(Cell::new(0.0_f64));
+        let touch = Rc::new(Cell::new(false));
+        let widget = MixerWidget::new(
+            links,
+            Rc::clone(&scroll),
+            Rc::clone(&content_w),
+            Rc::clone(&touch),
+        );
+        Self {
+            widget: Rc::new(RefCell::new(widget)),
+            scroll,
+            content_w,
+            touch,
+        }
+    }
+
+    /// The wheel over a mixer `width` wide: either direction runs along
+    /// the strips (winit's sign, as [`Mixer`] reads it).
+    pub fn wheel(&self, dx: f64, dy: f64, width: f64) {
+        let most = (self.content_w.get() - width).max(0.0);
+        self.scroll
+            .set((self.scroll.get() - dx - dy).clamp(0.0, most));
+    }
+}
+
 #[cfg(feature = "web")]
 impl crate::web_host::Hosted for MixerWidget {
     fn paint(&mut self, width: u32, height: u32, scale: f64) -> Scene {
@@ -744,7 +787,7 @@ enum Hold {
 }
 
 /// The widget: the recorded strips and what the pointer is doing to them.
-struct MixerWidget {
+pub struct MixerWidget {
     links: Links,
     palette: crate::arrangement::Palette,
     font: crate::text::Font,
