@@ -34,6 +34,9 @@ pub const SCENE: LayerKey = 1;
 /// The play cursor over it: all that crosses while the song plays and the
 /// view stands still.
 pub const CURSOR: LayerKey = 2;
+/// The track panel's mute and solo, lit, from here up: parts the engine's
+/// values show (`ArrangementWidget::paint_layers`), one key each.
+pub const BUTTONS: LayerKey = 1000;
 
 /// The widget hosted in a pane.
 pub struct Hosted {
@@ -42,6 +45,16 @@ pub struct Hosted {
     scope: InScope,
     layer: SceneLayer,
     cursor: SceneLayer,
+    /// The mute and solo parts, as last sent.
+    buttons: studio_view_link::ValueParts,
+    /// The engine's values light the buttons
+    /// (`studio_view_link::engine_lights_buttons`), and when that was last
+    /// looked at.
+    lit_by_values: bool,
+    looked: Option<web_time::Instant>,
+    /// Set by a test: the buttons lit by values or not, whatever the
+    /// table on this machine says.
+    forced: Option<bool>,
     /// The buttons held now: a move carries them, as Blitz's do.
     held: MouseEventButtons,
     /// Where the play cursor is now, seconds: the engine's transport (the
@@ -63,12 +76,25 @@ impl Hosted {
             scope,
             layer: SceneLayer::new(SCENE, stats),
             cursor: SceneLayer::new(CURSOR, Arc::default()),
+            buttons: studio_view_link::ValueParts::default(),
+            lit_by_values: false,
+            looked: None,
+            forced: None,
             held: MouseEventButtons::empty(),
             play_at: Box::new(|| {
                 // Read each frame: the transport is there once the link is.
                 session_ui::engine::Transport::shared().map_or(0.0, |t| t.read().0)
             }),
         }
+    }
+
+    /// The tracks' mute and solo lit by the engine's values (`on`) or
+    /// drawn in the picture, whatever this machine's table says: a test's
+    /// own table.
+    #[must_use]
+    pub const fn with_buttons_lit_by_values(mut self, on: bool) -> Self {
+        self.forced = Some(on);
+        self
     }
 
     /// The play cursor from `play_at` rather than the engine's transport:
@@ -207,13 +233,31 @@ impl PaintView for Hosted {
                 }
             });
         }
-        let (scene, cursor) = {
+        // Looked at every half second: the engine's table, once it is
+        // there, stays.
+        if let Some(on) = self.forced {
+            self.lit_by_values = on;
+        } else if self
+            .looked
+            .is_none_or(|at| began.duration_since(at).as_millis() >= 500)
+        {
+            self.looked = Some(began);
+            self.lit_by_values = studio_view_link::engine_lights_buttons();
+        }
+        let buttons = self.lit_by_values;
+        let (scene, cursor, parts) = {
             let widget = &self.widget;
             self.scope
-                .run(|| widget.borrow_mut().paint_layers(w, h, 1.0))
+                .run(|| widget.borrow_mut().paint_layers(w, h, 1.0, buttons))
         };
         let mut layers = self.cursor.frame(cursor, (w, h), began);
         layers.splice(0..0, self.layer.frame(scene, (w, h), began));
+        layers.extend(self.buttons.layers(
+            &parts,
+            BUTTONS,
+            (1, 1),
+            architect_workspace::paint::peniko::kurbo::Affine::IDENTITY,
+        ));
         Some(layers)
     }
 }

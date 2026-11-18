@@ -2510,13 +2510,20 @@ impl MixerWidget {
     /// engine's values, so a playing mixer changes none of the picture.
     /// Composed (the picture, the parts, what is over them) at the levels
     /// the values hold, it is [`Self::paint_scene`]'s picture.
+    ///
+    /// `buttons`: the engine's values carry the tracks' mute and solo
+    /// ([`crate::engine::track_value`]), so their lit state goes apart too.
     pub fn paint_layers(
         &mut self,
         width: u32,
         height: u32,
         scale: f64,
+        buttons: bool,
     ) -> (Scene, crate::overlay::Apart) {
-        self.apart = Some(crate::overlay::Apart::default());
+        self.apart = Some(crate::overlay::Apart {
+            buttons,
+            ..crate::overlay::Apart::default()
+        });
         let picture = self.paint_scene(width, height, scale);
         (picture, self.apart.take().unwrap_or_default())
     }

@@ -42,12 +42,14 @@ use std::time::Duration;
 
 use anyrender::{ImageRenderer as _, PaintScene as _};
 use architect::action::{ActionCaller, ActionList};
-use architect_scene::anim::Readings;
+use architect_scene::anim::{Name, Readings};
+use architect_scene::engine::EngineTable;
 use architect_scene::ops::{Receiver, Sender};
 use architect_workspace::paint::PaintView as _;
 use architect_workspace::{FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost};
 use dioxus::prelude::*;
 use peniko::kurbo::Affine;
+use session_engine::engine::{TRACK_PARTS, VALUE_TRACKS, track_value};
 use session_ui::panel::{ArrangementPanel, PanelEvent};
 use session_ui::studio::StudioSession;
 use session_ui::widget::ArrangementWidget;
@@ -66,7 +68,22 @@ fn fixture() -> std::path::PathBuf {
 fn session() -> StudioSession {
     let path = fixture();
     session_engine::open::open_silent(&path).expect("open the golden template");
-    let raw = session_ui::studio::fetch().expect("read it back");
+    let mut raw = session_ui::studio::fetch().expect("read it back");
+    // Some lit: muted, soloed, both (the buttons lit by the engine's
+    // values are what is compared).
+    for (i, (mute, solo)) in [
+        (0, (true, false)),
+        (5, (false, true)),
+        (11, (true, true)),
+        (1, (true, false)),
+        (2, (false, true)),
+        (3, (true, true)),
+    ] {
+        if let Some(t) = raw.tracks.get_mut(i) {
+            t.muted = mute;
+            t.soloed = solo;
+        }
+    }
     let planner = session_ui::studio::Planner {
         raw: Arc::new(raw),
         scene: Some("drum-mixing"),
@@ -105,12 +122,13 @@ impl PartialEq for Song {
 }
 
 /// The panel and its widget, as the extension's pane builds them (the
-/// window's mode Live, the track panel compact).
+/// window's mode Live, the track panel compact, or expanded as a swipe
+/// makes it).
 #[component]
-fn Root(song: Song, got: Got) -> Element {
+fn Root(song: Song, got: Got, compact: bool) -> Element {
     use_context_provider(|| song.0.clone());
     use_context_provider(|| Signal::new(session::modes::Mode::Live));
-    use_context_provider(|| session_ui::panel::StartCompact(true));
+    use_context_provider(|| session_ui::panel::StartCompact(compact));
     let engine: session_ui::panel::Engine = Rc::new(|_| {});
     let (panel, widget) =
         session_ui::panel::use_arrangement_panel(None, engine, |w| Rc::new(RefCell::new(w)));
@@ -166,13 +184,49 @@ fn write_png(path: &std::path::Path, rgba: &[u8]) {
 
 #[test]
 fn the_pane_shows_the_pixels_studio_s_window_paints() {
+    // The compact panel (the extension's start): its rows show no mute or
+    // solo, and the pane is the window's to the pixel.
+    let (buttons, differing, _) = same_pixels(true);
+    assert_eq!(buttons, 0, "a compact row lit a button apart");
+    assert_eq!(differing, 0, "the pane's pixels differ from the window's");
+    // Expanded: mute and solo lit by the engine's values, over the panel
+    // drawn with them unlit. What is left is where a lit button's soft
+    // edge meets the unlit one under it.
+    let (buttons, _, largest) = same_pixels(false);
+    assert!(buttons > 0, "no mute or solo lit by values");
+    assert!(
+        largest <= 24,
+        "a pixel differs from the window's by a step of {largest}"
+    );
+}
+
+/// The pane against the window, the panel `compact` or not: the buttons
+/// lit apart, the pixels that differ, and the largest step.
+fn same_pixels(compact: bool) -> (usize, usize, u8) {
     let song = session();
+    // The engine's button values, as the `daw` extension writes them.
+    let names: Vec<Name> = (0..VALUE_TRACKS)
+        .flat_map(|i| TRACK_PARTS.iter().map(move |p| track_value(i, p)))
+        .map(|n| Name::new(&n).unwrap())
+        .collect();
+    let (table, writer) = EngineTable::new(names).unwrap();
+    for t in &song.planner.raw.tracks {
+        let Ok(i) = usize::try_from(t.index) else {
+            continue;
+        };
+        for (part, on) in TRACK_PARTS.iter().zip([t.muted, t.soloed]) {
+            if let Some(slot) = table.slot(&Name::new(&track_value(i, part)).unwrap()) {
+                writer.write(slot, if on { 1.0 } else { 0.0 });
+            }
+        }
+    }
     let got = Got::default();
     let mut vdom = VirtualDom::new_with_props(
         Root,
         RootProps {
             song: Song(song),
             got: got.clone(),
+            compact,
         },
     );
     vdom.rebuild_in_place();
@@ -180,21 +234,33 @@ fn the_pane_shows_the_pixels_studio_s_window_paints() {
 
     // The extension's paint view over the same widget: what the pane runs.
     let stats = Arc::new(Mutex::new(Stats::default()));
-    let mut hosted = Hosted::new(Rc::clone(&widget), panel.clone(), scope.clone(), stats);
+    let mut hosted = Hosted::new(Rc::clone(&widget), panel.clone(), scope.clone(), stats)
+        .with_buttons_lit_by_values(true);
     let ctx = ctx();
     // Settled: the song fitted on its first paint, the panel's frames run
-    // until the scene stops changing.
-    let mut last = None;
-    for _ in 0..30 {
-        let layers = hosted.layers(&ctx).unwrap();
-        let content = Arc::clone(&layers[0].1.commands);
-        if last
-            .as_ref()
-            .is_some_and(|l: &Arc<_>| Arc::ptr_eq(l, &content))
-        {
-            break;
+    // until the scene stops changing. Then the rows three times as tall,
+    // so the compact panel's rows show their mute and solo, and settled
+    // again.
+    for taller in [false, true] {
+        if taller {
+            let mut zoom = panel.zoom;
+            scope.run(|| {
+                let (x, y) = *zoom.peek();
+                zoom.set((x, y * 3.0));
+            });
         }
-        last = Some(content);
+        let mut last = None;
+        for _ in 0..30 {
+            let layers = hosted.layers(&ctx).unwrap();
+            let content = Arc::clone(&layers[0].1.commands);
+            if last
+                .as_ref()
+                .is_some_and(|l: &Arc<_>| Arc::ptr_eq(l, &content))
+            {
+                break;
+            }
+            last = Some(content);
+        }
     }
 
     // In-app: what the widget hands Blitz, painted now at the same state.
@@ -207,10 +273,13 @@ fn the_pane_shows_the_pixels_studio_s_window_paints() {
     // Runtime: the pane's layers (the picture, the play cursor over it)
     // through the protocol a process uses.
     let layers = hosted.layers(&ctx).unwrap();
-    assert_eq!(layers.len(), 2, "the picture and the play cursor");
+    // The picture, the play cursor, and the track panel's mute and solo
+    // lit by the engine's values.
+    let buttons = layers.len().saturating_sub(2);
     let mut sender = Sender::default();
     let batch = sender.frame(&layers).unwrap();
     let mut receiver = Receiver::new();
+    receiver.grant(Some(Arc::clone(&table)));
     receiver.apply(&batch).unwrap();
 
     let a = raster(|p| p.append_scene(in_app.clone(), Affine::IDENTITY));
@@ -224,8 +293,15 @@ fn the_pane_shows_the_pixels_studio_s_window_paints() {
         .zip(b.chunks_exact(4))
         .filter(|(x, y)| x != y)
         .count();
+    let largest = a
+        .iter()
+        .zip(&b)
+        .map(|(x, y)| x.abs_diff(*y))
+        .max()
+        .unwrap_or(0);
     println!(
-        "arrangement {W}×{H}: {} commands, a batch of {} bytes, {differing} of {} pixels differ",
+        "arrangement {W}×{H}{}: {} commands, {buttons} buttons lit by values, a batch of {} bytes, {differing} of {} pixels differ (largest step {largest})",
+        if compact { "" } else { " expanded" },
         in_app.commands.len(),
         batch.len(),
         W * H
@@ -244,7 +320,8 @@ fn the_pane_shows_the_pixels_studio_s_window_paints() {
                 "{}/../../target/parity/arrangement",
                 env!("CARGO_MANIFEST_DIR")
             )
-        }));
+        }))
+        .join(if compact { "compact" } else { "expanded" });
         std::fs::create_dir_all(&out).unwrap();
         write_png(&out.join("in-app.png"), &a);
         write_png(&out.join("runtime.png"), &b);
@@ -262,5 +339,5 @@ fn the_pane_shows_the_pixels_studio_s_window_paints() {
         write_png(&out.join("diff.png"), &diff);
         println!("written to {}", out.display());
     }
-    assert_eq!(differing, 0, "the pane's pixels differ from the window's");
+    (buttons, differing, largest)
 }

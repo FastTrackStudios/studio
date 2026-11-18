@@ -601,6 +601,13 @@ pub struct ArrangementWidget {
     /// of the picture stays the same while they move. `None` (the
     /// window's): drawn into the picture.
     live_apart: Option<Scene>,
+    /// The track panel's mute and solo lit apart, by the engine's values
+    /// ([`ArrangementWidget::paint_layers`]'s `buttons`): the panel draws
+    /// them unlit, and these parts light them.
+    buttons_apart: bool,
+    value_parts: Vec<crate::overlay::ValueLayer>,
+    /// Whether [`Self::controls`] was cut with the buttons apart.
+    controls_apart: bool,
     /// The folds the rows were planned at ([`crate::folds::generation`]).
     folds_seen: u64,
     /// The outside edits the rows were planned at ([`edit_song`]).
@@ -924,6 +931,9 @@ impl ArrangementWidget {
             hidden_seen: None,
             paint_began: web_time::Instant::now(),
             live_apart: None,
+            buttons_apart: false,
+            value_parts: Vec::new(),
+            controls_apart: false,
             folds_seen: crate::folds::generation(),
             edited_seen: EDITED.with(Cell::get),
             previews,
@@ -5217,7 +5227,7 @@ impl ArrangementWidget {
                     &self.map,
                     view,
                     &self.pointer,
-                    at,
+                    (at, false),
                 );
             }
         }
@@ -5412,19 +5422,38 @@ impl ArrangementWidget {
     /// that keeps a layer per scene sends the first again only when it
     /// changes, so playing moves the cursor alone (an Architect pane's
     /// host, `studio.arrangement`). The window keeps one picture.
-    pub fn paint_layers(&mut self, width: u32, height: u32, scale: f64) -> (Scene, Scene) {
+    ///
+    /// `buttons`: the engine's values carry the tracks' mute and solo
+    /// ([`crate::engine::track_value`]); then the track panel draws them
+    /// unlit, and the third, parts the values show, lights them — in the
+    /// same frame as every other pane drawing them from those values.
+    pub fn paint_layers(
+        &mut self,
+        width: u32,
+        height: u32,
+        scale: f64,
+        buttons: bool,
+    ) -> (Scene, Scene, Vec<crate::overlay::ValueLayer>) {
         self.live_apart = Some(Scene::new());
+        self.buttons_apart = buttons;
+        self.value_parts.clear();
         let content = self.paint_scene(width, height, scale);
         let drawn = self.live_apart.take().unwrap_or_default();
+        let mut parts = std::mem::take(&mut self.value_parts);
+        // The window's own paint (`paint_scene`) draws them lit, as ever.
+        self.buttons_apart = false;
         let scale = scale.max(f64::EPSILON) * self.ui.get().max(f64::EPSILON);
         let cursor = if (scale - 1.0).abs() < f64::EPSILON {
             drawn
         } else {
             let mut scene = Scene::new();
             anyrender::PaintScene::append_scene(&mut scene, drawn, Affine::scale(scale));
+            for part in &mut parts {
+                part.transform = Some(part.transform.unwrap_or_default().then_scale(scale));
+            }
             scene
         };
-        (content, cursor)
+        (content, cursor, parts)
     }
 
     /// Whether this event is not the arrangement's to act on.
@@ -6507,7 +6536,7 @@ impl ArrangementWidget {
         let at = Affine::translate((0.0, below));
         let settled = (self.was - view.zoom_y).abs() < f64::EPSILON;
         self.was = view.zoom_y;
-        if !settled {
+        if !settled || self.controls_apart != self.buttons_apart {
             self.controls = None;
         }
         let stale = self
@@ -6522,9 +6551,10 @@ impl ArrangementWidget {
                 &self.rows,
                 &self.tracks,
                 &self.map,
-                view,
+                (view, self.buttons_apart),
             );
             self.controls = Some((recorded, view.zoom_y));
+            self.controls_apart = self.buttons_apart;
         }
         // Kept below the ruler. The ruler covers the recorded panel by
         // being drawn after it, but these come after the ruler, so a row
@@ -6558,7 +6588,7 @@ impl ArrangementWidget {
                     &self.map,
                     view,
                     &self.pointer,
-                    at,
+                    (at, self.buttons_apart),
                 );
                 counts
             }
@@ -6572,9 +6602,23 @@ impl ArrangementWidget {
                 &self.map,
                 view,
                 &self.pointer,
-                at,
+                (at, self.buttons_apart),
             ),
         };
+        // Their mute and solo, lit, as parts the engine's values show.
+        if self.buttons_apart {
+            self.value_parts = crate::overlay::panel_buttons(
+                &self.palette,
+                &self.font,
+                &self.scene,
+                &self.rows,
+                &self.tracks,
+                &self.map,
+                view,
+                &self.pointer,
+                (at, under_ruler),
+            );
+        }
         // The levels, in the name fields: into the picture, or with the
         // play cursor when a host asked for what moves apart (under the
         // same clip).

@@ -156,12 +156,13 @@ through the protocol, levels from the simulated signal):
 | Live: work a frame p50 / p99 | 3.8 / 80 ms (loaded machine; 2.2 / 23 alone) | |
 
 The meters are the engine's values (`engine.meter.<track>.{pl,pr,hl,hr,pk}`,
-written by `daw` into its shared table, 204 tracks in its 1024 slots):
-the pane draws them once as parts the host moves (`overlay::Apart`). What
-is left playing is where a cover's soft edge meets the level and the order
-two transparent paints blend in a cap's pane. The golden template's four
-strips past 204 tracks keep their meters in the picture (63 KB a playing
-frame for them).
+written by `daw` into its shared table): the pane draws them once as
+parts the host moves (`overlay::Apart`). What is left playing is where a
+cover's soft edge meets the level and the order two transparent paints
+blend in a cap's pane. The table carries 146 tracks (`VALUE_TRACKS`:
+five meter values and two buttons a track, 1022 of its 1024 slots); a
+strip past them keeps its meter in the picture (the golden template's
+208 tracks: about 71 KB a playing frame for those strips).
 
 ## 6. Behaviour gaps, biggest first
 
@@ -195,9 +196,37 @@ frame for them).
      What is left is the round trip: the arrangement draws its own
      prediction on the click's frame, and the mixer the engine's answer
      (apply, then the event), which lands after the next vsync about two
-     times in three. The same frame every time needs the host to hold the
-     arrangement's frame for the engine's answer, or both panes to draw
-     the selection from one engine value.
+     times in three.
+   - **The same frame, by design.** Two processes meet only where the
+     host composes. One process for both views would not do it: each
+     view sends its own frames, and a vsync falls between them. So:
+     - *State that is a value* is drawn from one value both panes read
+       at compose. The `daw` extension is the engine's process: it writes
+       each track's mute and solo into its shared table as the engine's
+       track events say (`engine.track.<i>.{mute,solo}`, 1 lit), before
+       any other process hears of them. Every pane draws the button
+       unlit and lays the lit one over it as a part that value shows
+       (`overlay::Apart::buttons`, `overlay::panel_buttons`), so every
+       pane lights it in the same compose, whichever was clicked. The
+       clicked pane's own button lights at the engine's answer (one call,
+       about a millisecond), not at its prediction. Measured live (a
+       mute clicked in the mixer 16 times, 60 fps, the strip pane showing
+       the same track): the strip lit in the same frame 16 of 16 times
+       (on #519's binaries, 12 of 16, up to 3 frames apart). The parity
+       tests compare both panes, with some tracks muted and soloed, with
+       the window's pictures (a step of 6 at most, the lit button's soft
+       edge over the unlit one).
+     - *A change of layout* (a selected strip opened wide, a row's tint
+       in a recorded panel) is no value: it needs the host to hold a
+       group of panes' frames until each has drawn the same edit (a frame
+       barrier, Architect's to build). Selection is the one that shows.
+     - Arm, phase, volume and pan can join mute and solo the same way;
+       each costs a slot a track, and the table's 1024 are spent, so the
+       next step is Architect's `MAX_SLOTS`.
+   - The arrangement's track panel starts compact beside the mixer, as
+     docked: its rows show no mute or solo until expanded, and only a
+     touch swipe or the window's toolbar switch expands it, neither of
+     which a pane has.
    - A key in the mixer pane is still the mixer's.
    The visibility manager is no longer one of them: a mixer on its own
    keeps every track and plans its strips again when one is shown or
@@ -206,8 +235,8 @@ frame for them).
    Blitz widget (`CustomWidgetAttr`), its Escape a winit window event:
    neither exists in a process view's document. It needs the rack widget
    hosted in a pane of its own, as the mixer is.
-3. **Meters past 204 tracks** stay in the mixer's picture (a shared value
-   table's 1024 slots, five values a track).
+3. **Meters and buttons past 146 tracks** stay in the panes' pictures (a
+   shared value table's 1024 slots, seven values a track).
 4. **Out by decision:** Studio's window chrome beyond the views (the
    browser, navigator, editor, chart, lyrics and quantize panels, the
    bottom bar). The transport and Folded are `STUDIO_ARRANGEMENT_*`

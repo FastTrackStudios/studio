@@ -14,8 +14,16 @@ authors = ["FastTrackStudios"]
 [entry]
 path = "studio-arrangement"
 
+# The engine's values: its panes read the shared value table of the
+# provider of a service they use (the `daw` extension provides
+# fts.session), and the host lights the track panel's mute and solo by it,
+# in the same frame as the mixer's.
+[uses]
+"fts.session" = "^0.1"
+
 [capabilities]
 effect = "mutating"
+ui = ["engine"]
 
 [[views]]
 id = "arrangement"
