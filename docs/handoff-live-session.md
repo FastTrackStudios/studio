@@ -291,7 +291,7 @@ daw's tag) and drop the path entries. Data outside git: the songs' `.kf`,
 | chord track voicings (pushes, rests) | `features/session/session/src/keyflow/generate.rs` |
 | rebuild_from_chart | `features/session/session/src/keyflow/from_chart.rs` |
 | mixer memory | `apps/session/daw/src/mixer_panel.rs` |
-| `.session` save/load (labels) | `crates/daw/standalone/src/session_file.rs`, `project_loader.rs` |
+| `.session` save/load (labels) | `daw:crates/daw/standalone/src/session_file.rs`, `project_loader.rs` |
 | chord parsing (add2/add4, parens) | `crates/keyflow/keyflow-proto/src/chord/definition.rs`, `normalization.rs` |
 | chord memory setting | `crates/keyflow/keyflow-proto/src/chart/memory.rs`, `settings.rs` |
 | chart parser | `keyflow/crates/keyflow/keyflow-text/src/chart/parser/{chords,sections,metadata}.rs` |

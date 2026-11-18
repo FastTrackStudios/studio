@@ -25,7 +25,7 @@ Path shorthand used below:
 | `SDK.h` | `/home/cody/.cargo/git/checkouts/reaper-rs-ea00aff97ae2f1e5/3a9e706/main/low/lib/reaper/reaper_plugin_functions.h` (pinned by `Cargo.lock` here and in `../daw/Cargo.lock`: `reaper-low … #3a9e70638dc67adc1aaf21a54fcf72ae752eeb21`) |
 | `ActionList.txt` | `/home/cody/fts-dev/ActionList.txt` (REAPER's own action-list export, `Section<TAB>Id<TAB>Name`) |
 | `daw/` | `../daw/` (sibling checkout, see root `AGENTS.md`) |
-| `standalone/` | `crates/daw/standalone/src/` |
+| `standalone/` | `daw:crates/daw/standalone/src/` |
 | `legacy-offline.rs` | `/run/media/Development/FastTrackStudio-legacy/sample-collector/crates/sc-capture/src/offline.rs` |
 
 ## Summary
@@ -169,7 +169,7 @@ removes that class of mistake.
   regionindex, track, flag)` with flag 2 = force mono, 4 = stereo, N = N/2
   channels (`SDK.h:6250-6255`). Not wrapped anywhere in `daw/` today (no
   hits for `SetRegionRenderMatrix` under `features/adapters/reaper/daw-reaper/src`
-  or `crates/daw/standalone/src`); the region service doc
+  or `daw:crates/daw/standalone/src`); the region service doc
   only *mentions* "render matrix" (`daw:crates/daw/proto/src/region/service.rs:9`).
 - `RenderFileSection(source, target, start_pct, end_pct, playrate)` renders
   a section of a *media file*, "not available while playing back"

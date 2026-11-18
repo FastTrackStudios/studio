@@ -196,7 +196,7 @@ compiled code.
 
 ### 1. Duplicate an item — a closure that zooms into every brick
 
-`crates/daw/standalone/src/item.rs:327` `duplicate_item` is ~115 lines,
+`daw:crates/daw/standalone/src/item.rs:327` `duplicate_item` is ~115 lines,
 most of it one closure passed to `with_project_mut`. At the top it works
 at "mint a guid, copy the item"; at line 360 it drops into copying each
 take, then into filtering envelopes by key, re-keying them, cloning audio

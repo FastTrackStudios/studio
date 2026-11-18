@@ -8,7 +8,7 @@ comes next, in order. The design docs this points at are in `docs/design/`.
 - **Step 1 — the feature layout** (`11e12c7`): `features/signal` (Signal's
   domain) vs `features/rigs` (the instruments, `rigs/host`, `rigs/proto`);
   `adapters/<host>` (`reaper`, `protools`, `ableton`, `logic`,
-  `interchange`, `web`); the daw's own file is `crates/daw/session-format`;
+  `interchange`, `web`); the daw's own file is `daw:crates/daw/session-format`;
   the REAPER overlay forks are merged (`reaper-dioxus`, `reaper-embed`);
   `expression-editor` is `editor` (folders `model/ pitch/ drums/ harmony/
   interact/`, `chords` folded into `harmony/chords`).

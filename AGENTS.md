@@ -37,12 +37,16 @@ apps/       studio/desktop                     Studio, THE app (desktop + iOS, o
                                                (bundle load checks); the effects'
                                                plugins are in FastTrackStudios/fts-fx
             themer/
-crates/     daw/*      the DAW alone: the domain core (`daw`), the standalone
-                       engine (`daw-standalone`), session-format, actions.
-                       Its base (proto, control, module, transport-sync,
-                       audio-graph, allocator, the test macro, utils, and
-                       `midi`, `audio`, `fts-sample`) is in
-                       FastTrackStudios/daw, taken by git: see "The base"
+crates/     daw/*      what is left of the DAW here: `daw-actions` (they drive
+                       a live REAPER) and the DAW's notes (docs/). The DAW
+                       itself (its base: proto, control, module,
+                       transport-sync, audio-graph, allocator, the test
+                       macro, utils, `midi`, `audio`, `fts-sample`; and the
+                       engine: the `daw` facade, `daw-standalone`,
+                       `session-format`, `dawfile-reaper`,
+                       `signal-plugin-host`, `builtin`, `daw-sync`) is in
+                       FastTrackStudios/daw, taken by git: see "The base
+                       and the engine"
             studio/    the umbrella over daw: REAPER adapter, project files,
                        UI, CSI, the daw CLI, the integration-test harness —
                        all cargo features of `studio`
@@ -53,9 +57,10 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
             rigs/        the instruments — guitar, keys, drums, ekit, synth,
                          orchestra — plus host/ (rigs on the one engine) and
                          proto/ (the shared RigCore service)
-            dsp/*        builtin (the effects as engine blocks) and nam; the
-                         effects themselves (`dsp`, `dsp-core`) are in
-                         FastTrackStudios/fts-fx (docs/fts-fx.md)
+            dsp/*        nam; the effects themselves (`dsp`, `dsp-core`) are
+                         in FastTrackStudios/fts-fx (docs/fts-fx.md), and
+                         `builtin` (the effects as engine blocks) is in
+                         FastTrackStudios/daw with the engine
             editor/      the editor: piano roll, drum lanes, curves
             timeline/    the editing engine the arrangement and the editor
                          share (docs/design/timeline.md)
@@ -71,8 +76,8 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
                          kept as project notes of an Architect vault with
                          a stage; an Ableton show set's songs as a setlist
                          (`studio productions …`; studio#396)
-            session/, song/, sampler/, plugin-host/, input/,
-            sync/, chords/, formats/, control-surfaces/,
+            session/, song/, sampler/, input/,
+            chords/, formats/, control-surfaces/,
             dynamic-template/, patch-list/, …
             ui/*         shared UI: daw-ui, dock, plugin-faces, … (fts-audio-ui
                          and plugin-core are in fts-fx)
@@ -93,8 +98,8 @@ working there.
 
 ## The model
 
-- **daw is the DAW alone; `studio` is the umbrella.** `crates/daw/*` knows
-  nothing of REAPER or of any product. REAPER, the project formats, the
+- **daw is the DAW alone; `studio` is the umbrella.** The DAW
+  (FastTrackStudios/daw) knows nothing of REAPER or of any product. REAPER, the project formats, the
   UI, control surfaces and the daw CLI are features of `crates/studio`.
 - **One engine.** A process runs ONE daw engine: one `Standalone`, one
   project, one realtime audio engine on one device. A rig is a folder of
@@ -132,8 +137,8 @@ working there.
 - **Git deps across repos, pinned to a tag** (architect, keyflow, editor,
   music-convention, neural-amp-modeler-rs, the `vendor` repo), or to a
   `rev` (fts-fx: the effects, every crate at one rev; `docs/fts-fx.md`). The base
-  crates from FastTrackStudios/daw are pinned to one revision until that
-  repo cuts a tag. The branch
+  and the engine from FastTrackStudios/daw are pinned to one revision
+  until that repo cuts a tag. The branch
   pins that remain say why in Cargo.toml (nice-plug's `fts-baseview-03`,
   reaper-rs, task's `editor`).
 - **The root `[patch]` tables**, all live: `crates-io` (the vendor repo's
@@ -142,9 +147,9 @@ working there.
   blitz tag, pipewire-rs past 0.10.0); `DioxusLabs/dioxus` (the vendor
   repo's dioxus-native{,-dom} and dioxus-core);
   `FastTrackStudios/daw` (hands keyflow's git dep, which still names the
-  daw repo's old tag, the in-tree `daw` and `dawfile-reaper`, and the
-  `fts-sample` Studio builds, named on the `www.` host because a patch
-  may not point back at its own source: goes when keyflow pins the daw
+  daw repo's old tag, the `daw` and `fts-sample` Studio builds: every
+  daw-repo crate Studio builds, named on the `www.` host because a patch
+  may not point back at its own source; goes when keyflow pins the daw
   repo at Studio's revision). One architect `[patch]`, on the
   `www.github.com` spelling (end of Cargo.toml): keyflow names Architect
   there, and the table hands those crates Studio's own tag, so an
@@ -161,20 +166,30 @@ working there.
   `[patch."https://github.com/FastTrackStudios/architect"] architect =
   { path = "../architect/architect" }` — and never commit it; the paths are
   machine-specific.
-- **The base** (`daw-proto`, `daw-control`, `daw-module`,
-  `daw-transport-sync`, `daw-audio-graph`, `daw-allocator`,
-  `daw-test-macro`, `utils`, `midi`, `audio`, `fts-sample`) lives in
-  FastTrackStudios/daw at the paths it had here (`daw:crates/daw/proto`,
-  `daw:features/midi`, …; studio#510). A change to one of them is a PR
-  there, then a bump of the one `rev` in the root `[workspace.dependencies]`
-  (and of `fts-sample`'s in the daw `[patch]` table) here. To work on both
-  at once, check the daw repo out beside this one and add the crates you
-  are changing to the existing daw `[patch]` table in the root
-  `Cargo.toml`, **never committed**:
+- **The base and the engine** live in FastTrackStudios/daw at the paths
+  they had here (studio#510): the base (`daw-proto`, `daw-control`,
+  `daw-module`, `daw-transport-sync`, `daw-audio-graph`, `daw-allocator`,
+  `daw-test-macro`, `utils`, `midi`, `audio`, `fts-sample`;
+  `daw:crates/daw/proto`, `daw:features/midi`, …) and the engine (the `daw`
+  facade, `daw-standalone`, `session-format`, `dawfile-reaper`,
+  `signal-plugin-host`, `builtin`, `daw-sync`; `daw:crates/daw/standalone`,
+  `daw:features/dsp/builtin`, …). Their tests run there. A change to one
+  of them is a PR there, then a bump of the one `rev` here, on every line
+  that names the daw repo: the root `[workspace.dependencies]` and the
+  daw `[patch]` table (which hands keyflow's old daw tag the same crates,
+  on the `www.` host). To work on both at once, check the daw repo out
+  beside this one and, in that `[patch]` table, replace the `www.` lines
+  with paths, **never committed**:
 
   ```toml
   [patch."https://github.com/FastTrackStudios/daw"]
-  # …the three entries already there; for fts-sample, replace its line…
+  daw                = { path = "../daw/crates/daw/daw" }
+  daw-standalone     = { path = "../daw/crates/daw/standalone" }
+  session-format     = { path = "../daw/crates/daw/session-format" }
+  dawfile-reaper     = { path = "../daw/features/adapters/reaper/dawfile-reaper" }
+  signal-plugin-host = { path = "../daw/features/plugin-host" }
+  builtin            = { path = "../daw/features/dsp/builtin" }
+  daw-sync           = { path = "../daw/features/sync" }
   daw-proto          = { path = "../daw/crates/daw/proto" }
   daw-control        = { path = "../daw/crates/daw/control" }
   daw-module         = { path = "../daw/crates/daw/module" }
@@ -188,12 +203,12 @@ working there.
   fts-sample         = { path = "../daw/features/audio/sample" }
   ```
 
-  Patch every crate whose types cross the one you are editing
-  (`daw-control` and `daw-proto` with `daw-transport-sync` and `midi`), or
-  cargo builds two copies and their types do not unify. `cargo check`
-  then rewrites `Cargo.lock`: do not commit that either (`git checkout
-  Cargo.lock` when done). A patch that does get committed fails `PR
-  checks`: the paths do not exist on the runner.
+  All of them, not just the one you edit: the engine's own path
+  dependencies then come from the checkout too, and a crate left on the
+  `www.` line would be a second copy whose types do not unify. `cargo
+  check` then rewrites `Cargo.lock`: do not commit that either (`git
+  checkout Cargo.lock` when done). A patch that does get committed fails
+  `PR checks`: the paths do not exist on the runner.
 - **`include_str!` / `@import` across a repo boundary does not work** (a
   git dep has no stable path on disk). Export the bytes from the owning
   crate (`architect_ui::THEME_CSS`), or resolve the path with

@@ -24,10 +24,6 @@ studio-assets  features/formats/tests/fixtures/protools/live-concert-session.ptx
 studio-assets  features/formats/tests/fixtures/protools/orchestral-session.ptx  features/adapters/protools/tests/fixtures/protools/orchestral-session.ptx
 studio-assets  features/formats/tests/fixtures/protools/studio-tracking-session.ptx  features/adapters/protools/tests/fixtures/protools/studio-tracking-session.ptx
 studio-assets  features/formats/tests/fixtures/protools/worship-session.ptx  features/adapters/protools/tests/fixtures/protools/worship-session.ptx
-studio-assets  features/formats/dawfile-reaper/tests/fixtures/tempo_advanced_curve_samples.tsv  features/adapters/reaper/dawfile-reaper/tests/fixtures/tempo_advanced_curve_samples.tsv
-studio-assets  features/formats/dawfile-reaper/tests/fixtures/tempo_calibration_curve_samples.tsv  features/adapters/reaper/dawfile-reaper/tests/fixtures/tempo_calibration_curve_samples.tsv
-studio-assets  features/formats/dawfile-reaper/tests/fixtures/tempo_curve_samples.tsv  features/adapters/reaper/dawfile-reaper/tests/fixtures/tempo_curve_samples.tsv
-studio-assets  features/formats/dawfile-reaper/tests/fixtures/tempo_edge_curve_samples.tsv  features/adapters/reaper/dawfile-reaper/tests/fixtures/tempo_edge_curve_samples.tsv
 studio-assets  features/rigs/synth/tools/omni_probe/exp_act1on.wav
 studio-assets  features/rigs/synth/tools/omni_probe/exp_am_05_ours.wav
 studio-assets  features/rigs/synth/tools/omni_probe/exp_am_05.wav

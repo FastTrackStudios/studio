@@ -243,10 +243,6 @@ package = "audio-controls"
 layer = "L1"
 
 [[row]]
-package = "builtin"
-layer = "L1"
-
-[[row]]
 package = "comp"
 layer = "L1"
 
@@ -272,14 +268,6 @@ layer = "L1"
 
 [[row]]
 package = "daw-reaper-dioxus-ext"
-layer = "L1"
-
-[[row]]
-package = "daw-sync"
-layer = "L1"
-
-[[row]]
-package = "dawfile-reaper"
 layer = "L1"
 
 [[row]]
@@ -484,10 +472,6 @@ layer = "L1"
 
 [[row]]
 package = "signal-orchestra"
-layer = "L1"
-
-[[row]]
-package = "signal-plugin-host"
 layer = "L1"
 
 [[row]]

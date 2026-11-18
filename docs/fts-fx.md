@@ -8,15 +8,17 @@ build and release there, and Studio links them.
 
 | In fts-fx | Still here |
 |---|---|
-| `dsp-core`, `dsp` (`features/dsp`) | `builtin` (`features/dsp/builtin`): the effects as engine blocks. It needs the engine (`daw`, `daw-standalone`, `daw-proto`, `fts-sample`), and the engine needs `dsp`, so it cannot follow. |
-| `fts-audio-ui`, `plugin-core` (`features/ui`), `preset-browser` | `signal-nam` (`features/dsp/nam`): Signal's. |
+| `dsp-core`, `dsp` (`features/dsp`) | `signal-nam` (`features/dsp/nam`): Signal's. `builtin`, the effects as engine blocks, went with the engine to FastTrackStudios/daw (`daw:features/dsp/builtin`): it needs the engine, and the engine needs `dsp`, so it cannot live in fts-fx without the two repos pinning each other. |
+| `fts-audio-ui`, `plugin-core` (`features/ui`), `preset-browser` | |
 | The effect plugins: comp, delay, eq, gate, level, limiter, meter, mic, modulation, pitch, reverb, saturate, trigger, tune, unison, and `eq-standalone` | `nam-plugin`, `signal-plugin`, `signal-sampler-clap` (the sampler), `guide-plugin` (the session), `fts-clap-host` (the engine). |
 | The bundler recipes for those (`just plugins-bundle`, `plugins-link`, `plugins-verify`) | The same recipes, for nam, signal and guide. |
 
 The comparison tools that drive a commercial plugin against ours
-(`eq_match`, `reverb_match`, the probes; they need `signal-plugin-host`,
-`signal-import` and `builtin`) are examples of `builtin`:
-`cargo run -p builtin --example eq_match`.
+(`eq_match`, `reverb_match`, the probes; they need `signal-plugin-host`
+and `builtin`) are examples of `builtin`, in the daw repo
+(`cargo run -p builtin --example eq_match` there). The one that reads
+Pro-Q's presets with `signal-import` is that crate's example here:
+`cargo run -p signal-import --example proq_params`.
 
 ## The pin
 
@@ -27,7 +29,9 @@ declares the same versions, git pins and `[patch]` entries as this repo
 (blitz, dioxus, architect, nice-plug, wgpu): a bump of one of those lands
 in both repos, fts-fx first.
 
-fts-fx never depends on this repo.
+fts-fx never depends on this repo, nor on FastTrackStudios/daw: the engine there
+depends on fts-fx, one way. Move the fts-fx rev here and in the daw repo
+together.
 
 ## Working on both at once
 

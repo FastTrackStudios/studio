@@ -21,8 +21,8 @@ Nothing here needs REAPER's UI. Don't tell the user to "right-click the toolbar
 | Service trait + types | `daw:crates/daw/proto/src/toolbar/{service,types}.rs` |
 | Client handle | `daw:crates/daw/control/src/toolbar.rs` |
 | REAPER implementation | `features/adapters/reaper/daw-reaper/src/toolbar.rs` |
-| CLI verbs | `crates/daw/daw/src/cli/{command,ops}.rs` (`Toolbar*`) |
-| Offline ini **reader** | `features/adapters/reaper/dawfile-reaper/src/toolbar_config.rs` |
+| CLI verbs | `daw:crates/daw/daw/src/cli/{command,ops}.rs` (`Toolbar*`) |
+| Offline ini **reader** | `daw:features/adapters/reaper/dawfile-reaper/src/toolbar_config.rs` |
 | Offline ini **writer** | `features/adapters/reaper/fts-icons/src/menu.rs` (icon assignment only) |
 | Icon generator | `features/adapters/reaper/fts-icons/` (lib `fts_icons` + bin `fts-icons`) |
 

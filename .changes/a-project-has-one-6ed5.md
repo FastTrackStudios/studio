@@ -1,5 +1,4 @@
 ---
-"daw-standalone" = "minor"
 "session" = "minor"
 ---
 

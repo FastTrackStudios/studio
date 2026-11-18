@@ -5,7 +5,7 @@ Status: 2026-10-31. Built: the song's history (`SESSION_HISTORY`,
 The automatic forks made before marks existed are pruned with
 `SESSION_CHECKPOINTS_PRUNE`.
 
-A song is one project file (`crates/daw/session-format/src/store`) holding
+A song is one project file (`daw:crates/daw/session-format/src/store`) holding
 a Loro doc. Loro keeps every operation, and its snapshots are never
 shallow, so every version the song has ever been is still in the doc,
 named by its frontier. What it lacked was a way to name those versions.

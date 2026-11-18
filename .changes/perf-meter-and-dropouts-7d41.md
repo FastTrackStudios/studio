@@ -1,5 +1,4 @@
 ---
-"daw-standalone" = "minor"
 "session-engine" = "minor"
 "session-ui" = "minor"
 "session-desktop" = "patch"

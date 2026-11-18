@@ -336,7 +336,7 @@ over Wi-Fi or USB, with the Mac accepting the connection [logic-remote].
 - The GUI already talks to the engine through vox *in-process*:
   `build_in_process_daw` serves `Standalone`'s router on a
   `LocalServer` and hands back a `daw_control::Daw`
-  (`crates/daw/standalone/src/bootstrap.rs:45`).
+  (`daw:crates/daw/standalone/src/bootstrap.rs:45`).
 - A headless Session engine exists. `session-desktop --engine` serves
   "the whole daw facade" over `ws://0.0.0.0:4040/vox` and iroh
   (`apps/session/desktop/src/engine_server.rs`). Signal's
@@ -613,7 +613,7 @@ Primary unless marked.
 - [vep-plugin] https://www.vsl.co.at/manuals/vep7/vep-plugin
 
 Repo sources: `docs/design/one-engine.md`, `docs/design/set-engine.md`,
-`docs/research/item-peaks.md`, `crates/daw/standalone/src/bootstrap.rs`,
+`docs/research/item-peaks.md`, `daw:crates/daw/standalone/src/bootstrap.rs`,
 `daw:crates/daw/proto/src/peak/service.rs`,
 `daw:crates/daw/proto/src/transport_sync/{service,types}.rs`,
 `apps/session/desktop/src/{engine_server,session_engine}.rs`,

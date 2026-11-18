@@ -341,7 +341,7 @@ guitar-switch-bench SWITCHES="12":
 #   /worklet/signal_keys_worklet.js
 #   /worklet/signal_keys_worklet_bg.wasm
 # wasm-bindgen-cli comes from the dev shell, pinned to the workspace
-# wasm-bindgen version (same as task-worklet-wasm).
+# wasm-bindgen version.
 keys-worklet-wasm out='apps/studio/desktop/web-dist/worklet':
     # --max-memory: default wasm linear memory caps at 2 GB — resident pack
     # bytes + decoded-PCM budget + app need the full 4 GB address space.
@@ -873,9 +873,10 @@ check:
 # build and run exactly these; building the workspace's ~200 crates with no
 # tests left would only link empty harnesses. Add a crate here when it gains
 # tests worth running on every change. The wire types' tests (daw-proto,
-# daw-control, daw-transport-sync, utils) run in FastTrackStudios/daw, where
-# those crates live (studio#510).
-test_packages := "session-format daw-standalone timeline studio studio-desktop dioxus-test dock studio-architect"
+# daw-control, daw-transport-sync, utils) and the engine's and the session
+# format's (daw-standalone, session-format) run in FastTrackStudios/daw,
+# where those crates live (studio#510).
+test_packages := "timeline studio studio-desktop dioxus-test dock studio-architect"
 
 # Run the core test set (test_packages above).
 test:
@@ -994,29 +995,9 @@ graph:
 graph-serve:
     graphify-mcp --transport stdio --graph graphify-out/graph.json
 
-# Rebuild the browser setlist player's AudioWorklet wasm bundle — a small
-# RELEASE build of daw-standalone (the render graph that runs ON the audio
-# thread; see the task repo's apps/session/web/assets/worklet/processor.js).
-# wasm-bindgen-cli comes from the dev shell, pinned to the workspace
-# wasm-bindgen version.
-#
-# CROSS-REPO since the August 2026 split: the source lives here, the built
-# artifact is COMMITTED in the task repo (so plain `dx serve` / CI there
-# need no extra step). Pass the path to your task checkout:
-#
-#   just task-worklet-wasm ../task
-#
-# Re-run after changing daw-standalone's audio/render/web code, then commit
-# the result in the task repo.
-task-worklet-wasm task_repo='../task':
-    cargo build -p daw-standalone --lib \
-        --target wasm32-unknown-unknown --release \
-        --no-default-features --features decode,web
-    test -d {{task_repo}}/apps/web/assets/worklet \
-        || { echo "no worklet dir at {{task_repo}}/apps/web/assets/worklet — pass the task checkout path"; exit 1; }
-    wasm-bindgen --target web --out-dir {{task_repo}}/apps/web/assets/worklet \
-        --out-name daw_standalone \
-        target/wasm32-unknown-unknown/release/daw_standalone.wasm
+# The browser setlist player's AudioWorklet bundle (daw-standalone's `web`
+# renderer, committed in the task repo) is built in FastTrackStudios/daw,
+# where the engine lives: its README has the command (studio#510).
 
 # ── CSS A/B (orchestral sampling) ────────────────────────────────────────
 
@@ -1143,15 +1124,6 @@ web-build: web-tailwind
 # Type-check apps/session/web against the actual deploy target.
 web-check:
     cargo check -p session-web --target wasm32-unknown-unknown
-
-# ── Standalone playback ──────────────────────────────────────────────────
-# Open a REAPER project in daw-standalone and play it through the default
-# output device, with a transport prompt on stdin (h for help). Release,
-# because a debug build of the render path can xrun.
-
-# Play an .rpp through the standalone engine
-daw-play RPP:
-    cargo run --release -p daw-standalone --features rpp-loader --example play_rpp -- "{{RPP}}"
 
 # ── Aliases ──────────────────────────────────────────────────────────────
 
