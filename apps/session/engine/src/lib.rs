@@ -11,6 +11,8 @@
 
 #[cfg(feature = "native")]
 pub mod audio_health;
+#[cfg(feature = "native")]
+pub mod autosave;
 pub mod audio_mode;
 pub mod automation;
 #[cfg(feature = "native")]

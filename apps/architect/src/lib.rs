@@ -4,12 +4,12 @@
 //! first-party extensions, the store as a registry, installs at run time)
 //! with Studio's extensions **compiled in**, under an identity of its own:
 //!
-//! | | Studio Architect | the Architect app | Studio's own app |
+//! | | Studio (this) | the Architect app | `studio-desktop` (being replaced) |
 //! | --- | --- | --- | --- |
-//! | name | `Studio Architect` | `Architect` | `Studio` |
+//! | name | `Studio` | `Architect` | `Studio` |
 //! | binary / app | `studio-architect` | `architect-desktop` | `studio-desktop` |
-//! | config folder | `studio-architect` | `architect` | (Studio's prefs) |
-//! | bundle id | `app.fasttrackstudio.studio-architect` | `app.fasttrackstudio.architect` | `app.fasttrackstudio.studio` |
+//! | config folder | `studio` | `architect` | (Studio's prefs) |
+//! | bundle id | `app.fasttrackstudio.studio` | `app.fasttrackstudio.architect` | `app.fasttrackstudio.studio` |
 //!
 //! Compiled in, as the `studio` bundle: Setlists ([`setlists::ext::Setlists`])
 //! and Productions ([`productions::ext::Productions`]); and Studio's block
@@ -26,13 +26,13 @@
 use architect_desktop::{Bundle, Distribution, Icon};
 
 /// The distribution's name.
-pub const NAME: &str = "Studio Architect";
+pub const NAME: &str = "Studio";
 
-/// Its bundle id: distinct from the Architect app's and Studio's own.
-pub const BUNDLE_ID: &str = "app.fasttrackstudio.studio-architect";
+/// Its bundle id: Studio's (this is the Studio app; `studio-desktop` is on its way out).
+pub const BUNDLE_ID: &str = "app.fasttrackstudio.studio";
 
 /// Its app name and its folder under the platform's config dir.
-pub const FOLDER: &str = "studio-architect";
+pub const FOLDER: &str = "studio";
 
 /// Its icon: Architect's columns over Studio's staff.
 pub const ICON: &str = include_str!("../icon.svg");
@@ -45,6 +45,23 @@ pub fn studio() -> Bundle {
         .member(&setlists::ext::Setlists)
         .member(&productions::ext::Productions)
         .member(&studio_views::ext::StudioViews)
+}
+
+/// The window's extensions, compiled in with `gui`: Studio's arrangement
+/// and mixer (windows on Studio's engine, the `daw` extension, which stays
+/// a process), Keyflow's chart and Ignition's lighting. A development copy
+/// of any of them shadows the linked one, so one of them can be worked on
+/// while the rest run as built.
+#[cfg(feature = "gui")]
+#[must_use]
+pub fn stage() -> Bundle {
+    Bundle::new("stage", "Stage")
+        .member(&studio_arrangement::Arrangement)
+        .member(&studio_mixer::Mixer)
+        .member(&studio_lyrics::Lyrics)
+        .member(&studio_navigator::Navigator)
+        .member(&keyflow_extension::Keyflow)
+        .member(&ignition_pane::ext::Lighting)
 }
 
 pub mod island;
@@ -99,7 +116,7 @@ pub fn distribution_with(island: Option<architect_sites::SiteIsland>) -> Distrib
 }
 
 fn base() -> Distribution {
-    architect_desktop::distribution::architect()
+    let dist = architect_desktop::distribution::architect()
         .named(NAME)
         .app(FOLDER)
         .folder(FOLDER)
@@ -107,5 +124,8 @@ fn base() -> Distribution {
         .version(env!("CARGO_PKG_VERSION"))
         .icon(Icon::svg(ICON).tray("music.note.list", "audio-x-generic"))
         .bundle(studio())
-        .block(setlists::share::blocks())
+        .block(setlists::share::blocks());
+    #[cfg(feature = "gui")]
+    let dist = dist.bundle(stage());
+    dist
 }

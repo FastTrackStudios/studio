@@ -68,10 +68,17 @@ params = '{"type":"object","properties":{"path":{"type":"string"}},"required":["
 [[actions]]
 id = "DAW_RUN"
 name = "Studio engine: run an action"
-description = "Runs action `id` of the engine's own Action List with `args`."
+description = "Runs action `id` of the engine's own Action List with `args`. `song` (its number in the set from 1, its title, or its project) runs it on that song of the set without going to it: the window stays on its song, so a script edits every song in one go (DAW_SONGS lists them)."
 group = "DAW"
 effect = "mutating"
-params = '{"type":"object","properties":{"id":{"type":"string"},"args":{}},"required":["id"]}'
+params = '{"type":"object","properties":{"id":{"type":"string"},"args":{},"song":{}},"required":["id"]}'
+
+[[actions]]
+id = "DAW_SONGS"
+name = "Studio engine: the set's songs"
+description = "The open set's songs in order: each one's `number` (from 1), `title` and engine `project`, and which is current (`at`). What DAW_RUN's `song` takes."
+group = "DAW"
+effect = "read_only"
 
 [[actions]]
 id = "DAW_DECK"

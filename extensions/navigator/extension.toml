@@ -1,0 +1,40 @@
+id = "studio.navigator"
+name = "Navigator"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "Studio's song progress bar and set navigator: where the song and the set are, and a press to go there."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "studio-navigator"
+
+[uses]
+"fts.session" = "^0.1"
+
+[capabilities]
+effect = "mutating"
+
+[[views]]
+id = "progress"
+title = "Progress"
+icon = "ruler"
+
+[[views]]
+id = "navigator"
+title = "Navigator"
+icon = "list-tree"
+
+# The set's songs across a bar (studio-desktop's top bar): a layout puts
+# it in the window's title slot.
+[[views]]
+id = "songs"
+title = "Songs"
+icon = "list-music"
+
+[[actions]]
+id = "STUDIO_NAVIGATOR_STATE"
+name = "Navigator: state"
+description = "Whether this window is linked to Studio's engine, the set's songs and which is current."
+group = "Navigator"
+effect = "read_only"

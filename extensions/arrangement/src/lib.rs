@@ -105,7 +105,11 @@ fn ArrangementPane() -> Element {
     match song() {
         Some((key, session)) => rsx! {
             div { style: "position:relative; width:100%; height:100%; background:{surface};",
-                Panel { key: "{key}", session: Song(session) }
+                // A list of one, so its key is diffed: another song mounts
+                // the panel afresh (a lone keyed child is patched in place).
+                for key in std::iter::once(key) {
+                    Panel { key: "{key}", session: Song(session.clone()) }
+                }
             }
         },
         None => studio_view_link::waiting(),
@@ -150,14 +154,14 @@ fn Panel(session: Song) -> Element {
     let mount = use_hook(|| {
         let scope = InScope::here();
         let (widget, panel, stats) = (Rc::clone(&widget), panel.clone(), Arc::clone(&stats));
-        PaintMount::new(move |_| {
+        studio_view_link::with_engine_values(PaintMount::new(move |_| {
             Hosted::new(
                 Rc::clone(&widget),
                 panel.clone(),
                 scope.clone(),
                 Arc::clone(&stats),
             )
-        })
+        }))
     });
     let mounted = Rc::clone(&panel.mounted);
     rsx! {

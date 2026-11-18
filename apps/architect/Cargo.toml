@@ -17,7 +17,16 @@ path = "src/main.rs"
 # The window, as the Architect app has it. Off (`--no-default-features`),
 # the binary is the headless node alone: no Blitz, wgpu or wayland in it.
 default = ["gui"]
-gui = ["architect-desktop/gui"]
+gui = [
+    "architect-desktop/gui",
+    "dep:studio-arrangement",
+    "dep:session-engine",
+    "dep:studio-mixer",
+    "dep:studio-lyrics",
+    "dep:studio-navigator",
+    "dep:keyflow-extension",
+    "dep:ignition-pane",
+]
 
 [dependencies]
 # `vox` (the node's services) and no window, from the workspace entry.
@@ -31,6 +40,19 @@ productions = { workspace = true, features = ["extension"] }
 # Studio's views and the Views toolbar that opens them, linked in
 # (`studio_views::ext::StudioViews`, studio#409).
 studio-views = { workspace = true, features = ["extension"] }
+
+# The window's extensions, linked in with `gui` only (a headless node
+# draws no panes): Studio's arrangement and mixer views, Keyflow's chart,
+# Ignition's lighting. Studio's engine (`daw`) stays a process of its own:
+# a process has one audio mode, and these views attach to an engine as
+# studio-desktop's window does.
+studio-arrangement = { workspace = true, optional = true }
+session-engine = { workspace = true, optional = true, features = ["native"] }
+studio-mixer = { workspace = true, optional = true }
+studio-lyrics = { workspace = true, optional = true }
+studio-navigator = { workspace = true, optional = true }
+keyflow-extension = { workspace = true, optional = true }
+ignition-pane = { workspace = true, optional = true }
 
 # Its island (#445): `SiteIsland`, the node serves it; its folder is
 # checked against its lock (sha256, base64) before it is (src/island.rs).

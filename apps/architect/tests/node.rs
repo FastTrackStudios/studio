@@ -348,10 +348,10 @@ async fn a_stock_node_shows_the_same_chart_as_its_keyflow_text() {
 #[test]
 fn it_is_studio_architect_with_studios_extensions_compiled_in() {
     let d = studio_architect::distribution().describe();
-    assert_eq!(d["name"], "Studio Architect");
-    assert_eq!(d["app"], "studio-architect");
-    assert_eq!(d["folder"], "studio-architect");
-    assert_eq!(d["bundle_id"], "app.fasttrackstudio.studio-architect");
+    assert_eq!(d["name"], "Studio");
+    assert_eq!(d["app"], "studio");
+    assert_eq!(d["folder"], "studio");
+    assert_eq!(d["bundle_id"], "app.fasttrackstudio.studio");
     let ids: Vec<&str> = d["extensions"]
         .as_array()
         .unwrap()

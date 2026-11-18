@@ -481,7 +481,7 @@ fn RecordMixer() -> Element {
             {
                 strips.set(found);
             }
-            architect::platform::sleep(std::time::Duration::from_secs(2)).await;
+            crate::pause(std::time::Duration::from_secs(2)).await;
         }
     });
     let list = strips();

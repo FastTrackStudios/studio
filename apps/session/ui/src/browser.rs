@@ -136,7 +136,7 @@ pub fn BrowserColumn() -> Element {
                 let was = *browser.peek();
                 browser.set(!was);
             }
-            architect::platform::sleep(std::time::Duration::from_millis(TOGGLE_EVERY_MS)).await;
+            crate::pause(std::time::Duration::from_millis(TOGGLE_EVERY_MS)).await;
         }
     });
     if !open {
@@ -166,7 +166,7 @@ pub fn BrowserBody() -> Element {
             {
                 shown.set(read);
             }
-            architect::platform::sleep(std::time::Duration::from_millis(READ_EVERY_MS)).await;
+            crate::pause(std::time::Duration::from_millis(READ_EVERY_MS)).await;
         }
     });
     let body = shown().map_or_else(

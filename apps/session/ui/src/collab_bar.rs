@@ -229,7 +229,7 @@ pub fn CollabBar() -> Element {
     // The status, kept current (peers come and go with nothing clicked).
     use_future(move || async move {
         loop {
-            architect::platform::sleep(Duration::from_millis(500)).await;
+            crate::pause(Duration::from_millis(500)).await;
             let now = live::status();
             let left = now.as_ref().and_then(|s| s.resets_at).map(|at| {
                 at.saturating_duration_since(architect::platform::Instant::now())
@@ -703,7 +703,7 @@ pub fn PeerDots(project: String) -> Element {
                 if *here.peek() != now {
                     here.set(now);
                 }
-                architect::platform::sleep(Duration::from_millis(300)).await;
+                crate::pause(Duration::from_millis(300)).await;
             }
         }
     });
@@ -748,7 +748,7 @@ pub fn PeerDots(project: String) -> Element {
 pub fn use_follow_song(mut setlist: Signal<crate::setlist::Setlist>) {
     use_future(move || async move {
         loop {
-            architect::platform::sleep(Duration::from_millis(100)).await;
+            crate::pause(Duration::from_millis(100)).await;
             if !crate::audio_mode::owns_project()
                 && let Some(remote) = crate::open::current_song()
             {

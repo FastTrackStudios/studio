@@ -1,0 +1,26 @@
+[package]
+name = "studio-navigator"
+description = "Studio's song progress bar and its set navigator as an extension: the bar across the top of studio-desktop's window (the song's sections, the playhead, a press on a section plays from it) and the vertical navigator (every song of the set, the one playing opened into its sections), in Architect panes, attached to Studio's engine (the daw extension)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "studio-navigator"
+path = "src/main.rs"
+
+[dependencies]
+studio-view-link = { workspace = true }
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+session-ui = { workspace = true, features = ["native"] }
+session-engine = { workspace = true, features = ["native"] }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+futures-timer = { workspace = true }
+
+[lints]
+workspace = true

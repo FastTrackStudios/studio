@@ -89,6 +89,51 @@ async fn run(id: &str, args: &Json) -> Result<Json, String> {
         .unwrap_or_else(|_| Json::String(String::from_utf8_lossy(&out).into_owned())))
 }
 
+/// The engine project of the set's song `song` names: its number in the
+/// set (from 1), its title, or its project's guid.
+fn song_project(song: &Json) -> Result<String, String> {
+    let lineup = session_engine::studio_engine::set::lineup().ok_or("no set is open")?;
+    let found = match song {
+        Json::Number(n) => n
+            .as_u64()
+            .and_then(|n| usize::try_from(n).ok())
+            .and_then(|n| n.checked_sub(1))
+            .and_then(|i| lineup.songs.get(i)),
+        Json::String(text) => lineup
+            .songs
+            .iter()
+            .find(|(title, project)| title.eq_ignore_ascii_case(text.trim()) || project == text),
+        _ => None,
+    };
+    found
+        .map(|(_, project)| project.clone())
+        .ok_or_else(|| format!("no song {song} in the set (DAW_SONGS lists them)"))
+}
+
+/// Action `id` of the engine's list, run on song `project` of the set
+/// without going to it (`session_engine::open::in_song`).
+fn run_in(project: &str, id: &str, args: &Json) -> Result<Json, String> {
+    let list = session_engine::actions::list();
+    let bytes = args.to_string();
+    let out = session_engine::open::in_song(project, || {
+        match list.run_json(id, bytes.as_bytes()) {
+            // An async action: awaited on this thread, so the song it is
+            // scoped to holds for all of it.
+            Err(e) if e.to_string().contains("run_json_async") => {
+                let handle = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
+                tokio::task::block_in_place(|| {
+                    handle
+                        .block_on(list.run_json_async(id, bytes.as_bytes()))
+                        .map_err(|e| e.to_string())
+                })
+            }
+            other => other.map_err(|e| e.to_string()),
+        }
+    })?;
+    Ok(serde_json::from_slice(&out)
+        .unwrap_or_else(|_| Json::String(String::from_utf8_lossy(&out).into_owned())))
+}
+
 pub struct Daw;
 
 impl Extension for Daw {
@@ -120,7 +165,21 @@ impl Extension for Daw {
         })
         .action("DAW_RUN", |args| async move {
             let id = args.get("id").and_then(Json::as_str).ok_or("no id")?;
-            run(id, args.get("args").unwrap_or(&Json::Null)).await
+            let none = Json::Null;
+            let with = args.get("args").unwrap_or(&none);
+            match args.get("song").filter(|s| !s.is_null()) {
+                None => run(id, with).await,
+                Some(song) => run_in(&song_project(song)?, id, with),
+            }
+        })
+        .action("DAW_SONGS", |_| async {
+            let lineup = session_engine::studio_engine::set::lineup();
+            Ok(json!({
+                "at": lineup.as_ref().map(|l| l.at + 1),
+                "songs": lineup.map(|l| l.songs.iter().enumerate().map(|(i, (title, project))| {
+                    json!({ "number": i + 1, "title": title, "project": project })
+                }).collect::<Vec<_>>()),
+            }))
         });
     }
 }
