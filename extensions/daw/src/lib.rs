@@ -6,7 +6,7 @@
 //!
 //! - `fts.session` ([`session::extension::answer`]): the session
 //!   primitive's own service, for every extension that reads or writes
-//!   the session (actions `DAW_SESSION_READ/WRITE/STRUCTURE`);
+//!   the session (actions `DAW_READ/WRITE/STRUCTURE`);
 //! - `fts.daw` ([`daw_view`]): what the views of the DAW read and ask
 //!   (actions `DAW_STATE`, `DAW_TRACKS`, `DAW_CLIPS`, `DAW_PEAKS`,
 //!   `DAW_TRANSPORT`, `DAW_SET`, `DAW_OPEN`).
@@ -347,13 +347,13 @@ impl Extension for Daw {
 
     fn build(&self, ext: &mut Builder) {
         *HANDLE.lock().unwrap_or_else(PoisonError::into_inner) = Some(ext.handle());
-        ext.action_in("DAW_SESSION_READ", |args, cx| async move {
+        ext.action_in("DAW_READ", |args, cx| async move {
             session_call(session::service::READ, &args, &cx)
         })
-        .action_in("DAW_SESSION_WRITE", |args, cx| async move {
+        .action_in("DAW_WRITE", |args, cx| async move {
             session_call(session::service::WRITE, &args, &cx)
         })
-        .action_in("DAW_SESSION_STRUCTURE", |args, cx| async move {
+        .action_in("DAW_STRUCTURE", |args, cx| async move {
             session_call(session::service::STRUCTURE, &args, &cx)
         })
         .action("DAW_STATE", |_| async { to_json(&state()) })

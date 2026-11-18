@@ -73,9 +73,14 @@ impl Extension for Arrangement {
     fn build(&self, ext: &mut Builder) {
         *HANDLE.lock().unwrap_or_else(PoisonError::into_inner) = Some(ext.handle());
         ext.view("arrangement", ArrangementPane)
-            .action("ARRANGEMENT_STATE", |_| async { Ok(state()) })
-            .action("ARRANGEMENT_VIEW", |args| async move { set_view(&args) })
-            .action("ARRANGEMENT_FIXTURE", |args| async move { fixture(&args) });
+            .action("STUDIO_ARRANGEMENT_STATE", |_| async { Ok(state()) })
+            .action(
+                "STUDIO_ARRANGEMENT_VIEW",
+                |args| async move { set_view(&args) },
+            )
+            .action("STUDIO_ARRANGEMENT_FIXTURE", |args| async move {
+                fixture(&args)
+            });
     }
 }
 
