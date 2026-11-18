@@ -66,6 +66,69 @@ pub fn through_list(actions: Vec<Action>) -> Vec<Action> {
     take_window()
 }
 
+/// A key pressed in a window that shows no arrangement: what Studio's
+/// keymap binds it to, run.
+///
+/// An Architect pane with the mixer alone. Run on the Action List as the
+/// arrangement runs its keys ([`through_list`]), behind the window: the
+/// engine's actions on the engine, the arrangement's own asked of the
+/// window that shows it, this window's own here. `keys` holds a sequence
+/// half typed. Whether the key did anything.
+#[cfg(feature = "native")]
+pub fn key_alone(
+    keys: &mut crate::keys::Keys,
+    event: &blitz_traits::events::BlitzKeyEvent,
+) -> bool {
+    use blitz_traits::events::Key;
+    let named;
+    let (named, text) = match &event.key {
+        Key::Character(text) => (None, Some(text.as_str())),
+        other @ Key::Named(_) => {
+            named = other.to_string();
+            (Some(named.as_str()), None)
+        }
+    };
+    let Some(code) = crate::keys::key_code(named, text) else {
+        return false;
+    };
+    // Escape abandons a half-typed sequence, and does only that.
+    if code == architect_input::KeyCode::Escape && keys.is_pending() {
+        keys.cancel();
+        return true;
+    }
+    if event.is_auto_repeating && keys.is_pending() {
+        return true;
+    }
+    let held = crate::widget::mods(event.modifiers);
+    let actions = keys.press(
+        code,
+        architect_input::Modifiers {
+            ctrl: held.ctrl,
+            alt: held.alt,
+            shift: held.shift,
+            meta: false,
+        },
+    );
+    if actions.is_empty() {
+        return keys.is_pending();
+    }
+    // Each on the thread keys' slow actions run on, in the order pressed:
+    // the engine's wait on the engine, this window's own (the mixer's
+    // toggle) on Architect, and none of it holds a frame. What the list
+    // has no action for is an arrangement's to do, and there is none here.
+    for action in actions {
+        let _span = tracing::info_span!(
+            "window.key",
+            window.key_action = id_and_args(&action).map_or("", |(id, _)| id),
+        )
+        .entered();
+        if let Some((id, args)) = id_and_args(&action) {
+            crate::actions::off_the_window(id, args);
+        }
+    }
+    true
+}
+
 /// A control pressed in the window — a button, a menu item, a gesture's
 /// end: its named action run through the Action List, exactly as a key's
 /// is ([`through_list`]), so `watch`, a guide and the CLI see the same

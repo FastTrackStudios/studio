@@ -1183,6 +1183,7 @@ fn mixer_shot(
                 scroll_x,
                 frame.content_width(),
                 at,
+                None,
             );
             counts.replayed = recorded.replayed + live.replayed;
             counts.submitted = recorded.submitted + live.submitted;
@@ -1785,6 +1786,7 @@ impl MixerRig {
             0.0,
             self.frame.content_width(),
             at,
+            None,
         );
         Counts {
             replayed: a.replayed + b.replayed,

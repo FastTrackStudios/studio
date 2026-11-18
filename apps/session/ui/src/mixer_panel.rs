@@ -696,6 +696,10 @@ pub struct HostedMixer {
     content_w: Rc<Cell<f64>>,
     /// Touch mode, as the host has it (bigger strips).
     pub touch: Rc<Cell<bool>>,
+    /// Studio's keymap, for the keys pressed in the mixer: the window's
+    /// arrangement reads them beside one; a mixer alone reads them here.
+    #[cfg(feature = "native")]
+    keys: RefCell<crate::keys::Keys>,
 }
 
 impl HostedMixer {
@@ -715,6 +719,19 @@ impl HostedMixer {
             scroll,
             content_w,
             touch,
+            #[cfg(feature = "native")]
+            keys: RefCell::new(crate::keys::Keys::load()),
+        }
+    }
+
+    /// A key pressed in the mixer alone: what Studio's keymap binds it to,
+    /// run (`window::key_alone`) — Space plays, `x` hides the mixer, as in
+    /// the window. Whether it did anything; a key up does nothing.
+    #[cfg(feature = "native")]
+    pub fn key(&self, event: &UiEvent) -> bool {
+        match event {
+            UiEvent::KeyDown(e) => crate::window::key_alone(&mut self.keys.borrow_mut(), e),
+            _ => false,
         }
     }
 
@@ -2123,11 +2140,13 @@ impl MixerWidget {
                 self.let_go(e.id);
                 true
             }
-            UiEvent::KeyDown(e) => {
+            // Beside an arrangement, its keymap reads them; alone, the
+            // host does (`HostedMixer::key`).
+            UiEvent::KeyDown(e) if !self.links.alone => {
                 self.links.keys.borrow_mut().push(Key::Down(e.clone()));
                 false
             }
-            UiEvent::KeyUp(e) => {
+            UiEvent::KeyUp(e) if !self.links.alone => {
                 self.links.keys.borrow_mut().push(Key::Up(e.clone()));
                 false
             }
