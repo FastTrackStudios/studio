@@ -139,12 +139,26 @@ async fn read_all(doc: &str, engine: bool, held: &HashSet<String>) -> Result<Mod
 /// Keeps `model` current: asks the engine's revision every [`POLL`] and
 /// reads again when it moved; without an engine, reads the session
 /// `pane_doc` names every few polls.
-async fn follow(model: HostData<Model>, wake: PaintWake, pane_doc: String) {
+async fn follow(
+    model: HostData<Model>,
+    shared: HostData<Shared>,
+    wake: PaintWake,
+    pane_doc: String,
+) {
     let mut seen: Option<u64> = None;
     let mut polls = 0_u64;
     loop {
         if !model.read(|m| m.fixture) {
             let state: Result<State, String> = daw(method::STATE, json!({})).await;
+            if let Ok(s) = &state {
+                let page = shared.update(|sh| {
+                    sh.transport = Some((s.playing, s.position));
+                    sh.off_page()
+                });
+                if page.is_some() {
+                    wake.wake();
+                }
+            }
             let (engine, doc, revision, problem) = match &state {
                 Ok(s) => (true, s.session.clone(), Some(s.revision), s.problem.clone()),
                 Err(e) => (
@@ -233,8 +247,8 @@ fn ArrangementPane() -> Element {
         (mount, open, Arc::new(Mutex::new(Some(rx))))
     });
     use_hook(|| {
-        let (model, wake) = (open.model.clone(), open.wake.clone());
-        spawn(follow(model, wake, pane_doc.clone()));
+        let (model, shared, wake) = (open.model.clone(), open.shared.clone(), open.wake.clone());
+        spawn(follow(model, shared, wake, pane_doc.clone()));
         if let Some(mut rx) = tx.lock().unwrap_or_else(PoisonError::into_inner).take() {
             spawn(async move {
                 while let Some(intent) = rx.next().await {

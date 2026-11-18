@@ -12125,6 +12125,20 @@ dependencies = [
 [[package]]
 name = "studio-mixer"
 version = "0.1.0"
+dependencies = [
+ "anyrender",
+ "architect-extensions",
+ "architect-scene",
+ "architect-workspace",
+ "daw-view",
+ "dioxus",
+ "futures-channel",
+ "futures-timer",
+ "futures-util",
+ "paint-kit",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "stylo"

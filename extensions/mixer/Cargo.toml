@@ -1,9 +1,33 @@
 [package]
 name = "studio-mixer"
+description = "Studio's mixer and track control panel as a runtime extension: a strip or a row per track, faders and pans as the host's drags writing the engine's values, meters from the engine's values. Reads fts.daw; names no other view."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
 
 [lib]
-path = "src/lib.rs"
+doctest = false
+
+[[bin]]
+name = "studio-mixer"
+path = "src/main.rs"
+
+[dependencies]
+daw-view = { workspace = true }
+paint-kit = { workspace = true }
+architect-extensions = { workspace = true, features = ["guest", "linked-core", "paint-pane"] }
+architect-workspace = { workspace = true, features = ["paint-ui"] }
+anyrender = { workspace = true }
+dioxus = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+futures-channel = "0.3"
+futures-util = "0.3"
+futures-timer = "3"
+
+[dev-dependencies]
+architect-scene = { workspace = true }
+
+[lints]
+workspace = true

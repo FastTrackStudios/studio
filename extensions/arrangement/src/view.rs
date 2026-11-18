@@ -91,6 +91,21 @@ pub struct Shared {
     /// Times the view recorded content (an open, an edit, a zoom at rest).
     pub records: u64,
     pub layers: usize,
+    /// The engine's transport as last polled: `(playing, seconds)`.
+    pub transport: Option<(bool, f64)>,
+    /// How wide the lanes are, pixels.
+    pub lanes_width: f64,
+}
+
+impl Shared {
+    /// Whether the playhead, playing, is off the page the camera shows.
+    #[must_use]
+    pub fn off_page(&self) -> Option<f64> {
+        let (playing, at) = self.transport?;
+        let c = self.camera?;
+        let seen = self.lanes_width / c.zoom.max(1e-6);
+        (playing && seen > 0.0 && (at < c.left || at > c.left + seen * 0.92)).then_some(at)
+    }
 }
 
 /// What it recorded, at which zoom.
@@ -715,6 +730,14 @@ impl PaintView for ArrangeView {
             self.camera = asked;
             self.clamp();
         }
+        // Playing past the page: the next page (REAPER's follow).
+        if self.panning.is_none()
+            && let Some(at) = self.shared.read(Shared::off_page)
+        {
+            let seen = (self.size.0 - HEADER_W).max(1.0) / self.camera.zoom;
+            self.camera.left = (at - seen * 0.05).max(0.0);
+            self.clamp();
+        }
         let stale = self.recorded.as_ref().is_none_or(|r| {
             r.model != self.model.version()
                 || r.dark != p.dark
@@ -801,9 +824,11 @@ impl PaintView for ArrangeView {
             layer.visible = shown;
             out.push((key, layer));
         }
+        let lanes_width = (w - HEADER_W).max(0.0);
         self.shared.update(|s| {
-            s.camera = Some(c);
+            s.camera = Some(self.camera);
             s.layers = out.len();
+            s.lanes_width = lanes_width;
         });
         Some(out)
     }

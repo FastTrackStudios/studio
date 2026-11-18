@@ -84,8 +84,28 @@ pub fn publish(s: &Session) {
     );
 }
 
+/// When the engine last told the deck something, in ms of the process's
+/// clock: the deck's events that follow are its echo, not someone's move.
+static TOLD: AtomicU64 = AtomicU64::new(0);
+
+/// How long after its own report the engine takes the deck's events as
+/// the echo of it.
+pub const ECHO: std::time::Duration = std::time::Duration::from_millis(600);
+
+fn now_ms() -> u64 {
+    static EPOCH: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    u64::try_from(
+        EPOCH
+            .get_or_init(std::time::Instant::now)
+            .elapsed()
+            .as_millis(),
+    )
+    .unwrap_or(u64::MAX)
+}
+
 /// The engine's transport moved: the deck follows.
 pub fn moved(playing: bool, position: f64) {
+    TOLD.store(now_ms().max(1), Ordering::Relaxed);
     call("seek", json!({ "t": position.max(0.0) }));
     call(if playing { "play" } else { "pause" }, json!({}));
 }
@@ -95,6 +115,10 @@ pub fn moved(playing: bool, position: f64) {
 pub fn heard(args: &Json) {
     // A hook is given `{event, detail}`: the detail is the source's state.
     let state = args.get("detail").unwrap_or(args);
+    let told = TOLD.load(Ordering::Relaxed);
+    if told != 0 && now_ms().saturating_sub(told) < u64::try_from(ECHO.as_millis()).unwrap_or(0) {
+        return;
+    }
     let playing = state.get("playing").and_then(Json::as_bool);
     let time = state.get("time").and_then(Json::as_f64);
     #[cfg(feature = "audio")]
