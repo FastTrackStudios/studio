@@ -5,11 +5,12 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
-# The `daw` facade (not daw-proto directly): these modules drive a live
-# backend — `daw::reaper::Reaper` — on top of the service traits, which is
-# exactly why they can't live in daw-proto (daw-reaper depends on it).
+# The `daw` facade for the service traits, and the backend these modules
+# drive: `daw_reaper::Reaper`. Driving a live backend is why they are not
+# in daw-proto (daw-reaper depends on it). Not `studio`: its
+# `studio::reaper` is a re-export of daw-reaper, and the umbrella brings
+# the project formats and the UI with it.
 daw = { workspace = true }
-studio = { workspace = true, features = ["reaper"] }
 daw-reaper = { workspace = true }
 architect = { workspace = true, features = ["vox"] }
 # Canonical 128-slot group partition (music_catalog::groups).
