@@ -10,7 +10,7 @@ description = "What every FTS app shares around its UI: the in-memory log ring (
 # The shared studio shell (src/ui): ShellFrame, ShellState, PanelRegistry.
 # Renderer-agnostic Dioxus with inline styles only, so it runs on Blitz, a
 # WebView and the web alike; the app picks the renderer.
-ui = ["dep:dioxus", "dep:dock", "dep:utils"]
+ui = ["dep:dioxus", "dep:dock", "dep:signal-rig-shell", "dep:utils"]
 # The form factor's publisher on dioxus-native (`ui::form::use_window_screen`):
 # the window measured from its own events. Only the Blitz apps turn it on.
 native = ["ui", "dep:dioxus-native", "dep:futures-timer"]
@@ -32,6 +32,9 @@ dock = { workspace = true, optional = true }
 facet = { workspace = true }
 facet-json = { workspace = true }
 utils = { workspace = true, optional = true }
+# The tokens and the text fields' hold on the keyboard are the rig frame's
+# (`ui`): one look and one keyboard rule for the studio shell and the rigs.
+signal-rig-shell = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { workspace = true, optional = true, features = ["Window", "Location", "Request", "RequestInit", "RequestCache", "Response"] }

@@ -582,6 +582,7 @@ dependencies = [
  "objc2 0.6.5",
  "objc2-foundation 0.3.2",
  "objc2-ui-kit 0.3.2",
+ "signal-rig-shell",
  "tempfile",
  "tokio",
  "tracing",
@@ -9699,7 +9700,6 @@ dependencies = [
  "anyrender",
  "anyrender_vello",
  "anyrender_vello_hybrid",
- "app-shell",
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.6)",
  "architect-mcp",
  "audio",
@@ -20748,8 +20748,8 @@ dependencies = [
 name = "signal-rig-shell"
 version = "26.10.3"
 dependencies = [
- "app-shell",
  "dioxus",
+ "utils",
 ]
 
 [[package]]

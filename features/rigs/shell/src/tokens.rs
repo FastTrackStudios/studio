@@ -1,10 +1,9 @@
 //! The studio shell's tokens: the touch prototype's `styles.css`
 //! (`prototypes/touch`), one value per name. Inline-style fragments, since
 //! Blitz takes no stylesheet (AGENTS.md); a colour is changed here or
-//! nowhere. Pure constants and helpers, so this module needs no feature:
-//! the iPad rig frame (`signal-rig-shell`, which re-exports it as
-//! `signal_rig_shell::tokens`) and the desktop frame (`ui`) draw from the
-//! same set.
+//! nowhere. Pure constants and helpers: this iPad rig frame and the
+//! desktop frame (`app_shell::ui`, which re-exports them as
+//! `app_shell::tokens`) draw from the same set.
 
 // ── Grounds ────────────────────────────────────────────────────────────────
 

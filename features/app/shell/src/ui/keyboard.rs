@@ -1,52 +1,8 @@
 //! A text field's hold on the keyboard, so global hotkeys stand aside
-//! while it is typed into (`utils::keyboard`).
-//!
-//! ```ignore
-//! let keys = use_text_focus();
-//! rsx! { input { onfocus: move |_| keys.focus(), onblur: move |_| keys.blur(), … } }
-//! ```
-//!
-//! The hold goes when the field loses focus or unmounts, whichever is
-//! first: a field closed mid-edit never leaves the keyboard taken.
-//!
-//! On dioxus-native the renderer does this for every text input itself
-//! ([`follow_text_fields`], called once before launch); the hook stays for
-//! fields that are not text inputs to the renderer, and for other hosts.
+//! while it is typed into (`utils::keyboard`). The hook is the rig frame's
+//! (`signal_rig_shell::keyboard`), so a rig and the studio shell share it.
 
-use dioxus::prelude::*;
-use utils::keyboard::{Claim, claim};
-
-/// One text field's hold on the keyboard.
-#[derive(Clone, Copy)]
-pub struct TextFocus(CopyValue<Option<Claim>>);
-
-impl TextFocus {
-    /// The field has focus: global hotkeys stand aside.
-    pub fn focus(&self) {
-        let mut held = self.0;
-        if held.peek().is_none() {
-            held.set(Some(claim()));
-        }
-    }
-
-    /// The field lost focus: hotkeys act again (once nothing else holds the
-    /// keyboard).
-    pub fn blur(&self) {
-        let mut held = self.0;
-        held.set(None);
-    }
-}
-
-/// A [`TextFocus`] for the field this component draws.
-#[must_use]
-pub fn use_text_focus() -> TextFocus {
-    let held = use_hook(|| CopyValue::new(None::<Claim>));
-    use_drop(move || {
-        let mut held = held;
-        held.set(None);
-    });
-    TextFocus(held)
-}
+pub use signal_rig_shell::keyboard::{TextFocus, use_text_focus};
 
 /// Holds the keyboard switch (`utils::keyboard::TEXT_FIELD`) whenever the
 /// renderer has a text input focused, in any window of the process. Call

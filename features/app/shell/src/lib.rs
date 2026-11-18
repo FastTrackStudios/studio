@@ -20,8 +20,10 @@
 pub mod ios_scene;
 pub mod log_ring;
 /// The studio shell's tokens: colours, sizes and the font, shared by the
-/// desktop frame (`ui`) and the iPad rig frame (`signal-rig-shell`).
-pub mod tokens;
+/// desktop frame (`ui`) and the iPad rig frame (`signal-rig-shell`, whose
+/// they are).
+#[cfg(feature = "ui")]
+pub use signal_rig_shell::tokens;
 #[cfg(feature = "ui")]
 pub mod ui;
 #[cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
