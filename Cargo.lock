@@ -5974,7 +5974,6 @@ dependencies = [
  "facet",
  "facet-postcard",
  "rusty_link",
- "studio",
  "tokio",
  "tokio-util",
  "tracing",
