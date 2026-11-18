@@ -1,6 +1,8 @@
-//! The app, through the host service: the vault's notes, the engine's
-//! actions, the panes. The only way the launcher reaches any of them, so
-//! its development copy (a process) behaves as the compiled-in one.
+//! The app, through the host service.
+//!
+//! The vault's notes, the engine's actions, the panes: the only way the
+//! launcher reaches any of them, so its development copy (a process)
+//! behaves as the compiled-in one.
 
 use std::sync::{Mutex, PoisonError};
 

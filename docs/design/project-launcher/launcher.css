@@ -296,3 +296,60 @@ iframe { width: 100%; height: 760px; border: 1px solid var(--border); border-rad
 }
 
 .phone .ruler.untimed .actname b { display: none; }
+
+/* ---- inside Architect's shell: its tab strip, its rail and its navigator.
+   The launcher draws none of these; they are drawn here so the launcher's
+   provider ("Open") and its page are seen where they will sit. */
+:root { --accent-pill: oklch(0.78 0.13 178); --accent-pill-ink: oklch(0.2 0.03 178); }
+.tabs { height: 38px; display: flex; align-items: center; gap: 4px; padding: 0 12px; background: var(--sidebar); border-bottom: 1px solid var(--border); }
+.tabs .lights { margin-right: 10px; }
+.tab { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px; border-radius: 7px; color: var(--muted-foreground); font-size: 12px; }
+.tab.on { background: var(--background); color: var(--foreground); font-weight: 600; }
+.frame { grid-template-columns: 48px 236px minmax(0, 1fr) 300px; }
+.frame.plan { grid-template-columns: 48px 236px minmax(0, 1fr); }
+.rail { background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; }
+.rb { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; color: var(--muted-foreground); }
+.rb.on { background: color-mix(in srgb, var(--accent-pill) 22%, transparent); color: var(--accent-pill); }
+.rail .orgmark { margin-top: 6px; }
+.navhead { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 6px; font-size: 13px; color: var(--muted-foreground); }
+.navhead b { color: var(--foreground); font-weight: 650; }
+.side h2 { display: flex; align-items: center; gap: 4px; padding: 14px 4px 5px; }
+.side h2 .i { width: 14px; height: 14px; }
+.side h2.theirs { padding: 7px 4px; font-weight: 500; }
+.side h2.theirs .num { margin-left: auto; padding-right: 6px; font-weight: 400; }
+.navnote { margin: 12px 8px 0; font-size: 11px; color: var(--muted-foreground); line-height: 1.45; }
+
+/* ---- the song list, in the grammar of Architect's media list: number,
+   48 px tile (the key on the song's colour), title over artist, length */
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px 0 12px; border: 0; border-radius: 999px;
+  background: var(--accent-pill); color: var(--accent-pill-ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.pill .i { fill: currentColor; stroke: none; }
+.tile { width: 48px; height: 48px; border-radius: 6px; display: grid; place-items: center; color: #fff; font-size: 16px; font-weight: 700; }
+.tile.sm { font-size: 12px; }
+.tile .i { width: 20px; height: 20px; }
+.colhead, .row { grid-template-columns: 22px 48px minmax(0, 1fr) 62px 44px 230px; }
+.row { min-height: 56px; border-radius: 8px; }
+.row .t b { font-size: 15px; font-weight: 500; }
+.row .t small { font-size: 12px; }
+.row.now .t b { color: var(--accent-pill); }
+.row.bench .tile { opacity: 0.5; }
+.sethead { border-bottom: 0; margin: 18px 24px 2px; padding-bottom: 4px; font-size: 13px; font-weight: 650; color: var(--muted-foreground); }
+.plan .colhead, .plan .row { grid-template-columns: 16px 22px 48px minmax(0, 1.1fr) minmax(0, 1fr) 62px 44px 230px; }
+.prow, .colhead:has(.pact) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 70px; }
+.blk.now { outline-color: var(--accent-pill); }
+.chooser .tab.on { background: var(--background); }
+.phone .row { grid-template-columns: 18px 48px minmax(0, 1fr) 150px; min-height: 60px; }
+.phone .sethead { margin: 16px 16px 2px; }
+.tabbar a.on { color: var(--accent-pill); }
+.resume .btn.primary { background: var(--accent-pill); color: var(--accent-pill-ink); border-radius: 999px; height: 36px; padding: 0 16px 0 12px; }
+
+/* ---- a song list to look at and load from: no columns of marks */
+.colhead, .row { grid-template-columns: 22px 48px minmax(0, 1fr) 70px 48px; }
+.plan .colhead, .plan .row { grid-template-columns: 16px 22px 48px minmax(0, 1.1fr) minmax(0, 1.2fr) 70px 48px; }
+.phone .row { grid-template-columns: 18px 48px minmax(0, 1fr) 44px; }
+.phone .row .bpm { display: none; }
+.head { padding-bottom: 6px; }
+.pill.wide { width: 100%; justify-content: center; }
+.links { margin-top: 14px; }
+.links li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); }
+.links li a { color: var(--foreground); font-weight: 560; font-size: 13px; }

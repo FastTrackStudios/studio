@@ -15,6 +15,11 @@ path = "src/main.rs"
 
 [dependencies]
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+# The provider it adds to Architect's navigator (`src/nav.rs`).
+architect-navigator-api = { workspace = true }
+# A song's tile colour, the setlists extension's rule (`setlists::row::tile_hue`),
+# so a song is the same colour here as on its setlist's page.
+setlists = { workspace = true }
 dioxus = { workspace = true }
 serde_json = { workspace = true }
 futures-timer = { workspace = true }

@@ -7,7 +7,7 @@
 use serde_json::{Map, Value, json};
 
 /// A note as a vault query's row: its path and properties.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Row {
     pub path: String,
     pub values: Map<String, Value>,
@@ -114,7 +114,10 @@ impl Link {
     /// The note it points at (`target.md`).
     #[must_use]
     pub fn note(&self) -> String {
-        if self.target.ends_with(".md") {
+        let is_note = std::path::Path::new(&self.target)
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("md"));
+        if is_note {
             self.target.clone()
         } else {
             format!("{}.md", self.target)
@@ -123,6 +126,8 @@ impl Link {
 }
 
 /// A song of a library, as its note has it.
+// Four independent facts about its files, each read from its own property.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Song {
     /// Its note (`Libraries/<lib>/<Song>/<Song>.md`).
@@ -295,12 +300,14 @@ impl Setlist {
     /// do not.
     #[must_use]
     pub fn length(&self) -> (f64, usize) {
-        self.entries().fold((0.0, 0), |(sum, unknown), e| {
-            match e.song.as_ref().and_then(|s| s.length) {
-                Some(len) => (sum + len, unknown),
-                None => (sum, unknown + 1),
-            }
-        })
+        let lengths: Vec<Option<f64>> = self
+            .entries()
+            .map(|e| e.song.as_ref().and_then(|s| s.length))
+            .collect();
+        (
+            lengths.iter().flatten().sum(),
+            lengths.iter().filter(|l| l.is_none()).count(),
+        )
     }
 }
 
@@ -312,14 +319,19 @@ pub fn setlists(setlist_rows: &[Row], song_rows: &[Row]) -> Vec<Setlist> {
         .iter()
         .map(|r| Setlist::of(r, &songs))
         .collect();
-    out.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    out.sort_by_key(|a| a.title.to_lowercase());
     out
 }
 
 /// `3:16` for 196.5 seconds; `1:04:10` past the hour.
 #[must_use]
 pub fn clock(seconds: f64) -> String {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    // Whole seconds, never negative: a length in a note's frontmatter.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::as_conversions
+    )]
     let total = seconds.max(0.0).round() as u64;
     let (h, m, s) = (total / 3600, total / 60 % 60, total % 60);
     if h > 0 {
@@ -336,10 +348,11 @@ pub fn slug(title: &str) -> String {
     for c in title.chars() {
         if c.is_alphanumeric() {
             out.extend(c.to_lowercase());
-        } else if c.is_whitespace() || c == '-' || c == '_' {
-            if !out.ends_with('-') && !out.is_empty() {
-                out.push('-');
-            }
+        } else if (c.is_whitespace() || c == '-' || c == '_')
+            && !out.ends_with('-')
+            && !out.is_empty()
+        {
+            out.push('-');
         }
     }
     out.trim_end_matches('-').to_owned()
@@ -423,7 +436,7 @@ pub fn entry_json(entry: &Entry, session: Option<&str>, lights: bool) -> Value {
 mod tests {
     use super::*;
 
-    fn row(path: &str, values: Value) -> Row {
+    fn row(path: &str, values: &Value) -> Row {
         Row {
             path: path.to_owned(),
             values: values.as_object().cloned().unwrap_or_default(),
@@ -433,7 +446,7 @@ mod tests {
     fn drive() -> Row {
         row(
             "Libraries/Recital/Drive To LA/Drive To LA.md",
-            json!({
+            &json!({
                 "title": "Drive To LA", "artist": "Nights Out", "key": "C", "key_end": "Db",
                 "tempo": 160.0, "meter": "4/4", "length": 196.5,
                 "chart": "[[Libraries/Recital/Drive To LA/Drive To LA.kf|Drive To LA.kf]]",
@@ -465,7 +478,7 @@ mod tests {
         assert_eq!(song.session, None);
         let bare = Song::of(&row(
             "Libraries/X/Jingle Bell Rock/Jingle Bell Rock.md",
-            json!({}),
+            &json!({}),
         ));
         assert_eq!(bare.title, "Jingle Bell Rock");
         assert!(!bare.chart && !bare.lyrics && !bare.recording && !bare.reference);
@@ -475,7 +488,7 @@ mod tests {
     fn a_setlist_keeps_its_sets_and_finds_its_songs() {
         let set = row(
             "Setlists/Recital.md",
-            json!({
+            &json!({
                 "title": "JT's Senior Recital",
                 "sets": [
                     { "name": "Act I", "songs": ["[[Libraries/Recital/Drive To LA/Drive To LA|Drive To LA]]"] },
@@ -503,7 +516,7 @@ mod tests {
     fn a_setlist_without_sets_is_one_run_and_takes_its_project_link() {
         let set = row(
             "Setlists/Crescendum.md",
-            json!({
+            &json!({
                 "songs": ["[[Libraries/C/Unbreakable/Unbreakable|Unbreakable]]"],
                 "project": "[[Projects/Crescendum Album/project|Crescendum]]",
             }),
