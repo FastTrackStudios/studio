@@ -1,0 +1,107 @@
+# Studio's views as runtime extensions (docs/design/arrangement-mixer-extensions.md):
+# a workspace of its own, NOT a member of the root one. Its pins differ from
+# Studio's: Architect at the compositor branch (runtime-compositor-arrangement,
+# by rev until it is tagged), one revision for the whole graph through the
+# www. patch below (as Keyflow does). The directory moves to a repo of its
+# own with `git mv`: nothing here names a path outside it.
+[workspace]
+resolver = "3"
+members = ["daw-view", "paint-kit", "daw", "arrangement", "mixer"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["FastTrack Studio"]
+repository = "https://github.com/FastTrackStudios/studio"
+
+[workspace.dependencies]
+daw-view = { path = "daw-view" }
+paint-kit = { path = "paint-kit" }
+
+# Architect at FastTrackStudios/architect runtime-compositor-arrangement
+# (the compositor, plus an engine's values shared across processes).
+architect = { git = "https://github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect-extensions = { git = "https://github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3", default-features = false }
+architect-workspace = { git = "https://github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3", default-features = false }
+architect-theme = { git = "https://github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3", default-features = false }
+architect-scene = { git = "https://github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+
+# The session primitive (FastTrackStudios/session main): fts.session's
+# rules and types.
+session = { git = "https://github.com/FastTrackStudios/session", rev = "f15c8b840ab448aca1ee544546654a36640eed60" }
+
+# The engine, at the revision Studio pins.
+daw-standalone = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
+daw-proto = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
+dawfile-reaper = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
+
+dioxus = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41", default-features = false, features = ["lib"] }
+anyrender = "0.14"
+peniko = "0.6"
+kurbo = "0.13"
+skrifa = "0.40"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+base64 = "0.22"
+blake3 = "1.8"
+tokio = { version = "1", default-features = false }
+
+[workspace.lints.rust]
+dead_code = "warn"
+unused = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 1
+
+# The audio thread's crates at full speed in a dev build: a rig never xruns.
+[profile.dev.package.daw-standalone]
+opt-level = 3
+[profile.dev.package.fts-sample]
+opt-level = 3
+[profile.dev.package.symphonia]
+opt-level = 3
+
+[patch.crates-io]
+blitz-dom = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "46459d384806583dac4d60a414d7cba7cc9e6104" }
+blitz-traits = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "46459d384806583dac4d60a414d7cba7cc9e6104" }
+blitz-paint = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "46459d384806583dac4d60a414d7cba7cc9e6104" }
+blitz-shell = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "46459d384806583dac4d60a414d7cba7cc9e6104" }
+blitz-net = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "46459d384806583dac4d60a414d7cba7cc9e6104" }
+blitz-html = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "46459d384806583dac4d60a414d7cba7cc9e6104" }
+anyrender = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "db5b7ef11e4df19ef317c23f77152ec5e1887101" }
+anyrender_vello = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+anyrender_vello_hybrid = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+wgpu-hal = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
+phon-jit = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.2.3" }
+facet-core = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.4.0" }
+vox-phon = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.3.0" }
+
+[patch."https://github.com/DioxusLabs/dioxus"]
+dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+dioxus-native-dom = { git = "https://www.github.com/FastTrackStudios/vendor", rev = "25bf4bcdfd0b6acb268ca91a93bc8ff8da683a96" }
+dioxus-vdom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+
+# One Architect revision for the whole graph: session and daw pin the
+# v0.12.6 tag; the www. host is another source to cargo, so it may patch
+# the plain one.
+[patch."https://github.com/FastTrackStudios/architect"]
+architect = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect-action-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect-permissions = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect-rpc-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect-story-core = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect-story-macros = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect-story-runtime = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect-ui = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect-theme = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+architect-workspace-hack = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }
+crdt = { git = "https://www.github.com/FastTrackStudios/architect", rev = "f20eb91087ee91aea00aaf35812c91a97f9003f3" }

@@ -1,0 +1,17 @@
+[package]
+name = "paint-kit"
+description = "What Studio's painted runtime views share: text as glyph runs (skrifa, an embedded face), the app's theme as a palette, and small drawing helpers. A utility, not a contract: either view works without the other."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+anyrender = { workspace = true }
+peniko = { workspace = true }
+kurbo = { workspace = true }
+skrifa = "0.44"
+architect-workspace = { workspace = true, features = ["paint"] }
+
+[lints]
+workspace = true
