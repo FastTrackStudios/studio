@@ -12108,6 +12108,7 @@ name = "studio-arrangement"
 version = "0.1.0"
 dependencies = [
  "anyrender",
+ "architect",
  "architect-extensions",
  "architect-scene",
  "architect-workspace",
@@ -12127,6 +12128,7 @@ name = "studio-mixer"
 version = "0.1.0"
 dependencies = [
  "anyrender",
+ "architect",
  "architect-extensions",
  "architect-scene",
  "architect-workspace",

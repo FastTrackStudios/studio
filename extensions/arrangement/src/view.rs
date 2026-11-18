@@ -52,6 +52,10 @@ pub const HEADERS: LayerKey = 6;
 pub const CORNER: LayerKey = 7;
 pub const PLAYHEAD: LayerKey = 8;
 pub const BAND: LayerKey = 1000;
+/// About how wide a tile is, pixels at the zoom it was recorded at.
+pub const TILE_PX: f64 = 2048.0;
+/// Chunks a band key leaves room for.
+const CHUNKS: LayerKey = 1024;
 
 /// Where the camera is: the view's left edge in seconds, how far down in
 /// pixels, and pixels a second.
@@ -121,7 +125,15 @@ struct Recorded {
     headers: Arc<Vec<RenderCommand>>,
     corner: Arc<Vec<RenderCommand>>,
     playhead: Arc<Vec<RenderCommand>>,
-    bands: Vec<Arc<Vec<RenderCommand>>>,
+    /// Tiles recorded so far, by `(band, chunk)`; recorded when they first
+    /// come near the view, kept until the next record.
+    tiles: std::collections::HashMap<(usize, usize), Arc<Vec<RenderCommand>>>,
+    /// Seconds a chunk spans.
+    chunk: f64,
+    /// Each band's longest clip, seconds: how far before the view a tile
+    /// may start and still reach into it.
+    reach: Vec<f64>,
+    palette: Palette,
 }
 
 pub struct ArrangeView {
@@ -158,7 +170,7 @@ fn wave_path(
     mid: f64,
     half: f64,
 ) -> Option<BezPath> {
-    let cols = (width / 2.0).floor().clamp(1.0, 4000.0);
+    let cols = (width / 3.0).floor().clamp(1.0, 4000.0);
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -203,12 +215,14 @@ fn wave_path(
     Some(path)
 }
 
-/// The clips of `rows` (the rows of one band, the first at `first`), at
-/// `r` pixels a second.
-fn record_band(
+/// A tile: the clips of `rows` (one band's, the first at `first`) that
+/// start in `[from, to)` seconds, at `r` pixels a second. A clip is drawn
+/// whole in the tile it starts in.
+fn record_tile(
     m: &Model,
     first: usize,
     rows: &[Row],
+    (from, to): (f64, f64),
     r: f64,
     p: &Palette,
 ) -> Arc<Vec<RenderCommand>> {
@@ -221,7 +235,7 @@ fn record_band(
     for (i, row) in rows.iter().enumerate() {
         #[expect(clippy::cast_precision_loss, reason = "a row")]
         let y = (first + i) as f64 * ROW_H;
-        for c in &row.clips {
+        for c in row.clips.iter().filter(|c| c.start >= from && c.start < to) {
             let (x0, x1) = (c.start * r, c.end.max(c.start) * r);
             let w = (x1 - x0).max(1.0);
             let body = Rect::new(x0, y + 1.0, x0 + w, y + ROW_H - 1.0);
@@ -516,11 +530,16 @@ impl ArrangeView {
                 );
             }
             let (grid, ruler) = record_grid(m, r, height, p);
-            let bands = m
+            // At most 64 chunks a band, each about 2,048 pixels wide.
+            let chunk = (TILE_PX / r).max(m.duration / 64.0).max(1.0);
+            let reach = m
                 .rows
                 .chunks(BAND_ROWS)
-                .enumerate()
-                .map(|(b, rows)| record_band(m, b * BAND_ROWS, rows, r, p))
+                .map(|rows| {
+                    rows.iter()
+                        .flat_map(|row| row.clips.iter().map(|c| c.end - c.start))
+                        .fold(0.0_f64, f64::max)
+                })
                 .collect();
             let mut ruler_bg = Scene::new();
             rect(
@@ -581,7 +600,10 @@ impl ArrangeView {
                     headers: record_headers(m, p),
                     corner: commands(corner),
                     playhead: commands(line),
-                    bands,
+                    tiles: std::collections::HashMap::new(),
+                    chunk,
+                    reach,
+                    palette: *p,
                 },
             )
         });
@@ -811,18 +833,76 @@ impl PaintView for ArrangeView {
                     )]),
             ),
         ];
-        for (b, band) in rec.bands.iter().enumerate() {
-            #[expect(clippy::cast_precision_loss, reason = "a band")]
-            let (y0, y1) = (
-                (b * BAND_ROWS) as f64 * ROW_H,
-                ((b + 1) * BAND_ROWS) as f64 * ROW_H,
-            );
-            // Off screen, a band is not drawn (it keeps its fragment).
-            let shown = y1 - c.top + RULER_H > RULER_H && y0 - c.top + RULER_H < h;
-            let key = BAND + LayerKey::try_from(b).unwrap_or(0);
-            let mut layer = Layer::new(Arc::clone(band)).at(camera).clipped(lanes).z(2);
-            layer.visible = shown;
-            out.push((key, layer));
+        // The tiles near the view: recorded when first needed, kept after.
+        let seen = (w - HEADER_W).max(0.0) / c.zoom;
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a row"
+        )]
+        let (first_row, last_row) = (
+            ((c.top / ROW_H).floor().max(0.0)) as usize,
+            (((c.top + h) / ROW_H).ceil().max(0.0)) as usize,
+        );
+        let bands = (first_row / BAND_ROWS)..=(last_row / BAND_ROWS);
+        let mut wanted = Vec::new();
+        let rows_n = self.model.read(|m| m.rows.len());
+        for b in bands.filter(|b| b * BAND_ROWS < rows_n) {
+            let reach = rec.reach.get(b).copied().unwrap_or(0.0);
+            // A chunk either side of what shows, and back as far as the
+            // band's longest clip, which may start before the view.
+            let from = c.left - reach - rec.chunk;
+            let to = c.left + seen + rec.chunk;
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "a chunk"
+            )]
+            let chunks = ((from / rec.chunk).floor().max(0.0) as usize)
+                ..=((to / rec.chunk).floor().max(0.0) as usize);
+            for k in chunks {
+                wanted.push((b, k));
+            }
+        }
+        let (chunk, palette, at_zoom) = (rec.chunk, rec.palette, rec.at_zoom);
+        let missing: Vec<(usize, usize)> = wanted
+            .iter()
+            .copied()
+            .filter(|t| !rec.tiles.contains_key(t))
+            .collect();
+        let made: Vec<((usize, usize), Arc<Vec<RenderCommand>>)> = self.model.read(|m| {
+            missing
+                .iter()
+                .map(|&(b, k)| {
+                    let first = b * BAND_ROWS;
+                    let rows = m
+                        .rows
+                        .get(first..(first + BAND_ROWS).min(m.rows.len()))
+                        .unwrap_or(&[]);
+                    #[expect(clippy::cast_precision_loss, reason = "a chunk")]
+                    let span = (k as f64 * chunk, (k + 1) as f64 * chunk);
+                    ((b, k), record_tile(m, first, rows, span, at_zoom, &palette))
+                })
+                .collect()
+        });
+        if let Some(rec) = self.recorded.as_mut() {
+            rec.tiles.extend(made);
+        }
+        let rec = self.recorded.as_ref()?;
+        for (b, k) in wanted {
+            let Some(tile) = rec.tiles.get(&(b, k)) else {
+                continue;
+            };
+            if tile.is_empty() {
+                continue;
+            }
+            let key = BAND
+                + LayerKey::try_from(b).unwrap_or(0) * CHUNKS
+                + LayerKey::try_from(k).unwrap_or(0);
+            out.push((
+                key,
+                Layer::new(Arc::clone(tile)).at(camera).clipped(lanes).z(2),
+            ));
         }
         let lanes_width = (w - HEADER_W).max(0.0);
         self.shared.update(|s| {
