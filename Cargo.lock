@@ -5771,7 +5771,6 @@ dependencies = [
  "daw-transport-sync",
  "dawfile-reaper",
  "display-info",
- "editor",
  "enumflags2",
  "eyre",
  "facet-json",

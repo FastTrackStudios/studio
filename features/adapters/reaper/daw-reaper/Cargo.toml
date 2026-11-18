@@ -68,8 +68,6 @@ swell-ui.workspace = true
 display-info = { workspace = true }
 
 [dev-dependencies]
-editor = { workspace = true, features = ["daw", "ops"] }
-
 daw-control = { workspace = true }
 daw-proto = { workspace = true }
 base64 = { workspace = true }
