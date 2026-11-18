@@ -135,6 +135,21 @@ impl CloseupHandle {
     }
 }
 
+/// A close-up of one rack panel as a pane's state keeps it:
+/// `<track GUID>/<panel slug>` (`eq`, `comp`, …).
+#[must_use]
+pub fn rack_state(guid: &str, which: Which) -> String {
+    format!("{guid}/{}", which.slug())
+}
+
+/// [`rack_state`] read back: the track's GUID and the panel.
+#[must_use]
+pub fn rack_of_state(state: &str) -> Option<(String, Which)> {
+    let (guid, slug) = state.rsplit_once('/')?;
+    let which = Which::from_slug(slug)?;
+    (!guid.is_empty()).then(|| (guid.to_owned(), which))
+}
+
 impl Default for Closeups {
     fn default() -> Self {
         Self::new()
@@ -381,7 +396,11 @@ const ZOOM_MAX: f64 = 2.2;
 
 /// A rack panel as a widget of its own: drawn to fill it, edited through
 /// the same grips a strip's is.
-struct RackWidget {
+///
+/// What the window's close-up layer mounts ([`CloseupLayer`]: a Blitz
+/// custom widget natively, a canvas in a browser), and what an Architect
+/// pane hosts (`studio.mixer`'s `closeup` view): the same widget.
+pub struct RackWidget {
     tone: Rc<Shared>,
     guid: String,
     which: Which,
@@ -405,7 +424,14 @@ struct RackWidget {
 }
 
 impl RackWidget {
-    fn new(tone: Rc<Shared>, guid: String, which: Which, touch: bool) -> Self {
+    /// Track `guid`'s `which` panel, over the racks' settings `tone`;
+    /// `touch` keeps it no smaller than the strip it came from.
+    ///
+    /// # Panics
+    ///
+    /// The embedded font does not load (it is built in).
+    #[must_use]
+    pub fn new(tone: Rc<Shared>, guid: String, which: Which, touch: bool) -> Self {
         let theme = daw_ui::theming::Theme::dark();
         Self {
             tone,
@@ -441,7 +467,8 @@ impl RackWidget {
         )
     }
 
-    fn event(&mut self, event: &UiEvent) {
+    /// One input event: a grip pressed, dragged, let go; a mouse over one.
+    pub fn event(&mut self, event: &UiEvent) {
         // In the panel's own units: CSS pixels over the close-up's zoom.
         let zoom = self.zoom.get().max(f64::EPSILON);
         let at = |e: &BlitzPointerEvent| {
@@ -532,7 +559,9 @@ impl RackWidget {
         true
     }
 
-    fn paint_scene(&mut self, width: u32, height: u32, scale: f64) -> Scene {
+    /// The panel drawn to fill `width` × `height` device pixels at
+    /// `scale`.
+    pub fn paint_scene(&mut self, width: u32, height: u32, scale: f64) -> Scene {
         self.dirty.set(false);
         let scale = scale.max(f64::EPSILON);
         let (css_w, css_h) = (f64::from(width) / scale, f64::from(height) / scale);
