@@ -2786,13 +2786,33 @@ impl Meters {
     }
 }
 
-/// The tracks whose meters an engine publishes as values ([`meter_value`]).
+/// The tracks an engine publishes values for: their meters
+/// ([`meter_value`]) and their mute and solo ([`track_value`]).
 ///
-/// The first this many of the project, by index. Five
-/// values a track, inside a shared value table's 1024 slots
-/// (`architect_scene::engine::MAX_SLOTS`); a track past them keeps its
-/// meter drawn into the mixer's picture.
-pub const METER_TRACKS: usize = 204;
+/// The first this many of the project, by index. Seven values a track
+/// (five a meter, two the buttons), inside a shared value table's 1024
+/// slots (`architect_scene::engine::MAX_SLOTS`); a track past them keeps
+/// its meter and its buttons drawn into the panes' pictures.
+pub const VALUE_TRACKS: usize = 146;
+
+/// The tracks whose meters an engine publishes as values ([`meter_value`]):
+/// [`VALUE_TRACKS`].
+pub const METER_TRACKS: usize = VALUE_TRACKS;
+
+/// The engine value a host lights track `index`'s `part` button by: 1
+/// lit, 0 not.
+///
+/// `part` is one of [`TRACK_PARTS`]. The `daw` extension writes them as
+/// the engine's track events say, in the engine's own process, so every
+/// pane that draws the button from it (the arrangement's track panel and
+/// the mixer, as Architect panes) lights it in the same frame.
+#[must_use]
+pub fn track_value(index: usize, part: &str) -> String {
+    format!("engine.track.{index}.{part}")
+}
+
+/// The buttons [`track_value`] names.
+pub const TRACK_PARTS: [&str; 2] = ["mute", "solo"];
 
 /// The engine value a host moves track `index`'s meter by.
 ///

@@ -17,7 +17,6 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use anyrender::recording::RenderCommand;
-use architect_scene::anim::{Animation, Input, Linear, Name, Property};
 
 use architect_workspace::paint::{Layer, LayerKey, PaintView, Scene};
 use architect_workspace::{ViewCtx, ViewInput};
@@ -54,6 +53,14 @@ pub struct Hosted {
     held: MouseEventButtons,
     /// The pane's width, for the wheel's end.
     width: f64,
+    /// The engine's values light the tracks' mute and solo
+    /// (`studio_view_link::engine_lights_buttons`), and when that was
+    /// last looked at.
+    buttons: bool,
+    looked: Option<web_time::Instant>,
+    /// Set by a test: the buttons lit by values or not, whatever the
+    /// table on this machine says.
+    forced: Option<bool>,
 }
 
 impl Hosted {
@@ -67,7 +74,19 @@ impl Hosted {
             kept: None,
             held: MouseEventButtons::empty(),
             width: 0.0,
+            buttons: false,
+            looked: None,
+            forced: None,
         }
+    }
+
+    /// The tracks' mute and solo lit by the engine's values (`on`) or
+    /// drawn in the picture, whatever this machine's table says: a test's
+    /// own table.
+    #[must_use]
+    pub const fn with_buttons_lit_by_values(mut self, on: bool) -> Self {
+        self.forced = Some(on);
+        self
     }
 
     /// The scene the widget last painted, as it painted it.
@@ -95,21 +114,6 @@ impl Hosted {
             }
         }
     }
-}
-
-/// A part's move as the host's animation of it.
-fn animation(m: &session_ui::overlay::ValueMove) -> Option<Animation> {
-    use session_ui::overlay::ValueProperty;
-    let name = Name::new(&m.name).ok()?;
-    let property = match m.property {
-        ValueProperty::Y => Property::Y,
-        ValueProperty::Opacity => Property::Opacity,
-        ValueProperty::Visible => Property::Visible,
-    };
-    let mut linear = Linear::new(m.scale, m.offset);
-    linear.min = m.min;
-    linear.max = m.max;
-    Some(Animation::linear(property, Input::Value(name), linear))
 }
 
 impl PaintView for Hosted {
@@ -178,12 +182,23 @@ impl PaintView for Hosted {
 
     fn layers(&mut self, ctx: &ViewCtx) -> Option<Vec<(LayerKey, Layer)>> {
         let began = web_time::Instant::now();
+        // Looked at every half second: the engine's table, once it is
+        // there, stays.
+        if let Some(on) = self.forced {
+            self.buttons = on;
+        } else if self
+            .looked
+            .is_none_or(|at| began.duration_since(at).as_millis() >= 500)
+        {
+            self.looked = Some(began);
+            self.buttons = studio_view_link::engine_lights_buttons();
+        }
         let (w, h) = studio_view_link::pane_size(ctx);
         self.width = f64::from(w);
         let (scene, apart) = {
             let widget = &self.mixer.widget;
             self.scope
-                .run(|| widget.borrow_mut().paint_layers(w, h, 1.0))
+                .run(|| widget.borrow_mut().paint_layers(w, h, 1.0, self.buttons))
         };
         let mut layers = self.layer.frame(scene, (w, h), began);
         if let (Some((picture, above, kept)), Some((_, now))) = (&self.kept, layers.first())
@@ -199,8 +214,12 @@ impl PaintView for Hosted {
                 .ok()
                 .and_then(|i| PARTS.checked_add(i))
                 .unwrap_or(LayerKey::MAX);
-            let mut layer = Layer::new(self.content(key, &part.scene.commands))
-                .animated(part.moves.iter().filter_map(animation).collect::<Vec<_>>());
+            let mut layer = Layer::new(self.content(key, &part.scene.commands)).animated(
+                part.moves
+                    .iter()
+                    .filter_map(studio_view_link::animation)
+                    .collect::<Vec<_>>(),
+            );
             let at = part.transform.unwrap_or(apart.transform);
             layer.transform = at;
             layer.clip = part.clip.map(|clip| at.transform_rect_bbox(clip));

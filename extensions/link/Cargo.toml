@@ -21,6 +21,7 @@ anyrender = { workspace = true }
 serde_json = { workspace = true }
 futures-timer = { workspace = true }
 web-time = { workspace = true }
+architect-scene = { workspace = true }
 
 [lints]
 workspace = true

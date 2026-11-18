@@ -47,7 +47,9 @@ use architect_workspace::paint::PaintView as _;
 use architect_workspace::{FrameClock, Geometry, KindId, PaneId, Placement, ViewCtx, ViewHost};
 use dioxus::prelude::*;
 use peniko::kurbo::Affine;
-use session_engine::engine::{METER_PARTS, METER_TRACKS, meter_fraction, meter_value};
+use session_engine::engine::{
+    METER_PARTS, METER_TRACKS, TRACK_PARTS, VALUE_TRACKS, meter_fraction, meter_value, track_value,
+};
 use session_ui::mixer_panel::{HostedMixer, Links};
 use session_ui::studio::StudioSession;
 use studio_mixer::host::Hosted;
@@ -62,7 +64,22 @@ fn fixture() -> std::path::PathBuf {
 fn session() -> StudioSession {
     let path = fixture();
     session_engine::open::open_silent(&path).expect("open the golden template");
-    let raw = session_ui::studio::fetch().expect("read it back");
+    let mut raw = session_ui::studio::fetch().expect("read it back");
+    // Some lit: muted, soloed, both (the buttons lit by the engine's
+    // values are what is compared).
+    for (i, (mute, solo)) in [
+        (0, (true, false)),
+        (5, (false, true)),
+        (11, (true, true)),
+        (1, (true, false)),
+        (2, (false, true)),
+        (3, (true, true)),
+    ] {
+        if let Some(t) = raw.tracks.get_mut(i) {
+            t.muted = mute;
+            t.soloed = solo;
+        }
+    }
     let planner = session_ui::studio::Planner {
         raw: Arc::new(raw),
         scene: Some("drum-mixing"),
@@ -168,13 +185,33 @@ fn backdrop(p: &mut anyrender_vello_cpu::VelloCpuScenePainter, (w, h): (u32, u32
     );
 }
 
-/// The engine's meter values, as the `daw` extension publishes them.
+/// The engine's meter and button values, as the `daw` extension
+/// publishes them.
 fn table() -> (Arc<EngineTable>, EngineWriter) {
     let names: Vec<Name> = (0..METER_TRACKS)
         .flat_map(|i| METER_PARTS.iter().map(move |p| meter_value(i, p)))
+        .chain((0..VALUE_TRACKS).flat_map(|i| TRACK_PARTS.iter().map(move |p| track_value(i, p))))
         .map(|n| Name::new(&n).unwrap())
         .collect();
     EngineTable::new(names).unwrap()
+}
+
+/// `tracks`' mute and solo into the table, as the `daw` extension writes
+/// them from the engine's track events.
+fn write_buttons(table: &EngineTable, writer: &EngineWriter, tracks: &[daw_proto::Track]) {
+    for t in tracks {
+        let Ok(i) = usize::try_from(t.index) else {
+            continue;
+        };
+        for (part, on) in TRACK_PARTS.iter().zip([t.muted, t.soloed]) {
+            if let Some(slot) = Name::new(&track_value(i, part))
+                .ok()
+                .and_then(|n| table.slot(&n))
+            {
+                writer.write(slot, if on { 1.0 } else { 0.0 });
+            }
+        }
+    }
 }
 
 /// `levels` into the table, as the engine writes them.
@@ -246,12 +283,14 @@ fn same_pixels(
         mixer.simulate();
     }
     let stats = Arc::new(Mutex::new(Stats::default()));
-    let mut hosted = Hosted::new(Rc::clone(&mixer), scope.clone(), stats);
+    let mut hosted =
+        Hosted::new(Rc::clone(&mixer), scope.clone(), stats).with_buttons_lit_by_values(true);
     let ctx = ctx(size);
     let (table, writer) = table();
     let mut sender = Sender::default();
     let mut receiver = Receiver::new();
     receiver.grant(Some(Arc::clone(&table)));
+    write_buttons(&table, &writer, &song.planner.raw.tracks);
     let frames = if playing { 30 } else { 6 };
     let mut worst = (0, 0, 0);
     let mut bytes = Vec::new();

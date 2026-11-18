@@ -17,10 +17,13 @@ use std::time::Duration;
 
 use architect_scene::anim::Name;
 use architect_scene::engine::{EngineWriter, Slot, shared};
-use session_engine::engine::{METER_PARTS, METER_TRACKS, meter_fraction, meter_value};
+use session_engine::engine::{
+    METER_PARTS, METER_TRACKS, TRACK_PARTS, VALUE_TRACKS, meter_fraction, meter_value, track_value,
+};
 
 /// Publishes the engine's meters, on a thread of its own, for as long as
-/// the process runs.
+/// the process runs; and, in the same table, the tracks' mute and solo
+/// (`crate::buttons`).
 pub fn publish() {
     let _ = std::thread::Builder::new()
         .name("studio-meters".to_owned())
@@ -32,7 +35,7 @@ pub fn publish() {
 }
 
 /// The project the set has current.
-fn current_project() -> Option<String> {
+pub(crate) fn current_project() -> Option<String> {
     session_engine::studio_engine::set::peek(|view| {
         let set = view.setlist.as_ref()?;
         set.songs.get(set.at).map(|s| s.project.clone())
@@ -72,10 +75,12 @@ impl Table {
 fn run() -> Result<(), String> {
     let names: Vec<Name> = (0..METER_TRACKS)
         .flat_map(|i| METER_PARTS.iter().map(move |p| meter_value(i, p)))
+        .chain((0..VALUE_TRACKS).flat_map(|i| TRACK_PARTS.iter().map(move |p| track_value(i, p))))
         .map(|n| Name::new(&n).map_err(|e| e.to_string()))
         .collect::<Result<_, _>>()?;
     let path = shared::path_of("daw").map_err(|e| e.to_string())?;
     let (table, writer) = shared::create(&path, names).map_err(|e| e.to_string())?;
+    crate::buttons::publish(writer.clone());
     let slots: Vec<Vec<Slot>> = (0..METER_TRACKS)
         .map(|i| {
             METER_PARTS

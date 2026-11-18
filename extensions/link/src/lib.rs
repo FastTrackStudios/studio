@@ -184,6 +184,21 @@ pub fn mode_from_env() -> session::modes::Mode {
 /// over): what `studio-desktop`'s one window runs itself.
 pub const MIXER_ACTIONS: [&str; 3] = ["MIXER_VIEW", "SESSION_MIXER_FX", "SESSION_TOGGLE_MIXER"];
 
+/// Whether the `daw` extension's value table carries the tracks' mute and
+/// solo ([`session_engine::engine::track_value`]).
+///
+/// Then a pane draws their lit state from it, apart, and lights them in
+/// the same frame as every other pane. One `stat` a call.
+#[must_use]
+pub fn engine_lights_buttons() -> bool {
+    let Ok(name) =
+        architect_scene::anim::Name::new(&session_engine::engine::track_value(0, "mute"))
+    else {
+        return false;
+    };
+    architect_scene::engine::shared::open_engine("daw").is_some_and(|t| t.slot(&name).is_some())
+}
+
 /// An action of the engine's Action List, run over this window's link.
 ///
 /// # Errors
@@ -314,6 +329,70 @@ impl SceneLayer {
             }
         }
         vec![(self.key, Layer::new(Arc::clone(&self.content)))]
+    }
+}
+
+/// A part's move as the host's animation of it.
+#[must_use]
+pub fn animation(m: &session_ui::overlay::ValueMove) -> Option<architect_scene::anim::Animation> {
+    use architect_scene::anim::{Animation, Input, Linear, Name, Property};
+    use session_ui::overlay::ValueProperty;
+    let name = Name::new(&m.name).ok()?;
+    let property = match m.property {
+        ValueProperty::Y => Property::Y,
+        ValueProperty::Opacity => Property::Opacity,
+        ValueProperty::Visible => Property::Visible,
+    };
+    let mut linear = Linear::new(m.scale, m.offset);
+    linear.min = m.min;
+    linear.max = m.max;
+    Some(Animation::linear(property, Input::Value(name), linear))
+}
+
+/// Parts an engine's values move ([`session_ui::overlay::ValueLayer`]) as a
+/// pane's layers, keyed from `first`: a part drawn as last frame keeps its
+/// content, so nothing of it crosses.
+#[derive(Default)]
+pub struct ValueParts {
+    sent: std::collections::HashMap<LayerKey, Arc<Vec<RenderCommand>>>,
+}
+
+impl ValueParts {
+    /// `parts` as layers keyed `first`, `first + 1`, …, each at `z` (or
+    /// `over_z` for one over the caps), placed by `transform` unless the
+    /// part has its own.
+    pub fn layers(
+        &mut self,
+        parts: &[session_ui::overlay::ValueLayer],
+        first: LayerKey,
+        (z, over_z): (i32, i32),
+        transform: architect_workspace::paint::peniko::kurbo::Affine,
+    ) -> Vec<(LayerKey, Layer)> {
+        let mut out = Vec::with_capacity(parts.len());
+        for (i, part) in parts.iter().enumerate() {
+            let key = LayerKey::try_from(i)
+                .ok()
+                .and_then(|i| first.checked_add(i))
+                .unwrap_or(LayerKey::MAX);
+            let content = match self.sent.get(&key) {
+                Some(was) if was.as_slice() == part.scene.commands.as_slice() => Arc::clone(was),
+                _ => {
+                    let now = Arc::new(part.scene.commands.clone());
+                    self.sent.insert(key, Arc::clone(&now));
+                    now
+                }
+            };
+            let mut layer = Layer::new(content)
+                .animated(part.moves.iter().filter_map(animation).collect::<Vec<_>>());
+            let at = part.transform.unwrap_or(transform);
+            layer.transform = at;
+            layer.clip = part.clip.map(|clip| at.transform_rect_bbox(clip));
+            layer.z = if part.over { over_z } else { z };
+            out.push((key, layer));
+        }
+        let keep: Vec<LayerKey> = out.iter().map(|(k, _)| *k).collect();
+        self.sent.retain(|key, _| keep.contains(key));
+        out
     }
 }
 

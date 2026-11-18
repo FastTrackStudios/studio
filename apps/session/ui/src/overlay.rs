@@ -428,7 +428,7 @@ fn draw_strip_controls(
     themed: bool,
     // The meter's moving parts apart, for a host that moves them by
     // values ([`Apart`]); `None` (the window's): drawn here.
-    apart: Option<&mut Apart>,
+    mut apart: Option<&mut Apart>,
 ) {
     let strip = crate::strip::Strip::laid_out(
         width,
@@ -546,38 +546,47 @@ fn draw_strip_controls(
             );
         }
 
-        for (control, label, on, lit) in [
+        let values = button_index(apart.as_deref().is_some_and(|a| a.buttons), track);
+        for (control, label, on, lit, part) in [
             (
                 Control::Mute,
                 "M",
                 track.muted,
                 crate::tcp::mute_lit(palette),
+                "mute",
             ),
             (
                 Control::Solo,
                 "S",
                 track.soloed,
                 crate::tcp::solo_lit(palette),
+                "solo",
             ),
         ] {
             // At the size the strip gives it: a touchscreen's are bigger.
             let Some(r) = strip.rect(control) else {
                 continue;
             };
-            crate::art::place(
-                scene,
-                &art::gutter_button_sized(
+            let button = |on: bool| {
+                art::gutter_button_sized(
                     &palette.chrome,
                     label,
                     on,
                     lit,
                     state(control),
                     (r.width(), r.height()),
-                ),
-                font,
-                left + r.x0,
-                r.y0,
-            );
+                )
+            };
+            // Lit by the engine's value, over it unlit, where a host
+            // lights it so.
+            if let (Some(index), Some(apart)) = (values, apart.as_deref_mut()) {
+                crate::art::place(scene, &button(false), font, left + r.x0, r.y0);
+                let mut shown = anyrender::Scene::new();
+                crate::art::place(&mut shown, &button(true), font, left + r.x0, r.y0);
+                apart.layers.push(lit_button(index, part, shown));
+                continue;
+            }
+            crate::art::place(scene, &button(on), font, left + r.x0, r.y0);
         }
     }
 
@@ -863,6 +872,36 @@ pub struct Apart {
     pub above: anyrender::Scene,
     /// What places all of it in the pane (as [`controls`]' own drawing).
     pub transform: Affine,
+    /// The tracks' mute and solo lit apart too: the picture draws each
+    /// unlit, and a part over it, lit, shows by the engine's value
+    /// ([`crate::engine::track_value`]). Only where the values are there.
+    pub buttons: bool,
+}
+
+/// `button` (mute or solo, of track `index`) lit, as a part a value shows:
+/// what a pane over the engine's values lights in the same frame as every
+/// other pane drawing it.
+fn lit_button(index: usize, part: &str, button: anyrender::Scene) -> ValueLayer {
+    ValueLayer {
+        scene: button,
+        clip: None,
+        moves: vec![ValueMove::new(
+            ValueProperty::Visible,
+            &crate::engine::track_value(index, part),
+            1.0,
+            0.0,
+        )],
+        transform: None,
+        over: false,
+    }
+}
+
+/// `track`'s index, when its buttons go apart (`apart`) and the engine
+/// publishes them as values.
+fn button_index(apart: bool, track: &Track) -> Option<usize> {
+    usize::try_from(track.index)
+        .ok()
+        .filter(|i| apart && *i < crate::engine::VALUE_TRACKS)
 }
 
 /// One part a value moves: its drawing, where it is cut (in the pane),
@@ -1450,13 +1489,23 @@ pub fn panel_controls(
     map: &crate::plan::Rows,
     view: crate::arrangement::Viewport,
     pointer: &crate::pointer::Pointer<crate::pointer::RowSpot>,
-    transform: Affine,
+    (transform, buttons_apart): (Affine, bool),
 ) -> crate::profile::Counts {
     let mut counts = crate::profile::Counts::default();
     let mut out = anyrender::Scene::new();
     for index in scene.visible_rows(view) {
         control_row(
-            &mut out, palette, font, scene, rows, tracks, map, view, pointer, index,
+            &mut out,
+            palette,
+            font,
+            scene,
+            rows,
+            tracks,
+            map,
+            view,
+            pointer,
+            index,
+            buttons_apart,
         );
     }
     for command in &out.commands {
@@ -1578,7 +1627,7 @@ pub fn record_controls(
     rows: &[(Track, u32)],
     tracks: &[Track],
     map: &crate::plan::Rows,
-    view: crate::arrangement::Viewport,
+    (view, buttons_apart): (crate::arrangement::Viewport, bool),
 ) -> Controls {
     let mut out = anyrender::Scene::new();
     let mut spans = Vec::with_capacity(rows.len());
@@ -1586,7 +1635,17 @@ pub fn record_controls(
     for index in 0..rows.len() {
         let from = command_index(&out);
         control_row(
-            &mut out, palette, font, scene, rows, tracks, map, view, &at_rest, index,
+            &mut out,
+            palette,
+            font,
+            scene,
+            rows,
+            tracks,
+            map,
+            view,
+            &at_rest,
+            index,
+            buttons_apart,
         );
         spans.push(from..command_index(&out));
     }
@@ -1651,7 +1710,7 @@ pub fn hovered_row(
     map: &crate::plan::Rows,
     view: crate::arrangement::Viewport,
     pointer: &crate::pointer::Pointer<crate::pointer::RowSpot>,
-    transform: Affine,
+    (transform, buttons_apart): (Affine, bool),
 ) -> crate::profile::Counts {
     let mut counts = crate::profile::Counts::default();
     let Some(row) = pointer.active().map(|(spot, _)| spot.row) else {
@@ -1659,7 +1718,17 @@ pub fn hovered_row(
     };
     let mut out = anyrender::Scene::new();
     control_row(
-        &mut out, palette, font, scene, rows, tracks, map, view, pointer, row,
+        &mut out,
+        palette,
+        font,
+        scene,
+        rows,
+        tracks,
+        map,
+        view,
+        pointer,
+        row,
+        buttons_apart,
     );
     for command in &out.commands {
         counts.replayed = counts.replayed.saturating_add(1);
@@ -1668,6 +1737,129 @@ pub fn hovered_row(
         }
     }
     counts
+}
+
+/// Row `row`'s mute or solo button, `on` or not, into `out`: as the track
+/// panel draws it.
+fn row_button(
+    out: &mut anyrender::Scene,
+    (palette, font): (&Palette, &Font),
+    row: &crate::row::Row,
+    (control, label): (crate::row::Control, &str),
+    on: bool,
+    lit: daw_ui::theme::Color,
+    state: Interaction,
+) {
+    let Some(r) = row.rect(control) else { return };
+    // A touchscreen's fills its rect.
+    if row.tcp.compact {
+        crate::art::place(
+            &mut *out,
+            &art::gutter_button_sized(
+                &palette.chrome,
+                label,
+                on,
+                lit,
+                state,
+                (r.width(), r.height()),
+            ),
+            font,
+            r.x0,
+            r.y0,
+        );
+        return;
+    }
+    // Flattened to the rect on a row too short for the full button — the
+    // row's shape says how tall, not the art.
+    crate::art::squashed(
+        &mut *out,
+        &art::gutter_button(&palette.chrome, label, on, lit, state),
+        font,
+        r.x0,
+        r.y0,
+        1.0,
+        (r.height() / crate::tcp::BUTTON.1).min(1.0),
+    );
+}
+
+/// The track panel's mute and solo, lit, for the rows on screen.
+///
+/// Parts an engine's values show ([`crate::engine::track_value`]), over
+/// the panel that [`control_row`] drew with them unlit (`buttons_apart`).
+/// Placed by `transform` and cut to `clip` (the pane's), as the panel's
+/// controls are. A row a theme draws keeps its own.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "what the panel's controls are drawn from, as `panel_controls` takes it"
+)]
+#[must_use]
+pub fn panel_buttons(
+    palette: &Palette,
+    font: &Font,
+    scene: &crate::arrangement::Arrangement,
+    rows: &[(Track, u32)],
+    tracks: &[Track],
+    map: &crate::plan::Rows,
+    view: crate::arrangement::Viewport,
+    pointer: &crate::pointer::Pointer<crate::pointer::RowSpot>,
+    (transform, clip): (Affine, vello::kurbo::Rect),
+) -> Vec<ValueLayer> {
+    use crate::pointer::RowSpot;
+    use crate::row::{Control as C, Row};
+    let in_content = transform.inverse().transform_rect_bbox(clip);
+    let mut parts = Vec::new();
+    for index in scene.visible_rows(view) {
+        let (Some((track, depth)), Some(live)) = (rows.get(index), map.live(tracks, index)) else {
+            continue;
+        };
+        let Some(at) = button_index(true, live) else {
+            continue;
+        };
+        let Some((top, height)) = scene.panel_band(index, view) else {
+            continue;
+        };
+        let row = Row::new(
+            top,
+            height,
+            i32::try_from(*depth).unwrap_or(0),
+            track.is_folder,
+            scene.tcp,
+        )
+        .with_lanes(!crate::lanes::speaks_for(tracks, live, scene.lane_tracks(index)).is_empty());
+        let themed = crate::skin::loaded()
+            .as_deref()
+            .is_some_and(|t| t.has_role(crate::skin::ROW) && !row.tcp.compact);
+        if row.density == crate::tcp::Density::Bar || themed {
+            continue;
+        }
+        for (control, label, lit, part) in [
+            (C::Mute, "M", crate::tcp::mute_lit(palette), "mute"),
+            (C::Solo, "S", crate::tcp::solo_lit(palette), "solo"),
+        ] {
+            let mut shown = anyrender::Scene::new();
+            let state = pointer.state(RowSpot {
+                row: index,
+                control,
+            });
+            row_button(
+                &mut shown,
+                (palette, font),
+                &row,
+                (control, label),
+                true,
+                lit,
+                state,
+            );
+            if shown.commands.is_empty() {
+                continue;
+            }
+            let mut part = lit_button(at, part, shown);
+            part.transform = Some(transform);
+            part.clip = Some(in_content);
+            parts.push(part);
+        }
+    }
+    parts
 }
 
 /// One row's controls, into `out`.
@@ -1686,6 +1878,7 @@ fn control_row(
     view: crate::arrangement::Viewport,
     pointer: &crate::pointer::Pointer<crate::pointer::RowSpot>,
     index: usize,
+    buttons_apart: bool,
 ) {
     use crate::pointer::RowSpot;
     use crate::row::{Control as C, Indicator, Row};
@@ -1773,40 +1966,21 @@ fn control_row(
         return;
     }
 
-    // Mute and solo.
+    // Mute and solo: unlit where a host lights them by the engine's
+    // values ([`panel_buttons`]).
+    let apart = button_index(buttons_apart, live).is_some();
     for (control, label, on, lit) in [
         (C::Mute, "M", live.muted, crate::tcp::mute_lit(palette)),
         (C::Solo, "S", live.soloed, crate::tcp::solo_lit(palette)),
     ] {
-        let Some(r) = row.rect(control) else { continue };
-        // A touchscreen's fills its rect.
-        if row.tcp.compact {
-            crate::art::place(
-                &mut *out,
-                &art::gutter_button_sized(
-                    &palette.chrome,
-                    label,
-                    on,
-                    lit,
-                    look(control),
-                    (r.width(), r.height()),
-                ),
-                font,
-                r.x0,
-                r.y0,
-            );
-            continue;
-        }
-        // Flattened to the rect on a row too short for the full
-        // button — the row's shape says how tall, not the art.
-        crate::art::squashed(
-            &mut *out,
-            &art::gutter_button(&palette.chrome, label, on, lit, look(control)),
-            font,
-            r.x0,
-            r.y0,
-            1.0,
-            (r.height() / crate::tcp::BUTTON.1).min(1.0),
+        row_button(
+            out,
+            (palette, font),
+            &row,
+            (control, label),
+            on && !apart,
+            lit,
+            look(control),
         );
     }
 

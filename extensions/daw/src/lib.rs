@@ -14,6 +14,7 @@
 //! setlist, anything `studio engine --open` takes) or the `DAW_OPEN`
 //! action.
 
+pub mod buttons;
 pub mod deck;
 pub mod meters;
 pub mod session_doc;
