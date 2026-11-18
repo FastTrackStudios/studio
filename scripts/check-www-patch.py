@@ -12,13 +12,14 @@ Studio retargets keyflow's www-spelled Architect to its own tag with
 `scripts/bump-architect.py` refuses the same on a bump; this keeps every
 other PR honest too.
 
-Between tags, Studio pins Architect by revision. The repos it takes by git
-(daw, fts-fx, signal, studio-adapters, session) still name Architect on the
-plain URL by their tags, so the plain URL itself is patched instead, to the
-www spelling at that revision (`[patch."https://github.com/FastTrackStudios/architect"]`).
-Then this fails when
-  - Studio's own Architect pins name more than one revision;
-  - that table points a crate anywhere but the www spelling at that revision;
+When the repos Studio takes by git (daw, fts-fx, signal, studio-adapters,
+session) name Architect on the plain URL by other tags than Studio's (between
+tags, Studio pins a revision; on a tag, they lag behind it), the plain URL
+itself is patched instead, to the www spelling at Studio's pin, a revision or
+a tag (`[patch."https://github.com/FastTrackStudios/architect"]`). Then this
+fails when
+  - Studio's own Architect pins name more than one revision or tag;
+  - that table points a crate anywhere but the www spelling at that pin;
   - Cargo.lock holds Architect from any source but that one (besides
     task@main's own).
 """
@@ -34,25 +35,31 @@ TASK_ARCHITECT = {"v0.10.0"}
 PLAIN_HEADER = '[patch."https://github.com/FastTrackStudios/architect"]'
 
 
+# A pin of the patched plain URL: `rev = "<40 hex>"` or `tag = "vX.Y.Z"`,
+# as (kind, value).
+PIN = r'(rev|tag) = "([0-9a-f]{40}|v[^"]+)"'
+
+
 def check_by_rev(manifest: str, lock: str) -> list[str]:
-    """The revision-pinned shape (see the module's doc)."""
+    """The patched-plain-URL shape, at a revision or a tag (see the
+    module's doc)."""
     bad = []
     head = manifest.split(PLAIN_HEADER)[0]
-    own = set(re.findall(r'git = "https://github\.com/FastTrackStudios/architect"[^}\n]*?rev = "([0-9a-f]{40})"', head))
+    own = set(re.findall(r'git = "https://github\.com/FastTrackStudios/architect"[^}\n]*?' + PIN, head))
     if len(own) != 1:
         bad.append(f"Studio's own Architect revisions disagree: {sorted(own)}")
     m = re.search(r'^\[patch\."https://github\.com/FastTrackStudios/architect"\]\n((?:(?!\[).*\n)*)', manifest, re.M)
     if not m:
         bad.append(f"no {PLAIN_HEADER} table for the revision pin")
     else:
-        patched = set(re.findall(r'rev = "([0-9a-f]{40})"', m.group(1)))
+        patched = set(re.findall(PIN, m.group(1)))
         hosts = set(re.findall(r'git = "(https://[^"]+)"', m.group(1)))
         if patched != own:
             bad.append(f"the plain-URL [patch] table pins {sorted(patched)}, Studio pins {sorted(own)}")
         if hosts != {"https://www.github.com/FastTrackStudios/architect"}:
             bad.append(f"the plain-URL [patch] table must point at the www spelling, points at {sorted(hosts)}")
     sources = set(re.findall(r'source = "git\+(https://(?:www\.)?github\.com/FastTrackStudios/architect\?[^#"]+)', lock))
-    allowed = {f"https://www.github.com/FastTrackStudios/architect?rev={r}" for r in own}
+    allowed = {f"https://www.github.com/FastTrackStudios/architect?{k}={r}" for k, r in own}
     allowed |= {f"https://github.com/FastTrackStudios/architect?tag={t}" for t in TASK_ARCHITECT}
     if sources - allowed:
         bad.append(f"Cargo.lock holds architect from {sorted(sources - allowed)} beside Studio's {sorted(allowed)}")
@@ -60,7 +67,8 @@ def check_by_rev(manifest: str, lock: str) -> list[str]:
 
 
 def by_rev(manifest: str) -> bool:
-    """Whether Studio pins Architect by revision (between tags)."""
+    """Whether the plain URL is patched to Studio's pin (a revision between
+    tags, or a tag the repos it takes by git have not reached)."""
     return PLAIN_HEADER in manifest
 
 
@@ -101,7 +109,7 @@ def self_test() -> int:
     lock = (ROOT / "Cargo.lock").read_text()
     if by_rev(manifest):
         head, table = manifest.split(PLAIN_HEADER)
-        behind = head + PLAIN_HEADER + re.sub(r'rev = "[0-9a-f]{40}"', 'rev = "' + "0" * 40 + '"', table, count=1)
+        behind = head + PLAIN_HEADER + re.sub(PIN, 'rev = "' + "0" * 40 + '"', table, count=1)
         stray = lock + '\n[[package]]\nname = "architect-x"\nversion = "0.1.0"\nsource = "git+https://github.com/FastTrackStudios/architect?tag=v0.0.1#00"\n'
         failed = [n for n, (m, l) in {"a stale patch revision": (behind, lock), "a stray source": (manifest, stray)}.items()
                   if not check(m, l)]
@@ -135,7 +143,7 @@ def main() -> int:
         print("\n".join(f"  {b}" for b in bad))
         return 1
     if by_rev((ROOT / "Cargo.toml").read_text()):
-        print("ok: one Architect revision, the plain URL patched to it, no other source in Cargo.lock")
+        print("ok: one Architect pin, the plain URL patched to it, no other source in Cargo.lock")
     else:
         print("ok: one Architect, the www [patch] on it, no www source in Cargo.lock")
     return 0
