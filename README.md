@@ -1,4 +1,5 @@
 # Captures for studio#519
 
 - reference-studio-desktop/: what studio-desktop (origin/main 7c2b7ac0) shows for Drive To LA at 1280 px: THE reference the runtime extensions must match.
+- in-app-vs-runtime/: the pair. studio-desktop's arrangement and the studio.arrangement extension's pane in a stock Architect, the same song in the same state (folded tops, Guide shut, docks hidden, SESSION_ZOOM FitTracks + Project in each), both 1280x764: 182 of 977 920 pixels differ, none by more than 13/255 (text anti-aliasing in the bottom rows). `arrangement-pair-diff.png` marks them. `window-*` are the two whole windows; `parity-golden-*` are the parity test's two rasters (extensions/arrangement/tests/parity.rs: the widget's scene as the window paints it, and through Architect's layer protocol: 0 pixels differ). `mixer-extension-beside-arrangement-1280.png`: the studio.mixer extension (Studio's mixer widget) in a pane beside it.
 - superseded/: the first runtime extensions' placeholder drawing (a re-implementation, not Studio's views), kept for the record only.
