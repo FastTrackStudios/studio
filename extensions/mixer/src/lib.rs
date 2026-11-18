@@ -134,7 +134,11 @@ fn SongPane(shown: Shown) -> Element {
     match song() {
         Some((key, session)) => rsx! {
             div { style: "position:relative; width:100%; height:100%; background:{surface};",
-                Strips { key: "{key}", session: Song(session), shown }
+                // A list of one, so its key is diffed: another song mounts
+                // the strips afresh (a lone keyed child is patched in place).
+                for key in std::iter::once(key) {
+                    Strips { key: "{key}", session: Song(session.clone()), shown }
+                }
             }
         },
         None => studio_view_link::waiting(),
@@ -175,13 +179,13 @@ fn Strips(session: Song, shown: Shown) -> Element {
     let mount = use_hook(|| {
         let scope = InScope::here();
         let (mixer, stats) = (std::rc::Rc::clone(&mixer), Arc::clone(&stats));
-        PaintMount::new(move |_| {
+        studio_view_link::with_engine_values(PaintMount::new(move |_| {
             Hosted::new(
                 std::rc::Rc::clone(&mixer),
                 scope.clone(),
                 Arc::clone(&stats),
             )
-        })
+        }))
     });
     // An edit made elsewhere (the arrangement's) comes as a track event:
     // drawn as it lands, not at the pane's next tick, so it shows in the

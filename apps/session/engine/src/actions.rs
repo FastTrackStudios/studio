@@ -5367,6 +5367,25 @@ fn register_peaks(list: &ActionList) -> Result<(), architect::action::ActionErro
     Ok(())
 }
 
+/// Whether this process's windows are linked into the app that hosts them
+/// ([`in_host`]).
+#[cfg(feature = "native")]
+static IN_HOST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Say the windows here run inside their host app's own process, on its
+/// thread: an async window action is then started, never waited for.
+#[cfg(feature = "native")]
+pub fn in_host(on: bool) {
+    IN_HOST.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether [`in_host`] was said.
+#[cfg(feature = "native")]
+#[must_use]
+pub fn is_in_host() -> bool {
+    IN_HOST.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Run `id` with `args` (JSON) where the engine is: this process's list,
 /// or — a window driving an engine in another process — that engine's
 /// (`crate::studio_engine::link`). A window's own actions always run here.
@@ -5388,6 +5407,22 @@ pub fn run(id: &str, args: &[u8]) -> Result<Vec<u8>, String> {
         Err(architect::action::ActionError::Failed { message, .. })
             if message.contains("run_json_async") =>
         {
+            // Linked into the app it is a window of (Studio's distribution):
+            // this thread is the app's, and the action asks that app
+            // (`WORKSPACE_…`) — waiting here would wait on itself. Started,
+            // not waited for.
+            if IN_HOST.load(std::sync::atomic::Ordering::Relaxed) {
+                let Some(rt) = crate::open::runtime() else {
+                    return Err("no runtime to run it on".to_owned());
+                };
+                let (id, args) = (id.to_owned(), args.to_vec());
+                rt.spawn(async move {
+                    if let Err(error) = list().run_json_async(&id, &args).await {
+                        tracing::warn!(action = %id, %error, "a window action failed");
+                    }
+                });
+                return Ok(b"null".to_vec());
+            }
             let block = || {
                 crate::open::runtime()
                     .ok_or_else(|| "no runtime to run it on".to_owned())

@@ -426,10 +426,31 @@ pub(crate) fn with_local_engine<R>(what: LocalOnly, f: impl FnOnce(&Standalone) 
 #[must_use]
 pub fn current_song() -> Option<String> {
     use daw::service::Projects as _;
+    // A call scoped to one song of the set ([`in_song`]) works on that
+    // song, whichever is on screen.
+    if let Some(song) = IN_SONG.with(|s| s.borrow().clone()) {
+        return Some(song);
+    }
     if crate::audio_mode::owns_project() {
         return engine().current().map(|p| p.guid);
     }
     REMOTE_CURRENT.read().ok().and_then(|slot| slot.clone())
+}
+
+thread_local! {
+    /// The song a call on this thread is scoped to ([`in_song`]).
+    static IN_SONG: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Runs `f` with song `project` (an engine project's guid) as the current
+/// song for everything it calls on this thread: an action that works on
+/// "the open song" then works on that one, the window staying where it
+/// is. How a script edits every song of a set in one go.
+pub fn in_song<R>(project: &str, f: impl FnOnce() -> R) -> R {
+    let before = IN_SONG.with(|s| s.replace(Some(project.to_owned())));
+    let out = f();
+    IN_SONG.with(|s| *s.borrow_mut() = before);
+    out
 }
 
 /// The remote's current project, as [`current_song`] reports it.

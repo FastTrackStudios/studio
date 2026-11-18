@@ -212,3 +212,21 @@ pub mod widget;
 pub mod window_cursor;
 pub use editing::written;
 pub use session_engine::zoom;
+
+/// Whether this process's windows are linked into the app that hosts them
+/// (`session_engine::actions::in_host`).
+#[cfg(feature = "native")]
+#[must_use]
+pub fn engine_actions_in_host() -> bool {
+    session_engine::actions::is_in_host()
+}
+
+/// Wait `dur`, on whatever drives this crate's futures: a timer of its own
+/// on a desktop (the app that hosts these components may run them outside
+/// any tokio runtime: an Architect window does), the platform's elsewhere.
+pub async fn pause(dur: std::time::Duration) {
+    #[cfg(feature = "native")]
+    futures_timer::Delay::new(dur).await;
+    #[cfg(not(feature = "native"))]
+    architect::platform::sleep(dur).await;
+}

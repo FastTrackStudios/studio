@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use anyrender::recording::RenderCommand;
 use architect_workspace::paint::{Layer, LayerKey, Scene};
+use architect_workspace::paint::PaintMount;
 use dioxus::prelude::*;
 use serde_json::Value as Json;
 use session_engine::studio_engine::link;
@@ -202,6 +203,36 @@ pub fn engine_lights_buttons() -> bool {
         return false;
     };
     architect_scene::engine::shared::open_engine("daw").is_some_and(|t| t.slot(&name).is_some())
+}
+
+/// [`engine_lights_buttons`], for a pane that the host moves by engine
+/// values: never when this window is compiled into its host app, which
+/// composes a linked pane's layers itself and binds none of them to an
+/// engine's values (they would all draw lit). The pane then draws its
+/// buttons' state in its own picture.
+#[must_use]
+pub fn engine_lights_buttons_here() -> bool {
+    engine_lights_buttons()
+}
+
+/// `mount` reading the engine's values, when this window is compiled into
+/// its host app.
+///
+/// A process copy's layers are bound to the engine's table by the host
+/// (`architect-extensions`' remote view). A linked pane's are composed in
+/// the app's own document, which binds a table only when the mount brings
+/// one: without it every part a value shows (a lit mute or solo, a meter)
+/// draws as if its value were full. The table is the `daw` extension's
+/// shared one, as the song has it now (a pane mounts again for another
+/// song).
+#[must_use]
+pub fn with_engine_values(mount: PaintMount) -> PaintMount {
+    if session_engine::actions::is_in_host()
+        && let Some(table) = architect_scene::engine::shared::open_engine("daw")
+    {
+        return mount.with_engine(table);
+    }
+    mount
 }
 
 /// An action of the engine's Action List, run over this window's link.

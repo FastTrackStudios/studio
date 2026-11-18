@@ -269,7 +269,7 @@ impl PaintView for Hosted {
             .is_none_or(|at| began.duration_since(at).as_millis() >= 500)
         {
             self.looked = Some(began);
-            self.lit_by_values = studio_view_link::engine_lights_buttons();
+            self.lit_by_values = studio_view_link::engine_lights_buttons_here();
         }
         let buttons = self.lit_by_values;
         // The panel's shape, as asked (`STUDIO_ARRANGEMENT_PANEL`): set as
