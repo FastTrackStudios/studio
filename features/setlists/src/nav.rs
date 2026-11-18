@@ -48,8 +48,14 @@ pub fn open_song(at: &SongRef, song: Option<&SongRow>) -> Open {
     }
 }
 
-fn song_item(id: String, container: &str, at: &SongRef, song: Option<&SongRow>) -> Item {
-    let mut item = Item::new(id, container, at.label()).opens(open_song(at, song));
+fn song_item(
+    id: String,
+    container: &str,
+    title: String,
+    at: &SongRef,
+    song: Option<&SongRow>,
+) -> Item {
+    let mut item = Item::new(id, container, title).opens(open_song(at, song));
     item.icon = Some("music".to_owned());
     let summary = song.map(SongRow::summary).unwrap_or_default();
     let preview = if summary.is_empty() {
@@ -71,8 +77,18 @@ fn song_item(id: String, container: &str, at: &SongRef, song: Option<&SongRow>) 
     item
 }
 
+/// Song `at`, `n`th of the running order, as its row says it: its place
+/// first (`07. Silent Night`), zero-padded to `width` digits. The navigator
+/// lists a provider's items by date and then by name, and setlist songs
+/// have no date, so their names keep them in running order in every set
+/// (`Snapshot::ordered` orders the sets themselves, not their songs:
+/// FastTrackStudios/architect#907).
+fn in_order(n: usize, width: usize, at: &SongRef) -> String {
+    format!("{n:0width$}. {}", at.label())
+}
+
 /// The setlists snapshot, from the rows read: each setlist, its named
-/// sets under it; its songs in running order, each in its set.
+/// sets under it; its songs in running order, each in its set, numbered.
 #[must_use]
 pub fn setlists_snapshot(sets: &[SetlistRow], songs: &[SongRow]) -> Snapshot {
     let mut snap = Snapshot::new("Setlists").ordered();
@@ -93,6 +109,7 @@ pub fn setlists_snapshot(sets: &[SetlistRow], songs: &[SongRow]) -> Snapshot {
             }
         }
         snap = snap.node(node);
+        let width = set.songs.len().to_string().len();
         for (i, section) in sections.iter().enumerate() {
             for (n, at) in (section.start.saturating_add(1)..).zip(section.songs) {
                 let known = songs
@@ -101,6 +118,7 @@ pub fn setlists_snapshot(sets: &[SetlistRow], songs: &[SongRow]) -> Snapshot {
                 snap = snap.item(song_item(
                     format!("{}|{n}", set.path),
                     &container(i),
+                    in_order(n, width, at),
                     at,
                     known,
                 ));
@@ -133,13 +151,20 @@ pub fn libraries_snapshot(songs: &[SongRow]) -> Snapshot {
         snap = snap.node(node);
         for s in songs.iter().filter(|s| s.at.library == lib) {
             if s.categories.is_empty() {
-                snap = snap.item(song_item(s.path.clone(), &lib_id, &s.at, Some(s)));
+                snap = snap.item(song_item(
+                    s.path.clone(),
+                    &lib_id,
+                    s.at.label(),
+                    &s.at,
+                    Some(s),
+                ));
             }
             for c in &s.categories {
                 let container = format!("{lib_id}/{c}");
                 snap = snap.item(song_item(
                     format!("{container}|{}", s.path),
                     &container,
+                    s.at.label(),
                     &s.at,
                     Some(s),
                 ));
@@ -215,7 +240,7 @@ mod tests {
         assert!(snap.ordered);
         assert!(snap.tree[0].shared);
         let titles: Vec<&str> = snap.items.iter().map(|i| i.title.as_str()).collect();
-        assert_eq!(titles, ["Old Hundredth", "Silent Night (Acoustic)"]);
+        assert_eq!(titles, ["1. Old Hundredth", "2. Silent Night (Acoustic)"]);
         assert_eq!(snap.items[0].preview.as_deref(), Some("A · 83 bpm · Hymns"));
         match &snap.items[1].open {
             Some(Open::Context {
@@ -280,9 +305,70 @@ mod tests {
         assert_eq!(
             placed,
             [
-                ("Setlists/Concert.md#set1", "A"),
-                ("Setlists/Concert.md#set2", "B"),
-                ("Setlists/Concert.md#set2", "D")
+                ("Setlists/Concert.md#set1", "1. A"),
+                ("Setlists/Concert.md#set2", "2. B"),
+                ("Setlists/Concert.md#set2", "3. D")
+            ]
+        );
+    }
+
+    /// The navigator lists undated items by name (its tie-break is the
+    /// path), so a set's rows sorted by name must be its running order:
+    /// not alphabetical, and past nine songs too.
+    #[test]
+    fn a_sets_songs_sorted_by_name_stay_in_running_order() {
+        let order = [
+            "Sleigh Ride",
+            "Joy",
+            "Feliz",
+            "Silent Night",
+            "All I Want",
+            "This",
+            "Last",
+            "Rockin",
+            "What",
+            "Jingle",
+            "Go Tell It",
+            "Ave",
+        ];
+        let songs: Vec<SongRow> = order.iter().map(|t| song("C", t, &[])).collect();
+        let sets = [SetlistRow {
+            path: "Setlists/Show.md".to_owned(),
+            title: "Show".to_owned(),
+            date: None,
+            songs: order.iter().map(|t| SongRef::new("C", t, None)).collect(),
+            sets: vec![
+                crate::setlist::Set {
+                    name: Some("First".to_owned()),
+                    len: 3,
+                },
+                crate::setlist::Set {
+                    name: Some("Second".to_owned()),
+                    len: 9,
+                },
+            ],
+            share: None,
+        }];
+        let snap = setlists_snapshot(&sets, &songs);
+        let mut second: Vec<&str> = snap
+            .items
+            .iter()
+            .filter(|i| i.container == "Setlists/Show.md#set2")
+            .map(|i| i.title.as_str())
+            .collect();
+        second.sort_unstable();
+        assert_eq!(
+            second,
+            [
+                "04. Silent Night",
+                "05. All I Want",
+                "06. This",
+                "07. Last",
+                "08. Rockin",
+                "09. What",
+                "10. Jingle",
+                "11. Go Tell It",
+                "12. Ave"
             ]
         );
     }
