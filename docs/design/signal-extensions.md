@@ -24,7 +24,7 @@ the `rig` bundle of `apps/architect` (`studio_architect::rig()`).
 | `studio.rig.browser` | `extensions/rig-browser` | blocks, presets, captures on this device, TONE3000 | `browser` | yes |
 | `studio.rig.grid` | `extensions/rig-grid` | the DSP grid (routing), the FX row (the selected block's faces and its preset bar) and Edit (a section's changes) | `grid`, `fx`, `edit` | yes |
 | `studio.rig.macros` | `extensions/rig-macros` | the macro bar of the patch playing | `macros` | yes |
-| `studio.keys` | `extensions/keys` | the keys rig's screens | `mixer`, `layers`, `routing`, `midi`, `macros`, `controller`, `piano`, `browser`, `switches` | yes |
+| `studio.keys` | `extensions/keys` | the keys rig's screens | `rack` (the engine rack), `keyboard` (the keys, the wheels to their left, the patch's stack over them), `layers`, `routing`, `midi`, `macros`, `browser`, `switches` | yes |
 | `studio.audio-settings` | `extensions/audio-settings` | audio device, rate, buffer, routing; MIDI devices and learn; the instrument: one surface for the rig engine and the `daw` engine | `settings` (the page in Settings), `audio`, `midi`, `instrument` | yes |
 
 `extensions/rig-link` (`studio-rig-link`) is to these what
@@ -43,7 +43,9 @@ process, and draws a pane's rig scope (`RigPane`).
 - **The status bar, the tuner and the DI player are one extension**: the
   three small readouts of the engine itself. Each is a view of its own, so
   a layout takes any of them.
-- **Keys is one extension with nine views.** Its screens share one keys
+- **Keys is one extension with eight views.** The engine rack and the
+  keyboard are panes apart (the owner's ask), so the keys sit where the
+  hands are. Its screens share one keys
   view state (`KeysRigRemote`'s) and have no panel seam yet as the guitar's
   have (`guitar::ui::panels`); they split when that seam exists.
 - **The audio settings are one extension** by the owner's ask: one
@@ -271,13 +273,13 @@ them with `WORKSPACE_APPLY`):
 ```
 guitar                                      keys
 +------------------------------------+     +----------+-----------------------+
-| status                         9 % |     |          | mixer            46 % |
-+---------+--------------------------+     | browser  +-----------------------+
-|         | macros              14 % |     |          | layers           30 % |
-| setlist +--------------------------+     |   22 %   +-----------------------+
-|         | grid | fx | edit |       |     |          | switches | piano |    |
-|  24 %   | browser             48 % |     |          | macros | routing |    |
-|         +--------------------------+     |          | midi             24 % |
+| status                         9 % |     |          | rack | layers |       |
++---------+--------------------------+     |          | routing | midi   50 % |
+|         | macros              14 % |     | browser  +-----------------------+
+| setlist +--------------------------+     |          | keyboard         26 % |
+|         | grid | fx | edit |       |     |   22 %   +-----------------------+
+|  24 %   | browser             48 % |     |          | switches | macros     |
+|         +--------------------------+     |          |                  24 % |
 |         | switches | tuner    38 % |     +----------+-----------------------+
 +---------+--------------------------+
 ```
@@ -309,9 +311,9 @@ compositor, a copy of the rig library, its own config folder):
   output when linked; the page drawn. Not tried: the `daw` engine
   reopening a real device with a set playing.
 - **Keys.** The keys rig starts in the engine (its profile, 13 layers, the
-  pack library read) and the mixer pane draws with its keyboard and
-  controller strip; the other eight views render (`EXT_CHECK`) and were
-  not each looked at.
+  pack library read) and the engine rack, the keyboard, the browser
+  and the switches draw in the keys arrangement; the layers, routing,
+  MIDI and macros views were not each looked at.
 - **Not done:** a drive pedal's face in the FX row is its name only (the
   effects' faces draw: the compressor's was looked at, with `just faces`'
   output in place); TONE3000's sign-in callback is `studio-desktop`'s and is not served by

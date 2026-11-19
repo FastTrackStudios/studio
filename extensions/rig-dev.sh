@@ -79,9 +79,11 @@ done
 #            right of it the macros on top, the DSP grid in the middle with
 #            the FX row, Edit and the browser as its tabs, and the switches
 #            at the foot with the tuner as their tab.
-#   keys     the browser down the left; the mixer over the engine-and-layer
-#            page; the switches at the foot with the piano, the macros,
-#            the routing and the MIDI monitor as their tabs.
+#   keys     the browser down the left; the engine rack on top with the
+#            engine-and-layer page, the routing and the MIDI monitor as
+#            its tabs; the keyboard (the keys, the wheels beside them, the
+#            patch's stack over them) under it; the switches at the foot
+#            with the macros as their tab.
 #
 # When Studio's launcher has landed (feat/project-launcher), this is the
 # layout to save through it (STUDIO_LAUNCHER_LAYOUT_SAVE as "Rig").
@@ -89,13 +91,16 @@ open() { act EXT_VIEW_OPEN "{\"extension\":\"$1\",\"view\":\"$2\",\"placement\":
 focus() { act WORKSPACE_FOCUS "{\"pane\":\"$1\"}" > /dev/null; }
 if [ "$layout" = keys ]; then
   open studio.keys browser tab
-  open studio.keys mixer
-  open studio.keys layers
+  open studio.keys rack
+  open studio.keys keyboard
   open studio.keys switches
-  for view in piano macros routing midi; do
-    focus studio.keys/switches
+  for view in layers routing midi; do
+    focus studio.keys/rack
     open studio.keys "$view" tab
   done
+  focus studio.keys/switches
+  open studio.keys macros tab
+  focus studio.keys/rack
   focus studio.keys/switches
 else
   open studio.rig.status status tab
@@ -140,9 +145,9 @@ for w in d["windows"]:
         continue
     g = lambda view: find(c, view)
     if os.environ["RIG_LAYOUT"] == "keys":
-        if not g("studio.keys/mixer"):
+        if not g("studio.keys/rack"):
             continue
-        work = split("column", [(0.46, g("studio.keys/mixer")), (0.30, g("studio.keys/layers")),
+        work = split("column", [(0.50, g("studio.keys/rack")), (0.26, g("studio.keys/keyboard")),
                                 (0.24, g("studio.keys/switches"))])
         w["center"] = split("row", [(0.22, g("studio.keys/browser")), (0.78, work)])
     else:
