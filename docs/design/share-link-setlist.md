@@ -110,6 +110,80 @@ written for one node per org and needs that line changed.
    has not been looked at since the change.
 7. Studio's own web build (W1).
 
+## The dashboard (2026-11-18, later)
+
+The owner: "we want the existing app as the landing page but we want
+like a dashboard or something that brings us to studio-web. Where if we
+are logged in we can browse and see all of our sets and song libraries
+and everything."
+
+**Built and seen** (signed in as the stack's dev account on a copy of
+the `fasttrackaudio` vault, 390 px and 1280 px; `phone/61` to `64` in
+the private folder):
+
+- Signed in, the web app opens on the dashboard: the island's `home`
+  view (`apps/architect/island/src/home.rs`), which Architect mounts as
+  the app's home (`SiteIsland::home`, `apps/web/src/app/home.rs`). An
+  extension's view like the others; a guest has none.
+- Setlists (dated today or later first, the soonest on top; then the
+  latest; then the undated), song libraries by `Libraries/<Library>/`,
+  each song with its key, tempo and whether it has a chart, synced lyrics
+  and a recording, what was opened from it lately, and the setlists that
+  carry a share link. 2 setlists and 28 songs in 2 libraries showed; the
+  recital reads "18 songs, 1:10:11".
+- One column on a phone; from 900 px the sets beside the libraries. A
+  Home tab leads the bottom tabs; on a desk a Home button is in the rail.
+- A press opens the note in the app: the recital opened with its
+  playlist (`phone/63`).
+- **One model, two surfaces.** The dashboard reads the vault with the
+  Project Launcher's model, moved to `setlists::rows` (from
+  `extensions/launcher/src/model.rs` at `feat/project-launcher`
+  50641aa4, unchanged but for one fix). The launcher's `find.rs` is its
+  disk layer (sessions, rigs, cue files) and stays the launcher's: a
+  browser has no such disk. To converge: the launcher's `model` becomes
+  `pub use setlists::rows::*`; "open" stays the surface's own (the engine
+  on a desk, the listening views in a browser); and when Studio has its
+  own web build, both are one linked extension with two hosts.
+
+**Not built, in the order to do them:**
+
+1. **More than one org.** The app opens the node's first hosted org
+   only. The hosted list is on Architect
+   `feat/storage-servers-vault-attachments` (dce4d37e: `/node/status`
+   `hosted`, a lane an org at `/org/<slug>/vox`); `apps/web` there does
+   not read it. This branch is 9 commits past the shared base and that
+   one 2, touching one file in common (`node/shares.rs`): rebase onto
+   it, read `hosted`, open a lane for each org the account is in, and
+   hand the home one `orgs` entry each (the view already groups by org
+   and was tested with one). Opening a note of another org means
+   switching the open org, which the app has no route for.
+2. **A member's recordings do not play in the web app.** The player has
+   a URL for a link's files and for nothing else (Architect's own
+   `TODO(#628)` in `audio.rs`); a member's setlist shows "Not heard
+   here" and no covers. The listening views open; the listening needs
+   the node's file stream with a read ticket.
+3. **Signed out.** `/app/` shows Architect's "Sign in" card, with a demo
+   beside it; it does not start the sign-in itself, and the sign-in
+   returns to `/app/`, never to a page asked for. A share link stays
+   reachable without an account (unchanged).
+4. **Share links made or given.** The dashboard lists setlists whose
+   note carries a `share` code. A person's links are on the org lane
+   (`ShareLinks::shares`, every share of the node's vaults); the web app
+   does not call it. Nothing records links *given to* an account: an
+   invited address is only checked when the link is opened.
+5. **Recently opened** is what was opened from the dashboard since the
+   page loaded; nothing keeps it across a reload.
+6. With Home in the bar, a setlist's fourth tab (More) is past a phone's
+   four places for a member.
+
+**The landing page's side** (the site is another repository; not
+changed). One link to `/app/`: "Open Studio". Signed in or not is known
+on the same origin from `localStorage["architect.session"]` (the web
+app's session, set at sign-in, removed at sign-out): present, show the
+person's avatar linking to `/app/`; absent, "Open Studio" linking to
+`/app/`, where the card offers the sign-in. When item 3 is built the
+signed-out link becomes `/app/?signin`.
+
 ## The audit
 
 **What it ran on.** Studio at `stack/studio-distribution` (`5f78e7cd`)
