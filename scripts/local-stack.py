@@ -120,6 +120,16 @@ def slug_segment(name):
     return out.rstrip("-")
 
 
+def yaml_scalar(raw):
+    """A one-line YAML scalar's value: 'single' ('' an apostrophe), "double", or plain."""
+    v = raw.strip()
+    if len(v) >= 2 and v[0] == v[-1] == "'":
+        return v[1:-1].replace("''", "'")
+    if len(v) >= 2 and v[0] == v[-1] == '"':
+        return json.loads(v)
+    return v
+
+
 def seed_share(vault, setlist, code, vault_id):
     """The share note SHARE_CREATE writes for STUDIO_SETLISTS_SHARE: the
     setlist's note and each of its songs' notes, for anyone with the link
@@ -132,7 +142,7 @@ def seed_share(vault, setlist, code, vault_id):
     except OSError as e:
         die(f"the setlist {setlist} is not in {vault}: {e}")
     fm = frontmatter(text)
-    title = next((l.split(":", 1)[1].strip().strip("'\"") for l in fm.splitlines() if l.startswith("title:")), None)
+    title = next((yaml_scalar(l.split(":", 1)[1]) for l in fm.splitlines() if l.startswith("title:")), None)
     title = title or os.path.splitext(os.path.basename(setlist))[0]
     # The top-level `songs:` list (each set lists them again).
     songs, inside = [], False
@@ -144,8 +154,12 @@ def seed_share(vault, setlist, code, vault_id):
             if line.startswith("- "):
                 m = LINK.search(line)
                 if m:
-                    note = m.group(1).replace("''", "'")
-                    songs.append(note if note.endswith(".md") else note + ".md")
+                    # `Song#Arrangement` names the song's note: the share
+                    # holds the note, the arrangement is a heading on it.
+                    note = m.group(1).replace("''", "'").split("#", 1)[0]
+                    note = note if note.endswith(".md") else note + ".md"
+                    if note not in songs:
+                        songs.append(note)
             elif line and not line.startswith(" "):
                 inside = False
     missing = [s for s in songs if not os.path.isfile(os.path.join(vault, s))]

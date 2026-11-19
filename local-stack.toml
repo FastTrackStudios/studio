@@ -32,7 +32,8 @@ keyflow = "../keyflow"
 
 # The vault the node serves: a COPY of it, made once into the stack's
 # state (`just dev-reset` drops it), so nothing done while testing
-# reaches the source. `LOCAL_STACK_VAULT` names another. Missing: the
+# reaches the source. `LOCAL_STACK_VAULT` names another, with
+# `LOCAL_STACK_SETLIST` (its setlist note) and `LOCAL_STACK_SHARE_CODE`. Missing: the
 # node holds Architect's demo seed instead (its setlist `Fall Show`, link
 # /s/ksqx75iaaaaaaaae/).
 [vault]

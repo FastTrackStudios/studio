@@ -244,7 +244,7 @@ load_plan() {
     . "$state/plan.env"
 }
 
-share_code() { py get vault.share_code; }
+share_code() { if [ -n "${LOCAL_STACK_SHARE_CODE:-}" ]; then echo "$LOCAL_STACK_SHARE_CODE"; else py get vault.share_code; fi; }
 
 banner() {
     load_choice
@@ -353,7 +353,7 @@ seed_vault() {
     local src dst setlist code out
     src="$(locate "${LOCAL_STACK_VAULT:-$(py get vault.source)}")"
     dst="$(node_vault)"
-    setlist="$(py get vault.setlist)"
+    setlist="${LOCAL_STACK_SETLIST:-$(py get vault.setlist)}"
     code="$(share_code)"
     if [ -z "$src" ]; then
         say "NOTICE: no test vault at ${LOCAL_STACK_VAULT:-$(py get vault.source)}: the node holds Architect's demo seed (setlist Fall Show, /s/ksqx75iaaaaaaaae/)"
