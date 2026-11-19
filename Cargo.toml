@@ -23,6 +23,8 @@ members = [
     "extensions/rig-grid",
     "extensions/rig-macros",
     "extensions/rig-status",
+    "extensions/audio-settings",
+    "extensions/keys",
     "features/timeline",
     "features/editing",
     "features/ui/dock",
@@ -181,6 +183,8 @@ daw-control = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731
 daw-module = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
 daw-transport-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
 daw-audio-graph = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
+# The device layer (enumeration, opening), for the audio settings (DAW_AUDIO).
+audio = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
 daw-test-macro = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
 utils = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
 midi = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
@@ -818,6 +822,8 @@ studio-rig-browser = { path = "extensions/rig-browser" }
 studio-rig-grid = { path = "extensions/rig-grid" }
 studio-rig-macros = { path = "extensions/rig-macros" }
 studio-rig-status = { path = "extensions/rig-status" }
+studio-audio-settings = { path = "extensions/audio-settings" }
+studio-keys = { path = "extensions/keys" }
 # Keyflow's chart extension and Ignition's lighting extension, linked into
 # the distribution the same way (`pane`: Ignition's room as the GPU
 # process view the app hosts).
@@ -826,6 +832,8 @@ ignition-pane = { git = "https://github.com/FastTrackStudios/Ignition", rev = "6
 signal-rig-host = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-rigs-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-rig-shell = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+# The widgets the rigs share (the on-screen piano), for the keys extension.
+signal-widgets = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-rig-perform-ui = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-content-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-content-library = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }

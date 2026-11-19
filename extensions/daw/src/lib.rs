@@ -134,6 +134,20 @@ fn run_in(project: &str, id: &str, args: &Json) -> Result<Json, String> {
         .unwrap_or_else(|_| Json::String(String::from_utf8_lossy(&out).into_owned())))
 }
 
+/// The outputs this machine has, as the engine could open them.
+fn output_devices() -> Vec<Json> {
+    audio::io::output_devices(&audio::io::audio_host())
+        .into_iter()
+        .map(|d| {
+            json!({
+                "name": d.name,
+                "channels": d.channels,
+                "sample_rate": d.default_sample_rate,
+            })
+        })
+        .collect()
+}
+
 pub struct Daw;
 
 impl Extension for Daw {
@@ -156,6 +170,16 @@ impl Extension for Daw {
         .action("DAW_OPEN", |args| async move {
             let path = args.get("path").and_then(Json::as_str).ok_or("no path")?;
             run("SESSION_OPEN", &json!({ "path": path })).await
+        })
+        .action("DAW_AUDIO", |args| async move {
+            // With nothing to change, the device as kept: no reopening.
+            let change = args.as_object().is_some_and(|a| !a.is_empty());
+            let device = if change {
+                run("SESSION_AUDIO_DEVICE", &args).await?
+            } else {
+                run("SESSION_AUDIO_DEVICE", &json!({})).await?
+            };
+            Ok(json!({ "device": device, "devices": output_devices() }))
         })
         .action("DAW_DECK", |args| async move {
             // The app's playhead moved (its hook): the engine follows

@@ -11,12 +11,12 @@
 
 #[cfg(feature = "native")]
 pub mod audio_health;
-#[cfg(feature = "native")]
-pub mod autosave;
 pub mod audio_mode;
 pub mod automation;
 #[cfg(feature = "native")]
 pub mod automation_actions;
+#[cfg(feature = "native")]
+pub mod autosave;
 pub mod changes;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod collab;
@@ -179,6 +179,8 @@ pub mod gain_stage;
 pub use editing::groove;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod arrange_actions;
+#[cfg(feature = "native")]
+pub mod audio_device;
 #[cfg(feature = "native")]
 pub mod audio_window;
 #[cfg(feature = "native")]

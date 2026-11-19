@@ -6032,6 +6032,7 @@ version = "26.10.3"
 dependencies = [
  "architect-extensions",
  "architect-scene",
+ "audio",
  "daw 26.10.3 (git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e)",
  "daw-proto 0.1.0 (git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e)",
  "daw-ui",
@@ -22059,6 +22060,8 @@ dependencies = [
  "setlists",
  "sha2 0.10.9",
  "studio-arrangement",
+ "studio-audio-settings",
+ "studio-keys",
  "studio-lyrics",
  "studio-mixer",
  "studio-navigator",
@@ -22097,6 +22100,19 @@ dependencies = [
  "session-ui",
  "studio-view-link",
  "web-time",
+]
+
+[[package]]
+name = "studio-audio-settings"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "dioxus",
+ "facet",
+ "facet-json",
+ "guitar",
+ "serde_json",
+ "studio-rig-link",
 ]
 
 [[package]]
@@ -22201,6 +22217,19 @@ dependencies = [
  "toml 0.8.2",
  "transport-ui",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "studio-keys"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "dioxus",
+ "keys",
+ "serde_json",
+ "signal-widgets",
+ "studio-rig-link",
+ "tokio",
 ]
 
 [[package]]
