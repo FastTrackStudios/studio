@@ -24,6 +24,11 @@ extension = ["dep:architect-extensions"]
 serde_json = { workspace = true }
 # The Chart Editor's options: Keyflow's own transposer (`transpose_source`).
 keyflow = { workspace = true, features = ["text", "engraver"] }
+# `linked-core` on every target (a browser links it); `guest`, the
+# process copy's side, off wasm only (below).
+architect-extensions = { workspace = true, optional = true, features = ["linked-core"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 architect-extensions = { workspace = true, optional = true, features = ["guest"] }
 
 [dev-dependencies]

@@ -122,7 +122,7 @@ the `fasttrackaudio` vault, 390 px and 1280 px; `phone/61` to `64` in
 the private folder):
 
 - Signed in, the web app opens on the dashboard: the island's `home`
-  view (`apps/architect/island/src/home.rs`), which Architect mounts as
+  view (`features/island/src/home.rs`), which Architect mounts as
   the app's home (`SiteIsland::home`, `apps/web/src/app/home.rs`). An
   extension's view like the others; a guest has none.
 - Setlists (dated today or later first, the soonest on top; then the
@@ -523,7 +523,7 @@ Three different things carry the name today:
 own wasm, as the desktop is Studio's own binary. Architect has the route
 (`guide/your-own-architect.md`, "The web"):
 
-1. `apps/architect` gains a `web` feature and
+1. `apps/desktop` gains a `web` feature and
    `crate-type = ["cdylib", "rlib"]`, with
    `architect_web::run(studio_architect::distribution())` as the page's
    one start, and `architect-desktop` only off the browser.
@@ -536,7 +536,7 @@ own wasm, as the desktop is Studio's own binary. Architect has the route
    the lyrics panel, `WebArrangement` and `WebMixer`. The work is a web
    host for each extension, with the engine either in the page
    (`session-engine/web`) or absent (a listener).
-3. `cargo xtask dist web --manifest-path apps/architect/Cargo.toml`
+3. `cargo xtask dist web --manifest-path apps/desktop/Cargo.toml`
    builds it; `scripts/studio-architect.sh web` calls that instead of
    Architect's `web-bundle.sh`, and the release's web tarball is then
    Studio's.
@@ -596,8 +596,8 @@ except where said.
 ## What this branch built
 
 - The node lists the island's claims and reads
-  (`apps/architect/src/island.rs`), with a test that holds them to the
-  island's manifest (`apps/architect/tests/node.rs`). This is S1: it
+  (`apps/desktop/src/island.rs`), with a test that holds them to the
+  island's manifest (`apps/desktop/tests/node.rs`). This is S1: it
   turned five of the audit's steps from broken or missing to working.
 - The local stack runs on the distribution branch, takes a set of local
   overrides, serves a copy of any vault's setlist

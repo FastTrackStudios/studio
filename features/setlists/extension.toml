@@ -166,7 +166,7 @@ icon = "list-music"
 views = ["setlist"]
 
 # A setlist's favourites are declared beside the view they open, in the
-# island's manifest (apps/architect/island/extension.toml): a favourite may
+# island's manifest (features/island/extension.toml): a favourite may
 # open only its own extension's views and run only actions in its reach
 # (architect#658), and the playlist view is the island's web bundle's.
 

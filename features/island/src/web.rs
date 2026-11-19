@@ -12,7 +12,7 @@ use serde_json::Value;
 use wasm_bindgen::JsCast as _;
 use wasm_bindgen::prelude::*;
 
-use crate::views::{self, playhead_of};
+use crate::views;
 
 thread_local! {
     /// The view this frame draws.
@@ -141,39 +141,5 @@ fn App() -> Element {
         });
     });
     let view = VIEW.with(|v| v.borrow().clone());
-    if view == "lyrics" {
-        return rsx! { crate::lyrics::Lyrics { page: props } };
-    }
-    if view == "arrangement" {
-        return rsx! { crate::arrangement::Arrangement { page: props, ask: ask() } };
-    }
-    if view == "home" {
-        return rsx! { crate::home::Home { note, ask: ask() } };
-    }
-    if view == "mixer" {
-        return rsx! { crate::arrangement::NotHere {
-            title: "Mixer",
-            what: "The mixer shows a song's tracks: their levels, pans and effects.",
-            why: "This link shares each song's finished mix, not its tracks, so there is nothing to mix here.",
-        } };
-    }
-    if view == "lighting" {
-        return rsx! { crate::arrangement::NotHere {
-            title: "Lighting Visualizer",
-            what: "The lighting view shows a song's cues and looks as it plays.",
-            why: "The show's cues are not on this link yet.",
-        } };
-    }
-    if view == crate::queue::VIEW {
-        return rsx! { crate::setlist::SetlistView { page: props, note, ask: ask() } };
-    }
-    if view == crate::song::VIEW {
-        return rsx! { crate::chart::SongView { page: props, note, ask: ask() } };
-    }
-    let p = playhead_of(&props.read());
-    match view.as_str() {
-        "progress" => rsx! { views::Progress { p, ask: ask() } },
-        "transport" => rsx! { views::Transport { p, ask: ask() } },
-        _ => rsx! {},
-    }
+    rsx! { crate::view::View { view, page: props, note, ask: ask() } }
 }

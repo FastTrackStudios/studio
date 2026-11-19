@@ -2,11 +2,11 @@
 # Build Studio for Linux as an AppImage: the installer attached to the
 # release's GitHub Release, and what scripts/install.sh installs.
 #
-# Studio is Studio's distribution of Architect (apps/architect, the cargo
+# Studio is Studio's distribution of Architect (apps/desktop, the cargo
 # target `studio-architect`, run as `studio`), with its engine beside it:
 # the `daw` process extension (extensions/daw, the program `daw-extension`)
 # in `extensions/daw/`, where the distribution looks for what it ships
-# (`Distribution::shipped`, apps/architect/src/lib.rs `SHIPPED`).
+# (`Distribution::shipped`, apps/desktop/src/lib.rs `SHIPPED`).
 #
 #   scripts/desktop/linux.sh     # -> target/desktop/Studio-<version>-linux-x86_64.AppImage
 #

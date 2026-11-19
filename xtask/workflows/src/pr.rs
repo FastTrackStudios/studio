@@ -18,7 +18,7 @@
 //! ```
 //!
 //! One job here compiles: `studio-architect`, `cargo check` of Studio's
-//! distribution of Architect's node for x86_64 Linux (apps/architect, the
+//! distribution of Architect's node for x86_64 Linux (apps/desktop, the
 //! release's `studio-architect` workflow builds it), and only when the PR
 //! reaches it; and, when the PR reaches Studio's island's sheet, compiles
 //! that sheet and puts it through Architect's `cleanSheet`. Not required.
@@ -139,7 +139,7 @@ echo "studio-architect: $(wc -l <<<"$dirs") crates of this repo in the node's tr
 island=false
 while IFS= read -r f; do
   case "$f" in
-    Cargo.toml|Cargo.lock|devenv.nix|devenv.lock|devenv.yaml|xtask/workflows/src/steps.rs|apps/architect/island/*|features/ui/transport-ui/*|scripts/island-sheet*) island=true ;;
+    Cargo.toml|Cargo.lock|devenv.nix|devenv.lock|devenv.yaml|xtask/workflows/src/steps.rs|features/island/*|features/ui/transport-ui/*|scripts/island-sheet*) island=true ;;
   esac
 done <<<"$changed"
 echo "island=$island" >> "$GITHUB_OUTPUT"

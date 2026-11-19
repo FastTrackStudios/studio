@@ -28,7 +28,7 @@ default:
 # Keyflow. `devenv up` (processes in devenv.nix, scripts/local-stack.sh)
 # is the engine underneath; `just dev-status` says what runs and where.
 
-# Everything locally, rebuilt on save: issuer, Studio's node + share link on the test vault, web app, site (architect=local keyflow=local desktop=on)
+# Everything locally, hot-patched on save: the sign-in, the Architect server (plain Architect) on the demo vault with its share links, studio-web and Studio desktop (desktop=off: no window)
 dev *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -42,7 +42,7 @@ dev *ARGS:
     # shellcheck disable=SC2046 # the process names, split on purpose
     exec devenv up $(scripts/local-stack.sh procs)
 
-# See it working, quickly: issuer + Studio's node on the test vault with its share link, last build, no watchers
+# See it working, quickly: the sign-in, the Architect server and studio-web, no desktop window
 demo *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -50,27 +50,28 @@ demo *ARGS:
     # shellcheck disable=SC2046
     exec devenv up $(scripts/local-stack.sh procs)
 
-# The public website (Architect's apps/site: landing, download, changelog, extensions, docs), hot reload
-website *ARGS:
+# studio-web (with the server's paths) on this tailnet over HTTPS for a phone or another machine (tailscale serve, never funnel); `just phone off`
+phone *ARGS:
+    scripts/local-stack.sh tailnet {{ARGS}}
+
+# Stop Studio's engine (the `daw` extension's process, which outlives the window); the app starts a new one when it next opens
+engine-stop:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "just: the website is Architect's (apps/site); running it from the Architect the stack resolves (architect=local for your checkout)" >&2
-    scripts/local-stack.sh choose mode=dev {{ARGS}}
-    exec devenv up site
-
-# The running stack's node on this tailnet over HTTPS for a phone (tailscale serve, never funnel); `just phone off`
-phone *ARGS:
-    scripts/local-stack.sh phone {{ARGS}}
+    bin=extensions/daw/daw-extension
+    [ -x "$bin" ] || bin="$(find target -path '*desktop-dev/daw-extension' -type f | head -1)"
+    [ -n "$bin" ] || { echo "no daw-extension built" >&2; exit 1; }
+    "$bin" --stop && echo "engine: stopped (or none was running)"
 
 # What the local stack runs, from where (studio/architect/keyflow versions), its URLs
 dev-status:
     scripts/local-stack.sh status
 
-# The local stack, checked end to end: share page, songs, island files, Firefox plays and the playhead moves
+# The local stack, checked end to end: share page, songs, Firefox plays and the playhead moves
 dev-smoke:
     scripts/local-stack.sh smoke
 
-# Remove the local stack's state (its vault copy, issuer database, staged node); stop it first
+# Remove the local stack's state (its vault copy, issuer database, the server's and the window's data); stop it first
 dev-reset:
     scripts/local-stack.sh reset
 
@@ -2055,7 +2056,7 @@ rail-evidence:
     echo "rail evidence: $dir"
 
 
-# ── Studio Architect (apps/architect, docs/architect-distribution.md) ────
+# ── Studio Architect (apps/desktop, docs/architect-distribution.md) ────
 # Studio's distribution of Architect: the Architect app with Studio's
 # extensions compiled in. Its node is what a hosted Architect runs.
 
@@ -2211,7 +2212,7 @@ studio-web-config-test:
 # component for a share link's now-playing view. Built in the `wasi` profile
 # (wasm32-wasip2, node) into <target>/studio-island/: Architect's `build-web`
 # folder (the component transpiled by jco, its lock) and its stylesheet
-# (apps/architect/island/island.css, compiled by tailwind). Architect's web
+# (features/island/island.css, compiled by tailwind). Architect's web
 # tools come from the architect checkout cargo resolved, copied into
 # <target>/architect-web. NETWORK: `npm ci` there fetches their npm packages
 # (jco and its transpiler, pinned by that folder's package-lock.json) at
@@ -2254,7 +2255,7 @@ island-build:
     rm -rf "$out"
     web() {
         devenv --profile wasi shell -- node "$tools/cli/cli.mjs" build-web \
-            "$target/wasm32-wasip2/wasm-release/studio_island.wasm" "$out" --manifest apps/architect/island/extension.toml
+            "$target/wasm32-wasip2/wasm-release/studio_island.wasm" "$out" --manifest features/island/extension.toml
     }
     web
     # The same views as a web bundle (`web-*` files of the folder): what a
@@ -2263,13 +2264,13 @@ island-build:
     # web view frame (`SiteIsland::web`).
     just island-web "$out"
     just _lumen-link
-    tailwindcss -i apps/architect/island/island.css -o "$out/island.css" --minify
+    tailwindcss -i features/island/island.css -o "$out/island.css" --minify
     # The sheet as the page will hold it: refused by Architect's cleanSheet,
     # the island would draw unstyled, so the build fails instead.
     bash scripts/island-sheet.sh "$out/island.css"
     # Locked with the rest: build-web locks every file in its folder, so a
     # second run puts the sheet's digest in architect.lock.json, which the
-    # node checks it against (apps/architect/src/island.rs).
+    # node checks it against (apps/desktop/src/island.rs).
     web
     python3 -c 'import json,sys; sys.exit(0 if "island.css" in json.load(open(sys.argv[1]))["files"] else "island.css is not in the lock")' "$out/architect.lock.json"
     # What it was built from: the release ships it only from that same

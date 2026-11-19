@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Studio's island's stylesheet (apps/architect/island/island.css, studio#445)
+# Studio's island's stylesheet (features/island/island.css, studio#445)
 # held to the sanitiser the page holds it to: Architect's `cleanSheet`, from
 # the architect checkout Cargo.lock pins (features/extensions/web/sanitize.js),
 # with the island's own prefix. A sheet it refuses fails here, not as a
@@ -32,6 +32,6 @@ if [ -z "$sheet" ]; then
     ln -sfn "$(package_dir architect-ui)" features/ui/.architect-ui
     sheet="$(mktemp --suffix .css)"
     trap 'rm -f "$sheet"' EXIT
-    tailwindcss -i apps/architect/island/island.css -o "$sheet" --minify 2>/dev/null
+    tailwindcss -i features/island/island.css -o "$sheet" --minify 2>/dev/null
 fi
 node scripts/island-sheet-check.mjs "$ext/web/sanitize.js" "$sheet"

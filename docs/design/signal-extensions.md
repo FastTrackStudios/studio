@@ -1,7 +1,7 @@
 # Signal as Studio extensions
 
 Signal (the guitar and keys rigs) in Studio's distribution of Architect
-(`apps/architect`), as extensions: the rig engine a process of its own, its
+(`apps/desktop`), as extensions: the rig engine a process of its own, its
 screens panes any layout can place. `apps/studio/desktop` keeps hosting
 Signal as it does until this replaces it.
 
@@ -13,7 +13,7 @@ end.
 One crate per extension under `extensions/`, each with an `extension.toml`
 and a program of its own (`[entry]`), so each loads as a development copy
 (`--extension <folder>`) and shadows the linked one. The linked copies are
-the `rig` bundle of `apps/architect` (`studio_architect::rig()`).
+the `rig` bundle of `apps/desktop` (`studio_architect::rig()`).
 
 | id | crate | what | views | linked |
 | --- | --- | --- | --- | --- |
@@ -204,7 +204,7 @@ few days, once there is a build to try it in.
 
 **Web.**
 
-1. *Studio's distribution has no web build* (`apps/architect` is
+1. *Studio's distribution has no web build* (`apps/desktop` is
    `architect-desktop` only; its web bundle is Architect's stock wasm plus
    a `distribution.json`). It needs a `web` lib over `architect_web::run`,
    `guest` behind a target cfg in the nine rig crates (a browser has no

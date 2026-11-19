@@ -36,10 +36,10 @@
 set -euo pipefail
 
 app=studio
-# Studio is its distribution of Architect (apps/architect, the cargo target
+# Studio is its distribution of Architect (apps/desktop, the cargo target
 # `studio-architect`, run as `studio`), with its engine in the bundle: the
 # `daw` process extension in Contents/Resources/extensions/daw, where the
-# distribution looks for what it ships (apps/architect/src/lib.rs SHIPPED).
+# distribution looks for what it ships (apps/desktop/src/lib.rs SHIPPED).
 crate=studio-architect; built=studio-architect; bin=studio; title=Studio
 engine_crate=daw-extension; engine_bin=daw-extension
 features=""

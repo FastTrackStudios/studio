@@ -1408,6 +1408,7 @@ dependencies = [
  "futures",
  "futures-timer",
  "hex",
+ "js-sys",
  "objc2 0.6.5",
  "objc2-foundation 0.3.2",
  "objc2-health-kit",
@@ -1437,6 +1438,9 @@ dependencies = [
  "vox",
  "vox-core",
  "vox-stream",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "web-time",
 ]
 
@@ -1740,6 +1744,7 @@ dependencies = [
  "facet",
  "futures",
  "futures-timer",
+ "js-sys",
  "oxc_allocator",
  "oxc_ast",
  "oxc_codegen",
@@ -1757,6 +1762,9 @@ dependencies = [
  "vox",
  "vox-codegen",
  "vox-types",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -2203,6 +2211,56 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "architect-web"
+version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/architect?tag=v0.15.1#533f5f50457b0a4bf4615c24fe109bbabf6854ec"
+dependencies = [
+ "architect",
+ "architect-command-palette",
+ "architect-commands",
+ "architect-distribution",
+ "architect-extensions",
+ "architect-favourites",
+ "architect-media",
+ "architect-navigator",
+ "architect-pages",
+ "architect-playhead",
+ "architect-settings",
+ "architect-shell",
+ "architect-spaces",
+ "architect-theme",
+ "architect-theme-picker",
+ "architect-ui",
+ "architect-workspace",
+ "architect-workspace-hack",
+ "auth-client",
+ "base64 0.22.1",
+ "crdt",
+ "dioxus",
+ "futures-channel",
+ "futures-timer",
+ "futures-util",
+ "gloo-timers 0.3.0",
+ "include_dir",
+ "js-sys",
+ "loro",
+ "lucide-dioxus",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "symphonia-codec-vorbis",
+ "symphonia-core",
+ "symphonia-format-ogg",
+ "tokio",
+ "url",
+ "vault-proto",
+ "vault-query 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.15.1)",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -5839,9 +5897,11 @@ version = "26.10.3"
 dependencies = [
  "architect-extensions",
  "architect-scene",
+ "audio",
  "daw",
  "daw-proto",
  "daw-ui",
+ "libc",
  "serde_json",
  "session 0.1.0 (git+https://github.com/FastTrackStudios/session?rev=568e9a30a2d858b68a617a94f40f2390f7ea022e)",
  "session-desktop",
@@ -21729,26 +21789,13 @@ dependencies = [
  "architect-spaces",
  "base64 0.22.1",
  "fts-version",
- "ignition-pane",
- "keyflow-extension",
- "productions",
  "serde",
  "serde_json",
  "session-engine",
  "setlists",
  "sha2 0.10.9",
  "studio-arrangement",
- "studio-launcher",
- "studio-lyrics",
- "studio-mixer",
- "studio-navigator",
- "studio-rig-browser",
- "studio-rig-grid",
- "studio-rig-macros",
- "studio-rig-setlist",
- "studio-rig-status",
- "studio-rig-switches",
- "studio-views",
+ "studio-extensions",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -21777,6 +21824,19 @@ dependencies = [
  "session-ui",
  "studio-view-link",
  "web-time",
+]
+
+[[package]]
+name = "studio-audio-settings"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "dioxus",
+ "facet",
+ "facet-json",
+ "guitar",
+ "serde_json",
+ "studio-rig-link",
 ]
 
 [[package]]
@@ -21864,6 +21924,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "studio-extensions"
+version = "26.10.3"
+dependencies = [
+ "architect-distribution",
+ "ignition-pane",
+ "keyflow-extension",
+ "productions",
+ "setlists",
+ "studio-arrangement",
+ "studio-audio-settings",
+ "studio-keys",
+ "studio-launcher",
+ "studio-lyrics",
+ "studio-mixer",
+ "studio-navigator",
+ "studio-rig-browser",
+ "studio-rig-grid",
+ "studio-rig-macros",
+ "studio-rig-setlist",
+ "studio-rig-status",
+ "studio-rig-switches",
+ "studio-views",
+]
+
+[[package]]
 name = "studio-island"
 version = "26.10.3"
 dependencies = [
@@ -21881,6 +21966,19 @@ dependencies = [
  "toml 0.8.2",
  "transport-ui",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "studio-keys"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "dioxus",
+ "keys",
+ "serde_json",
+ "signal-widgets",
+ "studio-rig-link",
+ "tokio",
 ]
 
 [[package]]
@@ -22037,6 +22135,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "studio-tempo-map"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "hound",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tempo-map",
+ "tokio",
+ "toml 0.8.2",
+]
+
+[[package]]
 name = "studio-view-link"
 version = "26.10.3"
 dependencies = [
@@ -22065,6 +22177,27 @@ dependencies = [
  "keyflow",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "studio-web"
+version = "26.10.3"
+dependencies = [
+ "architect-distribution",
+ "architect-extensions",
+ "architect-playhead",
+ "architect-web",
+ "dioxus",
+ "getrandom 0.3.4",
+ "gloo-timers 0.3.0",
+ "serde_json",
+ "studio-extensions",
+ "studio-island",
+ "toml 0.8.2",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-wasm",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -22899,6 +23032,19 @@ dependencies = [
  "once_cell",
  "rustix 1.1.6",
  "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "tempo-map"
+version = "26.10.3"
+dependencies = [
+ "clap",
+ "hound",
+ "rayon",
+ "realfft",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -24510,7 +24656,7 @@ dependencies = [
  "vault-live",
  "vault-obsidian",
  "vault-proto",
- "vault-query",
+ "vault-query 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.15.1)",
 ]
 
 [[package]]
@@ -24576,7 +24722,7 @@ dependencies = [
  "tracing",
  "uuid",
  "vault-proto",
- "vault-query",
+ "vault-query 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.15.1)",
  "walkdir",
 ]
 
@@ -24603,7 +24749,7 @@ dependencies = [
  "uuid",
  "vault-live",
  "vault-proto",
- "vault-query",
+ "vault-query 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.15.1)",
  "walkdir",
 ]
 
@@ -24623,6 +24769,25 @@ dependencies = [
  "uuid",
  "vox",
  "vox-types",
+]
+
+[[package]]
+name = "vault-query"
+version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/architect?tag=v0.15.1#533f5f50457b0a4bf4615c24fe109bbabf6854ec"
+dependencies = [
+ "architect",
+ "architect-workspace-hack",
+ "chrono",
+ "facet",
+ "indexmap",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 2.0.20",
+ "uuid",
+ "vault-proto",
 ]
 
 [[package]]

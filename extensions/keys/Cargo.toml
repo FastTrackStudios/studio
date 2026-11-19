@@ -1,6 +1,6 @@
 [package]
 name = "studio-keys"
-description = "The keys rig's screens as panes of Studio: the engine rack (engines, layers, master, the macro band), the keyboard visualiser (the keys, the wheels beside them, the patch's stack over them), an engine's or a layer's page, the routing, the MIDI monitor, the rig's macros, the browser and the switches. Vox clients of the rig engine (the studio.rig extension); linked into apps/architect, or its own process as a development copy."
+description = "The keys rig's screens as panes of Studio: the engine rack (engines, layers, master, the macro band), the keyboard visualiser (the keys, the wheels beside them, the patch's stack over them), an engine's or a layer's page, the routing, the MIDI monitor, the rig's macros, the browser and the switches. Vox clients of the rig engine (the studio.rig extension); linked into apps/desktop, or its own process as a development copy."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

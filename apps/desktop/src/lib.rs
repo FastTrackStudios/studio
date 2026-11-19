@@ -37,61 +37,33 @@ pub const FOLDER: &str = "studio";
 /// Its icon: Architect's columns over Studio's staff.
 pub const ICON: &str = include_str!("../icon.svg");
 
-/// Studio's extensions, compiled in together: a production's show set is
-/// a setlist (`productions` writes the notes `setlists` reads).
+/// Studio's extensions (`studio_extensions::studio`: the one list the
+/// desktop app and studio-web both link).
 #[must_use]
 pub fn studio() -> Bundle {
-    Bundle::new("studio", "Studio")
-        .member(&setlists::ext::Setlists)
-        .member(&productions::ext::Productions)
-        .member(&studio_views::ext::StudioViews)
+    studio_extensions::studio()
 }
 
-/// The window's extensions, compiled in with `gui`: Studio's arrangement
-/// and mixer (windows on Studio's engine, the `daw` extension, which stays
-/// a process), Keyflow's chart and Ignition's lighting. A development copy
-/// of any of them shadows the linked one, so one of them can be worked on
-/// while the rest run as built.
+/// The window's extensions, compiled in with `gui`
+/// (`studio_extensions::stage`).
 #[cfg(feature = "gui")]
 #[must_use]
 pub fn stage() -> Bundle {
-    Bundle::new("stage", "Stage")
-        .member(&studio_arrangement::Arrangement)
-        .member(&studio_mixer::Mixer)
-        .member(&studio_lyrics::Lyrics)
-        .member(&studio_navigator::Navigator)
-        .member(&studio_launcher::Launcher)
-        .member(&keyflow_extension::Keyflow)
-        .member(&ignition_pane::ext::Lighting)
+    studio_extensions::stage()
 }
 
-/// Signal's rig views, compiled in with `gui`: the footswitch scenes, the
-/// sidebar, the browser, the DSP grid with its FX row and Edit, the
-/// macros, the rig's status, the keys rig's screens, and the audio settings
-/// of both engines
-/// (`docs/design/signal-extensions.md`). Each
-/// is a vox client of the rig engine (`studio.rig`), which stays a process
-/// of its own as `daw` does; a development copy of any of them shadows
-/// the linked one.
+/// Signal's rig views, compiled in with `gui` (`studio_extensions::rig`).
 #[cfg(feature = "gui")]
 #[must_use]
 pub fn rig() -> Bundle {
-    Bundle::new("rig", "Rig")
-        .member(&studio_rig_status::Status)
-        .member(&studio_rig_switches::Switches)
-        .member(&studio_rig_setlist::Setlist)
-        .member(&studio_rig_browser::Browser)
-        .member(&studio_rig_grid::Grid)
-        .member(&studio_rig_macros::Macros)
-        .member(&studio_keys::Keys)
-        .member(&studio_audio_settings::AudioSettings)
+    studio_extensions::rig()
 }
 
 pub mod island;
 
-/// The island's manifest (`apps/architect/island/extension.toml`): its
+/// The island's manifest (`features/island/extension.toml`): its
 /// views, its claims and a setlist's favourites.
-pub const ISLAND_MANIFEST: &str = include_str!("../island/extension.toml");
+pub const ISLAND_MANIFEST: &str = include_str!("../../../features/island/extension.toml");
 
 /// Where the extensions Studio ships beside its window's binary are, from
 /// that binary's folder: the engine (`daw`, a process extension, so a
@@ -114,7 +86,7 @@ pub const ISLAND_FOLDER: &str = "studio-island";
 /// Studio's island (#445), from the folder beside the binary, if it matches its lock.
 ///
 /// Session's progress bar and transport on a share link's now-playing
-/// view, a WASI component (`apps/architect/island`) the node serves from
+/// view, a WASI component (`features/island`) the node serves from
 /// its own `/_ext/` (`architect_sites::island`). Read
 /// from [`ISLAND_FOLDER`] beside the binary (part of the distribution as
 /// shipped, never a vault's or the node's config) and checked against its

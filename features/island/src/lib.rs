@@ -59,3 +59,6 @@ mod setlist;
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod web;
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub mod view;

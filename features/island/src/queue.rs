@@ -56,7 +56,7 @@ use setlists::row::{row_key, signed, tile_hue};
 use setlists::setlist::{Line, SETLIST_FENCE, section_line};
 
 /// This extension's id, whose source the view sets: the island's
-/// (`apps/architect/island/extension.toml`, `studio_architect::island::ID`).
+/// (`features/island/extension.toml`, `studio_architect::island::ID`).
 pub const SOURCE: &str = "studio.transport";
 
 /// The view's id in the bundle and the manifest (`mount(view)`): one

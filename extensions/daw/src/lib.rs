@@ -17,6 +17,7 @@
 pub mod buttons;
 pub mod deck;
 pub mod meters;
+pub mod owner;
 pub mod session_doc;
 
 use std::sync::OnceLock;

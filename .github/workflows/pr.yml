@@ -138,7 +138,7 @@ jobs:
         island=false
         while IFS= read -r f; do
           case "$f" in
-            Cargo.toml|Cargo.lock|devenv.nix|devenv.lock|devenv.yaml|xtask/workflows/src/steps.rs|apps/architect/island/*|features/ui/transport-ui/*|scripts/island-sheet*) island=true ;;
+            Cargo.toml|Cargo.lock|devenv.nix|devenv.lock|devenv.yaml|xtask/workflows/src/steps.rs|features/island/*|features/ui/transport-ui/*|scripts/island-sheet*) island=true ;;
           esac
         done <<<"$changed"
         echo "island=$island" >> "$GITHUB_OUTPUT"

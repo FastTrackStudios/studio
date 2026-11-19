@@ -1,7 +1,7 @@
 # The project launcher
 
 Status: built (`extensions/launcher`, id `studio.launcher`, linked into
-Studio in `apps/architect`), with its decisions taken. Written 2026-11-18.
+Studio in `apps/desktop`), with its decisions taken. Written 2026-11-18.
 Mockups: [`project-launcher/index.html`](project-launcher/index.html).
 It needs Architect's `feat/media-list-press` (the media list's press and
 tile).
@@ -355,7 +355,7 @@ should not try to.
 ## As built
 
 `extensions/launcher` (`studio-launcher`, id `studio.launcher`), linked into
-Studio (`apps/architect/src/lib.rs` `stage`) and runnable as a process, so
+Studio (`apps/desktop/src/lib.rs` `stage`) and runnable as a process, so
 a development copy shadows it and reloads on save. No dependency on
 Session's crates.
 

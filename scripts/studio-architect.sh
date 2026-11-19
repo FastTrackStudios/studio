@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Studio Architect: Studio's distribution of Architect (apps/architect,
+# Studio Architect: Studio's distribution of Architect (apps/desktop,
 # docs/architect-distribution.md), built the way Architect builds its own
 # app's node and web bundle (architect's xtask/src/dist.rs at the tag
 # Studio pins), from this checkout:

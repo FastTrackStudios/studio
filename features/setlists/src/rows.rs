@@ -4,7 +4,7 @@
 //! **One model, two surfaces.** This is the Project Launcher's model
 //! (`extensions/launcher/src/model.rs` on `feat/project-launcher`, moved
 //! here as it was at 50641aa4) so that the launcher on a desk and the
-//! dashboard in a browser (`apps/architect/island`, view `home`) list the
+//! dashboard in a browser (`features/island`, view `home`) list the
 //! same sets and songs from the same reading of the same properties.
 //! Rows in (a vault query's answer on a desk, the notes a browser holds),
 //! values out. The launcher's `model` becomes `pub use setlists::rows::*`

@@ -15,6 +15,8 @@ members = [
     "extensions/lyrics",
     "extensions/navigator",
     "extensions/launcher",
+    "apps/web",
+    "features/distribution",
     "extensions/link",
     "extensions/rig",
     "extensions/rig-link",
@@ -33,7 +35,7 @@ members = [
     "features/ui/dock",
     "features/ui/transport-ui",
     "features/ui/lyrics-ui",
-    "apps/architect/island",
+    "features/island",
     "features/adapters/web/worklet",
     "features/editor",
     "features/session",
@@ -64,7 +66,7 @@ members = [
     "features/setlists",
     "features/productions",
     "features/studio-views",
-    "apps/architect",
+    "apps/desktop",
     # ── daw ──
     "features/ui/audio-controls",
     "xtask/devtools",
@@ -405,7 +407,7 @@ architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v
 # into Studio's app and served as process extensions the Architect app
 # installs (features/setlists; studio#386).
 architect-extensions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-# A WASI component's guest side (Studio's island, apps/architect/island).
+# A WASI component's guest side (Studio's island, features/island).
 architect-extension-wasi = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 # The media list (`architect_media::ui::MediaList`): the launcher's song list.
@@ -424,11 +426,16 @@ architect-settings = { git = "https://github.com/FastTrackStudios/architect", ta
 # block renderers and sanitiser (features/setlists `share`).
 architect-sites = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 # The Architect app itself, as a library a distribution's `main` runs
-# (`architect_desktop::run`): Studio's distribution, apps/architect. Without
+# (`architect_desktop::run`): Studio's distribution, apps/desktop. Without
 # its window by default (`gui` turns it on there); `vox` is the node's
 # services and every build of it needs them.
 architect-desktop = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1", default-features = false, features = ["vox"] }
-# Share links as notes of their vault (`share_note`): apps/architect's
+# Architect's web app as a library a distribution's web build runs
+# (`architect_web::run`, without its own `start`): studio-web.
+architect-web = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1", default-features = false }
+architect-distribution = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect-playhead = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1", default-features = false }
+# Share links as notes of their vault (`share_note`): apps/desktop's
 # node test writes the share SHARE_CREATE would.
 architect-spaces = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 # The keymap engine (studio's former `features/input`, studio#61).
@@ -812,7 +819,7 @@ session-runtime = { path = "apps/session/runtime" }
 session-ui = { path = "apps/session/ui", default-features = false }
 studio-view-link = { path = "extensions/link" }
 # Studio's engine, arrangement and mixer extensions as libraries: what
-# Studio's distribution (apps/architect) links in. Each is also its own
+# Studio's distribution (apps/desktop) links in. Each is also its own
 # process program (a development copy shadows the linked one).
 daw-extension = { path = "extensions/daw" }
 studio-arrangement = { path = "extensions/arrangement" }
@@ -820,6 +827,11 @@ studio-mixer = { path = "extensions/mixer" }
 studio-lyrics = { path = "extensions/lyrics" }
 studio-navigator = { path = "extensions/navigator" }
 studio-launcher = { path = "extensions/launcher" }
+# The island's views (features/island): drawn in frames by its own
+# web bundle, and linked into studio-web (`studio_island::view`).
+studio-island = { path = "features/island" }
+# Studio's compiled-in extensions, listed once for the desktop app and studio-web.
+studio-extensions = { path = "features/distribution", default-features = false }
 # Signal's rigs as extensions (docs/design/signal-extensions.md): the
 # engine (a process), what its views share at build time, and the views.
 rig-extension = { path = "extensions/rig" }

@@ -1,6 +1,6 @@
 # Studio Architect: Studio's distribution of Architect
 
-**Studio Architect** (`apps/architect`, package and binary
+**Studio Architect** (`apps/desktop`, package and binary
 `studio-architect`) is the Architect app with Studio's extensions
 **compiled in**. Its headless node (`studio-architect serve`) is what a
 hosted Architect runs, so that a setlist shared from the hosted node
@@ -21,7 +21,7 @@ node cannot ask one to draw (FastTrackStudios/architect#547). So a stock
 Architect node shows a song's chart as its Keyflow text, and this node
 draws it as Keyflow's follow SVG: bars timed on the chart's clock, tied to
 the song's recording, followed by the page's player (studio#406).
-`apps/architect/tests/node.rs` shows both on real nodes.
+`apps/desktop/tests/node.rs` shows both on real nodes.
 
 The owner's decision for the hosted app (architect#528, D1) is Studio
 "both compiled in and loadable at run time, with override". That is what
@@ -100,7 +100,7 @@ script builds from this checkout instead and keeps `dist`'s flags.
 A share link's now-playing view draws Session's own progress bar (at the top:
 sections as played, the playhead, a tap on a section seeks there) and its
 transport (under the chart: previous, play / pause, next) when the node
-ships Studio's island: `apps/architect/island`, a WASI component built from
+ships Studio's island: `features/island`, a WASI component built from
 `features/ui/transport-ui`, the crate Session draws them from. Architect's
 node runs it in the page's extension sandbox, a document of its own with
 its own CSP, so the share page's policy is unchanged
@@ -113,7 +113,7 @@ Its theme variables come from the share page's own theme.
 `just island` builds it (in the `wasi` devenv profile: `wasm32-wasip2` and
 node) into `<target>/studio-island/` (`<target>` is cargo's target
 directory, from `cargo metadata`): Architect's `build-web` folder and its
-stylesheet (`apps/architect/island/island.css`, Tailwind's theme and
+stylesheet (`features/island/island.css`, Tailwind's theme and
 utilities for the components' classes, no preflight: a view's sheet may not
 style `html` or `:host`). It runs `just island-check` first, the island's
 clippy for `wasm32-wasip2` (on the host the crate is empty, so a host
@@ -256,7 +256,7 @@ without that listing the web app mounts none of these views. Where the
 paragraphs below say a guest gets no body, they describe Architect
 before v0.14.
 
-**Props in** (data only), read in one module, `apps/architect/island/src/queue.rs`:
+**Props in** (data only), read in one module, `features/island/src/queue.rs`:
 
 - `note`, the setlist note, as the app gives the view that claims its
   type, only when the claim names `reads = ["documents"]` and the
@@ -325,7 +325,7 @@ plays only when the viewer presses its row, through the app, with the
 viewer's own read ticket, never handed to the frame.
 
 **Where it is declared.** In the island's manifest
-(`apps/architect/island/extension.toml`): the view, its claim (`[[embeds]]
+(`features/island/extension.toml`): the view, its claim (`[[embeds]]
 view = "setlist.playlist" claims = { note_type = ["setlist"] }`), the
 actions (`[capabilities] actions`), `[uses] "architect.playhead"`, the read
 capability (`[capabilities] reads` and the claim's `reads`), and the
@@ -401,7 +401,7 @@ bundle:
   the cover, and the queue item carries `art` (the Now Playing card's)
   and its lines as sung `marks` (what the Lyrics tab follows).
 - **The song view** (`song`, claiming notes of type `song`;
-  `apps/architect/island/src/song.rs` the contract, `chart.rs` the view)
+  `features/island/src/song.rs` the contract, `chart.rs` the view)
   reads the body as `setlists::song` writes it: the `kf` fence, the
   recording it embeds (the one the fence's `media=` names), the `.lrc` it
   embeds (else its `lrc` fence). It engraves the chart in the frame with

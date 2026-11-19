@@ -250,7 +250,7 @@ in
   # shell adds to the default env, which already has Xvfb, xvfb-run, xdotool,
   # PipeWire's JACK shim and cargo-nextest.
   # `devenv --profile wasi shell`: the fleet toolchain plus `wasm32-wasip2`,
-  # what Studio's island builds for (apps/architect/island, `just island`,
+  # what Studio's island builds for (features/island, `just island`,
   # #445), and node for Architect's `build-web` (its JSPI needs the current
   # release). A profile, as Architect's: an extra target changes the rustc
   # store path, so kache shares nothing with the default shell's builds.
@@ -266,14 +266,22 @@ in
     pkgs.xwininfo     # the window geometry daw::test::VirtualDisplay reads
   ];
 
-  # `devenv up`: the local stack (docs/local-stack.md). The just
-  # recipes in front of it (`just dev`, `just demo`, `just website`) choose
-  # what is local first (scripts/local-stack.sh `choose`); a bare
-  # `devenv up` runs the last choice (Architect and Keyflow pinned by
-  # default). Each process is `scripts/local-stack.sh run <name>`: the
-  # issuer and the node's environment are Architect's own `cargo xtask dev`
-  # (from the Architect checkout it resolves), on this stack's ports
-  # (local-stack.toml) and state (.devenv/state/local-stack).
+  # `devenv up`: the local stack (docs/local-stack.md). Architect is the
+  # server, Studio is the client:
+  #
+  #   mock-oauth  the sign-in's stand-in for GitHub/Google    (Architect's)
+  #   auth        the auth server, the issuer                  (Architect's)
+  #   architect   THE SERVER: plain `architect-desktop serve`  (Architect's;
+  #               no Studio code), holding the demo vault (Merry & Bright,
+  #               JT's Recital) and a share link per set
+  #   web         studio-web under `dx serve` (hot-patched), behind the front
+  #               that puts it and the server on one origin (/app/)
+  #   desktop     Studio's desktop app under `dx serve` (hot-patched), a
+  #               client of the server; it starts its engine itself
+  #
+  # Each is `scripts/local-stack.sh run <name>`; ports in local-stack.toml
+  # (local-stack.local.env moves them), state in .devenv/state/local-stack.
+  # The just recipes (`just dev`, `just demo`) choose what is local first.
   processes = let
     stack = "${config.devenv.root}/scripts/local-stack.sh";
     probe = name: { exec = "${stack} ready ${name}"; period = 2; };
@@ -287,28 +295,20 @@ in
       after = [ "devenv:processes:mock-oauth" ];
       ready = probe "auth";
     };
-    # Studio Architect's headless node, built from this tree (and a local
-    # Architect or Keyflow), signed in to the local issuer, serving a copy
-    # of the test vault and its share link (the URL is in its log); rebuilt
-    # and restarted on a save.
-    node = {
-      exec = "exec ${stack} run node";
+    architect = {
+      exec = "exec ${stack} run architect";
       after = [ "devenv:processes:auth" ];
-      ready = probe "node";
+      ready = probe "architect";
     };
-    # The web app (Architect's, with this distribution's
-    # distribution.json), its issuer the local one.
     web = {
       exec = "exec ${stack} run web";
       after = [ "devenv:processes:auth" ];
+      ready = probe "web";
     };
-    # The public site (Architect's apps/site), hot reload.
-    site.exec = "exec ${stack} run site";
-    # The window: this machine's own start script when
-    # local-stack.local.env names one (LOCAL_STACK_DESKTOP_RUN), else the
-    # window on the stack's node when chosen (`just dev desktop=on`), else
-    # nothing. It waits for the node itself.
-    desktop.exec = "exec ${stack} run desktop";
+    desktop = {
+      exec = "exec ${stack} run desktop";
+      after = [ "devenv:processes:auth" ];
+    };
   };
 
   fleet.banner = ''

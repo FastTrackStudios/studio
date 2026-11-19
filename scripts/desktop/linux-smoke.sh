@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke-test a Linux AppImage headless: it must start, with no display and no
 # audio, and print "studio <version>" for `--version` (the distribution's
-# window binary, apps/architect, which answers that before anything else).
+# window binary, apps/desktop, which answers that before anything else).
 #
 #   scripts/desktop/linux-smoke.sh <file.AppImage> <X.Y.Z>
 #

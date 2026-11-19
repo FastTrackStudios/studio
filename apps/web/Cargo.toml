@@ -1,0 +1,47 @@
+[package]
+name = "studio-web"
+description = "Studio's web client: Architect's web app as a library (`architect_web::run`) with Studio's views linked in (`studio.transport`: setlist, song, lyrics, arrangement, home), one wasm. It talks to a plain Architect server for content, auth and share links, as any client does; the server knows nothing of Studio. Dev: `dx serve` (the local stack's `web`); release: `dx bundle --web --release`, static files."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "studio-web"
+path = "src/main.rs"
+
+# The manifest is read on every target, so its test runs on the host.
+[dependencies]
+toml = { workspace = true }
+
+# The browser build only: natively (a workspace-wide build) the crate is
+# its manifest and its test.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Without `start`: this crate's own start runs it with Studio's views.
+architect-web = { workspace = true }
+architect-distribution = { workspace = true }
+architect-extensions = { workspace = true, features = ["linked-core"] }
+architect-playhead = { workspace = true }
+studio-island = { workspace = true }
+# The same extensions the desktop app links (one list). `stage` (the
+# window's views on the engine) joins when the engine runs in the page:
+# today its extensions pull the native engine link (REAPER adapter,
+# dioxus-native, iroh, axum), which does not build for wasm32.
+studio-extensions = { workspace = true }
+dioxus = { workspace = true, features = ["web"] }
+serde_json = { workspace = true }
+gloo-timers = { workspace = true, features = ["futures"] }
+tracing = { workspace = true }
+tracing-wasm = { workspace = true }
+tracing-subscriber = { workspace = true }
+wasm-bindgen = { workspace = true }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[lints]
+workspace = true

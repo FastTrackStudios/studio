@@ -1,6 +1,6 @@
 //! Studio's island as the node ships it (#445), checked against its lock.
 //!
-//! `just island`'s folder (`apps/architect/island`, built by Architect's
+//! `just island`'s folder (`features/island`, built by Architect's
 //! `build-web`) is read from disk and checked before the node serves any
 //! of it.
 //!
@@ -30,7 +30,7 @@ use architect_sites::SiteIsland;
 use base64::Engine as _;
 use sha2::{Digest as _, Sha256};
 
-/// The island's extension id (`apps/architect/island/extension.toml`).
+/// The island's extension id (`features/island/extension.toml`).
 pub const ID: &str = "studio.transport";
 
 /// Its lock, as `build-web` writes it.

@@ -1063,10 +1063,8 @@ fn the_manifest_declares_the_view_its_claim_and_its_favourites() {
     assert_eq!(primary["state"].as_str(), Some("playing"));
     assert_eq!(primary["on"]["label"].as_str(), Some("Pause"));
     // The setlists extension's own `setlist` view is not this one.
-    let other: toml::Table = toml::from_str(include_str!(
-        "../../../../../features/setlists/extension.toml"
-    ))
-    .unwrap();
+    let other: toml::Table =
+        toml::from_str(include_str!("../../../setlists/extension.toml")).unwrap();
     assert!(other.get("favourites").is_none());
     assert!(
         other["views"]

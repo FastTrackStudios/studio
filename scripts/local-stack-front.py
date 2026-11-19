@@ -8,11 +8,16 @@ web app (`/app/start.js`, `/assets/app-<sha>/`) from the same origin
 before the static files, and everything else is the bundle by its four
 rules (P, P.html, P/index.html, else 404.html with status 404).
 
-    local-stack-front.py <bundle> <port> <node port>
+    local-stack-front.py <bundle | http://127.0.0.1:<dx port>> <port> <node port> [<bind address>]
+
+Given a URL instead of a bundle, everything that is not the node's goes
+there: `dx serve`'s dev server for studio-web, its hot-reload WebSocket
+included. The bind address is 127.0.0.1 unless one is given (0.0.0.0:
+the LAN, LOCAL_STACK_LAN=on).
 
 `<origin>/<code>` (a link by its code alone) redirects to `/s/<code>/`.
 
-Loopback only. Streams both ways (a recording's ranges, the link's live
+Loopback by default. Streams both ways (a recording's ranges, the link's live
 events), and relays an upgrade (the app's WebSocket to `/org/<slug>/vox`).
 """
 
@@ -38,6 +43,8 @@ class Front(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     root = ""
     node = 0
+    # dx's dev server's port, when it serves the app (else the bundle).
+    app = 0
 
     def log_message(self, format, *args):
         pass
@@ -64,9 +71,14 @@ class Front(BaseHTTPRequestHandler):
             return
         if path == "/s" or any(path.startswith(p) or path == p.rstrip("/") for p in NODE):
             if self.headers.get("Upgrade"):
-                self.relay()
+                self.relay(self.node)
             else:
-                self.forward()
+                self.forward(self.node)
+        elif self.app:
+            if self.headers.get("Upgrade"):
+                self.relay(self.app)
+            else:
+                self.forward(self.app)
         elif self.command in ("GET", "HEAD"):
             self.static(urllib.parse.unquote(path))
         else:
@@ -115,16 +127,16 @@ class Front(BaseHTTPRequestHandler):
                 while chunk := f.read(1 << 16):
                     self.wfile.write(chunk)
 
-    def forward(self):
+    def forward(self, port):
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length) if length else None
         headers = {k: v for k, v in self.headers.items() if k.lower() not in HOP}
-        conn = http.client.HTTPConnection("127.0.0.1", self.node, timeout=3600)
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=3600)
         try:
             conn.request(self.command, self.path, body=body, headers=headers)
             resp = conn.getresponse()
         except OSError as e:
-            return self.plain(502, f"the node on port {self.node} does not answer: {e}")
+            return self.plain(502, f"nothing answers on port {port} yet (still building?): {e}")
         self.send_response(resp.status, resp.reason)
         sized = False
         for k, v in resp.getheaders():
@@ -148,11 +160,11 @@ class Front(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
-    def relay(self):
+    def relay(self, port):
         try:
-            up = socket.create_connection(("127.0.0.1", self.node), timeout=10)
+            up = socket.create_connection(("127.0.0.1", port), timeout=10)
         except OSError as e:
-            return self.plain(502, f"the node on port {self.node} does not answer: {e}")
+            return self.plain(502, f"nothing answers on port {port}: {e}")
         up.settimeout(None)
         head = f"{self.command} {self.path} HTTP/1.1\r\n" + "".join(f"{k}: {v}\r\n" for k, v in self.headers.items()) + "\r\n"
         up.sendall(head.encode("latin-1"))
@@ -175,12 +187,19 @@ class Front(BaseHTTPRequestHandler):
 
 
 def main(argv):
-    if len(argv) != 4:
+    if len(argv) not in (4, 5):
         sys.exit(__doc__)
-    Front.root, port, Front.node = argv[1], int(argv[2]), int(argv[3])
-    server = ThreadingHTTPServer(("127.0.0.1", port), Front)
+    target, port, Front.node = argv[1], int(argv[2]), int(argv[3])
+    bind = argv[4] if len(argv) == 5 else "127.0.0.1"
+    if target.startswith("http://"):
+        Front.app = int(urllib.parse.urlsplit(target).port or 80)
+        what = f"the app from dx at :{Front.app}"
+    else:
+        Front.root = target
+        what = f"the bundle {target}"
+    server = ThreadingHTTPServer((bind, port), Front)
     server.daemon_threads = True
-    print(f"local-stack: front http://127.0.0.1:{port} (the bundle {Front.root}; the node's paths to :{Front.node})", file=sys.stderr, flush=True)
+    print(f"local-stack: front http://{bind}:{port} ({what}; the server's paths to :{Front.node})", file=sys.stderr, flush=True)
     server.serve_forever()
 
 

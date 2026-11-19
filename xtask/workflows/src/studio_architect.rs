@@ -1,4 +1,4 @@
-//! `studio-architect` — Studio's distribution of Architect (apps/architect,
+//! `studio-architect` — Studio's distribution of Architect (apps/desktop,
 //! docs/architect-distribution.md) on the release tag: its headless node
 //! and its web bundle for x86_64 Linux, attached to the ONE GitHub Release
 //! of `vX.Y.Z` in the shape Architect's own release attaches its app's

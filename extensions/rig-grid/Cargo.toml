@@ -1,6 +1,6 @@
 [package]
 name = "studio-rig-grid"
-description = "The rig's DSP grid (the patch playing as modules and blocks), the FX row (the selected block's controls and its presets) and Edit (a section's changes). A pane of Studio, a vox client of the rig engine (the studio.rig extension); linked into apps/architect, or its own process as a development copy."
+description = "The rig's DSP grid (the patch playing as modules and blocks), the FX row (the selected block's controls and its presets) and Edit (a section's changes). A pane of Studio, a vox client of the rig engine (the studio.rig extension); linked into apps/desktop, or its own process as a development copy."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

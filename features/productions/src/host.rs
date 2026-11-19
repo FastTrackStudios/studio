@@ -18,8 +18,14 @@ use serde_json::{Map, Value, json};
 use crate::bases;
 use crate::model::{Daw, keys};
 
-/// An action's answer, when it comes.
+/// An action's answer, when it comes (`Send` off the browser, where the
+/// host's futures are; a browser's are not).
+#[cfg(not(target_family = "wasm"))]
 pub type Answer = Pin<Box<dyn Future<Output = Result<Value, String>> + Send>>;
+/// An action's answer, when it comes (`Send` off the browser, where the
+/// host's futures are; a browser's are not).
+#[cfg(target_family = "wasm")]
+pub type Answer = Pin<Box<dyn Future<Output = Result<Value, String>>>>;
 /// What runs an app action: its id and its arguments.
 pub type Door = Arc<dyn Fn(String, Value) -> Answer + Send + Sync>;
 

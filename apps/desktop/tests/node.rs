@@ -536,7 +536,7 @@ fn the_island_claims_setlist_and_song_notes_as_its_manifest_says() {
     assert!(!other.text && !other.files);
 
     // The manifest is where a claim is declared; the node repeats it.
-    let manifest = include_str!("../island/extension.toml");
+    let manifest = include_str!("../../../features/island/extension.toml");
     for line in [
         r#"view = "setlist.playlist""#,
         r#"claims = { note_type = ["setlist"] }"#,
