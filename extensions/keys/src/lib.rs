@@ -23,7 +23,7 @@ use architect_extensions::linked::{Builder, Extension};
 use dioxus::prelude::*;
 use keys::proto::keys::KeysRigClient;
 use keys::ui::{
-    Browser, ControlView, ControllerStrip, Controllers, EngineView, KeysViewState, LayerView,
+    Browser, ControlView, Controllers, EngineView, KeyboardStrip, KeysViewState, LayerView,
     MacroPanel, MidiPanel, PerformStrip, RoutingView, Zoom, held_notes,
 };
 use serde_json::{Value as Json, json};
@@ -46,13 +46,12 @@ impl Extension for Keys {
 
     fn build(&self, ext: &mut Builder) {
         studio_rig_link::set_handle(ID, ext.handle());
-        ext.view("mixer", MixerPane)
+        ext.view("rack", RackPane)
+            .view("keyboard", KeyboardPane)
             .view("layers", LayersPane)
             .view("routing", RoutingPane)
             .view("midi", MidiPane)
             .view("macros", MacrosPane)
-            .view("controller", ControllerPane)
-            .view("piano", PianoPane)
             .view("browser", BrowserPane)
             .view("switches", SwitchesPane)
             .action("STUDIO_KEYS_STATE", |_| async {
@@ -134,27 +133,23 @@ fn Providers(children: Element) -> Element {
     }
 }
 
-/// The mixer: every engine and its layers, the master, the macro band and
-/// the keyboard.
+/// The engine rack: every engine with its layers, the master, and the
+/// macro band of what is selected. The keyboard is a pane of its own
+/// ([`KeyboardPane`]).
 #[component]
-fn MixerPane() -> Element {
-    rsx! { KeysPane { Mixer {} } }
+fn RackPane() -> Element {
+    rsx! { KeysPane { Rack {} } }
 }
 
 #[component]
-fn Mixer() -> Element {
+fn Rack() -> Element {
     let state = use_context::<KeysViewState>();
-    let midi = state.midi.read().clone();
     rsx! {
-        ControlView {
-            mixer: state.mixer.read().clone(),
-            held: held_notes(&midi),
-            controllers: Controllers::from_midi(&midi),
-        }
+        ControlView { mixer: state.mixer.read().clone(), keyboard: false }
     }
 }
 
-/// The engine or the layer opened (a card's open button in the mixer, or
+/// The engine or the layer opened (a card's open button in the rack, or
 /// `STUDIO_KEYS_OPEN`); the engines and their layers to open until one is.
 #[component]
 fn LayersPane() -> Element {
@@ -299,60 +294,30 @@ fn Macros() -> Element {
     }
 }
 
-/// Where the wheels and pedals are sitting.
+/// The keyboard visualiser: the keys with the notes held lit, the wheels
+/// and pedals to their left, and over them the patch's stack: each
+/// sounding layer's span of the keyboard. A press on a key plays the rig.
 #[component]
-fn ControllerPane() -> Element {
-    rsx! { KeysPane { Controller {} } }
-}
-
-#[component]
-fn Controller() -> Element {
-    let state = use_context::<KeysViewState>();
-    let controllers = Controllers::from_midi(&state.midi.read());
-    rsx! {
-        div { style: "flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:8px;",
-            ControllerStrip { controllers }
-        }
-    }
-}
-
-/// The keyboard: the keys held light up, a press plays the rig.
-#[component]
-fn PianoPane() -> Element {
+fn KeyboardPane() -> Element {
     rsx! { KeysPane { Keyboard {} } }
 }
 
 #[component]
 fn Keyboard() -> Element {
     let state = use_context::<KeysViewState>();
-    let rig = use_hook(try_consume_context::<KeysRigClient>);
-    let held = held_notes(&state.midi.read());
-    let play = use_callback(move |(note, velocity): (u8, u32)| {
-        let rig = rig.clone();
-        spawn(async move {
-            if let Some(rig) = rig {
-                let _ = rig.trigger(u32::from(note), velocity).await;
-            }
-        });
-    });
+    let midi = state.midi.read().clone();
     rsx! {
-        div { style: "flex:1; min-height:0; display:flex; flex-direction:column; justify-content:center; padding:8px;",
-            signal_widgets::Piano {
-                start_note: 21,
-                end_note: 108,
-                active_notes: held,
-                show_labels: false,
-                waterfall: false,
-                accent_color: ACCENT.to_owned(),
-                height: "120px",
-                on_note_on: move |note: u8| play.call((note, 100)),
-                on_note_off: move |note: u8| play.call((note, 0)),
+        div { style: "flex:1; min-height:0; display:flex; flex-direction:column; justify-content:flex-end;",
+            KeyboardStrip {
+                mixer: state.mixer.read().clone(),
+                held: held_notes(&midi),
+                controllers: Controllers::from_midi(&midi),
             }
         }
     }
 }
 
-/// The browser, pointed at what is selected in the mixer.
+/// The browser, pointed at what is selected in the rack.
 #[component]
 fn BrowserPane() -> Element {
     rsx! { KeysPane { Sounds {} } }

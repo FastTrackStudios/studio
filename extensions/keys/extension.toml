@@ -8,7 +8,7 @@ name = "Keys rig"
 version = "0.1.0"
 kind = "process"
 api = "0.1"
-description = "The keys rig's screens: the mixer with its engines, layers and master, an engine's or a layer's page, routing, the MIDI monitor, the rig's macros, the controller strip, the piano, the browser and the switches."
+description = "The keys rig's screens: the engine rack (every engine, its layers, the master and the macro band), the keyboard visualiser (the keys, the wheels beside them, the patch's stack over them), an engine's or a layer's page, routing, the MIDI monitor, the rig's macros, the browser and the switches."
 authors = ["FastTrackStudios"]
 
 [entry]
@@ -19,9 +19,16 @@ effect = "mutating"
 actions = ["EXT_VIEW_OPEN"]
 
 [[views]]
-id = "mixer"
-title = "Keys mixer"
+id = "rack"
+title = "Engine rack"
 icon = "sliders-vertical"
+
+# The keys with the notes held lit, the wheels and pedals to their left,
+# the patch's stack (each layer's span) over them.
+[[views]]
+id = "keyboard"
+title = "Keyboard"
+icon = "piano"
 
 [[views]]
 id = "layers"
@@ -44,16 +51,6 @@ title = "Keys macros"
 icon = "gauge"
 
 [[views]]
-id = "controller"
-title = "Keys controllers"
-icon = "joystick"
-
-[[views]]
-id = "piano"
-title = "Piano"
-icon = "piano"
-
-[[views]]
 id = "browser"
 title = "Keys browser"
 icon = "library"
@@ -66,14 +63,14 @@ icon = "footprints"
 [[actions]]
 id = "STUDIO_KEYS_STATE"
 name = "Keys rig: state"
-description = "Whether this window's process is connected to the rig engine, what is open in the keys panes (`open`: the mixer, an engine or a layer) and what the browser is pointed at."
+description = "Whether this window's process is connected to the rig engine, what is open in the keys panes (`open`: the rack, an engine or a layer) and what the browser is pointed at."
 group = "Keys"
 effect = "read_only"
 
 [[actions]]
 id = "STUDIO_KEYS_OPEN"
 name = "Keys rig: open an engine or a layer"
-description = "Opens `layer` or `engine` (by name) in the keys panes' engine-and-layer view; with neither, back to the mixer."
+description = "Opens `layer` or `engine` (by name) in the keys panes' engine-and-layer view; with neither, back to the list of engines."
 group = "Keys"
 effect = "mutating"
 params = '{"type":"object","properties":{"engine":{"type":"string"},"layer":{"type":"string"}}}'

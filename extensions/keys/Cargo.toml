@@ -1,6 +1,6 @@
 [package]
 name = "studio-keys"
-description = "The keys rig's screens as panes of Studio: the mixer (engines, layers, master, its macro band and keyboard), an engine's or a layer's page, the routing, the MIDI monitor, the rig's macros, the controller strip, the on-screen piano, the browser and the switches. Vox clients of the rig engine (the studio.rig extension); linked into apps/architect, or its own process as a development copy."
+description = "The keys rig's screens as panes of Studio: the engine rack (engines, layers, master, the macro band), the keyboard visualiser (the keys, the wheels beside them, the patch's stack over them), an engine's or a layer's page, the routing, the MIDI monitor, the rig's macros, the browser and the switches. Vox clients of the rig engine (the studio.rig extension); linked into apps/architect, or its own process as a development copy."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -17,7 +17,7 @@ path = "src/main.rs"
 studio-rig-link = { workspace = true }
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
 keys = { workspace = true, features = ["ui"] }
-signal-widgets = { workspace = true, features = ["piano"] }
+signal-widgets = { workspace = true }
 dioxus = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
