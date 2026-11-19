@@ -159,7 +159,7 @@ fn App() -> Element {
     }
     if view == "lighting" {
         return rsx! { crate::arrangement::NotHere {
-            title: "Lighting",
+            title: "Lighting Visualizer",
             what: "The lighting view shows a song's cues and looks as it plays.",
             why: "The show's cues are not on this link yet.",
         } };

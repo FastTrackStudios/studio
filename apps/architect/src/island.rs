@@ -181,6 +181,10 @@ pub fn at(dir: &Path) -> Result<SiteIsland, IslandError> {
         // list and a song's chart as its text.
         // The app's home for a signed-in person: the dashboard.
         .home(HOME_VIEW)
+        // The views a setlist's More menu opens, each filling the page.
+        .page_view("arrangement")
+        .page_view("mixer")
+        .page_view("lighting")
         .embed_note(SETLIST_VIEW, [SETLIST_TYPE], SETLIST_PROPERTIES)
         .embed_note(SONG_VIEW, [SONG_TYPE], [] as [&str; 0])
         .reads(READS))
