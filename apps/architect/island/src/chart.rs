@@ -30,20 +30,20 @@ const SHEET: &str = r#"
 .sv { font-family: var(--font, system-ui, -apple-system, sans-serif); color: var(--foreground, CanvasText);
       box-sizing: border-box; width: 100%; padding: 0 0 12px; }
 .sv * { box-sizing: border-box; }
-.sv-tabs { display: flex; gap: 4px; padding: 4px; margin: 0 0 8px; border-radius: 10px; position: sticky; top: 0; z-index: 2;
+.sv-tabs { display: flex; gap: 4px; padding: 4px; margin: 0 10px 8px; border-radius: 10px; position: sticky; top: 0; z-index: 2;
            background: var(--background, Canvas); border: 1px solid var(--border, GrayText); width: max-content; }
 .sv-tab { border: 0; border-radius: 7px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 500;
           background: transparent; color: var(--muted-foreground, GrayText); cursor: pointer; min-height: 32px; }
 .sv-tab[aria-pressed="true"] { background: var(--accent, Highlight); color: var(--accent-foreground, HighlightText); }
-.sv-hint { font-size: 12px; color: var(--muted-foreground, GrayText); margin: 0 0 8px; }
+.sv-hint { font-size: 12px; color: var(--muted-foreground, GrayText); margin: 0 12px 8px; }
 .sv-pages { display: flex; flex-direction: column; gap: 12px; }
-.sv-page { position: relative; width: 100%; background: #fff; border-radius: 6px; overflow: hidden;
+.sv-page { position: relative; width: 100%; background: #fff; border-radius: 0; overflow: hidden;
            box-shadow: 0 0 0 1px rgba(0,0,0,.08); }
 .sv-paper > svg { display: block; width: 100%; height: auto; }
 .sv-over { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
 .sv-bar { fill: transparent; cursor: pointer; }
 .sv-bar:hover { fill: rgba(128,128,128,.12); }
-.sv-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.sv-lines { list-style: none; margin: 0; padding: 0 10px; display: flex; flex-direction: column; gap: 2px; }
 .sv-line { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: var(--muted-foreground, GrayText);
            font: inherit; font-size: 18px; line-height: 1.35; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
 .sv-line:hover { background: rgba(128,128,128,.12); }

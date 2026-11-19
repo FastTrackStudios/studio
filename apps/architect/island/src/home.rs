@@ -195,7 +195,7 @@ mod view {
     use crate::views::Ask;
 
     const CSS: &str = r"
-.hv { font-family: var(--font, system-ui, sans-serif); color: var(--foreground, CanvasText); padding: 2px 0 28px; }
+.hv { font-family: var(--font, system-ui, sans-serif); color: var(--foreground, CanvasText); padding: 2px 12px 28px; }
 .hv-top { padding: 6px 2px 14px; }
 .hv-top h1 { margin: 0; font-size: 26px; line-height: 1.15; letter-spacing: -0.02em; font-weight: 700; }
 .hv-top p { margin: 6px 0 0; font-size: 14px; color: var(--muted-foreground, GrayText); }
