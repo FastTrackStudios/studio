@@ -47,6 +47,24 @@ everything on loopback are Architect's own `cargo xtask dev`, run from the
 Architect checkout the stack resolves, given this stack's ports and state.
 Nothing of it is copied here.
 
+**Share links open on the web app's port.** A link's page is the node's
+answer and loads the web app from its own origin, so the `web` process is
+a front (`scripts/local-stack-front.py`): the bundle's files, and the
+node's paths (`/s/`, `/_ext/`, `/org/`, …) sent on to the node, as the
+hosted proxy joins them. `http://127.0.0.1:7423/s/<code>/…` opens; the
+same path on the node's own port stays on "Opening the shared link…".
+
+**Another vault's setlist**, for one run, without editing
+`local-stack.toml`: `LOCAL_STACK_VAULT` (copied, never written),
+`LOCAL_STACK_SETLIST` (the setlist note's path in it) and
+`LOCAL_STACK_SHARE_CODE`. **A stack of local checkouts** (every repo
+patched by one cargo config, as the distribution branch needs):
+`LOCAL_STACK_OVERRIDES=<that file>` with `LOCAL_STACK_ARCHITECT_PATH`, the
+Architect checkout the issuer and the web app are built from.
+`scripts/share-audit-browser.mjs` is a headless Firefox to walk a link
+with, one JSON command at a time, off the audio graph as the smoke
+test's is.
+
 ## Which pieces are local
 
 Studio is always this tree. Architect and Keyflow are pinned (the tags
