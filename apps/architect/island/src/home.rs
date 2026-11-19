@@ -344,7 +344,7 @@ mod view {
         rsx! {
             for (name, songs) in org.libraries.iter().cloned() {
                 h2 { key: "h{name}", "{name}" span { "{songs.len()} songs" } }
-                ul { key: "l{name}", for song in songs {
+                ul { for song in songs {
                     SongRow { key: "{song.path}", song, ask }
                 } }
             }
@@ -390,7 +390,7 @@ mod view {
                     if many {
                         div { key: "o{org.slug}", class: "hv-org", "{org.slug}" }
                     }
-                    div { key: "c{org.slug}", class: "hv-cols",
+                    div { class: "hv-cols",
                         div { Sets { org: org.clone(), ask } }
                         div { Libraries { org, ask } }
                     }

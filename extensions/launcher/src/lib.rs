@@ -95,6 +95,15 @@ impl Extension for Launcher {
                 let found = load().await?;
                 open_setlist(found.named(&name)?, opt(&args, "layout").as_deref()).await
             })
+            .action("STUDIO_LAUNCHER_SHARE", |args| async move {
+                // The app's own Share sheet on the set: its links first
+                // (a set has one link an audience, for good), a new one
+                // second.
+                let name = text(&args, "setlist")?;
+                let found = load().await?;
+                let notes = found.named(&name)?.setlist.share_notes();
+                host::run("SHARE_SHEET", json!({ "notes": notes })).await
+            })
             .action("STUDIO_LAUNCHER_OPEN_SONG", |args| async move {
                 let name = text(&args, "song")?;
                 let found = load().await?;

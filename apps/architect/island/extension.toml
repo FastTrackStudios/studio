@@ -163,12 +163,13 @@ target = { view = "setlist.playlist" }
 [[favourites.tabs]]
 id = "chart"
 label = "Chart"
-icon = "music"
+icon = "file-text"
 target = { view = "song" }
 
 [[favourites.tabs]]
 id = "lyrics"
 label = "Lyrics"
+# `mic` draws only its arc in the app's icon set; this is the mic that draws whole.
 icon = "mic-vocal"
 target = { view = "lyrics" }
 
