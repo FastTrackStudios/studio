@@ -7,6 +7,9 @@
 //!   and once it has, the caller says which (`follow`). The guide is
 //!   generated again, so the click follows (below the guide's threshold
 //!   its eighths come in by themselves).
+//! - `TEMPO_MAP_SET` replaces the whole map: every tempo point, with the
+//!   meters that change along it. What a tempo-mapped recording gets (one
+//!   point per bar, `studio.tempo-map`).
 //! - `TIME_SELECTION_SET` sets the time selection, in the engine and in
 //!   the arrangement (`crate::edit_state::ask`), or clears it.
 //! - `SECTION_INSERT` and `MARKER_INSERT` are the toolbar's buttons
@@ -31,6 +34,15 @@ static TEMPO: ActionMeta = crate::actions::meta(
     "tempo_set",
     "Set the tempo",
     "Set the tempo to `bpm` at `at` — a bar (`33`, `33:2.5`) or a time (`12.5s`); the song's start when left out. While the song has no audio its markers, sections and the edit cursor keep their bars; once it has, say `follow: true` for that or `follow: false` to leave them at their times. The click and guide are generated again (below 75 bpm the click plays eighths).",
+    "Tempo",
+    "",
+);
+
+static TEMPO_MAP: ActionMeta = crate::actions::meta(
+    "TEMPO_MAP_SET",
+    "tempo_map_set",
+    "Set the tempo map",
+    "Replace the song's whole tempo map with `points`: each `at` (seconds), `bpm` (quarter notes a minute) and, where the meter is set or changes, `numerator` and `denominator`. Every point the song had is removed first; a point at 0 is the song's own tempo and meter. `follow: true` keeps the markers, sections and the edit cursor on their bars (they move in time); left out or false they stay at their times, as a recording's do. `bar_one` (seconds) is where the song's bar 1 is under the new map: its SONGSTART is moved there (made, when the song has none), so the ruler and everything that takes a bar count from it. The click and guide are generated again. Says how many points and meter changes were set.",
     "Tempo",
     "",
 );
@@ -68,6 +80,26 @@ struct TempoArg {
     bpm: f64,
     at: Option<String>,
     follow: Option<bool>,
+}
+
+/// One point of a tempo map.
+#[derive(Facet, Clone)]
+struct TempoMapPoint {
+    /// Seconds.
+    at: f64,
+    /// Quarter notes a minute.
+    bpm: f64,
+    numerator: Option<u32>,
+    denominator: Option<u32>,
+}
+
+/// A whole tempo map.
+#[derive(Facet)]
+struct TempoMapArg {
+    points: Vec<TempoMapPoint>,
+    follow: Option<bool>,
+    /// Where the song's bar 1 is, seconds.
+    bar_one: Option<f64>,
 }
 
 /// A span, or none.
@@ -420,6 +452,30 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
             }
         ))
     })?;
+    list.register(&TEMPO_MAP, Effect::Mutating, |a: TempoMapArg| {
+        let (daw, project) = crate::actions::song()?;
+        // Not an undo step, as TEMPO_SET is not: the engine's undo keeps
+        // tracks and items, not the tempo map.
+        if a.bar_one.is_some_and(|at| !at.is_finite() || at < 0.0) {
+            return Err("`bar_one` is a time in the song, seconds".to_owned());
+        }
+        let meters = set_tempo_map(daw, &project, &a.points, a.follow.unwrap_or(false))?;
+        let started = a
+            .bar_one
+            .map(|at| set_song_start(daw, &project, at))
+            .transpose()?;
+        regenerate_guide(daw);
+        crate::song_model::request_resync();
+        crate::actions::list().changed("tempo", &format!("{} points", a.points.len()));
+        let first = a.points.iter().map(|p| p.at).fold(f64::INFINITY, f64::min);
+        let last = a.points.iter().map(|p| p.at).fold(0.0, f64::max);
+        Ok(format!(
+            "{} tempo points from {first:.3} s to {last:.3} s, {meters} meter{} set{}; the guide follows",
+            a.points.len(),
+            if meters == 1 { "" } else { "s" },
+            started.map_or_else(String::new, |at| format!(", bar 1 (SONGSTART) at {at:.3} s"))
+        ))
+    })?;
     list.register(&SELECTION, Effect::Mutating, |a: SelectionArg| {
         let (daw, project) = crate::actions::song()?;
         let Some(chosen) = span(daw, &project, a.from.as_deref(), a.to.as_deref())? else {
@@ -503,6 +559,73 @@ fn has_audio(daw: &daw::standalone::Standalone, project: &ProjectContext) -> boo
 /// A moment as the tempo map counts it: measure, beat, fraction of a beat.
 type Musical = (i32, i32, f64);
 
+/// Where the markers, the sections, the edit cursor and the time
+/// selection are in bars, read before the tempo changes.
+struct Places {
+    marks: Vec<(u32, Musical)>,
+    spans: Vec<(u32, Musical, Musical)>,
+    cursor: Musical,
+    selection: Option<(Musical, Musical)>,
+}
+
+/// The bars everything is on now.
+fn places(daw: &daw::standalone::Standalone, project: &ProjectContext) -> Places {
+    let musical = |seconds: f64| daw.time_to_musical(project.clone(), seconds);
+    let edit = edit_now(daw, project);
+    Places {
+        marks: daw::service::Markers::all(daw, project.clone())
+            .into_iter()
+            .filter_map(|m| Some((m.id?, musical(m.position.seconds()?))))
+            .collect(),
+        spans: daw::service::Regions::all(daw, project.clone())
+            .into_iter()
+            .filter_map(|r| {
+                Some((
+                    r.id?,
+                    musical(r.time_range.start_seconds()),
+                    musical(r.time_range.end_seconds()),
+                ))
+            })
+            .collect(),
+        cursor: musical(edit.at),
+        selection: edit.selection.map(|s| (musical(s.start), musical(s.end))),
+    }
+}
+
+/// Puts everything back on the bars it was on, under the tempo map as it
+/// is now.
+fn keep_places(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    was: Places,
+) -> Result<(), String> {
+    let time = |(measure, beat, fraction): Musical| {
+        daw.musical_to_time(project.clone(), measure, beat, fraction)
+    };
+    for (id, bar) in was.marks {
+        daw::service::Markers::set_position(daw, project.clone(), id, time(bar))
+            .map_err(|e| format!("a marker did not keep its bar: {e}"))?;
+    }
+    for (id, start, end) in was.spans {
+        daw::service::Regions::set_bounds(daw, project.clone(), id, time(start), time(end))
+            .map_err(|e| format!("a section did not keep its bars: {e}"))?;
+    }
+    let edit = Edit {
+        at: time(was.cursor),
+        selection: was
+            .selection
+            .map(|(start, end)| Span::between(time(start), time(end))),
+    };
+    daw.set_position(project.clone(), edit.at)
+        .map_err(|e| e.to_string())?;
+    if let Some(span) = edit.selection {
+        daw.set_time_selection(project.clone(), span.start, span.end)
+            .map_err(|e| e.to_string())?;
+    }
+    crate::edit_state::ask(edit);
+    Ok(())
+}
+
 /// `bpm` from `at`: the tempo point there set, the song's own tempo when
 /// `at` is its start and there is none, else a point added. With
 /// `follow`, the markers, sections and edit cursor go back onto the bars
@@ -514,27 +637,7 @@ fn set_tempo(
     at: f64,
     follow: bool,
 ) -> Result<(), String> {
-    let musical = |seconds: f64| daw.time_to_musical(project.clone(), seconds);
-    let marks: Vec<(u32, Musical)> = daw::service::Markers::all(daw, project.clone())
-        .into_iter()
-        .filter_map(|m| Some((m.id?, musical(m.position.seconds()?))))
-        .collect();
-    let spans: Vec<(u32, Musical, Musical)> = daw::service::Regions::all(daw, project.clone())
-        .into_iter()
-        .filter_map(|r| {
-            Some((
-                r.id?,
-                musical(r.time_range.start_seconds()),
-                musical(r.time_range.end_seconds()),
-            ))
-        })
-        .collect();
-    let edit = edit_now(daw, project);
-    let cursor = (
-        musical(edit.at),
-        edit.selection.map(|s| (musical(s.start), musical(s.end))),
-    );
-
+    let was = follow.then(|| places(daw, project));
     let points = daw.get_tempo_points(project.clone());
     let here = points.iter().position(|p| {
         p.position
@@ -550,32 +653,136 @@ fn set_tempo(
         None => daw.add_tempo_point(project.clone(), at, bpm).map(|_| ()),
     }
     .map_err(|e| format!("the tempo was refused: {e}"))?;
-    if !follow {
-        return Ok(());
+    match was {
+        Some(was) => keep_places(daw, project, was),
+        None => Ok(()),
     }
+}
 
-    let time = |(measure, beat, fraction): Musical| {
-        daw.musical_to_time(project.clone(), measure, beat, fraction)
-    };
-    for (id, bar) in marks {
-        daw::service::Markers::set_position(daw, project.clone(), id, time(bar))
-            .map_err(|e| format!("a marker did not keep its bar: {e}"))?;
+/// Puts the song's bar 1 at `at`: its `SONGSTART` moved there, any other
+/// marker of that name removed (bar 1 is the bar the first one falls in),
+/// or one made when the song has none.
+fn set_song_start(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    at: f64,
+) -> Result<f64, String> {
+    use daw::service::Markers;
+    let refused = |e: daw_proto::DawError| format!("SONGSTART was refused: {e}");
+    let mut ids = Markers::all(daw, project.clone())
+        .into_iter()
+        .filter(|m| m.name == "SONGSTART")
+        .filter_map(|m| m.id);
+    match ids.next() {
+        Some(id) => {
+            Markers::set_position(daw, project.clone(), id, at).map_err(refused)?;
+            for extra in ids {
+                Markers::remove(daw, project.clone(), extra).map_err(refused)?;
+            }
+        }
+        None => {
+            Markers::add(daw, project.clone(), at, "SONGSTART").map_err(refused)?;
+        }
     }
-    for (id, start, end) in spans {
-        daw::service::Regions::set_bounds(daw, project.clone(), id, time(start), time(end))
-            .map_err(|e| format!("a section did not keep its bars: {e}"))?;
+    crate::actions::list().changed("markers", "SONGSTART");
+    Ok(at)
+}
+
+/// A meter a tempo point may set: 1 to 64 over a power of two up to 64.
+fn meter_of(point: &TempoMapPoint) -> Result<Option<(i32, i32)>, String> {
+    match (point.numerator, point.denominator) {
+        (None, None) => Ok(None),
+        (Some(n), Some(d)) if (1..=64).contains(&n) && d.is_power_of_two() && d <= 64 => {
+            Ok(Some((
+                i32::try_from(n).map_err(|e| e.to_string())?,
+                i32::try_from(d).map_err(|e| e.to_string())?,
+            )))
+        }
+        (n, d) => Err(format!(
+            "{} over {} at {:.3} s is not a meter: `numerator` 1 to 64 and `denominator` a power of two, together",
+            n.map_or_else(|| "nothing".to_owned(), |n| n.to_string()),
+            d.map_or_else(|| "nothing".to_owned(), |d| d.to_string()),
+            point.at
+        )),
     }
-    let (cursor_at, selection) = cursor;
-    let edit = Edit {
-        at: time(cursor_at),
-        selection: selection.map(|(start, end)| Span::between(time(start), time(end))),
-    };
-    daw.set_position(project.clone(), edit.at)
-        .map_err(|e| e.to_string())?;
-    if let Some(span) = edit.selection {
-        daw.set_time_selection(project.clone(), span.start, span.end)
-            .map_err(|e| e.to_string())?;
+}
+
+/// `points` in time order, each a tempo and a time a map can hold, no two
+/// at one time.
+fn checked(points: &[TempoMapPoint]) -> Result<Vec<TempoMapPoint>, String> {
+    if points.is_empty() {
+        return Err("no points: a tempo map has at least one".to_owned());
     }
-    crate::edit_state::ask(edit);
-    Ok(())
+    let mut sorted = points.to_vec();
+    sorted.sort_by(|a, b| a.at.total_cmp(&b.at));
+    let mut before: Option<f64> = None;
+    for p in &sorted {
+        if !p.at.is_finite() || p.at < 0.0 {
+            return Err(format!("{} s is not a time in the song", p.at));
+        }
+        if !BPM.contains(&p.bpm) {
+            return Err(format!(
+                "{} bpm at {:.3} s is not a tempo: {} to {}",
+                p.bpm,
+                p.at,
+                BPM.start(),
+                BPM.end()
+            ));
+        }
+        if before.is_some_and(|b| p.at - b < SAME_POINT) {
+            return Err(format!("two points at {:.3} s", p.at));
+        }
+        meter_of(p)?;
+        before = Some(p.at);
+    }
+    Ok(sorted)
+}
+
+/// Replaces the song's tempo map with `points`: the ones it had removed,
+/// a point at 0 made the song's own tempo and meter, the rest added with
+/// their meters. With how many meters were set.
+fn set_tempo_map(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+    points: &[TempoMapPoint],
+    follow: bool,
+) -> Result<usize, String> {
+    let points = checked(points)?;
+    let was = follow.then(|| places(daw, project));
+    let refused = |e: daw_proto::DawError| format!("the tempo map was refused: {e}");
+    for index in (0..daw.tempo_point_count(project.clone())).rev() {
+        daw.remove_tempo_point(project.clone(), index)
+            .map_err(refused)?;
+    }
+    let mut meters = 0_usize;
+    for (i, point) in points.iter().enumerate() {
+        let meter = meter_of(point)?;
+        if point.at < SAME_POINT {
+            daw.set_default_tempo(project.clone(), point.bpm)
+                .map_err(refused)?;
+            if let Some((n, d)) = meter {
+                daw.set_default_time_signature(project.clone(), n, d)
+                    .map_err(refused)?;
+                meters = meters.saturating_add(1);
+            }
+            continue;
+        }
+        if i == 0 {
+            // No point at 0: the song opens at the first point's tempo.
+            daw.set_default_tempo(project.clone(), point.bpm)
+                .map_err(refused)?;
+        }
+        let index = daw
+            .add_tempo_point(project.clone(), point.at, point.bpm)
+            .map_err(refused)?;
+        if let Some((n, d)) = meter {
+            daw.set_time_signature_at_point(project.clone(), index, n, d)
+                .map_err(refused)?;
+            meters = meters.saturating_add(1);
+        }
+    }
+    if let Some(was) = was {
+        keep_places(daw, project, was)?;
+    }
+    Ok(meters)
 }
