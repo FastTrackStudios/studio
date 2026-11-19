@@ -332,9 +332,9 @@ with_overrides() {
     fi
     (
         flock 9
-        cp Cargo.lock "$state/Cargo.lock.held"
+        cp "$root/Cargo.lock" "$state/Cargo.lock.held"
         # shellcheck disable=SC2329 # the EXIT trap runs it
-        restore() { cmp -s Cargo.lock "$state/Cargo.lock.held" || cp "$state/Cargo.lock.held" Cargo.lock; }
+        restore() { cmp -s "$root/Cargo.lock" "$state/Cargo.lock.held" || cp "$state/Cargo.lock.held" "$root/Cargo.lock"; }
         trap restore EXIT
         "$@"
     ) 9>"$state/cargo.flock"
