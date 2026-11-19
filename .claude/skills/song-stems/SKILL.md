@@ -1,9 +1,9 @@
 ---
 name: song-stems
-description: Get a song's reference recording and split it into 11 stems (Vocals, Bass, Guitar, Piano, Other, Kick, Snare, Hi-Hat, Toms, Cymbals, Drums Other) with Logic Pro's Stem Splitter on voyager, collected into a "<Song> Reference" folder. Use when asked to stem-split or multitrack-separate a song, make reference stems, or as step 1 of `song-prep`.
+description: Split a song's reference recording (an audio file you already have) into 11 stems (Vocals, Bass, Guitar, Piano, Other, Kick, Snare, Hi-Hat, Toms, Cymbals, Drums Other) with Logic Pro's Stem Splitter on voyager, collected into a "<Song> Reference" folder. Use when asked to stem-split or multitrack-separate a song, make reference stems, or as step 1 of `song-prep`.
 ---
 
-# Reference recording and stems
+# Stems from a reference recording
 
 Output: a folder `<Song> Reference/` holding `<basename> (Mix).wav` and 11 files
 `<basename> (<Stem>).wav`, every one the exact length of the source, so they
@@ -16,17 +16,17 @@ or work over `ssh voyager` for the shell parts; Logic itself is driven with the
 
 ## 1. The recording
 
-```bash
-cd ~/Downloads && yt-dlp -x --audio-format wav --no-playlist \
-  -o '%(id)s - %(title)s.%(ext)s' '<url>'
-```
+The process starts from an audio file. How it was obtained is up to whoever
+brings it, and is not part of this skill.
 
-- Quote the URL: zsh globs the `?`.
-- **Say the video's title and length back to the owner and stop if it is not the
-  expected song and version.** Links are sometimes a different recording.
-- Downloads go to `~/Downloads`, not a scratch folder.
-- The id in the name comes from the template; keep it, the stems and the project
-  name files by that basename. A `/` in a title becomes `⧸`.
+- A WAV at the recording's own sample rate; convert anything else with ffmpeg
+  first (`ffmpeg -i in.ext out.wav`).
+- **Say the file's name, length and what it is (artist, version) back to the
+  owner and stop if it is not the expected song and version.** Every later step
+  is built on this one recording.
+- Its name without the extension is the **basename**: the stems, the mix copy
+  and the project are all named from it, so settle the name before splitting.
+- Work on a copy in `~/Downloads` on voyager, not in a scratch folder.
 
 ## 2. Logic: import, split
 
@@ -76,7 +76,7 @@ in the background and wait for it.
 
 ## Report
 
-The folder path, the recording (title, length), the stem list with levels, which
+The folder path, the recording (file, length), the stem list with levels, which
 stems are silent, and which Logic project was left open and unsaved.
 
 ## Not proven

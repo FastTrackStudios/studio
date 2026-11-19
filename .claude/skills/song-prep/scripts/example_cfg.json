@@ -1,8 +1,8 @@
 {
  "rpp": "<folder>/Last Christmas - Tempo Mapped.RPP",
  "folder": "<folder>",
- "base": "<youtube id> - <title>",
- "mix": "<folder>/<youtube id> - <title> (Mix).wav",
+ "base": "<basename>",
+ "mix": "<folder>/<basename> (Mix).wav",
  "bar1": 0,
  "sections": [
   [
