@@ -144,6 +144,9 @@ fn App() -> Element {
     if view == "lyrics" {
         return rsx! { crate::lyrics::Lyrics { page: props } };
     }
+    if view == "arrangement" {
+        return rsx! { crate::arrangement::Arrangement { page: props, ask: ask() } };
+    }
     if view == crate::queue::VIEW {
         return rsx! { crate::setlist::SetlistView { page: props, note, ask: ask() } };
     }
