@@ -19,7 +19,7 @@
 //! (`Last Christmas - Tempo Mapped.RPP`): the session is `<title>.session`.
 //!
 //! ```sh
-//! prepare --recording "Song/Song.mp3" --as "Song Title" [--bpm 93]
+//! prepare --recording "Song/Song.mp3" --as "Song Title" [--bpm 93] [--meter 3/4]
 //! ```
 //!
 //! A song that is only a recording: a session holding it as the song's
@@ -38,6 +38,7 @@ fn main() -> eyre::Result<()> {
     let mut title: Option<String> = None;
     let mut recording: Option<PathBuf> = None;
     let mut bpm: Option<f64> = None;
+    let mut meter: (u32, u32) = (4, 4);
     let mut args = std::env::args_os().skip(1);
     while let Some(arg) = args.next() {
         if arg == "--as" {
@@ -46,13 +47,20 @@ fn main() -> eyre::Result<()> {
             recording = args.next().map(PathBuf::from);
         } else if arg == "--bpm" {
             bpm = args.next().and_then(|b| b.to_string_lossy().parse().ok());
+        } else if arg == "--meter" {
+            let said = args.next().map(|m| m.to_string_lossy().into_owned());
+            meter = said
+                .as_deref()
+                .and_then(|m| m.split_once('/'))
+                .and_then(|(beats, unit)| Some((beats.parse().ok()?, unit.parse().ok()?)))
+                .ok_or_else(|| eyre::eyre!("--meter takes beats/unit, as 3/4"))?;
         } else {
             files.push(PathBuf::from(arg));
         }
     }
     if let Some(recording) = recording {
         let title = title.ok_or_else(|| eyre::eyre!("--recording needs --as <title>"))?;
-        let saved = session_engine::prepare::reference_session(&recording, &title, bpm)?;
+        let saved = session_engine::prepare::reference_session(&recording, &title, bpm, meter)?;
         tracing::info!(session.saved = %saved.display(), "prepared");
         return Ok(());
     }

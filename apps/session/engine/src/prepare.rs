@@ -572,7 +572,8 @@ fn save_prepared(
 /// MP3, an Ogg) on one track, filed as the song's reference in a
 /// top-level `Reference` folder, the song named `title`, saved as
 /// `<title>.session` beside the recording. `bpm` is the song's one tempo
-/// when somebody knows it (its chart's); nothing says where a bar line of
+/// when somebody knows it (its chart's), in `meter` (beats a bar, and the
+/// beat's note value); nothing says where a bar line of
 /// the recording is, so the song gets no sections, no tempo map and no
 /// guide.
 ///
@@ -588,6 +589,7 @@ pub fn reference_session(
     recording: &std::path::Path,
     title: &str,
     bpm: Option<f64>,
+    meter: (u32, u32),
 ) -> eyre::Result<PathBuf> {
     let file = recording
         .file_name()
@@ -608,7 +610,8 @@ pub fn reference_session(
         Some("flac") => "FLAC",
         _ => "WAVE",
     };
-    let tempo = bpm.map_or_else(String::new, |bpm| format!("  TEMPO {bpm} 4 4\n"));
+    let (beats, unit) = meter;
+    let tempo = bpm.map_or_else(String::new, |bpm| format!("  TEMPO {bpm} {beats} {unit}\n"));
     let project = format!(
         "<REAPER_PROJECT 0.1 \"7.0/studio\" 0\n{tempo}  <TRACK {{{track}}}\n    NAME MIX\n    <ITEM\n      POSITION 0\n      LENGTH {seconds}\n      IGUID {{{item}}}\n      NAME \"{file}\"\n      <SOURCE {kind}\n        FILE \"{file}\"\n      >\n    >\n  >\n>\n",
         track = uuid::Uuid::new_v4().to_string().to_uppercase(),
