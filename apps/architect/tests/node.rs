@@ -450,6 +450,75 @@ fn a_folder_matching_its_lock_is_the_island() {
     assert!(island.file("BUILT_FROM").is_none());
 }
 
+/// The web app mounts an island's view on a note only when the node lists
+/// the claim, and hands it the note only when the node lists the read
+/// (docs/design/share-link-setlist.md, gap 1): the island's manifest says
+/// both, and the node must say them as the manifest does. Without the
+/// claims a share link's guest got the app's own list for a setlist and a
+/// song's chart as its Keyflow text, with the island served and unused.
+#[test]
+fn the_island_claims_setlist_and_song_notes_as_its_manifest_says() {
+    use architect_sites::island::{note_reads, page_json};
+    let dir = tempfile::tempdir().unwrap();
+    island_folder(dir.path());
+    // With its web bundle, as `just island` builds it: a claimed view is
+    // drawn from that bundle only, so a node lists no claim without it.
+    std::fs::write(dir.path().join("web-studio-island.js"), "export default 1;").unwrap();
+    std::fs::write(
+        dir.path().join("web-studio-island_bg.wasm"),
+        b"\0asm\x01\0\0\0",
+    )
+    .unwrap();
+    relock(
+        dir.path(),
+        &[
+            "architect.json",
+            "studio_island.js",
+            "studio_island.core.wasm",
+            "island.css",
+            "web-studio-island.js",
+            "web-studio-island_bg.wasm",
+        ],
+    );
+    let island = studio_architect::island::at(dir.path()).unwrap();
+    let json = page_json(std::slice::from_ref(&island));
+    let listed = &json["islands"][0];
+    assert_eq!(
+        listed["embeds"],
+        serde_json::json!([
+            {"view": "setlist.playlist", "note_type": ["setlist"], "properties": ["date"], "reads": ["documents"]},
+            {"view": "song", "note_type": ["song"], "properties": [], "reads": ["documents"]},
+        ]),
+        "the claims the web app mounts by: {listed}"
+    );
+    assert_eq!(listed["reads"], serde_json::json!(["documents", "files"]));
+    // What the node then gives a share link's guest for those notes: the
+    // text (the set's fence, the song's chart) and the link's covers and
+    // synced lyrics. Any other note type: nothing.
+    for note_type in ["setlist", "song"] {
+        let reads = note_reads(std::slice::from_ref(&island), note_type);
+        assert!(reads.text && reads.files, "{note_type}: {reads:?}");
+    }
+    let other = note_reads(std::slice::from_ref(&island), "task");
+    assert!(!other.text && !other.files);
+
+    // The manifest is where a claim is declared; the node repeats it.
+    let manifest = include_str!("../island/extension.toml");
+    for line in [
+        r#"view = "setlist.playlist""#,
+        r#"claims = { note_type = ["setlist"] }"#,
+        r#"properties = ["date"]"#,
+        r#"view = "song""#,
+        r#"claims = { note_type = ["song"] }"#,
+        r#"reads = ["documents", "files"]"#,
+    ] {
+        assert!(
+            manifest.lines().any(|l| l.trim() == line),
+            "extension.toml no longer says `{line}`: change studio_architect::island with it"
+        );
+    }
+}
+
 #[test]
 fn a_sheet_not_as_built_is_refused_with_the_island() {
     use studio_architect::island::{IslandError, at};

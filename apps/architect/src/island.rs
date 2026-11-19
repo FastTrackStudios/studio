@@ -170,5 +170,31 @@ pub fn at(dir: &Path) -> Result<SiteIsland, IslandError> {
         .progress("progress")
         .transport("transport")
         .lyrics("lyrics")
-        .stylesheet(STYLESHEET))
+        .stylesheet(STYLESHEET)
+        // Its manifest's claims (`[[embeds]]`) and reads, said to the node
+        // as the manifest says them: the web app draws `setlist.playlist`
+        // at the head of a setlist note and `song` at the head of a song
+        // note, for a member and for a share link's guest, and hands each
+        // the note it is drawn on with the link's images and `.lrc`
+        // (`docs/design/share-link-setlist.md`, gap 1). Without them the
+        // island is served and never mounted: a guest gets the app's own
+        // list and a song's chart as its text.
+        .embed_note(SETLIST_VIEW, [SETLIST_TYPE], SETLIST_PROPERTIES)
+        .embed_note(SONG_VIEW, [SONG_TYPE], [] as [&str; 0])
+        .reads(READS))
 }
+
+/// The view drawn at the head of a setlist note, and the note type it
+/// claims (`extension.toml` `[[embeds]] id = "setlist.playlist"`).
+pub const SETLIST_VIEW: &str = "setlist.playlist";
+/// See [`SETLIST_VIEW`].
+pub const SETLIST_TYPE: &str = "setlist";
+/// The setlist's properties its view declares (the claim's `properties`).
+pub const SETLIST_PROPERTIES: [&str; 1] = ["date"];
+/// The view drawn at the head of a song note (`[[embeds]] id = "song"`).
+pub const SONG_VIEW: &str = "song";
+/// See [`SONG_VIEW`].
+pub const SONG_TYPE: &str = "song";
+/// What the island's views read (`[capabilities] reads`): the note they
+/// are drawn on, and its images and synced lyrics.
+pub const READS: [&str; 2] = ["documents", "files"];
