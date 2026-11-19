@@ -574,8 +574,44 @@ pub fn contextual_paths<T: TemplateTarget>(target: &T) -> Vec<TrackContext<T::Tr
 /// Both matter: grouping by folder alone puts every top-level track in one
 /// bucket, and reclassifying a whole qualifying bucket sweeps in whatever
 /// merely sat beside the stems. Returns the reclassified list.
+///
+/// A separation that is all the project plays ([`separation_alone`]: the
+/// record's mix, its stems and a click, nothing tracked) doubles nothing:
+/// its stems are the song's multitrack and keep what they classify as.
 #[must_use]
 pub fn reclassify_stem_splits<Id>(entries: Vec<TrackContext<Id>>) -> Vec<TrackContext<Id>> {
+    let is_stem = stem_flags(&entries);
+    if separation_alone(&entries, &is_stem) {
+        // What the separator could not name (`other`, `instrumental`)
+        // classifies as nothing but a stem split: a part of the song with
+        // no instrument, not a reference to it.
+        return entries
+            .into_iter()
+            .zip(is_stem)
+            .map(|(mut entry, stem)| {
+                if stem && entry.path.first().is_some_and(|g| g == "Reference") {
+                    entry.path.clear();
+                }
+                entry
+            })
+            .collect();
+    }
+    let stem_path = vec!["Reference".to_string(), "Stem Split".to_string()];
+
+    entries
+        .into_iter()
+        .zip(is_stem)
+        .map(|(mut entry, stem)| {
+            if stem {
+                entry.path.clone_from(&stem_path);
+            }
+            entry
+        })
+        .collect()
+}
+
+/// Which of `entries` are stems of a separation, one flag each.
+fn stem_flags<Id>(entries: &[TrackContext<Id>]) -> Vec<bool> {
     use std::collections::HashMap;
 
     // Group by (folder, apparent source): stems from one separation share both.
@@ -601,7 +637,6 @@ pub fn reclassify_stem_splits<Id>(entries: Vec<TrackContext<Id>>) -> Vec<TrackCo
             .push(i);
     }
 
-    let stem_path = vec!["Reference".to_string(), "Stem Split".to_string()];
     let mut is_stem: Vec<bool> = vec![false; entries.len()];
     for indices in sets.values() {
         let names: Vec<String> = indices
@@ -616,17 +651,73 @@ pub fn reclassify_stem_splits<Id>(entries: Vec<TrackContext<Id>>) -> Vec<TrackCo
             }
         }
     }
+    is_stem
+}
 
-    entries
-        .into_iter()
-        .zip(is_stem)
-        .map(|(mut entry, stem)| {
-            if stem {
-                entry.path.clone_from(&stem_path);
-            }
-            entry
+/// Whether the stem split `is_stem` flags is all the project plays: beside
+/// its stems there is only the guide, reference material (the record's own
+/// mix) and folders, with nothing tracked for the stems to double.
+///
+/// A folder named for a stem beside the set (`DRUMS`, next to `VOCALS`,
+/// `BASS` and `OTHER`) is that stem separated further (`Kick`, `Snare`,
+/// `Cymbals`…): what it holds is the separation's too. A track that
+/// classifies as nothing counts as tracked, so a project with anything
+/// unknown in it is filed as before.
+#[must_use]
+pub fn separation_alone<Id>(entries: &[TrackContext<Id>], is_stem: &[bool]) -> bool {
+    if !is_stem.iter().any(|stem| *stem) {
+        return false;
+    }
+    let is_folder = |i: usize| {
+        entries
+            .get(i)
+            .zip(entries.get(i.saturating_add(1)))
+            .is_some_and(|(entry, next)| next.context.len() > entry.context.len())
+    };
+    // The folders that are stems of the set: named for a stem, with a stem
+    // track of the same source as a sibling. By the names down to them.
+    let stem_folders: Vec<Vec<String>> = entries
+        .iter()
+        .enumerate()
+        .filter(|(i, entry)| {
+            is_folder(*i)
+                && crate::stem_source(&entry.name).is_some_and(|source| {
+                    entries.iter().zip(is_stem).any(|(other, stem)| {
+                        *stem
+                            && other.context == entry.context
+                            && crate::stem_source(&other.name).as_deref() == Some(source.as_str())
+                    })
+                })
         })
-        .collect()
+        .map(|(_, entry)| {
+            let mut path = entry.context.clone();
+            path.push(entry.name.clone());
+            path
+        })
+        .collect();
+    let in_a_stem = |entry: &TrackContext<Id>| {
+        stem_folders
+            .iter()
+            .any(|folder| entry.context.starts_with(folder))
+    };
+    entries
+        .iter()
+        .zip(is_stem)
+        .enumerate()
+        .all(|(i, (entry, stem))| {
+            let aside = entry
+                .path
+                .first()
+                .is_some_and(|g| g == "Guide" || g == "Reference");
+            *stem || is_folder(i) || aside || in_a_stem(entry)
+        })
+}
+
+/// Whether what `target` holds is a record and its separation and nothing
+/// else ([`separation_alone`]): a song to play along to, not one to mix.
+pub fn is_separated_record<T: TemplateTarget>(target: &T) -> bool {
+    let entries = contextual_paths(target);
+    separation_alone(&entries, &stem_flags(&entries))
 }
 
 /// Every track's group path, the way the organizer files it.
@@ -1167,4 +1258,67 @@ pub fn apply_routing<T: TemplateTarget>(
         }
     }
     Ok(report)
+}
+
+#[cfg(test)]
+mod separation_tests {
+    use super::{reclassify_stem_splits, TrackContext};
+
+    fn track(name: &str, context: &[&str], path: &[&str]) -> TrackContext<u32> {
+        TrackContext {
+            track: 0,
+            name: name.to_owned(),
+            context: context.iter().map(|s| (*s).to_owned()).collect(),
+            path: path.iter().map(|s| (*s).to_owned()).collect(),
+        }
+    }
+
+    fn paths(entries: Vec<TrackContext<u32>>) -> Vec<(String, String)> {
+        reclassify_stem_splits(entries)
+            .into_iter()
+            .map(|e| (e.name, e.path.join("/")))
+            .collect()
+    }
+
+    /// A record, its click and its separation (the drums separated further,
+    /// in a folder): the stems are the multitrack, and stay what they are.
+    #[test]
+    fn a_separation_that_is_all_the_project_plays_is_its_multitrack() {
+        let filed = paths(vec![
+            track("CLICK", &[], &["Guide"]),
+            track("MIX", &[], &["Reference"]),
+            track("VOCALS", &[], &["Vocals"]),
+            track("DRUMS", &[], &["Drums"]),
+            track("Kick", &["DRUMS"], &["Drums", "Kick"]),
+            track("Snare", &["DRUMS"], &["Drums", "Snare"]),
+            track("BASS", &[], &["Bass"]),
+            track("PIANO", &[], &["Keys"]),
+            track("OTHER", &[], &["Reference", "Stem Split"]),
+        ]);
+        assert!(
+            filed.iter().all(|(_, path)| !path.contains("Stem Split")),
+            "{filed:?}"
+        );
+        assert!(filed.contains(&("OTHER".to_owned(), String::new())));
+        assert!(filed.contains(&("BASS".to_owned(), "Bass".to_owned())));
+    }
+
+    /// The same separation beside a part somebody tracked is reference
+    /// material, as before: it would double the part.
+    #[test]
+    fn a_separation_beside_tracked_parts_is_reference_material() {
+        let filed = paths(vec![
+            track("Lead Gtr", &[], &["Guitars"]),
+            track("VOCALS", &[], &["Vocals"]),
+            track("BASS", &[], &["Bass"]),
+            track("OTHER", &[], &[]),
+        ]);
+        for stem in ["VOCALS", "BASS", "OTHER"] {
+            assert!(
+                filed.contains(&(stem.to_owned(), "Reference/Stem Split".to_owned())),
+                "{filed:?}"
+            );
+        }
+        assert!(filed.contains(&("Lead Gtr".to_owned(), "Guitars".to_owned())));
+    }
 }
