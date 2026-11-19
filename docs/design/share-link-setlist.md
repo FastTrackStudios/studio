@@ -63,9 +63,9 @@ base. All are fixed on this branch:
 | `…/studio-architect is not Studio Architect`, then `invalid value 'node' for '<PROCESS>'` | The distribution is named Studio now; Architect's dev stack runs its node as `app --headless` (architect#825) | `scripts/studio-architect.sh`, `scripts/local-stack.sh` |
 | The link's page stayed on "Opening the shared link…" | The page is the node's and loads the web app from **its own origin**; the stack served the bundle on one port and the node on another, joined by nothing | `scripts/local-stack-front.py`: one origin, the node's paths to the node, as the hosted proxy does |
 
-`just dev-smoke` still checks the share page that architect#646 retired
-(server-rendered rows, `[data-track]`); it fails on this base and is gap
-S3.
+`just dev-smoke` checked the share page that architect#646 retired
+(server-rendered rows, `[data-track]`) and failed on this base: gap S3,
+rewritten on this branch.
 
 ### The goal, step by step
 
@@ -124,14 +124,14 @@ Size: **S** a day or less, **M** a few days, **L** a week or more.
 | --- | --- | --- | --- | --- |
 | S1 | The node listed none of the island's claims, so its views never mounted for anyone | this repo | S | **done** (`276dc7fb`, with a test) |
 | S2 | The local stack did not run on this base and could not open a link in a browser | this repo, and one line in Architect | S | **done** (`08c97b63`; Architect `fb128b72`) |
-| S3 | `just dev-smoke` checks the retired share page | this repo | S | S2 |
+| S3 | `just dev-smoke` checked the retired share page | this repo | S | **done**: it opens the link as a guest, sees the playlist list the set's songs, plays one and sees its chart follow; green on the recital copy |
 | S4 | The link's first load is about 30 MB | Architect ([architect#908], with architect#602 and architect#695), Keyflow (keyflow#76), infra ([infra#26]: compress at the proxy), content (covers at 600 px) | M | nothing; the proxy and the covers are the two cheap ones |
 | S5 | The lock screen has no cover and no scrubber; whether the next song starts on a locked iPhone is untested | Architect ([architect#909]) | S to M | a real iPhone |
 | S6 | Recordings are Ogg Vorbis, which an iPhone plays only from iOS 18.4 (from memory of Safari's release notes; **check on a device**). Older phones would be told "Can't be played" and skip every song | content (an AAC rendition beside each Ogg), this repo (`setlists` prefers the rendition the listener can play, or lists both) | S | the owner's choice of format (below) |
 | S7 | A guest's screen carries a member's controls and two extra bars | Architect ([architect#910]; part of architect#804 and architect#805) | M | nothing |
 | S8 | The hosted node and bundle for the two orgs | infra ([infra#26]) | M | the owner's go; a Studio release with S1; one node per org or architect#538 |
 
-S1 and S2 are what this branch built. With S1 alone, on a desktop
+S1 to S3 are what this branch built. With S1 alone, on a desktop
 browser, the smallest slice already holds end to end. What stands between
 that and a phone someone was sent a link to is S4 to S8, and none of it
 is in this repository except half of S6.
@@ -166,8 +166,8 @@ is in this repository except half of S6.
 
 ## The order
 
-1. **S3**: the smoke test on the app-as-guest flow, so slice 1 has a
-   test and not only screenshots.
+1. **S1 to S3**: done on this branch. Slice 1 has a test (`just
+   dev-smoke`), not only screenshots.
 2. **S6**: an AAC rendition, and the playlist choosing it. Cheap, and the
    one thing that could make a link silent on an older iPhone.
 3. **S4**, in this order: compression at the proxy (infra, a config
@@ -435,6 +435,10 @@ except where said.
   overrides, serves a copy of any vault's setlist
   (`LOCAL_STACK_SETLIST`, `LOCAL_STACK_SHARE_CODE`), and opens share
   links in a browser (`scripts/local-stack-front.py`).
+- `just dev-smoke` on the app-as-guest flow (`scripts/local-stack-smoke.*`):
+  the link answers with the web app beside it, the island claims setlist
+  and song notes, a headless Firefox plays a song from the playlist and
+  sees its chart follow.
 - `scripts/share-audit-browser.mjs`: the browser the audit was walked
   with, kept for the next one.
 - The mockups.

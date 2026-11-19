@@ -173,10 +173,12 @@ just dev-smoke    # SCREENSHOTS=<dir> keeps the browser's shots at 390 px
 ```
 
 It starts the stack when it is not running (and stops it after), then
-checks that the share link answers, the setlist page lists its songs, the
-node serves Studio's island and every file its lock names, and that a
-headless Firefox (WebDriver BiDi, `scripts/local-stack-smoke.mjs`) plays a
-song and sees the playhead move and the chart follow. The browser runs in
+checks that the share link answers with the web app beside it, that the
+node serves Studio's island, its claims on setlist and song notes and
+every file its lock names, and that a headless Firefox (WebDriver BiDi,
+`scripts/local-stack-smoke.mjs`) opens the link as the app's guest, sees
+Studio's playlist list the set's songs, plays one from it and sees that
+song's chart engraved with the bar being played marked. The browser runs in
 a mount namespace of its own with an empty runtime dir and `/run/pipewire`,
 so it can never open an output on this machine's audio graph; without the
 namespace the check refuses to run.
