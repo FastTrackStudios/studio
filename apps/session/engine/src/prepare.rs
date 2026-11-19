@@ -282,8 +282,13 @@ fn strip_date(folder: &str) -> String {
 }
 
 /// Each word's first letter capitalised, the rest as written
-/// (`it knows my name` → `It Knows My Name`, `AG GTR` stays).
+/// (`it knows my name` → `It Knows My Name`, `AG GTR` stays). A name
+/// that already has capitals is a title somebody wrote, and stays as it
+/// is (`What Christmas Means to Me`).
 fn title_case(text: &str) -> String {
+    if text.chars().any(char::is_uppercase) {
+        return text.split_whitespace().collect::<Vec<_>>().join(" ");
+    }
     text.split_whitespace()
         .map(|word| {
             let mut chars = word.chars();
@@ -305,13 +310,15 @@ fn media_end(daw: &daw_standalone::sync::Standalone, project: &ProjectContext) -
     let tracks = Tracks::all(daw, project.clone());
     let by_guid: std::collections::HashMap<&str, &daw_proto::Track> =
         tracks.iter().map(|t| (t.guid.as_str(), t)).collect();
-    // Under REFERENCES or the Guide, however deep.
+    // Under REFERENCES, the song's Reference or the Guide, however deep.
     let referenced = |guid: &str| {
         let mut at = by_guid.get(guid).copied();
         while let Some(track) = at {
             let name = track.name.trim();
             if name.eq_ignore_ascii_case(dynamic_template::apply::REFERENCES_FOLDER)
-                || (track.parent_guid.is_none() && name.eq_ignore_ascii_case("Guide"))
+                || (track.parent_guid.is_none()
+                    && (name.eq_ignore_ascii_case("Guide")
+                        || name.eq_ignore_ascii_case("Reference")))
             {
                 return true;
             }
@@ -512,16 +519,111 @@ pub fn chart_beside(project: &std::path::Path) -> Option<PathBuf> {
 /// session could not be written.
 #[cfg(feature = "native")]
 pub fn prepare_and_save(rpp: &std::path::Path, chart: Option<PathBuf>) -> eyre::Result<PathBuf> {
+    prepare_and_save_as(rpp, chart, None)
+}
+
+/// [`prepare_and_save`], the song named `title`: its SONG region and its
+/// session (`<title>.session`, beside the project) take that name, not
+/// the project file's. For a project another DAW named for its own
+/// purposes (`Last Christmas - Tempo Mapped.RPP` is "Last Christmas").
+///
+/// # Errors
+///
+/// As [`prepare_and_save`].
+#[cfg(feature = "native")]
+pub fn prepare_and_save_as(
+    rpp: &std::path::Path,
+    chart: Option<PathBuf>,
+    title: Option<&str>,
+) -> eyre::Result<PathBuf> {
     let prepare = Prepare {
         organize: true,
         chart,
         guide: true,
     };
+    save_prepared(rpp, &prepare, title)
+}
+
+/// `rpp` opened, prepared as `prepare` says and saved: `<title>.session`
+/// beside it, else the project's own name.
+#[cfg(feature = "native")]
+fn save_prepared(
+    rpp: &std::path::Path,
+    prepare: &Prepare,
+    title: Option<&str>,
+) -> eyre::Result<PathBuf> {
     let opened = crate::open::open_silent(rpp)?;
+    let title = title.map(str::trim).filter(|title| !title.is_empty());
+    if let Some(title) = title {
+        opened
+            .daw
+            .write_project(&opened.project_guid, |p| title.clone_into(&mut p.info.name));
+    }
     prepare.run(&opened)?;
-    let dir = rpp.with_extension("session");
+    let dir = title.map_or_else(
+        || rpp.with_extension("session"),
+        |title| rpp.with_file_name(format!("{title}.session")),
+    );
     crate::session_file::save_session(&opened.daw, &opened.project_guid, &dir)
         .map_err(|e| eyre::eyre!("saving {}: {e}", dir.display()))
+}
+
+/// A session for a song that is only a recording: `recording` (a WAV, an
+/// MP3, an Ogg) on one track, filed as the song's reference in a
+/// top-level `Reference` folder, the song named `title`, saved as
+/// `<title>.session` beside the recording. `bpm` is the song's one tempo
+/// when somebody knows it (its chart's); nothing says where a bar line of
+/// the recording is, so the song gets no sections, no tempo map and no
+/// guide.
+///
+/// The song is written as a one-track REAPER project beside the
+/// recording (`<title>.RPP`) and prepared like any other, so what a
+/// recording becomes is what a project holding just its mix becomes.
+///
+/// # Errors
+///
+/// The recording could not be read, or as [`prepare_and_save`].
+#[cfg(feature = "native")]
+pub fn reference_session(
+    recording: &std::path::Path,
+    title: &str,
+    bpm: Option<f64>,
+) -> eyre::Result<PathBuf> {
+    let file = recording
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .ok_or_else(|| eyre::eyre!("{}: not a file", recording.display()))?;
+    let audio = fts_sample::load_audio(recording, f64::from(crate::reference::RATE))
+        .map_err(|e| eyre::eyre!("{}: {e}", recording.display()))?;
+    #[expect(clippy::cast_precision_loss, reason = "a length in frames, as seconds")]
+    let seconds = audio.data.len() as f64 / f64::from(crate::reference::RATE);
+    let kind = match recording
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("mp3") => "MP3",
+        Some("ogg") => "VORBIS",
+        Some("flac") => "FLAC",
+        _ => "WAVE",
+    };
+    let tempo = bpm.map_or_else(String::new, |bpm| format!("  TEMPO {bpm} 4 4\n"));
+    let project = format!(
+        "<REAPER_PROJECT 0.1 \"7.0/studio\" 0\n{tempo}  <TRACK {{{track}}}\n    NAME MIX\n    <ITEM\n      POSITION 0\n      LENGTH {seconds}\n      IGUID {{{item}}}\n      NAME \"{file}\"\n      <SOURCE {kind}\n        FILE \"{file}\"\n      >\n    >\n  >\n>\n",
+        track = uuid::Uuid::new_v4().to_string().to_uppercase(),
+        item = uuid::Uuid::new_v4().to_string().to_uppercase(),
+    );
+    let rpp = recording.with_file_name(format!("{title}.RPP"));
+    std::fs::write(&rpp, project)?;
+    // No click, count or cues: with no bar line known they would play
+    // against the recording, not with it.
+    let prepare = Prepare {
+        organize: true,
+        chart: None,
+        guide: false,
+    };
+    save_prepared(&rpp, &prepare, Some(title))
 }
 
 /// Lay an edited chart over the open session: rebuild the song's structure
@@ -577,6 +679,11 @@ pub fn steps(
     let project = ProjectContext::Project(project_guid.to_owned());
 
     let mut target = dynamic_template::apply::DawTarget::on(daw.clone(), project.clone());
+    // A record and its separation (a REAPER project with the mix, its
+    // stems and a click): something to play along to. It is organized
+    // like any song, and left unmixed: a level staged or a chain added
+    // and the stems no longer add up to the record.
+    let separated = organize && dynamic_template::apply::is_separated_record(&target);
     if organize {
         // Folders first — Drums, Bass, Guitars … with any wrapper the
         // multitrack came in taken apart — so the bus pass routes
@@ -595,37 +702,8 @@ pub fn steps(
         let triggers = target.mute_triggers()?;
         // The golden template's drum Process folder: the kit's parallel
         // compressors and rooms, sent from the kit, to DRUM BUS.
-        let process = target.add_drum_process()?;
-        tracing::info!(process = process.len(), "prepare: drum process");
-        // The recorded tracks at the reference kit's levels, as item
-        // volume: nothing rendered, the audio as it was recorded.
-        let staged = crate::gain_stage::stage(daw, &project)?;
-        // And the kit at the session's reference, −23 LUFS short-term at
-        // its loudest: its folder's fader.
-        #[cfg(feature = "native")]
-        if let Some((loudest, fader)) =
-            crate::gain_stage::kit_headroom(daw, project_guid, 0.0, media_end(daw, &project).latest)
-        {
-            tracing::info!(
-                kit.short_term_lufs = loudest,
-                kit.fader_db = fader,
-                "prepare: kit level"
-            );
-        }
-        tracing::info!(
-            staged = staged.staged.len(),
-            silent = ?staged.silent,
-            toms = ?staged.toms,
-            "prepare: gain staged"
-        );
-        for each in &staged.staged {
-            tracing::debug!(
-                track = %each.name,
-                role = ?each.role,
-                level_db = each.level,
-                gain_db = each.gain_db,
-                "prepare: staged"
-            );
+        if !separated {
+            mix_levels(daw, project_guid, &project, &mut target)?;
         }
         tracing::info!(
             hidden = ?hidden,
@@ -696,7 +774,10 @@ pub fn steps(
         target.hide_in_tcp("Click Audio")?;
         target.hide_in_tcp("Guide Audio")?;
     }
-    if organize {
+    if organize && separated {
+        tracing::info!("prepare: a record and its separation, left unmixed");
+    }
+    if organize && !separated {
         // Last, after the renders that read the song — the kit's level,
         // where the sound ends — which the reverbs and the pitch shifter
         // below would make cost a minute. The gates change the kit's
@@ -736,6 +817,8 @@ pub fn steps(
                 "prepare: mix chains"
             );
         }
+    }
+    if organize {
         // The template's top-level order — what is played to first,
         // then the song, then the instruments, routing last — and the
         // routing out of the track panel.
@@ -750,6 +833,65 @@ pub fn steps(
         )?;
         target.hide_in_tcp("CLICK + GUIDE BUS")?;
         target.hide_in_tcp("MIX BUS")?;
+        // Last of all, so it stays last: the song's stereo reference in
+        // its own top-level folder, and the song heard by it when that is
+        // how it came (every part muted under the mix).
+        let reference = crate::instrument_tracks::file_reference(daw, &project)
+            .map_err(|e| eyre::eyre!("reference: {e}"))?;
+        let by_reference = crate::instrument_tracks::settle_hearing(daw, &project)
+            .map_err(|e| eyre::eyre!("reference: {e}"))?;
+        tracing::info!(
+            reference = ?reference,
+            heard_by_reference = by_reference,
+            "prepare: the song's reference"
+        );
+    }
+    Ok(())
+}
+
+/// The kit's parallel chains and the song's levels: the golden template's
+/// drum Process folder (the kit's compressors and rooms, sent from the
+/// kit, to DRUM BUS), the recorded tracks staged to the reference kit's
+/// levels, and the kit's folder at the session's reference.
+fn mix_levels(
+    daw: &daw_standalone::sync::Standalone,
+    project_guid: &str,
+    project: &ProjectContext,
+    target: &mut dynamic_template::apply::DawTarget<daw_standalone::sync::Standalone>,
+) -> eyre::Result<()> {
+    let process = target.add_drum_process()?;
+    tracing::info!(process = process.len(), "prepare: drum process");
+    // The recorded tracks at the reference kit's levels, as item
+    // volume: nothing rendered, the audio as it was recorded.
+    let staged = crate::gain_stage::stage(daw, project)?;
+    // And the kit at the session's reference, −23 LUFS short-term at
+    // its loudest: its folder's fader.
+    #[cfg(feature = "native")]
+    if let Some((loudest, fader)) =
+        crate::gain_stage::kit_headroom(daw, project_guid, 0.0, media_end(daw, project).latest)
+    {
+        tracing::info!(
+            kit.short_term_lufs = loudest,
+            kit.fader_db = fader,
+            "prepare: kit level"
+        );
+    }
+    #[cfg(not(feature = "native"))]
+    let _ = project_guid;
+    tracing::info!(
+        staged = staged.staged.len(),
+        silent = ?staged.silent,
+        toms = ?staged.toms,
+        "prepare: gain staged"
+    );
+    for each in &staged.staged {
+        tracing::debug!(
+            track = %each.name,
+            role = ?each.role,
+            level_db = each.level,
+            gain_db = each.gain_db,
+            "prepare: staged"
+        );
     }
     Ok(())
 }
@@ -757,6 +899,88 @@ pub fn steps(
 #[cfg(test)]
 mod tests {
     use super::names_an_artist;
+
+    /// A REAPER project's ruler: `lanes` its `RULERLANE` lines, then two
+    /// regions side by side on its first lane and a note on its second.
+    #[cfg(feature = "native")]
+    fn marked_up(lanes: &str) -> (daw::standalone::Standalone, daw::service::ProjectContext) {
+        let daw = daw::standalone::Standalone::new();
+        let text = format!(
+            "<REAPER_PROJECT 0.1 \"7.0/test\" 0\n{lanes}\
+  MARKER 1 2 Intro 1 0 1 B {{00000000-0000-0000-0000-000000000001}} 0 1\n\
+  MARKER 1 10 \"\" 1\n\
+  MARKER 2 10 \"Chorus 1 (Spanish)\" 1 0 1 B {{00000000-0000-0000-0000-000000000002}} 0 1\n\
+  MARKER 2 20 \"\" 1\n\
+  MARKER 101 4 \"Kick in\" 0 0 1 B {{00000000-0000-0000-0000-000000000003}} 0 2\n>\n"
+        );
+        let loaded = daw::standalone::project_loader::load_rpp_text(&daw, "Song", "", &text)
+            .expect("the project loads");
+        (
+            daw,
+            daw::service::ProjectContext::Project(loaded.project_guid),
+        )
+    }
+
+    /// A REAPER project marked up with plain regions (its ruler lanes
+    /// unnamed) has them as its sections: not the note that reads like
+    /// one, which stays a mark.
+    #[cfg(feature = "native")]
+    #[test]
+    fn a_reaper_projects_own_regions_are_its_sections() {
+        use daw::service::{Markers, Regions};
+        use session::proto::ruler_lanes::CoreLane;
+        let (daw, project) = marked_up("  RULERLANE 1 4 \"\" 0 -1\n  RULERLANE 2 8 \"\" 0 -1\n");
+        let converted =
+            session::keyflow::actions::convert_markers_in(&daw, &project, Some("Song"), None)
+                .expect("converted");
+        assert_eq!(converted.sections, ["Intro", "Chorus 1 (Spanish)"]);
+        assert_eq!(converted.song, Some((2.0, 20.0)));
+        assert_eq!(converted.marks, ["Kick in"]);
+        let regions = Regions::all(&daw, project.clone());
+        let on = |lane: CoreLane| -> Vec<String> {
+            let mut names: Vec<_> = regions
+                .iter()
+                .filter(|r| r.lane == Some(lane.lane_index()))
+                .map(|r| (r.start_seconds(), r.name.clone()))
+                .collect();
+            names.sort_by(|a, b| a.0.total_cmp(&b.0));
+            names.into_iter().map(|(_, name)| name).collect()
+        };
+        assert_eq!(on(CoreLane::Sections), ["Intro", "Chorus 1 (Spanish)"]);
+        assert_eq!(on(CoreLane::Song), ["Song"]);
+        let at = |name: &str| {
+            Markers::all(&daw, project.clone())
+                .into_iter()
+                .find(|m| m.name == name)
+                .and_then(|m| m.position.seconds())
+        };
+        assert_eq!(at("SONGSTART"), Some(2.0));
+        assert_eq!(at("SONGEND"), Some(20.0));
+        assert_eq!(at("Kick in"), Some(4.0));
+    }
+
+    /// Regions side by side on a lane the project names `SONG` are a
+    /// set's songs, and stay there.
+    #[cfg(feature = "native")]
+    #[test]
+    fn regions_on_a_lane_named_song_are_songs() {
+        use daw::service::Regions;
+        use session::proto::ruler_lanes::CoreLane;
+        let (daw, project) = marked_up("  RULERLANE 1 8 SONG 0 -1\n  RULERLANE 2 4 MARKS 0 -1\n");
+        let converted =
+            session::keyflow::actions::convert_markers_in(&daw, &project, Some("Song"), None)
+                .expect("converted");
+        assert!(
+            !converted.sections.contains(&"Intro".to_owned()),
+            "{converted:?}"
+        );
+        assert!(
+            Regions::all(&daw, project)
+                .iter()
+                .filter(|r| r.name == "Intro" || r.name.starts_with("Chorus"))
+                .all(|r| r.lane == Some(CoreLane::Song.lane_index()))
+        );
+    }
 
     #[test]
     fn filing_folders_do_not_name_an_artist() {
