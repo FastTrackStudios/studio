@@ -16,7 +16,7 @@ for m, ts in deps.items():
             if s in k.get("prod", []): continue
             a, b = ASSIGN[m], home(t, s)
             if a != b and rank[a] < rank[b]: print(f"  {m} -> {t}::{s}  ({a} -> {b})")
-ROOT = "/run/media/Development/fts/studio/apps/session/daw"
+ROOT = "/run/media/Development/fts/studio/features/engine/ui"
 print("== bins / integration tests -> crates used:")
 for d in ["src/bin", "tests"]:
     p = os.path.join(ROOT, d)

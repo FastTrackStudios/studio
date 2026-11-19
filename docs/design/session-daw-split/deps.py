@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Module dependency extraction for apps/session/daw (session-daw).
+"""Module dependency extraction for features/engine/ui (session-daw).
 
 For every top-level module M (src/M.rs or src/M/**.rs) find references to other
 top-level modules, via:
@@ -16,7 +16,7 @@ Records the symbol used (first segment after the module) for each edge.
 import json, os, re, sys
 from collections import defaultdict
 
-SRC = "/run/media/Development/fts/studio/apps/session/daw/src"
+SRC = "/run/media/Development/fts/studio/features/engine/ui/src"
 
 def strip(src):
     out = []; i = 0; n = len(src)

@@ -66,7 +66,7 @@ written, and say where they were overtaken.
 player now decodes Ogg Vorbis in the page (symphonia's Ogg reader and
 Vorbis decoder) and plays it through an AudioWorklet whose own count of
 played frames is the clock the chart and lyrics follow. The same shape
-as Session's browser audio (`apps/session/runtime/src/web_audio.rs`),
+as Session's browser audio (`features/engine/runtime/src/web_audio.rs`),
 written again in Architect because Architect is MIT / Apache and Studio
 is GPL. The decoder is proven natively: a whole decode, and seeks to six
 frames compared sample by sample (they found a real fault first: after a
@@ -228,7 +228,7 @@ base. All are fixed on this branch:
 | `Cargo.lock has no architect-desktop from https://github.com/…` | Since studio#539 the lock names Architect on the `www.` host | `scripts/local-stack.py` matches either spelling |
 | `the setlist names songs the vault does not have: ['…/Not Too Much Longer#Live.md', …]` | The share seeder took `Song#Arrangement` links as file names | it shares the song's note |
 | `error[E0433]: cannot find shot in the crate root` building the node | Architect's `stack/studio-distribution` calls a native-only module from the headless build | one `#[cfg]` on Architect branch `feat/share-link-setlist-web` (`fb128b72`) |
-| `…/studio-architect is not Studio Architect`, then `invalid value 'node' for '<PROCESS>'` | The distribution is named Studio now; Architect's dev stack runs its node as `app --headless` (architect#825) | `scripts/studio-architect.sh`, `scripts/local-stack.sh` |
+| `…/studio is not Studio Architect`, then `invalid value 'node' for '<PROCESS>'` | The distribution is named Studio now; Architect's dev stack runs its node as `app --headless` (architect#825) | `scripts/studio.sh`, `scripts/local-stack.sh` |
 | The link's page stayed on "Opening the shared link…" | The page is the node's and loads the web app from **its own origin**; the stack served the bundle on one port and the node on another, joined by nothing | `scripts/local-stack-front.py`: one origin, the node's paths to the node, as the hosted proxy does |
 
 `just dev-smoke` checked the share page that architect#646 retired
@@ -516,8 +516,8 @@ Three different things carry the name today:
 | | What it is | State |
 | --- | --- | --- |
 | `studio-web` (`nix/modules/packages/studio-web.nix`, the `Images` workflow) | an image of the **old** web apps: `/signal/`, `/session/` (`session-daw-web`), a front door | built on every tag; not Architect, and not what a share link opens |
-| `studio-architect-web-<tag>.tar.gz` (`scripts/studio-architect.sh web`) | **Architect's stock web app** with Studio's `distribution.json`: one wasm, no Studio code in it | released; what the VPS serves at `/app/` |
-| `studio-architect-node-<tag>…tar.gz` | Studio's node with `studio-island/` beside it | released; where every Studio view on the web comes from today |
+| `studio-web-<tag>.tar.gz` (`scripts/studio.sh web`) | **Architect's stock web app** with Studio's `distribution.json`: one wasm, no Studio code in it | released; what the VPS serves at `/app/` |
+| `studio-node-<tag>…tar.gz` | Studio's node with `studio-island/` beside it | released; where every Studio view on the web comes from today |
 
 "Compiled together" on the web means the second line becomes Studio's
 own wasm, as the desktop is Studio's own binary. Architect has the route
@@ -525,7 +525,7 @@ own wasm, as the desktop is Studio's own binary. Architect has the route
 
 1. `apps/desktop` gains a `web` feature and
    `crate-type = ["cdylib", "rlib"]`, with
-   `architect_web::run(studio_architect::distribution())` as the page's
+   `architect_web::run(studio_desktop::distribution())` as the page's
    one start, and `architect-desktop` only off the browser.
 2. **Every linked extension builds for `wasm32-unknown-unknown`.**
    `setlists`, `productions` and `studio-views` are the candidates. The
@@ -537,7 +537,7 @@ own wasm, as the desktop is Studio's own binary. Architect has the route
    host for each extension, with the engine either in the page
    (`session-engine/web`) or absent (a listener).
 3. `cargo xtask dist web --manifest-path apps/desktop/Cargo.toml`
-   builds it; `scripts/studio-architect.sh web` calls that instead of
+   builds it; `scripts/studio.sh web` calls that instead of
    Architect's `web-bundle.sh`, and the release's web tarball is then
    Studio's.
 4. The image the VPS runs is that tarball and the node, one release,
@@ -547,7 +547,7 @@ own wasm, as the desktop is Studio's own binary. Architect has the route
 Two things about the desktop distribution's state decide the order:
 
 - **It builds only with local overrides.** `stack/studio-distribution`
-  in five repos, pinned to nothing. `scripts/studio-architect.sh release`
+  in five repos, pinned to nothing. `scripts/studio.sh release`
   refuses overrides, rightly. A web release waits for those branches to
   land and for tags.
 - **A guest runs no linked extension** (architect#805). So for a share

@@ -230,7 +230,7 @@ does) would make the whole thing deterministic in tests.
 
 ### 2. Patch the UI's project — honest logic wrapped in globals
 
-`apps/session/daw/src/studio.rs:491` `patch_items` fetches the engine and
+`features/engine/ui/src/studio.rs:491` `patch_items` fetches the engine and
 song from `crate::open`, reads and stores the `SEEN` static (line 422),
 then does honest work: drop changed items from their lanes, re-insert the
 current ones, re-sort, recompute `item_count` and `length_secs`. The
@@ -264,7 +264,7 @@ dishonest lookup as an injected function.
 
 ### 3. Comp a swipe — a raw loop, a hidden invariant and a begin/end pair
 
-`apps/session/daw/src/comp.rs:58` `swipe` takes `(from, to): (f64, f64)`
+`features/engine/ui/src/comp.rs:58` `swipe` takes `(from, to): (f64, f64)`
 and checks `to - from > GRAIN` and finiteness on its first line (as do its
 siblings); resolves targets with a `for` loop that searches, records names
 and dedupes in one body (lines 71–82); then brackets the work with
@@ -294,7 +294,7 @@ vector); `in_undo_block` makes the pairing impossible to break with a `?`
 
 ### 4. Clear a span from an item — two booleans standing for a shape
 
-`apps/session/daw/src/comp.rs:249` `clear` computes `left` and `right`
+`features/engine/ui/src/comp.rs:249` `clear` computes `left` and `right`
 flags and branches on `right`, `left`, and `!right` with an `else if` at
 the end, so the four cases (inside, overlaps left, overlaps right, spans
 both) are spread across two `if`s and share the duplicate-or-reuse logic

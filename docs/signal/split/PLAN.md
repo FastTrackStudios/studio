@@ -264,7 +264,7 @@ Each new repo needs, none of which `filter-repo` produces:
 - `CLAUDE.md` — the domain rules from the monorepo's, minus the parts
   that moved
 - `LICENSE` — GPL-3.0-or-later in all of them. `libs/vendor/world`
-  (BSD-3-Clause) and `libs/vendor/dioxus-test` (MIT OR Apache-2.0) keep
+  (BSD-3-Clause) and `vendor:dioxus-test` (MIT OR Apache-2.0) keep
   their own and travel to `daw` with them
 
 Docs travel with their domain: `crates/keyflow/docs` and the docs-site's

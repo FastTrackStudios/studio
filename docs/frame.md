@@ -12,7 +12,7 @@ What stays here:
 - `features/ui/plugin-faces`: the plugin and rig faces, written with Frame's
   surface kit; `just faces` generates them into
   `features/ui/plugin-faces/generated`.
-- The hosts that draw them: `apps/session/ui` (`faces`, `fx_view`, the
+- The hosts that draw them: `features/engine/ui` (`faces`, `fx_view`, the
   themed mixer in `skin`; `docs/frame-themes.md`) and `signal:features/rigs/guitar`
   (`ui/frame_surface`, `ui/tablet/routing_canvas`).
 

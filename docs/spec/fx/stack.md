@@ -153,7 +153,7 @@ stage.
 r[fx.stack.every-shell]
 The stack is implemented once per kind in the kind's facade/DSP crates
 (`*-dsp` / `*` facade + `*-ui`), and exposed identically by the CLAP/VST3
-shell in `apps/plugins/*` and the native block in `signal-fx` — the
+shell in `plugins/*` and the native block in `signal-fx` — the
 `DualRouting` special cases in `signal-fx` migrate onto the stack (Series12
 = one lane [A,B], Series21 = [B,A] by stage `order`, Parallel = two lanes
 summed dry-once, Split = two lanes with per-lane L/R pan) and are removed.

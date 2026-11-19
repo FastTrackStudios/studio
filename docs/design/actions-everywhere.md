@@ -13,13 +13,13 @@ Why:
   `Changed { topic: "tracks" }`, and often as nothing.
 - **It is scriptable.** Anything a click does, `studio run <ID> '{…}'`
   and MCP's `run` can do too: the CLI and MCP reach every id on the list
-  (`apps/session/desktop/src/cli/app.rs`, `architect_mcp`). An action's
+  (`features/engine/host/src/cli/app.rs`, `architect_mcp`). An action's
   description is its MCP and CLI documentation.
 
 ## The rules
 
 1. **A handler names an action and runs it.** In the window that is
-   `crate::window::press(id, &args)` (`apps/session/ui/src/window.rs`),
+   `crate::window::press(id, &args)` (`features/engine/ui/src/window.rs`),
    the same path a key takes (`through_list` → `crate::actions::run`).
    `press_behind` runs it on the key-actions thread when it reads the
    whole song or waits on the engine. A strip control builds a
@@ -36,7 +36,7 @@ Why:
    ends** (`MixerPanel::commit_turn` → `TRACK_SET`).
 4. **View state is still an action.** Folds, lanes shown, panels,
    screensets, modes, phases and options are window state. Their actions
-   are window actions (registered in `apps/session/ui/src/window.rs`) or
+   are window actions (registered in `features/engine/ui/src/window.rs`) or
    engine actions that forward to the window (`also_in_the_window` with
    the settled state: `TRACK_SHOW_LANES {tracks}`, `SESSION_FOLD
    {folders}`).
@@ -86,7 +86,7 @@ Why:
 
 ## The guard
 
-`apps/session/ui/tests/it/actions_everywhere.rs` scans `session-ui`'s
+`features/engine/ui/tests/it/actions_everywhere.rs` scans `session-ui`'s
 sources (comments out, whitespace squeezed) for the patterns a bypass is
 made of — an `Edit` pushed to an edits queue or an applier
 (`edits.borrow_mut().push(`, `edits.borrow_mut().extend(`,
@@ -144,7 +144,7 @@ exempt by rule 6.
 | Session UI rsx (`shell`, `transport_bar`, `toolbar`, `quantize_panel`, `collab_bar`, `record_view`, `versions`, `setup`, `compact`, `closeup`, `bar_step`, `studio`, `lyrics_panel`, `perf_meter`, `chart_*`, `browser`, `organize`, `navigator`, `instrument_rail`, `web_host`, `progress`, `performer`, `app_menu`) | 41 → **73** → **~81** | 97 → **65** → **~57** | 107 |
 | Desktop (`native/{dock,shell,start,library,publish,handoff,mod}.rs`, `session_view.rs`, `lib.rs`, `mixer_view.rs`) | 28 → **34** → **~47** | 71 → **65** → **~52** | 68 |
 | Dock crate (`features/ui/dock` host + components) | 0 → **~29** | 50 → **~21** | 30 |
-| Studio welcome (`apps/studio/desktop/src/front.rs`) | 4 | 3 | 3 |
+| Studio welcome (the removed rig app's `/src/front.rs`) | 4 | 3 | 3 |
 | **total** | **87 → 146 → ~174 → ~188 → ~205 → ~217 → ~246 → ~267** | **~341 → ~282 → ~254 → ~240 → ~223 → ~211 → ~182 → ~161** | **222** |
 
 Bold: after the first routing pass, then after pass 2's arrangement area
@@ -339,7 +339,7 @@ engine (`RIG_BLOCKS`) is the fix.
 | session_view.rs:310-639 | REAPER connect, guide/metronome, output routing | direct | NEW `SESSION_REAPER_CONNECT`, `GUIDE_SET`, `AUDIO_ROUTING_SET` |
 | mixer_view.rs:72 | open setlist in REAPER | writes an RPP, spawns REAPER | NEW `SESSION_OPEN_IN_REAPER` |
 | lib.rs (older webview shell) 570-1417 | workspaces, setlist load/save, organize, record | direct | `SESSION_WORKSPACE`, `SESSION_OPEN`, `SETLIST_CREATE`, `ORGANIZE_PRESS`, `TRANSPORT_RECORD` |
-| apps/studio/desktop/src/mac_menu.rs:56-119; window.rs `dock_request`; keys.rs:575 | menu and pane keys | `request_dock` | `SESSION_PANEL` / `SESSION_SCREENSET*` |
+| the removed rig app's src/mac_menu.rs:56-119; window.rs `dock_request`; keys.rs:575 | menu and pane keys | `request_dock` | `SESSION_PANEL` / `SESSION_SCREENSET*` |
 
 **The dock crate stays Session-free.** `features/ui/dock` has a
 serialisable `DockIntent` (`intent.rs`: move, attach, open, duplicate,

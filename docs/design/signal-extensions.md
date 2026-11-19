@@ -2,7 +2,7 @@
 
 Signal (the guitar and keys rigs) in Studio's distribution of Architect
 (`apps/desktop`), as extensions: the rig engine a process of its own, its
-screens panes any layout can place. `apps/studio/desktop` keeps hosting
+screens panes any layout can place. the removed rig app keeps hosting
 Signal as it does until this replaces it.
 
 What was built and how it was checked is in "Where it stands" at the
@@ -13,7 +13,7 @@ end.
 One crate per extension under `extensions/`, each with an `extension.toml`
 and a program of its own (`[entry]`), so each loads as a development copy
 (`--extension <folder>`) and shadows the linked one. The linked copies are
-the `rig` bundle of `apps/desktop` (`studio_architect::rig()`).
+the `rig` bundle of `apps/desktop` (`studio_desktop::rig()`).
 
 | id | crate | what | views | linked |
 | --- | --- | --- | --- | --- |
@@ -64,7 +64,7 @@ each work with only the engine.
   an instrument played live. The rig needs the duplex engine at the
   interface's quantum (`signal_rig_host::engine::Engine::start_audio`).
 - The rig engine exists and is proven headless: it is what
-  `studio-desktop --engine` runs (`apps/studio/desktop/src/engine_main.rs`).
+  `studio-desktop --engine` runs (the removed rig app's `/src/engine_main.rs`).
   `studio.rig` runs the same backends (`guitar::GuitarRigBackend`,
   `keys::KeysRigBackend`) on one `signal_rig_host::Engine`, so guitar and
   keys are folders of tracks in one project on one device
@@ -134,7 +134,7 @@ A view extension adds only what is its own: each a `…_STATE`,
 `STUDIO_RIG_GRID_SELECT` (the selection), `STUDIO_RIG_BROWSER_FOCUS`,
 `STUDIO_KEYS_OPEN` (an engine or a layer), and
 `STUDIO_AUDIO_SETTINGS_STATE` / `_SET`. Actions reach the CLI
-(`studio-architect actions run`), MCP and Luau as any extension's do.
+(`studio actions run`), MCP and Luau as any extension's do.
 
 ## Audio settings
 
@@ -244,7 +244,7 @@ few days, once there is a build to try it in.
 1. *Studio's distribution has no iOS build* (`architect_mobile::run`,
    `cargo xtask dist ios`): `architect-desktop` moved to non-iOS, an
    `Info.plist` with the microphone string
-   (`apps/studio/desktop/ios/app-plist.sh` has it), and every linked crate
+   (the removed rig app's `/ios/app-plist.sh` has it), and every linked crate
    building for `aarch64-apple-ios`; `setlists`' PDF writer is known not
    to (studio#492). Days, to weeks with `stage`.
 2. *The engine in the app.* Processes never run on iOS, so `studio.rig`
@@ -290,7 +290,7 @@ through it as "Rig".
 
 ## Where it stands (2026-11-18)
 
-Verified in an isolated instance (`studio-architect dev`, a headless
+Verified in an isolated instance (`studio dev`, a headless
 compositor, a copy of the rig library, its own config folder):
 
 - **Guitar, desktop.** `studio.rig` loads the library and serves it; the

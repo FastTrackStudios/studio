@@ -33,8 +33,8 @@ relative to the root of this checkout.
    headless use is limited "by the fact that most actions in Ardour are
    provided by the Editor GUI". Studio has the same problem today. The
    Action List and the MCP server live in the window crate
-   (`apps/session/daw/src/actions.rs`, `mcp_server.rs`), and 55 files in
-   `apps/session/daw/src` take a `&Standalone` directly. Splitting the
+   (`features/engine/ui/src/actions.rs`, `mcp_server.rs`), and 55 files in
+   `features/engine/ui/src` take a `&Standalone` directly. Splitting the
    process is easy. Moving the *editing logic* out of the window is the
    real work.
 3. **Nobody makes an RPC per frame.** In-process Ardour polls meters on a
@@ -339,11 +339,11 @@ over Wi-Fi or USB, with the Mac accepting the connection [logic-remote].
   (`daw:crates/daw/standalone/src/bootstrap.rs:45`).
 - A headless Session engine exists. `session-desktop --engine` serves
   "the whole daw facade" over `ws://0.0.0.0:4040/vox` and iroh
-  (`apps/session/desktop/src/engine_server.rs`). Signal's
+  (`features/engine/host/src/engine_server.rs`). Signal's
   `studio-desktop --engine` serves the rig on the same `EngineHost`,
-  with MCP on 127.0.0.1:47812 (`apps/studio/desktop/src/engine_main.rs`).
+  with MCP on 127.0.0.1:47812 (the removed rig app's `/src/engine_main.rs`).
   A supervisor spawns it or attaches to it, optionally through a systemd unit
-  (`apps/studio/desktop/src/engines.rs`).
+  (the removed rig app's `/src/engines.rs`).
 - Push streams already exist: `Peaks::meters` (one `MeterFrame` per
   project, ~30 Hz) and `TransportSync::positions` (clock-stamped playhead
   at least every ~20 ms, plus `clock_now` for NTP-style offset
@@ -363,10 +363,10 @@ over Wi-Fi or USB, with the Mac accepting the connection [logic-remote].
   two kinds of action: *window* actions (transport keys, selection, edit
   cursor, zoom, panels; "running one queues it … the window applies the
   queue on its next pass") and *session data* actions ("run against the
-  engine directly") (`apps/session/daw/src/actions.rs:1-19`). `hits.rs`,
+  engine directly") (`features/engine/ui/src/actions.rs:1-19`). `hits.rs`,
   `actions.rs`, `open.rs`, `comp.rs`, `grow.rs` and about 50 other files
   take `&daw::standalone::Standalone`. The `studio` CLI drives *the
-  running window* over MCP (`apps/session/desktop/src/cli/mod.rs`).
+  running window* over MCP (`features/engine/host/src/cli/mod.rs`).
 
 ### Recommended architecture
 
@@ -616,9 +616,9 @@ Repo sources: `docs/design/one-engine.md`, `docs/design/set-engine.md`,
 `docs/research/item-peaks.md`, `daw:crates/daw/standalone/src/bootstrap.rs`,
 `daw:crates/daw/proto/src/peak/service.rs`,
 `daw:crates/daw/proto/src/transport_sync/{service,types}.rs`,
-`apps/session/desktop/src/{engine_server,session_engine}.rs`,
-`apps/session/desktop/src/cli/mod.rs`,
-`apps/studio/desktop/src/{engines,engine_main}.rs`,
-`apps/session/daw/src/{actions,mcp_server}.rs`,
+`features/engine/host/src/{engine_server,session_engine}.rs`,
+`features/engine/host/src/cli/mod.rs`,
+the removed rig app's `/src/{engines,engine_main}.rs`,
+`features/engine/ui/src/{actions,mcp_server}.rs`,
 `studio-adapters:features/adapters/reaper/daw-bridge/src/lib.rs`; vox at `08db2c4`
 (`rust/vox-{stream,local,fdpass}`, `rust/vox-core/CHANGELOG.md`).

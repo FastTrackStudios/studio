@@ -23,7 +23,7 @@ another (`docs/design/one-engine.md`).
   load on workers, never on a client's UI thread, and nothing a load does
   stalls a frame.
 - **The split stays tied to the show.** A song cut from a show
-  (`apps/session/daw/src/show.rs`) records where it sits in the show (the
+  (`features/engine/ui/src/show.rs`) records where it sits in the show (the
   show file and its start, seconds). From that, the set is laid out on one
   show timeline (show timecode), and a song's edits can be written back
   into the combined session.

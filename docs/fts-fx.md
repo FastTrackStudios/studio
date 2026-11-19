@@ -69,6 +69,6 @@ move the rev here.
 ## FTS Mic's models
 
 `mic-plugin` builds the default mic in when it finds the private models at
-build time. As a git dependency it no longer sees `apps/plugins/mic/models`:
+build time. As a git dependency it no longer sees `plugins/mic/models`:
 it finds them in `$FTS_MIC_MODELS` or `~/.local/share/fts/mic-models`
 (`just mic-models-install`).

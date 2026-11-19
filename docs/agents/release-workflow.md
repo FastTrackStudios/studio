@@ -31,11 +31,11 @@ In short:
 - **A merge to `main` runs CI and nothing else.** It ships nothing.
 - **A release is a `vYY.M.MICRO` tag**, pushed by `just release` on a green
   commit. The tag ships everything, from the tag alone and in parallel:
-  the studio-web image, the Studio TestFlight upload, the desktop
-  installers and the one GitHub Release. **Production is the latest `v*`
-  tag.** This repo deploys nothing: Argo CD rolls out the image from
-  gitops (Codys-Wright/starcommand), with argocd-image-updater picking the
-  highest image. The REAPER integration suites are not in CI; check them
+  Studio's node and web tarballs, the desktop installers and the one
+  GitHub Release. **Production is the latest `v*` tag.** This repo deploys
+  nothing: the infra repo runs the release's node tarball as a NixOS
+  service. There is no image, and no TestFlight build until apps/desktop
+  has an iOS target (the old rig app that built it is gone). The REAPER integration suites are not in CI; check them
   locally (`just reaper-test`, `just reaper daw-test`).
 
 ```
@@ -43,10 +43,8 @@ feat/sta-1-x ─PR (fast checks, change file)─squash (lone PR)─────�
 stack a◀b◀c  ─merge commits, titled with each PR title─┘                                       │
                        just release ─▶ tag v26.10.4 on main's newest green commit
                                           │ (the tag alone, in parallel:)
-                                          ├─ Images: ghcr.io/…/studio-web:26.10.4 ─▶ image-updater ─▶ Argo CD
-                                          ├─ studio-ios: TestFlight
                                           ├─ desktop: .dmg + AppImage, attached to the Release
-                                          ├─ studio-architect: the distribution's node + web tarballs (docs/architect-distribution.md)
+                                          ├─ studio: the distribution's node + web tarballs (docs/architect-distribution.md)
                                           │    (each of the two above ends with SHA256SUMS over what it built + the signed sums, then publishes the draft)
                                           └─ release: the GitHub Release (notes from .changes/)
 
@@ -71,10 +69,8 @@ version reaches each artifact like this instead:
 
 | Where | From |
 | --- | --- |
-| the app's own version (`studio-desktop --version`, Settings' "Signal v…" / "Session v…", the update check, the MCP servers' `serverInfo`) | `fts-version` (`features/app/version`), the ONE crate that reads `FTS_RELEASE_VERSION` (its build script; unset, the committed version). Only studio-desktop's binaries depend on it; `main` hands it to the libraries at start (`app_shell::version::set`, read with `app_shell::version::current()`), so a release recompiles `fts-version` and the binaries, not Session or the rigs |
+| the app's own version (`studio --version`, the update check, the MCP servers' `serverInfo`) | `fts-version` (`features/app/version`), the ONE crate that reads `FTS_RELEASE_VERSION` (its build script; unset, the committed version). Only the apps' binaries depend on it; `main` hands it to the libraries at start (`app_shell::version::set`, read with `app_shell::version::current()`), so a release recompiles `fts-version` and the binaries, not Session or the rigs |
 | the macOS `.dmg`'s Info.plist, the AppImage's desktop entry and file names | written at bundle time from `release.sh version` (`scripts/desktop/{macos,linux}.sh`, which also export `FTS_RELEASE_VERSION` to their cargo build) |
-| the iOS marketing version | `MARKETING_VER` (the tag's, from `ios-resolve`) into Info.plist by `deploy-testflight.sh`, which exports it as `FTS_RELEASE_VERSION` for the in-app version |
-| the studio-web image's `version.json` and `org.opencontainers.image.version` label | `fts.buildTag` (nix/modules/crane.nix) from `FTS_RELEASE_VERSION` under `--impure`; only the cheap wrapper layers read it. The Signal web bundle gets it as its build env (`fts-version` again) |
 
 Never `env!("CARGO_PKG_VERSION")` for "the app's version": that is the
 crate's committed version. A build with no `FTS_RELEASE_VERSION` (any dev
@@ -84,10 +80,8 @@ latest `v*` tag is (`just release-plan` shows both).
 
 Versions are CalVer `YY.M.MICRO` (no leading zeros). The next version is
 computed, not chosen: take the highest `vX.Y.Z` tag (suffixed tags don't
-count); in the same month it's `MICRO + 1`, otherwise `YY.M.0`. The image
-tag is exactly that bare version (`26.10.4`: no `v`, never `26.09.1`),
-because argocd-image-updater filters on `^[0-9]+\.[0-9]+\.[0-9]+$` and
-orders the tags as semver. `Images` refuses anything else.
+count); in the same month it's `MICRO + 1`, otherwise `YY.M.0` (`26.10.4`,
+never `26.09.1`).
 
 ## Commands
 
@@ -117,7 +111,7 @@ merge). It refuses:
 - a next version that is not above the highest tag (the clock).
 
 Then it prints the notes and pushes an annotated tag. It waits on nothing
-after the push: the image doesn't exist yet, because the tag builds it.
+after the push: the tag's builds start from it.
 
 Run it as a person, or as the `fts-forge` App. A tag pushed with a
 workflow's `GITHUB_TOKEN` starts no workflow. Never move or delete a tag; a
@@ -175,7 +169,7 @@ www table included, and the comments that name them. It lets cargo update
 the versions in Architect's own lock. It adds lines to
 `.config/duplicate-deps.toml` only for crates the bump gives a new version
 (`check-duplicate-deps.py --add`: notes and other lines stay; never
-`--write`, which drops them). It writes the change file (`studio-architect`,
+`--write`, which drops them). It writes the change file (`studio`,
 patch), carrying Architect's `Data-Migration:` lines.
 
 - **Exit 3** (done, needs a person) when any of these hold:
@@ -219,7 +213,7 @@ trailer). That is free text, so the queue continues only after
 `bump/architect-*` in this repo, opened by fts-forge[bot], touching only
 allow-listed files. Then it runs `release.sh release --yes <sha>`, exactly
 `just release <sha>`. That means a CalVer tag on a green commit, `CI passed`
-with "Web image evaluates" and "Apple builds" still gating, and no release
+with "Apple builds" still gating, and no release
 commit. Nothing else ships without a person.
 
 **Data migrations.** A change file whose body has a line `Data-Migration:
@@ -247,7 +241,7 @@ re-running an old tag's `desktop` never makes it Latest again. minisign is
 the pinned upstream binary.
 
 `release.yml`'s publish job is the one writer that creates the draft; the
-others (`desktop`, `studio-ios`) wait for it (10 minutes, then create it
+others (`desktop`, `studio`) wait for it (10 minutes, then create it
 themselves). Every caller makes sure `release-facts.json` is on it, and
 `sums` uploads it as a last resort.
 
@@ -285,11 +279,11 @@ keyflow's crates on the git tag, which means two Architects.
 | push to `main` | `CI`, narrowed: `Rail plan` (`cargo rail plan` from the newest green commit with rail evidence; the full set without one) gates `Check` (+ advisory clippy; records the evidence), `Wasm` and `Tests` (the core test set, filtered to the packages reached); with `Gates`, `Release tooling (macOS)`, aggregated as `CI passed`; also `Dependency cache`. A newer push waits behind the running run (only the newest waits) | Rail plan, Check, Tests, Wasm on THEBATTLESHIP's `studio-main`; the rest on GitHub's free runners |
 | push to `release/v*` | `CI` full set | as above |
 | `gh workflow run checks.yml --ref <branch>` | `CI` full set; when green it posts `Local CI` on the branch's head | as above |
-| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag) | all from the tag, in parallel, each in its own never-cancelled group. Each starts with `stamp` and the tag guard, and none re-runs the tests. **`Images`**: `.#studio-web-image` pushed to `ghcr.io/fasttrackstudios/studio-web` as `X.Y.Z`, `sha-<short>`, `latest`, labelled with the commit. **`studio-ios`**: the TestFlight upload. **`desktop`**: the signed, notarized macOS `.dmg` and the Linux AppImage, attached to the Release as they finish (`gh workflow run desktop.yml -f tag=<ref> -f mode=build-only` proves them from any branch). **`studio-architect`**: Studio's distribution of Architect, `studio-architect-node-<tag>-x86_64-linux.tar.gz` and `studio-architect-web-<tag>.tar.gz` with their `.sha256` (docs/architect-distribution.md). `desktop` and `studio-architect` each end with the `sums` job: `SHA256SUMS` over only what that workflow's jobs built (their reported digests), the facts recomputed from the tag and the already-signed sums, signed with the org minisign key in `release-signing` (`SHA256SUMS.minisig`); the first signed one publishes the draft (Latest only for the highest stable tag). **`release`**: the GitHub Release with the notes, as a DRAFT (the one writer that creates it), with `release-facts.json` | Images on THEBATTLESHIP's `studio-release`; TestFlight and the `.dmg` on airlock's `studio-release-mac`; the AppImage and Studio Architect on `thebattleship-release`; resolve, guard and publish jobs hosted |
+| push of tag `vYY.M.MICRO` (or `workflow_dispatch` with the tag) | all from the tag, in parallel, each in its own never-cancelled group. Each starts with `stamp` and the tag guard, and none re-runs the tests. **`desktop`**: the signed, notarized macOS `.dmg` and the Linux AppImage, attached to the Release as they finish (`gh workflow run desktop.yml -f tag=<ref> -f mode=build-only` proves them from any branch). **`studio`**: Studio's distribution of Architect, `studio-node-<tag>-x86_64-linux.tar.gz` and `studio-web-<tag>.tar.gz` with their `.sha256` (docs/architect-distribution.md). `desktop` and `studio` each end with the `sums` job: `SHA256SUMS` over only what that workflow's jobs built (their reported digests), the facts recomputed from the tag and the already-signed sums, signed with the org minisign key in `release-signing` (`SHA256SUMS.minisig`); the first signed one publishes the draft (Latest only for the highest stable tag). **`release`**: the GitHub Release with the notes, as a DRAFT (the one writer that creates it), with `release-facts.json` | the `.dmg` on airlock's `studio-release-mac`; the AppImage and Studio Architect on `thebattleship-release`; resolve, guard and publish jobs hosted |
 
 **Pools.** `studio-release` (THEBATTLESHIP) and `studio-release-mac`
-(airlock) build only release artifacts: the image, the AppImage, the
-`.dmg`, TestFlight. Checks never run there. They run on `studio-main`,
+(airlock) build only release artifacts: the tarballs, the AppImage, the
+`.dmg`. Checks never run there. They run on `studio-main`,
 which keeps the warm dev cache, three runners sharing one cache capped at
 200 GB (Codys-Wright/nix-config hosts/THEBATTLESHIP/github-runners.nix),
 in the `.#ci` dev shell. Release jobs are never cancelled, and a push to
@@ -326,24 +320,27 @@ green.
 
 ## What the guards check
 
-**Tag guard** (`release.sh tag-guard` after `stamp`, in `Images` and the
-`release` publish; `ios-resolve` in `studio-ios` and `desktop`):
+**Tag guard** (`release.sh tag-guard` after `stamp`, in the
+`release` publish; `ios-resolve` in `desktop` and `studio`):
 
 - the tag is `vX.Y.Z`, and the checkout was stamped with its version;
 - the checkout is the tagged commit, on `main` or a `release/v*` line;
 - where the job has a token, `CI passed` is green on it. The test suite is
   not run again.
 
-`Images` also refuses a tag whose bare version is not
-`^[1-9][0-9]\.(1[0-2]|[1-9])\.(0|[1-9][0-9]*)$` (`release.sh image-tag`
-holds the same rule). A network error fails every guard, so none of them
+`release.sh image-tag` holds the CalVer rule
+(`^[1-9][0-9]\.(1[0-2]|[1-9])\.(0|[1-9][0-9]*)$`). A network error fails every guard, so none of them
 can pass by accident.
 
 ## The iOS app: TestFlight is a release
 
-Studio (`apps/studio/desktop`, App Store record "Studio - by
-FastTrackStudio", `app.fasttrackstudio.studio`) is the one iOS app:
-Signal and Session behind one front screen. Signal's and Session's own
+**Paused.** The iOS app was the old rig app, removed in the restructure
+(apps/desktop and apps/web); no workflow uploads to TestFlight until
+apps/desktop has an iOS target. What follows is how it worked, and how
+the `release.sh ios-*` helpers still behave for that target.
+
+Studio (App Store record "Studio - by
+FastTrackStudio", `app.fasttrackstudio.studio`) is the one iOS app. Signal's and Session's own
 records (`app.fasttrackstudio.signal`, `.session`) get no new builds.
 
 - **TestFlight uploads only from the release tag**, never on a push, a PR
@@ -366,7 +363,7 @@ not from this tag.
 
 Verify a release: App Store Connect's build for each bundle id has the
 Release's version and the build number written in its notes
-(`ruby apps/<app>/desktop/ios/testflight-status.rb app.fasttrackstudio.<app>`
+(`ruby features/engine/host/ios/testflight-status.rb app.fasttrackstudio.<app>`
 on airlock).
 
 ## Hotfix
@@ -386,13 +383,9 @@ on airlock).
 
 ## Rollback
 
-- **studio-web**: this repo deploys nothing. Roll back in the cluster:
-  pin the previous release's image in starcommand's gitops (or revert
-  argocd-image-updater's write-back commit), or roll back the Argo CD
-  Application. Nothing in studio-web holds data, so an image swap is a
-  full rollback. A rollback is a production change: get the Captain's
-  yes or no first. The old session-web / signal-web sites (#224) keep
-  serving their last image until they are retired.
+- **The hosted node**: this repo deploys nothing. Roll back in the infra
+  repo: point its NixOS service at the previous release's node tarball.
+  A rollback is a production change: get the Captain's yes or no first.
 - **TestFlight**: expire the build in App Store Connect (per app); the
   previous build stays installable. To ship the previous code again, fix
   forward and release a new version; a tag is never moved or reused.
