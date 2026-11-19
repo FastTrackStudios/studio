@@ -577,9 +577,16 @@ fn save_prepared(
 /// the recording is, so the song gets no sections, no tempo map and no
 /// guide.
 ///
-/// The song is written as a one-track REAPER project beside the
-/// recording (`<title>.RPP`) and prepared like any other, so what a
-/// recording becomes is what a project holding just its mix becomes.
+/// A separation of the recording beside it comes in with it: each
+/// `<recording> (<Stem>).wav` ([`stems_beside`]: `Vocals`, `Bass`,
+/// `Guitar`, `Piano`, `Other`, and the kit's `Kick`, `Snare`, `Hi-Hat`,
+/// `Toms`, `Cymbals`, `Drums Other`) is a track, the kit's in a `DRUMS`
+/// folder, as the stems of a record are laid out in REAPER. The song is
+/// then heard by its reference with the stems behind the switch.
+///
+/// The song is written as a REAPER project beside the recording
+/// (`<title>.RPP`) and prepared like any other, so what a recording
+/// becomes is what a project holding its mix (and its stems) becomes.
 ///
 /// # Errors
 ///
@@ -612,11 +619,52 @@ pub fn reference_session(
     };
     let (beats, unit) = meter;
     let tempo = bpm.map_or_else(String::new, |bpm| format!("  TEMPO {bpm} {beats} {unit}\n"));
-    let project = format!(
-        "<REAPER_PROJECT 0.1 \"7.0/studio\" 0\n{tempo}  <TRACK {{{track}}}\n    NAME MIX\n    <ITEM\n      POSITION 0\n      LENGTH {seconds}\n      IGUID {{{item}}}\n      NAME \"{file}\"\n      <SOURCE {kind}\n        FILE \"{file}\"\n      >\n    >\n  >\n>\n",
-        track = uuid::Uuid::new_v4().to_string().to_uppercase(),
-        item = uuid::Uuid::new_v4().to_string().to_uppercase(),
-    );
+    // One track of the project: `file` on it from zero when it has one,
+    // `muted`, `folder` its place in a folder (REAPER's `ISBUS`).
+    let track = |name: &str, file: Option<(&str, &str)>, muted: bool, folder: (i32, i32)| {
+        let item = file.map_or_else(String::new, |(file, kind)| {
+            format!(
+                "    <ITEM\n      POSITION 0\n      LENGTH {seconds}\n      IGUID {{{item}}}\n      NAME \"{file}\"\n      <SOURCE {kind}\n        FILE \"{file}\"\n      >\n    >\n",
+                item = uuid::Uuid::new_v4().to_string().to_uppercase(),
+            )
+        });
+        format!(
+            "  <TRACK {{{guid}}}\n    NAME \"{name}\"\n    MUTESOLO {muted} 0 0\n    ISBUS {} {}\n{item}  >\n",
+            folder.0,
+            folder.1,
+            guid = uuid::Uuid::new_v4().to_string().to_uppercase(),
+            muted = u8::from(muted),
+        )
+    };
+    let mut tracks = track("MIX", Some((file, kind)), false, (0, 0));
+    // Its separation, when it sits beside it: each stem muted under the
+    // mix, as a REAPER project of a record and its stems has them.
+    let stems = stems_beside(recording);
+    let stem = |name: &str| {
+        stems
+            .iter()
+            .find(|(stem, _)| stem.eq_ignore_ascii_case(name))
+    };
+    let kit: Vec<&(String, String)> = KIT_STEMS.iter().filter_map(|name| stem(name)).collect();
+    for name in ["Vocals"] {
+        if let Some((_, file)) = stem(name) {
+            tracks += &track(&name.to_uppercase(), Some((file, "WAVE")), true, (0, 0));
+        }
+    }
+    if !kit.is_empty() {
+        tracks += &track("DRUMS", None, false, (1, 1));
+        for (i, (name, file)) in kit.iter().enumerate() {
+            let last = i + 1 == kit.len();
+            let folder = if last { (2, -1) } else { (0, 0) };
+            tracks += &track(name, Some((file, "WAVE")), true, folder);
+        }
+    }
+    for name in ["Bass", "Guitar", "Piano", "Other"] {
+        if let Some((_, file)) = stem(name) {
+            tracks += &track(&name.to_uppercase(), Some((file, "WAVE")), true, (0, 0));
+        }
+    }
+    let project = format!("<REAPER_PROJECT 0.1 \"7.0/studio\" 0\n{tempo}{tracks}>\n");
     let rpp = recording.with_file_name(format!("{title}.RPP"));
     std::fs::write(&rpp, project)?;
     // No click, count or cues: with no bar line known they would play
@@ -627,6 +675,39 @@ pub fn reference_session(
         guide: false,
     };
     save_prepared(&rpp, &prepare, Some(title))
+}
+
+/// The kit's stems, in the order they are laid out.
+#[cfg(feature = "native")]
+const KIT_STEMS: [&str; 6] = ["Kick", "Snare", "Hi-Hat", "Toms", "Cymbals", "Drums Other"];
+
+/// The stems of a separation that sit beside `recording`: every
+/// `<recording's name> (<Stem>).wav` in its folder, as `(stem, file name)`.
+#[cfg(feature = "native")]
+fn stems_beside(recording: &std::path::Path) -> Vec<(String, String)> {
+    let (Some(dir), Some(name)) = (
+        recording.parent(),
+        recording.file_stem().and_then(std::ffi::OsStr::to_str),
+    ) else {
+        return Vec::new();
+    };
+    let prefix = format!("{name} (");
+    let mut stems: Vec<(String, String)> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter_map(|file| {
+            let stem = file
+                .strip_prefix(&prefix)?
+                .strip_suffix(".wav")?
+                .strip_suffix(')')?
+                .to_owned();
+            Some((stem, file))
+        })
+        .collect();
+    stems.sort();
+    stems
 }
 
 /// Lay an edited chart over the open session: rebuild the song's structure
