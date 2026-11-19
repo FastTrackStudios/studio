@@ -4,8 +4,9 @@
 // opens the share link as the web app's guest (architect#646), sees
 // Studio's playlist drawn on the setlist note with the set's songs, plays
 // a song from it and sees the recording load, the playhead move and the
-// row marked; then opens that song from the link's notes and sees its
-// chart engraved with the bar being played marked.
+// row marked; then finds the link's own tabs (and no member control),
+// presses Charts and sees the playing song's chart engraved with the bar
+// being played marked, and Arrangement and sees its playhead.
 //
 // SHARE_URL   the setlist page (scripts/local-stack.sh url)
 // SONGS       the titles the playlist must list, one a line (optional)
@@ -147,7 +148,10 @@ const frameWith = async (testid, what, ms = 60000) => {
     await sleep(200);
   }
 };
-const audio = `(() => { const a = document.querySelector('audio'); return a ? JSON.stringify({ src: decodeURIComponent(a.currentSrc), t: a.currentTime, ready: a.readyState }) : ''; })()`;
+// What the app's player holds: its marks on the app's audio element (`data-media`
+// the recording, `data-clock` whether the app decodes it or the browser
+// plays it, `data-time` where it is).
+const audio = `(() => { const a = document.querySelector('audio'); return a && a.dataset.media ? JSON.stringify({ src: decodeURIComponent(a.dataset.media), clock: a.dataset.clock, t: Number(a.dataset.time || 0) }) : ''; })()`;
 try {
   await tab.go(share);
   // The app, as the link's guest, with Studio's playlist on the setlist note.
@@ -163,8 +167,13 @@ try {
   await tab.shot('setlist-390');
   const at = await inFrame(set, `document.querySelectorAll('.sl-row')[${first}]`);
   await tab.press(...at);
-  const loaded = JSON.parse(await tab.until(`(() => { const s = ${audio}; return s && JSON.parse(s).ready >= 2 ? s : ''; })()`, 'the recording to load in the app\'s audio element', 30000));
+  const loaded = JSON.parse(await tab.until(audio, 'the recording in the app\'s player', 30000));
   log(`playing ${loaded.src.split('/').pop()}`);
+  // It moves: decoded by the app (Ogg, on every browser), or, where no
+  // audio device lets a context start (this check's sandbox), on the
+  // browser's own player.
+  const moved = JSON.parse(await tab.until(`(() => { const s = ${audio}; return s && JSON.parse(s).t > 1 ? s : ''; })()`, 'the playhead to move a second', 30000));
+  log(`the playhead moved to ${moved.t.toFixed(1)} s, played by ${moved.clock === 'decoded' ? 'the app\'s decoder' : 'the browser\'s player'}`);
   await tab.until(`navigator.mediaSession && navigator.mediaSession.playbackState === 'playing'`, 'the player to say it is playing', 20000);
   const title = await tab.eval(`navigator.mediaSession.metadata ? navigator.mediaSession.metadata.title : ''`);
   // The row is marked, and its time moves (the deck's clock, heard or not).
@@ -176,10 +185,22 @@ try {
   }
   log(`the Now Playing bar and the lock screen's title say ${title}; its row is marked`);
   await tab.shot('song-playing-390');
-  // Its note, from the link's notes: the chart, engraved, and following.
-  await tab.eval(`(() => { const b = [...document.querySelectorAll('button')].find(b => b.innerText.trim().startsWith('Notes')); b && b.click(); return 1; })()`);
-  const opened = await tab.until(`(() => { const e = [...document.querySelectorAll('a,button,li,div')].filter(e => e.innerText.trim() === ${JSON.stringify(title)}).pop(); if (!e) return ''; e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect(); return JSON.stringify([r.x + r.width / 2, r.y + r.height / 2]); })()`, `${title} among the link's notes`, 15000);
-  await tab.press(...JSON.parse(opened));
+  // The link's own tabs, as its extension declares them, and no control a
+  // guest cannot use.
+  const controls = JSON.parse(await tab.eval(`JSON.stringify([...document.querySelectorAll('button')].map(b => (b.getAttribute('aria-label') || b.title || b.innerText.trim())))`));
+  for (const want of ['Setlist', 'Charts', 'Lyrics', 'Arrangement']) {
+    if (!controls.includes(want)) throw new Error(`no ${want} tab at the bottom of the link (${controls.filter((c) => c.length < 20).join(', ')})`);
+  }
+  for (const not of ['New note', 'Vault', 'Files', 'Open…', 'Search']) {
+    if (controls.includes(not)) throw new Error(`a guest is shown a member's control: ${not}`);
+  }
+  log('the link has its Setlist, Charts, Lyrics and Arrangement tabs, and no member control');
+  const pressTab = async (name) => {
+    const at = await tab.eval(`(() => { const b = [...document.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') || b.title || b.innerText.trim()) === ${JSON.stringify(name)}); const r = b.getBoundingClientRect(); return JSON.stringify([r.x + r.width / 2, r.y + r.height / 2]); })()`);
+    await tab.press(...JSON.parse(at));
+  };
+  // Charts: the chart of the song playing, engraved, and following.
+  await pressTab('Charts');
   const song = await frameWith('studio-song', `${title}'s song view`);
   const chart = await (async () => {
     const t0 = Date.now();
@@ -199,6 +220,13 @@ try {
   }
   await tab.eval(`(() => { [...document.querySelectorAll('*')].forEach(e => { if (e.scrollTop > 0) e.scrollTop = 0; }); return 1; })()`);
   await tab.shot('song-chart-390');
+  // Arrangement: the song playing on its timeline, the playhead in it.
+  await pressTab('Arrangement');
+  const arr = await frameWith('studio-arrangement', 'the arrangement view');
+  const head = await tab.evalIn(arr, `(() => { const p = document.querySelector('[data-testid="arrangement-playhead"]'); const s = document.querySelectorAll('[data-testid="arrangement-section"]').length; return p ? JSON.stringify({ left: parseFloat(p.style.left), sections: s }) : ''; })()`);
+  if (!head) throw new Error('the arrangement draws no playhead for the song playing');
+  log(`the arrangement shows the song (${JSON.parse(head).sections} section${JSON.parse(head).sections === 1 ? '' : 's'}) with its playhead ${JSON.parse(head).left} points in`);
+  await tab.shot('song-arrangement-390');
 } catch (e) {
   failed = true;
   console.error(`smoke: FAILED: ${e.message}`);
