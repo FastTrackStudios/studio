@@ -592,6 +592,10 @@ run_web() {
             bash scripts/web-bundle.sh "$out" >&2
     )
     printf '{"issuer":"http://127.0.0.1:%s","client_id":"architect"}' "$auth" >"$out/app/config.json"
+    # The page's policy lets it talk to itself and to https; the stack's
+    # issuer is plain http on loopback, so the sign-in's token exchange is
+    # refused ("NetworkError") unless the page names it. This copy only.
+    sed -i "s|connect-src 'self' https:|connect-src 'self' https: http://127.0.0.1:$auth|" "$out/app/index.html"
     say "web: http://127.0.0.1:$web/app/ (sign in as ada@local.test, password development-password)"
     # One origin for the bundle and the node, as the hosted proxy joins
     # them: a share link's page is the node's and loads the app from its
