@@ -1,8 +1,10 @@
 # The project launcher
 
-Status: design, with a working first version (`extensions/launcher`,
-id `studio.launcher`). Written 2026-11-18. Mockups:
-[`project-launcher/index.html`](project-launcher/index.html).
+Status: built (`extensions/launcher`, id `studio.launcher`, linked into
+Studio in `apps/architect`), with its decisions taken. Written 2026-11-18.
+Mockups: [`project-launcher/index.html`](project-launcher/index.html).
+It needs Architect's `feat/media-list-press` (the media list's press and
+tile).
 
 The launcher is where a person chooses what Studio works on: a setlist to
 play or rehearse, a song to work on, a rig to load. It replaces
@@ -47,7 +49,7 @@ Three existing pieces and one new extension that joins them.
 |---|---|---|
 | **The shell**: rail, tab strip, docks on a desk; the phone body and its foot of tabs on a phone (`architect_shell::FormFactor`, `features/shell/src/shell/bar.rs` `PhoneFoot`, `features/workspace/src/host/overlay.rs` `PhoneBody` in Architect) | Architect | Nothing. The launcher's view is a pane in it, and its provider is a row in the navigator, so the phone layout comes with the shell |
 | **The navigator** and its providers (`architect_navigator_api::NavigatorProvider`) | Architect; the setlists extension already provides **Setlists** and **Libraries** (`features/setlists/src/nav.rs` `SetlistsNav`, `LibrariesNav`), productions provides projects | Adds one provider, **Open** (`extensions/launcher/src/nav.rs` `LauncherNav`): Recent, Setlists, Rigs |
-| **The media list** (`architect_media::ui::MediaList` in Architect: a pill, each section's name, each row's number, 48 px tile, title over artist, length; a row with nothing to play greyed; a phone grid of its own) and the tile rule of the setlist's share page (`setlists::row::tile_hue`, `features/setlists/src/share.rs` `tile`: the song's key on the song's colour) | Architect and the setlists extension | The launcher's page for a setlist is this list. See "The song list" for how |
+| **The media list** (`architect_media::ui::MediaList` in Architect: a pill, each section's name, each row's number, 48 px tile, title over artist, length; a row with nothing to play greyed; a phone grid of its own) and the tile rule of the setlist's share page (`setlists::row::tile_hue`, `features/setlists/src/share.rs` `tile`: the song's key on the song's colour) | Architect and the setlists extension | The launcher's page for a setlist is this list, mounted (`extensions/launcher/src/view.rs` `LauncherView`), given the launcher's press and each song's tile |
 | **The engine** (`extensions/daw`: `DAW_OPEN`, `DAW_RUN`, `DAW_STATE`) | Studio | What a press on the pill or a row runs |
 
 ## The objects, where each lives and how it is found
@@ -143,65 +145,97 @@ Loading one beside an open song is not built: see Rigs below.
 ## What each action does
 
 "Launcher" actions are `extensions/launcher`'s own; the engine's are reached
-through `extensions/daw`.
+through `extensions/daw`. All of these are built.
 
-| Action | What runs | State |
-|---|---|---|
-| Open the launcher as a pane (⇧⌘O, ⌘K "Launcher: open") | `STUDIO_LAUNCHER_SHOW` → `EXT_VIEW_OPEN` | Built |
-| Open it as a window | `STUDIO_LAUNCHER_WINDOW` → `WORKSPACE_OPEN {view, at: {window: {}}}` | Built |
-| Show a setlist's song list | `STUDIO_LAUNCHER_CHOOSE {setlist}`; the navigator's rows run it | Built |
-| Open a set | `STUDIO_LAUNCHER_OPEN_SETLIST` → `DAW_OPEN {path}` on the setlist's file, or on one written from its songs' sessions; answers which songs were left out | Built |
-| Open a song | `STUDIO_LAUNCHER_OPEN_SONG` → `DAW_RUN {id: "SESSION_SONG", args: {to}}` when the open set has it, else `DAW_OPEN {path}` | Built |
-| Recent | `STUDIO_LAUNCHER_RECENT` → `DAW_RUN {id: "SESSION_RECENT"}`; a row runs `DAW_OPEN` | Built |
-| The navigator's tree | `STUDIO_LAUNCHER_NAV_SNAPSHOT` | Built |
-| List setlists as data, for a script or an agent | `STUDIO_LAUNCHER_LIST` | Built |
-| List rigs | `STUDIO_LAUNCHER_RIGS` (profile files) | Built, listing only |
-| Carry on | `DAW_OPEN` on the engine's last open (`session_engine::studio_engine::link::remember_open`) | Missing 4 |
-| Reorder, add, remove a song | `STUDIO_SETLISTS_MOVE`, `_ADD`, `_REMOVE` (`features/setlists/extension.toml`) | Exist; the view does not call them yet |
-| New setlist; share with the band | `STUDIO_SETLISTS_CREATE`; `STUDIO_SETLISTS_SHARE` | Exist |
-| Rename, reorder or bench a set; a note on a song | — | Missing 2 |
-| Arrange the views for the show | `WORKSPACE_APPLY` with a named layout, then `HOME_SLOT_SET`, as `run-studio.sh` does | Missing 6 |
-| Point the chart and lighting at the song | `KEYFLOW_SESSION_FOLLOW`, `IGNITION_SESSION_SONG`, `IGNITION_SESSION_ROOM`, as `run-studio.sh` and `follow-song.sh` do | Missing 7 |
-| New song | `DAW_RUN {id: "SESSION_NEW"}`, then a song note | Missing 5 |
-| Load a rig | `RIG_LOAD` | Missing 8 |
+| Action | What runs |
+|---|---|
+| Open the launcher as a pane (⇧⌘O, ⌘K "Launcher: open") | `STUDIO_LAUNCHER_SHOW` → `EXT_VIEW_OPEN` |
+| Open it as a window | `STUDIO_LAUNCHER_WINDOW` → `WORKSPACE_OPEN {view, at: {window: {}}}`, or `WORKSPACE_MOVE` when it is already a pane |
+| At launch | `STUDIO_LAUNCHER_STARTUP`, on the app's `startup` hook: the window when the engine has nothing open |
+| Show a setlist's song list | `STUDIO_LAUNCHER_CHOOSE {setlist}`; the navigator's rows run it |
+| Open a set | `STUDIO_LAUNCHER_OPEN_SETLIST {setlist, layout?}` → `DAW_OPEN {path}` on the setlist's file, or on one written from its songs' sessions; then the layout, then the chart and lighting; answers which songs were left out |
+| Open a song | `STUDIO_LAUNCHER_OPEN_SONG` → `DAW_RUN {id: "SESSION_SONG", args: {to}}` when the open set has it, else `DAW_OPEN {path}`; then the chart and lighting |
+| Lay the panes out | `STUDIO_LAUNCHER_ARRANGE {layout}`: Stage, Rehearse, or a saved one |
+| Save the panes as a layout | `STUDIO_LAUNCHER_LAYOUT_SAVE {name}` → `WORKSPACE_EXPORT`, kept on the device; `STUDIO_LAUNCHER_LAYOUTS` lists them |
+| Point the chart and lighting at the song | `STUDIO_LAUNCHER_FOLLOW`, on the `app:playhead.changed` hook → `KEYFLOW_SESSION_FOLLOW`, `WORKSPACE_NAVIGATE`, `IGNITION_SESSION_SONG`, `IGNITION_SESSION_ROOM` |
+| A note on a song in a set | `STUDIO_LAUNCHER_NOTE {setlist, song, note}` → `VAULT_SET_PROPERTY` on the setlist's `notes` |
+| A rig a set is played with | `STUDIO_LAUNCHER_PART {setlist, player, rig, profile?, song?, patch?, remove?}` → the setlist's `parts` |
+| Name each song's session in its note | `STUDIO_LAUNCHER_NAME_SESSIONS {setlist}` → `VAULT_SET_PROPERTY` on each song's `session` |
+| Recent | `STUDIO_LAUNCHER_RECENT` → `DAW_RUN {id: "SESSION_RECENT"}`; a row runs `DAW_OPEN` |
+| The navigator's tree | `STUDIO_LAUNCHER_NAV_SNAPSHOT` |
+| List setlists as data, for a script or an agent | `STUDIO_LAUNCHER_LIST` (each song's `session_from`: `note` or `name`) |
+| List rigs | `STUDIO_LAUNCHER_RIGS` (profile files; loads nothing) |
 
-### Missing, and where each belongs
+Reordering, adding and removing songs are the setlists extension's
+(`STUDIO_SETLISTS_MOVE`, `_ADD`, `_REMOVE`, `features/setlists/extension.toml`);
+the view does not call them yet.
 
-1. **A song note that names its session** (`session`, relative to the
-   project root), written by whatever makes the session. The key exists in
-   `features/setlists/src/song.rs`; nothing resolves it into
-   `<org>/Projects/<name>`. Until then the launcher finds sessions by name.
-2. **Set and note edits** in `features/setlists`: `STUDIO_SETLISTS_SET_RENAME`,
-   `_SET_MOVE`, `_SET_BENCH {section, on}`, `_NOTE {setlist, song, note}`.
+### Layouts
+
+A layout is applied by name (`extensions/launcher/src/arrange.rs` `arrange`).
+
+- **Stage** is the layout `stack/run-studio.sh` built by hand: the panes
+  of the last layout closed; the arrangement, mixer, chart, lighting room,
+  lyrics, progress bar and cues opened; the Now Playing bar, status bar,
+  bottom dock and tab bars hidden and the set's songs put in the title row;
+  the chart and the room moved to windows of their own; then the
+  workspace's export rewritten and applied (`src/layout.rs` `stage`). The
+  main window is the arrangement with the mixer beside it when the window
+  is at least 2.4 times wider than tall, under it otherwise, below the
+  song's progress bar; the chart is over the lyrics; the room has its cues
+  to the right. The script's embedded Python is `layout.rs`, with tests.
+- **Rehearse** is one window: the arrangement over the mixer, the chart
+  over the lyrics beside them, the app's bars as they are (`layout.rs`
+  `rehearse`).
+- **A saved layout** is the workspace's export as it was
+  (`STUDIO_LAUNCHER_LAYOUT_SAVE`), kept in the extension's data on the
+  device, since displays differ by machine. Applying it closes the panes
+  before it, applies it, and points the chart at the engine's song.
+
+A step whose extension is not there (no lighting, no chart) is skipped and
+named in the answer; the rest still lays out. The layout a set was opened
+in is written to its note (`layout`), so Open set applies it next time
+without being told. The name syncs; the layout itself is each device's.
+
+Not carried over from the script: the Space key bound to play and pause in
+every pane (it wrote the app's `keys.json` directly; there is no action for
+a key binding yet).
+
+### The chart and the lighting follow the song
+
+`stack/follow-song.sh` polled the engine and kept a table of the names that
+differ between a session's folder, its song's note and its cue file. The
+launcher needs no table: the song whose session the engine has is a place
+in a setlist (`src/follow.rs` `target`), and that place has its chart (the
+song note's `chart`, else the `.kf` beside the note) and its cues
+(`Projects/<project>/lighting/cues/<slug of its label>.json`). The
+project's Live set is `show/<name>.als` in the project root, or
+`IGNITION_LIVE_SET`.
+
+It runs after every open the launcher makes, after a layout is applied,
+and on the deck's moves (`[[hooks]] on = "app:playhead.changed"`), where it
+asks the engine at most once in 900 ms and does nothing while the song is
+the one last pointed at.
+
+### Still missing, and where each belongs
+
+1. **The engine's save writing a song's `session`** into its note. The
+   launcher reads it and has an action that writes it for a whole set
+   (`STUDIO_LAUNCHER_NAME_SESSIONS`); a session made later is found by name
+   until that action runs again.
+2. **Set edits** in `features/setlists`: rename, reorder and bench a set.
 3. **Recents as data.** `SESSION_RECENT` answers text lines for people,
-   which the launcher parses (`extensions/launcher/src/model.rs`
-   `Recent::parse`). It should answer rows; in
-   `apps/session/engine/src/actions.rs`.
+   which the launcher parses (`src/model.rs` `Recent::parse`); in
+   `apps/session/engine/src/actions.rs`. Recents are the engine's, so they
+   are one machine's and one org's; across orgs needs the account.
 4. **`DAW_LAST`** in `extensions/daw`: what the engine opened last and where
    its playhead was, for Carry on.
 5. **New song into a library**: one action that makes the song note, its
-   folder in the project root and an empty session there (`SESSION_NEW`
-   makes an untitled song and saves nowhere). In `features/setlists`.
-6. **Named layouts**: `STUDIO_LAUNCHER_ARRANGE {layout}` applying a saved
-   workspace layout and the title slot. `run-studio.sh`'s embedded Python,
-   which computes the splits from the display's shape, becomes layout files
-   ("Stage", "Rehearse", "Edit"). In `extensions/launcher`.
-7. **The song changed, as an event** from `extensions/daw`, so Keyflow and
-   Ignition follow by themselves and `follow-song.sh` (which polls
-   `DAW_STATE`) is deleted.
+   folder in the project root and an empty session there.
+6. **The song changed, as an event** from `extensions/daw`. The deck's
+   moves stand in for it, and fire far more often than a song changes.
+7. **A key binding as an action** (Architect), for Stage's Space.
 8. **Rigs in the app's engine**: below.
-9. **The media list for a view that is not a note's head** (in Architect,
-   not changed here). `MediaList` takes rows that play a recording through
-   the playhead and reads the shell from context (`use_shell`), which a
-   development copy (a process) does not have. For the launcher to mount it
-   rather than follow it, it needs a press it can be given (`on_press`) and
-   a row's art to be a tile (key and hue), and to be reachable from a
-   process view. Until then `extensions/launcher/src/view.rs` draws the same
-   grid by hand, with the same tile rule. This is the one piece of
-   duplicated drawing, and the first thing to remove.
-10. **A start view** (in Architect): nothing lets a distribution name the
-    view shown when nothing is open (`features/workspace/src/host/mod.rs`
-    `EmptyCenter` shows "Nothing open").
 
 ## Rigs
 
@@ -219,13 +253,34 @@ for guitar and bass only, and only when `session-engine` is built with its
 `signal` feature. `extensions/daw/Cargo.toml` builds it without, so the
 app's engine has no `RIG_LOAD`.
 
-So the first version lists rigs and says loading is not built. Loading
-needs, in order: `extensions/daw` built with `signal` (the guitar crate and
-its captures come into the engine's build, `rig-library/README.md`); Signal
-as an extension providing a rigs service, so the launcher asks it instead of
-reading Signal's folder, and keys, drums and synth get a load path; and
-parts (which rig a setlist uses, which patch a song takes) stored on the
-setlist note so they sync (decision 5).
+So the launcher lists rigs, and a setlist's note keeps its **parts**
+(`parts: [{player, rig, profile, patches}]`, written by
+`STUDIO_LAUNCHER_PART`), and nothing is loaded. Loading takes, in order:
+
+1. **The engine built with Signal.** `extensions/daw/Cargo.toml` asks
+   `session-engine` for `features = ["native"]`; it needs `"signal"` too
+   (`apps/session/engine/Cargo.toml`: `signal = ["native", "dep:signal-fx",
+   "session-runtime/signal"]`). That brings `signal-fx` and the guitar crate
+   into the engine's build, whose build script embeds the captures and
+   frozen Cores from `SIGNAL_RIG_LIBRARY` (`rig-library/`, linked by `just
+   assets`; a release build refuses to start without them). The engine's
+   binary grows and its build needs the private `rig-models` assets on every
+   machine and runner that builds it.
+2. **A track to put it on.** `RIG_LOAD {track, instrument, profile, patch}`
+   loads onto an existing track, so the launcher first runs
+   `TRACK_ADD_INSTRUMENT {instrument}` (Guitar, Bass or Drums), then
+   `RIG_LOAD` through `DAW_RUN`. Both exist once step 1 is done.
+3. **The right profiles.** `RIG_LOAD` reads profiles from Session's own
+   copy (`signal_fx::signal_rig::library_dir`, `<config>/fts/<instrument>-rig`),
+   not from the player's live rig folder the launcher lists
+   (`~/.config/signal/<instrument>/profiles`). One of the two has to become
+   the other's source, or the launcher lists what `RIG_BROWSE` answers.
+4. **Keys, drums and synth.** They have no `RIG_LOAD` at all: only guitar
+   and bass are `signal_fx` rigs. They need Signal as an extension with a
+   rigs service, or `one-engine.md`'s step 5 (Session hosting rigs as
+   `signal_rig_host::engine::Engine::add_rig` does).
+5. **Per song.** A part's patch for the engine's song applied on each song
+   change, from the same hook the chart and lighting follow.
 
 ## How it shows
 
@@ -269,78 +324,56 @@ engine's actions and a member's disk, which a guest is not granted
 So for a guest the launcher adds nothing to the setlist's own page, and
 should not try to.
 
-## Decisions for the owner
+## Decisions (taken 2026-11-18)
 
-1. **How a song says where its session is.** (a) The song note names it,
-   relative to the project root. (b) By convention: a folder named for the
-   song. *Recommend (a), with (b) as the fallback it is today.* A name is a
-   guess ("DTLA Cinematic Intro" is in `songs/cinematic-intro`).
-2. **One vault at a time, or every org.** An Architect window is on one
-   vault, and the two real collections are in two orgs. (a) The launcher
-   shows the open vault; Architect's org switch changes it. (b) Recent and
-   upcoming setlists across every org. *Recommend (a) now, (b) later for
-   Recent only.*
-3. **What launch shows.** (a) Always the launcher. (b) The launcher only
-   when the engine has nothing open; otherwise the app as it was.
-   *Recommend (b):* at a venue the app must come back as it was.
-4. **Does the window close when something opens.** *Recommend yes as a
-   window, no as a pane.*
-5. **Where a note on a song in a set, and a rig's parts, live.** *Recommend
-   the setlist note's frontmatter* (`notes`, `parts`): both are about this
-   set and must sync to the band.
-6. **What Open set arranges.** (a) Nothing. (b) The setlist's saved layout
-   ("Stage" or "Rehearse"), which is the part of `run-studio.sh` people
-   will miss most. *Recommend (b), remembered per setlist.*
-7. **The tile.** The setlist's page shows cover art where a song has it and
-   a key tile where it does not. The launcher's first version always shows
-   the key tile, since the key is what a player reads. *Recommend the cover
-   with the key over its corner once the media list takes a tile (missing
-   9).*
+1. **A song's note names its session** (`session`, a path in the project
+   root); a session found by the song's name is the fallback.
+   `STUDIO_LAUNCHER_NAME_SESSIONS` writes the names found.
+2. **The open vault now; Recent across orgs later.** Nothing built for the
+   second: it needs the account's orgs, not one engine's list.
+3. **At launch the launcher shows only when the engine has nothing open.**
+   The engine comes up after the window, so it is asked for up to 8 s (90 s
+   while it is opening a set); a song there ends the wait.
+4. **As a window it closes when something opens; as a pane it stays.** "A
+   window" is the launcher alone in a window other than the main one
+   (`src/lib.rs` `has_own_window`).
+5. **A note on a song in a set, and a set's rig parts, are the setlist
+   note's frontmatter** (`notes`, `parts`).
+6. **Open set applies a layout, remembered per setlist** (`layout`).
+7. **Cover art with the key over its corner.** Built in the media list; a
+   song with no cover shows the key on its colour.
 
-## Left out of the first version
+## Left out
 
-- Plan: no reordering, sets or notes in the view.
+- Plan in the view: no reordering, no set edits, and a note is set by its
+  action, not typed in the list.
 - The song beside the list, Carry on, search, New song, New setlist.
-- Loading a rig; parts.
-- Arranging the views and pointing the chart and lighting at the song.
-- Mounting `MediaList` itself (missing 9): the view follows its grid.
+- Loading a rig.
+- A name field to save a layout from the view (the action saves one).
 - Opening on another machine's engine from a phone.
 
-## The first version, as built
+## As built
 
-`extensions/launcher` (`studio-launcher`, id `studio.launcher`), a process
-extension that is also linkable (`studio_launcher::Launcher`), with no
-dependency on Session's crates.
+`extensions/launcher` (`studio-launcher`, id `studio.launcher`), linked into
+Studio (`apps/architect/src/lib.rs` `stage`) and runnable as a process, so
+a development copy shadows it and reloads on save. No dependency on
+Session's crates.
 
 - `src/nav.rs`: the Open provider (Recent, Setlists, Rigs).
-- `src/view.rs`: a setlist as the song list; the pill opens the set, a row
-  opens its song; the foot says what the last press did and what the engine
-  has.
-- `src/model.rs`: setlists, sets and songs from the vault's rows. Pure.
+- `src/view.rs`: a setlist as Architect's media list; the pill opens the
+  set in the layout picked beside it, a row opens its song; the foot says
+  what the last press did and what the engine has.
+- `src/model.rs`: setlists, sets, songs, notes and parts from the vault's
+  rows. Pure.
 - `src/find.rs`: the project root beside the vault, a song's session by its
-  note or its name, rig profiles, the written setlist file. The only code
-  that reads the disk.
-- `src/host.rs`: the vault query, `VAULT_STATUS`, `DAW_RUN`.
-- `src/lib.rs`: the actions.
-
-Checked as a development copy in a second, isolated instance of the app
-(`studio dev --name launcher-test --extension <package>` on a copy of the
-vault's notes, in a headless desktop session, with its own engine):
-`extensions check` passes and renders the view; the Open provider shows in
-the navigator; `STUDIO_LAUNCHER_OPEN_SONG` opened a song,
-`STUDIO_LAUNCHER_OPEN_SETLIST` opened a four-song set and named the songs it
-left out, a second song press went to song 3 of the open set, and a rebuilt
-program was picked up without restarting the app.
-
-To link it into the distribution, two lines in `apps/architect` (not done
-here: that file is changing):
-
-```toml
-# apps/architect/Cargo.toml, [dependencies] (and "dep:studio-launcher" in `gui`)
-studio-launcher = { workspace = true, optional = true }
-```
-
-```rust
-// apps/architect/src/lib.rs, in `stage()`
-        .member(&studio_launcher::Launcher)
-```
+  note or its name, cues, the Live set, covers, rig profiles, the written
+  setlist file. The only code that reads the disk.
+- `src/layout.rs`: Stage and Rehearse as rewrites of the workspace's
+  export. Pure.
+- `src/arrange.rs`: the steps that open the panes and apply a layout.
+- `src/follow.rs`: the chart and the lighting pointed at the engine's song.
+- `src/plan.rs`: what a setlist's note keeps (notes, parts, layout) and a
+  song's session, written through the vault.
+- `src/host.rs`: the vault query, the vault's properties, the extension's
+  data, `DAW_RUN`.
+- `src/lib.rs`: the actions, the launch rule, the opens.

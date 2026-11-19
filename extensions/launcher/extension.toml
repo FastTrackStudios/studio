@@ -23,12 +23,30 @@ path = "extensions/launcher"
 "fts.session" = "^0.1"
 
 [capabilities]
-# The setlist and song notes, through the vault's index.
+# The setlist and song notes, through the vault's index; what a setlist
+# keeps about itself (a note per song, its rigs, its layout) and a song's
+# session are written to their notes.
 reads = ["documents"]
-# The engine (DAW_OPEN, DAW_STATE, DAW_RUN SESSION_RECENT), the vault's
-# folder (VAULT_STATUS: where the org's project root is), and the panes.
-actions = ["DAW_", "VAULT_STATUS", "EXT_VIEW_OPEN", "WORKSPACE_OPEN"]
+writes = ["documents"]
+# The engine (DAW_OPEN, DAW_STATE, DAW_RUN), the vault's folder and its
+# notes' properties, the panes and the window's bars (a layout), the
+# chart and the lighting told which song to follow.
+actions = [
+    "DAW_",
+    "VAULT_STATUS",
+    "VAULT_SET_PROPERTY",
+    "VAULT_REMOVE_PROPERTY",
+    "EXT_VIEW_OPEN",
+    "EXT_SERVICE_USE",
+    "WORKSPACE_",
+    "HOME_SLOT_SET",
+    "COMMANDS_RUN",
+    "KEYFLOW_",
+    "IGNITION_",
+]
 effect = "mutating"
+# The deck's moves: the engine going to another song is one.
+events = ["playhead.changed"]
 
 [[views]]
 id = "launcher"
@@ -86,15 +104,15 @@ effect = "read_only"
 [[actions]]
 id = "STUDIO_LAUNCHER_OPEN_SETLIST"
 name = "Launcher: open a setlist"
-description = "Opens setlist `setlist` (its title or its note's path) in Studio's engine: the setlist's own session file when its note names one, else every song of it that has a session, in the setlist's order. Says which songs were left out."
+description = "Opens setlist `setlist` (its title or its note's path) in Studio's engine: the setlist's own session file when its note names one, else every song of it that has a session, in the setlist's order. Then lays the panes out in `layout` (Stage, Rehearse or a saved one; none given: the one it was opened in last), points the chart and the lighting at its song, and closes the launcher's own window. Says which songs were left out. A layout given is remembered in the setlist's note."
 group = "Launcher"
 effect = "mutating"
-params = '{"type":"object","properties":{"setlist":{"type":"string"}},"required":["setlist"]}'
+params = '{"type":"object","properties":{"setlist":{"type":"string"},"layout":{"type":"string"}},"required":["setlist"]}'
 
 [[actions]]
 id = "STUDIO_LAUNCHER_OPEN_SONG"
 name = "Launcher: open a song"
-description = "Opens song `song` (its title or its note's path) in Studio's engine by its session; `setlist` names the setlist whose project its session is looked for in."
+description = "Opens song `song` (its title or its note's path) in Studio's engine by its session (the one its note names, else the one found by its name in the project); `setlist` names the setlist whose project its session is looked for in. When the engine's open set has the song it goes to it. Its chart and lighting follow, and the launcher's own window closes."
 group = "Launcher"
 effect = "mutating"
 params = '{"type":"object","properties":{"song":{"type":"string"},"setlist":{"type":"string"}},"required":["song"]}'
@@ -112,3 +130,77 @@ name = "Launcher: rigs"
 description = "The rigs on this machine: each instrument's saved profiles (Signal's, in its config folder). Listing only: loading one into the engine is not built yet."
 group = "Launcher"
 effect = "read_only"
+
+[[actions]]
+id = "STUDIO_LAUNCHER_STARTUP"
+name = "Launcher: at launch"
+description = "Shows the launcher's window when the engine has nothing open, and nothing when it has a song or is opening one (the app comes back as it was). Run by the app's startup."
+group = "Launcher"
+effect = "mutating"
+
+[[actions]]
+id = "STUDIO_LAUNCHER_ARRANGE"
+name = "Launcher: lay the panes out"
+description = "Applies layout `layout` for the song the engine has: Stage (the arrangement and mixer under the song's progress bar with the set as tabs, the chart over the lyrics in a window of its own, the lighting's room and cues in another), Rehearse (one window: the arrangement over the mixer, the chart over the lyrics beside them), or one saved with STUDIO_LAUNCHER_LAYOUT_SAVE. Says which steps were skipped (an extension that is not there)."
+group = "Launcher"
+effect = "mutating"
+params = '{"type":"object","properties":{"layout":{"type":"string"}},"required":["layout"]}'
+
+[[actions]]
+id = "STUDIO_LAUNCHER_LAYOUT_SAVE"
+name = "Launcher: save this layout"
+description = "Saves the windows and panes as they are now as layout `name`, on this device: Open set and STUDIO_LAUNCHER_ARRANGE apply it by that name, on whichever song the engine has then."
+group = "Launcher"
+effect = "mutating"
+params = '{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}'
+
+[[actions]]
+id = "STUDIO_LAUNCHER_LAYOUTS"
+name = "Launcher: layouts"
+description = "The layouts by name: those the launcher makes (Stage, Rehearse) and those saved on this device."
+group = "Launcher"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_LAUNCHER_FOLLOW"
+name = "Launcher: point the chart and lighting at the song"
+description = "Tells Keyflow's chart and Ignition's room which song the engine has, when it is another than the one last told (`force`: whatever it is): the song's chart from its note, its cues and the project's Live set from the project. Run by the deck's moves, so the chart and the lighting follow the set."
+group = "Launcher"
+effect = "mutating"
+# Its hook hands it the deck's event (`event`, `detail`), so any object.
+params = '{"type":"object"}'
+
+[[actions]]
+id = "STUDIO_LAUNCHER_NOTE"
+name = "Launcher: a note on a song in a set"
+description = "Sets what setlist `setlist` says of song `song` (its label in the set) to `note`, shown under the song in the list; empty takes it away. Kept in the setlist note's `notes`."
+group = "Launcher"
+effect = "mutating"
+params = '{"type":"object","properties":{"setlist":{"type":"string"},"song":{"type":"string"},"note":{"type":"string"}},"required":["setlist","song"]}'
+
+[[actions]]
+id = "STUDIO_LAUNCHER_PART"
+name = "Launcher: a rig a set is played with"
+description = "Makes or changes the part of `player` on rig `rig` (guitar, keys) in setlist `setlist`: its `profile`, and the `patch` song `song` takes (empty: the profile's default); `remove` takes the part out. Kept in the setlist note's `parts`. Listing only: a part loads nothing yet."
+group = "Launcher"
+effect = "mutating"
+params = '{"type":"object","properties":{"setlist":{"type":"string"},"player":{"type":"string"},"rig":{"type":"string"},"profile":{"type":"string"},"song":{"type":"string"},"patch":{"type":"string"},"remove":{"type":"boolean"}},"required":["setlist","rig"]}'
+
+[[actions]]
+id = "STUDIO_LAUNCHER_NAME_SESSIONS"
+name = "Launcher: name each song's session in its note"
+description = "Writes into each song note of setlist `setlist` the session found for it by name (`session`, its path in the project), so the note names it from then on. Songs whose note already names one are left."
+group = "Launcher"
+effect = "mutating"
+params = '{"type":"object","properties":{"setlist":{"type":"string"}},"required":["setlist"]}'
+
+# At launch: the launcher when the engine has nothing open.
+[[hooks]]
+on = "startup"
+action = "STUDIO_LAUNCHER_STARTUP"
+
+# The engine going to another song moves the deck: the chart and the
+# lighting follow.
+[[hooks]]
+on = "app:playhead.changed"
+action = "STUDIO_LAUNCHER_FOLLOW"

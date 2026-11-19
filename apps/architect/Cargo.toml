@@ -24,6 +24,7 @@ gui = [
     "dep:studio-mixer",
     "dep:studio-lyrics",
     "dep:studio-navigator",
+    "dep:studio-launcher",
     "dep:keyflow-extension",
     "dep:ignition-pane",
 ]
@@ -51,6 +52,7 @@ session-engine = { workspace = true, optional = true, features = ["native"] }
 studio-mixer = { workspace = true, optional = true }
 studio-lyrics = { workspace = true, optional = true }
 studio-navigator = { workspace = true, optional = true }
+studio-launcher = { workspace = true, optional = true }
 keyflow-extension = { workspace = true, optional = true }
 ignition-pane = { workspace = true, optional = true }
 

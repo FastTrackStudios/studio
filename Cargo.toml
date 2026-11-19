@@ -394,6 +394,8 @@ architect-extensions = { git = "https://github.com/FastTrackStudios/architect", 
 # A WASI component's guest side (Studio's island, apps/architect/island).
 architect-extension-wasi = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
+# The media list (`architect_media::ui::MediaList`): the launcher's song list.
+architect-media = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 architect-scene = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 # The app's theme as data (`use_resolved`): what a Studio view in Architect
