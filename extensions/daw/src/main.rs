@@ -6,6 +6,7 @@
 //! window (`owner`'s module docs: how it is found, why never two, how it
 //! stops). `--stop` stops it, `--status` says whether one runs.
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> std::process::ExitCode {
     let arg = std::env::args().nth(1);
     let result = match arg.as_deref() {
@@ -33,3 +34,8 @@ fn main() -> std::process::ExitCode {
         }
     }
 }
+
+/// The program is the native process's; in a browser the extension is
+/// linked into the web app.
+#[cfg(target_arch = "wasm32")]
+fn main() {}

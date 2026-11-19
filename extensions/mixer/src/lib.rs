@@ -17,21 +17,41 @@
 //! switch, the mixer's toggle) are this process's: it claims them from
 //! the engine ([`claim`]).
 
-pub mod claim;
-pub mod closeup;
-pub mod host;
+//!
+//! **In a browser** (studio-web) the `mixer` view is the same widget over
+//! the page's own engine (`session_ui::web_host`, [`web`]); the strip and
+//! the close-up say they are the desktop's for now.
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod claim;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod closeup;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod host;
+#[cfg(target_arch = "wasm32")]
+pub mod web;
+
+#[cfg(not(target_arch = "wasm32"))]
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use architect_extensions::linked::{Builder, Extension, PaintPane};
+#[cfg(not(target_arch = "wasm32"))]
+use architect_extensions::linked::PaintPane;
+use architect_extensions::linked::{Builder, Extension};
+#[cfg(not(target_arch = "wasm32"))]
 use architect_workspace::paint::PaintMount;
+#[cfg(not(target_arch = "wasm32"))]
 use dioxus::prelude::*;
 use serde_json::{Value as Json, json};
+#[cfg(not(target_arch = "wasm32"))]
 use session_ui::mixer_panel::{HostedMixer, Links};
+#[cfg(not(target_arch = "wasm32"))]
 use session_ui::song_model::StudioSession;
-use studio_view_link::{InScope, Stats};
+#[cfg(not(target_arch = "wasm32"))]
+use studio_view_link::InScope;
+use studio_view_link::Stats;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::host::Hosted;
 
 pub const MANIFEST: &str = include_str!("../extension.toml");
@@ -50,11 +70,18 @@ impl Extension for Mixer {
     }
 
     fn build(&self, ext: &mut Builder) {
-        claim::claim(ext.handle());
-        ext.view("mixer", MixerPane)
-            .view("strip", StripPane)
-            .view("closeup", closeup::CloseupPane)
-            .action("STUDIO_MIXER_STATE", |_| async { Ok(state()) })
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            claim::claim(ext.handle());
+            ext.view("mixer", MixerPane)
+                .view("strip", StripPane)
+                .view("closeup", closeup::CloseupPane);
+        }
+        #[cfg(target_arch = "wasm32")]
+        ext.view("mixer", web::MixerPane)
+            .view("strip", web::StripPane)
+            .view("closeup", web::CloseupPane);
+        ext.action("STUDIO_MIXER_STATE", |_| async { Ok(state()) })
             .action("STUDIO_MIXER_RACKS", |args| async move {
                 let on = args
                     .get("on")
@@ -66,6 +93,7 @@ impl Extension for Mixer {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// A new pane's frame statistics, kept for `STUDIO_MIXER_STATE` as
 /// `view`'s (the last pane of each view).
 pub(crate) fn pane_stats(view: &'static str) -> Arc<Mutex<Stats>> {
@@ -90,7 +118,7 @@ fn state() -> Json {
         })
         .collect();
     json!({
-        "linked": session_engine::view_client::is_linked(),
+        "linked": linked(),
         "problem": studio_view_link::problem(),
         "song": song.as_ref().map(|(k, _)| k.clone()),
         "tracks": song.as_ref().map(|(_, n)| *n),
@@ -99,13 +127,24 @@ fn state() -> Json {
     })
 }
 
+/// Whether this view has an engine: attached to its process, or (in a
+/// browser) the page's open.
+fn linked() -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    return session_engine::view_client::is_linked();
+    #[cfg(target_arch = "wasm32")]
+    return session_ui::web_host::hosted_is_open();
+}
+
 /// Which of the two a pane is.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Shown {
     Mixer,
     Strip,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Shown {
     const fn name(self) -> &'static str {
         match self {
@@ -115,11 +154,13 @@ impl Shown {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[component]
 fn MixerPane() -> Element {
     rsx! { SongPane { shown: Shown::Mixer } }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[component]
 fn StripPane() -> Element {
     rsx! { SongPane { shown: Shown::Strip } }
@@ -127,6 +168,7 @@ fn StripPane() -> Element {
 
 /// A pane: its view once the engine has a song, a line saying what it
 /// waits for until then.
+#[cfg(not(target_arch = "wasm32"))]
 #[component]
 fn SongPane(shown: Shown) -> Element {
     let song = studio_view_link::use_song();
@@ -146,9 +188,11 @@ fn SongPane(shown: Shown) -> Element {
 }
 
 /// A song's session as a prop (keyed by the pane, so never compared).
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 pub(crate) struct Song(pub(crate) StudioSession);
 
+#[cfg(not(target_arch = "wasm32"))]
 impl PartialEq for Song {
     fn eq(&self, _: &Self) -> bool {
         true
@@ -158,6 +202,7 @@ impl PartialEq for Song {
 /// The mixer's widget over `session`'s strips, hosted in the pane: what
 /// `session_ui::mixer_panel::Mixer` is in the desktop window, with the
 /// pane in place of the window.
+#[cfg(not(target_arch = "wasm32"))]
 #[component]
 fn Strips(session: Song, shown: Shown) -> Element {
     let session = use_context_provider(|| session.0.clone());

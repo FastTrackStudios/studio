@@ -14,6 +14,7 @@ default = []
 # The window's views: Studio's arrangement, mixer, lyrics, navigator and
 # launcher, Keyflow's chart; Ignition's lighting natively.
 stage = [
+    "dep:daw-extension",
     "dep:studio-arrangement",
     "dep:studio-mixer",
     "dep:studio-lyrics",
@@ -46,12 +47,17 @@ studio-arrangement = { workspace = true, optional = true }
 studio-mixer = { workspace = true, optional = true }
 studio-lyrics = { workspace = true, optional = true }
 studio-navigator = { workspace = true, optional = true }
-studio-launcher = { workspace = true, optional = true }
-keyflow-extension = { workspace = true, optional = true }
+
+# Studio's engine in a browser: the `daw` extension linked in, its engine
+# in the page (natively `daw` is a process extension of its own).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+daw-extension = { workspace = true, optional = true }
 
 # Native until their browser builds land: Ignition's room (a GPU process
 # view natively; Ignition's viz has a web renderer), the rig views.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+studio-launcher = { workspace = true, optional = true }
+keyflow-extension = { workspace = true, optional = true }
 ignition-pane = { workspace = true, optional = true }
 studio-rig-switches = { workspace = true, optional = true }
 studio-rig-setlist = { workspace = true, optional = true }

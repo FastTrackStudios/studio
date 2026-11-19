@@ -30,6 +30,9 @@ pub fn distribution() -> architect_distribution::Distribution {
     architect_distribution::architect()
         .named("Studio")
         .bundle(studio_extensions::studio())
+        // Studio's engine in the page (`daw`) and the views on it: the
+        // arrangement, the mixer, the lyrics and the navigator.
+        .bundle(studio_extensions::stage())
         .linked(&StudioViews)
         // A signed-in person's web app opens on Studio's dashboard: their
         // setlists and songs across their orgs (architect#990).

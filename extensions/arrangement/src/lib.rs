@@ -14,21 +14,39 @@
 //! chrome for: the transport (`STUDIO_ARRANGEMENT_PLAY_PAUSE`, `_STOP`)
 //! and the Folded switch (`STUDIO_ARRANGEMENT_FOLDED`), on keys, ⌘K and
 //! MCP as every action is.
+//!
+//! **In a browser** (studio-web) the view is the same panel over the
+//! page's own engine (`session_ui::web_host`, the panels under
+//! dioxus-web with the widget in a WebGL2 canvas): one crate, the host
+//! chosen by the target ([`web`]).
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod host;
+#[cfg(target_arch = "wasm32")]
+pub mod web;
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::cell::RefCell;
+#[cfg(not(target_arch = "wasm32"))]
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use architect_extensions::linked::{Builder, Extension, PaintPane};
+#[cfg(not(target_arch = "wasm32"))]
+use architect_extensions::linked::PaintPane;
+use architect_extensions::linked::{Builder, Extension};
+#[cfg(not(target_arch = "wasm32"))]
 use architect_workspace::paint::PaintMount;
+#[cfg(not(target_arch = "wasm32"))]
 use dioxus::prelude::*;
 use serde_json::{Value as Json, json};
+#[cfg(not(target_arch = "wasm32"))]
 use session_ui::song_model::StudioSession;
+#[cfg(not(target_arch = "wasm32"))]
+use studio_view_link::InScope;
+use studio_view_link::Stats;
 pub use studio_view_link::attach;
-use studio_view_link::{InScope, Stats};
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::host::Hosted;
 
 pub const MANIFEST: &str = include_str!("../extension.toml");
@@ -51,13 +69,16 @@ impl Extension for Arrangement {
     }
 
     fn build(&self, ext: &mut Builder) {
-        ext.view("arrangement", ArrangementPane)
-            .action("STUDIO_ARRANGEMENT_STATE", |_| async { Ok(state()) })
+        #[cfg(not(target_arch = "wasm32"))]
+        ext.view("arrangement", ArrangementPane);
+        #[cfg(target_arch = "wasm32")]
+        ext.view("arrangement", web::ArrangementPane);
+        ext.action("STUDIO_ARRANGEMENT_STATE", |_| async { Ok(state()) })
             .action("STUDIO_ARRANGEMENT_PLAY_PAUSE", |_| async {
-                studio_view_link::run("SESSION_PLAY_PAUSE", &Json::Null)
+                studio_view_link::call("SESSION_PLAY_PAUSE", &Json::Null).await
             })
             .action("STUDIO_ARRANGEMENT_STOP", |_| async {
-                studio_view_link::run("SESSION_STOP", &Json::Null)
+                studio_view_link::call("SESSION_STOP", &Json::Null).await
             })
             .action("STUDIO_ARRANGEMENT_FOLDED", |args| async move {
                 let on = args
@@ -86,7 +107,7 @@ fn state() -> Json {
         .as_ref()
         .map(|s| s.lock().unwrap_or_else(PoisonError::into_inner).json());
     json!({
-        "linked": session_engine::view_client::is_linked(),
+        "linked": linked(),
         "problem": studio_view_link::problem(),
         "song": song.as_ref().map(|(k, _)| k.clone()),
         "tracks": song.as_ref().map(|(_, n)| *n),
@@ -96,8 +117,18 @@ fn state() -> Json {
     })
 }
 
+/// Whether this view has an engine: attached to its process, or (in a
+/// browser) the page's open.
+fn linked() -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    return session_engine::view_client::is_linked();
+    #[cfg(target_arch = "wasm32")]
+    return session_ui::web_host::hosted_is_open();
+}
+
 /// The pane: the arrangement once the engine has a song, a line saying
 /// what it waits for until then.
+#[cfg(not(target_arch = "wasm32"))]
 #[component]
 fn ArrangementPane() -> Element {
     let song = studio_view_link::use_song();
@@ -117,9 +148,11 @@ fn ArrangementPane() -> Element {
 }
 
 /// A song's session as a prop (keyed by the pane, so never compared).
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 struct Song(StudioSession);
 
+#[cfg(not(target_arch = "wasm32"))]
 impl PartialEq for Song {
     fn eq(&self, _: &Self) -> bool {
         true
@@ -129,6 +162,7 @@ impl PartialEq for Song {
 /// Studio's arrangement panel over `session`, hosted in the pane: what
 /// `session_ui::studio::Arrangement` is in the desktop window, with the
 /// pane in place of the window.
+#[cfg(not(target_arch = "wasm32"))]
 #[component]
 fn Panel(session: Song) -> Element {
     use_context_provider(|| session.0.clone());
