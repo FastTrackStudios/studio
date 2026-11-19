@@ -15,6 +15,14 @@ members = [
     "extensions/lyrics",
     "extensions/navigator",
     "extensions/link",
+    "extensions/rig",
+    "extensions/rig-link",
+    "extensions/rig-switches",
+    "extensions/rig-setlist",
+    "extensions/rig-browser",
+    "extensions/rig-grid",
+    "extensions/rig-macros",
+    "extensions/rig-status",
     "features/timeline",
     "features/editing",
     "features/ui/dock",
@@ -800,6 +808,16 @@ studio-arrangement = { path = "extensions/arrangement" }
 studio-mixer = { path = "extensions/mixer" }
 studio-lyrics = { path = "extensions/lyrics" }
 studio-navigator = { path = "extensions/navigator" }
+# Signal's rigs as extensions (docs/design/signal-extensions.md): the
+# engine (a process), what its views share at build time, and the views.
+rig-extension = { path = "extensions/rig" }
+studio-rig-link = { path = "extensions/rig-link" }
+studio-rig-switches = { path = "extensions/rig-switches" }
+studio-rig-setlist = { path = "extensions/rig-setlist" }
+studio-rig-browser = { path = "extensions/rig-browser" }
+studio-rig-grid = { path = "extensions/rig-grid" }
+studio-rig-macros = { path = "extensions/rig-macros" }
+studio-rig-status = { path = "extensions/rig-status" }
 # Keyflow's chart extension and Ignition's lighting extension, linked into
 # the distribution the same way (`pane`: Ignition's room as the GPU
 # process view the app hosts).

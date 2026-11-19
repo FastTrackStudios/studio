@@ -1,0 +1,24 @@
+[package]
+name = "studio-rig-status"
+description = "The rig's status bar (the footswitch mode, Panic, the MIDI and audio lights, CPU, the IN, OUT and PHONES meters, Mute), the tuner and the DI player. A pane of Studio, a vox client of the rig engine (the studio.rig extension); linked into apps/architect, or its own process as a development copy."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "studio-rig-status"
+path = "src/main.rs"
+
+[dependencies]
+studio-rig-link = { workspace = true }
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+guitar = { workspace = true, features = ["ui"] }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
