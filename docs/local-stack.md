@@ -26,7 +26,7 @@ there, `just dev` runs this stack with that checkout as the local piece.
 | `node` | http://127.0.0.1:7422 | Studio Architect's headless node (`studio-architect serve`) built from this tree, its island beside it as the release ships it, signed in to the local issuer as Ada, hosting `acme` with a **copy** of the test vault and a share link of its setlist |
 | `web` | http://127.0.0.1:7423/app/ | Architect's web app with Studio Architect's `distribution.json`, its issuer the local one |
 | `site` | http://127.0.0.1:7424 | Architect's public site (`apps/site`), Vite with hot reload |
-| `desktop` | a window | Studio Architect's app, off unless `just dev desktop=on` |
+| `desktop` | a window | Studio Architect's app: with `just dev desktop=on`, or this machine's own start script (`LOCAL_STACK_DESKTOP_RUN`, below) on a bare `devenv up` |
 
 The share link is fixed, so it is the same on every start and machine:
 
@@ -227,3 +227,23 @@ It is not a CI job: it needs the private test vault and a node build
 - Ctrl-C (or `devenv processes down`) stops everything and puts
   `Cargo.lock` back.
 - Nothing plays audio: the node serves files.
+
+## A checkout's own settings
+
+`local-stack.local.env` beside `local-stack.toml` (untracked) holds
+`LOCAL_STACK_*=value` lines for a checkout that always runs the same way;
+the environment wins over it. With it a bare `devenv up` is the whole
+thing:
+
+```
+LOCAL_STACK_OVERRIDES=../stack/overrides.toml   # a stack of local checkouts
+LOCAL_STACK_ARCHITECT_PATH=../architect
+LOCAL_STACK_DESKTOP_RUN=../stack/run-studio.sh  # the window, this machine's way
+LOCAL_STACK_OPEN=on                             # the web app and the link, in the browser
+LOCAL_STACK_PORT_MOCK_OAUTH=7430                # when 7420-7424 are taken
+```
+
+`LOCAL_STACK_DESKTOP_RUN` names a program that takes `--build-only` (run
+under the stack's overrides, one build at a time) and `--foreground` (run
+the window until it closes or the program is told to stop). It decides the
+vault, the session and the layout; nothing about them is in this repo.

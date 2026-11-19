@@ -304,12 +304,11 @@ in
     };
     # The public site (Architect's apps/site), hot reload.
     site.exec = "exec ${stack} run site";
-    # The window, off unless chosen (`just dev desktop=on`).
-    desktop = {
-      exec = "exec ${stack} run desktop";
-      after = [ "devenv:processes:node" ];
-      start.enable = false;
-    };
+    # The window: this machine's own start script when
+    # local-stack.local.env names one (LOCAL_STACK_DESKTOP_RUN), else the
+    # window on the stack's node when chosen (`just dev desktop=on`), else
+    # nothing. It waits for the node itself.
+    desktop.exec = "exec ${stack} run desktop";
   };
 
   fleet.banner = ''
