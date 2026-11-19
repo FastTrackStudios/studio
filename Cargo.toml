@@ -1558,3 +1558,5 @@ vault-live = { git = "https://www.github.com/FastTrackStudios/architect", tag = 
 vault-obsidian = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 vault-proto = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 architect-process-view = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
+architect-media = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
+architect-playhead = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
