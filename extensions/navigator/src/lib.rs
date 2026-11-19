@@ -151,15 +151,19 @@ fn Hearing() -> Element {
     let mut by = use_signal(|| None::<String>);
     let ask = move |set: Option<&'static str>| {
         let (tx, rx) = std::sync::mpsc::channel();
-        let _ = std::thread::Builder::new().name("hear".to_owned()).spawn(move || {
-            let args = set.map_or_else(|| json!({}), |by| json!({ "by": by }));
-            let said = studio_view_link::run("SESSION_HEAR", &args).ok();
-            let now = said.and_then(|v| match v {
-                serde_json::Value::String(text) => serde_json::from_str::<serde_json::Value>(&text).ok(),
-                other => Some(other),
+        let _ = std::thread::Builder::new()
+            .name("hear".to_owned())
+            .spawn(move || {
+                let args = set.map_or_else(|| json!({}), |by| json!({ "by": by }));
+                let said = studio_view_link::run("SESSION_HEAR", &args).ok();
+                let now = said.and_then(|v| match v {
+                    serde_json::Value::String(text) => {
+                        serde_json::from_str::<serde_json::Value>(&text).ok()
+                    }
+                    other => Some(other),
+                });
+                let _ = tx.send(now.and_then(|v| v.get("by")?.as_str().map(str::to_owned)));
             });
-            let _ = tx.send(now.and_then(|v| v.get("by")?.as_str().map(str::to_owned)));
-        });
         spawn(async move {
             loop {
                 futures_timer::Delay::new(std::time::Duration::from_millis(40)).await;
@@ -187,7 +191,11 @@ fn Hearing() -> Element {
     let now = by();
     let part = |label: &'static str, value: &'static str, title: &'static str| {
         let on = now.as_deref() == Some(value);
-        let (fill, ink) = if on { ("#26292f", "#e6e8eb") } else { ("transparent", "#8b9099") };
+        let (fill, ink) = if on {
+            ("#26292f", "#e6e8eb")
+        } else {
+            ("transparent", "#8b9099")
+        };
         rsx! {
             button {
                 title,

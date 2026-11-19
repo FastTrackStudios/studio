@@ -21,8 +21,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use anyrender::recording::RenderCommand;
-use architect_workspace::paint::{Layer, LayerKey, Scene};
 use architect_workspace::paint::PaintMount;
+use architect_workspace::paint::{Layer, LayerKey, Scene};
 use dioxus::prelude::*;
 use serde_json::Value as Json;
 use session_engine::studio_engine::link;

@@ -1000,7 +1000,7 @@ dependencies = [
  "architect-pages",
  "architect-playhead",
  "architect-presence",
- "architect-process-view 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.14.0)",
+ "architect-process-view",
  "architect-projects",
  "architect-sandbox-board",
  "architect-sandbox-sketch",
@@ -1842,32 +1842,6 @@ dependencies = [
  "tokio",
  "tracing",
  "zbus 5.19.0",
-]
-
-[[package]]
-name = "architect-process-view"
-version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/architect?tag=v0.14.0#a236142c4f4f71df4e9f2b3d51aed80e9fdf7571"
-dependencies = [
- "anyrender",
- "architect-workspace",
- "architect-workspace-hack",
- "ash",
- "blitz-dom 0.3.0-beta.4 (git+https://www.github.com/FastTrackStudios/blitz?rev=c995d2722c3c9ece4882d28474b70e71ee7bb277)",
- "blitz-traits 0.3.0-beta.4 (git+https://www.github.com/FastTrackStudios/blitz?rev=c995d2722c3c9ece4882d28474b70e71ee7bb277)",
- "dioxus",
- "dioxus-native-dom",
- "futures-timer",
- "mach2",
- "objc2 0.6.5",
- "objc2-core-foundation",
- "objc2-io-surface",
- "objc2-metal 0.3.2",
- "peniko 0.6.1",
- "rustix 1.1.6",
- "thiserror 2.0.20",
- "wgpu 30.0.1",
- "wgpu_context",
 ]
 
 [[package]]
@@ -11158,7 +11132,7 @@ source = "git+https://github.com/FastTrackStudios/Ignition?rev=6659bb205c28b5e3d
 dependencies = [
  "architect",
  "architect-extensions",
- "architect-process-view 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.14.0)",
+ "architect-process-view",
  "crdt",
  "dioxus",
  "futures-timer",
@@ -20068,6 +20042,22 @@ dependencies = [
 [[package]]
 name = "session"
 version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/session?rev=a8ec37a454c767c0558973412c4d321746066d02#a8ec37a454c767c0558973412c4d321746066d02"
+dependencies = [
+ "architect",
+ "architect-permissions",
+ "crdt",
+ "facet",
+ "facet-json",
+ "loro",
+ "thiserror 2.0.20",
+ "vox",
+ "web-time",
+]
+
+[[package]]
+name = "session"
+version = "0.1.0"
 source = "git+https://github.com/FastTrackStudios/session?rev=f186f34b8451e3a1543ac78a2c99d1ab02c1b352#f186f34b8451e3a1543ac78a2c99d1ab02c1b352"
 dependencies = [
  "architect",
@@ -20079,22 +20069,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "uuid",
- "vox",
- "web-time",
-]
-
-[[package]]
-name = "session"
-version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/session?rev=a8ec37a454c767c0558973412c4d321746066d02#a8ec37a454c767c0558973412c4d321746066d02"
-dependencies = [
- "architect",
- "architect-permissions",
- "crdt",
- "facet",
- "facet-json",
- "loro",
- "thiserror 2.0.20",
  "vox",
  "web-time",
 ]

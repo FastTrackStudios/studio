@@ -113,7 +113,8 @@ pub fn HostedLyrics() -> Element {
     use_future(move || async move {
         loop {
             futures_timer::Delay::new(std::time::Duration::from_millis(33)).await;
-            let Some(now) = crate::engine::Transport::shared().map(crate::engine::Transport::reading)
+            let Some(now) =
+                crate::engine::Transport::shared().map(crate::engine::Transport::reading)
             else {
                 continue;
             };

@@ -1553,3 +1553,4 @@ vault-doc = { git = "https://www.github.com/FastTrackStudios/architect", tag = "
 vault-live = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 vault-obsidian = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 vault-proto = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
+architect-process-view = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
