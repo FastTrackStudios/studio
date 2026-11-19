@@ -9,10 +9,10 @@ use transport_ui::{ProgressSection, SongProgressBar, TransportControlBar};
 /// Where the song is, as the page gave it.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Playhead {
-    time: f64,
-    playing: bool,
-    duration: f64,
-    sections: Vec<(String, f64, f64, String)>,
+    pub(crate) time: f64,
+    pub(crate) playing: bool,
+    pub(crate) duration: f64,
+    pub(crate) sections: Vec<(String, f64, f64, String)>,
 }
 
 fn number(v: &Value, key: &str) -> f64 {

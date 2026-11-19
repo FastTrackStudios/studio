@@ -30,20 +30,20 @@ const SHEET: &str = r#"
 .sv { font-family: var(--font, system-ui, -apple-system, sans-serif); color: var(--foreground, CanvasText);
       box-sizing: border-box; width: 100%; padding: 0 0 12px; }
 .sv * { box-sizing: border-box; }
-.sv-tabs { display: flex; gap: 4px; padding: 4px; margin: 0 0 8px; border-radius: 10px; position: sticky; top: 0; z-index: 2;
+.sv-tabs { display: flex; gap: 4px; padding: 4px; margin: 0 10px 8px; border-radius: 10px; position: sticky; top: 0; z-index: 2;
            background: var(--background, Canvas); border: 1px solid var(--border, GrayText); width: max-content; }
 .sv-tab { border: 0; border-radius: 7px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 500;
           background: transparent; color: var(--muted-foreground, GrayText); cursor: pointer; min-height: 32px; }
 .sv-tab[aria-pressed="true"] { background: var(--accent, Highlight); color: var(--accent-foreground, HighlightText); }
-.sv-hint { font-size: 12px; color: var(--muted-foreground, GrayText); margin: 0 0 8px; }
+.sv-hint { font-size: 12px; color: var(--muted-foreground, GrayText); margin: 0 12px 8px; }
 .sv-pages { display: flex; flex-direction: column; gap: 12px; }
-.sv-page { position: relative; width: 100%; background: #fff; border-radius: 6px; overflow: hidden;
+.sv-page { position: relative; width: 100%; background: #fff; border-radius: 0; overflow: hidden;
            box-shadow: 0 0 0 1px rgba(0,0,0,.08); }
 .sv-paper > svg { display: block; width: 100%; height: auto; }
 .sv-over { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
 .sv-bar { fill: transparent; cursor: pointer; }
 .sv-bar:hover { fill: rgba(128,128,128,.12); }
-.sv-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.sv-lines { list-style: none; margin: 0; padding: 0 10px; display: flex; flex-direction: column; gap: 2px; }
 .sv-line { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: var(--muted-foreground, GrayText);
            font: inherit; font-size: 18px; line-height: 1.35; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
 .sv-line:hover { background: rgba(128,128,128,.12); }
@@ -203,7 +203,6 @@ pub fn SongView(page: Signal<Value>, note: Signal<Value>, ask: Ask) -> Element {
             .map_err(|e| e.to_string());
         Some((pages, tempo(&source)))
     });
-    let mut tab = use_signal(|| None::<Tab>);
     use_hook(watch_scrolling);
     // Where the song is, moved on between the app's updates while it plays.
     let mut at = use_signal(|| None::<f64>);
@@ -267,8 +266,9 @@ pub fn SongView(page: Signal<Value>, note: Signal<Value>, ask: Ask) -> Element {
         };
     };
     let has_chart = s.chart.is_some();
-    let has_lines = !s.lines.is_empty();
-    let shown = tab().unwrap_or(if has_chart { Tab::Chart } else { Tab::Lyrics });
+    // The chart; a song with none shows its timed lines. No switch of
+    // its own: the app's tabs have Chart and Lyrics (the owner, 2026-11-18).
+    let shown = if has_chart { Tab::Chart } else { Tab::Lyrics };
     let playing = page
         .read()
         .get("playing")
@@ -287,14 +287,6 @@ pub fn SongView(page: Signal<Value>, note: Signal<Value>, ask: Ask) -> Element {
     rsx! {
         document::Style { {SHEET} }
         div { class: "sv", "data-testid": "studio-song", "data-following": if t.is_some() { "true" } else { "false" },
-            if has_chart && has_lines {
-                div { class: "sv-tabs", role: "group", "aria-label": "Show",
-                    button { r#type: "button", class: "sv-tab", "aria-pressed": "{shown == Tab::Chart}",
-                        onclick: move |_| tab.set(Some(Tab::Chart)), "Chart" }
-                    button { r#type: "button", class: "sv-tab", "aria-pressed": "{shown == Tab::Lyrics}",
-                        onclick: move |_| tab.set(Some(Tab::Lyrics)), "Lyrics" }
-                }
-            }
             if let Some(h) = hint {
                 p { class: "sv-hint", "{h}" }
             }

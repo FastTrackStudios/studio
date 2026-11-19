@@ -61,6 +61,39 @@ id = "lyrics"
 title = "Lyrics"
 icon = "mic-vocal"
 
+# The song playing as an arrangement, read only (web bundle only): its
+# sections and sung lines on one timeline, the playhead through them, a
+# tap playing from there (docs/design/share-link-setlist.md).
+[[views]]
+id = "arrangement"
+title = "Arrangement"
+icon = "rows-3"
+
+# The dashboard (web bundle only): the app's home for a signed-in person.
+# Their setlists (what is coming up first), their song libraries with
+# what each song has (chart, synced lyrics, a recording), what they
+# opened lately and the setlists shared by link, across every org the
+# app has open; a press opens the note in the views a link uses
+# (`src/home.rs`, read with `setlists::rows`, the Project Launcher's
+# model). The node names it the home (`SiteIsland::home`).
+[[views]]
+id = "home"
+title = "Home"
+icon = "house"
+
+# The song's mixer and its lighting, in the More menu (web bundle only).
+# Neither has anything to draw from a listener's link yet: a link shares a
+# song's finished mix, not its stems, and no cues. Each says so.
+[[views]]
+id = "mixer"
+title = "Mixer"
+icon = "sliders-vertical"
+
+[[views]]
+id = "lighting"
+title = "Lighting"
+icon = "lightbulb"
+
 # One setlist as a streaming app's playlist (web bundle only): each set a
 # label, each song a row (number, its key's tile, title over artist,
 # length), the song playing marked, a row pressed plays it. Given the note
@@ -112,12 +145,12 @@ claims = { note_type = ["song"] }
 reads = ["documents"]
 
 # A setlist's favourites (architect#607, #658): the bottom slots while a
-# setlist note is open, each a view of this extension's own. Its playlist,
-# the lyrics of the song playing, and the round button plays and pauses
-# (`PLAYHEAD_TOGGLE`, its Pause face while the app's runtime state
-# `playing` is on: architect#660). No Charts: no view of a song's chart
-# opens in the web bundle yet (`studio-setlists`' `song` is a process
-# extension's).
+# setlist is open, each a view of this extension's own, as the owner
+# asked for them (2026-11-18): the Setlist, the Charts and the Lyrics of
+# the song playing, a More menu (Arrangement, Mixer, Lighting Visualizer),
+# and a round button that opens the player. A tab whose view claims a note type
+# opens the note of that type that is playing (`song`: the song's chart);
+# one that claims none fills the page (`lyrics`, `arrangement`).
 [[favourites]]
 note_type = "setlist"
 
@@ -128,15 +161,34 @@ icon = "list-music"
 target = { view = "setlist.playlist" }
 
 [[favourites.tabs]]
+id = "chart"
+label = "Chart"
+icon = "music"
+target = { view = "song" }
+
+[[favourites.tabs]]
 id = "lyrics"
 label = "Lyrics"
 icon = "mic-vocal"
 target = { view = "lyrics" }
 
+# The fourth place opens a menu above itself for what does not fit the
+# bar (the owner, 2026-11-18): the song's Arrangement, its Mixer and its
+# Lighting.
+[[favourites.tabs]]
+id = "more"
+label = "More"
+icon = "ellipsis"
+target = { menu = [
+  { id = "arrangement", label = "Arrangement", icon = "rows-3", target = { view = "arrangement" } },
+  { id = "mixer", label = "Mixer", icon = "sliders-vertical", target = { view = "mixer" } },
+  { id = "lighting", label = "Lighting Visualizer", icon = "lightbulb", target = { view = "lighting" } },
+] }
+
+# The round button opens the player (the Now Playing bar's detail: where
+# the song is, previous and next): the owner's "^" (2026-11-18).
 [favourites.primary]
-id = "play"
-label = "Play"
-icon = "play"
-target = { action = "PLAYHEAD_TOGGLE" }
-state = "playing"
-on = { label = "Pause", icon = "pause" }
+id = "player"
+label = "Player"
+icon = "chevron-up"
+target = { action = "PLAYHEAD_DETAIL" }

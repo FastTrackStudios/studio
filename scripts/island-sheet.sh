@@ -15,7 +15,12 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
-meta="$(cargo metadata --locked --format-version 1)"
+# As locked, or (a local stack's overrides) as those resolve.
+if [ -n "${STUDIO_ARCHITECT_CARGO_CONFIG:-}" ]; then
+    meta="$(cargo metadata --offline --format-version 1 --config "$STUDIO_ARCHITECT_CARGO_CONFIG")"
+else
+    meta="$(cargo metadata --locked --format-version 1)"
+fi
 package_dir() {
     python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.loads(sys.stdin.read())["packages"] if p["name"]==sys.argv[1]))' "$1" <<<"$meta"
 }

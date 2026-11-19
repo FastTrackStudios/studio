@@ -176,8 +176,35 @@ pinned_architect() {
     echo "$src"
 }
 
+# A cargo config written elsewhere (LOCAL_STACK_OVERRIDES: a stack of local
+# checkouts, every repo patched at once) is the overrides as they are; the
+# issuer and the web app are built from LOCAL_STACK_ARCHITECT_PATH, the
+# Architect checkout that goes with it. Nothing is written into either.
+plan_given() {
+    local given="$1" arch
+    [ -f "$given" ] || die "LOCAL_STACK_OVERRIDES=$given: no such file"
+    arch="$(locate "${LOCAL_STACK_ARCHITECT_PATH:-}")"
+    [ -n "$arch" ] && [ -f "$arch/Cargo.toml" ] \
+        || die "LOCAL_STACK_OVERRIDES needs LOCAL_STACK_ARCHITECT_PATH: the Architect checkout the issuer and the web app are built from"
+    cp "$given" "$overrides"
+    {
+        printf 'arch_src=%q\n' "$arch"
+        printf 'arch_local=%q\n' "$arch"
+        printf 'kf_local=%q\n' ""
+        printf 'issuer_target=%q\n' "$(target_dir)/local-stack/architect/target"
+        printf 'arch_desc=%q\n' "LOCAL $arch @ $(describe "$arch") (issuer, web app); the node's crates as the overrides say"
+        printf 'kf_desc=%q\n' "as the overrides say ($given)"
+        printf 'studio_desc=%q\n' "THE TREE $root @ $(describe "$root") ($(git branch --show-current 2>/dev/null || echo detached))"
+    } >"$state/plan.env"
+    banner
+}
+
 plan() {
     load_choice
+    if [ -n "${LOCAL_STACK_OVERRIDES:-}" ]; then
+        plan_given "$LOCAL_STACK_OVERRIDES"
+        return
+    fi
     local arch_local kf_local s_tag k_tag
     arch_local="$(local_source architect "$c_architect")"
     kf_local="$(local_source keyflow "$c_keyflow")"
@@ -298,7 +325,7 @@ node_build() {
 }
 
 island_build() {
-    just island-build >&2
+    with_overrides just island-build >&2
 }
 
 # The node and its island, copied (never linked: the node refuses a linked
@@ -394,6 +421,9 @@ xdev() {
         DEV_STACK_PORT_WEB="$(port web)"
         DEV_STACK_PORT_SITE="$(port site)"
         DEV_STACK_BIN_NODE="$state/node-wrapper"
+        # An Architect whose app is its node (architect#825): the same, by its names.
+        DEV_STACK_PORT_APP="$(port node)"
+        DEV_STACK_BIN_APP="$state/node-wrapper"
     )
     [ -n "$issuer_target" ] && vars+=(CARGO_TARGET_DIR="$issuer_target")
     # The fixed dev cast only: never a mirror of production.
@@ -488,7 +518,12 @@ run_node() {
                     say "node: restarting on the new build"
                 fi
                 stamp="$now"
-                "$self" _xdev run node &
+                # The stack's node is `node`, or (architect#825) the app with no window.
+                if grep -q '=> "app"' "$arch_src/xtask/src/dev/mod.rs" 2>/dev/null; then
+                    "$self" _xdev run app --headless &
+                else
+                    "$self" _xdev run node &
+                fi
                 pid=$!
                 (
                     for _ in $(seq 1 240); do
@@ -557,8 +592,16 @@ run_web() {
             bash scripts/web-bundle.sh "$out" >&2
     )
     printf '{"issuer":"http://127.0.0.1:%s","client_id":"architect"}' "$auth" >"$out/app/config.json"
+    # The page's policy lets it talk to itself and to https; the stack's
+    # issuer is plain http on loopback, so the sign-in's token exchange is
+    # refused ("NetworkError") unless the page names it. This copy only.
+    sed -i "s|connect-src 'self' https:|connect-src 'self' https: http://127.0.0.1:$auth|" "$out/app/index.html"
     say "web: http://127.0.0.1:$web/app/ (sign in as ada@local.test, password development-password)"
-    exec static-web-server --config-file "$arch_src/apps/web/sws.toml" --root "$out" --host 127.0.0.1 --port "$web"
+    # One origin for the bundle and the node, as the hosted proxy joins
+    # them: a share link's page is the node's and loads the app from its
+    # own origin, so on the bundle's port alone no link opens.
+    say "web: share links open here: $(share_url "http://127.0.0.1:$web")"
+    exec python3 "$root/scripts/local-stack-front.py" "$out" "$web" "$(port node)"
 }
 
 run_desktop() {
