@@ -381,10 +381,18 @@ impl Lyrics {
 /// file beside it. (Not LINES, beside it: that is the chart's melodies.)
 pub const LYRICS_TRACK: &str = "Lyrics";
 
-/// Whether `name` is the lyrics track's.
+/// Whether `name` is the lyrics track's: `Lyrics`, with or without the
+/// tags a set made in Ableton for AbleSet carries after it
+/// (`Lyrics +LYRICS +CC [large]`). Not another track that only shows on
+/// AbleSet's lyrics page (`Chords +LYRICS`, `FoH Notes +LYRICS`).
 #[must_use]
 pub fn is_lyrics_track(name: &str) -> bool {
-    name.trim().eq_ignore_ascii_case(LYRICS_TRACK)
+    let end = [" +", " ["]
+        .iter()
+        .filter_map(|tag| name.find(tag))
+        .min()
+        .unwrap_or(name.len());
+    name[..end].trim().eq_ignore_ascii_case(LYRICS_TRACK)
 }
 
 impl Lyrics {

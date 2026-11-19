@@ -2373,6 +2373,8 @@ impl MixerWidget {
                         preview: Edit::Done(0),
                     };
                     crate::mcp::run(&press);
+                    // This process's folds too (see the arrangement's).
+                    crate::folds::toggle(&track.guid, open);
                     self.redraw();
                 } else if let Some(track) = self.track_at(spot.row).cloned() {
                     // The clip latch clears on a click while it is lit;

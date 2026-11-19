@@ -15,6 +15,8 @@ pub mod audio_mode;
 pub mod automation;
 #[cfg(feature = "native")]
 pub mod automation_actions;
+#[cfg(feature = "native")]
+pub mod autosave;
 pub mod changes;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod collab;

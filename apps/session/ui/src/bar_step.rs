@@ -248,7 +248,7 @@ pub fn Stepper(big: bool) -> Element {
             if *grid.peek() != here {
                 grid.set(here);
             }
-            architect::platform::sleep(std::time::Duration::from_millis(READ_EVERY_MS)).await;
+            crate::pause(std::time::Duration::from_millis(READ_EVERY_MS)).await;
         }
     });
     let now = step();

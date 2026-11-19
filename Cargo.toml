@@ -12,6 +12,8 @@ members = [
     "extensions/daw",
     "extensions/arrangement",
     "extensions/mixer",
+    "extensions/lyrics",
+    "extensions/navigator",
     "extensions/link",
     "features/timeline",
     "features/editing",
@@ -252,16 +254,16 @@ studio-views = { path = "features/studio-views" }
 # defaults OFF here; consumers name the formats they use.
 # The facade defaults OFF too: each consumer names its tier (`text`,
 # `svg` for wasm, `engraver` for the full engraver with the GPU renderer).
-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
-keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
-keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
-keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
-keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
-keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
-tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4" }
+keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "7f3aaa160ba1f8196f0497b20affff12bf248c35", default-features = false }
+keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", rev = "7f3aaa160ba1f8196f0497b20affff12bf248c35" }
+keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", rev = "7f3aaa160ba1f8196f0497b20affff12bf248c35", default-features = false }
+keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", rev = "7f3aaa160ba1f8196f0497b20affff12bf248c35" }
+keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", rev = "7f3aaa160ba1f8196f0497b20affff12bf248c35" }
+keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", rev = "7f3aaa160ba1f8196f0497b20affff12bf248c35" }
+tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "7f3aaa160ba1f8196f0497b20affff12bf248c35" }
 # Engraver — defaults OFF at the root (the full `engraver` feature drags
 # wgpu/vello + PDF export); consumers opt into `svg`/`wgpu`/`engraver`.
-engraver = { git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
+engraver = { git = "https://github.com/FastTrackStudios/keyflow", rev = "7f3aaa160ba1f8196f0497b20affff12bf248c35", default-features = false }
 
 # ── signal domain (wave 4) ────────────────────────────────────────────
 # `signal` is the facade — the only public API surface for the signal
@@ -695,7 +697,7 @@ editor-crdt = { git = "https://github.com/FastTrackStudios/editor", rev = "6817d
 # folded into it at keyflow v0.2.8). Defaults off: no `.kf` fence
 # renderer, so no engraver. Renamed because task's older `editor-keyflow`
 # (below, for the site) has the same package name.
-keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", tag = "v0.5.4", default-features = false }
+keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", rev = "7f3aaa160ba1f8196f0497b20affff12bf248c35", default-features = false }
 editor-keyflow = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 editor-keyflow-lang = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 view-knowledge-graph = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
@@ -792,6 +794,19 @@ session-engine = { path = "apps/session/engine", default-features = false }
 session-runtime = { path = "apps/session/runtime" }
 session-ui = { path = "apps/session/ui", default-features = false }
 studio-view-link = { path = "extensions/link" }
+# Studio's engine, arrangement and mixer extensions as libraries: what
+# Studio's distribution (apps/architect) links in. Each is also its own
+# process program (a development copy shadows the linked one).
+daw-extension = { path = "extensions/daw" }
+studio-arrangement = { path = "extensions/arrangement" }
+studio-mixer = { path = "extensions/mixer" }
+studio-lyrics = { path = "extensions/lyrics" }
+studio-navigator = { path = "extensions/navigator" }
+# Keyflow's chart extension and Ignition's lighting extension, linked into
+# the distribution the same way (`pane`: Ignition's room as the GPU
+# process view the app hosts).
+keyflow-extension = { git = "https://github.com/FastTrackStudios/keyflow", rev = "7f3aaa160ba1f8196f0497b20affff12bf248c35" }
+ignition-pane = { git = "https://github.com/FastTrackStudios/Ignition", rev = "6659bb205c28b5e3d700481249c4cdb9b622a1e1", default-features = false, features = ["pane"] }
 signal-rig-host = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-rigs-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-rig-shell = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
@@ -952,16 +967,16 @@ pipewire-sys = { git = "https://gitlab.freedesktop.org/pipewire/pipewire-rs.git"
 # The fork's FTS.md lists where it departs from upstream (architect#211
 # has the full kept/dropped table). One revision across all blitz crates,
 # and anyrender from the same one.
-blitz-dom = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "8009ce1572aee1c7f4fbed25856189e5e79da4fb" }
-blitz-traits = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "8009ce1572aee1c7f4fbed25856189e5e79da4fb" }
-blitz-paint = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "8009ce1572aee1c7f4fbed25856189e5e79da4fb" }
-blitz-shell = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "8009ce1572aee1c7f4fbed25856189e5e79da4fb" }
-blitz-net = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "8009ce1572aee1c7f4fbed25856189e5e79da4fb" }
-blitz-html = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "8009ce1572aee1c7f4fbed25856189e5e79da4fb" }
+blitz-dom = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-traits = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-paint = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-shell = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-net = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
+blitz-html = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
 # The fork's anyrender (0.14), carried in the blitz repo at the same tag:
 # the compositor's `composite` module and `RenderContext::render`, which
 # the processor's painted visualisers and the vendored anyrender_vello use.
-anyrender = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "8009ce1572aee1c7f4fbed25856189e5e79da4fb" }
+anyrender = { git = "https://www.github.com/FastTrackStudios/blitz", rev = "c995d2722c3c9ece4882d28474b70e71ee7bb277" }
 # From the vendor repo (a sibling checkout path would build on one machine
 # and nowhere else). Three
 # measured changes to the present path — the GPU barrier removed, frame
@@ -1538,3 +1553,4 @@ vault-doc = { git = "https://www.github.com/FastTrackStudios/architect", tag = "
 vault-live = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 vault-obsidian = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 vault-proto = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
+architect-process-view = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }

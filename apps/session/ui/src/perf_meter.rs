@@ -273,7 +273,7 @@ pub fn PerfMeter() -> Element {
     let sort = use_signal(Sort::default);
     use_future(move || async move {
         loop {
-            architect::platform::sleep(std::time::Duration::from_millis(POLL_MS)).await;
+            crate::pause(std::time::Duration::from_millis(POLL_MS)).await;
             let now = open();
             if now != *shown.peek() {
                 shown.set(now);

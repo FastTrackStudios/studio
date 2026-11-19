@@ -207,7 +207,7 @@ impl PaintView for Hosted {
             .is_none_or(|at| began.duration_since(at).as_millis() >= 500)
         {
             self.looked = Some(began);
-            self.buttons = studio_view_link::engine_lights_buttons();
+            self.buttons = studio_view_link::engine_lights_buttons_here();
         }
         let (w, h) = studio_view_link::pane_size(ctx);
         self.width = f64::from(w);

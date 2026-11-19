@@ -56,6 +56,24 @@ fn words_of(session: &StudioSession) -> Words {
     )
 }
 
+/// What the open session holds for the panel: its timed lyric lines (the
+/// Lyrics track's items), its section regions, and every region it has.
+#[must_use]
+pub fn summary(session: &StudioSession) -> (usize, usize, usize) {
+    let project = &session.project;
+    let lines = project
+        .tracks
+        .iter()
+        .find(|t| session::lyrics::is_lyrics_track(&t.name))
+        .map_or(0, |track| project.lane(&track.guid).len());
+    let sections = project
+        .sections
+        .iter()
+        .filter(|r| r.lane == crate::ruler::SECTIONS_ROW as u32)
+        .count();
+    (lines, sections, project.sections.len())
+}
+
 /// The lyrics panel.
 #[component]
 pub fn LyricsPanel() -> Element {
@@ -77,6 +95,40 @@ pub fn LyricsPanel() -> Element {
             at: reading().at,
             start_size,
             empty: "No lyrics for this song yet — put a synced .lrc beside its chart \
+                    (session lyrics fetch) and prepare the song again.",
+        }
+    }
+}
+
+/// The lyrics panel in a pane of another app (Studio's `studio.lyrics`
+/// extension, an Architect pane): the same words and views, the play
+/// position read on a timer, since the pane's window is not this crate's
+/// (no window events to follow, no bars to leave room for).
+#[cfg(feature = "native")]
+#[component]
+pub fn HostedLyrics() -> Element {
+    let session: StudioSession = use_context();
+    let words = use_hook(|| words_of(&session));
+    let mut at = use_signal(|| 0.0_f64);
+    use_future(move || async move {
+        loop {
+            futures_timer::Delay::new(std::time::Duration::from_millis(33)).await;
+            let Some(now) =
+                crate::engine::Transport::shared().map(crate::engine::Transport::reading)
+            else {
+                continue;
+            };
+            if (now.at - *at.peek()).abs() > 0.03 {
+                at.set(now.at);
+            }
+        }
+    });
+    rsx! {
+        LyricsView {
+            words,
+            at: at(),
+            start_size: None,
+            empty: "No lyrics for this song yet: put a synced .lrc beside its chart \
                     (session lyrics fetch) and prepare the song again.",
         }
     }

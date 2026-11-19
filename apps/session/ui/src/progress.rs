@@ -95,12 +95,26 @@ pub(crate) fn use_reading() -> Signal<Reading> {
             reading.set(now);
         }
     };
+    // Linked into another app's window (Studio's views in an Architect
+    // pane): that window's events are not this crate's to follow, so the
+    // reading is taken on a timer.
     #[cfg(feature = "native")]
-    dioxus_native::use_window_event(move |event, _| {
-        if matches!(event, winit::event::WindowEvent::RedrawRequested) {
+    let hosted = use_hook(crate::engine_actions_in_host);
+    #[cfg(feature = "native")]
+    use_future(move || async move {
+        while hosted {
+            futures_timer::Delay::new(std::time::Duration::from_millis(33)).await;
             publish();
         }
     });
+    #[cfg(feature = "native")]
+    if !hosted {
+        dioxus_native::use_window_event(move |event, _| {
+            if matches!(event, winit::event::WindowEvent::RedrawRequested) {
+                publish();
+            }
+        });
+    }
     #[cfg(all(feature = "web", not(feature = "native")))]
     use_future(move || async move {
         loop {

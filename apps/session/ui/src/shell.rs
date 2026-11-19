@@ -662,7 +662,7 @@ pub fn Jobs() -> Element {
     let mut shown = use_signal(Vec::<crate::jobs::Running>::new);
     use_future(move || async move {
         loop {
-            architect::platform::sleep(std::time::Duration::from_millis(200)).await;
+            crate::pause(std::time::Duration::from_millis(200)).await;
             let now = jobs_now();
             if now != *shown.peek() {
                 shown.set(now);
@@ -799,7 +799,7 @@ pub fn PhaseSwitch(mode: Signal<Mode>) -> Element {
     let mut seen = use_signal(session::mode_phases::version);
     use_future(move || async move {
         loop {
-            architect::platform::sleep(std::time::Duration::from_millis(150)).await;
+            crate::pause(std::time::Duration::from_millis(150)).await;
             let now = session::mode_phases::version();
             if now != *seen.peek() {
                 seen.set(now);
@@ -1050,7 +1050,7 @@ pub(crate) fn RackSwitch() -> Element {
     // Switched on the Action List (a key, a model): followed here.
     use_future(move || async move {
         loop {
-            architect::platform::sleep(std::time::Duration::from_millis(250)).await;
+            crate::pause(std::time::Duration::from_millis(250)).await;
             let now = racks_shown();
             if now != *shown.peek() {
                 shown.set(now);

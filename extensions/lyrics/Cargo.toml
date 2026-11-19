@@ -1,0 +1,24 @@
+[package]
+name = "studio-lyrics"
+description = "Studio's lyrics panel as an extension: the song's words following the song (Audience, Performer and Confidence Monitor views, session-ui's lyrics panel), in an Architect pane, attached to Studio's engine (the daw extension) as the arrangement and mixer are."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "studio-lyrics"
+path = "src/main.rs"
+
+[dependencies]
+studio-view-link = { workspace = true }
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+session-ui = { workspace = true, features = ["native"] }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

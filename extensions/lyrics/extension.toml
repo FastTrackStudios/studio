@@ -1,0 +1,28 @@
+id = "studio.lyrics"
+name = "Lyrics"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "Studio's lyrics: the song's words following the song, as an audience slide, a performer's page or a confidence monitor."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "studio-lyrics"
+
+[uses]
+"fts.session" = "^0.1"
+
+[capabilities]
+effect = "read_only"
+
+[[views]]
+id = "lyrics"
+title = "Lyrics"
+icon = "mic-vocal"
+
+[[actions]]
+id = "STUDIO_LYRICS_STATE"
+name = "Lyrics: state"
+description = "Whether this window is linked to Studio's engine, the song it shows, and how many timed lyric lines, section regions and regions in all that song holds."
+group = "Lyrics"
+effect = "read_only"
