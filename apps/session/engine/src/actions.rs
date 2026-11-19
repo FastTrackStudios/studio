@@ -910,6 +910,7 @@ fn register_data(list: &ActionList) -> Result<(), architect::action::ActionError
     crate::record::register(list)?;
     #[cfg(feature = "native")]
     crate::render_ahead::register(list)?;
+    crate::audio_device::register(list)?;
     #[cfg(feature = "native")]
     register_window_controls(list)?;
     crate::grow::register(list)?;

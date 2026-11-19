@@ -798,7 +798,8 @@ pub(crate) fn restart_audio() {
 /// The set's engine on the device, its health watched.
 fn open_set_audio(daw: &Standalone) -> Option<daw::standalone::audio_engine::SetAudio> {
     let began = web_time::Instant::now();
-    let prefs = crate::render_ahead::current().io_prefs();
+    // Rendering ahead as kept, on the device kept (`audio_device`).
+    let prefs = crate::audio_device::current().applied(crate::render_ahead::current().io_prefs());
     match daw.attach_set_audio_with_prefs(&prefs) {
         Ok(audio) => {
             tracing::info!(

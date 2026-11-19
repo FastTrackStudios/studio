@@ -180,6 +180,8 @@ pub use editing::groove;
 #[cfg(any(feature = "native", feature = "web"))]
 pub mod arrange_actions;
 #[cfg(feature = "native")]
+pub mod audio_device;
+#[cfg(feature = "native")]
 pub mod audio_window;
 #[cfg(feature = "native")]
 pub mod comp_keep;

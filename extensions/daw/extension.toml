@@ -66,6 +66,14 @@ effect = "mutating"
 params = '{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}'
 
 [[actions]]
+id = "DAW_AUDIO"
+name = "Studio engine: audio device"
+description = "The output the engine plays through and the outputs this machine has (`devices`: each one's name, channels and own sample rate). `output_device` (part of a name; empty for the system's default), `sample_rate` (Hz; 0 for the device's own) and `buffer_size` (frames; 0 for the default) change it: kept, and the device is opened again (SESSION_AUDIO_DEVICE). What Studio's audio settings set beside the rig engine's."
+group = "DAW"
+effect = "mutating"
+params = '{"type":"object","properties":{"output_device":{"type":"string"},"sample_rate":{"type":"integer"},"buffer_size":{"type":"integer"}}}'
+
+[[actions]]
 id = "DAW_RUN"
 name = "Studio engine: run an action"
 description = "Runs action `id` of the engine's own Action List with `args`. `song` (its number in the set from 1, its title, or its project) runs it on that song of the set without going to it: the window stays on its song, so a script edits every song in one go (DAW_SONGS lists them)."

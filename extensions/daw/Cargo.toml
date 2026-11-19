@@ -26,6 +26,8 @@ tokio = { workspace = true }
 architect-scene = { workspace = true }
 daw = { workspace = true }
 daw-proto = { workspace = true }
+# The output devices this machine has, for DAW_AUDIO (the audio settings).
+audio = { workspace = true, features = ["io"] }
 
 [lints]
 workspace = true
