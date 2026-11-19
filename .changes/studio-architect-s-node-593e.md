@@ -1,5 +1,5 @@
 ---
-"studio-architect" = "minor"
+"studio-desktop" = "minor"
 "xtask-workflows" = "patch"
 ---
 
