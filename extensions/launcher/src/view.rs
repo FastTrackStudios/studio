@@ -1,58 +1,35 @@
-//! The launcher's view: one setlist as a list of songs, in the grammar of
-//! Architect's media list (`architect_media::ui::MediaList`, the list a
-//! setlist's own page plays from): each set's name, then each row's
-//! number, tile, title over artist, and length. The tile is the song's
-//! key on the song's colour, as the setlist's share page draws it
-//! (`setlists::row::tile_hue`). Nothing else is on a row: it is a list to
-//! look at and load from. What differs from the media list is what a
-//! press does: it opens the song in Studio's engine instead of playing
-//! its recording, so a song with no tracks on this machine is greyed, as
-//! a row with nothing to play is there.
+//! The launcher's view: one setlist as Architect's media list
+//! (`architect_media::ui::MediaList`, the list a setlist's own page plays
+//! from), given the launcher's press: the pill opens the set and a row
+//! opens its song in Studio's engine, where the page's list plays a
+//! recording. A song's tile is its key on its colour, the setlist share
+//! page's rule (`setlists::row::tile_hue`), over its cover's corner when
+//! it has one. A song with no tracks on this machine is greyed, as a row
+//! with nothing to play is.
 //!
 //! The view draws no navigation of its own. Which setlist it shows is
 //! chosen in Architect's navigator (`crate::nav`) or in the row of
 //! setlist names at its head, so the same view is the desk's pane, the
 //! window's and the phone's page inside Architect's shell.
-//!
-//! Inline styles over the host's theme variables only (a linked view may
-//! hold no `style` node).
 
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
+use architect_media::ui::{MediaList, Sections};
+use architect_media::{Item, Row, Tile};
 use dioxus::prelude::*;
 use serde_json::{Value, json};
 
-use crate::Found;
-use crate::model::clock;
+use crate::model::{Entry, clock};
+use crate::{Found, Loaded, layout};
 
 const INK: &str = "var(--foreground, #e6e8eb)";
 const DIM: &str = "var(--muted-foreground, #8b9099)";
 const LINE: &str = "var(--border, #23262b)";
 const WASH: &str = "var(--accent, #26292f)";
 const GROUND: &str = "var(--background, #101114)";
-/// The pill and the open song: the theme's "safe" green.
-const READY: &str = "var(--signal-safe, #3ecf8e)";
-
-/// What the engine has open, as the view says it.
-#[derive(Clone, PartialEq, Default)]
-struct Engine {
-    up: bool,
-    /// The open song's session path.
-    path: Option<String>,
-}
-
-async fn engine_now() -> Engine {
-    let Ok(state) = crate::host::run("DAW_STATE", json!({})).await else {
-        return Engine::default();
-    };
-    Engine {
-        up: state.get("up").and_then(Value::as_bool).unwrap_or(false),
-        path: state
-            .pointer("/session/path")
-            .and_then(Value::as_str)
-            .map(str::to_owned),
-    }
-}
 
 /// What a press said, shown along the foot until the next one.
 #[derive(Clone, PartialEq)]
@@ -63,11 +40,101 @@ enum Said {
     Refused(String),
 }
 
+/// The covers read so far, by their file: a cover is read once.
+static COVERS: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(None);
+
+fn cover(file: &str) -> Option<String> {
+    let mut covers = COVERS.lock().unwrap_or_else(PoisonError::into_inner);
+    covers
+        .get_or_insert_with(HashMap::new)
+        .entry(file.to_owned())
+        .or_insert_with(|| crate::find::picture_url(Path::new(file)))
+        .clone()
+}
+
+/// A place of a setlist as a row of the list: `id` its place from 0.
+fn row(id: usize, entry: &Entry, session: Option<&Path>, vault: Option<&str>) -> Row {
+    let song = entry.song.as_ref();
+    let about: Vec<String> = [
+        song.and_then(|s| s.artist.clone()),
+        song.and_then(|s| s.tempo).map(|t| format!("{t:.0} bpm")),
+        entry.remark.clone(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    Row {
+        id: id.to_string(),
+        number: id.saturating_add(1),
+        item: Item {
+            path: entry.note.clone(),
+            title: entry.label.clone(),
+            subtitle: if song.is_none() {
+                Some("its note is not in the library".to_owned())
+            } else {
+                (!about.is_empty()).then(|| about.join(" · "))
+            },
+            duration: song.and_then(|s| s.length),
+            ..Item::default()
+        },
+        // What the row loads: its session. None greys it.
+        media: session.and_then(Path::to_str).map(str::to_owned),
+        art: song
+            .and_then(|s| s.art.as_deref())
+            .zip(vault)
+            .map(|(art, vault)| format!("{vault}/{art}")),
+        tile: Some(Tile {
+            text: song
+                .and_then(crate::model::Song::keys)
+                .unwrap_or_else(|| "♪".to_owned()),
+            hue: setlists::row::tile_hue(&entry.label),
+        }),
+    }
+}
+
+/// `found` as the list's sections: its sets, each place a row.
+fn sections(found: &Found, vault: Option<&str>) -> Sections {
+    let mut places = found.sessions.iter().enumerate();
+    found
+        .setlist
+        .sets
+        .iter()
+        .map(|set| {
+            let rows = set
+                .entries
+                .iter()
+                .filter_map(|entry| {
+                    let (id, session) = places.next()?;
+                    Some(row(id, entry, session.as_deref(), vault))
+                })
+                .collect();
+            (set.name.clone(), rows)
+        })
+        .collect()
+}
+
+/// The place of `found` whose session is the engine's `playing`.
+fn current(found: &Found, playing: Option<&str>) -> Option<String> {
+    let playing = Path::new(playing?).with_extension("");
+    found
+        .sessions
+        .iter()
+        .position(|s| {
+            s.as_deref()
+                .is_some_and(|p| p.with_extension("") == playing)
+        })
+        .map(|at| at.to_string())
+}
+
 #[component]
 pub fn LauncherView() -> Element {
-    let mut loaded = use_signal(|| None::<Result<Vec<Found>, String>>);
-    let mut engine = use_signal(Engine::default);
+    let mut loaded = use_signal(|| None::<Result<Loaded, String>>);
+    let mut playing = use_signal(|| None::<String>);
     let mut chosen = use_signal(crate::chosen);
+    let mut saved = use_signal(Vec::<String>::new);
+    // The layout Open set applies: none until one is picked, then the
+    // setlist's own.
+    let mut picked = use_signal(|| None::<Option<String>>);
     let mut said = use_signal(|| Said::Nothing);
 
     // The choice made elsewhere (the navigator, an action) twice a second;
@@ -79,15 +146,20 @@ pub fn LauncherView() -> Element {
             let now = crate::chosen();
             if *chosen.peek() != now {
                 chosen.set(now);
+                picked.set(None);
             }
             if tick.is_multiple_of(8) {
-                let now = crate::load().await.map(|l| l.setlists);
+                let now = crate::load().await;
                 if loaded.peek().as_ref() != Some(&now) {
                     loaded.set(Some(now));
                 }
-                let now = engine_now().await;
-                if *engine.peek() != now {
-                    engine.set(now);
+                let now = crate::follow::session().await.map(|s| s.path);
+                if *playing.peek() != now {
+                    playing.set(now);
+                }
+                let now = crate::arrange::saved_names().await;
+                if *saved.peek() != now {
+                    saved.set(now);
                 }
             }
             tick = tick.wrapping_add(1);
@@ -95,20 +167,28 @@ pub fn LauncherView() -> Element {
         }
     });
 
-    let lists: Vec<Found> = match loaded() {
+    let all = match loaded() {
         None => return rsx! { Note { text: "Reading the vault…" } },
         Some(Err(why)) => return rsx! { Note { text: "The vault could not be read: {why}" } },
-        Some(Ok(lists)) => lists,
+        Some(Ok(all)) => all,
     };
-    if lists.is_empty() {
+    if all.setlists.is_empty() {
         return rsx! {
             Note { text: "No setlist in this vault yet. A setlist is a note of type setlist in Setlists/." }
         };
     }
-    let open = chosen()
-        .and_then(|path| lists.iter().find(|f| f.setlist.path == path).cloned())
-        .or_else(|| lists.first().cloned());
-    let open_path = open.as_ref().map(|f| f.setlist.path.clone());
+    let Some(found) = chosen()
+        .and_then(|path| {
+            all.setlists
+                .iter()
+                .find(|f| f.setlist.path == path)
+                .cloned()
+        })
+        .or_else(|| all.setlists.first().cloned())
+    else {
+        return rsx! { Note { text: "Choose a setlist." } };
+    };
+    let list = found.setlist.clone();
 
     let mut press = move |what: String, action: &'static str, args: Value| {
         said.set(Said::Working(what.clone()));
@@ -118,9 +198,39 @@ pub fn LauncherView() -> Element {
                 Ok(out) => Said::Done(done(&what, &out)),
                 Err(why) => Said::Refused(why),
             });
-            engine.set(engine_now().await);
+            playing.set(crate::follow::session().await.map(|s| s.path));
         });
     };
+
+    let count = list.entries().count();
+    let playable = found.playable();
+    let (length, unknown) = list.length();
+    let mut facts = vec![format!("{count} songs")];
+    if length > 0.0 {
+        facts.push(if unknown == 0 {
+            clock(length)
+        } else {
+            format!("{} timed, {unknown} not", clock(length))
+        });
+    }
+    if let Some(date) = &list.date {
+        facts.push(date.clone());
+    }
+    let head = if found.file.is_some() || playable == count {
+        "Open set".to_owned()
+    } else if playable > 0 {
+        format!("Open {playable} with tracks")
+    } else {
+        "No tracks yet".to_owned()
+    };
+    let layout_now = picked().unwrap_or_else(|| list.layout.clone());
+    let layouts = layout::BUILT_IN
+        .iter()
+        .map(|l| (*l).to_owned())
+        .chain(saved());
+    let (title, songs) = (list.title.clone(), found.clone());
+    let layout_for_open = layout_now.clone();
+    let art = use_callback(|file: String| cover(&file));
 
     rsx! {
         div {
@@ -129,43 +239,71 @@ pub fn LauncherView() -> Element {
             div {
                 style: "flex:1; min-height:0; overflow-y:scroll; padding:16px 20px 24px; box-sizing:border-box;",
                 // The setlists, to switch between where the navigator is not showing.
-                if lists.len() > 1 {
+                if all.setlists.len() > 1 {
                     div { style: "display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px;",
-                        for found in lists.iter() {
-                            {
-                                let on = open_path.as_deref() == Some(found.setlist.path.as_str());
-                                let (fill, ink) = if on { (WASH, INK) } else { ("transparent", DIM) };
-                                let path = found.setlist.path.clone();
-                                rsx! {
-                                    button {
-                                        key: "{found.setlist.path}",
-                                        style: "height:28px; padding:0 12px; border:1px solid {LINE}; border-radius:999px; \
-                                                background:{fill}; color:{ink}; font-size:12px; font-weight:600; cursor:pointer;",
-                                        onclick: move |_| {
-                                            crate::choose(path.clone());
-                                            chosen.set(Some(path.clone()));
-                                        },
-                                        "{found.setlist.title}"
+                        for other in all.setlists.iter() {
+                            Pill {
+                                key: "{other.setlist.path}",
+                                label: other.setlist.title.clone(),
+                                on: other.setlist.path == list.path,
+                                onpick: {
+                                    let path = other.setlist.path.clone();
+                                    move |()| {
+                                        crate::choose(path.clone());
+                                        chosen.set(Some(path.clone()));
+                                        picked.set(None);
                                     }
-                                }
+                                },
                             }
                         }
                     }
                 }
-                if let Some(found) = open {
-                    SetlistPage {
-                        found,
-                        playing: engine().path,
-                        onsetlist: move |title: String| {
-                            press(title.clone(), "STUDIO_LAUNCHER_OPEN_SETLIST", json!({ "setlist": title }));
-                        },
-                        onsong: move |(setlist, song): (String, String)| {
-                            press(song.clone(), "STUDIO_LAUNCHER_OPEN_SONG", json!({ "song": song, "setlist": setlist }));
-                        },
+                div { style: "font-size:22px; font-weight:700; line-height:1.2; margin-bottom:8px;", "{list.title}" }
+                // The layout Open set lays the panes out in.
+                div { style: "display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:6px;",
+                    div { style: "color:{DIM}; font-size:12px; margin-right:2px;", "Opens in" }
+                    Pill {
+                        label: "As it is".to_owned(),
+                        on: layout_now.is_none(),
+                        onpick: move |()| picked.set(Some(None)),
+                    }
+                    for name in layouts {
+                        Pill {
+                            key: "{name}",
+                            label: name.clone(),
+                            on: layout_now.as_deref().is_some_and(|l| l.eq_ignore_ascii_case(&name)),
+                            onpick: move |()| picked.set(Some(Some(name.clone()))),
+                        }
                     }
                 }
+                MediaList {
+                    source: "app:studio-launcher".to_owned(),
+                    name: list.title,
+                    sections: sections(&found, all.vault_root.as_deref()),
+                    art: Some(art),
+                    head: Some(head),
+                    sum: Some(facts.join(" · ")),
+                    current: current(&found, playing().as_deref()),
+                    on_head: move |()| {
+                        let mut args = json!({ "setlist": title });
+                        if let (Some(layout), Some(fields)) = (&layout_for_open, args.as_object_mut()) {
+                            fields.insert("layout".to_owned(), json!(layout));
+                        }
+                        press(title.clone(), "STUDIO_LAUNCHER_OPEN_SETLIST", args);
+                    },
+                    on_press: move |id: String| {
+                        let place = id.parse::<usize>().ok().and_then(|at| songs.setlist.entries().nth(at));
+                        if let Some(entry) = place {
+                            press(
+                                entry.label.clone(),
+                                "STUDIO_LAUNCHER_OPEN_SONG",
+                                json!({ "song": entry.label, "setlist": songs.setlist.title }),
+                            );
+                        }
+                    },
+                }
             }
-            Foot { said: said(), engine: engine() }
+            Foot { said: said(), playing: playing() }
         }
     }
 }
@@ -180,10 +318,10 @@ fn done(what: &str, out: &Value) -> String {
         .filter_map(Value::as_str)
         .collect();
     if left.is_empty() {
-        format!("Opening {what} in the engine.")
+        format!("Opened {what}.")
     } else {
         format!(
-            "Opening {what} without {} with no tracks: {}.",
+            "Opened {what} without {} with no tracks: {}.",
             left.len(),
             left.join(", ")
         )
@@ -201,142 +339,40 @@ fn Note(text: String) -> Element {
     }
 }
 
+/// One of a row of choices: the one on is filled.
 #[component]
-fn SetlistPage(
-    found: Found,
-    playing: Option<String>,
-    onsetlist: EventHandler<String>,
-    onsong: EventHandler<(String, String)>,
-) -> Element {
-    let list = &found.setlist;
-    let count = list.entries().count();
-    let playable = found.playable();
-    let (length, unknown) = list.length();
-    // The media list's summary line: items, time, how many open.
-    let mut facts = vec![format!("{count} songs")];
-    if length > 0.0 {
-        facts.push(if unknown == 0 {
-            clock(length)
-        } else {
-            format!("{} timed, {unknown} not", clock(length))
-        });
-    }
-    if let Some(date) = &list.date {
-        facts.push(date.clone());
-    }
-    let facts = facts.join(" · ");
-    let can = found.file.is_some() || playable > 0;
-    let button = if can {
-        format!("background:{READY}; color:#06140d; cursor:pointer;")
+fn Pill(label: String, on: bool, onpick: EventHandler<()>) -> Element {
+    let (fill, ink) = if on {
+        (WASH, INK)
     } else {
-        format!("background:{WASH}; color:{DIM};")
+        ("transparent", DIM)
     };
-    let label = if found.file.is_some() || playable == count {
-        "Open set".to_owned()
-    } else if playable > 0 {
-        format!("Open {playable} with tracks")
-    } else {
-        "No tracks yet".to_owned()
-    };
-    let title = list.title.clone();
-    let mut at = 0usize;
     rsx! {
-        div { style: "font-size:22px; font-weight:700; line-height:1.2;", "{list.title}" }
-        // The list's head: its pill, then what it holds.
-        div { style: "display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:10px 0 6px; min-width:0;",
-            button {
-                style: "flex:none; height:36px; padding:0 16px; border:none; border-radius:999px; font-size:14px; font-weight:600; {button}",
-                disabled: !can,
-                onclick: move |_| onsetlist.call(title.clone()),
-                "{label}"
-            }
-            div { style: "flex:1 1 160px; min-width:0; color:{DIM};", "{facts}" }
-        }
-        for (s, set) in list.sets.iter().enumerate() {
-            div { key: "{s}",
-                if let Some(name) = &set.name {
-                    div { style: "padding:18px 0 6px; font-size:13px; font-weight:650; color:{DIM};", "{name}" }
-                }
-                for entry in set.entries.iter() {
-                    {
-                        let number = at + 1;
-                        let session = found.sessions.get(at).cloned().flatten();
-                        at += 1;
-                        let song = entry.song.as_ref();
-                        let now = session.is_some()
-                            && session.as_ref().and_then(|p| p.to_str()) == playing.as_deref();
-                        let key = song.and_then(crate::model::Song::keys);
-                        let hue = setlists::row::tile_hue(&entry.label);
-                        let about = [
-                            song.and_then(|x| x.artist.clone()),
-                            song.and_then(|x| x.tempo).map(|t| format!("{t:.0} bpm")),
-                        ]
-                        .into_iter()
-                        .flatten()
-                        .collect::<Vec<_>>()
-                        .join(" · ");
-                        let length = song.and_then(|x| x.length).map(clock).unwrap_or_default();
-                        let fill = if now { WASH } else { "transparent" };
-                        let ink = if now { READY } else { INK };
-                        // A song with no tracks is greyed, as a row with
-                        // nothing to play is in the media list.
-                        let fade = if session.is_some() { "1" } else { "0.55" };
-                        let cursor = if session.is_some() { "pointer" } else { "default" };
-                        let tile_size = if key.as_ref().is_some_and(|k| k.chars().count() > 2) { 12 } else { 16 };
-                        let (name, label) = (list.title.clone(), entry.label.clone());
-                        rsx! {
-                            div {
-                                key: "{number}",
-                                style: "display:flex; align-items:center; gap:12px; min-width:0; min-height:56px; \
-                                        padding:4px; border-radius:8px; background:{fill}; cursor:{cursor};",
-                                onclick: move |_| {
-                                    if session.is_some() {
-                                        onsong.call((name.clone(), label.clone()));
-                                    }
-                                },
-                                div { style: "flex:none; width:22px; text-align:right; color:{DIM}; font-size:13px; opacity:{fade};", "{number}" }
-                                div {
-                                    style: "flex:none; width:48px; height:48px; border-radius:6px; background:hsl({hue} 42% 40%); \
-                                            color:#ffffff; display:flex; align-items:center; justify-content:center; \
-                                            font-size:{tile_size}px; font-weight:700; opacity:{fade};",
-                                    {key.unwrap_or_else(|| "♪".to_owned())}
-                                }
-                                div { style: "flex:1; min-width:0; opacity:{fade};",
-                                    div { style: "color:{ink}; font-size:16px; font-weight:500; line-height:1.3; overflow:hidden; white-space:nowrap;", "{entry.label}" }
-                                    div { style: "color:{DIM}; font-size:13px; overflow:hidden; white-space:nowrap;",
-                                        if song.is_none() { "its note is not in the library" } else { "{about}" }
-                                    }
-                                }
-                                div { style: "flex:none; color:{DIM}; font-size:13px; opacity:{fade};", "{length}" }
-                            }
-                        }
-                    }
-                }
-            }
+        button {
+            style: "height:28px; padding:0 12px; border:1px solid {LINE}; border-radius:999px; \
+                    background:{fill}; color:{ink}; font-size:12px; font-weight:600; cursor:pointer;",
+            onclick: move |_| onpick.call(()),
+            "{label}"
         }
     }
 }
 
 #[component]
-fn Foot(said: Said, engine: Engine) -> Element {
+fn Foot(said: Said, playing: Option<String>) -> Element {
     let (text, ink) = match &said {
         Said::Nothing => (String::new(), DIM),
         Said::Working(what) => (format!("Opening {what}…"), DIM),
         Said::Done(text) => (text.clone(), INK),
         Said::Refused(why) => (why.clone(), "var(--destructive, #e5534b)"),
     };
-    let state = if engine.up {
-        engine
-            .path
-            .as_deref()
-            .and_then(|p| p.rsplit('/').next())
-            .map_or_else(
-                || "Engine: nothing open".to_owned(),
-                |name| format!("Engine: {name}"),
-            )
-    } else {
-        "Engine: not running".to_owned()
-    };
+    let state = playing
+        .as_deref()
+        .and_then(|p| Path::new(p).file_stem())
+        .and_then(|s| s.to_str())
+        .map_or_else(
+            || "Engine: nothing open".to_owned(),
+            |name| format!("Engine: {name}"),
+        );
     rsx! {
         div {
             style: "flex:none; display:flex; align-items:center; gap:12px; min-width:0; padding:6px 16px; \

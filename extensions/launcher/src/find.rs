@@ -120,6 +120,76 @@ pub fn cues(vault_root: &Path, project: &str, label: &str) -> Option<PathBuf> {
     path.exists().then_some(path)
 }
 
+/// The largest cover read into a page, bytes.
+const COVER_MAX: u64 = 2 * 1024 * 1024;
+
+/// The picture at `path` as a `data:` URL an image can show, when it is
+/// one and small enough.
+#[must_use]
+pub fn picture_url(path: &Path) -> Option<String> {
+    use base64::Engine as _;
+    let kind = match path.extension()?.to_str()?.to_lowercase().as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "webp" => "image/webp",
+        _ => return None,
+    };
+    if std::fs::metadata(path).ok()?.len() > COVER_MAX {
+        return None;
+    }
+    let bytes = std::fs::read(path).ok()?;
+    Some(format!(
+        "data:{kind};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
+}
+
+/// The chart beside song note `note` (a path on disk): the first `.kf` in
+/// its folder. What a song whose note names no chart (it has arrangements
+/// only) is read from.
+#[must_use]
+pub fn chart_beside(note: &Path) -> Option<PathBuf> {
+    let mut charts: Vec<PathBuf> = std::fs::read_dir(note.parent()?)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "kf"))
+        .collect();
+    charts.sort();
+    charts.into_iter().next()
+}
+
+/// The Ableton set of a project (`show/<name>.als`, or at its top): what
+/// its lighting reads its locators from. `IGNITION_LIVE_SET` names
+/// another.
+#[must_use]
+pub fn live_set(project_root: &Path) -> Option<PathBuf> {
+    if let Some(named) = std::env::var_os("IGNITION_LIVE_SET").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(named));
+    }
+    let mut sets: Vec<PathBuf> = [project_root.join("show"), project_root.to_owned()]
+        .iter()
+        .filter_map(|dir| std::fs::read_dir(dir).ok())
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "als"))
+        .collect();
+    sets.sort_by_key(|p| p.as_os_str().len());
+    sets.into_iter().next()
+}
+
+/// `session` as a song's note names it: its path inside `project_root`,
+/// when it is in there.
+#[must_use]
+pub fn in_project(session: &Path, project_root: &Path) -> Option<String> {
+    session
+        .strip_prefix(project_root)
+        .ok()
+        .and_then(Path::to_str)
+        .map(str::to_owned)
+}
+
 /// Writes a setlist file of `sessions` in order (one path a line, what
 /// the engine's `read_setlist` takes) for setlist `title`: where it is.
 ///
@@ -271,6 +341,31 @@ mod tests {
         let cue = s.file("Projects/Show/lighting/cues/know-me-extended.json");
         assert_eq!(cues(&s.0, "Show", "Know Me (Extended)"), Some(cue));
         assert_eq!(cues(&s.0, "Show", "Know Me"), None);
+    }
+
+    #[test]
+    fn a_chart_and_a_live_set_are_found_by_their_folders() {
+        let s = Scratch::new("beside");
+        let note = s.file("Libraries/L/Know Me/Know Me.md");
+        assert_eq!(chart_beside(&note), None);
+        let chart = s.file("Libraries/L/Know Me/Know Me.kf");
+        s.file("Libraries/L/Know Me/Know Me.lrc");
+        assert_eq!(chart_beside(&note), Some(chart));
+        let project = s.0.join("Projects/Show");
+        s.file("Projects/Show/show/Backup/Old Showcase Backup.als");
+        let set = s.file("Projects/Show/show/Showcase.als");
+        if std::env::var_os("IGNITION_LIVE_SET").is_none() {
+            assert_eq!(live_set(&project), Some(set));
+        }
+        let session = project.join("songs/a/A.session");
+        assert_eq!(
+            in_project(&session, &project).as_deref(),
+            Some("songs/a/A.session")
+        );
+        assert_eq!(
+            in_project(Path::new("/elsewhere/A.session"), &project),
+            None
+        );
     }
 
     #[test]

@@ -60,6 +60,7 @@ pub fn stage() -> Bundle {
         .member(&studio_mixer::Mixer)
         .member(&studio_lyrics::Lyrics)
         .member(&studio_navigator::Navigator)
+        .member(&studio_launcher::Launcher)
         .member(&keyflow_extension::Keyflow)
         .member(&ignition_pane::ext::Lighting)
 }

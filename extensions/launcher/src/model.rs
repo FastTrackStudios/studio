@@ -143,6 +143,10 @@ pub struct Song {
     pub length: Option<f64>,
     /// It has a chart (a `.kf`).
     pub chart: bool,
+    /// Its chart's file, a vault path.
+    pub chart_path: Option<String>,
+    /// Its cover, a vault path.
+    pub art: Option<String>,
     /// It has timed lyrics (an `.lrc`).
     pub lyrics: bool,
     /// It has a recording of its own (a render) to rehearse to.
@@ -174,6 +178,8 @@ impl Song {
             meter: row.text("meter"),
             length: row.number("length"),
             chart: row.text("chart").is_some(),
+            chart_path: row.text("chart").map(|c| Link::parse(&c).target),
+            art: row.text("art").map(|a| Link::parse(&a).target),
             lyrics: row.text("lyrics").is_some(),
             recording: media.iter().any(|m| !is_reference(m)),
             reference: media.iter().any(is_reference),
@@ -202,6 +208,49 @@ pub struct Entry {
     pub arrangement: Option<String>,
     /// The song, when the library has its note.
     pub song: Option<Song>,
+    /// What this setlist says of it (the setlist's `notes`, by its label).
+    pub remark: Option<String>,
+}
+
+/// A rig a setlist is played with (the setlist's `parts`): whose it is,
+/// which instrument and profile, and the patch a song takes.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Part {
+    pub player: String,
+    /// The instrument (`guitar`, `keys`).
+    pub rig: String,
+    pub profile: Option<String>,
+    /// A song's label to its patch.
+    pub patches: Vec<(String, String)>,
+}
+
+impl Part {
+    fn of(value: &Value) -> Option<Self> {
+        let text = |k: &str| value.get(k).and_then(Value::as_str).map(str::to_owned);
+        Some(Self {
+            player: text("player").unwrap_or_default(),
+            rig: text("rig")?,
+            profile: text("profile"),
+            patches: value
+                .get("patches")
+                .and_then(Value::as_object)
+                .into_iter()
+                .flatten()
+                .filter_map(|(song, patch)| Some((song.clone(), patch.as_str()?.to_owned())))
+                .collect(),
+        })
+    }
+
+    /// As the setlist's frontmatter keeps it.
+    #[must_use]
+    pub fn json(&self) -> Value {
+        let patches: Map<String, Value> = self
+            .patches
+            .iter()
+            .map(|(song, patch)| (song.clone(), Value::String(patch.clone())))
+            .collect();
+        json!({ "player": self.player, "rig": self.rig, "profile": self.profile, "patches": patches })
+    }
 }
 
 /// A named run of a setlist (an act, a set); unnamed when the setlist has
@@ -224,17 +273,28 @@ pub struct Setlist {
     pub project: String,
     /// The session file its note names (`session`), as written.
     pub session: Option<String>,
+    /// The layout Open set applies (its note's `layout`): the one it was
+    /// opened with last.
+    pub layout: Option<String>,
+    /// The rigs it is played with (its note's `parts`).
+    pub parts: Vec<Part>,
     pub sets: Vec<Set>,
 }
 
 impl Setlist {
     #[must_use]
     pub fn of(row: &Row, songs: &[Song]) -> Self {
+        let notes = row.values.get("notes").and_then(Value::as_object);
         let entry = |text: &str| {
             let link = Link::parse(text);
             let note = link.note();
             Entry {
                 song: songs.iter().find(|s| s.path == note).cloned(),
+                remark: notes
+                    .and_then(|n| n.get(&link.label))
+                    .and_then(Value::as_str)
+                    .filter(|t| !t.trim().is_empty())
+                    .map(str::to_owned),
                 label: link.label,
                 arrangement: link.part,
                 note,
@@ -287,6 +347,15 @@ impl Setlist {
             date: row.text("date"),
             project,
             session: row.text("session").map(|s| Link::parse(&s).target),
+            layout: row.text("layout"),
+            parts: row
+                .values
+                .get("parts")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Part::of)
+                .collect(),
             sets,
         }
     }
@@ -420,6 +489,7 @@ pub fn entry_json(entry: &Entry, session: Option<&str>, lights: bool) -> Value {
         "tempo": song.and_then(|s| s.tempo),
         "meter": song.and_then(|s| s.meter.clone()),
         "length": song.and_then(|s| s.length),
+        "note": entry.remark,
         "ready": {
             "chart": song.is_some_and(|s| s.chart),
             "lyrics": song.is_some_and(|s| s.lyrics),
@@ -495,6 +565,12 @@ mod tests {
                     { "name": "Act II", "songs": ["[[Libraries/Recital/Gone/Gone|Gone]]"] },
                 ],
                 "songs": ["[[Libraries/Recital/Drive To LA/Drive To LA|Drive To LA]]"],
+                "notes": { "Drive To LA": "in C, ends in Db", "Gone": " " },
+                "layout": "Stage",
+                "parts": [
+                    { "player": "Cody", "rig": "guitar", "profile": "worship", "patches": { "Drive To LA": "clean" } },
+                    { "player": "nobody" },
+                ],
             }),
         );
         let lists = setlists(&[set], &[drive()]);
@@ -510,6 +586,22 @@ mod tests {
         );
         assert!(list.sets[1].entries[0].song.is_none());
         assert_eq!(list.length(), (196.5, 1));
+        assert_eq!(
+            list.sets[0].entries[0].remark.as_deref(),
+            Some("in C, ends in Db")
+        );
+        assert_eq!(list.sets[1].entries[0].remark, None);
+        assert_eq!(list.layout.as_deref(), Some("Stage"));
+        assert_eq!(list.parts.len(), 1);
+        assert_eq!(list.parts[0].rig, "guitar");
+        assert_eq!(
+            list.parts[0].patches,
+            [("Drive To LA".to_owned(), "clean".to_owned())]
+        );
+        assert_eq!(
+            Part::of(&list.parts[0].json()).as_ref(),
+            Some(&list.parts[0])
+        );
     }
 
     #[test]

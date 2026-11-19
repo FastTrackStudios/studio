@@ -4,7 +4,10 @@
 //! launcher reaches any of them, so its development copy (a process)
 //! behaves as the compiled-in one.
 
-use std::sync::{Mutex, PoisonError};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::{Mutex, OnceLock, PoisonError};
+use std::task::{Context, Poll};
 
 use architect_extensions::hostcall::HostRequest;
 use architect_extensions::linked::Handle;
@@ -26,27 +29,60 @@ fn handle() -> Result<Handle, String> {
         .ok_or_else(|| "the launcher is not running".to_owned())
 }
 
+/// A runtime for the actions the launcher runs.
+///
+/// Linked in, an action the launcher runs is polled where the launcher's
+/// own future is: a hook's (launch, the deck's moves) is not on Tokio,
+/// and an action that needs its reactor (Keyflow's follow opens a socket)
+/// panics there, which the same action run from the command line never
+/// does. Each call is polled with this runtime entered, so what it
+/// spawns and waits on has one. As a process the call crosses to the
+/// host and none of this matters.
+fn runtime() -> Option<&'static tokio::runtime::Runtime> {
+    static RUNTIME: OnceLock<Option<tokio::runtime::Runtime>> = OnceLock::new();
+    RUNTIME
+        .get_or_init(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .thread_name("studio-launcher")
+                .enable_all()
+                .build()
+                .ok()
+        })
+        .as_ref()
+}
+
+/// `future`, each poll of it with [`runtime`] entered.
+struct Entered<F>(Pin<Box<F>>);
+
+impl<F: Future> Future for Entered<F> {
+    type Output = F::Output;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let _guard = runtime().map(tokio::runtime::Runtime::enter);
+        self.0.as_mut().poll(cx)
+    }
+}
+
 /// Runs app action `action` with `args`: its answer.
 ///
 /// # Errors
 ///
 /// The launcher is not running, or the action refused.
 pub async fn run(action: &str, args: Value) -> Result<Value, String> {
-    handle()?
-        .host(HostRequest::Run {
-            action: action.to_owned(),
-            args,
-            ticket: None,
-        })
-        .await
-        .map_err(|e| e.to_string())
+    let call = handle()?.host(HostRequest::Run {
+        action: action.to_owned(),
+        args,
+        ticket: None,
+    });
+    Entered(Box::pin(call)).await.map_err(|e| e.to_string())
 }
 
 /// Every setlist note.
-const SETLISTS: &str = "filters:\n  and:\n    - type == \"setlist\"\nviews:\n  - type: table\n    name: Setlists\n    order:\n      - file.name\n      - title\n      - date\n      - songs\n      - sets\n      - project\n      - session\n";
+const SETLISTS: &str = "filters:\n  and:\n    - type == \"setlist\"\nviews:\n  - type: table\n    name: Setlists\n    order:\n      - file.name\n      - title\n      - date\n      - songs\n      - sets\n      - project\n      - session\n      - notes\n      - parts\n      - layout\n";
 
 /// Every song note, with what says what it is ready with.
-const SONGS: &str = "filters:\n  and:\n    - type == \"song\"\nviews:\n  - type: table\n    name: Songs\n    order:\n      - file.name\n      - title\n      - artist\n      - key\n      - key_end\n      - tempo\n      - meter\n      - length\n      - chart\n      - lyrics\n      - media\n      - session\n";
+const SONGS: &str = "filters:\n  and:\n    - type == \"song\"\nviews:\n  - type: table\n    name: Songs\n    order:\n      - file.name\n      - title\n      - artist\n      - key\n      - key_end\n      - tempo\n      - meter\n      - length\n      - chart\n      - lyrics\n      - media\n      - session\n      - art\n";
 
 async fn query(source: &str) -> Result<Vec<Row>, String> {
     let out = handle()?
@@ -90,4 +126,56 @@ pub async fn engine(id: &str, args: Value) -> Result<Value, String> {
         Value::String(text) => serde_json::from_str(&text).unwrap_or(Value::String(text)),
         other => other,
     })
+}
+
+/// The extension's own kept value `key` on this device.
+pub async fn data(key: &str) -> Option<Value> {
+    handle()
+        .ok()?
+        .host(HostRequest::Data {
+            key: key.to_owned(),
+        })
+        .await
+        .ok()
+        .filter(|v| !v.is_null())
+}
+
+/// Keeps `value` as `key` on this device (none: forgets it).
+///
+/// # Errors
+///
+/// The launcher is not running, or the host refused.
+pub async fn set_data(key: &str, value: Option<Value>) -> Result<(), String> {
+    handle()?
+        .host(HostRequest::SetData {
+            key: key.to_owned(),
+            value,
+        })
+        .await
+        .map(drop)
+        .map_err(|e| e.to_string())
+}
+
+/// Sets property `key` of note `path` to `value` (`None`: removes it).
+///
+/// # Errors
+///
+/// The vault refused the write.
+pub async fn set_property(path: &str, key: &str, value: Option<&Value>) -> Result<(), String> {
+    match value {
+        // The vault takes a property's value as JSON text, or else as text.
+        Some(value) => {
+            let value = match value {
+                Value::String(text) => text.clone(),
+                other => other.to_string(),
+            };
+            run(
+                "VAULT_SET_PROPERTY",
+                json!({ "path": path, "key": key, "value": value }),
+            )
+            .await
+        }
+        None => run("VAULT_REMOVE_PROPERTY", json!({ "path": path, "key": key })).await,
+    }
+    .map(drop)
 }
