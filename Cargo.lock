@@ -22224,6 +22224,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "studio-tempo-map"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "hound",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tempo-map",
+ "tokio",
+ "toml 0.8.2",
+]
+
+[[package]]
 name = "studio-view-link"
 version = "26.10.3"
 dependencies = [
@@ -23097,6 +23111,19 @@ dependencies = [
  "once_cell",
  "rustix 1.1.6",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "tempo-map"
+version = "26.10.3"
+dependencies = [
+ "clap",
+ "hound",
+ "rayon",
+ "realfft",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
