@@ -37,7 +37,7 @@ use crate::queue::{self, Item, Now, Setlist};
 )]
 pub const SHEET: &str = r#"
 .sl { font-family: var(--font, system-ui, -apple-system, sans-serif); color: var(--foreground, CanvasText);
-      padding: 4px 0 12px; box-sizing: border-box; width: 100%; }
+      padding: 4px 10px 12px; box-sizing: border-box; width: 100%; }
 .sl * { box-sizing: border-box; }
 .sl-head { display: none; }
 .sl ol { list-style: none; margin: 0; padding: 0; }

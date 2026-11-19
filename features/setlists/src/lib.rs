@@ -41,6 +41,7 @@ pub mod layout;
 pub mod lyrics;
 pub mod media;
 pub mod row;
+pub mod rows;
 pub mod setlist;
 pub mod song;
 pub mod vault;

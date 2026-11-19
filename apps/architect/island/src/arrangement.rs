@@ -21,7 +21,7 @@ use crate::views::{Ask, playhead_of};
 const PX: f64 = 5.0;
 
 const CSS: &str = r"
-.av { font-family: var(--font, system-ui, sans-serif); color: var(--foreground, CanvasText); padding: 4px 0 16px; }
+.av { font-family: var(--font, system-ui, sans-serif); color: var(--foreground, CanvasText); padding: 4px 12px 16px; }
 .av-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 4px 2px 10px; }
 .av-where { font-size: 17px; font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .av-song { color: var(--muted-foreground, GrayText); font-weight: 400; }
