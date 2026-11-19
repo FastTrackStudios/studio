@@ -235,6 +235,24 @@ where
     let song_lane = CoreLane::Song.lane_index();
     let mut done = MarkersConverted::default();
 
+    // A project laid out some other way keeps its sections as plain
+    // regions: they are the sections, before any marker is read as one.
+    let own = own_sections(daw, project, &Regions::all(daw, project.clone()));
+    for region in &own {
+        let Some(id) = region.id else { continue };
+        Regions::set_lane(daw, project.clone(), id, Some(section_lane))?;
+        if region.color.is_none()
+            && let Some(section_type) = parse_region_section_type(&region.name)
+        {
+            Regions::set_color(daw, project.clone(), id, section_type_color(&section_type))?;
+        }
+        done.sections.push(region.name.trim().to_string());
+        let (start, stop) = (region.start_seconds(), region.end_seconds());
+        done.song = Some(
+            done.song
+                .map_or((start, stop), |(a, b)| (a.min(start), b.max(stop))),
+        );
+    }
     let regions = Regions::all(daw, project.clone());
     let has_sections = regions.iter().any(|r| {
         r.lane == Some(section_lane)
@@ -323,6 +341,52 @@ where
         "[session] Convert markers to session format",
     );
     Ok(done)
+}
+
+/// The sections of a project whose ruler is not laid out as Session's: its
+/// regions, side by side on the lane Session keeps for the song.
+///
+/// REAPER puts every region on its first lane unless told otherwise, and
+/// that is the index of Session's SONG lane; a project tempo-mapped and
+/// marked up there (`Intro`, `Chorus 1 (Spanish)`, `Breakdown`…) arrives
+/// with its whole form where one region naming the song belongs. Read as
+/// they stand, none is a section, and the next thing that looks like one
+/// (a note such as `Kick in`) is made one instead.
+///
+/// They are sections when the SECTIONS lane holds nothing, the lane they
+/// are on is not named `SONG` (a set's songs, side by side, are songs),
+/// there are at least two, and none overlaps another (a region around the
+/// rest is the song, and the project is laid out as Session's after all).
+fn own_sections<D>(daw: &D, project: &ProjectContext, regions: &[Region]) -> Vec<Region>
+where
+    D: Projects,
+{
+    let section_lane = CoreLane::Sections.lane_index();
+    let song_lane = CoreLane::Song.lane_index();
+    if regions.iter().any(|r| r.lane == Some(section_lane)) {
+        return Vec::new();
+    }
+    let named_song = daw
+        .get_ruler_lane_name(project.clone(), song_lane)
+        .trim()
+        .eq_ignore_ascii_case(CoreLane::Song.display_name());
+    if named_song {
+        return Vec::new();
+    }
+    let mut own: Vec<Region> = regions
+        .iter()
+        .filter(|r| r.lane.is_none() || r.lane == Some(song_lane))
+        .cloned()
+        .collect();
+    own.sort_by(|a, b| a.start_seconds().total_cmp(&b.start_seconds()));
+    let side_by_side = own.windows(2).all(|pair| match pair {
+        [a, b] => b.start_seconds() >= a.end_seconds() - TOUCH_EPSILON_SECONDS,
+        _ => true,
+    });
+    if own.len() < 2 || !side_by_side {
+        return Vec::new();
+    }
+    own
 }
 
 /// A marker that is a section's start: a section name ([`parse_region_section_type`]),

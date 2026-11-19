@@ -74,10 +74,15 @@ struct HearArg {
 const REFERENCE_FOLDER: &str = "Reference";
 
 /// Whether top-level track `name` is neither an instrument folder nor the
-/// reference: the guide and the buses, which both ways of hearing leave.
+/// reference: the guide and the buses, which both ways of hearing leave,
+/// and the organizer's `REFERENCES` (bounces and rehearsals to listen
+/// against, muted on purpose: the stems do not turn them on).
 fn left_alone(name: &str) -> bool {
     let n = name.trim().to_ascii_uppercase();
-    n == "GUIDE" || n.ends_with(" BUS") || n == "KEYFLOW"
+    n == "GUIDE"
+        || n.ends_with(" BUS")
+        || n == "KEYFLOW"
+        || n == dynamic_template::apply::REFERENCES_FOLDER
 }
 
 /// Whether song `project` is heard by its reference now: its Reference
@@ -91,7 +96,11 @@ fn heard_by_reference(daw: &daw::standalone::Standalone, project: &ProjectContex
 
 /// Song `project` heard by its reference (`reference`) or its stems.
 /// Whether it has a reference to hear.
-fn hear(
+///
+/// # Errors
+///
+/// A track would not mute.
+pub fn hear(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     reference: bool,
@@ -107,15 +116,169 @@ fn hear(
         // Nothing to hear it by: left on its stems.
         return Ok(false);
     }
+    // A song that is only its reference (a recording, no stems yet) has
+    // nothing else to play: it is heard by it either way.
+    let has_parts = top
+        .iter()
+        .any(|t| !left_alone(&t.name) && !t.name.trim().eq_ignore_ascii_case(REFERENCE_FOLDER));
+    let reference = reference || (has && !has_parts);
     for track in top.iter().filter(|t| !left_alone(&t.name)) {
         let is_reference = track.name.trim().eq_ignore_ascii_case(REFERENCE_FOLDER);
         let mute = is_reference != reference;
         if track.muted != mute {
-            Tracks::set_muted(daw, project.clone(), TrackRef::Guid(track.guid.clone()), mute)
-                .map_err(|e| e.to_string())?;
+            Tracks::set_muted(
+                daw,
+                project.clone(),
+                TrackRef::Guid(track.guid.clone()),
+                mute,
+            )
+            .map_err(|e| e.to_string())?;
         }
     }
     Ok(has)
+}
+
+/// Whether `name` says a track is a mix of the whole song.
+fn names_a_mix(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    ["mix", "reference", "master", "original"]
+        .iter()
+        .any(|word| {
+            lower
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|w| w == *word)
+        })
+}
+
+/// The song's stereo reference filed where [`hear`] looks for it: in a
+/// top-level `Reference` folder, last. Its name, when it was moved.
+///
+/// The organizer lays every bounce out in `REFERENCES`, muted, as
+/// something to listen against; the one that is the song's mix is what
+/// the set is heard by. It is the only track with audio directly in
+/// `REFERENCES`, else the only one of them named for a mix; with none or
+/// several it is left to whoever knows which. A `REFERENCES` left empty
+/// is removed. A song that has a `Reference` folder already is not touched.
+///
+/// # Errors
+///
+/// A backend call failed.
+pub(crate) fn file_reference(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+) -> Result<Option<String>, String> {
+    use daw::service::Items as _;
+    let tracks = Tracks::all(daw, project.clone());
+    let top = |name: &str| {
+        tracks
+            .iter()
+            .find(|t| t.parent_guid.is_none() && t.name.trim().eq_ignore_ascii_case(name))
+    };
+    if top(REFERENCE_FOLDER).is_some() {
+        return Ok(None);
+    }
+    let Some(references) = top(dynamic_template::apply::REFERENCES_FOLDER) else {
+        return Ok(None);
+    };
+    let bounces: Vec<&daw::service::Track> = tracks
+        .iter()
+        .filter(|t| t.parent_guid.as_deref() == Some(references.guid.as_str()) && !t.is_folder)
+        .filter(|t| {
+            !daw.get_items(project.clone(), TrackRef::Guid(t.guid.clone()))
+                .is_empty()
+        })
+        .collect();
+    let mixes: Vec<&&daw::service::Track> =
+        bounces.iter().filter(|t| names_a_mix(&t.name)).collect();
+    let reference = match (bounces.as_slice(), mixes.as_slice()) {
+        ([only], _) => *only,
+        (_, [only]) => **only,
+        _ => return Ok(None),
+    };
+    move_into(daw, project, &reference.guid, REFERENCE_FOLDER, None)?;
+    let emptied = !Tracks::all(daw, project.clone())
+        .iter()
+        .any(|t| t.parent_guid.as_deref() == Some(references.guid.as_str()));
+    if emptied {
+        Tracks::remove(
+            daw,
+            project.clone(),
+            TrackRef::Guid(references.guid.clone()),
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(Some(reference.name.clone()))
+}
+
+/// A song that came with every part muted under its reference (a REAPER
+/// project that plays the record's mix, its stems muted one by one) heard
+/// the same way as [`hear`] has it: the parts unmuted, their folders
+/// muted, the `Reference` folder on. Then the Stems/Reference switch has
+/// stems to play. Whether it did: `false` for a song with no reference,
+/// one whose reference is muted, or one with a part already playing.
+///
+/// # Errors
+///
+/// A backend call failed.
+pub(crate) fn settle_hearing(
+    daw: &daw::standalone::Standalone,
+    project: &ProjectContext,
+) -> Result<bool, String> {
+    use daw::service::Items as _;
+    let tracks = Tracks::all(daw, project.clone());
+    // The top-level track `track` is under (itself, when it is one).
+    fn top_of<'a>(
+        tracks: &'a [daw::service::Track],
+        track: &'a daw::service::Track,
+    ) -> &'a daw::service::Track {
+        let mut at = track;
+        while let Some(parent) = at
+            .parent_guid
+            .as_deref()
+            .and_then(|p| tracks.iter().find(|t| t.guid == p))
+        {
+            at = parent;
+        }
+        at
+    }
+    let is_reference =
+        |t: &daw::service::Track| t.name.trim().eq_ignore_ascii_case(REFERENCE_FOLDER);
+    let Some(folder) = tracks
+        .iter()
+        .find(|t| t.parent_guid.is_none() && is_reference(t))
+    else {
+        return Ok(false);
+    };
+    let has_audio = |t: &daw::service::Track| {
+        !daw.get_items(project.clone(), TrackRef::Guid(t.guid.clone()))
+            .is_empty()
+    };
+    let reference_plays = !folder.muted
+        && tracks
+            .iter()
+            .any(|t| t.parent_guid.as_deref() == Some(folder.guid.as_str()) && !t.muted);
+    // The parts: what has audio under an instrument folder.
+    let parts: Vec<&daw::service::Track> = tracks
+        .iter()
+        .filter(|t| {
+            let top = top_of(&tracks, t);
+            let aside = left_alone(&top.name) || is_reference(top);
+            !aside && !t.is_folder && has_audio(t)
+        })
+        .collect();
+    if !reference_plays || parts.is_empty() || parts.iter().any(|t| !t.muted) {
+        return Ok(false);
+    }
+    for part in parts {
+        Tracks::set_muted(
+            daw,
+            project.clone(),
+            TrackRef::Guid(part.guid.clone()),
+            false,
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    hear(daw, project, true)
 }
 
 /// A track, and the top-level folder it goes into.
@@ -173,13 +336,13 @@ fn move_into(
         .map_err(|e| e.to_string())?;
     // The folder: the top-level track of that name, else a new one, last.
     let all = Tracks::all(daw, project.clone());
-    let folder = match all
-        .iter()
-        .find(|t| t.parent_guid.is_none() && t.guid != guid && t.name.trim().eq_ignore_ascii_case(into.trim()))
-    {
+    let folder = match all.iter().find(|t| {
+        t.parent_guid.is_none() && t.guid != guid && t.name.trim().eq_ignore_ascii_case(into.trim())
+    }) {
         Some(found) => found.guid.clone(),
         None => {
-            let made = Tracks::add(daw, project.clone(), into.trim(), None).map_err(|e| e.to_string())?;
+            let made =
+                Tracks::add(daw, project.clone(), into.trim(), None).map_err(|e| e.to_string())?;
             if muted == Some(true) {
                 Tracks::set_muted(daw, project.clone(), TrackRef::Guid(made.clone()), true)
                     .map_err(|e| e.to_string())?;
@@ -190,9 +353,7 @@ fn move_into(
     // Into it, as its last track.
     let tree = TrackTree::new(Tracks::all(daw, project.clone()));
     let parent = tree.get(&folder).ok_or("the folder is gone")?.clone();
-    let plan = tree
-        .plan_append(&folder)
-        .ok_or("no place in the folder")?;
+    let plan = tree.plan_append(&folder).ok_or("no place in the folder")?;
     if let Some((terminator, to)) = &plan.retarget {
         depth(terminator, *to)?;
     }
@@ -203,7 +364,11 @@ fn move_into(
     let here = tree.get(&guid).map_or(u32::MAX, |t| t.index);
     // Taken from after the folder's end, the place is the plan's; from
     // before it, everything between moves up one.
-    let index = if here < plan.index { plan.index.saturating_sub(1) } else { plan.index };
+    let index = if here < plan.index {
+        plan.index.saturating_sub(1)
+    } else {
+        plan.index
+    };
     Tracks::move_to(daw, project.clone(), TrackRef::Guid(guid.clone()), index)
         .map_err(|e| e.to_string())?;
     depth(&guid, -plan.closes)?;
@@ -310,16 +475,30 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                 .count();
             return Ok(format!(
                 "{{\"by\":\"{}\",\"songs\":{},\"by_reference\":{on}}}",
-                if on > 0 && on == songs.len() { "reference" } else if on == 0 { "stems" } else { "mixed" },
+                if on > 0 && on == songs.len() {
+                    "reference"
+                } else if on == 0 {
+                    "stems"
+                } else {
+                    "mixed"
+                },
                 songs.len()
             ));
         };
         let reference = match by.to_ascii_lowercase().as_str() {
             "reference" | "references" => true,
             "stems" | "multitracks" => false,
-            other => return Err(format!("hear the set by `reference` or `stems`, not {other}")),
+            other => {
+                return Err(format!(
+                    "hear the set by `reference` or `stems`, not {other}"
+                ));
+            }
         };
-        let label = if reference { "Hear the references" } else { "Hear the stems" };
+        let label = if reference {
+            "Hear the references"
+        } else {
+            "Hear the stems"
+        };
         let mut without = Vec::new();
         for (title, project) in &songs {
             Projects::begin_undo_block(daw, project.clone(), label);
@@ -735,4 +914,133 @@ fn serde_json_list(names: &[String]) -> String {
         .map(|n| format!("\"{}\"", n.replace('\\', "\\\\").replace('"', "\\\"")))
         .collect();
     format!("[{}]", quoted.join(","))
+}
+
+#[cfg(test)]
+mod reference_tests {
+    use super::{file_reference, hear, settle_hearing};
+    use daw::service::{ProjectContext, Tracks};
+    use daw::standalone::Standalone;
+
+    /// A song from REAPER project text, and its context.
+    fn song(tracks: &str) -> (Standalone, ProjectContext) {
+        let daw = Standalone::new();
+        let text = format!("<REAPER_PROJECT 0.1 \"7.0/test\" 0\n{tracks}>\n");
+        let loaded = daw::standalone::project_loader::load_rpp_text(&daw, "Song", "", &text)
+            .expect("the project loads");
+        (daw, ProjectContext::Project(loaded.project_guid))
+    }
+
+    /// A track of the project's text: `depth` its folder change, with an
+    /// item when `audio`.
+    fn track(n: u32, name: &str, depth: (i32, i32), muted: bool, audio: bool) -> String {
+        let item = if audio {
+            "    <ITEM\n      POSITION 0\n      LENGTH 4\n      <SOURCE WAVE\n        FILE \"a.wav\"\n      >\n    >\n"
+        } else {
+            ""
+        };
+        format!(
+            "  <TRACK {{00000000-0000-0000-0000-{n:012}}}\n    NAME \"{name}\"\n    MUTESOLO {} 0 0\n    ISBUS {} {}\n{item}  >\n",
+            u8::from(muted),
+            depth.0,
+            depth.1,
+        )
+    }
+
+    /// `(path-less name, muted)` of every track, in order.
+    fn mutes(daw: &Standalone, project: &ProjectContext) -> Vec<(String, bool)> {
+        Tracks::all(daw, project.clone())
+            .into_iter()
+            .map(|t| (t.name, t.muted))
+            .collect()
+    }
+
+    /// The organizer's layout of a record and its separation: the mix in
+    /// REFERENCES, every stem muted as REAPER had it.
+    fn separated() -> (Standalone, ProjectContext) {
+        song(
+            &[
+                track(1, "Drums", (1, 1), false, false),
+                track(2, "Kick", (2, -1), true, true),
+                track(3, "Bass", (1, 1), false, false),
+                track(4, "BASS", (2, -1), true, true),
+                track(5, "REFERENCES", (1, 1), true, false),
+                track(6, "MIX", (2, -1), false, true),
+            ]
+            .concat(),
+        )
+    }
+
+    #[test]
+    fn the_mix_is_filed_in_a_top_level_reference_folder() {
+        let (daw, project) = separated();
+        assert_eq!(file_reference(&daw, &project), Ok(Some("MIX".to_owned())));
+        let tracks = Tracks::all(&daw, project.clone());
+        let folder = tracks
+            .iter()
+            .find(|t| t.name == "Reference")
+            .expect("a Reference folder");
+        assert!(folder.parent_guid.is_none() && !folder.muted);
+        let mix = tracks.iter().find(|t| t.name == "MIX").expect("the mix");
+        assert_eq!(mix.parent_guid.as_deref(), Some(folder.guid.as_str()));
+        assert!(
+            !tracks.iter().any(|t| t.name == "REFERENCES"),
+            "left empty, REFERENCES goes"
+        );
+        // Filed once: a second run finds the folder and moves nothing.
+        assert_eq!(file_reference(&daw, &project), Ok(None));
+    }
+
+    #[test]
+    fn stems_muted_under_the_mix_become_a_song_heard_by_its_reference() {
+        let (daw, project) = separated();
+        file_reference(&daw, &project).expect("filed");
+        assert_eq!(settle_hearing(&daw, &project), Ok(true));
+        let now = mutes(&daw, &project);
+        for (name, muted) in [
+            ("Drums", true),
+            ("Kick", false),
+            ("Bass", true),
+            ("BASS", false),
+            ("Reference", false),
+            ("MIX", false),
+        ] {
+            assert!(now.contains(&(name.to_owned(), muted)), "{name}: {now:?}");
+        }
+        // And by its stems: the folders on, the reference off.
+        hear(&daw, &project, false).expect("heard by stems");
+        let now = mutes(&daw, &project);
+        for (name, muted) in [("Drums", false), ("Bass", false), ("Reference", true)] {
+            assert!(now.contains(&(name.to_owned(), muted)), "{name}: {now:?}");
+        }
+    }
+
+    #[test]
+    fn a_part_already_playing_is_left_as_it_is() {
+        let (daw, project) = song(
+            &[
+                track(1, "Bass", (1, 1), false, false),
+                track(2, "BASS", (2, -1), false, true),
+                track(3, "Reference", (1, 1), false, false),
+                track(4, "MIX", (2, -1), false, true),
+            ]
+            .concat(),
+        );
+        assert_eq!(settle_hearing(&daw, &project), Ok(false));
+        assert!(mutes(&daw, &project).iter().all(|(_, muted)| !muted));
+    }
+
+    #[test]
+    fn a_song_that_is_only_its_reference_plays_by_stems_too() {
+        let (daw, project) = song(
+            &[
+                track(1, "UTILITY BUS", (0, 0), false, false),
+                track(2, "Reference", (1, 1), false, false),
+                track(3, "MIX", (2, -1), false, true),
+            ]
+            .concat(),
+        );
+        assert_eq!(hear(&daw, &project, false), Ok(true));
+        assert!(mutes(&daw, &project).iter().all(|(_, muted)| !muted));
+    }
 }
