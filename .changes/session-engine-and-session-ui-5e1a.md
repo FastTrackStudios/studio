@@ -2,7 +2,6 @@
 "session-engine" = "minor"
 "session-ui" = "minor"
 "session-desktop" = "patch"
-"session-daw-web" = "patch"
 "session-reaper-xtask" = "none"
 "app-shell" = "none"
 "dynamic-template" = "none"
