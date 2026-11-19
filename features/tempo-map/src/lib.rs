@@ -27,7 +27,24 @@
     clippy::suboptimal_flops,
     clippy::many_single_char_names,
     clippy::similar_names,
+    clippy::float_cmp,
+    clippy::while_float,
+    clippy::manual_midpoint,
+    clippy::suspicious_operation_groupings,
+    clippy::needless_range_loop,
     reason = "numeric code over slices whose bounds are computed beside each use"
+)]
+#![allow(
+    clippy::too_many_lines,
+    clippy::too_long_first_doc_paragraph,
+    clippy::items_after_statements,
+    clippy::option_if_let_else,
+    clippy::single_match_else,
+    clippy::if_not_else,
+    clippy::useless_let_if_seq,
+    clippy::collapsible_if,
+    clippy::assert_is_empty,
+    reason = "the ported steps are kept in the order and shape of the scripts they came from"
 )]
 
 pub mod analysis;

@@ -14,6 +14,11 @@
     clippy::print_stderr,
     reason = "a command line prints"
 )]
+#![allow(
+    clippy::too_many_lines,
+    clippy::or_fun_call,
+    reason = "one match arm per command, each with its own words for what is wrong"
+)]
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;

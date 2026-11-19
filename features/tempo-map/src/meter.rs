@@ -48,7 +48,7 @@ impl Meter {
     /// Whether the beat is a dotted note: 6/8, 9/8, 12/8.
     #[must_use]
     pub const fn compound(self) -> bool {
-        self.denominator >= 8 && self.numerator > 3 && self.numerator % 3 == 0
+        self.denominator >= 8 && self.numerator > 3 && self.numerator.is_multiple_of(3)
     }
 
     /// How many tracked beats a bar holds: the numerator, or a third of it

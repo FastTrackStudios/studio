@@ -421,7 +421,7 @@ mod tests {
         let beats: Vec<f64> = (0..65).map(|i| 1.0 + f64::from(i) * 0.5).collect();
         let a = map_of(&beats);
         // The second map misses beat 30: every bar line after is a beat late.
-        let mut short = beats.clone();
+        let mut short = beats;
         short.remove(30);
         let b = map_of(&short);
         let diff = compare(&a, &b, 20.0);

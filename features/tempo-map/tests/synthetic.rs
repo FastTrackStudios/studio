@@ -13,6 +13,8 @@
     clippy::cast_precision_loss,
     clippy::cast_sign_loss,
     clippy::panic,
+    clippy::similar_names,
+    clippy::suboptimal_flops,
     reason = "a test"
 )]
 
