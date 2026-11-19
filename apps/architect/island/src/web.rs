@@ -147,6 +147,9 @@ fn App() -> Element {
     if view == "arrangement" {
         return rsx! { crate::arrangement::Arrangement { page: props, ask: ask() } };
     }
+    if view == "home" {
+        return rsx! { crate::home::Home { note, ask: ask() } };
+    }
     if view == "mixer" {
         return rsx! { crate::arrangement::NotHere {
             title: "Mixer",

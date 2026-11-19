@@ -35,6 +35,7 @@
 //! tested natively) and, under test, the setlist view's rows (rendered by
 //! `dioxus-ssr`).
 
+pub mod home;
 pub mod queue;
 pub mod song;
 

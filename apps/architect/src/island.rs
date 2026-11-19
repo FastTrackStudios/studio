@@ -179,11 +179,15 @@ pub fn at(dir: &Path) -> Result<SiteIsland, IslandError> {
         // (`docs/design/share-link-setlist.md`, gap 1). Without them the
         // island is served and never mounted: a guest gets the app's own
         // list and a song's chart as its text.
+        // The app's home for a signed-in person: the dashboard.
+        .home(HOME_VIEW)
         .embed_note(SETLIST_VIEW, [SETLIST_TYPE], SETLIST_PROPERTIES)
         .embed_note(SONG_VIEW, [SONG_TYPE], [] as [&str; 0])
         .reads(READS))
 }
 
+/// The island's home view: the dashboard (`[[views]] id = "home"`).
+pub const HOME_VIEW: &str = "home";
 /// The view drawn at the head of a setlist note, and the note type it
 /// claims (`extension.toml` `[[embeds]] id = "setlist.playlist"`).
 pub const SETLIST_VIEW: &str = "setlist.playlist";
