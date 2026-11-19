@@ -274,9 +274,9 @@ in
   #   architect   THE SERVER: plain `architect-desktop serve`  (Architect's;
   #               no Studio code), holding the demo vault (Merry & Bright,
   #               JT's Recital) and a share link per set
-  #   web         studio-web under `dx serve` (hot-patched), behind the front
+  #   web         studio-web under `dx serve` (rebuilt on a save), behind the front
   #               that puts it and the server on one origin (/app/)
-  #   desktop     Studio's desktop app under `dx serve` (hot-patched), a
+  #   desktop     Studio's desktop app under `dx serve` (rebuilt on a save), a
   #               client of the server; it starts its engine itself
   #
   # Each is `scripts/local-stack.sh run <name>`; ports in local-stack.toml

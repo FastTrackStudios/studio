@@ -477,7 +477,8 @@ PY
 
 # STUDIO-WEB: Studio's web client (apps/web: Architect's web app as
 # a library with Studio's views linked in, one wasm) under `dx serve`,
-# Rust hot-patched and rsx hot-reloaded on a save, behind the front that
+# rebuilt on a save (rsx hot-reloaded; no Rust hot-patching: its builds
+# bypass kache, so every workspace crate would compile uncached), behind the front that
 # puts it and the server's paths on one origin. LOCAL_STACK_LAN=on opens
 # the front to the LAN; LOCAL_STACK_TAILNET=on serves it on this
 # machine's tailnet name over HTTPS (`tailscale serve`, never funnel).
@@ -521,10 +522,10 @@ run_web() {
     (
         cd "$crate"
         if [ "${#cfg[@]}" -gt 0 ]; then
-            exec dx serve --platform web --addr 127.0.0.1 --port "$dx" --open false --hot-patch true \
-                --cargo-args "${cfg[*]}"
+            exec dx serve --platform web --addr 127.0.0.1 --port "$dx" --open false --hot-patch false \
+                --cargo-args="${cfg[*]}"
         fi
-        exec dx serve --platform web --addr 127.0.0.1 --port "$dx" --open false --hot-patch true
+        exec dx serve --platform web --addr 127.0.0.1 --port "$dx" --open false --hot-patch false
     ) &
     pids+=($!)
     wait -n "${pids[@]}"
@@ -532,8 +533,8 @@ run_web() {
 }
 
 # STUDIO DESKTOP: Studio's distribution of Architect (apps/desktop,
-# studio-architect) under `dx serve`, Rust hot-patched where dx can (an
-# rsx edit hot-reloads), an isolated dev instance signed in to the stack's
+# studio-architect) under `dx serve`, rebuilt on a save through kache (an
+# rsx edit hot-reloads; no Rust hot-patching, whose builds bypass kache), an isolated dev instance signed in to the stack's
 # issuer and syncing with the server like any other client. Its engine is
 # the `daw` extension, a development copy (extensions/daw, rebuilt alone):
 # the app starts the engine when none runs, and the engine outlives the
@@ -619,10 +620,10 @@ run_desktop() {
     trap '[ -f "$state/Cargo.lock.desktop" ] && ! cmp -s Cargo.lock "$state/Cargo.lock.desktop" && cp "$state/Cargo.lock.desktop" Cargo.lock' EXIT
     cd "$root/apps/desktop"
     if [ "${#cfg[@]}" -gt 0 ]; then
-        env "${vars[@]}" dx serve --platform desktop --renderer native --hot-patch true --profile desktop-dev \
-            --target "$triple" --open false --cargo-args "${cfg[*]}"
+        env "${vars[@]}" dx serve --platform desktop --renderer native --hot-patch false --profile desktop-dev \
+            --target "$triple" --open false --cargo-args="${cfg[*]}"
     else
-        env "${vars[@]}" dx serve --platform desktop --renderer native --hot-patch true --profile desktop-dev \
+        env "${vars[@]}" dx serve --platform desktop --renderer native --hot-patch false --profile desktop-dev \
             --target "$triple" --open false
     fi
 }
