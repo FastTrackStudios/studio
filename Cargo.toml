@@ -482,6 +482,10 @@ auth-client = { git = "https://github.com/FastTrackStudios/architect", tag = "v0
 crdt = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.10.0" }
 crdt-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.10.0" }
 crdt-seaorm = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.10.0" }
+# Runtime themes: architect's palette, cascade and store, which Studio's
+# own tokens (apps/session/ui/src/theme/) sit on. Pinned by rev until a
+# tag carries it (feat/runtime-themes).
+architect-theme = { git = "https://github.com/FastTrackStudios/architect", rev = "a39d693a82ab27a9cbd3db251bdb95ffd7da84b0" }
 # The Dioxus primitive library (was libs/ui/fts-ui, renamed on the split).
 architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.10.0" }
 # The keymap engine (studio's former `features/input`, studio#61).
