@@ -149,6 +149,10 @@ fn shared_setlist(root: &Path, files: &Path) -> String {
         audiences: Vec::new(),
         // What SHARE_CREATE gives a new link (architect v0.12.2, #528).
         listen: Listen::Reference,
+        // A link's name, pause and last opening (architect v0.15.0).
+        name: None,
+        paused_at: None,
+        opened_at: None,
     };
     let path = root.join(share_note_path(&code));
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
