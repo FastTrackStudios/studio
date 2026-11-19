@@ -35,7 +35,7 @@ Load the step's skill before doing the step. Scripts for steps 1–3 are in
 6. Chart last, against the project: chart bar N is project bar N+1.
 
 Steps 1–3 for different songs are independent: several songs can be at
-different steps at once. Stem splitting on voyager is one Logic at a time.
+different steps at once.
 
 ## One folder per song
 
@@ -72,7 +72,7 @@ with a compressed reference beside it as an attachment. Multitracks stay under
 - **Not yet done on any song:** step 4 (lyrics on the map). `song-lyric-sync` is
   the intended procedure, to be corrected the first time it is run.
 - **Not handled by the scripts:** meters other than 4/4 (Silent Night is 3/4),
-  meter changes, stem separation off voyager. Say so and handle by hand rather
+  meter changes. Say so and handle by hand rather
   than forcing a song through.
 - **Importing the REAPER project into a Studio session** (the app's own format,
   with the top-level Reference folder) is being built on branch
