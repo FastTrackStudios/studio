@@ -374,6 +374,21 @@ impl Setlist {
         }
     }
 
+    /// The notes a share link of it lists: its own, then each song's,
+    /// once, in the set's order. The first is the set's: what makes two
+    /// such lists the same thing shared (Architect's `ShareScope::root`),
+    /// so the set keeps its link as its songs change.
+    #[must_use]
+    pub fn share_notes(&self) -> Vec<String> {
+        let mut notes = vec![self.path.clone()];
+        for entry in self.entries() {
+            if !entry.note.is_empty() && !notes.contains(&entry.note) {
+                notes.push(entry.note.clone());
+            }
+        }
+        notes
+    }
+
     /// Every place of it, in order.
     pub fn entries(&self) -> impl Iterator<Item = &Entry> {
         self.sets.iter().flat_map(|s| s.entries.iter())
@@ -688,5 +703,27 @@ mod tests {
         let set = Setlist::of(&row, &[]);
         assert_eq!(set.entries().count(), 2);
         assert_eq!(set.sets.len(), 1);
+    }
+
+    #[test]
+    fn a_sets_share_lists_its_note_first_then_each_song_once() {
+        let row = Row {
+            path: "Setlists/Eve.md".to_owned(),
+            values: json!({
+                "title": "Eve",
+                "songs": ["[[Libraries/C/Joy/Joy|Joy]]", "[[Libraries/C/Fire/Fire#Live|Fire (Live)]]", "[[Libraries/C/Joy/Joy|Joy again]]"],
+            })
+            .as_object()
+            .cloned()
+            .unwrap(),
+        };
+        assert_eq!(
+            Setlist::of(&row, &[]).share_notes(),
+            [
+                "Setlists/Eve.md",
+                "Libraries/C/Joy/Joy.md",
+                "Libraries/C/Fire/Fire.md"
+            ]
+        );
     }
 }

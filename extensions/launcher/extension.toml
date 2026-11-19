@@ -32,6 +32,7 @@ writes = ["documents"]
 # notes' properties, the panes and the window's bars (a layout), the
 # chart and the lighting told which song to follow.
 actions = [
+    "SHARE_SHEET",
     "DAW_",
     "VAULT_STATUS",
     "VAULT_SET_PROPERTY",
@@ -108,6 +109,14 @@ description = "Opens setlist `setlist` (its title or its note's path) in Studio'
 group = "Launcher"
 effect = "mutating"
 params = '{"type":"object","properties":{"setlist":{"type":"string"},"layout":{"type":"string"}},"required":["setlist"]}'
+
+[[actions]]
+id = "STUDIO_LAUNCHER_SHARE"
+name = "Launcher: share a setlist"
+description = "Opens the app's Share sheet on setlist `setlist` (its title or its note's path): the setlist's note and its songs'. The sheet shows the links the set has already, to copy, name, pause or revoke, and makes a new one only for other people: a set has one link an audience, and its address does not change as the set does."
+group = "Launcher"
+effect = "mutating"
+params = '{"type":"object","properties":{"setlist":{"type":"string"}},"required":["setlist"]}'
 
 [[actions]]
 id = "STUDIO_LAUNCHER_OPEN_SONG"

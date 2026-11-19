@@ -50,7 +50,7 @@ const SHEET: &str = r#"
 .sv-line[data-current] { color: var(--foreground, CanvasText); font-weight: 700;
                          background: rgba(128,128,128,.10); }
 .sv-line[data-past] { opacity: .7; }
-.sv-empty { padding: 16px 0; color: var(--muted-foreground, GrayText); }
+.sv-empty { padding: 16px 12px; color: var(--muted-foreground, GrayText); }
 "#;
 
 /// The frame's `document`.
@@ -181,13 +181,6 @@ impl PartialEq for Engraved {
     }
 }
 
-/// What the view shows: the chart or the lyrics.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Tab {
-    Chart,
-    Lyrics,
-}
-
 /// The song view, over the app's props and the note it handed.
 #[component]
 pub fn SongView(page: Signal<Value>, note: Signal<Value>, ask: Ask) -> Element {
@@ -266,21 +259,17 @@ pub fn SongView(page: Signal<Value>, note: Signal<Value>, ask: Ask) -> Element {
         };
     };
     let has_chart = s.chart.is_some();
-    // The chart; a song with none shows its timed lines. No switch of
-    // its own: the app's tabs have Chart and Lyrics (the owner, 2026-11-18).
-    let shown = if has_chart { Tab::Chart } else { Tab::Lyrics };
     let playing = page
         .read()
         .get("playing")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let hint = match (&s.recording, at()) {
-        (None, _) => Some("No recording to follow for this song yet."),
-        (Some(_), None) => Some(if shown == Tab::Chart {
-            "Tap a bar to play the song from there."
-        } else {
-            "Tap a line to play the song from there."
-        }),
+    // The chart, and only the chart: a song's lyrics are the app's Lyrics
+    // tab (the owner, 2026-11-18). A song with no chart says so here.
+    let hint = match (has_chart, &s.recording, at()) {
+        (false, _, _) => None,
+        (true, None, _) => Some("No recording to follow for this song yet."),
+        (true, Some(_), None) => Some("Tap a bar to play the song from there."),
         _ => None,
     };
     let t = at();
@@ -290,18 +279,13 @@ pub fn SongView(page: Signal<Value>, note: Signal<Value>, ask: Ask) -> Element {
             if let Some(h) = hint {
                 p { class: "sv-hint", "{h}" }
             }
-            match shown {
-                Tab::Chart => match &*chart.read() {
-                    Some(Some((Ok(pages), _))) => rsx! {
-                        Chart { pages: pages.clone(), t, playing, on_seek }
-                    },
-                    Some(Some((Err(why), _))) => rsx! { p { class: "sv-empty", "The chart did not engrave: {why}" } },
-                    Some(None) => rsx! { p { class: "sv-empty", "No chart for this song." } },
-                    None => rsx! { p { class: "sv-empty", "Engraving the chart…" } },
+            match &*chart.read() {
+                Some(Some((Ok(pages), _))) => rsx! {
+                    Chart { pages: pages.clone(), t, playing, on_seek }
                 },
-                Tab::Lyrics => rsx! {
-                    Lines { lines: s.lines, t, playing, on_seek }
-                },
+                Some(Some((Err(why), _))) => rsx! { p { class: "sv-empty", "The chart did not engrave: {why}" } },
+                Some(None) => rsx! { p { class: "sv-empty", "No chart for this song yet." } },
+                None => rsx! { p { class: "sv-empty", "Engraving the chart…" } },
             }
         }
     }
@@ -369,51 +353,6 @@ fn Chart(pages: Engraved, t: Option<f64>, playing: bool, on_seek: EventHandler<f
                         if let Some((_, x, y, bw, bh)) = beat.filter(|b| b.0 == n) {
                             rect { "data-testid": "chart-beat", x: "{x:.2}", y: "{y:.2}", width: "{bw:.2}", height: "{bh:.2}",
                                 fill: "{line}", pointer_events: "none" }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// The timed lines, the one being sung marked; a line pressed seeks there.
-#[component]
-fn Lines(
-    lines: Vec<(f64, String)>,
-    t: Option<f64>,
-    playing: bool,
-    on_seek: EventHandler<f64>,
-) -> Element {
-    if lines.is_empty() {
-        return rsx! { p { class: "sv-empty", "No timed lyrics for this song yet." } };
-    }
-    let starts: Vec<f64> = lines.iter().map(|(at, _)| *at).collect();
-    let current = t.and_then(|t| at_or_before(&starts, t));
-    use_effect(use_reactive!(|current, playing| {
-        if playing && current.is_some() {
-            keep_in_view("sv-current-line");
-        }
-    }));
-    rsx! {
-        ol { class: "sv-lines", "data-testid": "song-lines", "data-line": current.map(|c| c.to_string()),
-            for (i, (at, text)) in lines.iter().enumerate() {
-                {
-                    let at = *at;
-                    let mm = (at / 60.0).floor();
-                    let ss = mm.mul_add(-60.0, at).floor();
-                    rsx! {
-                        li { key: "l{i}",
-                            button { r#type: "button", class: "sv-line",
-                                id: if current == Some(i) { "sv-current-line" },
-                                "data-current": if current == Some(i) { "" },
-                                "data-past": if current.is_some_and(|c| i < c) { "" },
-                                "data-at": "{at:.3}",
-                                "aria-current": if current == Some(i) { "true" },
-                                "aria-label": "{text}, at {mm}:{ss:02}, play from here",
-                                onclick: move |_| on_seek.call(at),
-                                "{text}"
-                            }
                         }
                     }
                 }
