@@ -203,7 +203,6 @@ pub fn SongView(page: Signal<Value>, note: Signal<Value>, ask: Ask) -> Element {
             .map_err(|e| e.to_string());
         Some((pages, tempo(&source)))
     });
-    let mut tab = use_signal(|| None::<Tab>);
     use_hook(watch_scrolling);
     // Where the song is, moved on between the app's updates while it plays.
     let mut at = use_signal(|| None::<f64>);
@@ -267,8 +266,9 @@ pub fn SongView(page: Signal<Value>, note: Signal<Value>, ask: Ask) -> Element {
         };
     };
     let has_chart = s.chart.is_some();
-    let has_lines = !s.lines.is_empty();
-    let shown = tab().unwrap_or(if has_chart { Tab::Chart } else { Tab::Lyrics });
+    // The chart; a song with none shows its timed lines. No switch of
+    // its own: the app's tabs have Chart and Lyrics (the owner, 2026-11-18).
+    let shown = if has_chart { Tab::Chart } else { Tab::Lyrics };
     let playing = page
         .read()
         .get("playing")
@@ -287,14 +287,6 @@ pub fn SongView(page: Signal<Value>, note: Signal<Value>, ask: Ask) -> Element {
     rsx! {
         document::Style { {SHEET} }
         div { class: "sv", "data-testid": "studio-song", "data-following": if t.is_some() { "true" } else { "false" },
-            if has_chart && has_lines {
-                div { class: "sv-tabs", role: "group", "aria-label": "Show",
-                    button { r#type: "button", class: "sv-tab", "aria-pressed": "{shown == Tab::Chart}",
-                        onclick: move |_| tab.set(Some(Tab::Chart)), "Chart" }
-                    button { r#type: "button", class: "sv-tab", "aria-pressed": "{shown == Tab::Lyrics}",
-                        onclick: move |_| tab.set(Some(Tab::Lyrics)), "Lyrics" }
-                }
-            }
             if let Some(h) = hint {
                 p { class: "sv-hint", "{h}" }
             }
