@@ -150,6 +150,22 @@ pub fn problem() -> Option<String> {
 /// How many of this process's panes hold a connection now.
 static CONNECTED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
+/// One connected pane, counted while it lives.
+struct Counted;
+
+impl Counted {
+    fn new() -> Self {
+        CONNECTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Self
+    }
+}
+
+impl Drop for Counted {
+    fn drop(&mut self) {
+        CONNECTED.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 /// This process's side of the rig, as a view extension's `…_STATE`
 /// action answers it: the engine it would attach to, how many of its
 /// panes are connected, why none is when something is known, and what
@@ -215,7 +231,9 @@ pub fn use_link() -> Link {
             let rig = found.rig.clone();
             generation += 1;
             clients.set(Some(found));
-            CONNECTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            // Counted until the engine is lost or the pane closes (the
+            // future is dropped with it).
+            let counted = Counted::new();
             let mut silences = 0u32;
             while silences < 2 {
                 futures_timer::Delay::new(PING).await;
@@ -229,7 +247,7 @@ pub fn use_link() -> Link {
                 rig.outcome = "lost",
                 "the rig engine went away; looking again"
             );
-            CONNECTED.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            drop(counted);
             clients.set(None);
         }
     });
@@ -277,10 +295,64 @@ pub async fn run(id: &str, action: &str, args: Json) -> Result<Json, String> {
         .map_err(|e| format!("{action}: {e}"))
 }
 
+/// Extension `id`'s own setting `key` (`<id>.<name>`), as the settings
+/// registry has it: the stored value, else its manifest's default.
+///
+/// # Errors
+///
+/// The extension is not running, or the host refused.
+pub async fn setting(id: &str, key: &str) -> Result<Json, String> {
+    let handle = handle(id).ok_or_else(|| format!("{id} is not running"))?;
+    handle
+        .host(HostRequest::Setting {
+            key: key.to_owned(),
+        })
+        .await
+        .map_err(|e| format!("{key}: {e}"))
+}
+
+/// Sets extension `id`'s own setting `key`.
+///
+/// # Errors
+///
+/// The extension is not running, or the host refused.
+pub async fn set_setting(id: &str, key: &str, value: Json) -> Result<Json, String> {
+    let handle = handle(id).ok_or_else(|| format!("{id} is not running"))?;
+    handle
+        .host(HostRequest::SetSetting {
+            key: key.to_owned(),
+            value,
+        })
+        .await
+        .map_err(|e| format!("{key}: {e}"))
+}
+
+/// The clients of this app's rig engine, for an action (a pane has its
+/// own, [`RigPane`]'s): `None` while no engine answers.
+pub async fn clients() -> Option<Clients> {
+    connect(&discover::url()?).await
+}
+
 /// Which extension a pane belongs to: what it asks of the host, it asks
 /// as that extension.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Owner(pub &'static str);
+
+/// Whether a pane's view is the guitar rig's (Signal's panel providers
+/// around it) or brings its own state (the keys').
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Bare(bool);
+
+/// A pane's root for a view that brings its own state (the keys rig's):
+/// `children` under the engine's clients once it answers, with no
+/// guitar providers around them.
+#[component]
+pub fn EnginePane(owner: Owner, children: Element) -> Element {
+    use_context_provider(|| Bare(true));
+    rsx! {
+        RigPane { owner, {children} }
+    }
+}
 
 /// A rig pane's root: `children` under the rig's clients and Signal's
 /// panel providers once the engine answers, a line saying what it waits
@@ -356,6 +428,11 @@ fn Connected(children: Element) -> Element {
             open_view(owner, "studio.audio-settings", view.to_owned());
         }),
     });
+    if try_use_context::<Bare>().is_some_and(|bare| bare.0) {
+        return rsx! {
+            div { style: "position:relative; flex:1; min-width:0; min-height:0; display:flex;", {children} }
+        };
+    }
     rsx! {
         guitar::ui::panels::RigProviders {
             Shared {}

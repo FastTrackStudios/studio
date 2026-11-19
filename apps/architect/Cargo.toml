@@ -32,6 +32,8 @@ gui = [
     "dep:studio-rig-grid",
     "dep:studio-rig-macros",
     "dep:studio-rig-status",
+    "dep:studio-audio-settings",
+    "dep:studio-keys",
 ]
 
 [dependencies]
@@ -67,6 +69,10 @@ studio-rig-browser = { workspace = true, optional = true }
 studio-rig-grid = { workspace = true, optional = true }
 studio-rig-macros = { workspace = true, optional = true }
 studio-rig-status = { workspace = true, optional = true }
+# One settings surface for both engines (the daw engine and the rig engine).
+studio-audio-settings = { workspace = true, optional = true }
+# The keys rig's screens, clients of the same rig engine.
+studio-keys = { workspace = true, optional = true }
 
 # Its island (#445): `SiteIsland`, the node serves it; its folder is
 # checked against its lock (sha256, base64) before it is (src/island.rs).

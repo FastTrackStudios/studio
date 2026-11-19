@@ -66,7 +66,9 @@ pub fn stage() -> Bundle {
 
 /// Signal's rig views, compiled in with `gui`: the footswitch scenes, the
 /// sidebar, the browser, the DSP grid with its FX row and Edit, the
-/// macros and the rig's status (`docs/design/signal-extensions.md`). Each
+/// macros, the rig's status, the keys rig's screens, and the audio settings
+/// of both engines
+/// (`docs/design/signal-extensions.md`). Each
 /// is a vox client of the rig engine (`studio.rig`), which stays a process
 /// of its own as `daw` does; a development copy of any of them shadows
 /// the linked one.
@@ -80,6 +82,8 @@ pub fn rig() -> Bundle {
         .member(&studio_rig_browser::Browser)
         .member(&studio_rig_grid::Grid)
         .member(&studio_rig_macros::Macros)
+        .member(&studio_keys::Keys)
+        .member(&studio_audio_settings::AudioSettings)
 }
 
 pub mod island;

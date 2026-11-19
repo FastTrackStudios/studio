@@ -1,0 +1,79 @@
+# studio.keys (src/lib.rs): the keys rig's screens in Architect panes, vox
+# clients of the rig engine (the studio.rig extension runs it). Opening one
+# starts the keys rig, as Signal's keys screen does. One extension: the
+# screens share one keys view state and have no panel seam yet
+# (docs/design/signal-extensions.md).
+id = "studio.keys"
+name = "Keys rig"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "The keys rig's screens: the mixer with its engines, layers and master, an engine's or a layer's page, routing, the MIDI monitor, the rig's macros, the controller strip, the piano, the browser and the switches."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "studio-keys"
+
+[capabilities]
+effect = "mutating"
+actions = ["EXT_VIEW_OPEN"]
+
+[[views]]
+id = "mixer"
+title = "Keys mixer"
+icon = "sliders-vertical"
+
+[[views]]
+id = "layers"
+title = "Keys engine & layer"
+icon = "layers"
+
+[[views]]
+id = "routing"
+title = "Keys routing"
+icon = "workflow"
+
+[[views]]
+id = "midi"
+title = "Keys MIDI"
+icon = "cable"
+
+[[views]]
+id = "macros"
+title = "Keys macros"
+icon = "gauge"
+
+[[views]]
+id = "controller"
+title = "Keys controllers"
+icon = "joystick"
+
+[[views]]
+id = "piano"
+title = "Piano"
+icon = "piano"
+
+[[views]]
+id = "browser"
+title = "Keys browser"
+icon = "library"
+
+[[views]]
+id = "switches"
+title = "Keys switches"
+icon = "footprints"
+
+[[actions]]
+id = "STUDIO_KEYS_STATE"
+name = "Keys rig: state"
+description = "Whether this window's process is connected to the rig engine, what is open in the keys panes (`open`: the mixer, an engine or a layer) and what the browser is pointed at."
+group = "Keys"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_KEYS_OPEN"
+name = "Keys rig: open an engine or a layer"
+description = "Opens `layer` or `engine` (by name) in the keys panes' engine-and-layer view; with neither, back to the mixer."
+group = "Keys"
+effect = "mutating"
+params = '{"type":"object","properties":{"engine":{"type":"string"},"layer":{"type":"string"}}}'
