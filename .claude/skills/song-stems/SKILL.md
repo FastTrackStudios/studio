@@ -1,6 +1,6 @@
 ---
 name: song-stems
-description: Split a song's reference recording (an audio file you already have) into 11 stems (Vocals, Bass, Guitar, Piano, Other, Kick, Snare, Hi-Hat, Toms, Cymbals, Drums Other) with Logic Pro's Stem Splitter on voyager, collected into a "<Song> Reference" folder. Use when asked to stem-split or multitrack-separate a song, make reference stems, or as step 1 of `song-prep`.
+description: Split a song's reference recording (an audio file you already have) into 11 stems (Vocals, Bass, Guitar, Piano, Other, Kick, Snare, Hi-Hat, Toms, Cymbals, Drums Other) — open models on a Linux GPU machine, or Logic Pro's Stem Splitter on macOS — collected into a "<Song> Reference" folder. Use when asked to stem-split or multitrack-separate a song, make reference stems, or as step 1 of `song-prep`.
 ---
 
 # Stems from a reference recording
@@ -9,10 +9,13 @@ Output: a folder `<Song> Reference/` holding `<basename> (Mix).wav` and 11 files
 `<basename> (<Stem>).wav`, every one the exact length of the source, so they
 all sit at 0 in a project.
 
-Where it runs: **voyager** (the owner's Mac, Logic Pro 13). No other machine has
-a proven separator. From another machine, launch a thread on voyager (fleet-t3)
-or work over `ssh voyager` for the shell parts; Logic itself is driven with the
-`cua-driver` MCP tools there (load the `cua-driver` skill).
+Two separators are proven. Use the one for the machine you are on; both give
+the same 11 names, each the source's exact length and rate.
+
+| Machine | Separator | Time for a 4-minute song |
+|---|---|---|
+| Linux with an NVIDIA GPU (THEBATTLESHIP) | `split_stems_linux.sh`: two open models, in two passes | about 1 minute |
+| macOS (voyager) | Logic Pro 13 Stem Splitter, driven with `cua-driver` | about 2 minutes |
 
 ## 1. The recording
 
@@ -26,9 +29,41 @@ brings it, and is not part of this skill.
   is built on this one recording.
 - Its name without the extension is the **basename**: the stems, the mix copy
   and the project are all named from it, so settle the name before splitting.
-- Work on a copy in `~/Downloads` on voyager, not in a scratch folder.
 
-## 2. Logic: import, split
+## 2. Linux: two passes on the GPU
+
+```bash
+scripts=<studio>/.claude/skills/song-prep/scripts
+$scripts/split_stems_linux.sh "<source.wav>" "<Song> Reference"
+```
+
+- Pass 1, **BS-Roformer-SW**: vocals, drums, bass, guitar, piano, other.
+  Pass 2, **MDX23C DrumSep** (aufr33/jarredou) on the drums stem: kick, snare,
+  toms, hi-hat, ride, crash. Cymbals = ride + crash; Drums Other = the drums
+  stem less the pieces. It also writes `(Drums)`, the whole kit, and `(Mix)`.
+- Setup, once per machine: a venv at `/run/media/Development/tools/stem-sep`
+  (`uv venv --python 3.11 .venv && uv pip install --python .venv/bin/python
+  "audio-separator[gpu]"`, version 0.48.0 as tested); the models download on
+  first use into `models/`. Another place: set `STEM_SEP`.
+- The script prints `GPU: <name>`. `GPU: none` means the driver's libraries
+  were not found and it will take about 30 times longer; on NixOS it adds
+  `/run/opengl-driver/lib` itself. A `libcurand` warning is harmless.
+- The models work at 44.1 kHz and turn loud input down; the script resamples
+  back to the source's rate and restores the level (it prints the gain). Do not
+  call `audio-separator` directly for a reference folder, or the stems come out
+  at the wrong rate and level.
+
+Against Logic on the same five recordings (`compare_stems.py <A> <B>`):
+kick, snare, bass, guitar, vocals agree hit for hit (0.92–1.00); hi-hat and toms
+mostly (0.5–0.8); **cymbals and Drums Other differ** (0.15–0.5), so check those
+by ear before a chart or light cue leans on them. Its stems sum back to the mix
+far more closely than Logic's (−24 to −34 dB against −10 to −14 dB). Where
+Logic gave a silent kick and snare on a brush track (Rockin' Around the
+Christmas Tree), this one gives quiet ones (−50 and −35 dB): listen before
+trusting either.
+
+## 3. macOS: Logic, import and split
+
 
 Use an empty project. If the open project has content, **do not `File > New`**
 (it would close the owner's unsaved project): import onto a new track at the end
@@ -49,7 +84,7 @@ project.
 
 `osascript` has no assistive access from the terminal, so it is not an option.
 
-## 3. Collect
+### Collect
 
 Logic writes the stems while it splits, into
 `<project>.logicx/Media/Audio Files/<basename>_<Stem>.wav`; no export is needed.
@@ -77,11 +112,4 @@ in the background and wait for it.
 ## Report
 
 The folder path, the recording (file, length), the stem list with levels, which
-stems are silent, and which Logic project was left open and unsaved.
-
-## Not proven
-
-Separation anywhere but Logic on voyager. If another separator is tried (for
-example Demucs on a GPU machine), it must produce the same 11 names at the
-source's exact length, and its drum kit pieces must be checked by ear before
-`song-tempo-map` relies on them; write the result here.
+stems are silent, which separator was used, and (Logic) which project was left open and unsaved.
