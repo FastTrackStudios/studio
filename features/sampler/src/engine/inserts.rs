@@ -19,7 +19,7 @@
 //! - legacy filters (types 2..): `21759.5 · (min((e^(6.15u) − 1) · 0.0025728, 1) + 0.002)` Hz,
 //!   Butterworth sections, resonance raising the sharpest one's Q by
 //!   `e^(6.4r)` with a `5.5 r` dB passband loss for two poles.
-//! - EQ bands: the cookbook bell with twice the stored dB at the centre
+//! - EQ bands: Kontakt's classic band ([`bell`]): the cookbook bell with twice the stored dB at the centre
 //!   (`A = 2^(dB/6)`) and `α = sin ω · sinh(octaves · ln 2)`; a route of
 //!   intensity 1 moves the stored dB by 12, clamped to ±18.
 //! - a route's lag is the time to settle within 1 %: a one-pole with
@@ -290,8 +290,9 @@ enum Section {
     OnePole(f32),
     /// Trapezoidal state-variable lowpass (`a1 a2 a3` of `g`, `k`).
     Svf(f32, f32, f32),
-    /// Direct form II transposed biquad, normalised.
-    Biquad([f32; 5]),
+    /// Kontakt's classic EQ band: `[b0, b1, b2, −a1, −a2]` over `a0 = 1`,
+    /// run as f32 direct form I in `Process3Band_SSE`'s order.
+    Df1([f32; 5]),
 }
 
 /// A voice's run of its layer's plan.
@@ -308,7 +309,7 @@ pub struct InsertState {
     /// Output gain per stage (resonance loss).
     gain: [f32; MAX_STAGES],
     /// Two memories per section per channel.
-    mem: [[[[f32; 2]; MAX_SECTIONS]; MAX_STAGES]; 2],
+    mem: [[[[f32; 4]; MAX_SECTIONS]; MAX_STAGES]; 2],
     countdown: u16,
     /// The chain's limiter stage, if it has one: its index and state.
     limiter: Option<(usize, super::kontakt_limiter::KontaktLimiter)>,
@@ -333,7 +334,7 @@ impl InsertState {
             sections: [[Section::Off; MAX_SECTIONS]; MAX_STAGES],
             envs: Default::default(),
             gain: [1.0; MAX_STAGES],
-            mem: [[[[0.0; 2]; MAX_SECTIONS]; MAX_STAGES]; 2],
+            mem: [[[[0.0; 4]; MAX_SECTIONS]; MAX_STAGES]; 2],
             countdown: 0,
             limiter: None,
             pan: None,
@@ -543,7 +544,7 @@ impl InsertState {
 }
 
 #[inline]
-fn run(sec: Section, m: &mut [f32; 2], x: f32) -> f32 {
+fn run(sec: Section, m: &mut [f32; 4], x: f32) -> f32 {
     match sec {
         Section::Off => x,
         Section::OnePole(g) => {
@@ -561,10 +562,10 @@ fn run(sec: Section, m: &mut [f32; 2], x: f32) -> f32 {
             m[1] = 2.0 * v2 - ic2;
             v2
         }
-        Section::Biquad([b0, b1, b2, a1, a2]) => {
-            let y = b0 * x + m[0];
-            m[0] = b1 * x - a1 * y + m[1];
-            m[1] = b2 * x - a2 * y;
+        Section::Df1([b0, b1, b2, na1, na2]) => {
+            let [x1, x2, y1, y2] = *m;
+            let y = (((b0 * x + b1 * x1) + b2 * x2) + na1 * y1) + na2 * y2;
+            *m = [x, x1, y, y1];
             y
         }
     }
@@ -647,26 +648,71 @@ fn coefficients(
     }
 }
 
-/// Kontakt's EQ band: the cookbook bell at twice the stored dB, bandwidth
-/// `α = sin ω · sinh(octaves · ln 2)`.
+/// Kontakt 8.7.1's classic EQ band (KONTRA `laws::eq_band` and
+/// `eq::kontakt_bell`, 6b09e30). `BEQBand::SetBand` (0x67e91c) stores each
+/// knob as a 0..=1 value through cheap log2/exp2 approximations and
+/// `SetBandInt` (0x67f8f8) turns them back, once more before the first
+/// block (`BEffectBase::Reset`): the band plays at a moved frequency and a
+/// gain a hair off `2^(dB/6)`. Octaves are held to 1/3..=3, dB to ±18; a band
+/// at 0 dB is skipped. The cookbook peak (`A`, `α = sin ω·sinh(octaves·ln 2)`)
+/// with `ω` and its sine and cosine in f32, the coefficients in f64 from
+/// them, stored as f32.
 fn bell(hz: f32, octaves: f32, stored_db: f32, fs: f32) -> Section {
     if !(hz > 0.0 && octaves > 0.0) {
         return Section::Off;
     }
-    let w = 2.0 * std::f32::consts::PI * hz.min(20_000.0).min(0.49 * fs) / fs;
-    let (sw, cw) = w.sin_cos();
-    let alpha = sw * (octaves * std::f32::consts::LN_2).sinh();
-    // the cookbook's A (10^(peak/40)) is 2^(dB/6): the centre gain A² is
-    // twice the stored dB
-    let a = (stored_db / 6.0).exp2();
-    let a0 = 1.0 + alpha / a;
-    Section::Biquad([
-        (1.0 + alpha * a) / a0,
-        -2.0 * cw / a0,
-        (1.0 - alpha * a) / a0,
-        -2.0 * cw / a0,
-        (1.0 - alpha / a) / a0,
+    let mut unit = eq_hz_to_unit(hz);
+    unit = eq_hz_to_unit(eq_unit_to_hz(unit));
+    let hz = eq_unit_to_hz(unit);
+    let bandwidth = ((octaves - 1.0 / 3.0) / (8.0 / 3.0)).clamp(0.0, 1.0);
+    let octaves = bandwidth * 2.666_666_7 + 0.333_333_34;
+    let g = (stored_db / 18.0).clamp(-1.0, 1.0);
+    let a = fast_exp2(((g * 0.5 + 0.5) * 36.0 - 18.0) / 6.0);
+    if a == 1.0 {
+        return Section::Off;
+    }
+    let q = 1.0 / (2.0 * (octaves * std::f32::consts::LN_2).sinh());
+    let w = (f64::from((hz / fs).min(0.49)) * std::f64::consts::TAU) as f32;
+    let (s, c) = (f64::from(f64::from(w).sin() as f32), f64::from(f64::from(w).cos() as f32));
+    let a = f64::from(a);
+    let alpha = s / (2.0 * f64::from(q).max(1e-3));
+    let d4 = alpha / a;
+    let inv = 1.0 / (d4 + 1.0);
+    Section::Df1([
+        (alpha.mul_add(a, 1.0) * inv) as f32,
+        ((c * -2.0) * inv) as f32,
+        ((-alpha).mul_add(a, 1.0) * inv) as f32,
+        ((c + c) * inv) as f32,
+        ((d4 - 1.0) * inv) as f32,
     ])
+}
+
+/// `SetBand`'s Hz knob → 0..=1: `log2(1 + 468.7109·(hz − 20)/19980)·ln 2 / 6.156954`.
+fn eq_hz_to_unit(hz: f32) -> f32 {
+    let x = ((hz - 20.0) / 19980.0).clamp(0.0, 1.0) * 468.710_9 + 1.0;
+    fast_log2(x) * std::f32::consts::LN_2 / 6.156_954
+}
+
+/// `SetBandInt`'s 0..=1 → Hz, the inverse through [`fast_exp2`].
+fn eq_unit_to_hz(unit: f32) -> f32 {
+    let x = fast_exp2(unit * 6.156_954 * 1.442_695);
+    ((x - 1.0) / 468.710_9).clamp(0.0, 1.0) * 19980.0 + 20.0
+}
+
+/// Kontakt's fast log2: the float's bits as an integer over 2^23, less 127,
+/// plus `(m − m²)·0.346607` on its fraction `m`.
+fn fast_log2(x: f32) -> f32 {
+    let y = x.to_bits() as f32 / 8_388_608.0 - 127.0;
+    let m = y - y.floor();
+    y + (m - m * m) * 0.346_607
+}
+
+/// Kontakt's fast exp2: `p` plus `(m − m²)·(−0.339710)` on its fraction,
+/// plus 127, to 23 fractional bits, read as a float's bits.
+fn fast_exp2(p: f32) -> f32 {
+    let m = p - p.floor();
+    let v = p + (m - m * m) * -0.339_710 + 127.0;
+    f32::from_bits((v * 8_388_608.0) as i32 as u32)
 }
 
 #[cfg(test)]
