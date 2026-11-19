@@ -22010,6 +22010,7 @@ dependencies = [
  "setlists",
  "sha2 0.10.9",
  "studio-arrangement",
+ "studio-launcher",
  "studio-lyrics",
  "studio-mixer",
  "studio-navigator",
@@ -22146,6 +22147,22 @@ dependencies = [
  "toml 0.8.2",
  "transport-ui",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "studio-launcher"
+version = "26.10.3"
+dependencies = [
+ "architect-extensions",
+ "architect-media",
+ "architect-navigator-api",
+ "base64 0.22.1",
+ "dioxus",
+ "dirs 6.0.0",
+ "futures-timer",
+ "serde_json",
+ "setlists",
+ "tokio",
 ]
 
 [[package]]
