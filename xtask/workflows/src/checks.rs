@@ -402,7 +402,7 @@ fn apple() -> Job {
     )
     .step(Step::uses("devenv CLI", "./.github/actions/devenv"))
     .step(Step::run(
-        "macOS: cargo build -p studio-desktop (the .dmg's app, linked), nothing from /nix/store",
+        "macOS: cargo build -p studio-architect -p daw-extension (the .dmg's app and its engine, linked), nothing from /nix/store",
         &in_shell(MACOS),
     ))
     .step(Step::run(
@@ -415,9 +415,11 @@ fn apple() -> Job {
 /// macOS SDK: `macos-libs.sh config`), then its guard on a copy: a binary
 /// that links anything from /nix/store fails here, not at the tag (v26.11.2
 /// shipped no .dmg for nixpkgs' libz.dylib; studio#444).
-const MACOS: &str = r#"cargo build -p studio-desktop --config "$(bash scripts/desktop/macos-libs.sh config)"
-cp "${CARGO_TARGET_DIR:-target}/debug/studio-desktop" "$RUNNER_TEMP/studio-desktop"
-bash scripts/desktop/macos-libs.sh guard "$RUNNER_TEMP/studio-desktop"
+const MACOS: &str = r#"cargo build -p studio-architect -p daw-extension --config "$(bash scripts/desktop/macos-libs.sh config)"
+for built in studio-architect daw-extension; do
+  cp "${CARGO_TARGET_DIR:-target}/debug/$built" "$RUNNER_TEMP/$built"
+  bash scripts/desktop/macos-libs.sh guard "$RUNNER_TEMP/$built"
+done
 "#;
 
 /// iOS needs Xcode's own xcrun first on PATH and the nix SDK variables

@@ -32,6 +32,8 @@ gui = [
 [dependencies]
 # `vox` (the node's services) and no window, from the workspace entry.
 architect-desktop = { workspace = true }
+# The release version a packaged build answers `--version` with.
+fts-version.workspace = true
 # Song libraries and setlists, linked in (`setlists::ext::Setlists`), and
 # `share`: the renderer that draws a song's chart as Keyflow's follow SVG
 # on a share link (`setlists::share::blocks`, studio#406).

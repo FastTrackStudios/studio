@@ -71,6 +71,20 @@ pub mod island;
 /// views, its claims and a setlist's favourites.
 pub const ISLAND_MANIFEST: &str = include_str!("../island/extension.toml");
 
+/// Where the extensions Studio ships beside its window's binary are, from
+/// that binary's folder: the engine (`daw`, a process extension, so a
+/// program of its own that cannot be linked in) in `<here>/daw/`, loaded
+/// as a built-in when the app starts (`Distribution::shipped`). A Mac's
+/// bundle keeps what is not its main program out of `Contents/MacOS`
+/// (scripts/desktop/macos.sh); the AppImage has it beside the binary
+/// (scripts/desktop/linux.sh). A build run from `target/` has no such
+/// folder and loads the engine as a development copy, as before.
+pub const SHIPPED: &str = if cfg!(target_os = "macos") {
+    "../Resources/extensions"
+} else {
+    "extensions"
+};
+
 /// Where Studio's island ships: `studio-island/` beside the binary (the
 /// release puts `just island`'s folder there: scripts/studio-architect.sh).
 pub const ISLAND_FOLDER: &str = "studio-island";
@@ -136,6 +150,6 @@ fn base() -> Distribution {
         // which is not a compiled-in extension's.
         .favourites_of(ISLAND_MANIFEST);
     #[cfg(feature = "gui")]
-    let dist = dist.bundle(stage());
+    let dist = dist.bundle(stage()).shipped(SHIPPED);
     dist
 }

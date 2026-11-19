@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Smoke-test a Linux AppImage headless: it must start, with no display and no
-# audio, and print "studio-desktop <version>" for `--version`.
+# audio, and print "studio <version>" for `--version` (the distribution's
+# window binary, apps/architect, which answers that before anything else).
 #
 #   scripts/desktop/linux-smoke.sh <file.AppImage> <X.Y.Z>
 #
@@ -17,7 +18,7 @@ trap 'echo "linux-smoke: failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 img="${1:?usage: linux-smoke.sh <file.AppImage> <X.Y.Z>}"
 want="${2:?version}"
-crate=studio-desktop
+crate=studio
 [ -x "$img" ] || { echo "$img is not an executable file" >&2; exit 1; }
 img="$(cd "$(dirname "$img")" && pwd)/$(basename "$img")"
 
