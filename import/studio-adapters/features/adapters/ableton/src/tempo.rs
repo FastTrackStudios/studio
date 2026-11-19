@@ -5,7 +5,7 @@
 //! that map (steps and linear ramps, as Live plays its tempo automation),
 //! and [`sample_seconds`] reads a warped clip's warp markers.
 
-use crate::types::{AbletonLiveSet, AutomationPoint, WarpMarker};
+use crate::types::{AbletonLiveSet, AutomationPoint, TimeSignature, WarpMarker};
 
 /// Beats → seconds through a tempo map: the set's tempo, or its tempo
 /// automation (linear ramps between breakpoints, as Live plays them).
@@ -114,11 +114,65 @@ impl TempoMap {
         out
     }
 
+    /// The map's steps with the set's metre changes laid in
+    /// (`meters`, `(beat, signature)` as
+    /// [`AbletonLiveSet::time_signature_automation`] keeps them): one
+    /// change per beat where the tempo or the metre changes, in order,
+    /// each with the tempo from it and — only where the metre changes —
+    /// the new signature. The first is at beat 0 and always names the
+    /// signature in force there (`start`, when the set's automation has
+    /// none at 0).
+    #[must_use]
+    pub fn changes(&self, start: TimeSignature, meters: &[(f64, TimeSignature)]) -> Vec<Change> {
+        let mut meters: Vec<(f64, TimeSignature)> = meters.to_vec();
+        meters.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let start = meters
+            .iter()
+            .rev()
+            .find(|m| m.0 <= 1e-9)
+            .map_or(start, |m| m.1);
+        let mut beats: Vec<f64> = self.steps().iter().map(|s| s.0).collect();
+        beats.extend(meters.iter().filter(|m| m.0 > 1e-9).map(|m| m.0));
+        beats.push(0.0);
+        beats.sort_by(f64::total_cmp);
+        beats.dedup_by(|later, earlier| (*later - *earlier).abs() < 1e-9);
+        let mut in_force = start;
+        beats
+            .into_iter()
+            .enumerate()
+            .map(|(i, beat)| {
+                let signature = meters
+                    .iter()
+                    .rev()
+                    .find(|m| m.0 <= beat + 1e-9)
+                    .map_or(start, |m| m.1);
+                let named = (i == 0 || signature != in_force).then_some(signature);
+                in_force = signature;
+                Change {
+                    beat,
+                    bpm: self.bpm_at(beat),
+                    signature: named,
+                }
+            })
+            .collect()
+    }
+
     /// Seconds `beats` long starting at `at`.
     #[must_use]
     pub fn span(&self, at: f64, beats: f64) -> f64 {
         self.seconds_at(at + beats) - self.seconds_at(at)
     }
+}
+
+/// A change of tempo or metre on the arrangement ([`TempoMap::changes`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Change {
+    /// Where, beats from the arrangement's start.
+    pub beat: f64,
+    /// The tempo from it, bpm.
+    pub bpm: f64,
+    /// The signature from it, when it changes here.
+    pub signature: Option<TimeSignature>,
 }
 
 /// Where a warped clip's `beat` falls in its audio file, seconds: linear
@@ -238,6 +292,49 @@ mod tests {
             &[tempo(0.0, 100.0), tempo(8.0, 140.0), tempo(8.0, 100.0)],
         );
         assert_eq!(back.steps(), [(0.0, 100.0)]);
+    }
+
+    #[test]
+    fn metre_changes_ride_the_tempo_steps() {
+        let sig = |numerator, denominator| TimeSignature {
+            numerator,
+            denominator,
+        };
+        // 160 to beat 16, a step to 116; 4/4 parked before the set, a 5/4
+        // bar at 12, 4/4 again at 17 (one beat past the step).
+        let map = TempoMap::new(
+            120.0,
+            &[
+                tempo(-63_072_000.0, 160.0),
+                tempo(16.0, 160.0),
+                tempo(16.0, 116.0),
+            ],
+        );
+        let meters = [(0.0, sig(4, 4)), (12.0, sig(5, 4)), (17.0, sig(4, 4))];
+        let changes: Vec<(f64, f64, Option<TimeSignature>)> = map
+            .changes(sig(3, 4), &meters)
+            .into_iter()
+            .map(|c| (c.beat, c.bpm, c.signature))
+            .collect();
+        assert_eq!(
+            changes,
+            [
+                (0.0, 160.0, Some(sig(4, 4))),
+                (12.0, 160.0, Some(sig(5, 4))),
+                (16.0, 116.0, None),
+                (17.0, 116.0, Some(sig(4, 4))),
+            ],
+            "the set's own 4/4 at 0, not the fallback; a tempo step names no metre"
+        );
+        assert_eq!(
+            TempoMap::new(90.0, &[]).changes(sig(6, 8), &[]),
+            [Change {
+                beat: 0.0,
+                bpm: 90.0,
+                signature: Some(sig(6, 8))
+            }],
+            "a set that never changes: its tempo and signature at 0"
+        );
     }
 
     #[test]
