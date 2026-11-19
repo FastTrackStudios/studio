@@ -282,29 +282,12 @@ in
   # Each is `scripts/local-stack.sh run <name>`; ports in local-stack.toml
   # (local-stack.local.env moves them), state in .devenv/state/local-stack.
   # The just recipes (`just dev`, `just demo`) choose what is local first.
-  # Each build is a task the process waits on, so the TUI shows it
-  # compiling (its own output) and a failed build stops its process
-  # visibly; each process is ready only once it really answers (web: dx
-  # serves studio-web's built module; desktop: the window's control socket).
+  # Each process builds first in its own log, then serves; it is ready only
+  # once it really answers (web: dx serves studio-web's built module;
+  # desktop: the window's control socket), so a green dot means up. Run it
+  # detached (`devenv up -d`) and watch it with `devenv processes attach`.
   # Every process exports to the telemetry module's collector, so Teley
   # (:8787, and its MCP) has the stack's traces and logs.
-  tasks = let
-    stack = "${config.devenv.root}/scripts/local-stack.sh";
-  in {
-    "stack:build-architect" = {
-      exec = "${stack} build architect";
-      before = [ "devenv:processes:architect" ];
-    };
-    "stack:build-web" = {
-      exec = "${stack} build web";
-      before = [ "devenv:processes:web" ];
-    };
-    "stack:build-desktop" = {
-      exec = "${stack} build desktop";
-      before = [ "devenv:processes:desktop" ];
-    };
-  };
-
   processes = let
     stack = "${config.devenv.root}/scripts/local-stack.sh";
     probe = name: { exec = "${stack} ready ${name}"; period = 2; };
@@ -335,7 +318,7 @@ in
     };
     desktop = {
       exec = "exec ${stack} run desktop";
-      after = [ "devenv:processes:architect" ];
+      after = [ "devenv:processes:auth" ];
       ready = probe "desktop";
       env = otel;
     };

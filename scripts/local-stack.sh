@@ -412,6 +412,7 @@ run_architect() {
     plan_locked
     load_plan
     seed_vault
+    ( build_architect ) || die "server: the build failed (above)"
     say "server: plain Architect from $arch_src (architect-desktop serve, no Studio code), on :$(port server)"
     (
         for _ in $(seq 1 1800); do
@@ -460,7 +461,9 @@ def put(rel, src=None, text=None):
     else:
         shutil.copyfile(src, out)
 put("app/style.css", os.path.join(archweb, "app/style.css"))
-put("app/config.json", text=json.dumps({"issuer": f"http://127.0.0.1:{auth}", "client_id": "architect"}))
+# Signed in already as the stack's demo account (architect#991): the
+# issuer approves it without its form, the app starts the sign-in itself.
+put("app/config.json", text=json.dumps({"issuer": f"http://127.0.0.1:{auth}", "client_id": "architect", "auto_sign_in": True}))
 # A share link's page (the server's, /s/<code>/) starts the app from
 # /app/start.js, as the bundle does: here, dx's build of studio-web.
 put("app/start.js", text="// Written by scripts/local-stack.sh: studio-web's dev start, for a share link's page.\n"
@@ -518,6 +521,9 @@ run_web() {
             xdg-open "http://127.0.0.1:$web/app/" >/dev/null 2>&1 || true
         ) &
     fi
+    # Its build first, in this process's log (compiling, then served:
+    # `ready web` answers only once dx serves the built module).
+    ( build_web ) || die "web: the build failed (above)"
     cp Cargo.lock "$state/Cargo.lock.web"
     (
         cd "$crate"
@@ -557,6 +563,9 @@ run_desktop() {
     triple="$(host_triple)"
     out="$(target_dir)/$triple/desktop-dev"
     mapfile -t cfg < <(cargo_config)
+    # Its build first (the engine, then the window), in this process's log;
+    # `ready desktop` answers only once the window's control socket does.
+    ( build_desktop ) || die "desktop: the build failed (above)"
     for _ in $(seq 1 7200); do
         curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port server)/health" && break
         sleep 1
@@ -621,12 +630,14 @@ run_desktop() {
     fi
 }
 
-# ── Builds as devenv tasks ───────────────────────────────────────────────
-# Each process's build, run by devenv as a task before the process starts
-# (devenv.nix `tasks`), so `devenv up` shows it compiling with its own
-# output and a failed build stops that process visibly. The same flags as
-# the process's own `cargo run` / `dx serve`, so its first build after this
-# is an up-to-date check. Everything through kache (no hot-patching).
+# ── Builds ───────────────────────────────────────────────────────────────
+# Each process builds first, in its own log, then serves: `devenv up` (or
+# `devenv processes attach`) shows it running and not ready, compiling,
+# until it really answers (`ready <process>`). Not devenv tasks: a task
+# runs inside `devenv up -d`'s two-minute start and a desktop bundle takes
+# longer. The same flags as the serve after it, so that serve is an
+# up-to-date check. Everything through kache (no hot-patching).
+# `local-stack.sh build <process>` runs one alone.
 
 # The Architect server: plain `architect-desktop`, no window.
 build_architect() {
