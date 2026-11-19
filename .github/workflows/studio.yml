@@ -1,7 +1,7 @@
-# Generated from xtask::workflows::studio_architect (xtask/workflows/src/studio_architect.rs)
+# Generated from xtask::workflows::studio (xtask/workflows/src/studio.rs)
 # Rebuild with `just workflows`; do not edit by hand (`just workflows-check` fails CI on drift).
 # The reasons for every job and step are comments in that Rust source.
-name: studio-architect
+name: studio
 on:
   push:
     tags:
@@ -23,7 +23,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: studio-architect-${{ inputs.tag || github.ref_name }}
+  group: studio-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 env:
   TAG: ${{ inputs.tag || github.ref_name }}
@@ -128,7 +128,7 @@ jobs:
     - name: Own target dir, size-capped
       run: |
         base="${CI_CACHE_DIR:?not a shared runner (no CI_CACHE_DIR)}"
-        dir="$base/studio-architect/$RUNNER_NAME/target"
+        dir="$base/studio/$RUNNER_NAME/target"
         cap_gb="${TARGET_CAP_GB-120}"
         mkdir -p "$dir"
         used_gb="$(du -s --block-size=1G "$dir" | cut -f1)"
@@ -143,7 +143,7 @@ jobs:
           exit 1
         fi
         echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
-        echo "STUDIO_ARCHITECT_CACHE=$base/studio-architect/$RUNNER_NAME" >> "$GITHUB_ENV"
+        echo "STUDIO_ARCHITECT_CACHE=$base/studio/$RUNNER_NAME" >> "$GITHUB_ENV"
     - name: Studio's island (wasm32-wasip2, node >= 26)
       run: |
         set -euo pipefail
@@ -159,20 +159,20 @@ jobs:
       run: |
         set -euo pipefail
         name="${TAG//\//-}"
-        out="$RUNNER_TEMP/studio-architect"
+        out="$RUNNER_TEMP/studio"
         rm -rf "$out"
-        devenv shell -- bash scripts/studio-architect.sh release "$name" "$out"
+        devenv shell -- bash scripts/studio.sh release "$name" "$out"
     - name: What the node links (DT_NEEDED), smoke test
       run: |
         set -euo pipefail
         name="${TAG//\//-}"
-        out="$RUNNER_TEMP/studio-architect"
+        out="$RUNNER_TEMP/studio"
         tmp="$(mktemp -d)"
-        tar -C "$tmp" -xzf "$out/studio-architect-node-$name-x86_64-linux.tar.gz"
-        bin="$tmp/studio-architect-node-$name-x86_64-linux/studio-architect"
+        tar -C "$tmp" -xzf "$out/studio-node-$name-x86_64-linux.tar.gz"
+        bin="$tmp/studio-node-$name-x86_64-linux/studio"
         "$bin" serve --help > /dev/null
         "$bin" distribution > "$tmp/distribution.json"
-        island="$tmp/studio-architect-node-$name-x86_64-linux/studio-island"
+        island="$tmp/studio-node-$name-x86_64-linux/studio-island"
         test -f "$island/architect.lock.json"
         test "$(cat "$island/BUILT_FROM")" = "$(git describe --always --dirty --abbrev=40)"
         python3 -c 'import json,sys; sys.exit(0 if "island.css" in json.load(open(sys.argv[1]))["files"] else "island.css is not in the lock")' "$island/architect.lock.json"
@@ -182,7 +182,7 @@ jobs:
           echo '```'
           ls -l "$out"
           echo '```'
-          echo "DT_NEEDED of \`studio-architect\`:"
+          echo "DT_NEEDED of \`studio\`:"
           echo '```'
           readelf -d "$bin" | grep NEEDED || true
           echo "interpreter: $(readelf -l "$bin" | sed -n 's/.*Requesting program interpreter: \(.*\)]/\1/p')"
@@ -204,9 +204,9 @@ jobs:
     - name: Keep the tarballs
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
-        name: studio-architect
+        name: studio
         path: |
-          ${{ runner.temp }}/studio-architect/*.tar.gz*
+          ${{ runner.temp }}/studio/*.tar.gz*
         if-no-files-found: error
         retention-days: 14
   publish:
@@ -225,7 +225,7 @@ jobs:
     - name: The tarballs
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
-        name: studio-architect
+        name: studio
         path: dist
     - name: Verify, then attach to the one Release
       id: attach
@@ -235,7 +235,7 @@ jobs:
         set -euo pipefail
         cd dist
         ls -l
-        files=("studio-architect-node-$TAG-x86_64-linux.tar.gz" "studio-architect-web-$TAG.tar.gz")
+        files=("studio-node-$TAG-x86_64-linux.tar.gz" "studio-web-$TAG.tar.gz")
         for f in "${files[@]}"; do
           test -f "$f"
           sha256sum -c "$f.sha256"

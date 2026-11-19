@@ -6,8 +6,8 @@
     let
       # The whole monorepo is the build source: ONE workspace, so the
       # root Cargo.lock drives vendoring, and the [patch.crates-io]
-      # path patches (libs/vendor/styx-format, libs/editor/vendor/
-      # mermaid-rs-renderer) resolve in-tree. Keep the filter minimal
+      # patches (FastTrackStudios/vendor's styx-format and the other forks,
+      # by git) resolve from it. Keep the filter minimal
       # — the flake source is already the tracked git tree (no
       # target/, no untracked junk); we only strip obvious non-build
       # dirs to cut store-copy churn.
@@ -239,8 +239,8 @@
       # hosts/THEBATTLESHIP/kache-nix-sandbox.nix). Without them (another
       # host, the drive missing) the build goes on without kache.
       #
-      # Only the derivations that compile everything themselves take these
-      # (web-bundles.nix: session-app-web and the dx bundles); the
+      # Only a derivation that compiles everything itself takes these (the
+      # web bundles did, until they went with the studio-web image); the
       # deps-only builds keep their pure hashes, so the copies already in
       # the nix store still serve.
       fts.kacheArgs =

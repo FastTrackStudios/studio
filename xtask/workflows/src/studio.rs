@@ -1,4 +1,4 @@
-//! `studio-architect` — Studio's distribution of Architect (apps/desktop,
+//! `studio` — Studio's distribution of Architect (apps/desktop,
 //! docs/architect-distribution.md) on the release tag: its headless node
 //! and its web bundle for x86_64 Linux, attached to the ONE GitHub Release
 //! of `vX.Y.Z` in the shape Architect's own release attaches its app's
@@ -6,36 +6,36 @@
 //! cannot be taken for Architect's:
 //!
 //! ```text
-//!   studio-architect-node-vX.Y.Z-x86_64-linux.tar.gz (+ .sha256)
-//!       studio-architect-node-vX.Y.Z-x86_64-linux/studio-architect
-//!       studio-architect-node-vX.Y.Z-x86_64-linux/studio-island/
+//!   studio-node-vX.Y.Z-x86_64-linux.tar.gz (+ .sha256)
+//!       studio-node-vX.Y.Z-x86_64-linux/studio
+//!       studio-node-vX.Y.Z-x86_64-linux/studio-island/
 //!           architect.json, architect.lock.json, studio_island.js,
 //!           studio_island.*.wasm (the lock's files), island.css,
 //!           web-studio-island.js, web-studio-island_bg.wasm, web-snippet-*.js
 //!           (its web bundle, for browsers without JSPI), BUILT_FROM
-//!   studio-architect-web-vX.Y.Z.tar.gz (+ .sha256)
-//!       studio-architect-web-vX.Y.Z/{index.html, docs/, app/ (+ distribution.json)}
+//!   studio-web-vX.Y.Z.tar.gz (+ .sha256)
+//!       studio-web-vX.Y.Z/{index.html, docs/, app/ (+ distribution.json)}
 //!   SHA256SUMS (+ SHA256SUMS.minisig, the org key)   sums.rs, over the whole Release
 //! ```
 //!
 //! No image: the hosted node runs as a NixOS service from the tarball
 //! (FastTrackStudios/infra wraps it). `studio-island/` must sit beside the
 //! node's real binary: the node reads it from its own executable's folder
-//! (`studio_architect::ISLAND_FOLDER`), and serves no island without it.
+//! (`studio_desktop::ISLAND_FOLDER`), and serves no island without it.
 //!
 //! ```text
 //!   `just release` pushes vX.Y.Z --> resolve (desktop.rs's: the stamped
 //!   version is the tag's, on main or release/v*, `CI passed` green, the
 //!   Release exists) --> build (THEBATTLESHIP `thebattleship-release`, its
 //!   own size-capped target dir in the pool's cache, warm across tags:
-//!   scripts/studio-architect.sh release) --> publish (hosted, the only
+//!   scripts/studio.sh release) --> publish (hosted, the only
 //!   job with a write token) --> sums (signed, in release-signing)
 //! ```
 //!
 //! workflow_dispatch: `publish` (default) re-runs a tag; `build-only`
 //! builds any ref and keeps the tarballs as workflow artifacts, touching
 //! no Release. Never a pull_request: PRs get `cargo check` of the node
-//! (pr.rs `studio-architect`).
+//! (pr.rs `studio`).
 
 use crate::desktop::{NOT_VALIDATE, STAMPED, resolve};
 use crate::model::{Job, RunsOn, Step, UBUNTU, Workflow, yaml};
@@ -44,7 +44,7 @@ use anyhow::Result;
 
 pub fn workflow() -> Result<Workflow> {
     Ok(Workflow::new(
-        "studio-architect",
+        "studio",
         yaml(
             r#"
 push:
@@ -65,10 +65,7 @@ workflow_dispatch:
         )?,
     )
     .permissions(yaml("contents: read\n")?)
-    .concurrency(
-        "studio-architect-${{ inputs.tag || github.ref_name }}",
-        false,
-    )
+    .concurrency("studio-${{ inputs.tag || github.ref_name }}", false)
     .env("TAG", "${{ inputs.tag || github.ref_name }}")
     .env("MODE", "${{ inputs.mode || 'publish' }}")
     .job("resolve", resolve()?)
@@ -99,7 +96,7 @@ fn build() -> Job {
         .step(Step::run(
             "Own target dir, size-capped",
             r#"base="${CI_CACHE_DIR:?not a shared runner (no CI_CACHE_DIR)}"
-dir="$base/studio-architect/$RUNNER_NAME/target"
+dir="$base/studio/$RUNNER_NAME/target"
 cap_gb="${TARGET_CAP_GB-120}"
 mkdir -p "$dir"
 used_gb="$(du -s --block-size=1G "$dir" | cut -f1)"
@@ -114,7 +111,7 @@ if [ "$free_gb" -lt 60 ]; then
   exit 1
 fi
 echo "CARGO_TARGET_DIR=$dir" >> "$GITHUB_ENV"
-echo "STUDIO_ARCHITECT_CACHE=$base/studio-architect/$RUNNER_NAME" >> "$GITHUB_ENV"
+echo "STUDIO_ARCHITECT_CACHE=$base/studio/$RUNNER_NAME" >> "$GITHUB_ENV"
 "#,
         ))
         // Studio's island (#445), into the same target dir, from this very
@@ -141,9 +138,9 @@ devenv shell -- just island
             "Build the node and the web bundle",
             r#"set -euo pipefail
 name="${TAG//\//-}"
-out="$RUNNER_TEMP/studio-architect"
+out="$RUNNER_TEMP/studio"
 rm -rf "$out"
-devenv shell -- bash scripts/studio-architect.sh release "$name" "$out"
+devenv shell -- bash scripts/studio.sh release "$name" "$out"
 "#,
         ))
         // The node as the infra repo wraps it (autoPatchelf on NixOS): what
@@ -152,13 +149,13 @@ devenv shell -- bash scripts/studio-architect.sh release "$name" "$out"
             "What the node links (DT_NEEDED), smoke test",
             r####"set -euo pipefail
 name="${TAG//\//-}"
-out="$RUNNER_TEMP/studio-architect"
+out="$RUNNER_TEMP/studio"
 tmp="$(mktemp -d)"
-tar -C "$tmp" -xzf "$out/studio-architect-node-$name-x86_64-linux.tar.gz"
-bin="$tmp/studio-architect-node-$name-x86_64-linux/studio-architect"
+tar -C "$tmp" -xzf "$out/studio-node-$name-x86_64-linux.tar.gz"
+bin="$tmp/studio-node-$name-x86_64-linux/studio"
 "$bin" serve --help > /dev/null
 "$bin" distribution > "$tmp/distribution.json"
-island="$tmp/studio-architect-node-$name-x86_64-linux/studio-island"
+island="$tmp/studio-node-$name-x86_64-linux/studio-island"
 test -f "$island/architect.lock.json"
 test "$(cat "$island/BUILT_FROM")" = "$(git describe --always --dirty --abbrev=40)"
 python3 -c 'import json,sys; sys.exit(0 if "island.css" in json.load(open(sys.argv[1]))["files"] else "island.css is not in the lock")' "$island/architect.lock.json"
@@ -168,7 +165,7 @@ python3 -c 'import json,sys; f=json.load(open(sys.argv[1]))["files"]; sys.exit(0
   echo '```'
   ls -l "$out"
   echo '```'
-  echo "DT_NEEDED of \`studio-architect\`:"
+  echo "DT_NEEDED of \`studio\`:"
   echo '```'
   readelf -d "$bin" | grep NEEDED || true
   echo "interpreter: $(readelf -l "$bin" | sed -n 's/.*Requesting program interpreter: \(.*\)]/\1/p')"
@@ -195,8 +192,8 @@ echo "cache after: $(du -sh "$cache" | cut -f1)"
         )
         .step(
             Step::uses("Keep the tarballs", crate::model::pinned::UPLOAD_ARTIFACT)
-                .with("name", "studio-architect")
-                .with("path", "${{ runner.temp }}/studio-architect/*.tar.gz*\n")
+                .with("name", "studio")
+                .with("path", "${{ runner.temp }}/studio/*.tar.gz*\n")
                 .with("if-no-files-found", "error")
                 .with("retention-days", 14),
         )
@@ -215,7 +212,7 @@ fn publish() -> Result<Job> {
         .output("digests", "${{ steps.attach.outputs.digests }}")
         .step(
             Step::uses("The tarballs", crate::model::pinned::DOWNLOAD_ARTIFACT)
-                .with("name", "studio-architect")
+                .with("name", "studio")
                 .with("path", "dist"),
         )
         .step(
@@ -224,7 +221,7 @@ fn publish() -> Result<Job> {
                 r####"set -euo pipefail
 cd dist
 ls -l
-files=("studio-architect-node-$TAG-x86_64-linux.tar.gz" "studio-architect-web-$TAG.tar.gz")
+files=("studio-node-$TAG-x86_64-linux.tar.gz" "studio-web-$TAG.tar.gz")
 for f in "${files[@]}"; do
   test -f "$f"
   sha256sum -c "$f.sha256"

@@ -12,14 +12,13 @@
 #   just release [<sha>]  --> tag vYY.M.MICRO on main's newest commit whose
 #       `CI passed` is green (or on <sha>)
 #                                              The TAG ships, and only the
-#                                              tag: the studio-web image
-#                                              (Images), the Studio
-#                                              TestFlight upload, the
+#                                              tag: Studio's node and web
+#                                              tarballs (`studio`), the
 #                                              desktop installers and the
-#                                              one GitHub Release. (Argo CD
-#                                              deploys the image from
-#                                              gitops; this repo deploys
-#                                              nothing.)
+#                                              one GitHub Release. (The
+#                                              infra repo deploys the node
+#                                              to its NixOS host; this repo
+#                                              deploys nothing.)
 #
 #   hotfix, when main can't ship: release/v<latest tag> (from the tag)
 #       <-- PR of `cherry-pick -x` of fixes already on main; once that
@@ -195,9 +194,10 @@ next_version() {
 }
 
 # ── the iOS app (Studio) ────────────────────────────────────────────────
-# Studio (Signal and Session in one app, apps/studio/desktop), with its
-# `<app>-ios` workflow (Patchbay's iOS app ships from its own repo); Signal's and Session's own App Store
-# records get no new builds. Each is built from the one `v<version>` tag:
+# Studio, with its `<app>-ios` workflow. The old rig app that built it is
+# gone and apps/desktop has no iOS target yet, so no workflow uploads one
+# today; these helpers stay for that target (Patchbay's iOS app ships from
+# its own repo). Signal's and Session's own App Store records get no new builds. Each is built from the one `v<version>` tag:
 # its marketing version is the tag's (deploy-testflight.sh writes
 # MARKETING_VER into the Info.plist) and Studio reports it in-app through
 # fts-version (FTS_RELEASE_VERSION, which `stamp` exported). The tag guard
@@ -541,7 +541,7 @@ cmd_plan() {
 }
 
 # Tag the next version on a green commit and push it. THE TAG SHIPS: the
-# image, TestFlight, the installers and the Release all start from it, in
+# node and web tarballs, the installers and the Release all start from it, in
 # parallel; nothing here waits for any of them.
 cmd_release() { # [--dry-run] [--yes] [SHA]
     local dry=0 yes=0 want="" sha line tag prev next ltag existing a
@@ -594,7 +594,7 @@ cmd_release() { # [--dry-run] [--yes] [SHA]
     fi
     if [ "$dry" = 1 ]; then note "dry run: v$next not tagged"; return 0; fi
     if [ "$yes" = 0 ] && [ -t 0 ]; then
-        printf 'Push v%s? It ships the studio-web image, TestFlight, the installers and the Release. [y/N] ' "$next" >&2
+        printf 'Push v%s? It ships the node and web tarballs, the installers and the Release. [y/N] ' "$next" >&2
         read -r a
         [ "$a" = y ] || [ "$a" = Y ] || die "not tagged"
     fi
@@ -604,7 +604,7 @@ cmd_release() { # [--dry-run] [--yes] [SHA]
         || ident=(-c "user.name=fts-forge[bot]" -c "user.email=fts-forge[bot]@users.noreply.github.com")
     git ${ident[@]+"${ident[@]}"} tag -a "v$next" "$sha" -m "studio $next"
     git push --quiet origin "refs/tags/v$next"
-    note "pushed v$next at $(git rev-parse --short "$sha") on $line: Images, studio-ios, desktop and the Release start from the tag"
+    note "pushed v$next at $(git rev-parse --short "$sha") on $line: studio, desktop and the Release start from the tag"
 }
 
 # Record <version> as this checkout's release version: `.release-version`
@@ -780,7 +780,7 @@ publish_release() { # [tag]
         note "release $tag exists — its facts are on it"; return 0
     fi
     # ONE writer creates the draft: release.yml's publish job. The other
-    # callers (desktop, studio-ios) wait for it, and create it themselves
+    # callers (desktop, studio) wait for it, and create it themselves
     # only when it never came (release.yml failed).
     if [ "${PUBLISH_MODE:-create}" = wait ]; then
         local i
@@ -807,7 +807,7 @@ publish_release() { # [tag]
             echo
         fi
         echo "---"
-        echo "Tag \`$tag\` at \`$(git rev-parse --short "$target")\` on ${line:-main} (image \`ghcr.io/fasttrackstudios/studio-web:$v\`)."
+        echo "Tag \`$tag\` at \`$(git rev-parse --short "$target")\` on ${line:-main}."
         [ -n "$prev" ] && echo "Full diff: https://github.com/$REPO/compare/$prev...$tag"
         echo
         tf_render "$tag" "$v" ""
@@ -878,7 +878,7 @@ release_dedupe() { # <tag>
 cmd_publish() { publish_release "$@"; }
 
 
-# CI, first job of studio-ios.yml and desktop.yml, in a checkout of the tag
+# CI, first job of desktop.yml (and an <app>-ios.yml), in a checkout of the tag
 # that `stamp` has recorded the tag's version in. TestFlight ships exactly
 # the tag: refuse a tag that is not vX.Y.Z, a checkout whose stamped
 # release version is not the tag's, a commit that is on neither main nor a

@@ -21,7 +21,10 @@
 # you lower it here, so the numbers only go down.
 
 contract-target = "wasm32-unknown-unknown"
-host-dirs = ["apps"]
+# plugins/ and features/engine/ were under apps/ until the restructure
+# (apps/desktop and apps/web); they keep the host treatment until they get
+# rows of their own.
+host-dirs = ["apps", "plugins", "features/engine"]
 unmapped-ok = ["features/adapters/reaper/tests", "features/adapters/reaper/session-extension/xtask", "studio-adapters:features/adapters/reaper/daw-reaper/xtask"]
 single-source = ["architect", "architect-*", "auth", "auth-*", "crdt", "crdt-*", "ui-snapshot"]
 

@@ -9,8 +9,8 @@
 //!                          is not run again), then the ONE GitHub Release
 //!                          with the notes from the change files added since
 //!                          the previous tag. It waits for nothing: the
-//!                          image, TestFlight and the installers start from
-//!                          the same tag in parallel and attach or record
+//!                          node and web tarballs (`studio`) and the
+//!                          installers start from the same tag in parallel and attach or record
 //!                          into the Release as they finish. The tag is
 //!                          pushed by `just release` as a person or the
 //!                          fts-forge App: a tag pushed with GITHUB_TOKEN

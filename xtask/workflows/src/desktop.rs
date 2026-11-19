@@ -1,11 +1,10 @@
 //! `desktop` — the Studio desktop installers on the release tag: a signed,
 //! notarized macOS `.dmg` and a Linux AppImage, attached to the ONE GitHub
-//! Release of `vX.Y.Z`, beside the TestFlight build `studio-ios` makes from
-//! the same tag. scripts/install.sh installs them (README, "Install").
+//! Release of `vX.Y.Z`. scripts/install.sh installs them (README, "Install").
 //!
 //! ```text
-//!   `just release` pushes vX.Y.Z --> this, Images, studio-ios and the
-//!   release publish all start on the tag, in parallel --> resolve (hosted:
+//!   `just release` pushes vX.Y.Z --> this, `studio` (the node and web
+//!   tarballs) and the release publish all start on the tag, in parallel --> resolve (hosted:
 //!   the tag's version stamped in, tag shape, the stamped version == the
 //!   tag's, commit on main or release/v*, `CI passed` green, Release exists) --> macos (airlock) and linux
 //!   (THEBATTLESHIP, `thebattleship-release`) build in parallel and upload
@@ -15,8 +14,7 @@
 //!
 //! The signing identity and the notarization key never leave their machine:
 //! `macos` runs on airlock (the Mac mini), on studio's own release runner
-//! there, `studio-release-mac` (its own warm checkout, shared with the
-//! TestFlight build), whose build keychain holds the Developer ID Application identity and whose
+//! there, `studio-release-mac` (its own warm checkout), whose build keychain holds the Developer ID Application identity and whose
 //! ~/.appstoreconnect holds the App Store Connect key notarytool uses, so
 //! this reads no GitHub secret. Only the hosted `publish` job can write to
 //! the Release; the jobs that touch the identity have a read-only token.
@@ -89,7 +87,8 @@ pub const NOT_VALIDATE: &str = "${{ inputs.mode != 'validate' }}";
 /// the version it commits.
 pub const STAMPED: &str = "${{ env.MODE != 'build-only' }}";
 
-/// The same checks TestFlight makes (release.sh ios-resolve): the tag is
+/// The release checks (release.sh ios-resolve, named for the TestFlight
+/// build it first served): the tag is
 /// vX.Y.Z, the stamped release version is the tag's, the commit is
 /// on main or release/v*, `CI passed` is green. A
 /// build-only run checks none of that and builds the ref as it is.
@@ -198,7 +197,7 @@ fi
 "#,
         ))
         // The commit `resolve` checked. clean:false keeps target/ between
-        // runs, so cargo builds incrementally (studio-ios builds here too).
+        // runs, so cargo builds incrementally.
         .step(
             checkout()
                 .with("ref", "${{ needs.resolve.outputs.sha }}")
@@ -207,7 +206,7 @@ fi
         .step(stamp("${{ env.TAG }}").cond(STAMPED))
         // The guitar rig's release build refuses to compile without its
         // captures (signal:features/rigs/guitar/build.rs): airlock's rig-models
-        // clone, fast-forwarded first (as studio-ios does).
+        // clone, fast-forwarded first.
         .step(Step::run(
             "Rig captures (rig-models) linked into the tree",
             &rig_models("/Volumes/build-disk/development/rig-models", true),
