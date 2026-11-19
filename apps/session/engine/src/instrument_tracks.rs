@@ -70,15 +70,7 @@ struct HearArg {
     by: Option<String>,
 }
 
-/// The top-level folder a song's stereo reference is in.
-const REFERENCE_FOLDER: &str = "Reference";
-
-/// Whether top-level track `name` is neither an instrument folder nor the
-/// reference: the guide and the buses, which both ways of hearing leave.
-fn left_alone(name: &str) -> bool {
-    let n = name.trim().to_ascii_uppercase();
-    n == "GUIDE" || n.ends_with(" BUS") || n == "KEYFLOW"
-}
+use session_runtime::reference::{REFERENCE_FOLDER, left_alone};
 
 /// Whether song `project` is heard by its reference now: its Reference
 /// folder is on. `None` for a song with no such folder.
@@ -89,33 +81,15 @@ fn heard_by_reference(daw: &daw::standalone::Standalone, project: &ProjectContex
         .map(|t| !t.muted)
 }
 
-/// Song `project` heard by its reference (`reference`) or its stems.
-/// Whether it has a reference to hear.
+/// Song `project` heard by its reference (`reference`) or its stems
+/// (`session_runtime::reference::hear`). Whether it has a reference to
+/// hear.
 fn hear(
     daw: &daw::standalone::Standalone,
     project: &ProjectContext,
     reference: bool,
 ) -> Result<bool, String> {
-    let top: Vec<_> = Tracks::all(daw, project.clone())
-        .into_iter()
-        .filter(|t| t.parent_guid.is_none())
-        .collect();
-    let has = top
-        .iter()
-        .any(|t| t.name.trim().eq_ignore_ascii_case(REFERENCE_FOLDER));
-    if reference && !has {
-        // Nothing to hear it by: left on its stems.
-        return Ok(false);
-    }
-    for track in top.iter().filter(|t| !left_alone(&t.name)) {
-        let is_reference = track.name.trim().eq_ignore_ascii_case(REFERENCE_FOLDER);
-        let mute = is_reference != reference;
-        if track.muted != mute {
-            Tracks::set_muted(daw, project.clone(), TrackRef::Guid(track.guid.clone()), mute)
-                .map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(has)
+    session_runtime::reference::hear(daw, project, reference)
 }
 
 /// A track, and the top-level folder it goes into.
@@ -173,13 +147,13 @@ fn move_into(
         .map_err(|e| e.to_string())?;
     // The folder: the top-level track of that name, else a new one, last.
     let all = Tracks::all(daw, project.clone());
-    let folder = match all
-        .iter()
-        .find(|t| t.parent_guid.is_none() && t.guid != guid && t.name.trim().eq_ignore_ascii_case(into.trim()))
-    {
+    let folder = match all.iter().find(|t| {
+        t.parent_guid.is_none() && t.guid != guid && t.name.trim().eq_ignore_ascii_case(into.trim())
+    }) {
         Some(found) => found.guid.clone(),
         None => {
-            let made = Tracks::add(daw, project.clone(), into.trim(), None).map_err(|e| e.to_string())?;
+            let made =
+                Tracks::add(daw, project.clone(), into.trim(), None).map_err(|e| e.to_string())?;
             if muted == Some(true) {
                 Tracks::set_muted(daw, project.clone(), TrackRef::Guid(made.clone()), true)
                     .map_err(|e| e.to_string())?;
@@ -190,9 +164,7 @@ fn move_into(
     // Into it, as its last track.
     let tree = TrackTree::new(Tracks::all(daw, project.clone()));
     let parent = tree.get(&folder).ok_or("the folder is gone")?.clone();
-    let plan = tree
-        .plan_append(&folder)
-        .ok_or("no place in the folder")?;
+    let plan = tree.plan_append(&folder).ok_or("no place in the folder")?;
     if let Some((terminator, to)) = &plan.retarget {
         depth(terminator, *to)?;
     }
@@ -203,7 +175,11 @@ fn move_into(
     let here = tree.get(&guid).map_or(u32::MAX, |t| t.index);
     // Taken from after the folder's end, the place is the plan's; from
     // before it, everything between moves up one.
-    let index = if here < plan.index { plan.index.saturating_sub(1) } else { plan.index };
+    let index = if here < plan.index {
+        plan.index.saturating_sub(1)
+    } else {
+        plan.index
+    };
     Tracks::move_to(daw, project.clone(), TrackRef::Guid(guid.clone()), index)
         .map_err(|e| e.to_string())?;
     depth(&guid, -plan.closes)?;
@@ -310,16 +286,30 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
                 .count();
             return Ok(format!(
                 "{{\"by\":\"{}\",\"songs\":{},\"by_reference\":{on}}}",
-                if on > 0 && on == songs.len() { "reference" } else if on == 0 { "stems" } else { "mixed" },
+                if on > 0 && on == songs.len() {
+                    "reference"
+                } else if on == 0 {
+                    "stems"
+                } else {
+                    "mixed"
+                },
                 songs.len()
             ));
         };
         let reference = match by.to_ascii_lowercase().as_str() {
             "reference" | "references" => true,
             "stems" | "multitracks" => false,
-            other => return Err(format!("hear the set by `reference` or `stems`, not {other}")),
+            other => {
+                return Err(format!(
+                    "hear the set by `reference` or `stems`, not {other}"
+                ));
+            }
         };
-        let label = if reference { "Hear the references" } else { "Hear the stems" };
+        let label = if reference {
+            "Hear the references"
+        } else {
+            "Hear the stems"
+        };
         let mut without = Vec::new();
         for (title, project) in &songs {
             Projects::begin_undo_block(daw, project.clone(), label);

@@ -380,7 +380,10 @@ seed_vault() {
     local src dst setlist code out
     src="$(locate "${LOCAL_STACK_VAULT:-$(py get vault.source)}")"
     dst="$(node_vault)"
-    setlist="$(py get vault.setlist)"
+    # `LOCAL_STACK_SETLIST` names another vault's setlist (with
+    # `LOCAL_STACK_VAULT`), `LOCAL_STACK_LISTEN` how far its link plays
+    # (Reference, the default, or Full: the multitracks too).
+    setlist="${LOCAL_STACK_SETLIST:-$(py get vault.setlist)}"
     code="$(share_code)"
     if [ -z "$src" ]; then
         say "NOTICE: no test vault at ${LOCAL_STACK_VAULT:-$(py get vault.source)}: the node holds Architect's demo seed (setlist Fall Show, /s/ksqx75iaaaaaaaae/)"
@@ -394,7 +397,7 @@ seed_vault() {
         cp -a --reflink=auto "$src/." "$dst.tmp/" 2>/dev/null || { mkdir -p "$dst.tmp" && cp -a --reflink=auto "$src/." "$dst.tmp/"; }
         mv "$dst.tmp" "$dst"
     fi
-    out="$(py seed-share "$dst" "$setlist" "$code" "$vault_id")"
+    out="$(py seed-share "$dst" "$setlist" "$code" "$vault_id" "${LOCAL_STACK_LISTEN:-Reference}")"
     echo "$code ${out#* }" >"$state/share"
 }
 
@@ -584,13 +587,61 @@ run_web() {
         "$bindgen" --version 2>/dev/null | grep -q "$want" \
             || cargo install -q wasm-bindgen-cli --version "$want" --locked --root "$state/tools"
     fi
-    say "web: building Architect's web bundle with Studio Architect's distribution.json"
-    (
-        cd "$arch_src"
-        [ -n "$issuer_target" ] && export CARGO_TARGET_DIR="$issuer_target"
-        ARCHITECT_DISTRIBUTION="$json" ARCHITECT_WEB_URL="http://127.0.0.1:$web" WASM_BINDGEN="$bindgen" \
-            bash scripts/web-bundle.sh "$out" >&2
-    )
+    # Studio's own build of the web app (apps/architect/web: Architect's
+    # app with Studio's engine in the page), when this tree has it and the
+    # Architect it is built against has what it needs (`provide_engine`);
+    # else Architect's own wasm, as before.
+    local studio_wasm="" cfg=()
+    [ -s "$overrides" ] && cfg=(--config "$overrides")
+    if [ -f "$root/apps/architect/web/Cargo.toml" ] && grep -q 'pub fn provide_engine' "$arch_src/apps/web/src/provided.rs" 2>/dev/null; then
+        say "web: building Studio's web app (apps/architect/web, the engine in the page)"
+        # SIMD, as `just web-daw` builds the engine's page: its painting
+        # and its mix pick their level at compile time and run their scalar
+        # fallback without it.
+        if RUSTFLAGS="-C target-feature=+simd128" with_overrides cargo build --profile wasm-release -p studio-architect-web --lib --target wasm32-unknown-unknown "${cfg[@]}" >&2; then
+            mkdir -p "$state/web-wasm"
+            cp --reflink=auto "$(target_dir)/wasm32-unknown-unknown/wasm-release/studio_architect_web.wasm" "$state/web-wasm/architect_web.wasm"
+            studio_wasm="$state/web-wasm/architect_web.wasm"
+        else
+            say "web: Studio's web app did not build: Architect's own wasm instead (no engine in the page)"
+        fi
+    fi
+    if [ "${LOCAL_STACK_WEB:-bundle}" = app ]; then
+        # The app alone, no site and no docs (no bun, no Architect CLI): what
+        # a share link and /app/ need, in a fraction of the build.
+        [ -n "$studio_wasm" ] || die "LOCAL_STACK_WEB=app needs Studio's web app (apps/architect/web) built"
+        say "web: the app alone (LOCAL_STACK_WEB=app): no site, no docs"
+        rm -rf "$out"
+        mkdir -p "$out/app" "$out/assets/app-local"
+        cp "$arch_src"/apps/web/app/* "$out/app/"
+        cp "$json" "$out/app/distribution.json"
+        "$bindgen" --target web --no-typescript --out-dir "$out/assets/app-local" "$studio_wasm"
+        # As `just web-daw`: smaller, and what a release would serve.
+        if command -v wasm-opt >/dev/null; then
+            wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int \
+                --enable-sign-ext --enable-mutable-globals --enable-reference-types \
+                --enable-multivalue --enable-simd "$out/assets/app-local/architect_web_bg.wasm" \
+                -o "$out/assets/app-local/architect_web_bg.wasm" >&2 || say "web: wasm-opt failed: the module is served as built"
+        fi
+        cp "$arch_src/apps/web/assets/Inter-Variable.woff2" "$arch_src/apps/web/assets/Inter-OFL.txt" "$out/assets/app-local/"
+        cp -r "$arch_src/apps/web/assets/luau-web" "$out/assets/app-local/"
+        {
+            echo "// Written by scripts/local-stack.sh (LOCAL_STACK_WEB=app), as Architect's"
+            echo "// scripts/web-bundle.sh writes it."
+            echo "import init from '/assets/app-local/architect_web.js';"
+            echo "document.documentElement.dataset.assets = '/assets/app-local/';"
+            echo "init({ module_or_path: '/assets/app-local/architect_web_bg.wasm' });"
+        } >"$out/app/start.js"
+    else
+        say "web: building Architect's web bundle with Studio Architect's distribution.json"
+        (
+            cd "$arch_src"
+            [ -n "$issuer_target" ] && export CARGO_TARGET_DIR="$issuer_target"
+            [ -z "$studio_wasm" ] || export ARCHITECT_WEB_WASM="$studio_wasm" ARCHITECT_WEB_LOCK="$root/Cargo.lock"
+            ARCHITECT_DISTRIBUTION="$json" ARCHITECT_WEB_URL="http://127.0.0.1:$web" WASM_BINDGEN="$bindgen" \
+                bash scripts/web-bundle.sh "$out" >&2
+        )
+    fi
     printf '{"issuer":"http://127.0.0.1:%s","client_id":"architect"}' "$auth" >"$out/app/config.json"
     # The page's policy lets it talk to itself and to https; the stack's
     # issuer is plain http on loopback, so the sign-in's token exchange is

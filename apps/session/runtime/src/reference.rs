@@ -72,6 +72,57 @@ pub fn left_out(daw: &Standalone, project: &str) -> HashSet<String> {
     }
 }
 
+/// The top-level folder a song's own stereo reference recording is in.
+pub const REFERENCE_FOLDER: &str = "Reference";
+
+/// Whether top-level track `name` is neither an instrument folder nor the
+/// reference: the guide and the buses, which both ways of hearing leave.
+#[must_use]
+pub fn left_alone(name: &str) -> bool {
+    let n = name.trim().to_ascii_uppercase();
+    n == "GUIDE" || n.ends_with(" BUS") || n == "KEYFLOW"
+}
+
+/// Hear song `project` by its own reference recording (`reference`: its
+/// top-level `Reference` folder on, every instrument folder muted) or by
+/// its stems (the instrument folders on, the reference muted). The guide
+/// and the buses are left as they are. A song with no `Reference` folder
+/// stays on its stems. Whether it has one.
+///
+/// A set is saved in whichever of the two it was last heard by, so what
+/// opens it elsewhere (a link's engine, a bounce) says which it wants.
+///
+/// # Errors
+///
+/// A track's mute could not be set.
+pub fn hear(daw: &Standalone, project: &ProjectContext, reference: bool) -> Result<bool, String> {
+    let top: Vec<_> = Tracks::all(daw, project.clone())
+        .into_iter()
+        .filter(|t| t.parent_guid.is_none())
+        .collect();
+    let has = top
+        .iter()
+        .any(|t| t.name.trim().eq_ignore_ascii_case(REFERENCE_FOLDER));
+    if reference && !has {
+        // Nothing to hear it by: left on its stems.
+        return Ok(false);
+    }
+    for track in top.iter().filter(|t| !left_alone(&t.name)) {
+        let is_reference = track.name.trim().eq_ignore_ascii_case(REFERENCE_FOLDER);
+        let mute = is_reference != reference;
+        if track.muted != mute {
+            Tracks::set_muted(
+                daw,
+                project.clone(),
+                daw::service::TrackRef::Guid(track.guid.clone()),
+                mute,
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(has)
+}
+
 /// Add a song's reference into `buf` — interleaved, `channels` a frame, at
 /// `rate` — from `at` seconds on, at the transport's `playrate`: the
 /// reference proper where it has arrived at the playhead, else its

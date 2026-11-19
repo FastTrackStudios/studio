@@ -6,6 +6,8 @@
 //! open (its prepared `.session`, mirrored into memory) with its proxies
 //! streaming in by range, what will be heard first first; `&guide=<link>`
 //! is the guide sample library's, for the click, the count and the cues.
+//! `?link=<link>` opens the set an Architect share link shares instead
+//! (`session_runtime::link`).
 //! Without a link it asks for one (`session::open_link::OpenSet`): a paste
 //! box for the link Task gave, and the way to the demo. It does not guess
 //! at a song: the static server answers a missing file with the site's
@@ -62,6 +64,16 @@ fn source() -> (
     let query = web_sys::window()
         .and_then(|w| w.location().search().ok())
         .and_then(|q| web_sys::UrlSearchParams::new_with_str(&q).ok());
+    // A set shared by an Architect share link (`?link=<…/s/<code>/…>`):
+    // every song it lists, in this page's one engine.
+    if let Some(url) = query
+        .as_ref()
+        .and_then(|q| q.get("link"))
+        .filter(|v| !v.trim().is_empty())
+    {
+        let guide = query.as_ref().and_then(|q| q.get("guide"));
+        return (Some(WebSource::Link { url }), guide);
+    }
     // A link given as a path (`?live=/org/<org>/share/<code>`) is a link
     // on this deployment's Task; `name` and the rest are kept as given.
     let task_url = app_shell::web_config::current().task_url;

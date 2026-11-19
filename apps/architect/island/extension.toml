@@ -82,8 +82,13 @@ title = "Home"
 icon = "house"
 
 # The song's mixer and its lighting, in the More menu (web bundle only).
-# Neither has anything to draw from a listener's link yet: a link shares a
-# song's finished mix, not its stems, and no cues. Each says so.
+# In this frame neither has anything to draw: a frame reaches no file of
+# the link, so no stems and no cues. Each says so. In Studio's own build
+# of the web app (apps/architect/web) the Arrangement and the Mixer are
+# the engine's own panels, drawn in the page behind these same tabs when
+# the link shares a song's session
+# (docs/design/engine-through-a-link.md); these views are what a build
+# without the engine, or a link without a session, shows.
 [[views]]
 id = "mixer"
 title = "Mixer"

@@ -94,6 +94,12 @@ pub enum WebSource {
     /// it — its first song opened from that song's files link, everyone in
     /// the set in one session with it (`collab::join_task`), by `name`.
     Live { link: String, name: String },
+    /// A set shared by an Architect share link (`https://<node>/s/<code>/`):
+    /// every song the link lists with a project, all in the page's one
+    /// engine, each song's renditions streamed by range from the link's own
+    /// file URLs ([`session_runtime::link`]). How deep it is heard is the
+    /// link's layer, never more.
+    Link { url: String },
 }
 
 pub use crate::open_progress::Progress;
@@ -103,12 +109,20 @@ pub use crate::setlist::Arrival;
 /// A song the page will open, and where it comes from.
 struct Wanted {
     title: Option<String>,
+    /// The vault note the song is, on a link: what the host's playhead
+    /// knows it by ([`project_of_note`]).
+    note: Option<String>,
+    /// The vault folder the song's files are in, on a link
+    /// ([`link_songs`]).
+    folder: Option<String>,
     from: Origin,
 }
 
 enum Origin {
     /// A Task share link to the song's session folder.
     Share(String),
+    /// A song of an Architect share link.
+    Link(session_runtime::link::LinkSong),
     /// A copy bundled with the page.
     Bundled {
         name: String,
@@ -123,6 +137,9 @@ struct Fetched {
     folder: Arc<dyn crate::folder::Folder>,
     path: std::path::PathBuf,
     streamed: Option<crate::song_stream::StreamedSong>,
+    /// A share link's song: heard by its stems here, however it was saved
+    /// ([`session_runtime::reference::hear`]).
+    by_stems: bool,
 }
 
 /// A song opened into the page's engine, before it is read back.
@@ -312,6 +329,135 @@ fn needs_stems(edit: &crate::engine::Edit) -> bool {
             .is_some_and(|song| matches!(song.listening(), Listening::Reference { .. }))
             && !crate::reference::left_out(&web.standalone, &current).contains(track)
     })
+}
+
+thread_local! {
+    /// A share link's set on a device judged not to carry the stems: none
+    /// is fetched until the listener asks ([`load_multitracks`]).
+    static HELD_BACK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether the page's set is a share link's ([`WebSource::Link`]).
+    static ON_LINK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Each open song's vault folder and project, on a share link.
+    static FOLDERS: std::cell::RefCell<Vec<(String, String)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+    /// Each song's project by the vault note it is, on a share link.
+    static NOTES: std::cell::RefCell<HashMap<String, String>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+fn note_is(note: Option<&str>, folder: Option<&str>, project: &str) {
+    if let Some(note) = note {
+        NOTES.with(|n| n.borrow_mut().insert(note.to_owned(), project.to_owned()));
+    }
+    if let Some(folder) = folder {
+        FOLDERS.with(|f| f.borrow_mut().push((folder.to_owned(), project.to_owned())));
+    }
+}
+
+/// A share link's songs the engine has open: each one's vault folder and
+/// its project. A host that knows a song by a file of it (a playhead
+/// item's media) finds the project by the folder that holds the file.
+#[must_use]
+pub fn link_songs() -> Vec<(String, String)> {
+    FOLDERS.with(|f| f.borrow().clone())
+}
+
+/// The project a share link's song note opened as, once it has: what the
+/// host's playhead (which knows songs by their notes) switches to.
+#[must_use]
+pub fn project_of_note(note: &str) -> Option<String> {
+    NOTES.with(|n| n.borrow().get(note).cloned())
+}
+
+/// The share link's song note `project` is, if it is one.
+#[must_use]
+pub fn note_of_project(project: &str) -> Option<String> {
+    NOTES.with(|n| {
+        n.borrow()
+            .iter()
+            .find(|(_, p)| p.as_str() == project)
+            .map(|(note, _)| note.clone())
+    })
+}
+
+/// What this device says of itself, for the choice between a song's stems
+/// and its reference.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Carry {
+    /// Logical processors (`navigator.hardwareConcurrency`).
+    pub cores: u32,
+    /// Memory in GB as the browser rounds it (`navigator.deviceMemory`:
+    /// Chromium only, at most 8), when it says.
+    pub memory_gb: Option<f64>,
+    /// The user asked the browser to save data (`connection.saveData`).
+    pub save_data: bool,
+}
+
+impl Carry {
+    /// Fewer processors than this decode a song's stems too slowly beside
+    /// the page: the mix runs on the page's own thread.
+    pub const CORES: u32 = 4;
+    /// Less memory than this (GB) and the browser's own share leaves too
+    /// little for a set's decoded windows.
+    pub const MEMORY_GB: f64 = 4.0;
+
+    /// Whether the device carries a song's stems.
+    #[must_use]
+    pub fn carries(self) -> bool {
+        !self.save_data
+            && self.cores >= Self::CORES
+            && self.memory_gb.is_none_or(|gb| gb >= Self::MEMORY_GB)
+    }
+}
+
+/// What this device says of itself ([`Carry`]).
+#[must_use]
+pub fn carry() -> Carry {
+    let navigator = web_sys::window().map(|w| w.navigator());
+    let read = |key: &str| {
+        navigator
+            .as_ref()
+            .and_then(|n| js_sys::Reflect::get(n, &key.into()).ok())
+    };
+    let cores = read("hardwareConcurrency")
+        .and_then(|v| v.as_f64())
+        .map_or(1, |n| n as u32);
+    let memory_gb = read("deviceMemory").and_then(|v| v.as_f64());
+    let save_data = read("connection")
+        .filter(|c| c.is_object())
+        .and_then(|c| js_sys::Reflect::get(&c, &"saveData".into()).ok())
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    Carry {
+        cores,
+        memory_gb,
+        save_data,
+    }
+}
+
+/// Why the song on screen is heard by its reference and not its stems.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ReferenceWhy {
+    /// The link plays to its reference layer: the stems are not served.
+    Link,
+    /// This device was judged not to carry the stems ([`Carry`]); the
+    /// listener may ask for them all the same ([`load_multitracks`]).
+    Device(Carry),
+    /// The stems are on their way, or were not asked for.
+    NotLoaded,
+}
+
+/// Why a song heard by its reference is ([`ReferenceWhy`]).
+#[must_use]
+pub fn reference_reason() -> ReferenceWhy {
+    if !listen().hears_stems() {
+        return ReferenceWhy::Link;
+    }
+    if HELD_BACK.with(std::cell::Cell::get) {
+        ReferenceWhy::Device(carry())
+    } else {
+        ReferenceWhy::NotLoaded
+    }
 }
 
 /// Where this viewer's choice of the multitracks is kept, so a page opened
@@ -516,6 +662,8 @@ pub async fn open_with(
                 .filter_map(|s| {
                     Some(Wanted {
                         title: Some(s.title.clone()),
+                        note: None,
+                        folder: None,
                         from: Origin::Share(s.files.clone()?),
                     })
                 })
@@ -528,14 +676,53 @@ pub async fn open_with(
         }
         WebSource::Shared { link } => vec![Wanted {
             title: None,
+            note: None,
+            folder: None,
             from: Origin::Share(link.clone()),
         }],
+        WebSource::Link { url } => {
+            progress(Progress::Joining { retry: None });
+            let set = crate::task_set::until_ok(
+                Some(6),
+                || session_runtime::link::LinkSet::open(url),
+                |why| {
+                    progress(Progress::Joining { retry: Some(why) });
+                },
+            )
+            .await?;
+            // The link's layer is the most this page hears, whatever the
+            // host asked for.
+            if !set.listen.hears_stems() {
+                LISTEN.with(|l| l.set(Listen::Reference));
+            }
+            tracing::info!(
+                link.songs = set.songs.len(),
+                link.stems = set
+                    .songs
+                    .iter()
+                    .map(session_runtime::link::LinkSong::stems)
+                    .sum::<usize>(),
+                link.hears_stems = set.listen.hears_stems(),
+                "web: a share link's set"
+            );
+            set.songs
+                .into_iter()
+                .map(|song| Wanted {
+                    title: Some(song.title.clone()),
+                    note: Some(song.note.clone()),
+                    folder: Some(song.folder().to_owned()),
+                    from: Origin::Link(song),
+                })
+                .collect()
+        }
         WebSource::Bundled {
             name,
             rpp_url,
             chart_url,
         } => vec![Wanted {
             title: None,
+            note: None,
+            folder: None,
             from: Origin::Bundled {
                 name: name.clone(),
                 rpp_url: rpp_url.clone(),
@@ -578,7 +765,13 @@ pub async fn open_with(
     progress(Progress::Opening {
         title: first_title.clone(),
     });
-    MULTITRACKS.with(|m| m.set(chose_multitracks() && listen.hears_stems()));
+    // The stems from the start when this viewer chose them before, or
+    // (a share link's set) when the device can carry them; else the
+    // reference, saying why ([`reference_reason`]).
+    let carried = matches!(source, WebSource::Link { .. }) && carry().carries();
+    MULTITRACKS.with(|m| m.set((chose_multitracks() || carried) && self::listen().hears_stems()));
+    HELD_BACK.with(|h| h.set(matches!(source, WebSource::Link { .. }) && !carried));
+    ON_LINK.with(|l| l.set(matches!(source, WebSource::Link { .. })));
     if crate::stream_quality::current() == crate::stream_quality::Quality::Full {
         tracing::info!(
             stream.quality = "full",
@@ -603,10 +796,11 @@ pub async fn open_with(
     daw::init_from_parts(bundle.daw.clone());
     // The facade and the engine live as long as the page.
     std::mem::forget(bundle);
-    let loaded = in_slices(open_fetched(&standalone, first.title, fetched)).await?;
+    let loaded = in_slices(open_fetched(&standalone, first.title.clone(), fetched)).await?;
     let opened_ms = ms();
     let (song, kept) = in_slices(read_back(loaded)).await?;
     let project = song.project.clone();
+    note_is(first.note.as_deref(), first.folder.as_deref(), &project);
     WEB.with(|web| {
         *web.borrow_mut() = Some(Web {
             standalone: standalone.clone(),
@@ -688,6 +882,7 @@ pub async fn open_with(
             let arrival = match opened {
                 Ok((song, kept)) => {
                     let project = song.project.clone();
+                    note_is(want.note.as_deref(), want.folder.as_deref(), &project);
                     WEB.with(|web| {
                         if let Some(web) = web.borrow_mut().as_mut() {
                             web.songs.insert(project.clone(), kept);
@@ -744,6 +939,18 @@ async fn fetch_song(want: &Wanted) -> eyre::Result<Fetched> {
                 folder: Arc::clone(&song.folder),
                 path: song.project.clone(),
                 streamed: Some(song),
+                by_stems: false,
+            })
+        }
+        Origin::Link(song) => {
+            let song = mirror(Arc::new(song.clone()), Keep::Memory(Memory::new()))
+                .await?
+                .with_listen(listen());
+            Ok(Fetched {
+                folder: Arc::clone(&song.folder),
+                path: song.project.clone(),
+                streamed: Some(song),
+                by_stems: true,
             })
         }
         Origin::Bundled {
@@ -768,6 +975,7 @@ async fn fetch_song(want: &Wanted) -> eyre::Result<Fetched> {
                 folder: Arc::new(memory),
                 path: rpp,
                 streamed: None,
+                by_stems: false,
             })
         }
     }
@@ -805,6 +1013,16 @@ async fn open_fetched(
     // The chart a live set's doc for this song is seeded with.
     if let Some(chart) = &chart_text {
         crate::collab::remember_chart(&opened_from, chart);
+    }
+    if song.by_stems {
+        // A set is saved in whichever way it was last heard on the desk
+        // (`SESSION_HEAR`): by its reference recording, every instrument
+        // folder is muted, and the song would open here silent. In this
+        // page's engine alone; nothing of it is written anywhere.
+        let project = daw::service::ProjectContext::Project(project_guid.clone());
+        if let Err(why) = session_runtime::reference::hear(standalone, &project, false) {
+            tracing::warn!(error = %why, "web: the song could not be set to its stems");
+        }
     }
     Ok(Loaded {
         title: title.unwrap_or(name),
@@ -1035,12 +1253,20 @@ async fn waveforms(
     if !items.is_empty() {
         previews.fill_waves_in(&project, items).await;
     }
-    while !previews.partial().is_empty()
-        && streamed
+    while !previews.partial().is_empty() {
+        // Building one decodes a whole rendition on the thread that mixes:
+        // never while the song is playing, where it is heard as dropouts.
+        if crate::engine::moving() {
+            gloo_timers::future::TimeoutFuture::new(500).await;
+            continue;
+        }
+        if streamed
             .build_missing_peaks(crate::midi::WAVE_BLOCK, BUILT_PER_READ)
             .await
-            > 0
-    {
+            == 0
+        {
+            break;
+        }
         // What the builds made drawable, read again: those alone.
         previews
             .fill_waves_in(&project, previews.partial_now_whole(&song))
@@ -1069,7 +1295,27 @@ fn warm_around(web: &mut Web, project: &str) {
         .filter_map(|p| Some((p.clone(), web.songs.get(p)?.streamed.clone()?)))
         .collect();
     let by_reference: Vec<bool> = songs.iter().map(|(_, s)| s.has_reference()).collect();
-    let steps = crate::song_stream::warm_order(&by_reference, listen());
+    // A device judged not to carry the stems brings none in behind the
+    // references until its listener asks for them.
+    let held_back = HELD_BACK.with(std::cell::Cell::get) && !MULTITRACKS.with(std::cell::Cell::get);
+    let depth = if held_back {
+        Listen::Reference
+    } else {
+        listen()
+    };
+    let on_link = ON_LINK.with(std::cell::Cell::get);
+    let steps: Vec<WarmStep> = crate::song_stream::warm_order(&by_reference, depth)
+        .into_iter()
+        // A link's listener is a guest on their own device: the song on
+        // screen comes in whole, the rest of the set by its references.
+        // Every other song's stems (half a gigabyte for a recital) are
+        // fetched when that song is picked, not kept for a set that may
+        // never be played through.
+        .filter(|step| {
+            !on_link
+                || !matches!(step, WarmStep::Warm { song, heard: crate::song_stream::Heard::Stems } if *song > 0)
+        })
+        .collect();
     let warmed = Rc::clone(&web.warmed);
     wasm_bindgen_futures::spawn_local(async move {
         for step in steps {

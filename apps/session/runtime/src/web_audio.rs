@@ -78,16 +78,20 @@ const CATCH_UP_BUDGET_MS: u128 = 24;
 
 /// The worklet: a queue of interleaved stereo blocks, played in order,
 /// silence when it runs dry. It reports how much it has played, tagged
-/// with the epoch of the last flush, so the page knows what is queued.
+/// with the epoch of the last flush, so the page knows what is queued,
+/// and what it put out since its last report ([`Probe`]): the loudest
+/// sample, how many frames were not silence, and how many were silence
+/// because the queue ran dry while it was being fed.
 const PROCESSOR: &str = r"
 class FtsOut extends AudioWorkletProcessor {
   constructor() {
     super();
     this.q = []; this.off = 0; this.epoch = 0; this.played = 0; this.tick = 0;
+    this.peak = 0; this.loud = 0; this.dry = 0; this.fed = false;
     this.port.onmessage = (e) => {
       const m = e.data;
-      if (typeof m === 'number') { this.q = []; this.off = 0; this.epoch = m; this.played = 0; return; }
-      this.q.push(m);
+      if (typeof m === 'number') { this.q = []; this.off = 0; this.epoch = m; this.played = 0; this.fed = false; return; }
+      this.q.push(m); this.fed = true;
     };
   }
   process(_inputs, outputs) {
@@ -101,19 +105,68 @@ class FtsOut extends AudioWorkletProcessor {
       const take = Math.min(frames - this.off, n - i);
       for (let k = 0; k < take; k++) {
         const j = (this.off + k) << 1;
-        l[i + k] = c[j];
-        r[i + k] = c[j + 1];
+        const a = c[j], b = c[j + 1];
+        l[i + k] = a;
+        r[i + k] = b;
+        const m = Math.max(a < 0 ? -a : a, b < 0 ? -b : b);
+        if (m > this.peak) this.peak = m;
+        if (m > 1e-4) this.loud++;
       }
       i += take; this.off += take; this.played += take;
       if (this.off >= frames) { this.q.shift(); this.off = 0; }
     }
+    if (i < n && this.fed) this.dry += n - i;
     for (; i < n; i++) { l[i] = 0; r[i] = 0; }
-    if ((++this.tick & 3) === 0) this.port.postMessage([this.epoch, this.played]);
+    if ((++this.tick & 3) === 0) {
+      this.port.postMessage([this.epoch, this.played, this.peak, this.loud, this.dry]);
+      this.peak = 0; this.loud = 0; this.dry = 0;
+    }
     return true;
   }
 }
 registerProcessor('fts-out', FtsOut);
 ";
+
+/// What the worklet has put out, measured where it writes its output: the
+/// last point in the page before the browser's own device.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Probe {
+    /// Frames put out that were not silence, since the context started.
+    pub loud_frames: u64,
+    /// Frames of silence put out because the queue ran dry while it was
+    /// being fed (an underrun), since the context started.
+    pub dry_frames: u64,
+    /// The loudest sample of the last report (about 11 ms).
+    pub peak: f32,
+    /// The loudest sample since the context started.
+    pub peak_ever: f32,
+    /// When the first frame that was not silence was put out, in the
+    /// page's `performance.now()` milliseconds.
+    pub first_loud_ms: Option<f64>,
+}
+
+thread_local! {
+    static PROBE: Cell<Probe> = const { Cell::new(Probe {
+        loud_frames: 0,
+        dry_frames: 0,
+        peak: 0.0,
+        peak_ever: 0.0,
+        first_loud_ms: None,
+    }) };
+}
+
+/// What the worklet has put out so far ([`Probe`]).
+#[must_use]
+pub fn probe() -> Probe {
+    PROBE.with(Cell::get)
+}
+
+fn page_ms() -> Option<f64> {
+    let performance = js_sys::Reflect::get(&js_sys::global(), &"performance".into()).ok()?;
+    let now = js_sys::Reflect::get(&performance, &"now".into()).ok()?;
+    let now: js_sys::Function = now.dyn_into().ok()?;
+    now.call0(&performance).ok()?.as_f64()
+}
 
 /// The device side, once unlocked.
 struct Out {
@@ -429,6 +482,23 @@ pub fn unlock() {
                 };
                 if tag as u32 == epoch.get() {
                     played.set(count as u64);
+                }
+                if let (Some(peak), Some(loud), Some(dry)) = (
+                    report.get(2).as_f64(),
+                    report.get(3).as_f64(),
+                    report.get(4).as_f64(),
+                ) {
+                    PROBE.with(|probe| {
+                        let mut now = probe.get();
+                        now.peak = peak as f32;
+                        now.peak_ever = now.peak_ever.max(peak as f32);
+                        now.loud_frames += loud as u64;
+                        now.dry_frames += dry as u64;
+                        if loud > 0.0 && now.first_loud_ms.is_none() {
+                            now.first_loud_ms = page_ms();
+                        }
+                        probe.set(now);
+                    });
                 }
                 // The audio thread's own cadence, which a hidden page's
                 // throttled timers do not have: this is what keeps the

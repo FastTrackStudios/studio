@@ -1,0 +1,43 @@
+[package]
+name = "studio-architect-web"
+description = "Studio's build of Architect's web app: the app as it is (`architect_web::run`), with Studio's engine in the page (`session-engine` `web`: one `Standalone`, a share link's set as its projects, each song's renditions streamed by range) as the playhead's clock, and the engine's Arrangement and Mixer drawn behind the tabs the island declares. docs/design/engine-through-a-link.md."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+# The page's module (wasm-bindgen `--target web`, out-name `architect_web`:
+# what Architect's web bundle and its `start.js` load).
+crate-type = ["cdylib", "rlib"]
+
+# Which song of the engine's set a playhead item is: built for every
+# target, so its tests run on the host.
+[dependencies]
+
+# The browser build only: on native (a workspace-wide build) session-ui's
+# `web` feature would unify into the desktop's (as session-daw-web).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Without `start`: this crate's own start runs it.
+architect-web = { workspace = true }
+architect-distribution = { workspace = true }
+# The deck the engine is the clock of.
+architect-playhead = { workspace = true }
+session-engine = { workspace = true, features = ["web"] }
+session-ui = { workspace = true, features = ["web"] }
+dioxus = { workspace = true, features = ["web"] }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-wasm = { workspace = true }
+tracing-subscriber = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+gloo-timers = { workspace = true }
+web-sys = { workspace = true, features = ["Window", "Location", "Document", "Element", "Performance"] }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[lints]
+workspace = true
