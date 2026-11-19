@@ -36,7 +36,12 @@
 set -euo pipefail
 
 app=studio
-crate=studio-desktop; bin=studio-desktop; title=Studio
+# Studio is its distribution of Architect (apps/architect, the cargo target
+# `studio-architect`, run as `studio`), with its engine in the bundle: the
+# `daw` process extension in Contents/Resources/extensions/daw, where the
+# distribution looks for what it ships (apps/architect/src/lib.rs SHIPPED).
+crate=studio-architect; built=studio-architect; bin=studio; title=Studio
+engine_crate=daw-extension; engine_bin=daw-extension
 features=""
 icon=apps/studio/desktop/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
 category=public.app-category.music
@@ -80,19 +85,22 @@ if [ "$NOTARIZE" = 1 ]; then
 fi
 
 # ── Build ───────────────────────────────────────────────────────────────────
-BIN="$ROOT/target/$PROFILE/$bin"
+BIN="$ROOT/target/$PROFILE/$built"
+ENGINE="$ROOT/target/$PROFILE/$engine_bin"
 if [ "${SKIP_BUILD:-}" = 1 ]; then
-    echo "=== SKIP_BUILD=1: reusing $BIN ==="
+    echo "=== SKIP_BUILD=1: reusing $BIN and $ENGINE ==="
 else
     # zlib from the macOS SDK, not the dev shell's (macos-libs.sh).
     libs="$(bash "$SCRIPT_DIR/macos-libs.sh" config)"
-    echo "=== cargo build --profile $PROFILE -p $crate $features --config $libs ==="
+    echo "=== cargo build --profile $PROFILE -p $crate -p $engine_crate $features --config $libs ==="
     # shellcheck disable=SC2086
-    devenv shell -- cargo build --profile "$PROFILE" -p "$crate" $features --config "$libs"
+    devenv shell -- cargo build --profile "$PROFILE" -p "$crate" -p "$engine_crate" $features --config "$libs"
 fi
-[ -x "$BIN" ] || { echo "ERROR: the build produced no $BIN" >&2; exit 1; }
-file -b "$BIN" | grep -q 'Mach-O 64-bit executable arm64' \
-    || { echo "ERROR: $BIN is not an arm64 Mach-O: $(file -b "$BIN")" >&2; exit 1; }
+for built_bin in "$BIN" "$ENGINE"; do
+    [ -x "$built_bin" ] || { echo "ERROR: the build produced no $built_bin" >&2; exit 1; }
+    file -b "$built_bin" | grep -q 'Mach-O 64-bit executable arm64' \
+        || { echo "ERROR: $built_bin is not an arm64 Mach-O: $(file -b "$built_bin")" >&2; exit 1; }
+done
 
 # ── The bundle ──────────────────────────────────────────────────────────────
 STAGE="$(mktemp -d)"
@@ -102,8 +110,17 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$bin"
 chmod +x "$APP/Contents/MacOS/$bin"
 
+# The engine's package: its manifest and its program, out of Contents/MacOS
+# (only the bundle's main program belongs there).
+ENGINE_PKG="$APP/Contents/Resources/extensions/daw"
+mkdir -p "$ENGINE_PKG"
+cp "$ROOT/extensions/daw/extension.toml" "$ENGINE_PKG/extension.toml"
+cp "$ENGINE" "$ENGINE_PKG/$engine_bin"
+chmod +x "$ENGINE_PKG/$engine_bin"
+
 # Only what every Mac has: nothing from /nix/store (macos-libs.sh guard).
 bash "$SCRIPT_DIR/macos-libs.sh" guard "$APP/Contents/MacOS/$bin"
+bash "$SCRIPT_DIR/macos-libs.sh" guard "$ENGINE_PKG/$engine_bin"
 
 if [ -f "$icon" ]; then
     iconset="$STAGE/$title.iconset"
@@ -146,6 +163,10 @@ find "$APP" \( -name '*.dylib' -o -name '*.so' -o -name '*.framework' \) -print0
     | while IFS= read -r -d '' f; do
         codesign --force --keychain "$KEYCHAIN" --timestamp --options runtime --sign "$SIGN_ID" "$f"
       done
+# The engine first (inside out): a program of its own that opens the audio
+# device, so it carries the app's entitlements too.
+codesign --force --keychain "$KEYCHAIN" --timestamp --options runtime \
+    --entitlements "$ENT" --sign "$SIGN_ID" "$ENGINE_PKG/$engine_bin"
 codesign --force --keychain "$KEYCHAIN" --timestamp --options runtime \
     --entitlements "$ENT" --sign "$SIGN_ID" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"

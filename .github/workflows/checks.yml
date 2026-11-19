@@ -673,12 +673,14 @@ jobs:
         persist-credentials: false
     - name: devenv CLI
       uses: ./.github/actions/devenv
-    - name: 'macOS: cargo build -p studio-desktop (the .dmg''s app, linked), nothing from /nix/store'
+    - name: 'macOS: cargo build -p studio-architect -p daw-extension (the .dmg''s app and its engine, linked), nothing from /nix/store'
       run: |
         devenv shell -- bash -euo pipefail -s <<'EOF'
-        cargo build -p studio-desktop --config "$(bash scripts/desktop/macos-libs.sh config)"
-        cp "${CARGO_TARGET_DIR:-target}/debug/studio-desktop" "$RUNNER_TEMP/studio-desktop"
-        bash scripts/desktop/macos-libs.sh guard "$RUNNER_TEMP/studio-desktop"
+        cargo build -p studio-architect -p daw-extension --config "$(bash scripts/desktop/macos-libs.sh config)"
+        for built in studio-architect daw-extension; do
+          cp "${CARGO_TARGET_DIR:-target}/debug/$built" "$RUNNER_TEMP/$built"
+          bash scripts/desktop/macos-libs.sh guard "$RUNNER_TEMP/$built"
+        done
         EOF
     - name: 'iOS: cargo build -p studio-desktop (TestFlight''s features, linked)'
       run: |

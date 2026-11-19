@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Build Studio (Signal and Session in one app, apps/studio/desktop) for
-# Linux as an AppImage: the installer attached to the release's GitHub
-# Release, and what scripts/install.sh installs.
+# Build Studio for Linux as an AppImage: the installer attached to the
+# release's GitHub Release, and what scripts/install.sh installs.
+#
+# Studio is Studio's distribution of Architect (apps/architect, the cargo
+# target `studio-architect`, run as `studio`), with its engine beside it:
+# the `daw` process extension (extensions/daw, the program `daw-extension`)
+# in `extensions/daw/`, where the distribution looks for what it ships
+# (`Distribution::shipped`, apps/architect/src/lib.rs `SHIPPED`).
 #
 #   scripts/desktop/linux.sh     # -> target/desktop/Studio-<version>-linux-x86_64.AppImage
 #
@@ -41,9 +46,13 @@
 set -euo pipefail
 
 app=studio
-crate=studio-desktop; bin=studio-desktop; title=Studio; features=""
+# The cargo target, and the name it runs under: Linux names a window's app
+# after its program.
+crate=studio-architect; built=studio-architect; bin=studio; title=Studio; features=""
+# The engine: its crate and program, and its package's folder in the bundle.
+engine_crate=daw-extension; engine_bin=daw-extension; engine_pkg=extensions/daw
 icon=apps/studio/desktop/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
-comment="Signal and Session: live rigs and the DAW"
+comment="Sets, charts, lighting and the DAW, in one app"
 categories="AudioVideo;Audio;Music;"
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -72,15 +81,17 @@ if [ -z "${DESKTOP_IN_TOOLS:-}" ]; then
 fi
 
 # ── Build ───────────────────────────────────────────────────────────────────
-BIN="${CARGO_TARGET_DIR:-$ROOT/target}/$PROFILE/$bin"
+BIN="${CARGO_TARGET_DIR:-$ROOT/target}/$PROFILE/$built"
+ENGINE="${CARGO_TARGET_DIR:-$ROOT/target}/$PROFILE/$engine_bin"
 if [ "${SKIP_BUILD:-}" = 1 ]; then
-    echo "=== SKIP_BUILD=1: reusing $BIN ==="
+    echo "=== SKIP_BUILD=1: reusing $BIN and $ENGINE ==="
 else
-    echo "=== cargo build --profile $PROFILE -p $crate $features ==="
+    echo "=== cargo build --profile $PROFILE -p $crate -p $engine_crate $features ==="
     # shellcheck disable=SC2086
-    cargo build --profile "$PROFILE" -p "$crate" $features
+    cargo build --profile "$PROFILE" -p "$crate" -p "$engine_crate" $features
 fi
 [ -x "$BIN" ] || { echo "ERROR: the build produced no $BIN" >&2; exit 1; }
+[ -x "$ENGINE" ] || { echo "ERROR: the build produced no $ENGINE" >&2; exit 1; }
 
 # ── The AppDir ──────────────────────────────────────────────────────────────
 WORK="$(mktemp -d -p "$OUT_DIR" .appdir.XXXXXX)"   # on the build disk, not /tmp
@@ -89,6 +100,13 @@ AD="$WORK/$title.AppDir"
 mkdir -p "$AD/usr/bin" "$AD/usr/lib" "$AD/usr/share/applications" "$AD/usr/share/icons/hicolor/256x256/apps"
 cp "$BIN" "$AD/usr/bin/$bin"
 chmod u+w "$AD/usr/bin/$bin"
+# The engine's package beside the app: its manifest and its program.
+mkdir -p "$AD/usr/bin/$engine_pkg"
+cp "$ROOT/extensions/daw/extension.toml" "$AD/usr/bin/$engine_pkg/extension.toml"
+cp "$ENGINE" "$AD/usr/bin/$engine_pkg/$engine_bin"
+chmod u+w "$AD/usr/bin/$engine_pkg/$engine_bin"
+# Every program of the bundle.
+PROGRAMS=("$AD/usr/bin/$bin" "$AD/usr/bin/$engine_pkg/$engine_bin")
 
 # Not bundled: the user's graphics stack (driver-matched), and glibc itself.
 excluded() {
@@ -114,19 +132,22 @@ while read -r name arrow path _; do
     seen[$name]=1
     cp -L "$path" "$AD/usr/lib/$name"
     chmod u+w "$AD/usr/lib/$name"
-done < <(ldd "$BIN")
+done < <(ldd "$BIN"; ldd "$ENGINE")
 echo "=== bundled ${#seen[@]} libraries; taken from the host at run time: $(sort -u "$WORK/needed-excluded.txt" | tr '\n' ' ')==="
 
 # Nothing may point into /nix/store.
 # shellcheck disable=SC2016 # $ORIGIN is for the dynamic loader, not the shell
 patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/../lib' "$AD/usr/bin/$bin"
+# The engine is two folders further down (usr/bin/extensions/daw).
+# shellcheck disable=SC2016
+patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --set-rpath '$ORIGIN/../../../lib' "$AD/usr/bin/$engine_pkg/$engine_bin"
 for f in "$AD"/usr/lib/*; do
     # shellcheck disable=SC2016
     patchelf --set-rpath '$ORIGIN' "$f" 2>/dev/null || true
 done
 # A few libraries (libsoup's libsqlite3) list a NEEDED entry by absolute
 # /nix/store path; the bundle holds that file under its base name.
-for f in "$AD"/usr/bin/* "$AD"/usr/lib/*; do
+for f in "${PROGRAMS[@]}" "$AD"/usr/lib/*; do
     readelf -d "$f" 2>/dev/null | sed -n 's/.*Shared library: \[\(\/[^]]*\)\].*/\1/p' | while read -r abs; do
         [ -e "$AD/usr/lib/$(basename "$abs")" ] || { echo "ERROR: $f needs $abs, which is not in the bundle" >&2; exit 1; }
         patchelf --replace-needed "$abs" "$(basename "$abs")" "$f"
@@ -135,7 +156,7 @@ done
 if grep -rl '/nix/store' "$AD/usr/bin" "$AD/usr/lib" >/dev/null 2>&1; then
     # Strings baked into a binary (build paths in panic messages) are fine;
     # ELF dynamic metadata is not.
-    for f in "$AD"/usr/bin/* "$AD"/usr/lib/*; do
+    for f in "${PROGRAMS[@]}" "$AD"/usr/lib/*; do
         if readelf -d "$f" 2>/dev/null | grep -E 'RPATH|RUNPATH|NEEDED' | grep -q '/nix/store'; then
             echo "ERROR: $f still names /nix/store in its dynamic section" >&2
             exit 1
@@ -152,14 +173,14 @@ fi
 glibc_refs() { objdump -p "$1" 2>/dev/null | sed -n '/Version References/,$p' | grep -o 'GLIBC_[0-9][0-9.]*' || true; }
 
 # The floor: the newest GLIBC_x.y symbol version any bundled ELF requires.
-floor="$(for f in "$AD"/usr/bin/* "$AD"/usr/lib/*; do
+floor="$(for f in "${PROGRAMS[@]}" "$AD"/usr/lib/*; do
         glibc_refs "$f"
     done | sed 's/GLIBC_//' | sort -uV | tail -1)"
 echo "=== glibc floor of this AppImage: ${floor:-none} (limit $MAX_GLIBC) ==="
 if [ -n "$floor" ] && [ "$(printf '%s\n%s\n' "$floor" "$MAX_GLIBC" | sort -V | tail -1)" != "$MAX_GLIBC" ]; then
     echo "ERROR: needs glibc $floor, over the limit $MAX_GLIBC: it would not start on the distros we claim." >&2
     echo "       Files that require GLIBC_$floor:" >&2
-    for f in "$AD"/usr/bin/* "$AD"/usr/lib/*; do
+    for f in "${PROGRAMS[@]}" "$AD"/usr/lib/*; do
         if glibc_refs "$f" | grep -qx "GLIBC_$floor"; then echo "         $(basename "$f")"; fi
     done | head -20 >&2
     exit 1
