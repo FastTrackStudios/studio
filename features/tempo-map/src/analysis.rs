@@ -75,7 +75,10 @@ pub struct HitMark {
     pub strength: f32,
     /// The song bar (0 and below: before bar 1).
     pub bar: i64,
-    /// The beat in the bar, from 1, with its fraction.
+    /// The beat in the bar, from 1, with its fraction: 1.0 is on the
+    /// downbeat, 2.5 the and of two. A hit just ahead of a bar line is
+    /// that bar's (0.98, not the bar before's 4.98), so the beat a hit is
+    /// on is this rounded.
     pub beat: f64,
 }
 
@@ -341,7 +344,7 @@ impl Analysis {
                 let marks = hits
                     .iter()
                     .map(|h| {
-                        let (bar, beat) = map.position(h.time);
+                        let (bar, beat) = map.hit_position(h.time);
                         HitMark {
                             time: h.time,
                             strength: h.strength,

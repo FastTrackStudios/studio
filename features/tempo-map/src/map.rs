@@ -56,7 +56,7 @@ pub struct TempoMap {
 }
 
 /// What a map is built from besides the beats.
-#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct MapOptions {
     /// The index of the beat that is bar 1's downbeat.
     pub bar1: usize,
@@ -125,7 +125,7 @@ impl TempoMap {
                 bpm: meter.bpm_of(next - time),
             });
         }
-        let count_in = bars.first().and_then(|first| count_in(first));
+        let count_in = bars.first().and_then(|first| count_in(first, first.time));
         Self {
             bars,
             end,
@@ -203,14 +203,45 @@ impl TempoMap {
         (i64::from(bar.number), 1.0 + into)
     }
 
+    /// Where a hit at `time` is, for something that syncs to it: as
+    /// [`TempoMap::position`], but a time within half a beat before a bar
+    /// line belongs to that bar (beat 0.5 to 1), so the beat rounds to the
+    /// beat the hit is on.
+    #[must_use]
+    pub fn hit_position(&self, time: f64) -> (i64, f64) {
+        let (bar, beat) = self.position(time);
+        let pulses = usize::try_from(bar - 1)
+            .ok()
+            .and_then(|i| self.bars.get(i))
+            .or_else(|| self.bars.first())
+            .map_or(4, |b| b.meter.pulses()) as f64;
+        if beat >= pulses + 0.5 {
+            (bar + 1, beat - pulses)
+        } else {
+            (bar, beat)
+        }
+    }
+
     /// The map as tempo points: the count-in from 0, one point per bar
     /// (with its meter where that is set or changes), and one at the end
     /// holding the last tempo.
     #[must_use]
     pub fn points(&self) -> Vec<TempoPoint> {
+        self.points_at(0.0)
+    }
+
+    /// The map as tempo points of a session whose audio starts `offset`
+    /// seconds in: every bar that much later, and the count-in from the
+    /// session's start to bar 1 where it then is.
+    #[must_use]
+    pub fn points_at(&self, offset: f64) -> Vec<TempoPoint> {
         let mut points = Vec::with_capacity(self.bars.len() + 2);
         let mut meter = None;
-        if let Some(count) = &self.count_in {
+        if let Some(count) = self
+            .bars
+            .first()
+            .and_then(|first| count_in(first, first.time + offset))
+        {
             points.push(TempoPoint {
                 time: 0.0,
                 bpm: count.bpm,
@@ -221,7 +252,7 @@ impl TempoMap {
         for bar in &self.bars {
             let changed = meter != Some(bar.meter);
             points.push(TempoPoint {
-                time: bar.time,
+                time: bar.time + offset,
                 bpm: bar.bpm,
                 meter: changed.then_some(bar.meter),
             });
@@ -229,12 +260,22 @@ impl TempoMap {
         }
         if let Some(last) = self.bars.last() {
             points.push(TempoPoint {
-                time: self.end,
+                time: self.end + offset,
                 bpm: last.bpm,
                 meter: None,
             });
         }
         points
+    }
+
+    /// How far into a session the audio would sit for the count-in to be
+    /// one whole bar at bar 1's tempo (what the project script did by
+    /// moving the items): none when it already is at least that.
+    #[must_use]
+    pub fn count_in_offset(&self) -> Option<f64> {
+        let first = self.bars.first()?;
+        let bar = self.bar_length(0);
+        (first.time + 0.05 < bar).then_some(bar - first.time)
     }
 
     /// The map a list of tempo points describes, each holding its tempo
@@ -259,10 +300,10 @@ impl TempoMap {
                 let p = sorted[next];
                 bpm = p.bpm;
                 // A meter takes hold on a bar line only.
-                if done < 1e-9 {
-                    if let Some(m) = p.meter {
-                        meter = m;
-                    }
+                if done < 1e-9
+                    && let Some(m) = p.meter
+                {
+                    meter = m;
                 }
                 next += 1;
             }
@@ -340,23 +381,36 @@ pub struct GridBeat {
     pub time: f64,
 }
 
-/// The count-in before `first`: one bar of its meter from 0 to its
-/// downbeat; more, at a tempo that can be set, where one would be too
-/// slow. None when the song starts at 0.
-fn count_in(first: &Bar) -> Option<CountIn> {
-    if first.time < 0.02 {
+/// The count-in before `first`, whose downbeat is `lead` seconds after
+/// the session's start: one bar of its meter from 0 to that downbeat;
+/// more, where one would be slower than a tempo can be; and where the
+/// lead is too short for a bar at any tempo, a bar of one beat (1/4, 1/8,
+/// ...), so the grid still lands on bar 1. None when the song starts at 0.
+fn count_in(first: &Bar, lead: f64) -> Option<CountIn> {
+    if lead < 0.02 {
         return None;
     }
     let mut bars = 1_u32;
-    let mut bpm = first.meter.bpm_of(first.time);
+    let mut bpm = first.meter.bpm_of(lead);
     while bpm < *BPM_RANGE.start() && bars < 64 {
         bars += 1;
-        bpm = first.meter.bpm_of(first.time / f64::from(bars));
+        bpm = first.meter.bpm_of(lead / f64::from(bars));
+    }
+    if bpm <= *BPM_RANGE.end() {
+        return Some(CountIn {
+            bars,
+            bpm,
+            meter: first.meter,
+        });
+    }
+    let mut meter = Meter::new(1, first.meter.denominator.max(4));
+    while meter.bpm_of(lead) > *BPM_RANGE.end() && meter.denominator < 64 {
+        meter = Meter::new(1, meter.denominator * 2);
     }
     Some(CountIn {
-        bars,
-        bpm: bpm.min(*BPM_RANGE.end()),
-        meter: first.meter,
+        bars: 1,
+        bpm: meter.bpm_of(lead).min(*BPM_RANGE.end()),
+        meter,
     })
 }
 
@@ -490,6 +544,33 @@ mod tests {
     }
 
     #[test]
+    fn a_short_lead_in_still_lands_the_grid_on_bar_one() {
+        // Bar 1 a quarter of a second in: no 4/4 bar is that short.
+        let beats = steady(17, 0.25, 0.5);
+        let map = TempoMap::build(&beats, &hits(17), &MapOptions::default());
+        let count = map.count_in.unwrap_or(CountIn {
+            bars: 0,
+            bpm: 0.0,
+            meter: Meter::COMMON,
+        });
+        // One bar of one beat, a quarter of a second long.
+        assert_eq!((count.bars, count.meter), (1, Meter::new(1, 4)));
+        assert!((count.bpm - 240.0).abs() < 1e-6);
+        let back = TempoMap::from_points(&map.points(), map.end, 1);
+        assert!((back.bars[0].time - 0.25).abs() < 1e-6);
+        assert_eq!(back.bars[0].meter, Meter::COMMON);
+        // With the audio moved so a whole bar fits, the count-in is one
+        // bar at bar 1's tempo.
+        let offset = map.count_in_offset().unwrap_or(0.0);
+        assert!((offset - 1.75).abs() < 1e-9);
+        let points = map.points_at(offset);
+        assert_eq!(points[0].meter, Some(Meter::COMMON));
+        assert!((points[0].bpm - 120.0).abs() < 1e-6);
+        assert!((points[1].time - 2.0).abs() < 1e-9);
+        assert_eq!(points[1].meter, None);
+    }
+
+    #[test]
     fn points_round_trip_through_a_map() {
         let beats = steady(18, 1.0, 0.5);
         let options = MapOptions {
@@ -522,5 +603,14 @@ mod tests {
         let (bar, beat) = map.position(1.5);
         assert_eq!(bar, 0);
         assert!((beat - 4.0).abs() < 1e-9);
+        // A hit just ahead of a bar line is on that bar's first beat.
+        let (bar, beat) = map.hit_position(3.995);
+        assert_eq!(bar, 2);
+        assert!((beat - 0.99).abs() < 1e-9, "{beat}");
+        // The and of four stays in its bar.
+        assert_eq!(map.hit_position(3.74).0, 1);
+        let (bar, beat) = map.hit_position(1.99);
+        assert_eq!(bar, 1);
+        assert!((beat - 0.98).abs() < 1e-9, "{beat}");
     }
 }

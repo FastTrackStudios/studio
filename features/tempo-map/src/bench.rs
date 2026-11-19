@@ -202,8 +202,8 @@ fn measure(
         max_ms: diff.downbeat.max,
         differing: diff.differing,
         slips: diff.slips.len(),
-        slipped_at: diff.slips.clone(),
-        phase_line: measured.phase_line.clone(),
+        slipped_at: diff.slips,
+        phase_line: measured.phase_line,
         grid_ms: measured.grid_error.map_or(0.0, |g| g.median),
         on_hits: measured.on_hits,
     };
