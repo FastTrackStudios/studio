@@ -124,7 +124,11 @@ pub fn note_of(id: &str) -> Option<&str> {
         .filter(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
         .map_or(song, |(s, _)| s);
     let note = song.split_once('#').map_or(song, |(n, _)| n);
-    note.ends_with(".md").then_some(note)
+    // A vault's note is `.md` as written: the paths here are the vault's
+    // own, never a filesystem's folding of them.
+    #[allow(clippy::case_sensitive_file_extension_comparisons)]
+    let is_note = note.ends_with(".md");
+    is_note.then_some(note)
 }
 
 /// One song of the list.

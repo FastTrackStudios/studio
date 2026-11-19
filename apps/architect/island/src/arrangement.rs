@@ -111,10 +111,11 @@ pub fn Arrangement(page: Signal<Value>, ask: Ask) -> Element {
         .and_then(|i| sections.get(i))
         .map(|s| s.0.clone())
         .unwrap_or_default();
-    let ticks: Vec<f64> = (0..)
+    // A tick every fifteen seconds, up to the song's length (a bounded
+    // count: eighteen hours is past any song).
+    let ticks = (0..u16::MAX)
         .map(|i| f64::from(i) * 15.0)
-        .take_while(|t| *t < length)
-        .collect();
+        .take_while(move |t| *t < length);
     let at = (p.time.min(length) * PX).round();
     let seek = move |t: f64| ask.call(("PLAYHEAD_SEEK".to_owned(), json!({ "t": t })));
     // The playhead kept in view: the lanes scroll under it once it has

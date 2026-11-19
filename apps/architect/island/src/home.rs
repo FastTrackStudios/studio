@@ -116,7 +116,7 @@ pub fn board_of(note: &Value, today: &str) -> Board {
             // The latest first; the undated after every dated one.
             earlier.sort_by(|a, b| b.date.cmp(&a.date).then(a.title.cmp(&b.title)));
             let mut songs: Vec<Song> = song_rows.iter().map(Song::of).collect();
-            songs.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+            songs.sort_by_key(|a| a.title.to_lowercase());
             let mut libraries: Vec<(String, Vec<Song>)> = Vec::new();
             for song in songs {
                 let name = library_of(&song.path);
@@ -126,7 +126,7 @@ pub fn board_of(note: &Value, today: &str) -> Board {
                     None => libraries.push((name, vec![song])),
                 }
             }
-            libraries.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+            libraries.sort_by_key(|a| a.0.to_lowercase());
             for s in coming.iter().chain(&earlier) {
                 titles.push((s.path.clone(), s.title.clone()));
             }
@@ -225,7 +225,7 @@ mod view {
         format!(
             "{:04}-{:02}-{:02}",
             d.get_full_year(),
-            d.get_month() + 1,
+            d.get_month().saturating_add(1),
             d.get_date()
         )
     }
@@ -343,10 +343,12 @@ mod view {
     fn Libraries(org: Org, ask: Ask) -> Element {
         rsx! {
             for (name, songs) in org.libraries.iter().cloned() {
-                h2 { key: "h{name}", "{name}" span { "{songs.len()} songs" } }
-                ul { key: "l{name}", for song in songs {
-                    SongRow { key: "{song.path}", song, ask }
-                } }
+                Fragment { key: "{name}",
+                    h2 { "{name}" span { "{songs.len()} songs" } }
+                    ul { for song in songs {
+                        SongRow { key: "{song.path}", song, ask }
+                    } }
+                }
             }
             if org.libraries.is_empty() {
                 h2 { "Song libraries" }
@@ -387,12 +389,14 @@ mod view {
                     } }
                 }
                 for org in board.orgs.iter().cloned() {
-                    if many {
-                        div { key: "o{org.slug}", class: "hv-org", "{org.slug}" }
-                    }
-                    div { key: "c{org.slug}", class: "hv-cols",
-                        div { Sets { org: org.clone(), ask } }
-                        div { Libraries { org, ask } }
+                    Fragment { key: "{org.slug}",
+                        if many {
+                            div { class: "hv-org", "{org.slug}" }
+                        }
+                        div { class: "hv-cols",
+                            div { Sets { org: org.clone(), ask } }
+                            div { Libraries { org, ask } }
+                        }
                     }
                 }
             }
