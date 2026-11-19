@@ -7,12 +7,17 @@
 //! drawn beside (`use_embed`'s `props.note`, or the home's `{home}`),
 //! and a way to ask the playhead, as this extension.
 
-use architect_extensions::linked::{Builder, Extension};
+use std::sync::{Mutex, PoisonError};
+
+use architect_extensions::linked::{Builder, Extension, Handle};
 use dioxus::prelude::*;
 use serde_json::{Value, json};
 
 /// The extension's id: the playhead source its views set and read.
 const ID: &str = "studio.transport";
+
+/// The host, as this extension: what opens a note a view asks for.
+static HANDLE: Mutex<Option<Handle>> = Mutex::new(None);
 
 /// Studio's views, linked into the web client.
 pub struct StudioViews;
@@ -23,6 +28,7 @@ impl Extension for StudioViews {
     }
 
     fn build(&self, ext: &mut Builder) {
+        *HANDLE.lock().unwrap_or_else(PoisonError::into_inner) = Some(ext.handle());
         ext.view("setlist.playlist", setlist)
             .view("song", song)
             .view("lyrics", lyrics)
@@ -82,6 +88,28 @@ fn state(note: &Value) -> Value {
     s
 }
 
+/// Opens the note at `args.path` through the host, as this extension.
+fn open_note(args: Value) {
+    let Some(path) = args.get("path").and_then(Value::as_str).map(str::to_owned) else {
+        tracing::warn!("studio-web: NOTE_OPEN without a path");
+        return;
+    };
+    let Some(handle) = HANDLE
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
+    else {
+        tracing::warn!("studio-web: NOTE_OPEN before the extension was built");
+        return;
+    };
+    spawn(async move {
+        let request = architect_extensions::hostcall::HostRequest::Open { path };
+        if let Err(e) = handle.host(request).await {
+            tracing::warn!(error = %e, "studio-web: the host did not open the note");
+        }
+    });
+}
+
 /// What a view is drawn beside, from its embed's props: the note
 /// (`props.note`), or for the home the whole `{home}` value.
 fn note_of(props: &Value) -> Value {
@@ -116,6 +144,13 @@ fn Linked(view: &'static str) -> Element {
         }
     });
     let ask = Callback::new(|(action, args): (String, Value)| {
+        // A row or a card opens its note: the host opens it where this
+        // person may (a member's workspace; for a link's guest only a note
+        // the link lists), as it does for every linked view.
+        if action == "NOTE_OPEN" {
+            open_note(args);
+            return;
+        }
         let caller = architect_playhead::Caller::Extension(ID.to_owned());
         if let Err(e) = architect_playhead::ask(&caller, &action, &args) {
             tracing::warn!(view.ask = %action, error = %e, "studio-web: a view's ask was refused");
