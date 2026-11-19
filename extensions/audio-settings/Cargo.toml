@@ -1,0 +1,26 @@
+[package]
+name = "studio-audio-settings"
+description = "Studio's audio settings as an extension: one surface for both engines. The audio device, sample rate and buffer of the Studio engine (the daw extension, DAW_AUDIO) and of the rig engine (studio.rig, its AudioSettings service), the rig's input and output routing, its MIDI controllers and what they are learned to, and the instrument played. A page of Settings and panes of their own."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "studio-audio-settings"
+path = "src/main.rs"
+
+[dependencies]
+studio-rig-link = { workspace = true }
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+guitar = { workspace = true, features = ["ui"] }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+facet = { workspace = true }
+facet-json = { workspace = true }
+
+[lints]
+workspace = true

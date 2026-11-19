@@ -1,0 +1,31 @@
+# studio.rig.macros (src/lib.rs): the macro bar (`guitar::ui::panels::Macros`, the iPad layout's `TouchMacroBar`), in an Architect pane: a vox client of
+# the rig engine (the studio.rig extension runs it), as every Signal GUI
+# is. It names no other view (docs/design/signal-extensions.md).
+id = "studio.rig.macros"
+name = "Rig macros"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "The macro bar of the patch playing: its knobs and pads, each one's panel a press away."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "studio-rig-macros"
+
+# What a press asks of the app: another rig view brought up beside this
+# one (the browser on a block's presets, Setup from a status light).
+[capabilities]
+effect = "mutating"
+actions = ["EXT_VIEW_OPEN"]
+
+[[views]]
+id = "macros"
+title = "Macros"
+icon = "gauge"
+
+[[actions]]
+id = "STUDIO_RIG_MACROS_STATE"
+name = "Rig macros: state"
+description = "Whether this window's process is connected to the rig engine and where it is, why not when it is not, and what the rig's panes share (the grid's selection, the browser's focus, the part being built)."
+group = "Rig"
+effect = "read_only"

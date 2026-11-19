@@ -1,0 +1,72 @@
+# studio.audio-settings (src/lib.rs): one settings surface for Studio's two
+# engines: the Studio engine (the `daw` extension: the songs and sets) and
+# the rig engine (`studio.rig`: guitar and keys). Audio device, sample rate
+# and buffer of each; the rig's input, output routing and test tones; its
+# MIDI controllers and what they are learned to; the instrument played
+# (docs/design/signal-extensions.md, "Audio settings").
+id = "studio.audio-settings"
+name = "Audio settings"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "Audio and MIDI for Studio's engines: the device, sample rate and buffer of the Studio engine and of the rig engine, the rig's routing, its MIDI controllers and mappings, and the instrument."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "studio-audio-settings"
+
+# DAW_AUDIO is the Studio engine's device (the `daw` extension's); the rig
+# engine's is reached over its own connection.
+[capabilities]
+effect = "mutating"
+actions = ["DAW_AUDIO", "EXT_VIEW_OPEN"]
+
+# The whole surface, a page of Settings: its three parts as tabs.
+[[views]]
+id = "settings"
+title = "Audio & MIDI"
+icon = "audio-lines"
+
+[[views]]
+id = "audio"
+title = "Audio devices"
+icon = "audio-lines"
+
+[[views]]
+id = "midi"
+title = "MIDI"
+icon = "cable"
+
+[[views]]
+id = "instrument"
+title = "Instrument"
+icon = "guitar"
+
+[[sections]]
+id = "studio-audio"
+title = "Audio & MIDI"
+icon = "audio-lines"
+group = "Studio"
+view = "settings"
+
+[[sections.settings]]
+key = "studio.audio-settings.link_engines"
+title = "One output for both engines"
+description = "A change to the rig engine's output device or sample rate is made to the Studio engine's too, so a set's songs and the rig play through the same interface at the same rate."
+control = "switch"
+default = true
+
+[[actions]]
+id = "STUDIO_AUDIO_SETTINGS_STATE"
+name = "Audio settings: state"
+description = "Both engines' audio as it is set: the Studio engine's output device, sample rate and buffer with the outputs it could open (`studio`), and the rig engine's prefs, devices and whether its audio runs (`rig`); each `null` with why when that engine does not answer. `link`: whether one output is kept for both."
+group = "Audio"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_AUDIO_SETTINGS_SET"
+name = "Audio settings: set"
+description = "Sets an engine's audio: `engine` is `studio`, `rig` or `both` (the default); `output_device`, `sample_rate`, `buffer_size` for either, `input_device` and `input_channel` (from 1) for the rig. Each engine keeps it and reopens its device. Answers the state after."
+group = "Audio"
+effect = "mutating"
+params = '{"type":"object","properties":{"engine":{"type":"string","enum":["studio","rig","both"]},"output_device":{"type":"string"},"input_device":{"type":"string"},"input_channel":{"type":"integer"},"sample_rate":{"type":"integer"},"buffer_size":{"type":"integer"}}}'

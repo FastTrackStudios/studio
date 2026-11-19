@@ -3,3 +3,13 @@
 /daw/daw-extension
 /arrangement/studio-arrangement
 /mixer/studio-mixer
+# rig-dev.sh's: the rig engine and any view loaded as a development copy.
+/rig/rig-extension
+/rig-switches/studio-rig-switches
+/rig-setlist/studio-rig-setlist
+/rig-browser/studio-rig-browser
+/rig-grid/studio-rig-grid
+/rig-macros/studio-rig-macros
+/rig-status/studio-rig-status
+/audio-settings/studio-audio-settings
+/keys/studio-keys
