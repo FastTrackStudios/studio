@@ -147,9 +147,8 @@ reads = ["documents"]
 # A setlist's favourites (architect#607, #658): the bottom slots while a
 # setlist is open, each a view of this extension's own, as the owner
 # asked for them (2026-11-18): the Setlist, the Charts and the Lyrics of
-# the song playing, a More menu, and the round button plays and
-# pauses (`PLAYHEAD_TOGGLE`, its Pause face while the app's runtime state
-# `playing` is on: architect#660). A tab whose view claims a note type
+# the song playing, a More menu (Arrangement, Mixer, Lighting Visualizer),
+# and a round button that opens the player. A tab whose view claims a note type
 # opens the note of that type that is playing (`song`: the song's chart);
 # one that claims none fills the page (`lyrics`, `arrangement`).
 [[favourites]]
@@ -162,8 +161,8 @@ icon = "list-music"
 target = { view = "setlist.playlist" }
 
 [[favourites.tabs]]
-id = "charts"
-label = "Charts"
+id = "chart"
+label = "Chart"
 icon = "music"
 target = { view = "song" }
 
@@ -183,13 +182,13 @@ icon = "ellipsis"
 target = { menu = [
   { id = "arrangement", label = "Arrangement", icon = "rows-3", target = { view = "arrangement" } },
   { id = "mixer", label = "Mixer", icon = "sliders-vertical", target = { view = "mixer" } },
-  { id = "lighting", label = "Lighting", icon = "lightbulb", target = { view = "lighting" } },
+  { id = "lighting", label = "Lighting Visualizer", icon = "lightbulb", target = { view = "lighting" } },
 ] }
 
+# The round button opens the player (the Now Playing bar's detail: where
+# the song is, previous and next): the owner's "^" (2026-11-18).
 [favourites.primary]
-id = "play"
-label = "Play"
-icon = "play"
-target = { action = "PLAYHEAD_TOGGLE" }
-state = "playing"
-on = { label = "Pause", icon = "pause" }
+id = "player"
+label = "Player"
+icon = "chevron-up"
+target = { action = "PLAYHEAD_DETAIL" }
