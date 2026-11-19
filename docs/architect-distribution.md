@@ -247,6 +247,15 @@ hands the frame (`--foreground`, `--muted-foreground`, `--accent`,
 `--border`, `--font`). There is no player bar in it: the Now Playing bar is
 Architect's.
 
+**As of 2026-11-18** (`docs/design/share-link-setlist.md`, the audit):
+a share link's guest **is** handed the note's text, as the link's build
+writes it (no frontmatter, comments out), so the playlist draws for a
+guest; the declared properties still arrive empty (architect#911). The
+node lists the claims below itself (`studio_architect::island::at`):
+without that listing the web app mounts none of these views. Where the
+paragraphs below say a guest gets no body, they describe Architect
+before v0.14.
+
 **Props in** (data only), read in one module, `apps/architect/island/src/queue.rs`:
 
 - `note`, the setlist note, as the app gives the view that claims its
