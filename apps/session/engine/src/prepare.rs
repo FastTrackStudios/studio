@@ -920,15 +920,19 @@ pub fn steps(
         // Last of all, so it stays last: the song's stereo reference in
         // its own top-level folder, and the song heard by it when that is
         // how it came (every part muted under the mix).
-        let reference = crate::instrument_tracks::file_reference(daw, &project)
-            .map_err(|e| eyre::eyre!("reference: {e}"))?;
-        let by_reference = crate::instrument_tracks::settle_hearing(daw, &project)
-            .map_err(|e| eyre::eyre!("reference: {e}"))?;
-        tracing::info!(
-            reference = ?reference,
-            heard_by_reference = by_reference,
-            "prepare: the song's reference"
-        );
+        // The engine's (native): a browser prepares nothing by reference.
+        #[cfg(feature = "native")]
+        {
+            let reference = crate::instrument_tracks::file_reference(daw, &project)
+                .map_err(|e| eyre::eyre!("reference: {e}"))?;
+            let by_reference = crate::instrument_tracks::settle_hearing(daw, &project)
+                .map_err(|e| eyre::eyre!("reference: {e}"))?;
+            tracing::info!(
+                reference = ?reference,
+                heard_by_reference = by_reference,
+                "prepare: the song's reference"
+            );
+        }
     }
     Ok(())
 }
