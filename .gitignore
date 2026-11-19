@@ -81,5 +81,6 @@ features/dynamic-template/fixtures/golden/media/
 /.release-version
 local-stack.local.env
 
-# Written by devenv from devenv.nix (claude.code.mcpServers): names this checkout.
+# Written by devenv from devenv.nix (claude.code): they name this checkout or the store.
 /.mcp.json
+/.claude/settings.json
