@@ -26,6 +26,7 @@ members = [
     "extensions/rig-status",
     "extensions/audio-settings",
     "extensions/keys",
+    "extensions/tempo-map",
     "features/tempo-map",
     "features/timeline",
     "features/editing",
@@ -834,6 +835,7 @@ studio-keys = { path = "extensions/keys" }
 # Tempo maps from stems: the algorithms and their measurements (no UI),
 # and the extension that runs them (`studio.tempo-map`, a process).
 tempo-map = { path = "features/tempo-map" }
+studio-tempo-map = { path = "extensions/tempo-map" }
 # Keyflow's chart extension and Ignition's lighting extension, linked into
 # the distribution the same way (`pane`: Ignition's room as the GPU
 # process view the app hosts).

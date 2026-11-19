@@ -86,6 +86,14 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
                          kept as project notes of an Architect vault with
                          a stage; an Ableton show set's songs as a setlist
                          (`studio productions …`; studio#396)
+            tempo-map/   tempo maps from a recording's stems: onsets,
+                         beats, the snap to hits, the backbeat's phase,
+                         bar 1, one tempo point per bar in any meter, and
+                         the measurements and benchmark that say how good
+                         a map is (no UI; `tempo-map bench`). Its Action
+                         List is the extension `studio.tempo-map`
+                         (`extensions/tempo-map`, a process: rebuilt and
+                         swapped under a running Studio)
             session/, song/, input/,
             chords/, formats/, control-surfaces/,
             dynamic-template/, patch-list/, …
