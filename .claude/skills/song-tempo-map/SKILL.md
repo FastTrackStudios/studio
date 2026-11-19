@@ -127,6 +127,12 @@ the pickup and count-in.
   4/4 again) puts the kick on 64 of the chart's 90 downbeats, against 46
   read as plain 4/4. That count (a kick within 45 ms of the bar line) is
   the check that a layout fits a recording.
+- **The chart's ending is the band's, not the record's, and that is
+  expected:** a record fades, a band cannot. Where they part (This
+  Christmas fades on the hook past bar 90; the chart ends with a fermata)
+  the map follows the recording, the chart keeps its ending, and the
+  difference is said in the report, not treated as a wrong map or a wrong
+  chart. Check a layout against the chart up to where they part.
 - A counted-in recording (This Christmas: two clicks) fools the bar-1
   guess: the best candidate was the first click, bar 1 the third beat.
 - A tempo point's bpm is always in quarter notes, whatever the meter, and a
