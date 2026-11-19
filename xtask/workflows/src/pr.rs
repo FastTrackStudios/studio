@@ -17,9 +17,9 @@
 //! gh workflow run checks.yml --ref <branch>     (posts Local CI when green)
 //! ```
 //!
-//! One job here compiles: `studio-architect`, `cargo check` of Studio's
+//! One job here compiles: `studio`, `cargo check` of Studio's
 //! distribution of Architect's node for x86_64 Linux (apps/desktop, the
-//! release's `studio-architect` workflow builds it), and only when the PR
+//! release's `studio` workflow builds it), and only when the PR
 //! reaches it; and, when the PR reaches Studio's island's sheet, compiles
 //! that sheet and puts it through Architect's `cleanSheet`. Not required.
 //!
@@ -61,7 +61,7 @@ pub fn workflow() -> Result<Workflow> {
         )
         .concurrency("pr-${{ github.event.pull_request.number }}", true)
         .job("pr-checks", pr_checks()?)
-        .job("studio-architect", studio_architect()?)
+        .job("studio", studio()?)
         .job("architect-pin", architect_pin()?),
     )
 }
@@ -116,13 +116,13 @@ fn pr_checks() -> Result<Job> {
 /// the lockfile, the toolchain, the cargo config or its build script.
 const REACH: &str = r#"set -euo pipefail
 changed="$(git diff --name-only HEAD^1 HEAD)"
-dirs="$(cargo tree --locked -p studio-architect --no-default-features -e normal,build,dev --prefix none -f '{p}' \
+dirs="$(cargo tree --locked -p studio-desktop --no-default-features -e normal,build,dev --prefix none -f '{p}' \
   | sed -n "s|.* (\($GITHUB_WORKSPACE/[^)]*\))\$|\1|p" | sed "s|^$GITHUB_WORKSPACE/||" | sort -u)"
 reach=false
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   case "$f" in
-    Cargo.toml|Cargo.lock|rust-toolchain.toml|.cargo/*|scripts/studio-architect.sh) reach=true ;;
+    Cargo.toml|Cargo.lock|rust-toolchain.toml|.cargo/*|scripts/studio.sh) reach=true ;;
   esac
   while IFS= read -r d; do
     [ -n "$d" ] || continue
@@ -130,7 +130,7 @@ while IFS= read -r f; do
   done <<<"$dirs"
 done <<<"$changed"
 echo "reach=$reach" >> "$GITHUB_OUTPUT"
-echo "studio-architect: $(wc -l <<<"$dirs") crates of this repo in the node's tree; this PR reaches it: $reach"
+echo "studio: $(wc -l <<<"$dirs") crates of this repo in the node's tree; this PR reaches it: $reach"
 # Studio's island's sheet: its source, the classes it is compiled for, the
 # check, the lockfile (which pins the sanitiser it is checked against), and
 # Tailwind's version (the dev shell's, devenv.nix/devenv.lock; CI's pin in
@@ -143,17 +143,17 @@ while IFS= read -r f; do
   esac
 done <<<"$changed"
 echo "island=$island" >> "$GITHUB_OUTPUT"
-echo "studio-architect: this PR reaches the island's sheet: $island"
+echo "studio: this PR reaches the island's sheet: $island"
 "#;
 
 /// Studio's distribution of Architect still builds for the hosted node:
 /// `cargo check --all-targets` of its node for x86_64 Linux, exactly as the
-/// release builds it (scripts/studio-architect.sh: `--no-default-features`,
+/// release builds it (scripts/studio.sh: `--no-default-features`,
 /// `--cfg no_workspace_hack`). A free hosted runner with no target cache
 /// (PRs never write the Actions cache): a cold check, 6m39s on its first
 /// run (PR #407), so it runs only for a PR that reaches the node
 /// ([`REACH`]) and nothing waits on it (main requires `PR checks` only).
-fn studio_architect() -> Result<Job> {
+fn studio() -> Result<Job> {
     const REACHED: &str = "${{ steps.reach.outputs.reach == 'true' }}";
     const ISLAND: &str = "${{ steps.reach.outputs.island == 'true' }}";
     const EITHER: &str =
@@ -184,13 +184,7 @@ fn studio_architect() -> Result<Job> {
         // The image's rustup reads rust-toolchain.toml: the workspace pin.
         .step(Step::run("Does this PR reach the node?", REACH).id("reach"))
         .steps(setup.into_iter().map(|s| s.cond(EITHER)))
-        .step(
-            Step::run(
-                "cargo check the node",
-                "bash scripts/studio-architect.sh check",
-            )
-            .cond(REACHED),
-        )
+        .step(Step::run("cargo check the node", "bash scripts/studio.sh check").cond(REACHED))
         // The island's sheet as a share page will hold it: compiled, then
         // put through the pinned Architect's `cleanSheet` (studio#445).
         // Refused, the island would draw unstyled; here the PR fails.
@@ -229,7 +223,7 @@ gh workflow run checks.yml --repo "$GITHUB_REPOSITORY" --ref "$HEAD_REF"
 
 /// A PR that moves the Architect pin runs what main runs, before it merges.
 ///
-/// A PR's own jobs compile nothing but the node (`studio-architect`, `cargo
+/// A PR's own jobs compile nothing but the node (`studio`, `cargo
 /// check`), while main runs the duplicate-version gate, every crate's test
 /// targets and the core test set. A pin move reaches 27 of the workspace's
 /// 52 crates, and studio#519's did break main on all three: an Architect

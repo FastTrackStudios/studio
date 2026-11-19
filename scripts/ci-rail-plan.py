@@ -32,11 +32,10 @@ import json
 import sys
 from typing import NoReturn
 
-# Leaf entry points of the browser builds the wasm job checks: the three web
-# bundles (`just web-wasm-check`) and the Signal browser
-# remote (studio-desktop's web build). rail's selection already includes
-# reverse dependencies, so membership of these is enough.
-WASM = {"session-daw-web", "session-web", "signal-web", "studio-desktop"}
+# Leaf entry point of the browser build the wasm job checks: studio-web
+# (apps/web, `just web-wasm-check`). rail's selection already includes
+# reverse dependencies, so membership is enough.
+WASM = {"studio-web"}
 
 # A change to CI's own definition (.config/rail.toml `ci-infra`): smoke the
 # tests job end to end on the workflows crate — tiny, and CI's own code.

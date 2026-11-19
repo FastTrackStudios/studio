@@ -5,7 +5,7 @@
 # Built from the vendored reaper-flake recipes (nix/vendor/reaper-flake,
 # subtree-imported — see wrapper/reaper/pkgs/{reaper,sws,reapack}.nix) plus a
 # new `fts-plugins` crane package (the plugin still built in this repo,
-# apps/plugins/guide, bundled the same way `just plugins-bundle` does; the
+# plugins/guide, bundled the same way `just plugins-bundle` does; the
 # effects' plugins are built in FastTrackStudios/fts-fx and the nam and
 # signal plugins in FastTrackStudios/signal, and they are NOT in this
 # package any more, studio#510).

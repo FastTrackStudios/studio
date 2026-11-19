@@ -61,8 +61,8 @@ const MECHANICAL: &str = "<!-- bump:mechanical -->";
 
 /// The paths a bump may change (git pathspecs; `land` checks the PR's
 /// files against the same list as a regex).
-const PATHS: &str = "Cargo.toml '*/Cargo.toml' Cargo.lock .config/duplicate-deps.toml '.changes/studio-architect-on-architect-*.md'";
-const PATHS_RE: &str = r"^(Cargo\.toml|.*/Cargo\.toml|Cargo\.lock|\.config/duplicate-deps\.toml|\.changes/studio-architect-on-architect-[0-9a-f]+\.md)$";
+const PATHS: &str = "Cargo.toml '*/Cargo.toml' Cargo.lock .config/duplicate-deps.toml '.changes/studio-on-architect-*.md'";
+const PATHS_RE: &str = r"^(Cargo\.toml|.*/Cargo\.toml|Cargo\.lock|\.config/duplicate-deps\.toml|\.changes/studio-on-architect-[0-9a-f]+\.md)$";
 
 const WHICH_TAG: &str = r#"set -euo pipefail
 tag="${INPUT_TAG:-}"

@@ -57,14 +57,6 @@
         type = lib.types.str;
         description = "Commit date (UTC, ISO 8601) baked into version.json.";
       };
-      mkStaticSite = lib.mkOption {
-        type = lib.types.raw;
-        description = "static-web-server OCI image factory: { name, tag ?, siteRoot }.";
-      };
-      studioWebSwsConfig = lib.mkOption {
-        type = lib.types.raw;
-        description = "static-web-server config for the studio-web root (COOP/COEP, cache rules): { root, port ? }.";
-      };
       cargoRail = lib.mkOption {
         type = lib.types.nullOr lib.types.package;
         description = "cargo-rail release binary (null where upstream ships no asset).";
