@@ -17,6 +17,12 @@
 #   local-stack.sh smoke                  the stack, checked end to end
 #   local-stack.sh reset                  remove the stack's state
 #
+# local-stack.local.env (untracked) holds a checkout's own LOCAL_STACK_*
+# settings: LOCAL_STACK_OVERRIDES + LOCAL_STACK_ARCHITECT_PATH (a stack of
+# local checkouts), LOCAL_STACK_VAULT, LOCAL_STACK_SETLIST,
+# LOCAL_STACK_PORT_<NAME>, LOCAL_STACK_DESKTOP_RUN (the window's own start
+# script), LOCAL_STACK_OPEN=on (the web app and the link in the browser).
+#
 # What is Architect's stays Architect's: mock-oauth, the auth server, the
 # node's environment, its sign-in and the guard are `cargo xtask dev run`
 # in an Architect checkout (the local one, or the tag Studio pins), given
@@ -31,6 +37,20 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 self="$root/scripts/local-stack.sh"
+
+# This checkout's own settings (local-stack.local.env, never committed):
+# `NAME=value` lines of the LOCAL_STACK_* variables below, for a checkout
+# that always runs the same way (a stack of local checkouts and its
+# overrides, another vault, other ports, the window's own start script).
+# The environment wins over the file.
+if [ -f "$root/local-stack.local.env" ]; then
+    while IFS='=' read -r _k _v; do
+        case "$_k" in
+            LOCAL_STACK_*) [ -n "${!_k:-}" ] || export "$_k=$_v" ;;
+        esac
+    done <"$root/local-stack.local.env"
+    unset _k _v
+fi
 
 ARCH_URL=https://github.com/FastTrackStudios/architect
 KF_URL=https://github.com/FastTrackStudios/keyflow
@@ -601,12 +621,48 @@ run_web() {
     # them: a share link's page is the node's and loads the app from its
     # own origin, so on the bundle's port alone no link opens.
     say "web: share links open here: $(share_url "http://127.0.0.1:$web")"
+    # `LOCAL_STACK_OPEN=on`: the app and the share link in the browser,
+    # once both answer.
+    if [ "${LOCAL_STACK_OPEN:-off}" = on ] && command -v xdg-open >/dev/null; then
+        (
+            for _ in $(seq 1 600); do
+                up "$web" && up "$(port node)" && [ -f "$state/share" ] && break
+                sleep 1
+            done
+            xdg-open "http://127.0.0.1:$web/app/" >/dev/null 2>&1 || true
+            sleep 1
+            xdg-open "$(share_url "http://127.0.0.1:$web")" >/dev/null 2>&1 || true
+        ) &
+    fi
     exec python3 "$root/scripts/local-stack-front.py" "$out" "$web" "$(port node)"
 }
 
+# The window. `LOCAL_STACK_DESKTOP_RUN` names a script of the machine's own
+# that builds (`--build-only`, under the overrides) and then runs it
+# (`--foreground`: until the window closes or the script is told to stop),
+# on whatever vault and session that machine works on. Without one: the
+# window signed in to the stack's issuer and node, when chosen
+# (`just dev desktop=on`); a bare `devenv up` then starts no window.
 run_desktop() {
     plan_locked
     load_plan
+    load_choice
+    local own="${LOCAL_STACK_DESKTOP_RUN:-}"
+    if [ -n "$own" ]; then
+        case "$own" in /*) ;; *) own="$(cd "$root/$(dirname "$own")" 2>/dev/null && pwd)/$(basename "$own")" ;; esac
+        [ -n "$own" ] && [ -x "$own" ] || die "LOCAL_STACK_DESKTOP_RUN=$LOCAL_STACK_DESKTOP_RUN: no such program"
+        say "desktop: $own (this machine's own window, vault and session)"
+        with_overrides "$own" --build-only >&2
+        exec "$own" --foreground
+    fi
+    if [ "$c_desktop" != on ]; then
+        say "desktop: off (just dev desktop=on, or LOCAL_STACK_DESKTOP_RUN)"
+        return 0
+    fi
+    for _ in $(seq 1 7200); do
+        curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port node)/health" && break
+        sleep 1
+    done
     local vars=() line cfg=() bin
     while IFS= read -r line; do vars+=("$line"); done < <(
         cd "$arch_src" && env DEV_STACK_ROOT="$arch_src" DEV_STACK_STATE="$state/stack" DEVENV_STATE="$state" \
