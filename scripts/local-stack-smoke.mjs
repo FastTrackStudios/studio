@@ -224,8 +224,8 @@ try {
   await pressTab('More');
   const entries = JSON.parse(await tab.until(`(() => { const e = [...document.querySelectorAll('[data-testid="tab-menu-item"]')].map(b => b.innerText.trim()); return e.length ? JSON.stringify(e) : ''; })()`, 'the More menu above its tab', 5000));
   if (entries.join(', ') !== 'Arrangement, Mixer, Lighting') throw new Error(`the More menu holds ${entries.join(', ')}`);
-  const first = await tab.eval(`(() => { const r = document.querySelector('[data-testid="tab-menu-item"]').getBoundingClientRect(); return JSON.stringify([r.x + r.width / 2, r.y + r.height / 2]); })()`);
-  await tab.press(...JSON.parse(first));
+  const entryAt = await tab.eval(`(() => { const r = document.querySelector('[data-testid="tab-menu-item"]').getBoundingClientRect(); return JSON.stringify([r.x + r.width / 2, r.y + r.height / 2]); })()`);
+  await tab.press(...JSON.parse(entryAt));
   const arr = await frameWith('studio-arrangement', 'the arrangement view');
   const head = await tab.evalIn(arr, `(() => { const p = document.querySelector('[data-testid="arrangement-playhead"]'); const s = document.querySelectorAll('[data-testid="arrangement-section"]').length; return p ? JSON.stringify({ left: parseFloat(p.style.left), sections: s }) : ''; })()`);
   if (!head) throw new Error('the arrangement draws no playhead for the song playing');
