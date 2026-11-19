@@ -290,7 +290,12 @@ fn lead() {
         }
         match rt.block_on(Leader::serve(&format!("0.0.0.0:{port}"), id)) {
             Ok(leader) => {
-                tracing::info!(session.lead = %leader.url(), "daw: the session's transport is led from here");
+                // A leader that serves its own presence has a URL (one on
+                // its node's presence would have none).
+                tracing::info!(
+                    session.lead = leader.url().unwrap_or_default(),
+                    "daw: the session's transport is led from here"
+                );
                 *LEADER.lock().unwrap_or_else(PoisonError::into_inner) = Some(leader);
                 return;
             }
@@ -330,7 +335,7 @@ pub fn state() -> Json {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
-        .map(|l| l.url().to_owned());
+        .and_then(|l| l.url().map(str::to_owned));
     json!({
         "path": path,
         "id": id,
