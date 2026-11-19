@@ -10,8 +10,6 @@
 #                          ~/.local/share/studio, `studio` on PATH, a desktop
 #                          entry and icon
 #
-# The same release tag ships the iPhone/iPad app to TestFlight (README).
-#
 # Environment:
 #   STUDIO_VERSION           exact version to install, e.g. 26.10.1
 #                            (default: the newest release)

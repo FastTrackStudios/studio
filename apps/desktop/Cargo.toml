@@ -1,6 +1,6 @@
 [package]
-name = "studio-architect"
-description = "Studio's distribution of Architect: the Architect app with Studio's extensions compiled in (setlists and its share-page chart renderer, productions), under a name, bundle id and config folder of its own. Its node (`studio-architect serve`, built without `gui`) is what a hosted Architect runs, so share links draw Studio's charts; built and released by scripts/studio-architect.sh (docs/architect-distribution.md)."
+name = "studio-desktop"
+description = "Studio's distribution of Architect: the Architect app with Studio's extensions compiled in (setlists and its share-page chart renderer, productions), under a name, bundle id and config folder of its own. Its node (`studio serve`, built without `gui`) is what a hosted Architect runs, so share links draw Studio's charts; built and released by scripts/studio.sh (docs/architect-distribution.md)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ repository.workspace = true
 publish = false
 
 [[bin]]
-name = "studio-architect"
+name = "studio"
 path = "src/main.rs"
 
 [features]

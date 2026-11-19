@@ -38,7 +38,7 @@ What it changes, and nothing else:
     the edit requires moves), then moving crates the resolve newly added to
     the versions in Architect's own Cargo.lock at the tag, where it can;
   - .config/duplicate-deps.toml, ADD-ONLY (`check-duplicate-deps.py --add`);
-  - a change file, .changes/studio-architect-on-architect-<hash>.md
+  - a change file, .changes/studio-on-architect-<hash>.md
     (patch), carrying Architect's `Data-Migration:` lines when it has any.
 
 Exit status:
@@ -88,7 +88,7 @@ FOLLOWED = ("dioxuslabs/dioxus", "fasttrackstudios/blitz", "fasttrackstudios/edi
             "fasttrackstudios/vendor", "fasttrackstudios/lucide",
             "fasttrackstudios/dioxus-components", "fasttrackstudios/lumen-blocks")
 NOTES = (".config/duplicate-deps.toml",)
-CHANGE_CRATE = "studio-architect"
+CHANGE_CRATE = "studio-desktop"
 # The org's release key (public half): what signs every SHA256SUMS.
 ORG_RELEASE_KEY = "RWRh9Gk9qaStQMhku4THMidEYrQsmAEsm2dDprUkZxShEtqfIcroM8Od"
 
@@ -386,7 +386,7 @@ def seed_from_upstream(before: dict, upstream_lock: str) -> list[str]:
 
 def change_file(arch: str, keyflow: str | None, migrations: list[str]) -> Path:
     slug = hashlib.sha1(f"{arch} {keyflow}".encode()).hexdigest()[:4]
-    path = ROOT / ".changes" / f"studio-architect-on-architect-{slug}.md"
+    path = ROOT / ".changes" / f"studio-on-architect-{slug}.md"
     with_kf = f" and keyflow {keyflow}" if keyflow else ""
     body = (f'---\n"{CHANGE_CRATE}" = "patch"\n---\n\n'
             f"Changed Studio Architect to architect {arch}{with_kf}: what that release carries is in its notes, "

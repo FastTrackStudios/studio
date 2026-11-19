@@ -1,7 +1,7 @@
 //! `studio.rig`: Signal's rig engine as an Architect extension.
 //!
 //! The process runs what `studio-desktop --engine` runs
-//! (`apps/studio/desktop/src/engine_main.rs`): the guitar and keys
+//! (the old rig app's `engine_main.rs`): the guitar and keys
 //! backends on one `signal_rig_host::Engine` (one project, one device:
 //! `docs/design/one-engine.md`), their vox services on one router, served
 //! on loopback at a free port. It says where it is

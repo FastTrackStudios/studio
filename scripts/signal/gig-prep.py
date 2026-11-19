@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Build a Signal gig folder from a gig manifest — see apps/studio/desktop/src/gig/.
+"""Build a Signal gig folder from a gig manifest (the gig mode of the old rig app,
+removed with it; kept for the gig folders it still describes).
 
     python3 scripts/signal/gig-prep.py \
         --manifest /Volumes/dev-drive/caa-2026/manifest.json \
@@ -223,7 +224,7 @@ def main() -> int:
         "name": facts.get("name") or manifest.get("generated_by", "Gig"),
         "dates": facts.get("dates", []),
         # When and where, as instants in the venue's offset: Studio's home
-        # opens a gig that is on now (apps/studio/desktop/src/gig/schedule.rs).
+        # opens a gig that is on now (the old rig app's gig schedule).
         "schedule": facts.get("schedule", []),
         "note": facts.get("note", ""),
         "source": facts.get("source", ""),

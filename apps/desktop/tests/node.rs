@@ -144,7 +144,7 @@ fn shared_setlist(root: &Path, files: &Path) -> String {
         expires_at: None,
         revoked_at: None,
         created_at: 1_790_000_000,
-        created_by: "studio-architect-test".to_owned(),
+        created_by: "studio-test".to_owned(),
         domain: None,
         audiences: Vec::new(),
         // What SHARE_CREATE gives a new link (architect v0.12.2, #528).
@@ -167,7 +167,7 @@ async fn serve(dist: &Distribution, data: &Path, vault: &Path) -> Running {
         ("ARCHITECT_DATA_DIR", data.display().to_string()),
         ("ARCHITECT_VAULTS", format!("{VAULT}={}", vault.display())),
         ("ARCHITECT_IROH", "local".to_owned()),
-        ("ARCHITECT_NAME", "studio-architect-test".to_owned()),
+        ("ARCHITECT_NAME", "studio-test".to_owned()),
     ]);
     let config = Config::load(None, |k| env.get(k).cloned()).unwrap();
     let blocks = dist.blocks(&config.data_dir.join("linked"));
@@ -273,7 +273,7 @@ fn values<'a>(html: &'a str, name: &str) -> Vec<&'a str> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn studios_node_draws_a_shared_chart_as_the_follow_svg() {
-    let html = shared_song_on(&studio_architect::distribution()).await;
+    let html = shared_song_on(&studio_desktop::distribution()).await;
     let start = html
         .find("data-by=\"studio.setlists\"")
         .unwrap_or_else(|| panic!("Studio's renderer drew no block:\n{html}"));
@@ -350,8 +350,8 @@ async fn a_stock_node_shows_the_same_chart_as_its_keyflow_text() {
 }
 
 #[test]
-fn it_is_studio_architect_with_studios_extensions_compiled_in() {
-    let d = studio_architect::distribution().describe();
+fn it_is_studio_with_studios_extensions_compiled_in() {
+    let d = studio_desktop::distribution().describe();
     assert_eq!(d["name"], "Studio");
     assert_eq!(d["app"], "studio");
     assert_eq!(d["folder"], "studio");
@@ -440,7 +440,7 @@ fn relock(dir: &Path, names: &[&str]) {
 fn a_folder_matching_its_lock_is_the_island() {
     let dir = tempfile::tempdir().unwrap();
     island_folder(dir.path());
-    let island = studio_architect::island::at(dir.path()).unwrap();
+    let island = studio_desktop::island::at(dir.path()).unwrap();
     assert_eq!(island.id(), "studio.transport");
     assert!(island.integrity().unwrap().starts_with("sha256-"));
     assert!(island.stylesheet_integrity().is_some());
@@ -449,7 +449,7 @@ fn a_folder_matching_its_lock_is_the_island() {
     // Only what the lock names (the sheet among them) and the lock are served.
     std::fs::write(dir.path().join("stray.js"), "alert(1)").unwrap();
     std::fs::write(dir.path().join("BUILT_FROM"), "abc").unwrap();
-    let island = studio_architect::island::at(dir.path()).unwrap();
+    let island = studio_desktop::island::at(dir.path()).unwrap();
     assert!(island.file("stray.js").is_none());
     assert!(island.file("BUILT_FROM").is_none());
 }
@@ -460,7 +460,7 @@ fn a_folder_matching_its_lock_is_the_island() {
 /// is neither listed nor in "Download all".
 #[test]
 fn a_songs_lighting_video_is_only_on_a_full_link() {
-    let rules = studio_architect::distribution().share_layers();
+    let rules = studio_desktop::distribution().share_layers();
     let layer = |file: &str| {
         let note = "Libraries/Recital/Joy/Joy.md";
         rules
@@ -513,7 +513,7 @@ fn the_island_claims_setlist_and_song_notes_as_its_manifest_says() {
             "web-studio-island_bg.wasm",
         ],
     );
-    let island = studio_architect::island::at(dir.path()).unwrap();
+    let island = studio_desktop::island::at(dir.path()).unwrap();
     let json = page_json(std::slice::from_ref(&island));
     let listed = &json["islands"][0];
     assert_eq!(
@@ -547,14 +547,14 @@ fn the_island_claims_setlist_and_song_notes_as_its_manifest_says() {
     ] {
         assert!(
             manifest.lines().any(|l| l.trim() == line),
-            "extension.toml no longer says `{line}`: change studio_architect::island with it"
+            "extension.toml no longer says `{line}`: change studio_desktop::island with it"
         );
     }
 }
 
 #[test]
 fn a_sheet_not_as_built_is_refused_with_the_island() {
-    use studio_architect::island::{IslandError, at};
+    use studio_desktop::island::{IslandError, at};
     // Altered after the build: its digest is the lock's no longer.
     let altered = tempfile::tempdir().unwrap();
     island_folder(altered.path());
@@ -584,7 +584,7 @@ fn a_sheet_not_as_built_is_refused_with_the_island() {
 #[test]
 fn a_link_in_the_island_folder_is_refused_never_followed() {
     use std::os::unix::fs::symlink;
-    use studio_architect::island::{IslandError, at};
+    use studio_desktop::island::{IslandError, at};
     let outside = tempfile::tempdir().unwrap();
     let secret = outside.path().join("secret.txt");
     std::fs::write(&secret, "a file the node can read").unwrap();
@@ -639,7 +639,7 @@ fn a_link_in_the_island_folder_is_refused_never_followed() {
 
 #[test]
 fn a_folder_that_does_not_match_its_lock_is_refused_whole() {
-    use studio_architect::island::{IslandError, at};
+    use studio_desktop::island::{IslandError, at};
     let none = tempfile::tempdir().unwrap();
     assert!(matches!(
         at(&none.path().join("studio-island")),
@@ -684,7 +684,7 @@ fn a_folder_that_does_not_match_its_lock_is_refused_whole() {
 async fn a_node_with_the_island_offers_it_to_the_now_playing_view() {
     let dir = tempfile::tempdir().unwrap();
     island_folder(dir.path());
-    let dist = studio_architect::distribution_with(studio_architect::island::at(dir.path()).ok());
+    let dist = studio_desktop::distribution_with(studio_desktop::island::at(dir.path()).ok());
     assert_eq!(islands_offered_by(&dist).await, ["studio.transport"]);
 }
 
@@ -692,9 +692,9 @@ async fn a_node_with_the_island_offers_it_to_the_now_playing_view() {
 async fn a_node_without_the_folder_offers_no_island() {
     // The test binary has no `studio-island/` beside it: as a node shipped
     // without one.
-    assert!(studio_architect::island().is_none());
+    assert!(studio_desktop::island().is_none());
     assert_eq!(
-        islands_offered_by(&studio_architect::distribution()).await,
+        islands_offered_by(&studio_desktop::distribution()).await,
         Vec::<String>::new()
     );
 }
@@ -708,6 +708,6 @@ async fn a_node_whose_folder_was_altered_offers_no_island() {
         b"\0asm\x01\0\0\0tampered",
     )
     .unwrap();
-    let dist = studio_architect::distribution_with(studio_architect::island::at(dir.path()).ok());
+    let dist = studio_desktop::distribution_with(studio_desktop::island::at(dir.path()).ok());
     assert_eq!(islands_offered_by(&dist).await, Vec::<String>::new());
 }

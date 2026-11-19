@@ -455,11 +455,9 @@ fn both_apps_register_the_performer_panels_through_one_function() {
         let p = reg.get(id).unwrap_or_else(|| panic!("{id} not registered"));
         assert_eq!(p.region, region, "{id}");
     }
-    // Session's mount and Signal's gig mount, and every other app source.
+    // Session's mount (features/engine), and every other source there.
     let mut files = Vec::new();
-    for app in ["apps/session", "apps/signal"] {
-        rust_files(&root.join(app), &mut files);
-    }
+    rust_files(&root.join("features/engine"), &mut files);
     assert!(!files.is_empty(), "no app sources under {}", root.display());
     let mut mounts = Vec::new();
     for f in &files {
@@ -490,7 +488,7 @@ fn both_apps_register_the_performer_panels_through_one_function() {
         }
     }
     assert!(
-        mounts.iter().any(|m| m.starts_with("apps/session/")),
+        mounts.iter().any(|m| m.starts_with("features/engine/")),
         "Session mounts the PerformerScreen: {mounts:?}"
     );
 }

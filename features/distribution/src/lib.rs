@@ -1,6 +1,6 @@
 //! Studio's compiled-in extensions, listed once.
 //!
-//! The desktop app (`studio-architect`, apps/desktop) and the web client
+//! The desktop app (`studio`, apps/desktop) and the web client
 //! (`studio-web`, apps/web) are the same distribution of Architect
 //! and link the same extensions: [`studio`], [`stage`] and [`rig`]. Add an
 //! extension here and both apps have it.

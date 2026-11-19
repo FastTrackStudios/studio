@@ -5,7 +5,7 @@
 //! counter rendered with a fixed style so pixel snapshots are stable
 //! across machines (modulo GPU vendor — see daw-vja for the test).
 //!
-//! NOT for production. Only used by `crates/daw-reaper/tests/reaper_visual_e2e.rs`.
+//! NOT for production. Only used by daw-reaper's `tests/reaper_visual_e2e.rs` (FastTrackStudios/studio-adapters).
 
 use std::error::Error;
 

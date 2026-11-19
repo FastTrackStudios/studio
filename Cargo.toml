@@ -50,15 +50,12 @@ members = [
     "features/control-surfaces",
     # ── session ──
     "xtask/session-reaper",
-    "apps/themer",
     "features/adapters/reaper/daw-reaper-dioxus-ext",
     "features/adapters/reaper/tests/daw-reaper-dioxus-ext-test",
-    "apps/session/desktop",
-    "apps/session/daw-web",
-    "apps/session/engine",
-    "apps/session/runtime",
-    "apps/session/ui",
-    "apps/session/web",
+    "features/engine/host",
+    "features/engine/engine",
+    "features/engine/runtime",
+    "features/engine/ui",
     "features/patch-list",
     "features/adapters/reaper/session-extension",
     "features/adapters/reaper/session-extension/xtask",
@@ -71,16 +68,12 @@ members = [
     "features/ui/audio-controls",
     "xtask/devtools",
     "xtask/workflows",
-    "vendor/dioxus-test",
     # ── processor ──
-    "apps/plugins/host",
+    "plugins/host",
     "xtask/plugins",
     "xtask/kit-sheet",
     # ── signal ──
-    "apps/studio/desktop",
-    "apps/signal/mobile",
-    "apps/signal/web",
-    "apps/plugins/guide",
+    "plugins/guide",
     # ── frame's plugin faces (frame itself is a git dependency) ──
     "features/ui/plugin-faces",
 ]
@@ -230,7 +223,6 @@ daw-reaper = { git = "https://github.com/FastTrackStudios/studio-adapters", rev 
 daw-extension-runtime = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
 reaper-dioxus = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
 daw-reaper-dioxus-ext = { path = "features/adapters/reaper/daw-reaper-dioxus-ext" }
-fts-themer-ui = { path = "apps/themer" }
 
 # ── session domain (wave 3) ───────────────────────────────────────────
 # `session` is the facade — the only public API surface for the session
@@ -548,8 +540,10 @@ dioxus-native-dom = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cf
 # in release builds unless the `force` feature is on. Not on crates.io.
 dioxus-mcp-probe = { git = "https://github.com/tonybierman/dioxus-mcp" }
 # Vendored DioxusLabs/dioxus-test on the pins above — headless component
-# tests on blitz-dom (no browser). See libs/vendor/dioxus-test.
-dioxus-test = { path = "vendor/dioxus-test" }
+# tests on blitz-dom (no browser), from FastTrackStudios/vendor. Pinned to
+# the commit of vendor#5 (dioxus-test moves there from this repo's old
+# vendor folder); moves to that repo's tag once vendor#5 is released.
+dioxus-test = { git = "https://github.com/FastTrackStudios/vendor", rev = "c892de83e77b3d51e9c3dd17d9f9e8471d01e112" }
 dioxus-primitives = { git = "https://github.com/FastTrackStudios/dioxus-components", package = "dioxus-primitives", tag = "fts-upstream-2026-11", default-features = false }
 lucide-dioxus = { git = "https://github.com/FastTrackStudios/lucide", tag = "fts-upstream-2026-11", features = ["all-icons"] }
 clsx = "0.1.1"
@@ -743,7 +737,7 @@ files-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main
 files-client = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 task-dial = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 # The server lane's org management (`ensure_personal_org`): where a signed-in
-# person's own docs live (studio-desktop's sync).
+# person's own docs live (the app's sync).
 org-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 # Live sessions Task keeps: joining a set, the clock, the epochs.
 live-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
@@ -807,16 +801,15 @@ web-time = "1"
 
 signal-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-import = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
-signal-web = { path = "apps/signal/web" }
-# Session's app as a library: Studio (apps/studio/desktop) mounts it behind
-# its front screen. No default features: Studio picks the iOS-clean set.
-session-desktop = { path = "apps/session/desktop", default-features = false }
+# Session's app as a library (features/engine/host): its window, CLI and
+# engine host. No default features: each dependent picks its set.
+session-desktop = { path = "features/engine/host", default-features = false }
 # Session's engine, and its window (a view of it): features chosen by each
 # dependent (`native` on a desktop, `web` in a page).
-session-engine = { path = "apps/session/engine", default-features = false }
+session-engine = { path = "features/engine/engine", default-features = false }
 # Its host-neutral runtime: no window, no shell, no Dioxus (studio#400).
-session-runtime = { path = "apps/session/runtime" }
-session-ui = { path = "apps/session/ui", default-features = false }
+session-runtime = { path = "features/engine/runtime" }
+session-ui = { path = "features/engine/ui", default-features = false }
 studio-view-link = { path = "extensions/link" }
 # Studio's engine, arrangement and mixer extensions as libraries: what
 # Studio's distribution (apps/desktop) links in. Each is also its own
@@ -1166,8 +1159,8 @@ inherits = "release"
 incremental = true
 codegen-units = 256
 
-# The browser's app (`session-daw-web`): one module every visitor
-# downloads and compiles, so its size is paid on every first visit.
+# A browser build (the island's web bundle, `just island`; first written for
+# the old in-browser DAW): one module every visitor downloads and compiles, so its size is paid on every first visit.
 # Whole-program LTO in one codegen unit lets LLVM drop what no path from
 # `main` reaches across crate boundaries, and `s` stops it trading size
 # for speed where speed does not matter (the UI, the parsers, the RPC).
@@ -1202,7 +1195,7 @@ opt-level = 3
 # dx's own profile: `dx serve` builds the window as `desktop-dev` with an
 # explicit `--target`, so its artifacts land in
 # target/<host>/desktop-dev. The dev loop builds the engine and the tests the
-# same way (scripts/dev-herdr.sh, `just dev-test`) so all three share one set
+# same way (`just dev-test`) so all three share one set
 # of compiled crates. Declared here so cargo knows it outside dx; it is the
 # dev profile, nothing else.
 [profile.desktop-dev]

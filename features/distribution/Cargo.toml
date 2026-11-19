@@ -1,6 +1,6 @@
 [package]
 name = "studio-extensions"
-description = "Studio's compiled-in extensions, listed once: what the desktop app (apps/desktop, studio-architect) and the web client (apps/web) link in: `studio`, `stage` (the window's views), `rig` (Signal's rig views). Ignition's room and the rig views are native until their browser builds land; Studio's engine is the `daw` extension (a process natively, session-engine's web engine in a browser)."
+description = "Studio's compiled-in extensions, listed once: what the desktop app (apps/desktop, studio) and the web client (apps/web) link in: `studio`, `stage` (the window's views), `rig` (Signal's rig views). Ignition's room and the rig views are native until their browser builds land; Studio's engine is the `daw` extension (a process natively, session-engine's web engine in a browser)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

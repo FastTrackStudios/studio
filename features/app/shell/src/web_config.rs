@@ -7,8 +7,8 @@
 //! that is missing or is not JSON (a static server answers an unknown path
 //! with its `index.html`), fall back to the page's own origin: the setup
 //! where Task is served behind the same host, as task-web dials its own
-//! origin (task's `deploy/README.md`, "same origin"). One image serves
-//! both setups.
+//! origin (task's deploy notes, "same origin"). One build serves both
+//! setups.
 //!
 //! [`resolve`] is the whole rule, pure. The fetch (feature `web-config`,
 //! wasm only) is a thin shell around it: `load_then(launch)` in the app's

@@ -1630,7 +1630,7 @@ dependencies = [
  "architect-workspace-hack",
  "dioxus",
  "lucide-dioxus",
- "pulldown-cmark 0.13.6",
+ "pulldown-cmark",
  "serde_json",
  "serde_yaml",
  "tracing",
@@ -2024,7 +2024,7 @@ dependencies = [
  "dioxus",
  "dioxus-ssr",
  "facet-json",
- "pulldown-cmark 0.13.6",
+ "pulldown-cmark",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -4860,16 +4860,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "console_error_panic_hook"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
-dependencies = [
- "cfg-if",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "const-fnv1a-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5908,6 +5898,7 @@ dependencies = [
  "session-engine",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
@@ -7056,6 +7047,7 @@ dependencies = [
 [[package]]
 name = "dioxus-test"
 version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/vendor?rev=c892de83e77b3d51e9c3dd17d9f9e8471d01e112#c892de83e77b3d51e9c3dd17d9f9e8471d01e112"
 dependencies = [
  "anyrender",
  "anyrender_vello_cpu",
@@ -7063,11 +7055,9 @@ dependencies = [
  "blitz-html",
  "blitz-paint",
  "blitz-traits",
- "dioxus",
  "dioxus-html",
  "dioxus-native-dom",
  "dioxus-vdom",
- "indoc",
  "keyboard-types 0.8.3",
  "peniko 0.6.1",
  "png 0.17.16",
@@ -7384,7 +7374,6 @@ dependencies = [
  "architect",
  "builtin",
  "daw",
- "dioxus",
  "facet",
  "kontrol",
  "midi",
@@ -7394,7 +7383,6 @@ dependencies = [
  "signal-rig-perform-store",
  "signal-rigs-proto",
  "signal-space",
- "signal-widgets",
  "tracing",
  "vox",
 ]
@@ -7722,24 +7710,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "ekit"
-version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
-dependencies = [
- "architect",
- "daw",
- "facet",
- "midi",
- "sampler",
- "signal-rig-host",
- "signal-rig-perform-store",
- "signal-rigs-proto",
- "signal-space",
- "tracing",
- "vox",
 ]
 
 [[package]]
@@ -8979,17 +8949,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fts-themer-ui"
-version = "26.10.3"
-dependencies = [
- "daw-proto",
- "daw-ui",
- "dioxus",
- "serde",
- "themer",
-]
-
-[[package]]
 name = "fts-version"
 version = "26.10.3"
 
@@ -9808,7 +9767,6 @@ dependencies = [
  "anyrender",
  "anyrender_vello_hybrid",
  "architect",
- "architect-mcp",
  "audio",
  "base64 0.22.1",
  "blake3",
@@ -11131,15 +11089,6 @@ dependencies = [
  "portable-atomic",
  "unicode-width 0.2.2",
  "web-time",
-]
-
-[[package]]
-name = "indoc"
-version = "2.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a37b2691796cffeb8a8cd305ac66e65841559f147f4e63231d0eafa4db5384d1"
-dependencies = [
- "rustversion",
 ]
 
 [[package]]
@@ -17485,33 +17434,15 @@ dependencies = [
 
 [[package]]
 name = "pulldown-cmark"
-version = "0.10.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76979bea66e7875e7509c4ec5300112b316af87fa7a252ca91c448b32dfe3993"
-dependencies = [
- "bitflags 2.13.2",
- "memchr",
- "pulldown-cmark-escape 0.10.1",
- "unicase",
-]
-
-[[package]]
-name = "pulldown-cmark"
 version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3db2be46835f013dd3f4fa7f5f7402c537787b54ebb6fe2b94bbdd7e2669bb7b"
 dependencies = [
  "bitflags 2.13.2",
  "memchr",
- "pulldown-cmark-escape 0.11.0",
+ "pulldown-cmark-escape",
  "unicase",
 ]
-
-[[package]]
-name = "pulldown-cmark-escape"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd348ff538bc9caeda7ee8cad2d1d48236a1f443c1fa3913c6a02fe0043b1dd3"
 
 [[package]]
 name = "pulldown-cmark-escape"
@@ -19861,24 +19792,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "session-daw-web"
-version = "26.10.3"
-dependencies = [
- "app-shell",
- "console_error_panic_hook",
- "dioxus",
- "getrandom 0.3.4",
- "js-sys",
- "session 0.1.0",
- "session-engine",
- "session-ui",
- "tracing",
- "tracing-subscriber",
- "tracing-wasm",
- "web-sys",
-]
-
-[[package]]
 name = "session-desktop"
 version = "26.10.3"
 dependencies = [
@@ -20175,28 +20088,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "session-web"
-version = "26.10.3"
-dependencies = [
- "architect",
- "architect-ui",
- "console_error_panic_hook",
- "dioxus",
- "dioxus-web",
- "eyre",
- "getrandom 0.3.4",
- "session 0.1.0",
- "ssg",
- "ssg-build",
- "ssg-ui",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "tracing-wasm",
- "vox",
-]
-
-[[package]]
 name = "setlists"
 version = "26.10.3"
 dependencies = [
@@ -20358,100 +20249,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "signal"
-version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
-dependencies = [
- "signal-controller",
- "signal-daw-bridge",
- "signal-import",
- "signal-live",
- "signal-nam",
- "signal-proto",
- "signal-storage",
- "tokio",
- "tracing",
- "utils",
-]
-
-[[package]]
 name = "signal-browser"
 version = "26.10.3"
 source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
- "rayon",
- "sampler",
- "signal",
  "signal-grid",
  "signal-proto",
  "uuid",
- "walkdir",
-]
-
-[[package]]
-name = "signal-content-client"
-version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
-dependencies = [
- "futures-channel",
- "futures-util",
- "reqwest 0.12.28",
- "sha2 0.10.9",
- "signal-content-proto",
- "tokio",
- "tracing",
- "vox",
-]
-
-[[package]]
-name = "signal-content-library"
-version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
-dependencies = [
- "architect",
- "sha2 0.10.9",
- "signal-content-proto",
- "tokio",
- "tracing",
- "vox",
- "walkdir",
-]
-
-[[package]]
-name = "signal-content-proto"
-version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
-dependencies = [
- "architect",
- "facet",
- "thiserror 2.0.20",
- "vox",
- "vox-types",
-]
-
-[[package]]
-name = "signal-controller"
-version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
-dependencies = [
- "signal-live",
- "signal-proto",
- "signal-storage",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
- "vox",
-]
-
-[[package]]
-name = "signal-daw-bridge"
-version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
-dependencies = [
- "daw",
- "serde",
- "signal-import",
- "signal-proto",
 ]
 
 [[package]]
@@ -20526,44 +20330,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "signal-import"
-version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
-dependencies = [
- "base64 0.22.1",
- "dsp",
- "eyre",
- "serde",
- "serde_json",
- "signal-controller",
- "signal-proto",
- "thiserror 2.0.20",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "signal-live"
-version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
-dependencies = [
- "base64 0.22.1",
- "daw",
- "eyre",
- "futures",
- "serde",
- "serde_json",
- "signal-macromod",
- "signal-nam",
- "signal-proto",
- "signal-storage",
- "tokio",
- "tracing",
- "uuid",
- "vox",
-]
-
-[[package]]
 name = "signal-macromod"
 version = "26.10.3"
 source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
@@ -20572,23 +20338,6 @@ dependencies = [
  "facet",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "signal-mobile"
-version = "0.1.0"
-dependencies = [
- "android-activity",
- "architect",
- "blitz-shell",
- "dioxus",
- "dioxus-native",
- "guitar",
- "signal-rigs-proto",
- "tracing",
- "tracing-subscriber",
- "vox-core",
- "vox-websocket",
 ]
 
 [[package]]
@@ -20723,41 +20472,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "signal-storage"
-version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
-dependencies = [
- "async-trait",
- "base64 0.22.1",
- "facet",
- "facet-styx",
- "sea-orm",
- "serde",
- "serde_json",
- "signal-proto",
- "thiserror 2.0.20",
- "utils",
- "uuid",
-]
-
-[[package]]
-name = "signal-synth-rig"
-version = "26.10.3"
-source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
-dependencies = [
- "architect",
- "audio",
- "keys",
- "midi",
- "sampler",
- "signal-browser",
- "signal-rig-host",
- "signal-rigs-proto",
- "synth",
- "tracing",
-]
-
-[[package]]
 name = "signal-tone3000"
 version = "26.10.3"
 source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
@@ -20780,26 +20494,6 @@ dependencies = [
  "tracing",
  "url",
  "vox",
-]
-
-[[package]]
-name = "signal-web"
-version = "26.10.3"
-dependencies = [
- "architect",
- "console_error_panic_hook",
- "dioxus",
- "dioxus-router",
- "guitar",
- "keys",
- "signal-proto",
- "ssg",
- "ssg-build",
- "ssg-ui",
- "tracing",
- "tracing-subscriber",
- "tracing-wasm",
- "web-sys",
 ]
 
 [[package]]
@@ -21503,42 +21197,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ssg"
-version = "26.10.1"
-source = "git+https://github.com/FastTrackStudios/task?branch=main#7b90e40fc221e331fafffb2bd375981fefdf9f72"
-dependencies = [
- "ssg-ui",
- "ssg-vault",
-]
-
-[[package]]
-name = "ssg-build"
-version = "26.10.1"
-source = "git+https://github.com/FastTrackStudios/task?branch=main#7b90e40fc221e331fafffb2bd375981fefdf9f72"
-dependencies = [
- "ssg-vault",
-]
-
-[[package]]
-name = "ssg-ui"
-version = "26.10.1"
-source = "git+https://github.com/FastTrackStudios/task?branch=main#7b90e40fc221e331fafffb2bd375981fefdf9f72"
-dependencies = [
- "dioxus",
- "ssg-vault",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "ssg-vault"
-version = "26.10.1"
-source = "git+https://github.com/FastTrackStudios/task?branch=main#7b90e40fc221e331fafffb2bd375981fefdf9f72"
-dependencies = [
- "pulldown-cmark 0.10.3",
-]
-
-[[package]]
 name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -21781,28 +21439,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "studio-architect"
-version = "26.10.3"
-dependencies = [
- "architect-desktop",
- "architect-sites",
- "architect-spaces",
- "base64 0.22.1",
- "fts-version",
- "serde",
- "serde_json",
- "session-engine",
- "setlists",
- "sha2 0.10.9",
- "studio-arrangement",
- "studio-extensions",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "studio-arrangement"
 version = "26.10.3"
 dependencies = [
@@ -21843,84 +21479,22 @@ dependencies = [
 name = "studio-desktop"
 version = "26.10.3"
 dependencies = [
- "app-shell",
- "architect",
- "architect-telemetry",
- "axum",
+ "architect-desktop",
+ "architect-sites",
+ "architect-spaces",
  "base64 0.22.1",
- "blitz-shell",
- "block2 0.6.2",
- "builtin",
- "chrono",
- "clap",
- "cpal",
- "crdt",
- "daw-proto",
- "dioxus",
- "dioxus-native",
- "dioxus-native-dom",
- "dioxus-test",
- "dock",
- "drums",
- "dsp",
- "ekit",
- "eyre",
- "facet",
- "facet-json",
- "fts-account",
- "fts-audio-ui",
- "fts-sample",
  "fts-version",
- "futures-channel",
- "futures-timer",
- "futures-util",
- "getrandom 0.3.4",
- "guitar",
- "include_dir",
- "js-sys",
- "keys",
- "launcher",
- "libc",
- "library",
- "midi",
- "objc2 0.6.5",
- "objc2-app-kit 0.3.2",
- "objc2-foundation 0.3.2",
- "objc2-ui-kit 0.3.2",
- "reqwest 0.12.28",
- "sampler",
+ "serde",
  "serde_json",
- "session 0.1.0",
- "session-desktop",
- "session-format",
+ "session-engine",
+ "setlists",
  "sha2 0.10.9",
- "signal-content-client",
- "signal-content-library",
- "signal-content-proto",
- "signal-import",
- "signal-nam",
- "signal-plugin-host",
- "signal-rig-host",
- "signal-rig-perform-ui",
- "signal-rigs-proto",
- "signal-space",
- "signal-synth-rig",
- "signal-tone3000",
- "synth",
+ "studio-arrangement",
+ "studio-extensions",
  "tempfile",
+ "thiserror 2.0.20",
  "tokio",
- "tower-http",
  "tracing",
- "tracing-subscriber",
- "url",
- "utils",
- "uuid",
- "vox",
- "vox-core",
- "vox-websocket",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]
@@ -22795,15 +22369,12 @@ version = "26.10.3"
 source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
 dependencies = [
  "architect",
- "dioxus",
  "facet",
  "facet-styx",
  "flate2",
- "fts-audio-ui",
  "midi",
  "sampler",
  "signal-proto",
- "signal-widgets",
  "tracing",
  "vox",
 ]
