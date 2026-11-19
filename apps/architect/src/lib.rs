@@ -70,6 +70,10 @@ pub fn stage() -> Bundle {
 
 pub mod island;
 
+/// The island's manifest (`apps/architect/island/extension.toml`): its
+/// views, its claims and a setlist's favourites.
+pub const ISLAND_MANIFEST: &str = include_str!("../island/extension.toml");
+
 /// Where Studio's island ships: `studio-island/` beside the binary (the
 /// release puts `just island`'s folder there: scripts/studio-architect.sh).
 pub const ISLAND_FOLDER: &str = "studio-island";
@@ -128,7 +132,12 @@ fn base() -> Distribution {
         .version(env!("CARGO_PKG_VERSION"))
         .icon(Icon::svg(ICON).tray("music.note.list", "audio-x-generic"))
         .bundle(studio())
-        .block(setlists::share::blocks());
+        .block(setlists::share::blocks())
+        // The island's favourites: a setlist's bottom tabs (Setlist,
+        // Charts, Lyrics, Arrangement) and its round Play button are
+        // declared beside the views they open, in the island's manifest,
+        // which is not a compiled-in extension's.
+        .favourites_of(ISLAND_MANIFEST);
     #[cfg(feature = "gui")]
     let dist = dist.bundle(stage());
     dist

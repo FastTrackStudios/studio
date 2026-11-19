@@ -1,11 +1,16 @@
 // The local stack in a real browser (`just dev-smoke`, scripts/local-stack-smoke.sh):
 // a headless Firefox over WebDriver BiDi (FIREFOX=… names one, else
 // `firefox` on the PATH; Chromium hangs on http loads on THEBATTLESHIP)
-// opens the share link's setlist page, then its first song with a chart,
-// plays it and sees the playhead move and the chart's bar follow.
+// opens the share link as the web app's guest (architect#646), sees
+// Studio's playlist drawn on the setlist note with the set's songs, plays
+// a song from it and sees the recording load, the playhead move and the
+// row marked; then finds the link's own tabs (and no member control),
+// presses Charts and sees the playing song's chart engraved with the bar
+// being played marked, and Arrangement and sees its playhead.
 //
 // SHARE_URL   the setlist page (scripts/local-stack.sh url)
-// SCREENSHOTS a folder: the setlist and the playing song at 390 px wide
+// SONGS       the titles the playlist must list, one a line (optional)
+// SCREENSHOTS a folder: the setlist, the song playing and its chart at 390 px wide
 //
 // The browser can never reach this machine's audio graph: it runs in a
 // mount namespace of its own (`unshare -r -m`) where the runtime dir and
@@ -82,6 +87,19 @@ async function open() {
   await send('browsingContext.setViewport', { context, viewport: { width: 390, height: 844 } });
   const tab = {
     go: (url) => send('browsingContext.navigate', { context, url, wait: 'complete' }),
+    // The view's frame (the app's sandboxed web view document), once it is there.
+    async frame() {
+      const tree = await send('browsingContext.getTree', { root: context });
+      return tree.contexts[0]?.children?.find((c) => c.url.includes('/_ext/webview.'))?.context ?? null;
+    },
+    async evalIn(frame, expression) {
+      const r = await send('script.evaluate', { expression, target: { context: frame }, awaitPromise: true });
+      if (r.type === 'exception') throw new Error(r.exceptionDetails.text);
+      return r.result.value;
+    },
+    // A real pointer press at a point of the page.
+    press: (x, y) => send('input.performActions', { context, actions: [{ type: 'pointer', id: 'mouse', parameters: { pointerType: 'mouse' }, actions: [
+      { type: 'pointerMove', x: Math.round(x), y: Math.round(y) }, { type: 'pointerDown', button: 0 }, { type: 'pause', duration: 60 }, { type: 'pointerUp', button: 0 }] }] }),
     eval: async (expression) => {
       const r = await send('script.evaluate', { expression, target: { context }, awaitPromise: true });
       if (r.type === 'exception') throw new Error(r.exceptionDetails.text);
@@ -112,30 +130,107 @@ async function open() {
 
 const { tab, close } = await open();
 let failed = false;
+// Where an element of the frame is on the page: the frame's box plus the element's own.
+const inFrame = async (frame, pick) => {
+  const at = await tab.eval(`(() => { const r = document.querySelector('iframe[src*="/_ext/webview."]').getBoundingClientRect(); return JSON.stringify([r.x, r.y]); })()`);
+  const el = await tab.evalIn(frame, `(() => { const e = ${pick}; if (!e) return ''; e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect(); return JSON.stringify([r.x + r.width / 2, r.y + r.height / 2]); })()`);
+  if (!el) return null;
+  const [fx, fy] = JSON.parse(at);
+  const [x, y] = JSON.parse(el);
+  return [fx + x, fy + y];
+};
+const frameWith = async (testid, what, ms = 60000) => {
+  const started = Date.now();
+  for (;;) {
+    const f = await tab.frame();
+    if (f && await tab.evalIn(f, `!!document.querySelector('[data-testid="${testid}"]')`).catch(() => false)) return f;
+    if (Date.now() - started > ms) throw new Error(`waited ${ms} ms for ${what}`);
+    await sleep(200);
+  }
+};
+// What the app's player holds: its marks on the app's audio element (`data-media`
+// the recording, `data-clock` whether the app decodes it or the browser
+// plays it, `data-time` where it is).
+const audio = `(() => { const a = document.querySelector('audio'); return a && a.dataset.media ? JSON.stringify({ src: decodeURIComponent(a.dataset.media), clock: a.dataset.clock, t: Number(a.dataset.time || 0) }) : ''; })()`;
 try {
   await tab.go(share);
-  const rows = await tab.until(`document.querySelectorAll('[data-track]').length`, 'the setlist\'s playable rows');
-  log(`the setlist page has ${rows} playable rows (songs with a recording)`);
-  await tab.shot('setlist-390');
-  // Each row's song page; the first whose chart follows the playhead plays.
-  const links = await tab.eval(`JSON.stringify([...document.querySelectorAll('[data-track][data-page]')].map(e => new URL(e.dataset.page, location.href).href))`);
-  let song = null;
-  for (const href of [...new Set(JSON.parse(links))]) {
-    if (href === share) continue;
-    await tab.go(href);
-    if (await tab.eval(`!!document.querySelector('[data-follow-playhead] [data-at]')`)) { song = href; break; }
+  // The app, as the link's guest, with Studio's playlist on the setlist note.
+  const set = await frameWith('studio-setlist', 'Studio\'s playlist on the setlist note (the node lists the island\'s claims: /_ext/islands.json)');
+  const rows = JSON.parse(await tab.evalIn(set, `JSON.stringify([...document.querySelectorAll('.sl-row')].map(r => ({ label: r.getAttribute('aria-label') || '', off: r.getAttribute('aria-disabled') === 'true' })))`));
+  if (!rows.length) throw new Error('the playlist lists no songs');
+  for (const title of (process.env.SONGS || '').split('\n').filter(Boolean)) {
+    if (!rows.some((r) => r.label.includes(title))) throw new Error(`the playlist does not list ${title}`);
   }
-  if (!song) throw new Error('no song page with a chart that follows the playhead');
-  log(`playing ${song}`);
-  const before = await tab.eval('architect.playhead.time');
-  await tab.eval('architect.playhead.play()');
-  await tab.until('architect.playhead.playing', 'the player to start', 20000);
-  const t = await tab.until(`architect.playhead.time > ${before} + 1.5 && architect.playhead.time`, 'the playhead to move 1.5 s', 20000);
-  log(`the playhead moved: ${before.toFixed(2)} s -> ${Number(t).toFixed(2)} s`);
-  const bar = await tab.until(`document.querySelector('[data-follow-playhead] [aria-current=time]')?.getAttribute('data-at')`, 'a bar of the chart marked at the playhead', 10000);
-  log(`the chart follows: the bar at ${bar} s is current`);
+  const first = rows.findIndex((r) => !r.off);
+  if (first < 0) throw new Error(`none of the playlist's ${rows.length} songs can play (no recording the link serves)`);
+  log(`the playlist lists ${rows.length} songs, ${rows.filter((r) => !r.off).length} with a recording`);
+  await tab.shot('setlist-390');
+  const at = await inFrame(set, `document.querySelectorAll('.sl-row')[${first}]`);
+  await tab.press(...at);
+  const loaded = JSON.parse(await tab.until(audio, 'the recording in the app\'s player', 30000));
+  log(`playing ${loaded.src.split('/').pop()}`);
+  // It moves: decoded by the app (Ogg, on every browser), or, where no
+  // audio device lets a context start (this check's sandbox), on the
+  // browser's own player.
+  const moved = JSON.parse(await tab.until(`(() => { const s = ${audio}; return s && JSON.parse(s).t > 1 ? s : ''; })()`, 'the playhead to move a second', 30000));
+  log(`the playhead moved to ${moved.t.toFixed(1)} s, played by ${moved.clock === 'decoded' ? 'the app\'s decoder' : 'the browser\'s player'}`);
+  await tab.until(`navigator.mediaSession && navigator.mediaSession.playbackState === 'playing'`, 'the player to say it is playing', 20000);
+  const title = await tab.eval(`navigator.mediaSession.metadata ? navigator.mediaSession.metadata.title : ''`);
+  // The row is marked, and its time moves (the deck's clock, heard or not).
+  const started = Date.now();
+  for (;;) {
+    if (await tab.evalIn(set, `!!document.querySelector('.sl-row[data-current][data-playing]')`)) break;
+    if (Date.now() - started > 15000) throw new Error('the playing song\'s row is not marked');
+    await sleep(200);
+  }
+  log(`the Now Playing bar and the lock screen's title say ${title}; its row is marked`);
   await tab.shot('song-playing-390');
-  await tab.eval('architect.playhead.pause()');
+  // The link's own tabs, as its extension declares them, and no control a
+  // guest cannot use.
+  const controls = JSON.parse(await tab.eval(`JSON.stringify([...document.querySelectorAll('button')].map(b => (b.getAttribute('aria-label') || b.title || b.innerText.trim())))`));
+  for (const want of ['Setlist', 'Chart', 'Lyrics', 'More']) {
+    if (!controls.includes(want)) throw new Error(`no ${want} tab at the bottom of the link (${controls.filter((c) => c.length < 20).join(', ')})`);
+  }
+  for (const not of ['New note', 'Vault', 'Files', 'Open…', 'Search']) {
+    if (controls.includes(not)) throw new Error(`a guest is shown a member's control: ${not}`);
+  }
+  log('the link has its Setlist, Chart, Lyrics and More tabs, and no member control');
+  const pressTab = async (name) => {
+    const at = await tab.eval(`(() => { const b = [...document.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') || b.title || b.innerText.trim()) === ${JSON.stringify(name)}); const r = b.getBoundingClientRect(); return JSON.stringify([r.x + r.width / 2, r.y + r.height / 2]); })()`);
+    await tab.press(...JSON.parse(at));
+  };
+  // Charts: the chart of the song playing, engraved, and following.
+  await pressTab('Chart');
+  const song = await frameWith('studio-song', `${title}'s song view`);
+  const chart = await (async () => {
+    const t0 = Date.now();
+    for (;;) {
+      const v = await tab.evalIn(song, `(() => { const s = document.querySelector('[data-testid="studio-song"]'); const bars = document.querySelectorAll('.sv-bar').length; const cur = document.querySelector('[data-testid="chart-current-bar"]'); const none = [...document.querySelectorAll('.sv-empty')].map(e => e.textContent).join(' '); return JSON.stringify({ following: s.dataset.following, bars, bar: cur ? cur.dataset.bar : '', none }); })()`);
+      const c = JSON.parse(v);
+      if (c.bar || /No chart/.test(c.none) || Date.now() - t0 > 60000) return c;
+      await sleep(300);
+    }
+  })();
+  if (/No chart/.test(chart.none)) {
+    log(`${title} has no chart: its song view drew without one`);
+  } else {
+    if (!chart.bars) throw new Error(`the chart did not engrave (${chart.none || 'no bars'})`);
+    if (!chart.bar) throw new Error(`the chart has ${chart.bars} bars and none is marked at the playhead (following: ${chart.following})`);
+    log(`the chart is engraved (${chart.bars} bars) and follows: bar ${chart.bar} is the one being played`);
+  }
+  await tab.eval(`(() => { [...document.querySelectorAll('*')].forEach(e => { if (e.scrollTop > 0) e.scrollTop = 0; }); return 1; })()`);
+  await tab.shot('song-chart-390');
+  // Arrangement: the song playing on its timeline, the playhead in it.
+  await pressTab('More');
+  const entries = JSON.parse(await tab.until(`(() => { const e = [...document.querySelectorAll('[data-testid="tab-menu-item"]')].map(b => b.innerText.trim()); return e.length ? JSON.stringify(e) : ''; })()`, 'the More menu above its tab', 5000));
+  if (entries.join(', ') !== 'Arrangement, Mixer, Lighting Visualizer') throw new Error(`the More menu holds ${entries.join(', ')}`);
+  const entryAt = await tab.eval(`(() => { const r = document.querySelector('[data-testid="tab-menu-item"]').getBoundingClientRect(); return JSON.stringify([r.x + r.width / 2, r.y + r.height / 2]); })()`);
+  await tab.press(...JSON.parse(entryAt));
+  const arr = await frameWith('studio-arrangement', 'the arrangement view');
+  const head = await tab.evalIn(arr, `(() => { const p = document.querySelector('[data-testid="arrangement-playhead"]'); const s = document.querySelectorAll('[data-testid="arrangement-section"]').length; return p ? JSON.stringify({ left: parseFloat(p.style.left), sections: s }) : ''; })()`);
+  if (!head) throw new Error('the arrangement draws no playhead for the song playing');
+  log(`the arrangement shows the song (${JSON.parse(head).sections} section${JSON.parse(head).sections === 1 ? '' : 's'}) with its playhead ${JSON.parse(head).left} points in`);
+  await tab.shot('song-arrangement-390');
 } catch (e) {
   failed = true;
   console.error(`smoke: FAILED: ${e.message}`);

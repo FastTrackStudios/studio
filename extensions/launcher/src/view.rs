@@ -275,6 +275,17 @@ pub fn LauncherView() -> Element {
                             onpick: move |()| picked.set(Some(Some(name.clone()))),
                         }
                     }
+                    // The set's share links: find one, send it again, or
+                    // make one for other people (the app's Share sheet).
+                    div { style: "flex:1 1 0;" }
+                    Pill {
+                        label: "Share".to_owned(),
+                        on: false,
+                        onpick: {
+                            let set = list.title.clone();
+                            move |()| press(set.clone(), "STUDIO_LAUNCHER_SHARE", json!({ "setlist": set }))
+                        },
+                    }
                 }
                 MediaList {
                     source: "app:studio-launcher".to_owned(),

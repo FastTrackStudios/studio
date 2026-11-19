@@ -37,7 +37,7 @@ use crate::queue::{self, Item, Now, Setlist};
 )]
 pub const SHEET: &str = r#"
 .sl { font-family: var(--font, system-ui, -apple-system, sans-serif); color: var(--foreground, CanvasText);
-      padding: 4px 0 12px; box-sizing: border-box; width: 100%; }
+      padding: 4px 10px 12px; box-sizing: border-box; width: 100%; }
 .sl * { box-sizing: border-box; }
 .sl-head { display: none; }
 .sl ol { list-style: none; margin: 0; padding: 0; }
@@ -48,6 +48,11 @@ pub const SHEET: &str = r#"
           font: inherit; text-align: left; position: relative; cursor: pointer; border-radius: 8px; }
 .sl-row:hover { background: rgba(128, 128, 128, .12);
                 background: color-mix(in srgb, var(--foreground, CanvasText) 6%, transparent); }
+.sl-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.sl-open { width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent;
+  color: var(--muted-foreground, GrayText); border-radius: 10px; cursor: pointer; }
+.sl-open:hover { background: rgba(128, 128, 128, .12); color: var(--foreground, CanvasText); }
+.sl-open:focus-visible { outline: 2px solid var(--accent, Highlight); outline-offset: -2px; }
 .sl-row:focus-visible { outline: 2px solid var(--accent, Highlight); outline-offset: -2px; }
 .sl-row[aria-disabled="true"] { cursor: default; }
 .sl-row[aria-disabled="true"]:hover { background: transparent; }
@@ -161,7 +166,16 @@ pub fn SetlistView(
     };
     rsx! {
         document::Style { {SHEET} }
-        Rows { setlist, now: now(), playable: playable(), art: art(), on_press }
+        Rows { setlist, now: now(), playable: playable(), art: art(), on_press,
+            // A row's song, opened: its chart and lyrics. The app opens it
+            // where the viewer may (a note the link lists) and refuses
+            // otherwise; the view only asks.
+            on_open: move |item: Item| {
+                if let Some(note) = queue::note_of(&item.id) {
+                    ask.call(("NOTE_OPEN".to_owned(), serde_json::json!({ "path": note })));
+                }
+            },
+        }
     }
 }
 
@@ -175,6 +189,9 @@ pub fn Rows(
     #[props(default)]
     art: BTreeMap<String, String>,
     on_press: EventHandler<Item>,
+    /// A row's "open" pressed: to its song's note.
+    #[props(default)]
+    on_open: EventHandler<Item>,
 ) -> Element {
     if setlist.items().next().is_none() {
         // A share link's guest is handed no body (architect#648): the
@@ -208,7 +225,7 @@ pub fn Rows(
                         ol { "aria-labelledby": "sl-set-{n}",
                             for item in section.items.iter() {
                                 li { key: "{item.id}",
-                                    Row { item: item.clone(), now: now.clone(), playable: playable.contains(&item.id), cover: item.art.as_ref().and_then(|a| art.get(a)).cloned(), on_press }
+                                    Row { item: item.clone(), now: now.clone(), playable: playable.contains(&item.id), cover: item.art.as_ref().and_then(|a| art.get(a)).cloned(), on_press, on_open }
                                 }
                             }
                         }
@@ -217,7 +234,7 @@ pub fn Rows(
                     ol { key: "s{n}", "aria-label": "{title}",
                         for item in section.items.iter() {
                             li { key: "{item.id}",
-                                Row { item: item.clone(), now: now.clone(), playable: playable.contains(&item.id), cover: item.art.as_ref().and_then(|a| art.get(a)).cloned(), on_press }
+                                Row { item: item.clone(), now: now.clone(), playable: playable.contains(&item.id), cover: item.art.as_ref().and_then(|a| art.get(a)).cloned(), on_press, on_open }
                             }
                         }
                     }
@@ -234,6 +251,7 @@ fn Row(
     playable: bool,
     cover: Option<String>,
     on_press: EventHandler<Item>,
+    on_open: EventHandler<Item>,
 ) -> Element {
     let current = now.as_ref().filter(|n| n.id == item.id);
     let playing = current.is_some_and(|n| n.playing);
@@ -252,7 +270,10 @@ fn Row(
         _ => "xs",
     };
     let pressed = item.clone();
+    let opened = item.clone();
+    let has_note = queue::note_of(&item.id).is_some();
     rsx! {
+      div { class: "sl-item",
         button {
             r#type: "button",
             class: "sl-row",
@@ -305,6 +326,22 @@ fn Row(
                 span { class: "sl-bar", "aria-hidden": "true", span { style: "width: {p:.2}%;" } }
             }
         }
+        // To the song itself: its chart and lyrics. A press of its own,
+        // beside the row (a row plays).
+        if has_note {
+            button {
+                r#type: "button",
+                class: "sl-open",
+                "data-testid": "row-open",
+                "aria-label": "Open {item.title}: its chart and lyrics",
+                onclick: move |_| on_open.call(opened.clone()),
+                svg { view_box: "0 0 24 24", width: "20", height: "20", fill: "none", stroke: "currentColor",
+                    stroke_width: "2", stroke_linecap: "round", stroke_linejoin: "round", "aria-hidden": "true",
+                    path { d: "M9 6l6 6-6 6" }
+                }
+            }
+        }
+      }
     }
 }
 
