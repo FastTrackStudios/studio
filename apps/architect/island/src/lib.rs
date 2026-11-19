@@ -50,6 +50,9 @@ mod chart;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod lyrics;
 
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+mod arrangement;
+
 #[cfg(any(test, all(target_arch = "wasm32", target_os = "unknown")))]
 mod setlist;
 
