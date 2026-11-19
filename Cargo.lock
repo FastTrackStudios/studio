@@ -7624,7 +7624,7 @@ dependencies = [
 [[package]]
 name = "editor-keyflow"
 version = "0.5.3"
-source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.3#b71833eddacf8763a3d5d1f95ad999235f6ebbec"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=2b03d43566b9633ef711020a18f4c720aaee490e#2b03d43566b9633ef711020a18f4c720aaee490e"
 dependencies = [
  "editor-state",
  "keyflow-lang",
@@ -7770,7 +7770,7 @@ checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 [[package]]
 name = "engraver"
 version = "0.5.3"
-source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.3#b71833eddacf8763a3d5d1f95ad999235f6ebbec"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=2b03d43566b9633ef711020a18f4c720aaee490e#2b03d43566b9633ef711020a18f4c720aaee490e"
 dependencies = [
  "anyrender",
  "bitflags 2.13.2",
@@ -11911,7 +11911,7 @@ dependencies = [
 [[package]]
 name = "keyflow"
 version = "0.5.3"
-source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.3#b71833eddacf8763a3d5d1f95ad999235f6ebbec"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=2b03d43566b9633ef711020a18f4c720aaee490e#2b03d43566b9633ef711020a18f4c720aaee490e"
 dependencies = [
  "color-eyre",
  "colored",
@@ -11930,12 +11930,12 @@ dependencies = [
 [[package]]
 name = "keyflow-annotate"
 version = "0.5.3"
-source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.3#b71833eddacf8763a3d5d1f95ad999235f6ebbec"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=2b03d43566b9633ef711020a18f4c720aaee490e#2b03d43566b9633ef711020a18f4c720aaee490e"
 
 [[package]]
 name = "keyflow-daw-analysis"
 version = "0.5.3"
-source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.3#b71833eddacf8763a3d5d1f95ad999235f6ebbec"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=2b03d43566b9633ef711020a18f4c720aaee490e#2b03d43566b9633ef711020a18f4c720aaee490e"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.4)",
  "daw",
@@ -11949,7 +11949,7 @@ dependencies = [
 [[package]]
 name = "keyflow-lang"
 version = "0.5.3"
-source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.3#b71833eddacf8763a3d5d1f95ad999235f6ebbec"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=2b03d43566b9633ef711020a18f4c720aaee490e#2b03d43566b9633ef711020a18f4c720aaee490e"
 dependencies = [
  "facet",
  "facet-json",
@@ -11967,7 +11967,7 @@ dependencies = [
 [[package]]
 name = "keyflow-proto"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.3#b71833eddacf8763a3d5d1f95ad999235f6ebbec"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=2b03d43566b9633ef711020a18f4c720aaee490e#2b03d43566b9633ef711020a18f4c720aaee490e"
 dependencies = [
  "architect 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.12.4)",
  "color-palette 0.1.0 (git+https://github.com/FastTrackStudios/music-convention?tag=v0.1.0)",
