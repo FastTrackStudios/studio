@@ -121,6 +121,14 @@ the pickup and count-in.
   `{changes: [{bar: 17, meter: "2/4"}, {bar: 18, meter: "4/4"}]}` the bars
   where it changes (song bars). Compound meters are tracked in their beat:
   give `bpm` as the dotted quarter's for 6/8 (two beats a bar).
+- Meter changes are not found by themselves: take them from the chart.
+  This Christmas (Donny Hathaway) alternates 4/4 and 3/4 in every hook:
+  `changes` for bars 2, 4, 24, 44, 64, 84, 86, 88 (3/4, each followed by
+  4/4 again) puts the kick on 64 of the chart's 90 downbeats, against 46
+  read as plain 4/4. That count (a kick within 45 ms of the bar line) is
+  the check that a layout fits a recording.
+- A counted-in recording (This Christmas: two clicks) fools the bar-1
+  guess: the best candidate was the first click, bar 1 the third beat.
 - A tempo point's bpm is always in quarter notes, whatever the meter, and a
   point carries the time signature where it is set or changes.
 - A score's odd bar may not be on the record (Rockin' Around the Christmas
