@@ -11,15 +11,15 @@ is built yet.
 
 ## What exists
 
-- **The view, on the web.** `apps/session/ui/src/web_host.rs`: the panels in
+- **The view, on the web.** `features/engine/ui/src/web_host.rs`: the panels in
   dioxus-web, each widget (`crate::widget::ArrangementWidget`) in a
   `<canvas>` drawn with vello_hybrid's WebGL2 renderer (iOS Safari 15+ has
-  WebGL2). The demo bundle is `apps/session/daw-web` (about 7 MB of wasm).
-- **A silent source.** `apps/session/engine/src/web_engine.rs`
+  WebGL2). The demo bundle is the in-browser DAW (session-daw-web, removed) (about 7 MB of wasm).
+- **A silent source.** `features/engine/engine/src/web_engine.rs`
   `WebSource::Bundled { name, rpp_url, chart_url }`: the song's `.RPP` and
   `.kf` read into memory (`Memory`), opened with `Media::Deferred`: no
   proxies, no stems, no streams.
-- **Locked.** `apps/session/ui/src/options.rs` `LOCKING`: drags scroll and
+- **Locked.** `features/engine/ui/src/options.rs` `LOCKING`: drags scroll and
   move nothing (`arrange_edit.rs`, `widget.rs`, `mixer_panel.rs`), mirrored
   from the shell's lock (`shell.rs`) and toggled by the toolbar's Lock item
   (`toolbar.rs`).

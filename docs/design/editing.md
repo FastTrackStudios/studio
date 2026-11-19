@@ -8,7 +8,7 @@ is built against: its drums must stay editable after every step.
 ## 0. The shape of the answer
 
 Session edits drums well, but the engine is spread across files in
-`apps/session/daw/src/`:
+`features/engine/ui/src/`:
 
 - the quantize engine: about 3.3k lines of `actions.rs`;
 - `drum_level.rs`, `drum_edit.rs`, `groove.rs`, `written.rs`,
@@ -135,7 +135,7 @@ case, with nothing speculative in it.
    builds its scope (selected folded rows, else razor areas, else selected
    tracks over the time selection) and publishes it every frame
    (`edit_actions::publish`). `EDIT_QUANTIZE`, `EDIT_REVERT`, `EDIT_LEVEL`
-   and the read-only `EDIT_SCOPE` (`apps/session/daw/src/edit_actions.rs`)
+   and the read-only `EDIT_SCOPE` (`features/engine/ui/src/edit_actions.rs`)
    take the call's `tracks` / `spans` / `from`/`to` / `sections`, or the
    published selection, then pick the profile and run the drum engines
    (`actions::quantize`, `actions::revert`, `drum_level::level`). Q, Alt+Q

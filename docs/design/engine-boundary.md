@@ -15,7 +15,7 @@ Steps 1–3 of the research's migration path (§7) are under way:
 
 | step | state |
 |---|---|
-| 1. The boundary inside one process | done, and cut: `session-engine` (`apps/session/engine`, 100 modules) and `session-ui` (`apps/session/ui`, the window); the compiler holds the line |
+| 1. The boundary inside one process | done, and cut: `session-engine` (`features/engine/engine`, 100 modules) and `session-ui` (`features/engine/ui`, the window); the compiler holds the line |
 | 2. The Action List and set state to the engine | done: the list is the engine's; a window registers its own actions when it attaches; the edit cursor and time selection are engine state; Live's roll-on is the engine's |
 | 3. `studio engine` | runs: the engine, the set, SetAudio, MCP on 47811, the daw facade on a Unix socket (`--listen` adds WS) |
 | 4. The app attaches or spawns | done, and the only way: see Phase C and Phase D |
@@ -127,12 +127,12 @@ the engine directly.
 
 ### Phase B: two crates
 
-`session-daw` is gone: **`session-engine`** (`apps/session/engine`) is
+`session-daw` is gone: **`session-engine`** (`features/engine/engine`) is
 the engine — the set, the Action List, MCP, opening, streaming, collab,
 the project file, every edit of a song, `studio_engine::headless`, the
 engine-only tools (`hits`, `prepare`, `reference`, `session-media`,
 `show-split`, `chain-probe`); native and wasm (`native`, `web`).
-**`session-ui`** (`apps/session/ui`) is the window, a view of it: it
+**`session-ui`** (`features/engine/ui`) is the window, a view of it: it
 re-exports every engine module at its root, so its code (and its
 dependents, `session_ui::open`, `session_ui::studio_engine`) reads as
 before. The engine still depends on a few window-kind crates (dioxus
@@ -171,7 +171,7 @@ signals, daw-ui's project types, vello's colour) for the read-back model
 
 ### What moved (this change)
 
-- **`apps/session/engine/src/studio_engine/` (was `apps/session/daw/src/…`)** — the engine side's module,
+- **`features/engine/engine/src/studio_engine/` (was `features/engine/ui/src/…`)** — the engine side's module,
   the seam the `studio-engine` crate will be cut along:
   - `set.rs`: the set the engine has open (`SetView`: revision, epoch,
     `Setlist`, `Opening`), published on a `tokio::sync::watch`. The one
@@ -196,7 +196,7 @@ signals, daw-ui's project types, vello's colour) for the read-back model
   `SongPick`/`PICKED`/`pick_song_from_outside`/`take_song_pick`,
   `SetlistOpen`/`NEXT_SET`/`open_setlist_from_outside`/`pending_setlist`/
   `take_setlist`, `open_from_outside`. With no window those never ran.
-- **The window is a view of the set** (`apps/session/desktop/src/native`):
+- **The window is a view of the set** (`features/engine/host/src/native`):
   `start::App` shows whatever set the engine has (keyed by its epoch), the
   start screen while there is none or one is opening; the start screen
   opens through `set::open_with` and mirrors `Opening`; the shell mirrors
@@ -206,7 +206,7 @@ signals, daw-ui's project types, vello's colour) for the read-back model
   likewise on native; the web build keeps its own set. Studio's welcome
   screen enters the DAW view while the engine opens a set
   (`projects::pending_open` → `set::is_opening`), whoever asked.
-- **`studio engine`** (`apps/session/desktop/src/cli/engine.rs`): see
+- **`studio engine`** (`features/engine/host/src/cli/engine.rs`): see
   [Running it](#running-it).
 
 ### Running it
@@ -250,8 +250,8 @@ Every place the GUI crates reach the engine directly — not through the vox
 facade: `open::engine()`/`local_engine()`/`with_local_engine`/
 `cue_engine`, `actions::song()`/`Song::current()` (both hand out
 `&'static Standalone`), a `&Standalone` parameter, or a `daw_standalone`
-item. 89 files: 79 in `apps/session/daw/src`, 10 in
-`apps/session/desktop/src`; 63 engine, 12 view, 14 mixed. 49 of the daw
+item. 89 files: 79 in `features/engine/ui/src`, 10 in
+`features/engine/host/src`; 63 engine, 12 view, 14 mixed. 49 of the daw
 files are reached from the Action List.
 
 **engine** — project data for its own sake (tracks, items, takes, hits,
@@ -259,7 +259,7 @@ comp, fx, automation, saving, opening, the set, transport, the device).
 **view** — exists only to paint or lay out; a view that reads the engine
 per frame is a read-back that becomes a replica/subscription (step 5).
 
-### apps/session/daw/src
+### features/engine/ui/src
 
 | file | reaches | what it does with the engine | side | Action List |
 |---|---|---|---|---|
@@ -342,7 +342,7 @@ Borrow only the engine's runtime (no `Standalone`): `task_account.rs`,
 `expression.rs`, `quantize_panel.rs`, `routes.rs`, `take_rating.rs`,
 `widget.rs`, `studio_engine/mcp.rs`.
 
-### apps/session/desktop/src
+### features/engine/host/src
 
 | file | reaches | what it does | side |
 |---|---|---|---|
@@ -430,7 +430,7 @@ In order, each a commit that keeps the build green:
   attached as is (the window shows its set).
 - **Spawn**: `studio engine --socket …` in its own session (`setsid`), so
   closing the window or a GUI crash does not stop the audio. Generalise
-  `apps/studio/desktop/src/engines.rs` (child or systemd unit, kills only
+  the removed rig app's `/src/engines.rs` (child or systemd unit, kills only
   what it started).
 - **The GUI's link**: the window already speaks the facade for Remote mode
   (`open::attach_to_reaper` → `studio::cli::connect`); `studio engine`'s

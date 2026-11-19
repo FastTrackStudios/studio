@@ -1,7 +1,7 @@
 import re, os, json, tomllib
 from collections import defaultdict
 from proposal import ASSIGN, ORDER
-ROOT="/run/media/Development/fts/studio/apps/session/daw"
+ROOT="/run/media/Development/fts/studio/features/engine/ui"
 cargo=tomllib.load(open(ROOT+"/Cargo.toml","rb"))
 names=set(cargo["dependencies"])|set(cargo.get("target",{}).get("cfg(target_arch = \"wasm32\")",{}).get("dependencies",{}))
 alias={n:n.replace("-","_") for n in names}

@@ -105,7 +105,12 @@ do not touch.
 
 ## Studio from the studio repo (canonical checkout on the build-disk)
 
-**Studio is the one iOS app** (`apps/studio/desktop`, package
+> **Removed (2026-11-19).** The app below, the old rig app, was deleted
+> from the studio repo (apps/ now holds only apps/desktop and apps/web).
+> apps/desktop has no iOS target yet; until it does, nothing below builds.
+> Kept for that target's history.
+
+**Studio was the one iOS app** (the old rig app, then package
 `studio-desktop`, bundle `app.fasttrackstudio.studio`, App Store record
 6826004255): Signal and Session behind a front screen (`src/front.rs`).
 Signal's and Session's own records get no new builds. The scene delegate
@@ -119,7 +124,7 @@ The studio tree builds Studio on airlock from
 warm `target/`; never a worktree), not `~/fts`:
 
 ```bash
-cd /Volumes/build-disk/development/studio/apps/studio/desktop
+cd /Volumes/build-disk/development/studio/<the old rig app's folder>
 nix develop ../../.. -c bash -c 'unset DEVELOPER_DIR SDKROOT; export PATH=$HOME/bin-ios:$PATH; \
   dx build --platform ios --device --release --no-default-features \
   --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app,doc-sync'

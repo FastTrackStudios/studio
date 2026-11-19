@@ -25,7 +25,7 @@ times 27 000 items on a sliced kit, inside a 5 ms redraw budget).
 ## When to load
 
 - Adding or changing a `#[architect::rpc]` trait, a proto type, an `Edit`
-  variant, a handle/scope, or anything in `crates/daw/{proto,standalone}`.
+  variant, a handle/scope, or anything in `daw:crates/daw/{proto,standalone}`.
 - Writing code that calls `Items`/`Takes`/`Tracks` more than once for one
   logical thing, or that loops calling the engine per item.
 - Touching the window's read-back path (`studio.rs::patch_items`,
@@ -209,7 +209,7 @@ enum Gesture {                // at most one at a time, by construction
   (`CompError::NothingToComp { from, to }`, `CompError::NoLane { lane }`,
   `#[from] DawError`). `Display` is the user sentence; the variant is what
   code matches.
-- `Result<_, String>` (170 of them in `apps/session/daw/src`) only where the
+- `Result<_, String>` (170 of them in `features/engine/ui/src`) only where the
   value goes straight to a person (an action's status line).
 - Never `Option` to swallow an error (`.ok()?` on a lock or a not-found).
   `DawResult` already exists — use it.
@@ -232,7 +232,7 @@ enum Gesture {                // at most one at a time, by construction
 
 - `crate::open::local_engine()`, `current_song()`, `RESYNC`/`ALL`/`SEEN`,
   `midi::STALE`, `bar_step::STEP`, `cursor::CURRENT`, … (≈160 `static`s in
-  `apps/session/daw/src`) are ambient state. New code takes what it needs as
+  `features/engine/ui/src`) are ambient state. New code takes what it needs as
   parameters; the window owns a `Session { daw, song, cursor, previews }`
   context and passes `&Session` down. See `perfect-functions` principle 1.
 
@@ -304,14 +304,14 @@ Run on every public item and every call site you touch:
 
 | Seen | Where (example) | Instead |
 |---|---|---|
-| `daw.set_x(project.clone(), at.clone(), …)?;` ×5 | `apps/session/daw/src/comp.rs:249-360` (`clear`, `place`, `slip`) | `song.edit_item(&id, \|i\| { … })` |
+| `daw.set_x(project.clone(), at.clone(), …)?;` ×5 | `features/engine/ui/src/comp.rs:249-360` (`clear`, `place`, `slip`) | `song.edit_item(&id, \|i\| { … })` |
 | per-item `get_active_take` inside `get_items` loop | `comp_rank.rs:148-182` (`current`) | one `song.read(\|s\| …)` with `items_in` + `active_take` |
 | `get_item` + `get_active_take` for two fields | `hits.rs:1215-1229` | one borrowed read returning `f64` |
 | `retain` over every lane + `fold` over every item per edit | `studio.rs:491-555` (`patch_items`) | mirror with `ItemId → (TrackId, slot)` index, incremental totals |
 | whole-state deep clone per undo step | `standalone/src/sync/daw.rs:524-543` | `imbl` maps / per-track `Arc` |
 | `"folded:{guid}:{i}"` ids parsed back | `daw-ui/src/studio/folded.rs:211-226` | `RowItem` enum |
-| `Edit::guid() -> &str` over 60 positional variants | `apps/session/daw/src/engine.rs:30-400` | `Edit::Item(ItemId, ItemEdit)` etc. |
-| a dozen gesture `Option`s | `apps/session/daw/src/widget.rs:607-648` | `gesture: Gesture` |
+| `Edit::guid() -> &str` over 60 positional variants | `features/engine/ui/src/engine.rs:30-400` | `Edit::Item(ItemId, ItemEdit)` etc. |
+| a dozen gesture `Option`s | `features/engine/ui/src/widget.rs:607-648` | `gesture: Gesture` |
 | `begin_undo_block` … `end_undo_block` by hand | `comp.rs:107-124` | `undo_step(label, \|\| …)` |
 | `Result<_, String>` in engine-side modules | `comp.rs`, `comp_rank.rs`, … | `thiserror` enum |
 | `static SEEN/RESYNC/STALE` cursors and queues | `studio.rs:412-422`, `midi.rs:65` | a reader-owned `Cursor`, a `Session` context |

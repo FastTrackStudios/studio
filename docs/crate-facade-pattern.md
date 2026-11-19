@@ -112,7 +112,7 @@ WASM-compatible core vs platform-specific implementations), use **Cargo
 features** to keep the base lightweight:
 
 ```toml
-# crates/daw/Cargo.toml
+# daw:crates/daw/Cargo.toml
 [dependencies]
 daw-proto = { path = "../daw-proto" }          # always included
 daw-control = { path = "../daw-control" }      # always included

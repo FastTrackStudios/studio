@@ -76,4 +76,4 @@ fts reaper-config diff   [resources]   # what changed
 ```
 
 Defaults to `$FTS_REAPER_RESOURCES` or `~/fts-dev`. The rules and their
-tests live in `crates/daw/daw/src/reaper_config/`.
+tests live in `daw:crates/daw/daw/src/reaper_config/`.

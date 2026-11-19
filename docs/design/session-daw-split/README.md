@@ -1,6 +1,6 @@
 # Splitting session-daw
 
-Measured 2026-10-13 over `apps/session/daw/src` (156 modules, ~139k lines).
+Measured 2026-10-13 over `features/engine/ui/src` (156 modules, ~139k lines).
 115 modules are one strongly connected component and every agreed feature
 group sits in one cycle, so the split needs symbols moved down and a few
 references inverted before crates can be cut. `proposal.py` checks a cut

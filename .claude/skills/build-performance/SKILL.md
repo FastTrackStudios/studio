@@ -122,9 +122,9 @@ Since 2026-10-31 everything run while working builds ONE way: the window
   `target/<profile>`, not under the triple. Its timestamps can look stale;
   delete it and every crate that uses a proc-macro rebuilds (done once by
   mistake on 2026-10-31). Clear it only together with the triple's dir.
-- **Features `cli,signal-keys-rig`** on studio-desktop. `just dev-test`
-  names studio-desktop with them so the crates under test unify their
-  features with the app's, and filters to the crates asked for.
+- **studio-desktop (the app, apps/desktop) in the build.** `just dev-test`
+  names it so the crates under test unify their features with the app's,
+  and filters to the crates asked for.
 
 Measured: with dx's build warm, building the engine (`--bin studio`) this
 way compiled only the 102 workspace crates the CLI adds; every registry
@@ -135,7 +135,7 @@ nothing changed took 135 s.
 
 The app must be fast in this build — if it is slow here, the code is doing
 too much. `release-fast` (release, incremental, 256 units) and `--release`
-are for shipping (`scripts/desktop/*`, `scripts/signal/mac-release.sh`) and
+are for shipping (`scripts/desktop/*`) and
 measuring performance on what ships, not for working.
 
 ## The build cache is kache (sccache stays gone)

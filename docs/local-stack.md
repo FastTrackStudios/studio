@@ -23,7 +23,7 @@ there, `just dev` runs this stack with that checkout as the local piece.
 | --- | --- | --- |
 | `mock-oauth` | http://127.0.0.1:7420 | Architect's stand-in for GitHub, Google and TONE3000 |
 | `auth` | http://127.0.0.1:7421 | Architect's auth server: the fixed dev cast (`ada@local.test`, `grace@local.test`, `alan@local.test`; password `development-password`), never a mirror of production |
-| `node` | http://127.0.0.1:7422 | Studio Architect's headless node (`studio-architect serve`) built from this tree, its island beside it as the release ships it, signed in to the local issuer as Ada, hosting `acme` with a **copy** of the test vault and a share link of its setlist |
+| `node` | http://127.0.0.1:7422 | Studio Architect's headless node (`studio serve`) built from this tree, its island beside it as the release ships it, signed in to the local issuer as Ada, hosting `acme` with a **copy** of the test vault and a share link of its setlist |
 | `web` | http://127.0.0.1:7423/app/ | Architect's web app with Studio Architect's `distribution.json`, its issuer the local one |
 | `site` | http://127.0.0.1:7424 | Architect's public site (`apps/site`), Vite with hot reload |
 | `desktop` | a window | Studio Architect's app: with `just dev desktop=on`, or this machine's own start script (`LOCAL_STACK_DESKTOP_RUN`, below) on a bare `devenv up` |
@@ -197,7 +197,7 @@ It is not a CI job: it needs the private test vault and a node build
 - Builds go to this checkout's target dir. A local Architect's builds for
   the stack (its xtask, the issuer, the web app) go to
   `target/local-stack/architect/target`; the pinned Architect is a clone
-  under `target/studio-architect/`, sharing a local Architect checkout's
+  under `target/studio/`, sharing a local Architect checkout's
   git objects when it has the commit. The stack writes nothing into the
   Architect or Keyflow checkouts, except the site's `node_modules` when
   the site runs from a local Architect (its hot reload needs it there).

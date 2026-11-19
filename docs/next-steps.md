@@ -60,7 +60,7 @@ one-axis; down zooms in; the embedded Editor undoes through Loro;
 
 ## Step 3 — split `session-daw` into features
 
-`apps/session/daw` is ~139k lines in 156 modules; 115 of them are one
+`features/engine/ui` is ~139k lines in 156 modules; 115 of them are one
 strongly connected component, so it cannot be cut as-is. The measured
 graph and a checked cut (118 symbol moves + 40 references turned into
 hooks/traits → an acyclic crate graph, adding `session-daw-core`, `timeline`

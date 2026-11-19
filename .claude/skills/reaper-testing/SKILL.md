@@ -240,7 +240,7 @@ and the screenshot — the assertion is likely asking the wrong question
 ## Headless UI logic: dioxus-test
 
 For component behaviour that needs no DAW, mount on the vendored
-`dioxus-test` (`libs/vendor/dioxus-test`) — a headless Blitz DOM with
+`dioxus-test` (`vendor:dioxus-test`) — a headless Blitz DOM with
 real event dispatch, plus `render_png` for CPU-rasterized screenshots
 with no GPU. See any `*-ui` crate's `tests/`.
 

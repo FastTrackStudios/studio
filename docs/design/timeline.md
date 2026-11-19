@@ -10,7 +10,7 @@ partway through being reorganised into `interact/`, `model/`, `editor/`,
 `drums/` and `pitch/`, and the paths below use that new layout. Paths are
 relative to these roots unless they are written out in full:
 
-- arrangement: `apps/session/daw/src/`
+- arrangement: `features/engine/ui/src/`
 - Editor: `features/editor/src/`
 - shared crate: `features/editing/src/`
 
@@ -1203,7 +1203,7 @@ check` and one `nextest` run, as the batch-before-testing memory asks.
   move/remove, edge)
 - gestures: 5 tests (zoom drag, sweep, wheel, marquee modes, span)
 
-**Arrangement (inline `#[cfg(test)]` in `apps/session/daw/src`):**
+**Arrangement (inline `#[cfg(test)]` in `features/engine/ui/src`):**
 - `arrange_edit.rs` (65), including:
   - zoom: `a_sideways_drag_zooms_time_about_the_press`,
     `an_upward_drag_zooms_the_rows`,
@@ -1264,7 +1264,7 @@ check` and one `nextest` run, as the batch-before-testing memory asks.
 - `keys.rs` (13)
 - `arrangement.rs` (21, drawing)
 
-**Arrangement (`apps/session/daw/tests/`):**
+**Arrangement (`features/engine/ui/tests/`):**
 - `editor_view.rs` (the embedded editor)
 - `automation_item_edits.rs`, `automation_by_section.rs`
 - `comp_lanes.rs`, `split_keeps_audio.rs`, `track_regions.rs`,
@@ -1520,7 +1520,7 @@ pins A's behaviour. Keep it or change it on purpose.
     Pins: all of `arrange_edit` (65), `mouse_actions` (52), `tools`,
     `stack_slip`, `cc`, `mpe_gestures`, `mode_drums`, `widget` (27),
     `hit_after_mutation`, and the integration tests under
-    `apps/session/daw/tests/`.
+    `features/engine/ui/tests/`.
 14. **Undo protocol.**
     - Add `UndoSink` + `SnapshotHistory`.
     - E: `model/edit.rs History` → `SnapshotHistory<ExpressionDoc>`.

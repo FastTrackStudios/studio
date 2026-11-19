@@ -1,8 +1,8 @@
 # Studio Architect: Studio's distribution of Architect
 
 **Studio Architect** (`apps/desktop`, package and binary
-`studio-architect`) is the Architect app with Studio's extensions
-**compiled in**. Its headless node (`studio-architect serve`) is what a
+`studio`) is the Architect app with Studio's extensions
+**compiled in**. Its headless node (`studio serve`) is what a
 hosted Architect runs, so that a setlist shared from the hosted node
 draws its songs' charts.
 
@@ -31,17 +31,23 @@ a linked extension still overrides it.
 
 ## What it is
 
-| | Studio Architect | the Architect app | Studio (`apps/studio/desktop`) |
-| --- | --- | --- | --- |
-| name | `Studio Architect` | `Architect` | `Studio` |
-| binary / app name | `studio-architect` | `architect-desktop` | `studio-desktop` |
-| config folder | `studio-architect` | `architect` | Studio's prefs |
-| bundle id | `app.fasttrackstudio.studio-architect` | `app.fasttrackstudio.architect` | `app.fasttrackstudio.studio` |
+| | Studio (apps/desktop) | the Architect app |
+| --- | --- | --- |
+| name | `Studio` | `Architect` |
+| cargo package | `studio-desktop` | `architect-desktop` |
+| binary / app name | `studio` | `architect-desktop` |
+| config folder | `studio` | `architect` |
+| bundle id | `app.fasttrackstudio.studio` | `app.fasttrackstudio.architect` |
+
+(The package is `studio-desktop`, not `studio`: FastTrackStudios/studio-adapters'
+umbrella crate is `studio` at the same version, and two packages of one name
+make `cargo -p studio` ambiguous and, with local path overrides, collide in
+the lockfile.)
 
 It does not adopt the Architect app's folder (`named` drops
 `architect()`'s `adopts`), so on a desk it starts with data of its own.
 
-**Compiled in** (`studio_architect::distribution`):
+**Compiled in** (`studio_desktop::distribution`):
 
 - everything the Architect app compiles in (`architect_desktop::distribution::architect()`):
   the Project Management bundle (Projects, Tasks, Time Tracker), Calendar,
@@ -62,22 +68,22 @@ services), and `gui` only in the desktop build. The node is built with
 `node-wasi` (Wasmtime in the node, so installed WASI components draw on
 share links): nothing Studio ships needs it yet.
 
-`studio-architect distribution` prints all of this as JSON, which is also
+`studio distribution` prints all of this as JSON, which is also
 the web bundle's `/app/distribution.json`.
 
 ## Building it
 
 ```sh
-just studio-architect-node        # the node for this machine: prints node=<path>
-just studio-architect-web OUT     # the web bundle into OUT
-just studio-architect-check       # cargo check of the node, as the PR job runs it
-just studio-architect-release v26.11.0 DIR   # the release's tarballs into DIR
-cargo run -p studio-architect     # the desktop app (gui), if you want the window
+just studio-node        # the node for this machine: prints node=<path>
+just studio-web OUT     # the web bundle into OUT
+just studio-check       # cargo check of the node, as the PR job runs it
+just studio-release v26.11.0 DIR   # the release's tarballs into DIR
+cargo run -p studio-desktop     # the desktop app (gui), if you want the window
 ```
 
-The recipes run `scripts/studio-architect.sh`:
+The recipes run `scripts/studio.sh`:
 
-- **node**: `cargo build --profile release -p studio-architect
+- **node**: `cargo build --profile release -p studio-desktop
   --no-default-features --config 'target.<host>.rustflags=["--cfg","no_workspace_hack"]'`.
   Cargo joins that array to the repo's table for the host, so on x86_64
   Linux the node is linked with mold and built for **x86-64-v3** (AVX2,
@@ -135,8 +141,8 @@ serves both uncompressed: FastTrackStudios/architect#602), and stay where it
 cannot run (Safari, which has no JS Promise Integration yet).
 
 The distribution reads it from `studio-island/` beside the node's own
-executable (`studio_architect::island`, `Distribution::island`) and checks
-it against its lock first (`studio_architect::island::at`). The lock is
+executable (`studio_desktop::island`, `Distribution::island`) and checks
+it against its lock first (`studio_desktop::island::at`). The lock is
 written at build time and names every file a page loads with its digest
 (sha256, base64), the stylesheet among them: `just island` writes
 `island.css` into the folder and runs `build-web` again, which locks every
@@ -152,11 +158,11 @@ now-playing view keeps Architect's own bar and controls, as on a node
 shipped without the folder. Only the lock's files and the lock are
 served. `just island` writes `BUILT_FROM` beside them (`git describe
 --always --dirty` of the tree it was built from, taken before the build;
-not locked, not served), and `scripts/studio-architect.sh release`
+not locked, not served), and `scripts/studio.sh release`
 refuses to package a folder that is missing, was built from another tree,
 or from a tree with uncommitted changes, and refuses to release from one.
 The release job builds it just
-before, in the same target dir (`xtask/workflows/src/studio_architect.rs`,
+before, in the same target dir (`xtask/workflows/src/studio.rs`,
 step "Studio's island": the `wasi` profile's `wasm32-wasip2` target and
 node >= 26, checked first).
 
@@ -171,7 +177,7 @@ default, so the bar still eases. `scripts/island-sheet.sh` puts the
 compiled sheet through the `cleanSheet` of the architect checkout
 Cargo.lock pins, with the island's prefix, and fails on a refusal:
 `just island` runs it on the sheet it built, and the PR workflow's
-`studio-architect` job compiles and checks it whenever a PR touches the
+`studio` job compiles and checks it whenever a PR touches the
 sheet, `transport-ui`, the island or the lockfile.
 
 What the island stays inside (Architect v0.12.4): at most 8 intents a
@@ -186,12 +192,12 @@ it).
 ### Serving it from the hosted node
 
 Install the node's tarball as it is laid out: the folder `studio-island/`
-**next to the real `studio-architect` executable**. The node finds the
+**next to the real `studio` executable**. The node finds the
 folder from its own executable's path (`std::env::current_exe()`, which
 resolves symlinks), so with a Nix package:
 
 ```text
-$out/bin/studio-architect            the ELF (autoPatchelfHook patches it)
+$out/bin/studio            the ELF (autoPatchelfHook patches it)
 $out/bin/studio-island/              the tarball's folder, copied as is:
     architect.json  architect.lock.json  island.css  BUILT_FROM
     studio_island.js  studio_island.core.wasm  studio_island.core2.wasm
@@ -199,7 +205,7 @@ $out/bin/studio-island/              the tarball's folder, copied as is:
 ```
 
 A `makeWrapper` wrapper keeps the real ELF in `$out/bin` (as
-`.studio-architect-wrapped`), so the folder stays beside it; a binary
+`.studio-wrapped`), so the folder stays beside it; a binary
 moved to `libexec/` takes the folder with it. The folder holds no ELF, so
 autoPatchelfHook leaves it alone, and nothing in it may be changed after
 the build: a file that does not match the lock refuses the whole island,
@@ -251,7 +257,7 @@ Architect's.
 a share link's guest **is** handed the note's text, as the link's build
 writes it (no frontmatter, comments out), so the playlist draws for a
 guest; the declared properties still arrive empty (architect#911). The
-node lists the claims below itself (`studio_architect::island::at`):
+node lists the claims below itself (`studio_desktop::island::at`):
 without that listing the web app mounts none of these views. Where the
 paragraphs below say a guest gets no body, they describe Architect
 before v0.14.
@@ -376,7 +382,7 @@ while the Setlist favourite's pane scrolls the whole list; and, once an
 Architect release has them, Studio's node listing the claim and its read
 (`SiteIsland::embed_note("setlist.playlist", ["setlist"], ["date"])`,
 `SiteIsland::embed_note("song", ["song"], [])` and
-`.reads(["documents", "files"])` in `studio_architect::island::at`; on
+`.reads(["documents", "files"])` in `studio_desktop::island::at`; on
 Architect main, not in v0.12.6, which Studio pins) and this
 manifest's `[[favourites]]` with the island as their declarer
 (`Manifest::declarer()`: `studio.transport`, `["PLAYHEAD_"]`, `mutating`)
@@ -447,7 +453,7 @@ that view mounts, so only the song view loads the engraver
 
 ## Release artefacts
 
-The `studio-architect` workflow (`xtask/workflows/src/studio_architect.rs`)
+The `studio` workflow (`xtask/workflows/src/studio.rs`)
 runs on every release tag `vYY.M.MICRO`. It builds on THEBATTLESHIP's
 `thebattleship-release` pool (the AppImage's pool), in a size-capped target
 dir of its own in the pool's shared cache, and attaches these to the
@@ -455,8 +461,8 @@ tag's one GitHub Release:
 
 | asset | what |
 | --- | --- |
-| `studio-architect-node-<tag>-x86_64-linux.tar.gz` (+ `.sha256`) | `studio-architect-node-<tag>-x86_64-linux/`: `studio-architect`, the node, and `studio-island/` beside it, its island (`architect.json`, `architect.lock.json`, `studio_island.js`, the `studio_island.*.wasm` the lock names, `island.css`, `BUILT_FROM`). Install the folder next to the node's real binary (not a wrapper or a symlink's folder): the node finds it from its own executable's path |
-| `studio-architect-web-<tag>.tar.gz` (+ `.sha256`) | `studio-architect-web-<tag>/`: the landing page, `docs/`, `app/` with `distribution.json` |
+| `studio-node-<tag>-x86_64-linux.tar.gz` (+ `.sha256`) | `studio-node-<tag>-x86_64-linux/`: `studio`, the node, and `studio-island/` beside it, its island (`architect.json`, `architect.lock.json`, `studio_island.js`, the `studio_island.*.wasm` the lock names, `island.css`, `BUILT_FROM`). Install the folder next to the node's real binary (not a wrapper or a symlink's folder): the node finds it from its own executable's path |
+| `studio-web-<tag>.tar.gz` (+ `.sha256`) | `studio-web-<tag>/`: the landing page, `docs/`, `app/` with `distribution.json` |
 | `SHA256SUMS` (+ `SHA256SUMS.minisig`) | every asset of the release, signed with the org key |
 
 These follow Architect's own (`architect-node-<tag>-x86_64-linux.tar.gz`,
@@ -465,7 +471,7 @@ The names differ so the two can't be confused. There is no image: the
 hosted node runs as a NixOS service.
 
 `SHA256SUMS` is written by the `sums` job (`xtask/workflows/src/sums.rs`),
-which runs at the end of both `desktop` and `studio-architect`. It sums
+which runs at the end of both `desktop` and `studio`. It sums
 every asset the release has at that point from GitHub's digests, and runs
 in the `release-signing` environment (tags only) to sign with
 `FTS_RELEASE_MINISIGN_KEY`, whose public half is
@@ -492,7 +498,7 @@ glibc. `libstdc++` is Luau's (`mlua-sys`, through Architect's
 `architect-scripting`).
 
 A PR that reaches the node (a crate of this repo in its tree, the
-manifest, the lockfile or the toolchain) gets the `studio-architect` job in
+manifest, the lockfile or the toolchain) gets the `studio` job in
 `PR`: `cargo check --all-targets` of the Linux node on a free hosted
 runner, set up as the hosted Gates job is (`mold` and the CI cargo
 config, no apt header set). It is a cold check (6m39s on its first run),
@@ -501,9 +507,9 @@ it is not required, and PRs that don't reach the node skip it after
 
 ## How it relates to the rest of Studio
 
-- **Studio's own app** (`apps/studio/desktop`, `Studio`) is the DAW and
-  the rig. It has its own identity and does not run Architect's shell.
-  This is Architect's app, with Studio's notes features.
+- **This is Studio's own app** now: the old rig app (its own identity,
+  not Architect's shell) was removed in the restructure that made
+  apps/desktop and apps/web the only apps.
 - **The setlists extension in the store** (`setlists-extension`
   workflow, `studio-setlists`) is the same extension as a process, for the
   stock Architect app. It works there, but it can't draw on a node.

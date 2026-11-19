@@ -1,7 +1,8 @@
 # Where each folded-in repo's code came from: repo, the directory it first
 # landed in here, the branch, and its last commit carried over. A record
 # only: the old repos are no longer followed, and their directories have
-# since been reorganised into apps/, crates/, features/, vendor/, xtask/.
+# since been reorganised (apps/desktop and apps/web, extensions/, features/,
+# plugins/, xtask/).
 session    .           frame-mixer  f03928a8be851edbbc1b6755660ee011407a2f34
 daw        daw         fx-key       cce12c84d97a3daae8688e4c94355f41649c91db
 processor  processor   builtin-fx   f6f52e9fdc3e89db3dd8b8aeb70b28ad96f3e57b

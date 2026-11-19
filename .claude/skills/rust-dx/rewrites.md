@@ -16,7 +16,7 @@ data layout is the point.
 
 ## 1. Placing a comp piece — five setters, ten clones, ~14 locks
 
-`apps/session/daw/src/comp.rs:311-360` (`place` and `slip`)
+`features/engine/ui/src/comp.rs:311-360` (`place` and `slip`)
 
 ```rust
 fn place(daw: &Standalone, project: &ProjectContext, copy: &str,
@@ -67,7 +67,7 @@ which today travel as two parameters of `set_fade_in`.
 
 ## 2. Which take the comp plays — an N+1 query in a nested loop
 
-`apps/session/daw/src/comp_rank.rs:148-182` (`current`)
+`features/engine/ui/src/comp_rank.rs:148-182` (`current`)
 
 ```rust
 fn current(daw: &Standalone, project: &ProjectContext, versions: &[TakeVersion],
@@ -123,7 +123,7 @@ honest and testable against a `SongView` built from fixtures.
 
 ## 3. Two fields from two fetches
 
-`apps/session/daw/src/hits.rs:1215-1229` (`recording_origin`)
+`features/engine/ui/src/hits.rs:1215-1229` (`recording_origin`)
 
 ```rust
 fn recording_origin(daw: &Standalone, project: &ProjectContext, item: &str) -> Option<f64> {
@@ -150,7 +150,7 @@ shape; most collapse the same way.
 
 ## 4. The window's read-back — O(song) work per edit
 
-`apps/session/daw/src/studio.rs:491-555` (`patch_items`)
+`features/engine/ui/src/studio.rs:491-555` (`patch_items`)
 
 ```rust
 for (track, items) in &mut raw.items {                         // every lane in the song
@@ -323,7 +323,7 @@ snapshot on its own flattened form.
 
 ## 7. `Edit` — sixty positional variants and a `guid()` that guesses
 
-`apps/session/daw/src/engine.rs:30-316` (enum) and `:340-400` (`guid`)
+`features/engine/ui/src/engine.rs:30-316` (enum) and `:340-400` (`guid`)
 
 ```rust
 pub enum Edit {
@@ -381,7 +381,7 @@ coalesces edits by target keys on `Target::Item(&ItemId)`.
 
 ## 8. The window's gestures — a dozen `Option`s and a priority ladder
 
-`apps/session/daw/src/widget.rs:607-648` (fields) and `:4423-4520` (`took`)
+`features/engine/ui/src/widget.rs:607-648` (fields) and `:4423-4520` (`took`)
 
 ```rust
 pub struct ArrangementWidget {

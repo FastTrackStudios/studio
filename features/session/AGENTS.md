@@ -12,7 +12,7 @@ that before adding a crate or a flag.
 - Roles: `ui` (Dioxus, `src/ui/`), `engine`, `net`, `collab`, `library`,
   `reaper`, `tts`, `vault-sync`, `web` / `desktop`. Flags compose one way:
   `ui` never implies a backend, a backend never implies `ui`.
-- Apps (`apps/session/*`) depend on `session` with the flags they need.
+- The engine crates (`features/engine/*`) and the apps depend on `session` with the flags they need.
 - The REAPER extension is a separate binary, so it is its own crate:
   `features/adapters/reaper/session-extension`.
 

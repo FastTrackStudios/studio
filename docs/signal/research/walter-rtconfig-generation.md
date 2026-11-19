@@ -351,12 +351,12 @@ expressions; there is a path from *measurements* of a Taffy tree to WALTER
 coordinates.
 
 1. **Render headless at a size.** `dioxus-test` (vendored,
-   `libs/vendor/dioxus-test/`) drives components through `blitz-dom` — the same
+   `vendor:dioxus-test/`) drives components through `blitz-dom` — the same
    engine that renders our REAPER panels. `DocumentTester::with_window_size`
-   (`libs/vendor/dioxus-test/src/document.rs:79-89`) sets the viewport.
+   (`vendor:dioxus-test/src/document.rs:79-89`) sets the viewport.
 2. **Read the computed layout.** `node.final_layout` is the Taffy `Layout`:
    parent-relative `location` + `size`. `ResolvedElement::upper_left`
-   (`libs/vendor/dioxus-test/src/element.rs:104-110`) already does exactly this
+   (`vendor:dioxus-test/src/element.rs:104-110`) already does exactly this
    read; `pointer.rs:111` already walks the tree accumulating parent-relative
    positions into absolute ones. So step 2 is a few dozen lines, today.
 3. **Map node → REAPER element id.** A `data-walter="mcp.volume"` attribute on
