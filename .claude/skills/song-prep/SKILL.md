@@ -1,6 +1,6 @@
 ---
 name: song-prep
-description: Set up a new song for a setlist end to end — reference recording, stem separation, tempo map, sections, the project with a Reference folder, synced lyrics, and the Master Rhythm chart. Use when asked to "set up", "prep", "add" or "do" a song or a whole setlist, or to bring a song to the standard the Christmas and recital sets are at. Routes to one skill per step.
+description: Set up a new song for a setlist end to end, starting from an audio file of the reference recording — stem separation, tempo map, sections, the project with a Reference folder, synced lyrics, and the Master Rhythm chart. Use when asked to "set up", "prep", "add" or "do" a song or a whole setlist, or to bring a song to the standard the Christmas and recital sets are at. Routes to one skill per step.
 ---
 
 # Song prep: one song, start to charted
@@ -9,7 +9,7 @@ A song is **done** when it has all of these, and each agrees with the recording:
 
 | # | Deliverable | Step skill | Done when |
 |---|---|---|---|
-| 1 | Reference recording + 11 stems | `song-stems` | Title and length said back to the owner; 11 stems + Mix, each the source's length |
+| 1 | 11 stems from the reference recording | `song-stems` | The file's identity and length said back to the owner; 11 stems + Mix, each the source's length |
 | 2 | Tempo map (one point per bar) | `song-tempo-map` | Snare check passes, grid error reported, **bar 1 confirmed** |
 | 3 | Project: tracks, Reference, sections, markers | `song-project` | Opens, saved, song bar 1 = project bar 2, the owner has seen the regions |
 | 4 | Synced lyrics | `song-lyric-sync` | A lyrics track whose lines sit on the right bars |
@@ -20,10 +20,11 @@ Load the step's skill before doing the step. Scripts for steps 1–3 are in
 
 ## Order, and what runs in parallel
 
-1. **Ask or find which recording.** The setlist note names the artist and version
-   (key, tempo, meter). Without a link from the owner, find the recording and say
-   the title and length back before anything else. A wrong recording wastes every
-   later step.
+1. **Start from the audio file.** The process begins once there is an audio
+   file of the reference recording; getting it is outside these skills and
+   differs per person. Check it against the setlist note (artist, version, key,
+   tempo, meter) and say what it is and its length back before anything else.
+   A wrong recording wastes every later step. No file: ask for one.
 2. Stems (step 1). While they split, start **research in a parallel subagent**:
    form, chords and lyrics from published sources (MusicXML or Musicnotes score,
    Songsterr via `songsterr-ref`, LRC via `spotify-lrc`).
@@ -40,8 +41,8 @@ different steps at once. Stem splitting on voyager is one Logic at a time.
 
 ```
 <Org>/Projects/<Set>/songs/<slug>/
-  <id> - <title> (Mix).wav            the reference, copied in
-  <id> - <title> (<Stem>).wav         11 stems
+  <basename> (Mix).wav                the reference, copied in
+  <basename> (<Stem>).wav             11 stems
   <Song> - Tempo Mapped.RPP           the REAPER project
   <song>_cfg.json  <song>_beats.json  the tempo map's inputs (keep them)
   <Song>.lrc                          synced lyrics
