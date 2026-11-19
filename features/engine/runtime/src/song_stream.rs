@@ -65,7 +65,11 @@ impl Keep {
         match self {
             #[cfg(not(target_arch = "wasm32"))]
             Self::Disk(_) => true,
-            Self::Memory(_) => !lower.starts_with("media/peaks/"),
+            // Wherever the session keeps them (`Media/Peaks/`, a split
+            // Live set's `Samples/Imported/Peaks/`, a link's
+            // `…/Proxies/Peaks/`): a page reads a waveform when its take
+            // is drawn (`StreamedSong::load_peaks`), not at the open.
+            Self::Memory(_) => peaks_cache_of(lower).is_none(),
         }
     }
 

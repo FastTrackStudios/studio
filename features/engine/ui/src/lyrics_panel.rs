@@ -103,8 +103,9 @@ pub fn LyricsPanel() -> Element {
 /// The lyrics panel in a pane of another app (Studio's `studio.lyrics`
 /// extension, an Architect pane): the same words and views, the play
 /// position read on a timer, since the pane's window is not this crate's
-/// (no window events to follow, no bars to leave room for).
-#[cfg(feature = "native")]
+/// (no window events to follow, no bars to leave room for). In a browser
+/// (studio-web) the same, over the page's own engine.
+#[cfg(any(feature = "native", feature = "web"))]
 #[component]
 pub fn HostedLyrics() -> Element {
     let session: StudioSession = use_context();
@@ -112,7 +113,10 @@ pub fn HostedLyrics() -> Element {
     let mut at = use_signal(|| 0.0_f64);
     use_future(move || async move {
         loop {
+            #[cfg(feature = "native")]
             futures_timer::Delay::new(std::time::Duration::from_millis(33)).await;
+            #[cfg(not(feature = "native"))]
+            gloo_timers::future::TimeoutFuture::new(33).await;
             let Some(now) =
                 crate::engine::Transport::shared().map(crate::engine::Transport::reading)
             else {
