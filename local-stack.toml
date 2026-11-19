@@ -1,22 +1,77 @@
-# The local stack (docs/local-stack.md): `just dev`, `just demo`,
-# `just website` start Studio's node, its issuer, the web app and the site
-# on this machine, from these settings, through scripts/local-stack.sh.
-# The issuer, the node's environment and the guard are Architect's own
-# (`cargo xtask dev`, xtask/src/dev in the Architect checkout the stack
-# resolves): nothing here copies them.
+# The local stack (docs/local-stack.md): `devenv up` (`just dev`, `just up`)
+# runs the Studio engine, Studio and Studio Web (scripts/studio-dev.sh) from these
+# settings; the legacy stack (`just dev-legacy`, `just demo`, `just
+# website`; scripts/local-stack.sh) reads them too.
+#
+# THIS MACHINE'S SETTINGS go in local-stack.local.toml beside this file
+# (gitignored; `LOCAL_STACK_LOCAL` names another): any table or key of this
+# file, merged over it — which vault, setlist and share link, which set
+# Studio opens, local Architect/Keyflow. Never edit this file for that.
+# The LOCAL_STACK_* variables win over both.
+#
+#   # local-stack.local.toml
+#   [choose]
+#   architect = "local"
+#   keyflow = "local"
+#   [sources]
+#   architect = "/path/to/architect"
+#   [vault]
+#   source = "/path/to/vault"
+#   setlist = "Setlists/My Show.md"
+#   share_code = "abcdefghijkmnpqr"
+#   [studio]
+#   open = "/path/to/My Show.setlist"
+#   live_set = "/path/to/Show.als"
+
+# The engine, Studio and Studio Web (`devenv up`).
+[studio]
+# Studio's server (its in-process node). 7412 because Architect's
+# web app proxies the node's paths there (its apps/web/Dioxus.toml), so it
+# cannot run beside Architect's own dev stack. `LOCAL_STACK_PORT_DESKTOP`.
+node_port = 7412
+# Studio Web: the origin a browser (and a share link) uses.
+# `LOCAL_STACK_PORT_STUDIO_WEB`.
+web_port = 7413
+# The engine's Action List (MCP), apart from a running Studio's 47811.
+engine_mcp_port = 47821
+# The XDG data/config home of the engine and the stack's windows: where the
+# engine registers, so a dev Studio never attaches to (or replaces) another
+# Studio's engine. Empty: the stack's own (.devenv/state/studio-dev/profile).
+profile = ""
+# What Studio opens (FTS_STUDIO_OPEN: a set, a setlist, `rig`); empty: the
+# welcome screen.
+open = ""
+# Lighting's live set (`ignition.live_set` when that setting is empty).
+live_set = ""
+# Studio Architect's features beyond its defaults (`dx serve --features`):
+# `daw`, the DAW view and its engine link, until it is a default. Empty:
+# the defaults alone.
+features = "daw"
+
+# Which Architect and Keyflow: `pinned` (Cargo.lock's tags), `local`
+# ([sources]) or a path. Lighting and Studio's server need
+# Architect's main: architect = "local".
+[choose]
+architect = "pinned"
+keyflow = "pinned"
+
+# The legacy stack's ports (`just dev-legacy`).
 
 # Every process binds 127.0.0.1. Clear of Architect's own stack (7410-7414,
 # its dev-stack.toml), so both run at once, and of what a fleet machine
 # runs (Teley 8787, the collector 4318, `just web` 8080, Task's 9090).
-# `LOCAL_STACK_PORT_<NAME>` (MOCK_OAUTH, AUTH, NODE, WEB, SITE) moves one.
+# `LOCAL_STACK_PORT_<NAME>` (MOCK_OAUTH, AUTH, NODE, WEB, FRONT, SITE) moves
+# one. `front` is the one origin a browser uses: the node, with the web app
+# beside it at /app/.
 [ports]
 mock_oauth = 7420
 auth = 7421
 node = 7422
 web = 7423
 site = 7424
+front = 7425
 
-# `just phone`: the node on this machine's tailnet name over HTTPS
+# `just phone`: Studio Web on this machine's tailnet name over HTTPS
 # (`tailscale serve`, never funnel). Tailscale serves HTTPS on 443, 8443
 # and 10000; the first two are often taken on a fleet machine.
 [phone]
@@ -30,11 +85,11 @@ https_port = 10000
 architect = "../architect"
 keyflow = "../keyflow"
 
-# The vault the node serves: a COPY of it, made once into the stack's
-# state (`just dev-reset` drops it), so nothing done while testing
-# reaches the source. `LOCAL_STACK_VAULT` names another. Missing: the
-# node holds Architect's demo seed instead (its setlist `Fall Show`, link
-# /s/ksqx75iaaaaaaaae/).
+# The vault Studio opens and serves: a COPY of it, made once into
+# the stack's state, so nothing done while testing reaches the source;
+# `just dev-sync` copies it again from the source (`just dev-sync watch`
+# follows it), `just dev-reset` drops it. `LOCAL_STACK_VAULT`,
+# `LOCAL_STACK_SETLIST` and `LOCAL_STACK_SHARE_CODE` win over these.
 [vault]
 source = "../setlists/merry-and-bright/vault"
 # The setlist the share link opens, with its songs.

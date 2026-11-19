@@ -35,6 +35,7 @@
 //! tested natively) and, under test, the setlist view's rows (rendered by
 //! `dioxus-ssr`).
 
+pub mod lighting;
 pub mod queue;
 pub mod song;
 
@@ -46,6 +47,9 @@ mod wasi;
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod chart;
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+mod lighting_view;
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod lyrics;

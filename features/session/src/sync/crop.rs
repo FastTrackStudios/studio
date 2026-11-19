@@ -115,9 +115,12 @@ fn trim_take_head(take: &mut TakeState, head: f64) {
 ///
 /// A change a hair past `start` (a song cut where its tempo changes, the
 /// change read back from a file a few ulps later) is the change at it: the
-/// song starts at its own tempo, not the one before for a picosecond.
+/// song starts at its own tempo, not the one before for a picosecond. And
+/// a change a hair before `end` is the next song's: a Live set's song-end
+/// locator can sit microseconds past the next song's tempo step, and the
+/// song ended on that tempo for its last 26 µs.
 fn crop_tempo(tempo: &[TempoPoint], start: f64, end: f64) -> Vec<TempoPoint> {
-    const SAME: f64 = 1e-9;
+    const SAME: f64 = 1e-3;
     let mut sorted: Vec<&TempoPoint> = tempo.iter().collect();
     sorted.sort_by(|a, b| a.at.total_cmp(&b.at));
     let mut out = Vec::new();
@@ -128,7 +131,7 @@ fn crop_tempo(tempo: &[TempoPoint], start: f64, end: f64) -> Vec<TempoPoint> {
     }
     for t in sorted
         .into_iter()
-        .filter(|t| t.at > start + SAME && t.at < end)
+        .filter(|t| t.at > start + SAME && t.at < end - SAME)
     {
         let mut t = t.clone();
         t.at -= start;
@@ -380,6 +383,26 @@ mod tests {
         let song = crop(&show, start, start + 200.0);
         let tempo: Vec<(f64, f64)> = song.tempo.iter().map(|t| (t.at, t.bpm)).collect();
         assert_eq!(tempo, [(0.0, 107.0)], "not 160 with a 107 a picosecond in");
+    }
+
+    #[test]
+    fn a_change_in_a_songs_last_instant_is_the_next_songs() {
+        // Better Strangers: 140 to its end; the next song's 107 26 µs
+        // before the SONG END locator.
+        let point = |at, bpm| TempoPoint {
+            at,
+            bpm,
+            beats_per_bar: 4,
+            beat_unit: 4,
+        };
+        let (start, end) = (3247.569, 3498.081_631_3);
+        let show = SessionModel {
+            tempo: vec![point(3200.0, 140.0), point(end - 2.6e-5, 107.0)],
+            ..SessionModel::default()
+        };
+        let song = crop(&show, start, end);
+        let tempo: Vec<(f64, f64)> = song.tempo.iter().map(|t| (t.at, t.bpm)).collect();
+        assert_eq!(tempo, [(0.0, 140.0)], "no 107 at the very end");
     }
 
     #[test]

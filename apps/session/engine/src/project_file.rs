@@ -418,8 +418,14 @@ fn direct(daw: &Standalone) -> Arc<dyn Direct> {
     Arc::new(daw.clone())
 }
 
+/// The song's media root: the folder its file is in, absolute. A song
+/// opened by a path relative to the working directory (`songs/a/A.session`)
+/// would otherwise resolve its takes against that relative folder, and the
+/// engine anchor them a second time (`…/songs/a/songs/a/Samples/…`): not
+/// one of them loaded.
 fn media_of(path: &Path) -> MediaRoot {
-    MediaRoot(path.parent().map(Path::to_path_buf).unwrap_or_default())
+    let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
+    MediaRoot(std::path::absolute(&dir).unwrap_or(dir))
 }
 
 /// Save the song (the engine's `project_guid`) into the project file at

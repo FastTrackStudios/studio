@@ -248,10 +248,19 @@ impl TempoMapEngine {
         prev_qn + target_from_cursor.max(0.0)
     }
 
+    /// Where the metre changes, in quarter notes. A point that names the
+    /// metre already in force changes nothing: a map that keeps a metre on
+    /// every point (Session's does) would otherwise start a bar at every
+    /// tempo change, and a tempo step mid-bar cut the bar in two.
     fn time_signature_changes_qn(&self) -> Vec<(f64, SignatureMetric)> {
         let mut changes: Vec<(f64, SignatureMetric)> = Vec::new();
+        let mut in_force = self.default_time_signature;
         for point in &self.points {
             if let Some(ts) = point.time_signature {
+                if (ts.numerator, ts.denominator) == (in_force.numerator, in_force.denominator) {
+                    continue;
+                }
+                in_force = ts;
                 let qn = self.seconds_to_quarter_notes(point.position_seconds());
                 let metric = signature_metric(ts);
                 if let Some((last_qn, last_metric)) = changes.last_mut()
@@ -448,6 +457,42 @@ mod tests {
             shape: Some(shape),
             ..TempoPoint::default()
         }
+    }
+
+    fn metred(seconds: f64, bpm: f64, num: u32, den: u32) -> TempoPoint {
+        TempoPoint {
+            time_signature: Some(TimeSignature::new(num, den)),
+            ..point(seconds, bpm, 1)
+        }
+    }
+
+    #[test]
+    fn a_tempo_step_mid_bar_that_repeats_the_metre_keeps_the_bar_whole() {
+        // 4/4 at 60 bpm; a step to 120 two beats into bar 2 (the metre
+        // repeated on it, as Session keeps it); a 3/4 bar at bar 4.
+        let engine = TempoMapEngine::new(
+            60.0,
+            TimeSignature::new(4, 4),
+            vec![
+                metred(0.0, 60.0, 4, 4),
+                metred(6.0, 120.0, 4, 4),
+                metred(9.0, 120.0, 3, 4),
+                metred(10.5, 120.0, 4, 4),
+            ],
+        );
+        assert_eq!(
+            engine.time_to_musical(6.0),
+            (2, 3, 0.0),
+            "no bar at the step"
+        );
+        assert_eq!(engine.time_to_musical(7.0), (3, 1, 0.0));
+        assert_eq!(engine.time_to_musical(9.0), (4, 1, 0.0), "the 3/4 bar");
+        assert_eq!(
+            engine.time_to_musical(10.5),
+            (5, 1, 0.0),
+            "three beats later"
+        );
+        assert_eq!(engine.time_to_musical(12.5), (6, 1, 0.0), "4/4 again");
     }
 
     #[test]

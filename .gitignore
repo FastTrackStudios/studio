@@ -284,3 +284,7 @@ features/dynamic-template/fixtures/golden/media/
 
 # A release build's version (scripts/release.sh stamp): never committed.
 /.release-version
+
+# The local stack's machine-local settings (docs/local-stack.md), merged
+# over local-stack.toml.
+local-stack.local.toml

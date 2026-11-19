@@ -86,6 +86,9 @@ tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
 # Collaboration (collab.rs, native): hosting/joining over iroh, and the
 # chart editor's remote edits and carets.
 architect = { workspace = true, optional = true, features = ["vox", "platform", "action-list", "local"] }
+# Telling the account's other Studio engines what the set plays
+# (studio_engine/peers.rs, through the rig engine's `PeersControl`).
+studio-peers = { workspace = true, optional = true }
 crdt = { workspace = true, optional = true, features = ["vox"] }
 vox-core = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
@@ -191,7 +194,7 @@ vox = []
 signal = ["native", "dep:signal-fx", "session-runtime/signal"]
 # The desktop app: dioxus-native (Blitz) hosts for the panels, the
 # in-process engine with its audio device, threads, the plugin-UI graph.
-native = ["session-runtime/builtin", "session-runtime/library", "dep:app-shell", "dep:dock", "dep:chrono", "dep:opentelemetry", "dep:realfft", "dep:architect-mcp", "dep:dirs", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:rayon", "dsp/hits", "dep:session-format", "session-format/store", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "session/library", "session/publish", "dep:blake3", "dep:auth-client", "dep:fts-account", "session/project-sync", "dep:live-proto", "dep:task-dial", "dep:reqwest", "vox"]
+native = ["session-runtime/builtin", "session-runtime/library", "dep:app-shell", "dep:dock", "dep:chrono", "dep:opentelemetry", "dep:realfft", "dep:architect-mcp", "dep:dirs", "dep:tokio", "dep:tracing-subscriber", "dsp/eq-native", "daw/standalone-rpp", "daw/standalone-bootstrap", "daw-standalone/reapeaks", "daw-standalone/stream-ogg", "daw/standalone-session-file", "studio/cli", "dynamic-template/reaper", "dep:rayon", "dsp/hits", "dep:session-format", "session-format/store", "dep:futures-util", "session/collab", "dep:architect", "architect/iroh", "dep:crdt", "dep:vox-core", "dep:uuid", "dep:daw-transport-sync", "dep:fts-sample", "fts-sample/engine-native", "fts-sample/write", "dep:dawfile-reaper", "dep:builtin", "builtin?/engine", "dawfile-reaper/peaks-wav", "dawfile-reaper/peaks-ogg", "session/library", "session/publish", "dep:blake3", "dep:auth-client", "dep:fts-account", "session/project-sync", "dep:live-proto", "dep:task-dial", "dep:reqwest", "vox", "dep:studio-peers", "architect/connect"]
 # A show recorded as one Live set, split into its songs (src/show.rs,
 # the `show-split` bin): the Live-set reader and the .als → .RPP converter.
 show = ["native", "dep:ableton", "studio/convert-ableton"]
@@ -221,6 +224,11 @@ required-features = ["show"]
 [[bin]]
 name = "session-media"
 path = "src/bin/session-media.rs"
+required-features = ["native"]
+
+[[bin]]
+name = "session-tempo"
+path = "src/bin/session-tempo.rs"
 required-features = ["native"]
 
 [[bin]]

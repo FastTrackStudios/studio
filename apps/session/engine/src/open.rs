@@ -111,11 +111,17 @@ pub fn serve_actions() {
         STARTED.get_or_init(|| {
             // The engine's runtime, made now if no song has made it yet:
             // the server runs on it.
-            if let Err(error) = engine_runtime() {
-                tracing::warn!(%error, "mcp: no runtime to serve on");
-                return;
-            }
+            let runtime = match engine_runtime() {
+                Ok(runtime) => runtime,
+                Err(error) => {
+                    tracing::warn!(%error, "mcp: no runtime to serve on");
+                    return;
+                }
+            };
             let _ = crate::studio_engine::mcp::start();
+            // What the set plays, to the account's other Studio engines
+            // (through this machine's rig engine, when it is up).
+            crate::studio_engine::peers::start(runtime);
         });
     }
 }

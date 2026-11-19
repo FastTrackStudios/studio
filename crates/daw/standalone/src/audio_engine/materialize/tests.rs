@@ -154,3 +154,25 @@ async fn takes_loaded_on_first_read_share_one_mapping() {
         "mapped, not decoded"
     );
 }
+
+/// A file the engine cannot decode — a set's reference kept as a video —
+/// plays from its proxy beside it.
+#[test]
+fn a_file_that_does_not_decode_plays_from_its_proxy() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let video = dir.path().join("Reference.mp4");
+    std::fs::write(&video, b"\0\0\0\x18ftypmp42 not audio we decode").expect("the video");
+    std::fs::create_dir_all(dir.path().join("Proxies")).expect("proxies");
+    std::fs::write(dir.path().join("Proxies/Reference.ogg"), wav(4_800, 16)).expect("its proxy");
+    let mut resolve = |path: &str| std::fs::read(dir.path().join(path)).map_err(|e| e.to_string());
+    let loaded = super::load_file(&video, "Reference.mp4", &mut resolve);
+    assert!(
+        matches!(loaded, Ok(AudioSource::Memory(_))),
+        "the proxy, decoded"
+    );
+    std::fs::remove_file(dir.path().join("Proxies/Reference.ogg")).expect("no proxy");
+    assert!(
+        super::load_file(&video, "Reference.mp4", &mut resolve).is_err(),
+        "no proxy: it does not load"
+    );
+}

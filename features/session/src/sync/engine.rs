@@ -282,33 +282,39 @@ pub async fn read_keeping(
             ))
         })
         .collect();
+    // A point that names no metre keeps the one in force (an `.RPP`'s
+    // tempo change carries a time signature only where it changes): the
+    // project's own before the first that names one.
+    let (beats, unit) = project.tempo_map().default_time_signature().await?;
+    let mut in_force = (
+        u32::try_from(beats).unwrap_or(4),
+        u32::try_from(unit).unwrap_or(4),
+    );
     let mut tempo: Vec<TempoPoint> = project
         .tempo_map()
         .points()
         .await?
         .into_iter()
         .map(|p| {
-            let (beats_per_bar, beat_unit) = p
-                .time_signature
-                .map_or((4, 4), |s| (s.numerator, s.denominator));
+            if let Some(s) = p.time_signature {
+                in_force = (s.numerator, s.denominator);
+            }
             TempoPoint {
                 at: p.position.time.map_or(0.0, |t| t.as_seconds()),
                 bpm: p.bpm,
-                beats_per_bar,
-                beat_unit,
+                beats_per_bar: in_force.0,
+                beat_unit: in_force.1,
             }
         })
         .collect();
     // No points: the project's own tempo and metre, as the one point a
     // song with a steady tempo has.
     if tempo.is_empty() {
-        let map = project.tempo_map();
-        let (beats, unit) = map.default_time_signature().await?;
         tempo.push(TempoPoint {
             at: 0.0,
-            bpm: map.default_tempo().await?,
-            beats_per_bar: u32::try_from(beats).unwrap_or(4),
-            beat_unit: u32::try_from(unit).unwrap_or(4),
+            bpm: project.tempo_map().default_tempo().await?,
+            beats_per_bar: in_force.0,
+            beat_unit: in_force.1,
         });
     }
 

@@ -1,0 +1,41 @@
+[package]
+name = "studio-daw"
+description = "Studio's DAW view in Architect, an Architect extension: a setlist or a song entered into Session's shell (reused, not rewritten), attached to the Studio engine it spawns or attaches (headless, outliving the window); Back leaves it for the library. Linked into Studio Architect (docs/design/studio-in-architect.md)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+# The extension as a process (extension.toml's [entry]).
+name = "studio-daw"
+path = "src/main.rs"
+
+[dependencies]
+architect-extensions = { workspace = true, features = ["guest"] }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+futures-channel = { workspace = true }
+futures-timer = { workspace = true }
+dirs = { workspace = true }
+# A song note's link targets (`setlists::frontmatter::link_target`), the
+# host's `run_on` and the vault's root.
+setlists = { workspace = true, features = ["extension"] }
+
+# Session's shell as a library, and the engine it is a client of: the
+# DAW view and `--session-engine` (the headless engine this binary is).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+session-desktop = { workspace = true, features = ["native", "session-domain", "charts"] }
+session-engine = { workspace = true, features = ["native"] }
+app-shell = { workspace = true, features = ["ui", "native"] }
+# `architect::host::boot`: the headless engine's tracing and panic log.
+architect = { workspace = true, features = ["host"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

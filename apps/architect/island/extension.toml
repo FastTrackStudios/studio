@@ -43,6 +43,9 @@ reads = ["documents", "files"]
 # items (architect#589, `architect.playhead` v0.1).
 [uses]
 "architect.playhead" = "^0.1"
+# The Lighting view hands a song's light show to Review (architect#809):
+# optional, the view loads and plays without it.
+"architect.review" = "^0.1"
 
 [[views]]
 id = "progress"
@@ -83,6 +86,17 @@ icon = "list-music"
 id = "song"
 title = "Song"
 icon = "music"
+
+# The Lighting tab's view (web bundle only, src/lighting.rs): the song
+# playing as its prerendered light show (`<Title> - Lights.mp4` beside its
+# recording, `just lighting render-recital`), muted and kept on the
+# playhead, and a Review button handing the song note and its video to
+# `architect.review`. Waits on Architect handing a view a video's URL (see
+# src/lighting.rs): until then it names the video.
+[[views]]
+id = "lighting"
+title = "Lighting"
+icon = "lightbulb"
 
 # Drawn at the head of a note of type `setlist` in the web app's frame
 # host (the node lists the claim: `SiteIsland::embed`).

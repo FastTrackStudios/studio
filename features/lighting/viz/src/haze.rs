@@ -1,0 +1,952 @@
+//! The haze, marched at a fraction of the picture's size.
+//!
+//! Bevy's volumetric fog raymarches every pixel of the view it is on:
+//! `step_count` samples per pixel, each looping over every volumetric
+//! light whose cone reaches that cluster. At 5120x1440 that was most of
+//! the frame by a wide margin, and it scales with pixels for a picture
+//! that is, by nature, soft — haze has no edges of its own.
+//!
+//! So the fog is not on the main camera. A second **haze camera** on its
+//! own render layer sees only black twins of the room's occluders and
+//! renders the fog over them into a small HDR texture; a full-screen
+//! composite in the main camera's transparent pass adds that texture in
+//! and dims the scene by the transmittance the twins wrote into its
+//! alpha. Every part of it is a Bevy feature used as shipped — render
+//! layers, render-to-texture, `Material`, the fog itself — which is what
+//! keeps it out of the engine's internals.
+//!
+//! Halving the haze camera's size cuts the fog to a quarter; a third,
+//! to a ninth. The picture is upsampled bilinearly. What that costs is
+//! sharpness where a shaft meets a wall, and at the studio's viewport
+//! that edge is already softened by bloom.
+//!
+//! Every fixture's spill light is volumetric, so the fog is the one
+//! thing that puts light in the air: with the hazers off nothing shows
+//! there, and as they run every shaft appears in it. `HazeLevel` is the
+//! hazers' settled output; `drive_haze` writes it into the fog volume
+//! and the occluders' extinction every frame.
+
+use crate::spawn::VizSettings;
+use bevy::asset::embedded_asset;
+use bevy::camera::visibility::RenderLayers;
+use bevy::camera::{ClearColorConfig, Exposure, Hdr, RenderTarget};
+use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::image::Image;
+use bevy::light::{FogVolume, NotShadowCaster, ShadowFilteringMethod, VolumetricFog};
+use bevy::mesh::skinning::SkinnedMesh;
+use bevy::pbr::{MaterialPipeline, MaterialPipelineKey};
+use bevy::prelude::*;
+use bevy::render::mesh::MeshVertexBufferLayoutRef;
+use bevy::render::render_resource::{
+    AsBindGroup, BlendComponent, BlendFactor, BlendOperation, BlendState, RenderPipelineDescriptor,
+    SpecializedMeshPipelineError, TextureFormat,
+};
+use bevy::shader::ShaderRef;
+
+const OCCLUDER_SHADER: &str = "embedded://ignition_viz/haze_occluder.wgsl";
+const COMPOSITE_SHADER: &str = "embedded://ignition_viz/haze_composite.wgsl";
+
+/// The render layer the haze camera sees: occluder twins and volumetric
+/// lights, nothing else.
+pub const HAZE_LAYER: usize = 1;
+
+/// The first layer a composite quad may be given.
+///
+/// Above 0 (the room) and 1 (the twins), with room left between for
+/// anything that wants a layer of its own later.
+pub const FIRST_COMPOSITE_LAYER: usize = 8;
+
+/// A layer no composite quad is on, so this camera's haze reaches this
+/// camera and nothing else.
+///
+/// A quad on the default layer is drawn by *every* camera, which is
+/// invisible with one viewport and wrong the moment there are two: the
+/// quad sits a tenth of a metre in front of its own camera, is two
+/// hundred metres across and skips frustum culling, so the second
+/// camera draws it as a wall of the first camera's haze — the first
+/// camera's beams, and the first camera's occlusion, from a viewpoint
+/// that is not its own. From the studio that was a person blocking a
+/// shaft in the Visualizer punching a hole in the Programme pane's fog,
+/// and it is why the fog is marched on the camera itself for now.
+///
+/// Layers are recycled by looking at what is in use rather than by
+/// keeping a free list, because a pane can close at any time and a list
+/// that leaks a layer per closed pane grows the bitmask forever.
+///
+/// # Panics
+///
+/// Never in practice: the search range is unbounded, so it only fails to
+/// find a free layer if every `usize` up to `usize::MAX` is in use.
+#[must_use]
+// `FIRST_COMPOSITE_LAYER..` is an unbounded range over `usize` — `find`
+// only returns `None` if every value up to `usize::MAX` were in use,
+// which is not a real rig's pane count. `maybe_infinite_iter` is
+// `pedantic`'s way of flagging exactly that unboundedness; it is the
+// point of the range, not an oversight.
+#[expect(
+    clippy::expect_used,
+    clippy::maybe_infinite_iter,
+    reason = "the range is unbounded; see the comment above"
+)]
+pub fn free_composite_layer(in_use: &[usize]) -> usize {
+    (FIRST_COMPOSITE_LAYER..)
+        .find(|layer| !in_use.contains(layer))
+        .expect("the layers above the first are unbounded")
+}
+
+/// On the main camera: "march the haze for this view at `1/scale` of
+/// its size, with `fog_steps` samples per pixel". At a scale of one the
+/// fog goes on the camera itself; above it, on a haze camera.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HazeView {
+    pub fog_steps: u32,
+    pub scale: u32,
+    /// How many pixels the haze camera may have when `scale` is 0 —
+    /// the quality preset's `haze_pixels`. See [`haze_scale`].
+    pub pixels: u32,
+}
+
+/// The haze camera itself, and which main camera it follows.
+#[derive(Component)]
+pub struct HazeCamera {
+    pub main: Entity,
+    pub image: Handle<Image>,
+    pub size: UVec2,
+}
+
+/// The full-screen composite quad, a child of the main camera.
+#[derive(Component)]
+pub struct HazeComposite;
+
+/// How much haze is in the room right now, as a fraction of a normally
+/// hazed room: the hazers' output, settled with the lag real haze has.
+///
+/// The operator's `--haze` dial multiplies it (`spawn::haze_density`).
+// r[impl viz.haze-is-volumetric] - the haze in the room is the hazers' settled output
+#[derive(Resource, Debug, Clone, Copy, PartialEq)]
+pub struct HazeLevel {
+    pub level: f32,
+}
+
+impl Default for HazeLevel {
+    /// A room opens already hazed to its residual — the hazers ran
+    /// before doors — rather than clear.
+    fn default() -> Self {
+        Self {
+            level: HAZE_RESIDUAL,
+        }
+    }
+}
+
+/// What is left in the air with every hazer off: a room that has been hazed
+/// does not clear, and a show that never touches its hazers is lit in that
+/// residual rather than in clean air.
+///
+/// A venue with no hazer patched at all is taken as normally hazed.
+pub const HAZE_RESIDUAL: f32 = 0.15;
+
+/// Seconds for the haze to close most of the gap toward a hazer that
+/// has just come up: fluid takes a while to fill a room.
+pub const HAZE_RISE_SECONDS: f32 = 4.0;
+
+/// Seconds for it to fall most of the way once the hazers stop. Slower
+/// than the rise: haze lingers.
+pub const HAZE_FALL_SECONDS: f32 = 12.0;
+
+/// The level the room is heading for: the hardest-working hazer, never
+/// below the residual, and a full room where no hazer is patched.
+// r[impl viz.haze-is-volumetric] - no hazer patched reads as a hazed room
+#[must_use]
+pub fn hazer_target(hazer_outputs: &[f32]) -> f32 {
+    if hazer_outputs.is_empty() {
+        return 1.0;
+    }
+    hazer_outputs
+        .iter()
+        .fold(HAZE_RESIDUAL, |acc, o| acc.max(o.clamp(0.0, 1.0)))
+}
+
+impl HazeLevel {
+    /// One frame of settling toward `target`: a first-order lag with
+    /// the rise and fall constants above.
+    // r[impl viz.haze-is-volumetric] - haze builds and lingers
+    pub fn settle(&mut self, target: f32, dt: f32) {
+        let tau = if target > self.level {
+            HAZE_RISE_SECONDS
+        } else {
+            HAZE_FALL_SECONDS
+        };
+        let k = 1.0 - (-dt.max(0.0) / tau).exp();
+        self.level += (target - self.level) * k;
+    }
+}
+
+/// A black twin, so its original is not twinned again and the twin
+/// itself never is.
+#[derive(Component)]
+pub struct HazeTwin;
+
+/// The extinction the twins write — one material for every twin, so the
+/// haze camera draws the whole room in one batch per mesh.
+#[derive(Resource)]
+struct OccluderMaterialHandle(Handle<HazeOccluderMaterial>);
+
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+pub struct HazeOccluderMaterial {
+    /// x = extinction per metre.
+    #[uniform(0)]
+    pub params: Vec4,
+}
+
+impl Material for HazeOccluderMaterial {
+    fn fragment_shader() -> ShaderRef {
+        OCCLUDER_SHADER.into()
+    }
+}
+
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+pub struct HazeCompositeMaterial {
+    #[texture(0)]
+    #[sampler(1)]
+    pub haze: Handle<Image>,
+}
+
+impl Material for HazeCompositeMaterial {
+    fn fragment_shader() -> ShaderRef {
+        COMPOSITE_SHADER.into()
+    }
+
+    /// Transparent pass, no depth write — the routing `Add` buys. The
+    /// blend itself is replaced below.
+    fn alpha_mode(&self) -> AlphaMode {
+        AlphaMode::Add
+    }
+
+    /// `out = fog + scene * transmittance`: the haze camera's colour is
+    /// added, and what was already there is scaled by the alpha its
+    /// occluders wrote.
+    fn specialize(
+        _pipeline: &MaterialPipeline,
+        descriptor: &mut RenderPipelineDescriptor,
+        _layout: &MeshVertexBufferLayoutRef,
+        _key: MaterialPipelineKey<Self>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        if let Some(fragment) = descriptor.fragment.as_mut()
+            && let Some(Some(target)) = fragment.targets.first_mut()
+        {
+            target.blend = Some(BlendState {
+                color: BlendComponent {
+                    src_factor: BlendFactor::One,
+                    dst_factor: BlendFactor::SrcAlpha,
+                    operation: BlendOperation::Add,
+                },
+                alpha: BlendComponent {
+                    src_factor: BlendFactor::Zero,
+                    dst_factor: BlendFactor::One,
+                    operation: BlendOperation::Add,
+                },
+            });
+        }
+        Ok(())
+    }
+}
+
+pub struct HazePlugin;
+
+impl Plugin for HazePlugin {
+    fn build(&self, app: &mut App) {
+        embedded_asset!(app, "haze_occluder.wgsl");
+        embedded_asset!(app, "haze_composite.wgsl");
+        app.add_plugins((
+            MaterialPlugin::<HazeOccluderMaterial>::default(),
+            MaterialPlugin::<HazeCompositeMaterial>::default(),
+        ))
+        .init_resource::<HazeLevel>()
+        .add_systems(Startup, occluder_material)
+        .add_systems(Update, (spawn_haze_cameras, sort_occluders, drive_haze))
+        .add_systems(
+            PostUpdate,
+            follow_main_camera.before(bevy::transform::TransformSystems::Propagate),
+        );
+    }
+}
+
+/// The haze's extinction per metre, from the same dials the fog volume
+/// is spawned with — see `spawn::VOLUMETRIC_HAZE_SCALE`.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Res<T> is a Bevy SystemParam and must be taken by value for this to run \
+              as a system; the fn only borrows the resource it wraps"
+)]
+fn occluder_material(
+    mut commands: Commands,
+    settings: Res<VizSettings>,
+    mut materials: ResMut<Assets<HazeOccluderMaterial>>,
+) {
+    let extinction =
+        crate::spawn::haze_extinction_per_metre(settings.haze, HazeLevel::default().level);
+    let handle = materials.add(HazeOccluderMaterial {
+        params: Vec4::new(extinction, 0.0, 0.0, 0.0),
+    });
+    commands.insert_resource(OccluderMaterialHandle(handle));
+}
+
+/// Bevy's per-pixel ray-start jitter on the haze camera, in metres.
+///
+/// At 128 steps across a thirty-metre house a step is a quarter of a metre,
+/// and a wide cone seen along its axis shows every step as a ring; a jitter
+/// of about one step turns the rings into grain the bilinear upsample and
+/// bloom smooth away, and it changes with the frame (interleaved gradient
+/// noise on `frame_count`), so what is left averages out over a few frames.
+/// `IGNITION_FOG_JITTER` overrides it.
+pub const FOG_JITTER_METRES: f32 = 0.3;
+
+/// The step count `FOG_JITTER_METRES` was measured against.
+pub const FOG_JITTER_REFERENCE_STEPS: f32 = 128.0;
+
+/// The jitter for a given march and a given haze scale: about one step,
+/// less whatever smoothing the upsample is going to do anyway.
+///
+/// Both halves were learned the hard way, and both were a constant
+/// before.
+///
+/// **Per step.** The jitter's whole job is to be roughly one step long
+/// — enough to scatter the ring a step boundary would otherwise draw,
+/// and no more. A step is the march's length over the step count, so
+/// halving the steps doubles the step and leaves a fixed jitter
+/// covering half of one: the rings come back, and it reads as "that is
+/// not enough steps" when it is not enough dither.
+///
+/// **Per scale.** The haze is marched small and stretched up, and the
+/// stretch smooths the step boundaries for free — so the coarser the
+/// haze camera, the less dither is needed. Dither past that and the
+/// noise itself is what gets magnified: at scale 3 a fixed one-step
+/// jitter puts a visible cross-hatch across the mouth of a wide beam,
+/// because after a bilinear stretch the noise is three pixels across
+/// and spatially correlated, which is exactly what TAA cannot average
+/// away. Divided by the scale it disappears and the shafts stay solid.
+///
+/// `IGNITION_FOG_JITTER` still forces a fixed value, for measuring.
+// r[impl viz.quality-presets] - the dither follows the march and the stretch
+#[must_use]
+pub fn fog_jitter_for(steps: u32) -> f32 {
+    if let Some(forced) = std::env::var("IGNITION_FOG_JITTER")
+        .ok()
+        .and_then(|v| v.trim().parse::<f32>().ok())
+    {
+        return forced;
+    }
+    FOG_JITTER_METRES * FOG_JITTER_REFERENCE_STEPS / crate::num::f32_of_u32(steps.max(1))
+}
+
+/// How many pixels the haze may march in a **frame** when the scale is
+/// chosen automatically (`HazeView::scale == 0`).
+///
+/// The fog's cost is this times the step count, so it is the one number that
+/// sets the haze's share of the frame whatever the viewport: 1280x720 at a
+/// 2560-wide studio, 1280x360 at 5120 — both under the budget with 128 steps
+/// on the reference GPU.
+///
+/// Per frame, and it used to be per camera, which is not the same thing
+/// the moment there is more than one. The operator's layout puts a
+/// Programme pane beside the Visualizer, and each took the whole budget
+/// — two haze cameras at 620x752 with no downscale at all, so the frame
+/// paid twice for a number whose own job was to bound it once. See
+/// [`share`].
+pub const HAZE_PIXEL_BUDGET: u32 = 640 * 960;
+
+/// The smallest a camera's share may get, however many are up.
+///
+/// Four panes should each look thin, not one of them look broken: below
+/// about this the shafts stop being shafts at any step count, and a
+/// picture that has given up is worse than a slow one.
+const HAZE_MIN_SHARE: u32 = 160 * 240;
+
+/// One camera's share of [`HAZE_PIXEL_BUDGET`] when `cameras` of them
+/// are marching haze this frame.
+///
+/// Split evenly rather than by area. A share proportional to each pane's
+/// size sounds fairer and is worse: the Programme pane is a preview and
+/// the Visualizer is the thing being looked at, and area would hand the
+/// larger one more pixels precisely when the frame can least afford it.
+/// Even shares mean adding a pane costs the frame nothing and costs
+/// every pane a little, which is the trade an operator can actually
+/// predict.
+// r[impl viz.performance-budget] - the haze is bounded per frame, not per camera
+#[must_use]
+#[expect(
+    clippy::arithmetic_side_effects,
+    reason = "the divisor is cameras.max(1), which is never zero, so this division \
+              can never panic"
+)]
+pub fn share(budget: u32, cameras: usize) -> u32 {
+    (budget / crate::num::u32_of_usize(cameras.max(1))).max(HAZE_MIN_SHARE.min(budget))
+}
+
+/// The scale for `main`: the smallest whole divisor that brings the
+/// haze camera under `budget` pixels; a given scale is used as is.
+#[must_use]
+pub fn haze_scale(main: UVec2, scale: u32, budget: u32) -> u32 {
+    if scale > 0 {
+        return scale;
+    }
+    let pixels = f64::from(main.x) * f64::from(main.y);
+    crate::num::u32_of_f64((pixels / f64::from(budget.max(1))).sqrt().ceil()).max(1)
+}
+
+/// The haze camera's target: `main / scale`, never below one pixel.
+#[must_use]
+pub fn haze_size(main: UVec2, scale: u32, budget: u32) -> UVec2 {
+    let scale = haze_scale(main, scale, budget);
+    UVec2::new(main.x.div_ceil(scale).max(1), main.y.div_ceil(scale).max(1))
+}
+
+fn haze_target(images: &mut Assets<Image>, size: UVec2) -> Handle<Image> {
+    // Float, so the shafts keep their HDR headroom for the main
+    // camera's bloom; no sRGB view, this is radiance.
+    let mut image = Image::new_target_texture(size.x, size.y, TextureFormat::Rgba16Float, None);
+    image.sampler = bevy::image::ImageSampler::linear();
+    images.add(image)
+}
+
+/// Gives every main camera that asks for one a haze camera and a
+/// composite quad.
+fn spawn_haze_cameras(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut composites: ResMut<Assets<HazeCompositeMaterial>>,
+    cameras: Query<
+        (
+            Entity,
+            &HazeView,
+            &Camera,
+            &Transform,
+            &Projection,
+            Option<&Exposure>,
+            Option<&bevy::anti_alias::taa::TemporalAntiAliasing>,
+        ),
+        Added<HazeView>,
+    >,
+    // Every camera that marches haze, new or not — the budget is the
+    // frame's and has to be split across all of them.
+    // r[impl viz.performance-budget] - the haze is bounded per frame, not per camera
+    all_views: Query<(), With<HazeView>>,
+    // The layers already spoken for, so a new pane takes one nobody is
+    // compositing on — see `free_composite_layer`.
+    composites_up: Query<&RenderLayers, With<HazeComposite>>,
+) {
+    let cameras_marching = all_views.iter().count();
+    let mut in_use: Vec<usize> = composites_up.iter().flat_map(RenderLayers::iter).collect();
+    for (main, view, camera, transform, projection, exposure, taa) in &cameras {
+        if view.scale == 1 {
+            // Full size: the fog on the camera itself, as Bevy ships
+            // it and as every still is made.
+            //
+            // The dither follows the anti-aliasing, because it is only
+            // half of a technique. A live viewport marches at a low
+            // count now — twelve steps at potato, over a room thirty
+            // metres deep — and without dither that is visible bands
+            // across every shaft; with it, and with TAA to average the
+            // noise over frames, it is a soft cone. A still has no
+            // frames to average over, so it takes the bands out by
+            // marching finely instead, and dither there would only be
+            // grain nothing removes.
+            let jitter = match taa {
+                Some(_) => fog_jitter_for(view.fog_steps),
+                None => 0.0,
+            };
+            commands.entity(main).insert(VolumetricFog {
+                ambient_intensity: 0.0,
+                step_count: view.fog_steps,
+                jitter,
+                ..default()
+            });
+            continue;
+        }
+        let budget = share(view.pixels, cameras_marching);
+        let size = haze_size(
+            camera
+                .physical_viewport_size()
+                .unwrap_or(UVec2::new(64, 64)),
+            view.scale,
+            budget,
+        );
+        // What the haze actually costs, in the log, once per camera.
+        // The three numbers multiply into the raymarch's whole bill and
+        // not one of them is visible from the outside — a viewport that
+        // silently landed on a different scale is exactly the kind of
+        // thing that makes a quality dial look like it does nothing.
+        // r[impl studio.profiling] - the haze says what it is marching
+        tracing::info!(
+            width = size.x,
+            height = size.y,
+            scale = haze_scale(
+                camera
+                    .physical_viewport_size()
+                    .unwrap_or(UVec2::new(64, 64)),
+                view.scale,
+                view.pixels,
+            ),
+            steps = view.fog_steps,
+            "viz.haze: marching"
+        );
+        let image = haze_target(&mut images, size);
+        commands.spawn((
+            HazeCamera {
+                main,
+                image: image.clone(),
+                size,
+            },
+            Camera3d::default(),
+            Camera {
+                order: -1,
+                clear_color: ClearColorConfig::Custom(Color::NONE),
+                ..default()
+            },
+            RenderTarget::Image(image.clone().into()),
+            Hdr,
+            Msaa::Off,
+            Tonemapping::None,
+            // The same static exposure as the main camera, so the fog
+            // is at the level the room is: `view.exposure` scales what
+            // the raymarch scatters, and the composite is added into
+            // the main camera's HDR frame *before* its tonemapping,
+            // which is where the auto exposure lands — so the eye
+            // adapts to the composite, fog and room together, and the
+            // haze camera itself never needs to adapt.
+            exposure.copied().unwrap_or_default(),
+            RenderLayers::layer(HAZE_LAYER),
+            ShadowFilteringMethod::Hardware2x2,
+            VolumetricFog {
+                ambient_intensity: 0.0,
+                step_count: view.fog_steps,
+                jitter: fog_jitter_for(view.fog_steps),
+                ..default()
+            },
+            *transform,
+            projection.clone(),
+            Name::new("Haze camera"),
+        ));
+        // A quad just past the near plane, big enough to fill any field
+        // of view, a child of the camera so it rides along. Nearest
+        // thing in the transparent pass, so it is drawn last.
+        //
+        // On a layer of its own, which the main camera is given as well
+        // as the room's: this camera's haze is for this camera, and a
+        // second pane must not draw it. See `free_composite_layer`.
+        let layer = free_composite_layer(&in_use);
+        in_use.push(layer);
+        commands
+            .entity(main)
+            .insert(RenderLayers::from_layers(&[0, layer]));
+        commands.spawn((
+            HazeComposite,
+            Mesh3d(meshes.add(Rectangle::new(200.0, 200.0))),
+            MeshMaterial3d(composites.add(HazeCompositeMaterial { haze: image })),
+            Transform::from_xyz(0.0, 0.0, -0.1),
+            RenderLayers::layer(layer),
+            bevy::camera::visibility::NoFrustumCulling,
+            NotShadowCaster,
+            ChildOf(main),
+            Name::new("Haze composite"),
+        ));
+    }
+}
+
+/// Keeps each haze camera on its main camera's pose, projection and
+/// size. A resize is a new target image — the render world caches one
+/// GPU texture per handle, so the image is replaced, not resized.
+fn follow_main_camera(
+    mut images: ResMut<Assets<Image>>,
+    mut composites: ResMut<Assets<HazeCompositeMaterial>>,
+    mains: Query<(&HazeView, &Camera, &Transform, Ref<Projection>, &Children), Without<HazeCamera>>,
+    mut hazes: Query<
+        (
+            &mut HazeCamera,
+            &mut Transform,
+            &mut Projection,
+            &mut RenderTarget,
+            &mut VolumetricFog,
+        ),
+        Without<HazeView>,
+    >,
+    quads: Query<&MeshMaterial3d<HazeCompositeMaterial>, With<HazeComposite>>,
+    all_views: Query<(), With<HazeView>>,
+) {
+    // Recomputed every frame, so a Programme pane opening or closing
+    // resizes every haze camera through the same path a window resize
+    // takes — there is no separate "the count changed" case to get
+    // wrong.
+    // r[impl viz.performance-budget] - the haze is bounded per frame, not per camera
+    let cameras_marching = all_views.iter().count();
+    for (mut haze, mut transform, mut projection, mut target, mut fog) in &mut hazes {
+        let Ok((view, camera, main_transform, main_projection, children)) = mains.get(haze.main)
+        else {
+            continue;
+        };
+        if *transform != *main_transform {
+            *transform = *main_transform;
+        }
+        if main_projection.is_changed() {
+            *projection = (*main_projection).clone();
+        }
+        if fog.step_count != view.fog_steps {
+            fog.step_count = view.fog_steps;
+        }
+        let Some(main_size) = camera.physical_viewport_size() else {
+            continue;
+        };
+        let budget = share(view.pixels, cameras_marching);
+        let wanted = haze_size(main_size, view.scale, budget);
+        if wanted == haze.size {
+            continue;
+        }
+        let image = haze_target(&mut images, wanted);
+        *target = RenderTarget::Image(image.clone().into());
+        for child in children.iter() {
+            if let Ok(material) = quads.get(child)
+                && let Some(mut m) = composites.get_mut(&material.0)
+            {
+                m.haze = image.clone();
+            }
+        }
+        // The dither follows the march *and* the stretch, so a resize
+        // that changes the scale changes it — see `fog_jitter_for`.
+        let scale = haze_scale(main_size, view.scale, budget);
+        let jitter = fog_jitter_for(view.fog_steps);
+        // Only a write that actually changes the value should mark the
+        // `FogVolume` changed — an equal-looking write every frame would
+        // otherwise thrash whatever downstream reacts to `is_changed()`.
+        if (fog.jitter - jitter).abs() > f32::EPSILON {
+            fog.jitter = jitter;
+        }
+        tracing::info!(
+            width = wanted.x,
+            height = wanted.y,
+            scale,
+            steps = view.fog_steps,
+            jitter,
+            cameras = cameras_marching,
+            "viz.haze: resized"
+        );
+        haze.image = image;
+        haze.size = wanted;
+    }
+}
+
+/// Sorts every new opaque mesh into what it does for the light: a
+/// fixture housing casts no shadow and blocks no shaft; everything else
+/// gets a black twin on the haze layer: same mesh, same skin, a child with an identity transform
+/// so it is wherever its original is. Only `StandardMaterial` meshes —
+/// a beam cone or the composite quad occludes nothing — and nothing
+/// under a fixture: a par's housing is a hand's width across and hangs
+/// above every beam, and five hundred of them would double what the
+/// haze camera culls and draws for a silhouette no shaft ever shows.
+fn sort_occluders(
+    mut commands: Commands,
+    material: Option<Res<OccluderMaterialHandle>>,
+    // Whether anything is marching the haze on a camera of its own.
+    // With the fog on the main camera — every tier, at present — no
+    // camera renders the occluder layer at all, and a twin of every
+    // mesh in the room is a second copy of the room to animate, skin
+    // and extract for nobody to look at.
+    views: Query<&HazeView>,
+    mut twinning: Local<bool>,
+    twins: Query<Entity, With<HazeTwin>>,
+    added: Query<
+        (Entity, &Mesh3d, Option<&SkinnedMesh>),
+        (
+            Added<Mesh3d>,
+            With<MeshMaterial3d<StandardMaterial>>,
+            Without<HazeTwin>,
+        ),
+    >,
+    // The same set without `Added`, for the frame a haze camera first
+    // appears: the room was built long before it, and twinning only
+    // what arrives after would leave the fog marching against an empty
+    // room.
+    every: Query<
+        (Entity, &Mesh3d, Option<&SkinnedMesh>),
+        (With<MeshMaterial3d<StandardMaterial>>, Without<HazeTwin>),
+    >,
+    parents: Query<&ChildOf>,
+    fixtures: Query<(), With<crate::spawn::Fixture>>,
+) {
+    let Some(material) = material else { return };
+    let under_a_fixture = |mut entity: Entity| loop {
+        if fixtures.contains(entity) {
+            return true;
+        }
+        match parents.get(entity) {
+            Ok(parent) => entity = parent.parent(),
+            Err(_) => return false,
+        }
+    };
+
+    // Nor does a housing cast a shadow: twelve shadow views a frame
+    // each culled and drew five hundred fixture meshes for silhouettes
+    // that land on the ceiling they hang from. That was most of the
+    // render thread's frame — and it is true whether or not anything
+    // is marching haze, so it is settled first and unconditionally.
+    // r[impl viz.performance-budget] - fixture bodies cast no shadow
+    for (entity, _, _) in &added {
+        if under_a_fixture(entity) {
+            commands.entity(entity).insert(NotShadowCaster);
+        }
+    }
+
+    let wanted = views.iter().any(|view| view.scale != 1);
+    if !wanted {
+        if *twinning {
+            // The last haze camera went away: the twins go with it,
+            // rather than being left to animate for no viewer.
+            for twin in &twins {
+                commands.entity(twin).despawn();
+            }
+            *twinning = false;
+        }
+        return;
+    }
+    // Turning on: sweep the room once, then follow what arrives. The
+    // twins were despawned above when it last turned off, so a sweep
+    // never doubles one.
+    let sweep = !*twinning;
+    *twinning = true;
+
+    let candidates: Vec<_> = if sweep {
+        every.iter().collect()
+    } else {
+        added.iter().collect()
+    };
+    for (entity, mesh, skin) in candidates {
+        if under_a_fixture(entity) {
+            continue;
+        }
+        let mut twin = commands.spawn((
+            HazeTwin,
+            Mesh3d(mesh.0.clone()),
+            MeshMaterial3d(material.0.clone()),
+            Transform::IDENTITY,
+            RenderLayers::layer(HAZE_LAYER),
+            NotShadowCaster,
+            ChildOf(entity),
+        ));
+        if let Some(skin) = skin {
+            twin.insert(skin.clone());
+        }
+    }
+}
+
+/// Writes the room's haze into the renderer: the fog volume's density
+/// and the occluder twins' extinction, both from the same dial and the
+/// same hazer level, so the composite dims the room exactly as much as
+/// the fog lights it. Runs after the fixtures decode the frame's DMX,
+/// which is where the level moves.
+// r[impl viz.haze-is-volumetric] - one density, fog and occluders alike
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Res<T> is a Bevy SystemParam and must be taken by value for this to run \
+              as a system; the fn only borrows the resources it wraps"
+)]
+fn drive_haze(
+    level: Res<HazeLevel>,
+    settings: Res<VizSettings>,
+    material: Option<Res<OccluderMaterialHandle>>,
+    mut materials: ResMut<Assets<HazeOccluderMaterial>>,
+    mut fogs: Query<&mut FogVolume>,
+) {
+    if !level.is_changed() && !settings.is_changed() {
+        return;
+    }
+    let density = crate::spawn::haze_density(settings.haze, level.level);
+    for mut fog in &mut fogs {
+        if (fog.density_factor - density).abs() > f32::EPSILON {
+            fog.density_factor = density;
+        }
+    }
+    let extinction = crate::spawn::haze_extinction_per_metre(settings.haze, level.level);
+    if let Some(handle) = material
+        && let Some(mut m) = materials.get_mut(&handle.0)
+        && (m.params.x - extinction).abs() > f32::EPSILON
+    {
+        m.params.x = extinction;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// No hazer patched is a hazed room; hazers off is the residual, not
+    /// clean air; the hardest-working hazer sets the level.
+    /// r[verify viz.haze-is-volumetric]
+    #[test]
+    fn the_hazers_set_the_level_and_a_room_never_fully_clears() {
+        assert!((hazer_target(&[]) - (1.0)).abs() < 1e-6);
+        assert!((hazer_target(&[0.0, 0.0]) - (HAZE_RESIDUAL)).abs() < 1e-6);
+        assert!((hazer_target(&[0.2, 0.9]) - (0.9)).abs() < 1e-6);
+        assert!((hazer_target(&[3.0]) - (1.0)).abs() < 1e-6);
+    }
+
+    /// Haze builds over seconds and lingers longer than it took to
+    /// build; it never overshoots.
+    /// r[verify viz.haze-is-volumetric]
+    #[test]
+    fn haze_builds_with_a_lag_and_lingers() {
+        let mut h = HazeLevel { level: 0.0 };
+        h.settle(1.0, HAZE_RISE_SECONDS);
+        let after_one_tau = h.level;
+        assert!((after_one_tau - 0.632).abs() < 0.01, "{after_one_tau}");
+        for _ in 0..100 {
+            h.settle(1.0, 1.0);
+        }
+        assert!(h.level <= 1.0 && h.level > 0.999);
+        h.settle(0.0, HAZE_RISE_SECONDS);
+        assert!(
+            h.level > 1.0 - 0.632,
+            "falls slower than it rose: {}",
+            h.level
+        );
+        h.settle(0.0, 1000.0);
+        assert!(h.level.abs() < 1e-3);
+        // A zero or negative frame does nothing.
+        let before = h.level;
+        h.settle(1.0, 0.0);
+        assert!((h.level - (before)).abs() < 1e-6);
+    }
+
+    /// The dial multiplies the hazers: no haze on the dial, or a room
+    /// with none in it, is no density at all.
+    /// r[verify viz.haze-is-volumetric]
+    #[test]
+    fn density_is_dial_times_hazer_level() {
+        use crate::spawn::haze_density;
+        assert!((haze_density(0.0, 1.0) - (0.0)).abs() < 1e-6);
+        assert!((haze_density(1.6, 0.0) - (0.0)).abs() < 1e-6);
+        assert!((haze_density(1.6, 0.5) - haze_density(1.6, 1.0) * 0.5).abs() < 1e-7);
+        assert!(haze_density(1.6, 1.0) > 0.0);
+    }
+
+    /// The dither is sized in *steps*, not metres: halve the march and
+    /// the jitter doubles, because a step doubled too. A constant here
+    /// is what makes a coarser march ring.
+    /// r[verify viz.quality-presets]
+    #[test]
+    fn the_jitter_is_about_one_step_whatever_the_count() {
+        // SAFETY: single-threaded test, and the variable is removed
+        // again before anything else reads it.
+        unsafe { std::env::remove_var("IGNITION_FOG_JITTER") };
+        assert!((fog_jitter_for(128) - FOG_JITTER_METRES).abs() < 1e-6);
+        assert!(FOG_JITTER_METRES.mul_add(-2.0, fog_jitter_for(64)).abs() < 1e-6);
+        assert!((fog_jitter_for(256) - FOG_JITTER_METRES / 2.0).abs() < 1e-6);
+        // A step count of zero is not a divide by zero.
+        assert!(fog_jitter_for(0).is_finite());
+    }
+
+    /// The budget is the frame's, so a second pane halves each share
+    /// rather than doubling what the frame pays. That was the bug: two
+    /// viz panes each took the whole budget and the frame marched twice
+    /// the pixels the one number was supposed to bound.
+    /// r[verify viz.performance-budget]
+    /// Two panes, two layers: a camera composites its own haze and
+    /// nobody else's.
+    ///
+    /// The quad is two hundred metres across, sits a tenth of a metre
+    /// in front of its camera and skips frustum culling — all three
+    /// deliberate, and together they mean a quad on the shared layer is
+    /// drawn by every other camera in the room as a wall of somebody
+    /// else's fog. With one viewport that is invisible. With a
+    /// Visualizer and a Programme pane it is a person occluding a shaft
+    /// in one of them punching a hole in the other's haze, from a
+    /// viewpoint that is not its own.
+    ///
+    /// r[verify viz.haze-is-volumetric] - one camera's haze reaches one camera
+    #[test]
+    fn each_pane_composites_its_own_haze_and_no_other() {
+        // Nothing up yet: the first pane takes the first layer, and
+        // never the room's or the twins'.
+        let first = free_composite_layer(&[]);
+        assert_eq!(first, FIRST_COMPOSITE_LAYER);
+        assert!(
+            first > HAZE_LAYER,
+            "a composite on the room's layer or the twins' is the bug this exists to \
+             prevent, one layer over"
+        );
+
+        // A second pane takes a different one, and a third another.
+        let second = free_composite_layer(&[first]);
+        let third = free_composite_layer(&[first, second]);
+        assert_ne!(first, second);
+        assert_ne!(second, third);
+        assert_ne!(first, third);
+
+        // A pane closing frees its layer for the next one, rather than
+        // spending a fresh layer per open — four panes over an evening
+        // of docking and undocking would otherwise walk the bitmask up
+        // forever.
+        assert_eq!(free_composite_layer(&[first, third]), second);
+        assert_eq!(free_composite_layer(&[second, third]), first);
+    }
+
+    #[test]
+    fn the_budget_is_split_across_the_cameras_marching_it() {
+        assert_eq!(share(HAZE_PIXEL_BUDGET, 1), HAZE_PIXEL_BUDGET);
+        assert_eq!(share(HAZE_PIXEL_BUDGET, 2), HAZE_PIXEL_BUDGET / 2);
+        assert_eq!(share(HAZE_PIXEL_BUDGET, 3), HAZE_PIXEL_BUDGET / 3);
+        // Whatever the count, the frame never marches more than the
+        // budget — which is the whole claim the constant makes.
+        for cameras in 1..=4 {
+            let total = share(HAZE_PIXEL_BUDGET, cameras) * crate::num::u32_of_usize(cameras);
+            assert!(
+                total <= HAZE_PIXEL_BUDGET,
+                "{cameras} cameras march {total} of {HAZE_PIXEL_BUDGET}"
+            );
+        }
+        // And a share never collapses to nothing: past the floor the
+        // frame goes over budget rather than the picture giving up.
+        assert_eq!(share(HAZE_PIXEL_BUDGET, 100), HAZE_MIN_SHARE);
+        assert!(share(0, 4) == 0 || share(0, 4) >= 1);
+    }
+
+    /// r[verify viz.performance-budget]
+    #[test]
+    fn the_haze_camera_is_a_fraction_of_the_view_and_never_nothing() {
+        assert_eq!(
+            haze_size(UVec2::new(5120, 1440), 2, HAZE_PIXEL_BUDGET),
+            UVec2::new(2560, 720)
+        );
+        assert_eq!(
+            haze_size(UVec2::new(2560, 1440), 3, HAZE_PIXEL_BUDGET),
+            UVec2::new(854, 480)
+        );
+        assert_eq!(
+            haze_size(UVec2::new(1, 1), 4, HAZE_PIXEL_BUDGET),
+            UVec2::new(1, 1)
+        );
+    }
+
+    /// Auto scale: the studio's two viewports land under the pixel
+    /// budget at the smallest whole scale, and a small window is not
+    /// shrunk at all.
+    /// r[verify viz.performance-budget]
+    #[test]
+    fn the_automatic_scale_keeps_the_haze_under_its_pixel_budget() {
+        for (w, h) in [(5120, 1440), (2560, 1440), (1920, 1080), (640, 360)] {
+            let size = haze_size(UVec2::new(w, h), 0, HAZE_PIXEL_BUDGET);
+            assert!(size.x * size.y <= HAZE_PIXEL_BUDGET, "{w}x{h} -> {size}");
+            let scale = haze_scale(UVec2::new(w, h), 0, HAZE_PIXEL_BUDGET);
+            if scale > 1 {
+                let coarser = UVec2::new(w.div_ceil(scale - 1), h.div_ceil(scale - 1));
+                assert!(
+                    coarser.x * coarser.y > HAZE_PIXEL_BUDGET,
+                    "{w}x{h} could use {}",
+                    scale - 1
+                );
+            }
+        }
+        assert_eq!(haze_scale(UVec2::new(640, 360), 0, HAZE_PIXEL_BUDGET), 1);
+        assert_eq!(haze_scale(UVec2::new(2560, 1440), 0, HAZE_PIXEL_BUDGET), 3);
+        assert_eq!(haze_scale(UVec2::new(5120, 1440), 0, HAZE_PIXEL_BUDGET), 4);
+    }
+}

@@ -92,6 +92,67 @@ pub fn parse_tempo_automation(master_node: Node<'_, '_>) -> Vec<AutomationPoint>
     points
 }
 
+/// Parse the time-signature automation from the master track: every
+/// change of signature on the arrangement, `(beat, signature)` in order.
+///
+/// The envelope's events are `EnumEvent`s carrying the encoded signature
+/// (see the module docs). Live parks the first one far before the
+/// arrangement, like the tempo's; it is clamped to beat 0, the signature
+/// the set starts in.
+pub fn parse_time_signature_automation(master_node: Node<'_, '_>) -> Vec<(f64, TimeSignature)> {
+    let Some(target_id) = descend(
+        master_node,
+        "DeviceChain.Mixer.TimeSignature.AutomationTarget",
+    )
+    .and_then(|n| n.attribute("Id"))
+    .and_then(|v| v.parse::<i32>().ok()) else {
+        return Vec::new();
+    };
+    let Some(envelopes) = descend(master_node, "AutomationEnvelopes.Envelopes") else {
+        return Vec::new();
+    };
+    let mut changes: Vec<(f64, TimeSignature)> = envelopes
+        .children()
+        .filter(|e| e.has_tag_name("AutomationEnvelope"))
+        .find(|e| {
+            descend(*e, "EnvelopeTarget").and_then(|n| child_i32(n, "PointeeId")) == Some(target_id)
+        })
+        .and_then(|e| descend(e, "Automation.Events"))
+        .map(|events| {
+            events
+                .children()
+                .filter_map(|event| {
+                    let time = event.attribute("Time")?.parse::<f64>().ok()?;
+                    let encoded = event.attribute("Value")?.parse::<f64>().ok()?;
+                    Some((time.max(0.0), decode_signature_event(encoded)?))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    changes.sort_by(|a, b| a.0.total_cmp(&b.0));
+    changes
+}
+
+/// Live's one-number signature: `(numerator - 1) + 99 * log2(denominator)`.
+fn decode_signature_event(encoded: f64) -> Option<TimeSignature> {
+    if !(0.0..=494.0).contains(&encoded) {
+        return None;
+    }
+    #[expect(
+        clippy::as_conversions,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "range-checked to 0..=494 above"
+    )]
+    let encoded = encoded.round() as u32;
+    let numerator = u8::try_from(encoded % 99 + 1).ok()?;
+    let denominator = 1u8.checked_shl(encoded / 99)?;
+    Some(TimeSignature {
+        numerator,
+        denominator,
+    })
+}
+
 fn collect_float_events(events_node: Node<'_, '_>, points: &mut Vec<AutomationPoint>) {
     for event in events_node.children() {
         if event.has_tag_name("FloatEvent")

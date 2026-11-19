@@ -1,0 +1,276 @@
+{
+  "console_name": "150W Moving Head Beam",
+  "manufacturer": "U'King (UKING ONLINE / Shenzhen Uking Technology)",
+  "model": "ZQ02341 (Amazon ZQ02341US; 'Big Steel Gun' / 'BEAM PRO' 150W beam)",
+  "sources": [
+    "https://www.uking-online.com/products/zq02341-150w-beam-moving-head-light-stage-light-for-dj-concert-party-weddings-nightclub-dance-hall",
+    "https://www.uking-online.com/cdn/shop/files/ZQ02341-Beam-Moving-Head-Light.pdf?v=1024286754085817358",
+    "https://manuals.plus/asin/B0FDL1WML4",
+    "https://manuals.plus/m/d0365b144119eb959ec207c39033e50568fecd25a94a2bbd8b4e6dfe58ed12d5",
+    "https://www.amazon.com/dp/B0F8H1RF35"
+  ],
+  "physical": {
+    "width_mm": 150,
+    "length_mm": 230,
+    "height_mm": 310,
+    "weight_kg": 5.0,
+    "power_w": 150,
+    "weight_kg_guess": true
+  },
+  "optics": {
+    "beam_angle_deg": 2.8,
+    "field_angle_deg": null,
+    "lumens_or_lux": "34,000 lux @ 5 m (listing); beam chart image: 530,000 / 350,000 / 200,000 / 120,000 (units unlabelled) at 5 / 7 / 10 / 15 m",
+    "source": "1 x white LED beam engine (150W rated input), listing image 'White - CCT: 8500K'",
+    "led_count": 1,
+    "emitters": [
+      "white"
+    ],
+    "strobe_hz": "1-25 Hz"
+  },
+  "movement": {
+    "pan_deg": 540,
+    "tilt_deg": 180
+  },
+  "wheels": {
+    "color": [
+      "white",
+      "color1",
+      "color2",
+      "color3",
+      "color4",
+      "color5",
+      "color6",
+      "color7"
+    ],
+    "gobo": [
+      "open",
+      "gobo1",
+      "gobo2",
+      "gobo3",
+      "gobo4",
+      "gobo5",
+      "gobo6",
+      "gobo7"
+    ],
+    "color_names_guess": true
+  },
+  "modes": {
+    "12ch": [
+      {
+        "channel": 1,
+        "attribute": "Pan",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 255,
+            "meaning": "pan 0-540 deg"
+          }
+        ]
+      },
+      {
+        "channel": 2,
+        "attribute": "PanFine",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 255,
+            "meaning": "pan fine"
+          }
+        ]
+      },
+      {
+        "channel": 3,
+        "attribute": "Tilt",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 255,
+            "meaning": "tilt 0-180 deg"
+          }
+        ]
+      },
+      {
+        "channel": 4,
+        "attribute": "TiltFine",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 255,
+            "meaning": "tilt fine"
+          }
+        ]
+      },
+      {
+        "channel": 5,
+        "attribute": "Speed",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 255,
+            "meaning": "pan/tilt speed fast to slow"
+          }
+        ]
+      },
+      {
+        "channel": 6,
+        "attribute": "Dimmer",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 255,
+            "meaning": "LED linear dimming 0-100%"
+          }
+        ]
+      },
+      {
+        "channel": 7,
+        "attribute": "Strobe",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 15,
+            "meaning": "strobe off (open)"
+          },
+          {
+            "from": 16,
+            "to": 255,
+            "meaning": "strobe slow to fast"
+          }
+        ]
+      },
+      {
+        "channel": 8,
+        "attribute": "Color",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 9,
+            "meaning": "white"
+          },
+          {
+            "from": 10,
+            "to": 79,
+            "meaning": "colours 1-7 (10-value steps, manual does not list names)"
+          },
+          {
+            "from": 80,
+            "to": 139,
+            "meaning": "half-colour selection"
+          },
+          {
+            "from": 140,
+            "to": 197,
+            "meaning": "colour wheel forward rotation fast to slow"
+          },
+          {
+            "from": 198,
+            "to": 255,
+            "meaning": "colour wheel reverse rotation slow to fast"
+          }
+        ]
+      },
+      {
+        "channel": 9,
+        "attribute": "Gobo",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 9,
+            "meaning": "open (circular)"
+          },
+          {
+            "from": 10,
+            "to": 79,
+            "meaning": "gobos 1-7 (10-value steps)"
+          },
+          {
+            "from": 80,
+            "to": 149,
+            "meaning": "gobo shake, slow to fast"
+          },
+          {
+            "from": 150,
+            "to": 159,
+            "meaning": "open shake, slow to fast"
+          },
+          {
+            "from": 160,
+            "to": 207,
+            "meaning": "auto clockwise gobo scroll fast to slow"
+          },
+          {
+            "from": 208,
+            "to": 255,
+            "meaning": "auto counter-clockwise gobo scroll fast to slow"
+          }
+        ]
+      },
+      {
+        "channel": 10,
+        "attribute": "Prism",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 8,
+            "meaning": "prism closed"
+          },
+          {
+            "from": 9,
+            "to": 127,
+            "meaning": "prism open"
+          },
+          {
+            "from": 128,
+            "to": 255,
+            "meaning": "prism rotation slow to fast"
+          }
+        ]
+      },
+      {
+        "channel": 11,
+        "attribute": "Macro",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 50,
+            "meaning": "other channels active (no macro)"
+          },
+          {
+            "from": 51,
+            "to": 100,
+            "meaning": "fast auto program"
+          },
+          {
+            "from": 101,
+            "to": 200,
+            "meaning": "slow auto program"
+          },
+          {
+            "from": 201,
+            "to": 255,
+            "meaning": "sound mode"
+          }
+        ]
+      },
+      {
+        "channel": 12,
+        "attribute": "Reset",
+        "ranges": [
+          {
+            "from": 0,
+            "to": 249,
+            "meaning": "no function"
+          },
+          {
+            "from": 250,
+            "to": 255,
+            "meaning": "reset, hold 3 s"
+          }
+        ]
+      }
+    ]
+  },
+  "confidence": "manual found",
+  "notes": "Amazon listing B0F8H1RF35 (4-pack 'U`King 150W Moving Head Lights, 18-Facet Prism Stage Beam Light', sold by SpectraVibe) re-read 2026-08-26: 34,000 lux @ 5 m, 18-facet 360-deg rotating prism, 8 rotating gobos, 8 colours with colour mixing (half colours), 2.8 deg beam (the beam-chart image says 2 deg, CCT 8500K), 1-25 Hz strobe, 12 DMX channels, pan/tilt inversion, fine pan/tilt, 3-pin DMX in/out, locking power connectors, 4-button LCD menu, 'compact 13.4 x 8.93 x 5.9 in' (that is the shipping box). The dimension drawing gives the bare fixture as 31 cm tall, 15 cm wide, 23 cm deep, X-axis 540 deg, Y-axis 180 deg -- physical now uses 150 x 230 x 310 mm (was the 385 x 265 x 260 mm packaged size, guess flag removed). Weight is not on the listing; 5 kg from U'King's page is kept and flagged as a guess. The listing carries no DMX chart and no manual link. 12ch chart transcribed from U'King's own PDF manual (Big Steel Gun Manual, ZQ02341-Beam-Moving-Head-Light.pdf). Colour and gobo names are not given anywhere found. CHANNEL MAP: the venue patches this as manufacturer \"U'King\" / model '150W Moving Head Beam', and crates/ignition-viz/src/channel_map.rs has no entry for that pair (its 12ch beam entry matches manufacturer 'betopper' only), so the visualizer currently has no channel map for this fixture; versus the Betopper entry it would otherwise share, ch11 here is an auto/sound macro channel, not Focus, and the colour wheel has 8 slots in 10-value steps (0-9 white, 10-79 colours 1-7, 80-139 half-colours) rather than 9 colours. The repo GDTF UKing@ZQ02341_150W_Big_Steel_Gun_LED_Moving_Head_Beam (2024-R001) should be the definitive reference for slot names/colours."
+}

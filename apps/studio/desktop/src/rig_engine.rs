@@ -156,9 +156,13 @@ pub fn bootstrap_blocking() -> eyre::Result<()> {
         // Signed in: the books are the docs that sync with the account's
         // other devices (sync.rs). Before the first rig makes its home.
         #[cfg(feature = "doc-sync")]
-        crate::sync::start().await;
+        crate::peers::books();
         let backend = GuitarRigBackend::new();
         let router = backend.router();
+        // This engine on the account's mesh (peers.rs), and its handle on
+        // the in-process router.
+        #[cfg(feature = "doc-sync")]
+        let router = router.merge_router(crate::peers::start(&backend).await.router());
         // The shared performance surface, under the guitar's scope — as
         // engine_main.rs mounts it.
         let router = signal_rigs_proto::mount_perform!(router, signal_rigs_proto::Rig::Guitar, backend.clone());

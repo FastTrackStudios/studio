@@ -43,6 +43,11 @@ pub struct Song {
 ///
 /// The set would not read, convert or open, or a song would not be written.
 pub fn split(set: &Path, into: &Path) -> eyre::Result<Vec<Song>> {
+    // Absolute from here on: the show's model, the songs and the media they
+    // name are all placed by these, and a path relative to the working
+    // directory left every song naming its media by it (none of it loaded).
+    let (set, into) = (std::path::absolute(set)?, std::path::absolute(into)?);
+    let (set, into) = (set.as_path(), into.as_path());
     let live =
         ableton::io::read_live_set(set).map_err(|e| eyre::eyre!("{}: {e}", set.display()))?;
     let ranges = ableton::setlist::songs(&live);

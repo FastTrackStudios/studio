@@ -1,0 +1,430 @@
+# Where the frame went
+
+`r[studio.profiling]`
+
+The studio draws with two renderers in one process. Blitz lays the
+document out and paints it with Vello; inside one element of that paint,
+Bevy steps the entire visualizer and hands back a texture. A frame-rate
+readout tells you the two of them together took 44 ms and nothing about
+which one spent it — which is the only question worth asking about a slow
+studio, and the reason "it feels slow, let's tune something" has been
+guesswork here twice.
+
+Three tools, in the order to reach for them.
+
+## 1. The stage table — which stage
+
+```
+IGNITION_PROFILE=1 just studio          # or: just profile
+```
+
+No rebuild, no extra binary, nothing to install. Every stage of a frame
+opens a `tracing` span on one target of its own (`ignition::profile`);
+`IGNITION_PROFILE=1` adds a directive for that target to the log filter
+and installs a layer that aggregates the spans. Every two seconds a table
+lands in the log — and so in `~/.local/state/ignition/studio.log`:
+
+```
+profile: 2.0 s · 84 frames · 23.81 ms/frame · 42.0 fps (budget 8.33 ms at 120 Hz)
+  stage                          calls self/frame  all/frame      avg      p99      max
+  viz.render                        84     14.20!     14.20    14.20    22.10    31.40
+  blitz.render                      84      6.10       23.81    23.81    30.02    41.90
+  blitz.style                       84      2.40        2.40     2.40     4.10     6.20
+  viz.commands                      84      0.61        0.61     0.61     1.20     2.90
+```
+
+Read the **self/frame** column and nothing else first. It is the time a
+stage spent that was *not* inside a nested stage, so it is the only
+column that attributes anything: `blitz.render` is by construction 100%
+of the frame every time and says nothing, while its self time — what is
+left after the scene build, and so after the visualizer — is Vello
+encoding and the GPU submit. A `!` marks a stage over the whole 120 Hz
+budget on its own; there is rarely more than one, and it is the answer.
+
+The stages, nested as they nest:
+
+| stage | what it is |
+| --- | --- |
+| `loop.window_event` | one winit event; the `redraw` one contains the frame. |
+| `loop.poll` | the Dioxus virtual DOM coming up for air: every dirty component re-rendered, diffed and written into the document. |
+| `loop.redraw` / `loop.resume` / `loop.shell_other` | the other shell events. |
+| `blitz.render` | one window's whole frame. Self time is Vello encode + submit. |
+| `blitz.scene`  | the DOM paint walk — and, inside one element, the visualizer. |
+| `viz.paint`    | the Visualizer pane's element. |
+| `viz.commands` | the operator's commands, the sound fade, the transport, the playhead published back. |
+| `viz.render`   | one visualizer frame: resize, main-world step, extract, encode. |
+| `viz.step`     | just `App::update` — the main world. |
+| `viz.programme`| the Programme pane, when one is up. |
+| `blitz.resolve`| style and layout together. |
+| `blitz.style`  | stylo. |
+| `blitz.layout` | taffy. |
+
+A stage that never appears either never ran (`viz.programme` with no
+Programme pane up) or was compiled out.
+
+Two windows painting means two `blitz.render` calls a frame, so `avg`
+(per call) and `self/frame` (per frame) are deliberately different
+columns. Do not read one for the other.
+
+Knobs: `IGNITION_PROFILE_INTERVAL` (seconds, default 2) and
+`IGNITION_PROFILE_FRAME` (the span that counts as a frame, default
+`blitz.render`).
+
+## 1a. Measure the worst case, not an idle one
+
+```
+just profile-bench
+```
+
+`IGNITION_BENCH=1` opens the studio on `data/songs/benchmark.json` — one
+cue lighting every mover, par, bar, beam and hazer at once, with chases,
+figures, strobes and colour cycles running — and **takes** it. Quote
+numbers from this and nothing else: an idle transport flatters the
+studio by a third, and the two are not the same shape of frame. Idle,
+the studio is CPU-bound in Blitz; lit, it is GPU-bound in the volumetric
+pass, and `blitz.render`'s self time *rises* because Vello's submit ends
+up waiting on the visualizer.
+
+Two traps, both of which cost this repo real time:
+
+* A cue list that is loaded but never GOed outputs nothing, so the
+  studio comes up on a dark rig and reports a lovely frame rate for an
+  empty room. `crates/ignition-viz/tests/benchmark_cue.rs` exists
+  because of it.
+* `follow_song` seeks the cue player to the transport's position *every
+  frame*. With a project open and its transport parked at bar one, it
+  drags the player off the benchmark cue as fast as GO puts it there —
+  the cue fires, the rig stays dark, and nothing in the logs is wrong.
+  Benchmark mode opens no project for exactly this reason.
+
+Prove the rig is lit and moving rather than assuming it: capture two
+screenshots a second apart and diff the viewport. Ninety-odd per cent of
+those pixels should differ.
+
+```
+tools/shoot.sh --out /tmp/a && sleep 1 && tools/shoot.sh --out /tmp/b
+magick compare -metric AE -crop 1290x190+300+40 /tmp/a/DP-4.png /tmp/b/DP-4.png null:
+```
+
+## 2. `IGNITION_PROFILE=all` — which system
+
+Once the table says `viz.step`, the next question is *which system*.
+
+```
+just profile-build-trace       # a release build with `--features trace`
+IGNITION_PROFILE=all just studio
+```
+
+`ignition-viz/trace` turns on `bevy/trace`, which opens a span per
+system, per schedule and per render pass; `all` aggregates every span in
+the process rather than just the named stages. The table gets long and
+the profiler itself starts costing a millisecond or two — which is why
+this is a separate build and a separate mode.
+
+## 3. A timeline, and a sampling profile — which line
+
+An average hides shape. A stage costing 12 ms a frame might be one frame
+in ten costing 120 ms; two windows might be painting in lockstep and
+serialising. For that:
+
+```
+just profile TRACE=/tmp/ignition-trace.json
+```
+
+which writes a Chrome trace-event file — open it at
+<https://ui.perfetto.dev>. It is plain JSON, one event per line, and the
+array is deliberately never closed (the format allows a truncated file),
+so killing the studio however you like still leaves a trace that opens.
+
+And for everything the spans cannot see at all — Vello's own encoding,
+wgpu, the image decoders behind the library thumbnails, malloc:
+
+```
+just studio          # then, in another terminal, against the running one:
+sudo sysctl kernel.perf_event_paranoid=1
+just perf-studio
+hotspot /tmp/ignition-perf.data
+```
+
+Sampling from launch would spend the whole profile in shader
+compilation, which is a real cost but not the one that repeats every
+frame — hence attaching to a studio that is already up.
+
+## The visualizer on its own
+
+```
+just bench                     # crates/ignition-viz/src/bench.rs
+```
+
+Headless, repeatable, through the same embedded route the studio uses,
+and it splits the CPU step from the GPU tail. This is what a change to
+the renderer is judged against (`r[viz.performance-budget]`); the
+profiler is what tells you which change to make.
+
+## Why not Tracy
+
+It would be the obvious choice, and it is not usable here yet: Bevy 0.19
+pins `tracing-tracy` 0.11, whose wire protocol wants a Tracy 0.11 server,
+and nixpkgs ships 0.13. Matching those up is a build rabbit hole in
+exchange for a nicer picture of a number the table already gives. If Bevy
+bumps its pin to something nixpkgs carries, the layer to add is four
+lines next to `ignition_profile::from_env()` in the studio's `main.rs`.
+
+## What it found the first time
+
+Worth keeping, because both answers were somewhere nobody was looking
+and both were found by reading one column.
+
+The studio was at 30 fps, 44 ms a frame, and the standing assumption was
+that the visualizer was too expensive. The table said `viz.step` — the
+entire Bevy world, every fixture, the volumetrics — was **2.7 ms**, and
+that `loop.poll`, the Dioxus vdom poll, was **22.4 ms**. Under it, a
+sampling profile (`just perf-studio`) put twenty-seven per cent of the
+whole process in `url::parser::parse_cannot_be_a_base_path`: the library
+panes animate their thumbnails by swapping an `img src` twelve times a
+second, those `src` values were base64 `data:` URIs, and Blitz parses an
+`img src` as a URL every time it is set — two hundred thousand
+characters of it, before a cache lookup keyed on the parsed string.
+`file:` URLs instead: 22.4 ms to 0.21, and 30 fps to 77.
+
+Then `blitz.layout` at 3.9 ms a frame, every frame, on a document whose
+shape had not changed since the window opened. The frame loop kept Blitz
+repainting by bumping a signal into a `data-frame` attribute — which
+re-rendered a component, diffed it, mutated the document, restyled it
+and relaid the whole tree out, to change a number nothing reads.
+`use_window().request_redraw()` asks winit for the same frame and
+touches nothing: 3.9 ms to 1.4, and 77 fps to 105.
+
+Neither of those is a thing to guess at, and both are obvious in the
+table. That is the argument for the profiler.
+
+## Measure the layout the operator actually runs
+
+```
+IGNITION_OPERATOR=cody just profile-bench
+```
+
+Without it the studio draws its built-in single-window layout, and every
+number is a third too good. The operator layout is **three windows** —
+Cue List + Transport, the library panes, and Programme + Visualizer —
+and it changes the shape of the frame twice over:
+
+* Only the window holding the Viewport asks for frames. The other two
+  repaint when their content changes, which since the frame loop stopped
+  dirtying the DOM is rarely — so they cost almost nothing, and
+  `blitz.scene` drops from 1.9 ms to 0.4.
+* The Programme pane is a **second camera on the same scene**, so the
+  visualizer renders it twice: `viz.step` goes from 3.0 ms to 5.0.
+
+Measured on the benchmark cue at 5120x1440: **70 fps, 14.3 ms**, against
+110 fps for the same cue in the single-window layout. `blitz.render`'s
+self time is 8.7 ms of it — over the whole 120 Hz budget on its own,
+waiting on a GPU now drawing the venue twice.
+
+**The haze pixel budget is per camera, not per frame**, and with two
+viz panes up the frame pays it twice — the log shows two haze cameras at
+620x752 (scale 1, so no downscale at all) beside the viewport's 847x464.
+`HAZE_PIXEL_BUDGET`'s own comment calls it "the one number that sets the
+haze's share of the frame", and with more than one camera it does not.
+Dividing it among the live haze cameras, or simply giving a preview pane
+a fraction, is worth about 2 ms of the 6 ms deficit and is the cheapest
+thing left on this list. It is a quality decision about the Programme
+pane, which is why it is written down here rather than done.
+
+## Render quality presets
+
+`IGNITION_QUALITY=potato|low|medium|high|ultra`, default `medium` —
+`r[viz.quality-presets]`. Measured on the benchmark cue at 5120x1440
+with the rig lit, the effects running and the screens playing, on an RTX
+4080; the haze camera's size is the one the studio logs
+(`viz.haze: resized`).
+
+| preset | haze camera | steps | fps |
+| --- | --- | --- | --- |
+| potato | 518x72 | 32 | 129 |
+| low | 1036x144 | 64 | 128 |
+| **medium** | 2071x288 | 96 | **110** |
+| high | 2071x288 | 192 | 87 |
+| ultra | full size, on the camera itself | 192 (256 for a narrow shaft) | 26 |
+
+Medium marches 96 steps and used to march 128, for the same picture.
+The ray-start jitter was a constant 0.3 m, sized against a 128-step
+march where a step is about a quarter of a metre; its whole job is to be
+about one step long, so that a step boundary scatters instead of drawing
+a ring. Fixed, a 96-step march got three quarters of its own step of
+dither and rang — which reads as "96 steps are not enough" and is
+really "that is not enough dither". Sized in steps
+(`haze::fog_jitter_for`), 96 is clean and 64 still beads a thin mover
+shaft, so the floor moved rather than disappeared: 97 fps to 110, and
+the beams are the beams.
+
+Three things in that table are worth more than the numbers.
+
+**Potato and low are the same speed**, and that is not a mistake in the
+ladder. Below `medium` the frame stops being GPU-bound: what is left is
+Blitz painting the document and Bevy stepping its main world, about
+8 ms of CPU, and no graphics setting touches it. **~125 fps is the
+ceiling on this machine** until that CPU work comes down. Potato earns
+its rung on a weaker GPU, not this one.
+
+**High marches the same haze camera as medium**, because the scale is a
+whole divisor: doubling the budget is not enough to reach the next one
+at this viewport. High is a finer march over the same pixels, which is
+the dial that matters anyway.
+
+**Ultra is a quarter of the frame rate** — it marches on the camera
+itself at the picture's full size, and `for_rig` is then free to raise
+the count to 256 for a narrow shaft. It is for looking closely at
+something, not for running a show.
+
+## Where it stands, and the dial that moves it
+
+On the benchmark cue at 5120x1440 with the screens playing: **101 fps,
+9.86 ms a frame**, against an 8.33 ms budget. The same window was 30 fps
+before the four fixes above it.
+
+The frame is now GPU-bound and the volumetric raymarch is nearly all of
+it. `IGNITION_FOG_STEPS` is the dial, and it is a quality decision
+rather than a free win — 128 is the fewest that keeps a narrow shaft a
+solid shaft rather than a column of rings (see `RenderQuality::live`):
+
+| fog steps | fps |
+| --- | --- |
+| 128 (default) | 101 |
+| 112 | 104 |
+| 96 | 109 |
+| 64 | 118 |
+
+`IGNITION_SSR=0` is worth about 3 fps, `IGNITION_TAA=0` about 2,
+`IGNITION_SSAO=0` none.
+
+One earlier reading here was wrong and is worth recording as such:
+`IGNITION_FOG_SCALE=2` appeared to give the haze camera four times the
+pixels for free. It gave it exactly the pixels it already had — the
+automatic scale had *already* chosen 2 at this viewport, which the
+studio now says out loud in `viz.haze: resized`. The cost model holds:
+pixels times steps times lights, with the pixels already budgeted, which
+is why the step count is the dial that moves.
+
+## The wall medium is against, and what is not the answer
+
+The quality tiers cost exactly one thing, and it is not where you would
+look for it. Comparing `low` and `medium` stage by stage:
+
+| stage | low | medium |
+| --- | --- | --- |
+| `blitz.render` self | 3.39 ms | **5.50 ms** |
+| `viz.step` | 3.01 ms | 3.09 ms |
+| `blitz.scene` self | 1.40 ms | 1.46 ms |
+| frame | 8.03 ms | 10.32 ms |
+
+The entire 2.3 ms lands in **Vello's submit**, and the visualizer's own
+CPU time does not move at all. The extra raymarch is pure GPU, and the
+frame is waiting for it: Bevy steps *inside* Blitz's paint, both halves
+go to one queue, and Vello's composite samples the texture Bevy is still
+writing.
+
+**Buffering is not the fix, and this has been measured.** Raising
+`desired_maximum_frame_latency` from 2 to 3, switching the present mode
+to Mailbox, and both together, all land within noise of 98 fps. The CPU
+is not blocking on acquiring a swapchain image, so there is no point
+patching `anyrender-vello-vendored` for it — that patch was written,
+measured, and reverted.
+
+**Two targets is also not the fix, and this has been measured.** The
+obvious way to let the visualizer's volumetric pass and Vello's
+composite overlap is to give the visualizer two render targets and
+alternate them, so the host samples the one the GPU finished last frame
+instead of the one being written. It was built — mailbox posting both
+slots, cameras re-pointed each frame, the resize path recreating the
+pair — and it works: 97 fps to 102 at medium, 125 to 127 at low.
+
+It was reverted anyway, because the beams come back **stippled**. A
+mover's shaft that was a smooth cone turns into a dither pattern at its
+mouth. The volumetric raymarch is deliberately jittered per frame and
+TAA is what averages that jitter into a solid shaft — and TAA's history
+does not survive the render target changing underneath it, so every
+frame resolves from nothing. Five per cent for the exact artifact the
+whole quality ladder exists to avoid is not a trade worth making.
+
+Both structural ideas are therefore spent. The read-after-write
+dependency was real but was not what the frame was waiting on; the GPU
+simply has more work than a frame's worth. Total GPU per frame at medium
+is about 9.8 ms against an 8.3 ms budget, and the raymarch is nearly all
+of the difference.
+
+What is left is not a trick, it is less work:
+
+* **The gaps in a steep beam are the raymarch's step count**, and
+  nothing else was ever going to fix them. `just beam-test` renders
+  `data/songs/beam-alias.json` — every mover at full white into a hazed
+  room, the two ranks crossed, nothing else lit — which is the picture
+  that decides this. A diagonal beam runs *along* the camera ray and
+  hides the artefact; a near-vertical one is crossed by it and shows
+  every step boundary. A step count chosen against the benchmark cue is
+  too low, which is how 96 briefly became the default.
+
+  What the test shows, at 2560x1440:
+
+  | steps | haze | the beam |
+  | --- | --- | --- |
+  | 64 | budgeted | coarse stipple the whole length |
+  | 128 (default) | budgeted | solid at the top, dashes below |
+  | 128 | full size | no noise, but smooth *bulges* — the bands themselves |
+  | 256 | budgeted | clean, continuous shaft |
+  | 256 | full size | clean, continuous shaft |
+
+  Read the third row twice. At full resolution with no dither the
+  artefact is a low-frequency ripple along the beam, which is what
+  raymarch banding actually looks like; every other row is that same
+  banding wearing a different disguise, dithered into beads by the
+  jitter or into stipple by the upsample. Resolution and dither change
+  its *appearance*. Only steps change whether it is there.
+
+  Everything else was tried against `just beam-test` and none of it
+  moved the artefact, which is worth recording so the same afternoon is
+  not spent twice:
+
+  * **Haze resolution** — 256 steps looks the same at the budgeted size
+    as at full size. Pixels are not what a thin beam is short of.
+  * **The dither** — 0.15, 0.30, 0.45 m all trade one appearance for
+    another. Bevy's `jitter` offsets the ray *start*; it decorrelates
+    the bands into noise, it cannot add samples.
+  * **The fog volume's size** — the shader's step is
+    `(end_depth - start_depth) / step_count`, so a shorter ray really
+    is a finer step, and shrinking the volume to 0.7 of the room is
+    visibly cleaner. It is also wrong: the fog stops before the walls
+    and the beams are cut off in mid-air. Between 1.0 and 1.3 — the
+    range that does not clip — the pictures are indistinguishable,
+    because the occluder twins on the haze layer already bound almost
+    every ray at the geometry behind it.
+
+  That leaves the step count, and Bevy 0.19's volumetric fog exposes
+  nothing else: uniform steps over the whole ray, a jitter on the start,
+  and a count. A thin bright feature crossed by the ray needs samples
+  *inside* it, and only the count provides them.
+
+  So the two dials are not interchangeable, and not in the way an equal
+  cost model suggests. `pixels x steps` says 256 steps over half the
+  pixels should cost what 128 over all of them does; measured in the
+  operator layout it is **52 fps against 81**. Steps dominate. Doubling
+  them to fix the beams costs about a third of the frame rate, and that
+  is the honest price of the fix — there is no arrangement of the two
+  that avoids it.
+
+  The way out is not a setting. Every lighting visualiser that draws a
+  clean shaft cheaply draws the *beam* as geometry — a cone mesh with an
+  analytic falloff, additively blended — and leaves the raymarch the
+  ambient scatter it is good at. `spawn.rs` explicitly chose not to
+  ("one volume covering the room ... which is the whole reason this
+  reads better than a cone per beam: two beams crossing actually
+  brighten where they overlap"), and that reasoning still holds for the
+  *haze*. It does not hold for the shaft: a cone can be additive too,
+  and crossing cones brighten where they overlap just as well. This is
+  the real fix, it is a feature rather than a tweak, and it would make
+  the beams both smooth and cheaper than 256 steps.
+
+* **Less CPU.** The 8 ms floor is Blitz painting 5,509 nodes and Bevy
+  stepping its main world. Cut that and the ceiling moves for every
+  preset at once — and it is the only lever that helps `low` and
+  `potato`, which are already GPU-idle.

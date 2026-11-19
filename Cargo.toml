@@ -8,6 +8,23 @@
 resolver = "3"
 
 members = [
+    # ── lighting (Ignition; docs/lighting) ──
+    "features/lighting/proto",
+    "features/lighting/daw-proto",
+    "features/lighting/colour",
+    "features/lighting/rig",
+    "features/lighting/show",
+    "features/lighting/effects",
+    "features/lighting/playback",
+    "features/lighting/core",
+    "features/lighting/dmx",
+    "features/lighting/daw",
+    "features/lighting/fixture",
+    "features/lighting/profile",
+    "features/lighting/viz",
+    "features/lighting/pane",
+    "apps/ignition",
+    "features/peers",
     "features/signal/space",
     "features/signal/tone3000",
     "features/ui/fts-audio-ui",
@@ -64,8 +81,11 @@ members = [
     "features/adapters/reaper/session-extension/xtask",
     "features/song",
     "features/setlists",
+    "features/chart",
+    "features/lyrics",
     "features/productions",
     "features/studio-views",
+    "features/studio-daw",
     "apps/architect",
     # ── daw ──
     "features/audio/sample",
@@ -185,6 +205,22 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/FastTrackStudios/session"
 
 [workspace.dependencies]
+# ── lighting (Ignition): features/lighting, docs/lighting ──
+ignition-proto = { path = "features/lighting/proto" }
+ignition-daw-proto = { path = "features/lighting/daw-proto" }
+ignition-colour = { path = "features/lighting/colour" }
+ignition-rig = { path = "features/lighting/rig" }
+ignition-show = { path = "features/lighting/show" }
+ignition-effects = { path = "features/lighting/effects" }
+ignition-playback = { path = "features/lighting/playback" }
+ignition-core = { path = "features/lighting/core" }
+ignition-dmx = { path = "features/lighting/dmx" }
+ignition-daw = { path = "features/lighting/daw" }
+ignition-fixture = { path = "features/lighting/fixture" }
+ignition-profile = { path = "features/lighting/profile" }
+ignition-viz = { path = "features/lighting/viz" }
+ignition-pane = { path = "features/lighting/pane" }
+
 signal-space = { path = "features/signal/space" }
 signal-tone3000 = { path = "features/signal/tone3000" }
 fts-audio-ui = { path = "features/ui/fts-audio-ui" }
@@ -330,10 +366,15 @@ song = { path = "features/song" }
 # Song libraries and setlists as notes of an Architect vault project, shared
 # by an Architect share link (studio#386).
 setlists = { path = "features/setlists" }
+studio-chart = { path = "features/chart" }
+studio-lyrics = { path = "features/lyrics" }
 # Productions in other DAWs (Ableton sets, Pro Tools sessions, REAPER and
 # Logic projects) as project notes with a stage, found by a scan (studio#396).
 productions = { path = "features/productions" }
 studio-views = { path = "features/studio-views" }
+# Studio's DAW view in Architect: Session's shell as an extension view
+# (docs/design/studio-in-architect.md).
+studio-daw = { path = "features/studio-daw" }
 
 # ── keyflow domain — its own repo since the 2026-08 split ─────────────
 # (FastTrackStudios/keyflow: the chart language, its formats, the LSP and
@@ -499,6 +540,9 @@ architect-atom = { git = "https://github.com/FastTrackStudios/architect", tag = 
 architect-form = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 architect-permissions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 architect-permissions-proto = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+# Who an engine lets in: the account pass, the admission table and the
+# iroh serve that closes a revoked device's connections (features/peers).
+architect-devices = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 architect-auth = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 auth = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 auth-proto = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
@@ -519,6 +563,12 @@ architect-extensions = { git = "https://github.com/FastTrackStudios/architect", 
 architect-extension-wasi = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
 architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
+# Process views (architect#641): a pane drawn by another program over a
+# socket pair, its frames in shared memory or a dma-buf — the lighting
+# visualizer's pane in Studio Architect (apps/ignition --process-view).
+# Pinned to main's revision until a tag carries it; move to the tag with
+# the rest of architect.
+architect-process-view = { git = "https://github.com/FastTrackStudios/architect", rev = "50a37e5e8409cb8b9b46727f83ea882cc85471c2" }
 # The app's theme as data (`use_resolved`): what a Studio view in Architect
 # colours itself from.
 architect-theme = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.12.6" }
@@ -979,6 +1029,7 @@ session-ui = { path = "apps/session/ui", default-features = false }
 signal-daw-bridge = { path = "features/signal/daw-bridge" }
 signal-rig-host = { path = "features/rigs/host" }
 signal-rigs-proto = { path = "features/rigs/proto" }
+studio-peers = { path = "features/peers" }
 signal-widgets = { path = "features/signal/widgets" }
 signal-rig-shell = { path = "features/rigs/shell" }
 signal-rig-perform-ui = { path = "features/rigs/perform-ui" }
@@ -1114,6 +1165,12 @@ rustfft = "6.2"
 test-that = { version = "0.5.2", default-features = false }
 
 [patch.crates-io]
+# Lighting's visualizer (features/lighting/viz), two one-hunk forks:
+# gdtf 0.3.0 (vendor/gdtf/FTS-PATCH.md) and bevy_pbr 0.19.1, so a light
+# can scatter in volumetric fog without casting a shadow
+# (vendor/bevy_pbr/FTS-PATCH.md, docs/lighting/domain/beams-in-the-air.md).
+gdtf = { path = "vendor/gdtf" }
+bevy_pbr = { path = "vendor/bevy_pbr" }
 # tone3000 on reqwest 0.12's ring-backed rustls instead of 0.13's `rustls`,
 # whose only backend is aws-lc-rs: aws-lc-sys's build script (a cmake C
 # build) was 186 s of a 375 s clean `cargo check --workspace`, all of it on

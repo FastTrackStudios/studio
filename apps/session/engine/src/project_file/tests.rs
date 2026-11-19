@@ -305,3 +305,18 @@ fn an_rpp_opens_as_its_session_file() {
         "it opens as its session file from now on"
     );
 }
+
+#[test]
+fn a_song_opened_by_a_relative_path_finds_its_media_once() {
+    let root = super::media_of(Path::new("songs/drive-to-la/Drive To LA.session"));
+    assert!(root.0.is_absolute(), "{}", root.0.display());
+    assert!(root.0.ends_with("songs/drive-to-la"));
+    let local = root.to_local("Samples/Imported/Bass.wav");
+    assert!(
+        local.ends_with("songs/drive-to-la/Samples/Imported/Bass.wav")
+            && !local.contains("drive-to-la/songs/"),
+        "{local}"
+    );
+    // And an absolute take under it is kept relative in the doc.
+    assert_eq!(root.to_doc(&local), "Samples/Imported/Bass.wav");
+}

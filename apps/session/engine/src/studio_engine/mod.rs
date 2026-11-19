@@ -36,6 +36,8 @@ pub mod headless;
 pub mod link;
 pub mod live;
 pub mod mcp;
+#[cfg(feature = "native")]
+pub mod peers;
 pub mod set;
 pub mod set_actions;
 pub mod view_host;

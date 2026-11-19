@@ -147,6 +147,9 @@ fn App() -> Element {
     if view == crate::queue::VIEW {
         return rsx! { crate::setlist::SetlistView { page: props, note, ask: ask() } };
     }
+    if view == crate::lighting::VIEW {
+        return rsx! { crate::lighting_view::Lighting { page: props, note, ask: ask() } };
+    }
     if view == crate::song::VIEW {
         return rsx! { crate::chart::SongView { page: props, note, ask: ask() } };
     }

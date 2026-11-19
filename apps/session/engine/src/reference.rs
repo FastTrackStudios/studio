@@ -7,6 +7,8 @@
 pub use session_runtime::reference::*;
 
 #[cfg(feature = "native")]
+use std::collections::HashSet;
+#[cfg(feature = "native")]
 use std::path::{Path, PathBuf};
 
 #[cfg(feature = "native")]
@@ -134,6 +136,168 @@ fn render(daw: &Standalone, project: &str, wav: &Path) -> eyre::Result<f64> {
     fts_sample::write_wav_f32(wav, RATE, &[left, right])
         .map_err(|e| eyre::eyre!("{}: {e}", wav.display()))?;
     Ok(frames as f64 / f64::from(RATE))
+}
+
+/// libvorbis quality of a recording (0.45 ≈ 140 kbps stereo at 48 kHz).
+#[cfg(feature = "native")]
+const RECORDING_QUALITY: f32 = 0.45;
+
+/// What a song's recording ([`record`]) was rendered from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Recorded {
+    /// The track asked for, alone: the song's own recording, placed and
+    /// warped on the arrangement.
+    Track(String),
+    /// The whole mix less what [`left_out`] names: the song had no track of
+    /// that name, or nothing on it.
+    Mix,
+}
+
+/// Render `song`'s recording to `ogg` (Ogg Vorbis, stereo, [`RATE`]): the
+/// track named `track` (any case) alone — soloed, and heard even where the
+/// song mutes it or sends it elsewhere ([`heard_alone`]) — or, with no
+/// such track or nothing on it in the song, the whole mix as [`bounce`]
+/// renders it. Either way from 0:00 for the song's whole length (its
+/// `SONGEND` mark, else its last item's end), so it stays in step with the
+/// song, edits and warps included.
+///
+/// # Errors
+///
+/// The song could not be opened, or `ogg` could not be written.
+#[cfg(feature = "native")]
+#[tracing::instrument(
+    name = "reference.record",
+    skip_all,
+    fields(reference.was_muted = tracing::field::Empty, reference.was_unsent = tracing::field::Empty)
+)]
+pub fn record(song: &Path, track: Option<&str>, ogg: &Path) -> eyre::Result<(Recorded, f64)> {
+    let song = song_file(song)?;
+    let prepare = crate::prepare::Prepare::for_song(&song);
+    let daw = Standalone::new();
+    crate::open::equip(&daw);
+    let (opened, _) = crate::open_core::open_song_into(&daw, &song, &prepare)?;
+    let project = opened.project_guid.clone();
+    let seconds = song_length(&daw, &project);
+    let alone = track.and_then(|name| track_with_items(&daw, &project, name, seconds));
+    match &alone {
+        Some(guid) => {
+            let heard = heard_alone(&daw, &project, guid);
+            tracing::Span::current().record("reference.was_muted", heard.was_muted);
+            tracing::Span::current().record("reference.was_unsent", heard.was_unsent);
+        }
+        None => {
+            for guid in left_out(&daw, &project) {
+                let _ = Tracks::set_muted(&daw, ctx(&project), TrackRef::Guid(guid), true);
+            }
+        }
+    }
+    let frames = render_frames(&daw, &project, seconds);
+    let bytes = fts_sample::cache::encode_ogg_vorbis(&frames, 2, RATE, RECORDING_QUALITY)
+        .map_err(|e| eyre::eyre!("{}: {e}", ogg.display()))?;
+    if let Some(dir) = ogg.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let partial = ogg.with_extension("ogg.partial");
+    std::fs::write(&partial, bytes)?;
+    std::fs::rename(&partial, ogg)?;
+    let recorded = match alone {
+        Some(_) => Recorded::Track(track.unwrap_or_default().to_owned()),
+        None => Recorded::Mix,
+    };
+    tracing::info!(
+        reference.song = %song.display(),
+        reference.track = track.unwrap_or(""),
+        reference.alone = matches!(recorded, Recorded::Track(_)),
+        reference.seconds = seconds,
+        "recording rendered"
+    );
+    Ok((recorded, seconds))
+}
+
+/// The song's length: its `SONGEND` (or `=END`) mark, else where its last
+/// item ends.
+#[cfg(feature = "native")]
+fn song_length(daw: &Standalone, project: &str) -> f64 {
+    daw::service::Markers::all(daw, ctx(project))
+        .iter()
+        .filter(|m| matches!(m.name.trim(), "SONGEND" | "=END"))
+        .filter_map(|m| m.position.time.map(|t| t.as_seconds()))
+        .reduce(f64::min)
+        .filter(|end| *end > 0.0)
+        .unwrap_or_else(|| song_end(daw, project))
+}
+
+/// The guid of the track named `name` (any case) with an item that sounds
+/// before `seconds`.
+#[cfg(feature = "native")]
+fn track_with_items(daw: &Standalone, project: &str, name: &str, seconds: f64) -> Option<String> {
+    let named: HashSet<String> = Tracks::all(daw, ctx(project))
+        .into_iter()
+        .filter(|t| t.name.trim().eq_ignore_ascii_case(name.trim()))
+        .map(|t| t.guid)
+        .collect();
+    Items::get_all_items(daw, ctx(project))
+        .into_iter()
+        .find(|item| {
+            named.contains(&item.track_guid)
+                && item.position.as_seconds() < seconds
+                && item.position.as_seconds() + item.length.as_seconds() > 0.0
+        })
+        .map(|item| item.track_guid)
+}
+
+/// What [`heard_alone`] had to change for the track to be heard.
+#[cfg(feature = "native")]
+struct HeardAlone {
+    /// It, or a folder it sits in, was muted.
+    was_muted: bool,
+    /// It, or a folder it sits in, did not send to its parent: a set's
+    /// reference often goes to an output of its own, not the mix (Live's
+    /// `AudioOut/None`, an AbleSet `+G:` guide output).
+    was_unsent: bool,
+}
+
+/// `keep` soloed, and it and the folders it sits in unmuted and sending to
+/// the master: the track alone, heard.
+#[cfg(feature = "native")]
+fn heard_alone(daw: &Standalone, project: &str, keep: &str) -> HeardAlone {
+    use daw::service::Routing;
+    let tracks = Tracks::all(daw, ctx(project));
+    let mut heard = HeardAlone {
+        was_muted: false,
+        was_unsent: false,
+    };
+    let mut at = Some(keep.to_owned());
+    let mut seen: HashSet<String> = HashSet::new();
+    while let Some(guid) = at.filter(|g| seen.insert(g.clone())) {
+        let Some(track) = tracks.iter().find(|t| t.guid == guid) else {
+            break;
+        };
+        heard.was_muted |= track.muted;
+        heard.was_unsent |= !track.parent_send;
+        let _ = Tracks::set_muted(daw, ctx(project), TrackRef::Guid(guid.clone()), false);
+        let _ = Routing::set_parent_send_enabled(daw, ctx(project), TrackRef::Guid(guid), true);
+        at = track.parent_guid.clone();
+    }
+    let _ = Tracks::set_soloed(daw, ctx(project), TrackRef::Guid(keep.to_owned()), true);
+    heard
+}
+
+/// `project` rendered from 0 for `seconds`, interleaved stereo at [`RATE`].
+#[cfg(feature = "native")]
+fn render_frames(daw: &Standalone, project: &str, seconds: f64) -> Vec<f32> {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let frames = (seconds.max(0.0) * f64::from(RATE)).round() as u64;
+    let renderer = daw::standalone::audio_engine::render::ProjectRenderer::new(daw, project, RATE);
+    let mut out = Vec::with_capacity(usize::try_from(frames * 2).unwrap_or(0));
+    let mut at = 0u64;
+    while at < frames {
+        let n = BLOCK.min(usize::try_from(frames - at).unwrap_or(BLOCK));
+        let block = renderer.render_block(at, n);
+        out.extend(block.samples.chunks_exact(2).take(n).flatten());
+        at += n as u64;
+    }
+    out
 }
 
 /// The song file under `path`: itself, or the `.session` (else `.RPP`) in

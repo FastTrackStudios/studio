@@ -108,8 +108,11 @@ in
 {
   packages = with pkgs; [
     cargo-watch
-    # The local stack's web app (scripts/local-stack.sh `run web`).
+    # The local stack's web app, its front and its vault sync
+    # (scripts/local-stack.sh `run web`, `run front`, `sync`).
     static-web-server
+    caddy
+    rsync
     cargo-nextest
     bacon
     flac
@@ -266,49 +269,92 @@ in
     pkgs.xwininfo     # the window geometry daw::test::VirtualDisplay reads
   ];
 
-  # `devenv up`: the local stack (docs/local-stack.md). The just
-  # recipes in front of it (`just dev`, `just demo`, `just website`) choose
-  # what is local first (scripts/local-stack.sh `choose`); a bare
-  # `devenv up` runs the last choice (Architect and Keyflow pinned by
-  # default). Each process is `scripts/local-stack.sh run <name>`: the
-  # issuer and the node's environment are Architect's own `cargo xtask dev`
-  # (from the Architect checkout it resolves), on this stack's ports
-  # (local-stack.toml) and state (.devenv/state/local-stack).
+  # `devenv up`: the local stack (docs/local-stack.md), complete, rebuilt on
+  # a save — each `scripts/studio-dev.sh run <name>`:
+  #   engine  Studio's headless engine (`studio engine`): every window
+  #           attaches to it, so a rebuild never takes the audio down.
+  #   studio  Studio: Studio Architect (Architect with Studio's extensions,
+  #           Lighting and the DAW view linked in) under `dx serve`; the
+  #           server too (STUDIO_SERVE: its node in-process, holding a copy
+  #           of the test vault and its share link).
+  #   web     Studio Web: Architect's web app under `dx serve --platform
+  #           web`, proxying the node's paths (/s, /vox, /org, /node, /_ext)
+  #           to Studio, so a share link opens on its origin.
+  # `studio-desktop-legacy` (off) is the old Studio window, until the merge
+  # into Studio Architect lands: `devenv up engine studio-desktop-legacy`,
+  # or `just dev` with it named. Which vault, setlist, share link, set and
+  # profile, and whether Architect and Keyflow are local: local-stack.toml
+  # under this machine's gitignored local-stack.local.toml. `just up` runs
+  # this as a systemd user unit.
   processes = let
-    stack = "${config.devenv.root}/scripts/local-stack.sh";
-    probe = name: { exec = "${stack} ready ${name}"; period = 2; };
+    root = config.devenv.root;
+    dev = "${root}/scripts/studio-dev.sh";
+    probe = name: { exec = "${dev} ready ${name}"; period = 2; };
+    # .env (gitignored, secrets) into the process, never through devenv's
+    # dotenv (which copies it into the store).
+    run = name: ''
+      set -a; [ -f "${root}/.env" ] && . "${root}/.env"; set +a
+      exec ${dev} run ${name}
+    '';
   in {
-    mock-oauth = {
-      exec = "exec ${stack} run mock-oauth";
-      ready = probe "mock-oauth";
+    engine = {
+      exec = run "engine";
+      ready = probe "engine";
     };
-    auth = {
-      exec = "exec ${stack} run auth";
-      after = [ "devenv:processes:mock-oauth" ];
-      ready = probe "auth";
+    studio = {
+      exec = run "studio";
+      after = [ "devenv:processes:engine" ];
+      ready = probe "studio";
     };
-    # Studio Architect's headless node, built from this tree (and a local
-    # Architect or Keyflow), signed in to the local issuer, serving a copy
-    # of the test vault and its share link (the URL is in its log); rebuilt
-    # and restarted on a save.
-    node = {
-      exec = "exec ${stack} run node";
-      after = [ "devenv:processes:auth" ];
-      ready = probe "node";
-    };
-    # The web app (Architect's, with this distribution's
-    # distribution.json), its issuer the local one.
     web = {
-      exec = "exec ${stack} run web";
-      after = [ "devenv:processes:auth" ];
+      exec = run "web";
+      ready = probe "web";
     };
-    # The public site (Architect's apps/site), hot reload.
-    site.exec = "exec ${stack} run site";
-    # The window, off unless chosen (`just dev desktop=on`).
-    desktop = {
-      exec = "exec ${stack} run desktop";
-      after = [ "devenv:processes:node" ];
+    studio-desktop-legacy = {
+      exec = run "studio-desktop-legacy";
+      after = [ "devenv:processes:engine" ];
       start.enable = false;
+    };
+  };
+
+  # `devenv --profile legacy-stack up` (`just dev-legacy`, `just demo`,
+  # `just website`): the stack before Studio served itself —
+  # Architect's issuer, Studio's headless node, the static web app, the
+  # front (Caddy) that puts both on one origin, the site, each a process
+  # (scripts/local-stack.sh). Kept until nothing needs it.
+  profiles.legacy-stack.module = let
+    root = config.devenv.root;
+    stack = "${root}/scripts/local-stack.sh";
+    probe = name: { exec = "${stack} ready ${name}"; period = 2; };
+    run = name: ''
+      set -a; [ -f "${root}/.env" ] && . "${root}/.env"; set +a
+      exec ${stack} run ${name}
+    '';
+  in {
+    processes = {
+      mock-oauth = { exec = run "mock-oauth"; ready = probe "mock-oauth"; };
+      auth = {
+        exec = run "auth";
+        after = [ "devenv:processes:mock-oauth" ];
+        ready = probe "auth";
+      };
+      node = {
+        exec = run "node";
+        after = [ "devenv:processes:auth" ];
+        ready = probe "node";
+      };
+      legacy-web = {
+        exec = run "web";
+        after = [ "devenv:processes:auth" ];
+        ready = probe "web";
+      };
+      front = { exec = run "front"; ready = probe "front"; };
+      site.exec = run "site";
+      # The default profile's, off here: `devenv --profile legacy-stack up`
+      # alone is the legacy stack.
+      engine.start.enable = false;
+      studio.start.enable = false;
+      web.start.enable = false;
     };
   };
 

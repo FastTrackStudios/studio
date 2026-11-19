@@ -4,7 +4,8 @@ local-stack.toml and Cargo.lock, writing the [patch] overrides that put a
 local Architect or Keyflow under this checkout's build, and seeding the
 node's copy of the test vault with its share link.
 
-    local-stack.py get KEY                       a local-stack.toml value (a.b)
+    local-stack.py get KEY [DEFAULT]             a setting (a.b): local-stack.local.toml over
+                                                 local-stack.toml; DEFAULT (else an error) when neither has it
     local-stack.py pinned URL CRATE              "<tag> <rev>" Cargo.lock pins CRATE at
     local-stack.py patch URL CHECKOUT            [patch."URL"] for every locked crate of URL
     local-stack.py dep-tag MANIFEST URL          the tag MANIFEST's deps of URL name
@@ -25,20 +26,82 @@ def die(msg) -> NoReturn:
     sys.exit(f"local-stack: {msg}")
 
 
+def lock_text():
+    """The committed Cargo.lock (HEAD's): the working one may hold a patched
+    build's path sources, which name no git source at all."""
+    import subprocess
+    try:
+        return subprocess.run(["git", "-C", ROOT, "show", "HEAD:Cargo.lock"], check=True,
+                              capture_output=True, text=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        with open(os.path.join(ROOT, "Cargo.lock"), encoding="utf-8") as f:
+            return f.read()
+
+
 def locked(url):
-    """Every package of Cargo.lock whose source is the git repo URL."""
-    with open(os.path.join(ROOT, "Cargo.lock"), "rb") as f:
-        lock = tomllib.load(f)
+    """Every package whose source is the git repo URL: in the committed
+    Cargo.lock, else in the working one."""
     prefix = f"git+{url}"
-    return [p for p in lock.get("package", []) if p.get("source", "").split("?")[0].split("#")[0] == prefix]
+    out, seen = [], set()
+    texts = [lock_text()]
+    try:
+        with open(os.path.join(ROOT, "Cargo.lock"), encoding="utf-8") as f:
+            texts.append(f.read())
+    except OSError:
+        pass
+    for text in texts:
+        for p in tomllib.loads(text).get("package", []):
+            if p.get("source", "").split("?")[0].split("#")[0] == prefix and p["name"] not in seen:
+                seen.add(p["name"])
+                out.append(p)
+    return out
 
 
-def get(key):
+def declared(url):
+    """The crates the workspace's Cargo.toml takes from URL (one not built
+    yet is in no lock)."""
+    with open(os.path.join(ROOT, "Cargo.toml"), "rb") as f:
+        m = tomllib.load(f)
+    deps = m.get("workspace", {}).get("dependencies", {})
+    return {d.get("package", n) for n, d in deps.items() if isinstance(d, dict) and d.get("git", "").rstrip("/") == url}
+
+
+def local_file():
+    """This machine's settings: `LOCAL_STACK_LOCAL`, else local-stack.local.toml
+    (gitignored) beside local-stack.toml."""
+    return os.environ.get("LOCAL_STACK_LOCAL") or os.path.join(ROOT, "local-stack.local.toml")
+
+
+def merged(base, over):
+    out = dict(base)
+    for k, v in over.items():
+        out[k] = merged(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
+
+
+def settings():
     with open(os.path.join(ROOT, "local-stack.toml"), "rb") as f:
         value = tomllib.load(f)
+    try:
+        with open(local_file(), "rb") as f:
+            value = merged(value, tomllib.load(f))
+    except FileNotFoundError:
+        pass
+    except tomllib.TOMLDecodeError as e:
+        die(f"{local_file()}: {e}")
+    return value
+
+
+def get(key, *default):
+    value = settings()
     for part in key.split("."):
+        if not isinstance(value, dict) or part not in value:
+            if default:
+                print(default[0])
+                return
+            die(f"no setting {key} (local-stack.toml, {local_file()})")
         value = value[part]
-    print(value)
+    print(str(value).lower() if isinstance(value, bool) else value)
 
 
 def pinned(url, crate):
@@ -76,7 +139,7 @@ def patch(url, checkout):
     from URL with the same crate in CHECKOUT. A crate the checkout no longer
     has is named on stderr and left as locked (cargo then says why)."""
     have = manifests(checkout)
-    names = sorted({p["name"] for p in locked(url)})
+    names = sorted({p["name"] for p in locked(url)} | declared(url))
     if not names:
         die(f"Cargo.lock takes nothing from {url}")
     print(f'[patch."{url}"]')
@@ -120,6 +183,16 @@ def slug_segment(name):
     return out.rstrip("-")
 
 
+def yaml_scalar(raw):
+    """A one-line YAML scalar's value: 'single' ('' an apostrophe), "double", or plain."""
+    v = raw.strip()
+    if len(v) >= 2 and v[0] == v[-1] == "'":
+        return v[1:-1].replace("''", "'")
+    if len(v) >= 2 and v[0] == v[-1] == '"':
+        return json.loads(v)
+    return v
+
+
 def seed_share(vault, setlist, code, vault_id):
     """The share note SHARE_CREATE writes for STUDIO_SETLISTS_SHARE: the
     setlist's note and each of its songs' notes, for anyone with the link
@@ -132,7 +205,7 @@ def seed_share(vault, setlist, code, vault_id):
     except OSError as e:
         die(f"the setlist {setlist} is not in {vault}: {e}")
     fm = frontmatter(text)
-    title = next((l.split(":", 1)[1].strip().strip("'\"") for l in fm.splitlines() if l.startswith("title:")), None)
+    title = next((yaml_scalar(l.split(":", 1)[1]) for l in fm.splitlines() if l.startswith("title:")), None)
     title = title or os.path.splitext(os.path.basename(setlist))[0]
     # The top-level `songs:` list (each set lists them again).
     songs, inside = [], False
@@ -144,8 +217,12 @@ def seed_share(vault, setlist, code, vault_id):
             if line.startswith("- "):
                 m = LINK.search(line)
                 if m:
-                    note = m.group(1).replace("''", "'")
-                    songs.append(note if note.endswith(".md") else note + ".md")
+                    # `Song#Arrangement` names the song's note: the share
+                    # holds the note, the arrangement is a heading on it.
+                    note = m.group(1).replace("''", "'").split("#", 1)[0]
+                    note = note if note.endswith(".md") else note + ".md"
+                    if note not in songs:
+                        songs.append(note)
             elif line and not line.startswith(" "):
                 inside = False
     missing = [s for s in songs if not os.path.isfile(os.path.join(vault, s))]

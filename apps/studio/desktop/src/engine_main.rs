@@ -243,12 +243,16 @@ async fn async_main() {
     signal_rig_host::engine::install_shared(signal_rig_host::engine::Engine::new("Signal"));
     // The rig libraries as books (synced Loro docs), before a rig reads one.
     crate::books::enable();
-    // Signed in: the books are the docs that sync with the account's other
-    // devices (sync.rs). Before the first rig makes its home.
+    // Signed in: the books are the account's docs, synced with its other
+    // Studio engines directly (peers.rs). Before the first rig makes its home.
     #[cfg(feature = "doc-sync")]
-    crate::sync::start().await;
+    crate::peers::books();
     let guitar = GuitarRigBackend::new();
     guitar.start(); // worship rig: open audio + load profile off-thread
+    // This engine on the account's mesh: found and admitted by the
+    // account's other engines, any of which it may follow.
+    #[cfg(feature = "doc-sync")]
+    let peers = crate::peers::start(&guitar).await;
     // Signal's commands for a model, when asked (`--mcp` / `SIGNAL_MCP=1`).
     start_mcp(&guitar).await;
     let drums = drums::DrumRigBackend::new(); // dormant until started
@@ -305,6 +309,11 @@ async fn async_main() {
     // Sample-pack distribution: serves the built `.signalpack` trees
     // (proxy + full) so remotes — the phone keys rig above all — can list
     // and download packs over the same `/vox` (and iroh p2p) endpoint.
+    // `studio peers …`: this engine's handle on its mesh, on its own router
+    // (peers reach the mesh through its gate, never this).
+    #[cfg(feature = "doc-sync")]
+    let router = router.merge_router(peers.router());
+
     let packs = sampler::library::PackLibraryBackend::new();
     let router = router.merge_router(packs.router());
 

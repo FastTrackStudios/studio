@@ -358,7 +358,28 @@ where
     }
     #[cfg(target_arch = "wasm32")]
     let _ = disk;
-    decode_resident(path, resolve(path)?)
+    match decode_resident(path, resolve(path)?) {
+        // A file there that does not decode (a video, an `.mp4` a set
+        // plays its reference from) plays from its proxy, when it has
+        // one: `Proxies/<stem>.ogg` beside it, the proxies' rule.
+        Err(Unshared::Failed(why)) => match proxy_beside(disk) {
+            Some(proxy) => std::fs::read(&proxy)
+                .map_err(|e| Unshared::Failed(format!("{why}; its proxy: {e}")))
+                .and_then(|bytes| decode_resident(&proxy.to_string_lossy(), bytes)),
+            None => Err(Unshared::Failed(why)),
+        },
+        other => other,
+    }
+}
+
+/// `disk`'s proxy, `Proxies/<stem>.ogg` beside it, when there is one.
+fn proxy_beside(disk: &std::path::Path) -> Option<std::path::PathBuf> {
+    let proxy = disk
+        .parent()?
+        .join("Proxies")
+        .join(disk.file_stem()?)
+        .with_extension("ogg");
+    proxy.is_file().then_some(proxy)
 }
 
 /// `bytes` (the media `path` names) decoded whole — or, for an Ogg stream,
