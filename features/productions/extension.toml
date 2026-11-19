@@ -34,6 +34,12 @@ path = "features/productions"
 # BASES_*: every production in one query (BASES_ROWS), and whether a
 # default base is there (BASES_READ).
 [capabilities]
+# Its notes, read and written through the vault's actions: a `VAULT_*` or
+# `BASES_*` action is the person's documents, so it needs these beside
+# `actions` (architect `Capabilities::may_run_app`); without them every
+# list of setlists and songs is refused.
+reads = ["documents"]
+writes = ["documents"]
 actions = ["VAULT_", "BASES_"]
 effect = "mutating"
 

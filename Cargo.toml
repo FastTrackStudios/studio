@@ -414,6 +414,10 @@ architect-sites = { git = "https://github.com/FastTrackStudios/architect", tag =
 # its window by default (`gui` turns it on there); `vox` is the node's
 # services and every build of it needs them.
 architect-desktop = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0", default-features = false, features = ["vox"] }
+# The same app on an iPhone or iPad (`architect_mobile::run`), and the
+# `Distribution` both are handed: apps/architect, by target.
+architect-mobile = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
+architect-distribution = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 # Share links as notes of their vault (`share_note`): apps/architect's
 # node test writes the share SHARE_CREATE would.
 architect-spaces = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
@@ -1510,6 +1514,7 @@ architect-launcher-core = { git = "https://www.github.com/FastTrackStudios/archi
 architect-launcher-providers = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 architect-launcher-ui = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 architect-mcp = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
+architect-mobile = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 architect-navigator = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 architect-navigator-api = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 architect-navigator-extension = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.14.0" }

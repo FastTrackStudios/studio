@@ -29,6 +29,12 @@ path = "features/setlists"
 "studio.setlists" = "0.1.0"
 
 [capabilities]
+# Its notes, read and written through the vault's actions: a `VAULT_*` or
+# `BASES_*` action is the person's documents, so it needs these beside
+# `actions` (architect `Capabilities::may_run_app`); without them every
+# list of setlists and songs is refused.
+reads = ["documents"]
+writes = ["documents"]
 actions = ["VAULT_", "BASES_", "SHARE_CREATE", "EXT_VIEW_OPEN"]
 effect = "mutating"
 # A song's workspace reads its `.kf` and `.lrc` and saves an edited chart

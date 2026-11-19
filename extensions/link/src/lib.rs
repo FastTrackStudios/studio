@@ -21,8 +21,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use anyrender::recording::RenderCommand;
-use architect_workspace::paint::{Layer, LayerKey, Scene};
 use architect_workspace::paint::PaintMount;
+use architect_workspace::paint::{Layer, LayerKey, Scene};
 use dioxus::prelude::*;
 use serde_json::Value as Json;
 use session_engine::studio_engine::link;
@@ -31,6 +31,9 @@ use session_ui::song_model::StudioSession;
 /// How long an attach waits for an engine before it says so (it keeps
 /// trying after).
 const WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// What a view on Studio's engine says on an iPhone or iPad.
+pub const NO_ENGINE_HERE: &str = "Not on iPhone and iPad yet: this view draws from Studio's engine, which runs on a Mac or PC. Setlists, charts, recordings and share links work here.";
 
 static ATTACHING: AtomicBool = AtomicBool::new(false);
 static PROBLEM: Mutex<Option<String>> = Mutex::new(None);
@@ -54,8 +57,16 @@ pub fn problem() -> Option<String> {
 /// (`session_desktop::native::attach_engine`). Once per process, on a
 /// thread of its own; it keeps the link after (an engine that restarts is
 /// attached to again).
+///
+/// On iOS there is nothing to attach to: an app is one process, and
+/// Studio's engine is not in this one yet (docs/studio-ios.md). The views
+/// say so ([`NO_ENGINE_HERE`]) instead of waiting for an engine.
 pub fn attach() {
     if ATTACHING.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    if cfg!(target_os = "ios") {
+        set_problem(Some(NO_ENGINE_HERE.to_owned()));
         return;
     }
     let _ = std::thread::Builder::new()

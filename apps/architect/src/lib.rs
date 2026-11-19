@@ -1,6 +1,6 @@
 //! Studio's distribution of Architect (`docs/architect-distribution.md`).
 //!
-//! The Architect app (`architect_desktop::distribution::architect()`: its
+//! The Architect app (`architect_distribution::architect()`: its
 //! first-party extensions, the store as a registry, installs at run time)
 //! with Studio's extensions **compiled in**, under an identity of its own:
 //!
@@ -23,7 +23,7 @@
 //! An installed copy of either extension still overrides the compiled-in
 //! one, as everywhere in Architect.
 
-use architect_desktop::{Bundle, Distribution, Icon};
+use architect_distribution::{Bundle, Distribution, Icon};
 
 /// The distribution's name.
 pub const NAME: &str = "Studio";
@@ -55,14 +55,17 @@ pub fn studio() -> Bundle {
 #[cfg(feature = "gui")]
 #[must_use]
 pub fn stage() -> Bundle {
-    Bundle::new("stage", "Stage")
+    let stage = Bundle::new("stage", "Stage")
         .member(&studio_arrangement::Arrangement)
         .member(&studio_mixer::Mixer)
         .member(&studio_lyrics::Lyrics)
         .member(&studio_navigator::Navigator)
         .member(&studio_launcher::Launcher)
-        .member(&keyflow_extension::Keyflow)
-        .member(&ignition_pane::ext::Lighting)
+        .member(&keyflow_extension::Keyflow);
+    // Lighting's room is a program of its own in the pane: not on a phone.
+    #[cfg(not(target_os = "ios"))]
+    let stage = stage.member(&ignition_pane::ext::Lighting);
+    stage
 }
 
 pub mod island;
@@ -117,7 +120,7 @@ pub fn distribution_with(island: Option<architect_sites::SiteIsland>) -> Distrib
 }
 
 fn base() -> Distribution {
-    let dist = architect_desktop::distribution::architect()
+    let dist = architect_distribution::architect()
         .named(NAME)
         .app(FOLDER)
         .folder(FOLDER)

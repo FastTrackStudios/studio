@@ -30,8 +30,8 @@ gui = [
 ]
 
 [dependencies]
-# `vox` (the node's services) and no window, from the workspace entry.
-architect-desktop = { workspace = true }
+# `Distribution`, `Bundle`, `Icon`: what either app is handed.
+architect-distribution = { workspace = true }
 # Song libraries and setlists, linked in (`setlists::ext::Setlists`), and
 # `share`: the renderer that draws a song's chart as Keyflow's follow SVG
 # on a share link (`setlists::share::blocks`, studio#406).
@@ -54,7 +54,6 @@ studio-lyrics = { workspace = true, optional = true }
 studio-navigator = { workspace = true, optional = true }
 studio-launcher = { workspace = true, optional = true }
 keyflow-extension = { workspace = true, optional = true }
-ignition-pane = { workspace = true, optional = true }
 
 # Its island (#445): `SiteIsland`, the node serves it; its folder is
 # checked against its lock (sha256, base64) before it is (src/island.rs).
@@ -65,6 +64,19 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+# The desk's window and the node, everywhere but iOS: `vox` (the node's
+# services) and no window, from the workspace entry.
+architect-desktop = { workspace = true }
+# Ignition's lighting: its room is drawn by a program of its own in the
+# pane (a process view, architect#838), which a phone cannot run, so the
+# iOS app has no Lighting (docs/studio-ios.md).
+ignition-pane = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+# The iPhone and iPad app (`architect_mobile::run`, docs/studio-ios.md).
+architect-mobile = { workspace = true }
 
 [dev-dependencies]
 # tests/node.rs: a real node on loopback, serving a setlist's share link.

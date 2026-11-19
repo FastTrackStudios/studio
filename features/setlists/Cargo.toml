@@ -43,6 +43,12 @@ share = ["engrave", "dep:architect-sites"]
 name = "workspace_shot"
 required-features = ["extension"]
 
+# examples/demo_vault.rs: a small vault (two songs with a chart and a
+# recording, a setlist) to open in a build under test.
+[[example]]
+name = "demo_vault"
+required-features = ["engrave"]
+
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
