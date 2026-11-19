@@ -1,0 +1,69 @@
+{
+ "rpp": "<folder>/Last Christmas - Tempo Mapped.RPP",
+ "folder": "<folder>",
+ "base": "<basename>",
+ "mix": "<folder>/<basename> (Mix).wav",
+ "bar1": 0,
+ "sections": [
+  [
+   1,
+   "Intro",
+   "c8c8c8"
+  ],
+  [
+   9,
+   "Chorus 1",
+   "e65a5a"
+  ],
+  [
+   25,
+   "Interlude",
+   "c8c8c8"
+  ],
+  [
+   33,
+   "Verse 1",
+   "5aaae6"
+  ],
+  [
+   49,
+   "Chorus 2",
+   "e65a5a"
+  ],
+  [
+   65,
+   "Post-Chorus / Break",
+   "aa6edc"
+  ],
+  [
+   73,
+   "Verse 2",
+   "5aaae6"
+  ],
+  [
+   89,
+   "Chorus 3",
+   "e65a5a"
+  ],
+  [
+   105,
+   "Outro (A face on a lover)",
+   "e6963c"
+  ],
+  [
+   113,
+   "Fade",
+   "787878"
+  ]
+ ],
+ "markers": [
+  [
+   69,
+   "Perc (Drums Other) in"
+  ],
+  [
+   114,
+   "Drums fade out"
+  ]
+ ]
+}
