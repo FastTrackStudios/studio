@@ -10,6 +10,8 @@ rules (P, P.html, P/index.html, else 404.html with status 404).
 
     local-stack-front.py <bundle> <port> <node port>
 
+`<origin>/<code>` (a link by its code alone) redirects to `/s/<code>/`.
+
 Loopback only. Streams both ways (a recording's ranges, the link's live
 events), and relays an upgrade (the app's WebSocket to `/org/<slug>/vox`).
 """
@@ -17,6 +19,7 @@ events), and relays an upgrade (the app's WebSocket to `/org/<slug>/vox`).
 import http.client
 import mimetypes
 import os
+import re
 import select
 import socket
 import sys
@@ -26,6 +29,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # The node's prefixes (Architect's apps/web/Dioxus.toml proxies the same).
 NODE = ("/s/", "/_ext/", "/node/", "/org/", "/vox", "/mcp", "/health")
 HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade"}
+# A share link's code: 16 of Architect's link alphabet (`architect_spaces::share::is_code`).
+SHORT = re.compile(r"^/([abcdefghijkmnpqrstuvwxyz23456789]{16})(/.*)?$")
 TYPES = {".wasm": "application/wasm", ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json", ".woff2": "font/woff2", ".svg": "image/svg+xml"}
 
 
@@ -44,6 +49,19 @@ class Front(BaseHTTPRequestHandler):
 
     def route(self):
         path = self.path.split("?", 1)[0]
+        # A link by its code alone (`<origin>/<code>`, the short form a
+        # person is sent): to the link's page, `/s/<code>/`, where the node
+        # answers it. The node's own paths and the app's relative URLs all
+        # hang off `/s/`, so the short form is a redirect, never a mount.
+        short = SHORT.match(path)
+        if short and self.command in ("GET", "HEAD"):
+            query = self.path[len(path):]
+            self.send_response(302)
+            self.send_header("Location", f"/s/{short.group(1)}{short.group(2) or '/'}{query}")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if path == "/s" or any(path.startswith(p) or path == p.rstrip("/") for p in NODE):
             if self.headers.get("Upgrade"):
                 self.relay()
@@ -124,7 +142,8 @@ class Front(BaseHTTPRequestHandler):
                 while chunk := resp.read1(1 << 16):
                     self.wfile.write(chunk)
                     self.wfile.flush()
-        except OSError:
+        except (OSError, http.client.HTTPException):
+            # The node went away mid-answer (a restart): the browser asks again.
             pass
         finally:
             conn.close()

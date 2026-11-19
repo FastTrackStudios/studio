@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Share link mockups</title>
+<link rel="stylesheet" href="mock.css">
+</head>
+<body>
+<main class="board">
+<h1>A setlist's share link on a phone</h1>
+<p>Five screens at 390 by 844 and one at 1280 by 800, for docs/design/share-link-setlist.md. The titles, artists, keys and lengths are the recital's. The covers, the lyric lines, the chart's bars and the song's sections are stand-ins: the vault is private, and these files are in a public repository.</p>
+<p>Each frame is a page of its own: open one at phone width to see it as it would sit on a phone. They follow the system's light or dark theme, as the app does.</p>
+<div class="phones">
+<figure><iframe src="set.html" title="The set" loading="lazy"></iframe><figcaption><b>The set</b>What the link opens on. Acts as the setlist names them, a row plays its song, the docked player stays on every screen.</figcaption></figure>
+<figure><iframe src="player.html" title="The player" loading="lazy"></iframe><figcaption><b>The player</b>A tap on the docked player. The strip is the song by section; chart, lyrics and arrangement are one tap away.</figcaption></figure>
+<figure><iframe src="chart.html" title="The chart, following" loading="lazy"></iframe><figcaption><b>The chart, following</b>The bar being played is washed and the beat line moves through it; the page scrolls to keep it in view.</figcaption></figure>
+<figure><iframe src="lyrics.html" title="The lyrics, following" loading="lazy"></iframe><figcaption><b>The lyrics, following</b>The line being sung is the large one, with section names between. A tap on a line plays from it.</figcaption></figure>
+<figure><iframe src="arrangement.html" title="The arrangement" loading="lazy"></iframe><figcaption><b>The arrangement</b>Read only: sections, markers and the reference mix on one timeline, scrolled sideways.</figcaption></figure>
+</div>
+<div class="phones wide"><figure><iframe src="desktop.html" title="Desktop width"></iframe><figcaption style="max-width:70ch"><b>At 1280 wide</b>The same views side by side: the set down the left, the chart with the lyrics or the arrangement beside it, the player along the bottom.</figcaption></figure></div>
+</main>
+<script src="mock.js"></script>
+</body>
+</html>
