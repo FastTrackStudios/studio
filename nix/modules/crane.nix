@@ -106,11 +106,29 @@
         # name ("invalid inclusion of reserved file name Cargo.toml.orig"),
         # and the whole vendor step, so every crane build, failed with it.
         # cargo writes its own when it packages; nothing reads these.
+        #
+        # And a crate a repo carries under `vendor/` for its own
+        # `[patch]` (Signal's `vendor/tone3000`, which Studio's
+        # `[patch.crates-io]` names by git): it sits inside the repo's
+        # workspace folder without being a member, so crane's
+        # `cargo metadata` on it fails ("believes it's in a workspace when
+        # it's not"), the crate is left out of the vendored source and
+        # every build stops at "patch location … does not contain packages
+        # matching `tone3000`" (v26.11.5's images). Its own empty
+        # `[workspace]` makes it readable alone; cargo ignores that table
+        # in a dependency, and the repo's own workspace still resolves.
         overrideVendorGitCheckout = ps: drv:
           let
             noOrig = drv.overrideAttrs (old: {
               preInstall = (old.preInstall or "") + ''
                 find . -name Cargo.toml.orig -type f -delete
+                for m in vendor/*/Cargo.toml; do
+                  [ -f "$m" ] || continue
+                  # Only one cargo cannot read alone: a `vendor/` crate that
+                  # is a member (the editor repo's) keeps its manifest.
+                  cargo metadata --format-version 1 --no-deps --offline --manifest-path "$m" >/dev/null 2>&1 \
+                    || printf '\n[workspace]\n' >> "$m"
+                done
               '';
             });
           in
