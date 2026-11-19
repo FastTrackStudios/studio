@@ -1,0 +1,24 @@
+[package]
+name = "studio-rig-browser"
+description = "The rig's browser: blocks, modules and presets by kind, the captures on this device and TONE3000; a pick loads it into the rig. A pane of Studio, a vox client of the rig engine (the studio.rig extension); linked into apps/architect, or its own process as a development copy."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "studio-rig-browser"
+path = "src/main.rs"
+
+[dependencies]
+studio-rig-link = { workspace = true }
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+guitar = { workspace = true, features = ["ui"] }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

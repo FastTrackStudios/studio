@@ -1,0 +1,31 @@
+[package]
+name = "studio-rig-link"
+description = "What every Studio rig view extension shares at build time: finding the rig engine (the studio.rig extension), one vox connection to it per process, and a pane's rig scope (the clients in context, Signal's panel providers around the view, what panes share kept in step). To the rig's views what studio-view-link is to the arrangement and the mixer; no extension needs another at run time."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[dependencies]
+architect = { workspace = true, features = ["connect", "vox", "platform"] }
+architect-extensions = { workspace = true, features = ["linked-core"] }
+guitar = { workspace = true, features = ["ui"] }
+keys = { workspace = true, features = ["ui"] }
+signal-rigs-proto = { workspace = true }
+signal-rig-perform-ui = { workspace = true }
+signal-tone3000 = { workspace = true, features = ["ui"] }
+dioxus = { workspace = true }
+vox-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
+futures-timer = { workspace = true }
+tracing = { workspace = true }
+dirs = { workspace = true }
+libc = { workspace = true }
+
+[lints]
+workspace = true

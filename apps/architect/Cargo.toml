@@ -27,6 +27,12 @@ gui = [
     "dep:studio-launcher",
     "dep:keyflow-extension",
     "dep:ignition-pane",
+    "dep:studio-rig-switches",
+    "dep:studio-rig-setlist",
+    "dep:studio-rig-browser",
+    "dep:studio-rig-grid",
+    "dep:studio-rig-macros",
+    "dep:studio-rig-status",
 ]
 
 [dependencies]
@@ -57,6 +63,14 @@ studio-navigator = { workspace = true, optional = true }
 studio-launcher = { workspace = true, optional = true }
 keyflow-extension = { workspace = true, optional = true }
 ignition-pane = { workspace = true, optional = true }
+# Signal's rig views (docs/design/signal-extensions.md), vox clients of the
+# rig engine (`studio.rig`, a process of its own as `daw` is).
+studio-rig-switches = { workspace = true, optional = true }
+studio-rig-setlist = { workspace = true, optional = true }
+studio-rig-browser = { workspace = true, optional = true }
+studio-rig-grid = { workspace = true, optional = true }
+studio-rig-macros = { workspace = true, optional = true }
+studio-rig-status = { workspace = true, optional = true }
 
 # Its island (#445): `SiteIsland`, the node serves it; its folder is
 # checked against its lock (sha256, base64) before it is (src/island.rs).

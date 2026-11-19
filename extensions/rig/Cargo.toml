@@ -1,0 +1,36 @@
+[package]
+name = "rig-extension"
+description = "Signal's rig engine as an Architect extension: the engine `studio-desktop --engine` runs (the guitar and keys backends on one signal_rig_host::Engine), in the extension's process, served over vox on loopback, with every control an action. Studio's rig views (studio.rig.*) are vox clients of it."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "rig-extension"
+path = "src/main.rs"
+
+[dependencies]
+studio-rig-link = { workspace = true }
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+architect = { workspace = true, features = ["host", "rig", "vox", "action-list"] }
+guitar = { workspace = true }
+keys = { workspace = true }
+sampler = { workspace = true, features = ["library"] }
+signal-rig-host = { workspace = true }
+signal-rigs-proto = { workspace = true }
+signal-proto = { workspace = true }
+signal-tone3000 = { workspace = true, features = ["client"] }
+signal-nam = { workspace = true }
+facet = { workspace = true }
+facet-json = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

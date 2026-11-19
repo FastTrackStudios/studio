@@ -65,6 +65,24 @@ pub fn stage() -> Bundle {
         .member(&ignition_pane::ext::Lighting)
 }
 
+/// Signal's rig views, compiled in with `gui`: the footswitch scenes, the
+/// sidebar, the browser, the DSP grid with its FX row and Edit, the
+/// macros and the rig's status (`docs/design/signal-extensions.md`). Each
+/// is a vox client of the rig engine (`studio.rig`), which stays a process
+/// of its own as `daw` does; a development copy of any of them shadows
+/// the linked one.
+#[cfg(feature = "gui")]
+#[must_use]
+pub fn rig() -> Bundle {
+    Bundle::new("rig", "Rig")
+        .member(&studio_rig_status::Status)
+        .member(&studio_rig_switches::Switches)
+        .member(&studio_rig_setlist::Setlist)
+        .member(&studio_rig_browser::Browser)
+        .member(&studio_rig_grid::Grid)
+        .member(&studio_rig_macros::Macros)
+}
+
 pub mod island;
 
 /// The island's manifest (`apps/architect/island/extension.toml`): its
@@ -150,6 +168,6 @@ fn base() -> Distribution {
         // which is not a compiled-in extension's.
         .favourites_of(ISLAND_MANIFEST);
     #[cfg(feature = "gui")]
-    let dist = dist.bundle(stage()).shipped(SHIPPED);
+    let dist = dist.bundle(stage()).bundle(rig()).shipped(SHIPPED);
     dist
 }
