@@ -29,11 +29,21 @@ def locked(url):
     """Every package of Cargo.lock whose source is the git repo URL."""
     with open(os.path.join(ROOT, "Cargo.lock"), "rb") as f:
         lock = tomllib.load(f)
-    prefix = f"git+{url}"
-    return [p for p in lock.get("package", []) if p.get("source", "").split("?")[0].split("#")[0] == prefix]
+    # Either spelling of the host: since Studio pins Architect by tag
+    # (studio#539) the root [patch] hands every Architect crate over from
+    # `www.github.com`, and that is the source the lock names.
+    prefixes = {f"git+{url}", f"git+{url.replace('https://github.com/', 'https://www.github.com/')}"}
+    return [p for p in lock.get("package", []) if p.get("source", "").split("?")[0].split("#")[0] in prefixes]
 
 
 def get(key):
+    # The vault's setlist and share code can be named for one run
+    # (LOCAL_STACK_SETLIST, LOCAL_STACK_SHARE_CODE), as LOCAL_STACK_VAULT
+    # names another vault: a copy of a real set without editing the file.
+    override = {"vault.setlist": "LOCAL_STACK_SETLIST", "vault.share_code": "LOCAL_STACK_SHARE_CODE"}.get(key)
+    if override and os.environ.get(override):
+        print(os.environ[override])
+        return
     with open(os.path.join(ROOT, "local-stack.toml"), "rb") as f:
         value = tomllib.load(f)
     for part in key.split("."):
@@ -132,7 +142,12 @@ def seed_share(vault, setlist, code, vault_id):
     except OSError as e:
         die(f"the setlist {setlist} is not in {vault}: {e}")
     fm = frontmatter(text)
-    title = next((l.split(":", 1)[1].strip().strip("'\"") for l in fm.splitlines() if l.startswith("title:")), None)
+    # YAML's quotes off (a single-quoted scalar doubles its apostrophes: 'JT''s').
+    title = next((l.split(":", 1)[1].strip() for l in fm.splitlines() if l.startswith("title:")), None)
+    if title and len(title) > 1 and title[0] == title[-1] == "'":
+        title = title[1:-1].replace("''", "'")
+    elif title:
+        title = title.strip('"')
     title = title or os.path.splitext(os.path.basename(setlist))[0]
     # The top-level `songs:` list (each set lists them again).
     songs, inside = [], False
@@ -144,8 +159,11 @@ def seed_share(vault, setlist, code, vault_id):
             if line.startswith("- "):
                 m = LINK.search(line)
                 if m:
-                    note = m.group(1).replace("''", "'")
-                    songs.append(note if note.endswith(".md") else note + ".md")
+                    # A link to one arrangement of a song (`Song#Live`) shares the song's note.
+                    note = m.group(1).replace("''", "'").split("#", 1)[0]
+                    note = note if note.endswith(".md") else note + ".md"
+                    if note not in songs:
+                        songs.append(note)
             elif line and not line.startswith(" "):
                 inside = False
     missing = [s for s in songs if not os.path.isfile(os.path.join(vault, s))]

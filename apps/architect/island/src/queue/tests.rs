@@ -1210,3 +1210,39 @@ fn lrc_lines_are_timed_and_tags_left_out() {
         ]
     );
 }
+
+#[test]
+fn a_rows_note_is_read_from_its_id() {
+    // What its "open" asks the app for: the song's note, never its
+    // arrangement or its number in the set.
+    assert_eq!(
+        note_of("Setlists/Eve.md|Libraries/C/Joy/Joy.md"),
+        Some("Libraries/C/Joy/Joy.md")
+    );
+    assert_eq!(
+        note_of("Setlists/Eve.md|Libraries/C/Joy/Joy.md#Live"),
+        Some("Libraries/C/Joy/Joy.md")
+    );
+    assert_eq!(
+        note_of("Setlists/Eve.md|Libraries/C/Joy/Joy.md@3"),
+        Some("Libraries/C/Joy/Joy.md")
+    );
+    assert_eq!(
+        note_of("Setlists/Eve.md|Libraries/C/Joy/Joy.md#Live@12"),
+        Some("Libraries/C/Joy/Joy.md")
+    );
+    // A guest's setlist has no path of its own: the row's note still reads.
+    assert_eq!(
+        note_of("|Libraries/C/Joy/Joy.md"),
+        Some("Libraries/C/Joy/Joy.md")
+    );
+    // A title with an `@` in it is not a number.
+    assert_eq!(
+        note_of("S.md|Songs/Live @ Five/Live @ Five.md"),
+        Some("Songs/Live @ Five/Live @ Five.md")
+    );
+    // No note named: nothing to open.
+    assert_eq!(note_of("S.md|"), None);
+    assert_eq!(note_of("no-bar"), None);
+    assert_eq!(note_of("S.md|Songs/joy.ogg"), None);
+}

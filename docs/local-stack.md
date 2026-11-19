@@ -47,6 +47,24 @@ everything on loopback are Architect's own `cargo xtask dev`, run from the
 Architect checkout the stack resolves, given this stack's ports and state.
 Nothing of it is copied here.
 
+**Share links open on the web app's port.** A link's page is the node's
+answer and loads the web app from its own origin, so the `web` process is
+a front (`scripts/local-stack-front.py`): the bundle's files, and the
+node's paths (`/s/`, `/_ext/`, `/org/`, …) sent on to the node, as the
+hosted proxy joins them. `http://127.0.0.1:7423/s/<code>/…` opens; the
+same path on the node's own port stays on "Opening the shared link…".
+
+**Another vault's setlist**, for one run, without editing
+`local-stack.toml`: `LOCAL_STACK_VAULT` (copied, never written),
+`LOCAL_STACK_SETLIST` (the setlist note's path in it) and
+`LOCAL_STACK_SHARE_CODE`. **A stack of local checkouts** (every repo
+patched by one cargo config, as the distribution branch needs):
+`LOCAL_STACK_OVERRIDES=<that file>` with `LOCAL_STACK_ARCHITECT_PATH`, the
+Architect checkout the issuer and the web app are built from.
+`scripts/share-audit-browser.mjs` is a headless Firefox to walk a link
+with, one JSON command at a time, off the audio graph as the smoke
+test's is.
+
 ## Which pieces are local
 
 Studio is always this tree. Architect and Keyflow are pinned (the tags
@@ -155,10 +173,12 @@ just dev-smoke    # SCREENSHOTS=<dir> keeps the browser's shots at 390 px
 ```
 
 It starts the stack when it is not running (and stops it after), then
-checks that the share link answers, the setlist page lists its songs, the
-node serves Studio's island and every file its lock names, and that a
-headless Firefox (WebDriver BiDi, `scripts/local-stack-smoke.mjs`) plays a
-song and sees the playhead move and the chart follow. The browser runs in
+checks that the share link answers with the web app beside it, that the
+node serves Studio's island, its claims on setlist and song notes and
+every file its lock names, and that a headless Firefox (WebDriver BiDi,
+`scripts/local-stack-smoke.mjs`) opens the link as the app's guest, sees
+Studio's playlist list the set's songs, plays one from it and sees that
+song's chart engraved with the bar being played marked. The browser runs in
 a mount namespace of its own with an empty runtime dir and `/run/pipewire`,
 so it can never open an output on this machine's audio graph; without the
 namespace the check refuses to run.

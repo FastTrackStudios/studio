@@ -93,6 +93,8 @@ dev-reset:
 _lumen-link:
     #!/usr/bin/env bash
     set -euo pipefail
+    # As locked, or (a local stack's overrides) as those resolve.
+    cargo() { if [ -n "${STUDIO_ARCHITECT_CARGO_CONFIG:-}" ]; then command cargo "${@/--locked/--offline}" --config "$STUDIO_ARCHITECT_CARGO_CONFIG"; else command cargo "$@"; fi; }
     dir=$(cargo metadata --locked --format-version 1 2>/dev/null \
         | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="lumen-blocks"))')
     ln -sfn "$dir" apps/session/desktop/.lumen-blocks
@@ -2229,10 +2231,12 @@ island-build:
     # What it is built from, taken before the build: the commit, and
     # `-dirty` when the tree has changes git tracks (the release refuses that).
     built=$(git describe --always --dirty --abbrev=40)
-    meta=$(cargo metadata --format-version 1)
+    # A local stack's overrides (scripts/local-stack.sh), when it gives them.
+    cfg=(${STUDIO_ARCHITECT_CARGO_CONFIG:+--config "$STUDIO_ARCHITECT_CARGO_CONFIG"})
+    meta=$(cargo metadata --format-version 1 "${cfg[@]}")
     target=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])' <<<"$meta")
     devenv --profile wasi shell -- env CARGO_TARGET_DIR="$target" CARGO_PROFILE_WASM_RELEASE_STRIP=true \
-        cargo build --profile wasm-release -p studio-island --target wasm32-wasip2
+        cargo build --profile wasm-release -p studio-island --target wasm32-wasip2 "${cfg[@]}"
     ext=$(python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="architect-extensions"))' <<<"$meta")
     tools="$target/architect-web"
     # jco and its transpiler, pinned by the folder's package-lock.json: `npm
@@ -2286,12 +2290,13 @@ island-web out:
     #!/usr/bin/env bash
     set -euo pipefail
     # The dev shell's cargo (its own output kept out of the JSON).
-    metafile=$(mktemp); devenv shell -- sh -c 'cargo metadata --format-version 1 > "$1"' sh "$metafile" >/dev/null; meta=$(cat "$metafile"); rm -f "$metafile"
+    cfg=(${STUDIO_ARCHITECT_CARGO_CONFIG:+--config "$STUDIO_ARCHITECT_CARGO_CONFIG"})
+    metafile=$(mktemp); devenv shell -- sh -c 'out="$1"; shift; cargo metadata --format-version 1 "$@" > "$out"' sh "$metafile" "${cfg[@]}" >/dev/null; meta=$(cat "$metafile"); rm -f "$metafile"
     target=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])' <<<"$meta")
     # The dev shell's own cargo, wasm-bindgen (pinned with the crate) and
     # wasm-opt (binaryen), never whatever else is on the PATH.
     devenv shell -- env CARGO_TARGET_DIR="$target" CARGO_PROFILE_WASM_RELEASE_STRIP=true \
-        cargo build --profile wasm-release -p studio-island --target wasm32-unknown-unknown
+        cargo build --profile wasm-release -p studio-island --target wasm32-unknown-unknown "${cfg[@]}"
     raw=$(mktemp -d)
     trap 'rm -rf "$raw"' EXIT
     devenv shell -- wasm-bindgen --target web --no-typescript --out-name web-studio-island --out-dir "$raw" \
