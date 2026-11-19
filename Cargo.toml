@@ -14,6 +14,7 @@ members = [
     "extensions/mixer",
     "extensions/lyrics",
     "extensions/navigator",
+    "extensions/launcher",
     "extensions/link",
     "features/timeline",
     "features/editing",
@@ -82,8 +83,10 @@ repository = "https://github.com/FastTrackStudios/session"
 # FastTrackStudios/session's `session` (the session primitive: its document
 # file, its fts.session service, its transport led as presence), as the
 # `daw` extension uses it; renamed because Studio's own `features/session`
-# is `session` too. session `main` (#191 merged: SessionFile, Leader).
-fts-session = { package = "session", git = "https://github.com/FastTrackStudios/session", rev = "84530a1297c2038eb70f62f0b2ef541d6a6a13e7", default-features = false, features = ["architect", "extension", "lead"] }
+# is `session` too. session `main` (#189 merged: the shared clock is
+# Architect's presence clock; it pins Architect by tag, v0.14.0, as Studio
+# does).
+fts-session = { package = "session", git = "https://github.com/FastTrackStudios/session", rev = "f186f34b8451e3a1543ac78a2c99d1ab02c1b352", default-features = false, features = ["architect", "extension", "lead"] }
 signal-space = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-tone3000 = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 # The effects live in FastTrackStudios/fts-fx (studio#510): `dsp-core`,
@@ -391,6 +394,8 @@ architect-extensions = { git = "https://github.com/FastTrackStudios/architect", 
 # A WASI component's guest side (Studio's island, apps/architect/island).
 architect-extension-wasi = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
+# The media list (`architect_media::ui::MediaList`): the launcher's song list.
+architect-media = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 architect-scene = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
 # The app's theme as data (`use_resolved`): what a Studio view in Architect
@@ -800,6 +805,7 @@ studio-arrangement = { path = "extensions/arrangement" }
 studio-mixer = { path = "extensions/mixer" }
 studio-lyrics = { path = "extensions/lyrics" }
 studio-navigator = { path = "extensions/navigator" }
+studio-launcher = { path = "extensions/launcher" }
 # Keyflow's chart extension and Ignition's lighting extension, linked into
 # the distribution the same way (`pane`: Ignition's room as the GPU
 # process view the app hosts).

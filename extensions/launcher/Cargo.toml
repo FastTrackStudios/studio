@@ -1,0 +1,37 @@
+[package]
+name = "studio-launcher"
+description = "Studio's project launcher as an extension: the vault's setlists and their songs, what each song is ready with, what was opened lately and the rigs, with a press that opens a setlist or a song in Studio's engine (the daw extension). Reads notes through the host and draws with nothing of Session's, so it builds in seconds (docs/design/project-launcher.md)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "studio-launcher"
+path = "src/main.rs"
+
+[dependencies]
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+# The provider it adds to Architect's navigator (`src/nav.rs`).
+architect-navigator-api = { workspace = true }
+# A song's tile colour, the setlists extension's rule (`setlists::row::tile_hue`),
+# so a song is the same colour here as on its setlist's page.
+setlists = { workspace = true }
+# The song list: Architect's media list (`architect_media::ui::MediaList`),
+# given the launcher's press and each song's tile.
+architect-media = { workspace = true, features = ["ui"] }
+# A song's cover as a `data:` URL the list's image shows.
+base64 = { workspace = true }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+futures-timer = { workspace = true }
+dirs = { workspace = true }
+# The runtime its host calls are polled in (`host::runtime`): a linked
+# action run from a hook is not on Tokio, and some actions need it.
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "time"] }
+
+[lints]
+workspace = true

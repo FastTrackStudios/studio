@@ -309,7 +309,10 @@ pub fn publish(playing: bool, at: f64, rate: f64) {
         .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
     {
-        leader.publish(playing, at.max(0.0), rate);
+        // `false` (nothing sent) only before the host's clock has its first
+        // estimate, which `Leader::serve` waits for; the engine publishes
+        // again on its next move, and re-anchors while it plays.
+        let _sent = leader.publish(playing, at.max(0.0), rate);
     }
 }
 
