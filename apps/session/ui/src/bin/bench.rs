@@ -393,6 +393,10 @@ fn main() {
         );
         all.push((*name, frame, paint, counts));
     }
+    write_json(
+        "arrangement",
+        all.iter().map(|(name, frame, paint, _)| (*name, frame, paint)),
+    );
 
     let worst = all
         .iter()
@@ -426,6 +430,33 @@ fn main() {
         (1000.0 / 240.0) / frame.p99,
         (1000.0 / 60.0) / frame.p99,
     );
+}
+
+/// `FTS_BENCH_JSON=<path>`: each phase's frame and paint summaries as
+/// JSON, the form `docs/perf/baselines/` commits. Milliseconds per
+/// frame; one sample is one batch's per-frame average, as in the table.
+fn write_json<'a>(bench: &str, phases: impl Iterator<Item = (&'a str, &'a Summary, &'a Summary)>) {
+    let Ok(path) = std::env::var("FTS_BENCH_JSON") else {
+        return;
+    };
+    let ms = |s: &Summary| {
+        serde_json::json!({
+            "mean": s.mean, "p50": s.p50, "p99": s.p99, "worst": s.worst, "samples": s.frames,
+        })
+    };
+    let phases: Vec<_> = phases
+        .map(|(name, frame, paint)| {
+            serde_json::json!({ "phase": name, "frame_ms": ms(frame), "paint_ms": ms(paint) })
+        })
+        .collect();
+    let out = serde_json::json!({
+        "bench": bench,
+        "frames_per_phase": FRAMES,
+        "batch": BATCH,
+        "phases": phases,
+    });
+    let text = serde_json::to_string_pretty(&out).expect("json");
+    std::fs::write(&path, text + "\n").unwrap_or_else(|e| panic!("write {path}: {e}"));
 }
 
 /// How many bars of groove the synthetic kit carries.
@@ -2143,6 +2174,7 @@ fn studio(
 
     let mut worst_p99 = 0.0_f64;
     let mut worst_name = "";
+    let mut summaries = Vec::new();
     for (name, gesture) in &phases {
         let mut stages = Stages::with_capacity(FRAMES);
         for batch in 0..FRAMES / BATCH {
@@ -2283,7 +2315,12 @@ fn studio(
             worst_p99 = frame.p99;
             worst_name = name;
         }
+        summaries.push((*name, frame, paint));
     }
+    write_json(
+        "studio",
+        summaries.iter().map(|(name, frame, paint)| (*name, frame, paint)),
+    );
     // Let go of the slip, and check it was one: a press that missed the
     // item would have measured a still view and called it a slip drag.
     // The edit it queues goes nowhere — nothing here drains the queue.
