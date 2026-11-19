@@ -556,11 +556,6 @@ run_desktop() {
     triple="$(host_triple)"
     out="$(target_dir)/$triple/desktop-dev"
     mapfile -t cfg < <(cargo_config)
-    say "desktop: building the engine (daw-extension) into its package, extensions/daw"
-    with_overrides cargo build --profile desktop-dev --target "$triple" --bin daw-extension "${cfg[@]}" >&2 \
-        || die "desktop: the engine's build failed"
-    cp --reflink=auto "$out/daw-extension" "$root/extensions/daw/daw-extension.new"
-    mv "$root/extensions/daw/daw-extension.new" "$root/extensions/daw/daw-extension"
     for _ in $(seq 1 7200); do
         curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port server)/health" && break
         sleep 1
@@ -603,14 +598,11 @@ run_desktop() {
         (
             bin="" sock=""
             for _ in $(seq 1 3600); do
-                bin="$(find "$root/target/dx" -type f -name studio-architect -perm -u+x 2>/dev/null | head -1)"
-                if [ -n "$bin" ]; then
-                    sock="$(ARCHITECT_DEV_ROOT="$state/desktop" "$bin" dev path --name studio-stack 2>/dev/null \
-                        | python3 -c 'import json, sys; print(json.load(sys.stdin).get("socket", ""))' 2>/dev/null || true)"
-                    [ -n "$sock" ] && [ -S "$sock" ] && "$bin" actions --app "$sock" run APP_STATUS >/dev/null 2>&1 && break
-                fi
+                desktop_up && break
                 sleep 2
             done
+            bin="$(desktop_bin)"
+            sock="$(desktop_socket "$bin")"
             say "desktop: up; running $after"
             ARCHITECT_DEV_ROOT="$state/desktop" "$after" "$bin" "$sock" >&2 || say "desktop: $after failed"
         ) &
@@ -626,6 +618,82 @@ run_desktop() {
         env "${vars[@]}" dx serve --platform desktop --renderer native --hot-patch false --profile desktop-dev \
             --target "$triple" --open false
     fi
+}
+
+# ── Builds as devenv tasks ───────────────────────────────────────────────
+# Each process's build, run by devenv as a task before the process starts
+# (devenv.nix `tasks`), so `devenv up` shows it compiling with its own
+# output and a failed build stops that process visibly. The same flags as
+# the process's own `cargo run` / `dx serve`, so its first build after this
+# is an up-to-date check. Everything through kache (no hot-patching).
+
+# The Architect server: plain `architect-desktop`, no window.
+build_architect() {
+    plan_locked
+    load_plan
+    say "build: the Architect server (architect-desktop, no window) from $arch_src"
+    (
+        cd "$arch_src"
+        [ -n "$issuer_target" ] && export CARGO_TARGET_DIR="$issuer_target"
+        cargo build -p architect-desktop --no-default-features --features vox --bin architect-desktop
+    )
+}
+
+# studio-web, as `dx serve` builds it.
+build_web() {
+    plan_locked
+    load_plan
+    local crate="$root/apps/web" archweb cfg=()
+    archweb="$(crate_dir architect-web)"
+    [ -n "$archweb" ] && [ -d "$archweb" ] || die "build: no architect-web crate resolved (cargo metadata)"
+    prepare_web "$crate" "$archweb"
+    mapfile -t cfg < <(cargo_config)
+    say "build: studio-web (apps/web) for the browser"
+    cd "$crate"
+    if [ "${#cfg[@]}" -gt 0 ]; then
+        with_overrides dx build --platform web --cargo-args="${cfg[*]}"
+    else
+        dx build --platform web
+    fi
+}
+
+# Studio desktop and its engine (the `daw` extension's program, copied
+# into its package), as `dx serve` builds them.
+build_desktop() {
+    plan_locked
+    load_plan
+    local triple out cfg=()
+    triple="$(host_triple)"
+    out="$(target_dir)/$triple/desktop-dev"
+    mapfile -t cfg < <(cargo_config)
+    say "build: the engine (daw-extension) into its package, extensions/daw"
+    with_overrides cargo build --profile desktop-dev --target "$triple" --bin daw-extension "${cfg[@]}"
+    cp --reflink=auto "$out/daw-extension" "$root/extensions/daw/daw-extension.new"
+    mv "$root/extensions/daw/daw-extension.new" "$root/extensions/daw/daw-extension"
+    say "build: Studio desktop (apps/desktop)"
+    cd "$root/apps/desktop"
+    if [ "${#cfg[@]}" -gt 0 ]; then
+        with_overrides dx build --platform desktop --renderer native --profile desktop-dev --target "$triple" \
+            --cargo-args="${cfg[*]}"
+    else
+        dx build --platform desktop --renderer native --profile desktop-dev --target "$triple"
+    fi
+}
+
+# The window's binary as dx built it, and its control socket once it
+# answers (the dev instance `studio-stack`).
+desktop_bin() { find "$root/target/dx" -type f -name studio -perm -u+x 2>/dev/null | head -1; }
+desktop_socket() {
+    local bin="$1"
+    ARCHITECT_DEV_ROOT="$state/desktop" "$bin" dev path --name studio-stack 2>/dev/null \
+        | python3 -c 'import json, sys; print(json.load(sys.stdin).get("socket", ""))' 2>/dev/null || true
+}
+desktop_up() {
+    local bin sock
+    bin="$(desktop_bin)"
+    [ -n "$bin" ] || return 1
+    sock="$(desktop_socket "$bin")"
+    [ -n "$sock" ] && [ -S "$sock" ] && "$bin" actions --app "$sock" run APP_STATUS >/dev/null 2>&1
 }
 
 # ── Status, tailnet, reset ───────────────────────────────────────────────
@@ -704,6 +772,14 @@ case "$cmd" in
             *) die "run: mock-oauth, auth, architect, web or desktop" ;;
         esac
         ;;
+    build)
+        case "${1:-}" in
+            architect) build_architect ;;
+            web) build_web ;;
+            desktop) build_desktop ;;
+            *) die "build: architect, web or desktop" ;;
+        esac
+        ;;
     status) status ;;
     ready)
         # devenv's readiness probe: the process answers on its port.
@@ -711,7 +787,11 @@ case "$cmd" in
             auth) curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port auth)/health" ;;
             architect) curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port server)/health" ;;
             mock-oauth) curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$(port mock_oauth)/" ;;
-            web) curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port web)/app/" ;;
+            # Built and served: dx serves the app's own module only once its
+            # build is done (before, its "building" page).
+            web) curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port web)/wasm/studio-web.js" ;;
+            # The window answers on its control socket.
+            desktop) desktop_up ;;
             *) curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$(port "$1")/" ;;
         esac
         ;;

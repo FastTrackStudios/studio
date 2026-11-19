@@ -282,32 +282,81 @@ in
   # Each is `scripts/local-stack.sh run <name>`; ports in local-stack.toml
   # (local-stack.local.env moves them), state in .devenv/state/local-stack.
   # The just recipes (`just dev`, `just demo`) choose what is local first.
+  # Each build is a task the process waits on, so the TUI shows it
+  # compiling (its own output) and a failed build stops its process
+  # visibly; each process is ready only once it really answers (web: dx
+  # serves studio-web's built module; desktop: the window's control socket).
+  # Every process exports to the telemetry module's collector, so Teley
+  # (:8787, and its MCP) has the stack's traces and logs.
+  tasks = let
+    stack = "${config.devenv.root}/scripts/local-stack.sh";
+  in {
+    "stack:build-architect" = {
+      exec = "${stack} build architect";
+      before = [ "devenv:processes:architect" ];
+    };
+    "stack:build-web" = {
+      exec = "${stack} build web";
+      before = [ "devenv:processes:web" ];
+    };
+    "stack:build-desktop" = {
+      exec = "${stack} build desktop";
+      before = [ "devenv:processes:desktop" ];
+    };
+  };
+
   processes = let
     stack = "${config.devenv.root}/scripts/local-stack.sh";
     probe = name: { exec = "${stack} ready ${name}"; period = 2; };
+    otel = config.fleet.telemetry.processEnv;
   in {
     mock-oauth = {
       exec = "exec ${stack} run mock-oauth";
       ready = probe "mock-oauth";
+      env = otel;
     };
     auth = {
       exec = "exec ${stack} run auth";
       after = [ "devenv:processes:mock-oauth" ];
       ready = probe "auth";
+      env = otel;
     };
     architect = {
       exec = "exec ${stack} run architect";
       after = [ "devenv:processes:auth" ];
       ready = probe "architect";
+      env = otel;
     };
     web = {
       exec = "exec ${stack} run web";
       after = [ "devenv:processes:auth" ];
       ready = probe "web";
+      env = otel;
     };
     desktop = {
       exec = "exec ${stack} run desktop";
-      after = [ "devenv:processes:auth" ];
+      after = [ "devenv:processes:architect" ];
+      ready = probe "desktop";
+      env = otel;
+    };
+  };
+
+  # Claude Code: devenv writes .mcp.json from this (git-ignored: it names
+  # this checkout's path). `devenv`: its own MCP (search nixpkgs and devenv
+  # options, https://devenv.sh/mcp/); `session`: Studio's engine's Action
+  # List over MCP, while an engine runs. Teley's MCP is the user's own
+  # (`teley-cli mcp --host localhost:8787`), reading what this stack exports.
+  claude.code.enable = true;
+  claude.code.mcpServers = {
+    devenv = {
+      type = "stdio";
+      command = "devenv";
+      args = [ "mcp" ];
+      env = { DEVENV_ROOT = config.devenv.root; };
+    };
+    session = {
+      type = "http";
+      url = "http://127.0.0.1:47811/mcp";
     };
   };
 

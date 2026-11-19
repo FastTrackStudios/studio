@@ -88,3 +88,6 @@ features/dynamic-template/fixtures/golden/media/
 # A release build's version (scripts/release.sh stamp): never committed.
 /.release-version
 local-stack.local.env
+
+# Written by devenv from devenv.nix (claude.code.mcpServers): names this checkout.
+/.mcp.json
