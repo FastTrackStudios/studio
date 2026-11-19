@@ -124,7 +124,7 @@ web() {
         ARCHITECT_DISTRIBUTION="$json" bash "$src/scripts/web-bundle.sh" "$out" >&2
     )
     rm -f "$json"
-    grep -q '"name": "Studio Architect"' "$out/app/distribution.json" \
+    grep -q '"bundle_id": "app.fasttrackstudio.studio"' "$out/app/distribution.json" \
         || { echo "studio-architect: $out/app/distribution.json is not Studio's" >&2; exit 1; }
     echo "web=$(cd "$out" && pwd)"
 }

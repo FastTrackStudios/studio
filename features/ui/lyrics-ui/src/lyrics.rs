@@ -382,9 +382,9 @@ impl Lyrics {
 pub const LYRICS_TRACK: &str = "Lyrics";
 
 /// Whether `name` is the lyrics track's: `Lyrics`, with or without the
-/// tags a set made in Ableton for AbleSet carries after it
+/// tags a set made in Ableton for `AbleSet` carries after it
 /// (`Lyrics +LYRICS +CC [large]`). Not another track that only shows on
-/// AbleSet's lyrics page (`Chords +LYRICS`, `FoH Notes +LYRICS`).
+/// `AbleSet`'s lyrics page (`Chords +LYRICS`, `FoH Notes +LYRICS`).
 #[must_use]
 pub fn is_lyrics_track(name: &str) -> bool {
     let end = [" +", " ["]
