@@ -175,3 +175,17 @@ pub fn Arrangement(page: Signal<Value>, ask: Ask) -> Element {
         }
     }
 }
+
+/// A view of the More menu that has nothing to draw from this link yet:
+/// what it is for, and why it is empty here.
+#[component]
+pub fn NotHere(title: String, what: String, why: String) -> Element {
+    rsx! {
+        document::Style { {CSS} }
+        div { class: "av", "data-testid": "studio-not-here",
+            div { class: "av-head", span { class: "av-where", "{title}" } }
+            p { class: "av-empty", style: "margin: 8px 2px 6px; color: var(--foreground, CanvasText);", "{what}" }
+            p { class: "av-note", "{why}" }
+        }
+    }
+}

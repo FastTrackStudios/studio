@@ -188,13 +188,13 @@ try {
   // The link's own tabs, as its extension declares them, and no control a
   // guest cannot use.
   const controls = JSON.parse(await tab.eval(`JSON.stringify([...document.querySelectorAll('button')].map(b => (b.getAttribute('aria-label') || b.title || b.innerText.trim())))`));
-  for (const want of ['Setlist', 'Charts', 'Lyrics', 'Arrangement']) {
+  for (const want of ['Setlist', 'Charts', 'Lyrics', 'More']) {
     if (!controls.includes(want)) throw new Error(`no ${want} tab at the bottom of the link (${controls.filter((c) => c.length < 20).join(', ')})`);
   }
   for (const not of ['New note', 'Vault', 'Files', 'Open…', 'Search']) {
     if (controls.includes(not)) throw new Error(`a guest is shown a member's control: ${not}`);
   }
-  log('the link has its Setlist, Charts, Lyrics and Arrangement tabs, and no member control');
+  log('the link has its Setlist, Charts, Lyrics and More tabs, and no member control');
   const pressTab = async (name) => {
     const at = await tab.eval(`(() => { const b = [...document.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') || b.title || b.innerText.trim()) === ${JSON.stringify(name)}); const r = b.getBoundingClientRect(); return JSON.stringify([r.x + r.width / 2, r.y + r.height / 2]); })()`);
     await tab.press(...JSON.parse(at));
@@ -221,7 +221,11 @@ try {
   await tab.eval(`(() => { [...document.querySelectorAll('*')].forEach(e => { if (e.scrollTop > 0) e.scrollTop = 0; }); return 1; })()`);
   await tab.shot('song-chart-390');
   // Arrangement: the song playing on its timeline, the playhead in it.
-  await pressTab('Arrangement');
+  await pressTab('More');
+  const entries = JSON.parse(await tab.until(`(() => { const e = [...document.querySelectorAll('[data-testid="tab-menu-item"]')].map(b => b.innerText.trim()); return e.length ? JSON.stringify(e) : ''; })()`, 'the More menu above its tab', 5000));
+  if (entries.join(', ') !== 'Arrangement, Mixer, Lighting') throw new Error(`the More menu holds ${entries.join(', ')}`);
+  const first = await tab.eval(`(() => { const r = document.querySelector('[data-testid="tab-menu-item"]').getBoundingClientRect(); return JSON.stringify([r.x + r.width / 2, r.y + r.height / 2]); })()`);
+  await tab.press(...JSON.parse(first));
   const arr = await frameWith('studio-arrangement', 'the arrangement view');
   const head = await tab.evalIn(arr, `(() => { const p = document.querySelector('[data-testid="arrangement-playhead"]'); const s = document.querySelectorAll('[data-testid="arrangement-section"]').length; return p ? JSON.stringify({ left: parseFloat(p.style.left), sections: s }) : ''; })()`);
   if (!head) throw new Error('the arrangement draws no playhead for the song playing');
