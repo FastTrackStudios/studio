@@ -133,6 +133,13 @@ Mac>` serves the app's Action List on a socket there
 - **Version and build number**: the plist carries `0.1.0` / `1`; the
   release has to stamp them.
 - **The app's first screens are Architect's** (Inbox, the Architect tour,
-  the vault navigator). The phone layout with bottom tabs and the
-  signed-in dashboard of sets and libraries are the web thread's
-  (`feat/share-link-setlist-web`); they are not merged here.
+  the vault navigator; the phone's drawer shows no Setlists section). The
+  web thread's work (`feat/share-link-setlist-web`, merged into this
+  branch in both repos) brings the Share sheet that finds a thing's
+  links first, with a name, a pause and a confirmed revoke
+  (`architect_accounts`, the same sheet on iOS: opened here signed out,
+  where it says so). Its dashboard of sets and songs, the bottom tabs and
+  the More menu are island views of the web app; the native app does not
+  draw them yet (a tab that opens a menu is left out of the native bar,
+  `architect:apps/ui/src/favourites.rs`). Copy and send-again through
+  the iOS share sheet (`UIActivityViewController`) is not wired.
