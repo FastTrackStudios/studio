@@ -16,6 +16,100 @@ a guest (Architect's `guide/shares.md`); Studio is a distribution of
 Architect with everything compiled in; nothing is deployed or published
 by this work.
 
+## Where it stands (2026-11-18, after the owner's answers)
+
+The owner took the recommendations below with four changes, and asked
+for a different phone layout after seeing the first one. This section is
+the current state; the audit and the gap tables under it are as first
+written, and say where they were overtaken.
+
+**Decided.**
+
+- A guest reads the text the link's build writes, plus the frontmatter
+  keys the view declares (architect#648, option 1).
+- Downloads: charts and lyrics yes, recordings and videos no. Download
+  all must not include the lighting videos.
+- **No AAC rendition.** "We want the app to handle playback." The web
+  app decodes the recordings as they are (Ogg Vorbis) on every browser.
+  Gap S6 is dropped.
+- **Hosting is one server and one domain.** Architect itself, headless,
+  for every org; Studio's web app at `fasttrackstudio.app`, a share link
+  a path on it. No node per org, no org subdomains.
+- **Media are attachments in the vault** and nothing else: no second
+  file store for what a link plays.
+- The recital's link is for invited people or expires; the Archive set
+  is left out for guests; Merry and Bright is not sent as a listening
+  link while it has no audio; no real link before iPhone checks.
+- **The phone screen** (asked for on seeing the first build): the top is
+  one thin line with the setlist's name centred and quiet; no Notes /
+  Files toggle, no "Shared with you" line, no large title (those are in
+  the sidebar); no editing toolbar; the bottom tabs are **Setlist,
+  Charts, Lyrics, Arrangement**, and the round button plays and pauses.
+
+**Built since, and seen in a browser at 390 px** (screenshots `30` to
+`45` and `smoke2/` in the private folder; `just dev-smoke` green):
+
+| What | Where | Seen |
+| --- | --- | --- |
+| A song's lighting video is a Full-layer file: a listener's link refuses it | `features/setlists/extension.toml` | Files 88 to 72, none a video; `403`, `x-architect-layer: full` by URL |
+| `<origin>/<code>` opens the link (a redirect to `/s/<code>/`) | `scripts/local-stack-front.py` | `302`, then the set |
+| A row of the set opens its song | the island; Architect `NOTE_OPEN` | the second row's control opens Drive To LA's chart from its top |
+| A guest is shown no control that needs a vault or a write | Architect `apps/web/src/permits.rs` | no Files, Open…, New note, Vault, Search; signed in they are back |
+| The thin title, the link in the sidebar, no editing toolbar | Architect `apps/web/src/app/guest.rs` | `41-set-390`, `45-sidebar-390` |
+| The four tabs and the round Play, from the island's declared favourites | the island's manifest; Architect `Distribution::favourites_of` | `42-charts-390` (the playing song's chart, following), `43-lyrics-390`, `44-arrangement-390` |
+| The Arrangement view, first version: the song playing on a timeline, its sung lines, the playhead; sections where the playhead has them | the island, `arrangement.rs` | `44-arrangement-390`: "The whole song", 48 lines, the playhead at 0:25 |
+| An island's files gzipped by the node | Architect `shares.rs` | the web bundle's wasm: 8.0 MB to 3.72 MB on the wire |
+| A song's view is handed its own files, not every other song's cover | Architect `shares.rs` | by test of the rule only |
+| The lock screen's cover and scrubber | Architect `audio.rs` | Media Session `artwork: 1` |
+
+**Built and NOT yet run in a browser: the in-app decode.** Architect's
+player now decodes Ogg Vorbis in the page (symphonia's Ogg reader and
+Vorbis decoder) and plays it through an AudioWorklet whose own count of
+played frames is the clock the chart and lyrics follow. The same shape
+as Session's browser audio (`apps/session/runtime/src/web_audio.rs`),
+written again in Architect because Architect is MIT / Apache and Studio
+is GPL. The decoder is proven natively: a whole decode, and seeks to six
+frames compared sample by sample (they found a real fault first: after a
+seek the first packet comes out short, so the reader now goes back a
+block and discards up to the frame asked for). **The worklet itself has
+not played**: no browser on the build host starts an AudioContext in the
+test sandbox (headless Firefox, a null ALSA device, a private PulseAudio
+with a null sink and a virtual display were all tried). There the player
+waits two seconds for the context and hands the recording to the
+browser's own player, which is what the screenshots and the smoke test
+show ("played by the browser's player"). It needs one run in a browser
+with an audio device: a desktop, or a phone over `just phone`. On an
+iPhone, playing on with the phone locked needs checking too: iOS may
+stop a page's Web Audio when it locks, and the known answer is to route
+the worklet into an `<audio>` element through a `MediaStream`.
+
+**Hosting, as it now stands.** One origin serves the bundle and the node
+(the local front does exactly this). A link is `/s/<code>/…`; the short
+form `<origin>/<code>` is a redirect at the proxy, not a second mount,
+because the node's paths and the app's own URLs hang off `/s/`. A node
+serves links of every vault it holds, whatever org each is of; hosting
+several orgs' enrolment on one node is architect#538. [infra#26] was
+written for one node per org and needs that line changed.
+
+**Left, in order.**
+
+1. The in-app decode heard in a real browser, and on an iPhone locked
+   through a song change (above).
+2. Recordings streamed but not offered for download: the link still
+   lists the 18 recordings under Files and in Download all. It is a
+   permission Architect does not have yet ("plays, is not offered").
+3. Covers at the size they are drawn (7.8 MB of originals for 48 px
+   tiles), the app's own 6.9 MB wasm, a bundle a view (architect#695),
+   the fonts (keyflow#76).
+4. The arrangement's sections for every song, its markers and waveform:
+   A1 below. Today a song opened from the set shows one section, "The
+   whole song", because the set's queue carries no sections.
+5. Lyrics exported from the session (C5), declared properties for a
+   guest (architect#911).
+6. On a desk, the sidebar holds the link as on a phone; the layout there
+   has not been looked at since the change.
+7. Studio's own web build (W1).
+
 ## The audit
 
 **What it ran on.** Studio at `stack/studio-distribution` (`5f78e7cd`)

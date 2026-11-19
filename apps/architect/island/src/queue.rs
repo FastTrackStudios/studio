@@ -112,6 +112,21 @@ pub const RETRIES: u8 = 3;
 /// One ask: an action and its args.
 pub type Ask = (&'static str, Value);
 
+/// The vault path of the note an item's row names, from its id
+/// (`<setlist>|<note>[#arrangement][@n]`): what a press on the row's
+/// "open" asks the app for (`NOTE_OPEN`). None for an id with no note.
+#[must_use]
+pub fn note_of(id: &str) -> Option<&str> {
+    let (_, song) = id.split_once('|')?;
+    // `@n` is a second listing of the same song; `#…` one arrangement.
+    let song = song
+        .rsplit_once('@')
+        .filter(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        .map_or(song, |(s, _)| s);
+    let note = song.split_once('#').map_or(song, |(n, _)| n);
+    note.ends_with(".md").then_some(note)
+}
+
 /// One song of the list.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Item {
