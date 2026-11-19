@@ -11,6 +11,7 @@ use facet::Facet;
 use guitar::proto::Applied;
 use guitar::proto::audio::AudioSettings;
 use guitar::proto::rig::Rig;
+use keys::proto::keys::KeysRig as Keys;
 use serde_json::{Value as Json, json};
 
 use crate::{Rigs, rigs};
@@ -460,6 +461,157 @@ pub fn register(ext: &mut Builder) {
                 "ports": Rig::midi_ports(&r.guitar),
                 "recent": Rig::midi_recent(&r.guitar),
                 "learn": perf.get("learn"),
+            }))
+        })
+    })
+    .action("STUDIO_RIG_RENDER", |args| {
+        on(move |_| {
+            // Offline: every patch of the profile built as the live rig
+            // builds it and played a recorded DI, on no device. Nothing is
+            // written (a dry run of the rig's own levelling).
+            let profile = text(&args, "profile");
+            let began = std::time::Instant::now();
+            let measured = guitar::levelling::level_profile(profile.as_deref(), 48_000, true)?;
+            let patches: Vec<Json> = measured
+                .iter()
+                .map(|m| json!({ "patch": m.patch, "lufs": m.lufs, "rendered": m.lufs.is_some() }))
+                .collect();
+            Ok(json!({
+                "profile": profile,
+                "sample_rate": 48_000,
+                "rendered": measured.iter().filter(|m| m.lufs.is_some()).count(),
+                "of": measured.len(),
+                "seconds": began.elapsed().as_secs_f64(),
+                "patches": patches,
+            }))
+        })
+    })
+    .action("STUDIO_RIG_KEYS_STATE", |_| {
+        on(|r| {
+            Ok(json!({
+                "status": wire(&Keys::status(&r.keys))?,
+                "perform": wire(&Keys::perform(&r.keys))?,
+            }))
+        })
+    })
+    .action("STUDIO_RIG_KEYS_START", |_| {
+        on(|r| {
+            Keys::start(&r.keys);
+            wire(&Keys::status(&r.keys))
+        })
+    })
+    .action("STUDIO_RIG_KEYS_STOP", |_| {
+        on(|r| {
+            Keys::stop(&r.keys);
+            wire(&Keys::status(&r.keys))
+        })
+    })
+    .action("STUDIO_RIG_KEYS_PRESETS", |_| {
+        on(|r| wire(&Keys::presets(&r.keys)))
+    })
+    .action("STUDIO_RIG_KEYS_PRESET", |args| {
+        on(move |r| {
+            let preset = match text(&args, "name") {
+                Some(name) => named(&wire(&Keys::presets(&r.keys))?, &name)
+                    .ok_or_else(|| format!("no keys preset named {name}"))?,
+                None => index(&args, "number")?.ok_or("no preset: number (from 1) or name")?,
+            };
+            Keys::load_preset(&r.keys, preset);
+            wire(&Keys::status(&r.keys))
+        })
+    })
+    .action("STUDIO_RIG_KEYS_STACK", |args| {
+        on(move |r| {
+            let stack = match text(&args, "name") {
+                Some(name) => {
+                    let perform = wire(&Keys::perform(&r.keys))?;
+                    named(perform.get("stacks").unwrap_or(&Json::Null), &name)
+                        .ok_or_else(|| format!("no keys stack named {name}"))?
+                }
+                None => index(&args, "stack")?.ok_or("no stack (from 1) or name")?,
+            };
+            Keys::press_stack(&r.keys, stack);
+            wire(&Keys::perform(&r.keys))
+        })
+    })
+    .action("STUDIO_RIG_KEYS_MIXER", |args| {
+        on(move |r| {
+            let db = real(&args, "db");
+            let muted = flag(&args, "mute");
+            match (text(&args, "layer"), text(&args, "engine")) {
+                (Some(layer), _) => {
+                    if let Some(db) = db {
+                        Keys::set_layer_gain(&r.keys, layer.clone(), db);
+                    }
+                    if let Some(muted) = muted {
+                        Keys::set_layer_mute(&r.keys, layer.clone(), muted);
+                    }
+                    if let Some(solo) = flag(&args, "solo") {
+                        Keys::set_layer_solo(&r.keys, layer, solo);
+                    }
+                }
+                (None, Some(engine)) => {
+                    if let Some(db) = db {
+                        Keys::set_engine_gain(&r.keys, engine.clone(), db);
+                    }
+                    if let Some(muted) = muted {
+                        Keys::set_engine_mute(&r.keys, engine, muted);
+                    }
+                }
+                (None, None) => {
+                    if let Some(db) = db {
+                        Keys::set_master_gain(&r.keys, db);
+                    }
+                }
+            }
+            wire(&Keys::mixer(&r.keys))
+        })
+    })
+    .action("STUDIO_RIG_KEYS_MACROS", |_| {
+        on(|r| wire(&Keys::rig_macros(&r.keys)))
+    })
+    .action("STUDIO_RIG_KEYS_MACRO", |args| {
+        on(move |r| {
+            let id = text(&args, "id").ok_or("no id (STUDIO_RIG_KEYS_MACROS lists them)")?;
+            let value = real(&args, "value").ok_or("no value")?;
+            match text(&args, "engine") {
+                Some(engine) => Keys::set_engine_global(&r.keys, engine, id, value),
+                None => Keys::set_rig_global(&r.keys, id, value),
+            }
+            wire(&Keys::rig_macros(&r.keys))
+        })
+    })
+    .action("STUDIO_RIG_KEYS_NOTE", |args| {
+        on(move |r| {
+            let note = whole(&args, "note")
+                .and_then(|n| u32::try_from(n).ok())
+                .filter(|n| *n <= 127)
+                .ok_or("no note (0 to 127)")?;
+            let velocity = whole(&args, "velocity")
+                .and_then(|v| u32::try_from(v).ok())
+                .unwrap_or(100)
+                .min(127);
+            Keys::trigger(&r.keys, note, velocity);
+            Ok(json!({ "note": note, "velocity": velocity }))
+        })
+    })
+    .action("STUDIO_RIG_KEYS_MIDI", |args| {
+        on(move |r| {
+            if let Some(port) = text(&args, "port") {
+                Keys::set_midi_port(&r.keys, port);
+            }
+            if let Some(target) = text(&args, "learn") {
+                Keys::midi_learn(&r.keys, target);
+            }
+            if let Some(target) = text(&args, "unlearn") {
+                Keys::midi_unlearn(&r.keys, target);
+            }
+            if flag(&args, "cancel").unwrap_or(false) {
+                Keys::midi_learn_cancel(&r.keys);
+            }
+            Ok(json!({
+                "ports": Keys::midi_ports(&r.keys),
+                "port": Keys::status(&r.keys).midi_port,
             }))
         })
     })

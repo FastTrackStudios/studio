@@ -260,3 +260,94 @@ description = "Runs `id` of Signal's command list (FTS_SIGNAL_NEXT_SONG, FTS_SIG
 group = "Rig"
 effect = "mutating"
 params = '{"type":"object","properties":{"id":{"type":"string"},"args":{"type":"object"}}}'
+
+[[actions]]
+id = "STUDIO_RIG_RENDER"
+name = "Rig: render offline"
+description = "Builds every patch of `profile` (the active one when left out) as the live rig builds it and plays a recorded DI through each, offline: no audio device, nothing written. Answers each patch's integrated loudness (`lufs`; null when it did not render) and how long it took. A check that the library's patches build and sound on this machine."
+group = "Rig"
+effect = "read_only"
+params = '{"type":"object","properties":{"profile":{"type":"string"}}}'
+
+[[actions]]
+id = "STUDIO_RIG_KEYS_STATE"
+name = "Keys rig: state"
+description = "The keys rig's status (running, the preset loaded, its MIDI port, the master's peak) and its performance (stacks, the one active)."
+group = "Rig"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_RIG_KEYS_START"
+name = "Keys rig: start"
+description = "Opens the keys rig: its profile loaded, its audio joined to the engine's device (opened when none is)."
+group = "Rig"
+effect = "mutating"
+
+[[actions]]
+id = "STUDIO_RIG_KEYS_STOP"
+name = "Keys rig: stop"
+description = "Closes the keys rig; its tracks leave the engine."
+group = "Rig"
+effect = "mutating"
+
+[[actions]]
+id = "STUDIO_RIG_KEYS_PRESETS"
+name = "Keys rig: the presets"
+description = "Every preset the keys rig can load."
+group = "Rig"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_RIG_KEYS_PRESET"
+name = "Keys rig: load a preset"
+description = "Loads preset `number` (from 1) or `name`."
+group = "Rig"
+effect = "mutating"
+params = '{"type":"object","properties":{"number":{"type":"integer"},"name":{"type":"string"}}}'
+
+[[actions]]
+id = "STUDIO_RIG_KEYS_STACK"
+name = "Keys rig: switch a stack"
+description = "Presses stack `stack` (from 1) or `name`, as its switch does."
+group = "Rig"
+effect = "mutating"
+params = '{"type":"object","properties":{"stack":{"type":"integer"},"name":{"type":"string"}}}'
+
+[[actions]]
+id = "STUDIO_RIG_KEYS_MIXER"
+name = "Keys rig: the mixer"
+description = "The keys mixer; with `layer` or `engine` (by name) sets its gain (`db`), `mute` or (a layer's) `solo`; with neither, `db` is the master's."
+group = "Rig"
+effect = "mutating"
+params = '{"type":"object","properties":{"layer":{"type":"string"},"engine":{"type":"string"},"db":{"type":"number"},"mute":{"type":"boolean"},"solo":{"type":"boolean"}}}'
+
+[[actions]]
+id = "STUDIO_RIG_KEYS_MACROS"
+name = "Keys rig: the macros"
+description = "The rig's macros: each one's `id`, name, group and value."
+group = "Rig"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_RIG_KEYS_MACRO"
+name = "Keys rig: set a macro"
+description = "Sets macro `id` to `value`, the rig's or (with `engine`) that engine's."
+group = "Rig"
+effect = "mutating"
+params = '{"type":"object","properties":{"id":{"type":"string"},"value":{"type":"number"},"engine":{"type":"string"}}}'
+
+[[actions]]
+id = "STUDIO_RIG_KEYS_NOTE"
+name = "Keys rig: play a note"
+description = "Plays MIDI note `note` (0 to 127) at `velocity` (100 when left out; 0 lets it go)."
+group = "Rig"
+effect = "mutating"
+params = '{"type":"object","properties":{"note":{"type":"integer"},"velocity":{"type":"integer"}}}'
+
+[[actions]]
+id = "STUDIO_RIG_KEYS_MIDI"
+name = "Keys rig: MIDI"
+description = "The MIDI ports and the one the keys rig listens to; `port` chooses one (empty for all), `learn`/`unlearn` a target, `cancel` learning."
+group = "Rig"
+effect = "mutating"
+params = '{"type":"object","properties":{"port":{"type":"string"},"learn":{"type":"string"},"unlearn":{"type":"string"},"cancel":{"type":"boolean"}}}'
