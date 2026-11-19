@@ -169,3 +169,14 @@ views = ["setlist"]
 # island's manifest (apps/architect/island/extension.toml): a favourite may
 # open only its own extension's views and run only actions in its reach
 # (architect#658), and the playlist view is the island's web bundle's.
+
+# Which layer of a share link a song's files are in (architect#528). A
+# link made for listening is a Reference link (what SHARE_CREATE gives):
+# it serves the song's recording, chart, lyrics and cover, which are page
+# files (no rule names them). A song's lighting video is the show's
+# production material, tens of megabytes a song: only a Full link serves
+# it, so a listener's link neither lists it nor puts it in "Download all"
+# (docs/design/share-link-setlist.md, the owner's decision of 2026-11-18).
+[[share_layers]]
+note_type = "song"
+full = ["**/* - Lights.mp4", "**/* - Lights.mov", "**/* - Lights.mkv", "**/* - Lights.webm"]

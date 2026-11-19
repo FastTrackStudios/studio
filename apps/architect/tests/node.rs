@@ -450,6 +450,35 @@ fn a_folder_matching_its_lock_is_the_island() {
     assert!(island.file("BUILT_FROM").is_none());
 }
 
+/// A listener's link (a Reference link, what `SHARE_CREATE` gives) serves
+/// a song's recording, chart, lyrics and cover, and not its lighting
+/// video: the node holds back a file above the link's layer, so the video
+/// is neither listed nor in "Download all".
+#[test]
+fn a_songs_lighting_video_is_only_on_a_full_link() {
+    let rules = studio_architect::distribution().share_layers();
+    let layer = |file: &str| {
+        let note = "Libraries/Recital/Joy/Joy.md";
+        rules
+            .iter()
+            .filter(|r| r.is_for("song"))
+            .find_map(|r| r.layer_of(note, &format!("Libraries/Recital/Joy/{file}")))
+    };
+    assert_eq!(layer("renders/Joy - Lights.mp4"), Some("full"));
+    assert_eq!(layer("Joy - Lights.mov"), Some("full"));
+    // What a listener is there for: page files, on every link.
+    for file in [
+        "renders/joy.ogg",
+        "Joy.kf",
+        "Joy.lrc",
+        "cover.jpg",
+        "Joy - Master Rhythm.pdf",
+        "renders/Joy (live).mp4",
+    ] {
+        assert_eq!(layer(file), None, "{file}");
+    }
+}
+
 /// The web app mounts an island's view on a note only when the node lists
 /// the claim, and hands it the note only when the node lists the read
 /// (docs/design/share-link-setlist.md, gap 1): the island's manifest says
