@@ -9,7 +9,7 @@
 #   scripts/island-sheet.sh SHEET      check an already compiled sheet
 #
 # `just island` runs it on the sheet it built; CI's PR check
-# (xtask/workflows/src/pr.rs, job studio-architect) compiles and checks it.
+# (xtask/workflows/src/pr.rs, job studio) compiles and checks it.
 # Needs cargo (`cargo metadata --locked`), python3, node, and tailwindcss
 # when compiling.
 set -euo pipefail

@@ -25,7 +25,7 @@ from pathlib import Path
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "FastTrackStudios/studio")
 ALLOWED = re.compile(r"^(Cargo\.toml|.*/Cargo\.toml|Cargo\.lock|\.config/duplicate-deps\.toml|"
-                     r"\.changes/studio-architect-on-architect-[0-9a-f]+\.md)$")
+                     r"\.changes/studio-on-architect-[0-9a-f]+\.md)$")
 
 
 def get(path: str, fixtures: Path | None):

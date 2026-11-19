@@ -32,12 +32,6 @@ default:
 dev *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
-    # `just dev local` and `just dev --fresh` were the DAW loop, now `just daw-dev`.
-    case " {{ARGS}} " in
-        *" local "* | *" --"*)
-            echo "just: the DAW loop is \`just daw-dev\` now (\`just dev\` is the local stack): running \`just daw-dev {{ARGS}}\`" >&2
-            exec just daw-dev {{ARGS}} ;;
-    esac
     scripts/local-stack.sh choose mode=dev {{ARGS}}
     # shellcheck disable=SC2046 # the process names, split on purpose
     exec devenv up $(scripts/local-stack.sh procs)
@@ -77,12 +71,12 @@ dev-reset:
 
 # ── Tailwind (app UI sheet) ──────────────────────────────────────────────
 # The single compiled sheet (assets/tailwind-signal.css) is inlined by
-# BOTH apps/session/desktop/src/rig_view.rs (signal UI) and
+# BOTH features/engine/host/src/rig_view.rs (signal UI) and
 # src/main.rs SessionChrome (session UI) via include_str!; rebuild it
 # whenever UI-crate class usage changes. input.css @source globs scan the
 # signal/session UI crates + libs/ui + libs/dock.
 
-# Point apps/{session,signal}/desktop/.lumen-blocks at the lumen-blocks
+# Point features/engine/host/.lumen-blocks at the lumen-blocks
 # checkout cargo actually resolved.
 #
 # input.css used to reach into $CARGO_HOME with a hardcoded /home/cody path
@@ -98,8 +92,7 @@ _lumen-link:
     cargo() { if [ -n "${STUDIO_ARCHITECT_CARGO_CONFIG:-}" ]; then command cargo "${@/--locked/--offline}" --config "$STUDIO_ARCHITECT_CARGO_CONFIG"; else command cargo "$@"; fi; }
     dir=$(cargo metadata --locked --format-version 1 2>/dev/null \
         | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="lumen-blocks"))')
-    ln -sfn "$dir" apps/session/desktop/.lumen-blocks
-    ln -sfn "$dir" apps/studio/desktop/.lumen-blocks
+    ln -sfn "$dir" features/engine/host/.lumen-blocks
     # architect-ui, for the FX editors' sheets (a git dep has no stable path).
     ui=$(cargo metadata --locked --format-version 1 2>/dev/null \
         | python3 -c 'import json,sys,os; print(next(os.path.dirname(p["manifest_path"]) for p in json.load(sys.stdin)["packages"] if p["name"]=="architect-ui"))')
@@ -112,11 +105,11 @@ _lumen-link:
 
 # Build Tailwind CSS (v4)
 tailwind: _lumen-link
-    cd apps/session/desktop && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --minify
+    cd features/engine/host && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --minify
 
 # Watch Tailwind CSS for changes
 tailwind-watch: _lumen-link
-    cd apps/session/desktop && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --watch --minify
+    cd features/engine/host && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --watch --minify
 
 # Fail if the committed sheet isn't what the sources produce.
 #
@@ -127,82 +120,30 @@ tailwind-watch: _lumen-link
 tailwind-check: tailwind
     #!/usr/bin/env bash
     set -euo pipefail
-    if ! git diff --quiet -- apps/session/desktop/assets/tailwind-signal.css; then
+    if ! git diff --quiet -- features/engine/host/assets/tailwind-signal.css; then
         echo "tailwind-signal.css is out of date — run 'just tailwind' and commit the result" >&2
         exit 1
     fi
     echo "tailwind-signal.css is up to date"
 
-# ── Live Rigs (carried from the dissolved signal workspace) ──────────────
-# Open a live instrument rig: live input → FX chain (NAM amp / cab / plugins)
-# → output, routed through PipeWire via cpal's NATIVE PipeWire backend. Each
-# rig's interface / input channel / profile is remembered in
-# ~/.config/signal/rigs/<name>.styx.
-#
-# NOTE: needs `libpipewire` on PKG_CONFIG_PATH for `--features pipewire`.
-
-# The signal engine — the headless rig core (serves the vox router on
-# ws://:4040/vox): the studio-desktop binary in --engine mode. `rigd`
-# kept as an alias for muscle memory. (`session-desktop --engine` is a
-# different thing: the setlist + daw facade server.)
-signal-engine:
-    cargo run --release -p studio-desktop -- --engine
-
-alias rigd := signal-engine
-
 # Launch the desktop app (Session and/or Charts, per default features) via
 # dx serve, so UI edits hot-reload instead of a plain `cargo run`.
 desktop:
-    cd apps/session/desktop && dx serve --release
+    cd features/engine/host && dx serve --release
 
 # Stage the fts web bundle (the browser remote) for embedding: tailwind →
 # dx web build (signal rigs + the session setlist remote) →
-# apps/session/desktop/web-dist/, which `cargo build -p session-desktop
+# features/engine/host/web-dist/, which `cargo build -p session-desktop
 # --features embed-web` compiles into the binary (include_dir). On wasm the
 # session feature is only the wire surface (session-proto clients +
 # session-ui); the player itself runs in the engine. web-dist/ is gitignored.
 web-stage: tailwind
-    cd apps/session/desktop && dx build --platform web --release --no-default-features --features signal,session
-    rm -rf apps/session/desktop/web-dist
-    cp -r target/dx/session-desktop/release/web/public apps/session/desktop/web-dist
-
-# ── Signal (apps/studio/desktop) ─────────────────────────────────────────
-# The isolated live-rig app: the same one engine as Session, running only
-# the rigs (see docs/design/one-engine.md). Its Tailwind sheet is its own
-# (apps/studio/desktop/assets/tailwind-signal.css, include_str!'d by
-# rig_view.rs), built from apps/studio/desktop/input.css.
-
-# Build the Signal app's Tailwind sheet. Committed, and regenerated by the
-# dev loop's window pane, so it must come out the same in every checkout:
-# input.css scans only its @source globs (`source(none)`), and the sheet is
-# only rewritten by the tailwindcss that wrote it (the dev shell's pin; its
-# version heads the sheet). Another version (a tailwindcss on PATH outside
-# `nix develop`) leaves it alone; `TAILWIND_BUMP=1` writes it anyway, for a
-# deliberate move to the new pin.
-signal-tailwind: _lumen-link
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd apps/studio/desktop
-    have=$(tailwindcss --help 2>/dev/null | sed -n 's/.*tailwindcss \(v[0-9.]*\).*/\1/p' | head -1)
-    want=$(sed -n '1s/.*tailwindcss \(v[0-9.]*\).*/\1/p' assets/tailwind-signal.css 2>/dev/null)
-    if [[ -n $want && $have != "$want" && -z ${TAILWIND_BUMP:-} ]]; then
-        echo "signal-tailwind: tailwindcss $have is not $want, which wrote the sheet: run it in the dev shell (or TAILWIND_BUMP=1)" >&2
-        exit 1
-    fi
-    tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --minify
-
-# Release rather than dev because the rig plays audio in-process, and a
-# debug build xruns. dx rebuilds and relaunches on a source change; that is
-# a slow loop at this opt level, so reach for `just signal-run` when you
-# only want to launch the thing.
-#
-# Run the Signal desktop app (release) through dx, with its file watcher
-studio-desktop: signal-tailwind
-    cd apps/studio/desktop && PIPEWIRE_PROPS='{ application.name = FTS-Signal }' \
-        dx serve --release --platform desktop
+    cd features/engine/host && dx build --platform web --release --no-default-features --features signal,session
+    rm -rf features/engine/host/web-dist
+    cp -r target/dx/session-desktop/release/web/public features/engine/host/web-dist
 
 # ONE build for the app, shared by every recipe that runs it and by the dev
-# loop (scripts/dev-herdr.sh, `just dev-test`): dx's `desktop-dev` profile
+# loop (`just dev-test`): dx's `desktop-dev` profile
 # (the dev profile, Cargo.toml) for the host triple, as `dx serve` builds the
 # window, so the window, the engine, the tests and these recipes reuse one set
 # of compiled crates. Another profile, target or feature set makes cargo
@@ -211,107 +152,6 @@ studio-desktop: signal-tailwind
 dev_host := `rustc -vV | sed -n 's/^host: //p'`
 dev_build := "--profile desktop-dev --target " + dev_host
 dev_out := "./target/" + dev_host + "/desktop-dev"
-signal_features := "cli,signal-keys-rig"
-signal_build := "cargo build " + dev_build + " -p studio-desktop --features " + signal_features
-signal_bin := dev_out + "/studio-desktop"
-
-# Build the Signal app (what `Signal.app` and the menu bar run)
-signal-app:
-    {{signal_build}}
-
-# Launch the release Signal app directly — no watcher, the fast path
-signal-run: signal-tailwind
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{signal_build}}
-    PIPEWIRE_PROPS='{ application.name = FTS-Signal }' \
-    RUST_LOG="${RUST_LOG:-info,vox_core=warn,schema_deser=off}" \
-        {{signal_bin}}
-
-# The Signal app as a macOS bundle — target/Signal.app, installed to
-# ~/Applications (Finder, Dock, Spotlight; log in ~/Library/Logs/Signal).
-#   just signal-mac-app                maximized, as the laptop opens it
-#   just signal-mac-app macbook        a MacBook Pro 14"'s window (1512x945)
-#   just signal-mac-app 1280x800       any size
-signal-mac-app size="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{signal_build}}
-    size="{{size}}"
-    [ "$size" = macbook ] && size=1512x945
-    SIGNAL_WINDOW_SIZE="$size" scripts/signal/mac-app.sh --install
-
-# Publish the Mac app + this Mac's whole rig config as a GitHub release the
-# laptop installs without building (see scripts/signal/mac-release.sh — it
-# names the repo the release goes to; whatever is in it is public if that
-# repo is).
-#   just signal-mac-release signal-mac-2026.10.06
-signal-mac-release tag:
-    scripts/signal/mac-release.sh {{tag}}
-
-# Stage the Signal web bundle (the browser remote) for embedding: tailwind →
-# dx web build → apps/studio/desktop/web-dist/, which `cargo build -p
-# studio-desktop --features embed-web` compiles into the binary
-# (include_dir), plus the keys AudioWorklet. web-dist/ is gitignored.
-signal-web-stage: signal-tailwind
-    cd apps/studio/desktop && dx build --platform web --release --no-default-features --features signal
-    rm -rf apps/studio/desktop/web-dist
-    cp -r target/dx/studio-desktop/release/web/public apps/studio/desktop/web-dist
-    just keys-worklet-wasm
-
-# ── The guitar rig ───────────────────────────────────────────────────────
-#
-#   just guitar                 the real rig: your interface, your DSP
-#   just guitar --design        no device, no MIDI, no DSP — several at once
-#   just guitar --silent        plays everything, heard by nobody
-#   just guitar --ephemeral     touches nothing on disk
-#
-# Release, not debug: the debug build renders the UI at a rate you can watch
-# arrive. Run it from the dev shell — the window is Blitz/Vello, and wgpu
-# needs `libvulkan.so` on the library path; outside it, wgpu finds only the
-# GL backend and panics before drawing a frame.
-
-# The guitar rig — the Signal app, the dev build
-# Studio on an iOS simulator — an iPad Pro 11" kept on the build disk
-# (never the system drive; SIM names another by udid): built
-# optimised, Info.plist and faces as TestFlight writes them, installed and
-# launched. GIGS ("<gig folder> …") puts gigs in its Documents, as Files
-# does; screenshots: `xcrun simctl --set /Volumes/build-disk/home/simulators io booted screenshot`.
-#   just ios-sim
-#   just ios-sim /Volumes/build-disk/development/gigs/ipad/CAA-2026
-ios-sim GIGS="" SIM="":
-    cd apps/studio/desktop && RELEASE=1 SIM_GIGS="{{GIGS}}" ./ios/build-ios.sh --sim {{SIM}}
-
-guitar *ARGS:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{signal_build}}
-    PIPEWIRE_PROPS='{ application.name = FTS-Signal }' \
-    RUST_LOG="${RUST_LOG:-info,vox_core=warn,schema_deser=off}" \
-        {{signal_bin}} --guitar {{ARGS}}
-
-# The rig with no audio at all: the profile loads, the meters move, and
-# nothing is opened. Several of these run side by side — an interface is
-# exclusive. Implies ephemeral, so a design session cannot move your
-# position or edit your profile.
-
-# The rig with no device, no MIDI and no DSP — run several at once
-guitar-design *ARGS:
-    @just guitar --design {{ARGS}}
-
-alias gd := guitar-design
-
-# A picture of the rig as it is ACTUALLY running, shaders and all.
-#
-#   just guitar-grab                    rig-live.png
-#   just guitar-grab /tmp/eq.png 2560   refuse anything but a 2560px-wide window
-#
-# Unlike `guitar-shot` (FastTrackStudios/signal's Justfile) this needs a rig on screen: the headless renderer
-# hands out no GPU device, so it can only ever draw the vector fallback.
-# KWin raises the rig and captures that window alone.
-guitar-grab OUT="rig-live.png" EXPECT_W="":
-    ./scripts/signal/rig-grab.sh {{OUT}} {{EXPECT_W}}
-
 # Stage the browser keys rig's AudioWorklet bundle (W4 of
 # signal:features/signal/docs/browser-keys-rig.md) into the web bundle:
 # a RELEASE wasm build of web-audio-worklet --features keys (KeysWorklet =
@@ -324,7 +164,7 @@ guitar-grab OUT="rig-live.png" EXPECT_W="":
 #   /worklet/signal_keys_worklet_bg.wasm
 # wasm-bindgen-cli comes from the dev shell, pinned to the workspace
 # wasm-bindgen version.
-keys-worklet-wasm out='apps/studio/desktop/web-dist/worklet':
+keys-worklet-wasm out='target/worklet':
     # --max-memory: default wasm linear memory caps at 2 GB — resident pack
     # bytes + decoded-PCM budget + app need the full 4 GB address space.
     #
@@ -366,7 +206,7 @@ keys-worklet-wasm out='apps/studio/desktop/web-dist/worklet':
 # Kept as its OWN recipe until it is proven: `keys-worklet-wasm` (single
 # threaded) stays the default so a toolchain problem here can never take the
 # working rig down with it.
-keys-worklet-wasm-threads out='apps/studio/desktop/web-dist/worklet':
+keys-worklet-wasm-threads out='target/worklet':
     # The four TLS symbols are exported EXPLICITLY: wasm-bindgen's threading
     # pass looks up `__wasm_init_tls` (each thread initialises its own TLS
     # block through it), and LLD garbage-collects all of them when no Rust
@@ -401,7 +241,7 @@ keys-worklet-wasm-threads out='apps/studio/desktop/web-dist/worklet':
 #   guitar_processor.js  nam_worker.js  guitar_rig.js  worklet_polyfill.js
 #   signal_guitar_worklet.js  signal_guitar_worklet_bg.wasm
 # +simd128: the NAM kernels are what decides how many models fit a quantum.
-guitar-worklet-wasm out='apps/studio/desktop/web-dist/worklet/guitar':
+guitar-worklet-wasm out='target/worklet/guitar':
     RUSTFLAGS="-C target-feature=+simd128" \
     cargo build -p web-audio-worklet --features guitar --lib \
         --target wasm32-unknown-unknown --release
@@ -414,115 +254,12 @@ guitar-worklet-wasm out='apps/studio/desktop/web-dist/worklet/guitar':
     cp features/adapters/web/worklet/js/guitar_rig.js {{out}}/
     cp features/adapters/web/worklet/js/worklet_polyfill.js {{out}}/
 
-# Try the browser guitar rig locally: stage the worklet bundle, export the
-# rig (XDG_CONFIG_HOME picks the config), copy the reference DI, and serve
-# the harness with the COOP/COEP headers SharedArrayBuffer needs:
-#   http://127.0.0.1:8765/  (Start = the demo DI through the chosen patch)
-# `node profile.mjs <profile> <patch>` in the dir prints each block's cost.
-guitar-web-harness dir='target/guitar-web' port='8765':
-    just guitar-worklet-wasm {{dir}}
-    cargo run -q -p studio-desktop --features cli --bin studio -- signal rig web-bundle {{dir}}/rig
-    cp features/adapters/web/worklet/harness/index.html features/adapters/web/worklet/harness/serve.py features/adapters/web/worklet/harness/profile.mjs {{dir}}/
-    cp "${XDG_CONFIG_HOME:-$HOME/.config}/signal/calibration/di-reference.wav" {{dir}}/ || echo "no di-reference.wav — the demo input needs one"
-    python3 {{dir}}/serve.py {{port}}
-
-# ONE engine binary serving the whole browser keys rig: stage the web
-# bundle + keys worklet (signal-web-stage), then embed it into the release
-# binary. Order matters — embed-web include_dir!s web-dist/ at compile
-# time, so staging runs first. Then:
-#   target/release/studio-desktop --engine     (binds 0.0.0.0:4040)
-# and open http://<host>:4040/rigs/keys/worship (tailnet-reachable).
-keys-web: signal-web-stage
-    cargo build --release -p studio-desktop --features embed-web
-
-# Playwright end-to-end suite for the browser keys rig (W5): spawns its
-# own engine on a scratch port (SIGNAL_ENGINE_ADDR) and proves the rig
-# makes SOUND in real chromium. Expects target/release/studio-desktop
-# to exist — build it with `just keys-web` first. Needs the real pack
-# library (or FTS_PACK_LIBRARY pointing at one with the Worship proxies).
-keys-web-e2e:
-    cd apps/studio/desktop/e2e && npm install --no-fund --no-audit && npx playwright test
-
-# Build the RELEASE Signal binary (web bundle EMBEDDED) and deploy the ONE
-# artifact to ~/.local/lib/fts/studio-desktop behind the signal-engine
-# systemd user unit. The unit is installed but NOT enabled: the desktop
-# app (or `systemctl --user start signal-engine`) is the on/off switch;
-# while running, systemd restarts crashes in ~1s; an explicit stop is
-# final. If the engine is running during deploy it restarts onto the new
-# build, otherwise it stays stopped.
-# Logs: `journalctl --user -u signal-engine`.
-rig-install: signal-web-stage
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build --release -p studio-desktop --features embed-web
-    install -d ~/.local/lib/fts
-    install -m 755 target/release/studio-desktop ~/.local/lib/fts/studio-desktop.new
-    mv -T ~/.local/lib/fts/studio-desktop.new ~/.local/lib/fts/studio-desktop
-    # No launcher prefix: audio is daw-audio-io's native PipeWire duplex and
-    # MIDI midicore's native PipeWire backend, so the engine needs no
-    # `pw-jack` shim.
-    install -d ~/.config/systemd/user
-    sed "s|@LAUNCH@||" apps/studio/desktop/systemd/signal-engine.service \
-        > ~/.config/systemd/user/signal-engine.service
-    systemctl --user daemon-reload
-    systemctl --user try-restart signal-engine
-    if systemctl --user is-active --quiet signal-engine; then
-        sleep 3
-        curl -sf http://127.0.0.1:4040/health >/dev/null && echo "deployed + restarted: health ok"
-    else
-        echo "deployed (engine stopped — start it from the app or: systemctl --user start signal-engine)"
-    fi
-
-# Full Signal install on this machine: everything rig-install does (release
-# binary + embedded web UI + systemd unit) PLUS the PATH symlink in
-# ~/.local/bin and desktop integration (launcher entry + icon) — Signal
-# shows up in the app menu like any other app.
-install: rig-install
-    #!/usr/bin/env bash
-    set -euo pipefail
-    install -d ~/.local/bin
-    # Signal's own install, from before Studio: its launcher would still
-    # open the old binary.
-    rm -f ~/.local/bin/signal-desktop ~/.local/share/applications/signal-desktop.desktop \
-        ~/.local/share/icons/hicolor/scalable/apps/signal-desktop.svg
-    ln -sf ~/.local/lib/fts/studio-desktop ~/.local/bin/studio-desktop
-    install -d ~/.local/share/icons/hicolor/512x512/apps
-    install -m 644 apps/studio/desktop/assets/icon.png \
-        ~/.local/share/icons/hicolor/512x512/apps/studio-desktop.png
-    install -d ~/.local/share/applications
-    sed -e "s|@LAUNCH@||" -e "s|@BIN@|$HOME/.local/lib/fts/studio-desktop|" \
-        apps/studio/desktop/assets/studio-desktop.desktop \
-        > ~/.local/share/applications/studio-desktop.desktop
-    update-desktop-database ~/.local/share/applications 2>/dev/null || true
-    gtk-update-icon-cache ~/.local/share/icons/hicolor 2>/dev/null || true
-    echo "installed: studio-desktop in ~/.local/bin, launcher entry ready"
-
-# Remove everything `just install` put on this machine: stop + remove
-# the systemd unit, binary, symlink, launcher entry, and icon.
-# User data is untouched (~/.config/fts, ~/.config/signal — the rig
-# config may be a symlink into this repo; never deleted).
-uninstall:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    systemctl --user stop signal-engine 2>/dev/null || true
-    systemctl --user disable signal-engine 2>/dev/null || true
-    rm -f ~/.config/systemd/user/signal-engine.service
-    systemctl --user daemon-reload
-    # ~/.local/lib/fts is shared with the other FTS products (patchbay,
-    # session). Remove only what this recipe installed.
-    rm -f ~/.local/bin/studio-desktop
-    rm -f ~/.local/lib/fts/studio-desktop
-    rm -f ~/.local/share/applications/studio-desktop.desktop
-    rm -f ~/.local/share/icons/hicolor/512x512/apps/studio-desktop.png
-    update-desktop-database ~/.local/share/applications 2>/dev/null || true
-    gtk-update-icon-cache ~/.local/share/icons/hicolor 2>/dev/null || true
-    echo "uninstalled (user data in ~/.config/fts and ~/.config/signal kept)"
 
 # Session.app + its macOS .pkg installer (signed with the Developer ID
 # identities in the login keychain), built with the host toolchain — see the
 # script's header for the knobs (NOTARIZE=1, ADHOC_SIGN=1, MAC_TARGETS=...).
 macos-pkg:
-    bash apps/session/desktop/ios/package-session-macos.sh
+    bash features/engine/host/ios/package-session-macos.sh
 
 # Build the installer and install it for this user (~/Applications, no
 # password), replacing any earlier install.
@@ -559,7 +296,7 @@ plugins-bundle plugins=fts_plugins:
     for p in {{plugins}}; do
         # `export` (the CLAP/VST3 entry points) is a feature of the FX
         # plugins; guide has no such feature.
-        feat=(); grep -q '^export *=' "apps/plugins/$p/Cargo.toml" && feat=(--features export)
+        feat=(); grep -q '^export *=' "plugins/$p/Cargo.toml" && feat=(--features export)
         cargo run -q -p fts-plugin-xtask -- "$cmd" -p "$p-plugin" --release "${feat[@]}"
     done
     ls target/bundled/
@@ -625,7 +362,7 @@ plugins-unlink:
     done
 
 # Prove every bundle in target/bundled actually LOADS — dlopen it, run its
-# entry point, and walk its factory (apps/plugins/verify/). A plugin that
+# entry point, and walk its factory (plugins/verify/). A plugin that
 # compiles, links, and exports the right symbol can still fail in a host: a
 # missing dependency or a panicking init only shows up at load time, and
 # `nm` cannot see either.
@@ -643,8 +380,8 @@ plugins-verify arch="":
     out="target/plugin-verify"; mkdir -p "$out"
     archflag=""
     [ -n "{{arch}}" ] && archflag="-arch {{arch}}"
-    cc $archflag -o "$out/clap_load" apps/plugins/verify/clap_load.c -ldl
-    cc $archflag -o "$out/vst3_load" apps/plugins/verify/vst3_load.c -ldl
+    cc $archflag -o "$out/clap_load" plugins/verify/clap_load.c -ldl
+    cc $archflag -o "$out/vst3_load" plugins/verify/vst3_load.c -ldl
     # The loadable binary inside a bundle, whatever shape the bundle is.
     binary_in() {
         if [ -d "$1" ]; then find "$1/Contents" -type f -perm -u+x ! -name "*.txt" ! -name "PkgInfo" | head -1
@@ -684,7 +421,7 @@ mic-models-install:
 # Package the plugin bundles as a single release tarball in dist/
 # (fts-plugins-v<version>-<platform>.tar.gz + SHA256SUMS entry). The macOS
 # release artifact is NOT this — it's the signed+notarized .zip built by
-# apps/session/desktop/ios/deploy-macos-plugins.sh, since Apple only accepts
+# features/engine/host/ios/deploy-macos-plugins.sh, since Apple only accepts
 # zip/pkg/dmg for notarization.
 plugins-package: plugins-bundle
     #!/usr/bin/env bash
@@ -701,66 +438,6 @@ plugins-package: plugins-bundle
     tar -czf "dist/$tarball" -C target/bundled .
     (cd dist && sha256sum "$tarball" >> SHA256SUMS 2>/dev/null || sha256sum "$tarball" > SHA256SUMS)
     echo "packaged: dist/$tarball"
-
-# The guitar rig as a TUI (meters + patch switching in a terminal).
-#
-# Was `just guitar` until the Signal app became the rig's real surface;
-# that name now opens the app. This is still the way in over ssh, or when
-# you want the rig without a window.
-
-# Built then run separately. This used to go through `pw-jack`: midir's MIDI
-# backend on Linux was JACK-over-pipewire-jack, and the dev shell links the
-# real libjack2, so the binary looked for a `jackd` that is not running and
-# hardware MIDI silently never attached. midicore now talks to PipeWire
-# directly, so there is nothing to wrap.
-# --release is REQUIRED for real-time audio.
-#
-# Open the Signal app straight to the keys rig (Worship profile, loaded)
-keys log="/tmp/fts-keys.log":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cargo build --release -p studio-desktop --features signal-keys-rig
-    echo "logging to {{log}}"
-    # The engine is a child with inherited stdio, so one tee captures the app
-    # AND the engine it spawns — which is where the rig actually lives, and so
-    # where anything worth debugging gets logged.
-    PIPEWIRE_PROPS='{ application.name = FTS-Signal }' \
-    RUST_LOG="${RUST_LOG:-info,keys=debug,sampler=debug,vox_core=warn,schema_deser=off}" \
-        ./target/release/studio-desktop --keys 2>&1 | tee "{{log}}"
-
-# ── Signal site (apps/signal/web → signal.fasttrackstudio.app) ─────────
-# The guide is statically generated: `--ssg` builds the app's server,
-# starts it, asks it for `static_routes` and renders each one to an
-# index.html under target/dx/signal-web/release/web/public — the directory
-# to deploy. Nix runs the same command (nix/modules/packages/web-bundles.nix).
-
-# The Signal site's sheet (assets/tailwind-signal.css, committed and
-# include_str!'d by src/lib.rs — the landing page embeds the real rig
-# surfaces, and the guitar rig's UI is Tailwind-styled).
-signal-web-tailwind: _lumen-link
-    cd apps/signal/web && tailwindcss -i ./input.css -o ./assets/tailwind-signal.css --minify
-
-# Dev server for the Signal site
-signal-web-serve:
-    cd apps/signal/web && dx serve --platform web
-
-# The Signal site as it ships: bundle + pre-rendered guide.
-#
-# `--force-sequential` is required: the pre-render borrows
-# `public/index.html` (written by the CLIENT build) for its page shell, and
-# in parallel the pages can come out in Dioxus's bare fallback shell
-# (dioxus#3518). The `rm` is required too: the renderer's cache is
-# `clear_cache(false)`, so a route already in it is served rather than
-# re-rendered and a rebuild silently ships the OLD html. `--wasm-split` is
-# load-bearing for wasm-opt — see web-bundles.nix.
-signal-web-build:
-    rm -rf target/dx/signal-web/release/web/public
-    cd apps/signal/web && dx build --platform web --release --ssg --force-sequential \
-        --wasm-split --features wasm-split
-
-# What `signal-web-build` produced, served the way a static host would
-signal-web-preview: signal-web-build
-    cd target/dx/signal-web/release/web/public && python3 -m http.server 8080
 
 # ── REAPER ───────────────────────────────────────────────────────────────
 # The daw-bridge cdylib and the daw-reaper integration suites (`just reaper
@@ -787,7 +464,7 @@ check:
 # daw-control, daw-transport-sync, utils) and the engine's and the session
 # format's (daw-standalone, session-format) run in FastTrackStudios/daw,
 # where those crates live (studio#510).
-test_packages := "timeline studio-desktop dioxus-test dock studio-architect tempo-map studio-tempo-map"
+test_packages := "timeline dock studio-desktop tempo-map studio-tempo-map"
 
 # Run the core test set (test_packages above).
 test:
@@ -796,9 +473,9 @@ test:
     pkgs=(); for p in {{test_packages}}; do pkgs+=(-p "$p"); done
     cargo nextest run "${pkgs[@]}"
 
-# Tests built the way the dev loop builds the app (scripts/dev-herdr.sh): dx's
-# `desktop-dev` profile for the host triple, with studio-desktop's
-# `cli,signal-keys-rig`, so cargo unifies
+# Tests built the way the dev loop builds the app: dx's
+# `desktop-dev` profile for the host triple, with studio-desktop (the app,
+# apps/desktop) in the build, so cargo unifies
 # the named crates' features with the app's and the tests reuse the window's
 # and engine's artifacts instead of recompiling them another way.
 #   just dev-test session-engine session-ui -- comp
@@ -808,7 +485,7 @@ dev-test *ARGS:
     set -euo pipefail
     # As dx builds the window: `desktop-dev` for the host triple.
     host="$(rustc -vV | sed -n 's/^host: //p')"
-    pkgs=(--cargo-profile desktop-dev --target "$host" -p studio-desktop --features studio-desktop/cli,studio-desktop/signal-keys-rig)
+    pkgs=(--cargo-profile desktop-dev --target "$host" -p studio-desktop)
     rest=()
     only=""
     seen=0
@@ -951,79 +628,10 @@ workstation SOURCE="/run/media/AudioHaven/Project/02 LORD OF THE FIGHT/02 LORD O
     cargo run --release -p editor --features standalone --example workstation -- \
         "{{SOURCE}}" --drums --size 1920x1080 {{ARGS}}
 
-# ── apps/session/web (session.fasttrackstudio.app) ────────────────────────────────
-# `apps/session/web/tailwind.css` @sources this crate plus architect-ui, a GIT DEP
-# with no stable path on disk — the glob cannot be written literally.
-# `cargo metadata` knows where cargo actually resolved it; this recipe asks,
-# and symlinks the answer into apps/session/web/.tailwind-src/. Without it the
-# classes architect-ui's components use are simply absent from the sheet,
-# and the failure is SILENT (a `@source` matching nothing is not an error —
-# see keyflow's apps/session/web/tailwind.css, the same pattern this mirrors).
-_web-tw-link:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mkdir -p apps/session/web/.tailwind-src
-    dir=$(cargo metadata --format-version 1 2>/dev/null \
-        | python3 -c "import json,sys,os;p=json.load(sys.stdin)['packages'];print(next(os.path.dirname(x['manifest_path']) for x in p if x['name']=='architect-ui'))")
-    if [ -z "$dir" ] || [ ! -d "$dir" ]; then
-        echo "cannot resolve architect-ui — is it in the dependency graph?" >&2
-        exit 1
-    fi
-    ln -sfn "$dir" apps/session/web/.tailwind-src/architect-ui
-
-# Compile the site's Tailwind sheet. Gitignored output; `asset!()` needs it
-# at compile time, so this runs before any build of apps/web.
-# Writes the sheet only when it changed: session-web's build script watches
-# it, so a fresh mtime on identical bytes rebuilt session-web every run.
-web-tailwind: _web-tw-link
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd apps/session/web
-    tmp="$(mktemp)"
-    tailwindcss -i ./tailwind.css -o "$tmp" --minify
-    mkdir -p assets
-    if cmp -s "$tmp" assets/tailwind.css; then rm -f "$tmp"; else mv "$tmp" assets/tailwind.css; fi
-
-# Serve apps/session/web with hot reload.
-web: web-tailwind
-    cd apps/session/web && dx serve --platform web
-
-# Build the shipping web bundle into target/dx/session-web/release/web/public,
-# with the guide pre-rendered into it.
-#
-# `--ssg` builds the app's server as well as its client, runs it, asks it
-# for `static_routes` and requests each — which writes the guide's routes
-# to disk as finished HTML. Nothing deploys that server.
-#
-# `--fullstack` because dx decides whether to build a server from the
-# CLIENT's features, and `dioxus/fullstack` is on the `server` feature
-# alone here (its reqwest would be a second major in the wasm binary —
-# see apps/session/web/Cargo.toml). Without it there is no server target and
-# `--ssg` silently does nothing.
-#
-# `--force-sequential` because the pre-render borrows
-# `public/index.html` as its page shell and the CLIENT build writes that
-# file; in parallel the pages can come out in Dioxus's bare fallback
-# shell — no title, no charset, no hydration — with the build still
-# reporting success. (dioxus#3518.)
-#
-# The `rm` because the renderer's cache is `clear_cache(false)` (it must
-# be — the cache directory IS the bundle), so a route already in it is
-# served rather than re-rendered and a rebuild ships the old html.
-web-build: web-tailwind
-    rm -rf target/dx/session-web/release/web/public
-    cd apps/session/web && dx build --platform web --release \
-        --ssg --fullstack --force-sequential
-
-# Type-check apps/session/web against the actual deploy target.
-web-check:
-    cargo check -p session-web --target wasm32-unknown-unknown
-
 # ── Aliases ──────────────────────────────────────────────────────────────
 
 alias c := check
 alias t := test
-alias g := guitar
 
 # The workstation on a real song, served: `rsx!` edits hot-reload into the
 # running window. SONG: set-in-stone or unbreakable.
@@ -1346,7 +954,7 @@ daw-expression OUT="/tmp/fts-expression.png" SIZE="1600x900":
 # The Patch List view's render fixture: the fixture album resolved
 # against the fixture room, written where its test reads it. Run it when
 # a deliberate change to the view has moved a pixel, and commit the PNG.
-daw-patch-list OUT="apps/session/ui/fixtures/patch-list.png" SIZE="1280x1280":
+daw-patch-list OUT="features/engine/ui/fixtures/patch-list.png" SIZE="1280x1280":
     #!/usr/bin/env bash
     set -euo pipefail
     cargo build --release -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
@@ -1356,7 +964,7 @@ daw-patch-list OUT="apps/session/ui/fixtures/patch-list.png" SIZE="1280x1280":
 # The Patch List view's second render fixture: the same fixture album
 # with a session override on Cody's DI and a stale banner (#57). Run it
 # when a deliberate change has moved a pixel, and commit the PNG.
-daw-patch-list-overridden-stale OUT="apps/session/ui/fixtures/patch-list-overridden-stale.png" SIZE="1280x1280":
+daw-patch-list-overridden-stale OUT="features/engine/ui/fixtures/patch-list-overridden-stale.png" SIZE="1280x1280":
     #!/usr/bin/env bash
     set -euo pipefail
     cargo build --release -p session-ui --bin bench 2>&1 | grep -E '^error' -A6 || true
@@ -1628,7 +1236,7 @@ daw-animate PROJECT="" SIZE="2560x1440":
 #
 #   just mixer-golden                    at the pictures' 2560x1440
 #   SIMULATE=0 just mixer-golden         silent, as the engine has it
-#   THEME=console just mixer-golden      apps/session/ui/themes/console/ (a folder of layers)
+#   THEME=console just mixer-golden      features/engine/ui/themes/console/ (a folder of layers)
 #   THEME=console:~/my-layers just …     a theme over it: each path over the ones before
 mixer-golden SIZE="2560x1440":
     #!/usr/bin/env bash
@@ -1639,8 +1247,8 @@ mixer-golden SIZE="2560x1440":
     theme=""
     IFS=: read -ra layers <<< "${THEME:-dark}"
     for layer in "${layers[@]}"; do
-        if [ -d "apps/session/ui/themes/$layer" ]; then path="$PWD/apps/session/ui/themes/$layer"
-        elif [ -f "apps/session/ui/themes/fts-$layer.frame" ]; then path="$PWD/apps/session/ui/themes/fts-$layer.frame"
+        if [ -d "features/engine/ui/themes/$layer" ]; then path="$PWD/features/engine/ui/themes/$layer"
+        elif [ -f "features/engine/ui/themes/fts-$layer.frame" ]; then path="$PWD/features/engine/ui/themes/fts-$layer.frame"
         else path="${layer/#\~/$HOME}"; fi
         theme="${theme:+$theme:}$path"
     done
@@ -1663,21 +1271,10 @@ theme-parity PROJECT="features/dynamic-template/fixtures/golden/template.rpp" SI
     set -euo pipefail
     mkdir -p "{{OUT}}"
     cargo build -q --release -p session-ui --bin bench --bin theme_diff --bin theme_export
-    ./target/release/theme_export apps/session/ui/themes/fts-dark.frame
+    ./target/release/theme_export features/engine/ui/themes/fts-dark.frame
     FTS_BENCH_MIXER="{{OUT}}/native.png" FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "{{PROJECT}}" 2>&1 | grep -E 'wrote' || true
-    FTS_THEME=apps/session/ui/themes/fts-dark.frame FTS_BENCH_MIXER="{{OUT}}/themed.png" FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "{{PROJECT}}" 2>&1 | grep -E 'wrote|theme' || true
+    FTS_THEME=features/engine/ui/themes/fts-dark.frame FTS_BENCH_MIXER="{{OUT}}/themed.png" FTS_BENCH_SIZE="{{SIZE}}" ./target/release/bench "{{PROJECT}}" 2>&1 | grep -E 'wrote|theme' || true
     ./target/release/theme_diff "{{OUT}}/native.png" "{{OUT}}/themed.png" "{{OUT}}/diff.png"
-
-# The DAW's dev loop in one herdr session (`herdr --session studio` to
-# watch): the engine (`studio engine --reopen`, restart it with Ctrl-C and
-# ↑ Enter) and the window under `dx serve` beside it, which only attaches —
-# a rebuilt window leaves the engine playing, a restarted engine is
-# re-attached to. Production Task by default; `just daw-dev local` runs a dev
-# Task server too and points Studio at it. `--fresh` replaces a running one.
-# See scripts/dev-herdr.sh. (It was `just dev` until the local stack took
-# that name; `just dev local` and `just dev --fresh` still come here.)
-daw-dev *ARGS:
-    scripts/dev-herdr.sh {{ARGS}}
 
 # The studio window (Blitz + the painted arrangement) on a real session,
 # prepared first: organize it, build the song from its keyflow chart
@@ -1865,19 +1462,12 @@ reaper-test FILTER="":
 reaper-test-gui FILTER="":
     cargo run -p session-reaper-xtask -- --gui --keep-open {{FILTER}}
 
-# The three web bundles (studio-web's image ships them), checked for wasm32 (STA-366):
-# `cargo check --workspace` is native and never compiles them, so a
-# native-only dep leaking into their graph (tokio `net` -> mio, an engine,
-# X11/HID) only showed when the deploy failed. Required in checks.yml.
+# studio-web (apps/web), checked for wasm32 (STA-366): `cargo check
+# --workspace` is native and never compiles it, so a native-only dep
+# leaking into its graph (tokio `net` -> mio, an engine, X11/HID) only shows
+# here. Required in checks.yml.
 web-wasm-check:
-    cargo check -p session-daw-web --target wasm32-unknown-unknown
-    cargo check -p session-web --target wasm32-unknown-unknown
-    cargo check -p signal-web --target wasm32-unknown-unknown
-
-# The Signal browser remote: studio-desktop's web build (rig + tone UI over
-# the engine's vox). Required in CI's Wasm job and in local CI.
-signal-wasm-check:
-    cargo check -p studio-desktop --target wasm32-unknown-unknown --no-default-features --features signal
+    cargo check -p studio-web --target wasm32-unknown-unknown
 
 # The workflows in .github/workflows are GENERATED from xtask/workflows (one
 # Rust module per workflow, the reasons as comments there). Edit the Rust,
@@ -1897,7 +1487,7 @@ workflows-check:
 # The same order as CI: the gates, then the whole workspace check, the wasm
 # checks and every test. A PR is checked by `just ci-local` instead (the
 # pre-push hook): the gates plus what the change affects. NOT the other
-# workflows: `studio-ios` (the release tag) and `deploy` need a Mac, signing
+# workflows: `desktop` and `studio` (the release tag) need a Mac, signing
 # keys and upload credentials, so a green run here says nothing about them.
 # Everything checks.yml runs after a merge to main, locally.
 ci FROM="lockfile":
@@ -1973,10 +1563,8 @@ ci FROM="lockfile":
     fi
 
     if run_from wasm; then
-      echo "── wasm check (web bundles) ─────────────────────────"
+      echo "── wasm check (studio-web) ───────────────────────────"
       just web-wasm-check
-      echo "── wasm check (Signal browser remote) ───────────────"
-      just signal-wasm-check
       echo "ok"
     fi
 
@@ -2051,7 +1639,7 @@ rail-evidence:
     dir="$(git rev-parse --git-common-dir)/rail-evidence/$(git rev-parse HEAD)"
     mkdir -p "$dir"
     cargo rail plan evidence --work cargo.test -o "$dir/cargo.test.json" -- \
-      test --workspace --no-run --features session-desktop/cli,studio-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
+      test --workspace --no-run --features session-desktop/cli,web-audio-worklet/guitar,web-audio-worklet/keys
     cargo rail plan evidence --work cargo.build -o "$dir/cargo.build.json" -- check --workspace
     echo "rail evidence: $dir"
 
@@ -2061,20 +1649,20 @@ rail-evidence:
 # extensions compiled in. Its node is what a hosted Architect runs.
 
 # The headless node for this machine (release profile; PROFILE=dev for a quick one).
-studio-architect-node:
-    bash scripts/studio-architect.sh node
+studio-node:
+    bash scripts/studio.sh node
 
 # The web bundle (Architect's web app + this distribution.json) into OUT.
-studio-architect-web OUT:
-    bash scripts/studio-architect.sh web {{OUT}}
+studio-web OUT:
+    bash scripts/studio.sh web {{OUT}}
 
 # `cargo check` of the node, as the PR job runs it.
-studio-architect-check:
-    bash scripts/studio-architect.sh check
+studio-check:
+    bash scripts/studio.sh check
 
 # The release's tarballs (node + web, with .sha256) into DIR.
-studio-architect-release TAG DIR:
-    bash scripts/studio-architect.sh release {{TAG}} {{DIR}}
+studio-release TAG DIR:
+    bash scripts/studio.sh release {{TAG}} {{DIR}}
 
 # ── Releases ─────────────────────────────────────────────────────────────
 #
@@ -2084,8 +1672,8 @@ studio-architect-release TAG DIR:
 # <none|patch|minor|major> -m "<note>"`), and a merge runs CI and ships
 # nothing. A release is a TAG: `just release` tags the next CalVer
 # `vYY.M.MICRO` on main's newest commit whose `CI passed` is green, and the
-# tag alone starts the release builds (the studio-web image, the Studio
-# TestFlight upload, the desktop installers, the one GitHub Release with
+# tag alone starts the release builds (Studio's node and web tarballs,
+# the desktop installers, the one GitHub Release with
 # the notes from the change files added since the previous tag). Nothing
 # is committed for a release: each build stamps the tag's version into its
 # checkout, so the version committed on main is not the released one.
@@ -2162,51 +1750,6 @@ release-notes *ARGS:
 release-sandbox:
     bash scripts/release-sandbox.sh
 
-# The Session DAW view in a browser (session-ui's web_host), built to
-# apps/session/daw-web/dist: cargo → wasm-bindgen → index.html, plus the
-# demo session's project and chart under dist/session/. Host toolchain
-# (rustup target add wasm32-unknown-unknown; cargo install
-# wasm-bindgen-cli --version 0.2.126). Serve with `just web-daw-serve`.
-web-daw SESSION="../sessions/Always On Time" RPP="Always On Time.RPP" CHART="Always_on_Time.kf" PROFILE="wasm-release":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # SIMD: vello's painting (fearless_simd) picks its level at compile
-    # time and runs its scalar fallback without it. RUSTFLAGS reaches only
-    # the wasm target here (not host build scripts); keep it in step with
-    # nix/modules/packages/web-bundles.nix's session-app-web.
-    RUSTFLAGS="-C target-feature=+simd128" \
-        cargo build -p session-daw-web --target wasm32-unknown-unknown --profile {{PROFILE}}
-    out=apps/session/daw-web/dist
-    mkdir -p "$out/session"
-    dir=$([ "{{PROFILE}}" = "dev" ] && echo debug || echo "{{PROFILE}}")
-    wasm-bindgen --target web --no-typescript --out-dir "$out" \
-        "target/wasm32-unknown-unknown/$dir/session-daw-web.wasm"
-    # 26 MB → 19 MB (7 MB gzipped). Release only: it takes half a minute.
-    if [ "{{PROFILE}}" != "dev" ] && command -v wasm-opt >/dev/null; then
-        wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int \
-            --enable-sign-ext --enable-mutable-globals --enable-reference-types \
-            --enable-multivalue --enable-simd "$out/session-daw-web_bg.wasm" -o "$out/session-daw-web_bg.wasm"
-    fi
-    cp apps/session/daw-web/www/index.html "$out/"
-    cp "{{SESSION}}/{{RPP}}" "$out/session/demo.RPP"
-    cp "{{SESSION}}/{{CHART}}" "$out/session/demo.kf"
-    ls -lh "$out" "$out/session"
-
-# Build studio-web's root (`nix build .#studio-web`: the front door, Signal
-# under /signal/, Session under /session/) and serve it on
-# http://localhost:8090 as the image does: its start step
-# (scripts/studio-web/serve.sh) writes /config.json from TASK_URL / AUTH_URL
-# (unset: same origin), static-web-server adds COOP/COEP (the keys rig's
-# shared memory) and the image's cache rules
-# (nix/modules/packages/studio-web.nix).
-#   TASK_URL=https://task.fasttrackstudio.app just studio-web-preview
-studio-web-preview:
-    nix run .#studio-web-preview
-
-# The /config.json writer's cases (also the `studio-web-config-test` flake
-# check).
-studio-web-config-test:
-    bash scripts/studio-web/write-config-test.sh
 
 # Studio's island (#445): Session's progress bar and transport as a WASI
 # component for a share link's now-playing view. Built in the `wasi` profile
@@ -2274,7 +1817,7 @@ island-build:
     web
     python3 -c 'import json,sys; sys.exit(0 if "island.css" in json.load(open(sys.argv[1]))["files"] else "island.css is not in the lock")' "$out/architect.lock.json"
     # What it was built from: the release ships it only from that same
-    # clean commit (scripts/studio-architect.sh release). Not locked, not served.
+    # clean commit (scripts/studio.sh release). Not locked, not served.
     printf '%s\n' "$built" > "$out/BUILT_FROM"
     ls -la "$out"
 
@@ -2315,10 +1858,6 @@ island-web out:
 island-check:
     devenv --profile wasi shell -- cargo clippy -p studio-island --target wasm32-wasip2 -- -D warnings
     devenv shell -- cargo clippy -p studio-island --target wasm32-unknown-unknown -- -D warnings
-
-# Serve the built web DAW on http://localhost:8765.
-web-daw-serve:
-    cd apps/session/daw-web/dist && python3 -m http.server 8765
 
 # Fetch the large binaries kept out of this repository (assets.txt: the
 # private studio-assets, rig-models and mic-models repos) into

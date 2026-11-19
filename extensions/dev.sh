@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Studio's engine and views as Architect extensions, in a stock Architect
 # as development copies: builds their programs (the root workspace's
-# `desktop-dev` profile for the host, as studio-desktop's recipes build, so
+# `desktop-dev` profile for the host, as the app recipes build, so
 # the shared crates are compiled once), installs each into its package
 # (its manifest's [entry]), and starts an isolated Architect
 # (`architect-desktop dev`) with only them and the playhead on. Extra

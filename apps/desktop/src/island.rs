@@ -41,7 +41,7 @@ pub const LOCK: &str = "architect.lock.json";
 pub const STYLESHEET: &str = "island.css";
 
 /// What `just island` built it from (`git describe --always --dirty`),
-/// which the release checks against its own (scripts/studio-architect.sh).
+/// which the release checks against its own (scripts/studio.sh).
 /// Not served.
 pub const BUILT_FROM: &str = "BUILT_FROM";
 

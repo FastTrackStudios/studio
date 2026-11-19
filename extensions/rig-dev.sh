@@ -2,7 +2,7 @@
 # Signal's rigs in Studio, as extensions (docs/design/signal-extensions.md):
 # builds Studio's distribution of Architect and the rig engine's program
 # (the root workspace's `desktop-dev` profile for the host), installs the
-# engine into its package, starts an isolated Studio (`studio-architect
+# engine into its package, starts an isolated Studio (`studio
 # dev`) with the engine loaded as a development copy, and lays the panes
 # out as the iPad does (the "Rig" arrangement, below).
 #
@@ -44,7 +44,7 @@ declare -A folder=(
   [audio-settings]=audio-settings [keys]=keys
 )
 
-build=(-p studio-architect) args=()
+build=(-p studio-desktop) args=()
 for p in rig $copies; do
   [ -n "${program[$p]:-}" ] || { echo "rig-dev: no extension '$p'" >&2; exit 2; }
   build+=(-p "${program[$p]}")
@@ -56,7 +56,7 @@ for p in rig $copies; do
   args+=(--extension "$here/${folder[$p]}")
 done
 
-app=${ARCHITECT:-$out/studio-architect}
+app=${ARCHITECT:-$out/studio}
 state=$(mktemp)
 trap 'rm -f "$state"' EXIT
 "$app" dev --name "$name" "${args[@]}" --collapse left "$@" > "$state"

@@ -7,7 +7,7 @@
 #      must equal the merged commit (Cargo.toml, Cargo.lock and
 #      .config/duplicate-deps.toml's note), apart from the change file's
 #      name and wording: there must be exactly one new one, for
-#      studio-architect, patch.
+#      studio, patch.
 #   2. the same base asked for v0.12.4 with keyflow kept at v0.5.2 (which
 #      pins v0.12.3): it must exit 4, waiting on keyflow, and change nothing.
 #   3. v0.11.2 -> v0.12.0 (Architect moved the editor revision Studio
@@ -72,8 +72,8 @@ replay() {
     else
         local new
         new="$(git -C "$scratch" status --porcelain -- .changes | sed -n 's/^?? //p')"
-        if [ "$(wc -w <<<"$new")" -ne 1 ] || ! grep -qx '"studio-architect" = "patch"' "$scratch/$new"; then
-            echo "FAIL $base -> $tag $*: expected one new change file for studio-architect (patch), got: ${new:-none}" >&2
+        if [ "$(wc -w <<<"$new")" -ne 1 ] || ! grep -qx '"studio-desktop" = "patch"' "$scratch/$new"; then
+            echo "FAIL $base -> $tag $*: expected one new change file for studio (patch), got: ${new:-none}" >&2
             fail=1
         fi
         rm -f "$scratch/$new"

@@ -180,11 +180,11 @@ describe() { git -C "$1" describe --always --dirty --tags 2>/dev/null || echo "?
 # The Architect checkout at the pinned commit: a clone sharing the objects
 # of a local Architect checkout when it has that commit (nothing fetched,
 # nothing written there), else one from GitHub, once. The same folder
-# scripts/studio-architect.sh uses for the web bundle.
+# scripts/studio.sh uses for the web bundle.
 pinned_architect() {
     local tag rev src sibling
     read -r tag rev <<<"$(py pinned "$ARCH_URL" architect-desktop)"
-    src="$(target_dir)/studio-architect/architect-$rev"
+    src="$(target_dir)/studio/architect-$rev"
     if [ ! -d "$src/.git" ] || [ "$(git -C "$src" rev-parse HEAD 2>/dev/null)" != "$rev" ]; then
         rm -rf "$src"
         mkdir -p "$(dirname "$src")"
@@ -533,8 +533,9 @@ run_web() {
 }
 
 # STUDIO DESKTOP: Studio's distribution of Architect (apps/desktop,
-# studio-architect) under `dx serve`, rebuilt on a save through kache (an
-# rsx edit hot-reloads; no Rust hot-patching, whose builds bypass kache), an isolated dev instance signed in to the stack's
+# studio) under `dx serve`, rebuilt on a save through kache (an rsx edit
+# hot-reloads; no Rust hot-patching, whose builds bypass kache), an
+# isolated dev instance signed in to the stack's
 # issuer and syncing with the server like any other client. Its engine is
 # the `daw` extension, a development copy (extensions/daw, rebuilt alone):
 # the app starts the engine when none runs, and the engine outlives the
@@ -607,7 +608,7 @@ run_desktop() {
             ARCHITECT_DEV_ROOT="$state/desktop" "$after" "$bin" "$sock" >&2 || say "desktop: $after failed"
         ) &
     fi
-    say "desktop: Studio (studio-architect) under dx serve, signed in to the stack's issuer, its server :$(port server)"
+    say "desktop: Studio (studio) under dx serve, signed in to the stack's issuer, its server :$(port server)"
     cp Cargo.lock "$state/Cargo.lock.desktop"
     trap '[ -f "$state/Cargo.lock.desktop" ] && ! cmp -s Cargo.lock "$state/Cargo.lock.desktop" && cp "$state/Cargo.lock.desktop" Cargo.lock' EXIT
     cd "$root/apps/desktop"

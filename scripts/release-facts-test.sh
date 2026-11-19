@@ -19,7 +19,7 @@ git config user.name test; git config user.email test@example.invalid
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 mkdir -p scripts .changes
 cp "$here/release.sh" scripts/
-change() { printf -- '---\n"studio-architect" = "%s"\n---\n\n%s\n' "$2" "$3" >".changes/$1.md"; git add -A; git commit -qm "$1"; }
+change() { printf -- '---\n"studio-desktop" = "%s"\n---\n\n%s\n' "$2" "$3" >".changes/$1.md"; git add -A; git commit -qm "$1"; }
 change base patch "Fixed a thing (studio)"
 git tag v26.1.0
 change setlist-column minor $'Added a column to setlists (studio)\n\nData-Migration: setlists gain a "key" column (a \\ backslash), not undone by a rollback'

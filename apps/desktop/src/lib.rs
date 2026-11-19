@@ -7,7 +7,7 @@
 //! | | Studio (this) | the Architect app | `studio-desktop` (being replaced) |
 //! | --- | --- | --- | --- |
 //! | name | `Studio` | `Architect` | `Studio` |
-//! | binary / app | `studio-architect` | `architect-desktop` | `studio-desktop` |
+//! | binary / app | `studio` | `architect-desktop` | `studio-desktop` |
 //! | config folder | `studio` | `architect` | (Studio's prefs) |
 //! | bundle id | `app.fasttrackstudio.studio` | `app.fasttrackstudio.architect` | `app.fasttrackstudio.studio` |
 //!
@@ -80,7 +80,7 @@ pub const SHIPPED: &str = if cfg!(target_os = "macos") {
 };
 
 /// Where Studio's island ships: `studio-island/` beside the binary (the
-/// release puts `just island`'s folder there: scripts/studio-architect.sh).
+/// release puts `just island`'s folder there: scripts/studio.sh).
 pub const ISLAND_FOLDER: &str = "studio-island";
 
 /// Studio's island (#445), from the folder beside the binary, if it matches its lock.
@@ -103,7 +103,7 @@ pub fn island() -> Option<architect_sites::SiteIsland> {
             tracing::warn!(
                 island.outcome = "refused",
                 island.reason = %error,
-                "studio-architect: its island does not match its lock; serving none"
+                "studio: its island does not match its lock; serving none"
             );
             None
         }

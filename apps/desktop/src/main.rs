@@ -1,6 +1,6 @@
-//! `studio-architect`: Studio's distribution of Architect. With `gui` (the
+//! `studio`: Studio's distribution of Architect. With `gui` (the
 //! default) the Architect app's window; without it, the headless node
-//! (`studio-architect serve`) a hosted Architect runs.
+//! (`studio serve`) a hosted Architect runs.
 
 fn main() -> std::process::ExitCode {
     let first = std::env::args().nth(1);
@@ -23,5 +23,5 @@ fn main() -> std::process::ExitCode {
         session_engine::actions::in_host(true);
         studio_arrangement::attach();
     }
-    architect_desktop::run(studio_architect::distribution())
+    architect_desktop::run(studio_desktop::distribution())
 }

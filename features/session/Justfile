@@ -51,12 +51,6 @@ web-build: tailwind-web
 web-dev: tailwind-web
     cd apps/web && dx build --platform web
 
-# ── CLI ──────────────────────────────────────────────────────────────────
-
-# Run the studio CLI (Session's commands are its top level)
-cli *ARGS:
-    cargo run -p studio-desktop --features cli --bin studio -- {{ARGS}}
-
 # ── Aliases ──────────────────────────────────────────────────────────────
 
 alias c := check
