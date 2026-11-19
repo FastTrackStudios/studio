@@ -22,6 +22,7 @@ members = [
     "features/ui/transport-ui",
     "features/ui/lyrics-ui",
     "apps/architect/island",
+    "apps/architect/web",
     "features/adapters/web/worklet",
     "features/editor",
     "features/session",
@@ -414,6 +415,12 @@ architect-sites = { git = "https://github.com/FastTrackStudios/architect", tag =
 # its window by default (`gui` turns it on there); `vox` is the node's
 # services and every build of it needs them.
 architect-desktop = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0", default-features = false, features = ["vox"] }
+# Architect's web app as a library a distribution's web build runs
+# (`architect_web::run`, without its own `start`): Studio's,
+# apps/architect/web, with the engine in the page.
+architect-web = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0", default-features = false }
+architect-distribution = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
+architect-playhead = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0", default-features = false }
 # Share links as notes of their vault (`share_note`): apps/architect's
 # node test writes the share SHARE_CREATE would.
 architect-spaces = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.14.0" }
@@ -913,6 +920,10 @@ rustfft = "6.2"
 test-that = { version = "0.5.2", default-features = false }
 
 [patch.crates-io]
+# One wasm-streams in a browser build: 0.4 (reqwest 0.12's `stream`) as a
+# re-export of 0.5 (dioxus-web's), or the two copies' `#[wasm_bindgen]`
+# classes collide at link time. See vendor/wasm-streams-0.4/FTS-PATCH.md.
+wasm-streams = { path = "vendor/wasm-streams-0.4" }
 # tone3000 on reqwest 0.12's ring-backed rustls instead of 0.13's `rustls`,
 # whose only backend is aws-lc-rs: aws-lc-sys's build script (a cmake C
 # build) was 186 s of a 375 s clean `cargo check --workspace`, all of it on

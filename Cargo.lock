@@ -442,7 +442,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -453,7 +453,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -992,13 +992,13 @@ dependencies = [
  "architect-files",
  "architect-guide",
  "architect-input",
- "architect-media",
+ "architect-media 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.14.0)",
  "architect-navigator",
  "architect-navigator-api",
  "architect-navigator-extension",
  "architect-orgs",
  "architect-pages",
- "architect-playhead",
+ "architect-playhead 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.14.0)",
  "architect-presence",
  "architect-process-view 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.14.0)",
  "architect-projects",
@@ -1252,7 +1252,7 @@ dependencies = [
  "architect-files",
  "architect-guide",
  "architect-mcp",
- "architect-media",
+ "architect-media 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.14.0)",
  "architect-orgs",
  "architect-permissions",
  "architect-presence",
@@ -1431,6 +1431,7 @@ dependencies = [
  "futures",
  "futures-timer",
  "hex",
+ "js-sys",
  "objc2 0.6.5",
  "objc2-foundation 0.3.2",
  "objc2-health-kit",
@@ -1460,6 +1461,9 @@ dependencies = [
  "vox",
  "vox-core",
  "vox-stream",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "web-time",
 ]
 
@@ -1642,9 +1646,25 @@ dependencies = [
 [[package]]
 name = "architect-media"
 version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/architect?tag=v0.14.0#a236142c4f4f71df4e9f2b3d51aed80e9fdf7571"
+dependencies = [
+ "architect-playhead 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.14.0)",
+ "architect-shell",
+ "architect-workspace-hack",
+ "dioxus",
+ "lucide-dioxus",
+ "pulldown-cmark 0.13.6",
+ "serde_json",
+ "serde_yaml",
+ "tracing",
+]
+
+[[package]]
+name = "architect-media"
+version = "0.1.0"
 source = "git+https://www.github.com/FastTrackStudios/architect?tag=v0.14.0#a236142c4f4f71df4e9f2b3d51aed80e9fdf7571"
 dependencies = [
- "architect-playhead",
+ "architect-playhead 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.14.0)",
  "architect-shell",
  "architect-workspace-hack",
  "dioxus",
@@ -1763,6 +1783,7 @@ dependencies = [
  "facet",
  "futures",
  "futures-timer",
+ "js-sys",
  "oxc_allocator",
  "oxc_ast",
  "oxc_codegen",
@@ -1780,6 +1801,9 @@ dependencies = [
  "vox",
  "vox-codegen",
  "vox-types",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -1800,6 +1824,21 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+]
+
+[[package]]
+name = "architect-playhead"
+version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/architect?tag=v0.14.0#a236142c4f4f71df4e9f2b3d51aed80e9fdf7571"
+dependencies = [
+ "architect-shell",
+ "architect-workspace-hack",
+ "dioxus",
+ "futures-timer",
+ "lucide-dioxus",
+ "serde",
+ "serde_json",
+ "web-time",
 ]
 
 [[package]]
@@ -2053,7 +2092,7 @@ dependencies = [
  "architect",
  "architect-extensions",
  "architect-favourites",
- "architect-media",
+ "architect-media 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.14.0)",
  "architect-pages",
  "architect-scripting",
  "architect-shell",
@@ -2252,6 +2291,53 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "architect-web"
+version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/architect?tag=v0.14.0#a236142c4f4f71df4e9f2b3d51aed80e9fdf7571"
+dependencies = [
+ "architect",
+ "architect-command-palette",
+ "architect-commands",
+ "architect-distribution",
+ "architect-extensions",
+ "architect-favourites",
+ "architect-media 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.14.0)",
+ "architect-navigator",
+ "architect-pages",
+ "architect-playhead 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.14.0)",
+ "architect-settings",
+ "architect-shell",
+ "architect-spaces",
+ "architect-theme",
+ "architect-theme-picker",
+ "architect-ui",
+ "architect-workspace",
+ "architect-workspace-hack",
+ "auth-client",
+ "base64 0.22.1",
+ "crdt",
+ "dioxus",
+ "futures-channel",
+ "futures-timer",
+ "futures-util",
+ "gloo-timers 0.3.0",
+ "include_dir",
+ "js-sys",
+ "loro",
+ "lucide-dioxus",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+ "url",
+ "vault-proto",
+ "vault-query 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.14.0)",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -3595,7 +3681,7 @@ dependencies = [
  "bitflags 2.13.2",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "lazy_static",
  "lazycell",
  "log",
@@ -4854,7 +4940,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7369,7 +7455,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7439,7 +7525,7 @@ checksum = "ad5208a115eaba24916f7456929832e310a81518c641f93fee4f89aa93aa3675"
 dependencies = [
  "cfg-if",
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8224,7 +8310,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9920,7 +10006,7 @@ dependencies = [
  "log",
  "presser",
  "thiserror 2.0.20",
- "windows 0.62.2",
+ "windows 0.58.0",
 ]
 
 [[package]]
@@ -10703,7 +10789,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-layer",
@@ -10724,7 +10810,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.58.0",
 ]
 
 [[package]]
@@ -11712,7 +11798,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -13891,7 +13977,7 @@ dependencies = [
  "once_cell",
  "png 0.18.1",
  "thiserror 2.0.20",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -13911,7 +13997,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "png 0.18.1",
  "thiserror 2.0.20",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -14541,7 +14627,7 @@ dependencies = [
  "pin-project-lite",
  "rustc-hash 2.1.3",
  "rustls",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "thiserror 2.0.20",
  "tokio",
  "tokio-stream",
@@ -14584,7 +14670,7 @@ checksum = "b56d621ed2c1773b5356ab39cc68c819f8d0103f7493d8661c4a5f5f8ea55f40"
 dependencies = [
  "cfg_aliases",
  "libc",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.61.2",
 ]
@@ -14635,7 +14721,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -17685,7 +17771,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -17698,7 +17784,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -17866,7 +17952,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.3",
  "rustls",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
@@ -17905,9 +17991,9 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -18620,7 +18706,7 @@ dependencies = [
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "wasm-streams 0.4.2",
+ "wasm-streams 0.4.3",
  "web-sys",
  "webpki-roots 1.0.9",
 ]
@@ -19023,7 +19109,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -19091,7 +19177,7 @@ dependencies = [
  "security-framework 3.7.0",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -20068,6 +20154,22 @@ dependencies = [
 [[package]]
 name = "session"
 version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/session?rev=a8ec37a454c767c0558973412c4d321746066d02#a8ec37a454c767c0558973412c4d321746066d02"
+dependencies = [
+ "architect",
+ "architect-permissions",
+ "crdt",
+ "facet",
+ "facet-json",
+ "loro",
+ "thiserror 2.0.20",
+ "vox",
+ "web-time",
+]
+
+[[package]]
+name = "session"
+version = "0.1.0"
 source = "git+https://github.com/FastTrackStudios/session?rev=f186f34b8451e3a1543ac78a2c99d1ab02c1b352#f186f34b8451e3a1543ac78a2c99d1ab02c1b352"
 dependencies = [
  "architect",
@@ -20079,22 +20181,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "uuid",
- "vox",
- "web-time",
-]
-
-[[package]]
-name = "session"
-version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/session?rev=a8ec37a454c767c0558973412c4d321746066d02#a8ec37a454c767c0558973412c4d321746066d02"
-dependencies = [
- "architect",
- "architect-permissions",
- "crdt",
- "facet",
- "facet-json",
- "loro",
- "thiserror 2.0.20",
  "vox",
  "web-time",
 ]
@@ -21394,7 +21480,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -22048,6 +22134,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "studio-architect-web"
+version = "26.10.3"
+dependencies = [
+ "architect-distribution",
+ "architect-playhead 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.14.0)",
+ "architect-web",
+ "dioxus",
+ "getrandom 0.3.4",
+ "gloo-timers 0.3.0",
+ "serde_json",
+ "session-engine",
+ "session-ui",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-wasm",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "studio-arrangement"
 version = "26.10.3"
 dependencies = [
@@ -22180,7 +22287,7 @@ name = "studio-launcher"
 version = "26.10.3"
 dependencies = [
  "architect-extensions",
- "architect-media",
+ "architect-media 0.1.0 (git+https://github.com/FastTrackStudios/architect?tag=v0.14.0)",
  "architect-navigator-api",
  "base64 0.22.1",
  "dioxus",
@@ -23113,7 +23220,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -23142,7 +23249,7 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8c27177b12a6399ffc08b98f76f7c9a1f4fe9fc967c784c5a071fa8d93cf7e1"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -23947,7 +24054,7 @@ dependencies = [
  "once_cell",
  "png 0.18.1",
  "thiserror 2.0.20",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -24268,7 +24375,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -24725,7 +24832,7 @@ dependencies = [
  "vault-live",
  "vault-obsidian",
  "vault-proto",
- "vault-query",
+ "vault-query 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.14.0)",
 ]
 
 [[package]]
@@ -24791,7 +24898,7 @@ dependencies = [
  "tracing",
  "uuid",
  "vault-proto",
- "vault-query",
+ "vault-query 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.14.0)",
  "walkdir",
 ]
 
@@ -24818,7 +24925,7 @@ dependencies = [
  "uuid",
  "vault-live",
  "vault-proto",
- "vault-query",
+ "vault-query 0.1.0 (git+https://www.github.com/FastTrackStudios/architect?tag=v0.14.0)",
  "walkdir",
 ]
 
@@ -24838,6 +24945,25 @@ dependencies = [
  "uuid",
  "vox",
  "vox-types",
+]
+
+[[package]]
+name = "vault-query"
+version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/architect?tag=v0.14.0#a236142c4f4f71df4e9f2b3d51aed80e9fdf7571"
+dependencies = [
+ "architect",
+ "architect-workspace-hack",
+ "chrono",
+ "facet",
+ "indexmap",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 2.0.20",
+ "uuid",
+ "vault-proto",
 ]
 
 [[package]]
@@ -25423,15 +25549,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-streams"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15053d8d85c7eccdbefef60f06769760a563c7f0a9d6902a13d35c7800b0ad65"
+version = "0.4.3"
 dependencies = [
- "futures-util",
- "js-sys",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
+ "wasm-streams 0.5.0",
 ]
 
 [[package]]
@@ -26302,7 +26422,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -27389,7 +27509,7 @@ dependencies = [
  "as-raw-xcb-connection",
  "gethostname",
  "libc",
- "libloading 0.8.9",
+ "libloading 0.9.0",
  "once_cell",
  "rustix 1.1.6",
  "x11rb-protocol 0.14.0",

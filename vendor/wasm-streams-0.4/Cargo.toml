@@ -1,0 +1,11 @@
+[package]
+name = "wasm-streams"
+# One past the last 0.4 release, so every `^0.4` requirement takes it.
+version = "0.4.3"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "wasm-streams 0.4 as a re-export of 0.5, so a browser build links one copy of its `#[wasm_bindgen]` classes (see FTS-PATCH.md)"
+publish = false
+
+[dependencies]
+streams = { package = "wasm-streams", version = "0.5" }

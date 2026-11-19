@@ -4,6 +4,8 @@
 //!
 //! - [`source`] — where a streamed song's files come from (`SongSource`),
 //!   and a Task share link as one.
+//! - [`link`] — a set opened from an Architect share link: its songs, each
+//!   a source over the link's own file URLs, by range.
 //! - [`song_stream`] — a song streamed from a source: its small files
 //!   mirrored, its proxies fetched in the order they will be heard, on the
 //!   host's runtime ([`song_stream::Spawn`]).
@@ -25,6 +27,7 @@
 
 pub mod folder;
 pub mod guide_instrument;
+pub mod link;
 pub mod listen;
 pub mod open_core;
 pub mod reference;

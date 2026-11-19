@@ -239,6 +239,11 @@ path = "src/bin/song-report.rs"
 required-features = ["native"]
 
 [[bin]]
+name = "link-prepare"
+path = "src/bin/link-prepare.rs"
+required-features = ["native"]
+
+[[bin]]
 name = "chain-probe"
 path = "src/bin/chain-probe.rs"
 required-features = ["native"]

@@ -166,6 +166,29 @@ public name for a share page: its redirects are relative, its CSP is
 `'self'`, a link share sets no cookies. Signing in from the phone is not
 covered: the issuer and the web app stay on loopback.
 
+## The engine in the page
+
+Studio's own build of the web app (`apps/architect/web`: Architect's app
+with Studio's engine in it) is what `web` serves when the Architect the
+stack builds against has what it needs (`architect_web::provide_engine`:
+today a local Architect on `feat/engine-through-a-link`); otherwise
+Architect's own wasm, as before. A link whose songs attach a session
+opens in the engine (docs/design/engine-through-a-link.md):
+
+```sh
+LOCAL_STACK_VAULT=/abs/vault LOCAL_STACK_SETLIST="Setlists/Set.md" \
+LOCAL_STACK_LISTEN=Full LOCAL_STACK_WEB=app just demo
+SHARE_URL=… SONG="Hey!" WIDTH=1280 HEIGHT=800 node scripts/engine-link-probe.mjs
+```
+
+`LOCAL_STACK_SETLIST` names the vault's setlist, `LOCAL_STACK_LISTEN` how
+far its link plays (`Reference`, the default, or `Full`: the multitracks
+too), and `LOCAL_STACK_WEB=app` serves the web app alone (no site, no
+docs: no bun, no Architect CLI). `scripts/engine-link-probe.mjs` plays a
+song through the engine in the same sandboxed Firefox as the smoke test
+and prints what the engine's worklet put out, the time to first audio and
+what the browser weighs.
+
 ## Checking it
 
 ```sh
