@@ -154,4 +154,9 @@ for w in d["windows"]:
         w["center"] = split("column", [(0.09, g("studio.rig.status/status")), (0.91, body)])
 print(json.dumps({"layout": d}))' > "$state"
 "$app" actions --app "$sock" run WORKSPACE_APPLY --json - < "$state" > /dev/null
+# The rig has the window: Architect's side and bottom docks folded away
+# (the layout applied above opens them again).
+for side in right bottom; do
+  act WORKSPACE_DOCK_SET "{\"side\":\"$side\",\"shown\":\"hidden\"}" > /dev/null || true
+done
 echo "studio rig: socket $sock ($layout); '$app dev stop $name' stops it"
