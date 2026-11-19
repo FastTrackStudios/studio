@@ -833,7 +833,7 @@ check:
 # build and run exactly these; building the workspace's ~200 crates with no
 # tests left would only link empty harnesses. Add a crate here when it gains
 # tests worth running on every change.
-test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control frame gate-plugin studio-desktop dsp dioxus-test dock"
+test_packages := "dsp-core session-format daw-standalone timeline daw-proto studio daw-transport-sync utils daw-control gate-plugin studio-desktop dsp dioxus-test dock"
 
 # Run the core test set (test_packages above).
 test:
@@ -2276,15 +2276,17 @@ faces *ONLY:
 # The face library: every plugin face rendered with frame's GPU effects
 # stage to OUT/<set>/<face>.webp, indexed by kind in OUT/index.json
 # (placeholders marked). Run `just faces` first; needs ImageMagick.
+# render_surface is Frame's (frame-cli), installed from the tag Studio pins
+# into target/frame-cli. Frame's own parity and tools are in its repo
+# (FastTrackStudios/frame: `just parity`).
 #   just faces-gallery /tmp/gallery --only saturate
 faces-gallery OUT *ARGS:
-    cargo build --release -p frame-cli --features anyrender --bin render_surface
+    cargo install --locked --git https://github.com/FastTrackStudios/frame --tag {{frame_tag}} frame-cli --features anyrender --bin render_surface --root target/frame-cli
     python3 scripts/face_gallery.py {{OUT}} {{ARGS}}
 
-# Frame's Figma parity: import → render → pixel + SVG diff against Figma's
-# own output (xtask/frame/scripts/run_parity_render_and_diff.sh).
-frame-parity *ARGS="--all":
-    cargo run -p xtask -- parity_test {{ARGS}}
+# The Frame tag faces-gallery's render_surface comes from: the one
+# Cargo.toml's `frame` pins. Bump them together.
+frame_tag := "v0.2.0"
 
 # ── Patchbay (apps/patchbay) ──────────────────────────────────────────
 # One crate, two platforms: the desktop app (default) and the browser

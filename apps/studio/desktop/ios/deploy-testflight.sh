@@ -162,6 +162,10 @@ APP_GLOB="$ROOT/target/dx/$DX_PACKAGE/release/ios/"*.app
 if [ "${SKIP_BUILD:-}" = "1" ] && [ -d $APP_GLOB ]; then
     echo "SKIP_BUILD=1 — reusing existing app"
 else
+    # frame's faces ride in the bundle (studio_app_faces below): generate
+    # them (`just faces`) unless FACES_DIR says where they already are.
+    FACES_GEN=""
+    [ -n "${FACES_DIR:-}" ] || FACES_GEN="cargo run -q --release -p plugin-faces -- '$ROOT/features/ui/plugin-faces/generated';"
     # DX_TAILWIND is relative to DX_APP_DIR. Tailwind v4's automatic content
     # detection is rooted at the WORKING DIRECTORY, so the sheet must be
     # built from the input's own directory or it silently loses rules —
@@ -172,6 +176,7 @@ else
         "$XCODE_ENV; export PATH=$BIN_IOS:\$PATH; \
          cd '$ROOT/$DX_APP_DIR'; \
          ${DX_TAILWIND:+(cd \"\$(dirname '$DX_TAILWIND')\" \&\& tailwindcss -i \"\$(basename '$DX_TAILWIND')\" -o '$ROOT/$DX_APP_DIR/assets/tailwind.css');} \
+         $FACES_GEN \
          dx build --platform ios --device --release $DX_FEATURES" \
         > /tmp/fts-build.log 2>&1 || true
     tail -2 /tmp/fts-build.log
@@ -219,9 +224,8 @@ fi
 # shellcheck source=app-plist.sh disable=SC1091
 source "$SCRIPT_DIR/app-plist.sh"
 studio_app_plist "$APP"
-# FRAME_PLUGINS: frame's examples/plugins when frame is not checked out beside
-# the repo (the airlock runner keeps it under /Volumes/build-disk/development).
-studio_app_faces "$APP" "${FRAME_PLUGINS:-}"
+# The faces the build above generated (`just faces`), or FACES_DIR's.
+studio_app_faces "$APP" "${FACES_DIR:-}"
 # TestFlight requires ITSAppUsesNonExemptEncryption declared (false = no
 # non-standard crypto → no export-compliance docs).
 /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$APP/Info.plist" 2>/dev/null || true

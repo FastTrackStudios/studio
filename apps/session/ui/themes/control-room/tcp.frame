@@ -1,0 +1,49 @@
+<Document>
+  <!-- Control Room track row, laid out like an edit-window track header:
+       a light name plate on the first line, the record, solo and mute keys
+       and the inserts slot on a second line under it (inline after the
+       name on short rows), graduated volume and pan dials at the right
+       with numeric readouts under them, and the record input on a third
+       line when the row is tall enough and armed. -->
+  <Page name="tcp.row">
+    <Frame name="Row" w=343 h=70>
+      <Rectangle name="Ground" w=343 h=70 bind:w="w" bind:h="h" bind:fill="track.selected ? mix($surface, $accent, 0.14) : $surface" />
+      <Rectangle name="Divider" y=69 w=343 h=1 bind:y="h - 1" bind:w="w" bind:fill="$border" />
+      <Rectangle name="Divider light" w=343 h=1 bind:w="w" fill="#ffffff0d" />
+      <Frame name="Body" w=343 h=70 bind:w="w" bind:h="h" bind:visible="h >= 11">
+        <Rectangle name="Column" w=20 h=70 bind:w="row.indent + 20" bind:h="h" bind:fill="$rail.ground" />
+        <Frame name="%steps" w=343 h=70 bind:w="w" bind:h="h" />
+        <Rectangle name="Rail" w=20 h=70 bind:x="row.indent" bind:h="h" bind:fill="$rail.ground" />
+        <Rectangle name="Colour" w=5 h=70 bind:x="row.indent" bind:h="h" bind:fill="track.band" />
+        <Rectangle name="Rule" x=20 w=1 h=70 bind:x="row.indent + 20" bind:h="h" bind:fill="$border" />
+        <Vector name="Open" w=8 h=6 geometry="M 0 0 L 8 0 L 4 5 Z" bind:x="row.indent + 8" bind:y="h - 10" bind:visible="track.folder && !track.collapsed && h >= 30" bind:fill="$text.dim" />
+        <Vector name="Shut" w=6 h=8 geometry="M 0 0 L 5 4 L 0 8 Z" bind:x="row.indent + 9" bind:y="h - 11" bind:visible="track.folder && track.collapsed && h >= 30" bind:fill="$text.dim" />
+        <Text name="Number" w=400 h=15 size=11 font="JetBrains Mono" bind:x="row.number_x - 1" bind:y="row.number_baseline - 0.8 * row.number_size - 1" bind:size="row.number_size" bind:text="row.number" bind:fill="$text.dim" bind:visible="row.has_number">1</Text>
+        <Frame name="%icon" w=16 h=16 bind:x="row.icon_x" bind:y="row.icon_y" bind:w="row.icon_size" bind:h="row.icon_size" bind:visible="row.icon" />
+        <Rectangle name="Plate" w=150 h=18 radius=2 bind:x="26 + row.indent" bind:w="max((h >= 46 ? 176 : 118) - (26 + row.indent), 0)" bind:y="(h >= 58 ? 6 : clamp((h - min(24, max(h - 2, 1))) / 2, 1, 6)) + ((h >= 58 ? 24 : min(24, max(h - 2, 1))) - min((h >= 58 ? 24 : min(24, max(h - 2, 1))), 18)) / 2" bind:h="min((h >= 58 ? 24 : min(24, max(h - 2, 1))), 18)" bind:fill="track.selected ? #bfe0fa : $cr.plate" />
+        <Text name="Name" w=150 h=13 size=10 font="Saira" weight=700 bind:x="31 + row.indent" bind:w="max((h >= 46 ? 172 : 114) - (31 + row.indent), 0)" bind:y="(h >= 58 ? 6 : clamp((h - min(24, max(h - 2, 1))) / 2, 1, 6)) + (h >= 58 ? 24 : min(24, max(h - 2, 1))) / 2 - 6" bind:text="row.name" bind:fill="track.mute ? #6d7a8c : $cr.plate.ink">Track</Text>
+        <Rectangle name="Name hover" w=150 h=2 bind:x="26 + row.indent" bind:w="max((h >= 46 ? 176 : 118) - (26 + row.indent), 0)" bind:y="(h >= 58 ? 6 : clamp((h - min(24, max(h - 2, 1))) / 2, 1, 6)) + ((h >= 58 ? 24 : min(24, max(h - 2, 1))) + min((h >= 58 ? 24 : min(24, max(h - 2, 1))), 18)) / 2 - 2" bind:fill="$accent" bind:visible="ui.pressed == \"name\" || (ui.hover == \"name\" && ui.pressed == \"\")" />
+        <Frame name="@name" w=150 h=18 bind:x="26 + row.indent" bind:w="max((h >= 46 ? 176 : 118) - (26 + row.indent), 0)" bind:y="(h >= 58 ? 6 : clamp((h - min(24, max(h - 2, 1))) / 2, 1, 6))" bind:h="(h >= 58 ? 24 : min(24, max(h - 2, 1)))" />
+        <Frame name="@folder" w=20 h=70 bind:x="row.indent" bind:h="h" />
+        <Instance name="@arm" of="arm" w=22 h=16 bind:x="h >= 46 ? 26 + row.indent : 122" bind:y="h >= 46 ? 32 : (h >= 58 ? 6 : clamp((h - min(24, max(h - 2, 1))) / 2, 1, 6)) + ((h >= 58 ? 24 : min(24, max(h - 2, 1))) - 16) / 2" bind:visible="ui.recording && (h >= 46 || (h >= 58 ? 24 : min(24, max(h - 2, 1))) >= 16)" arg:armed="track.armed" />
+        <Instance name="@solo" of="solo" w=22 h=16 bind:x="h >= 46 ? 50 + row.indent : 146" bind:y="h >= 46 ? 32 : (h >= 58 ? 6 : clamp((h - min(24, max(h - 2, 1))) / 2, 1, 6)) + ((h >= 58 ? 24 : min(24, max(h - 2, 1))) - min((h >= 58 ? 24 : min(24, max(h - 2, 1))), 16)) / 2" bind:h="h >= 46 ? 16 : min((h >= 58 ? 24 : min(24, max(h - 2, 1))), 16)" arg:on="track.solo" />
+        <Instance name="@mute" of="mute" w=22 h=16 bind:x="h >= 46 ? 74 + row.indent : 170" bind:y="h >= 46 ? 32 : (h >= 58 ? 6 : clamp((h - min(24, max(h - 2, 1))) / 2, 1, 6)) + ((h >= 58 ? 24 : min(24, max(h - 2, 1))) - min((h >= 58 ? 24 : min(24, max(h - 2, 1))), 16)) / 2" bind:h="h >= 46 ? 16 : min((h >= 58 ? 24 : min(24, max(h - 2, 1))), 16)" arg:on="track.mute" />
+        <Instance name="@fx" of="fx" w=76 h=16 bind:x="h >= 46 ? 100 + row.indent : 196" bind:w="h >= 46 ? max(176 - (100 + row.indent), 0) : 52" bind:y="h >= 46 ? 32 : (h >= 58 ? 6 : clamp((h - min(24, max(h - 2, 1))) / 2, 1, 6)) + ((h >= 58 ? 24 : min(24, max(h - 2, 1))) - 16) / 2" bind:visible="h >= 46 || (h >= 58 ? 24 : min(24, max(h - 2, 1))) >= 16" arg:count="track.fx" />
+        <Instance name="@routing" of="routing" x=252 w=28 h=22 bind:y="(h >= 58 ? 6 : clamp((h - min(24, max(h - 2, 1))) / 2, 1, 6)) + ((h >= 58 ? 24 : min(24, max(h - 2, 1))) - 22) / 2" bind:visible="(h >= 58 ? 24 : min(24, max(h - 2, 1))) >= 22" arg:parent_send="track.parent_send" arg:sends="track.sends" arg:receives="track.receives" />
+        <Instance name="@volume" of="volume" x=286 w=24 h=24 bind:y="(h >= 58 ? 6 : clamp((h - min(24, max(h - 2, 1))) / 2, 1, 6))" bind:visible="(h >= 58 ? 24 : min(24, max(h - 2, 1))) >= 22" arg:value="track.fader" />
+        <Instance name="@pan" of="pan" x=314 w=24 h=24 bind:y="(h >= 58 ? 6 : clamp((h - min(24, max(h - 2, 1))) / 2, 1, 6))" bind:visible="(h >= 58 ? 24 : min(24, max(h - 2, 1))) >= 22" arg:value="track.pan" />
+        <Frame name="Readouts" w=343 h=70 bind:visible="h >= 46">
+          <Rectangle name="Volume well" x=280 y=33 w=34 h=13 radius=1.5 bind:fill="$field" />
+          <Text name="Volume value" x=280 y=35 w=34 h=10 size=7.5 font="JetBrains Mono" text-align="center" bind:text="track.volume_label" bind:fill="$meter.safe">0.0</Text>
+          <Rectangle name="Pan well" x=316 y=33 w=22 h=13 radius=1.5 bind:fill="$field" />
+          <Text name="Pan value" x=316 y=35 w=22 h=10 size=7.5 font="JetBrains Mono" text-align="center" bind:text="track.pan < -0.005 ? \"L\" + fmt(round(-track.pan * 100)) : (track.pan > 0.005 ? \"R\" + fmt(round(track.pan * 100)) : \"C\")" bind:fill="$accent">C</Text>
+        </Frame>
+        <Frame name="Input" w=343 h=70 bind:visible="h >= 68 && track.armed">
+          <Rectangle name="Well" x=26 y=52 w=150 h=14 radius=1.5 bind:x="26 + row.indent" bind:w="max(176 - (26 + row.indent), 0)" bind:fill="$field" />
+          <Text name="Input name" x=30 y=54 w=140 h=11 size=8 font="JetBrains Mono" bind:x="30 + row.indent" bind:w="max(170 - (30 + row.indent), 0)" bind:text="\"In · \" + row.input" bind:fill="$text.dim">None</Text>
+        </Frame>
+        <Instance name="@phase" of="phase" x=320 w=16 h=16 bind:y="h - 24" bind:visible="h >= 94" arg:on="track.phase" />
+      </Frame>
+    </Frame>
+  </Page>
+</Document>

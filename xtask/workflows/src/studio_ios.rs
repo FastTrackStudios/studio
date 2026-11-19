@@ -227,8 +227,8 @@ echo "\`$TAG\` (\`$(git rev-parse --short HEAD)\`): marketing version \`$VERSION
 ///   (`session-app`). NOT the crate defaults: `tts` pulls ort/ONNX Runtime,
 ///   which publishes no prebuilt binary for aarch64-apple-ios (ort-sys'
 ///   build.rs panics); the guide runs on synthesized cues.
-/// - FRAME_PLUGINS: frame's faces ride in the bundle; frame is not checked
-///   out beside the workspace on the runner, so say where it lives.
+/// - Frame's faces ride in the bundle: deploy-testflight.sh generates them
+///   from features/ui/plugin-faces (`just faces`; FACES_DIR to reuse some).
 /// - DX_BUNDLE_ID must match apps/studio/desktop/Dioxus.toml.
 /// - APP_DISPLAY_NAME: the home-screen name; without it the device shows the
 ///   crate name.
@@ -257,7 +257,6 @@ bash apps/studio/desktop/ios/deploy-testflight.sh
         "DX_FEATURES",
         "--no-default-features --features signal-guitar,signal-keys-rig,signal-drums-rig,signal-ekit-rig,tone3000,session-app,doc-sync",
     )
-    .env("FRAME_PLUGINS", "/Volumes/build-disk/development/frame/examples/plugins")
     .env("DX_BUNDLE_ID", "app.fasttrackstudio.studio")
     .env("APP_DISPLAY_NAME", "Studio")
     .env("PROFILE_NAME", "FTS Studio App Store")

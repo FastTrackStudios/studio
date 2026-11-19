@@ -1,0 +1,63 @@
+<Document>
+  <!-- Workbench controls: square, flat plates with a one-pixel bevel
+       (light top, dark bottom), labels in condensed Saira. Every control
+       fills the rect its instance gives it (pw, ph), so the strip and the
+       row size them freely. Original artwork. -->
+  <Page name="controls">
+    <Component name="mute" w=21 h=20 arg:on="false">
+      <Frame name="Mute" w=21 h=20 bind:w="pw" bind:h="ph">
+        <Rectangle name="Face" w=21 h=20 radius=1 bind:w="pw" bind:h="ph" bind:fill="arg.on ? (ui.pressed == \"mute\" ? darken($mute, 0.2) : (ui.hover == \"mute\" ? lighten($mute, 0.1) : $mute)) : (ui.pressed == \"mute\" ? $hardware.edge : (ui.hover == \"mute\" ? lift($hardware, 0.18) : $hardware))" />
+        <Rectangle name="Light" x=1 w=19 h=1 bind:w="pw - 2" bind:fill="$wb.bevel.light" />
+        <Rectangle name="Shade" x=1 y=19 w=19 h=1 bind:y="ph - 1" bind:w="pw - 2" bind:fill="$wb.bevel.dark" />
+        <Text name="Letter" w=21 h=14 size=10 font="Saira" stretch=85 weight=700 text-align="center" bind:w="pw" bind:y="ph / 2 - 5.5" bind:fill="arg.on ? #1c1c1c : $text.dim">M</Text>
+      </Frame>
+    </Component>
+    <Component name="solo" w=21 h=20 arg:on="false">
+      <Frame name="Solo" w=21 h=20 bind:w="pw" bind:h="ph">
+        <Rectangle name="Face" w=21 h=20 radius=1 bind:w="pw" bind:h="ph" bind:fill="arg.on ? (ui.pressed == \"solo\" ? darken($solo, 0.2) : (ui.hover == \"solo\" ? lighten($solo, 0.1) : $solo)) : (ui.pressed == \"solo\" ? $hardware.edge : (ui.hover == \"solo\" ? lift($hardware, 0.18) : $hardware))" />
+        <Rectangle name="Light" x=1 w=19 h=1 bind:w="pw - 2" bind:fill="$wb.bevel.light" />
+        <Rectangle name="Shade" x=1 y=19 w=19 h=1 bind:y="ph - 1" bind:w="pw - 2" bind:fill="$wb.bevel.dark" />
+        <Text name="Letter" w=21 h=14 size=10 font="Saira" stretch=85 weight=700 text-align="center" bind:w="pw" bind:y="ph / 2 - 5.5" bind:fill="arg.on ? #1c1c1c : $text.dim">S</Text>
+      </Frame>
+    </Component>
+    <Component name="arm" w=20 h=20 arg:armed="false" arg:behind="track.ground">
+      <Frame name="Arm" w=20 h=20 bind:w="pw" bind:h="ph">
+        <Rectangle name="Face" w=20 h=20 radius=1 bind:w="pw" bind:h="ph" bind:fill="ui.pressed == \"arm\" ? $hardware.edge : (ui.hover == \"arm\" ? lift($hardware, 0.18) : $hardware)" />
+        <Rectangle name="Light" x=1 w=18 h=1 bind:w="pw - 2" bind:fill="$wb.bevel.light" />
+        <Rectangle name="Shade" x=1 y=19 w=18 h=1 bind:y="ph - 1" bind:w="pw - 2" bind:fill="$wb.bevel.dark" />
+        <Ellipse name="Dot" x=5 y=5 w=10 h=10 bind:x="pw / 2 - 5" bind:y="ph / 2 - 5" bind:fill="arg.armed ? $rec : darken($rec, 0.55)" />
+        <Ellipse name="Glint" x=7 y=6.5 w=3 h=2 bind:x="pw / 2 - 3" bind:y="ph / 2 - 3.5" fill="#ffffff55" bind:visible="arg.armed" />
+      </Frame>
+    </Component>
+    <Component name="pan" w=24 h=24 arg:value="0">
+      <Ellipse name="Well" x=1 y=1 w=22 h=22 bind:fill="$surface.sunken" />
+      <Vector name="Travel" w=24 h=24 geometry="M 0 0" bind:geometry="arc(12, 12, 10, -135, 270)" stroke-weight=1.5 bind:stroke="$hardware" />
+      <Vector name="Value" w=24 h=24 geometry="M 0 0" stroke-weight=2 bind:stroke="$pan" bind:geometry="arc(12, 12, 10, 0, clamp(arg.value, -1, 1) * 135)" bind:visible="abs(clamp(arg.value, -1, 1) * 135) > 0.5" />
+      <Ellipse name="Face" x=5 y=5 w=14 h=14 stroke-weight=1 bind:stroke="$hardware.edge" bind:fill="(ui.pressed == \"pan\" || ui.hover == \"pan\") ? lift($hardware, 0.18) : $hardware" />
+      <Vector name="Pointer" x=12 y=12 w=1 h=1 geometry="M -0.8 -7 L 0.8 -7 L 0.8 -2.5 L -0.8 -2.5 Z" bind:fill="$hardware.mark" bind:rotation="clamp(arg.value, -1, 1) * 135" />
+    </Component>
+    <Component name="volume" w=24 h=24 arg:value="0">
+      <Ellipse name="Well" x=1 y=1 w=22 h=22 bind:fill="$surface.sunken" />
+      <Vector name="Travel" w=24 h=24 geometry="M 0 0" bind:geometry="arc(12, 12, 10, -135, 270)" stroke-weight=1.5 bind:stroke="$hardware" />
+      <Vector name="Value" w=24 h=24 geometry="M 0 0" stroke-weight=2 bind:stroke="$accent" bind:geometry="arc(12, 12, 10, -135, 270 * clamp(arg.value, 0, 1))" bind:visible="arg.value > 0" />
+      <Ellipse name="Face" x=5 y=5 w=14 h=14 stroke-weight=1 bind:stroke="$hardware.edge" bind:fill="(ui.pressed == \"volume\" || ui.hover == \"volume\") ? lift($hardware, 0.18) : $hardware" />
+      <Vector name="Pointer" x=12 y=12 w=1 h=1 geometry="M -0.8 -7 L 0.8 -7 L 0.8 -2.5 L -0.8 -2.5 Z" bind:fill="$hardware.mark" bind:rotation="-135 + 270 * clamp(arg.value, 0, 1)" />
+    </Component>
+    <Component name="fx" w=72 h=22 arg:count="0">
+      <Frame name="FX" w=72 h=22 bind:w="pw" bind:h="ph">
+        <Rectangle name="Well" w=72 h=22 bind:w="pw" bind:h="ph" bind:fill="(ui.pressed == \"fx\" || ui.hover == \"fx\") ? lift($field, 0.1) : $field" />
+        <Rectangle name="Shade" w=72 h=1 bind:w="pw" bind:fill="$wb.bevel.dark" />
+        <Rectangle name="Light" y=21 w=72 h=1 bind:y="ph - 1" bind:w="pw" bind:fill="$wb.bevel.light" />
+        <Rectangle name="Lamp" x=4 y=8 w=5 h=6 bind:y="ph / 2 - 3" bind:fill="arg.count > 0 ? $accent : $hardware" />
+        <Text name="Label" x=13 y=5 w=56 h=13 size=9 font="Saira" stretch=85 weight=600 bind:y="ph / 2 - 5" bind:w="pw - 15" bind:fill="arg.count > 0 ? $text : $text.faint" bind:text="arg.count > 0 ? fmt(arg.count) + \" FX\" : \"FX\"">FX</Text>
+      </Frame>
+    </Component>
+    <Component name="fx.compact" w=26 h=22 arg:count="0">
+      <Frame name="FX" w=26 h=22 bind:w="pw" bind:h="ph">
+        <Rectangle name="Well" w=26 h=22 bind:w="pw" bind:h="ph" bind:fill="(ui.pressed == \"fx\" || ui.hover == \"fx\") ? lift($field, 0.1) : $field" />
+        <Rectangle name="Shade" w=26 h=1 bind:w="pw" bind:fill="$wb.bevel.dark" />
+        <Rectangle name="Lamp" x=10.5 y=8 w=5 h=6 bind:x="pw / 2 - 2.5" bind:y="ph / 2 - 3" bind:fill="arg.count > 0 ? $accent : $hardware" />
+      </Frame>
+    </Component>
+  </Page>
+</Document>

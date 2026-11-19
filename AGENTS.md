@@ -4,10 +4,11 @@
 (`daw`) and everything built on it — **Studio, the one app** (Signal, the
 live rig, and Session, the full DAW, as views of one project behind one
 welcome screen, the library), Patchbay
-(studio routing), the CLAP/VST3 plugins, and frame (the design /
-control-surface engine). It is the merger, in October
-2026, of the former session, daw, processor, signal, patchbay and frame
-repos. One Cargo workspace, one lockfile, one `target/`, one flake.
+(studio routing) and the CLAP/VST3 plugins. It is the merger, in October
+2026, of the former session, daw, processor, signal and patchbay repos
+(frame, the design / control-surface engine, merged too and left again at
+v0.2.0: it is a git dependency on FastTrackStudios/frame). One Cargo
+workspace, one lockfile, one `target/`, one flake.
 
 ## Layout
 
@@ -37,8 +38,6 @@ crates/     daw/*      the DAW alone: the domain core (`daw`), proto, control,
             studio/    the umbrella over daw: REAPER adapter, project files,
                        UI, CSI, the daw CLI, the integration-test harness —
                        all cargo features of `studio`
-            frame/     the design / control-surface engine (+ tools/: cli,
-                       desktop, mcp, library-server)
 features/   one crate per feature, sub-folders allowed. Name a feature for what
             it is; anything host-specific goes under adapters/<host>.
             signal/      Signal's domain: rigs, presets, scenes, its browser,
@@ -60,8 +59,8 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
             app/         shell (log ring, crash log, update check), launcher
             adapters/    reaper/ (everything REAPER), web/ (the AudioWorklet)
 vendor/     patched third-party crates (each with UPSTREAM.md or FTS-PATCH.md)
-xtask/      devtools, frame (Figma parity), plugins (the bundler), session-reaper
-docs/       design/ (one-engine.md), per-domain notes (daw, signal, frame,
+xtask/      devtools, plugins (the bundler), session-reaper
+docs/       design/ (one-engine.md), per-domain notes (daw, signal,
             patchbay, …), agents/, guides, specs
 nix/        flake modules (toolchain, shells, packages), reaper-config,
             vendored flakes
@@ -96,9 +95,11 @@ working there.
   are `features/app/shell`; prefs are `utils::prefs`. Session and Signal
   do not keep copies.
 - **Faces are frame documents.** Control surfaces and plugin faces are
-  `.frame` documents rendered by `crates/frame`. `just faces` generates the
-  plugin faces into `features/ui/plugin-faces/generated` (not kept in git; the apps
-  read them at runtime).
+  `.frame` documents rendered by Frame (the `frame` git dependency; its
+  docs, tools and Figma parity live in FastTrackStudios/frame). `just
+  faces` generates the plugin faces into
+  `features/ui/plugin-faces/generated` (not kept in git; the apps read
+  them at runtime).
 
 ## Crate rules
 

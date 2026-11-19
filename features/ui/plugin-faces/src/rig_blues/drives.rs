@@ -1,5 +1,5 @@
 //! The blues rig's drives: recreations of the four real pedals the suite's
-//! drives are modelled on (docs/rig-sections.md) — their enclosures,
+//! drives are modelled on (frame:docs/rig-sections.md) — their enclosures,
 //! colours, knobs and lettering, under names of our own.
 //!
 //! - `blade` — the dual-FET clean boost: gloss black, a white hairline
@@ -28,7 +28,7 @@ use crate::suite_studio_blues::parts::{self, set};
 
 use super::PLUGIN;
 
-/// Every pedal's height (docs/form-factors.md).
+/// Every pedal's height (frame:docs/form-factors.md).
 pub const H: f64 = 286.0;
 
 /// The rendered enclosure, `w` wide, in `color` and `finish` (plus

@@ -1,0 +1,62 @@
+<Document>
+  <!-- Control Room controls: raised slate keys with a lit top half, dark
+       ink that turns to the state colour's ink when lit; graduated dials
+       with tick marks. Every control fills the rect its instance gives it.
+       Original artwork. -->
+  <Page name="controls">
+    <Component name="mute" w=21 h=20 arg:on="false">
+      <Frame name="Mute" w=21 h=20 bind:w="pw" bind:h="ph">
+        <Rectangle name="Rim" w=21 h=20 radius=2.5 bind:w="pw" bind:h="ph" bind:fill="$hardware.edge" />
+        <Rectangle name="Face" x=1 y=1 w=19 h=18 radius=2 bind:w="pw - 2" bind:h="ph - 2" bind:fill="arg.on ? (ui.pressed == \"mute\" ? darken($mute, 0.2) : $mute) : (ui.pressed == \"mute\" ? $cr.button.bottom : (ui.hover == \"mute\" ? lighten($cr.button.bottom, 0.1) : $cr.button.bottom))" />
+        <Rectangle name="Lit" x=1 y=1 w=19 h=9 radius=2 bind:w="pw - 2" bind:h="(ph - 2) / 2" bind:fill="arg.on ? #ffffff33 : alpha($cr.button.top, 0.55)" bind:visible="ui.pressed != \"mute\"" />
+        <Text name="Letter" w=21 h=12 size=9 font="Saira" weight=800 text-align="center" bind:w="pw" bind:y="ph / 2 - 5" bind:fill="$cr.plate.ink">M</Text>
+      </Frame>
+    </Component>
+    <Component name="solo" w=21 h=20 arg:on="false">
+      <Frame name="Solo" w=21 h=20 bind:w="pw" bind:h="ph">
+        <Rectangle name="Rim" w=21 h=20 radius=2.5 bind:w="pw" bind:h="ph" bind:fill="$hardware.edge" />
+        <Rectangle name="Face" x=1 y=1 w=19 h=18 radius=2 bind:w="pw - 2" bind:h="ph - 2" bind:fill="arg.on ? (ui.pressed == \"solo\" ? darken($solo, 0.2) : $solo) : (ui.pressed == \"solo\" ? $cr.button.bottom : (ui.hover == \"solo\" ? lighten($cr.button.bottom, 0.1) : $cr.button.bottom))" />
+        <Rectangle name="Lit" x=1 y=1 w=19 h=9 radius=2 bind:w="pw - 2" bind:h="(ph - 2) / 2" bind:fill="arg.on ? #ffffff33 : alpha($cr.button.top, 0.55)" bind:visible="ui.pressed != \"solo\"" />
+        <Text name="Letter" w=21 h=12 size=9 font="Saira" weight=800 text-align="center" bind:w="pw" bind:y="ph / 2 - 5" bind:fill="$cr.plate.ink">S</Text>
+      </Frame>
+    </Component>
+    <Component name="arm" w=20 h=20 arg:armed="false" arg:behind="track.ground">
+      <Frame name="Arm" w=20 h=20 bind:w="pw" bind:h="ph">
+        <Rectangle name="Rim" w=20 h=20 radius=2.5 bind:w="pw" bind:h="ph" bind:fill="$hardware.edge" />
+        <Rectangle name="Face" x=1 y=1 w=18 h=18 radius=2 bind:w="pw - 2" bind:h="ph - 2" bind:fill="arg.armed ? (ui.pressed == \"arm\" ? darken($rec, 0.2) : $rec) : (ui.hover == \"arm\" ? lighten($cr.button.bottom, 0.1) : $cr.button.bottom)" />
+        <Rectangle name="Lit" x=1 y=1 w=18 h=9 radius=2 bind:w="pw - 2" bind:h="(ph - 2) / 2" bind:fill="arg.armed ? #ffffff33 : alpha($cr.button.top, 0.55)" />
+        <Ellipse name="Ring" x=6 y=6 w=8 h=8 stroke-weight=1.6 bind:x="pw / 2 - 4" bind:y="ph / 2 - 4" bind:stroke="arg.armed ? #fff4f0 : $cr.plate.ink" />
+        <Ellipse name="Core" x=8 y=8 w=4 h=4 bind:x="pw / 2 - 2" bind:y="ph / 2 - 2" bind:fill="arg.armed ? #fff4f0 : $rec" />
+      </Frame>
+    </Component>
+    <Component name="pan" w=24 h=24 arg:value="0">
+      <Vector name="Ticks" w=24 h=24 geometry="M 4.79 19.21 L 3.51 20.49 M 1.80 12.00 L 0.00 12.00 M 4.79 4.79 L 3.51 3.51 M 12.00 1.80 L 12.00 0.00 M 19.21 4.79 L 20.49 3.51 M 22.20 12.00 L 24.00 12.00 M 19.21 19.21 L 20.49 20.49" stroke-weight=1 bind:stroke="$text.faint" />
+      <Ellipse name="Well" x=2.5 y=2.5 w=19 h=19 bind:fill="$surface.sunken" />
+      <Vector name="Value" w=24 h=24 geometry="M 0 0" stroke-weight=2.5 bind:stroke="$pan" bind:geometry="arc(12, 12, 8.2, 0, clamp(arg.value, -1, 1) * 135)" bind:visible="abs(clamp(arg.value, -1, 1) * 135) > 0.5" />
+      <Ellipse name="Cap" x=6 y=6 w=12 h=12 bind:fill="(ui.pressed == \"pan\" || ui.hover == \"pan\") ? $cr.button.top : $hardware" />
+      <Ellipse name="Cap lit" x=7 y=6.5 w=10 h=5 fill="#ffffff22" />
+      <Vector name="Pointer" x=12 y=12 w=1 h=1 geometry="M -0.9 -6 L 0.9 -6 L 0.9 -1 L -0.9 -1 Z" bind:fill="$hardware.mark" bind:rotation="clamp(arg.value, -1, 1) * 135" />
+    </Component>
+    <Component name="volume" w=24 h=24 arg:value="0">
+      <Vector name="Ticks" w=24 h=24 geometry="M 4.79 19.21 L 3.51 20.49 M 1.80 12.00 L 0.00 12.00 M 4.79 4.79 L 3.51 3.51 M 12.00 1.80 L 12.00 0.00 M 19.21 4.79 L 20.49 3.51 M 22.20 12.00 L 24.00 12.00 M 19.21 19.21 L 20.49 20.49" stroke-weight=1 bind:stroke="$text.faint" />
+      <Ellipse name="Well" x=2.5 y=2.5 w=19 h=19 bind:fill="$surface.sunken" />
+      <Vector name="Value" w=24 h=24 geometry="M 0 0" stroke-weight=2.5 bind:stroke="$meter.safe" bind:geometry="arc(12, 12, 8.2, -135, 270 * clamp(arg.value, 0, 1))" bind:visible="arg.value > 0" />
+      <Ellipse name="Cap" x=6 y=6 w=12 h=12 bind:fill="(ui.pressed == \"volume\" || ui.hover == \"volume\") ? $cr.button.top : $hardware" />
+      <Ellipse name="Cap lit" x=7 y=6.5 w=10 h=5 fill="#ffffff22" />
+      <Vector name="Pointer" x=12 y=12 w=1 h=1 geometry="M -0.9 -6 L 0.9 -6 L 0.9 -1 L -0.9 -1 Z" bind:fill="$hardware.mark" bind:rotation="-135 + 270 * clamp(arg.value, 0, 1)" />
+    </Component>
+    <Component name="fx" w=72 h=22 arg:count="0">
+      <Frame name="Inserts" w=72 h=22 bind:w="pw" bind:h="ph">
+        <Rectangle name="Slot" w=72 h=22 radius=1.5 bind:w="pw" bind:h="ph" bind:fill="(ui.pressed == \"fx\" || ui.hover == \"fx\") ? lighten($field, 0.08) : $field" stroke-weight=1 bind:stroke="$hardware.edge" />
+        <Rectangle name="Tab" x=1 y=1 w=3 h=20 bind:h="ph - 2" bind:fill="arg.count > 0 ? $accent : $cr.section" />
+        <Text name="Label" x=8 w=62 h=12 size=8 font="Saira" weight=700 letter-spacing=0.8 case="upper" bind:y="ph / 2 - 4.5" bind:w="pw - 10" bind:fill="arg.count > 0 ? $text : $text.faint" bind:text="arg.count > 0 ? \"Inserts · \" + fmt(arg.count) : \"Inserts\"">Inserts</Text>
+      </Frame>
+    </Component>
+    <Component name="fx.compact" w=26 h=22 arg:count="0">
+      <Frame name="Inserts" w=26 h=22 bind:w="pw" bind:h="ph">
+        <Rectangle name="Slot" w=26 h=22 radius=1.5 bind:w="pw" bind:h="ph" bind:fill="$field" stroke-weight=1 bind:stroke="$hardware.edge" />
+        <Text name="Count" w=26 h=12 size=8 font="Saira" weight=700 text-align="center" bind:w="pw" bind:y="ph / 2 - 4.5" bind:fill="arg.count > 0 ? $accent : $text.faint" bind:text="arg.count > 0 ? fmt(arg.count) : \"–\"">–</Text>
+      </Frame>
+    </Component>
+  </Page>
+</Document>

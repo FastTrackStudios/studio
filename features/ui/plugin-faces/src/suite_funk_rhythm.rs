@@ -1,6 +1,6 @@
 //! Suite: funk rhythm — a clean-funk guitar rig as one plugin
 //! (`suite-funk-rhythm`), each unit a page in its own form factor
-//! (`docs/form-factors.md`): the treadle wah, four standard pre-FX
+//! (`frame:docs/form-factors.md`): the treadle wah, four standard pre-FX
 //! stompboxes, three amp heads, the cab, the desktop graphic EQ and three
 //! post-FX pedals (one a big-box delay).
 //!

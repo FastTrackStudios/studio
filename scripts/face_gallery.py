@@ -12,8 +12,9 @@ delay, saturation, compressor, eq, modulation, motion, drive, amp…), with
 whether each is a placeholder (its generator says "placeholder until its
 machine is drawn"), its size and its image.
 
-Needs `cargo build --release -p frame-cli --features anyrender --bin
-render_surface` (the recipe `just faces-gallery` builds it) and ImageMagick.
+Needs Frame's render_surface in target/frame-cli/bin (the recipe
+`just faces-gallery` installs it from the Frame tag Studio pins) and
+ImageMagick.
 """
 import argparse
 import concurrent.futures as cf
@@ -25,9 +26,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PLUGINS = ROOT / "features" / "faces" / "generated"
-SOURCES = ROOT / "features" / "faces" / "plugin-faces" / "src"
-RENDER = ROOT / "target" / "release" / "render_surface"
+PLUGINS = ROOT / "features" / "ui" / "plugin-faces" / "generated"
+SOURCES = ROOT / "features" / "ui" / "plugin-faces" / "src"
+RENDER = ROOT / "target" / "frame-cli" / "bin" / "render_surface"
 
 # Filename words → kind, first match wins.
 KINDS = [
@@ -111,7 +112,7 @@ def main():
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     if not RENDER.exists():
-        sys.exit(f"no {RENDER}: cargo build --release -p frame-cli --features anyrender --bin render_surface")
+        sys.exit(f"no {RENDER}: run `just faces-gallery`, which installs it from Frame")
     stubs = placeholders()
     todo = list(faces(a.dark, a.only))
     entries, failed = [], []

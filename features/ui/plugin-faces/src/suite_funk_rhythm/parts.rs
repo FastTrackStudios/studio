@@ -16,7 +16,7 @@ use frame::surface::widgets::Builder;
 
 use crate::reverb::ui;
 
-// ── form factors (docs/form-factors.md, 60 design px per inch) ────────────
+// ── form factors (frame:docs/form-factors.md, 60 design px per inch) ────────────
 
 /// Every pedal's height (the Standard class's depth).
 pub const PEDAL_H: f64 = 286.0;

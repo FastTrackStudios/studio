@@ -1,6 +1,6 @@
 //! Suite: boutique clean — a soft pastel boutique rig as one plugin
 //! (`suite-boutique-clean`), each unit a page in its own form factor
-//! (`docs/form-factors.md`): four standard pre-FX stompboxes, three amp
+//! (`frame:docs/form-factors.md`): four standard pre-FX stompboxes, three amp
 //! heads, the cab, the desktop graphic EQ, and the echo and reverb rack
 //! units of the post-FX stand.
 //!

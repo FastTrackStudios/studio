@@ -1,5 +1,5 @@
 //! Rig pages: the blues rig as sections a player swipes between
-//! (docs/rig-sections.md). Every page carries the section bar — one icon
+//! (frame:docs/rig-sections.md). Every page carries the section bar — one icon
 //! per section, a dot under the one showing — and is built from the
 //! units' own faces (`face::embed`), so every control on it is the unit's
 //! own, bound to the same params.

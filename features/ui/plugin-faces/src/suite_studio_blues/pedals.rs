@@ -3,7 +3,7 @@
 //! marker, named on a label-maker strip, with a chrome stomp and its LED
 //! beside it in the bottom 30 %.
 //!
-//! Forms (docs/form-factors.md, 60 px/in, all 286 tall):
+//! Forms (frame:docs/form-factors.md, 60 px/in, all 286 tall):
 //! - `plain-boost` — Micro, 92 × 286
 //! - `peak-filter`, `mild-drive`, `teal-drive`, `short-delay`,
 //!   `plate-verb` — Standard, 156 × 286

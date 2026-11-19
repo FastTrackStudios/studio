@@ -16,7 +16,6 @@ members = [
     "features/ui/plugin-core",
     "features/ui/dock",
     "features/sync",
-    "crates/frame",
     "features/adapters/web/worklet",
     "features/patchbay",
     "features/midi",
@@ -153,13 +152,8 @@ members = [
     # ── patchbay ──
     "features/patchbay/driver",
     "apps/patchbay",
-    # ── frame ──
-    "crates/frame/tools/cli",
-    "crates/frame/tools/mcp",
-    "crates/frame/tools/desktop",
-    "crates/frame/tools/library-server",
+    # ── the plugin faces (frame documents; Frame itself is a git dep) ──
     "features/ui/plugin-faces",
-    "xtask/frame",
     "features/adapters/protools",
     "features/adapters/ableton",
     "features/adapters/logic",
@@ -184,7 +178,6 @@ editing = { path = "features/editing" }
 plugin-core = { path = "features/ui/plugin-core" }
 dock = { path = "features/ui/dock" }
 daw-sync = { path = "features/sync" }
-frame = { path = "crates/frame" }
 web-audio-worklet = { path = "features/adapters/web/worklet" }
 patchbay = { path = "features/patchbay" }
 midi = { path = "features/midi" }
@@ -252,15 +245,23 @@ arborium ={ version = "2.16.0", default-features = false }
 arborium-theme = "2.16.0"
 arborium-tree-sitter = "2.16.0"
 ropey = "1.6"
-# ── frame themes ──────────────────────────────────────────────────────
-# The mixer (then the TCP, then the arrangement) drawn from frame
-# documents — runtime-swappable, hot-reloaded themes. See
-# docs/frame-themes.md. A path dep on a local checkout of
-# github.com/FastTrackStudios/frame while the theme runtime is built out;
-# becomes a tagged git dep once frame cuts one.
-# A frame face running live: a control surface designed in frame (the
-# rig's pedals, amps and Time blocks, a reverb's machine), painted into
-# the host's scene and played by its pointer — the FX view's devices.
+# ── frame ─────────────────────────────────────────────────────────────
+# Frame, the design and control-surface engine, is its own repo
+# (FastTrackStudios/frame; it lived in this workspace from 2026-10-12
+# until v0.2.0). Studio uses its core: documents, surfaces, the renderer,
+# live faces and themes — the mixer and track rows drawn from frame
+# documents, runtime-swappable and hot-reloaded (Frame's
+# docs/frame-themes.md), and the rig's faces painted into the host's
+# scene and played by its pointer. Nothing here serves a SurfaceEngine or
+# a surface library, so `frame-architect` is not a dependency.
+# Frame's [patch.crates-io] at this tag is a subset of the one below (the
+# same forks, at the same or newer vendor tags). Bump it with architect
+# (both pin architect v0.10.0) and with the Justfile's `frame_tag`.
+# Local integration override; restore the tagged dependency before sharing.
+frame = { path = "/run/media/Development/wt/frame-live-editor/crates/frame" }
+frame-editor = { path = "/run/media/Development/wt/frame-live-editor/crates/frame-editor", features = ["ui"] }
+# figcraft enables fontconfig dlopen; the UI fontique must use the same mode.
+fontique = { version = "0.12", features = ["fontconfig-dlopen"] }
 
 # ── daw domain (wave 2) ───────────────────────────────────────────────
 # Facade crate — the only public API surface for the daw domain.
@@ -877,7 +878,6 @@ gloo-timers = { version = "0.3", features = ["futures"] }
 futures-channel = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-rust_decimal = "1.39"
 # `cargo xtask` TS-type generation (crates/task/xtask).
 vox-codegen = "0.10.0-rc.5"
 
@@ -941,10 +941,6 @@ signal-synth-rig = { path = "features/rigs/synth-rig" }
 socket2 = { version = "0.6", features = ["all"] }
 
 
-# ── from frame's workspace (joined into studio) ──
-figma-api = { git = "https://github.com/gridaco/figma-api-rust.git" }
-anyrender_svg = "0.15"
-taffy = { version = "0.7", default-features = false, features = ["std", "flexbox", "taffy_tree"] }
 winit = "0.30"
 
 # ── external dependencies, declared once (moved up from the member
@@ -977,7 +973,6 @@ dirs = "6"
 dispatch2 = "0.3"
 display-info = "0.5"
 dpp = "0.4"
-fixed = "1.28"
 flacenc = "0.5.1"
 flate2 = "1"
 gethostname = "1"
@@ -992,8 +987,6 @@ libspa-sys = "0.10"
 manganis = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
 mdns-sd = "0.13"
 midly = "0.5"
-miniz_oxide = "0.8"
-nice-plug-core = { git = "https://github.com/FastTrackStudios/nice-plug.git", branch = "fts-baseview-03" }
 nom = "8"
 objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false }
@@ -1022,7 +1015,6 @@ ruzstd = "0.8"
 rusty_link = "0.4"
 smallvec = "1.15.2"
 styx-tree = "5.0.0-rc.5"
-svg = "0.18"
 symphonia = { version = "0.5", default-features = false }
 symphonia-bundle-flac = "0.5"
 symphonia-codec-vorbis = "0.5"
@@ -1034,7 +1026,6 @@ tracing-wasm = "0.2"
 turso = { version = "0.8.2", default-features = false }
 ureq = "2"
 url = "2"
-vello_cpu = { version = "0.3", default-features = false }
 vorbis_rs = "0.5"
 wiremock = "0.6"
 x11-dl = "2.21"

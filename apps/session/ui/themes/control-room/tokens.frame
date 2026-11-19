@@ -1,0 +1,41 @@
+<Document>
+  <!-- Control Room: a cool slate post-production console. Inspired by the
+       sectioned layout of Pro Tools' mix and edit windows; original
+       artwork and values, not a copy of any Avid theme. Layer it over
+       console: FTS_THEME=themes/console:themes/control-room -->
+  <Variables modes="dark">
+    <Var name="text" value="#e6ebf2" />
+    <Var name="text.dim" value="#a3afbf" />
+    <Var name="text.faint" value="#6d7a8c" />
+    <Var name="accent" value="#5aa9e6" />
+    <Var name="mute" value="#f08a24" />
+    <Var name="solo" value="#f2d32c" />
+    <Var name="rec" value="#e5352b" />
+    <Var name="meter.safe" value="#35c46a" />
+    <Var name="meter.warn" value="#f2d32c" />
+    <Var name="meter.danger" value="#e5352b" />
+    <Var name="field" value="#141a22" />
+    <Var name="combo" value="#141a22" />
+    <Var name="hardware" value="#59667a" />
+    <Var name="hardware.edge" value="#10151c" />
+    <Var name="hardware.mark" value="#dfe5ee" />
+    <Var name="surface" value="#2b3442" />
+    <Var name="surface.sunken" value="#1a212b" />
+    <Var name="border" value="#10151c" />
+    <Var name="plate" value="#0000004d" />
+    <Var name="sheen" value="#ffffff17" />
+    <Var name="pan" value="#5aa9e6" />
+    <Var name="monitor.tape" value="#35c46a" />
+    <Var name="rail.ground" value="#232b37" />
+    <Var name="rail.rule" value="#10151c" />
+    <Var name="rail.button" value="#36404f" />
+    <Var name="rack.well" value="#1a212b" />
+    <Var name="cr.section" value="#323c4c" />
+    <Var name="cr.button.top" value="#8794a8" />
+    <Var name="cr.button.bottom" value="#5d6a7e" />
+    <Var name="cr.plate" value="#d5dce6" />
+    <Var name="cr.plate.ink" value="#141a22" />
+    <Var name="cr.cap.top" value="#e9edf2" />
+    <Var name="cr.cap.bottom" value="#8f9aab" />
+  </Variables>
+</Document>

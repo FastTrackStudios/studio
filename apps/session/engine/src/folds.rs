@@ -38,12 +38,17 @@ impl Default for State {
     }
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-isolation")))]
 static STATE: std::sync::LazyLock<Mutex<State>> =
     std::sync::LazyLock::new(|| Mutex::new(State::default()));
+#[cfg(not(any(test, feature = "test-isolation")))]
 static GENERATION: AtomicU64 = AtomicU64::new(0);
+#[cfg(any(test, feature = "test-isolation"))]
+thread_local! {
+    static GENERATION: AtomicU64 = const { AtomicU64::new(0) };
+}
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test-isolation")))]
 fn state() -> std::sync::MutexGuard<'static, State> {
     STATE
         .lock()
@@ -52,12 +57,12 @@ fn state() -> std::sync::MutexGuard<'static, State> {
 
 // Under test, each thread's own: a test folding folders must not fold the
 // rows another test is planning beside it.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-isolation"))]
 thread_local! {
     static STATE: &'static Mutex<State> = Box::leak(Box::default());
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-isolation"))]
 fn state() -> std::sync::MutexGuard<'static, State> {
     STATE
         .with(|state| *state)
@@ -72,31 +77,49 @@ pub fn touch() {
 }
 
 fn changed() {
+    #[cfg(not(any(test, feature = "test-isolation")))]
     GENERATION.fetch_add(1, Ordering::Relaxed);
+    #[cfg(any(test, feature = "test-isolation"))]
+    GENERATION.with(|generation| generation.fetch_add(1, Ordering::Relaxed));
 }
 
 /// How many times the folds have changed: a view planning rows compares
 /// this with the value it planned at.
 #[must_use]
 pub fn generation() -> u64 {
-    GENERATION.load(Ordering::Relaxed)
+    #[cfg(not(any(test, feature = "test-isolation")))]
+    return GENERATION.load(Ordering::Relaxed);
+    #[cfg(any(test, feature = "test-isolation"))]
+    GENERATION.with(|generation| generation.load(Ordering::Relaxed))
 }
 
 /// Whether a shut folder's row shows every cut in what it holds — in
 /// Edit mode, where the cuts are the work — or the takes whole, the seams
 /// joined (`daw_ui::studio::folded::join`), everywhere else: mixing or
 /// playing a song, a slip-edited kit is still one take a song long.
+#[cfg(not(any(test, feature = "test-isolation")))]
 static CUTS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+#[cfg(any(test, feature = "test-isolation"))]
+thread_local! {
+    static CUTS: std::sync::atomic::AtomicBool = const { std::sync::atomic::AtomicBool::new(false) };
+}
 
 /// Whether shut folders show their cuts.
 #[must_use]
 pub fn cuts_shown() -> bool {
-    CUTS.load(Ordering::Relaxed)
+    #[cfg(not(any(test, feature = "test-isolation")))]
+    return CUTS.load(Ordering::Relaxed);
+    #[cfg(any(test, feature = "test-isolation"))]
+    CUTS.with(|cuts| cuts.load(Ordering::Relaxed))
 }
 
 /// Show shut folders' cuts or not; a change plans the rows again.
 pub fn show_cuts(on: bool) {
-    if CUTS.swap(on, Ordering::Relaxed) != on {
+    #[cfg(not(any(test, feature = "test-isolation")))]
+    let previous = CUTS.swap(on, Ordering::Relaxed);
+    #[cfg(any(test, feature = "test-isolation"))]
+    let previous = CUTS.with(|cuts| cuts.swap(on, Ordering::Relaxed));
+    if previous != on {
         changed();
     }
 }

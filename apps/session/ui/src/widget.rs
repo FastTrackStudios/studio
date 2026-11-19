@@ -4944,11 +4944,13 @@ impl Widget for ArrangementWidget {
     /// Most moves do not: a pointer crossing the panel raises an event
     /// per pixel and changes which control it is on perhaps twice.
     fn needs_redraw(&self) -> bool {
+        crate::skin::poll();
         // A notice fading and a refused ghost going home both change the
         // picture with no event behind them, so neither can wait on
         // `dirty` — nothing is going to set it. Nor can a read-back the
         // engine asked for.
         self.dirty.get()
+            || crate::skin::version() != self.skin_seen
             || window_queued()
             || crate::hit_overlay::version() != self.detection_seen.get()
             || crate::marks_strip::version() != self.marks_seen.get()

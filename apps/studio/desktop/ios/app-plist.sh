@@ -78,19 +78,22 @@ studio_app_plist() {
 
 # frame's faces (the rig's phone pages) ride in the bundle at frame/; the
 # app points SIGNAL_FRAME_DIR there at launch (main.rs). `$1` the .app, `$2`
-# frame's examples/plugins (default: the ../frame sibling beside the repo).
+# the generated faces (default: this repo's features/ui/plugin-faces/generated,
+# written by `just faces`).
 studio_app_faces() {
     local app="$1"
-    local src="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../.." && pwd)/frame/examples/plugins}"
+    local src="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/features/ui/plugin-faces/generated}"
     if [ ! -d "$src/rig-faces" ]; then
-        echo "ERROR: no frame faces at $src/rig-faces (check out frame beside the repo)" >&2
+        echo "ERROR: no frame faces at $src/rig-faces (run \`just faces\`)" >&2
         return 1
     fi
     rm -rf "$app/frame"
     mkdir -p "$app/frame"
     # Only the set the rig loads (signal_guitar_ui's rig_faces `SET`): its
-    # faces, catalogs and pictures, not the design sources.
-    rsync -a --include='*/' --include='*.fm' --include='*.json' --include='*.png' \
+    # faces (and their .frame.assets/ sidecars), catalogs and pictures, not
+    # the design sources.
+    rsync -a --include='*.frame.assets/***' --include='*/' --include='*.frame' \
+        --include='*.fm' --include='*.json' --include='*.png' \
         --exclude='*' --prune-empty-dirs "$src/rig-faces/" "$app/frame/rig-faces/"
 }
 

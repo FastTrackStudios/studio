@@ -179,6 +179,8 @@ serde_json = { workspace = true }
 tokio = { version = "1.48", default-features = false, features = ["sync", "macros"] }
 
 [features]
+# Isolate window-only state when another crate runs UI tests.
+test-isolation = []
 default = ["native"]
 # What `#[architect::rpc]` (the engine's view service, `view`) checks in
 # the crate that uses it: the vox client and server it emits.

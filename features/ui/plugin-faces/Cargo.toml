@@ -6,7 +6,7 @@ edition.workspace = true
 publish = false
 
 [dependencies]
-frame = { path = "../../../crates/frame", features = ["io", "render", "runtime"] }
+frame = { workspace = true, features = ["io", "render", "runtime"] }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 # frame's skrifa, not the workspace's: the font handles come from frame
@@ -14,7 +14,7 @@ uuid = { workspace = true }
 skrifa = "0.26"
 
 [dev-dependencies]
-frame = { path = "../../../crates/frame", features = ["anyrender", "design", "render", "runtime"] }
+frame = { workspace = true, features = ["anyrender", "design", "render", "runtime"] }
 # `tests/frame_assets.rs`: a face loaded from disk renders like the one in memory.
 kurbo = { workspace = true }
 

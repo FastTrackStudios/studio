@@ -1,0 +1,39 @@
+<Document>
+  <!-- Graphite: soft, rounded, dark graphite with the track's own colour
+       carried into the name plate and the fader cap. Inspired by Logic
+       Pro's modern mixer and track headers; original artwork and values,
+       not a copy of any Apple theme. Layer it over console:
+       FTS_THEME=themes/console:themes/graphite -->
+  <Variables modes="dark">
+    <Var name="text" value="#ececef" />
+    <Var name="text.dim" value="#a4a4ab" />
+    <Var name="text.faint" value="#6e6e76" />
+    <Var name="accent" value="#7aa2ff" />
+    <Var name="mute" value="#4ab3e8" />
+    <Var name="solo" value="#f5c518" />
+    <Var name="rec" value="#f0443a" />
+    <Var name="meter.safe" value="#46d17a" />
+    <Var name="meter.warn" value="#f5c518" />
+    <Var name="meter.danger" value="#f0443a" />
+    <Var name="field" value="#161618" />
+    <Var name="combo" value="#161618" />
+    <Var name="hardware" value="#3a3b40" />
+    <Var name="hardware.edge" value="#121214" />
+    <Var name="hardware.mark" value="#ececef" />
+    <Var name="surface" value="#1f2023" />
+    <Var name="surface.sunken" value="#141416" />
+    <Var name="border" value="#121214" />
+    <Var name="plate" value="#00000040" />
+    <Var name="sheen" value="#ffffff10" />
+    <Var name="pan" value="#7aa2ff" />
+    <Var name="monitor.tape" value="#ff9f2e" />
+    <Var name="rail.ground" value="#1a1b1d" />
+    <Var name="rail.rule" value="#121214" />
+    <Var name="rail.button" value="#2a2b2f" />
+    <Var name="rack.well" value="#161618" />
+    <Var name="gr.card" value="#2a2b2f" />
+    <Var name="gr.card.hi" value="#323338" />
+    <Var name="gr.pill" value="#404147" />
+    <Var name="gr.cap" value="#dcdce0" />
+  </Variables>
+</Document>

@@ -83,8 +83,8 @@ impl Borrow<str> for ItemId { … } // look up a HashMap<ItemId, _> with &str du
 ```
 
 - One newtype per kind: `ProjectId`, `TrackId`, `ItemId`, `TakeId`,
-  `FxId`. Precedent in-repo: `crates/frame/src/document/proto/model.rs`
-  (`NodeId`, `AssetId`, `#[facet(transparent)]`).
+  `FxId`. Precedent: Frame's `frame::document::proto` model
+  (`NodeId`, `AssetId`, `#[facet(transparent)]`; FastTrackStudios/frame).
 - Fields become typed: `Item { id: ItemId, track: TrackId, … }`.
 - Synthetic ids are enums, not encoded strings:
   `enum RowItem { Real(ItemId), Folded { folder: TrackId, span: u32 } }`.

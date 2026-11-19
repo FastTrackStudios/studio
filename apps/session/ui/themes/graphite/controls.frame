@@ -1,0 +1,58 @@
+<Document>
+  <!-- Graphite controls: pills with fully rounded ends, lit in the state
+       colour with dark ink; dials drawn at whatever size their instance
+       is (every arc and face is computed from pw, ph), so the strip's
+       large pan dial and the row's small one are the same component.
+       Original artwork. -->
+  <Page name="controls">
+    <Component name="mute" w=21 h=20 arg:on="false">
+      <Frame name="Mute" w=21 h=20 bind:w="pw" bind:h="ph">
+        <Rectangle name="Pill" w=21 h=20 bind:w="pw" bind:h="ph" bind:radius="min(pw, ph) / 2" bind:fill="arg.on ? (ui.pressed == \"mute\" ? darken($mute, 0.2) : $mute) : (ui.pressed == \"mute\" ? $hardware.edge : (ui.hover == \"mute\" ? $gr.card.hi : $gr.pill))" />
+        <Text name="Letter" w=21 h=12 size=9.5 weight=650 text-align="center" bind:w="pw" bind:y="ph / 2 - 5.2" bind:fill="arg.on ? #101012 : $text">M</Text>
+      </Frame>
+    </Component>
+    <Component name="solo" w=21 h=20 arg:on="false">
+      <Frame name="Solo" w=21 h=20 bind:w="pw" bind:h="ph">
+        <Rectangle name="Pill" w=21 h=20 bind:w="pw" bind:h="ph" bind:radius="min(pw, ph) / 2" bind:fill="arg.on ? (ui.pressed == \"solo\" ? darken($solo, 0.2) : $solo) : (ui.pressed == \"solo\" ? $hardware.edge : (ui.hover == \"solo\" ? $gr.card.hi : $gr.pill))" />
+        <Text name="Letter" w=21 h=12 size=9.5 weight=650 text-align="center" bind:w="pw" bind:y="ph / 2 - 5.2" bind:fill="arg.on ? #101012 : $text">S</Text>
+      </Frame>
+    </Component>
+    <Component name="arm" w=20 h=20 arg:armed="false" arg:behind="track.ground">
+      <Frame name="Arm" w=20 h=20 bind:w="pw" bind:h="ph">
+        <Rectangle name="Pill" w=20 h=20 bind:w="pw" bind:h="ph" bind:radius="min(pw, ph) / 2" bind:fill="arg.armed ? (ui.pressed == \"arm\" ? darken($rec, 0.2) : $rec) : (ui.hover == \"arm\" ? $gr.card.hi : $gr.pill)" />
+        <Text name="Letter" w=20 h=12 size=9.5 weight=650 text-align="center" bind:w="pw" bind:y="ph / 2 - 5.2" bind:fill="arg.armed ? #101012 : $rec">R</Text>
+      </Frame>
+    </Component>
+    <Component name="pan" w=24 h=24 arg:value="0">
+      <Frame name="Dial" w=24 h=24 bind:w="pw" bind:h="ph">
+        <Ellipse name="Body" w=24 h=24 bind:w="min(pw, ph)" bind:h="min(pw, ph)" bind:x="(pw - min(pw, ph)) / 2" bind:fill="$gr.card" />
+        <Vector name="Travel" w=24 h=24 geometry="M 0 0" bind:w="pw" bind:h="ph" stroke-weight=2 stroke-cap="round" bind:stroke="$hardware.edge" bind:geometry="arc(pw / 2, ph / 2, min(pw, ph) / 2 - 2.5, -135, 270)" />
+        <Vector name="Value" w=24 h=24 geometry="M 0 0" bind:w="pw" bind:h="ph" stroke-weight=2.5 stroke-cap="round" bind:stroke="$pan" bind:geometry="arc(pw / 2, ph / 2, min(pw, ph) / 2 - 2.5, 0, clamp(arg.value, -1, 1) * 135)" bind:visible="abs(clamp(arg.value, -1, 1) * 135) > 0.5" />
+        <Ellipse name="Face" w=14 h=14 bind:w="min(pw, ph) - 10" bind:h="min(pw, ph) - 10" bind:x="pw / 2 - (min(pw, ph) - 10) / 2" bind:y="ph / 2 - (min(pw, ph) - 10) / 2" bind:fill="(ui.pressed == \"pan\" || ui.hover == \"pan\") ? $gr.card.hi : $gr.pill" />
+        <Vector name="Pointer" w=1 h=1 geometry="M 0 0" bind:x="pw / 2" bind:y="ph / 2" bind:geometry="\"M -1 \" + fmt(-(min(pw, ph) / 2 - 6)) + \" L 1 \" + fmt(-(min(pw, ph) / 2 - 6)) + \" L 1 -2 L -1 -2 Z\"" bind:fill="$hardware.mark" bind:rotation="clamp(arg.value, -1, 1) * 135" />
+      </Frame>
+    </Component>
+    <Component name="volume" w=24 h=24 arg:value="0">
+      <Frame name="Dial" w=24 h=24 bind:w="pw" bind:h="ph">
+        <Ellipse name="Body" w=24 h=24 bind:w="min(pw, ph)" bind:h="min(pw, ph)" bind:x="(pw - min(pw, ph)) / 2" bind:fill="$gr.card" />
+        <Vector name="Travel" w=24 h=24 geometry="M 0 0" bind:w="pw" bind:h="ph" stroke-weight=2 stroke-cap="round" bind:stroke="$hardware.edge" bind:geometry="arc(pw / 2, ph / 2, min(pw, ph) / 2 - 2.5, -135, 270)" />
+        <Vector name="Value" w=24 h=24 geometry="M 0 0" bind:w="pw" bind:h="ph" stroke-weight=2.5 stroke-cap="round" bind:stroke="$meter.safe" bind:geometry="arc(pw / 2, ph / 2, min(pw, ph) / 2 - 2.5, -135, 270 * clamp(arg.value, 0, 1))" bind:visible="arg.value > 0" />
+        <Ellipse name="Face" w=14 h=14 bind:w="min(pw, ph) - 10" bind:h="min(pw, ph) - 10" bind:x="pw / 2 - (min(pw, ph) - 10) / 2" bind:y="ph / 2 - (min(pw, ph) - 10) / 2" bind:fill="(ui.pressed == \"volume\" || ui.hover == \"volume\") ? $gr.card.hi : $gr.pill" />
+        <Vector name="Pointer" w=1 h=1 geometry="M 0 0" bind:x="pw / 2" bind:y="ph / 2" bind:geometry="\"M -1 \" + fmt(-(min(pw, ph) / 2 - 6)) + \" L 1 \" + fmt(-(min(pw, ph) / 2 - 6)) + \" L 1 -2 L -1 -2 Z\"" bind:fill="$hardware.mark" bind:rotation="-135 + 270 * clamp(arg.value, 0, 1)" />
+      </Frame>
+    </Component>
+    <Component name="fx" w=72 h=22 arg:count="0">
+      <Frame name="Slot" w=72 h=22 bind:w="pw" bind:h="ph">
+        <Rectangle name="Pill" w=72 h=22 bind:w="pw" bind:h="ph" bind:radius="ph / 2" bind:fill="(ui.pressed == \"fx\" || ui.hover == \"fx\") ? $gr.card.hi : $gr.card" />
+        <Ellipse name="Dot" x=7 w=6 h=6 bind:y="ph / 2 - 3" bind:fill="arg.count > 0 ? $accent : $hardware" />
+        <Text name="Label" x=17 w=52 h=12 size=9 weight=500 bind:y="ph / 2 - 5" bind:w="pw - 20" bind:fill="arg.count > 0 ? $text : $text.faint" bind:text="arg.count > 0 ? \"Audio FX \" + fmt(arg.count) : \"Audio FX\"">Audio FX</Text>
+      </Frame>
+    </Component>
+    <Component name="fx.compact" w=26 h=22 arg:count="0">
+      <Frame name="Slot" w=26 h=22 bind:w="pw" bind:h="ph">
+        <Rectangle name="Pill" w=26 h=22 bind:w="pw" bind:h="ph" bind:radius="ph / 2" bind:fill="$gr.card" />
+        <Ellipse name="Dot" w=6 h=6 bind:x="pw / 2 - 3" bind:y="ph / 2 - 3" bind:fill="arg.count > 0 ? $accent : $hardware" />
+      </Frame>
+    </Component>
+  </Page>
+</Document>

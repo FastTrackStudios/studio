@@ -182,9 +182,10 @@ per-track `Arc<[Item]>`. Wire ids: `Arc<str>`-backed newtypes.
 
 ## 9. In-repo precedent
 
-- `crates/frame/src/document/proto/model.rs:21-55` — `NodeId(Uuid)` and
-  `AssetId(String)` with `#[facet(transparent)]`: typed ids already cross
-  the Facet wire in this repo.
+- Frame's `frame::document::proto` model (FastTrackStudios/frame, which
+  lived in this repo until v0.2.0) — `NodeId(Uuid)` and `AssetId(String)`
+  with `#[facet(transparent)]`: typed ids already cross the Facet wire in
+  a dependency Studio uses.
 - `crates/daw/proto/src/handle.rs` — `DawHandle`/`ProjectHandle`/
   `TrackHandle`/`SendBuilder`: the handle layer exists for tracks; items
   and takes need the same.

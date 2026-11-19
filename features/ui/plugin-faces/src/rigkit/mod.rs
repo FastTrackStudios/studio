@@ -2,7 +2,7 @@
 //! tabletop scaffolds, placing kit parts by their centre, the silkscreen
 //! and the catalog entries a unit binds.
 //!
-//! Forms follow `docs/form-factors.md`: pedals are one height (286 design
+//! Forms follow `frame:docs/form-factors.md`: pedals are one height (286 design
 //! px) and a class width (`panel.pedal`); treadles 241 × 600; amp heads
 //! 1200 × 510-ish (the plugin's faceplate aspect); cabs 900 × 900;
 //! tabletop EQ units at their render's aspect. The view system isn't built
