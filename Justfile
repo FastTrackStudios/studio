@@ -786,7 +786,7 @@ check:
 # daw-control, daw-transport-sync, utils) and the engine's and the session
 # format's (daw-standalone, session-format) run in FastTrackStudios/daw,
 # where those crates live (studio#510).
-test_packages := "timeline studio-desktop dioxus-test dock studio-architect"
+test_packages := "timeline studio-desktop dioxus-test dock studio-architect tempo-map studio-tempo-map"
 
 # Run the core test set (test_packages above).
 test:

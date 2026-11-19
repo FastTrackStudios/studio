@@ -628,6 +628,16 @@ pub static MARKER_ADD: ActionMeta = crate::actions::meta(
 );
 
 #[cfg(feature = "native")]
+pub static MARKERS_SET: ActionMeta = crate::actions::meta(
+    "TRACK_MARKERS_SET",
+    "track_markers_set",
+    "Set a track's markers",
+    "Put many named markers on a track at once (`track`; the kit's folder when left out): `markers`, each `at` (seconds) and a `name`. `replace` first removes the track's markers whose names start with it, so a set written again replaces itself (a kit piece's hits: `hit`). One undo step. Says how many were put and removed.",
+    "Tracks",
+    "",
+);
+
+#[cfg(feature = "native")]
 pub static GRID_FROM_MIDI: ActionMeta = crate::actions::meta(
     "TRACK_GRID_FROM_MIDI",
     "track_grid_from_midi",
@@ -685,6 +695,24 @@ struct MarkerArg {
     track: Option<String>,
     at: String,
     name: String,
+}
+
+/// One of many markers to put.
+#[cfg(feature = "native")]
+#[derive(Facet)]
+struct MarkerAt {
+    /// Seconds.
+    at: f64,
+    name: String,
+}
+
+/// Many markers to put on one track.
+#[cfg(feature = "native")]
+#[derive(Facet)]
+struct MarkersSetArg {
+    track: Option<String>,
+    markers: Vec<MarkerAt>,
+    replace: Option<String>,
 }
 
 /// Where to read the MIDI.
@@ -820,6 +848,7 @@ pub fn register(list: &ActionList) -> Result<(), architect::action::ActionError>
     register_edit(list)?;
     register_remove(list)?;
     register_marker_add(list)?;
+    register_markers_set(list)?;
     register_grid_from_midi(list)?;
     Ok(())
 }
@@ -966,6 +995,37 @@ fn register_marker_add(list: &ActionList) -> Result<(), architect::action::Actio
             write(daw, &project, &track, &marks)
         })?;
         Ok(id)
+    })?;
+    Ok(())
+}
+
+#[cfg(feature = "native")]
+fn register_markers_set(list: &ActionList) -> Result<(), architect::action::ActionError> {
+    list.register(&MARKERS_SET, Effect::Mutating, |a: MarkersSetArg| {
+        let (daw, project) = crate::actions::song()?;
+        let track = track_of(daw, &project, a.track.as_deref())?;
+        if let Some(bad) = a.markers.iter().find(|m| !m.at.is_finite() || m.at < 0.0) {
+            return Err(format!("{} s is not a time in the song", bad.at));
+        }
+        let put = a.markers.len();
+        let mut removed = 0_usize;
+        step(daw, &project, "Set a track's markers", || {
+            let mut marks = read(daw, &project, &track);
+            if let Some(prefix) = a.replace.as_deref().filter(|p| !p.is_empty()) {
+                let before = marks.markers.len();
+                marks.markers.retain(|m| !m.name.starts_with(prefix));
+                removed = before.saturating_sub(marks.markers.len());
+            }
+            marks
+                .markers
+                .extend(a.markers.into_iter().map(|m| TrackMarker {
+                    id: new_id(),
+                    at: m.at,
+                    name: m.name,
+                }));
+            write(daw, &project, &track, &marks)
+        })?;
+        Ok(format!("{put} markers put, {removed} removed"))
     })?;
     Ok(())
 }

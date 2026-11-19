@@ -1,0 +1,29 @@
+[package]
+name = "studio-tempo-map"
+description = "Tempo mapping as an extension: a song analysed from its stems (beats, hits, the phase check, candidates for bar 1), its map applied to the session (tempo points, time signatures), kit hits written as track markers, a map evaluated and two compared. A process, so the algorithms (features/tempo-map) are rebuilt and swapped without rebuilding the app."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "studio-tempo-map"
+path = "src/main.rs"
+
+[dependencies]
+tempo-map = { workspace = true }
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+hound = { workspace = true }
+toml = { workspace = true }
+
+[lints]
+workspace = true

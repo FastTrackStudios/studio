@@ -26,6 +26,8 @@ members = [
     "extensions/rig-status",
     "extensions/audio-settings",
     "extensions/keys",
+    "extensions/tempo-map",
+    "features/tempo-map",
     "features/timeline",
     "features/editing",
     "features/ui/dock",
@@ -837,6 +839,10 @@ studio-rig-macros = { path = "extensions/rig-macros" }
 studio-rig-status = { path = "extensions/rig-status" }
 studio-audio-settings = { path = "extensions/audio-settings" }
 studio-keys = { path = "extensions/keys" }
+# Tempo maps from stems: the algorithms and their measurements (no UI),
+# and the extension that runs them (`studio.tempo-map`, a process).
+tempo-map = { path = "features/tempo-map" }
+studio-tempo-map = { path = "extensions/tempo-map" }
 # Keyflow's chart extension and Ignition's lighting extension, linked into
 # the distribution the same way (`pane`: Ignition's room as the GPU
 # process view the app hosts).
@@ -1265,6 +1271,10 @@ opt-level = 3
 [profile.dev.package.dasp_frame]
 opt-level = 3
 [profile.dev.package.dasp_sample]
+opt-level = 3
+# Tempo maps: a mel spectrogram and a beat tracker over every stem of a
+# song; at 1 an analysis takes minutes.
+[profile.dev.package.tempo-map]
 opt-level = 3
 [profile.dev.package.rustfft]
 opt-level = 3

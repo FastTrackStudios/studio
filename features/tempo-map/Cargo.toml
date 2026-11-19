@@ -1,0 +1,35 @@
+[package]
+name = "tempo-map"
+description = "Tempo maps from a recording's separated stems: onsets per stem, beats over the weighted drum envelope, snapping to hits, the backbeat phase check, added/dropped-beat repair, bar-1 candidates, per-bar tempo points by line fit, meters and meter changes, and the measurements that say how good a map is. No UI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "tempo-map"
+path = "src/bin/tempo-map.rs"
+required-features = ["cli"]
+
+[features]
+default = []
+# The `tempo-map` program: analyse, evaluate, compare, and the benchmark
+# over the test set.
+cli = ["dep:clap"]
+
+[dependencies]
+hound = { workspace = true }
+realfft = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
