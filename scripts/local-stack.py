@@ -136,6 +136,8 @@ def slug_segment(name):
 
 
 def seed_share(vault, setlist, code, vault_id, listen="Reference"):
+    if listen not in ("Reference", "Full"):
+        die(f"listen `{listen}` for {setlist}: Reference or Full")
     """The share note SHARE_CREATE writes for STUDIO_SETLISTS_SHARE: the
     setlist's note and each of its songs' notes, for anyone with the link
     (apps/desktop/tests/node.rs builds the same)."""
@@ -233,6 +235,15 @@ def locate(path):
     return None
 
 
+def default_listen():
+    """How far a link plays when its `[[vault.shares]]` entry does not say:
+    `LOCAL_STACK_LISTEN`, else Reference."""
+    listen = os.environ.get("LOCAL_STACK_LISTEN", "Reference")
+    if listen not in ("Reference", "Full"):
+        die(f"LOCAL_STACK_LISTEN=`{listen}`: Reference or Full")
+    return listen
+
+
 def seed(dst, vault_id):
     """The demo vault at DST: its sources merged into a copy (reflinked
     where the file system can), made again when the list of sources
@@ -269,7 +280,8 @@ def seed(dst, vault_id):
         os.rename(tmp, dst)
     if os.environ.get("LOCAL_STACK_SETLIST"):
         shares = [{"setlist": os.environ["LOCAL_STACK_SETLIST"],
-                   "code": os.environ.get("LOCAL_STACK_SHARE_CODE", "merrybrightstack")}]
+                   "code": os.environ.get("LOCAL_STACK_SHARE_CODE", "merrybrightstack"),
+                   "listen": default_listen()}]
     else:
         shares = cfg.get("shares", [])
     for share in shares:
@@ -278,7 +290,7 @@ def seed(dst, vault_id):
             continue
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            seed_share(dst, share["setlist"], share["code"], vault_id)
+            seed_share(dst, share["setlist"], share["code"], vault_id, share.get("listen", default_listen()))
         print(f"{share['code']} {out.getvalue().split(' ', 1)[1].strip()}")
 
 

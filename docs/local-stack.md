@@ -42,6 +42,27 @@ state and writes the share note there, so nothing done while testing
 reaches the source. Without it the node holds Architect's demo seed
 (setlist Fall Show, `/s/ksqx75iaaaaaaaae/`).
 
+The third source, `../vaults/studio-demo/recital-vault`, is optional (a
+NOTICE when it is not there): JT's Senior Recital ready for the engine,
+each song note of the fasttrackaudio library again with its session, its
+reference bounce and a rendition of every stem attached. It is built
+outside the repo, on a reflinked copy of the recital's songs (the masters
+are never written):
+
+```sh
+cp -a --reflink=always <recital>/songs-v2 ../vaults/studio-demo/recital-songs
+link-prepare ../vaults/studio-demo/recital-songs/<song> …   # each song of the .setlist
+python3 -I scripts/link-vault.py ../vaults/studio-demo/recital-songs \
+    ../vaults/studio-demo/recital-vault \
+    --setlist "../vaults/studio-demo/recital-songs/JT's Senior Recital.setlist" \
+    --library ../vaults/fasttrackaudio/Vault --title "JT's Senior Recital (Multitracks)"
+```
+
+Its link, `/s/jtrecitstemsdeck/setlists/jts-senior-recital-multitracks/`,
+plays to Full (`listen` in its `[[vault.shares]]` entry), so the web
+app's engine opens every song's stems; the others play to Reference
+(`LOCAL_STACK_LISTEN` changes the default).
+
 The issuer, the node's environment, its sign-in and the guard that keeps
 everything on loopback are Architect's own `cargo xtask dev`, run from the
 Architect checkout the stack resolves, given this stack's ports and state.
