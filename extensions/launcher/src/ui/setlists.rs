@@ -233,10 +233,24 @@ pub fn week_page(s: &Studio, id: &str, back: EventHandler<()>) -> Element {
         top.iter().flatten().count(),
         bottom.iter().flatten().count(),
     );
+    let note = w.note.clone();
+    let title = format!("{} - {}", sr.name, sr.folder);
     rsx! {
         super::parts::Tint { hue: sr.hue }
         Back { title: "", onback: back, tools: super::parts::page_tools("download", "Download") }
         Hero { art: sr.logo.clone(), hue: sr.hue, title: sr.name.clone(), sub, count, facts }
+        // The vault's set for this week: its page, with its tabs, and its
+        // songs in the engine.
+        if let Some(note) = note {
+            button {
+                style: "margin: 12px 0 4px; height: 44px; padding: 0 20px; border-radius: 22px; border: none; background: {INK}; color: #000; font-weight: 650; font-size: 15px;",
+                onclick: move |_| {
+                    super::open_setlist(&note, &title);
+                    super::open_note(&note);
+                },
+                "Open setlist"
+            }
+        }
         Head { text: "Top set", note: songs(top_n) }
         Card { for (k, p) in top.iter().enumerate() { if k > 0 { Rule {} } {place_row(*p)} } }
         Head { text: "Bottom set", note: songs(bottom_n) }

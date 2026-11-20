@@ -48,6 +48,9 @@ pub fn distribution() -> Distribution {
         // Studio's look (docs/design/launcher/prototype): always dark, on
         // true black, its controls the prototype's pills.
         .dark()
+        // The prototype's bar: each tab named, and Search beside them.
+        .tab_labels()
+        .search_button()
         .token("desk", "#000000")
         .token("title-bar", "#000000")
         .token("sheet", "#111114")

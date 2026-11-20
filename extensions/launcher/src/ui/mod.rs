@@ -98,10 +98,56 @@ pub fn image(src: &str) -> Option<String> {
     if let Some(url) = art(src) {
         return Some(url.to_owned());
     }
-    ["data:", "http:", "https:", "blob:"]
+    if ["data:", "http:", "https:", "blob:"]
         .iter()
         .any(|p| src.starts_with(p))
-        .then(|| src.to_owned())
+    {
+        return Some(src.to_owned());
+    }
+    vault_image(src)
+}
+
+/// The vault's folder on this device, once the app says it (none in a
+/// browser).
+static ROOT: OnceLock<String> = OnceLock::new();
+
+/// A vault file's image (`Libraries/…/cover.jpg`) as a `data:` URL, read
+/// from the vault's folder on this device, once; none in a browser or
+/// when it cannot be read.
+fn vault_image(path: &str) -> Option<String> {
+    use base64::Engine as _;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    static SEEN: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(None);
+    let root = ROOT.get()?;
+    let mut seen = SEEN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let seen = seen.get_or_insert_with(HashMap::new);
+    if let Some(url) = seen.get(path) {
+        return url.clone();
+    }
+    let kind = match path
+        .rsplit('.')
+        .next()
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("png") => "image/png",
+        Some("webp") => "image/webp",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        _ => return None,
+    };
+    let url = std::fs::read(std::path::Path::new(root).join(path))
+        .ok()
+        .map(|b| {
+            format!(
+                "data:{kind};base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(b)
+            )
+        });
+    seen.insert(path.to_owned(), url.clone());
+    url
 }
 
 // ── Pages pushed inside a tab ─────────────────────────────────────────────
@@ -150,6 +196,11 @@ pub fn push(mut nav: Nav, route: Route) {
 pub fn use_studio() -> Signal<Studio> {
     let mut studio = use_signal(|| data::demo(Day::today()));
     use_future(move || async move {
+        if ROOT.get().is_none()
+            && let Some(root) = crate::host::vault_root().await
+        {
+            let _ = ROOT.set(root);
+        }
         loop {
             if let Ok(loaded) = crate::load().await {
                 let lists: Vec<_> = loaded.setlists.iter().map(|f| f.setlist.clone()).collect();
