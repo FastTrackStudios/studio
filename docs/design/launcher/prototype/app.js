@@ -140,7 +140,7 @@ const ALBUMS = {
 const RFOLDERS = [];
 // The orgs the account reaches (Task's), and whose each record is. Null: all.
 const ORGS = [["fasttrackstudio", "FastTrackStudio", 175], ["tombrooksmusic", "Tom Brooks Music", 25], ["fasttrackaudio", "FastTrack Audio", 265], ["codywright", "Cody Wright", 210], ["cbu", "CBU", 55], ["days-to-praise", "Days to Praise", 320], ["rockstars-of-tomorrow", "Rockstars of Tomorrow", 110]];
-const OWNER = { cr: "fasttrackstudio", png: "tombrooksmusic", mtl: "tombrooksmusic", joi: "tombrooksmusic", "t:Devour": "fasttrackaudio", "t:Fire": "codywright", "t:Drive To LA": "codywright" };
+const OWNER = { "t:Goodness of God": "tombrooksmusic", cr: "fasttrackstudio", png: "tombrooksmusic", mtl: "tombrooksmusic", joi: "tombrooksmusic", "t:Devour": "fasttrackaudio", "t:Fire": "codywright", "t:Drive To LA": "codywright" };
 const orgName = id => (ORGS.find(o => o[0] === id) || [, id])[1];
 let org = null;
 const PINNED = ["jt", "mb"];
@@ -719,6 +719,7 @@ const REVIEW = [
 const WHEN = { Unbreakable: "2h", "Chained Expectations": "5h", Heavify: "Yesterday", "The Ballad": "Yesterday", Intro: "Mon", "Set in Stone": "Last week", "It Knows My Name": "Nov 10", Kornesque: "Nov 8", "The Plague": "Nov 6", "Empty Focus": "Oct 30" };
 const SINGLES = [
   { title: "Devour", artist: "Beautifully Violent", stage: 3, when: "Jul 6", hue: 330 },
+  { title: "Goodness of God", artist: "Ron Kenoly", stage: 4, when: "Oct 12", hue: 0 },
   { title: "Fire", artist: "JT Wright", stage: 1, when: "Mon", hue: 40 },
   { title: "Drive To LA", artist: "Nights Out", stage: 4, when: "Last week", hue: 10 },
 ];
@@ -773,7 +774,7 @@ function wave(seed, n = 64, pins = []) {
   return `<span class="wave">${bars.map(h => `<i style="height:${Math.round(h * 100)}%"></i>`).join("")}${pins.map(c => `<b class="pin ${c.open ? "" : "done"}" style="left:${c.at * 100}%;--h:${PEOPLE[c.who]}"></b>`).join("")}</span>`;
 }
 // Real cover art where there is some; a generated one otherwise.
-const ART = { jt: "covers/jt.png", show: "covers/jt.png" };
+const ART = { jt: "covers/jt.png", show: "covers/jt.png", cr: "covers/crescendum.png", "t:Devour": "covers/bviolent.png", "t:Goodness of God": "covers/ghost.png" };
 // The ministries' own logos, for their weekly sets (JHM Sunday is JHM's).
 const LOGO = { main: "covers/main.png", cya: "covers/cya.png", hsm: "covers/hsm.png", jhm: "covers/jhm.png", jhms: "covers/jhm.png" };
 // A date as a calendar leaf: the month on a band, the day big, the weekday
@@ -1021,7 +1022,7 @@ function recRow(id) {
 }
 // The org switcher's button: what is shown, all orgs or one.
 const orgPill = () => `<button class="orgpill" data-orgs aria-label="Organization">${org ? `<span class="omark" style="--h:${ORGS.find(o => o[0] === org)[2]}">${orgName(org)[0]}</span>${esc(orgName(org))}` : `${ic("layers", 16)}All orgs`}${ic("updown", 14)}</button>`;
-const RECENT_WORK = ["cr", "t:Fire", "t:Drive To LA", "mtl", "t:Devour", "png", "joi"];
+const RECENT_WORK = ["cr", "t:Devour", "t:Fire", "t:Goodness of God", "t:Drive To LA", "mtl", "png", "joi"];
 // Records: every record as its cover, where it is and what it waits on.
 // Home has the review queue; this is the shelf.
 // ── Setlists: the folders as a filter; the weekly events as their logos,
@@ -1036,7 +1037,7 @@ function pageSetlistsTab() {
   const fs = sfold === "all" ? FOLDERS : FOLDERS.filter(f => f.tag === sfold);
   const series = fs.flatMap(f => f.series), shows = fs.flatMap(f => f.shows.map(id => ({ id, f })));
   const showDate = st => (st.date.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w* (\d{4})/) || [, "", ""]);
-  return `${bar({ title: "Setlists", tools: [{ joined: [{ label: "Filter", icon: "sliders", menu: "sfold", badge: sfold === "all" ? "" : "1" }, { label: "Library", icon: "library", open: "library" }] }, { label: "New setlist", icon: "plus", menu: "newset" }] })}
+  return `${bar({ title: "Setlists", tools: [{ joined: [{ label: "Filter", icon: "sliders", menu: "sfold", badge: sfold === "all" ? "" : "1" }, { label: "Every setlist", icon: "calendar", open: "every" }, { label: "Library", icon: "library", open: "library" }] }, { label: "New setlist", icon: "plus", menu: "newset" }] })}
     <div class="body">
       ${sfold === "all" ? "" : `<div class="onrow"><button class="onchip" data-sfold="all">${esc(FOLDERS.find(f => f.tag === sfold).name)}${ic("x", 13, 2.4)}</button></div>`}
       ${fs.filter(f => f.series.length).map(f => `<div class="dayhead">${esc(f.name)} · Recurring</div>
@@ -1056,6 +1057,27 @@ function pageSetlistsTab() {
     </div>`;
 }
 
+let EQ = "";
+function pageEvery() {
+  const rows = [...OCC.filter(o => o.songs.length || (daysFrom(o.date) >= 0 && daysFrom(o.date) < 7)).map(o => ({ date: o.date, title: o.series.name, sub: o.songs.length ? `${o.songs.length} songs · ${o.songs.slice(0, 2).map(x => x.title).join(", ")}` : "Not planned yet", logo: LOGO[o.series.id], open: o.id, ready: o.songs.length >= o.series.size, future: daysFrom(o.date) >= 0 })),
+    { date: new Date(Date.UTC(2026, 11, 12)), title: "Merry & Bright", sub: "CBU · 9 songs", art: null, open: "mb", ready: true, future: true },
+    { date: new Date(Date.UTC(2026, 4, 15)), title: "JT's Senior Recital", sub: "Recitals · 16 songs", art: ART.jt, open: "jt", ready: true }]
+    .filter(r => !EQ || r.title.toLowerCase().includes(EQ)).sort((a, b) => b.date - a.date);
+  const months = [...new Set(rows.map(r => `${r.date.getUTCFullYear()}-${r.date.getUTCMonth()}`))];
+  return `${bar({ back: true, title: "Every setlist" })}
+    <div class="body">
+      <label class="search lib">${ic("search", 16)}<input type="search" id="everyq" placeholder="Search ${rows.length} setlists" value="${esc(EQ)}" aria-label="Search setlists"></label>
+      ${months.map(m => { const [y, mo] = m.split("-").map(Number), l = rows.filter(r => r.date.getUTCFullYear() === y && r.date.getUTCMonth() === mo); return `
+        <div class="dayhead">${["January","February","March","April","May","June","July","August","September","October","November","December"][mo]} ${y}</div>
+        <div class="agenda">${l.map(r => `
+          <button class="ag" data-open="${r.open}">
+            <span class="agd"><small>${DAY[r.date.getUTCDay()].slice(0, 3)}</small><b>${r.date.getUTCDate()}</b></span>
+            ${r.logo ? `<img class="aglogo" src="${r.logo}" alt="">` : r.art ? `<img class="aglogo" src="${r.art}" alt="">` : `<span class="aglogo">${cover({ title: r.title }, 36, 150)}</span>`}
+            <span class="mid"><span class="t1">${esc(r.title)}</span><span class="s1">${esc(r.sub)}</span></span>
+            ${r.future ? (r.ready ? `<span class="st ok">${ic("check", 13, 2.6)}</span>` : `<span class="st none">Planning</span>`) : ""}
+          </button>`).join("")}</div>`; }).join("")}
+    </div>`;
+}
 // ── Records: each record as the work it is — its tracks by status, what
 // waits on review, when it is due.
 const DUE = { mtl: "Jun 15", cr: "Jan 30", png: "Feb 14" };
@@ -1079,29 +1101,14 @@ function recRow2(id) {
 let RPLAY = null;
 function pageSessions() {
   const ids = RECENT_WORK.filter(id => !org || OWNER[id] === org);
-  // One newest version from each record in turn, so the feed is not one album.
-  const byRec = ids.map(id => STUDIO.filter(x => (x.rec || x.id) === id));
-  const feed = []; for (let k = 0; feed.length < 5 && k < 12; k++) byRec.forEach(l => { if (l[k] && feed.length < 5) feed.push({ x: l[k], v: latest(l[k].title) }); });
-  return `${bar({ title: "Records", tools: [{ label: "New record", icon: "plus", act: "New album, EP or single" }] })}
+  return `${bar({ title: "Records", tools: [{ joined: [{ label: "Search", icon: "search", act: "Search records" }, { label: "New record", icon: "plus", act: "New album, EP or single" }] }] })}
     <div class="body">
-      <div class="dayhead">Records</div>
-      <div class="rshelf">${ids.map(id => { const a = ALBUMS[id], x = !a && studioOf(id); return `
-        <button class="rsh" data-open="${id}">
-          <span class="rshc">${ART[id] ? `<img src="${ART[id]}" alt="">` : cover(a || x, 0, (a || x).hue)}</span>
-          <span class="t1">${esc(a ? a.title : x.title)}</span>
-          <span class="s1">${a ? `${a.tracks.length} songs` : "Single"}</span>
-          ${stageTag(a ? a.status : x.stage)}
+      <div class="lgrid2">${ids.map(id => { const a = ALBUMS[id], x = !a && studioOf(id), list = a ? STUDIO.filter(y => y.rec === id) : [x], n = projOpen(list), st = a ? a.status : x.stage; return `
+        <button class="lg" data-open="${id}">
+          <span class="lgc">${ART[id] ? `<img src="${ART[id]}" alt="">` : cover(a || x, 0, (a || x).hue)}${n ? `<span class="rbub">${ic("message", 11, 2.4)}${n}</span>` : ""}</span>
+          <span class="lgt"><span class="t1">${esc(a ? a.title : x.title)}</span><span class="s1">${esc(a ? a.artist : x.artist)}</span>
+          <span class="lgs" style="--h:${STAGES[st][1] ?? 0}" data-none="${STAGES[st][1] == null}"><i></i>${STAGES[st][0]}${a ? ` · ${list.length} songs` : " · Single"}</span></span>
         </button>`; }).join("")}</div>
-      <div class="dayhead">Latest versions</div>
-      <div class="feed">${feed.map(({ x, v }) => { const n = v.comments.filter(c => c.open).length, on = RPLAY === x.title; return `
-        <div class="fd ${on ? "on" : ""}">
-          <button class="fdplay" data-fplay="${esc(x.title)}" aria-label="${on ? "Pause" : "Play"} ${esc(x.title)}">${ic(on ? "pause" : "play", 16, 2)}</button>
-          <button class="fdmid" data-rev="${esc(x.title)}">
-            <span class="fdtop"><span class="t1">${esc(x.title)}</span><span class="fdv">${v.what} v${v.v}</span></span>
-            ${wave(x.title.length, 48, v.comments)}
-            <span class="s1">${esc(x.rec ? ALBUMS[x.rec].title : "Single")} · ${esc(v.who)} · ${esc(v.when)}${n ? ` · <b class="openn">${n} open</b>` : ""}</span>
-          </button>
-        </div>`; }).join("")}</div>
     </div>`;
 }
 // Pick the org: all of them, or one (Architect's workspace switcher).
@@ -1338,8 +1345,8 @@ const closePalette = () => { const sh = document.getElementById("sheet"); sh.hid
 // ── Navigation ──────────────────────────────────────────────────────────────
 let tab = "home", stack = [];
 const stage = document.getElementById("stage");
-const known = id => id.startsWith("lt:") || ALBUMS[id] || RFOLDERS.some(f => f.id === id) || studioOf(id) || id === "library" || id === "allsets" || id === "tags" || seriesOf(id) || occOf(id) || PROJECTS.find(p => p.id === id);
-const pageFor = id => id.startsWith("lt:") ? pageLibrary(id) : RFOLDERS.some(f => f.id === id) ? pageRFolder(id) : studioOf(id) ? pageSong(id) : id === "library" ? pageLibraryHome() : id === "allsets" ? pageAllSets() : id === "tags" ? pageTags() : seriesOf(id) ? pageSeries(id) : occOf(id) ? pageOcc(id) : ALBUMS[id] ? pageAlbum(id) : pageProject(id);
+const known = id => id === "every" || id.startsWith("lt:") || ALBUMS[id] || RFOLDERS.some(f => f.id === id) || studioOf(id) || id === "library" || id === "allsets" || id === "tags" || seriesOf(id) || occOf(id) || PROJECTS.find(p => p.id === id);
+const pageFor = id => id === "every" ? pageEvery() : id.startsWith("lt:") ? pageLibrary(id) : RFOLDERS.some(f => f.id === id) ? pageRFolder(id) : studioOf(id) ? pageSong(id) : id === "library" ? pageLibraryHome() : id === "allsets" ? pageAllSets() : id === "tags" ? pageTags() : seriesOf(id) ? pageSeries(id) : occOf(id) ? pageOcc(id) : ALBUMS[id] ? pageAlbum(id) : pageProject(id);
 // Where a page lives when it is opened from outside a tab's own pages.
 const tabFor = id => { if (studioOf(id) || id.startsWith("f:") || ALBUMS[id]) return "sessions"; const p = PROJECTS.find(x => x.id === id); return p ? (p.kind === "Set" ? "setlists" : p.kind === "Song" ? "home" : "sessions") : "setlists"; };
 // The note the bottom slots follow: a set (live) or a record (studio).
@@ -1504,6 +1511,7 @@ document.addEventListener("submit", e => {
   RV.draft = ""; redrawReview();
 });
 document.addEventListener("input", e => {
+  if (e.target.id === "everyq") { EQ = e.target.value.toLowerCase(); const at = e.target.selectionStart; render(); const q = document.getElementById("everyq"); q.focus(); q.setSelectionRange(at, at); return; }
   if (e.target.id !== "libq") return;
   F.q = e.target.value.toLowerCase(); const at = e.target.selectionStart; render();
   const q = document.getElementById("libq"); q.focus(); q.setSelectionRange(at, at);

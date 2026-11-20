@@ -1209,3 +1209,16 @@ span.slogo { overflow: hidden; display: block; }
 .ev .t1 { font-size: 12px; }
 .ev .s1 { font-size: 11px; }
 .body > .onrow:first-child { margin: 0 0 4px; }
+
+/* Records: a library of covers */
+.lgrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px 16px; margin-top: 4px; }
+.lg { display: flex; flex-direction: column; text-align: left; min-width: 0; }
+.lgc { position: relative; display: block; aspect-ratio: 1; border-radius: 12px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); background: #111; }
+.lgc img, .lgc .cover { width: 100% !important; height: 100% !important; object-fit: cover; border-radius: 0; box-shadow: none; display: block; }
+.lgt { display: flex; flex-direction: column; padding: 8px 2px 0; min-width: 0; }
+.lg .t1 { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg .s1 { font-size: 13.5px; color: #8a8a93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lgs { display: flex; align-items: center; gap: 5px; margin-top: 4px; font-size: 11.5px; color: #6b6b74; }
+.lgs i { width: 6px; height: 6px; border-radius: 3px; background: oklch(.68 .13 var(--h)); }
+.lgs[data-none="true"] i { background: #4a4a52; }
+span.aglogo { overflow: hidden; display: block; }
