@@ -23594,6 +23594,7 @@ name = "studio-extensions"
 version = "26.10.3"
 dependencies = [
  "architect-distribution",
+ "architect-extensions",
  "daw-extension",
  "ignition-pane",
  "keyflow-extension",
@@ -23613,6 +23614,7 @@ dependencies = [
  "studio-rig-status",
  "studio-rig-switches",
  "studio-views",
+ "wasm-splitter",
 ]
 
 [[package]]
@@ -23662,6 +23664,7 @@ dependencies = [
  "serde_json",
  "setlists",
  "tokio",
+ "web-sys",
  "web-time",
 ]
 
@@ -23868,7 +23871,6 @@ dependencies = [
  "dioxus",
  "getrandom 0.3.4",
  "gloo-timers 0.3.0",
- "ignition-pane",
  "serde_json",
  "studio-extensions",
  "studio-island",

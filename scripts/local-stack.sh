@@ -700,7 +700,9 @@ build_phone() {
             dx build --platform web --profile wasm-phone --wasm-split --features wasm-split
         fi
     ) || { say "phone: the build failed (above)"; return 1; }
-    say "phone: built, $(du -sh "$(phone_dir)/wasm" | cut -f1) of wasm in $(phone_dir)"
+    # No function names or DWARF in what a phone downloads and compiles.
+    python3 "$root/scripts/wasm-strip-names.py" "$(phone_dir)"
+    say "phone: built, $(du -sh "$(phone_dir)/assets" | cut -f1) in $(phone_dir)"
 }
 
 # Studio desktop and its engine (the `daw` extension's program, copied
