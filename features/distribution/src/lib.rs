@@ -8,8 +8,9 @@
 //! Not yet in the browser build (each has a way there, none is left out
 //! by design): Studio's engine (`daw`: natively a process, in a browser
 //! session-engine's `web` engine in the page, the engine-through-a-link
-//! work), Ignition's room (`ignition-pane`: natively a GPU process view;
-//! Ignition's viz has a web renderer) and the rig views.
+//! work) and the rig views. Ignition's lighting builds for the browser
+//! (its room drawn by Ignition's web renderer), and studio-web links it
+//! itself until `stage` does.
 
 use architect_distribution::Bundle;
 
@@ -27,13 +28,14 @@ pub fn studio() -> Bundle {
 /// The window's extensions: Studio's arrangement and mixer (windows on
 /// Studio's engine, the `daw` extension, which stays a process), its
 /// lyrics, navigator and launcher, Keyflow's chart, and Ignition's
-/// lighting (natively, until its browser build lands). A development copy of any of them shadows the
+/// lighting (natively the room is a GPU process view, in a browser
+/// Ignition's web renderer in a canvas). A development copy of any of them shadows the
 /// linked one, so one can be worked on while the rest run as built.
 ///
 /// In a browser the stage begins with Studio's engine itself (`daw`,
 /// linked: its engine in the page), which the views require
-/// (`fts.session`); the launcher, Keyflow's chart and Ignition's lighting
-/// join there once their browser builds land.
+/// (`fts.session`); the launcher and Keyflow's chart join there once their
+/// browser builds land.
 #[cfg(feature = "stage")]
 #[must_use]
 pub fn stage() -> Bundle {
@@ -44,12 +46,12 @@ pub fn stage() -> Bundle {
         .member(&studio_arrangement::Arrangement)
         .member(&studio_mixer::Mixer)
         .member(&studio_lyrics::Lyrics)
-        .member(&studio_navigator::Navigator);
+        .member(&studio_navigator::Navigator)
+        .member(&ignition_pane::ext::Lighting);
     #[cfg(not(target_arch = "wasm32"))]
     let stage = stage
         .member(&studio_launcher::Launcher)
-        .member(&keyflow_extension::Keyflow)
-        .member(&ignition_pane::ext::Lighting);
+        .member(&keyflow_extension::Keyflow);
     stage
 }
 

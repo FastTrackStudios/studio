@@ -845,7 +845,7 @@ studio-tempo-map = { path = "extensions/tempo-map" }
 # the distribution the same way (`pane`: Ignition's room as the GPU
 # process view the app hosts).
 keyflow-extension = { git = "https://github.com/FastTrackStudios/keyflow", rev = "37f33703fbed2e7da66593390bc19e62e5ebc9aa" }
-ignition-pane = { git = "https://github.com/FastTrackStudios/Ignition", rev = "05678629abc8ba78e19316053743fa657dcb37f3", default-features = false, features = ["pane"] }
+ignition-pane = { git = "https://github.com/FastTrackStudios/Ignition", rev = "123921605b3ac774c6c5d4d7775c479615a41b90", default-features = false, features = ["pane"] }
 signal-rig-host = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-rigs-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-rig-shell = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
@@ -954,6 +954,10 @@ test-that = { version = "0.5.2", default-features = false }
 # re-export of 0.5 (dioxus-web's), or the two copies' `#[wasm_bindgen]`
 # classes collide at link time. See vendor/wasm-streams-0.4/FTS-PATCH.md.
 wasm-streams = { path = "vendor/wasm-streams-0.4" }
+# Ignition's fork of gdtf 0.3.0 (a parsed matrix's rows: its vendor/gdtf
+# FTS-PATCH.md), for its visualizer, which studio-web links (Ignition's
+# room in a browser). The same revision as ignition-pane.
+gdtf = { git = "https://github.com/FastTrackStudios/Ignition", rev = "123921605b3ac774c6c5d4d7775c479615a41b90" }
 # tone3000 on reqwest 0.12's ring-backed rustls instead of 0.13's `rustls`,
 # whose only backend is aws-lc-rs: aws-lc-sys's build script (a cmake C
 # build) was 186 s of a 375 s clean `cargo check --workspace`, all of it on
@@ -1354,6 +1358,12 @@ opt-level = 3
 # (upstream's renamed dioxus-core) — a dropped handler's owner is not a
 # panic, plus DioxusLabs/dioxus#5668's suspense fix (vendor v0.7.1 =
 # architect's v0.7.0 + that fix, FastTrackStudios/task#410).
+# Ignition's bevy_pbr (Bevy at its pin, plus two commits in the volumetric
+# fog: its vendor/bevy_pbr FTS-PATCH.md), for every Bevy crate of the
+# visualizer studio-web links. The same revision as ignition-pane.
+[patch."https://github.com/bevyengine/bevy"]
+bevy_pbr = { git = "https://github.com/FastTrackStudios/Ignition", rev = "123921605b3ac774c6c5d4d7775c479615a41b90" }
+
 [patch."https://github.com/DioxusLabs/dioxus"]
 dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
 dioxus-native-dom = { git = "https://www.github.com/FastTrackStudios/vendor", rev = "25bf4bcdfd0b6acb268ca91a93bc8ff8da683a96" }

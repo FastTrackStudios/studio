@@ -59,8 +59,10 @@ fn home() -> Element {
 fn mixer() -> Element {
     rsx! { Linked { view: "mixer" } }
 }
+/// The song's lighting (the setlist's More menu): Ignition's room, drawn
+/// in the page by Ignition's web renderer (its `show` view, linked in).
 fn lighting() -> Element {
-    rsx! { Linked { view: "lighting" } }
+    rsx! { ignition_pane::ext::ShowView {} }
 }
 fn progress() -> Element {
     rsx! { Linked { view: "progress" } }
