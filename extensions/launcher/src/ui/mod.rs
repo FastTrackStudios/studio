@@ -174,7 +174,9 @@ pub fn open_setlist(note: &str, title: &str) {
                 .and_then(|w| w.location().origin().ok())
                 .unwrap_or_default();
             let url = format!("{origin}/s/{code}/");
-            let _ = crate::host::run("DAW_OPEN", serde_json::json!({ "url": url })).await;
+            // `path`: the action's one declared argument, which the page's
+            // engine reads as the share link it is.
+            let _ = crate::host::run("DAW_OPEN", serde_json::json!({ "path": url })).await;
             return;
         }
         let _ = note;
