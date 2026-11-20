@@ -24,6 +24,10 @@ stage = [
     "dep:keyflow-extension",
     "dep:ignition-pane",
 ]
+# The browser build's deferred extensions as wasm chunks of their own
+# (`deferred`, Dioxus's `#[wasm_split]`): only with `dx build
+# --wasm-split`, which provides the loader they import.
+wasm-split = ["dep:wasm-splitter"]
 # Signal's rig views (docs/design/signal-extensions.md), natively: vox
 # clients of the rig engine (`studio.rig`, a process).
 rig = [
@@ -56,9 +60,13 @@ studio-navigator = { workspace = true, optional = true }
 ignition-pane = { workspace = true, optional = true }
 
 # Studio's engine in a browser: the `daw` extension linked in, its engine
-# in the page (natively `daw` is a process extension of its own).
+# in the page (natively `daw` is a process extension of its own). And the
+# window's extensions deferred there, each its own wasm chunk
+# (`architect_extensions::linked::deferred`, Dioxus's `#[wasm_split]`).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 daw-extension = { workspace = true, optional = true }
+architect-extensions = { workspace = true, features = ["linked"] }
+wasm-splitter = { workspace = true, optional = true }
 
 # The rig views, native until their browser builds land.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

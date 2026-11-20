@@ -12,6 +12,11 @@ publish = false
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# The window's extensions as wasm chunks fetched on first use: the phone's
+# build and releases (`dx build --wasm-split --features wasm-split`).
+wasm-split = ["studio-extensions/wasm-split"]
+
 [[bin]]
 name = "studio-web"
 path = "src/main.rs"
@@ -32,9 +37,6 @@ studio-island = { workspace = true }
 # The same extensions the desktop app links (one list), the window's
 # (`stage`) included: in a browser it begins with the engine in the page.
 studio-extensions = { workspace = true, features = ["stage"] }
-# Ignition's show view, drawn by studio-web's own lighting view (a
-# setlist's More > Lighting Visualizer); the extension itself is in `stage`.
-ignition-pane = { workspace = true }
 dioxus = { workspace = true, features = ["web"] }
 serde_json = { workspace = true }
 gloo-timers = { workspace = true, features = ["futures"] }

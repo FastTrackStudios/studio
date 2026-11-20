@@ -26,6 +26,11 @@ Origin rewritten to the loopback ones the issuer and the node register, so
 a phone on the tailnet signs in as the demo account with nothing changed
 in either of them.
 
+With LOCAL_STACK_FRONT_PHONE=<a built web folder> (`just phone`: dx's
+build of studio-web in the `wasm-phone` profile), another origin gets that
+build instead of dx's dev server: iOS Safari cannot compile the dev
+module. Loopback keeps the dev server and its hot reload.
+
 Loopback by default. Streams both ways (a recording's ranges, the link's live
 events), and relays an upgrade (the app's WebSocket to `/org/<slug>/vox`).
 """
@@ -56,6 +61,8 @@ class Front(BaseHTTPRequestHandler):
     auth = 0
     # This front's own port: the loopback origin the issuer and node know.
     port = 0
+    # A built web folder another origin gets instead of the dev server.
+    phone = ""
     # dx's dev server's port, when it serves the app (else the bundle).
     app = 0
 
@@ -108,6 +115,10 @@ class Front(BaseHTTPRequestHandler):
                 self.relay(self.node)
             else:
                 self.forward(self.node)
+        elif origin and self.phone and os.path.isfile(os.path.join(self.phone, "index.html")):
+            if self.command not in ("GET", "HEAD"):
+                return self.plain(405, "the phone's build is files")
+            self.static(urllib.parse.unquote(path), self.phone, spa=True)
         elif self.app:
             if self.headers.get("Upgrade"):
                 self.relay(self.app)
@@ -177,8 +188,8 @@ class Front(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
-    def static(self, path):
-        base = os.path.realpath(self.root)
+    def static(self, path, root=None, spa=False):
+        base = os.path.realpath(root or self.root)
         rel = path.lstrip("/")
         tries = [rel] if rel else []
         if not path.endswith("/"):
@@ -187,6 +198,9 @@ class Front(BaseHTTPRequestHandler):
         # The sign-in's way back is the app's page.
         if path.rstrip("/") == "/auth/callback":
             tries = ["app/index.html"]
+        # A single-page app's folder: its page for every route that is not a file.
+        if spa and not os.path.splitext(path)[1]:
+            tries = ["index.html"]
         status, found = 200, None
         for t in tries:
             full = os.path.realpath(os.path.join(base, t))
@@ -199,9 +213,23 @@ class Front(BaseHTTPRequestHandler):
                 return self.plain(404, "not found")
         ext = os.path.splitext(found)[1]
         ctype = TYPES.get(ext) or mimetypes.guess_type(found)[0] or "application/octet-stream"
+        # The phone's build gzipped (its module is tens of MB, and a phone
+        # on the tailnet may be reaching this machine through a relay).
+        encoding = None
+        if spa and ext in (".wasm", ".js", ".css") and "gzip" in (self.headers.get("Accept-Encoding") or ""):
+            packed = found + ".gz"
+            if not os.path.isfile(packed) or os.path.getmtime(packed) < os.path.getmtime(found):
+                import gzip, shutil
+                with open(found, "rb") as src, gzip.open(f"{packed}.{os.getpid()}.{id(self)}.tmp", "wb", compresslevel=6) as dst:
+                    shutil.copyfileobj(src, dst)
+                os.replace(f"{packed}.{os.getpid()}.{id(self)}.tmp", packed)
+            found, encoding = packed, "gzip"
         size = os.path.getsize(found)
         self.send_response(status)
         self.send_header("Content-Type", ctype)
+        if encoding:
+            self.send_header("Content-Encoding", encoding)
+            self.send_header("Vary", "Accept-Encoding")
         self.send_header("Content-Length", str(size))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Cache-Control", "public, max-age=31536000, immutable" if path.startswith("/assets/") else "no-store")
@@ -277,6 +305,7 @@ def main(argv):
     bind = argv[4] if len(argv) == 5 else "127.0.0.1"
     Front.port = port
     Front.auth = int(os.environ.get("LOCAL_STACK_FRONT_AUTH") or 0)
+    Front.phone = os.environ.get("LOCAL_STACK_FRONT_PHONE") or ""
     if target.startswith("http://"):
         Front.app = int(urllib.parse.urlsplit(target).port or 80)
         what = f"the app from dx at :{Front.app}"

@@ -506,7 +506,9 @@ run_web() {
     trap cleanup TERM INT EXIT
     # The issuer through the front too, for a browser on another origin
     # (the tailnet's: `just phone`).
-    LOCAL_STACK_FRONT_AUTH="$(port auth)" python3 "$root/scripts/local-stack-front.py" "http://127.0.0.1:$dx" "$web" "$server" "$bind" &
+    # and, once `just phone` built it, the phone's build of the app for
+    # that origin (iOS Safari cannot compile the dev build's module).
+    LOCAL_STACK_FRONT_AUTH="$(port auth)" LOCAL_STACK_FRONT_PHONE="$(phone_dir)" python3 "$root/scripts/local-stack-front.py" "http://127.0.0.1:$dx" "$web" "$server" "$bind" &
     pids+=($!)
     say "web: studio-web at http://127.0.0.1:$web/app/ (sign in as ada@local.test, password development-password)"
     if [ "$bind" = 0.0.0.0 ]; then
@@ -673,6 +675,34 @@ build_web() {
     fi
 }
 
+# Where dx puts studio-web's build in the `wasm-phone` profile.
+phone_dir() { echo "$(target_dir)/dx/studio-web/release/web/public"; }
+
+# studio-web for a phone (`just phone`): dx's split build in the
+# `wasm-phone` profile (the window's extensions each a chunk fetched on
+# first use), which the front hands the tailnet's origin. The dev build's module (157 MB of code) is more than
+# iOS Safari compiles: a phone sat on the splash. Not rebuilt on a save:
+# `just phone` again after a change.
+build_phone() {
+    plan_locked
+    load_plan
+    local crate="$root/apps/web" archweb cfg=()
+    archweb="$(crate_dir architect-web)"
+    [ -n "$archweb" ] && [ -d "$archweb" ] || die "phone: no architect-web crate resolved (cargo metadata)"
+    prepare_web "$crate" "$archweb"
+    mapfile -t cfg < <(cargo_config)
+    say "phone: studio-web in the wasm-phone profile, for the tailnet's origin (minutes the first time)"
+    (
+        cd "$crate"
+        if [ "${#cfg[@]}" -gt 0 ]; then
+            with_overrides dx build --platform web --profile wasm-phone --wasm-split --features wasm-split --cargo-args="${cfg[*]}"
+        else
+            dx build --platform web --profile wasm-phone --wasm-split --features wasm-split
+        fi
+    ) || { say "phone: the build failed (above)"; return 1; }
+    say "phone: built, $(du -sh "$(phone_dir)/wasm" | cut -f1) of wasm in $(phone_dir)"
+}
+
 # Studio desktop and its engine (the `daw` extension's program, copied
 # into its package), as `dx serve` builds them.
 build_desktop() {
@@ -823,7 +853,7 @@ case "$cmd" in
         esac
         ;;
     tailnet)
-        if [ "${1:-}" = off ]; then tailnet_off; else tailnet_on; fi
+        if [ "${1:-}" = off ]; then tailnet_off; else build_phone && tailnet_on; fi
         ;;
     smoke) exec bash "$root/scripts/local-stack-smoke.sh" "$@" ;;
     reset) reset ;;
