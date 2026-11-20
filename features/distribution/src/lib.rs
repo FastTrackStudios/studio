@@ -45,6 +45,21 @@ pub fn distribution() -> Distribution {
         .bundle_id(BUNDLE_ID)
         .version(env!("CARGO_PKG_VERSION"))
         .icon(Icon::svg(ICON).tray("music.note.list", "audio-x-generic"))
+        // Studio's look (docs/design/launcher/prototype): always dark, on
+        // true black, its controls the prototype's pills.
+        .dark()
+        .token("desk", "#000000")
+        .token("title-bar", "#000000")
+        .token("sheet", "#111114")
+        .token("pill", "#1a1a1f")
+        .token("rule", "#2b2b31")
+        .token("active", "rgba(255,255,255,0.10)")
+        .token("ink", "#f4f4f5")
+        .token("ink-2", "#a1a1aa")
+        .token("ink-3", "#8b8b94")
+        .token("background", "#000000")
+        .token("card", "#111114")
+        .token("border", "#1f1f24")
         .bundle(studio());
     #[cfg(feature = "stage")]
     let dist = dist.bundle(stage()).home(HOME.0, HOME.1);

@@ -57,7 +57,13 @@ fn root(s: &Studio, nav: Nav) -> Element {
         );
     }
     rsx! {
-        super::parts::Title { text: "Records" }
+        super::parts::TopBar { title: "Records",
+            super::parts::Joined {
+                super::parts::JTool { icon: "search", label: "Search records" }
+                super::parts::Hair {}
+                super::parts::JTool { icon: "plus", label: "New record" }
+            }
+        }
         div { style: "display: grid; grid-template-columns: 1fr 1fr; gap: 22px 16px; margin-top: 6px;",
             for (k, c) in cells.into_iter().enumerate() { div { key: "{k}", style: "min-width: 0;", {c} } }
         }

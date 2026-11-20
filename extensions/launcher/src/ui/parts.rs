@@ -75,6 +75,14 @@ fn shapes(name: &str) -> &'static [Shape] {
         "play" => &[P("M6 3l14 9-14 9z")],
         "pause" => &[R(6.0, 4.0, 4.0, 16.0, 1.0), R(14.0, 4.0, 4.0, 16.0, 1.0)],
         "library" => &[P("m16 6 4 14"), P("M12 6v14"), P("M8 8v12"), P("M4 4v16")],
+        "updown" => &[P("m7 15 5 5 5-5"), P("m7 9 5-5 5 5")],
+        "layers" => &[
+            P(
+                "m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z",
+            ),
+            P("m2 12 8.58 3.91a2 2 0 0 0 1.66 0L21 12"),
+            P("m2 17 8.58 3.91a2 2 0 0 0 1.66 0L21 17"),
+        ],
         "search" => &[C(11.0, 11.0, 8.0), P("m21 21-4.3-4.3")],
         "setlist" => &[
             P("M21 15V6"),
@@ -317,6 +325,86 @@ pub fn Title(text: String) -> Element {
     rsx! {
         div { style: "display: flex; align-items: center; justify-content: space-between; min-height: 52px; margin: 6px 0 4px;",
             span { style: "font-size: 34px; font-weight: 760; letter-spacing: -0.025em; color: {INK};", "{text}" }
+        }
+    }
+}
+
+/// The fill and edge of a floating control (the prototype's `--pill`,
+/// `--rule`), and its shadow.
+pub const PILL: &str =
+    "background: #1a1a1f; border: 1px solid #2b2b31; box-shadow: 0 6px 20px rgba(0,0,0,0.45);";
+
+/// A tab's bar: its title, and its tools on the right (the prototype's
+/// `.bar`: 28 px, the tools' 44 px pills on the title's line).
+#[component]
+pub fn TopBar(title: String, children: Element) -> Element {
+    rsx! {
+        div { style: "display: flex; align-items: center; gap: 10px; height: 56px; margin: 0 0 8px;",
+            span { style: "flex: 1; min-width: 0; font-size: 28px; line-height: 1.2; font-weight: 750; letter-spacing: -0.02em; color: {INK}; white-space: nowrap; overflow: hidden;",
+                "{title}"
+            }
+            div { style: "display: flex; align-items: center; gap: 8px; flex-shrink: 0;", {children} }
+        }
+    }
+}
+
+/// A round tool on its own (44 px).
+#[component]
+pub fn Tool(
+    icon: &'static str,
+    label: &'static str,
+    #[props(default)] onclick: EventHandler<()>,
+) -> Element {
+    rsx! {
+        button { "aria-label": label,
+            style: "width: 44px; height: 44px; border-radius: 22px; display: flex; align-items: center; justify-content: center; color: {INK}; padding: 0; {PILL}",
+            onclick: move |_| onclick.call(()),
+            Icon { name: icon, size: 20, stroke: 2.0 }
+        }
+    }
+}
+
+/// Tools joined in one pill, a hairline between them.
+#[component]
+pub fn Joined(children: Element) -> Element {
+    rsx! {
+        div { style: "height: 44px; border-radius: 22px; display: flex; align-items: center; padding: 0 1px; {PILL}", {children} }
+    }
+}
+
+/// A tool inside [`Joined`] (40 px, no fill of its own).
+#[component]
+pub fn JTool(
+    icon: &'static str,
+    label: &'static str,
+    #[props(default)] onclick: EventHandler<()>,
+) -> Element {
+    rsx! {
+        button { "aria-label": label,
+            style: "width: 40px; height: 40px; border-radius: 20px; border: none; background: none; display: flex; align-items: center; justify-content: center; color: {INK}; padding: 0;",
+            onclick: move |_| onclick.call(()),
+            Icon { name: icon, size: 20, stroke: 2.0 }
+        }
+    }
+}
+
+/// The hairline between joined tools.
+#[component]
+pub fn Hair() -> Element {
+    rsx! { span { style: "width: 1px; height: 20px; background: #2b2b31; flex-shrink: 0;" } }
+}
+
+/// Which organization the page shows: all of them, or one (the
+/// prototype's `.orgpill`).
+#[component]
+pub fn OrgPill(#[props(default)] onclick: EventHandler<()>) -> Element {
+    rsx! {
+        button { "aria-label": "Organization",
+            style: "height: 44px; padding: 0 12px 0 10px; border-radius: 22px; display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 650; color: {INK}; white-space: nowrap; {PILL}",
+            onclick: move |_| onclick.call(()),
+            Icon { name: "layers", size: 16, stroke: 2.0 }
+            "All orgs"
+            span { style: "color: {INK3}; display: flex;", Icon { name: "updown", size: 14, stroke: 2.0 } }
         }
     }
 }

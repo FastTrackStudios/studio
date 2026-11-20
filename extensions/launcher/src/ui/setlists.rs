@@ -34,7 +34,14 @@ fn root(s: &Studio, nav: Nav) -> Element {
         .filter(|x| !upcoming.iter().any(|u| u.id == x.id))
         .collect();
     rsx! {
-        super::parts::Title { text: "Setlists" }
+        super::parts::TopBar { title: "Setlists",
+            super::parts::Joined {
+                super::parts::JTool { icon: "library", label: "Song library" }
+                super::parts::Hair {}
+                super::parts::JTool { icon: "more", label: "Filter" }
+            }
+            super::parts::Tool { icon: "plus", label: "New setlist" }
+        }
         for (k, folder) in folders.iter().enumerate() {
             Head {
                 key: "{folder}",

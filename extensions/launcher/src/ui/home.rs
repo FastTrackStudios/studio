@@ -84,7 +84,14 @@ fn root(s: &Studio, nav: Nav) -> Element {
                               background: rgba(45,212,191,0.12); color: #2dd4bf;",
                     Icon { name: "mic", size: 17, stroke: 2.0 }
                 }
-                Lines { title: format!("Rehearsal · {name}"), sub: format!("{} · {}", r.room, r.time) }
+                div { style: "flex: 1; min-width: 0;",
+                    div { style: "font-size: 16px; font-weight: 620; color: {INK}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;",
+                        span { style: "color: #2dd4bf;", "Rehearsal" }
+                        span { style: "color: {INK3}; font-weight: 550;", " · {name}" }
+                    }
+                    div { style: "font-size: 12px; color: #85858e;", "{r.room} · {r.time}" }
+                }
+                span { style: "color: {INK3}; display: flex;", Icon { name: "chev", size: 16 } }
             }
         }));
     }
@@ -97,7 +104,7 @@ fn root(s: &Studio, nav: Nav) -> Element {
         .collect();
     let loaded = s.rigs.iter().find(|r| r.loaded);
     rsx! {
-        super::parts::Title { text: "Home" }
+        super::parts::TopBar { title: "Home", super::parts::OrgPill {} }
         div { style: "font-size: 13px; font-weight: 600; color: {INK3}; margin: 2px 2px 10px;", "{date}" }
         if let Some(w) = next {
             if let Some(sr) = s.series(&w.series) {
@@ -105,7 +112,15 @@ fn root(s: &Studio, nav: Nav) -> Element {
             }
         }
         if !week.is_empty() {
-            Head { text: "This week" }
+            div { style: "display: flex; align-items: center; justify-content: space-between; margin: 22px 2px 8px;",
+                span { style: "font-size: 13px; font-weight: 650; color: {INK3};", "This week" }
+                button { "aria-label": "Book a rehearsal",
+                    style: "height: 32px; padding: 0 12px 0 9px; border-radius: 16px; display: flex; align-items: center; gap: 5px; \
+                            font-size: 13px; font-weight: 650; color: {INK}; background: #1a1a1f; border: 1px solid #2b2b31;",
+                    Icon { name: "plus", size: 15, stroke: 2.2 }
+                    "Rehearsal"
+                }
+            }
             Card { for (k, (_, el)) in week.into_iter().enumerate() { if k > 0 { Rule { left: 66 } } {el} } }
         }
         if !review.is_empty() {
@@ -166,7 +181,11 @@ fn tonight(
                 span { style: "display: flex; align-items: center; gap: 5px;", Icon { name: "pin", size: 13, stroke: 2.0 } "{sr.room}" }
                 span { style: "display: flex; align-items: center; gap: 5px; color: rgba(240,194,75,0.7);", Icon { name: "clock", size: 13, stroke: 2.0 } "Call {sr.call}" }
                 if let Some(r) = loaded {
-                    span { style: "display: flex; align-items: center; gap: 5px; color: {hsl(r.hue, 70, 72)};", Icon { name: r.icon, size: 13, stroke: 2.0 } "{r.name}" }
+                    span { style: "display: flex; align-items: center; gap: 5px; color: {hsl(r.hue, 70, 72)};",
+                        Icon { name: r.icon, size: 13, stroke: 2.0 }
+                        "{r.name}"
+                        span { style: "color: {INK3};", "loaded" }
+                    }
                 }
                 span { style: "margin-left: auto;", Ready { n: w.places.len(), of: sr.size } }
             }
