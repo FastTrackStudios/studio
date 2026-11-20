@@ -10,22 +10,21 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="phone">
-  <section class="screen" id="home"></section>
-  <section class="screen" id="session" hidden></section>
-  <section class="screen pushed" id="set" hidden></section>
-  <section class="screen" id="signal" hidden></section>
-  <section class="screen" id="library" hidden></section>
-  <div class="dock" id="dock" hidden></div>
-  <div class="foot">
-    <nav class="tabs" aria-label="Modes">
-      <button class="tab" data-tab="home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg></button>
-      <button class="tab" data-tab="session" aria-label="Session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></button>
-      <button class="tab" data-tab="signal" aria-label="Signal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h3l3-8 4 16 3-8h7"/></svg></button>
-      <button class="tab" data-tab="library" aria-label="Library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="18" rx="1"/><path d="m17.5 4.5 3.5 15"/></svg></button>
-    </nav>
-    <button class="round" aria-label="Search" data-act="Search songs, sets and rigs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
-  </div>
+<!-- Architect's phone shell, Studio's distribution: the page (its bar over
+     its body), and the foot: the floating tab pill and the round search
+     button. The left drawer comes in from the edge. -->
+<div class="phone" id="phone">
+  <main class="stage" id="stage"></main>
+  <footer class="foot">
+    <div class="tabrow">
+      <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+      <button class="round" data-palette aria-label="Open anything"></button>
+    </div>
+  </footer>
+  <div class="scrim" id="scrim"></div>
+  <aside class="drawer" id="drawer" aria-label="Sidebar"></aside>
+  <div class="menu" id="menu" hidden></div>
+  <div class="sheet" id="sheet" hidden></div>
   <div class="toast" role="status" aria-live="polite"></div>
 </div>
 <script src="app.js"></script>
