@@ -1,0 +1,35 @@
+{
+  "windows": [
+    {
+      "id": "main",
+      "center": {
+        "group": {
+          "tabs": [
+            {
+              "pane": "studio-song",
+              "view": "studio-setlists/song",
+              "title": "Song"
+            }
+          ]
+        }
+      },
+      "docks": [
+        {
+          "side": "left",
+          "root": {
+            "group": {
+              "tabs": [
+                {
+                  "pane": "files",
+                  "view": "files",
+                  "title": "Files"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "active": "studio-song"
+}

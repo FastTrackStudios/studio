@@ -349,14 +349,58 @@ async fn libraries() -> Result<Value, String> {
 /// A song on show: its note's path, its title, its tab's properties.
 type DeckSong = (String, String, Vec<(String, String)>);
 
-/// The song on show in this deck.
+/// The song on show in this deck: linked in, the deck's own context; as a
+/// process, which is given no deck, the scope tab on show (`SCOPE_LIST`),
+/// followed as another is shown.
 fn deck_song() -> Option<DeckSong> {
-    architect_workspace::use_deck_context()
-        .filter(|c| c.kind == nav::SONG)
-        .map(|c| {
+    let linked = architect_workspace::use_deck_context();
+    let mut shown = use_signal(|| None::<DeckSong>);
+    use_future(move || async move {
+        if !architect_extensions::guest::in_process() {
+            return;
+        }
+        loop {
+            if let Ok(list) = host::run("SCOPE_LIST", Value::Null).await {
+                let now = shown_song(&list);
+                if *shown.peek() != now {
+                    shown.set(now);
+                }
+            }
+            crate::workspace_view::sleep(std::time::Duration::from_millis(400)).await;
+        }
+    });
+    match linked {
+        Some(c) => (c.kind == nav::SONG).then(|| {
             let props = c.properties.into_iter().map(|p| (p.key, p.value)).collect();
             (c.id, c.title, props)
+        }),
+        None => shown(),
+    }
+}
+
+/// The song of the scope tab on show, from `SCOPE_LIST`'s answer.
+fn shown_song(list: &Value) -> Option<DeckSong> {
+    let active = list.get("active")?.as_str()?;
+    let deck = list
+        .get("decks")?
+        .as_array()?
+        .iter()
+        .find(|d| d.get("id").and_then(Value::as_str) == Some(active))?;
+    let context = deck.get("context")?;
+    if context.get("kind").and_then(Value::as_str) != Some(nav::SONG) {
+        return None;
+    }
+    let text = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).map(str::to_owned);
+    let props = context
+        .get("properties")
+        .and_then(Value::as_array)
+        .map(|ps| {
+            ps.iter()
+                .filter_map(|p| Some((text(p, "key")?, text(p, "value")?)))
+                .collect()
         })
+        .unwrap_or_default();
+    Some((text(context, "id")?, text(context, "title")?, props))
 }
 
 /// A song's workspace: its note, read through the app, as Session's
@@ -371,13 +415,73 @@ fn SongView() -> Element {
     rsx! { SongLoader { key: "{path}", path, title, props } }
 }
 
-/// One song's workspace, once its files are read. Keyed by the note's
-/// path, so another song starts from nothing.
+/// The pane the song's note opens in, beside the song's own
+/// (`WORKSPACE_OPEN`): one a scope tab, never a second.
+const NOTE_PANE: &str = "studio-song-note";
+
+/// Song `path`'s note in a tab beside pane `pane` (this view's), in front
+/// when `in_front`. One open already (the tab showed another song a moment
+/// before this view heard of this one) is shown this song's.
+async fn open_note(path: &str, pane: &str, in_front: bool) {
+    let opened = host::run(
+        "WORKSPACE_OPEN",
+        json!({
+            "view": "vault.note",
+            "state": path,
+            "id": NOTE_PANE,
+            "at": { "beside": { "pane": pane } },
+            "focus": in_front,
+        }),
+    )
+    .await;
+    let already = opened
+        .as_ref()
+        .is_ok_and(|a| a.get("reason").and_then(Value::as_str) == Some("already_open"));
+    let shown = if already {
+        host::run(
+            "WORKSPACE_NAVIGATE",
+            json!({ "pane": NOTE_PANE, "state": path }),
+        )
+        .await
+    } else {
+        opened
+    };
+    if let Err(error) = shown {
+        tracing::warn!(%error, "setlists.song_note_not_opened");
+    }
+}
+
+/// One song's workspace, once its files are read, and its note opened
+/// beside it. Keyed by the note's path, so another song starts from
+/// nothing.
 #[component]
 fn SongLoader(path: String, title: String, props: Vec<(String, String)>) -> Element {
+    // This view's pane, as its host said last (a process hears it just
+    // after its first render): where the note opens beside.
+    let pane = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(None::<String>)));
+    if let Some((id, _)) = architect_extensions::linked::use_pane_state() {
+        *pane.borrow_mut() = Some(id);
+    }
     let loaded = use_resource(move || {
         let (path, title, props) = (path.clone(), title.clone(), props.clone());
-        async move { load(&path, &title, &props).await }
+        let pane = std::rc::Rc::clone(&pane);
+        async move {
+            let loaded = load(&path, &title, &props).await;
+            let beside = pane
+                .borrow()
+                .clone()
+                .unwrap_or_else(|| "studio-song".to_owned());
+            // In front when there is no chart to show here, and always in a
+            // process, where the workspace does not draw yet (studio#544).
+            let no_chart = loaded.chart.file.is_none() && loaded.chart.text.trim().is_empty();
+            open_note(
+                &path,
+                &beside,
+                no_chart || architect_extensions::guest::in_process(),
+            )
+            .await;
+            loaded
+        }
     });
     let ready = loaded.read().clone();
     ready.map_or_else(
@@ -499,8 +603,7 @@ fn SetlistView() -> Element {
 }
 
 /// The "Song" screenset every song starts in: its page, the navigator in
-/// the left dock.
-const SONG_LAYOUT: &str = r#"{"windows":[{"id":"main",
-  "center":{"group":{"tabs":[{"pane":"studio-song","view":"studio-setlists/song","title":"Song"}]}},
-  "docks":[{"side":"left","root":{"group":{"tabs":[{"pane":"files","view":"files","title":"Files"}]}}}]}],
-  "active":"studio-song"}"#;
+/// the left dock. A file of the package (`[[deck_templates]]`'s `layout`),
+/// which the app reads beside the manifest when it runs the program; linked
+/// in, [`Extension::files`] hands it over.
+const SONG_LAYOUT: &str = include_str!("../song.json");
