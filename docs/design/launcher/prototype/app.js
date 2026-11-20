@@ -45,6 +45,12 @@ const P = {
   transpose: '<path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/>',
   download: '<path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>',
   link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  layers: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m2 12 8.58 3.91a2 2 0 0 0 1.66 0L21 12"/><path d="m2 17 8.58 3.91a2 2 0 0 0 1.66 0L21 17"/>',
+  pause: '<rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>',
+  skip: '<path d="M5 4l10 8-10 8z" fill="currentColor"/><path d="M19 5v14"/>',
+  skipBack: '<path d="M19 20 9 12l10-8z" fill="currentColor"/><path d="M5 19V5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  branch: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7"/><path d="M18 10.5c0 4-6 3.5-10.5 6"/>',
   rig: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
   library: '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
   play: '<path d="M6 3l14 9-14 9z" fill="currentColor"/>',
@@ -105,9 +111,30 @@ const PROJECTS = [
 // stages are placeholders.
 // A track's status, and a record's: where it is on the way out.
 const STAGES = [["Writing", 320], ["Recording", 25], ["Editing", 290], ["Mixing", 65], ["Mastering", 215], ["Approval", 90], ["Complete", 150], ["Released", 180], ["Archived", null]];
-const ALBUMS = { cr: { title: "Crescendum", artist: "Crescendum", what: "Studio album", status: 3, tracks: [
-  ["Intro", 6], ["Set in Stone", 5], ["Unbreakable", 3], ["Chained Expectations", 3], ["Heavify", 2],
-  ["It Knows My Name", 2], ["Kornesque", 1], ["The Ballad", 1], ["The Plague", 1], ["Empty Focus", 0]].map(([title, stage]) => ({ title, stage })) } };
+// The records. Crescendum's track list is the demo vault's; PNG, Montreal and
+// A Journey of Immigrants are tombrooksmusic's projects on the share (their
+// song folders and mixes). Every status is a placeholder.
+const T = list => list.map(([title, stage]) => ({ title, stage }));
+const ALBUMS = {
+  cr: { title: "Crescendum", artist: "Crescendum", what: "Album", status: 3, hue: 285, when: "2h", tracks: T([
+    ["Intro", 6], ["Set in Stone", 5], ["Unbreakable", 3], ["Chained Expectations", 3], ["Heavify", 2],
+    ["It Knows My Name", 2], ["Kornesque", 1], ["The Ballad", 1], ["The Plague", 1], ["Empty Focus", 0]]) },
+  png: { title: "PNG Worship Collective Album", artist: "PNG Worship Collective", what: "Album", status: 2, hue: 150, when: "May 26", tracks: T([
+    ["All That I Am", 3], ["Lord of the Fight", 2], ["Dwelling Place", 2], ["Presence", 2], ["Life Giving Word", 1], ["He's Been Good", 2],
+    ["I Know a Name", 2], ["Seek Your Face", 2], ["Hannah's Song", 2], ["Reason Why", 2], ["Goodness of God (RK version)", 3], ["Unity", 2]]) },
+  mtl: { title: "Montreal Benefit Album", artist: "Various artists", what: "Benefit album", status: 1, hue: 5, when: "Aug 4", tracks: T([
+    ["Courage", 3], ["Radio", 3], ["Too Young", 1], ["Where to Go", 2], ["You and I", 2]]) },
+  joi: { title: "A Journey of Immigrants", artist: "Andres Jaramillo", what: "Album", status: 5, hue: 45, when: "May 8", tracks: T([
+    ["Toccata", 5], ["Ancestro", 5], ["La Zacapaneca", 5], ["Five Colombian Pieces", 5], ["Luz Entre Aguas", 5], ["El Intachable", 5], ["Etudes for Immigrants", 5]]) },
+};
+// Folders a record can sit in, nested as deep as wanted.
+// No folders by org: the org is a filter (the switcher), not a place.
+const RFOLDERS = [];
+// The orgs the account reaches (Task's), and whose each record is. Null: all.
+const ORGS = [["fasttrackstudio", "FastTrackStudio", 175], ["tombrooksmusic", "Tom Brooks Music", 25], ["fasttrackaudio", "FastTrack Audio", 265], ["codywright", "Cody Wright", 210], ["cbu", "CBU", 55], ["days-to-praise", "Days to Praise", 320], ["rockstars-of-tomorrow", "Rockstars of Tomorrow", 110]];
+const OWNER = { cr: "fasttrackstudio", png: "tombrooksmusic", mtl: "tombrooksmusic", joi: "tombrooksmusic", "t:Devour": "fasttrackaudio", "t:Fire": "codywright", "t:Drive To LA": "codywright" };
+const orgName = id => (ORGS.find(o => o[0] === id) || [, id])[1];
+let org = null;
 const PINNED = ["jt", "mb"];
 // The rigs. Presets and inputs are placeholders; one rig is loaded in the
 // engine at a time.
@@ -240,15 +267,16 @@ function pageProject(id) {
   return `${bar({ back: true, tools: [{ joined: [{ label: "Download", icon: "download", act: "Saved for offline" }, { label: "More", icon: "more", menu: "project" }] }] })}
     <div class="body">
       ${hero({ img: ART[p.id], h: p.set === "mb" ? 150 : 20, mark: set.title[0], title: titleOf(p),
-        kicker: `${songs(set).length} songs${total(set) ? " · " + dur(total(set)) : ""}`,
-        sub: [fold?.name, set.date].filter(Boolean).join(" · "),
+        kicker: "",
+        facts: calTile(...(set.date.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w* (\d{4})/) || [, "", ""]).slice(1, 3).map((v, k) => k ? v : v.slice(0, 3)), "") + `<span class="fcol">${fact("setlist", `${songs(set).length} songs`)}${total(set) ? fact("clock", dur(total(set))) : ""}</span>`,
+        sub: [fold?.name].filter(Boolean).join(" · "),
         buttons: playShare(`Playing ${set.title}`) })}
       ${set.acts.map(([name, list]) => `
         ${name ? `<div class="act">${esc(name)}<span>${list.length} songs${list.some(s => s.len) ? " · " + dur(list.reduce((t, s) => t + (s.len || 0), 0)) : ""}</span></div>` : ""}
         <div class="tracks">${list.map(x => `
           <div class="trow">
             ${songArt(x)}
-            <button class="mid" data-act="Opened ${esc(x.title)}"><span class="t1">${esc(x.title)}</span><span class="s1">${esc(x.artist || "No artist yet")}${x.len ? " · " + dur(x.len) : ""}</span></button>
+            <button class="mid" data-play="set:${p.set}|${esc(x.title)}"><span class="t1">${esc(x.title)}</span><span class="s1">${esc(x.artist || "No artist yet")}${x.len ? " · " + dur(x.len) : ""}</span></button>
             ${x.key ? `<span class="kc" style="--h:${hue(x.key.split("→")[0])}">${esc(x.key)}</span>` : `<span class="kc empty">?</span>`}
             ${dots(`${x.title}: options`)}
           </div>`).join("")}</div>`).join("")}
@@ -334,6 +362,7 @@ const prevOf = o => occsOf(o.series).filter(x => x.date < o.date && x.date.getUT
 function setCard(o, withPart) {
   const pv = prevOf(o);
   return `<button class="setrow" style="--h:${o.series.hue}" data-open="${o.id}">
+    ${LOGO[o.series.id] ? `<img class="slogo big" src="${LOGO[o.series.id]}" alt="">` : ""}
     <span class="mid"><span class="t1">${esc(o.series.name)}${withPart ? part(o) : ""}</span>${o.songs.length ? keys(o) : `<span class="s1">Nothing yet</span>`}</span>
     ${o.songs.length ? progress(o) : pv ? `<span class="copy" data-act="Copied ${esc(short(pv.date))}'s set">Copy ${MON[pv.date.getUTCMonth()]} ${pv.date.getUTCDate()}</span>` : ""}
   </button>`;
@@ -358,7 +387,7 @@ function pageAllSets() {
       </button>
       ${open ? `<div class="fbody">${f.series.map(id => { const sr = seriesOf(id), nx = nextOf(sr); return `
         <button class="srow" style="--h:${sr.hue}" data-open="${sr.id}">
-          <span class="dot"></span>
+          ${LOGO[sr.id] ? `<img class="slogo" src="${LOGO[sr.id]}" alt="">` : '<span class="dot"></span>'}
           <span class="mid"><span class="t1">${esc(sr.name)}</span><span class="s1">${esc(sr.days.map(d => (sr.note?.[d] || DAY[d]) + "s").join(" and "))}${nx ? ` · ${daysFrom(nx.date) === 0 ? "today" : daysFrom(nx.date) === 1 ? "tomorrow" : MON[nx.date.getUTCMonth()] + " " + nx.date.getUTCDate()}` : ""}</span></span>
           ${nx ? (nx.songs.length ? progress(nx) : '<span class="s1">Not planned</span>') : ""}
         </button>`; }).join("")}${f.shows.map(id => { const st = SETS[id]; return `
@@ -387,28 +416,38 @@ function pageOcc(id) {
   const o = occOf(id), sr = o.series, missing = sr.size - o.songs.length;
   const prev = occsOf(sr).filter(x => x.date < o.date && x.date.getUTCDay() === o.date.getUTCDay()).pop();
   const fold = FOLDERS.find(f => f.series.includes(sr.id));
-  let n = 0;
+  let n = 0; const roomy = o.songs.length <= 6;
   return `${bar({ back: true, tools: [{ joined: [{ label: "Download", icon: "download", act: "Saved for offline" }, { label: "More", icon: "more", menu: "project" }] }] })}
     <div class="body">
-      ${hero({ h: sr.hue, mark: sr.name.split(" ")[0], title: sr.name,
-        kicker: `${DAY[o.date.getUTCDay()].slice(0, 3)} ${MON[o.date.getUTCMonth()]} ${o.date.getUTCDate()} · ${o.songs.length} songs${o.songs.length ? " · " + dur(o.songs.reduce((t, s) => t + s.len, 0)) : ""}`,
-        sub: [fold?.name, ready(o)].filter(Boolean).join(" · "),
+      ${hero({ img: LOGO[sr.id], h: sr.hue, mark: sr.name.split(" ")[0], title: sr.name,
+        kicker: "",
+        facts: calTile(MON[o.date.getUTCMonth()], o.date.getUTCDate(), DAY[o.date.getUTCDay()].slice(0, 3)) + `<span class="fcol">${fact("setlist", `${o.songs.length} songs`)}${o.songs.length ? fact("clock", dur(o.songs.reduce((t, s) => t + s.len, 0))) : ""}</span>`,
+        sub: `${fold ? esc(fold.name) + " · " : ""}${o.songs.length >= sr.size ? `<span class="okp">${ic("check", 12, 3)}Ready</span>` : `<span class="todo2">${esc(ready(o))}</span>`}`,
         buttons: o.songs.length ? playShare(`Playing ${sr.name}, ${short(o.date)}`) : prev ? `<button class="primary" data-act="Copied ${esc(short(prev.date))}'s set">Start from ${MON[prev.date.getUTCMonth()]} ${prev.date.getUTCDate()}</button><button class="secondary" data-open="library">${ic("library", 17)}Library</button>` : "" })}
-      <div class="tracks">
-        ${o.songs.map(x => `
-          <div class="trow">
+      ${(() => {
+        // A week's set in its sections: the Top Set (two songs), then the Bottom Set.
+        const rows = [
+          ...o.songs.map((x, i) => `
+          <div class="trow roomy">
             ${songArt(x)}
-            <button class="mid" data-act="Opened ${esc(x.title)}"><span class="t1">${esc(x.title)}</span><span class="s1">${esc(x.artist)} · ${x.tempo} bpm</span></button>
-            <span class="kc" style="--h:${hue(x.key)}">${esc(x.key)}</span>
-            ${dots(`${x.title}: options`)}
-          </div>`).join("")}
-        ${Array.from({ length: Math.max(0, missing) }, () => `
-          <button class="trow add" data-open="library">
+            <button class="mid" data-play="occ:${o.id}|${esc(x.title)}">
+              <span class="t1">${esc(x.title)}</span><span class="s1">${esc(x.artist)}</span>
+              <span class="meta3">${arrChip(arrOf(o, i), `${o.id}|${i}`)}${leadsText(o, i, x)}</span>
+            </button>
+            <span class="rcol">${keyChip(x.key, keyIn(o, i, x), `${o.id}|${i}`)}</span>
+          </div>`),
+          ...Array.from({ length: Math.max(0, missing) }, () => `
+          <button class="trow roomy add" data-open="library">
             <span class="sart empty">${ic("plus", 18, 2)}</span>
-            <span class="mid"><span class="t1">Add a song</span></span>
-            <span></span><span></span>
-          </button>`).join("")}
-      </div>
+            <span class="mid"><span class="t1">Add a song</span><span class="s1">From the Library</span></span>
+            <span></span>
+          </button>`),
+        ];
+        const len = list => dur(list.reduce((t, s) => t + (s?.len || 0), 0));
+        return SECTIONS_OF(o).map(([name, from, to]) => `
+          <div class="ssec"><span>${name}</span><span>${to - from} songs${o.songs.slice(from, to).length ? " · " + len(o.songs.slice(from, to)) : ""}</span></div>
+          <div class="scard">${rows.slice(from, to).join("")}</div>`).join("");
+      })()}
     </div>`;
 }
 const rigIcon = (r, size = 24) => `<span class="rigicon" style="--h:${r.hue}">${ic(r.icon, size, 1.7)}</span>`;
@@ -451,8 +490,8 @@ const LIB = (() => {
   const add = (x, tags) => { if (seen.has(x.title)) return; seen.add(x.title);
     const e = x.tempo ? Math.min(5, Math.max(1, Math.round((x.tempo - 50) / 22))) : 3;
     out.push({ ...x, tags, energy: e }); };
-  POOL.forEach(x => add({ ...x, ready: x.ready || "cltm" }, ["worship", ...(x.tempo > 100 ? ["upbeat"] : ["ballad"])]));
-  songs(SETS.mb).forEach(x => add(x, ["christmas", ...(x.artist === "Chris Tomlin" ? ["worship"] : [])]));
+  POOL.forEach(x => add({ ...x, ready: x.ready || "cltm" }, ["worship", "contemporary", ...(x.tempo > 100 ? ["upbeat"] : ["ballad"]), ...(x.artist === "Chris Tomlin" ? ["hymns"] : [])]));
+  songs(SETS.mb).forEach(x => add(x, ["christmas", ...(x.artist === "Chris Tomlin" ? ["worship"] : []), ...(["Silent Night", "Joy to the World (Unspeakable Joy)"].includes(x.title) ? ["hymns"] : [])]));
   songs(SETS.jt).forEach(x => add(x, ["recital", OWN.includes(x.artist) ? "originals" : "covers", ...(ROCK.includes(x.artist) ? ["rock"] : [])]));
   return out.sort((a, b) => a.title.localeCompare(b.title));
 })();
@@ -484,19 +523,38 @@ function activeChips() {
 }
 const nFilters = () => activeChips().length;
 const bars = e => `<span class="energy" aria-label="Energy ${e} of 5">${[1, 2, 3, 4, 5].map(k => `<i class="${k <= e ? "on" : ""}" style="height:${4 + k * 2}px"></i>`).join("")}</span>`;
-function pageLibrary() {
-  const list = LIB.filter(matches), on = activeChips();
-  return `${bar({ back: true, title: "Library", tools: [{ label: "Tags", icon: "tag", open: "tags" }, { label: "Filter", icon: "sliders", filter: true, badge: nFilters() || "" }] })}
+// The Library opens on its tags, All songs first; a tag opens its songs.
+const cap = t => t[0].toUpperCase() + t.slice(1);
+function mosaic(list) {
+  const seen = new Set(), four = list.filter(x => x.artist && !seen.has(OWN.includes(x.artist) ? "own" : x.artist) && seen.add(OWN.includes(x.artist) ? "own" : x.artist)).slice(0, 4);
+  return `<span class="mosaic">${four.map(x => songArt(x)).join("")}</span>`;
+}
+function pageLibraryHome() {
+  const tile = (id, name, list, wide) => `<button class="ltile ${wide ? "wide" : ""}" data-ltile="${id}">${mosaic(list)}<span class="ln1">${esc(name)}</span><span class="ln2">${list.length} songs</span></button>`;
+  return `${bar({ back: true, title: "Library", tools: [{ label: "New tag", icon: "plus", act: "New tag" }] })}
+    <div class="body">
+      <div class="lgrid">
+        ${tile("all", "All songs", LIB, true)}
+        ${TAGS.map(({ t }) => tile(t, cap(t), LIB.filter(x => x.tags.includes(t)))).join("")}
+      </div>
+    </div>`;
+}
+let libBase = null;
+function pageLibrary(id) {
+  const tag = id.slice(3) === "all" ? null : id.slice(3);
+  if (libBase !== id) { libBase = id; F.tags = new Set(tag ? [tag] : []); }
+  const list = LIB.filter(matches), on = activeChips(), within = LIB.filter(x => !tag || x.tags.includes(tag));
+  return `${bar({ back: true, title: tag ? cap(tag) : "All songs", tools: [{ label: "Filter", icon: "sliders", filter: true, badge: nFilters() || "" }] })}
     <div class="body">
       <label class="search lib">${ic("search", 16)}<input type="search" id="libq" placeholder="Songs and artists" value="${esc(F.q)}" aria-label="Find a song"></label>
-      <div class="tagrow">${TAGS.map(({ t }) => `<button class="tagchip" data-ltag="${t}" aria-pressed="${F.tags.has(t)}">#${t}</button>`).join("")}</div>
+      <div class="tagrow">${TAGS.filter(({ t }) => t !== tag).map(({ t }) => `<button class="tagchip" data-ltag="${t}" aria-pressed="${F.tags.has(t)}">#${t}</button>`).join("")}</div>
       ${on.length ? `<div class="onrow">${on.map(([k, l]) => `<button class="onchip" data-unset="${k}">${esc(l)}${ic("x", 13, 2.4)}</button>`).join("")}<button class="clearall" data-unset="all">Clear</button></div>` : ""}
-      <div class="libcount">${list.length === LIB.length ? `${LIB.length} songs` : `${list.length} of ${LIB.length} songs`}</div>
+      <div class="libcount">${list.length === within.length ? `${within.length} songs` : `${list.length} of ${within.length} songs`}</div>
       <div class="list">${list.map(x => `
-        <button class="song lib" data-act="Opened ${esc(x.title)}">
-          ${keyTile(x.key)}
+        <button class="song lib" data-play="lib:${esc(id)}|${esc(x.title)}">
+          ${songArt(x)}
           <span class="mid"><span class="t1">${esc(x.title)}</span><span class="s1">${esc([x.artist, x.tempo ? x.tempo + " bpm" : null].filter(Boolean).join(" · "))}</span></span>
-          ${bars(x.energy)}
+          <span class="libr">${x.key ? `<span class="kc" style="--h:${hue(x.key.split("→")[0])}">${esc(x.key)}</span>` : ""}${bars(x.energy)}</span>
         </button>`).join("") || `<div class="empty">No song matches.<button data-unset="all">Clear the filters</button></div>`}</div>
     </div>`;
 }
@@ -552,18 +610,29 @@ const REVIEW = [
 ];
 // The songs in production, the last worked on first. A record is optional:
 // a song may be on one (Crescendum) or be a single.
+// Every song in production: each record's, and the singles (a single is a
+// record of one).
+const WHEN = { Unbreakable: "2h", "Chained Expectations": "5h", Heavify: "Yesterday", "The Ballad": "Yesterday", Intro: "Mon", "Set in Stone": "Last week", "It Knows My Name": "Nov 10", Kornesque: "Nov 8", "The Plague": "Nov 6", "Empty Focus": "Oct 30" };
+const SINGLES = [
+  { title: "Devour", artist: "Beautifully Violent", stage: 3, when: "Jul 6", hue: 330 },
+  { title: "Fire", artist: "JT Wright", stage: 1, when: "Mon", hue: 40 },
+  { title: "Drive To LA", artist: "Nights Out", stage: 4, when: "Last week", hue: 10 },
+];
 const STUDIO = [
-  ["Unbreakable", "cr", "2h"], ["Chained Expectations", "cr", "5h"], ["Heavify", "cr", "Yesterday"], ["The Ballad", "cr", "Yesterday"],
-  ["Fire", null, "Mon", "JT Wright", 1, 40], ["Intro", "cr", "Mon"], ["Drive To LA", null, "Last week", "Nights Out", 4, 10],
-  ["Set in Stone", "cr", "Last week"], ["It Knows My Name", "cr", "Nov 10"], ["Kornesque", "cr", "Nov 8"], ["The Plague", "cr", "Nov 6"], ["Empty Focus", "cr", "Oct 30"],
-].map(([title, rec, when, artist, stage, hue]) => {
-  const a = rec && ALBUMS[rec], n = a ? a.tracks.findIndex(t => t.title === title) : -1;
-  return { id: "t:" + title, title, rec, when, artist: artist || a.artist, stage: a ? a.tracks[n].stage : stage, no: n + 1, hue: a ? a.hue ?? 285 : hue };
-});
+  ...Object.entries(ALBUMS).flatMap(([rec, a]) => a.tracks.map((t, k) => ({ id: "t:" + t.title, title: t.title, rec, when: WHEN[t.title] || a.when, artist: a.artist, stage: t.stage, no: k + 1, hue: a.hue }))),
+  ...SINGLES.map(x => ({ ...x, id: "t:" + x.title, rec: null, no: 0 })),
+];
 const studioOf = id => STUDIO.find(x => x.id === id);
 const openCount = r => r.comments.filter(c => c.open).length;
 const trackReview = title => REVIEW.filter(r => r.track === title);
-const cover = (a, size, h = a.hue ?? 285, mark = a.title[0]) => `<span class="cover" style="width:${size}px;height:${size}px;--h:${h}"><i></i><b class="${mark.length > 1 ? "word" : ""}">${esc(mark)}</b></span>`;
+// Generated art: a blurred light in the cover's colour, placed and turned by
+// its title, so no two look alike. A word mark (CYA, JHM) only where one is
+// asked for; never a lone letter.
+const cover = (a, size, h = a.hue ?? 285, mark = "") => {
+  const seed = [...(a.title || "?")].reduce((n, c) => (n * 33 + c.charCodeAt(0)) % 9973, 5);
+  const x = 10 + seed % 55, y = 5 + (seed >> 3) % 50, r = seed % 360, s2 = 55 + seed % 35;
+  return `<span class="cover" style="width:${size}px;height:${size}px;--h:${h};--x:${x}%;--y:${y}%;--r:${r}deg;--s:${s2}%"><i></i><u></u></span>`;
+};
 const avatar = who => `<span class="av" style="--h:${PEOPLE[who] ?? 0}">${who[0]}</span>`;
 // A waveform, the same for the same seed.
 function wave(seed, n = 64, pins = []) {
@@ -573,20 +642,156 @@ function wave(seed, n = 64, pins = []) {
 }
 // Real cover art where there is some; a generated one otherwise.
 const ART = { jt: "covers/jt.png", show: "covers/jt.png" };
-function hero({ img, h, mark, kicker, title, sub, buttons }) {
+// The ministries' own logos, for their weekly sets (JHM Sunday is JHM's).
+const LOGO = { main: "covers/main.png", cya: "covers/cya.png", hsm: "covers/hsm.png", jhm: "covers/jhm.png", jhms: "covers/jhm.png" };
+// A date as a calendar leaf: the month on a band, the day big, the weekday
+// under it. A count and a length as small facts beside it.
+const calTile = (mon, day, wd) => `<span class="cal"><span class="cm">${mon}</span><span class="cd">${day}</span>${wd ? `<span class="cw">${wd}</span>` : ""}</span>`;
+const fact = (icon, text) => `<span class="fact2">${ic(icon, 14, 2)}${text}</span>`;
+function hero({ img, h, mark, kicker, title, sub, buttons, facts }) {
   return `<div class="tintbg" style="--h:${h}"></div>
     <div class="hero2">
       <div class="art">${img ? `<img src="${img}" alt="">` : cover({ title }, 0, h, mark)}</div>
-      <div class="hk">${kicker}</div>
-      <div class="ht">${esc(title)}</div>
-      ${sub ? `<div class="hs">${sub}</div>` : ""}
-      <div class="hb">${buttons}</div>
+      <div class="htxt">
+        ${facts ? `<div class="hfacts">${facts}</div>` : ""}
+        <div class="hbottom">
+          ${kicker ? `<div class="hk">${kicker}</div>` : ""}
+          <div class="ht">${esc(title)}</div>
+          ${sub ? `<div class="hs">${sub}</div>` : ""}
+        </div>
+      </div>
     </div>`;
 }
 const playShare = (play, share = "Share link copied") => `<button class="primary" data-act="${esc(play)}">${ic("play", 16)}Play</button><button class="secondary" data-act="${esc(share)}">${ic("link", 17)}Share</button>`;
 // A song's art: its artist's, generated where there is none (JT's own have his cover).
 const strHue = t => [...(t || "?")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
-const songArt = x => OWN.includes(x.artist) ? `<span class="sart"><img src="covers/jt.png" alt=""></span>` : `<span class="sart">${cover({ title: x.artist || x.title }, 44, strHue(x.artist || x.title), (x.artist || x.title)[0])}</span>`;
+const songArt = x => OWN.includes(x.artist) ? `<span class="sart"><img src="covers/jt.png" alt=""></span>`
+  : `<span class="sart" ${x.artist ? `data-art="${esc(x.artist)}|${esc(x.title)}"` : ""}>${cover({ title: x.title }, 44, strHue(x.artist || x.title))}</span>`;
+// ── Choosing a song's arrangement and key in a set ─────────────────────────
+function pickRef(ref) { const [id, i] = ref.split("|"), o = occOf(id); return { o, i: +i, x: o.songs[+i] }; }
+function openArr(ref) {
+  const { o, i, x } = pickRef(ref), cur = arrOf(o, i), sh = document.getElementById("sheet");
+  sh.innerHTML = `<div class="bsheet" role="dialog" aria-label="Arrangement"><div class="grab"></div>
+    <div class="bhead"><b>${esc(x.title)}</b><span class="bsub">Arrangement</span></div>
+    ${ARRS.map(([a, dt]) => `<button class="mi big" data-setarr="${ref}|${a}"><span class="ic">${ic("branch", 18)}</span><span class="mid"><span class="t1">${a}</span><span class="s1">${dur((x.len || 270) + dt)}${dt ? ` · ${dt > 0 ? "+" : "−"}${dur(Math.abs(dt))}` : " · as written"}</span></span>${a === cur ? `<span class="ck">${ic("check", 17, 2.2)}</span>` : ""}</button>`).join("")}
+  </div>`;
+  sh.classList.add("bottom"); sh.hidden = false;
+}
+function openKey(ref) {
+  const { o, i, x } = pickRef(ref), cur = keyIn(o, i, x), orig = x.key, sh = document.getElementById("sheet");
+  sh.innerHTML = `<div class="bsheet" role="dialog" aria-label="Key"><div class="grab"></div>
+    <div class="bhead"><b>${esc(x.title)}</b><span class="bsub">Key · original ${esc(orig)}</span></div>
+    <div class="keypick">${FIFTHS.map(k => { const d = steps(orig, k); return `<button class="kp ${k === cur ? "on" : ""} ${k === orig ? "orig" : ""}" style="--h:${hue(k)}" data-setkey="${ref}|${k}"><b>${k}</b><small>${k === orig ? "Original" : `${d > 0 ? "+" : "−"}${Math.abs(d)}`}</small></button>`; }).join("")}</div>
+    ${cur !== orig ? `<button class="secondary wide" data-setkey="${ref}|${orig}" style="margin-top:14px">Back to ${esc(orig)}, the original</button>` : ""}
+  </div>`;
+  sh.classList.add("bottom"); sh.hidden = false;
+}
+// ── Now Playing (architect_playhead's bar): above the tabs while something
+// is queued; a tap opens the player.
+let NP = null;
+function queueOf(ctx) {
+  const [kind, id] = ctx.split(":");
+  if (kind === "occ") return { list: occOf(id).songs, from: `${occOf(id).series.name} · ${short(occOf(id).date)}` };
+  if (kind === "set") return { list: songs(SETS[id]), from: SETS[id].title };
+  return { list: LIB.filter(matches), from: "Library" };
+}
+function play(ref) {
+  const [ctx, title] = ref.split("|"), q = queueOf(ctx);
+  NP = { ...q, i: Math.max(0, q.list.findIndex(x => x.title === title)), playing: true, pos: 0.08 };
+  drawNP();
+}
+const npSong = () => NP && NP.list[NP.i];
+function drawNP() {
+  const el = document.getElementById("np"), x = npSong();
+  if (!x) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `<button class="npmain" data-player>${songArt(x)}<span class="mid"><span class="t1">${esc(x.title)}</span><span class="s1">${esc(x.artist || NP.from)}</span></span></button>
+    <button class="npb" data-np="toggle" aria-label="${NP.playing ? "Pause" : "Play"}">${ic(NP.playing ? "pause" : "play", 20, 2)}</button>
+    <button class="npb" data-np="next" aria-label="Next">${ic("skip", 20, 2)}</button>
+    <span class="npprog"><i style="width:${NP.pos * 100}%"></i></span>`;
+  hydrateArt();
+}
+function openPlayer() {
+  const x = npSong(), sh = document.getElementById("sheet"), len = x.len || 240;
+  sh.innerHTML = `<div class="bsheet player" role="dialog" aria-label="Now playing"><div class="grab"></div>
+    <div class="pfrom">Playing from <b>${esc(NP.from)}</b></div>
+    <div class="partwork">${songArt(x)}</div>
+    <div class="ptitle">${esc(x.title)}</div><div class="partist">${esc(x.artist || "")}${x.key ? ` · <span class="kc" style="--h:${hue(x.key.split("→")[0])}">${esc(x.key)}</span>` : ""}${x.tempo ? ` · ${x.tempo} bpm` : ""}</div>
+    <div class="pscrub"><i style="width:${NP.pos * 100}%"></i><b style="left:${NP.pos * 100}%"></b></div>
+    <div class="ptimes"><span>${dur(len * NP.pos)}</span><span>-${dur(len * (1 - NP.pos))}</span></div>
+    <div class="ptrans">
+      <button data-np="prev" aria-label="Previous">${ic("skipBack", 30, 2)}</button>
+      <button class="pbig" data-np="toggle" aria-label="${NP.playing ? "Pause" : "Play"}">${ic(NP.playing ? "pause" : "play", 34, 2)}</button>
+      <button data-np="next" aria-label="Next">${ic("skip", 30, 2)}</button>
+    </div>
+    ${NP.list.length > NP.i + 1 ? `<div class="dayhead">Up next</div>${NP.list.slice(NP.i + 1, NP.i + 5).map(y => `<div class="upn">${songArt(y)}<span class="mid"><span class="t1">${esc(y.title)}</span><span class="s1">${esc(y.artist || "")}</span></span>${y.key ? `<span class="kc" style="--h:${hue(y.key.split("→")[0])}">${esc(y.key)}</span>` : ""}</div>`).join("")}` : ""}
+  </div>`;
+  sh.classList.add("bottom"); sh.hidden = false; hydrateArt();
+}
+// The real artwork, looked up live (the iTunes Search API) and kept in the
+// browser; the generated art stays where nothing matches.
+const ARTS = JSON.parse(localStorage.getItem("arts") || "{}");
+function hydrateArt() {
+  document.querySelectorAll("[data-art]").forEach(async el => {
+    const key = el.dataset.art, [artist, title] = key.split("|");
+    if (!(key in ARTS)) {
+      ARTS[key] = null;
+      try {
+        const r = await fetch(`https://itunes.apple.com/search?entity=song&limit=5&term=${encodeURIComponent(artist + " " + title)}`).then(r => r.json());
+        const hit = r.results.find(x => x.artistName.toLowerCase().includes(artist.toLowerCase().split(/[ &]/)[0]));
+        ARTS[key] = hit ? hit.artworkUrl100.replace("100x100", "200x200") : null;
+        localStorage.setItem("arts", JSON.stringify(ARTS));
+      } catch { delete ARTS[key]; return; }
+    }
+    if (ARTS[key]) document.querySelectorAll(`[data-art="${CSS.escape(key)}"]`).forEach(e => { e.innerHTML = `<img src="${ARTS[key]}" alt="">`; e.removeAttribute("data-art"); });
+  });
+}
+// Who leads a song in a set: its lead vocal and lead guitar, each optional.
+// Placeholders: the band's names are made up, Cody on guitar.
+const LEADS = { "cya@2026-11-19": [["Mia", null], ["Jake", "Cody"], ["Mia", "Cody"], ["Sam", null]] };
+function leadsOf(o, i, x) {
+  if (LEADS[o.id]) return LEADS[o.id][i] || [null, null];
+  const v = ["Mia", "Jake", "Sam"][(i + o.date.getUTCDate()) % 3];
+  return [v, x.tempo > 100 || i % 2 ? "Cody" : null];
+}
+// A week's set is two sections: the Top Set's two songs, the Bottom Set's rest.
+const SECTIONS_OF = o => { const n = Math.max(o.series.size, o.songs.length); return [["Top Set", 0, 2], ["Bottom Set", 2, n]]; };
+// The arrangement a set plays a song in: Normal, or a named one (placeholders).
+const ARR = { "cya@2026-11-19": ["Normal", "Big Intro", "Shortened", "Normal"] };
+// What a set changes on a song: its arrangement and its key. Anyone who can
+// edit the set picks them; the song's own key is its original.
+const CAN_EDIT = true;
+const OV = { "main@2026-11-22|0": { key: "C" }, "main@2026-11-22|1": { key: "E" } };
+const ARRS = [["Normal", 0], ["Shortened", -70], ["Big Intro", 25], ["Acoustic", -10], ["Extended", 45]];
+const SEMI = { C: 0, "C#": 1, Db: 1, D: 2, "D#": 3, Eb: 3, E: 4, F: 5, "F#": 6, Gb: 6, G: 7, "G#": 8, Ab: 8, A: 9, "A#": 10, Bb: 10, B: 11 };
+const steps = (from, to) => ((SEMI[to] - SEMI[from] + 18) % 12) - 6;
+const keyIn = (o, i, x) => OV[`${o.id}|${i}`]?.key || x.key;
+// The key chip: the original plain; a moved one outlined, with how far.
+function keyChip(orig, cur, ref) {
+  const d = orig && cur && orig !== cur ? steps(orig.split("→")[0], cur) : 0;
+  const tag = ref && CAN_EDIT ? `button data-keypick="${ref}"` : "span";
+  return `<${tag} class="kc ${d ? "moved" : ""}" style="--h:${hue(cur.split("→")[0])}" aria-label="${esc(cur)}${d ? `, ${Math.abs(d)} ${d > 0 ? "up" : "down"} from ${esc(orig)}` : ", the original key"}">${esc(cur)}${d ? `<sup>${d > 0 ? "+" : "−"}${Math.abs(d)}</sup>` : ""}</${tag.split(" ")[0]}>`;
+}
+const arrOf = (o, i) => OV[`${o.id}|${i}`]?.arr || (ARR[o.id] || [])[i] || ["Normal", "Big Intro", "Normal", "Shortened", "Acoustic"][(i + o.date.getUTCDate()) % 5];
+const arrChip = (a, ref) => ref && CAN_EDIT ? `<span class="arr ${a === "Normal" ? "ghost" : ""}" role="button" data-arrpick="${ref}">${ic("branch", 12, 2.2)}${esc(a)}</span>` : a === "Normal" ? "" : `<span class="arr ${a === "Normal" ? "arrnorm" : ""}">${ic("branch", 12, 2.2)}${esc(a)}</span>`;
+const ME = "Cody";
+const leadsText = (o, i, x) => {
+  const [v, g] = leadsOf(o, i, x);
+  const one = (who, role) => who === ME ? `<span class="ld me" style="--h:${(rigOf(role === "mic" ? "Keys" : "Guitar") || {}).hue ?? 30}">${ic(role, 13, 2)}You</span>` : `<span class="ld">${ic(role, 13, 2)}${who}</span>`;
+  return `${v ? one(v, "mic") : ""}${g ? one(g, "guitar") : ""}`;
+};
+// The leads as faces before the key: an initial, a mic or a guitar on it.
+const PEOPLE_HUE = { Mia: 320, Jake: 200, Sam: 140, Cody: 30 };
+function leadsFaces(o, i, x) {
+  const [v, g] = leadsOf(o, i, x);
+  const face = (who, role) => `<span class="face" style="--h:${PEOPLE_HUE[who] ?? 0}" title="${who}, lead ${role === "mic" ? "vocal" : "guitar"}">${who[0]}<i>${ic(role, 9, 2.6)}</i></span>`;
+  return `<span class="faces" aria-label="${[v && `${v} leads vocals`, g && `${g} leads guitar`].filter(Boolean).join(", ") || "No leads set"}">${v ? face(v, "mic") : ""}${g ? face(g, "guitar") : ""}</span>`;
+}
+function leadsLine(o, i, x) {
+  const [v, g] = leadsOf(o, i, x);
+  if (!v && !g) return `<span class="s1">${esc(x.artist)}</span>`;
+  return `<span class="s1 leads">${v ? `<span class="ld">${ic("mic", 13, 2)}${v}</span>` : ""}${g ? `<span class="ld">${ic("guitar", 13, 2)}${g}</span>` : ""}</span>`;
+}
 const dots = what => `<button class="dots3" aria-label="More" data-act="${esc(what)}">${ic("more", 18)}</button>`;
 let sfilter = "All";
 const stageTag = (st, target) => `<${target ? `button data-status="${esc(target)}"` : "span"} class="stgtag" style="--h:${STAGES[st][1] ?? 0}" data-none="${STAGES[st][1] == null}">${STAGES[st][0]}</${target ? "button" : "span"}>`;
@@ -614,21 +819,26 @@ function songRow(x) {
     ${stageTag(x.stage, x.id)}
   </div>`;
 }
+// Records: one list, albums and singles alike, with folders among them.
+const projOpen = list => list.reduce((t, x) => t + trackReview(x.title).reduce((u, r) => u + openCount(r), 0), 0);
+const inFolder = new Set(RFOLDERS.flatMap(f => f.items));
+function recRow(id) {
+  const a = ALBUMS[id], x = !a && studioOf(id);
+  const list = a ? STUDIO.filter(y => y.rec === id) : [x], n = projOpen(list);
+  const what = a ? `${list.length} songs` : org ? `Single · ${esc(x.artist)}` : esc(x.artist);
+  return `<div class="pjrow2">
+    <button class="pjopen" data-open="${id}">${cover(a || x, 56, (a || x).hue)}<span class="mid"><span class="t1">${esc(a ? a.title : x.title)}</span><span class="s1">${org ? "" : `<span class="orgtag">${esc(orgName(OWNER[id]))}</span>`}${what}${n ? ` · <b class="openn">${n} open</b>` : ""}</span></span></button>
+    ${stageTag(a ? a.status : x.stage, a ? "rec:" + id : id)}
+  </div>`;
+}
+// The org switcher's button: what is shown, all orgs or one.
+const orgPill = () => `<button class="orgpill" data-orgs aria-label="Organization">${org ? `<span class="omark" style="--h:${ORGS.find(o => o[0] === org)[2]}">${orgName(org)[0]}</span>${esc(orgName(org))}` : `${ic("layers", 16)}All orgs`}${ic("updown", 14)}</button>`;
+const RECENT_WORK = ["cr", "t:Fire", "t:Drive To LA", "mtl", "t:Devour", "png", "joi"];
 function pageSessions() {
-  const open = REVIEW.reduce((t, r) => t + openCount(r), 0);
-  const list = STUDIO.filter(x => sfilter === "All" || (sfilter === "Open comments" ? trackReview(x.title).some(openCount) : STAGES[x.stage][0] === sfilter));
-  const used = STAGES.map(([n]) => n).filter((n, k) => STUDIO.some(x => x.stage === k));
-  return `${bar({ title: "Records", tools: [{ label: "New track", icon: "plus", act: "New track" }] })}
+  const list = RECENT_WORK.filter(id => !org || OWNER[id] === org);
+  return `${bar({ title: "Records", tools: [{ html: orgPill() }, { label: "New record", icon: "plus", act: "New album, EP or single" }] })}
     <div class="body">
-      <div class="tagrow">${["All", "Open comments", ...used].map(f => `<button class="tagchip" data-sfilter="${f}" aria-pressed="${sfilter === f}">${f === "Open comments" ? `${open} open comments` : f}</button>`).join("")}</div>
-      <div class="list" style="margin-top:8px">${list.map(songRow).join("")}</div>
-      <div class="dayhead">Records</div>
-      ${Object.entries(ALBUMS).map(([id, a]) => `
-        <button class="srow file" data-open="${id}">
-          ${cover(a, 44)}
-          <span class="mid"><span class="t1">${esc(a.title)}</span><span class="s1">${esc(a.what)} · ${a.tracks.length} tracks</span></span>
-          ${stageTag(a.status)}
-        </button>`).join("")}
+      <div class="list">${list.map(recRow).join("") || `<div class="empty">No records in ${esc(orgName(org))} yet.</div>`}</div>
       <div class="dayhead">Session files</div>
       ${PROJECTS.filter(p => p.kind === "Production").map(p => `
         <button class="srow file" data-open="${p.id}">
@@ -637,6 +847,23 @@ function pageSessions() {
           <span class="chev">${ic("chevRight", 16)}</span>
         </button>`).join("")}
     </div>`;
+}
+// Pick the org: all of them, or one (Architect's workspace switcher).
+function openOrgs() {
+  const sh = document.getElementById("sheet");
+  const n = id => RECENT_WORK.filter(r => !id || OWNER[r] === id).length;
+  sh.innerHTML = `<div class="bsheet" role="dialog" aria-label="Organization"><div class="grab"></div>
+    <div class="bhead"><b>Organization</b></div>
+    <button class="mi big" data-org=""><span class="omark all">${ic("layers", 15)}</span>All organizations<span class="nt">${n(null)}</span>${org ? "" : `<span class="ck">${ic("check", 17, 2.2)}</span>`}</button>
+    <div class="md"></div>
+    ${ORGS.map(([id, name, h]) => `<button class="mi big" data-org="${id}"><span class="omark" style="--h:${h}">${name[0]}</span>${esc(name)}<span class="nt">${n(id) || ""}</span>${org === id ? `<span class="ck">${ic("check", 17, 2.2)}</span>` : ""}</button>`).join("")}
+  </div>`;
+  sh.classList.add("bottom"); sh.hidden = false;
+}
+function pageRFolder(id) {
+  const f = RFOLDERS.find(x => x.id === id);
+  return `${bar({ back: true, title: f.name, tools: [{ label: "New record", icon: "plus", act: `New record in ${f.name}` }] })}
+    <div class="body"><div class="list">${f.items.map(recRow).join("")}</div></div>`;
 }
 // Inside a song: its Song tab. The stage it is at, the version to hear,
 // what is open on it, and its record if it has one.
@@ -740,8 +967,8 @@ function drawer() {
   const meter = [1,1,1,1,1,1,0,0,0,0,0,0].map(o => `<i class="${o ? "on" : ""}"></i>`).join("");
   return `
     <div class="scroll">
-      <button class="switcher" data-act="Switch organization">
-        <span class="mark">F</span><span class="nm"><b>FastTrackStudio</b><span>Organization · 3 vaults</span></span>
+      <button class="switcher" data-orgs>
+        ${org ? `<span class="mark" style="background:oklch(.45 .1 ${ORGS.find(o => o[0] === org)[2]})">${orgName(org)[0]}</span>` : `<span class="mark">${ic("layers", 16)}</span>`}<span class="nm"><b>${esc(org ? orgName(org) : "All organizations")}</b><span>${org ? "Organization" : `${ORGS.length} organizations`}</span></span>
         <span style="color:var(--ink-3)">${ic("updown", 16)}</span>
       </button>
       <div class="sidetabs">${TABS.map(([id, label, icon]) => `<button class="sidetab" data-tab="${id}" aria-current="${tab === id ? "page" : "false"}">${ic(icon, 19)}${label}<span class="n">${{ home: "", sessions: 3, setlists: SERIES.length + 2, signal: RIGS.length }[id]}</span></button>`).join("")}
@@ -831,10 +1058,10 @@ const closePalette = () => { const sh = document.getElementById("sheet"); sh.hid
 // ── Navigation ──────────────────────────────────────────────────────────────
 let tab = "home", stack = [];
 const stage = document.getElementById("stage");
-const known = id => studioOf(id) || id === "library" || id === "allsets" || id === "tags" || seriesOf(id) || occOf(id) || PROJECTS.find(p => p.id === id);
-const pageFor = id => studioOf(id) ? pageSong(id) : id === "library" ? pageLibrary() : id === "allsets" ? pageAllSets() : id === "tags" ? pageTags() : seriesOf(id) ? pageSeries(id) : occOf(id) ? pageOcc(id) : ALBUMS[id] ? pageAlbum(id) : pageProject(id);
+const known = id => id.startsWith("lt:") || ALBUMS[id] || RFOLDERS.some(f => f.id === id) || studioOf(id) || id === "library" || id === "allsets" || id === "tags" || seriesOf(id) || occOf(id) || PROJECTS.find(p => p.id === id);
+const pageFor = id => id.startsWith("lt:") ? pageLibrary(id) : RFOLDERS.some(f => f.id === id) ? pageRFolder(id) : studioOf(id) ? pageSong(id) : id === "library" ? pageLibraryHome() : id === "allsets" ? pageAllSets() : id === "tags" ? pageTags() : seriesOf(id) ? pageSeries(id) : occOf(id) ? pageOcc(id) : ALBUMS[id] ? pageAlbum(id) : pageProject(id);
 // Where a page lives when it is opened from outside a tab's own pages.
-const tabFor = id => { if (studioOf(id)) return "sessions"; const p = PROJECTS.find(x => x.id === id); return p ? (p.kind === "Set" ? "setlists" : p.kind === "Song" ? "home" : "sessions") : "setlists"; };
+const tabFor = id => { if (studioOf(id) || id.startsWith("f:") || ALBUMS[id]) return "sessions"; const p = PROJECTS.find(x => x.id === id); return p ? (p.kind === "Set" ? "setlists" : p.kind === "Song" ? "home" : "sessions") : "setlists"; };
 // The note the bottom slots follow: a set (live) or a record (studio).
 const noteMode = id => studioOf(id) ? "song" : ALBUMS[id] ? "studio" : (occOf(id) || PROJECTS.find(p => p.id === id && p.kind === "Set")) ? "live" : null;
 const modeNote = () => [...stack].reverse().find(noteMode);
@@ -857,6 +1084,7 @@ function render() {
   if (top) stage.querySelector("#root").classList.add("under");
   // A cover's tint sits behind the whole page, its bar too.
   stage.querySelectorAll(".page").forEach(pg => { const t = pg.querySelector(".body > .tintbg"); if (t) pg.prepend(t); });
+  hydrateArt();
   const note = modeNote(), m = note && noteMode(note), fav = m && FAV[m];
   const cur = fav ? (view || fav.tabs[0][0]) : tab;
   document.getElementById("tabs").innerHTML = (fav ? fav.tabs : TABS).map(([id, label, icon]) => `<button class="tab ${fav ? "fav" : ""}" ${fav ? `data-view="${id}"` : `data-tab="${id}"`} aria-label="${label}" aria-current="${cur === id ? "page" : "false"}">${ic(icon, 22)}${fav ? `<span>${label}</span>` : ""}</button>`).join("");
@@ -908,11 +1136,25 @@ const refilter = () => { render(); if (!document.getElementById("sheet").hidden 
 const flip = (set, v) => set.has(v) ? set.delete(v) : set.add(v);
 document.addEventListener("click", e => {
   const el = sel => e.target.closest(sel);
+  if (el("[data-arrpick]")) return openArr(el("[data-arrpick]").dataset.arrpick);
+  if (el("[data-keypick]")) return openKey(el("[data-keypick]").dataset.keypick);
+  if (el("[data-setarr]")) { const [id, i, a] = el("[data-setarr]").dataset.setarr.split("|"); (OV[`${id}|${i}`] ||= {}).arr = a; closePalette(); return render(); }
+  if (el("[data-setkey]")) { const [id, i, k] = el("[data-setkey]").dataset.setkey.split("|"); (OV[`${id}|${i}`] ||= {}).key = k; closePalette(); return render(); }
   if (el("[data-filters]")) return openFilters();
+  if (el("[data-play]")) return play(el("[data-play]").dataset.play);
+  if (el("[data-player]")) return openPlayer();
+  if (el("[data-np]")) { const k = el("[data-np]").dataset.np;
+    if (k === "toggle") NP.playing = !NP.playing;
+    if (k === "next" && NP.i < NP.list.length - 1) { NP.i++; NP.pos = 0; }
+    if (k === "prev") { if (NP.pos > 0.05 || !NP.i) NP.pos = 0; else NP.i--; }
+    drawNP(); if (!document.getElementById("sheet").hidden && document.querySelector(".player")) openPlayer(); return; }
+  if (el("[data-ltile]")) return push("lt:" + el("[data-ltile]").dataset.ltile);
   if (el("[data-song]")) { const d = +el("[data-song]").dataset.song, n = setSongs(modeNote()).length; songIx = Math.max(0, Math.min(n - 1, songIx + d)); return render(); }
   if (el("[data-rfilter]")) { rfilter = el("[data-rfilter]").dataset.rfilter; return render(); }
   if (el("[data-rtrack]")) { rtrack = null; return render(); }
   if (el("[data-track]")) { rtrack = el("[data-track]").dataset.track; rfilter = "All"; return setView("review"); }
+  if (el("[data-orgs]")) { setSide(false); return openOrgs(); }
+  if (el("[data-org]")) { org = el("[data-org]").dataset.org || null; closePalette(); return render(); }
   if (el("[data-setstatus]")) { const [tg, k] = el("[data-setstatus]").dataset.setstatus.split("|"); setStatus(tg, +k); closePalette(); return render(); }
   if (el("[data-status]")) { e.stopPropagation(); return openStatus(el("[data-status]").dataset.status); }
   if (el("[data-sfilter]")) { sfilter = el("[data-sfilter]").dataset.sfilter; return render(); }
@@ -925,7 +1167,7 @@ document.addEventListener("click", e => {
   if (el("[data-fready]")) { flip(F.ready, el("[data-fready]").dataset.fready); return refilter(); }
   if (el("[data-frested]")) { F.rested = !F.rested; return refilter(); }
   if (el("[data-unset]")) { const k = el("[data-unset]").dataset.unset;
-    if (k === "all") { F.keys.clear(); F.energy.clear(); F.tempo.clear(); F.ready.clear(); F.rested = false; F.tags.clear(); }
+    if (k === "all") { F.keys.clear(); F.energy.clear(); F.tempo.clear(); F.ready.clear(); F.rested = false; F.tags = new Set(libBase && libBase !== "lt:all" ? [libBase.slice(3)] : []); }
     else if (k === "rested") F.rested = false; else F[k].clear();
     return refilter(); }
   if (el("[data-fold]")) { flip(folded, el("[data-fold]").dataset.fold); return render(); }
@@ -956,7 +1198,8 @@ addEventListener("touchstart", e => { const t = e.touches[0], ph = document.getE
 addEventListener("touchmove", e => { if (sx == null) return; const t = e.touches[0], dx = t.clientX - sx; if (Math.abs(t.clientY - sy) > Math.abs(dx)) { sx = null; return; } if (!side && dx > 50) { setSide(true); sx = null; } else if (side && dx < -50) { setSide(false); sx = null; } }, { passive: true });
 
 // #/projects, #/projects/jt, #/rigs, …; "!side" with the sidebar out.
-const h = (location.hash || "#/home").replace("#/projects", "#/home").replace("!filters", ""), wantSide = h.includes("!side"), wantFilters = location.hash.includes("!filters");
+const H0 = decodeURIComponent(location.hash);
+const h = (location.hash || "#/home").replace("#/projects", "#/home").replace("!filters", "").replace("!player", "").replace(/!(key|arr)=[^!]+/, ""), wantSide = h.includes("!side"), wantFilters = location.hash.includes("!filters"), wantPlayer = location.hash.includes("!player");
 const [, first, ...rest] = h.replace("!side", "").split("~")[0].split("/");
 view = h.replace("!side", "").split("~")[1] || null;
 tab = PAGES[first] ? first : "home";
@@ -964,3 +1207,8 @@ stack = rest.filter(known);
 render();
 if (wantSide) setSide(true);
 if (wantFilters) openFilters();
+NP = { ...queueOf("occ:cya@2026-11-19"), i: 0, playing: false, pos: 0.35 }; drawNP();
+if (wantPlayer) openPlayer();
+const pk = H0.match(/!(key|arr)=([^!]+)/); if (pk) (pk[1] === "key" ? openKey : openArr)(pk[2]);
+// The playhead moves while playing.
+setInterval(() => { if (NP && NP.playing) { NP.pos = Math.min(1, NP.pos + 0.004); const b = document.querySelector(".npprog i"); if (b) b.style.width = NP.pos * 100 + "%"; } }, 1000);
