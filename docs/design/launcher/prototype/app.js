@@ -51,6 +51,8 @@ const P = {
   skipBack: '<path d="M19 20 9 12l10-8z" fill="currentColor"/><path d="M5 19V5"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   branch: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7"/><path d="M18 10.5c0 4-6 3.5-10.5 6"/>',
+  pencil: '<path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>',
+  grip: '<path d="M4 9h16"/><path d="M4 15h16"/>',
   rig: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
   library: '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
   play: '<path d="M6 3l14 9-14 9z" fill="currentColor"/>',
@@ -207,7 +209,7 @@ function bar({ back, title, tools = [] }) {
     ? `<div class="joined">${g.joined.map((t, i) => (i ? '<span class="hair"></span>' : "") + toolBtn(t)).join("")}</div>`
     : toolBtn(g)).join("")}</div></div>`;
 }
-const toolBtn = t => `<button class="tool" aria-label="${esc(t.label)}" ${t.filter ? "data-filters" : t.open ? `data-open="${t.open}"` : t.menu ? `data-menu="${t.menu}"` : `data-act="${esc(t.act || t.label)}"`}>${ic(t.icon, 20)}${t.badge ? `<span class="count">${t.badge}</span>` : ""}</button>`;
+const toolBtn = t => `<button class="tool" aria-label="${esc(t.label)}" ${t.label === "Edit" ? "data-edit" : t.filter ? "data-filters" : t.open ? `data-open="${t.open}"` : t.menu ? `data-menu="${t.menu}"` : `data-act="${esc(t.act || t.label)}"`}>${ic(t.icon, 20)}${t.badge ? `<span class="count">${t.badge}</span>` : ""}</button>`;
 
 let toastT;
 function toast(msg) { const t = document.querySelector(".toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1600); }
@@ -417,12 +419,13 @@ function pageOcc(id) {
   const prev = occsOf(sr).filter(x => x.date < o.date && x.date.getUTCDay() === o.date.getUTCDay()).pop();
   const fold = FOLDERS.find(f => f.series.includes(sr.id));
   let n = 0; const roomy = o.songs.length <= 6;
-  return `${bar({ back: true, tools: [{ joined: [{ label: "Download", icon: "download", act: "Saved for offline" }, { label: "More", icon: "more", menu: "project" }] }] })}
+  const tools = [{ joined: [{ label: "Download", icon: "download", act: "Saved for offline" }, { label: "More", icon: "more", menu: "project" }] }];
+  return `${bar({ back: true, tools })}
     <div class="body">
       ${hero({ img: LOGO[sr.id], h: sr.hue, mark: sr.name.split(" ")[0], title: sr.name,
         kicker: "",
         facts: calTile(MON[o.date.getUTCMonth()], o.date.getUTCDate(), DAY[o.date.getUTCDay()].slice(0, 3)) + `<span class="fcol">${fact("setlist", `${o.songs.length} songs`)}${o.songs.length ? fact("clock", dur(o.songs.reduce((t, s) => t + s.len, 0))) : ""}</span>`,
-        sub: `${fold ? esc(fold.name) + " · " : ""}${o.songs.length >= sr.size ? `<span class="okp">${ic("check", 12, 3)}Ready</span>` : `<span class="todo2">${esc(ready(o))}</span>`}`,
+        sub: `${fold ? esc(fold.name) : ""}${o.songs.length < sr.size ? ` · <span class="todo2">${esc(ready(o))}</span>` : ""}`,
         buttons: o.songs.length ? playShare(`Playing ${sr.name}, ${short(o.date)}`) : prev ? `<button class="primary" data-act="Copied ${esc(short(prev.date))}'s set">Start from ${MON[prev.date.getUTCMonth()]} ${prev.date.getUTCDate()}</button><button class="secondary" data-open="library">${ic("library", 17)}Library</button>` : "" })}
       ${(() => {
         // A week's set in its sections: the Top Set (two songs), then the Bottom Set.
@@ -432,9 +435,9 @@ function pageOcc(id) {
             ${songArt(x)}
             <button class="mid" data-play="occ:${o.id}|${esc(x.title)}">
               <span class="t1">${esc(x.title)}</span><span class="s1">${esc(x.artist)}</span>
-              <span class="meta3">${arrChip(arrOf(o, i), `${o.id}|${i}`)}${leadsText(o, i, x)}</span>
+              <span class="meta3">${leadsText(o, i, x)}</span>
             </button>
-            <span class="rcol">${keyChip(x.key, keyIn(o, i, x), `${o.id}|${i}`)}</span>
+            <span class="rcol">${keyChip(x.key, keyIn(o, i, x), `${o.id}|${i}`)}<span class="arrsm ${arrOf(o, i) === "Normal" ? "none" : ""}" role="button" data-arrpick="${o.id}|${i}" aria-label="Arrangement: ${esc(arrOf(o, i))}">${ic("branch", 11, 2.4)}${arrOf(o, i) === "Normal" ? "" : esc(arrOf(o, i))}</span></span>
           </div>`),
           ...Array.from({ length: Math.max(0, missing) }, () => `
           <button class="trow roomy add" data-open="library">
@@ -761,6 +764,7 @@ const ARR = { "cya@2026-11-19": ["Normal", "Big Intro", "Shortened", "Normal"] }
 // What a set changes on a song: its arrangement and its key. Anyone who can
 // edit the set picks them; the song's own key is its original.
 const CAN_EDIT = true;
+let editing = false;
 const OV = { "main@2026-11-22|0": { key: "C" }, "main@2026-11-22|1": { key: "E" } };
 const ARRS = [["Normal", 0], ["Shortened", -70], ["Big Intro", 25], ["Acoustic", -10], ["Extended", 45]];
 const SEMI = { C: 0, "C#": 1, Db: 1, D: 2, "D#": 3, Eb: 3, E: 4, F: 5, "F#": 6, Gb: 6, G: 7, "G#": 8, Ab: 8, A: 9, "A#": 10, Bb: 10, B: 11 };
@@ -770,10 +774,12 @@ const keyIn = (o, i, x) => OV[`${o.id}|${i}`]?.key || x.key;
 function keyChip(orig, cur, ref) {
   const d = orig && cur && orig !== cur ? steps(orig.split("→")[0], cur) : 0;
   const tag = ref && CAN_EDIT ? `button data-keypick="${ref}"` : "span";
-  return `<${tag} class="kc ${d ? "moved" : ""}" style="--h:${hue(cur.split("→")[0])}" aria-label="${esc(cur)}${d ? `, ${Math.abs(d)} ${d > 0 ? "up" : "down"} from ${esc(orig)}` : ", the original key"}">${esc(cur)}${d ? `<sup>${d > 0 ? "+" : "−"}${Math.abs(d)}</sup>` : ""}</${tag.split(" ")[0]}>`;
+  // The key big in its colour; when the set moved it, how far and from what.
+  return `<${tag} class="key2 ${d ? "moved" : ""}" style="--h:${hue(cur.split("→")[0])}" aria-label="Key ${esc(cur)}${d ? `, ${Math.abs(d)} ${d > 0 ? "up" : "down"} from ${esc(orig)}` : ", the original key"}">
+    <b>${esc(cur)}</b>${d ? `<small>${d > 0 ? "+" : "−"}${Math.abs(d)}</small>` : ""}</${tag.split(" ")[0]}>`;
 }
 const arrOf = (o, i) => OV[`${o.id}|${i}`]?.arr || (ARR[o.id] || [])[i] || ["Normal", "Big Intro", "Normal", "Shortened", "Acoustic"][(i + o.date.getUTCDate()) % 5];
-const arrChip = (a, ref) => ref && CAN_EDIT ? `<span class="arr ${a === "Normal" ? "ghost" : ""}" role="button" data-arrpick="${ref}">${ic("branch", 12, 2.2)}${esc(a)}</span>` : a === "Normal" ? "" : `<span class="arr ${a === "Normal" ? "arrnorm" : ""}">${ic("branch", 12, 2.2)}${esc(a)}</span>`;
+const arrChip = (a, ref) => ref && CAN_EDIT ? `<span class="arr ghost ${a === "Normal" ? "" : "set"}" role="button" data-arrpick="${ref}" aria-label="Arrangement: ${esc(a)}">${ic("branch", 12, 2.2)}</span>` : a === "Normal" ? "" : `<span class="arr ${a === "Normal" ? "arrnorm" : ""}">${ic("branch", 12, 2.2)}${esc(a)}</span>`;
 const ME = "Cody";
 const leadsText = (o, i, x) => {
   const [v, g] = leadsOf(o, i, x);
@@ -1110,7 +1116,7 @@ function openMore() {
   </div>`;
   sh.classList.add("bottom"); sh.hidden = false;
 }
-function showTab(t) { tab = t; stack = []; view = null; setSide(false); render(); }
+function showTab(t) { editing = false; tab = t; stack = []; view = null; setSide(false); render(); }
 function push(id) {
   closePalette();
   if (!known(id)) return;
@@ -1125,7 +1131,7 @@ function pop() {
   if (!stack.length) return;
   const top = stage.querySelector("#top"), root = stage.querySelector("#root");
   root.classList.remove("under"); top.classList.add("enter");
-  setTimeout(() => { stack.pop(); if (!modeNote()) view = null; render(); }, 280);
+  setTimeout(() => { stack.pop(); editing = false; if (!modeNote()) view = null; render(); }, 280);
 }
 let side = false;
 function setSide(open) { side = open; document.getElementById("phone").classList.toggle("side-open", open); history.replaceState(null, "", location.hash.replace("!side", "") + (open ? "!side" : "")); }
@@ -1136,6 +1142,7 @@ const refilter = () => { render(); if (!document.getElementById("sheet").hidden 
 const flip = (set, v) => set.has(v) ? set.delete(v) : set.add(v);
 document.addEventListener("click", e => {
   const el = sel => e.target.closest(sel);
+  if (el("[data-edit]")) { editing = !editing; return render(); }
   if (el("[data-arrpick]")) return openArr(el("[data-arrpick]").dataset.arrpick);
   if (el("[data-keypick]")) return openKey(el("[data-keypick]").dataset.keypick);
   if (el("[data-setarr]")) { const [id, i, a] = el("[data-setarr]").dataset.setarr.split("|"); (OV[`${id}|${i}`] ||= {}).arr = a; closePalette(); return render(); }
@@ -1199,7 +1206,7 @@ addEventListener("touchmove", e => { if (sx == null) return; const t = e.touches
 
 // #/projects, #/projects/jt, #/rigs, …; "!side" with the sidebar out.
 const H0 = decodeURIComponent(location.hash);
-const h = (location.hash || "#/home").replace("#/projects", "#/home").replace("!filters", "").replace("!player", "").replace(/!(key|arr)=[^!]+/, ""), wantSide = h.includes("!side"), wantFilters = location.hash.includes("!filters"), wantPlayer = location.hash.includes("!player");
+const h = (location.hash || "#/home").replace("#/projects", "#/home").replace("!filters", "").replace("!player", "").replace(/!(key|arr)=[^!]+/, "").replace("!edit", ""), wantSide = h.includes("!side"), wantFilters = location.hash.includes("!filters"), wantPlayer = location.hash.includes("!player");
 const [, first, ...rest] = h.replace("!side", "").split("~")[0].split("/");
 view = h.replace("!side", "").split("~")[1] || null;
 tab = PAGES[first] ? first : "home";
@@ -1209,6 +1216,7 @@ if (wantSide) setSide(true);
 if (wantFilters) openFilters();
 NP = { ...queueOf("occ:cya@2026-11-19"), i: 0, playing: false, pos: 0.35 }; drawNP();
 if (wantPlayer) openPlayer();
+if (H0.includes("!edit")) { editing = true; render(); }
 const pk = H0.match(/!(key|arr)=([^!]+)/); if (pk) (pk[1] === "key" ? openKey : openArr)(pk[2]);
 // The playhead moves while playing.
 setInterval(() => { if (NP && NP.playing) { NP.pos = Math.min(1, NP.pos + 0.004); const b = document.querySelector(".npprog i"); if (b) b.style.width = NP.pos * 100 + "%"; } }, 1000);

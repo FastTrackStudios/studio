@@ -793,3 +793,102 @@ button.kc { cursor: pointer; }
 .setrow .t1 { overflow: visible; white-space: nowrap; }
 .setrow .part { flex: none; }
 .setrow .copy { padding: 0 10px; font-size: 12.5px; }
+
+/* The set page, polished */
+.hero2 { padding: 4px 0 8px; gap: 16px; }
+.hero2 .art { width: 96px; border-radius: 12px; box-shadow: 0 10px 28px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.06); }
+.hero2 .ht { font-size: 26px; font-weight: 760; letter-spacing: -0.025em; }
+.hero2 .hs { font-size: 14px; color: var(--ink-3); margin-top: 2px; }
+.ssec { padding: 18px 6px 8px; font-size: 11.5px; letter-spacing: .08em; font-weight: 700; color: #7c7c86; }
+.ssec span:last-child { font-size: 12px; color: #6b6b74; font-variant-numeric: tabular-nums; }
+.scard { background: #111114; border: 1px solid #1c1c21; border-radius: 16px; }
+.scard .trow.roomy { padding: 0 14px 0 12px; gap: 12px; }
+.scard .trow.roomy + .trow.roomy::before { left: 72px; background: #1f1f24; }
+.trow.roomy .sart, .trow.roomy .sart img, .trow.roomy .sart .cover { border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+.trow.roomy .t1 { font-size: 16px; font-weight: 620; letter-spacing: -0.01em; }
+.trow.roomy .s1 { color: #8a8a93; font-size: 13px; }
+.meta3 { gap: 4px 12px; margin-top: 4px; }
+.meta3:empty { display: none; }
+.meta3 .ld { font-size: 12.5px; color: #8a8a93; font-weight: 560; }
+.arr { height: 20px; font-size: 11.5px; letter-spacing: .01em; }
+.trow.roomy .rcol { align-self: center; padding-top: 0; flex-direction: row; align-items: center; gap: 6px; }
+.kc { min-width: 38px; height: 26px; border-radius: 8px; font-size: 12.5px; }
+.grip { color: #5a5a62; display: grid; place-items: center; width: 22px; }
+.donebtn { height: 40px; padding: 0 16px; border-radius: 20px; background: var(--ink); color: var(--desk); font-weight: 700; font-size: 15px; }
+.hero2 .art { width: 86px; }
+.hero2 .ht { font-size: 24px; }
+.hero2 { padding: 0 0 4px; }
+.ssec { padding: 12px 6px 7px; }
+.meta3 .ld.me { color: oklch(.82 .12 var(--h)); font-weight: 650; }
+.meta3 { flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
+.meta3 > * { flex: none; }
+.trow.roomy:has(.grip) .meta3 { gap: 4px 8px; }
+.trow.roomy:has(.grip) .arr { padding: 0 7px 0 5px; }
+.trow.roomy:has(.grip) { padding-right: 8px; gap: 10px; }
+.grip { width: 18px; }
+/* One mode: Normal is a small branch you can tap, a named arrangement a chip */
+.arr.ghost { width: 22px; padding: 0; justify-content: center; box-shadow: none; background: var(--surface-2); color: #6b6b74; }
+
+/* The key: the letter big in its colour on a soft wash; moved, how far and from what */
+.key2 { min-width: 56px; padding: 6px 8px 5px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 1px; background: oklch(.22 .04 var(--h)); }
+.key2 b { font-size: 19px; font-weight: 750; line-height: 1; letter-spacing: -0.01em; color: oklch(.86 .12 var(--h)); }
+.key2 small { font-size: 10px; font-weight: 650; white-space: nowrap; color: var(--live); }
+.key2 small.orig { color: #6b6b74; font-weight: 560; }
+.key2.moved { box-shadow: inset 0 0 0 1px rgba(240,194,75,.35); }
+.key2 { min-width: 0; width: 50px; height: 44px; padding: 0; justify-content: center; gap: 3px; border-radius: 11px; }
+.key2 b { font-size: 18px; }
+.key2 small { font-size: 9.5px; letter-spacing: .01em; }
+/* The key as before, quiet; a moved one only a faint +3 beside it */
+.key2 { width: auto; min-width: 40px; height: 28px; padding: 0 9px; flex-direction: row; align-items: baseline; justify-content: center; gap: 3px; border-radius: 8px; box-shadow: none !important; padding-top: 5px; }
+.key2 b { font-size: 14px; font-weight: 700; }
+.key2 small { font-size: 10px; font-weight: 600; color: #6b6b74; }
+/* The phone has room: a bigger cover, a bigger title */
+.hero2 .art { width: 132px; border-radius: 14px; }
+.hero2 { gap: 18px; padding: 4px 0 8px; }
+.hero2 .ht { font-size: 30px; }
+.hero2 .hs { font-size: 15px; }
+.hero2 .art { width: 152px; }
+.hero2 .ht { font-size: 32px; }
+/* The cover is always square: proper album art */
+.hero2 .art { aspect-ratio: 1 / 1; height: auto; align-self: flex-start; }
+.hero2 .art img, .hero2 .art .cover { aspect-ratio: 1 / 1; object-fit: cover; }
+.arrtxt { color: var(--live); font-weight: 600; }
+.arr.ghost.set { background: rgba(240,194,75,.14); color: var(--live); }
+/* The arrangement, small, under the key */
+.trow.roomy .rcol { flex-direction: column; align-items: flex-end; gap: 5px; }
+.arrsm { font-size: 10.5px; font-weight: 650; color: var(--live); opacity: .85; white-space: nowrap; cursor: pointer; }
+.arrsm { display: inline-flex; align-items: center; gap: 3px; height: 16px; }
+.arrsm.none { color: #55555d; opacity: 1; }
+
+/* Polish: one rhythm for every row of a set */
+.trow.roomy { height: 76px; grid-template-columns: 52px 1fr auto; gap: 14px; align-items: stretch; }
+.trow.roomy .sart, .trow.roomy .sart img, .trow.roomy .sart .cover { width: 52px !important; height: 52px !important; border-radius: 9px; }
+.trow.roomy .sart { align-self: center; }
+.trow.roomy .mid { align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 0; }
+.trow.roomy .t1 { font-size: 16px; line-height: 20px; font-weight: 620; }
+.trow.roomy .s1 { font-size: 13px; line-height: 17px; color: #85858e; }
+.meta3 { margin-top: 3px; height: 17px; gap: 0 12px; align-items: center; }
+.meta3 .ld { font-size: 12.5px; line-height: 17px; color: #85858e; gap: 4px; }
+.meta3 .ld svg { width: 12px; height: 12px; color: #5f5f68; }
+.meta3 .ld.me svg { color: oklch(.72 .12 var(--h)); }
+/* The right column: the key level with the title, the arrangement level with the leads */
+.trow.roomy .rcol { align-self: stretch; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; gap: 0; padding: 13px 0 12px; }
+.key2 { height: 24px; min-width: 36px; padding: 0 8px; padding-top: 0; align-items: center; border-radius: 7px; background: oklch(.2 .035 var(--h)); }
+.key2 b { font-size: 13.5px; line-height: 1; }
+.key2 small { font-size: 9.5px; color: #75757e; }
+.arrsm { height: 17px; font-size: 11px; font-weight: 600; gap: 4px; opacity: 1; color: oklch(.8 .11 85); }
+.arrsm svg { width: 11px; height: 11px; }
+.arrsm.none { color: #47474e; }
+/* Inset hairlines, starting at the text */
+.scard { background: #0f0f12; border-color: #1a1a1f; border-radius: 18px; }
+.scard .trow.roomy { padding: 0 14px 0 12px; }
+.scard .trow.roomy + .trow.roomy::before { left: 78px; right: 14px; background: #1d1d22; }
+/* Section headers and the header's line, quieter */
+.ssec { padding: 14px 8px 8px; font-size: 11px; letter-spacing: .09em; color: #6e6e77; }
+.ssec span:last-child { font-size: 11.5px; color: #5c5c64; letter-spacing: 0; }
+.hero2 .hs { color: #7a7a83; font-size: 14px; }
+.hfacts .fact2 { font-size: 13px; color: #8d8d96; }
+.hero2 .art { width: 140px; }
+.hero2 { padding: 0 0 2px; }
+.ssec { padding: 12px 8px 7px; }
+.tracks + .ssec, .scard + .ssec { padding-top: 16px; }
