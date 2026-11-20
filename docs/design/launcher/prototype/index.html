@@ -2,195 +2,183 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
 <title>Studio launcher prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --ground: #23211f;
-    --raised: #2c2926;
-    --raised-2: #35312d;
-    --rule: #3d3934;
-    --ink: #ece6da;
-    --ink-2: #a8a093;
-    --ink-3: #7a7369;
-    --live: #e8c46a;
-    --radius-s: 6px;
-    --radius-m: 10px;
-    --font: "Instrument Sans", system-ui, sans-serif;
+    --black: #000;
+    --surface: #161618;
+    --surface-2: #232326;
+    --rule: #2c2c30;
+    --ink: #f4f4f5;
+    --ink-2: #a1a1a8;
+    --ink-3: #6e6e76;
+    --live: #f0c24b;
+    --tab-h: 58px;
+    --font: "Instrument Sans", -apple-system, system-ui, sans-serif;
   }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--black); }
   body {
-    background: var(--ground);
     color: var(--ink);
-    font: 400 15px/1.45 var(--font);
+    font: 400 16px/1.4 var(--font);
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
   }
-  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
-  :focus-visible { outline: 2px solid var(--live); outline-offset: 2px; border-radius: 4px; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+  :focus-visible { outline: 2px solid var(--live); outline-offset: 2px; border-radius: 6px; }
 
-  .app { display: grid; grid-template-columns: 216px 1fr; height: 100%; }
-
-  /* Mode switcher */
-  nav.modes {
-    border-right: 1px solid var(--rule);
-    padding: 22px 12px;
-    display: flex; flex-direction: column; gap: 2px;
+  /* One phone-width column; wider screens get the same column, centred */
+  .phone { position: relative; max-width: 440px; height: 100%; margin: 0 auto; overflow: hidden; background: var(--black); }
+  .screen {
+    position: absolute; inset: 0;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: calc(env(safe-area-inset-top) + 12px) 16px calc(var(--tab-h) + env(safe-area-inset-bottom) + 24px);
+    transition: transform .28s cubic-bezier(.2, .8, .2, 1), opacity .2s;
   }
-  .brand { font-weight: 700; font-stretch: 85%; font-size: 21px; letter-spacing: -0.01em; padding: 0 12px 22px; }
-  .mode {
-    display: grid; grid-template-columns: 1fr auto; align-items: baseline;
-    text-align: left; padding: 10px 12px; border-radius: var(--radius-s);
-    color: var(--ink-2); font-size: 16px;
-  }
-  .mode:hover { background: var(--raised); color: var(--ink); }
-  .mode[aria-current="page"] { background: var(--raised-2); color: var(--ink); font-weight: 600; }
-  .mode kbd { font: inherit; font-size: 12px; color: var(--ink-3); }
-  .mode small { grid-column: 1 / -1; font-size: 12.5px; color: var(--ink-3); font-weight: 400; }
-  .nav-foot { margin-top: auto; padding: 12px; font-size: 12.5px; color: var(--ink-3); }
-  .nav-foot b { color: var(--ink-2); font-weight: 500; }
+  .screen[hidden] { display: none; }
+  .screen.pushed { padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 96px); }
+  .screen.enter { transform: translateX(100%); }
+  .screen.under { transform: translateX(-24%); opacity: .4; }
 
-  main { overflow-y: auto; padding: 34px 44px 60px; }
-  section[hidden] { display: none; }
-  h1 { font-size: 30px; font-weight: 650; font-stretch: 88%; letter-spacing: -0.015em; margin: 0 0 4px; }
-  h2 { font-size: 17px; font-weight: 600; margin: 34px 0 12px; }
-  .lede { color: var(--ink-2); margin: 0 0 26px; max-width: 62ch; }
+  /* Large titles, as iOS draws them */
+  .top { display: flex; justify-content: space-between; align-items: center; min-height: 44px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--surface-2); color: var(--ink-2); display: grid; place-items: center; font-size: 13px; font-weight: 600; }
+  h1 { font-size: 34px; line-height: 1.1; font-weight: 700; font-stretch: 88%; letter-spacing: -0.02em; margin: 2px 0 18px; }
+  h2 { font-size: 20px; font-weight: 650; margin: 30px 0 8px; letter-spacing: -0.01em; }
+  .sub { color: var(--ink-2); font-size: 15px; }
 
-  /* Key tiles: the colour is the key, a hue per step round the circle of fifths */
+  /* Key tiles: a hue per step round the circle of fifths */
   .tile {
-    --h: 0; width: 34px; height: 34px; flex: none;
-    border-radius: var(--radius-s);
-    display: grid; place-items: center;
-    font-weight: 650; font-size: 13px; letter-spacing: -0.01em;
-    color: #fff;
-    background: oklch(0.56 0.12 var(--h));
+    --h: 0; width: 40px; height: 40px; flex: none; border-radius: 9px;
+    display: grid; place-items: center; color: #fff;
+    font-weight: 650; font-size: 14px; letter-spacing: -0.01em;
+    background: oklch(0.6 0.13 var(--h));
   }
-  .tile.none { background: var(--raised-2); color: var(--ink-3); font-weight: 500; }
-  .tile.mod { background: linear-gradient(90deg, oklch(0.56 0.12 var(--h)) 50%, oklch(0.56 0.12 var(--h2)) 50%); font-size: 11px; }
+  .tile.none { background: var(--surface-2); color: var(--ink-3); font-weight: 500; }
+  .tile.mod { background: linear-gradient(90deg, oklch(0.6 0.13 var(--h)) 50%, oklch(0.6 0.13 var(--h2)) 50%); font-size: 11px; }
 
-  /* The memorable element: a set as a strip of its songs' keys */
-  .strip { display: flex; gap: 4px; align-items: stretch; flex-wrap: wrap; }
-  .strip .tile { width: auto; min-width: 30px; height: 46px; padding: 0 8px; flex: var(--len, 1) 1 0; }
-  .strip .gap { width: 10px; }
+  /* The set as a strip of its songs' keys, scrolled sideways on a phone */
+  .strip { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px 4px; scroll-snap-type: x proximity; }
+  .strip::-webkit-scrollbar { display: none; }
+  .strip .tile { width: 38px; height: 52px; border-radius: 8px; scroll-snap-align: start; font-size: 13px; }
+  .strip .tile.none { background: transparent; box-shadow: inset 0 0 0 1px var(--rule); }
+  .strip .gap { flex: none; width: 10px; }
   .strip .tile.here { outline: 2px solid var(--live); outline-offset: 2px; }
-  .strip .tile.none { color: var(--ink-3); font-weight: 500; background: transparent; box-shadow: inset 0 0 0 1px var(--rule); }
 
   /* Home */
-  .resume {
-    background: var(--raised); border-radius: var(--radius-m);
-    padding: 24px 26px 26px; display: grid; gap: 18px;
-  }
-  .resume-head { display: flex; justify-content: space-between; gap: 20px; align-items: end; flex-wrap: wrap; }
-  .resume-title { font-size: 40px; line-height: 1.05; font-weight: 700; font-stretch: 82%; letter-spacing: -0.02em; margin: 0; }
-  .resume-where { color: var(--ink-2); margin-top: 6px; }
+  .resume { background: var(--surface); border-radius: 16px; padding: 18px 16px 16px; }
+  .resume-title { font-size: 28px; line-height: 1.08; font-weight: 700; font-stretch: 82%; letter-spacing: -0.02em; margin: 0; }
+  .resume-where { color: var(--ink-2); font-size: 15px; margin: 6px 0 14px; }
   .resume-where b { color: var(--live); font-weight: 600; }
+  .buttons { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 16px; }
   .primary {
-    background: var(--ink); color: var(--ground); font-weight: 650;
-    padding: 11px 18px; border-radius: var(--radius-s);
+    min-height: 50px; border-radius: 12px; background: var(--ink); color: var(--black);
+    font-weight: 650; font-size: 17px; text-align: center; padding: 0 18px;
   }
-  .primary:hover { background: #fff; }
-  .secondary { padding: 11px 16px; border-radius: var(--radius-s); color: var(--ink); background: var(--raised-2); }
-  .secondary:hover { background: var(--rule); }
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .primary:active { background: #d4d4d8; }
+  .secondary {
+    min-height: 50px; border-radius: 12px; background: var(--surface-2); color: var(--ink);
+    font-weight: 550; font-size: 16px; text-align: center; padding: 0 16px;
+  }
+  .secondary:active { background: var(--rule); }
 
-  .rows { display: grid; }
+  /* Grouped lists */
+  .group { background: var(--surface); border-radius: 14px; overflow: hidden; }
   .row {
-    display: grid; grid-template-columns: 34px 1fr auto auto; gap: 14px; align-items: center;
-    padding: 9px 10px; border-radius: var(--radius-s); text-align: left; width: 100%;
+    display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center;
+    width: 100%; min-height: 60px; padding: 9px 14px; position: relative;
   }
-  .row:hover, .row.sel { background: var(--raised); }
-  .row .t { font-weight: 550; }
-  .row .s { color: var(--ink-2); font-size: 13.5px; }
-  .row .m { color: var(--ink-3); font-size: 13.5px; text-align: right; }
-  .kind { color: var(--ink-3); font-size: 13px; }
+  .row + .row::before { content: ""; position: absolute; top: 0; left: 66px; right: 0; height: 1px; background: var(--rule); }
+  .row:active { background: var(--surface-2); }
+  .row .t { font-weight: 550; font-size: 16px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .s { color: var(--ink-2); font-size: 14px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .m { color: var(--ink-3); font-size: 14px; text-align: right; white-space: nowrap; }
+  .row > span:nth-child(2) { min-width: 0; }
+  .chev { color: var(--ink-3); font-size: 20px; line-height: 1; margin-left: 4px; }
+  .plain { grid-template-columns: 1fr auto; }
+  .plain + .plain::before { left: 14px; }
 
-  /* Session */
-  .split { display: grid; grid-template-columns: minmax(240px, 300px) 1fr; gap: 30px; align-items: start; }
-  .sets .row { grid-template-columns: 1fr auto; }
-  .set-detail { background: var(--raised); border-radius: var(--radius-m); padding: 22px 22px 18px; }
-  .set-detail h3 { margin: 0; font-size: 26px; font-weight: 700; font-stretch: 85%; letter-spacing: -0.015em; }
-  .set-meta { color: var(--ink-2); margin: 4px 0 18px; }
-  .set-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; flex-wrap: wrap; }
-  .act { color: var(--ink-2); font-size: 13.5px; font-weight: 600; margin: 18px 10px 4px; }
-  .song { grid-template-columns: 22px 34px 1fr auto auto; }
-  .song .n { color: var(--ink-3); font-size: 13px; text-align: right; }
-  .out { margin-top: 18px; display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
-  .device { color: var(--ink-2); font-size: 13.5px; }
-  .device b { color: var(--ink); font-weight: 550; }
+  /* Set detail (a pushed screen) */
+  .back { color: var(--live); font-size: 17px; display: flex; align-items: center; gap: 2px; min-height: 44px; }
+  .meta { color: var(--ink-2); font-size: 15px; margin: -12px 0 16px; }
+  .act { color: var(--ink-2); font-size: 14px; font-weight: 600; margin: 22px 4px 8px; }
+  .song { grid-template-columns: 22px 40px 1fr auto; }
+  .song .n { color: var(--ink-3); font-size: 14px; text-align: right; }
+  .song + .song::before { left: 88px; }
+  .device { color: var(--ink-3); font-size: 13px; text-align: center; margin: 18px 0 0; }
+  .dock {
+    position: absolute; left: 0; right: 0; bottom: calc(var(--tab-h) + env(safe-area-inset-bottom));
+    padding: 10px 16px 12px; background: linear-gradient(to top, #000 70%, rgba(0,0,0,0));
+    display: grid; grid-template-columns: auto 1fr; gap: 8px;
+  }
+  .dock[hidden] { display: none; }
 
   /* Signal */
-  .rigs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .rigs-main { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .rig {
-    background: var(--raised); border-radius: var(--radius-m); padding: 18px 18px 16px;
-    text-align: left; display: grid; gap: 10px; min-height: 150px; align-content: start;
+    background: var(--surface); border-radius: 16px; padding: 16px; min-height: 172px;
+    display: flex; flex-direction: column; gap: 6px;
   }
-  .rig:hover { background: var(--raised-2); }
-  .rig .name { font-size: 22px; font-weight: 700; font-stretch: 85%; }
-  .rig .what { color: var(--ink-2); font-size: 13.5px; }
-  .scenes { display: flex; gap: 4px; margin-top: auto; }
-  .scenes span { flex: 1; height: 6px; border-radius: 3px; background: var(--rule); }
-  .scenes span.on { background: var(--ink-2); }
-  .rig .state { font-size: 13px; color: var(--ink-3); margin-top: auto; }
-  .rigs-main { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
-  .rig.big { min-height: 230px; padding: 24px; }
-  .rig.big .name { font-size: 40px; line-height: 1; letter-spacing: -0.02em; font-stretch: 80%; }
-  .rig.big .what { font-size: 15px; }
-  .rigs .rig { min-height: 120px; }
+  .rig:active { background: var(--surface-2); }
+  .rig .name { font-size: 30px; line-height: 1; font-weight: 700; font-stretch: 80%; letter-spacing: -0.02em; }
+  .rig .what { color: var(--ink-2); font-size: 14px; }
+  .rig .state { color: var(--ink-3); font-size: 13px; margin-top: auto; }
 
   /* Library */
-  .ready { display: flex; gap: 6px; }
-  .ready span { font-size: 12px; padding: 2px 7px; border-radius: 4px; background: var(--raised-2); color: var(--ink-3); }
-  .ready span.y { color: var(--ink); background: var(--rule); }
-  .lib .row { grid-template-columns: 34px 1fr auto auto; }
-  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
-  input[type=search] {
-    font: inherit; color: var(--ink); background: var(--raised); border: 1px solid var(--rule);
-    border-radius: var(--radius-s); padding: 9px 12px; width: min(360px, 100%);
+  .search {
+    display: flex; align-items: center; gap: 8px; background: var(--surface); border-radius: 11px;
+    padding: 0 12px; height: 40px; margin: -6px 0 16px; color: var(--ink-3);
   }
-  input[type=search]::placeholder { color: var(--ink-3); }
+  .search input { flex: 1; background: none; border: 0; color: var(--ink); font: inherit; font-size: 16px; outline: none; }
+  .search input::placeholder { color: var(--ink-3); }
+  .dots { display: flex; gap: 4px; justify-content: flex-end; margin-top: 4px; }
+  .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--surface-2); }
+  .dots i.y { background: var(--ink-2); }
+  .legend { display: flex; gap: 14px; color: var(--ink-3); font-size: 13px; margin: 0 4px 10px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-2); margin-right: 5px; vertical-align: middle; }
+
+  /* Tab bar */
+  nav.tabs {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: calc(var(--tab-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    background: rgba(12, 12, 13, .86); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--rule);
+  }
+  .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--ink-3); font-size: 11px; font-weight: 550; text-align: center; }
+  .tab svg { width: 25px; height: 25px; }
+  .tab[aria-current="page"] { color: var(--ink); }
 
   .toast {
-    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
-    background: var(--ink); color: var(--ground); padding: 10px 16px; border-radius: var(--radius-s);
-    font-weight: 600; opacity: 0; transition: opacity .18s; pointer-events: none;
+    position: absolute; left: 50%; top: calc(env(safe-area-inset-top) + 10px); transform: translate(-50%, -8px);
+    background: var(--surface-2); color: var(--ink); padding: 10px 16px; border-radius: 20px;
+    font-size: 14px; font-weight: 550; opacity: 0; transition: opacity .18s, transform .18s; pointer-events: none; white-space: nowrap;
   }
-  .toast.show { opacity: 1; }
-
-  @media (max-width: 760px) {
-    .app { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
-    nav.modes { order: 2; flex-direction: row; border-right: 0; border-top: 1px solid var(--rule); padding: 6px; }
-    .brand, .nav-foot, .mode small, .mode kbd { display: none; }
-    .mode { flex: 1; text-align: center; display: block; padding: 10px 4px; font-size: 14px; }
-    main { padding: 22px 16px 40px; }
-    .split { grid-template-columns: 1fr; }
-    .resume-title { font-size: 30px; }
-    .song { grid-template-columns: 18px 34px 1fr auto; }
-    .song .m:last-child { display: none; }
-  }
-  @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  @media (prefers-reduced-motion: reduce) { .screen, .toast { transition: none; } }
 </style>
 </head>
 <body>
-<div class="app">
-  <nav class="modes" aria-label="Modes">
-    <div class="brand">Studio</div>
-    <button class="mode" data-mode="home">Home <kbd>1</kbd><small>Recent projects, sets and songs</small></button>
-    <button class="mode" data-mode="session">Session <kbd>2</kbd><small>Open a set to play or rehearse</small></button>
-    <button class="mode" data-mode="signal">Signal <kbd>3</kbd><small>Choose a rig</small></button>
-    <button class="mode" data-mode="library">Library <kbd>4</kbd><small>Every song, and what it's ready for</small></button>
-    <div class="nav-foot">Signed in as <b>Ada</b><br>Acme Records, synced</div>
+<div class="phone">
+  <section class="screen" id="home"></section>
+  <section class="screen" id="session" hidden></section>
+  <section class="screen pushed" id="set" hidden></section>
+  <section class="screen" id="signal" hidden></section>
+  <section class="screen" id="library" hidden></section>
+  <div class="dock" id="dock" hidden></div>
+  <nav class="tabs" aria-label="Modes">
+    <button class="tab" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Home</button>
+    <button class="tab" data-tab="session"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>Session</button>
+    <button class="tab" data-tab="signal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h3l3-8 4 16 3-8h7"/></svg>Signal</button>
+    <button class="tab" data-tab="library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="18" rx="1"/><path d="m17.5 4.5 3.5 15"/></svg>Library</button>
   </nav>
-  <main>
-    <section id="home"></section>
-    <section id="session" hidden></section>
-    <section id="signal" hidden></section>
-    <section id="library" hidden></section>
-  </main>
+  <div class="toast" role="status" aria-live="polite"></div>
 </div>
-<div class="toast" role="status" aria-live="polite"></div>
 <script>
 // Real content from the demo vault (Merry & Bright, JT's Senior Recital, Crescendum).
 const FIFTHS = ["C","G","D","A","E","B","F#","Db","Ab","Eb","Bb","F"];
@@ -224,169 +212,166 @@ const SETS = [
       .map(t => S(t,"Crescendum",null,null,null,"c"))]]},
 ];
 const RIGS = [
-  { name: "Guitar", what: "Amp captures, cab IRs, pedals", preset: "Recital, Drive To LA", scenes: 4, on: 2, input: "Input 1, Hi-Z" },
-  { name: "Keys", what: "Piano, EPs, organ and pads", preset: "Recital keys", scenes: 3, on: 1, input: "MIDI, Kontrol S88" },
-  { name: "Bass", what: "Bass amp and DI blend", preset: "Royal Blood fuzz", scenes: 3, on: 0, input: "Input 2" },
-  { name: "Drums", what: "Sampled kit with per-mic voices", preset: "Recital kit", scenes: 2, on: 0, input: "Track from the session" },
-  { name: "E-kit", what: "Electronic kit triggers", preset: "Not set up", scenes: 0, on: 0, input: "No pads found" },
-  { name: "Synth", what: "Synth rig and arps", preset: "Christmas pads", scenes: 3, on: 0, input: "MIDI" },
-  { name: "Orchestra", what: "Strings, brass and winds", preset: "Silent Night strings", scenes: 2, on: 0, input: "MIDI" },
+  { name: "Guitar", what: "Amp captures, cabs and pedals", preset: "Recital, Drive To LA", scenes: 4, input: "Input 1, Hi-Z" },
+  { name: "Keys", what: "Piano, EPs, organ and pads", preset: "Recital keys", scenes: 3, input: "Kontrol S88" },
+  { name: "Bass", what: "Bass amp and DI blend", preset: "Royal Blood fuzz", input: "Input 2" },
+  { name: "Drums", what: "Sampled kit, every mic", preset: "Recital kit", input: "From the session" },
+  { name: "E-kit", what: "Electronic kit triggers", preset: "Not set up", input: "No pads found" },
+  { name: "Synth", what: "Synth rig and arps", preset: "Christmas pads", input: "MIDI" },
+  { name: "Orchestra", what: "Strings, brass and winds", preset: "Silent Night strings", input: "MIDI" },
 ];
 const RECENT = [
-  { kind: "Set", title: "JT's Senior Recital", sub: "Stopped in Know Me (Extended), 2:41", when: "Today", key: null, set: "jt" },
-  { kind: "Song", title: "Drive To LA", sub: "Nights Out, chart edited", when: "Today", key: "C→Db" },
-  { kind: "Project", title: "Sr. Recital Showcase", sub: "Ableton set, 16 songs split", when: "Yesterday", key: null },
-  { kind: "Set", title: "Merry & Bright", sub: "CBU Christmas 2026, 9 songs", when: "Monday", key: null, set: "mb" },
-  { kind: "Song", title: "This Christmas", sub: "Donny Hathaway, tempo map checked", when: "Monday", key: "F" },
-  { kind: "Song", title: "Silent Night", sub: "for KING & COUNTRY, stems prepared", when: "Last week", key: "A" },
+  { kind: "Set", title: "Merry & Bright", sub: "CBU Christmas 2026, 9 songs", when: "Mon", set: "mb" },
+  { kind: "Song", title: "Drive To LA", sub: "Chart edited", when: "Today", key: "C→Db" },
+  { kind: "Project", title: "Sr. Recital Showcase", sub: "Ableton set, 16 songs split", when: "Yesterday" },
+  { kind: "Song", title: "This Christmas", sub: "Tempo map checked", when: "Mon", key: "F" },
+  { kind: "Song", title: "Silent Night", sub: "Stems prepared", when: "Last week", key: "A" },
 ];
 
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const mmss = s => { if (s == null) return ""; s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = String(s % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
-const total = set => set.acts.flatMap(a => a[1]).reduce((t, s) => t + (s.len || 0), 0);
-const count = set => set.acts.flatMap(a => a[1]).length;
-function tile(key, extra = "") {
-  if (!key) return `<span class="tile none ${extra}" title="No key yet">?</span>`;
-  if (key.includes("→")) {
-    const [a, b] = key.split("→");
-    return `<span class="tile mod ${extra}" style="--h:${hue(a)};--h2:${hue(b)}" title="${esc(a)} to ${esc(b)}">${esc(key)}</span>`;
-  }
-  return `<span class="tile ${extra}" style="--h:${hue(key)}">${esc(key)}</span>`;
+const dur = s => { if (s == null) return ""; s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = String(s % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
+const songs = set => set.acts.flatMap(a => a[1]);
+const total = set => songs(set).reduce((t, s) => t + (s.len || 0), 0);
+function tile(key) {
+  if (!key) return `<span class="tile none" aria-label="No key yet">?</span>`;
+  if (key.includes("→")) { const [a, b] = key.split("→"); return `<span class="tile mod" style="--h:${hue(a)};--h2:${hue(b)}" aria-label="${esc(a)} to ${esc(b)}">${esc(key)}</span>`; }
+  return `<span class="tile" style="--h:${hue(key)}">${esc(key)}</span>`;
 }
 function strip(set, here = -1) {
   let i = 0;
-  return `<div class="strip" aria-label="${esc(set.title)}, ${count(set)} songs">` + set.acts.map((a, ai) =>
+  return `<div class="strip" aria-label="${esc(set.title)}, ${songs(set).length} songs">` + set.acts.map((a, ai) =>
     (ai ? '<span class="gap"></span>' : "") + a[1].map(s => {
-      const k = s.key, idx = i++;
-      const h = k ? (k.includes("→") ? hue(k.split("→")[0]) : hue(k)) : null;
-      return `<span class="tile ${k ? "" : "none"} ${idx === here ? "here" : ""}" style="${h != null ? `--h:${h};` : ""}--len:${Math.max(1, (s.len || 200) / 200)}" title="${esc(s.title)}${k ? "" : ", no key yet"}">${esc(k || String(idx + 1))}</span>`;
+      const k = s.key, idx = i++, h = k ? hue(k.split("→")[0]) : null;
+      return `<span class="tile ${k ? "" : "none"} ${idx === here ? "here" : ""}" ${h != null ? `style="--h:${h}"` : ""} title="${esc(s.title)}">${esc(k ? k.split("→")[0] : String(idx + 1))}</span>`;
     }).join("")).join("") + `</div>`;
 }
+const bar = (avatar = true) => `<div class="top"><span></span>${avatar ? '<span class="avatar" aria-label="Signed in as Ada">A</span>' : ""}</div>`;
 let toastT;
-function toast(msg) { const t = document.querySelector(".toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1800); }
+function toast(msg) { const t = document.querySelector(".toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1600); }
 
 function renderHome() {
   const jt = SETS[0];
-  document.getElementById("home").innerHTML = `
-    <h1>Good evening, Ada</h1>
-    <p class="lede">Pick up where you left off, or open something you've had lately.</p>
+  document.getElementById("home").innerHTML = `${bar()}
+    <h1>Home</h1>
     <div class="resume">
-      <div class="resume-head">
-        <div>
-          <p class="resume-title">${esc(jt.title)}</p>
-          <div class="resume-where">Stopped in <b>Know Me (Extended)</b> at 2:41, song 16 of ${count(jt)}</div>
-        </div>
-        <div class="actions">
-          <button class="primary" data-act="Resumed JT's Senior Recital">Resume the set</button>
-          <button class="secondary" data-act="Opened JT's Senior Recital from the top">From the top</button>
-        </div>
-      </div>
+      <p class="resume-title">${esc(jt.title)}</p>
+      <div class="resume-where">Stopped in <b>Know Me (Extended)</b> at 2:41</div>
       ${strip(jt, 15)}
+      <div class="buttons">
+        <button class="primary" data-act="Resumed JT's Senior Recital">Resume</button>
+        <button class="secondary" data-open="jt">Set list</button>
+      </div>
     </div>
     <h2>Recent</h2>
-    <div class="rows">${RECENT.map(r => `
-      <button class="row" data-act="Opened ${esc(r.title)}">
+    <div class="group">${RECENT.map(r => `
+      <button class="row" ${r.set ? `data-open="${r.set}"` : `data-act="Opened ${esc(r.title)}"`}>
         ${r.key ? tile(r.key) : `<span class="tile none">${r.kind === "Set" ? "♫" : "▤"}</span>`}
-        <span><span class="t">${esc(r.title)}</span><br><span class="s">${esc(r.sub)}</span></span>
-        <span class="kind">${r.kind}</span><span class="m">${r.when}</span>
+        <span><span class="t">${esc(r.title)}</span><span class="s">${esc(r.kind)}, ${esc(r.sub)}</span></span>
+        <span class="m">${esc(r.when)}</span>
       </button>`).join("")}</div>`;
 }
-
-let currentSet = "jt";
 function renderSession() {
-  const set = SETS.find(s => s.id === currentSet);
-  let n = 0;
-  document.getElementById("session").innerHTML = `
+  document.getElementById("session").innerHTML = `${bar()}
     <h1>Session</h1>
-    <p class="lede">Choose a set to play through, or a song to rehearse on its own.</p>
-    <div class="split">
-      <div class="rows sets">${SETS.map(s => `
-        <button class="row ${s.id === currentSet ? "sel" : ""}" data-set="${s.id}">
-          <span><span class="t">${esc(s.title)}</span><br><span class="s">${esc(s.date)}</span></span>
-          <span class="m">${count(s)} songs${total(s) ? `<br>${mmss(total(s))}` : ""}</span>
-        </button>`).join("")}</div>
-      <div class="set-detail">
-        <div class="set-head">
-          <div>
-            <h3>${esc(set.title)}</h3>
-            <p class="set-meta">${count(set)} songs${total(set) ? `, ${mmss(total(set))}` : ""}, ${set.acts.length} ${set.acts.length === 1 ? "set" : "sets"}</p>
-          </div>
-          <div class="actions">
-            <button class="secondary" data-act="Choose a song to rehearse">Rehearse a song</button>
-            <button class="primary" data-act="Opened ${esc(set.title)} for playback">Play the set</button>
-          </div>
-        </div>
-        ${strip(set)}
-        ${set.acts.map(([name, songs]) => `
-          ${name ? `<div class="act">${esc(name)}</div>` : ""}
-          <div class="rows">${songs.map(s => `
-            <button class="row song" data-act="Rehearsing ${esc(s.title)}">
-              <span class="n">${++n}</span>${tile(s.key)}
-              <span><span class="t">${esc(s.title)}</span>${s.artist ? `<br><span class="s">${esc(s.artist)}</span>` : ""}</span>
-              <span class="m">${s.tempo ? `${s.tempo} bpm` : ""}</span><span class="m">${mmss(s.len)}</span>
-            </button>`).join("")}</div>`).join("")}
-        <div class="out"><span class="device">Plays through <b>Scarlett 18i20</b>, lights on <b>Room 138</b></span></div>
-      </div>
-    </div>`;
+    <div class="group">${SETS.map(s => `
+      <button class="row" data-open="${s.id}">
+        <span class="tile none">${songs(s).length}</span>
+        <span><span class="t">${esc(s.title)}</span><span class="s">${esc(s.date)}${total(s) ? `, ${dur(total(s))}` : ""}</span></span>
+        <span class="chev">›</span>
+      </button>`).join("")}</div>
+    <p class="device">Plays through Scarlett 18i20. Lights on Room 138.</p>`;
 }
-
+let openSet = null;
+function renderSet(id) {
+  const set = SETS.find(s => s.id === id); let n = 0;
+  document.getElementById("set").innerHTML = `
+    <div class="top"><button class="back" data-back>‹ Session</button><span></span></div>
+    <h1>${esc(set.title)}</h1>
+    <p class="meta">${songs(set).length} songs${total(set) ? `, ${dur(total(set))}` : ""}</p>
+    ${strip(set)}
+    ${set.acts.map(([name, list]) => `
+      ${name ? `<div class="act">${esc(name)}</div>` : '<div style="height:14px"></div>'}
+      <div class="group">${list.map(s => `
+        <button class="row song" data-act="Rehearsing ${esc(s.title)}">
+          <span class="n">${++n}</span>${tile(s.key)}
+          <span><span class="t">${esc(s.title)}</span><span class="s">${esc([s.artist, s.tempo ? `${s.tempo} bpm` : null].filter(Boolean).join(", ") || "Not prepared yet")}</span></span>
+          <span class="m">${dur(s.len)}</span>
+        </button>`).join("")}</div>`).join("")}`;
+  document.getElementById("dock").innerHTML = `
+    <button class="secondary" data-act="Choose a song to rehearse">Rehearse</button>
+    <button class="primary" data-act="Playing ${esc(set.title)}">Play the set</button>`;
+}
 function renderSignal() {
-  const [main, more] = [RIGS.slice(0, 2), RIGS.slice(2)];
-  const card = (r, big) => `
-      <button class="rig ${big ? "big" : ""}" data-act="Opened the ${esc(r.name)} rig">
-        <span class="name">${esc(r.name)}</span>
-        <span class="what">${esc(r.what)}</span>
-        <span class="state">${r.scenes ? `${esc(r.preset)}, ${r.scenes} scenes` : esc(r.preset)}<br>${esc(r.input)}</span>
-      </button>`;
-  document.getElementById("signal").innerHTML = `
+  const card = r => `
+    <button class="rig" data-act="Opened the ${esc(r.name)} rig">
+      <span class="name">${esc(r.name)}</span><span class="what">${esc(r.what)}</span>
+      <span class="state">${esc(r.preset)}<br>${esc(r.input)}</span>
+    </button>`;
+  document.getElementById("signal").innerHTML = `${bar()}
     <h1>Signal</h1>
-    <p class="lede">Choose the rig you're playing. It opens on its last preset, ready on its input.</p>
-    <div class="rigs-main">${main.map(r => card(r, true)).join("")}</div>
+    <div class="rigs-main">${RIGS.slice(0, 2).map(card).join("")}</div>
     <h2>More rigs</h2>
-    <div class="rigs">${more.map(r => card(r, false)).join("")}</div>`;
+    <div class="group">${RIGS.slice(2).map(r => `
+      <button class="row plain" data-act="Opened the ${esc(r.name)} rig">
+        <span><span class="t">${esc(r.name)}</span><span class="s">${esc(r.preset)}</span></span><span class="chev">›</span>
+      </button>`).join("")}</div>`;
 }
-
-let libQuery = "";
+let q = "";
 function renderLibrary() {
-  const all = SETS.flatMap(s => s.acts.flatMap(a => a[1].map(x => ({ ...x, from: s.title }))));
-  const seen = new Set(); const songs = all.filter(s => !seen.has(s.title) && seen.add(s.title))
-    .filter(s => !libQuery || (s.title + " " + (s.artist || "")).toLowerCase().includes(libQuery));
-  const lab = { c: "Chart", l: "Lyrics", t: "Stems", m: "Tempo map" };
-  document.getElementById("library").innerHTML = `
+  const all = SETS.flatMap(s => songs(s).map(x => ({ ...x, from: s.title })));
+  const seen = new Set();
+  const list = all.filter(s => !seen.has(s.title) && seen.add(s.title)).filter(s => !q || (s.title + " " + (s.artist || "")).toLowerCase().includes(q));
+  const el = document.getElementById("library");
+  el.innerHTML = `${bar()}
     <h1>Library</h1>
-    <p class="lede">Every song, and what it's ready for. A song with stems and a tempo map plays in Session.</p>
-    <div class="toolbar">
-      <input type="search" placeholder="Find a song or artist" value="${esc(libQuery)}" aria-label="Find a song">
-      <button class="secondary" data-act="Import songs">Import songs</button>
-    </div>
-    <div class="rows lib">${songs.map(s => `
+    <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input type="search" placeholder="Songs and artists" value="${esc(q)}" aria-label="Find a song"></label>
+    <div class="legend"><span><i></i>Chart</span><span><i></i>Lyrics</span><span><i></i>Stems</span><span><i></i>Tempo map</span></div>
+    <div class="group">${list.map(s => `
       <button class="row" data-act="Opened ${esc(s.title)}">
         ${tile(s.key)}
-        <span><span class="t">${esc(s.title)}</span><br><span class="s">${esc(s.artist || "No artist yet")}, in ${esc(s.from)}</span></span>
-        <span class="ready">${Object.entries(lab).map(([k, v]) => `<span class="${s.ready.includes(k) ? "y" : ""}">${v}</span>`).join("")}</span>
-        <span class="m">${mmss(s.len)}</span>
-      </button>`).join("") || `<p class="lede">No song matches “${esc(libQuery)}”. Import it, or check the spelling.</p>`}</div>`;
-  const input = document.querySelector("#library input");
-  input.addEventListener("input", e => { libQuery = e.target.value.toLowerCase(); const pos = e.target.selectionStart; renderLibrary(); const i = document.querySelector("#library input"); i.focus(); i.setSelectionRange(pos, pos); });
+        <span><span class="t">${esc(s.title)}</span><span class="s">${esc(s.artist || "No artist yet")}</span></span>
+        <span class="m">${dur(s.len)}<span class="dots" aria-label="${["Chart","Lyrics","Stems","Tempo map"].filter((_, i) => s.ready.includes("cltm"[i])).join(", ") || "Nothing ready"}">${"cltm".split("").map(k => `<i class="${s.ready.includes(k) ? "y" : ""}"></i>`).join("")}</span></span>
+      </button>`).join("") || `<div class="row plain"><span class="s">No song matches “${esc(q)}”.</span></div>`}</div>`;
+  const input = el.querySelector("input");
+  input.addEventListener("input", e => { q = e.target.value.toLowerCase(); const p = e.target.selectionStart; renderLibrary(); const i = el.querySelector("input"); i.focus(); i.setSelectionRange(p, p); });
 }
 
-function show(mode) {
-  document.querySelectorAll(".mode").forEach(b => b.setAttribute("aria-current", b.dataset.mode === mode ? "page" : "false"));
-  document.querySelectorAll("main section").forEach(s => s.hidden = s.id !== mode);
-  history.replaceState(null, "", "#/" + mode);
+let tab = "home";
+function showTab(t) {
+  tab = t; openSet = null;
+  document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-current", b.dataset.tab === t ? "page" : "false"));
+  document.querySelectorAll(".screen").forEach(s => { s.hidden = s.id !== t; s.classList.remove("under", "enter"); });
+  document.getElementById("dock").hidden = true;
+  history.replaceState(null, "", "#/" + t);
+}
+function push(id) {
+  openSet = id; renderSet(id);
+  if (tab !== "session") showTab("session");
+  const under = document.getElementById("session"), over = document.getElementById("set");
+  over.hidden = false; over.scrollTop = 0; over.classList.add("enter");
+  requestAnimationFrame(() => requestAnimationFrame(() => { over.classList.remove("enter"); under.classList.add("under"); }));
+  setTimeout(() => { under.hidden = true; }, 300);
+  document.getElementById("dock").hidden = false;
+  history.replaceState(null, "", "#/session/" + id);
+}
+function pop() {
+  const under = document.getElementById("session"), over = document.getElementById("set");
+  under.hidden = false; under.classList.add("under");
+  requestAnimationFrame(() => { under.classList.remove("under"); over.classList.add("enter"); });
+  document.getElementById("dock").hidden = true;
+  setTimeout(() => { over.hidden = true; over.classList.remove("enter"); }, 280);
+  openSet = null; history.replaceState(null, "", "#/session");
 }
 document.addEventListener("click", e => {
-  const m = e.target.closest("[data-mode]"); if (m) return show(m.dataset.mode);
-  const s = e.target.closest("[data-set]"); if (s) { currentSet = s.dataset.set; return renderSession(); }
+  const t = e.target.closest("[data-tab]"); if (t) return showTab(t.dataset.tab);
+  const o = e.target.closest("[data-open]"); if (o) return push(o.dataset.open);
+  if (e.target.closest("[data-back]")) return pop();
   const a = e.target.closest("[data-act]"); if (a) toast(a.dataset.act);
 });
-document.addEventListener("keydown", e => {
-  if (e.target.matches("input")) return;
-  const modes = ["home", "session", "signal", "library"];
-  if (/^[1-4]$/.test(e.key)) show(modes[+e.key - 1]);
-});
 renderHome(); renderSession(); renderSignal(); renderLibrary();
-show((location.hash || "#/home").replace(/^#\/?/, "") || "home");
+const [, first, second] = (location.hash || "#/home").split("/");
+showTab(["home", "session", "signal", "library"].includes(first) ? first : "home");
+if (first === "session" && second) push(second);
 </script>
 </body>
 </html>
