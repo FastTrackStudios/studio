@@ -31,6 +31,10 @@ path = "features/setlists"
 [capabilities]
 actions = ["VAULT_", "BASES_", "SHARE_CREATE", "EXT_VIEW_OPEN"]
 effect = "mutating"
+# The vault's and the bases' actions are the documents (Architect
+# v0.14.0): the read-only ones need `reads`, the rest `writes`.
+reads = ["documents"]
+writes = ["documents"]
 # A song's workspace reads its `.kf` and `.lrc` and saves an edited chart
 # back to its `.kf`: files beside the song's note, which the vault's
 # actions (notes only) cannot reach, so the host's `read_file` and

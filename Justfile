@@ -2075,6 +2075,19 @@ studio-architect-check:
 studio-architect-release TAG DIR:
     bash scripts/studio-architect.sh release {{TAG}} {{DIR}}
 
+# Studio's setlists (or productions) extension as a development copy, built
+# from this checkout: its program built as the window and the engine are
+# (`desktop-dev` for the host), installed at its manifest's [entry]
+# (`features/<name>/bin/`, ignored by git). Then load the package into an
+# Architect app: `architect-desktop dev --extension features/setlists`.
+setlists-extension NAME="setlists":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    host=$(rustc -vV | sed -n 's/^host: //p')
+    cargo build --profile desktop-dev --target "$host" -p {{NAME}} --features extension --bin studio-{{NAME}}
+    install -D -m 755 "target/$host/desktop-dev/studio-{{NAME}}" "features/{{NAME}}/bin/studio-{{NAME}}"
+    echo "features/{{NAME}}: its program from $(git describe --always --dirty)"
+
 # ── Releases ─────────────────────────────────────────────────────────────
 #
 # Tag-from-main (docs/agents/release-workflow.md). `main` is the only
