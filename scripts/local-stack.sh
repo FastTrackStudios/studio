@@ -438,17 +438,17 @@ m = json.load(sys.stdin)
 print(next(os.path.dirname(p["manifest_path"]) for p in m["packages"] if p["name"] == sys.argv[1]))' "$1"
 }
 
-# studio-web's dev page and public folder for `dx serve`, from
-# Architect's web app's own (the bundle's page, without its policy and
-# start script, as Architect's `cargo xtask dev` makes its own).
+# studio-web's dev page and public folder for `dx serve`: Studio's own
+# page (apps/web/page.html), Architect's web app's sheet.
 prepare_web() {
     local crate="$1" archweb="$2"
     python3 - "$crate" "$archweb" "$(port auth)" "$arch_src" <<'PY'
 import json, os, re, shutil, sys
 crate, archweb, auth, arch = sys.argv[1:5]
-page = open(os.path.join(archweb, "app/index.html"), encoding="utf-8").read()
-page = re.sub(r'<meta http-equiv="Content-Security-Policy"[^>]*>', "", page, count=1)
-page = page.replace('<script type="module" src="/app/start.js"></script>', "")
+# Studio's own page (apps/web/page.html: its name, black, its splash),
+# with Studio's icon in it; Architect's web app's sheet beside it.
+icon = open(os.path.join(crate, "../../features/distribution/icon.svg"), encoding="utf-8").read()
+page = open(os.path.join(crate, "page.html"), encoding="utf-8").read().replace("{{ICON}}", icon.strip())
 page = page.replace('<html lang="en">', '<html lang="en" data-assets="/assets/app-dev/">')
 open(os.path.join(crate, "index.html"), "w", encoding="utf-8").write(page)
 pub = os.path.join(crate, "dev/public")
@@ -461,6 +461,7 @@ def put(rel, src=None, text=None):
     else:
         shutil.copyfile(src, out)
 put("app/style.css", os.path.join(archweb, "app/style.css"))
+put("app/icon.svg", text=icon)
 # Signed in already as the stack's demo account (architect#991): the
 # issuer approves it without its form, the app starts the sign-in itself.
 put("app/config.json", text=json.dumps({"issuer": f"http://127.0.0.1:{auth}", "client_id": "architect", "auto_sign_in": True}))

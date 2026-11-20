@@ -23,19 +23,9 @@
 //! An installed copy of either extension still overrides the compiled-in
 //! one, as everywhere in Architect.
 
-use architect_desktop::{Bundle, Distribution, Icon};
+use architect_desktop::{Bundle, Distribution};
 
-/// The distribution's name.
-pub const NAME: &str = "Studio";
-
-/// Its bundle id: Studio's (this is the Studio app; `studio-desktop` is on its way out).
-pub const BUNDLE_ID: &str = "app.fasttrackstudio.studio";
-
-/// Its app name and its folder under the platform's config dir.
-pub const FOLDER: &str = "studio";
-
-/// Its icon: Architect's columns over Studio's staff.
-pub const ICON: &str = include_str!("../icon.svg");
+pub use studio_extensions::{BUNDLE_ID, FOLDER, ICON, NAME};
 
 /// Studio's extensions (`studio_extensions::studio`: the one list the
 /// desktop app and studio-web both link).
@@ -128,15 +118,10 @@ pub fn distribution_with(island: Option<architect_sites::SiteIsland>) -> Distrib
     }
 }
 
+/// Studio ([`studio_extensions::distribution`]: with `gui` the window's
+/// views and the launcher too), with what only the desktop app has.
 fn base() -> Distribution {
-    let dist = architect_desktop::distribution::architect()
-        .named(NAME)
-        .app(FOLDER)
-        .folder(FOLDER)
-        .bundle_id(BUNDLE_ID)
-        .version(env!("CARGO_PKG_VERSION"))
-        .icon(Icon::svg(ICON).tray("music.note.list", "audio-x-generic"))
-        .bundle(studio())
+    let dist = studio_extensions::distribution()
         .block(setlists::share::blocks())
         // The island's favourites: a setlist's bottom tabs (Setlist,
         // Charts, Lyrics, Arrangement) and its round Play button are
@@ -144,6 +129,6 @@ fn base() -> Distribution {
         // which is not a compiled-in extension's.
         .favourites_of(ISLAND_MANIFEST);
     #[cfg(feature = "gui")]
-    let dist = dist.bundle(stage()).bundle(rig()).shipped(SHIPPED);
+    let dist = dist.bundle(rig()).shipped(SHIPPED);
     dist
 }

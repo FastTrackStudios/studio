@@ -1,9 +1,13 @@
-//! Studio's compiled-in extensions, listed once.
+//! Studio's distribution and its compiled-in extensions, listed once.
 //!
-//! The desktop app (`studio`, apps/desktop) and the web client
-//! (`studio-web`, apps/web) are the same distribution of Architect
-//! and link the same extensions: [`studio`], [`stage`] and [`rig`]. Add an
-//! extension here and both apps have it.
+//! The desktop app (`studio`, apps/desktop), the web client (`studio-web`,
+//! apps/web) and the iPhone and iPad app (`studio-mobile`, apps/mobile) are
+//! the same distribution of Architect: [`distribution`] (its name, bundle
+//! id, folder, icon, Studio's extensions and, with `stage`, the window's
+//! views and the launcher as the home). Each app adds only what its
+//! platform has (the desktop's island, share-link blocks and shipped
+//! engine; the browser's linked island views) and hands it to its
+//! platform's `run`. Add an extension here and every app has it.
 //!
 //! Not yet in the browser build (each has a way there, none is left out
 //! by design): Studio's engine (`daw`: natively a process, in a browser
@@ -12,7 +16,40 @@
 //! (its room drawn by Ignition's web renderer), and studio-web links it
 //! itself until `stage` does.
 
-use architect_distribution::Bundle;
+use architect_distribution::{Bundle, Distribution, Icon};
+
+/// The distribution's name.
+pub const NAME: &str = "Studio";
+
+/// Its bundle id (the App Store's and TestFlight's too).
+pub const BUNDLE_ID: &str = "app.fasttrackstudio.studio";
+
+/// Its app name and its folder under the platform's config dir.
+pub const FOLDER: &str = "studio";
+
+/// Its icon: Architect's columns over Studio's staff.
+pub const ICON: &str = include_str!("../icon.svg");
+
+/// The view a signed-in person's app opens on: the launcher's Home.
+pub const HOME: (&str, &str) = ("studio.launcher", "launcher");
+
+/// Studio, on every platform: the Architect app renamed, with Studio's
+/// extensions and, with `stage`, the window's views, opening on the
+/// launcher.
+#[must_use]
+pub fn distribution() -> Distribution {
+    let dist = architect_distribution::architect()
+        .named(NAME)
+        .app(FOLDER)
+        .folder(FOLDER)
+        .bundle_id(BUNDLE_ID)
+        .version(env!("CARGO_PKG_VERSION"))
+        .icon(Icon::svg(ICON).tray("music.note.list", "audio-x-generic"))
+        .bundle(studio());
+    #[cfg(feature = "stage")]
+    let dist = dist.bundle(stage()).home(HOME.0, HOME.1);
+    dist
+}
 
 /// Studio's extensions: a production's show set is a setlist
 /// (`productions` writes the notes `setlists` reads), and Studio's views

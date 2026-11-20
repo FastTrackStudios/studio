@@ -15,7 +15,8 @@ there: `dx serve`'s dev server for studio-web, its hot-reload WebSocket
 included. The bind address is 127.0.0.1 unless one is given (0.0.0.0:
 the LAN, LOCAL_STACK_LAN=on).
 
-`<origin>/<code>` (a link by its code alone) redirects to `/s/<code>/`.
+`<origin>/<code>` (a link by its code alone) redirects to `/s/<code>/`, and
+`<origin>/` to the app (`/app/`): no landing page in dev.
 
 Opened on another origin than loopback (`tailscale serve`, `just phone`),
 the app signs in through this front too: with LOCAL_STACK_FRONT_AUTH=<the
@@ -94,15 +95,14 @@ class Front(BaseHTTPRequestHandler):
         # person is sent): to the link's page, `/s/<code>/`, where the node
         # answers it. The node's own paths and the app's relative URLs all
         # hang off `/s/`, so the short form is a redirect, never a mount.
+        # The origin's root is the app in dev: the site's landing page
+        # (FastTrackStudio's, in production) is not this stack's.
+        if path == "/" and self.command in ("GET", "HEAD"):
+            return self.redirect("/app/" + self.path[len(path):])
         short = SHORT.match(path)
         if short and self.command in ("GET", "HEAD"):
             query = self.path[len(path):]
-            self.send_response(302)
-            self.send_header("Location", f"/s/{short.group(1)}{short.group(2) or '/'}{query}")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-            return
+            return self.redirect(f"/s/{short.group(1)}{short.group(2) or '/'}{query}")
         if path == "/s" or any(path.startswith(p) or path == p.rstrip("/") for p in NODE):
             if self.headers.get("Upgrade"):
                 self.relay(self.node)
@@ -160,6 +160,13 @@ class Front(BaseHTTPRequestHandler):
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(data)
+
+    def redirect(self, location):
+        self.send_response(302)
+        self.send_header("Location", location)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def plain(self, status, text):
         body = text.encode()

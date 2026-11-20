@@ -20,27 +20,13 @@ mod views;
 #[cfg(target_arch = "wasm32")]
 pub use views::StudioViews;
 
-/// Studio's distribution in a browser: Architect's, named Studio, with
-/// the extensions the desktop app links.
-///
-/// `studio_extensions` is one list; in a browser its `stage` begins with
-/// Studio's engine in the page. Beside them the island's views for a
-/// setlist, a song and the lyrics.
+/// Studio's distribution in a browser ([`studio_extensions::distribution`],
+/// with `stage`: in a browser it begins with Studio's engine in the page),
+/// with the island's views for a setlist, a song and the lyrics linked in.
 #[cfg(target_arch = "wasm32")]
 #[must_use]
 pub fn distribution() -> architect_distribution::Distribution {
-    architect_distribution::architect()
-        .named("Studio")
-        .bundle(studio_extensions::studio())
-        // Studio's engine in the page (`daw`) and every view of the window
-        // on it: the launcher, the arrangement, the mixer, the lyrics, the
-        // navigator, Keyflow's chart, Ignition's lighting.
-        .bundle(studio_extensions::stage())
-        .linked(&StudioViews)
-        // A signed-in person's web app opens on the Project Launcher: the
-        // vault's setlists and their songs, a press opening one in the
-        // engine (architect#990).
-        .home("studio.launcher", "launcher")
+    studio_extensions::distribution().linked(&StudioViews)
 }
 
 /// The page's start: the app, with Studio's views.
