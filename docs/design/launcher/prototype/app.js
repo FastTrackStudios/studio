@@ -31,6 +31,8 @@ const P = {
   wave: '<path d="M2 12c1.5-5 3-5 4.5 0s3 5 4.5 0 3-5 4.5 0 3 5 4.5 0"/><path d="M2 20h20"/>',
   strings: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   tuner: '<path d="M12 21a9 9 0 1 1 9-9"/><path d="m12 12 4-6"/><circle cx="12" cy="12" r="1.5"/>',
+  perc: '<path d="M7 3h10l-1.5 18h-7z"/><path d="M7.4 8h9.2M8 15h8"/>',
+  acoustic: '<circle cx="9" cy="15" r="6"/><circle cx="9" cy="15" r="1.8"/><path d="M13.3 10.7 20.5 3.5"/><path d="m19 2 3 3"/>',
   rig: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
   library: '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
   play: '<path d="M6 3l14 9-14 9z" fill="currentColor"/>',
@@ -97,13 +99,12 @@ const PINNED = ["jt", "mb"];
 // The rigs. Presets and inputs are placeholders; one rig is loaded in the
 // engine at a time.
 const RIGS = [
-  { name: "Guitar", icon: "guitar", hue: 30, preset: "CYA, Thu Nov 19", input: "Input 1 · Hi-Z", loaded: true },
-  { name: "Keys", icon: "keys", hue: 255, preset: "JHM Sunday", input: "Kontrol S88" },
-  { name: "Bass", icon: "bass", hue: 305, preset: "Royal Blood fuzz", input: "Input 2" },
   { name: "Drums", icon: "drums", hue: 70, preset: "Recital kit", input: "From the session" },
-  { name: "E-kit", icon: "pads", hue: 195, preset: null, input: "No pads found" },
-  { name: "Synth", icon: "wave", hue: 330, preset: "Christmas pads", input: "MIDI" },
-  { name: "Orchestra", icon: "strings", hue: 145, preset: "Silent Night strings", input: "MIDI" },
+  { name: "Perc", icon: "perc", hue: 110, preset: "Shakers and congas", input: "SPD-SX" },
+  { name: "Bass", icon: "bass", hue: 305, preset: "Royal Blood fuzz", input: "Input 2" },
+  { name: "Guitar", icon: "guitar", hue: 30, preset: "CYA, Thu Nov 19", input: "Input 1 · Hi-Z", loaded: true },
+  { name: "Acoustic", icon: "acoustic", hue: 190, preset: "Worship, warm", input: "Input 3 · DI" },
+  { name: "Keys", icon: "keys", hue: 255, preset: "JHM Sunday", input: "Kontrol S88" },
 ];
 const rigOf = name => RIGS.find(r => r.name === name);
 // What Cody plays at each set (placeholders).
@@ -380,8 +381,10 @@ function pageRigs() {
     <div class="body rigs">${RIGS.map(r => { const n = mine.filter(o => MINE[o.id] === r.name).length; return `
       <button class="rigrow ${r.loaded ? "loaded" : ""} ${r.preset ? "" : "off"}" style="--h:${r.hue}" data-act="Opened the ${esc(r.name)} rig">
         ${rigIcon(r, 26)}
-        <span class="mid"><span class="name">${esc(r.name)}</span><span class="s1">${esc(r.preset || "Not set up")} · ${esc(r.input)}</span></span>
-        ${r.loaded ? '<span class="on"><span class="live"></span>Loaded</span>' : n ? `<span class="yours">${n} set${n > 1 ? "s" : ""}</span>` : `<span class="chev">${ic("chevRight", 18)}</span>`}
+        <span class="mid"><span class="name">${esc(r.name)}<small>${esc(r.input)}</small></span>${r.loaded && next && MINE[next.id] === r.name
+          ? `<span class="s1 now">${esc(next.series.name)} · 1/${next.songs.length} · ${esc(next.songs[0].title)}</span><span class="level" aria-label="Input level"><i style="width:46%"></i></span>`
+          : `<span class="s1">${esc(r.preset || "Not set up")}</span>`}</span>
+        ${r.loaded ? '<span class="on" aria-label="Loaded"><span class="live"></span></span>' : n ? `<span class="yours">${n} set${n > 1 ? "s" : ""}</span>` : `<span class="chev">${ic("chevRight", 18)}</span>`}
       </button>`; }).join("")}
     </div>`;
 }
@@ -483,7 +486,7 @@ function drawer() {
 
 // ── The ⋯ menus ─────────────────────────────────────────────────────────────
 const MENUS = {
-  mine: () => [["head", "Your sets"], ...mySets().map(o => ["item", `${occName(o)}`, rigOf(MINE[o.id]).icon, `${when(o.date)} · ${MINE[o.id]}`])],
+  mine: () => [["head", "Open in your rig"], ...mySets().map(o => ["item", `${occName(o)}`, rigOf(MINE[o.id]).icon, `${when(o.date)} · ${MINE[o.id]}`, false, `Opened ${occName(o)}, ${short(o.date)} in the ${MINE[o.id]} rig`]), ["div"], ["item", "Tuner", "tuner"]],
   projects: () => [
     ["item", "New project", "plus"], ["item", "Open a file…", "open"],
     ["div"], ["head", "Bring in"],
@@ -503,10 +506,10 @@ const MENUS = {
 };
 function openMenu(name, anchor) {
   const m = document.getElementById("menu");
-  m.innerHTML = MENUS[name]().map(([k, a, b, c, d]) => k === "div" ? '<div class="md"></div>'
+  m.innerHTML = MENUS[name]().map(([k, a, b, c, d, says]) => k === "div" ? '<div class="md"></div>'
     : k === "head" ? `<div class="mh">${a}</div>`
     : k === "check" ? `<button class="mi" data-act="${a}"><span class="ic"></span>${a}${b ? `<span class="ck">${ic("check", 17, 2.2)}</span>` : ""}</button>`
-    : `<button class="mi" data-act="${a}" ${d ? 'style="color:#f87171"' : ""}><span class="ic" ${d ? 'style="color:#f87171"' : ""}>${ic(b, 18)}</span>${a}${c ? `<span class="nt">${c}</span>` : ""}</button>`).join("");
+    : `<button class="mi" data-act="${esc(says || a)}" ${d ? 'style="color:#f87171"' : ""}><span class="ic" ${d ? 'style="color:#f87171"' : ""}>${ic(b, 18)}</span>${a}${c ? `<span class="nt">${c}</span>` : ""}</button>`).join("");
   const r = anchor.getBoundingClientRect(), ph = document.getElementById("phone").getBoundingClientRect();
   m.style.top = `${r.bottom - ph.top + 8}px`; m.style.right = `${ph.right - r.right}px`;
   m.hidden = false;
