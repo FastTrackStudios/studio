@@ -16,6 +16,7 @@ members = [
     "extensions/navigator",
     "extensions/launcher",
     "apps/web",
+    "apps/mobile",
     "features/distribution",
     "extensions/link",
     "extensions/rig",
@@ -426,6 +427,9 @@ architect-desktop = { git = "https://github.com/FastTrackStudios/architect", tag
 # (`architect_web::run`, without its own `start`): studio-web.
 architect-web = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1", default-features = false }
 architect-distribution = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+# The Architect app on an iPhone or iPad as a library a distribution's
+# `main` runs (`architect_mobile::run`): studio-mobile, apps/mobile.
+architect-mobile = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 architect-playhead = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1", default-features = false }
 # Share links as notes of their vault (`share_note`): apps/desktop's
 # node test writes the share SHARE_CREATE would.
