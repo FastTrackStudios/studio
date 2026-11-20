@@ -506,8 +506,6 @@ run_web() {
     trap cleanup TERM INT EXIT
     # The issuer through the front too, for a browser on another origin
     # (the tailnet's: `just phone`).
-    # and, once `just phone` built it, the phone's build of the app for
-    # that origin (iOS Safari cannot compile the dev build's module).
     LOCAL_STACK_FRONT_AUTH="$(port auth)" python3 "$root/scripts/local-stack-front.py" "http://127.0.0.1:$dx" "$web" "$server" "$bind" &
     pids+=($!)
     say "web: studio-web at http://127.0.0.1:$web/app/ (sign in as ada@local.test, password development-password)"

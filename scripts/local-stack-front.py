@@ -177,8 +177,8 @@ class Front(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
-    def static(self, path, root=None, spa=False):
-        base = os.path.realpath(root or self.root)
+    def static(self, path):
+        base = os.path.realpath(self.root)
         rel = path.lstrip("/")
         tries = [rel] if rel else []
         if not path.endswith("/"):
@@ -187,9 +187,6 @@ class Front(BaseHTTPRequestHandler):
         # The sign-in's way back is the app's page.
         if path.rstrip("/") == "/auth/callback":
             tries = ["app/index.html"]
-        # A single-page app's folder: its page for every route that is not a file.
-        if spa and not os.path.splitext(path)[1]:
-            tries = ["index.html"]
         status, found = 200, None
         for t in tries:
             full = os.path.realpath(os.path.join(base, t))
@@ -202,23 +199,9 @@ class Front(BaseHTTPRequestHandler):
                 return self.plain(404, "not found")
         ext = os.path.splitext(found)[1]
         ctype = TYPES.get(ext) or mimetypes.guess_type(found)[0] or "application/octet-stream"
-        # The phone's build gzipped (its module is tens of MB, and a phone
-        # on the tailnet may be reaching this machine through a relay).
-        encoding = None
-        if spa and ext in (".wasm", ".js", ".css") and "gzip" in (self.headers.get("Accept-Encoding") or ""):
-            packed = found + ".gz"
-            if not os.path.isfile(packed) or os.path.getmtime(packed) < os.path.getmtime(found):
-                import gzip, shutil
-                with open(found, "rb") as src, gzip.open(f"{packed}.{os.getpid()}.{id(self)}.tmp", "wb", compresslevel=6) as dst:
-                    shutil.copyfileobj(src, dst)
-                os.replace(f"{packed}.{os.getpid()}.{id(self)}.tmp", packed)
-            found, encoding = packed, "gzip"
         size = os.path.getsize(found)
         self.send_response(status)
         self.send_header("Content-Type", ctype)
-        if encoding:
-            self.send_header("Content-Encoding", encoding)
-            self.send_header("Vary", "Accept-Encoding")
         self.send_header("Content-Length", str(size))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Cache-Control", "public, max-age=31536000, immutable" if path.startswith("/assets/") else "no-store")
