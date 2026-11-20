@@ -209,7 +209,7 @@ function bar({ back, title, tools = [] }) {
   const lead = back && !title
     ? `<button class="back rb" data-back aria-label="Back">${ic("chevLeft", 24, 2.2)}</button>`
     : back
-    ? `<button class="back" data-back aria-label="Back">${ic("chevLeft", 26, 2)}</button><span class="small">${esc(title)}</span>`
+    ? `<button class="back rb" data-back aria-label="Back">${ic("chevLeft", 24, 2.2)}</button><span class="small">${esc(title)}</span>`
     : `<span class="title">${esc(title)}</span>`;
   return `<div class="bar"><div class="lead">${lead}</div><div class="tools">${tools.map(g => g.html ? g.html : g.joined
     ? `<div class="joined">${g.joined.map((t, i) => (i ? '<span class="hair"></span>' : "") + toolBtn(t)).join("")}</div>`
@@ -255,21 +255,20 @@ function pageProjects() {
             <span class="nus">${esc(fold0(next))} · ${next.songs.length} songs</span>
           </span>
         </span>
-        <span class="nuwhere"><span class="nw">${ic("mappin", 13, 2)}<span><b>${esc(pl(next)[0] || "")}</b></span></span><span class="nw call">${ic("clock", 13, 2)}<span><small>Call</small><b>${esc(pl(next)[2] || "")}</b></span></span></span>
+        <span class="nuwhere"><span class="nw">${ic("mappin", 13, 2)}<span><b>${esc(pl(next)[0] || "")}</b></span></span><span class="nw call">${ic("clock", 13, 2)}<span><small>Call</small><b>${esc(pl(next)[2] || "")}</b></span></span>${loaded ? `<span class="nw rigc" style="--h:${loaded.hue}">${ic(loaded.icon, 13, 2)}<span><b>${loaded.name}</b><small>loaded</small></span></span>` : ""}<span class="nuready">${progress(next)}</span></span>
       </button>` : ""}
-      ${loaded ? `<button class="rigline" style="--h:${loaded.hue}" data-tab="signal"><span class="rigicon">${ic(loaded.icon, 16, 2)}</span><span class="mid"><b>${loaded.name}</b> loaded · ${esc(loaded.preset)}</span><span class="live"></span></button>` : ""}
-      ${week.length ? `<div class="dayhead dh2"><span>This week</span><button class="seeall" data-tab="setlists">Setlists ${ic("chevRight", 14)}</button></div>
+      ${week.length ? `<div class="dayhead dh2"><span>This week</span><button class="bookbtn" data-book>${ic("plus", 14, 2.4)}Rehearsal</button></div>
       <div class="agenda">${week.map(({ o, r }) => r ? rehRow(r) : `
         <button class="ag" data-open="${o.id}">
-          <span class="agd"><small>${DAY[o.date.getUTCDay()].slice(0, 3)}</small><b>${o.date.getUTCDate()}</b></span>
+          ${dayTile(o.date)}
           ${LOGO[o.series.id] ? `<img class="aglogo" src="${LOGO[o.series.id]}" alt="">` : ""}
           <span class="mid"><span class="t1">${esc(o.series.name)}</span><span class="s1">${ic("mappin", 11, 2)}${esc(pl(o)[0] || "")}${pl(o)[2] ? ` · <b class="agcall">Call ${pl(o)[2]}</b>` : ""}</span></span>
-          ${o.songs.length >= o.series.size ? `<span class="st ok">${ic("check", 13, 2.6)}</span>` : progress(o)}
+          ${o.songs.length >= o.series.size ? `${progress(o)}` : progress(o)}
         </button>`).join("")}</div>` : ""}
-      ${review.length ? `<div class="dayhead dh2"><span>To review</span><button class="seeall" data-tab="sessions">Records ${ic("chevRight", 14)}</button></div>
+      ${review.length ? `<div class="dayhead dh2"><span>To review</span><button class="seeall" data-tab="records">Records ${ic("chevRight", 14)}</button></div>
       <div class="agenda">${review.map(x => { const v = latest(x.title), n = openOn(x.title); return `
-        <button class="ag" data-rev="${esc(x.title)}">
-          ${cover(x.rec ? ALBUMS[x.rec] : x, 40, x.hue)}
+        <button class="ag" data-open="t:${esc(x.title)}">
+          ${trackCover(x, 40)}
           <span class="mid"><span class="t1">${esc(x.title)}</span><span class="s1">${v.what} v${v.v} · ${esc(v.who)} · ${esc(v.when)}</span></span>
           ${n ? `<span class="bubble">${ic("message", 13, 2)}${n}</span>` : `<span class="newv">New</span>`}
         </button>`; }).join("")}</div>` : ""}
@@ -311,17 +310,16 @@ function pageProject(id) {
     <div class="body">
       ${hero({ img: ART[p.id], h: p.set === "mb" ? 150 : 20, mark: set.title[0], title: titleOf(p),
         kicker: "",
-        facts: calTile(...(set.date.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w* (\d{4})/) || [, "", ""]).slice(1, 3).map((v, k) => k ? v : v.slice(0, 3)), "") + `<span class="fcol">${fact("setlist", `${songs(set).length} songs`)}${total(set) ? fact("clock", dur(total(set))) : ""}</span>`,
-        sub: [fold?.name].filter(Boolean).join(" · "),
+        facts: (p.set === "mb" ? calTile("Dec", 12) : calTile(...(set.date.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w* (\d{4})/) || [, "", ""]).slice(1, 3).map((v, k) => k ? v : v.slice(0, 3)))),
+        sub: `${esc(fold?.name || "")}<span class="hcount">${songs(set).length} songs${total(set) ? " · " + dur(total(set)) : ""}</span>`,
         buttons: playShare(`Playing ${set.title}`) })}
       ${set.acts.map(([name, list]) => `
-        ${name ? `<div class="act">${esc(name)}<span>${list.length} songs${list.some(s => s.len) ? " · " + dur(list.reduce((t, s) => t + (s.len || 0), 0)) : ""}</span></div>` : ""}
-        <div class="tracks">${list.map(x => `
-          <div class="trow">
+        ${name ? `<div class="ssec">${esc(name)}<span>${list.length} songs${list.some(s => s.len) ? " · " + dur(list.reduce((t, s) => t + (s.len || 0), 0)) : ""}</span></div>` : ""}
+        <div class="scard">${list.map(x => `
+          <div class="trow roomy show2">
             ${songArt(x)}
             <button class="mid" data-play="set:${p.set}|${esc(x.title)}"><span class="t1">${esc(x.title)}</span><span class="s1">${esc(x.artist || "No artist yet")}${x.len ? " · " + dur(x.len) : ""}</span></button>
-            ${x.key ? `<span class="kc" style="--h:${hue(x.key.split("→")[0])}">${esc(x.key)}</span>` : `<span class="kc empty">?</span>`}
-            ${dots(`${x.title}: options`)}
+            <span class="rcol">${x.key ? `<span class="key2" style="--h:${hue(x.key.split("→")[0])}"><b>${esc(x.key)}</b></span>` : `<span class="key2 nokey"><b>Set key</b></span>`}</span>
           </div>`).join("")}</div>`).join("")}
     </div>`;
 }
@@ -374,7 +372,7 @@ function occRibbon(o) {
   return `<div class="ribbon" aria-hidden="true">${slots.join("")}</div>`;
 }
 const swatch = (sr, label) => `<span class="tile sw" style="--h:${sr.hue}">${label}</span>`;
-const dateTile = o => `<span class="tile date" style="--h:${o.series.hue}"><small>${MON[o.date.getUTCMonth()]}</small>${o.date.getUTCDate()}</span>`;
+const dateTile = o => dayTile(o.date);
 const occRow = (o, named) => `
   <button class="proj" data-open="${o.id}">
     ${named ? swatch(o.series, DAY[o.date.getUTCDay()].slice(0, 3)) : dateTile(o)}
@@ -384,9 +382,12 @@ const occRow = (o, named) => `
   </button>`;
 
 // How far along a set is: a ring filling as songs go in, a tick when done.
+// How ready a set is, drawn one way everywhere: a tick when full, a ring
+// and n/N while songs go in, "Not planned" in grey when empty.
 function progress(o) {
   const n = o.songs.length, of = o.series.size;
-  if (n >= of) return `<span class="done" aria-label="Ready">${ic("check", 15, 2.6)}</span>`;
+  if (n >= of) return `<span class="st ok" aria-label="Ready">${ic("check", 13, 2.6)}</span>`;
+  if (!n) return `<span class="st none">Not planned</span>`;
   const c = 2 * Math.PI * 9, f = c * n / of;
   return `<span class="ring" aria-label="${n} of ${of} songs"><svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#2b2b31" stroke-width="3"/><circle cx="12" cy="12" r="9" fill="none" stroke="var(--live)" stroke-width="3" stroke-linecap="round" stroke-dasharray="${f} ${c}" transform="rotate(-90 12 12)"/></svg><b>${n}/${of}</b></span>`;
 }
@@ -416,7 +417,7 @@ const REH = [{ id: "reh1", set: "jhms@2026-11-22", date: new Date(Date.UTC(2026,
 function rehRow(r) {
   const o = occOf(r.set);
   return `<button class="ag reh" data-open="${r.set}">
-    <span class="agd"><small>${DAY[r.date.getUTCDay()].slice(0, 3)}</small><b>${r.date.getUTCDate()}</b></span>
+    ${dayTile(r.date)}
     <span class="rehic">${ic("mic", 17, 2)}</span>
     <span class="mid"><span class="t1">Rehearsal <span class="rfor">· ${esc(o.series.name)}</span></span><span class="s1">${esc(r.room)} · ${esc(r.time)}</span></span>
     <span class="chev">${ic("chevRight", 16)}</span>
@@ -425,14 +426,17 @@ function rehRow(r) {
 // Book a rehearsal: for which set, what day, what time, where.
 let BK = null;
 function openBook() {
-  const sets = OCC.filter(o => daysFrom(o.date) >= 0 && MINE[o.id]).sort((a, b) => a.date - b.date).slice(0, 4);
-  BK ||= { set: sets[0].id, day: 1, time: "7:00 PM", room: "Room 210" };
-  const days = Array.from({ length: 7 }, (_, k) => new Date(TODAY.getTime() + k * 864e5));
+  const sets = OCC.filter(o => daysFrom(o.date) >= 0 && daysFrom(o.date) < 14).sort((a, b) => (MINE[b.id] ? 1 : 0) - (MINE[a.id] ? 1 : 0) || a.date - b.date).slice(0, 6).sort((a, b) => a.date - b.date);
+  BK ||= { set: (sets.find(o => MINE[o.id] && daysFrom(o.date) >= 1) || sets.find(o => daysFrom(o.date) >= 1) || sets[0]).id, time: "7:00 PM", room: "Room 210" };
+  const o = occOf(BK.set), last = daysFrom(o.date);
+  // A rehearsal is before its set: today up to the day of it; the day before by default.
+  if (BK.day == null || BK.day > last) BK.day = Math.max(0, last - 1);
+  const days = Array.from({ length: last + 1 }, (_, k) => new Date(TODAY.getTime() + k * 864e5));
   const chip = (attr, v, on, label) => `<button class="fopt" data-bk="${attr}|${v}" aria-pressed="${on}">${label}</button>`;
   const sh = document.getElementById("sheet");
   sh.innerHTML = `<div class="bsheet" role="dialog" aria-label="Book a rehearsal"><div class="grab"></div>
     <div class="bhead"><b>Book a rehearsal</b></div>
-    <div class="fsec">For</div><div class="seg">${sets.map(o => chip("set", o.id, BK.set === o.id, `${esc(o.series.name)}<small>${short(o.date)}</small>`)).join("")}</div>
+    <div class="fsec">For</div><div class="seg">${sets.map(x => chip("set", x.id, BK.set === x.id, `${esc(x.series.name)}<small>${short(x.date)}</small>`)).join("")}</div>
     <div class="fsec">Day</div><div class="seg days">${days.map((d, k) => chip("day", k, BK.day === k, `${k === 0 ? "Today" : DAY[d.getUTCDay()].slice(0, 3)}<small>${MON[d.getUTCMonth()]} ${d.getUTCDate()}</small>`)).join("")}</div>
     <div class="fsec">Time</div><div class="seg">${["10:00 AM", "1:00 PM", "6:00 PM", "7:00 PM"].map(t => chip("time", t, BK.time === t, t)).join("")}</div>
     <div class="fsec">Where</div><div class="seg">${["Room 210", "Chapel", "Worship Center", "The Loft"].map(t => chip("room", t, BK.room === t, t)).join("")}</div>
@@ -473,7 +477,7 @@ function pageSetlists() {
       ${rest.length ? `
       <div class="agenda">${rest.map(({ o, r }) => r ? rehRow(r) : `
         <button class="ag" data-open="${o.id}">
-          <span class="agd"><small>${DAY[o.date.getUTCDay()].slice(0, 3)}</small><b>${o.date.getUTCDate()}</b></span>
+          ${dayTile(o.date)}
           ${LOGO[o.series.id] ? `<img class="aglogo" src="${LOGO[o.series.id]}" alt="">` : ""}
           <span class="mid"><span class="t1">${esc(o.series.name)}</span><span class="s1">${ic("mappin", 11, 2)}${esc(pl(o)[0] || "")}${pl(o)[2] ? ` · <b class="agcall">Call ${pl(o)[2]}</b>` : ""}</span></span>
           ${state(o)}
@@ -502,17 +506,24 @@ function pageAllSets(root) {
     </div>`;
 }
 function pageSeries(id) {
-  const sr = seriesOf(id), all = occsOf(sr);
+  const sr = seriesOf(id), all = occsOf(sr), pl = PLACE[sr.id] || [], fold = FOLDERS.find(f => f.series.includes(sr.id));
   const up = all.filter(o => daysFrom(o.date) >= 0), past = all.filter(o => daysFrom(o.date) < 0).reverse();
-  const todo = up.find(o => o.songs.length < sr.size);
-  return `${bar({ back: true, title: sr.name, tools: [{ joined: [{ label: "Plan a set", icon: "plus", act: todo ? `Planning ${short(todo.date)}` : "Plan a set" }, { label: "More", icon: "more", menu: "series" }] }] })}
+  const nx = up[0];
+  const row = o => `
+    <button class="ag" data-open="${o.id}">
+      ${dayTile(o.date)}
+      <span class="mid"><span class="t1">${esc(short(o.date))}</span><span class="s1">${o.songs.length ? esc(o.songs.slice(0, 3).map(x => x.title).join(", ")) : "No songs yet"}</span></span>
+      ${daysFrom(o.date) >= 0 ? progress(o) : `<span class="chev">${ic("chevRight", 16)}</span>`}
+    </button>`;
+  return `${bar({ back: true, tools: [{ joined: [{ label: "Plan a set", icon: "plus", act: nx ? `Planning ${short(nx.date)}` : "Plan a set" }, { label: "More", icon: "more", menu: "series" }] }] })}
     <div class="body">
-      <p class="meta">${esc(everyDays(sr))} · ${sr.size} songs a set · ${past.length} sets so far</p>
-      ${todo ? `<button class="primary wide" data-open="${todo.id}">${ic("plus", 17, 2.2)}Plan ${esc(short(todo.date))}</button>` : ""}
-      <h2>Coming up</h2>
-      <div class="list">${up.map(o => occRow(o, false)).join("")}</div>
-      <h2>Before</h2>
-      <div class="list">${past.map(o => occRow(o, false)).join("")}</div>
+      ${hero({ img: LOGO[sr.id], h: sr.hue, title: sr.name, kicker: "",
+        facts: `<span class="when2"><span class="loc">${ic("mappin", 14, 2)}<span><b>${esc(pl[0] || "")}</b><small>${esc(everyDays(sr))}${pl[2] ? ` · <span class="call">Call ${esc(pl[2])}</span>` : ""}</small></span></span></span>`,
+        sub: `${fold ? esc(fold.name) : ""}<span class="hcount">${sr.size} songs a set · ${past.length} sets so far</span>` })}
+      <div class="dayhead">Coming up</div>
+      <div class="agenda">${up.map(row).join("")}</div>
+      <div class="dayhead">Before</div>
+      <div class="agenda">${past.map(row).join("")}</div>
     </div>`;
 }
 function pageOcc(id) {
@@ -520,7 +531,7 @@ function pageOcc(id) {
   const prev = occsOf(sr).filter(x => x.date < o.date && x.date.getUTCDay() === o.date.getUTCDay()).pop();
   const fold = FOLDERS.find(f => f.series.includes(sr.id));
   let n = 0; const roomy = o.songs.length <= 6;
-  const tools = [{ joined: [{ label: "Download", icon: "download", act: "Saved for offline" }, { label: "More", icon: "more", menu: "project" }] }];
+  const tools = [{ joined: [{ label: "Download", icon: "download", act: "Saved for offline" }, { label: "More", icon: "more", menu: "occ" }] }];
   return `${bar({ back: true, tools })}
     <div class="body">
       ${hero({ img: LOGO[sr.id], h: sr.hue, mark: sr.name.split(" ")[0], title: sr.name,
@@ -630,8 +641,9 @@ const bars = e => `<span class="energy" aria-label="Energy ${e} of 5">${[1, 2, 3
 // The Library opens on its tags, All songs first; a tag opens its songs.
 const cap = t => t[0].toUpperCase() + t.slice(1);
 function mosaic(list) {
-  const seen = new Set(), four = list.filter(x => x.artist && !seen.has(OWN.includes(x.artist) ? "own" : x.artist) && seen.add(OWN.includes(x.artist) ? "own" : x.artist)).slice(0, 4);
-  return `<span class="mosaic">${four.map(x => songArt(x)).join("")}</span>`;
+  const seen = new Set(), four = list.filter(x => x.artist && !seen.has(x.artist) && seen.add(x.artist)).slice(0, 4);
+  while (four.length < 4) four.push({ title: `${list.length}-${four.length}`, artist: null });
+  return `<span class="mosaic">${four.map(x => x.artist ? songArt(x) : `<span class="sart">${cover({ title: x.title }, 44, strHue(x.title))}</span>`).join("")}</span>`;
 }
 function pageLibraryHome() {
   const tile = (id, name, list, wide) => `<button class="ltile ${wide ? "wide" : ""}" data-ltile="${id}">${mosaic(list)}<span class="ln1">${esc(name)}</span><span class="ln2">${list.length} songs</span></button>`;
@@ -651,9 +663,9 @@ function pageLibrary(id) {
   return `${bar({ back: true, title: tag ? cap(tag) : "All songs", tools: [{ label: "Filter", icon: "sliders", filter: true, badge: nFilters() || "" }] })}
     <div class="body">
       <label class="search lib">${ic("search", 16)}<input type="search" id="libq" placeholder="Songs and artists" value="${esc(F.q)}" aria-label="Find a song"></label>
-      <div class="tagrow">${TAGS.filter(({ t }) => t !== tag).map(({ t }) => `<button class="tagchip" data-ltag="${t}" aria-pressed="${F.tags.has(t)}">#${t}</button>`).join("")}</div>
+      <div class="tagrow"><span class="narrow">Narrow</span>${TAGS.filter(({ t }) => t !== tag).map(({ t }) => `<button class="tagchip" data-ltag="${t}" aria-pressed="${F.tags.has(t)}">${cap(t)}</button>`).join("")}</div>
       ${on.length ? `<div class="onrow">${on.map(([k, l]) => `<button class="onchip" data-unset="${k}">${esc(l)}${ic("x", 13, 2.4)}</button>`).join("")}<button class="clearall" data-unset="all">Clear</button></div>` : ""}
-      <div class="libcount">${list.length === within.length ? `${within.length} songs` : `${list.length} of ${within.length} songs`}</div>
+      <div class="libcount"><span>${list.length === within.length ? `${within.length} songs` : `${list.length} of ${within.length} songs`}</span><span class="elegend">Energy ${bars(3)}</span></div>
       <div class="list">${list.map(x => `
         <button class="song lib" data-play="lib:${esc(id)}|${esc(x.title)}">
           ${songArt(x)}
@@ -668,7 +680,7 @@ function pageTags() {
       <div class="dayhead">Songs</div>
       <div class="list">${TAGS.map(({ t, n }) => `<button class="tagrowx" data-pick="${t}"><span class="hash">#</span><span class="t1">${t}</span><span class="n">${n}</span></button>`).join("")}</div>
       <div class="dayhead">Sets</div>
-      <div class="list">${FOLDERS.map(f => `<button class="tagrowx" data-open="allsets"><span class="hash">#</span><span class="t1">${f.tag}</span><span class="n">${f.series.length + f.shows.length}</span></button>`).join("")}</div>
+      <div class="list">${FOLDERS.map(f => `<button class="tagrowx" data-tab="setlists"><span class="hash">#</span><span class="t1">${f.tag}</span><span class="n">${f.series.length + f.shows.length}</span></button>`).join("")}</div>
     </div>`;
 }
 // The filter sheet: key, energy, tempo, what it is ready for, rest.
@@ -719,7 +731,7 @@ const REVIEW = [
 const WHEN = { Unbreakable: "2h", "Chained Expectations": "5h", Heavify: "Yesterday", "The Ballad": "Yesterday", Intro: "Mon", "Set in Stone": "Last week", "It Knows My Name": "Nov 10", Kornesque: "Nov 8", "The Plague": "Nov 6", "Empty Focus": "Oct 30" };
 const SINGLES = [
   { title: "Devour", artist: "Beautifully Violent", stage: 3, when: "Jul 6", hue: 330 },
-  { title: "Goodness of God", artist: "Ron Kenoly", stage: 4, when: "Oct 12", hue: 0 },
+  { title: "Goodness of God", artist: "Ron Kenoly", stage: 4, when: "Oct 12", hue: 0, cover: true },
   { title: "Fire", artist: "JT Wright", stage: 1, when: "Mon", hue: 40 },
   { title: "Drive To LA", artist: "Nights Out", stage: 4, when: "Last week", hue: 10 },
 ];
@@ -740,13 +752,15 @@ function versionsOf(title) {
   const n = known ? known.ver : Math.max(1, Math.min(4, stage));
   const len = lenOf(title);
   const vs = Array.from({ length: n }, (_, k) => ({ v: k + 1, what: known ? known.what : what, who: k % 2 ? "Jake" : "Cody", when: k === n - 1 ? (known ? known.when : (x ? x.when : "Mon")) : `${(n - 1 - k) * 4 + 3} days ago`, len, comments: [] }));
-  if (known) vs[n - 1].comments = known.comments.map(c => ({ ...c }));
+  if (known) { vs[n - 1].comments = known.comments.map(c => ({ ...c })); vs[n - 1].who = known.who; }
   if (n > 1) vs[n - 2].comments = [{ at: .22, t: dur(len * .22), who: "Mia", text: "Vocal a bit loud in verse 1", open: false }];
   vs.at(-1).approved = !!(known && known.approved);
   return (VERS[title] = vs);
 }
 const latest = title => versionsOf(title).at(-1);
-const openOn = title => versionsOf(title).reduce((t, v) => t + v.comments.filter(c => c.open).length, 0);
+// Open comments on a track: its audio versions' and its chart's and lyrics'.
+const openOn = title => versionsOf(title).reduce((t, v) => t + v.comments.filter(c => c.open).length, 0)
+  + REVIEW.filter(r => r.track === title && r.kind !== "audio").reduce((t, r) => t + r.comments.filter(c => c.open).length, 0);
 const openCount = r => r.comments.filter(c => c.open).length;
 const trackReview = title => REVIEW.filter(r => r.track === title);
 // Generated art: a blurred light in the cover's colour, placed and turned by
@@ -779,7 +793,13 @@ const ART = { jt: "covers/jt.png", show: "covers/jt.png", cr: "covers/crescendum
 const LOGO = { main: "covers/main.png", cya: "covers/cya.png", hsm: "covers/hsm.png", jhm: "covers/jhm.png", jhms: "covers/jhm.png" };
 // A date as a calendar leaf: the month on a band, the day big, the weekday
 // under it. A count and a length as small facts beside it.
-const calTile = (mon, day, wd) => `<span class="cal"><span class="cm">${mon}</span><span class="cd">${day}</span>${wd ? `<span class="cw">${wd}</span>` : ""}</span>`;
+// One date component everywhere: a small red label over a big value
+// (weekday over day in lists, month over day in a header, month over year for a show).
+const calTile = (top, big) => `<span class="cal"><span class="cm">${top}</span><span class="cd">${big}</span></span>`;
+const dayTile = d => calTile(DAY[d.getUTCDay()].slice(0, 3), d.getUTCDate());
+// The art a track shows: its own, else its record's.
+const artFor = x => ART[x.id] || (x.rec && ART[x.rec]);
+const trackCover = (x, size) => artFor(x) ? `<img class="tcov" src="${artFor(x)}" alt="" style="width:${size}px;height:${size}px">` : cover(x.rec ? ALBUMS[x.rec] : x, size, x.hue);
 const fact = (icon, text) => `<span class="fact2">${ic(icon, 14, 2)}${text}</span>`;
 function hero({ img, h, mark, kicker, title, sub, buttons, facts }) {
   return `<div class="tintbg" style="--h:${h}"></div>
@@ -833,7 +853,7 @@ function openRev(title) {
   if (RV.title !== title) RV = { title, v: null, pos: 0.18, playing: false, draft: "" };
   const x = STUDIO.find(y => y.title === title), sh = document.getElementById("sheet");
   sh.innerHTML = `<div class="bsheet review" role="dialog" aria-label="Review ${esc(title)}"><div class="grab"></div>
-    <div class="bhead"><b>${esc(title)}</b><span class="bsub">${esc(x ? (x.rec ? ALBUMS[x.rec].title + " · track " + x.no : "Single · " + x.artist) : "")}</span></div>
+    <div class="bhead"><b>${esc(title)}</b><span class="bsub">${esc(x ? (x.rec ? ALBUMS[x.rec].title + " · Track " + x.no : (x.cover ? "Cover single · " : "Single · ") + x.artist) : "")}</span></div>
     ${reviewBody(title, true)}</div>`;
   sh.classList.add("bottom"); sh.hidden = false;
 }
@@ -1009,7 +1029,7 @@ function songRow(x) {
   </div>`;
 }
 // Records: one list, albums and singles alike, with folders among them.
-const projOpen = list => list.reduce((t, x) => t + trackReview(x.title).reduce((u, r) => u + openCount(r), 0), 0);
+const projOpen = list => list.reduce((t, x) => t + openOn(x.title), 0);
 const inFolder = new Set(RFOLDERS.flatMap(f => f.items));
 function recRow(id) {
   const a = ALBUMS[id], x = !a && studioOf(id);
@@ -1037,29 +1057,29 @@ function pageSetlistsTab() {
   const fs = sfold === "all" ? FOLDERS : FOLDERS.filter(f => f.tag === sfold);
   const series = fs.flatMap(f => f.series), shows = fs.flatMap(f => f.shows.map(id => ({ id, f })));
   const showDate = st => (st.date.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w* (\d{4})/) || [, "", ""]);
-  return `${bar({ title: "Setlists", tools: [{ joined: [{ label: "Filter", icon: "sliders", menu: "sfold", badge: sfold === "all" ? "" : "1" }, { label: "Every setlist", icon: "calendar", open: "every" }, { label: "Library", icon: "library", open: "library" }] }, { label: "New setlist", icon: "plus", menu: "newset" }] })}
+  return `${bar({ title: "Setlists", tools: [{ joined: [{ label: "Library", icon: "library", open: "library" }, { label: "Folders and every setlist", icon: "more", menu: "setmenu", badge: sfold === "all" ? "" : "1" }] }, { label: "New setlist", icon: "plus", menu: "newset" }] })}
     <div class="body">
       ${sfold === "all" ? "" : `<div class="onrow"><button class="onchip" data-sfold="all">${esc(FOLDERS.find(f => f.tag === sfold).name)}${ic("x", 13, 2.4)}</button></div>`}
-      ${fs.filter(f => f.series.length).map(f => `<div class="dayhead">${esc(f.name)} · Recurring</div>
-      <div class="evgrid">${f.series.map(id => { const sr = seriesOf(id), nx = nextOf(sr); return `
+      ${fs.filter(f => f.series.length).map((f, k) => `<div class="dayhead dh2"><span>${esc(f.name)} · Recurring</span>${k ? "" : `<button class="seeall" data-open="every">Every setlist ${ic("chevRight", 14)}</button>`}</div>
+      <div class="evgrid">${[...f.series].sort((a, b) => nextOf(seriesOf(a)).date - nextOf(seriesOf(b)).date).map(id => { const sr = seriesOf(id), nx = nextOf(sr); return `
         <button class="ev" data-open="${sr.id}">
           <span class="evlogo">${ring(nx, 84)}${LOGO[id] ? `<img src="${LOGO[id]}" alt="">` : cover({ title: sr.name }, 64, sr.hue)}</span>
           <span class="t1">${esc(sr.name)}</span>
-          <span class="s1">${nx ? (daysFrom(nx.date) === 0 ? "Today" : daysFrom(nx.date) < 7 ? DAY[nx.date.getUTCDay()].slice(0, 3) : short(nx.date)) : ""}${nx && nx.songs.length < sr.size ? ` · <b>${nx.songs.length}/${sr.size}</b>` : ""}</span>
+          <span class="s1">${nx ? (daysFrom(nx.date) === 0 ? "Today" : daysFrom(nx.date) < 7 ? DAY[nx.date.getUTCDay()].slice(0, 3) : short(nx.date)) : ""}${nx ? ` · <b class="${nx.songs.length >= sr.size ? "ok" : nx.songs.length ? "" : "none"}">${nx.songs.length}/${sr.size}</b>` : ""}</span>
         </button>`; }).join("")}</div>`).join("")}
       ${[["Upcoming shows", shows.filter(x => x.id === "mb")], ["Past shows", shows.filter(x => x.id !== "mb")]].filter(([, l]) => l.length).map(([head, l]) => `<div class="dayhead">${head}</div>
       <div class="showlist ${head.startsWith("Past") ? "past" : ""}">${l.map(({ id, f }) => { const st = SETS[id], [m, y] = ({ mb: ["Dec", "2026"] })[id] || showDate(st).slice(1); return `
         <button class="showc" data-open="${id}">
           <span class="showart">${ART[id] ? `<img src="${ART[id]}" alt="">` : cover({ title: st.title }, 0, id === "mb" ? 150 : 20)}</span>
           <span class="mid"><span class="t1">${esc(st.title)}</span><span class="s1">${esc(f.name)} · ${songs(st).length} songs${total(st) ? " · " + dur(total(st)) : ""}</span></span>
-          <span class="cal"><span class="cm">${m.slice(0, 3)}</span><span class="cd">${y}</span></span>
+          ${id === "mb" ? calTile("Dec", 12) : calTile(m.slice(0, 3), y)}
         </button>`; }).join("")}</div>`).join("")}
     </div>`;
 }
 
 let EQ = "";
 function pageEvery() {
-  const rows = [...OCC.filter(o => o.songs.length || (daysFrom(o.date) >= 0 && daysFrom(o.date) < 7)).map(o => ({ date: o.date, title: o.series.name, sub: o.songs.length ? `${o.songs.length} songs · ${o.songs.slice(0, 2).map(x => x.title).join(", ")}` : "Not planned yet", logo: LOGO[o.series.id], open: o.id, ready: o.songs.length >= o.series.size, future: daysFrom(o.date) >= 0 })),
+  const rows = [...OCC.filter(o => o.songs.length || (daysFrom(o.date) >= 0 && daysFrom(o.date) < 7)).map(o => ({ date: o.date, title: o.series.name, sub: o.songs.length ? `${o.songs.length} songs · ${o.songs.slice(0, 2).map(x => x.title).join(", ")}` : "Not planned yet", logo: LOGO[o.series.id], open: o.id, occ: o, future: daysFrom(o.date) >= 0 })),
     { date: new Date(Date.UTC(2026, 11, 12)), title: "Merry & Bright", sub: "CBU · 9 songs", art: null, open: "mb", ready: true, future: true },
     { date: new Date(Date.UTC(2026, 4, 15)), title: "JT's Senior Recital", sub: "Recitals · 16 songs", art: ART.jt, open: "jt", ready: true }]
     .filter(r => !EQ || r.title.toLowerCase().includes(EQ)).sort((a, b) => b.date - a.date);
@@ -1071,10 +1091,10 @@ function pageEvery() {
         <div class="dayhead">${["January","February","March","April","May","June","July","August","September","October","November","December"][mo]} ${y}</div>
         <div class="agenda">${l.map(r => `
           <button class="ag" data-open="${r.open}">
-            <span class="agd"><small>${DAY[r.date.getUTCDay()].slice(0, 3)}</small><b>${r.date.getUTCDate()}</b></span>
+            ${dayTile(r.date)}
             ${r.logo ? `<img class="aglogo" src="${r.logo}" alt="">` : r.art ? `<img class="aglogo" src="${r.art}" alt="">` : `<span class="aglogo">${cover({ title: r.title }, 36, 150)}</span>`}
             <span class="mid"><span class="t1">${esc(r.title)}</span><span class="s1">${esc(r.sub)}</span></span>
-            ${r.future ? (r.ready ? `<span class="st ok">${ic("check", 13, 2.6)}</span>` : `<span class="st none">Planning</span>`) : ""}
+            ${r.occ && r.future ? progress(r.occ) : r.future ? `<span class="st ok">${ic("check", 13, 2.6)}</span>` : ""}
           </button>`).join("")}</div>`; }).join("")}
     </div>`;
 }
@@ -1107,7 +1127,7 @@ function pageSessions() {
         <button class="lg" data-open="${id}">
           <span class="lgc">${ART[id] ? `<img src="${ART[id]}" alt="">` : cover(a || x, 0, (a || x).hue)}${n ? `<span class="rbub">${ic("message", 11, 2.4)}${n}</span>` : ""}</span>
           <span class="lgt"><span class="t1">${esc(a ? a.title : x.title)}</span><span class="s1">${esc(a ? a.artist : x.artist)}</span>
-          <span class="lgs" style="--h:${STAGES[st][1] ?? 0}" data-none="${STAGES[st][1] == null}"><i></i>${STAGES[st][0]}${a ? ` · ${list.length} songs` : " · Single"}</span></span>
+          <span class="lgs">${stageTag(st)}<span>${a ? `${list.length} tracks` : x.cover ? "Cover single" : "Single"}</span></span></span>
         </button>`; }).join("")}</div>
     </div>`;
 }
@@ -1135,7 +1155,7 @@ function pageSong(id) {
   if (RV.title !== x.title) RV = { title: x.title, v: null, pos: 0.18, playing: false, draft: "" };
   return `${bar({ back: true, tools: [{ joined: [{ label: "Open in Session", icon: "open", act: `Opened ${x.title} in Session` }, { label: "More", icon: "more", menu: "project" }] }] })}
     <div class="body">
-      <div class="trkhead">${a ? cover(a, 56, a.hue) : cover(x, 56, x.hue)}<span class="mid"><span class="hk">${esc(a ? `${a.title} · track ${x.no}` : "Single")}</span><span class="t">${esc(x.title)}</span><span class="s1">${esc(x.artist)}</span></span></div>
+      <div class="trkhead">${trackCover(x, 56)}<span class="mid"><span class="hk">${esc(a ? `${a.title} · Track ${x.no}` : x.cover ? "Cover single" : "Single")}</span><span class="t">${esc(x.title)}</span><span class="s1">${esc(x.artist)}</span></span></div>
       ${reviewBody(x.title, false)}
     </div>`;
 }
@@ -1150,12 +1170,12 @@ function pageAlbum(id) {
       <div class="scard">${list.map(x => { const v = latest(x.title), n = openOn(x.title); return `
         <div class="trow roomy rec">
           <span class="tno">${x.no}</span>
-          <button class="mid" data-rev="${esc(x.title)}">
+          <button class="mid" data-open="t:${esc(x.title)}">
             <span class="t1">${esc(x.title)}</span>
             <span class="s1">${esc(v.who)} · ${esc(v.when)}</span>
             <span class="meta3">${n ? `<span class="ld cmt">${ic("message", 12, 2)}${n} open</span>` : `<span class="ld">${dur(v.len)}</span>`}</span>
           </button>
-          <span class="rcol"><button class="vtag" data-rev="${esc(x.title)}">${v.what} v${v.v}</button>${stageTag(x.stage, x.id)}</span>
+          <span class="rcol"><button class="vtag" data-open="t:${esc(x.title)}">${v.what} v${v.v}</button>${stageTag(x.stage, x.id)}</span>
         </div>`; }).join("")}</div>
     </div>`;
 }
@@ -1214,7 +1234,7 @@ function progressBars() {
 let secIx = 1, livePlaying = false;
 function songHead(id) {
   const ss = setSongs(id), x = ss[songIx] || ss[0];
-  return `<div class="nowline"><button class="back sm" data-back aria-label="Back">${ic("chevLeft", 22, 2.2)}</button><span class="nn">${songIx + 1}/${ss.length}</span><span class="t1">${esc(x.title)}</span><span class="nk">${esc([x.key, x.tempo ? x.tempo + " bpm" : null].filter(Boolean).join(" · "))}</span></div>
+  return `<div class="nowline"><button class="back rb sm" data-back aria-label="Back">${ic("chevLeft", 22, 2.2)}</button><span class="nn">${songIx + 1}/${ss.length}</span><span class="t1">${esc(x.title)}</span><span class="nk">${(() => { const o = occOf(id), k = o ? keyIn(o, songIx, x) : x.key, d = o && x.key && k !== x.key ? steps(x.key, k) : 0; return `<b>${esc(k || "")}</b>${d ? ` <small>${d > 0 ? "+" : "−"}${Math.abs(d)} from ${esc(x.key)}</small>` : ""}${x.tempo ? ` · ${x.tempo} bpm` : ""}`; })()}</span></div>
     ${progressBars()}`;
 }
 // The transport: the click, the previous section, play, the next section, loop.
@@ -1242,44 +1262,28 @@ function pageLyrics(id) {
       <div class="sheetwrap"><div class="sheetpage"><b>Lyrics</b><span>The lyrics page fills this page, as wide as the phone</span></div></div>
     </div>`;
 }
-const PAGES = { home: pageProjects, sessions: pageSessions, setlists: pageSetlistsTab, signal: pageRigs };
-const TABS = [["home", "Home", "home"], ["sessions", "Records", "disc"], ["setlists", "Setlists", "setlist"], ["signal", "Signal", "rig"]];
+const PAGES = { home: pageProjects, records: pageSessions, setlists: pageSetlistsTab, signal: pageRigs };
+const TABS = [["home", "Home", "home"], ["records", "Records", "disc"], ["setlists", "Setlists", "setlist"], ["signal", "Signal", "rig"]];
 
 // ── The sidebar (the left drawer) ───────────────────────────────────────────
 function drawer() {
-  const meter = [1,1,1,1,1,1,0,0,0,0,0,0].map(o => `<i class="${o ? "on" : ""}"></i>`).join("");
+  const counts = { home: "", records: RECENT_WORK.length, setlists: SERIES.length + FOLDERS.reduce((t, f) => t + f.shows.length, 0), signal: RIGS.length };
+  const loaded = RIGS.find(r => r.loaded);
   return `
     <div class="scroll">
       <button class="switcher" data-orgs>
         ${org ? `<span class="mark" style="background:oklch(.45 .1 ${ORGS.find(o => o[0] === org)[2]})">${orgName(org)[0]}</span>` : `<span class="mark">${ic("layers", 16)}</span>`}<span class="nm"><b>${esc(org ? orgName(org) : "All organizations")}</b><span>${org ? "Organization" : `${ORGS.length} organizations`}</span></span>
         <span style="color:var(--ink-3)">${ic("updown", 16)}</span>
       </button>
-      <div class="sidetabs">${TABS.map(([id, label, icon]) => `<button class="sidetab" data-tab="${id}" aria-current="${tab === id ? "page" : "false"}">${ic(icon, 19)}${label}<span class="n">${{ home: "", sessions: 3, setlists: SERIES.length + 2, signal: RIGS.length }[id]}</span></button>`).join("")}
-        <button class="sidetab" data-open="library">${ic("library", 19)}Library<span class="n">${POOL.length + 21}</span></button></div>
-
-      <div class="sidehead">Engine</div>
-      <div class="engine">
-        <div class="row1"><span class="live"></span>Running on THEBATTLESHIP</div>
-        <div class="row2">Scarlett 18i20 · 48 kHz · 128 samples</div>
-        <div class="meter" aria-label="Load 48%">${meter}</div>
-      </div>
-
-      <div class="sidehead">Every week</div>
-      ${SERIES.map(sr => { const nx = nextOf(sr); return `<button class="siderow" data-open="${sr.id}"><span class="sw" style="background:oklch(.62 .12 ${sr.hue})"></span><span class="lbl">${esc(sr.name)}</span><span class="nt">${nx ? esc(when(nx.date)) : ""}</span></button>`; }).join("")}
-
+      <div class="sidetabs">${TABS.map(([id, label, icon]) => `<button class="sidetab" data-tab="${id}" aria-current="${tab === id ? "page" : "false"}">${ic(icon, 19)}${label}<span class="n">${counts[id]}</span></button>`).join("")}
+        <button class="sidetab" data-open="library">${ic("library", 19)}Library<span class="n">${LIB.length}</span></button></div>
+      <div class="sidehead">Recurring</div>
+      ${SERIES.map(sr => { const nx = nextOf(sr); return `<button class="siderow" data-open="${sr.id}">${LOGO[sr.id] ? `<img class="slogo sm" src="${LOGO[sr.id]}" alt="">` : ""}<span class="lbl">${esc(sr.name)}</span><span class="nt">${nx ? (daysFrom(nx.date) === 0 ? "Today" : DAY[nx.date.getUTCDay()].slice(0, 3)) : ""}</span></button>`; }).join("")}
       <div class="sidehead">Shows</div>
-      ${PINNED.map(id => { const p = PROJECTS.find(x => x.id === id); return `<button class="siderow" data-open="${id}">${ribbon(p)}<span class="lbl">${esc(titleOf(p))}</span><span class="nt">${songs(SETS[p.set]).length}</span></button>`; }).join("")}
-
-      <div class="sidehead">Loaded rig<button data-tab="signal">All</button></div>
-      ${RIGS.filter(r => r.loaded).map(r => `<button class="siderow" data-act="Opened the ${esc(r.name)} rig"><span class="ic"><span class="live"></span></span><span class="lbl">${esc(r.name)}</span><span class="nt">${esc(r.preset)}</span></button>`).join("")}
-
-      <div class="sidehead">Locations<button data-act="Scanning 4 locations">Scan</button></div>
-      ${[["Studio vault", "86"], ["Ableton projects", "41"], ["Pro Tools sessions", "23"], ["REAPER projects", "12"]].map(([l, n]) => `<button class="siderow" data-act="Opened ${l}"><span class="ic">${ic("drive", 17)}</span><span class="lbl">${l}</span><span class="nt">${n}</span></button>`).join("")}
+      ${PINNED.map(id => { const st = SETS[id]; return `<button class="siderow" data-open="${id}">${ART[id] ? `<img class="slogo sm" src="${ART[id]}" alt="">` : `<span class="slogo sm">${cover({ title: st.title }, 24, id === "mb" ? 150 : 20)}</span>`}<span class="lbl">${esc(st.title)}</span><span class="nt">${songs(st).length}</span></button>`; }).join("")}
+      ${loaded ? `<div class="sidehead">Loaded rig</div><button class="siderow" data-tab="signal"><span class="ic"><span class="live"></span></span><span class="lbl">${esc(loaded.name)}</span><span class="nt">${esc(loaded.preset)}</span></button>` : ""}
     </div>
-    <div class="footrows">
-      <button data-act="Theme: dark">${ic("moon", 18)}Theme</button>
-      <button data-act="Settings">${ic("settings", 18)}Settings</button>
-    </div>
+    <div class="footrows"><button data-act="Settings">${ic("settings", 18)}Settings</button></div>
     <div class="account"><button data-act="Account">
       <span class="avatar">CW</span><span class="who"><b>Cody Wright</b><span>Signed in · 2 devices</span></span>
       <span style="color:var(--ink-3)">${ic("updown", 15)}</span>
@@ -1301,9 +1305,11 @@ const MENUS = {
     ["div"], ["head", "Sort"], ["check", "Last opened", true], ["check", "Name", false], ["check", "Show ribbons", true],
   ],
   series: () => [
-    ["item", "Plan a set", "plus"], ["item", "Change the days", "settings"], ["item", "Songs a set", "setlist", "usual count"],
+    ["item", "Plan a set", "plus"], ["item", "Book a rehearsal", "mic"], ["item", "Change the days", "settings"], ["item", "Songs a set", "setlist", "usual count"],
     ["div"], ["item", "Pin to the sidebar", "pin"], ["item", "Share…", "share"],
   ],
+  occ: () => [["item", "Book a rehearsal", "mic"], ["item", "Copy last week's set", "loop"], ["div"], ["item", "Share…", "share"], ["item", "Show in the vault", "folder"]],
+  setmenu: () => [["head", "Show"], ["check", "All folders", sfold === "all"], ...FOLDERS.map(f => ["check", f.name, sfold === f.tag]), ["div"], ["item", "Every setlist", "calendar"], ["item", "Library", "library"]],
   project: () => [
     ["item", "Open in Session", "open"], ["item", "Rehearse", "mic"], ["item", "Pin to the sidebar", "pin"],
     ["div"], ["item", "Share…", "share"], ["item", "Show in the vault", "folder"],
@@ -1348,14 +1354,13 @@ const stage = document.getElementById("stage");
 const known = id => id === "every" || id.startsWith("lt:") || ALBUMS[id] || RFOLDERS.some(f => f.id === id) || studioOf(id) || id === "library" || id === "allsets" || id === "tags" || seriesOf(id) || occOf(id) || PROJECTS.find(p => p.id === id);
 const pageFor = id => id === "every" ? pageEvery() : id.startsWith("lt:") ? pageLibrary(id) : RFOLDERS.some(f => f.id === id) ? pageRFolder(id) : studioOf(id) ? pageSong(id) : id === "library" ? pageLibraryHome() : id === "allsets" ? pageAllSets() : id === "tags" ? pageTags() : seriesOf(id) ? pageSeries(id) : occOf(id) ? pageOcc(id) : ALBUMS[id] ? pageAlbum(id) : pageProject(id);
 // Where a page lives when it is opened from outside a tab's own pages.
-const tabFor = id => { if (studioOf(id) || id.startsWith("f:") || ALBUMS[id]) return "sessions"; const p = PROJECTS.find(x => x.id === id); return p ? (p.kind === "Set" ? "setlists" : p.kind === "Song" ? "home" : "sessions") : "setlists"; };
+const tabFor = id => { if (studioOf(id) || id.startsWith("f:") || ALBUMS[id]) return "records"; const p = PROJECTS.find(x => x.id === id); return p ? (p.kind === "Set" ? "setlists" : p.kind === "Song" ? "home" : "records") : "setlists"; };
 // The note the bottom slots follow: a set (live) or a record (studio).
 const noteMode = id => studioOf(id) ? "song" : ALBUMS[id] ? "studio" : (occOf(id) || PROJECTS.find(p => p.id === id && p.kind === "Set")) ? "live" : null;
 const modeNote = () => [...stack].reverse().find(noteMode);
 const FAV = {
   live: { tabs: [["setlist", "Setlist", "setlist"], ["chart", "Chart", "chart"], ["lyrics", "Lyrics", "type"], ["more", "More", "more"]], primary: ["Play the set", "play"] },
-  studio: { tabs: [["album", "Album", "disc"], ["review", "Review", "message"]], primary: ["Comment at the playhead", "messagePlus"] },
-  song: { tabs: [["song", "Song", "audio"], ["review", "Review", "message"]], primary: ["Comment at the playhead", "messagePlus"] },
+  studio: { tabs: [["album", "Album", "disc"], ["review", "Review", "message"]], primary: ["Play the latest versions", "play"] },
 };
 let view = null;
 function topPage(id) {
@@ -1374,7 +1379,7 @@ function render() {
   hydrateArt();
   const note = modeNote(), m = note && noteMode(note), fav = m && FAV[m];
   const cur = fav ? (view || fav.tabs[0][0]) : tab;
-  document.getElementById("tabs").innerHTML = (fav ? fav.tabs : TABS).map(([id, label, icon]) => `<button class="tab ${fav ? "fav" : ""}" ${fav ? `data-view="${id}"` : `data-tab="${id}"`} aria-label="${label}" aria-current="${cur === id ? "page" : "false"}">${ic(icon, 22)}${fav ? `<span>${label}</span>` : ""}</button>`).join("");
+  document.getElementById("tabs").innerHTML = (fav ? fav.tabs : TABS).map(([id, label, icon]) => `<button class="tab fav" ${fav ? `data-view="${id}"` : `data-tab="${id}"`} aria-label="${label}" aria-current="${cur === id ? "page" : "false"}">${ic(icon, 22)}<span>${label}</span></button>`).join("");
   const songView = m === "live" && (view === "chart" || view === "lyrics");
   // A track is its own player: no Now Playing bar over its review.
   document.getElementById("phone").classList.toggle("trackview", m === "song");
@@ -1384,6 +1389,7 @@ function render() {
   const round = document.querySelector(".round");
   const rig = m === "live" && rigOf(MINE[note]);
   const prim = rig ? [`Open in ${rig.name}`, rig.icon] : fav && fav.primary;
+  document.getElementById("phone").classList.toggle("noround", songView && !rig);
   round.outerHTML = fav ? `<button class="round prim" ${rig ? `style="--h:${rig.hue}" data-rig` : ""} data-act="${prim[0]}" aria-label="${prim[0]}">${ic(prim[1], 22, 1.9)}</button>` : `<button class="round" data-palette aria-label="Open anything">${ic("search", 22, 1.9)}</button>`;
   document.getElementById("drawer").innerHTML = drawer();
   history.replaceState(null, "", "#/" + [tab, ...stack].join("/") + (view ? "~" + view : "") + (side ? "!side" : ""));
@@ -1399,7 +1405,8 @@ function setView(v) {
 function openMore() {
   const sh = document.getElementById("sheet");
   sh.innerHTML = `<div class="bsheet" role="dialog" aria-label="More"><div class="grab"></div>
-    ${[["Arrangement", "branch"], ["Mixer", "sliders"], ["Lighting Vis", "bulb"], ["Lighting Cue List", "cues"], ["Notes", "message"]].map(([l, i]) => `<button class="mi big" data-act="${l}" data-close>${ic(i, 20)}${l}</button>`).join("")}
+    <div class="bhead"><b>More for this set</b></div>
+    ${[["Arrangement", "branch"], ["Mixer", "sliders"], ["Lighting visualizer", "bulb"], ["Lighting cue list", "cues"], ["Notes", "message"]].map(([l, i]) => `<button class="mi big" data-act="${l}" data-close>${ic(i, 20)}${l}</button>`).join("")}
   </div>`;
   sh.classList.add("bottom"); sh.hidden = false;
 }
@@ -1416,6 +1423,7 @@ function push(id) {
 }
 function pop() {
   if (!stack.length) return;
+  if (view && stack.at(-1) === modeNote()) { view = null; return render(); }
   const top = stage.querySelector("#top"), root = stage.querySelector("#root");
   root.classList.remove("under"); top.classList.add("enter");
   setTimeout(() => { stack.pop(); editing = false; if (!modeNote()) view = null; render(); }, 280);
@@ -1435,7 +1443,7 @@ document.addEventListener("click", e => {
   if (el("[data-setarr]")) { const [id, i, a] = el("[data-setarr]").dataset.setarr.split("|"); (OV[`${id}|${i}`] ||= {}).arr = a; closePalette(); return render(); }
   if (el("[data-setkey]")) { const [id, i, k] = el("[data-setkey]").dataset.setkey.split("|"); (OV[`${id}|${i}`] ||= {}).key = k; closePalette(); return render(); }
   if (el("[data-book]")) { BK = null; return openBook(); }
-  if (el("[data-bk]")) { const [k, v] = el("[data-bk]").dataset.bk.split("|"); BK[k] = k === "day" ? +v : v; return openBook(); }
+  if (el("[data-bk]")) { const [k, v] = el("[data-bk]").dataset.bk.split("|"); BK[k] = k === "day" ? +v : v; if (k === "set") BK.day = null; return openBook(); }
   if (el("[data-bkgo]")) { REH.push({ id: "reh" + (REH.length + 1), set: BK.set, date: new Date(TODAY.getTime() + BK.day * 864e5), time: BK.time, room: BK.room }); closePalette(); toast("Rehearsal booked"); return render(); }
   if (el("[data-rev]")) return openRev(el("[data-rev]").dataset.rev);
   if (el("[data-ver]")) { RV.v = +el("[data-ver]").dataset.ver; return redrawReview(); }
@@ -1489,6 +1497,9 @@ document.addEventListener("click", e => {
   if (el("[data-fold]")) { flip(folded, el("[data-fold]").dataset.fold); return render(); }
   if (el("[data-scope]")) { scope = el("[data-scope]").dataset.scope; return render(); }
   if (el("[data-menu]")) { e.stopPropagation(); return openMenu(el("[data-menu]").dataset.menu, el("[data-menu]")); }
+  if (el(".menu .mi") && el(".mi").dataset.act === "Book a rehearsal") { closeMenu(); const o = occOf(stack.at(-1)) || nextOf(seriesOf(stack.at(-1)) || SERIES[0]); BK = { set: o.id, time: "7:00 PM", room: (PLACE[o.series.id] || [])[0] || "Room 210" }; return openBook(); }
+  if (el(".menu .mi") && el(".mi").dataset.act === "Every setlist") { closeMenu(); return push("every"); }
+  if (el(".menu .mi") && el(".mi").dataset.act === "Library") { closeMenu(); return push("library"); }
   if (el(".menu .mi")) { const a = el(".mi").dataset.act, f = a === "All folders" ? "all" : FOLDERS.find(x => x.name === a)?.tag; closeMenu(); if (f) { sfold = f; return render(); } return toast(a); }
   if (el("[data-palette]")) return openPalette();
   if (el("#scrim")) return setSide(false);
@@ -1524,7 +1535,7 @@ addEventListener("touchmove", e => { if (sx == null) return; const t = e.touches
 
 // #/projects, #/projects/jt, #/rigs, …; "!side" with the sidebar out.
 const H0 = decodeURIComponent(location.hash);
-const h = (location.hash || "#/home").replace("#/projects", "#/home").replace("!filters", "").replace("!player", "").replace(/!(key|arr)=[^!]+/, "").replace("!edit", "").replace("!book", "").replace(/!rev=[^!]+/, ""), wantSide = h.includes("!side"), wantFilters = location.hash.includes("!filters"), wantPlayer = location.hash.includes("!player");
+const h = (location.hash || "#/home").replace("#/projects", "#/home").replace("#/sessions", "#/records").replace("!filters", "").replace("!player", "").replace(/!(key|arr)=[^!]+/, "").replace("!edit", "").replace("!book", "").replace(/!rev=[^!]+/, ""), wantSide = h.includes("!side"), wantFilters = location.hash.includes("!filters"), wantPlayer = location.hash.includes("!player");
 const [, first, ...rest] = h.replace("!side", "").split("~")[0].split("/");
 view = h.replace("!side", "").split("~")[1] || null;
 tab = PAGES[first] ? first : "home";
