@@ -36,60 +36,56 @@ use crate::queue::{self, Item, Now, Setlist};
     allow(dead_code, reason = "drawn by the web bundle only")
 )]
 pub const SHEET: &str = r#"
-.sl { font-family: var(--font, system-ui, -apple-system, sans-serif); color: var(--foreground, CanvasText);
-      padding: 4px 10px 12px; box-sizing: border-box; width: 100%; }
+.sl { font-family: var(--font, system-ui, -apple-system, sans-serif); color: var(--foreground, #f4f4f5);
+      padding: 4px 20px 28px; box-sizing: border-box; width: 100%; }
 .sl * { box-sizing: border-box; }
-.sl-head { display: none; }
 .sl ol { list-style: none; margin: 0; padding: 0; }
-.sl-section { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; margin: 0;
-              color: var(--muted-foreground, GrayText); padding: 18px 0 6px; }
-.sl-row { display: grid; grid-template-columns: 22px 48px minmax(0, 1fr) auto; align-items: center; column-gap: 12px;
-          width: 100%; min-height: 64px; padding: 8px 0; border: 0; margin: 0; background: transparent; color: inherit;
-          font: inherit; text-align: left; position: relative; cursor: pointer; border-radius: 8px; }
-.sl-row:hover { background: rgba(128, 128, 128, .12);
-                background: color-mix(in srgb, var(--foreground, CanvasText) 6%, transparent); }
-.sl-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
-.sl-open { width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: transparent;
-  color: var(--muted-foreground, GrayText); border-radius: 10px; cursor: pointer; }
-.sl-open:hover { background: rgba(128, 128, 128, .12); color: var(--foreground, CanvasText); }
-.sl-open:focus-visible { outline: 2px solid var(--accent, Highlight); outline-offset: -2px; }
-.sl-row:focus-visible { outline: 2px solid var(--accent, Highlight); outline-offset: -2px; }
+.sl-wash { height: 400px; margin: -4px -20px -396px; }
+.sl-hero { position: relative; display: flex; gap: 16px; align-items: stretch; margin: 6px 0 4px; }
+.sl-cover { width: 140px; height: 140px; flex: none; border-radius: 14px; overflow: hidden; position: relative;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.sl-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sl-htext { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; }
+.sl-cal { width: 40px; height: 40px; border-radius: 9px; display: flex; flex-direction: column; align-items: center;
+          justify-content: center; background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px rgba(255,255,255,.09); }
+.sl-cal b { font-size: 9px; font-weight: 800; letter-spacing: .05em; color: rgba(248,113,113,.85); text-transform: uppercase; }
+.sl-cal span { font-size: 16px; font-weight: 700; line-height: 1.05; }
+.sl-title { font-size: 30px; line-height: 1.12; font-weight: 750; letter-spacing: -.02em; margin: 0; }
+.sl-sub { font-size: 14px; color: var(--muted-foreground, #8b8b94); margin-top: 2px; }
+.sl-count { font-size: 12.5px; color: #80808a; margin-top: 3px; }
+.sl-shead { position: relative; display: flex; align-items: center; justify-content: space-between; margin: 22px 2px 8px; }
+.sl-section { font-size: 13px; font-weight: 650; margin: 0; color: var(--muted-foreground, #8b8b94); }
+.sl-n { font-size: 12.5px; color: #80808a; }
+.sl-card { position: relative; background: var(--card, #111114); border: 1px solid #1c1c21; border-radius: 16px; overflow: hidden; }
+.sl-card li + li::before { content: ""; display: block; height: 1px; margin-left: 72px; background: #1f1f24; }
+.sl-row { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 68px; padding: 10px 14px;
+          border: 0; margin: 0; background: transparent; color: inherit; font: inherit; text-align: left;
+          position: relative; cursor: pointer; }
+.sl-row:active { background: rgba(255,255,255,.06); }
+.sl-row:focus-visible { outline: 2px solid var(--accent, #f0c24b); outline-offset: -2px; }
 .sl-row[aria-disabled="true"] { cursor: default; }
-.sl-row[aria-disabled="true"]:hover { background: transparent; }
 .sl-row[aria-disabled="true"] .sl-tile, .sl-row[aria-disabled="true"] .sl-text { opacity: .55; }
-.sl-num { font-size: 14px; color: var(--muted-foreground, GrayText); text-align: right; font-variant-numeric: tabular-nums; }
-.sl-tile { width: 48px; height: 48px; border-radius: 6px; position: relative; overflow: hidden; display: flex;
-           align-items: center; justify-content: center; color: #fff; }
-.sl-key { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
-.sl-key[data-size="s"] { font-size: 14px; }
-.sl-key[data-size="xs"] { font-size: 12px; }
+.sl-tile { width: 44px; height: 44px; flex: none; border-radius: 8px; position: relative; overflow: hidden;
+           display: flex; align-items: center; justify-content: center; color: #fff;
+           box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
 .sl-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.sl-chip { position: absolute; left: 3px; bottom: 3px; font-size: 10px; font-weight: 700; line-height: 1; padding: 2px 4px;
-           border-radius: 4px; background: rgba(0, 0, 0, .62); color: #fff; }
-.sl-moved { position: absolute; right: 3px; bottom: 2px; font-size: 11px; font-weight: 700; }
-.sl-text { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
-.sl-name, .sl-by, .sl-artist { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sl-name { font-size: 15px; font-weight: 500; }
-.sl-by { font-size: 13px; color: var(--muted-foreground, GrayText); }
-.sl-artist { display: none; font-size: 14px; color: var(--muted-foreground, GrayText); }
-.sl-len { font-size: 13px; color: var(--muted-foreground, GrayText); font-variant-numeric: tabular-nums; text-align: right; }
-.sl-row[data-current] .sl-name, .sl-row[data-current] .sl-num { color: var(--accent, Highlight); }
-.sl-bar { position: absolute; left: 0; right: 0; bottom: 2px; height: 2px; border-radius: 1px;
-          background: rgba(128, 128, 128, .25);
-          background: color-mix(in srgb, var(--foreground, CanvasText) 12%, transparent); overflow: hidden; }
-.sl-bar > span { display: block; height: 100%; background: var(--accent, Highlight); }
-.sl-eq { display: inline-flex; gap: 2px; align-items: flex-end; height: 14px; }
-.sl-eq > span { width: 3px; background: var(--accent, Highlight); border-radius: 1px; }
-.sl-empty { padding: 16px 0; color: var(--muted-foreground, GrayText); }
-@media (min-width: 640px) {
-  .sl-head, .sl-row { grid-template-columns: 28px 48px minmax(0, 3fr) minmax(0, 2fr) 64px; }
-  .sl-head { display: grid; column-gap: 12px; font-size: 12px; color: var(--muted-foreground, GrayText);
-             padding-top: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border, GrayText); margin-bottom: 4px; }
-  .sl-head > span:first-child { text-align: right; }
-  .sl-head > span:last-child { text-align: right; }
-  .sl-by { display: none; }
-  .sl-artist { display: block; }
-}
+.sl-eq { position: absolute; inset: 0; display: flex; gap: 3px; align-items: flex-end; justify-content: center;
+         padding-bottom: 12px; background: rgba(0,0,0,.45); }
+.sl-eq > span { width: 3px; background: #f0c24b; border-radius: 1px; }
+.sl-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sl-name, .sl-by { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sl-name { font-size: 16px; font-weight: 620; }
+.sl-by { font-size: 13px; color: var(--muted-foreground, #8b8b94); }
+.sl-key { flex: none; height: 26px; min-width: 38px; padding: 0 8px; border-radius: 7px; display: flex;
+          align-items: center; justify-content: center; gap: 3px; font-size: 13.5px; font-weight: 700; }
+.sl-key small { font-size: 9.5px; font-weight: 600; color: #8b8b94; }
+.sl-nokey { flex: none; height: 26px; padding: 0 8px; border-radius: 7px; display: flex; align-items: center;
+            font-size: 11px; font-weight: 600; color: #8b8b94; box-shadow: inset 0 0 0 1px #3a3a42; }
+.sl-row[data-current] .sl-name { color: #f0c24b; }
+.sl-bar { position: absolute; left: 72px; right: 14px; bottom: 6px; height: 2px; border-radius: 1px;
+          background: rgba(255,255,255,.1); overflow: hidden; }
+.sl-bar > span { display: block; height: 100%; background: #f0c24b; }
+.sl-empty { padding: 16px 0; color: var(--muted-foreground, #8b8b94); }
 "#;
 
 /// The setlist view, over the app's props.
@@ -210,28 +206,47 @@ pub fn Rows(
     } else {
         setlist.title.clone()
     };
+    let (name, sub) = split_title(&title);
+    let songs = setlist.items().count();
+    let secs: f64 = setlist.items().filter_map(|i| i.length).sum();
+    let count = if secs > 0.0 {
+        format!("{} · {}", plural(songs), queue::clock(secs))
+    } else {
+        plural(songs)
+    };
+    let cover = setlist.art.as_ref().and_then(|a| art.get(a)).cloned();
+    let wash = title_hue(&title);
+    let cal = cal_of(&setlist.date);
     rsx! {
-        // No heading of its own: the host names the note (its tab, its
-        // place in the navigator); the list keeps the name for a screen
-        // reader.
+        // The setlist as the prototype's set page: its cover, its day,
+        // its name, then each set on a card under its name and count.
         div { class: "sl", "data-testid": "studio-setlist", role: "region", "aria-label": "{title}",
-            div { class: "sl-head", "aria-hidden": "true",
-                span { "#" } span {} span { "Title" } span { "Artist" } span { "Length" }
-            }
-            for (n, section) in setlist.sections.iter().enumerate() {
-                if let Some(name) = &section.name {
-                    div { key: "s{n}",
-                        h2 { class: "sl-section", id: "sl-set-{n}", "{name}" }
-                        ol { "aria-labelledby": "sl-set-{n}",
-                            for item in section.items.iter() {
-                                li { key: "{item.id}",
-                                    Row { item: item.clone(), now: now.clone(), playable: playable.contains(&item.id), cover: item.art.as_ref().and_then(|a| art.get(a)).cloned(), on_press, on_open }
-                                }
-                            }
+            div { class: "sl-wash", "aria-hidden": "true",
+                style: "background: linear-gradient(180deg, hsl({wash} 45% 15%) 0px, transparent 400px);" }
+            div { class: "sl-hero",
+                div { class: "sl-cover", style: "{cover_wash(wash)}",
+                    if let Some(src) = &cover { img { src: "{src}", alt: "" } }
+                }
+                div { class: "sl-htext",
+                    div {
+                        if let Some((mon, day)) = cal {
+                            div { class: "sl-cal", "aria-hidden": "true", b { "{mon}" } span { "{day}" } }
                         }
                     }
-                } else {
-                    ol { key: "s{n}", "aria-label": "{title}",
+                    div {
+                        h1 { class: "sl-title", "{name}" }
+                        if !sub.is_empty() { div { class: "sl-sub", "{sub}" } }
+                        div { class: "sl-count", "{count}" }
+                    }
+                }
+            }
+            for (n, section) in setlist.sections.iter().enumerate() {
+                div { key: "s{n}",
+                    div { class: "sl-shead",
+                        h2 { class: "sl-section", id: "sl-set-{n}", {section.name.clone().unwrap_or_else(|| "Songs".to_owned())} }
+                        span { class: "sl-n", "{plural(section.items.len())}" }
+                    }
+                    ol { class: "sl-card", "aria-labelledby": "sl-set-{n}",
                         for item in section.items.iter() {
                             li { key: "{item.id}",
                                 Row { item: item.clone(), now: now.clone(), playable: playable.contains(&item.id), cover: item.art.as_ref().and_then(|a| art.get(a)).cloned(), on_press, on_open }
@@ -242,6 +257,74 @@ pub fn Rows(
             }
         }
     }
+}
+
+/// `Merry & Bright - CBU Christmas 2026`: its name, and what follows the
+/// dash under it.
+fn split_title(title: &str) -> (String, String) {
+    match title.split_once(" - ") {
+        Some((a, b)) => (a.trim().to_owned(), b.trim().to_owned()),
+        None => (title.to_owned(), String::new()),
+    }
+}
+
+fn plural(n: usize) -> String {
+    if n == 1 {
+        "1 song".to_owned()
+    } else {
+        format!("{n} songs")
+    }
+}
+
+/// A hue from a title, for a cover that has no image.
+fn title_hue(title: &str) -> u32 {
+    title
+        .bytes()
+        .fold(7u32, |h, b| h.wrapping_mul(31).wrapping_add(u32::from(b)))
+        % 360
+}
+
+/// The abstract cover of a hue (the launcher's `Cover`).
+fn cover_wash(h: u32) -> String {
+    let b = (h + 300) % 360;
+    format!(
+        "background: radial-gradient(circle at 65% 62%, hsl({h} 70% 62%) 0%, hsl({b} 75% 50%) 26%, transparent 55%), \
+         linear-gradient(160deg, hsl({h} 45% 30%), hsl({h} 40% 9%));"
+    )
+}
+
+/// `2026-12-12` as its month's three letters and its day.
+fn cal_of(date: &str) -> Option<(&'static str, u32)> {
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    let mut parts = date.split('-');
+    let _year = parts.next()?;
+    let month: usize = parts.next()?.parse().ok()?;
+    let day: u32 = parts.next()?.get(..2)?.parse().ok()?;
+    Some((MONTHS.get(month.checked_sub(1)?)?, day))
+}
+
+/// A key's hue: a step round the circle of fifths a twelfth of the wheel
+/// (the launcher's `key_hue`).
+fn key_hue(key: &str) -> u32 {
+    const FIFTHS: [&str; 12] = [
+        "C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F",
+    ];
+    let root = key.split(['→', '*', 'm', ' ']).next().unwrap_or(key).trim();
+    let root = match root {
+        "Gb" => "F#",
+        "C#" => "Db",
+        "G#" => "Ab",
+        "D#" => "Eb",
+        "A#" => "Bb",
+        k => k,
+    };
+    FIFTHS
+        .iter()
+        .position(|k| *k == root)
+        .and_then(|i| u32::try_from(i).ok())
+        .map_or(0, |i| (i * 30 + 20) % 360)
 }
 
 #[component]
@@ -261,19 +344,15 @@ fn Row(
         (true, false) => "No recording".to_owned(),
         (false, false) => format!("{} · No recording", item.artist),
     };
-    let length = item.length.map(queue::clock).unwrap_or_default();
     let label = queue::row_label(&item, current.is_some(), playing, playable);
     let (r, g, b) = queue::tile_rgb(item.hue);
-    let size = match item.key.chars().count() {
-        0..=3 => "",
-        4..=5 => "s",
-        _ => "xs",
-    };
     let pressed = item.clone();
     let opened = item.clone();
     let has_note = queue::note_of(&item.id).is_some();
+    let _ = (on_open, has_note, opened);
+    let kh = key_hue(&item.key);
+    let shown_key = item.key.trim_end_matches('*').to_owned();
     rsx! {
-      div { class: "sl-item",
         button {
             r#type: "button",
             class: "sl-row",
@@ -287,32 +366,20 @@ fn Row(
                     on_press.call(pressed.clone());
                 }
             },
-            span { class: "sl-num", "aria-hidden": "true",
-                if playing {
-                    span { class: "sl-eq",
-                        span { style: "height: 60%;" } span { style: "height: 100%;" } span { style: "height: 40%;" }
-                    }
-                } else {
-                    "{item.number}"
-                }
-            }
             span { class: "sl-tile", style: "background: rgb({r} {g} {b});", "aria-hidden": "true",
                 if let Some(src) = &cover {
                     img { class: "sl-art", src: "{src}", alt: "", "data-testid": "row-art" }
-                    if !item.key.is_empty() {
-                        span { class: "sl-chip", "{item.key}" }
-                    }
-                } else if item.key.is_empty() {
-                    svg { view_box: "0 0 24 24", width: "22", height: "22", fill: "none", stroke: "currentColor",
+                } else {
+                    svg { view_box: "0 0 24 24", width: "20", height: "20", fill: "none", stroke: "currentColor",
                         stroke_width: "2", stroke_linecap: "round", stroke_linejoin: "round",
                         path { d: "M9 18V5l12-2v13" }
                         circle { cx: "6", cy: "18", r: "3" }
                         circle { cx: "18", cy: "16", r: "3" }
                     }
-                } else {
-                    span { class: "sl-key", "data-size": "{size}", "{item.key}" }
-                    if let Some(m) = &item.moved {
-                        span { class: "sl-moved", "{m}" }
+                }
+                if playing {
+                    span { class: "sl-eq",
+                        span { style: "height: 30%;" } span { style: "height: 50%;" } span { style: "height: 22%;" }
                     }
                 }
             }
@@ -320,28 +387,19 @@ fn Row(
                 span { class: "sl-name", "{item.title}" }
                 span { class: "sl-by", "{by}" }
             }
-            span { class: "sl-artist", "aria-hidden": "true", "{by}" }
-            span { class: "sl-len", "aria-hidden": "true", "{length}" }
+            if item.key.is_empty() {
+                span { class: "sl-nokey", "aria-hidden": "true", "Set key" }
+            } else {
+                span { class: "sl-key", "aria-hidden": "true",
+                    style: "background: hsl({kh} 40% 15%); color: hsl({kh} 70% 75%);",
+                    "{shown_key}"
+                    if let Some(m) = &item.moved { small { "{m}" } }
+                }
+            }
             if let Some(p) = progress {
                 span { class: "sl-bar", "aria-hidden": "true", span { style: "width: {p:.2}%;" } }
             }
         }
-        // To the song itself: its chart and lyrics. A press of its own,
-        // beside the row (a row plays).
-        if has_note {
-            button {
-                r#type: "button",
-                class: "sl-open",
-                "data-testid": "row-open",
-                "aria-label": "Open {item.title}: its chart and lyrics",
-                onclick: move |_| on_open.call(opened.clone()),
-                svg { view_box: "0 0 24 24", width: "20", height: "20", fill: "none", stroke: "currentColor",
-                    stroke_width: "2", stroke_linecap: "round", stroke_linejoin: "round", "aria-hidden": "true",
-                    path { d: "M9 6l6 6-6 6" }
-                }
-            }
-        }
-      }
     }
 }
 

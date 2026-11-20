@@ -471,6 +471,7 @@ fn list_of(items: Vec<Item>) -> Setlist {
         title: "S".to_owned(),
         sections: vec![Section { name: None, items }],
         withheld: false,
+        ..Setlist::default()
     }
 }
 

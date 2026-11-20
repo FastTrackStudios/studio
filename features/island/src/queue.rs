@@ -188,6 +188,10 @@ pub struct Setlist {
     /// The setlist note's path: what its item ids are scoped by.
     pub scope: String,
     pub title: String,
+    /// Its day (`2026-12-12`), from its note's `date`; empty for none.
+    pub date: String,
+    /// Its cover, a vault path the app hands as an image (`art`).
+    pub art: Option<String>,
     pub sections: Vec<Section>,
     /// The note came without its body (a share link's guest): its songs
     /// are not the view's to show.
@@ -671,6 +675,12 @@ fn from_note(note: &Value) -> Setlist {
                 .filter(|t| !t.is_empty())
         })
         .unwrap_or_default();
+    let props = note.get("properties");
+    let date = props.map(|p| text(p, "date")).unwrap_or_default();
+    let art = props
+        .map(|p| text(p, "art"))
+        .filter(|a| !a.is_empty())
+        .map(|a| a.trim_start_matches("[[").trim_end_matches("]]").to_owned());
     let withheld = note.get("body").is_none();
     let body = note.get("body").and_then(Value::as_str).unwrap_or("");
     let files = files_of(note);
@@ -729,12 +739,66 @@ fn from_note(note: &Value) -> Setlist {
         }
     }
     sections.retain(|s| s.name.is_some() || !s.items.is_empty());
+    // The list names no sets but the note's `sets` does (each a name and
+    // its songs' links): the rows grouped as it says.
+    if sections.iter().all(|s| s.name.is_none())
+        && let Some(sets) = props.and_then(|p| p.get("sets")).and_then(Value::as_array)
+    {
+        sections = grouped(sections, sets);
+    }
     capped(Setlist {
         scope,
         title,
+        date,
+        art,
         sections,
         withheld,
     })
+}
+
+/// `sections`' rows in the sets a note's `sets` names (`[{name, songs:
+/// ["[[path|label]]", …]}]`), in the list's order within each; a row no
+/// set names stays, in a set of its own at the end.
+fn grouped(sections: Vec<Section>, sets: &[Value]) -> Vec<Section> {
+    let mut rest: Vec<Item> = sections.into_iter().flat_map(|s| s.items).collect();
+    let mut out = Vec::new();
+    for set in sets {
+        let name = text(set, "name");
+        let links: Vec<String> = set
+            .get("songs")
+            .and_then(Value::as_array)
+            .map(|songs| {
+                songs
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(|l| {
+                        let inner = l.trim().trim_start_matches("[[").trim_end_matches("]]");
+                        let path = inner.split('|').next().unwrap_or(inner);
+                        path.trim_end_matches(".md").to_owned()
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let (mine, others): (Vec<Item>, Vec<Item>) = rest.into_iter().partition(|item| {
+            note_of(&item.id)
+                .map(|n| n.trim_end_matches(".md"))
+                .is_some_and(|n| links.iter().any(|l| l == n))
+        });
+        rest = others;
+        if !mine.is_empty() {
+            out.push(Section {
+                name: (!name.is_empty()).then_some(name),
+                items: mine,
+            });
+        }
+    }
+    if !rest.is_empty() {
+        out.push(Section {
+            name: None,
+            items: rest,
+        });
+    }
+    out
 }
 
 /// What a row's summary (`D · 120 bpm · 4/4`) says of its beat.
