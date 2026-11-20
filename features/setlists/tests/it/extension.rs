@@ -235,7 +235,8 @@ fn libraries_setlists_and_a_share_through_the_app() {
     );
 
     // The navigator's two stages: the setlist on the left, its songs on
-    // the right in order, each opening as a song's scope tab.
+    // the right in order (numbered, so the list's sort by name keeps it),
+    // each opening as a song's scope tab.
     let snap = run(&list, "STUDIO_SETLISTS_NAV_SNAPSHOT", json!({}));
     let titles: Vec<&str> = snap["items"]
         .as_array()
@@ -245,7 +246,11 @@ fn libraries_setlists_and_a_share_through_the_app() {
         .collect();
     assert_eq!(
         titles,
-        ["Old Hundredth", "Sleigh Ride", "Silent Night (Acoustic)"]
+        [
+            "1. Old Hundredth",
+            "2. Sleigh Ride",
+            "3. Silent Night (Acoustic)"
+        ]
     );
     assert_eq!(snap["items"][0]["open"]["kind"], "context");
     assert_eq!(snap["items"][0]["open"]["context_type"], "song");
