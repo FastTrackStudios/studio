@@ -177,11 +177,11 @@ fn tonight(
                     div { style: "font-size: 13px; color: {INK3};", "{sr.folder} · {w.places.len()} songs" }
                 }
             }
-            div { style: "display: flex; align-items: center; gap: 14px; font-size: 13px; color: #85858e;",
-                span { style: "display: flex; align-items: center; gap: 5px;", Icon { name: "pin", size: 13, stroke: 2.0 } "{sr.room}" }
-                span { style: "display: flex; align-items: center; gap: 5px; color: rgba(240,194,75,0.7);", Icon { name: "clock", size: 13, stroke: 2.0 } "Call {sr.call}" }
+            div { style: "display: flex; align-items: center; gap: 12px; font-size: 13px; color: #85858e; white-space: nowrap;",
+                span { style: "display: flex; align-items: center; gap: 5px; white-space: nowrap;", Icon { name: "pin", size: 13, stroke: 2.0 } "{sr.room}" }
+                span { style: "display: flex; align-items: center; gap: 5px; white-space: nowrap; color: rgba(240,194,75,0.7);", Icon { name: "clock", size: 13, stroke: 2.0 } "Call {sr.call}" }
                 if let Some(r) = loaded {
-                    span { style: "display: flex; align-items: center; gap: 5px; color: {hsl(r.hue, 70, 72)};",
+                    span { style: "display: flex; align-items: center; gap: 5px; white-space: nowrap; color: {hsl(r.hue, 70, 72)};",
                         Icon { name: r.icon, size: 13, stroke: 2.0 }
                         "{r.name}"
                         span { style: "color: {INK3};", "loaded" }
