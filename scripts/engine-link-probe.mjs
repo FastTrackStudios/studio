@@ -82,9 +82,13 @@ if [ -n "$PROBE_XVFB" ]; then
   # WebGL2 here, and the engine's views are WebGL2 canvases.
   [ ! -d /tmp/.X11-unix ] || mount -t tmpfs none /tmp/.X11-unix
   "$PROBE_XVFB" :"$PROBE_DISPLAY" -screen 0 "$PROBE_SCREEN" -nolisten tcp >"$PROBE_SCRATCH/xvfb.log" 2>&1 &
-  for i in $(seq 1 50); do [ -S "/tmp/.X11-unix/X$PROBE_DISPLAY" ] && break; sleep 0.1; done
+  # Up to 30 s: on a loaded machine Xvfb's keymap compile alone takes seconds.
+  for i in $(seq 1 300); do [ -S "/tmp/.X11-unix/X$PROBE_DISPLAY" ] && break; sleep 0.1; done
   export DISPLAY=":$PROBE_DISPLAY" LIBGL_ALWAYS_SOFTWARE=1
+  # X11, whatever the person's session says (GDK_BACKEND=wayland there
+  # leaves GTK with no display to open).
   unset WAYLAND_DISPLAY MOZ_HEADLESS
+  export GDK_BACKEND=x11
 fi
 if [ "$PROBE_AUDIO" = pipewire ]; then
   export XDG_CONFIG_HOME="$PROBE_SCRATCH/config" XDG_STATE_HOME="$PROBE_SCRATCH/state" XDG_CACHE_HOME="$PROBE_SCRATCH/cache"
@@ -153,9 +157,10 @@ async function open() {
   } catch {
     throw new Error('cannot run the browser away from this machine\'s audio (unshare -r -m, or hiding its sockets and cards, failed): refusing to play anything');
   }
-  const proc = spawn('unshare', ['-r', '-m', 'sh', launcher, 'run', firefox(), ...(xvfb ? [] : ['--headless']), '--no-remote', '--profile', profile, '--remote-debugging-port', String(port)], { stdio: 'ignore', env, detached: true });
+  const proc = spawn('unshare', ['-r', '-m', 'sh', launcher, 'run', firefox(), ...(xvfb ? ['--width', String(width), '--height', String(height)] : ['--headless']), '--no-remote', '--profile', profile, '--remote-debugging-port', String(port)], { stdio: 'ignore', env, detached: true });
   let ws;
-  for (let i = 0; i < 160 && !ws; i++) {
+  // Up to two minutes: a loaded machine starts a fresh profile slowly.
+  for (let i = 0; i < 480 && !ws; i++) {
     await sleep(250);
     try {
       const s = new WebSocket(`ws://127.0.0.1:${port}/session`);
@@ -183,7 +188,12 @@ async function open() {
   });
   await send('session.new', { capabilities: {} });
   const context = (await send('browsingContext.create', { type: 'tab' })).context;
-  await send('browsingContext.setViewport', { context, viewport: { width, height } });
+  // Under Xvfb with no window manager a resize can go unanswered: the
+  // window was opened at the size asked (`--width`/`--height`), so go on.
+  await Promise.race([
+    send('browsingContext.setViewport', { context, viewport: { width, height } }),
+    sleep(15000).then(() => log('setViewport not answered in 15 s: the window keeps its own size')),
+  ]).catch((e) => log(`setViewport: ${e.message}`));
   const tab = {
     pgid: proc.pid,
     audio,
@@ -194,6 +204,9 @@ async function open() {
       return tree.contexts[0]?.children?.find((c) => c.url.includes('/_ext/webview.'))?.context ?? null;
     },
     async evalIn(frame, expression) {
+      // The views drawn in the page itself (architect#990's linked views):
+      // the top document is the frame.
+      if (frame === 'top') return tab.eval(expression);
       const r = await send('script.evaluate', { expression, target: { context: frame }, awaitPromise: true });
       if (r.type === 'exception') throw new Error(r.exceptionDetails.text);
       return r.result.value;
@@ -264,7 +277,7 @@ let failed = false;
 const engine = `JSON.stringify(Object.fromEntries(Object.entries(document.documentElement.dataset).filter(([k]) => k.startsWith('engine'))))`;
 const read = async () => JSON.parse(await tab.eval(engine));
 const inFrame = async (frame, pick) => {
-  const at = await tab.eval(`(() => { const r = document.querySelector('iframe[src*="/_ext/webview."]').getBoundingClientRect(); return JSON.stringify([r.x, r.y]); })()`);
+  const at = frame === 'top' ? JSON.stringify([0, 0]) : await tab.eval(`(() => { const r = document.querySelector('iframe[src*="/_ext/webview."]').getBoundingClientRect(); return JSON.stringify([r.x, r.y]); })()`);
   const el = await tab.evalIn(frame, `(() => { const e = ${pick}; if (!e) return ''; e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect(); return JSON.stringify([r.x + r.width / 2, r.y + r.height / 2]); })()`);
   if (!el) return null;
   const [fx, fy] = JSON.parse(at);
@@ -274,6 +287,7 @@ const inFrame = async (frame, pick) => {
 const frameWith = async (testid, what, ms = 60000) => {
   const started = Date.now();
   for (;;) {
+    if (await tab.eval(`!!document.querySelector('[data-testid="${testid}"]')`).catch(() => false)) return 'top';
     const f = await tab.frame();
     if (f && await tab.evalIn(f, `!!document.querySelector('[data-testid="${testid}"]')`).catch(() => false)) return f;
     if (Date.now() - started > ms) throw new Error(`waited ${ms} ms for ${what}`);
@@ -301,7 +315,7 @@ try {
   await tab.go(share);
   const set = await frameWith('studio-setlist', 'Studio\'s playlist on the setlist note');
   out.playlist_ms = Date.now() - t0;
-  const rows = JSON.parse(await tab.evalIn(set, `JSON.stringify([...document.querySelectorAll('.sl-row')].map(r => ({ label: r.getAttribute('aria-label') || '', off: r.getAttribute('aria-disabled') === 'true' })))`));
+  const rows = JSON.parse(await tab.evalIn(set, `JSON.stringify((document.querySelectorAll('.sl-row').length ? [...document.querySelectorAll('.sl-row')] : [...document.querySelectorAll('[data-testid="studio-setlist"] button')].filter(b => /^\\d+\\. /.test(b.getAttribute('aria-label') || ''))).map(r => ({ label: r.getAttribute('aria-label') || '', off: r.getAttribute('aria-disabled') === 'true' })))`));
   out.songs_listed = rows.length;
   const index = wanted ? rows.findIndex((r) => r.label.includes(wanted)) : rows.findIndex((r) => !r.off);
   if (index < 0) throw new Error(`the playlist does not list ${wanted || 'a song that plays'} (${rows.map((r) => r.label).join(' | ')})`);
@@ -318,7 +332,7 @@ try {
   out.rss_open_mb = rss(tab.pgid);
   await tab.shot('setlist');
   // Play it, from the playlist: the press is the page's gesture.
-  const at = await inFrame(set, `document.querySelectorAll('.sl-row')[${index}]`);
+  const at = await inFrame(set, `(document.querySelectorAll('.sl-row').length ? [...document.querySelectorAll('.sl-row')] : [...document.querySelectorAll('[data-testid="studio-setlist"] button')].filter(b => /^\\d+\\. /.test(b.getAttribute('aria-label') || '')))[${index}]`);
   const pressed = Number(await tab.eval('performance.now()'));
   await tab.press(...at);
   await tab.until(`document.documentElement.dataset.engineClock === 'engine'`, 'the engine to be the playhead\'s clock for the song', 30000);
@@ -357,12 +371,17 @@ try {
   // Not fatal: what was played is measured either way (a browser with no
   // WebGL2 shows the views' own notice instead).
   try {
+    // The engine's own panel (`data-hosted`) when the tab is the engine's
+    // view; else the tab's view as it is (a guest's views of the link),
+    // shot either way.
+    const panel = async (which) => JSON.parse(await tab.until(hosted(which), `the engine's ${which} behind its tab`, 30000).catch(async () =>
+      JSON.stringify({ hosted: false, view: await tab.eval(`(() => { const v = document.querySelector('[data-view]:not([data-view="setlist.playlist"])') || document.querySelector('main'); return v ? (v.dataset.view || '') + ' ' + v.innerText.trim().slice(0, 120) : ''; })()`).catch(() => '') })));
     await more('Arrangement');
-    out.arrangement = JSON.parse(await tab.until(hosted('arrangement'), 'the engine\'s Arrangement behind its tab', 30000));
+    out.arrangement = await panel('arrangement');
     await sleep(2500);
     await tab.shot('arrangement');
     await more('Mixer');
-    out.mixer = JSON.parse(await tab.until(hosted('mixer'), 'the engine\'s Mixer behind its tab', 30000));
+    out.mixer = await panel('mixer');
     await sleep(2500);
     await tab.shot('mixer');
     let n = 0;
