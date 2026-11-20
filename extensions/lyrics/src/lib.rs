@@ -4,6 +4,9 @@
 //! (`studio_view_link`) showing `session_ui::lyrics_panel::HostedLyrics`,
 //! the panel `studio-desktop`'s Lyrics view shows (its Audience, Performer
 //! and Confidence Monitor views), following the engine's transport.
+//!
+//! **In a browser** (studio-web) the same panel follows the page's own
+//! engine: `studio_view_link` reads its song from there.
 
 use architect_extensions::linked::{Builder, Extension};
 use dioxus::prelude::*;

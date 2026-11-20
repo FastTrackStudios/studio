@@ -13,34 +13,58 @@
 //! What it opens comes from `FTS_DAW_OPEN` (a song, a `.session` or a
 //! setlist, anything `studio engine --open` takes) or the `DAW_OPEN`
 //! action.
+//!
+//! **In a browser** (studio-web, `wasm32`) the extension is linked into
+//! the web app and the engine is in the page ([`web`]): the same id, the
+//! same actions where a page has them, session-engine's web engine
+//! (`session_engine::web_engine`) hosted by `session_ui::web_host`, and
+//! the engine given to the app as the playhead's clock
+//! (`architect_playhead::engine`).
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod buttons;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod deck;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod meters;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod owner;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod session_doc;
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::OnceLock;
 
+#[cfg(not(target_arch = "wasm32"))]
 use architect_extensions::linked::{Builder, Extension};
+#[cfg(not(target_arch = "wasm32"))]
 use serde_json::{Value as Json, json};
 
 pub const MANIFEST: &str = include_str!("../extension.toml");
 
+#[cfg(target_arch = "wasm32")]
+pub mod web;
+#[cfg(target_arch = "wasm32")]
+pub use web::Daw;
+
 /// Where the engine said it is, once up.
+#[cfg(not(target_arch = "wasm32"))]
 static STARTED: OnceLock<Result<(), String>> = OnceLock::new();
 
 /// Starts the engine on a thread of its own (it blocks on its runtime
 /// until the process ends), opening `open` as it comes up.
 /// What the engine was asked to open at start (`FTS_DAW_OPEN`).
+#[cfg(not(target_arch = "wasm32"))]
 static OPENED: OnceLock<Option<String>> = OnceLock::new();
 
 /// What the engine was asked to open at start, when anything.
 #[must_use]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn opened() -> Option<&'static str> {
     OPENED.get().and_then(Option::as_deref)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn start_engine(open: Option<String>) {
     let _ = OPENED.set(open.clone());
     let args = session_desktop::engine_host::Args {
@@ -60,6 +84,7 @@ pub fn start_engine(open: Option<String>) {
 }
 
 /// The engine's state: whether it is up, where, and the song it has.
+#[cfg(not(target_arch = "wasm32"))]
 fn state() -> Json {
     let found = session_engine::studio_engine::link::found()
         .into_iter()
@@ -81,6 +106,7 @@ fn state() -> Json {
 /// (`SESSION_ZOOM`, the arrangement's gestures) as much as any.
 /// `session_engine::actions::run` would refuse those here, where a
 /// runtime is current.
+#[cfg(not(target_arch = "wasm32"))]
 async fn run(id: &str, args: &Json) -> Result<Json, String> {
     let out = session_engine::actions::list()
         .run_json_async(id, args.to_string().as_bytes())
@@ -92,6 +118,7 @@ async fn run(id: &str, args: &Json) -> Result<Json, String> {
 
 /// The engine project of the set's song `song` names: its number in the
 /// set (from 1), its title, or its project's guid.
+#[cfg(not(target_arch = "wasm32"))]
 fn song_project(song: &Json) -> Result<String, String> {
     let lineup = session_engine::studio_engine::set::lineup().ok_or("no set is open")?;
     let found = match song {
@@ -113,6 +140,7 @@ fn song_project(song: &Json) -> Result<String, String> {
 
 /// Action `id` of the engine's list, run on song `project` of the set
 /// without going to it (`session_engine::open::in_song`).
+#[cfg(not(target_arch = "wasm32"))]
 fn run_in(project: &str, id: &str, args: &Json) -> Result<Json, String> {
     let list = session_engine::actions::list();
     let bytes = args.to_string();
@@ -136,6 +164,7 @@ fn run_in(project: &str, id: &str, args: &Json) -> Result<Json, String> {
 }
 
 /// The outputs this machine has, as the engine could open them.
+#[cfg(not(target_arch = "wasm32"))]
 fn output_devices() -> Vec<Json> {
     audio::io::output_devices(&audio::io::audio_host())
         .into_iter()
@@ -149,8 +178,10 @@ fn output_devices() -> Vec<Json> {
         .collect()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub struct Daw;
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Extension for Daw {
     fn manifest(&self) -> &'static str {
         MANIFEST

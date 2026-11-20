@@ -70,20 +70,7 @@ struct HearArg {
     by: Option<String>,
 }
 
-/// The top-level folder a song's stereo reference is in.
-const REFERENCE_FOLDER: &str = "Reference";
-
-/// Whether top-level track `name` is neither an instrument folder nor the
-/// reference: the guide and the buses, which both ways of hearing leave,
-/// and the organizer's `REFERENCES` (bounces and rehearsals to listen
-/// against, muted on purpose: the stems do not turn them on).
-fn left_alone(name: &str) -> bool {
-    let n = name.trim().to_ascii_uppercase();
-    n == "GUIDE"
-        || n.ends_with(" BUS")
-        || n == "KEYFLOW"
-        || n == dynamic_template::apply::REFERENCES_FOLDER
-}
+use session_runtime::reference::{REFERENCE_FOLDER, left_alone};
 
 /// Whether song `project` is heard by its reference now: its Reference
 /// folder is on. `None` for a song with no such folder.
@@ -94,8 +81,9 @@ fn heard_by_reference(daw: &daw::standalone::Standalone, project: &ProjectContex
         .map(|t| !t.muted)
 }
 
-/// Song `project` heard by its reference (`reference`) or its stems.
-/// Whether it has a reference to hear.
+/// Song `project` heard by its reference (`reference`) or its stems
+/// (`session_runtime::reference::hear`, the one rule a link's engine and a
+/// bounce use too). Whether it has a reference to hear.
 ///
 /// # Errors
 ///
@@ -105,37 +93,7 @@ pub fn hear(
     project: &ProjectContext,
     reference: bool,
 ) -> Result<bool, String> {
-    let top: Vec<_> = Tracks::all(daw, project.clone())
-        .into_iter()
-        .filter(|t| t.parent_guid.is_none())
-        .collect();
-    let has = top
-        .iter()
-        .any(|t| t.name.trim().eq_ignore_ascii_case(REFERENCE_FOLDER));
-    if reference && !has {
-        // Nothing to hear it by: left on its stems.
-        return Ok(false);
-    }
-    // A song that is only its reference (a recording, no stems yet) has
-    // nothing else to play: it is heard by it either way.
-    let has_parts = top
-        .iter()
-        .any(|t| !left_alone(&t.name) && !t.name.trim().eq_ignore_ascii_case(REFERENCE_FOLDER));
-    let reference = reference || (has && !has_parts);
-    for track in top.iter().filter(|t| !left_alone(&t.name)) {
-        let is_reference = track.name.trim().eq_ignore_ascii_case(REFERENCE_FOLDER);
-        let mute = is_reference != reference;
-        if track.muted != mute {
-            Tracks::set_muted(
-                daw,
-                project.clone(),
-                TrackRef::Guid(track.guid.clone()),
-                mute,
-            )
-            .map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(has)
+    session_runtime::reference::hear(daw, project, reference)
 }
 
 /// Whether `name` says a track is a mix of the whole song.

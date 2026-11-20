@@ -135,7 +135,7 @@ def slug_segment(name):
     return out.rstrip("-")
 
 
-def seed_share(vault, setlist, code, vault_id):
+def seed_share(vault, setlist, code, vault_id, listen="Reference"):
     """The share note SHARE_CREATE writes for STUDIO_SETLISTS_SHARE: the
     setlist's note and each of its songs' notes, for anyone with the link
     (apps/desktop/tests/node.rs builds the same)."""
@@ -187,7 +187,9 @@ def seed_share(vault, setlist, code, vault_id):
         "created_by": "local-stack",
         "domain": None,
         "audiences": [],
-        "listen": "Reference",
+        # How far the link plays: Reference (the stack's default, a
+        # listener's link) or Full (the multitracks too; `LOCAL_STACK_LISTEN`).
+        "listen": listen,
     }
     note = (
         "---\npublish: false\n---\n"

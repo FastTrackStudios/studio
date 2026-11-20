@@ -33,7 +33,7 @@ studio-island = { workspace = true }
 # window's views on the engine) joins when the engine runs in the page:
 # today its extensions pull the native engine link (REAPER adapter,
 # dioxus-native, iroh, axum), which does not build for wasm32.
-studio-extensions = { workspace = true }
+studio-extensions = { workspace = true, features = ["stage"] }
 dioxus = { workspace = true, features = ["web"] }
 serde_json = { workspace = true }
 gloo-timers = { workspace = true, features = ["futures"] }

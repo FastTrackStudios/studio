@@ -177,6 +177,29 @@ views = ["setlist"]
 # production material, tens of megabytes a song: only a Full link serves
 # it, so a listener's link neither lists it nor puts it in "Download all"
 # (docs/design/share-link-setlist.md, the owner's decision of 2026-11-18).
+#
+# A song's session (studio#engine-through-a-link): what the engine in the
+# web app opens. Its project file and its reference bounce (one stereo
+# stream, its preview and their page indexes) are the Reference layer's:
+# a listener's link opens the arrangement and plays the reference mix.
+# Each track's rendition (`…/Proxies/<stem>.ogg` and its index) is the
+# Full layer's: only a link that plays to Full serves the multitracks.
+# The first list that matches wins, so the reference's files, which are
+# in a `Proxies/` too, are named first. The masters (the WAVs) are not
+# attached to the note and so are on no link at all.
 [[share_layers]]
 note_type = "song"
-full = ["**/* - Lights.mp4", "**/* - Lights.mov", "**/* - Lights.mkv", "**/* - Lights.webm"]
+reference = [
+    "*.session",
+    "**/Proxies/Reference.ogg",
+    "**/Proxies/Reference.ogg.idx",
+    "**/Proxies/Reference Preview.ogg",
+    "**/Proxies/Reference Preview.ogg.idx",
+    # Each recording's waveform at a link's resolution (`link-prepare`):
+    # what the arrangement draws its items with.
+    "**/Proxies/Peaks/*.sessionpeaks",
+]
+full = [
+    "**/* - Lights.mp4", "**/* - Lights.mov", "**/* - Lights.mkv", "**/* - Lights.webm",
+    "**/Proxies/*.ogg", "**/Proxies/*.ogg.idx",
+]

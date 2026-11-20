@@ -1070,3 +1070,349 @@ fn WebPerformance() -> Element {
         }
     }
 }
+
+// ── The engine in another app's page ─────────────────────────────────────
+//
+// `WebDemo` is the engine as a page of its own. Hosted (Studio's build of
+// Architect's web app, a share link's Arrangement and Mixer tabs), the
+// page is someone else's: the engine is opened once for the page
+// ([`open_hosted`]) and outlives whichever tab is on show, and each tab
+// mounts one panel over the song the engine has current ([`Hosted`]).
+// The host owns the transport and the song list; what it needs of the
+// engine it reads from `web_engine` and `engine::Transport`.
+
+/// Where the hosted engine has got to.
+#[derive(Clone, PartialEq)]
+pub enum HostedState {
+    /// Not asked for.
+    Idle,
+    /// Opening, at this step.
+    Opening(crate::web_engine::Progress),
+    /// Open: the engine, and its songs as they have arrived.
+    Open(crate::web_engine::EngineRef),
+    /// It did not open: why, as a sentence.
+    Failed(String),
+}
+
+thread_local! {
+    /// The hosted engine's state. Plain cells, not signals: it is written
+    /// from the page's own tasks and read by the host's clock, neither of
+    /// which runs inside a component.
+    static HOSTED: RefCell<HostedState> = const { RefCell::new(HostedState::Idle) };
+    /// Moves on whenever the state or the set changes (a song arrived,
+    /// another became current): what a view watches.
+    static HOSTED_REVISION: Cell<u64> = const { Cell::new(0) };
+    /// The hosted set: what a view's own `Signal<Setlist>` starts from.
+    static HOSTED_SONGS: RefCell<crate::setlist::Setlist> =
+        RefCell::new(crate::setlist::Setlist::default());
+    /// What the host does when a view picks a song (its playhead's item).
+    static HOSTED_PICK: RefCell<Option<Rc<dyn Fn(&str)>>> = const { RefCell::new(None) };
+}
+
+/// Where the hosted engine has got to.
+#[must_use]
+pub fn hosted() -> HostedState {
+    HOSTED.with(|h| h.borrow().clone())
+}
+
+/// Whether the hosted engine is open.
+#[must_use]
+pub fn hosted_is_open() -> bool {
+    HOSTED.with(|h| matches!(*h.borrow(), HostedState::Open(_)))
+}
+
+/// Moves on with every change to [`hosted`] or [`hosted_songs`].
+#[must_use]
+pub fn hosted_revision() -> u64 {
+    HOSTED_REVISION.with(Cell::get)
+}
+
+fn hosted_changed() {
+    HOSTED_REVISION.with(|r| r.set(r.get().wrapping_add(1)));
+}
+
+fn set_hosted(state: HostedState) {
+    HOSTED.with(|h| *h.borrow_mut() = state);
+    hosted_changed();
+}
+
+/// What picking a song in a hosted view does: the host moves its own
+/// playhead there, and the engine follows it as for any other press.
+pub fn on_hosted_pick(pick: impl Fn(&str) + 'static) {
+    HOSTED_PICK.with(|p| *p.borrow_mut() = Some(Rc::new(pick)));
+}
+
+/// Go to song `index` of the hosted set, as a pick in a hosted view
+/// does: the host moves its playhead there when it said how
+/// ([`on_hosted_pick`]), else the engine goes there itself.
+pub fn hosted_pick(index: usize) {
+    let project =
+        HOSTED_SONGS.with(|s| s.borrow().songs.get(index).map(|song| song.project.clone()));
+    let Some(project) = project else { return };
+    let host = HOSTED_PICK.with(|p| p.borrow().clone());
+    match host {
+        Some(host) => host(&project),
+        None => {
+            crate::open::switch_song(&project);
+            hosted_show(&project);
+        }
+    }
+}
+
+/// The hosted set as it is now.
+#[must_use]
+pub fn hosted_songs() -> crate::setlist::Setlist {
+    HOSTED_SONGS.with(|s| s.borrow().clone())
+}
+
+/// Make `project` the hosted set's current song (the engine's is moved by
+/// the caller): every view of it remounts on that song.
+pub fn hosted_show(project: &str) {
+    let moved = HOSTED_SONGS.with(|s| {
+        let mut set = s.borrow_mut();
+        let Some(index) = set.songs.iter().position(|song| song.project == project) else {
+            return false;
+        };
+        if set.at == index {
+            return false;
+        }
+        let at = crate::engine::Transport::shared().map_or(0.0, |t| t.read().0);
+        set.pick(index, at);
+        true
+    });
+    if moved {
+        hosted_changed();
+    }
+}
+
+/// Open `source` as the page's engine, once: a second call does nothing.
+/// The first song is up when [`HOSTED`] says [`HostedState::Open`]; the
+/// rest arrive behind it.
+pub fn open_hosted(source: crate::web_engine::WebSource, guide: Option<String>) {
+    if !matches!(hosted(), HostedState::Idle) {
+        return;
+    }
+    set_hosted(HostedState::Opening(crate::web_engine::Progress::Joining {
+        retry: None,
+    }));
+    #[cfg(not(feature = "native"))]
+    crate::press::register_page_actions();
+    wasm_bindgen_futures::spawn_local(async move {
+        let opened = crate::web_engine::open(&source, guide.as_deref(), |step| {
+            set_hosted(HostedState::Opening(step));
+        })
+        .await;
+        match opened {
+            Ok((engine, setlist)) => {
+                HOSTED_SONGS.with(|s| *s.borrow_mut() = setlist);
+                set_hosted(HostedState::Open(engine));
+                let Some(mut arrivals) = crate::web_engine::take_arrivals() else {
+                    return;
+                };
+                while let Some(arrival) = arrivals.recv().await {
+                    HOSTED_SONGS.with(|s| s.borrow_mut().arrive(arrival));
+                    hosted_changed();
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "web: the hosted engine did not open");
+                set_hosted(HostedState::Failed(crate::loading::readable_failure(
+                    &e.to_string(),
+                )));
+            }
+        }
+    });
+}
+
+/// Which of the engine's panels a hosted view shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HostedPanel {
+    /// The arrangement: its tracks, items, sections and markers.
+    Arrangement,
+    /// The mixer alone, filling the view.
+    Mixer,
+}
+
+/// One panel of the page's engine, in a host's own view: the song the
+/// engine has current, read-only as a guest's set is (no reorder, no
+/// removal), with how it is heard said above it.
+#[component]
+pub fn HostedView(panel: HostedPanel) -> Element {
+    if !use_hook(webgl2_offered) {
+        return rsx! { crate::loading::HardwareNeeded {} };
+    }
+    // The engine's state is the page's, not a signal's: watched.
+    let mut state = use_signal(hosted);
+    use_future(move || async move {
+        let mut seen = hosted_revision();
+        loop {
+            gloo_timers::future::TimeoutFuture::new(120).await;
+            let now = hosted_revision();
+            if now != seen {
+                seen = now;
+                let next = hosted();
+                if *state.peek() != next {
+                    state.set(next);
+                }
+            }
+        }
+    });
+    match state() {
+        HostedState::Idle => rsx! {
+            HostedNote { text: "Nothing is open in Studio's engine yet: open a setlist or a song." }
+        },
+        HostedState::Opening(progress) => rsx! {
+            div { style: "position:absolute; top:0; left:0; right:0; bottom:0; overflow:hidden;",
+                "data-hosted": "opening",
+                crate::loading::Loading { progress }
+            }
+        },
+        HostedState::Failed(why) => rsx! { HostedNote { text: "{why}" } },
+        HostedState::Open(engine) => rsx! { HostedOpen { engine, panel } },
+    }
+}
+
+#[component]
+fn HostedNote(text: String) -> Element {
+    rsx! {
+        div {
+            style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; \
+                    align-items:center; justify-content:center; padding:24px; text-align:center; \
+                    background:#0f1012; color:#9aa0a6; font:14px system-ui, sans-serif;",
+            "data-hosted": "note",
+            "{text}"
+        }
+    }
+}
+
+#[component]
+fn HostedOpen(engine: crate::web_engine::EngineRef, panel: HostedPanel) -> Element {
+    use session::modes::Mode;
+    use_hook(crate::web_audio::unlock_on_first_gesture);
+    let mode = use_signal(|| Mode::Live);
+    use_context_provider(|| mode);
+    use_context_provider(|| crate::setlist::ReadOnlySet(true));
+    use_context_provider(crate::lyrics_panel::LyricsChoice::new);
+    let mut setlist = use_context_provider(|| Signal::new(hosted_songs()));
+    // The page-level set is the truth: this view's copy follows it.
+    use_future(move || async move {
+        let mut seen = hosted_revision();
+        loop {
+            gloo_timers::future::TimeoutFuture::new(120).await;
+            let now = hosted_revision();
+            if now != seen {
+                seen = now;
+                let next = hosted_songs();
+                if *setlist.peek() != next {
+                    setlist.set(next);
+                }
+            }
+        }
+    });
+    let mut listening = use_signal(crate::web_engine::listening);
+    let mut asking = use_signal(|| false);
+    use_future(move || async move {
+        use crate::web_engine::Notice;
+        let mut notices = crate::web_engine::notices();
+        listening.set(crate::web_engine::listening());
+        while let Some(notice) = notices.recv().await {
+            match notice {
+                Notice::Listening(now) => listening.set(now),
+                Notice::Blocked => asking.set(crate::web_engine::multitracks_offered()),
+            }
+        }
+    });
+    let viewport = use_viewport_size();
+    use_context_provider(|| crate::shell::WindowSize(viewport));
+    let form = use_viewport_form(viewport);
+    use_context_provider(|| form);
+    let landscape = move || {
+        let (w, h) = viewport();
+        w > h
+    };
+    // A pick here is the host's: its playhead moves, and the engine with it.
+    let pick = move |index: usize| {
+        let project = setlist
+            .peek()
+            .songs
+            .get(index)
+            .map(|song| song.project.clone());
+        if let Some(project) = project {
+            let host = HOSTED_PICK.with(|p| p.borrow().clone());
+            match host {
+                Some(host) => host(&project),
+                None => {
+                    crate::open::switch_song(&project);
+                    hosted_show(&project);
+                }
+            }
+        }
+    };
+    use_context_provider(|| crate::record_view::PickSong(Callback::new(pick)));
+    use_context_provider(crate::touch::Touch::detect);
+    use_context_provider(crate::closeup::Closeups::new);
+    let current = setlist.read().current().cloned();
+    let why = match (listening(), crate::web_engine::reference_reason()) {
+        (crate::web_engine::Listening::Reference { .. }, crate::web_engine::ReferenceWhy::Link) => {
+            Some("Reference mix: this link does not share the multitracks.".to_owned())
+        }
+        (
+            crate::web_engine::Listening::Reference { stems_mb },
+            crate::web_engine::ReferenceWhy::Device(_),
+        ) => Some(format!(
+            "Reference mix: this device was judged too small for the multitracks ({stems_mb} MB). Tap to load them anyway."
+        )),
+        _ => None,
+    };
+    let which = match panel {
+        HostedPanel::Arrangement => "arrangement",
+        HostedPanel::Mixer => "mixer",
+    };
+    rsx! {
+        div {
+            style: "position:absolute; top:0; left:0; right:0; bottom:0; display:flex; \
+                    flex-direction:column; background:#0f1012; color:#e5e7eb; \
+                    font-family:system-ui, sans-serif; overflow:hidden;",
+            "data-hosted": "{which}",
+            "data-hosted-listening": "{listening():?}",
+            div {
+                style: "flex:0 0 auto; display:flex; align-items:center; gap:8px; \
+                        padding:6px 10px; min-height:32px; border-bottom:1px solid #1d1f23; \
+                        font-size:12px; color:#9aa0a6;",
+                span {
+                    style: "flex:1; min-width:0; overflow:hidden; white-space:nowrap; color:#e5e7eb;",
+                    if let Some(song) = &current { "{song.title()}" }
+                }
+                ListeningBadge { listening: listening(), asking }
+            }
+            if let Some(why) = why {
+                button {
+                    style: "flex:0 0 auto; text-align:left; padding:6px 10px; border:none; \
+                            border-bottom:1px solid #1d1f23; background:#16181c; color:#c9a227; \
+                            font:12px system-ui, sans-serif; cursor:pointer;",
+                    "data-hosted-reference": "true",
+                    onclick: move |_| asking.set(crate::web_engine::multitracks_offered()),
+                    "{why}"
+                }
+            }
+            div {
+                style: "position:relative; flex:1; min-height:0;",
+                if let Some(song) = current {
+                    WithSong {
+                        key: "{song.project}",
+                        session: song.session.clone(),
+                        crate::mixer_panel::WebDawPanels {
+                            key: "{which}",
+                            engine: engine.clone(),
+                            mixer_only: panel == HostedPanel::Mixer,
+                        }
+                    }
+                }
+            }
+            crate::closeup::CloseupLayer { landscape: landscape() }
+            if asking() {
+                LoadMultitracks { listening: listening(), asking }
+            }
+        }
+    }
+}

@@ -15,12 +15,22 @@ path = "src/main.rs"
 
 [dependencies]
 studio-view-link = { workspace = true }
+architect-extensions = { workspace = true, features = ["linked-core"] }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+
+# The native process: attached to the engine's socket.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
 session-ui = { workspace = true, features = ["native"] }
 session-engine = { workspace = true, features = ["native"] }
-dioxus = { workspace = true }
-serde_json = { workspace = true }
 futures-timer = { workspace = true }
+
+# The browser: the page's own engine (`src/web.rs`).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+session-ui = { workspace = true, features = ["web"] }
+session-engine = { workspace = true, features = ["web"] }
+gloo-timers = { workspace = true, features = ["futures"] }
 
 [lints]
 workspace = true

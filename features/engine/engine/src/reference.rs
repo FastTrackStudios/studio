@@ -34,6 +34,29 @@ const PREVIEW: (u32, f32) = (24_000, 0.1);
 /// The song could not be opened, or a file could not be written.
 #[cfg(feature = "native")]
 pub fn bounce(song: &Path) -> eyre::Result<PathBuf> {
+    bounce_heard(song, None)
+}
+
+/// [`bounce`], for a song that is opened elsewhere by its stems (a share
+/// link's set): the reference a listener hears there is the one the
+/// desktop's Reference mode plays, the song's own reference recording
+/// (its top-level `Reference` folder alone), and for a song with none its
+/// stems' mix. The song is saved in whichever of the two it was last
+/// heard by (`SESSION_HEAR`), so the bounce says which it renders; the
+/// song on disk is not changed.
+///
+/// # Errors
+///
+/// As [`bounce`].
+#[cfg(feature = "native")]
+pub fn bounce_for_link(song: &Path) -> eyre::Result<PathBuf> {
+    bounce_heard(song, Some(true))
+}
+
+/// [`bounce`] with the song heard by its reference recording
+/// (`Some(true)`), its stems (`Some(false)`), or as it was saved.
+#[cfg(feature = "native")]
+fn bounce_heard(song: &Path, by_reference: Option<bool>) -> eyre::Result<PathBuf> {
     let song = song_file(song)?;
     let prepare = crate::prepare::Prepare::for_song(&song);
     let daw = Standalone::new();
@@ -53,10 +76,31 @@ pub fn bounce(song: &Path) -> eyre::Result<PathBuf> {
                 .file_name()
                 .is_some_and(|n| n.eq_ignore_ascii_case(NAME))
         });
+    let hear = |reference: bool| {
+        session_runtime::reference::hear(&daw, &ctx(&project), reference)
+            .map_err(|e| eyre::eyre!("{e}"))
+    };
+    if let Some(reference) = by_reference {
+        // Its own recording when it has one, else its stems.
+        if reference && !hear(true)? {
+            hear(false)?;
+        }
+    }
     let seconds = if own {
         None
     } else {
-        Some(render(&daw, &project, &wav)?)
+        let (mut seconds, peak) = render(&daw, &project, &wav)?;
+        // A reference recording that does not decode here (a video's
+        // audio) renders as silence: the stems' mix is the reference then.
+        if by_reference == Some(true) && peak < SILENT {
+            tracing::warn!(
+                reference.peak = f64::from(peak),
+                "the song's reference recording rendered silent: its stems are bounced instead"
+            );
+            hear(false)?;
+            seconds = render(&daw, &project, &wav)?.0;
+        }
+        Some(seconds)
     };
 
     // The proxy, written aside and moved into place (as `session proxies`
@@ -110,10 +154,14 @@ fn preview(wav: &Path, ogg: &Path) -> eyre::Result<()> {
     Ok(())
 }
 
-/// Render `project`'s mix, less what [`left_out`] names, into `wav`.
-/// Returns its length, seconds.
+/// A render whose loudest sample is under this (about -80 dBFS) is silence.
 #[cfg(feature = "native")]
-fn render(daw: &Standalone, project: &str, wav: &Path) -> eyre::Result<f64> {
+const SILENT: f32 = 1e-4;
+
+/// Render `project`'s mix, less what [`left_out`] names, into `wav`.
+/// Returns its length, seconds, and its loudest sample.
+#[cfg(feature = "native")]
+fn render(daw: &Standalone, project: &str, wav: &Path) -> eyre::Result<(f64, f32)> {
     for guid in left_out(daw, project) {
         let _ = Tracks::set_muted(daw, ctx(project), TrackRef::Guid(guid), true);
     }
@@ -122,10 +170,12 @@ fn render(daw: &Standalone, project: &str, wav: &Path) -> eyre::Result<f64> {
     let capacity = usize::try_from(frames).unwrap_or(0);
     let (mut left, mut right) = (Vec::with_capacity(capacity), Vec::with_capacity(capacity));
     let mut at = 0u64;
+    let mut peak = 0f32;
     while at < frames {
         let n = BLOCK.min(usize::try_from(frames - at).unwrap_or(BLOCK));
         let block = renderer.render_block(at, n);
         for frame in block.samples.chunks_exact(2).take(n) {
+            peak = peak.max(frame[0].abs()).max(frame[1].abs());
             left.push(frame[0]);
             right.push(frame[1]);
         }
@@ -133,7 +183,7 @@ fn render(daw: &Standalone, project: &str, wav: &Path) -> eyre::Result<f64> {
     }
     fts_sample::write_wav_f32(wav, RATE, &[left, right])
         .map_err(|e| eyre::eyre!("{}: {e}", wav.display()))?;
-    Ok(frames as f64 / f64::from(RATE))
+    Ok((frames as f64 / f64::from(RATE), peak))
 }
 
 /// The song file under `path`: itself, or the `.session` (else `.RPP`) in

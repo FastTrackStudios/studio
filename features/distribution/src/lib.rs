@@ -29,18 +29,27 @@ pub fn studio() -> Bundle {
 /// lyrics, navigator and launcher, Keyflow's chart, and Ignition's
 /// lighting (natively, until its browser build lands). A development copy of any of them shadows the
 /// linked one, so one can be worked on while the rest run as built.
+///
+/// In a browser the stage begins with Studio's engine itself (`daw`,
+/// linked: its engine in the page), which the views require
+/// (`fts.session`); the launcher, Keyflow's chart and Ignition's lighting
+/// join there once their browser builds land.
 #[cfg(feature = "stage")]
 #[must_use]
 pub fn stage() -> Bundle {
-    let stage = Bundle::new("stage", "Stage")
+    let stage = Bundle::new("stage", "Stage");
+    #[cfg(target_arch = "wasm32")]
+    let stage = stage.member(&daw_extension::Daw);
+    let stage = stage
         .member(&studio_arrangement::Arrangement)
         .member(&studio_mixer::Mixer)
         .member(&studio_lyrics::Lyrics)
-        .member(&studio_navigator::Navigator)
-        .member(&studio_launcher::Launcher)
-        .member(&keyflow_extension::Keyflow);
+        .member(&studio_navigator::Navigator);
     #[cfg(not(target_arch = "wasm32"))]
-    let stage = stage.member(&ignition_pane::ext::Lighting);
+    let stage = stage
+        .member(&studio_launcher::Launcher)
+        .member(&keyflow_extension::Keyflow)
+        .member(&ignition_pane::ext::Lighting);
     stage
 }
 
