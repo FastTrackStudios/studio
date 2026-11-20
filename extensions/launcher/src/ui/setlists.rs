@@ -171,7 +171,8 @@ pub fn series_page(s: &Studio, id: &str, nav: Nav, back: EventHandler<()>) -> El
     let facts =
         rsx! { Where { room: sr.room.clone(), call: sr.call.clone(), starts: sr.starts.clone() } };
     rsx! {
-        Back { title: "", onback: back }
+        super::parts::Tint { hue: sr.hue }
+        Back { title: "", onback: back, tools: super::parts::page_tools("calendar", "Book a rehearsal") }
         Hero { art: sr.logo.clone(), hue: sr.hue, title: sr.name.clone(), sub: format!("{} · Every {days}", sr.folder),
             count: format!("{} songs a set · {} sets so far", sr.size, past.len()), facts }
         Head { text: "Coming up" }
@@ -228,12 +229,17 @@ pub fn week_page(s: &Studio, id: &str, back: EventHandler<()>) -> Element {
     let bottom: Vec<Option<&Place>> = (split..sr.size.max(w.places.len()))
         .map(|i| w.places.get(i))
         .collect();
+    let (top_n, bottom_n) = (
+        top.iter().flatten().count(),
+        bottom.iter().flatten().count(),
+    );
     rsx! {
-        Back { title: "", onback: back }
+        super::parts::Tint { hue: sr.hue }
+        Back { title: "", onback: back, tools: super::parts::page_tools("download", "Download") }
         Hero { art: sr.logo.clone(), hue: sr.hue, title: sr.name.clone(), sub, count, facts }
-        Head { text: "Top set" }
+        Head { text: "Top set", note: songs(top_n) }
         Card { for (k, p) in top.iter().enumerate() { if k > 0 { Rule {} } {place_row(*p)} } }
-        Head { text: "Bottom set" }
+        Head { text: "Bottom set", note: songs(bottom_n) }
         Card { for (k, p) in bottom.iter().enumerate() { if k > 0 { Rule {} } {place_row(*p)} } }
     }
 }
@@ -307,7 +313,8 @@ pub fn show_page(s: &Studio, id: &str, back: EventHandler<()>) -> Element {
     let note = show.note.clone();
     let title = show.title.clone();
     rsx! {
-        Back { title: "", onback: back }
+        super::parts::Tint { hue: show.hue }
+        Back { title: "", onback: back, tools: super::parts::page_tools("download", "Download") }
         Hero { art: show.art.clone(), hue: show.hue, title: show.title.clone(), sub: show.folder.clone(), count, facts }
         // The setlist itself: its note, with its Setlist, Chart, Lyrics
         // and More (arrangement, mixer, lighting) tabs.
@@ -327,7 +334,7 @@ pub fn show_page(s: &Studio, id: &str, back: EventHandler<()>) -> Element {
             div { style: "color: {INK3}; font-size: 14px; padding: 24px 2px;", "No songs yet." }
         }
         for (k, (name, places)) in show.sections.iter().enumerate() {
-            Head { key: "{k}", text: name.clone().unwrap_or_else(|| "Songs".into()) }
+            Head { key: "{k}", text: name.clone().unwrap_or_else(|| "Songs".into()), note: songs(places.len()) }
             Card { for (i, p) in places.iter().enumerate() { if i > 0 { Rule {} } {place_row(Some(p))} } }
         }
     }
@@ -392,5 +399,14 @@ pub fn every_page(s: &Studio, nav: Nav, back: EventHandler<()>) -> Element {
                 }
             }
         }
+    }
+}
+
+/// `1 song`, `3 songs`.
+fn songs(n: usize) -> String {
+    if n == 1 {
+        "1 song".to_owned()
+    } else {
+        format!("{n} songs")
     }
 }

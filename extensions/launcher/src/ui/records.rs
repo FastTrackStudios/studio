@@ -119,20 +119,17 @@ pub fn record_page(s: &Studio, id: &str, nav: Nav, back: EventHandler<()>) -> El
         .map(|v| v.secs)
         .sum();
     let open: usize = tracks.iter().map(|t| t.open()).sum();
-    let facts = rsx! { Stage { stage: r.status } };
-    let count = format!(
-        "{} tracks · {}{}",
-        tracks.len(),
-        data::clock(secs),
-        if open > 0 {
-            format!(" · {open} open")
-        } else {
-            String::new()
-        }
-    );
+    let chip = rsx! { Stage { stage: r.status } };
+    let count = format!("{} tracks · {}", tracks.len(), data::clock(secs));
+    let hot = if open > 0 {
+        format!("{open} open")
+    } else {
+        String::new()
+    };
     rsx! {
-        Back { title: "", onback: back }
-        Hero { art: r.art.clone(), hue: r.hue, title: r.title.clone(), sub: format!("{} · {}", r.what, r.artist), count, facts }
+        super::parts::Tint { hue: r.hue }
+        Back { title: "", onback: back, tools: super::parts::page_tools("download", "Download") }
+        Hero { art: r.art.clone(), hue: r.hue, title: r.title.clone(), over: r.what.clone(), sub: r.artist.clone(), chip, count, hot }
         div { style: "height: 12px;" }
         Card {
             for (k, t) in tracks.iter().enumerate() {
@@ -191,7 +188,7 @@ pub fn track_page(s: &Studio, id: &str, back: EventHandler<()>) -> Element {
         |r| format!("{} · Track {}", r.title, t.no),
     );
     rsx! {
-        Back { title: "", onback: back }
+        Back { title: "", onback: back, tools: super::parts::page_tools("folder", "Open its session") }
         div { style: "display: flex; align-items: center; gap: 12px; margin: 2px 0 14px;",
             Cover { art: s.art_of(t), hue: t.hue, size: 56, radius: 10 }
             div { style: "min-width: 0;",

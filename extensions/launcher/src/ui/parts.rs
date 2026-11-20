@@ -75,6 +75,14 @@ fn shapes(name: &str) -> &'static [Shape] {
         "play" => &[P("M6 3l14 9-14 9z")],
         "pause" => &[R(6.0, 4.0, 4.0, 16.0, 1.0), R(14.0, 4.0, 4.0, 16.0, 1.0)],
         "library" => &[P("m16 6 4 14"), P("M12 6v14"), P("M8 8v12"), P("M4 4v16")],
+        "download" => &[
+            P("M12 15V3"),
+            P("M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"),
+            P("m7 10 5 5 5-5"),
+        ],
+        "folder" => &[P(
+            "m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2",
+        )],
         "updown" => &[P("m7 15 5 5 5-5"), P("m7 9 5-5 5 5")],
         "layers" => &[
             P(
@@ -302,10 +310,16 @@ pub fn Head(
     text: String,
     #[props(default)] link: Option<String>,
     #[props(default)] onlink: Option<EventHandler<()>>,
+    /// Quiet words at its right (`3 songs`), when it has no link.
+    #[props(default)]
+    note: String,
 ) -> Element {
     rsx! {
         div { style: "display: flex; align-items: center; justify-content: space-between; margin: 22px 2px 8px;",
             span { style: "font-size: 13px; font-weight: 650; color: {INK3};", "{text}" }
+            if link.is_none() && !note.is_empty() {
+                span { style: "font-size: 12.5px; color: #80808a;", "{note}" }
+            }
             if let Some(link) = link {
                 button {
                     style: "display: flex; align-items: center; gap: 2px; font-size: 12.5px; font-weight: 600; color: {INK3}; \
@@ -421,17 +435,36 @@ pub fn Card(children: Element) -> Element {
 
 /// A pushed page's header: a round back button, its title beside it.
 #[component]
-pub fn Back(title: String, onback: EventHandler<()>) -> Element {
+pub fn Back(
+    title: String,
+    onback: EventHandler<()>,
+    #[props(default)] tools: Option<Element>,
+) -> Element {
     rsx! {
-        div { style: "display: flex; align-items: center; gap: 12px; margin: 0 0 10px;",
+        div { style: "display: flex; align-items: center; gap: 12px; height: 56px; margin: 0 0 8px;",
             button {
                 style: "width: 40px; height: 40px; border-radius: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; \
                         background: #1a1a1f; border: 1px solid {EDGE}; color: {INK};",
                 onclick: move |_| onback.call(()),
                 Icon { name: "back", size: 22, stroke: 2.2 }
             }
-            span { style: "font-size: 17px; font-weight: 650; color: {INK}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;", "{title}" }
+            span { style: "flex: 1; min-width: 0; font-size: 17px; font-weight: 650; color: {INK}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;", "{title}" }
+            if let Some(tools) = tools {
+                div { style: "display: flex; align-items: center; gap: 8px; flex-shrink: 0;", {tools} }
+            }
         }
+    }
+}
+
+/// A pushed page on its cover's colour: the top of the page washed in
+/// it, fading to black (the prototype's `.wash`), out to the page's
+/// edges. First on the page: what follows draws over it (its negative
+/// bottom margin takes back its height).
+#[component]
+pub fn Tint(hue: u16) -> Element {
+    let top = hsl(hue, 45, 15);
+    rsx! {
+        div { style: "height: 420px; margin: -4px -20px -416px; background: linear-gradient(180deg, {top} 0px, #000 420px);" }
     }
 }
 
@@ -456,6 +489,15 @@ pub fn Hero(
     sub: String,
     #[props(default)] count: String,
     #[props(default)] facts: Option<Element>,
+    /// A word over the title (`Album`).
+    #[props(default)]
+    over: String,
+    /// A chip after the subtitle (a record's stage).
+    #[props(default)]
+    chip: Option<Element>,
+    /// The count's tail, in the live colour (`6 open`).
+    #[props(default)]
+    hot: String,
 ) -> Element {
     rsx! {
         div { style: "display: flex; gap: 16px; align-items: stretch; margin: 4px 0 6px;",
@@ -465,10 +507,21 @@ pub fn Hero(
             div { style: "flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 8px;",
                 div { style: "display: flex; gap: 8px; align-items: center; flex-wrap: wrap;", {facts} }
                 div {
+                    if !over.is_empty() {
+                        div { style: "font-size: 13px; font-weight: 600; color: {INK3}; margin-bottom: 2px;", "{over}" }
+                    }
                     div { style: "font-size: 30px; line-height: 1.12; font-weight: 750; letter-spacing: -0.02em; color: {INK};", "{title}" }
-                    div { style: "font-size: 14px; color: {INK3}; margin-top: 2px;", "{sub}" }
+                    div { style: "display: flex; align-items: center; gap: 6px; font-size: 14px; color: {INK3}; margin-top: 2px;",
+                        span { style: "white-space: nowrap; overflow: hidden; text-overflow: ellipsis;", "{sub}" }
+                        {chip}
+                    }
                     if !count.is_empty() {
-                        div { style: "font-size: 12.5px; color: #80808a; margin-top: 3px;", "{count}" }
+                        div { style: "font-size: 12.5px; color: #80808a; margin-top: 3px;",
+                            "{count}"
+                            if !hot.is_empty() {
+                                span { style: "color: {LIVE}; font-weight: 600;", " · {hot}" }
+                            }
+                        }
                     }
                 }
             }
@@ -502,3 +555,15 @@ pub fn Rule(#[props(default = 70)] left: u32) -> Element {
 
 pub const ROW: &str = "display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px 10px 12px; \
     background: none; border: none; color: inherit; text-align: left; font: inherit;";
+
+/// A pushed page's tools: one, and More, in one pill.
+#[must_use]
+pub fn page_tools(icon: &'static str, label: &'static str) -> Element {
+    rsx! {
+        Joined {
+            JTool { icon, label }
+            Hair {}
+            JTool { icon: "more", label: "More" }
+        }
+    }
+}
