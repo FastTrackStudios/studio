@@ -481,8 +481,8 @@ function pageSetlists() {
     </div>`;
 }
 // Every set there is, in folders by tag; a series is one row, its next set beside it.
-function pageAllSets() {
-  return `${bar({ back: true, title: "All sets", tools: [{ label: "New set", icon: "plus", act: "New set or series" }] })}
+function pageAllSets(root) {
+  return `${bar(root ? { title: "Setlists", tools: [{ label: "Library", icon: "library", open: "library" }, { label: "New setlist", icon: "plus", menu: "newset" }] } : { back: true, title: "All sets", tools: [{ label: "New set", icon: "plus", act: "New set or series" }] })}
     <div class="body">${FOLDERS.map(f => { const open = !folded.has(f.tag), n = f.series.length + f.shows.length; return `
       <button class="folder" data-fold="${f.tag}" aria-expanded="${open}">
         <span class="fic">${ic("folder", 18)}</span><span class="fname">${esc(f.name)}</span><span class="ftag">#${f.tag}</span><span class="fn">${n}</span>
@@ -495,7 +495,7 @@ function pageAllSets() {
           ${nx ? (nx.songs.length ? progress(nx) : '<span class="s1">Not planned</span>') : ""}
         </button>`; }).join("")}${f.shows.map(id => { const st = SETS[id]; return `
         <button class="srow" data-open="${id}">
-          <span class="dot show"></span>
+          ${ART[id] ? `<img class="slogo" src="${ART[id]}" alt="">` : `<span class="slogo">${cover({ title: st.title }, 36, id === "mb" ? 150 : 20)}</span>`}
           <span class="mid"><span class="t1">${esc(st.title)}</span><span class="s1">${esc(st.date)} · ${songs(st).length} songs</span></span>
           <span class="chev">${ic("chevRight", 16)}</span>
         </button>`; }).join("")}</div>` : ""}`; }).join("")}
@@ -1022,27 +1022,35 @@ function recRow(id) {
 // The org switcher's button: what is shown, all orgs or one.
 const orgPill = () => `<button class="orgpill" data-orgs aria-label="Organization">${org ? `<span class="omark" style="--h:${ORGS.find(o => o[0] === org)[2]}">${orgName(org)[0]}</span>${esc(orgName(org))}` : `${ic("layers", 16)}All orgs`}${ic("updown", 14)}</button>`;
 const RECENT_WORK = ["cr", "t:Fire", "t:Drive To LA", "mtl", "t:Devour", "png", "joi"];
+// Records: every record as its cover, where it is and what it waits on.
+// Home has the review queue; this is the shelf.
+function recCard(id) {
+  const a = ALBUMS[id], x = !a && studioOf(id), list = a ? STUDIO.filter(y => y.rec === id) : [x];
+  const n = projOpen(list), st = a ? a.status : x.stage;
+  // How far the tracks have come: one segment per track, coloured by status.
+  const seg = list.map(y => `<i style="--h:${STAGES[y.stage][1] ?? 0}" data-none="${STAGES[y.stage][1] == null}"></i>`).join("");
+  return `<button class="rcard" data-open="${id}">
+    <span class="rcov">${ART[id] ? `<img src="${ART[id]}" alt="">` : cover(a || x, 0, (a || x).hue)}${n ? `<span class="rbub">${ic("message", 11, 2.4)}${n}</span>` : ""}</span>
+    <span class="t1">${esc(a ? a.title : x.title)}</span>
+    <span class="s1">${a ? `${list.length} songs` : "Single"} · ${esc(a ? a.artist : x.artist)}</span>
+    <span class="rfoot">${stageTag(st)}${a ? `<span class="rseg">${seg}</span>` : ""}</span>
+  </button>`;
+}
 function pageSessions() {
-  const list = RECENT_WORK.filter(id => !org || OWNER[id] === org);
-  const toReview = STUDIO.filter(x => (!org || OWNER[x.rec || x.id] === org) && (openOn(x.title) || /h$|Yesterday/.test(latest(x.title).when))).slice(0, 4);
+  const ids = RECENT_WORK.filter(id => !org || OWNER[id] === org);
+  const st = id => ALBUMS[id] ? ALBUMS[id].status : studioOf(id).stage;
+  const active = ids.filter(id => st(id) < 6), done = ids.filter(id => st(id) >= 6);
   return `${bar({ title: "Records", tools: [{ label: "New record", icon: "plus", act: "New album, EP or single" }] })}
     <div class="body">
-      ${toReview.length ? `<div class="dayhead">To review</div>
-      <div class="agenda">${toReview.map(x => { const v = latest(x.title), n = openOn(x.title); return `
-        <button class="ag" data-rev="${esc(x.title)}">
-          ${cover(x.rec ? ALBUMS[x.rec] : x, 40, x.hue)}
-          <span class="mid"><span class="t1">${esc(x.title)}</span><span class="s1">${v.what} v${v.v} · ${esc(v.who)} · ${esc(v.when)}</span></span>
-          ${n ? `<span class="bubble">${ic("message", 13, 2)}${n}</span>` : `<span class="newv">New</span>`}
-        </button>`; }).join("")}</div>
-      <div class="dayhead">Records</div>` : ""}
-      <div class="list">${list.map(recRow).join("") || `<div class="empty">No records in ${esc(orgName(org))} yet.</div>`}</div>
+      <div class="rgrid">${active.map(recCard).join("")}</div>
+      ${done.length ? `<div class="dayhead">Finished</div><div class="rgrid">${done.map(recCard).join("")}</div>` : ""}
       <div class="dayhead">Session files</div>
-      ${PROJECTS.filter(p => p.kind === "Production").map(p => `
-        <button class="srow file" data-open="${p.id}">
+      <div class="agenda">${PROJECTS.filter(p => p.kind === "Production").map(p => `
+        <button class="ag" data-open="${p.id}">
           ${projTile(p)}
           <span class="mid"><span class="t1">${esc(titleOf(p))}</span><span class="s1">${esc(p.fmt)} · ${esc(p.when)}</span></span>
           <span class="chev">${ic("chevRight", 16)}</span>
-        </button>`).join("")}
+        </button>`).join("")}</div>
     </div>`;
 }
 // Pick the org: all of them, or one (Architect's workspace switcher).
@@ -1176,7 +1184,7 @@ function pageLyrics(id) {
       <div class="sheetwrap"><div class="sheetpage"><b>Lyrics</b><span>The lyrics page fills this page, as wide as the phone</span></div></div>
     </div>`;
 }
-const PAGES = { home: pageProjects, sessions: pageSessions, setlists: pageSetlists, signal: pageRigs };
+const PAGES = { home: pageProjects, sessions: pageSessions, setlists: () => pageAllSets(true), signal: pageRigs };
 const TABS = [["home", "Home", "home"], ["sessions", "Records", "disc"], ["setlists", "Setlists", "setlist"], ["signal", "Signal", "rig"]];
 
 // ── The sidebar (the left drawer) ───────────────────────────────────────────

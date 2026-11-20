@@ -1112,3 +1112,20 @@ button.kc { cursor: pointer; }
 .shelfi .sc img, .shelfi .sc .cover { width: 100% !important; height: 100% !important; object-fit: cover; border-radius: 0; box-shadow: none; }
 .shelfi .t1 { font-size: 14px; }
 .shelfi .s1 { font-size: 12px; color: #6b6b74; }
+
+/* Records: a shelf of covers */
+.rgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 14px; margin-top: 4px; }
+.rcard { display: flex; flex-direction: column; gap: 2px; text-align: left; min-width: 0; }
+.rcov { position: relative; display: block; aspect-ratio: 1; border-radius: 14px; overflow: hidden; margin-bottom: 8px; box-shadow: 0 10px 26px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.05); }
+.rcov img, .rcov .cover { width: 100% !important; height: 100% !important; border-radius: 0; object-fit: cover; box-shadow: none; }
+.rbub { position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 3px; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 11.5px; font-weight: 700; background: rgba(0,0,0,.7); color: var(--live); backdrop-filter: blur(6px); }
+.rcard .t1 { font-size: 15.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rcard .s1 { font-size: 12.5px; color: #7a7a83; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rfoot { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.rfoot .stgtag { font-size: 10.5px; padding: 2px 7px; flex: none; }
+.rseg { flex: 1; display: flex; gap: 1.5px; height: 4px; }
+.rseg i { flex: 1; border-radius: 1px; background: oklch(.62 .12 var(--h)); }
+.rseg i[data-none="true"] { background: #3a3a40; }
+.ag .tile { width: 40px; height: 40px; }
+.slogo .cover { width: 36px !important; height: 36px !important; border-radius: 8px; box-shadow: none; }
+span.slogo { overflow: hidden; display: block; }
