@@ -26,11 +26,6 @@ Origin rewritten to the loopback ones the issuer and the node register, so
 a phone on the tailnet signs in as the demo account with nothing changed
 in either of them.
 
-With LOCAL_STACK_FRONT_PHONE=<a built web folder> (`just phone`: dx's
-build of studio-web in the `wasm-phone` profile), another origin gets that
-build instead of dx's dev server: iOS Safari cannot compile the dev
-module. Loopback keeps the dev server and its hot reload.
-
 Loopback by default. Streams both ways (a recording's ranges, the link's live
 events), and relays an upgrade (the app's WebSocket to `/org/<slug>/vox`).
 """
@@ -61,8 +56,6 @@ class Front(BaseHTTPRequestHandler):
     auth = 0
     # This front's own port: the loopback origin the issuer and node know.
     port = 0
-    # A built web folder another origin gets instead of the dev server.
-    phone = ""
     # dx's dev server's port, when it serves the app (else the bundle).
     app = 0
 
@@ -115,10 +108,6 @@ class Front(BaseHTTPRequestHandler):
                 self.relay(self.node)
             else:
                 self.forward(self.node)
-        elif origin and self.phone and os.path.isfile(os.path.join(self.phone, "index.html")):
-            if self.command not in ("GET", "HEAD"):
-                return self.plain(405, "the phone's build is files")
-            self.static(urllib.parse.unquote(path), self.phone, spa=True)
         elif self.app:
             if self.headers.get("Upgrade"):
                 self.relay(self.app)
@@ -305,7 +294,6 @@ def main(argv):
     bind = argv[4] if len(argv) == 5 else "127.0.0.1"
     Front.port = port
     Front.auth = int(os.environ.get("LOCAL_STACK_FRONT_AUTH") or 0)
-    Front.phone = os.environ.get("LOCAL_STACK_FRONT_PHONE") or ""
     if target.startswith("http://"):
         Front.app = int(urllib.parse.urlsplit(target).port or 80)
         what = f"the app from dx at :{Front.app}"

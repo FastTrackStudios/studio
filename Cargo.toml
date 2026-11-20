@@ -1208,22 +1208,6 @@ opt-level = 3
 [profile.wasm-release.package.symphonia-codec-vorbis]
 opt-level = 3
 
-# studio-web for a phone on the local stack (`just phone`) and its
-# releases: iOS Safari cannot compile the dev build's module (157 MB of
-# code). Built split (`dx build --wasm-split --features wasm-split`): the
-# page's module holds the shell, the launcher and Studio's notes, and each
-# of the window's extensions (Session's engine, the arrangement, the
-# mixer, Keyflow's chart, Ignition's lighting, ...) is a chunk fetched when
-# it is first used (features/distribution `deferred`). The splitter needs
-# fat LTO and the symbols (dx sets both for a split build; said here so
-# the profile is what is built); wasm-opt strips them after.
-[profile.wasm-phone]
-inherits = "release"
-opt-level = "s"
-lto = true
-debug = true
-codegen-units = 16
-
 # dx's own profile: `dx serve` builds the window as `desktop-dev` with an
 # explicit `--target`, so its artifacts land in
 # target/<host>/desktop-dev. The dev loop builds the engine and the tests the
