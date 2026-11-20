@@ -46,6 +46,11 @@ pub fn hsl(h: u16, s: u8, l: u8) -> String {
     format!("hsl({h}, {s}%, {l}%)")
 }
 
+/// Every box of a launcher page sized with its padding and border, as a
+/// browser sizes a button (Blitz sizes them content-box, and a card at
+/// 100% plus its padding runs off the right edge).
+pub const BOX: &str = ".studio-launcher, .studio-launcher * { box-sizing: border-box; }";
+
 /// The page every view draws on: black, the design's type, scrolling.
 pub const PAGE: &str = "flex: 1; min-height: 0; display: block; overflow-y: scroll; \
     background: #000; color: #f4f4f5; font-family: Instrument Sans, -apple-system, system-ui, sans-serif; \

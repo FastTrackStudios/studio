@@ -35,7 +35,7 @@ pub fn SignalView() -> Element {
     });
     let now = quick.as_ref().map(|q| q.4.clone());
     rsx! {
-        div { style: "{PAGE}",
+        div { class: "studio-launcher", style: "{PAGE}", document::Style { {super::BOX} }
             super::parts::TopBar { title: "Signal",
                 if let Some((name, when, icon, hue, _)) = quick {
                     div { style: "height: 44px; border-radius: 22px; display: flex; align-items: center; padding: 0 1px; \

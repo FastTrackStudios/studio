@@ -15,7 +15,7 @@ pub fn HomeView() -> Element {
     let nav: Nav = use_signal(Vec::new);
     let s = studio.read();
     let root = root(&s, nav);
-    rsx! { div { style: "{PAGE}", {stacked(&s, nav, root)} } }
+    rsx! { div { class: "studio-launcher", style: "{PAGE}", document::Style { {super::BOX} } {stacked(&s, nav, root)} } }
 }
 
 fn root(s: &Studio, nav: Nav) -> Element {
