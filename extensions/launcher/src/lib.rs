@@ -24,6 +24,7 @@ pub mod layout;
 pub mod model;
 pub mod nav;
 pub mod plan;
+pub mod ui;
 mod view;
 
 use std::path::{Path, PathBuf};
@@ -73,7 +74,14 @@ impl Extension for Launcher {
     fn build(&self, ext: &mut Builder) {
         host::connect(ext.handle());
         ext.navigator(nav::PREFIX, nav::LauncherNav);
-        ext.view(VIEW, view::LauncherView)
+        // Studio's phone app (docs/design/launcher/prototype): Home is the
+        // launcher's own view (the app's home); Records, Setlists and Signal
+        // its tabs (extension.toml); the setlist player the launcher was.
+        ext.view(VIEW, ui::HomeView);
+        ext.view("records", ui::RecordsView);
+        ext.view("setlists", ui::SetlistsView);
+        ext.view("signal", ui::SignalView);
+        ext.view("player", view::LauncherView)
             .action("STUDIO_LAUNCHER_CHOOSE", |args| async move {
                 let name = text(&args, "setlist")?;
                 let found = load().await?;
@@ -800,5 +808,23 @@ mod tests {
             json!([PANE, "studio.mixer/mixer"])
         )));
         assert!(!has_own_window(&layout(json!([PANE]), json!([]))));
+    }
+}
+
+#[cfg(test)]
+mod manifest_parses {
+    #[test]
+    fn the_manifest_parses() {
+        // Every view the code draws must be one the manifest declares, or the
+        // extension does not load (the host refuses it at start).
+        let declared = ["records", "setlists", "signal", "player"];
+        for v in declared {
+            assert!(
+                super::MANIFEST.contains(&format!("id = \"{v}\"")),
+                "{v} undeclared"
+            );
+        }
+        let m = architect_extensions::manifest::Manifest::parse(super::MANIFEST);
+        assert!(m.is_ok(), "{m:?}");
     }
 }
