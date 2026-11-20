@@ -14,7 +14,9 @@ name = "studio-launcher"
 path = "src/main.rs"
 
 [dependencies]
-architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+# The trait (`linked-core`): linked into an app, a browser's too; its
+# process copy (`guest`) off the browser.
+architect-extensions = { workspace = true, features = ["linked-core"] }
 # The provider it adds to Architect's navigator (`src/nav.rs`).
 architect-navigator-api = { workspace = true }
 # A song's tile colour, the setlists extension's rule (`setlists::row::tile_hue`),
@@ -28,10 +30,22 @@ base64 = { workspace = true }
 dioxus = { workspace = true }
 serde_json = { workspace = true }
 futures-timer = { workspace = true }
+# A clock that reads in a browser too (std's `Instant` panics there).
+web-time = { workspace = true }
+
+# Off the browser: its process copy, the machine's folders (the rigs, the
+# setlist file it writes), and the runtime its host calls are polled in
+# (`host::runtime`): a linked action run from a hook is not on Tokio, and
+# some actions need it.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+architect-extensions = { workspace = true, features = ["guest"] }
 dirs = { workspace = true }
-# The runtime its host calls are polled in (`host::runtime`): a linked
-# action run from a hook is not on Tokio, and some actions need it.
 tokio = { workspace = true, features = ["rt-multi-thread", "net", "time"] }
+
+# In a browser: its timers on the page's (`futures-timer` without it
+# waits on a thread a browser does not have).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+futures-timer = { workspace = true, features = ["wasm-bindgen"] }
 
 [lints]
 workspace = true

@@ -24,23 +24,26 @@ pub fn studio() -> Bundle {
         .member(&studio_views::ext::StudioViews)
 }
 
-/// The window's extensions: Studio's arrangement and mixer (windows on
-/// Studio's engine, the `daw` extension, which stays a process), its
-/// lyrics, navigator and launcher, Keyflow's chart, and Ignition's
-/// lighting (natively, until its browser build lands). A development copy of any of them shadows the
-/// linked one, so one can be worked on while the rest run as built.
+/// The window's extensions: Studio's launcher and Keyflow's chart on
+/// every target; natively also its arrangement, mixer, lyrics and
+/// navigator and Ignition's lighting, until their browser builds land.
+///
+/// The arrangement and mixer are windows on Studio's engine (the `daw`
+/// extension). A development copy of any of them shadows the linked one,
+/// so one can be worked on while the rest run as built.
 #[cfg(feature = "stage")]
 #[must_use]
 pub fn stage() -> Bundle {
     let stage = Bundle::new("stage", "Stage")
+        .member(&studio_launcher::Launcher)
+        .member(&keyflow_extension::Keyflow);
+    #[cfg(not(target_arch = "wasm32"))]
+    let stage = stage
         .member(&studio_arrangement::Arrangement)
         .member(&studio_mixer::Mixer)
         .member(&studio_lyrics::Lyrics)
         .member(&studio_navigator::Navigator)
-        .member(&studio_launcher::Launcher)
-        .member(&keyflow_extension::Keyflow);
-    #[cfg(not(target_arch = "wasm32"))]
-    let stage = stage.member(&ignition_pane::ext::Lighting);
+        .member(&ignition_pane::ext::Lighting);
     stage
 }
 

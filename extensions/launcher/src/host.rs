@@ -6,10 +6,12 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Mutex, OnceLock, PoisonError};
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::OnceLock;
+use std::sync::{Mutex, PoisonError};
 use std::task::{Context, Poll};
 
-use architect_extensions::hostcall::HostRequest;
+use architect_extensions::hostcall::{HostError, HostRequest};
 use architect_extensions::linked::Handle;
 use serde_json::{Value, json};
 
@@ -37,7 +39,9 @@ fn handle() -> Result<Handle, String> {
 /// panics there, which the same action run from the command line never
 /// does. Each call is polled with this runtime entered, so what it
 /// spawns and waits on has one. As a process the call crosses to the
-/// host and none of this matters.
+/// host and none of this matters. In a browser there is one thread and
+/// no Tokio: what an action awaits there is the page's.
+#[cfg(not(target_arch = "wasm32"))]
 fn runtime() -> Option<&'static tokio::runtime::Runtime> {
     static RUNTIME: OnceLock<Option<tokio::runtime::Runtime>> = OnceLock::new();
     RUNTIME
@@ -59,6 +63,7 @@ impl<F: Future> Future for Entered<F> {
     type Output = F::Output;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        #[cfg(not(target_arch = "wasm32"))]
         let _guard = runtime().map(tokio::runtime::Runtime::enter);
         self.0.as_mut().poll(cx)
     }
@@ -76,6 +81,57 @@ pub async fn run(action: &str, args: Value) -> Result<Value, String> {
         ticket: None,
     });
     Entered(Box::pin(call)).await.map_err(|e| e.to_string())
+}
+
+/// The service Studio's engine answers (`[uses]` in the manifest): its
+/// method `m` is the provider's action `<PREFIX>_<M>`, the `daw`
+/// extension's `DAW_<M>` natively and in a browser alike.
+pub const SESSION: &str = "fts.session";
+
+/// The action the engine's `fts.session` method `method` is: what is run
+/// when the provider the host meets has no such method (Keyflow provides
+/// `fts.session` too, for a chart's session, and opens nothing).
+fn engine_action(method: &str) -> String {
+    format!("DAW_{}", method.to_ascii_uppercase())
+}
+
+/// Calls method `method` of Studio's engine (`fts.session`: `open`,
+/// `state`, `run`) with `args`, through the host's service.
+///
+/// The same call natively (the `daw` extension, a process) and in a
+/// browser (the engine in the page). When the provider met is not the
+/// engine's (it has no such method), the engine's own action is run.
+///
+/// # Errors
+///
+/// The launcher is not running, no engine answers, or it refused.
+pub async fn session(method: &str, args: Value) -> Result<Value, String> {
+    let call = handle()?.service(SESSION, method, args.clone());
+    match Entered(Box::pin(call)).await {
+        Ok(out) => Ok(out),
+        // Another provider of the service (Keyflow's) answered, without it.
+        Err(HostError::NotFound { what })
+            if what.starts_with(&format!("method {method} of {SESSION}")) =>
+        {
+            run(&engine_action(method), args).await
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Opens note `path` as the app opens a note the person picks (only
+/// what the viewer may open).
+///
+/// # Errors
+///
+/// The launcher is not running, or the app refused.
+pub async fn open(path: &str) -> Result<Value, String> {
+    handle()?
+        .host(HostRequest::Open {
+            path: path.to_owned(),
+        })
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Every setlist note.
@@ -107,7 +163,7 @@ pub async fn notes() -> Result<(Vec<Row>, Vec<Row>), String> {
     Ok((query(SETLISTS).await?, query(SONGS).await?))
 }
 
-/// The vault's folder on disk, when it has one.
+/// The vault's folder on disk, when it has one (none in a browser).
 pub async fn vault_root() -> Option<String> {
     let out = run("VAULT_STATUS", json!({})).await.ok()?;
     out.get("root")
@@ -121,7 +177,7 @@ pub async fn vault_root() -> Option<String> {
 ///
 /// The engine is not running, or the action refused.
 pub async fn engine(id: &str, args: Value) -> Result<Value, String> {
-    let out = run("DAW_RUN", json!({ "id": id, "args": args })).await?;
+    let out = session("run", json!({ "id": id, "args": args })).await?;
     Ok(match out {
         Value::String(text) => serde_json::from_str(&text).unwrap_or(Value::String(text)),
         other => other,
