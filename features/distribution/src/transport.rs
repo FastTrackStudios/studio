@@ -1,11 +1,17 @@
-//! Studio's views as one linked extension (`studio.transport`).
+//! Studio's set views as one linked extension (`studio.transport`): a
+//! setlist's tabs (Setlist, Chart, Lyrics, More: Arrangement, Mixer,
+//! Lighting) and what each opens, in every app of Studio's.
 //!
-//! Each view is the island's component (`studio_island::view::View`),
-//! given what a frame would have been given: the playhead source's state
-//! (`page`, re-read on every change of the deck and ten times a second
-//! while it plays, as the web app's frame host does), the note it is
-//! drawn beside (`use_embed`'s `props.note`, or the home's `{home}`),
-//! and a way to ask the playhead, as this extension.
+//! The setlist is the island's view (`studio_island`), given what a frame
+//! would have been given: the playhead source's state (`page`, re-read on
+//! every change of the deck and ten times a second while it plays), the
+//! note it is drawn beside (`use_embed`'s `props.note`, or the home's
+//! `{home}`), and a way to ask the playhead, as this extension. With
+//! `web` the song, lyrics, home and transport are the island's too; on a
+//! device they are the native extensions' views (Keyflow's chart, Studio's
+//! lyrics and launcher). The arrangement, the mixer and the lighting are
+//! always the extensions' (`studio.arrangement`, `studio.mixer`,
+//! `ignition`), on the engine the app runs.
 
 use std::sync::{Mutex, PoisonError};
 
@@ -19,12 +25,16 @@ const ID: &str = "studio.transport";
 /// The host, as this extension: what opens a note a view asks for.
 static HANDLE: Mutex<Option<Handle>> = Mutex::new(None);
 
-/// Studio's views, linked into the web client.
+/// The extension's manifest: its views, its claims (a setlist note, a
+/// song note), what they read and a setlist's favourites.
+pub const MANIFEST: &str = include_str!("../transport.toml");
+
+/// Studio's set views, linked into every app.
 pub struct StudioViews;
 
 impl Extension for StudioViews {
     fn manifest(&self) -> &'static str {
-        crate::MANIFEST
+        MANIFEST
     }
 
     fn build(&self, ext: &mut Builder) {
@@ -44,11 +54,22 @@ impl Extension for StudioViews {
 fn setlist() -> Element {
     rsx! { Linked { view: "setlist.playlist" } }
 }
+/// The song's chart: the island's (following the playhead) in a browser,
+/// Keyflow's chart on a device.
 fn song() -> Element {
-    rsx! { Linked { view: "song" } }
+    if cfg!(feature = "web") {
+        rsx! { Linked { view: "song" } }
+    } else {
+        host_view("keyflow", "chart")
+    }
 }
+/// The song's lyrics: the island's in a browser, Studio's on a device.
 fn lyrics() -> Element {
-    rsx! { Linked { view: "lyrics" } }
+    if cfg!(feature = "web") {
+        rsx! { Linked { view: "lyrics" } }
+    } else {
+        host_view("studio.lyrics", "lyrics")
+    }
 }
 /// The song's arrangement: Studio's arrangement on the engine in the
 /// page (`studio.arrangement`), which a share link's page opens its set
@@ -57,7 +78,11 @@ fn arrangement() -> Element {
     host_view("studio.arrangement", "arrangement")
 }
 fn home() -> Element {
-    rsx! { Linked { view: "home" } }
+    if cfg!(feature = "web") {
+        rsx! { Linked { view: "home" } }
+    } else {
+        host_view("studio.launcher", "launcher")
+    }
 }
 /// The song's mixer: Studio's mixer on the engine in the page
 /// (`studio.mixer`).
@@ -94,11 +119,21 @@ impl PartialEq for Root {
 fn LinkedView(root: Root) -> Element {
     (root.0)()
 }
+/// The song's progress and transport: the island's in a browser; on a
+/// device the Now Playing bar is the app's own.
 fn progress() -> Element {
-    rsx! { Linked { view: "progress" } }
+    if cfg!(feature = "web") {
+        rsx! { Linked { view: "progress" } }
+    } else {
+        rsx! {}
+    }
 }
 fn transport() -> Element {
-    rsx! { Linked { view: "transport" } }
+    if cfg!(feature = "web") {
+        rsx! { Linked { view: "transport" } }
+    } else {
+        rsx! {}
+    }
 }
 
 /// This extension's source on the deck, flat, with `note`: what a frame
@@ -123,7 +158,7 @@ fn state(note: &Value) -> Value {
 /// Opens the note at `args.path` through the host, as this extension.
 fn open_note(args: Value) {
     let Some(path) = args.get("path").and_then(Value::as_str).map(str::to_owned) else {
-        tracing::warn!("studio-web: NOTE_OPEN without a path");
+        tracing::warn!("studio: NOTE_OPEN without a path");
         return;
     };
     let Some(handle) = HANDLE
@@ -131,13 +166,13 @@ fn open_note(args: Value) {
         .unwrap_or_else(PoisonError::into_inner)
         .clone()
     else {
-        tracing::warn!("studio-web: NOTE_OPEN before the extension was built");
+        tracing::warn!("studio: NOTE_OPEN before the extension was built");
         return;
     };
     spawn(async move {
         let request = architect_extensions::hostcall::HostRequest::Open { path };
         if let Err(e) = handle.host(request).await {
-            tracing::warn!(error = %e, "studio-web: the host did not open the note");
+            tracing::warn!(error = %e, "studio: the host did not open the note");
         }
     });
 }
@@ -166,7 +201,7 @@ fn Linked(view: &'static str) -> Element {
     use_future(move || async move {
         let mut seen = u64::MAX;
         loop {
-            gloo_timers::future::TimeoutFuture::new(100).await;
+            futures_timer::Delay::new(std::time::Duration::from_millis(100)).await;
             let rev = architect_playhead::revision();
             let playing = page.peek()["playing"] == json!(true);
             if playing || rev != seen {
@@ -185,8 +220,44 @@ fn Linked(view: &'static str) -> Element {
         }
         let caller = architect_playhead::Caller::Extension(ID.to_owned());
         if let Err(e) = architect_playhead::ask(&caller, &action, &args) {
-            tracing::warn!(view.ask = %action, error = %e, "studio-web: a view's ask was refused");
+            tracing::warn!(view.ask = %action, error = %e, "studio: a view's ask was refused");
         }
     });
-    rsx! { studio_island::view::View { view: view.to_owned(), page, note, ask } }
+    #[cfg(feature = "web")]
+    return rsx! { studio_island::view::View { view: view.to_owned(), page, note, ask } };
+    // On a device the island draws the setlist (Blitz); its other views
+    // are the native extensions' (above).
+    #[cfg(not(feature = "web"))]
+    rsx! { studio_island::setlist::SetlistView { page, note, ask } }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_manifest_reads_and_claims_setlists_and_songs() {
+        let manifest: toml::Value = toml::from_str(super::MANIFEST).expect("the manifest is TOML");
+        assert_eq!(manifest["id"].as_str(), Some("studio.transport"));
+        let views: Vec<&str> = manifest["views"]
+            .as_array()
+            .expect("views")
+            .iter()
+            .filter_map(|v| v["id"].as_str())
+            .collect();
+        for view in ["setlist.playlist", "song", "lyrics", "arrangement", "home"] {
+            assert!(views.contains(&view), "the manifest declares {view}");
+        }
+        let claims: Vec<String> = manifest["embeds"]
+            .as_array()
+            .expect("embeds")
+            .iter()
+            .flat_map(|e| {
+                e["claims"]["note_type"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default()
+            })
+            .filter_map(|t| t.as_str().map(str::to_owned))
+            .collect();
+        assert_eq!(claims, ["setlist", "song"]);
+    }
 }

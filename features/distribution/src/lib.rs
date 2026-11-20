@@ -18,6 +18,11 @@
 
 use architect_distribution::{Bundle, Distribution, Icon};
 
+/// Studio's set views (`studio.transport`): a setlist's tabs and what
+/// they open, in every app.
+#[cfg(feature = "stage")]
+pub mod transport;
+
 /// The distribution's name.
 pub const NAME: &str = "Studio";
 
@@ -65,7 +70,10 @@ pub fn distribution() -> Distribution {
         .token("border", "#1f1f24")
         .bundle(studio());
     #[cfg(feature = "stage")]
-    let dist = dist.bundle(stage()).home(HOME.0, HOME.1);
+    let dist = dist
+        .bundle(stage())
+        .linked(&transport::StudioViews)
+        .home(HOME.0, HOME.1);
     dist
 }
 
@@ -89,10 +97,14 @@ pub fn studio() -> Bundle {
 /// the room is Ignition's web renderer in a canvas. A development copy of
 /// any of them shadows the linked one, so one can be worked on while the
 /// rest run as built.
-#[cfg(all(feature = "stage", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "stage", not(feature = "web")))]
 #[must_use]
 pub fn stage() -> Bundle {
-    Bundle::new("stage", "Stage")
+    let stage = Bundle::new("stage", "Stage");
+    // On a phone the engine runs in the app (no process of its own).
+    #[cfg(feature = "mobile")]
+    let stage = stage.member(&daw_extension::Daw);
+    stage
         .member(&studio_launcher::Launcher)
         .member(&keyflow_extension::Keyflow)
         .member(&studio_arrangement::Arrangement)
@@ -108,7 +120,7 @@ pub fn stage() -> Bundle {
 /// actions runs ([`deferred`]): opening the arrangement fetches the
 /// arrangement, not the mixer, Keyflow's chart or Ignition's lighting.
 /// Studio's engine (`daw`) is the page's own, as the launcher is.
-#[cfg(all(feature = "stage", target_arch = "wasm32"))]
+#[cfg(all(feature = "stage", feature = "web"))]
 #[must_use]
 pub fn stage() -> Bundle {
     use architect_extensions::linked::deferred::Deferred;
@@ -131,7 +143,7 @@ pub fn stage() -> Bundle {
 /// chunk of its own (`#[wasm_split]`, feature `wasm-split`), split out by
 /// `dx build --wasm-split`. Without the feature (`dx serve`) the code is
 /// the page's module and only the building waits for first use.
-#[cfg(all(feature = "stage", target_arch = "wasm32"))]
+#[cfg(all(feature = "stage", feature = "web"))]
 pub mod deferred {
     use architect_extensions::linked::deferred::{Defer, Loading};
     use architect_extensions::linked::{Builder, Extension as _};

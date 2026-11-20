@@ -21,25 +21,16 @@ wasm-split = ["studio-extensions/wasm-split"]
 name = "studio-web"
 path = "src/main.rs"
 
-# The manifest is read on every target, so its test runs on the host.
-[dependencies]
-toml = { workspace = true }
-
 # The browser build only: natively (a workspace-wide build) the crate is
 # its manifest and its test.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # Without `start`: this crate's own start runs it with Studio's views.
 architect-web = { workspace = true }
 architect-distribution = { workspace = true }
-architect-extensions = { workspace = true, features = ["linked-core"] }
-architect-playhead = { workspace = true }
-studio-island = { workspace = true }
 # The same extensions the desktop app links (one list), the window's
 # (`stage`) included: in a browser it begins with the engine in the page.
-studio-extensions = { workspace = true, features = ["stage"] }
+studio-extensions = { workspace = true, features = ["web"] }
 dioxus = { workspace = true, features = ["web"] }
-serde_json = { workspace = true }
-gloo-timers = { workspace = true, features = ["futures"] }
 tracing = { workspace = true }
 tracing-wasm = { workspace = true }
 tracing-subscriber = { workspace = true }

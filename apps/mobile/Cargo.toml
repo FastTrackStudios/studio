@@ -19,7 +19,7 @@ path = "src/main.rs"
 architect-mobile = { workspace = true }
 # Studio's distribution with the window's views (`stage`): the launcher,
 # the arrangement, the mixer, the lyrics, the navigator, Keyflow's chart.
-studio-extensions = { workspace = true, features = ["stage"] }
+studio-extensions = { workspace = true, features = ["mobile"] }
 
 [lints]
 workspace = true

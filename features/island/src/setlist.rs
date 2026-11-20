@@ -99,18 +99,42 @@ pub const SHEET: &str = r#"
 .sl-empty { padding: 16px 0; color: var(--muted-foreground, #8b8b94); }
 "#;
 
+/// A view's way to ask the app (the playhead's intents, `NOTE_OPEN`).
+pub type Ask = Callback<(String, serde_json::Value)>;
+
+/// Now, in milliseconds since the epoch: the browser's clock or the
+/// device's.
+fn now_ms() -> f64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
+            .map_or(0.0, |d| d.as_secs_f64() * 1000.0)
+    }
+}
+
+/// Waits `ms` on the page's timer or the device's.
+async fn sleep(ms: u32) {
+    #[cfg(target_arch = "wasm32")]
+    gloo_timers::future::TimeoutFuture::new(ms).await;
+    #[cfg(not(target_arch = "wasm32"))]
+    futures_timer::Delay::new(std::time::Duration::from_millis(u64::from(ms))).await;
+}
+
 /// The setlist view, over the app's props.
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 #[component]
 pub fn SetlistView(
     page: Signal<serde_json::Value>,
     note: Signal<serde_json::Value>,
-    ask: crate::views::Ask,
+    ask: Ask,
 ) -> Element {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    let now_ms = js_sys::Date::now;
     // The list apart from where it is: rebuilt only when the list changes,
     // not at each tick of the playhead.
     let list = use_memo(move || queue::setlist_of_note(&note.read()));
@@ -152,7 +176,7 @@ pub fn SetlistView(
             let (outbox, sync) = (outbox.clone(), sync.clone());
             async move {
                 loop {
-                    gloo_timers::future::TimeoutFuture::new(200).await;
+                    sleep(200).await;
                     let asks = outbox.borrow_mut().tick(&page.peek(), now_ms());
                     sync();
                     send(asks);

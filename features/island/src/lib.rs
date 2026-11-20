@@ -54,8 +54,9 @@ mod lyrics;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod arrangement;
 
-#[cfg(any(test, all(target_arch = "wasm32", target_os = "unknown")))]
-mod setlist;
+/// The setlist view: in a browser's bundle, and on a device (Blitz).
+#[cfg(not(all(target_arch = "wasm32", target_os = "wasi")))]
+pub mod setlist;
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod web;
