@@ -1039,20 +1039,20 @@ function pageSetlistsTab() {
   return `${bar({ title: "Setlists", tools: [{ label: "Library", icon: "library", open: "library" }, { label: "New setlist", icon: "plus", menu: "newset" }] })}
     <div class="body">
       <div class="tagrow fchips">${[["all", "All"], ...FOLDERS.map(f => [f.tag, f.name])].map(([t, n]) => `<button class="tagchip" data-sfold="${t}" aria-pressed="${sfold === t}">${esc(n)}</button>`).join("")}</div>
-      ${series.length ? `<div class="dayhead">Every week</div>
+      ${series.length ? `<div class="dayhead">Recurring</div>
       <div class="evgrid">${series.map(id => { const sr = seriesOf(id), nx = nextOf(sr); return `
         <button class="ev" data-open="${sr.id}">
           <span class="evlogo">${ring(nx, 84)}${LOGO[id] ? `<img src="${LOGO[id]}" alt="">` : cover({ title: sr.name }, 64, sr.hue)}</span>
           <span class="t1">${esc(sr.name)}</span>
           <span class="s1">${nx ? (daysFrom(nx.date) === 0 ? "Today" : daysFrom(nx.date) < 7 ? DAY[nx.date.getUTCDay()].slice(0, 3) : short(nx.date)) : ""}${nx && nx.songs.length < sr.size ? ` · <b>${nx.songs.length}/${sr.size}</b>` : ""}</span>
         </button>`; }).join("")}</div>` : ""}
-      ${shows.length ? `<div class="dayhead">Shows</div>
-      <div class="showlist">${shows.map(({ id, f }) => { const st = SETS[id], [m, y] = ({ mb: ["Dec", "2026"] })[id] || showDate(st).slice(1); return `
+      ${[["Upcoming shows", shows.filter(x => x.id === "mb")], ["Past shows", shows.filter(x => x.id !== "mb")]].filter(([, l]) => l.length).map(([head, l]) => `<div class="dayhead">${head}</div>
+      <div class="showlist ${head.startsWith("Past") ? "past" : ""}">${l.map(({ id, f }) => { const st = SETS[id], [m, y] = ({ mb: ["Dec", "2026"] })[id] || showDate(st).slice(1); return `
         <button class="showc" data-open="${id}">
           <span class="showart">${ART[id] ? `<img src="${ART[id]}" alt="">` : cover({ title: st.title }, 0, id === "mb" ? 150 : 20)}</span>
           <span class="mid"><span class="t1">${esc(st.title)}</span><span class="s1">${esc(f.name)} · ${songs(st).length} songs${total(st) ? " · " + dur(total(st)) : ""}</span></span>
           <span class="cal"><span class="cm">${m.slice(0, 3)}</span><span class="cd">${y}</span></span>
-        </button>`; }).join("")}</div>` : ""}
+        </button>`; }).join("")}</div>`).join("")}
     </div>`;
 }
 
@@ -1074,16 +1074,34 @@ function recRow2(id) {
     ${n || DUE[id] ? `<span class="rmeta">${n ? `<span class="ropen">${ic("message", 12, 2.2)}${n} open</span>` : ""}${DUE[id] ? `<span class="rdue">${ic("calendar", 12, 2)}Due ${DUE[id]}</span>` : ""}</span>` : ""}
   </button>`;
 }
-let rfil = "Active";
+// Records: the newest versions to listen to first, each playable where it
+// sits (Samply's feed); then the records themselves, a shelf.
+let RPLAY = null;
 function pageSessions() {
   const ids = RECENT_WORK.filter(id => !org || OWNER[id] === org);
-  const st = id => ALBUMS[id] ? ALBUMS[id].status : studioOf(id).stage;
-  const pick = { Active: id => st(id) < 6, Albums: id => !!ALBUMS[id], Singles: id => !ALBUMS[id], Finished: id => st(id) >= 6 }[rfil];
-  const list = ids.filter(pick);
+  // One newest version from each record in turn, so the feed is not one album.
+  const byRec = ids.map(id => STUDIO.filter(x => (x.rec || x.id) === id));
+  const feed = []; for (let k = 0; feed.length < 5 && k < 12; k++) byRec.forEach(l => { if (l[k] && feed.length < 5) feed.push({ x: l[k], v: latest(l[k].title) }); });
   return `${bar({ title: "Records", tools: [{ label: "New record", icon: "plus", act: "New album, EP or single" }] })}
     <div class="body">
-      <div class="tagrow fchips">${["Active", "Albums", "Singles", "Finished"].map(f => `<button class="tagchip" data-rfil="${f}" aria-pressed="${rfil === f}">${f}</button>`).join("")}</div>
-      <div class="rlist">${list.map(recRow2).join("") || `<div class="empty">Nothing here yet.</div>`}</div>
+      <div class="dayhead">Records</div>
+      <div class="rshelf">${ids.map(id => { const a = ALBUMS[id], x = !a && studioOf(id); return `
+        <button class="rsh" data-open="${id}">
+          <span class="rshc">${ART[id] ? `<img src="${ART[id]}" alt="">` : cover(a || x, 0, (a || x).hue)}</span>
+          <span class="t1">${esc(a ? a.title : x.title)}</span>
+          <span class="s1">${a ? `${a.tracks.length} songs` : "Single"}</span>
+          ${stageTag(a ? a.status : x.stage)}
+        </button>`; }).join("")}</div>
+      <div class="dayhead">Latest versions</div>
+      <div class="feed">${feed.map(({ x, v }) => { const n = v.comments.filter(c => c.open).length, on = RPLAY === x.title; return `
+        <div class="fd ${on ? "on" : ""}">
+          <button class="fdplay" data-fplay="${esc(x.title)}" aria-label="${on ? "Pause" : "Play"} ${esc(x.title)}">${ic(on ? "pause" : "play", 16, 2)}</button>
+          <button class="fdmid" data-rev="${esc(x.title)}">
+            <span class="fdtop"><span class="t1">${esc(x.title)}</span><span class="fdv">${v.what} v${v.v}</span></span>
+            ${wave(x.title.length, 48, v.comments)}
+            <span class="s1">${esc(x.rec ? ALBUMS[x.rec].title : "Single")} · ${esc(v.who)} · ${esc(v.when)}${n ? ` · <b class="openn">${n} open</b>` : ""}</span>
+          </button>
+        </div>`; }).join("")}</div>
     </div>`;
 }
 // Pick the org: all of them, or one (Architect's workspace switcher).
@@ -1418,6 +1436,7 @@ document.addEventListener("click", e => {
   if (el("[data-resolve]")) { const [t, vv, at] = el("[data-resolve]").dataset.resolve.split("|"); const c = versionsOf(t).find(y => y.v === +vv).comments.find(c => c.at === +at); if (c) c.open = false; return redrawReview(); }
   if (el("[data-scrub]") && !el("[data-seek]")) { const w = el("[data-scrub]").getBoundingClientRect(); RV.pos = Math.max(0, Math.min(1, (e.clientX - w.left) / w.width)); return redrawReview(); }
   if (el("[data-sfold]")) { sfold = el("[data-sfold]").dataset.sfold; return render(); }
+  if (el("[data-fplay]")) { const t = el("[data-fplay]").dataset.fplay; RPLAY = RPLAY === t ? null : t; return render(); }
   if (el("[data-rfil]")) { rfil = el("[data-rfil]").dataset.rfil; return render(); }
   if (el("[data-filters]")) return openFilters();
   if (el("[data-play]")) return play(el("[data-play]").dataset.play);
