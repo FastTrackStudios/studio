@@ -50,19 +50,49 @@ fn song() -> Element {
 fn lyrics() -> Element {
     rsx! { Linked { view: "lyrics" } }
 }
+/// The song's arrangement: Studio's arrangement on the engine in the
+/// page (`studio.arrangement`), which a share link's page opens its set
+/// in and a member's launcher opens a setlist in.
 fn arrangement() -> Element {
-    rsx! { Linked { view: "arrangement" } }
+    host_view("studio.arrangement", "arrangement")
 }
 fn home() -> Element {
     rsx! { Linked { view: "home" } }
 }
+/// The song's mixer: Studio's mixer on the engine in the page
+/// (`studio.mixer`).
 fn mixer() -> Element {
-    rsx! { Linked { view: "mixer" } }
+    host_view("studio.mixer", "mixer")
 }
 /// The song's lighting (the setlist's More menu): Ignition's room, drawn
-/// in the page by Ignition's web renderer (its `show` view, linked in).
+/// in the page by Ignition's web renderer: its `show` view, as the host
+/// has it (deferred in a browser: Ignition's chunk is fetched when this
+/// first opens).
 fn lighting() -> Element {
-    rsx! { ignition_pane::ext::ShowView {} }
+    host_view("ignition", "show")
+}
+
+/// View `view` of linked extension `extension`, as the host has it
+/// (deferred: its chunk fetched when this first draws).
+fn host_view(extension: &str, view: &str) -> Element {
+    let root = try_use_context::<architect_extensions::interface::ExtensionUi>()
+        .and_then(|ui| ui.host().linked_view(extension, view));
+    root.map_or_else(|| rsx! {}, |root| rsx! { LinkedView { root: Root(root) } })
+}
+
+/// A view the host links, as a component of its own.
+#[derive(Clone, Copy)]
+struct Root(fn() -> Element);
+
+impl PartialEq for Root {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::fn_addr_eq(self.0, other.0)
+    }
+}
+
+#[component]
+fn LinkedView(root: Root) -> Element {
+    (root.0)()
 }
 fn progress() -> Element {
     rsx! { Linked { view: "progress" } }

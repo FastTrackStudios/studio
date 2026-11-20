@@ -17,7 +17,11 @@ path = "daw-extension"
 [provides]
 "fts.session" = "0.1.0"
 
-[requires]
+# The app's playhead (`architect.playhead`): the Now Playing bar it
+# follows. A use, not a requirement: in a browser the app answers it
+# itself (no extension provides it there), as it does for studio-web's
+# and the island's views.
+[uses]
 "architect.playhead" = "^0.1"
 
 [capabilities]
