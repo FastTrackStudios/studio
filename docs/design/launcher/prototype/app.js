@@ -33,6 +33,18 @@ const P = {
   tuner: '<path d="M12 21a9 9 0 1 1 9-9"/><path d="m12 12 4-6"/><circle cx="12" cy="12" r="1.5"/>',
   perc: '<path d="M7 3h10l-1.5 18h-7z"/><path d="M7.4 8h9.2M8 15h8"/>',
   acoustic: '<circle cx="9" cy="15" r="6"/><circle cx="9" cy="15" r="1.8"/><path d="M13.3 10.7 20.5 3.5"/><path d="m19 2 3 3"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  tag: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  chevDown: '<path d="m6 9 6 6 6-6"/>',
+  chart: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h2M8 17h2M14 13h2M14 17h2"/>',
+  type: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
+  message: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  messagePlus: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M8 12h8"/><path d="M12 8v8"/>',
+  compare: '<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>',
+  transpose: '<path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/>',
+  download: '<path d="M12 15V3"/><path d="m7 10 5 5 5-5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
   rig: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
   library: '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
   play: '<path d="M6 3l14 9-14 9z" fill="currentColor"/>',
@@ -91,9 +103,10 @@ const PROJECTS = [
 ];
 // Records: what is made in the studio. The track list is the vault's; the
 // stages are placeholders.
-const STAGES = [["Demo", null], ["Tracking", 235], ["Editing", 295], ["Mixing", 65], ["Mastered", 150]];
-const ALBUMS = { cr: { title: "Crescendum", artist: "Crescendum", what: "Studio album", tracks: [
-  ["Intro", 4], ["Set in Stone", 4], ["Unbreakable", 3], ["Chained Expectations", 3], ["Heavify", 2],
+// A track's status, and a record's: where it is on the way out.
+const STAGES = [["Writing", 320], ["Recording", 25], ["Editing", 290], ["Mixing", 65], ["Mastering", 215], ["Approval", 90], ["Complete", 150], ["Released", 180], ["Archived", null]];
+const ALBUMS = { cr: { title: "Crescendum", artist: "Crescendum", what: "Studio album", status: 3, tracks: [
+  ["Intro", 6], ["Set in Stone", 5], ["Unbreakable", 3], ["Chained Expectations", 3], ["Heavify", 2],
   ["It Knows My Name", 2], ["Kornesque", 1], ["The Ballad", 1], ["The Plague", 1], ["Empty Focus", 0]].map(([title, stage]) => ({ title, stage })) } };
 const PINNED = ["jt", "mb"];
 // The rigs. Presets and inputs are placeholders; one rig is loaded in the
@@ -108,7 +121,9 @@ const RIGS = [
 ];
 const rigOf = name => RIGS.find(r => r.name === name);
 // What Cody plays at each set (placeholders).
-const MINE = { "cya@2026-11-19": "Guitar", "jhms@2026-11-22": "Keys", "main@2026-11-22": "Guitar", "hsm@2026-11-24": "Guitar", "main@2026-11-25": "Keys" };
+// Cody plays JHM Sunday every week, and CYA when he is on it (today).
+// His part in each is a placeholder.
+const MINE = { "cya@2026-11-19": "Guitar", "jhms@2026-10-18": "Guitar", "jhms@2026-10-25": "Guitar", "jhms@2026-11-01": "Guitar", "jhms@2026-11-08": "Guitar", "jhms@2026-11-15": "Guitar", "jhms@2026-11-22": "Guitar", "jhms@2026-11-29": "Guitar", "jhms@2026-12-06": "Guitar" };
 
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const dur = s => { if (s == null) return ""; s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = String(s % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
@@ -156,22 +171,24 @@ function sub(p) {
 // The page's bar (page.rs TouchBar): the brand on a root page, or the way
 // back and the title small; the toolbar on the right.
 function bar({ back, title, tools = [] }) {
-  const lead = back
+  const lead = back && !title
+    ? `<button class="back rb" data-back aria-label="Back">${ic("chevLeft", 24, 2.2)}</button>`
+    : back
     ? `<button class="back" data-back aria-label="Back">${ic("chevLeft", 26, 2)}</button><span class="small">${esc(title)}</span>`
     : `<span class="title">${esc(title)}</span>`;
   return `<div class="bar"><div class="lead">${lead}</div><div class="tools">${tools.map(g => g.html ? g.html : g.joined
     ? `<div class="joined">${g.joined.map((t, i) => (i ? '<span class="hair"></span>' : "") + toolBtn(t)).join("")}</div>`
     : toolBtn(g)).join("")}</div></div>`;
 }
-const toolBtn = t => `<button class="tool" aria-label="${esc(t.label)}" ${t.open ? `data-open="${t.open}"` : t.menu ? `data-menu="${t.menu}"` : `data-act="${esc(t.act || t.label)}"`}>${ic(t.icon, 20)}${t.badge ? `<span class="count">${t.badge}</span>` : ""}</button>`;
+const toolBtn = t => `<button class="tool" aria-label="${esc(t.label)}" ${t.filter ? "data-filters" : t.open ? `data-open="${t.open}"` : t.menu ? `data-menu="${t.menu}"` : `data-act="${esc(t.act || t.label)}"`}>${ic(t.icon, 20)}${t.badge ? `<span class="count">${t.badge}</span>` : ""}</button>`;
 
 let toastT;
 function toast(msg) { const t = document.querySelector(".toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1600); }
 
 // ── Pages ───────────────────────────────────────────────────────────────────
 let scope = "All";
-const SCOPES = ["All", "Setlists", "Sessions", "Songs"];
-const scopeOf = p => p.kind === "Set" ? "Setlists" : p.kind === "Song" ? "Songs" : "Sessions";
+const SCOPES = ["All", "Setlists", "Records", "Songs"];
+const scopeOf = p => p.kind === "Set" ? "Setlists" : p.kind === "Song" ? "Songs" : "Records";
 const inScope = p => scope === "All" || scopeOf(p) === scope;
 function pageProjects() {
   const [first, ...rest] = PROJECTS.filter(inScope);
@@ -219,29 +236,22 @@ function pageProject(id) {
         <div class="fact"><span class="k">Edited</span><span>${esc(p.when)}</span></div>
       </div>
     </div>`;
-  return `${bar({ back: true, title: titleOf(p), tools })}
+  const fold = FOLDERS.find(f => f.shows.includes(p.set));
+  return `${bar({ back: true, tools: [{ joined: [{ label: "Download", icon: "download", act: "Saved for offline" }, { label: "More", icon: "more", menu: "project" }] }] })}
     <div class="body">
-      <p class="meta">${[p.kind === "Production" ? p.fmt : null, `${songs(set).length} songs`, total(set) ? dur(total(set)) : null, set.date].filter(Boolean).join(" · ")}</p>
-      <div class="big-ribbon">${setRibbon(set, p.stopped ? p.stopped[0] : -1)}</div>
-      ${set.acts[0][0] ? `<div class="acts">${set.acts.map(a => `<span style="flex:${a[1].length}">${esc(a[0])}</span>`).join("")}</div>` : '<div style="height:12px"></div>'}
-      <div class="go2">
-        <button class="primary" data-act="Playing ${esc(set.title)}">${ic("play", 15)}Play the set</button>
-        <button class="secondary" data-act="Choose a song to rehearse">${ic("mic", 16)}Rehearse</button>
-      </div>
+      ${hero({ img: ART[p.id], h: p.set === "mb" ? 150 : 20, mark: set.title[0], title: titleOf(p),
+        kicker: `${songs(set).length} songs${total(set) ? " · " + dur(total(set)) : ""}`,
+        sub: [fold?.name, set.date].filter(Boolean).join(" · "),
+        buttons: playShare(`Playing ${set.title}`) })}
       ${set.acts.map(([name, list]) => `
-        ${name ? `<div class="act">${esc(name)}<span>${list.length} songs${list.some(s => s.len) ? " · " + dur(list.reduce((t, s) => t + (s.len || 0), 0)) : ""}</span></div>` : '<div style="height:14px"></div>'}
-        <div class="list">${list.map(s => `
-          <button class="song" data-act="Rehearsing ${esc(s.title)}">
-            <span class="n">${++n}</span>${keyTile(s.key)}
-            <span class="mid"><span class="t1">${esc(s.title)}</span><span class="s1">${esc([s.artist, s.tempo ? `${s.tempo} bpm` : null].filter(Boolean).join(" · ") || "Not prepared yet")}</span></span>
-            <span class="len">${dur(s.len)}</span>
-          </button>`).join("")}</div>`).join("")}
-      <h2>Plays through</h2>
-      <div class="facts">
-        <div class="fact"><span class="k">Audio</span><span>Scarlett 18i20</span></div>
-        <div class="fact"><span class="k">Rigs</span><span>Guitar, Keys</span></div>
-        <div class="fact"><span class="k">Lights</span><span>Room 138</span></div>
-      </div>
+        ${name ? `<div class="act">${esc(name)}<span>${list.length} songs${list.some(s => s.len) ? " · " + dur(list.reduce((t, s) => t + (s.len || 0), 0)) : ""}</span></div>` : ""}
+        <div class="tracks">${list.map(x => `
+          <div class="trow">
+            ${songArt(x)}
+            <button class="mid" data-act="Opened ${esc(x.title)}"><span class="t1">${esc(x.title)}</span><span class="s1">${esc(x.artist || "No artist yet")}${x.len ? " · " + dur(x.len) : ""}</span></button>
+            ${x.key ? `<span class="kc" style="--h:${hue(x.key.split("→")[0])}">${esc(x.key)}</span>` : `<span class="kc empty">?</span>`}
+            ${dots(`${x.title}: options`)}
+          </div>`).join("")}</div>`).join("")}
     </div>`;
 }
 // ── The weekly events: a series meets on its days, and each meeting's set
@@ -302,21 +312,61 @@ const occRow = (o, named) => `
     <span></span>${occRibbon(o)}
   </button>`;
 
+// How far along a set is: a ring filling as songs go in, a tick when done.
+function progress(o) {
+  const n = o.songs.length, of = o.series.size;
+  if (n >= of) return `<span class="done" aria-label="Ready">${ic("check", 15, 2.6)}</span>`;
+  const c = 2 * Math.PI * 9, f = c * n / of;
+  return `<span class="ring" aria-label="${n} of ${of} songs"><svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#2b2b31" stroke-width="3"/><circle cx="12" cy="12" r="9" fill="none" stroke="var(--live)" stroke-width="3" stroke-linecap="round" stroke-dasharray="${f} ${c}" transform="rotate(-90 12 12)"/></svg><b>${n}/${of}</b></span>`;
+}
+// The set's keys in order, an outline for each place still empty.
+const keys = o => `<span class="keys">${o.songs.map(x => `<i style="--h:${hue(x.key)}">${esc(x.key)}</i>`).join("")}${'<i class="gap"></i>'.repeat(Math.max(0, o.series.size - o.songs.length))}</span>`;
+// The tab: the sets you are on, as a queue. All sets: every set there is.
+// Folders of sets, by their tag (Architect's tags on the set notes).
+const FOLDERS = [
+  { tag: "church", name: "Church", series: ["jhms", "main", "hsm", "jhm", "cya"], shows: [] },
+  { tag: "cbu", name: "CBU", series: [], shows: ["mb"] },
+  { tag: "recitals", name: "Recitals", series: [], shows: ["jt"] },
+];
+const folded = new Set();
+const part = o => { const r = rigOf(MINE[o.id]); return r ? `<span class="part" style="--h:${r.hue}">${ic(r.icon, 13, 2)}${r.name}</span>` : ""; };
+const prevOf = o => occsOf(o.series).filter(x => x.date < o.date && x.date.getUTCDay() === o.date.getUTCDay()).pop();
+function setCard(o, withPart) {
+  const pv = prevOf(o);
+  return `<button class="setrow" style="--h:${o.series.hue}" data-open="${o.id}">
+    <span class="mid"><span class="t1">${esc(o.series.name)}${withPart ? part(o) : ""}</span>${o.songs.length ? keys(o) : `<span class="s1">Nothing yet</span>`}</span>
+    ${o.songs.length ? progress(o) : pv ? `<span class="copy" data-act="Copied ${esc(short(pv.date))}'s set">Copy ${MON[pv.date.getUTCMonth()]} ${pv.date.getUTCDate()}</span>` : ""}
+  </button>`;
+}
+// The tab: the sets you are on, next first.
 function pageSetlists() {
-  const week = OCC.filter(o => daysFrom(o.date) >= 0 && daysFrom(o.date) < 7).sort((a, b) => a.date - b.date);
-  return `${bar({ title: "Setlists", tools: [{ label: "Library", icon: "library", open: "library" }, { joined: [{ label: "New show", icon: "plus", act: "New show" }, { label: "More", icon: "more", menu: "projects" }] }] })}
+  const mine = OCC.filter(o => daysFrom(o.date) >= 0 && MINE[o.id]).sort((a, b) => a.date - b.date).slice(0, 5);
+  const head = o => { const n = daysFrom(o.date); return n === 0 ? "Today" : n === 1 ? "Tomorrow" : n < 7 ? `${DAY[o.date.getUTCDay()]} ${o.date.getUTCDate()}` : short(o.date); };
+  return `${bar({ title: "Setlists", tools: [{ joined: [{ label: "All sets", icon: "folder", open: "allsets" }, { label: "Library", icon: "library", open: "library" }] }] })}
     <div class="body">
-      <h2 style="margin-top:4px">This week</h2>
-      <div class="list">${week.map(o => occRow(o, true)).join("")}</div>
-      <h2>Every week</h2>
-      <div class="list">${SERIES.map(sr => { const nx = nextOf(sr); return `
-        <button class="proj" data-open="${sr.id}">
-          ${swatch(sr, sr.name.split(" ")[0].slice(0, 4))}
-          <span class="mid"><span class="t1">${esc(sr.name)}</span><span class="s1">${esc(everyDays(sr))}</span></span>
-          <span class="when">${nx ? esc(when(nx.date)) : ""}</span>
-        </button>`; }).join("")}</div>
-      <h2>Shows</h2>
-      <div class="list">${PROJECTS.filter(p => p.kind === "Set").map(row).join("")}</div>
+      ${mine.map(o => `<div class="dayhead">${head(o)}</div>${setCard(o, true)}`).join("")}
+      <button class="more" data-open="allsets">Every set, by folder<span>All sets ${ic("chevRight", 16)}</span></button>
+    </div>`;
+}
+// Every set there is, in folders by tag; a series is one row, its next set beside it.
+function pageAllSets() {
+  return `${bar({ back: true, title: "All sets", tools: [{ label: "New set", icon: "plus", act: "New set or series" }] })}
+    <div class="body">${FOLDERS.map(f => { const open = !folded.has(f.tag), n = f.series.length + f.shows.length; return `
+      <button class="folder" data-fold="${f.tag}" aria-expanded="${open}">
+        <span class="fic">${ic("folder", 18)}</span><span class="fname">${esc(f.name)}</span><span class="ftag">#${f.tag}</span><span class="fn">${n}</span>
+        <span class="fchev">${ic(open ? "chevDown" : "chevRight", 16)}</span>
+      </button>
+      ${open ? `<div class="fbody">${f.series.map(id => { const sr = seriesOf(id), nx = nextOf(sr); return `
+        <button class="srow" style="--h:${sr.hue}" data-open="${sr.id}">
+          <span class="dot"></span>
+          <span class="mid"><span class="t1">${esc(sr.name)}</span><span class="s1">${esc(sr.days.map(d => (sr.note?.[d] || DAY[d]) + "s").join(" and "))}${nx ? ` · ${daysFrom(nx.date) === 0 ? "today" : daysFrom(nx.date) === 1 ? "tomorrow" : MON[nx.date.getUTCMonth()] + " " + nx.date.getUTCDate()}` : ""}</span></span>
+          ${nx ? (nx.songs.length ? progress(nx) : '<span class="s1">Not planned</span>') : ""}
+        </button>`; }).join("")}${f.shows.map(id => { const st = SETS[id]; return `
+        <button class="srow" data-open="${id}">
+          <span class="dot show"></span>
+          <span class="mid"><span class="t1">${esc(st.title)}</span><span class="s1">${esc(st.date)} · ${songs(st).length} songs</span></span>
+          <span class="chev">${ic("chevRight", 16)}</span>
+        </button>`; }).join("")}</div>` : ""}`; }).join("")}
     </div>`;
 }
 function pageSeries(id) {
@@ -336,28 +386,27 @@ function pageSeries(id) {
 function pageOcc(id) {
   const o = occOf(id), sr = o.series, missing = sr.size - o.songs.length;
   const prev = occsOf(sr).filter(x => x.date < o.date && x.date.getUTCDay() === o.date.getUTCDay()).pop();
+  const fold = FOLDERS.find(f => f.series.includes(sr.id));
   let n = 0;
-  return `${bar({ back: true, title: `${sr.name} · ${short(o.date)}`, tools: [{ joined: [{ label: "Share", icon: "share", act: "Share link copied" }, { label: "More", icon: "more", menu: "project" }] }] })}
+  return `${bar({ back: true, tools: [{ joined: [{ label: "Download", icon: "download", act: "Saved for offline" }, { label: "More", icon: "more", menu: "project" }] }] })}
     <div class="body">
-      <p class="meta">${esc(DAY[o.date.getUTCDay()])}, ${MON[o.date.getUTCMonth()]} ${o.date.getUTCDate()} · ${esc(ready(o))}${o.songs.length ? " · " + dur(o.songs.reduce((t, s) => t + s.len, 0)) : ""}</p>
-      <div class="big-ribbon">${occRibbon(o)}</div>
-      <div style="height:16px"></div>
-      ${o.songs.length ? `<div class="go2">
-        <button class="primary" data-act="Playing ${esc(sr.name)}, ${esc(short(o.date))}">${ic("play", 15)}Play the set</button>
-        <button class="secondary" data-act="Choose a song to rehearse">${ic("mic", 16)}Rehearse</button>
-      </div>
-      ${MINE[o.id] ? `<div class="assign solo" style="--h:${rigOf(MINE[o.id]).hue}"><div class="who">${rigIcon(rigOf(MINE[o.id]), 20)}<span class="mid"><span class="t1">You're on ${MINE[o.id]}</span><span class="s1">A preset for each song, in order</span></span></div>${openInRig(o, rigOf(MINE[o.id]))}</div>` : ""}` : prev ? `<button class="secondary wide" data-act="Copied ${esc(short(prev.date))}'s set">Start from ${esc(short(prev.date))}'s set</button>` : ""}
-      <div class="list" style="margin-top:14px">
-        ${o.songs.map(s => `
-          <button class="song" data-act="Rehearsing ${esc(s.title)}">
-            <span class="n">${++n}</span>${keyTile(s.key)}
-            <span class="mid"><span class="t1">${esc(s.title)}</span><span class="s1">${esc(s.artist)} · ${s.tempo} bpm</span></span>
-            <span class="len">${dur(s.len)}</span>
-          </button>`).join("")}
+      ${hero({ h: sr.hue, mark: sr.name.split(" ")[0], title: sr.name,
+        kicker: `${DAY[o.date.getUTCDay()].slice(0, 3)} ${MON[o.date.getUTCMonth()]} ${o.date.getUTCDate()} · ${o.songs.length} songs${o.songs.length ? " · " + dur(o.songs.reduce((t, s) => t + s.len, 0)) : ""}`,
+        sub: [fold?.name, ready(o)].filter(Boolean).join(" · "),
+        buttons: o.songs.length ? playShare(`Playing ${sr.name}, ${short(o.date)}`) : prev ? `<button class="primary" data-act="Copied ${esc(short(prev.date))}'s set">Start from ${MON[prev.date.getUTCMonth()]} ${prev.date.getUTCDate()}</button><button class="secondary" data-open="library">${ic("library", 17)}Library</button>` : "" })}
+      <div class="tracks">
+        ${o.songs.map(x => `
+          <div class="trow">
+            ${songArt(x)}
+            <button class="mid" data-act="Opened ${esc(x.title)}"><span class="t1">${esc(x.title)}</span><span class="s1">${esc(x.artist)} · ${x.tempo} bpm</span></button>
+            <span class="kc" style="--h:${hue(x.key)}">${esc(x.key)}</span>
+            ${dots(`${x.title}: options`)}
+          </div>`).join("")}
         ${Array.from({ length: Math.max(0, missing) }, () => `
-          <button class="song slot" data-open="library">
-            <span class="n">${++n}</span><span class="tile add">${ic("plus", 18, 2)}</span>
-            <span class="mid"><span class="t1">Add a song</span><span class="s1">From the Library</span></span><span></span>
+          <button class="trow add" data-open="library">
+            <span class="sart empty">${ic("plus", 18, 2)}</span>
+            <span class="mid"><span class="t1">Add a song</span></span>
+            <span></span><span></span>
           </button>`).join("")}
       </div>
     </div>`;
@@ -393,55 +442,298 @@ function lastPlayed(title) {
   if (!o) return null; const w = Math.round(-daysFrom(o.date) / 7);
   return `${o.series.name} ${w < 1 ? "this week" : w === 1 ? "last week" : w + " weeks ago"}`;
 }
+// Songs are notes; their tags are Architect's. Energy (1 to 5) and the
+// tags are placeholders.
+const ROCK = ["Royal Blood", "Metallica", "Queens of the Stone Age", "The White Stripes"];
+const OWN = ["Nights Out", "Nights Out & Ryce", "JT Wright", "Cody Wright"];
+const LIB = (() => {
+  const seen = new Set(), out = [];
+  const add = (x, tags) => { if (seen.has(x.title)) return; seen.add(x.title);
+    const e = x.tempo ? Math.min(5, Math.max(1, Math.round((x.tempo - 50) / 22))) : 3;
+    out.push({ ...x, tags, energy: e }); };
+  POOL.forEach(x => add({ ...x, ready: x.ready || "cltm" }, ["worship", ...(x.tempo > 100 ? ["upbeat"] : ["ballad"])]));
+  songs(SETS.mb).forEach(x => add(x, ["christmas", ...(x.artist === "Chris Tomlin" ? ["worship"] : [])]));
+  songs(SETS.jt).forEach(x => add(x, ["recital", OWN.includes(x.artist) ? "originals" : "covers", ...(ROCK.includes(x.artist) ? ["rock"] : [])]));
+  return out.sort((a, b) => a.title.localeCompare(b.title));
+})();
+const TAGS = [...new Set(LIB.flatMap(x => x.tags))].map(t => ({ t, n: LIB.filter(x => x.tags.includes(t)).length })).sort((a, b) => b.n - a.n);
+const TEMPI = [["Slow", 0, 80], ["Mid", 80, 110], ["Up", 110, 140], ["Fast", 140, 999]];
+const READY = [["c", "Chart"], ["l", "Lyrics"], ["s", "Stems"], ["m", "Tempo map"]];
+const F = { q: "", tags: new Set(), keys: new Set(), energy: new Set(), tempo: new Set(), ready: new Set(), rested: false };
+const weeksSince = title => { const o = OCC.filter(o => daysFrom(o.date) < 0 && o.songs.some(x => x.title === title)).pop(); return o ? -daysFrom(o.date) / 7 : Infinity; };
+const keyOf = x => x.key ? (ALIAS[x.key.split("→")[0]] || x.key.split("→")[0]) : null;
+function matches(x) {
+  if (F.q && !(x.title + " " + (x.artist || "")).toLowerCase().includes(F.q)) return false;
+  if ([...F.tags].some(t => !x.tags.includes(t))) return false;
+  if (F.keys.size && !F.keys.has(keyOf(x) || "?")) return false;
+  if (F.energy.size && !F.energy.has(x.energy)) return false;
+  if (F.tempo.size && !TEMPI.some(([n, lo, hi]) => F.tempo.has(n) && x.tempo >= lo && x.tempo < hi)) return false;
+  if ([...F.ready].some(k => !(x.ready || "").includes(k))) return false;
+  if (F.rested && weeksSince(x.title) < 4) return false;
+  return true;
+}
+// What is on, as chips that take themselves off.
+function activeChips() {
+  const c = [];
+  if (F.keys.size) c.push(["keys", `Key ${[...F.keys].join(", ")}`]);
+  if (F.energy.size) c.push(["energy", `Energy ${[...F.energy].sort().join(", ")}`]);
+  if (F.tempo.size) c.push(["tempo", [...F.tempo].join(", ")]);
+  if (F.ready.size) c.push(["ready", "Has " + READY.filter(([k]) => F.ready.has(k)).map(([, n]) => n.toLowerCase()).join(", ")]);
+  if (F.rested) c.push(["rested", "Not played in 4 weeks"]);
+  return c;
+}
+const nFilters = () => activeChips().length;
+const bars = e => `<span class="energy" aria-label="Energy ${e} of 5">${[1, 2, 3, 4, 5].map(k => `<i class="${k <= e ? "on" : ""}" style="height:${4 + k * 2}px"></i>`).join("")}</span>`;
 function pageLibrary() {
-  const seen = new Set();
-  const list = [...POOL, ...Object.values(SETS).flatMap(songs)].filter(s => !seen.has(s.title) && seen.add(s.title));
-  return `${bar({ back: true, title: "Library", tools: [{ label: "Filter", icon: "sliders", act: "Filter songs" }] })}
+  const list = LIB.filter(matches), on = activeChips();
+  return `${bar({ back: true, title: "Library", tools: [{ label: "Tags", icon: "tag", open: "tags" }, { label: "Filter", icon: "sliders", filter: true, badge: nFilters() || "" }] })}
     <div class="body">
-      <p class="meta">${list.length} songs · what each is ready for, and where it was last played</p>
-      <div class="legend"><span><i></i>Chart</span><span><i></i>Lyrics</span><span><i></i>Stems</span><span><i></i>Tempo map</span></div>
-      <div class="list">${list.map(s => { const lp = lastPlayed(s.title); return `
-        <button class="song" style="grid-template-columns:36px 1fr auto" data-act="Opened ${esc(s.title)}">
-          ${keyTile(s.key)}
-          <span class="mid"><span class="t1">${esc(s.title)}</span><span class="s1">${esc([s.artist || "No artist yet", lp].filter(Boolean).join(" · "))}</span></span>
-          <span class="len">${dur(s.len)}<span class="dots">${"cltm".split("").map(k => `<i class="${(s.ready ?? "cltm").includes(k) ? "y" : ""}"></i>`).join("")}</span></span>
-        </button>`; }).join("")}</div>
+      <label class="search lib">${ic("search", 16)}<input type="search" id="libq" placeholder="Songs and artists" value="${esc(F.q)}" aria-label="Find a song"></label>
+      <div class="tagrow">${TAGS.map(({ t }) => `<button class="tagchip" data-ltag="${t}" aria-pressed="${F.tags.has(t)}">#${t}</button>`).join("")}</div>
+      ${on.length ? `<div class="onrow">${on.map(([k, l]) => `<button class="onchip" data-unset="${k}">${esc(l)}${ic("x", 13, 2.4)}</button>`).join("")}<button class="clearall" data-unset="all">Clear</button></div>` : ""}
+      <div class="libcount">${list.length === LIB.length ? `${LIB.length} songs` : `${list.length} of ${LIB.length} songs`}</div>
+      <div class="list">${list.map(x => `
+        <button class="song lib" data-act="Opened ${esc(x.title)}">
+          ${keyTile(x.key)}
+          <span class="mid"><span class="t1">${esc(x.title)}</span><span class="s1">${esc([x.artist, x.tempo ? x.tempo + " bpm" : null].filter(Boolean).join(" · "))}</span></span>
+          ${bars(x.energy)}
+        </button>`).join("") || `<div class="empty">No song matches.<button data-unset="all">Clear the filters</button></div>`}</div>
     </div>`;
+}
+function pageTags() {
+  return `${bar({ back: true, title: "Tags", tools: [{ label: "New tag", icon: "plus", act: "New tag" }] })}
+    <div class="body">
+      <div class="dayhead">Songs</div>
+      <div class="list">${TAGS.map(({ t, n }) => `<button class="tagrowx" data-pick="${t}"><span class="hash">#</span><span class="t1">${t}</span><span class="n">${n}</span></button>`).join("")}</div>
+      <div class="dayhead">Sets</div>
+      <div class="list">${FOLDERS.map(f => `<button class="tagrowx" data-open="allsets"><span class="hash">#</span><span class="t1">${f.tag}</span><span class="n">${f.series.length + f.shows.length}</span></button>`).join("")}</div>
+    </div>`;
+}
+// The filter sheet: key, energy, tempo, what it is ready for, rest.
+function openFilters() {
+  const sh = document.getElementById("sheet");
+  const tog = (attr, v, on, label, style = "") => `<button class="fopt" data-${attr}="${v}" aria-pressed="${on}" ${style}>${label}</button>`;
+  const n = LIB.filter(matches).length;
+  sh.innerHTML = `<div class="bsheet" role="dialog" aria-label="Filter songs">
+    <div class="grab"></div>
+    <div class="bhead"><b>Filter</b><button data-unset="all">Reset</button></div>
+    <div class="fsec">Key</div>
+    <div class="keygrid">${[...FIFTHS, "?"].map(k => tog("fkey", k, F.keys.has(k), k === "?" ? "None" : k, k === "?" ? "" : `style="--h:${hue(k)}"`)).join("")}</div>
+    <div class="fsec">Energy</div>
+    <div class="seg">${[1, 2, 3, 4, 5].map(e => tog("fenergy", e, F.energy.has(e), bars(e))).join("")}</div>
+    <div class="fsec">Tempo</div>
+    <div class="seg">${TEMPI.map(([nm, lo, hi]) => tog("ftempo", nm, F.tempo.has(nm), `${nm}<small>${hi > 900 ? lo + "+" : lo ? lo + "–" + hi : "under " + hi}</small>`)).join("")}</div>
+    <div class="fsec">Has</div>
+    <div class="seg">${READY.map(([k, nm]) => tog("fready", k, F.ready.has(k), nm)).join("")}</div>
+    <div class="fsec">Rotation</div>
+    <div class="seg">${tog("frested", 1, F.rested, "Not played in 4 weeks")}</div>
+    <button class="primary wide" data-close>Show ${n} song${n === 1 ? "" : "s"}</button>
+  </div>`;
+  sh.classList.add("bottom"); sh.hidden = false;
+}
+// ── Studio: records, their review ──────────────────────────────────────────
+// Versions and comments on everything a record has: its mixes, charts and
+// lyrics. Who said what, and the versions, are placeholders.
+const PEOPLE = { Cody: 30, Jake: 200, Mia: 320, Sam: 140 };
+const REVIEW = [
+  { id: "r1", track: "Unbreakable", kind: "audio", what: "Mix", ver: 4, who: "Cody", when: "2h", comments: [
+    { at: .38, t: "1:42", who: "Jake", text: "Guitars eat the vocal in the pre-chorus", open: true },
+    { at: .66, t: "2:58", who: "Mia", text: "The delay throw here is perfect", open: false },
+    { at: .81, t: "3:37", who: "Sam", text: "Ride the bass up into the last chorus", open: true }] },
+  { id: "r2", track: "Chained Expectations", kind: "chart", what: "Chart", ver: 2, who: "Mia", when: "5h", bar: "Bridge · bar 3", chords: ["Em", "C", "G", "D/F#"], hot: 4, comments: [
+    { who: "Mia", text: "Is this D/F# or Bm? The demo walks the bass down.", open: true }] },
+  { id: "r3", track: "Heavify", kind: "audio", what: "Edit", ver: 2, who: "Cody", when: "Yesterday", comments: [
+    { at: .14, t: "0:37", who: "Sam", text: "Flam on the snare here", open: true }] },
+  { id: "r4", track: "The Ballad", kind: "lyrics", what: "Lyrics", ver: 3, who: "Jake", when: "Yesterday", line: "Verse 2 · line 3", comments: [
+    { who: "Jake", text: "Can we go back to the demo's line here?", open: true },
+    { who: "Cody", text: "Trying both in tomorrow's session", open: true }] },
+  { id: "r5", track: "Intro", kind: "audio", what: "Master", ver: 2, who: "Cody", when: "Mon", approved: true, comments: [
+    { at: .5, t: "0:58", who: "Jake", text: "Approved", open: false }] },
+];
+// The songs in production, the last worked on first. A record is optional:
+// a song may be on one (Crescendum) or be a single.
+const STUDIO = [
+  ["Unbreakable", "cr", "2h"], ["Chained Expectations", "cr", "5h"], ["Heavify", "cr", "Yesterday"], ["The Ballad", "cr", "Yesterday"],
+  ["Fire", null, "Mon", "JT Wright", 1, 40], ["Intro", "cr", "Mon"], ["Drive To LA", null, "Last week", "Nights Out", 4, 10],
+  ["Set in Stone", "cr", "Last week"], ["It Knows My Name", "cr", "Nov 10"], ["Kornesque", "cr", "Nov 8"], ["The Plague", "cr", "Nov 6"], ["Empty Focus", "cr", "Oct 30"],
+].map(([title, rec, when, artist, stage, hue]) => {
+  const a = rec && ALBUMS[rec], n = a ? a.tracks.findIndex(t => t.title === title) : -1;
+  return { id: "t:" + title, title, rec, when, artist: artist || a.artist, stage: a ? a.tracks[n].stage : stage, no: n + 1, hue: a ? a.hue ?? 285 : hue };
+});
+const studioOf = id => STUDIO.find(x => x.id === id);
+const openCount = r => r.comments.filter(c => c.open).length;
+const trackReview = title => REVIEW.filter(r => r.track === title);
+const cover = (a, size, h = a.hue ?? 285, mark = a.title[0]) => `<span class="cover" style="width:${size}px;height:${size}px;--h:${h}"><i></i><b class="${mark.length > 1 ? "word" : ""}">${esc(mark)}</b></span>`;
+const avatar = who => `<span class="av" style="--h:${PEOPLE[who] ?? 0}">${who[0]}</span>`;
+// A waveform, the same for the same seed.
+function wave(seed, n = 64, pins = []) {
+  let x = seed * 9301 + 49297; const r = () => (x = (x * 9301 + 49297) % 233280) / 233280;
+  const bars = Array.from({ length: n }, (_, k) => 0.25 + 0.75 * Math.abs(Math.sin(k / 5 + seed)) * (0.55 + 0.45 * r()));
+  return `<span class="wave">${bars.map(h => `<i style="height:${Math.round(h * 100)}%"></i>`).join("")}${pins.map(c => `<b class="pin ${c.open ? "" : "done"}" style="left:${c.at * 100}%;--h:${PEOPLE[c.who]}"></b>`).join("")}</span>`;
+}
+// Real cover art where there is some; a generated one otherwise.
+const ART = { jt: "covers/jt.png", show: "covers/jt.png" };
+function hero({ img, h, mark, kicker, title, sub, buttons }) {
+  return `<div class="tintbg" style="--h:${h}"></div>
+    <div class="hero2">
+      <div class="art">${img ? `<img src="${img}" alt="">` : cover({ title }, 0, h, mark)}</div>
+      <div class="hk">${kicker}</div>
+      <div class="ht">${esc(title)}</div>
+      ${sub ? `<div class="hs">${sub}</div>` : ""}
+      <div class="hb">${buttons}</div>
+    </div>`;
+}
+const playShare = (play, share = "Share link copied") => `<button class="primary" data-act="${esc(play)}">${ic("play", 16)}Play</button><button class="secondary" data-act="${esc(share)}">${ic("link", 17)}Share</button>`;
+// A song's art: its artist's, generated where there is none (JT's own have his cover).
+const strHue = t => [...(t || "?")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+const songArt = x => OWN.includes(x.artist) ? `<span class="sart"><img src="covers/jt.png" alt=""></span>` : `<span class="sart">${cover({ title: x.artist || x.title }, 44, strHue(x.artist || x.title), (x.artist || x.title)[0])}</span>`;
+const dots = what => `<button class="dots3" aria-label="More" data-act="${esc(what)}">${ic("more", 18)}</button>`;
+let sfilter = "All";
+const stageTag = (st, target) => `<${target ? `button data-status="${esc(target)}"` : "span"} class="stgtag" style="--h:${STAGES[st][1] ?? 0}" data-none="${STAGES[st][1] == null}">${STAGES[st][0]}</${target ? "button" : "span"}>`;
+const statusBar = st => `<span class="sbar">${STAGES.map(([, h], k) => `<i class="${k < st ? "past" : k === st ? "now" : ""}" style="--h:${h ?? 0}"></i>`).join("")}</span>`;
+// Change a track's status, or a record's.
+function openStatus(target) {
+  const cur = target.startsWith("rec:") ? ALBUMS[target.slice(4)].status : studioOf(target).stage;
+  const name = target.startsWith("rec:") ? ALBUMS[target.slice(4)].title : studioOf(target).title;
+  const sh = document.getElementById("sheet");
+  sh.innerHTML = `<div class="bsheet" role="dialog" aria-label="Status"><div class="grab"></div>
+    <div class="bhead"><b>${esc(name)}</b></div>
+    ${STAGES.map(([nm, h], k) => `<button class="mi big" data-setstatus="${esc(target)}|${k}"><span class="sdot" style="--h:${h ?? 0}" data-none="${h == null}"></span>${nm}${k === cur ? `<span class="ck">${ic("check", 17, 2.2)}</span>` : ""}</button>`).join("")}
+  </div>`;
+  sh.classList.add("bottom"); sh.hidden = false;
+}
+function setStatus(target, k) {
+  if (target.startsWith("rec:")) ALBUMS[target.slice(4)].status = k;
+  else { const x = studioOf(target); x.stage = k; const a = x.rec && ALBUMS[x.rec]; if (a) a.tracks[x.no - 1].stage = k; }
+}
+function songRow(x) {
+  const rv = trackReview(x.title), n = rv.reduce((t, r) => t + openCount(r), 0), v = rv.find(r => r.kind === "audio");
+  return `<div class="srow song2">
+    <button class="mid" data-open="${x.id}"><span class="t1">${esc(x.title)}</span><span class="s1">${esc(x.rec ? ALBUMS[x.rec].title : "Single")}${v ? ` · ${v.what} v${v.ver}` : ""} · ${esc(x.when)}</span></button>
+    ${n ? `<span class="bubble">${ic("message", 13, 2)}${n}</span>` : ""}
+    ${stageTag(x.stage, x.id)}
+  </div>`;
 }
 function pageSessions() {
-  const a = ALBUMS.cr;
-  return `${bar({ title: "Sessions", tools: [{ joined: [{ label: "New session", icon: "plus", act: "New session" }, { label: "More", icon: "more", menu: "projects" }] }] })}
+  const open = REVIEW.reduce((t, r) => t + openCount(r), 0);
+  const list = STUDIO.filter(x => sfilter === "All" || (sfilter === "Open comments" ? trackReview(x.title).some(openCount) : STAGES[x.stage][0] === sfilter));
+  const used = STAGES.map(([n]) => n).filter((n, k) => STUDIO.some(x => x.stage === k));
+  return `${bar({ title: "Records", tools: [{ label: "New track", icon: "plus", act: "New track" }] })}
     <div class="body">
-      <h2 style="margin-top:4px">Records</h2>
-      <button class="hero" data-open="cr">
-        <span class="kicker">${ic("disc", 14)}${esc(a.what)} · ${esc(a.artist)}</span>
-        <div class="t">${esc(a.title)}</div>
-        <div class="s">${a.tracks.length} tracks · ${esc(stageSummary(a))}</div>
-        ${stageRibbon(a)}
-        <span class="stages">${STAGES.map(([n, h]) => `<span><i style="${h == null ? "background:#3a3a40" : `background:oklch(.62 .13 ${h})`}"></i>${n}</span>`).join("")}</span>
-      </button>
-      <h2>Sessions on THEBATTLESHIP</h2>
-      <div class="list">${PROJECTS.filter(p => p.kind === "Production").map(row).join("")}</div>
+      <div class="tagrow">${["All", "Open comments", ...used].map(f => `<button class="tagchip" data-sfilter="${f}" aria-pressed="${sfilter === f}">${f === "Open comments" ? `${open} open comments` : f}</button>`).join("")}</div>
+      <div class="list" style="margin-top:8px">${list.map(songRow).join("")}</div>
+      <div class="dayhead">Records</div>
+      ${Object.entries(ALBUMS).map(([id, a]) => `
+        <button class="srow file" data-open="${id}">
+          ${cover(a, 44)}
+          <span class="mid"><span class="t1">${esc(a.title)}</span><span class="s1">${esc(a.what)} · ${a.tracks.length} tracks</span></span>
+          ${stageTag(a.status)}
+        </button>`).join("")}
+      <div class="dayhead">Session files</div>
+      ${PROJECTS.filter(p => p.kind === "Production").map(p => `
+        <button class="srow file" data-open="${p.id}">
+          ${projTile(p)}
+          <span class="mid"><span class="t1">${esc(titleOf(p))}</span><span class="s1">${esc(p.fmt)} · ${esc(p.when)}</span></span>
+          <span class="chev">${ic("chevRight", 16)}</span>
+        </button>`).join("")}
     </div>`;
 }
+// Inside a song: its Song tab. The stage it is at, the version to hear,
+// what is open on it, and its record if it has one.
+function pageSong(id) {
+  const x = studioOf(id), rv = trackReview(x.title), v = rv.find(r => r.kind === "audio"), open = rv.flatMap(r => r.comments.filter(c => c.open).map(c => ({ ...c, r })));
+  const a = x.rec && ALBUMS[x.rec];
+  return `${bar({ back: true, tools: [{ joined: [{ label: "Download", icon: "download", act: "Saved for offline" }, { label: "More", icon: "more", menu: "project" }] }] })}
+    <div class="body">
+      ${hero({ h: x.hue, mark: x.title[0], title: x.title, kicker: a ? `${esc(a.title)} · track ${x.no}` : "Single",
+        sub: `${esc(x.artist)} · ${v ? `${v.what} v${v.ver} · ` : ""}${esc(x.when)}`,
+        buttons: `<button class="primary" data-act="Playing ${esc(x.title)}${v ? ` ${v.what} v${v.ver}` : ""}">${ic("play", 16)}Play</button><button class="secondary" data-act="Opened ${esc(x.title)} in Session">${ic("open", 17)}Session</button>` })}
+      <div class="statusrow">${stageTag(x.stage, x.id)}${statusBar(x.stage)}<span class="of">${x.stage + 1}/${STAGES.length}</span></div>
+      ${v ? `<div class="rv">
+        <div class="rvhead"><span class="mid"><span class="t1">${v.what} v${v.ver}</span><span class="s1">${v.who} · ${v.when}</span></span>
+          <span class="vers">${Array.from({ length: v.ver }, (_, k) => `<i class="${k === v.ver - 1 ? "on" : ""}">v${k + 1}</i>`).join("")}</span></div>
+        <div class="rvwave"><button class="pl" aria-label="Play" data-act="Playing ${esc(x.title)}">${ic("play", 14)}</button>${wave(x.title.length, 60, v.comments)}</div>
+      </div>` : ""}
+      ${open.length ? `<div class="dayhead">Open · ${open.length}</div>
+      <div class="list">${open.map(c => `<button class="cm" data-view="review">${avatar(c.who)}<span class="mid"><span class="s1"><b>${c.who}</b> · ${c.r.what} v${c.r.ver}${c.t ? ` <span class="ts">${c.t}</span>` : ""}</span><span class="tx">${esc(c.text)}</span></span></button>`).join("")}</div>` : ""}
+      ${a ? `<button class="more" data-open="${x.rec}">On ${esc(a.title)} · ${a.tracks.length} songs<span>Album ${ic("chevRight", 16)}</span></button>` : ""}
+    </div>`;
+}
+// Inside a record, its Album tab.
 function pageAlbum(id) {
   const a = ALBUMS[id];
-  return `${bar({ back: true, title: a.title, tools: [{ joined: [{ label: "Share", icon: "share", act: "Share link copied" }, { label: "More", icon: "more", menu: "project" }] }] })}
+  return `${bar({ back: true, tools: [{ joined: [{ label: "Download", icon: "download", act: "Saved for offline" }, { label: "More", icon: "more", menu: "project" }] }] })}
     <div class="body">
-      <p class="meta">${esc(a.what)} · ${a.tracks.length} tracks · ${esc(stageSummary(a))}</p>
-      <div class="big-ribbon">${stageRibbon(a)}</div>
-      <div class="stages" style="margin:8px 0 18px">${STAGES.map(([n, h]) => `<span><i style="${h == null ? "background:#3a3a40" : `background:oklch(.62 .13 ${h})`}"></i>${n}</span>`).join("")}</div>
-      <div class="go2"><button class="primary" data-act="Opened ${esc(a.title)} in Session">Open in Session</button><button class="secondary" data-act="Playing the latest mixes">${ic("play", 15)}Listen</button></div>
-      <div class="list" style="margin-top:14px">${a.tracks.map((t, k) => `
-        <button class="song" data-act="Opened ${esc(t.title)}">
-          <span class="n">${k + 1}</span><span class="tile" style="width:36px;height:36px">${ic("audio", 18)}</span>
-          <span class="mid"><span class="t1">${esc(t.title)}</span><span class="s1">${esc(a.artist)}</span></span>
-          <span class="stage" style="${STAGES[t.stage][1] == null ? "" : `--h:${STAGES[t.stage][1]}`}" data-none="${STAGES[t.stage][1] == null}">${STAGES[t.stage][0]}</span>
-        </button>`).join("")}</div>
+      ${hero({ img: ART[id], h: a.hue ?? 285, mark: a.title[0], title: a.title, kicker: `${esc(a.what)} · ${a.tracks.length} tracks`, sub: `${esc(a.artist)} · ${stageTag(a.status, "rec:" + id)}`, buttons: playShare(`Playing the latest of ${a.title}`) })}
+      <div class="tracks">${a.tracks.map((t, k) => { const rv = trackReview(t.title), n = rv.reduce((x, r) => x + openCount(r), 0); return `
+        <div class="trow">
+          <span class="n">${k + 1}</span>
+          <button class="mid" data-open="t:${esc(t.title)}"><span class="t1">${esc(t.title)}</span></button>
+          ${n ? `<span class="cmc">${ic("message", 14, 2)}${n}</span>` : "<span></span>"}
+          ${stageTag(t.stage, "t:" + t.title)}
+          ${dots(`${t.title}: options`)}
+        </div>`; }).join("")}</div>
+    </div>`;
+}
+// Inside a record, its Review tab: every version and comment, newest first.
+let rfilter = "All", rtrack = null;
+function pageReview(id) {
+  const song = studioOf(id); if (song) rtrack = null;
+  const a = song ? { title: song.title } : ALBUMS[id];
+  const list = REVIEW.filter(r => (!song || r.track === song.title) && (!rtrack || r.track === rtrack) && (rfilter === "All" || (rfilter === "Open" ? openCount(r) : r.kind === rfilter.toLowerCase())));
+  const card = r => `
+    <div class="rv">
+      <div class="rvhead">${avatar(r.who)}<span class="mid"><span class="t1">${esc(r.track)}</span><span class="s1">${r.who} · ${r.what} v${r.ver} · ${r.when}</span></span>
+        ${r.approved ? `<span class="appr">${ic("check", 13, 2.6)}Approved</span>` : `<span class="vers">${Array.from({ length: r.ver }, (_, k) => `<i class="${k === r.ver - 1 ? "on" : ""}">v${k + 1}</i>`).join("")}</span>`}</div>
+      ${r.kind === "audio" ? `<div class="rvwave"><button class="pl" aria-label="Play" data-act="Playing ${esc(r.track)} ${r.what} v${r.ver}">${ic("play", 14)}</button>${wave(r.track.length, 60, r.comments)}</div>`
+        : r.kind === "chart" ? `<div class="rvchart"><span class="where">${esc(r.bar)}</span><div class="bars4">${r.chords.map((c, k) => `<span class="${k === r.hot - 1 ? "hot" : ""}">${esc(c)}</span>`).join("")}</div></div>`
+        : `<div class="rvlyr"><span class="where">${esc(r.line)}</span><span class="ln"></span><span class="ln hot"></span><span class="ln short"></span></div>`}
+      <div class="cms">${r.comments.map(c => `
+        <div class="cm ${c.open ? "" : "resolved"}">${avatar(c.who)}<span class="mid"><span class="s1"><b>${c.who}</b>${c.t ? ` <span class="ts">${c.t}</span>` : ""}</span><span class="tx">${esc(c.text)}</span></span>
+          ${c.open ? `<button class="rsv" aria-label="Resolve" data-act="Resolved">${ic("check", 14, 2.4)}</button>` : ""}</div>`).join("")}</div>
+      <button class="reply" data-act="Reply to ${esc(r.track)}">Reply${r.kind === "audio" ? " at the playhead" : ""}…</button>
+    </div>`;
+  return `${bar({ back: true, title: rtrack || a.title, tools: [{ label: "Compare versions", icon: "compare", act: "A/B the last two versions" }] })}
+    <div class="body">
+      <div class="tagrow rvchips">${(rtrack ? [`× ${rtrack}`] : []).concat(["All", "Open", "Audio", "Chart", "Lyrics"]).map(f => f.startsWith("×") ? `<button class="tagchip on" data-rtrack="">${esc(f)}</button>` : `<button class="tagchip" data-rfilter="${f}" aria-pressed="${rfilter === f}">${f}</button>`).join("")}</div>
+      ${list.map(card).join("") || `<div class="empty">Nothing here yet.</div>`}
+    </div>`;
+}
+
+// ── Live: a set's chart and lyrics, a song at a time ───────────────────────
+const SCALE = { C: "C D E F G A B", G: "G A B C D E F#", D: "D E F# G A B C#", A: "A B C# D E F# G#", E: "E F# G# A B C# D#", B: "B C# D# E F# G# A#", "F#": "F# G# A# B C# D# E#", Db: "Db Eb F Gb Ab Bb C", Ab: "Ab Bb C Db Eb F G", Eb: "Eb F G Ab Bb C D", Bb: "Bb C D Eb F G A", F: "F G A Bb C D E" };
+const chord = (key, deg) => { const sc = (SCALE[ALIAS[key] || key] || SCALE.C).split(" "); return sc[deg - 1] + ([2, 3, 6].includes(deg) ? "m" : ""); };
+// A worship-shaped chart in the song's key (placeholder chords).
+const FORM = [["Intro", [1, 5, 6, 4]], ["Verse 1", [1, 1, 4, 4, 6, 5, 4, 4]], ["Chorus", [4, 1, 5, 6, 4, 1, 5, 5]], ["Verse 2", [1, 1, 4, 4, 6, 5, 4, 4]], ["Chorus", [4, 1, 5, 6, 4, 1, 5, 5]], ["Bridge", [6, 4, 1, 5, 6, 4, 1, 5]], ["Chorus", [4, 1, 5, 6, 4, 1, 5, 5]]];
+let songIx = 0;
+const setSongs = id => occOf(id) ? occOf(id).songs : SETS[PROJECTS.find(p => p.id === id).set].acts.flatMap(a => a[1]);
+function songHead(id) {
+  const ss = setSongs(id), x = ss[songIx] || ss[0];
+  return `<div class="songnav">
+    <button class="sn" data-song="-1" aria-label="Previous song" ${songIx ? "" : "disabled"}>${ic("chevLeft", 20, 2)}</button>
+    <span class="mid"><span class="t1">${songIx + 1}. ${esc(x.title)}</span><span class="s1">${esc([x.key, x.tempo ? x.tempo + " bpm" : null, "4/4"].filter(Boolean).join(" · "))}</span></span>
+    <button class="sn" data-song="1" aria-label="Next song" ${songIx < ss.length - 1 ? "" : "disabled"}>${ic("chevRight", 20, 2)}</button>
+  </div>`;
+}
+function liveTitle(id) { return occOf(id) ? `${occOf(id).series.name} · ${short(occOf(id).date)}` : titleOf(PROJECTS.find(p => p.id === id)); }
+function pageChart(id) {
+  const x = setSongs(id)[songIx], k = (x.key || "C").split("→")[0];
+  return `${bar({ back: true, title: liveTitle(id), tools: [{ label: "Transpose", icon: "transpose", act: "Transpose" }] })}
+    <div class="body">${songHead(id)}
+      ${FORM.map(([sec, degs]) => `<div class="sec"><span class="sl">${sec}</span><div class="grid">${degs.map(d => `<span>${chord(k, d)}</span>`).join("")}</div></div>`).join("")}
+      <p class="ph">Placeholder chords in the song's key; the real chart is the song's .kf.</p>
+    </div>`;
+}
+function pageLyrics(id) {
+  const lines = [3, 4, 4, 3, 4];
+  return `${bar({ back: true, title: liveTitle(id), tools: [{ label: "Text size", icon: "type", act: "Text size" }] })}
+    <div class="body">${songHead(id)}
+      ${["Verse 1", "Chorus", "Verse 2", "Chorus", "Bridge"].map((sec, i) => `<div class="lsec"><span class="sl">${sec}</span>${Array.from({ length: lines[i] }, (_, k) => `<span class="ln" style="width:${62 + ((i * 7 + k * 13) % 34)}%"></span>`).join("")}</div>`).join("")}
+      <p class="ph">The lyrics come from the song's note; shown here as lines.</p>
     </div>`;
 }
 const PAGES = { home: pageProjects, sessions: pageSessions, setlists: pageSetlists, signal: pageRigs };
-const TABS = [["home", "Home", "home"], ["sessions", "Sessions", "audio"], ["setlists", "Setlists", "setlist"], ["signal", "Signal", "rig"]];
+const TABS = [["home", "Home", "home"], ["sessions", "Records", "disc"], ["setlists", "Setlists", "setlist"], ["signal", "Signal", "rig"]];
 
 // ── The sidebar (the left drawer) ───────────────────────────────────────────
 function drawer() {
@@ -534,28 +826,68 @@ function openPalette() {
   input.addEventListener("input", draw); draw();
   setTimeout(() => input.focus(), 50);
 }
-const closePalette = () => { document.getElementById("sheet").hidden = true; };
+const closePalette = () => { const sh = document.getElementById("sheet"); sh.hidden = true; sh.classList.remove("bottom"); };
 
 // ── Navigation ──────────────────────────────────────────────────────────────
 let tab = "home", stack = [];
 const stage = document.getElementById("stage");
-const known = id => id === "library" || seriesOf(id) || occOf(id) || PROJECTS.find(p => p.id === id);
-const pageFor = id => id === "library" ? pageLibrary() : seriesOf(id) ? pageSeries(id) : occOf(id) ? pageOcc(id) : ALBUMS[id] ? pageAlbum(id) : pageProject(id);
+const known = id => studioOf(id) || id === "library" || id === "allsets" || id === "tags" || seriesOf(id) || occOf(id) || PROJECTS.find(p => p.id === id);
+const pageFor = id => studioOf(id) ? pageSong(id) : id === "library" ? pageLibrary() : id === "allsets" ? pageAllSets() : id === "tags" ? pageTags() : seriesOf(id) ? pageSeries(id) : occOf(id) ? pageOcc(id) : ALBUMS[id] ? pageAlbum(id) : pageProject(id);
 // Where a page lives when it is opened from outside a tab's own pages.
-const tabFor = id => { const p = PROJECTS.find(x => x.id === id); return p ? (p.kind === "Set" ? "setlists" : p.kind === "Song" ? "home" : "sessions") : "setlists"; };
+const tabFor = id => { if (studioOf(id)) return "sessions"; const p = PROJECTS.find(x => x.id === id); return p ? (p.kind === "Set" ? "setlists" : p.kind === "Song" ? "home" : "sessions") : "setlists"; };
+// The note the bottom slots follow: a set (live) or a record (studio).
+const noteMode = id => studioOf(id) ? "song" : ALBUMS[id] ? "studio" : (occOf(id) || PROJECTS.find(p => p.id === id && p.kind === "Set")) ? "live" : null;
+const modeNote = () => [...stack].reverse().find(noteMode);
+const FAV = {
+  live: { tabs: [["setlist", "Setlist", "setlist"], ["chart", "Chart", "chart"], ["lyrics", "Lyrics", "type"], ["more", "More", "more"]], primary: ["Play the set", "play"] },
+  studio: { tabs: [["album", "Album", "disc"], ["review", "Review", "message"]], primary: ["Comment at the playhead", "messagePlus"] },
+  song: { tabs: [["song", "Song", "audio"], ["review", "Review", "message"]], primary: ["Comment at the playhead", "messagePlus"] },
+};
+let view = null;
+function topPage(id) {
+  const m = noteMode(id);
+  if (m === "live" && view === "chart") return pageChart(id);
+  if (m === "live" && view === "lyrics") return pageLyrics(id);
+  if ((m === "studio" || m === "song") && view === "review") return pageReview(id);
+  return pageFor(id);
+}
 function render() {
   const top = stack.at(-1), under = stack.at(-2);
-  stage.innerHTML = `<section class="page" id="root">${under ? pageFor(under) : PAGES[tab]()}</section>` + (top ? `<section class="page" id="top">${pageFor(top)}</section>` : "");
+  stage.innerHTML = `<section class="page" id="root">${under ? pageFor(under) : PAGES[tab]()}</section>` + (top ? `<section class="page" id="top">${topPage(top)}</section>` : "");
   if (top) stage.querySelector("#root").classList.add("under");
-  document.getElementById("tabs").innerHTML = TABS.map(([id, label, icon]) => `<button class="tab" data-tab="${id}" aria-label="${label}" aria-current="${tab === id ? "page" : "false"}">${ic(icon, 22)}</button>`).join("");
+  // A cover's tint sits behind the whole page, its bar too.
+  stage.querySelectorAll(".page").forEach(pg => { const t = pg.querySelector(".body > .tintbg"); if (t) pg.prepend(t); });
+  const note = modeNote(), m = note && noteMode(note), fav = m && FAV[m];
+  const cur = fav ? (view || fav.tabs[0][0]) : tab;
+  document.getElementById("tabs").innerHTML = (fav ? fav.tabs : TABS).map(([id, label, icon]) => `<button class="tab ${fav ? "fav" : ""}" ${fav ? `data-view="${id}"` : `data-tab="${id}"`} aria-label="${label}" aria-current="${cur === id ? "page" : "false"}">${ic(icon, 22)}${fav ? `<span>${label}</span>` : ""}</button>`).join("");
+  const round = document.querySelector(".round");
+  const rig = m === "live" && rigOf(MINE[note]);
+  const prim = rig ? [`Open in ${rig.name}`, rig.icon] : fav && fav.primary;
+  round.outerHTML = fav ? `<button class="round prim" ${rig ? `style="--h:${rig.hue}" data-rig` : ""} data-act="${prim[0]}" aria-label="${prim[0]}">${ic(prim[1], 22, 1.9)}</button>` : `<button class="round" data-palette aria-label="Open anything">${ic("search", 22, 1.9)}</button>`;
   document.getElementById("drawer").innerHTML = drawer();
-  history.replaceState(null, "", "#/" + [tab, ...stack].join("/") + (side ? "!side" : ""));
+  history.replaceState(null, "", "#/" + [tab, ...stack].join("/") + (view ? "~" + view : "") + (side ? "!side" : ""));
 }
-function showTab(t) { tab = t; stack = []; setSide(false); render(); }
+function setView(v) {
+  const note = modeNote(); if (!note) return;
+  if (v === "more") return openMore();
+  while (stack.at(-1) !== note) stack.pop();
+  view = ["setlist", "album", "song"].includes(v) ? null : v;
+  if (v !== "review") rtrack = null;
+  stage.scrollTop = 0; render();
+}
+function openMore() {
+  const sh = document.getElementById("sheet");
+  sh.innerHTML = `<div class="bsheet" role="dialog" aria-label="More"><div class="grab"></div>
+    ${[["Stems", "audio"], ["Tempo map", "tuner"], ["Click and cues", "rig"], ["Rehearse", "mic"], ["Notes", "message"], ["Share the set", "share"]].map(([l, i]) => `<button class="mi big" data-act="${l}" data-close>${ic(i, 20)}${l}</button>`).join("")}
+  </div>`;
+  sh.classList.add("bottom"); sh.hidden = false;
+}
+function showTab(t) { tab = t; stack = []; view = null; setSide(false); render(); }
 function push(id) {
   closePalette();
   if (!known(id)) return;
   if (side || tab === "signal") { setSide(false); stack = []; tab = tabFor(id); }
+  if (noteMode(id) && id !== modeNote()) { view = null; songIx = 0; rtrack = null; }
   stack.push(id); render();
   const top = stage.querySelector("#top"), root = stage.querySelector("#root");
   root.classList.remove("under"); top.classList.add("enter");
@@ -565,15 +897,38 @@ function pop() {
   if (!stack.length) return;
   const top = stage.querySelector("#top"), root = stage.querySelector("#root");
   root.classList.remove("under"); top.classList.add("enter");
-  setTimeout(() => { stack.pop(); render(); }, 280);
+  setTimeout(() => { stack.pop(); if (!modeNote()) view = null; render(); }, 280);
 }
 let side = false;
 function setSide(open) { side = open; document.getElementById("phone").classList.toggle("side-open", open); history.replaceState(null, "", location.hash.replace("!side", "") + (open ? "!side" : "")); }
 
-document.querySelector(".round").innerHTML = ic("search", 22, 1.9);
 
+// The Library's filters: a change redraws the page under the sheet, and the sheet.
+const refilter = () => { render(); if (!document.getElementById("sheet").hidden && document.querySelector(".bsheet")) openFilters(); };
+const flip = (set, v) => set.has(v) ? set.delete(v) : set.add(v);
 document.addEventListener("click", e => {
   const el = sel => e.target.closest(sel);
+  if (el("[data-filters]")) return openFilters();
+  if (el("[data-song]")) { const d = +el("[data-song]").dataset.song, n = setSongs(modeNote()).length; songIx = Math.max(0, Math.min(n - 1, songIx + d)); return render(); }
+  if (el("[data-rfilter]")) { rfilter = el("[data-rfilter]").dataset.rfilter; return render(); }
+  if (el("[data-rtrack]")) { rtrack = null; return render(); }
+  if (el("[data-track]")) { rtrack = el("[data-track]").dataset.track; rfilter = "All"; return setView("review"); }
+  if (el("[data-setstatus]")) { const [tg, k] = el("[data-setstatus]").dataset.setstatus.split("|"); setStatus(tg, +k); closePalette(); return render(); }
+  if (el("[data-status]")) { e.stopPropagation(); return openStatus(el("[data-status]").dataset.status); }
+  if (el("[data-sfilter]")) { sfilter = el("[data-sfilter]").dataset.sfilter; return render(); }
+  if (el("[data-view]")) return setView(el("[data-view]").dataset.view);
+  if (el("[data-ltag]")) { flip(F.tags, el("[data-ltag]").dataset.ltag); return refilter(); }
+  if (el("[data-pick]")) { F.tags = new Set([el("[data-pick]").dataset.pick]); stack.pop(); return render(); }
+  if (el("[data-fkey]")) { flip(F.keys, el("[data-fkey]").dataset.fkey); return refilter(); }
+  if (el("[data-fenergy]")) { flip(F.energy, +el("[data-fenergy]").dataset.fenergy); return refilter(); }
+  if (el("[data-ftempo]")) { flip(F.tempo, el("[data-ftempo]").dataset.ftempo); return refilter(); }
+  if (el("[data-fready]")) { flip(F.ready, el("[data-fready]").dataset.fready); return refilter(); }
+  if (el("[data-frested]")) { F.rested = !F.rested; return refilter(); }
+  if (el("[data-unset]")) { const k = el("[data-unset]").dataset.unset;
+    if (k === "all") { F.keys.clear(); F.energy.clear(); F.tempo.clear(); F.ready.clear(); F.rested = false; F.tags.clear(); }
+    else if (k === "rested") F.rested = false; else F[k].clear();
+    return refilter(); }
+  if (el("[data-fold]")) { flip(folded, el("[data-fold]").dataset.fold); return render(); }
   if (el("[data-scope]")) { scope = el("[data-scope]").dataset.scope; return render(); }
   if (el("[data-menu]")) { e.stopPropagation(); return openMenu(el("[data-menu]").dataset.menu, el("[data-menu]")); }
   if (el(".menu .mi")) { closeMenu(); return toast(el(".mi").dataset.act); }
@@ -589,15 +944,23 @@ document.addEventListener("click", e => {
   if (e.target.id === "sheet") return closePalette();
 });
 
+document.addEventListener("input", e => {
+  if (e.target.id !== "libq") return;
+  F.q = e.target.value.toLowerCase(); const at = e.target.selectionStart; render();
+  const q = document.getElementById("libq"); q.focus(); q.setSelectionRange(at, at);
+});
+
 // A swipe in from the left edge brings the sidebar; a swipe left puts it away.
 let sx = null, sy = null;
 addEventListener("touchstart", e => { const t = e.touches[0], ph = document.getElementById("phone").getBoundingClientRect(); sx = (side || t.clientX - ph.left < 24) ? t.clientX : null; sy = t.clientY; }, { passive: true });
 addEventListener("touchmove", e => { if (sx == null) return; const t = e.touches[0], dx = t.clientX - sx; if (Math.abs(t.clientY - sy) > Math.abs(dx)) { sx = null; return; } if (!side && dx > 50) { setSide(true); sx = null; } else if (side && dx < -50) { setSide(false); sx = null; } }, { passive: true });
 
 // #/projects, #/projects/jt, #/rigs, …; "!side" with the sidebar out.
-const h = (location.hash || "#/home").replace("#/projects", "#/home"), wantSide = h.includes("!side");
-const [, first, ...rest] = h.replace("!side", "").split("/");
+const h = (location.hash || "#/home").replace("#/projects", "#/home").replace("!filters", ""), wantSide = h.includes("!side"), wantFilters = location.hash.includes("!filters");
+const [, first, ...rest] = h.replace("!side", "").split("~")[0].split("/");
+view = h.replace("!side", "").split("~")[1] || null;
 tab = PAGES[first] ? first : "home";
 stack = rest.filter(known);
 render();
 if (wantSide) setSide(true);
+if (wantFilters) openFilters();
