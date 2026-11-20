@@ -10,8 +10,10 @@
 //! - **The launcher** (no argument: what the host runs). It finds the
 //!   running engine through its control socket and asks it to serve this
 //!   host ([`attach`]); with none running it spawns one first
-//!   ([`spawn_engine`]: this binary with `--engine`, in a session of its
-//!   own, so it outlives the window and the launcher). It then waits until
+//!   ([`spawn_engine`]: this binary with `--engine`, as a transient
+//!   systemd user service where there is one, else in a session of its
+//!   own, so it outlives the window, the launcher and whatever supervises
+//!   them). It then waits until
 //!   the engine is done with this host, so the host sees one live process
 //!   per window, as before.
 //! - **The engine** (`--engine`). It takes an exclusive lock on
@@ -23,8 +25,9 @@
 //! folder per user in the temp dir. There: `engine.lock`, `control.sock`,
 //! `engine.json` (pid, build, log) and `engine.log`.
 //!
-//! Stopping it: `daw-extension --stop` (or `just engine-stop`); `--status`
-//! says whether one runs. An engine of another build (the extension was
+//! Stopping it: `daw-extension --stop` (or `just engine-stop`, or
+//! `systemctl --user stop studio-engine` where systemd started it);
+//! `--status` says whether one runs. An engine of another build (the extension was
 //! rebuilt) is replaced when a window attaches: it stops, and a new one
 //! starts, as `studio_engine::link::plan`'s `Replace`.
 
@@ -197,17 +200,70 @@ fn wait_gone(dir: &Path, wait: Duration) {
     }
 }
 
-/// Starts this binary as the engine, in a session of its own (so neither
-/// the launcher's nor the window's end, nor a signal to their group,
-/// reaches it), its output in `engine.log`.
+/// The systemd unit an engine runs as, when the user's systemd starts it.
+const UNIT: &str = "studio-engine";
+
+/// Starts this binary as the engine, outside the window's process tree,
+/// its output in `engine.log`: as a transient systemd user service when
+/// the user's systemd answers (`systemd-run --user`), else in a session of
+/// its own (`setsid`). A session of its own is not enough under a
+/// supervisor that stops a process's every descendant (devenv's, a
+/// desktop's app manager): the service is no descendant at all.
 fn spawn_engine(dir: &Path) -> Result<(), String> {
-    use std::os::unix::process::CommandExt as _;
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let log_path = dir.join("engine.log");
+    if let Some(pid) = spawn_as_service(&exe, &log_path) {
+        tracing::info!(engine.unit = UNIT, engine.log = %log_path.display(), engine.launcher = pid, "daw: started the engine as a user service");
+        return Ok(());
+    }
+    spawn_in_own_session(&exe, &log_path)
+}
+
+/// `systemd-run --user` with this process's environment (the engine needs
+/// what the window was given: what to open, its audio, its libraries);
+/// `None` when there is no user systemd to ask or it refused.
+fn spawn_as_service(exe: &Path, log_path: &Path) -> Option<u32> {
+    if std::env::var_os("FTS_DAW_NO_SERVICE").is_some() || std::env::var_os("XDG_RUNTIME_DIR").is_none() {
+        return None;
+    }
+    let mut command = std::process::Command::new("systemd-run");
+    command.args(["--user", "--quiet", "--collect", "--unit", UNIT]);
+    command.arg(format!("--property=StandardOutput=append:{}", log_path.display()));
+    command.arg(format!("--property=StandardError=append:{}", log_path.display()));
+    for (k, v) in std::env::vars_os() {
+        if k == HOST_SOCKET {
+            continue;
+        }
+        let (Some(k), Some(v)) = (k.to_str(), v.to_str()) else {
+            continue;
+        };
+        command.arg(format!("--setenv={k}={v}"));
+    }
+    command.arg("--").arg(exe).arg("--engine");
+    let out = match command.stdin(std::process::Stdio::null()).output() {
+        Ok(out) => out,
+        Err(e) => {
+            tracing::warn!(error = %e, "daw: systemd-run did not start; the engine runs in a session of its own");
+            return None;
+        }
+    };
+    if !out.status.success() {
+        tracing::warn!(
+            engine.systemd_run = %String::from_utf8_lossy(&out.stderr).trim(),
+            "daw: systemd-run refused; the engine runs in a session of its own"
+        );
+        return None;
+    }
+    Some(std::process::id())
+}
+
+/// The engine in a session of its own (no user systemd).
+fn spawn_in_own_session(exe: &Path, log_path: &Path) -> Result<(), String> {
+    use std::os::unix::process::CommandExt as _;
     let log = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&log_path)
+        .open(log_path)
         .map_err(|e| format!("{}: {e}", log_path.display()))?;
     let err = log.try_clone().map_err(|e| e.to_string())?;
     let mut command = std::process::Command::new(exe);
