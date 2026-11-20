@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio launcher prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground: #23211f;
+    --raised: #2c2926;
+    --raised-2: #35312d;
+    --rule: #3d3934;
+    --ink: #ece6da;
+    --ink-2: #a8a093;
+    --ink-3: #7a7369;
+    --live: #e8c46a;
+    --radius-s: 6px;
+    --radius-m: 10px;
+    --font: "Instrument Sans", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font: 400 15px/1.45 var(--font);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--live); outline-offset: 2px; border-radius: 4px; }
+
+  .app { display: grid; grid-template-columns: 216px 1fr; height: 100%; }
+
+  /* Mode switcher */
+  nav.modes {
+    border-right: 1px solid var(--rule);
+    padding: 22px 12px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .brand { font-weight: 700; font-stretch: 85%; font-size: 21px; letter-spacing: -0.01em; padding: 0 12px 22px; }
+  .mode {
+    display: grid; grid-template-columns: 1fr auto; align-items: baseline;
+    text-align: left; padding: 10px 12px; border-radius: var(--radius-s);
+    color: var(--ink-2); font-size: 16px;
+  }
+  .mode:hover { background: var(--raised); color: var(--ink); }
+  .mode[aria-current="page"] { background: var(--raised-2); color: var(--ink); font-weight: 600; }
+  .mode kbd { font: inherit; font-size: 12px; color: var(--ink-3); }
+  .mode small { grid-column: 1 / -1; font-size: 12.5px; color: var(--ink-3); font-weight: 400; }
+  .nav-foot { margin-top: auto; padding: 12px; font-size: 12.5px; color: var(--ink-3); }
+  .nav-foot b { color: var(--ink-2); font-weight: 500; }
+
+  main { overflow-y: auto; padding: 34px 44px 60px; }
+  section[hidden] { display: none; }
+  h1 { font-size: 30px; font-weight: 650; font-stretch: 88%; letter-spacing: -0.015em; margin: 0 0 4px; }
+  h2 { font-size: 17px; font-weight: 600; margin: 34px 0 12px; }
+  .lede { color: var(--ink-2); margin: 0 0 26px; max-width: 62ch; }
+
+  /* Key tiles: the colour is the key, a hue per step round the circle of fifths */
+  .tile {
+    --h: 0; width: 34px; height: 34px; flex: none;
+    border-radius: var(--radius-s);
+    display: grid; place-items: center;
+    font-weight: 650; font-size: 13px; letter-spacing: -0.01em;
+    color: #fff;
+    background: oklch(0.56 0.12 var(--h));
+  }
+  .tile.none { background: var(--raised-2); color: var(--ink-3); font-weight: 500; }
+  .tile.mod { background: linear-gradient(90deg, oklch(0.56 0.12 var(--h)) 50%, oklch(0.56 0.12 var(--h2)) 50%); font-size: 11px; }
+
+  /* The memorable element: a set as a strip of its songs' keys */
+  .strip { display: flex; gap: 4px; align-items: stretch; flex-wrap: wrap; }
+  .strip .tile { width: auto; min-width: 30px; height: 46px; padding: 0 8px; flex: var(--len, 1) 1 0; }
+  .strip .gap { width: 10px; }
+  .strip .tile.here { outline: 2px solid var(--live); outline-offset: 2px; }
+  .strip .tile.none { color: var(--ink-3); font-weight: 500; background: transparent; box-shadow: inset 0 0 0 1px var(--rule); }
+
+  /* Home */
+  .resume {
+    background: var(--raised); border-radius: var(--radius-m);
+    padding: 24px 26px 26px; display: grid; gap: 18px;
+  }
+  .resume-head { display: flex; justify-content: space-between; gap: 20px; align-items: end; flex-wrap: wrap; }
+  .resume-title { font-size: 40px; line-height: 1.05; font-weight: 700; font-stretch: 82%; letter-spacing: -0.02em; margin: 0; }
+  .resume-where { color: var(--ink-2); margin-top: 6px; }
+  .resume-where b { color: var(--live); font-weight: 600; }
+  .primary {
+    background: var(--ink); color: var(--ground); font-weight: 650;
+    padding: 11px 18px; border-radius: var(--radius-s);
+  }
+  .primary:hover { background: #fff; }
+  .secondary { padding: 11px 16px; border-radius: var(--radius-s); color: var(--ink); background: var(--raised-2); }
+  .secondary:hover { background: var(--rule); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .rows { display: grid; }
+  .row {
+    display: grid; grid-template-columns: 34px 1fr auto auto; gap: 14px; align-items: center;
+    padding: 9px 10px; border-radius: var(--radius-s); text-align: left; width: 100%;
+  }
+  .row:hover, .row.sel { background: var(--raised); }
+  .row .t { font-weight: 550; }
+  .row .s { color: var(--ink-2); font-size: 13.5px; }
+  .row .m { color: var(--ink-3); font-size: 13.5px; text-align: right; }
+  .kind { color: var(--ink-3); font-size: 13px; }
+
+  /* Session */
+  .split { display: grid; grid-template-columns: minmax(240px, 300px) 1fr; gap: 30px; align-items: start; }
+  .sets .row { grid-template-columns: 1fr auto; }
+  .set-detail { background: var(--raised); border-radius: var(--radius-m); padding: 22px 22px 18px; }
+  .set-detail h3 { margin: 0; font-size: 26px; font-weight: 700; font-stretch: 85%; letter-spacing: -0.015em; }
+  .set-meta { color: var(--ink-2); margin: 4px 0 18px; }
+  .set-head { display: flex; justify-content: space-between; gap: 16px; align-items: start; flex-wrap: wrap; }
+  .act { color: var(--ink-2); font-size: 13.5px; font-weight: 600; margin: 18px 10px 4px; }
+  .song { grid-template-columns: 22px 34px 1fr auto auto; }
+  .song .n { color: var(--ink-3); font-size: 13px; text-align: right; }
+  .out { margin-top: 18px; display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .device { color: var(--ink-2); font-size: 13.5px; }
+  .device b { color: var(--ink); font-weight: 550; }
+
+  /* Signal */
+  .rigs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .rig {
+    background: var(--raised); border-radius: var(--radius-m); padding: 18px 18px 16px;
+    text-align: left; display: grid; gap: 10px; min-height: 150px; align-content: start;
+  }
+  .rig:hover { background: var(--raised-2); }
+  .rig .name { font-size: 22px; font-weight: 700; font-stretch: 85%; }
+  .rig .what { color: var(--ink-2); font-size: 13.5px; }
+  .scenes { display: flex; gap: 4px; margin-top: auto; }
+  .scenes span { flex: 1; height: 6px; border-radius: 3px; background: var(--rule); }
+  .scenes span.on { background: var(--ink-2); }
+  .rig .state { font-size: 13px; color: var(--ink-3); margin-top: auto; }
+  .rigs-main { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .rig.big { min-height: 230px; padding: 24px; }
+  .rig.big .name { font-size: 40px; line-height: 1; letter-spacing: -0.02em; font-stretch: 80%; }
+  .rig.big .what { font-size: 15px; }
+  .rigs .rig { min-height: 120px; }
+
+  /* Library */
+  .ready { display: flex; gap: 6px; }
+  .ready span { font-size: 12px; padding: 2px 7px; border-radius: 4px; background: var(--raised-2); color: var(--ink-3); }
+  .ready span.y { color: var(--ink); background: var(--rule); }
+  .lib .row { grid-template-columns: 34px 1fr auto auto; }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  input[type=search] {
+    font: inherit; color: var(--ink); background: var(--raised); border: 1px solid var(--rule);
+    border-radius: var(--radius-s); padding: 9px 12px; width: min(360px, 100%);
+  }
+  input[type=search]::placeholder { color: var(--ink-3); }
+
+  .toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: var(--ground); padding: 10px 16px; border-radius: var(--radius-s);
+    font-weight: 600; opacity: 0; transition: opacity .18s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    nav.modes { order: 2; flex-direction: row; border-right: 0; border-top: 1px solid var(--rule); padding: 6px; }
+    .brand, .nav-foot, .mode small, .mode kbd { display: none; }
+    .mode { flex: 1; text-align: center; display: block; padding: 10px 4px; font-size: 14px; }
+    main { padding: 22px 16px 40px; }
+    .split { grid-template-columns: 1fr; }
+    .resume-title { font-size: 30px; }
+    .song { grid-template-columns: 18px 34px 1fr auto; }
+    .song .m:last-child { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="modes" aria-label="Modes">
+    <div class="brand">Studio</div>
+    <button class="mode" data-mode="home">Home <kbd>1</kbd><small>Recent projects, sets and songs</small></button>
+    <button class="mode" data-mode="session">Session <kbd>2</kbd><small>Open a set to play or rehearse</small></button>
+    <button class="mode" data-mode="signal">Signal <kbd>3</kbd><small>Choose a rig</small></button>
+    <button class="mode" data-mode="library">Library <kbd>4</kbd><small>Every song, and what it's ready for</small></button>
+    <div class="nav-foot">Signed in as <b>Ada</b><br>Acme Records, synced</div>
+  </nav>
+  <main>
+    <section id="home"></section>
+    <section id="session" hidden></section>
+    <section id="signal" hidden></section>
+    <section id="library" hidden></section>
+  </main>
+</div>
+<div class="toast" role="status" aria-live="polite"></div>
+<script>
+// Real content from the demo vault (Merry & Bright, JT's Senior Recital, Crescendum).
+const FIFTHS = ["C","G","D","A","E","B","F#","Db","Ab","Eb","Bb","F"];
+const ALIAS = { Gb: "F#", "C#": "Db", "G#": "Ab", "D#": "Eb", "A#": "Bb" };
+const hue = k => { if (!k) return null; const i = FIFTHS.indexOf(ALIAS[k] || k); return i < 0 ? null : (i * 30 + 20) % 360; };
+const S = (title, artist, key, tempo, len, ready) => ({ title, artist, key, tempo, len, ready });
+const SETS = [
+  { id: "jt", title: "JT's Senior Recital", date: "Recital, May 2026", acts: [
+    ["The Originals", [
+      S("DTLA Cinematic Intro","Nights Out","C",160,123,"cltm"), S("Drive To LA","Nights Out","C→Db",160,197,"cltm"),
+      S("For You","Nights Out","Ab",105,193,"cltm"), S("Heart Isn't Ready","Nights Out","Bb",107,203,"cltm"),
+      S("No One Knows","Queens of the Stone Age",null,null,257,"lt"), S("Hey!","Nights Out & Ryce","E",87,251,"cltm")]],
+    ["Royal Blood", [
+      S("Sleeptalker","Royal Blood",null,null,191,"lt"), S("Figure It Out","Royal Blood",null,null,189,"lt"),
+      S("Seven Nation Army","The White Stripes",null,null,231,"lt"), S("Sad But True","Metallica",null,null,327,"lt"),
+      S("Out Of The Black","Royal Blood",null,null,327,"lt")]],
+    ["The Fun Part", [
+      S("She's American","The 1975","Db",116,267,"cltm"), S("WORST PART OF YOU","bilmuri","B",183,176,"cltm"),
+      S("Fire","JT Wright","D",120,206,"cltm"), S("Not Too Much Longer (Live)","Cody Wright",null,null,261,"lt"),
+      S("Know Me (Extended)","The Band CAMINO",null,null,304,"clt")]]]},
+  { id: "mb", title: "Merry & Bright", date: "CBU Christmas 2026", acts: [
+    ["Presidents Songs", [
+      S("All I Want for Christmas Is You","Mariah Carey","G",150,null,"cl"), S("Feliz Navidad",null,null,null,null,""),
+      S("Joy to the World (Unspeakable Joy)","Chris Tomlin","D",128,null,"cl")]],
+    ["Tree Lighting Concert Set", [
+      S("Last Christmas",null,null,null,null,""), S("Rockin' Around the Christmas Tree",null,null,null,null,""),
+      S("Silent Night","for KING & COUNTRY","A",83,null,"cl"), S("Sleigh Ride","Tori Kelly","B",86,null,"cl"),
+      S("This Christmas","Donny Hathaway","F",93,null,"cl"), S("What Christmas Means",null,null,null,null,"")]]]},
+  { id: "cr", title: "Crescendum", date: "Band set", acts: [
+    [null, ["Intro","Set in Stone","Unbreakable","Chained Expectations","Heavify","It Knows My Name","Kornesque","The Ballad","The Plague","Empty Focus"]
+      .map(t => S(t,"Crescendum",null,null,null,"c"))]]},
+];
+const RIGS = [
+  { name: "Guitar", what: "Amp captures, cab IRs, pedals", preset: "Recital, Drive To LA", scenes: 4, on: 2, input: "Input 1, Hi-Z" },
+  { name: "Keys", what: "Piano, EPs, organ and pads", preset: "Recital keys", scenes: 3, on: 1, input: "MIDI, Kontrol S88" },
+  { name: "Bass", what: "Bass amp and DI blend", preset: "Royal Blood fuzz", scenes: 3, on: 0, input: "Input 2" },
+  { name: "Drums", what: "Sampled kit with per-mic voices", preset: "Recital kit", scenes: 2, on: 0, input: "Track from the session" },
+  { name: "E-kit", what: "Electronic kit triggers", preset: "Not set up", scenes: 0, on: 0, input: "No pads found" },
+  { name: "Synth", what: "Synth rig and arps", preset: "Christmas pads", scenes: 3, on: 0, input: "MIDI" },
+  { name: "Orchestra", what: "Strings, brass and winds", preset: "Silent Night strings", scenes: 2, on: 0, input: "MIDI" },
+];
+const RECENT = [
+  { kind: "Set", title: "JT's Senior Recital", sub: "Stopped in Know Me (Extended), 2:41", when: "Today", key: null, set: "jt" },
+  { kind: "Song", title: "Drive To LA", sub: "Nights Out, chart edited", when: "Today", key: "C→Db" },
+  { kind: "Project", title: "Sr. Recital Showcase", sub: "Ableton set, 16 songs split", when: "Yesterday", key: null },
+  { kind: "Set", title: "Merry & Bright", sub: "CBU Christmas 2026, 9 songs", when: "Monday", key: null, set: "mb" },
+  { kind: "Song", title: "This Christmas", sub: "Donny Hathaway, tempo map checked", when: "Monday", key: "F" },
+  { kind: "Song", title: "Silent Night", sub: "for KING & COUNTRY, stems prepared", when: "Last week", key: "A" },
+];
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const mmss = s => { if (s == null) return ""; s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = String(s % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`; };
+const total = set => set.acts.flatMap(a => a[1]).reduce((t, s) => t + (s.len || 0), 0);
+const count = set => set.acts.flatMap(a => a[1]).length;
+function tile(key, extra = "") {
+  if (!key) return `<span class="tile none ${extra}" title="No key yet">?</span>`;
+  if (key.includes("→")) {
+    const [a, b] = key.split("→");
+    return `<span class="tile mod ${extra}" style="--h:${hue(a)};--h2:${hue(b)}" title="${esc(a)} to ${esc(b)}">${esc(key)}</span>`;
+  }
+  return `<span class="tile ${extra}" style="--h:${hue(key)}">${esc(key)}</span>`;
+}
+function strip(set, here = -1) {
+  let i = 0;
+  return `<div class="strip" aria-label="${esc(set.title)}, ${count(set)} songs">` + set.acts.map((a, ai) =>
+    (ai ? '<span class="gap"></span>' : "") + a[1].map(s => {
+      const k = s.key, idx = i++;
+      const h = k ? (k.includes("→") ? hue(k.split("→")[0]) : hue(k)) : null;
+      return `<span class="tile ${k ? "" : "none"} ${idx === here ? "here" : ""}" style="${h != null ? `--h:${h};` : ""}--len:${Math.max(1, (s.len || 200) / 200)}" title="${esc(s.title)}${k ? "" : ", no key yet"}">${esc(k || String(idx + 1))}</span>`;
+    }).join("")).join("") + `</div>`;
+}
+let toastT;
+function toast(msg) { const t = document.querySelector(".toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1800); }
+
+function renderHome() {
+  const jt = SETS[0];
+  document.getElementById("home").innerHTML = `
+    <h1>Good evening, Ada</h1>
+    <p class="lede">Pick up where you left off, or open something you've had lately.</p>
+    <div class="resume">
+      <div class="resume-head">
+        <div>
+          <p class="resume-title">${esc(jt.title)}</p>
+          <div class="resume-where">Stopped in <b>Know Me (Extended)</b> at 2:41, song 16 of ${count(jt)}</div>
+        </div>
+        <div class="actions">
+          <button class="primary" data-act="Resumed JT's Senior Recital">Resume the set</button>
+          <button class="secondary" data-act="Opened JT's Senior Recital from the top">From the top</button>
+        </div>
+      </div>
+      ${strip(jt, 15)}
+    </div>
+    <h2>Recent</h2>
+    <div class="rows">${RECENT.map(r => `
+      <button class="row" data-act="Opened ${esc(r.title)}">
+        ${r.key ? tile(r.key) : `<span class="tile none">${r.kind === "Set" ? "♫" : "▤"}</span>`}
+        <span><span class="t">${esc(r.title)}</span><br><span class="s">${esc(r.sub)}</span></span>
+        <span class="kind">${r.kind}</span><span class="m">${r.when}</span>
+      </button>`).join("")}</div>`;
+}
+
+let currentSet = "jt";
+function renderSession() {
+  const set = SETS.find(s => s.id === currentSet);
+  let n = 0;
+  document.getElementById("session").innerHTML = `
+    <h1>Session</h1>
+    <p class="lede">Choose a set to play through, or a song to rehearse on its own.</p>
+    <div class="split">
+      <div class="rows sets">${SETS.map(s => `
+        <button class="row ${s.id === currentSet ? "sel" : ""}" data-set="${s.id}">
+          <span><span class="t">${esc(s.title)}</span><br><span class="s">${esc(s.date)}</span></span>
+          <span class="m">${count(s)} songs${total(s) ? `<br>${mmss(total(s))}` : ""}</span>
+        </button>`).join("")}</div>
+      <div class="set-detail">
+        <div class="set-head">
+          <div>
+            <h3>${esc(set.title)}</h3>
+            <p class="set-meta">${count(set)} songs${total(set) ? `, ${mmss(total(set))}` : ""}, ${set.acts.length} ${set.acts.length === 1 ? "set" : "sets"}</p>
+          </div>
+          <div class="actions">
+            <button class="secondary" data-act="Choose a song to rehearse">Rehearse a song</button>
+            <button class="primary" data-act="Opened ${esc(set.title)} for playback">Play the set</button>
+          </div>
+        </div>
+        ${strip(set)}
+        ${set.acts.map(([name, songs]) => `
+          ${name ? `<div class="act">${esc(name)}</div>` : ""}
+          <div class="rows">${songs.map(s => `
+            <button class="row song" data-act="Rehearsing ${esc(s.title)}">
+              <span class="n">${++n}</span>${tile(s.key)}
+              <span><span class="t">${esc(s.title)}</span>${s.artist ? `<br><span class="s">${esc(s.artist)}</span>` : ""}</span>
+              <span class="m">${s.tempo ? `${s.tempo} bpm` : ""}</span><span class="m">${mmss(s.len)}</span>
+            </button>`).join("")}</div>`).join("")}
+        <div class="out"><span class="device">Plays through <b>Scarlett 18i20</b>, lights on <b>Room 138</b></span></div>
+      </div>
+    </div>`;
+}
+
+function renderSignal() {
+  const [main, more] = [RIGS.slice(0, 2), RIGS.slice(2)];
+  const card = (r, big) => `
+      <button class="rig ${big ? "big" : ""}" data-act="Opened the ${esc(r.name)} rig">
+        <span class="name">${esc(r.name)}</span>
+        <span class="what">${esc(r.what)}</span>
+        <span class="state">${r.scenes ? `${esc(r.preset)}, ${r.scenes} scenes` : esc(r.preset)}<br>${esc(r.input)}</span>
+      </button>`;
+  document.getElementById("signal").innerHTML = `
+    <h1>Signal</h1>
+    <p class="lede">Choose the rig you're playing. It opens on its last preset, ready on its input.</p>
+    <div class="rigs-main">${main.map(r => card(r, true)).join("")}</div>
+    <h2>More rigs</h2>
+    <div class="rigs">${more.map(r => card(r, false)).join("")}</div>`;
+}
+
+let libQuery = "";
+function renderLibrary() {
+  const all = SETS.flatMap(s => s.acts.flatMap(a => a[1].map(x => ({ ...x, from: s.title }))));
+  const seen = new Set(); const songs = all.filter(s => !seen.has(s.title) && seen.add(s.title))
+    .filter(s => !libQuery || (s.title + " " + (s.artist || "")).toLowerCase().includes(libQuery));
+  const lab = { c: "Chart", l: "Lyrics", t: "Stems", m: "Tempo map" };
+  document.getElementById("library").innerHTML = `
+    <h1>Library</h1>
+    <p class="lede">Every song, and what it's ready for. A song with stems and a tempo map plays in Session.</p>
+    <div class="toolbar">
+      <input type="search" placeholder="Find a song or artist" value="${esc(libQuery)}" aria-label="Find a song">
+      <button class="secondary" data-act="Import songs">Import songs</button>
+    </div>
+    <div class="rows lib">${songs.map(s => `
+      <button class="row" data-act="Opened ${esc(s.title)}">
+        ${tile(s.key)}
+        <span><span class="t">${esc(s.title)}</span><br><span class="s">${esc(s.artist || "No artist yet")}, in ${esc(s.from)}</span></span>
+        <span class="ready">${Object.entries(lab).map(([k, v]) => `<span class="${s.ready.includes(k) ? "y" : ""}">${v}</span>`).join("")}</span>
+        <span class="m">${mmss(s.len)}</span>
+      </button>`).join("") || `<p class="lede">No song matches “${esc(libQuery)}”. Import it, or check the spelling.</p>`}</div>`;
+  const input = document.querySelector("#library input");
+  input.addEventListener("input", e => { libQuery = e.target.value.toLowerCase(); const pos = e.target.selectionStart; renderLibrary(); const i = document.querySelector("#library input"); i.focus(); i.setSelectionRange(pos, pos); });
+}
+
+function show(mode) {
+  document.querySelectorAll(".mode").forEach(b => b.setAttribute("aria-current", b.dataset.mode === mode ? "page" : "false"));
+  document.querySelectorAll("main section").forEach(s => s.hidden = s.id !== mode);
+  history.replaceState(null, "", "#/" + mode);
+}
+document.addEventListener("click", e => {
+  const m = e.target.closest("[data-mode]"); if (m) return show(m.dataset.mode);
+  const s = e.target.closest("[data-set]"); if (s) { currentSet = s.dataset.set; return renderSession(); }
+  const a = e.target.closest("[data-act]"); if (a) toast(a.dataset.act);
+});
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input")) return;
+  const modes = ["home", "session", "signal", "library"];
+  if (/^[1-4]$/.test(e.key)) show(modes[+e.key - 1]);
+});
+renderHome(); renderSession(); renderSignal(); renderLibrary();
+show((location.hash || "#/home").replace(/^#\/?/, "") || "home");
+</script>
+</body>
+</html>
