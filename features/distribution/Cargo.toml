@@ -11,9 +11,9 @@ publish = false
 
 [features]
 default = []
-# The window's views: Studio's arrangement, mixer, lyrics, navigator and
-# launcher, Keyflow's chart, Ignition's lighting; in a browser also Studio's
-# engine (`daw`, in the page).
+# The window's views on every target: Studio's arrangement, mixer, lyrics,
+# navigator and launcher, Keyflow's chart, Ignition's lighting; in a browser
+# also Studio's engine (`daw`, in the page).
 stage = [
     "dep:daw-extension",
     "dep:studio-arrangement",
@@ -44,6 +44,9 @@ architect-distribution = { workspace = true }
 setlists = { workspace = true, features = ["extension"] }
 productions = { workspace = true, features = ["extension"] }
 studio-views = { workspace = true, features = ["extension"] }
+# The window's views, on every target.
+studio-launcher = { workspace = true, optional = true }
+keyflow-extension = { workspace = true, optional = true }
 studio-arrangement = { workspace = true, optional = true }
 studio-mixer = { workspace = true, optional = true }
 studio-lyrics = { workspace = true, optional = true }
@@ -57,11 +60,8 @@ ignition-pane = { workspace = true, optional = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 daw-extension = { workspace = true, optional = true }
 
-# Native until their browser builds land: the launcher, Keyflow's chart.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-studio-launcher = { workspace = true, optional = true }
-keyflow-extension = { workspace = true, optional = true }
 # The rig views, native until their browser builds land.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 studio-rig-switches = { workspace = true, optional = true }
 studio-rig-setlist = { workspace = true, optional = true }
 studio-rig-browser = { workspace = true, optional = true }

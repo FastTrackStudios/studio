@@ -29,10 +29,8 @@ architect-distribution = { workspace = true }
 architect-extensions = { workspace = true, features = ["linked-core"] }
 architect-playhead = { workspace = true }
 studio-island = { workspace = true }
-# The same extensions the desktop app links (one list). `stage` (the
-# window's views on the engine) joins when the engine runs in the page:
-# today its extensions pull the native engine link (REAPER adapter,
-# dioxus-native, iroh, axum), which does not build for wasm32.
+# The same extensions the desktop app links (one list), the window's
+# (`stage`) included: in a browser it begins with the engine in the page.
 studio-extensions = { workspace = true, features = ["stage"] }
 # Ignition's show view, drawn by studio-web's own lighting view (a
 # setlist's More > Lighting Visualizer); the extension itself is in `stage`.

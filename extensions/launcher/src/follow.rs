@@ -12,7 +12,9 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use web_time::Instant;
 
 use serde_json::{Value, json};
 
@@ -48,7 +50,7 @@ impl Session {
 
 /// The session the engine has now.
 pub async fn session() -> Option<Session> {
-    Session::of(&host::run("DAW_STATE", json!({})).await.ok()?)
+    Session::of(&host::session("state", json!({})).await.ok()?)
 }
 
 /// What a song's chart and lighting are pointed at.
