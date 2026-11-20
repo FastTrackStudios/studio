@@ -31,6 +31,9 @@ pub fn distribution() -> architect_distribution::Distribution {
         .named("Studio")
         .bundle(studio_extensions::studio())
         .linked(&StudioViews)
+        // Ignition's lighting, its room drawn in the page: here until
+        // `stage` (which has it) builds for wasm32; then it goes.
+        .linked(&ignition_pane::ext::Lighting)
         // A signed-in person's web app opens on Studio's dashboard: their
         // setlists and songs across their orgs (architect#990).
         .home("studio.transport", "home")

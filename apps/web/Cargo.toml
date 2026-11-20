@@ -34,6 +34,10 @@ studio-island = { workspace = true }
 # today its extensions pull the native engine link (REAPER adapter,
 # dioxus-native, iroh, axum), which does not build for wasm32.
 studio-extensions = { workspace = true }
+# Ignition's lighting (its show and cues views, the room drawn by
+# Ignition's web renderer in the page): linked here until `stage`, which
+# has it, builds for wasm32.
+ignition-pane = { workspace = true }
 dioxus = { workspace = true, features = ["web"] }
 serde_json = { workspace = true }
 gloo-timers = { workspace = true, features = ["futures"] }

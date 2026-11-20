@@ -48,11 +48,12 @@ studio-lyrics = { workspace = true, optional = true }
 studio-navigator = { workspace = true, optional = true }
 studio-launcher = { workspace = true, optional = true }
 keyflow-extension = { workspace = true, optional = true }
-
-# Native until their browser builds land: Ignition's room (a GPU process
-# view natively; Ignition's viz has a web renderer), the rig views.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Ignition's lighting: natively the room is a GPU process view, in a
+# browser Ignition's web renderer (Bevy on WebGPU) in a canvas.
 ignition-pane = { workspace = true, optional = true }
+
+# Native until their browser builds land: the rig views.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 studio-rig-switches = { workspace = true, optional = true }
 studio-rig-setlist = { workspace = true, optional = true }
 studio-rig-browser = { workspace = true, optional = true }
