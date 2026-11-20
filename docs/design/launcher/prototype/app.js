@@ -1036,16 +1036,16 @@ function pageSetlistsTab() {
   const fs = sfold === "all" ? FOLDERS : FOLDERS.filter(f => f.tag === sfold);
   const series = fs.flatMap(f => f.series), shows = fs.flatMap(f => f.shows.map(id => ({ id, f })));
   const showDate = st => (st.date.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w* (\d{4})/) || [, "", ""]);
-  return `${bar({ title: "Setlists", tools: [{ label: "Library", icon: "library", open: "library" }, { label: "New setlist", icon: "plus", menu: "newset" }] })}
+  return `${bar({ title: "Setlists", tools: [{ joined: [{ label: "Filter", icon: "sliders", menu: "sfold", badge: sfold === "all" ? "" : "1" }, { label: "Library", icon: "library", open: "library" }] }, { label: "New setlist", icon: "plus", menu: "newset" }] })}
     <div class="body">
-      <div class="tagrow fchips">${[["all", "All"], ...FOLDERS.map(f => [f.tag, f.name])].map(([t, n]) => `<button class="tagchip" data-sfold="${t}" aria-pressed="${sfold === t}">${esc(n)}</button>`).join("")}</div>
-      ${series.length ? `<div class="dayhead">Recurring</div>
-      <div class="evgrid">${series.map(id => { const sr = seriesOf(id), nx = nextOf(sr); return `
+      ${sfold === "all" ? "" : `<div class="onrow"><button class="onchip" data-sfold="all">${esc(FOLDERS.find(f => f.tag === sfold).name)}${ic("x", 13, 2.4)}</button></div>`}
+      ${fs.filter(f => f.series.length).map(f => `<div class="dayhead">${esc(f.name)} · Recurring</div>
+      <div class="evgrid">${f.series.map(id => { const sr = seriesOf(id), nx = nextOf(sr); return `
         <button class="ev" data-open="${sr.id}">
           <span class="evlogo">${ring(nx, 84)}${LOGO[id] ? `<img src="${LOGO[id]}" alt="">` : cover({ title: sr.name }, 64, sr.hue)}</span>
           <span class="t1">${esc(sr.name)}</span>
           <span class="s1">${nx ? (daysFrom(nx.date) === 0 ? "Today" : daysFrom(nx.date) < 7 ? DAY[nx.date.getUTCDay()].slice(0, 3) : short(nx.date)) : ""}${nx && nx.songs.length < sr.size ? ` · <b>${nx.songs.length}/${sr.size}</b>` : ""}</span>
-        </button>`; }).join("")}</div>` : ""}
+        </button>`; }).join("")}</div>`).join("")}
       ${[["Upcoming shows", shows.filter(x => x.id === "mb")], ["Past shows", shows.filter(x => x.id !== "mb")]].filter(([, l]) => l.length).map(([head, l]) => `<div class="dayhead">${head}</div>
       <div class="showlist ${head.startsWith("Past") ? "past" : ""}">${l.map(({ id, f }) => { const st = SETS[id], [m, y] = ({ mb: ["Dec", "2026"] })[id] || showDate(st).slice(1); return `
         <button class="showc" data-open="${id}">
@@ -1281,6 +1281,7 @@ function drawer() {
 
 // ── The ⋯ menus ─────────────────────────────────────────────────────────────
 const MENUS = {
+  sfold: () => [["head", "Show"], ["check", "All folders", sfold === "all"], ...FOLDERS.map(f => ["check", f.name, sfold === f.tag])],
   // A new set: the next week of an event, or a one-off show.
   newset: () => [["head", "Next week of"], ...SERIES.map(sr => { const nx = OCC.find(o => o.series === sr && daysFrom(o.date) >= 0 && !o.songs.length); return ["item", sr.name, "calendar", nx ? short(nx.date) : "", false, `New ${sr.name} set${nx ? " for " + short(nx.date) : ""}`]; }),
     ["div"], ["item", "A show", "plus", "named, one date", false, "New show"], ["item", "A new weekly event", "loop", "", false, "New weekly event"]],
@@ -1481,7 +1482,7 @@ document.addEventListener("click", e => {
   if (el("[data-fold]")) { flip(folded, el("[data-fold]").dataset.fold); return render(); }
   if (el("[data-scope]")) { scope = el("[data-scope]").dataset.scope; return render(); }
   if (el("[data-menu]")) { e.stopPropagation(); return openMenu(el("[data-menu]").dataset.menu, el("[data-menu]")); }
-  if (el(".menu .mi")) { closeMenu(); return toast(el(".mi").dataset.act); }
+  if (el(".menu .mi")) { const a = el(".mi").dataset.act, f = a === "All folders" ? "all" : FOLDERS.find(x => x.name === a)?.tag; closeMenu(); if (f) { sfold = f; return render(); } return toast(a); }
   if (el("[data-palette]")) return openPalette();
   if (el("#scrim")) return setSide(false);
   // A button inside the hero card says what it does; the card itself opens.

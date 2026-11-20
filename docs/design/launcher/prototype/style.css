@@ -1200,3 +1200,12 @@ span.slogo { overflow: hidden; display: block; }
 .rsh { width: 100px; } .rshc { width: 100px; height: 100px; }
 .fd { padding: 8px 14px 8px 12px; }
 .fdmid .wave { height: 18px; }
+
+/* Five events on one line */
+.evgrid { grid-template-columns: repeat(5, 1fr); gap: 14px 4px; }
+.evlogo { width: 66px; height: 66px; margin-bottom: 4px; }
+.evlogo .ringsvg { width: 66px; height: 66px; }
+.evlogo img, .evlogo .cover { width: 52px !important; height: 52px !important; border-radius: 26px; }
+.ev .t1 { font-size: 12px; }
+.ev .s1 { font-size: 11px; }
+.body > .onrow:first-child { margin: 0 0 4px; }
