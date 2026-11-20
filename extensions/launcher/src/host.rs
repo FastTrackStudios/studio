@@ -5,6 +5,7 @@
 //! behaves as the compiled-in one.
 
 use std::future::Future;
+use std::path::Path;
 use std::pin::Pin;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::OnceLock;
@@ -133,6 +134,29 @@ pub async fn open(path: &str) -> Result<Value, String> {
         .await
         .map_err(|e| e.to_string())
 }
+
+/// The code of a share link of `setlist` (its note's path): a share
+/// note (`_architect/shares/<code>.md`) whose `shares` property is the
+/// setlist's note (`note:<path>`, as Architect's `share_note` writes it).
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub async fn share_of(setlist: &str) -> Option<String> {
+    let want = format!("note:{setlist}");
+    query(SHARES)
+        .await
+        .ok()?
+        .into_iter()
+        .find(|row| row.values.get("shares").and_then(Value::as_str) == Some(want.as_str()))
+        .and_then(|row| {
+            Path::new(&row.path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(str::to_owned)
+        })
+}
+
+/// Every share link's note (`_architect/shares/<code>.md`).
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+const SHARES: &str = "filters:\n  and:\n    - file.folder == \"_architect/shares\"\nviews:\n  - type: table\n    name: Shares\n    order:\n      - file.name\n      - shares\n      - listen\n";
 
 /// Every setlist note.
 const SETLISTS: &str = "filters:\n  and:\n    - type == \"setlist\"\nviews:\n  - type: table\n    name: Setlists\n    order:\n      - file.name\n      - title\n      - date\n      - songs\n      - sets\n      - project\n      - session\n      - notes\n      - parts\n      - layout\n";

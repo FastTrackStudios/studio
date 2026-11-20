@@ -193,8 +193,12 @@ def seed_share(vault, setlist, code, vault_id, listen="Reference"):
         # listener's link) or Full (the multitracks too; `LOCAL_STACK_LISTEN`).
         "listen": listen,
     }
+    # As Architect writes it (architect-spaces `share_note`): what it shares
+    # and how far it plays as properties, which a vault query reads (the
+    # launcher finds a setlist's link by them).
+    shares = json.dumps(f"note:{setlist}", ensure_ascii=False)
     note = (
-        "---\npublish: false\n---\n"
+        f"---\npublish: false\nshares: {shares}\nlisten: {listen.lower()}\n---\n"
         f"# Share {code}\n\n"
         f"A share link, kept by Architect (`SHARE_*`): the setlist {title} and its songs, for anyone with the link. "
         "Written by Studio's local stack (scripts/local-stack.sh).\n\n"

@@ -297,14 +297,24 @@ pub fn show_page(s: &Studio, id: &str, back: EventHandler<()>) -> Element {
             String::new()
         }
     );
+    let note = show.note.clone();
     let title = show.title.clone();
     rsx! {
         Back { title: "", onback: back }
         Hero { art: show.art.clone(), hue: show.hue, title: show.title.clone(), sub: show.folder.clone(), count, facts }
-        button {
-            style: "margin: 12px 0 4px; height: 44px; border-radius: 22px; border: none; background: {INK}; color: #000; font-weight: 650; font-size: 15px;",
-            onclick: move |_| super::open_setlist(&title),
-            "Open in Session"
+        // The setlist itself: its note, with its Setlist, Chart, Lyrics
+        // and More (arrangement, mixer, lighting) tabs.
+        if let Some(note) = note {
+            button {
+                style: "margin: 12px 0 4px; height: 44px; border-radius: 22px; border: none; background: {INK}; color: #000; font-weight: 650; font-size: 15px;",
+                // Its page, and its songs in the engine (the arrangement's
+                // and the mixer's).
+                onclick: move |_| {
+                    super::open_setlist(&note, &title);
+                    super::open_note(&note);
+                },
+                "Open setlist"
+            }
         }
         if show.sections.is_empty() {
             div { style: "color: {INK3}; font-size: 14px; padding: 24px 2px;", "No songs yet." }

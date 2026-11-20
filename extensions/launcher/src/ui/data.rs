@@ -313,6 +313,8 @@ pub struct Show {
     pub sections: Vec<(Option<String>, Vec<Place>)>,
     pub art: Option<String>,
     pub hue: u16,
+    /// Its setlist note's path in the vault, when it has one.
+    pub note: Option<String>,
 }
 
 impl Show {
@@ -587,6 +589,7 @@ impl Studio {
                 .find(|sh| sh.id == id || lower.starts_with(&sh.title.to_lowercase()))
             {
                 show.sections = places;
+                show.note = Some(list.path.clone());
             } else {
                 s.shows.push(Show {
                     id,
@@ -597,6 +600,7 @@ impl Studio {
                     sections: places,
                     art: None,
                     hue: name_hue(&list.title),
+                    note: Some(list.path.clone()),
                 });
             }
         }
@@ -799,6 +803,7 @@ pub fn demo(today: Day) -> Studio {
             sections: Vec::new(),
             art: None,
             hue: 150,
+            note: None,
         },
         Show {
             id: "jts-senior-recital".into(),
@@ -809,6 +814,7 @@ pub fn demo(today: Day) -> Studio {
             sections: Vec::new(),
             art: Some("jt".into()),
             hue: 20,
+            note: None,
         },
     ];
     let rec = |id: &str,

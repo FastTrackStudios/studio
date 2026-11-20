@@ -46,6 +46,8 @@ tokio = { workspace = true, features = ["rt-multi-thread", "net", "time"] }
 # waits on a thread a browser does not have).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 futures-timer = { workspace = true, features = ["wasm-bindgen"] }
+# The page's origin: a setlist's share link for the page's engine.
+web-sys = { workspace = true, features = ["Window", "Location"] }
 
 [lints]
 workspace = true

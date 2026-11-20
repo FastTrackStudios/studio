@@ -85,11 +85,18 @@ pub fn art(name: &str) -> Option<&'static str> {
         .map(|(_, url)| url.as_str())
 }
 
-/// An image to show: one the crate carries by name, else the source as it is
-/// (a song note's `data:` cover).
+/// An image to show: one the crate carries by name, else a source a page
+/// can load as it is (a `data:` cover, a URL). A vault file's path is not
+/// one: `None`, and the cover is drawn instead.
 #[must_use]
-pub fn image(src: &str) -> String {
-    art(src).map_or_else(|| src.to_owned(), str::to_owned)
+pub fn image(src: &str) -> Option<String> {
+    if let Some(url) = art(src) {
+        return Some(url.to_owned());
+    }
+    ["data:", "http:", "https:", "blob:"]
+        .iter()
+        .any(|p| src.starts_with(p))
+        .then(|| src.to_owned())
 }
 
 // ── Pages pushed inside a tab ─────────────────────────────────────────────
@@ -152,14 +159,37 @@ pub fn use_studio() -> Signal<Studio> {
     studio
 }
 
-/// Opens a vault setlist (by its title) in Studio's engine: the old
-/// launcher's Open set.
-pub fn open_setlist(title: &str) {
-    let args = serde_json::json!({ "setlist": title });
+/// Opens a vault setlist (its note's path, its title) in Studio's
+/// engine: its songs' projects, what the arrangement and the mixer show.
+/// In a browser the page's engine opens a set by its share link
+/// (`DAW_OPEN {url}`, the set's files streamed from the link), so the
+/// setlist's link is found and opened; natively the engine opens the
+/// setlist's songs from the vault's folder.
+pub fn open_setlist(note: &str, title: &str) {
+    let (note, title) = (note.to_owned(), title.to_owned());
     dioxus::core::spawn_forever(async move {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(code) = crate::host::share_of(&note).await {
+            let origin = web_sys::window()
+                .and_then(|w| w.location().origin().ok())
+                .unwrap_or_default();
+            let url = format!("{origin}/s/{code}/");
+            let _ = crate::host::run("DAW_OPEN", serde_json::json!({ "url": url })).await;
+            return;
+        }
+        let _ = note;
+        let args = serde_json::json!({ "setlist": title });
         let _ = crate::host::run("STUDIO_LAUNCHER_OPEN_SETLIST", args).await;
     });
 }
 
+/// Opens a vault note (a setlist's) in the app: its page, with its tabs.
+pub fn open_note(path: &str) {
+    let path = path.to_owned();
+    dioxus::core::spawn_forever(async move {
+        let _ = crate::host::open(&path).await;
+    });
+}
+
 /// The launcher UI's revision, for the web app's rebuild.
-pub const REVISION: u32 = 3;
+pub const REVISION: u32 = 6;

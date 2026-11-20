@@ -137,8 +137,7 @@ pub fn Cover(
         format!("width: {size}px; height: {size}px;")
     };
     let edge = "box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);";
-    if let Some(src) = art {
-        let src = image(&src);
+    if let Some(src) = art.as_deref().and_then(image) {
         return rsx! {
             img { src: "{src}", style: "{dim} border-radius: {radius}px; object-fit: cover; display: block; flex-shrink: 0; {edge}" }
         };
