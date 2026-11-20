@@ -612,9 +612,10 @@ run_desktop() {
                 sleep 2
             done
             bin="$(desktop_bin)"
-            sock="$(desktop_socket "$bin")"
+            sock="$(desktop_socket)"
             say "desktop: up; running $after"
-            ARCHITECT_DEV_ROOT="$state/desktop" "$after" "$bin" "$sock" >&2 || say "desktop: $after failed"
+            ARCHITECT_DEV_ROOT="$state/desktop" LOCAL_STACK_DESKTOP_INSTANCE="$(desktop_instance)" \
+                "$after" "$bin" "$sock" >&2 || say "desktop: $after failed"
         ) &
     fi
     say "desktop: Studio (studio) under dx serve, signed in to the stack's issuer, its server :$(port server)"
@@ -692,20 +693,31 @@ build_desktop() {
     fi
 }
 
-# The window's binary as dx built it, and its control socket once it
-# answers (the dev instance `studio-stack`).
-desktop_bin() { find "$root/target/dx" -type f -name studio -perm -u+x 2>/dev/null | head -1; }
-desktop_socket() {
-    local bin="$1"
-    ARCHITECT_DEV_ROOT="$state/desktop" "$bin" dev path --name studio-stack 2>/dev/null \
-        | python3 -c 'import json, sys; print(json.load(sys.stdin).get("socket", ""))' 2>/dev/null || true
+# The window as it runs, from its dev instance's own record
+# (`<ARCHITECT_DEV_ROOT>/studio/studio-stack/instance.json`, written by the
+# app: its pid, its control socket, whether it runs). Not `studio dev path`,
+# which names another instance's socket folder, nor dx's binary, which dx
+# names with a hash (`studio-1f19ef17`).
+desktop_instance() { echo "$state/desktop/studio/studio-stack/instance.json"; }
+desktop_field() {
+    python3 -c 'import json, sys
+try:
+    print(json.load(open(sys.argv[1])).get(sys.argv[2], ""))
+except (OSError, ValueError):
+    pass' "$(desktop_instance)" "$1" 2>/dev/null
 }
+desktop_bin() {
+    local pid
+    pid="$(desktop_field pid)"
+    [ -n "$pid" ] && readlink "/proc/$pid/exe" 2>/dev/null
+}
+desktop_socket() { desktop_field socket; }
 desktop_up() {
-    local bin sock
-    bin="$(desktop_bin)"
-    [ -n "$bin" ] || return 1
-    sock="$(desktop_socket "$bin")"
-    [ -n "$sock" ] && [ -S "$sock" ] && "$bin" actions --app "$sock" run APP_STATUS >/dev/null 2>&1
+    local pid bin sock
+    pid="$(desktop_field pid)"
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || return 1
+    bin="$(desktop_bin)" sock="$(desktop_socket)"
+    [ -n "$bin" ] && [ -S "$sock" ] && "$bin" actions --app "$sock" run APP_STATUS >/dev/null 2>&1
 }
 
 # ── Status, tailnet, reset ───────────────────────────────────────────────
