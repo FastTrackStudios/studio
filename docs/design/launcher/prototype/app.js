@@ -53,6 +53,11 @@ const P = {
   branch: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7"/><path d="M18 10.5c0 4-6 3.5-10.5 6"/>',
   pencil: '<path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>',
   grip: '<path d="M4 9h16"/><path d="M4 15h16"/>',
+  mappin: '<path d="M20 10c0 4.99-5.54 10.19-7.4 11.79a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+  metronome: '<path d="M12 11.5 18 4"/><path d="M8.5 3h7l3.5 18H5z"/><path d="M7 15h10"/>',
+  loop: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+  bulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
+  cues: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
   rig: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
   library: '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
   play: '<path d="M6 3l14 9-14 9z" fill="currentColor"/>',
@@ -354,7 +359,7 @@ const keys = o => `<span class="keys">${o.songs.map(x => `<i style="--h:${hue(x.
 // The tab: the sets you are on, as a queue. All sets: every set there is.
 // Folders of sets, by their tag (Architect's tags on the set notes).
 const FOLDERS = [
-  { tag: "church", name: "Church", series: ["jhms", "main", "hsm", "jhm", "cya"], shows: [] },
+  { tag: "church", name: "Crossroads Church", series: ["jhms", "main", "hsm", "jhm", "cya"], shows: [] },
   { tag: "cbu", name: "CBU", series: [], shows: ["mb"] },
   { tag: "recitals", name: "Recitals", series: [], shows: ["jt"] },
 ];
@@ -369,13 +374,43 @@ function setCard(o, withPart) {
     ${o.songs.length ? progress(o) : pv ? `<span class="copy" data-act="Copied ${esc(short(pv.date))}'s set">Copy ${MON[pv.date.getUTCMonth()]} ${pv.date.getUTCDate()}</span>` : ""}
   </button>`;
 }
-// The tab: the sets you are on, next first.
+// The tab: the sets you are on. The next one featured; the rest an agenda.
 function pageSetlists() {
-  const mine = OCC.filter(o => daysFrom(o.date) >= 0 && MINE[o.id]).sort((a, b) => a.date - b.date).slice(0, 5);
-  const head = o => { const n = daysFrom(o.date); return n === 0 ? "Today" : n === 1 ? "Tomorrow" : n < 7 ? `${DAY[o.date.getUTCDay()]} ${o.date.getUTCDate()}` : short(o.date); };
+  const mine = OCC.filter(o => daysFrom(o.date) >= 0 && MINE[o.id]).sort((a, b) => a.date - b.date).slice(0, 6);
+  const [next, ...rest] = mine;
+  const pl = o => PLACE[o.series.id] || [];
+  const when = o => { const n = daysFrom(o.date); return n === 0 ? "Today" : n === 1 ? "Tomorrow" : DAY[o.date.getUTCDay()]; };
+  const state = o => o.songs.length >= o.series.size ? `<span class="st ok">${ic("check", 13, 2.6)}</span>`
+    : o.songs.length ? progress(o) : (() => { const pv = prevOf(o); return pv ? `<span class="copy2" data-act="Copied ${esc(short(pv.date))}'s set">Copy ${MON[pv.date.getUTCMonth()]} ${pv.date.getUTCDate()}</span>` : `<span class="st none">Empty</span>`; })();
+  const r = next && rigOf(MINE[next.id]);
   return `${bar({ title: "Setlists", tools: [{ joined: [{ label: "All sets", icon: "folder", open: "allsets" }, { label: "Library", icon: "library", open: "library" }] }] })}
     <div class="body">
-      ${mine.map(o => `<div class="dayhead">${head(o)}</div>${setCard(o, true)}`).join("")}
+      ${next ? `
+      <div class="nextup" style="--h:${next.series.hue}">
+        <button class="nuopen" data-open="${next.id}">
+          <span class="nutop">
+            ${LOGO[next.series.id] ? `<img class="nulogo" src="${LOGO[next.series.id]}" alt="">` : cover({ title: next.series.name }, 64, next.series.hue)}
+            <span class="mid">
+              <span class="nuk">Next up · ${when(next)}${pl(next)[1] ? " " + pl(next)[1] : ""}</span>
+              <span class="nut">${esc(next.series.name)}</span>
+              <span class="nus">${ic("mappin", 12, 2)}${esc(pl(next)[0] || "")}${pl(next)[2] ? ` · <b>Call ${pl(next)[2]}</b>` : ""}</span>
+            </span>
+          </span>
+          ${next.songs.length ? keys(next) : `<span class="s1">No songs yet</span>`}
+        </button>
+        <div class="nubtns">
+          <button class="nub" data-open="${next.id}">${ic("setlist", 16, 2)}Open set</button>
+          ${r ? `<button class="nub rigb" style="--h:${r.hue}" data-act="Opened ${esc(next.series.name)} in the ${r.name} rig">${ic(r.icon, 16, 2)}Open in ${r.name}</button>` : ""}
+        </div>
+      </div>` : ""}
+      ${rest.length ? `<div class="dayhead">Coming up</div>
+      <div class="agenda">${rest.map(o => `
+        <button class="ag" data-open="${o.id}">
+          <span class="agd"><small>${DAY[o.date.getUTCDay()].slice(0, 3)}</small><b>${o.date.getUTCDate()}</b></span>
+          ${LOGO[o.series.id] ? `<img class="aglogo" src="${LOGO[o.series.id]}" alt="">` : ""}
+          <span class="mid"><span class="t1">${esc(o.series.name)}</span><span class="s1">${esc([pl(o)[0], pl(o)[2] ? "Call " + pl(o)[2] : null].filter(Boolean).join(" · "))}</span></span>
+          ${state(o)}
+        </button>`).join("")}</div>` : ""}
       <button class="more" data-open="allsets">Every set, by folder<span>All sets ${ic("chevRight", 16)}</span></button>
     </div>`;
 }
@@ -424,8 +459,8 @@ function pageOcc(id) {
     <div class="body">
       ${hero({ img: LOGO[sr.id], h: sr.hue, mark: sr.name.split(" ")[0], title: sr.name,
         kicker: "",
-        facts: calTile(MON[o.date.getUTCMonth()], o.date.getUTCDate(), DAY[o.date.getUTCDay()].slice(0, 3)) + `<span class="fcol">${fact("setlist", `${o.songs.length} songs`)}${o.songs.length ? fact("clock", dur(o.songs.reduce((t, s) => t + s.len, 0))) : ""}</span>`,
-        sub: `${fold ? esc(fold.name) : ""}${o.songs.length < sr.size ? ` · <span class="todo2">${esc(ready(o))}</span>` : ""}`,
+        facts: `<span class="when2">${calTile(MON[o.date.getUTCMonth()], o.date.getUTCDate(), DAY[o.date.getUTCDay()].slice(0, 3))}<span class="loc">${ic("mappin", 14, 2)}<span><b>${esc(PLACE[sr.id]?.[0] || "")}</b>${PLACE[sr.id] ? `<small><span class="call">Call ${esc(PLACE[sr.id][2])}</span> · Starts ${esc(PLACE[sr.id][1])}</small>` : ""}</span></span></span>`,
+        sub: `${fold ? esc(fold.name) : ""}${o.songs.length < sr.size ? ` · <span class="todo2">${esc(ready(o))}</span>` : ""}<span class="hcount">${o.songs.length} songs${o.songs.length ? " · " + dur(o.songs.reduce((t, x) => t + x.len, 0)) : ""}</span>`,
         buttons: o.songs.length ? playShare(`Playing ${sr.name}, ${short(o.date)}`) : prev ? `<button class="primary" data-act="Copied ${esc(short(prev.date))}'s set">Start from ${MON[prev.date.getUTCMonth()]} ${prev.date.getUTCDate()}</button><button class="secondary" data-open="library">${ic("library", 17)}Library</button>` : "" })}
       ${(() => {
         // A week's set in its sections: the Top Set (two songs), then the Bottom Set.
@@ -447,8 +482,8 @@ function pageOcc(id) {
           </button>`),
         ];
         const len = list => dur(list.reduce((t, s) => t + (s?.len || 0), 0));
-        return SECTIONS_OF(o).map(([name, from, to]) => `
-          <div class="ssec"><span>${name}</span><span>${to - from} songs${o.songs.slice(from, to).length ? " · " + len(o.songs.slice(from, to)) : ""}</span></div>
+        return SECTIONS_OF(o).map(([name, from, to], k) => `
+          <div class="ssec"><span>${name}</span><span></span></div>
           <div class="scard">${rows.slice(from, to).join("")}</div>`).join("");
       })()}
     </div>`;
@@ -689,6 +724,15 @@ function openKey(ref) {
   </div>`;
   sh.classList.add("bottom"); sh.hidden = false;
 }
+// The chart page keeps a sheet's proportions: full width when the height
+// allows, else as tall as there is room for (Safari's bars take some).
+function fitSheet() {
+  const w = document.querySelector(".sheetwrap"), pg = w && w.querySelector(".sheetpage");
+  if (!pg) return;
+  const W = w.clientWidth, H = w.clientHeight, width = Math.min(W, H * 8.5 / 11);
+  pg.style.width = width + "px"; pg.style.height = width * 11 / 8.5 + "px";
+}
+addEventListener("resize", fitSheet);
 // ── Now Playing (architect_playhead's bar): above the tabs while something
 // is queued; a tap opens the player.
 let NP = null;
@@ -713,6 +757,7 @@ function drawNP() {
     <button class="npb" data-np="next" aria-label="Next">${ic("skip", 20, 2)}</button>
     <span class="npprog"><i style="width:${NP.pos * 100}%"></i></span>`;
   hydrateArt();
+  fitSheet();
 }
 function openPlayer() {
   const x = npSong(), sh = document.getElementById("sheet"), len = x.len || 240;
@@ -757,6 +802,10 @@ function leadsOf(o, i, x) {
   const v = ["Mia", "Jake", "Sam"][(i + o.date.getUTCDate()) % 3];
   return [v, x.tempo > 100 || i % 2 ? "Cody" : null];
 }
+// Where each weekly event meets: the room, the time (placeholders).
+// Where each weekly event meets, when the band is called, when it starts.
+// Main's room is Cody's; the rest, and every time, are placeholders.
+const PLACE = { main: ["Worship Center", "10:30", "8:30"], jhms: ["Room 210", "9:00", "7:45"], jhm: ["Room 210", "7:00", "6:00"], hsm: ["The Loft", "7:00", "5:45"], cya: ["Chapel", "7:30", "6:15"] };
 // A week's set is two sections: the Top Set's two songs, the Bottom Set's rest.
 const SECTIONS_OF = o => { const n = Math.max(o.series.size, o.songs.length); return [["Top Set", 0, 2], ["Bottom Set", 2, n]]; };
 // The arrangement a set plays a song in: Normal, or a named one (placeholders).
@@ -940,29 +989,55 @@ const chord = (key, deg) => { const sc = (SCALE[ALIAS[key] || key] || SCALE.C).s
 const FORM = [["Intro", [1, 5, 6, 4]], ["Verse 1", [1, 1, 4, 4, 6, 5, 4, 4]], ["Chorus", [4, 1, 5, 6, 4, 1, 5, 5]], ["Verse 2", [1, 1, 4, 4, 6, 5, 4, 4]], ["Chorus", [4, 1, 5, 6, 4, 1, 5, 5]], ["Bridge", [6, 4, 1, 5, 6, 4, 1, 5]], ["Chorus", [4, 1, 5, 6, 4, 1, 5, 5]]];
 let songIx = 0;
 const setSongs = id => occOf(id) ? occOf(id).songs : SETS[PROJECTS.find(p => p.id === id).set].acts.flatMap(a => a[1]);
+// In Chart and Lyrics the song on show is the one playing: one line names
+// it, the progress bar (an existing component) sits under it, and the
+// transport at the foot moves through sections and songs.
+const SECS = ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Bridge", "Chorus", "Outro"];
+// Each section's length in bars, and its colour by kind (a placeholder form).
+const BARS = [4, 8, 8, 8, 8, 8, 8, 4];
+const SEC_HUE = { Intro: 250, Verse: 200, Chorus: 330, Bridge: 60, Outro: 250 };
+const secHue = n => SEC_HUE[n.split(" ")[0]] ?? 0;
+let barIx = 3; // the bar playing inside the section
+// The song's sections side by side, each as long as it lasts, the ones played
+// full, the one playing filling; under it the section's bars, one tick each.
+function progressBars() {
+  const total = BARS.reduce((a, b) => a + b, 0);
+  const song = SECS.map((n, k) => { const fill = k < secIx ? 100 : k === secIx ? (barIx + 0.5) / BARS[k] * 100 : 0;
+    return `<span class="pseg ${k === secIx ? "now" : ""}" style="flex:${BARS[k]};--h:${secHue(n)}"><i style="width:${fill}%"></i><b>${esc(n.replace("Verse ", "V").replace("Chorus", "C").replace("Bridge", "B").replace("Intro", "In").replace("Outro", "Out"))}</b></span>`; }).join("");
+  const n = BARS[secIx];
+  const bars = Array.from({ length: n }, (_, k) => `<span class="pbar ${k < barIx ? "played" : k === barIx ? "now" : ""}"></span>`).join("");
+  return `<div class="prog" aria-label="Song progress">${song}</div>
+    <div class="secbar" aria-label="${SECS[secIx]}, bar ${barIx + 1} of ${n}" style="--h:${secHue(SECS[secIx])}"><span class="sname">${SECS[secIx]}</span><span class="pbars">${bars}</span><span class="scount">${barIx + 1}/${n}</span></div>`;
+}
+let secIx = 1, livePlaying = false;
 function songHead(id) {
   const ss = setSongs(id), x = ss[songIx] || ss[0];
-  return `<div class="songnav">
-    <button class="sn" data-song="-1" aria-label="Previous song" ${songIx ? "" : "disabled"}>${ic("chevLeft", 20, 2)}</button>
-    <span class="mid"><span class="t1">${songIx + 1}. ${esc(x.title)}</span><span class="s1">${esc([x.key, x.tempo ? x.tempo + " bpm" : null, "4/4"].filter(Boolean).join(" · "))}</span></span>
-    <button class="sn" data-song="1" aria-label="Next song" ${songIx < ss.length - 1 ? "" : "disabled"}>${ic("chevRight", 20, 2)}</button>
-  </div>`;
+  return `<div class="nowline"><button class="back sm" data-back aria-label="Back">${ic("chevLeft", 22, 2.2)}</button><span class="nn">${songIx + 1}/${ss.length}</span><span class="t1">${esc(x.title)}</span><span class="nk">${esc([x.key, x.tempo ? x.tempo + " bpm" : null].filter(Boolean).join(" · "))}</span></div>
+    ${progressBars()}`;
+}
+// The transport: the click, the previous section, play, the next section, loop.
+let clickOn = false, loopOn = false;
+function transport() {
+  const b = (k, icon, label, on, big) => `<button class="tp ${big ? "big" : ""} ${on ? "on" : ""}" data-tp="${k}" aria-label="${label}" aria-pressed="${!!on}">${ic(icon, big ? 22 : 20, 2)}</button>`;
+  return `${b("click", "metronome", "Click", clickOn)}${b("sec-1", "chevLeft", "Previous section")}
+    ${b("play", livePlaying ? "pause" : "play", livePlaying ? "Pause" : "Play", false, true)}
+    ${b("sec1", "chevRight", "Next section")}${b("loop", "loop", loopOn ? `Looping ${SECS[secIx]}` : "Loop the section", loopOn)}`;
 }
 function liveTitle(id) { return occOf(id) ? `${occOf(id).series.name} · ${short(occOf(id).date)}` : titleOf(PROJECTS.find(p => p.id === id)); }
 function pageChart(id) {
-  const x = setSongs(id)[songIx], k = (x.key || "C").split("→")[0];
-  return `${bar({ back: true, title: liveTitle(id), tools: [{ label: "Transpose", icon: "transpose", act: "Transpose" }] })}
-    <div class="body">${songHead(id)}
-      ${FORM.map(([sec, degs]) => `<div class="sec"><span class="sl">${sec}</span><div class="grid">${degs.map(d => `<span>${chord(k, d)}</span>`).join("")}</div></div>`).join("")}
-      <p class="ph">Placeholder chords in the song's key; the real chart is the song's .kf.</p>
+  // The page fills the middle, letterboxed on black; above it the song and
+  // the progress bar, below it the transport and the tabs.
+  return `
+    <div class="body sheetview">${songHead(id)}
+      <div class="sheetwrap"><div class="sheetpage"><b>Chart</b><span>The chart page (keyflow) fills this page, as wide as the phone</span></div></div>
     </div>`;
 }
 function pageLyrics(id) {
-  const lines = [3, 4, 4, 3, 4];
-  return `${bar({ back: true, title: liveTitle(id), tools: [{ label: "Text size", icon: "type", act: "Text size" }] })}
-    <div class="body">${songHead(id)}
-      ${["Verse 1", "Chorus", "Verse 2", "Chorus", "Bridge"].map((sec, i) => `<div class="lsec"><span class="sl">${sec}</span>${Array.from({ length: lines[i] }, (_, k) => `<span class="ln" style="width:${62 + ((i * 7 + k * 13) % 34)}%"></span>`).join("")}</div>`).join("")}
-      <p class="ph">The lyrics come from the song's note; shown here as lines.</p>
+  // The page fills the middle, letterboxed on black; above it the song and
+  // the progress bar, below it the transport and the tabs.
+  return `
+    <div class="body sheetview">${songHead(id)}
+      <div class="sheetwrap"><div class="sheetpage"><b>Lyrics</b><span>The lyrics page fills this page, as wide as the phone</span></div></div>
     </div>`;
 }
 const PAGES = { home: pageProjects, sessions: pageSessions, setlists: pageSetlists, signal: pageRigs };
@@ -1094,6 +1169,10 @@ function render() {
   const note = modeNote(), m = note && noteMode(note), fav = m && FAV[m];
   const cur = fav ? (view || fav.tabs[0][0]) : tab;
   document.getElementById("tabs").innerHTML = (fav ? fav.tabs : TABS).map(([id, label, icon]) => `<button class="tab ${fav ? "fav" : ""}" ${fav ? `data-view="${id}"` : `data-tab="${id}"`} aria-label="${label}" aria-current="${cur === id ? "page" : "false"}">${ic(icon, 22)}${fav ? `<span>${label}</span>` : ""}</button>`).join("");
+  const songView = m === "live" && (view === "chart" || view === "lyrics");
+  const tpEl = document.getElementById("transport");
+  tpEl.hidden = !songView; if (songView) tpEl.innerHTML = transport();
+  document.getElementById("phone").classList.toggle("songview", songView);
   const round = document.querySelector(".round");
   const rig = m === "live" && rigOf(MINE[note]);
   const prim = rig ? [`Open in ${rig.name}`, rig.icon] : fav && fav.primary;
@@ -1112,7 +1191,7 @@ function setView(v) {
 function openMore() {
   const sh = document.getElementById("sheet");
   sh.innerHTML = `<div class="bsheet" role="dialog" aria-label="More"><div class="grab"></div>
-    ${[["Stems", "audio"], ["Tempo map", "tuner"], ["Click and cues", "rig"], ["Rehearse", "mic"], ["Notes", "message"], ["Share the set", "share"]].map(([l, i]) => `<button class="mi big" data-act="${l}" data-close>${ic(i, 20)}${l}</button>`).join("")}
+    ${[["Arrangement", "branch"], ["Mixer", "sliders"], ["Lighting Vis", "bulb"], ["Lighting Cue List", "cues"], ["Notes", "message"]].map(([l, i]) => `<button class="mi big" data-act="${l}" data-close>${ic(i, 20)}${l}</button>`).join("")}
   </div>`;
   sh.classList.add("bottom"); sh.hidden = false;
 }
@@ -1156,6 +1235,16 @@ document.addEventListener("click", e => {
     if (k === "prev") { if (NP.pos > 0.05 || !NP.i) NP.pos = 0; else NP.i--; }
     drawNP(); if (!document.getElementById("sheet").hidden && document.querySelector(".player")) openPlayer(); return; }
   if (el("[data-ltile]")) return push("lt:" + el("[data-ltile]").dataset.ltile);
+  if (el("[data-tp]")) { const k = el("[data-tp]").dataset.tp, n = setSongs(modeNote()).length;
+    if (k === "play") livePlaying = !livePlaying;
+    if (k === "click") { clickOn = !clickOn; return render(); }
+    if (k === "loop") { loopOn = !loopOn; return render(); }
+    if (k === "song1" && songIx < n - 1) { songIx++; secIx = 0; }
+    if (k === "song-1" && songIx) { songIx--; secIx = 0; }
+    if (k.startsWith("sec") || k.startsWith("song")) barIx = 0;
+    if (k === "sec1") { if (secIx < SECS.length - 1) secIx++; else if (songIx < n - 1) { songIx++; secIx = 0; } }
+    if (k === "sec-1") { if (secIx) secIx--; else if (songIx) { songIx--; secIx = SECS.length - 1; } }
+    return render(); }
   if (el("[data-song]")) { const d = +el("[data-song]").dataset.song, n = setSongs(modeNote()).length; songIx = Math.max(0, Math.min(n - 1, songIx + d)); return render(); }
   if (el("[data-rfilter]")) { rfilter = el("[data-rfilter]").dataset.rfilter; return render(); }
   if (el("[data-rtrack]")) { rtrack = null; return render(); }
@@ -1199,10 +1288,10 @@ document.addEventListener("input", e => {
   const q = document.getElementById("libq"); q.focus(); q.setSelectionRange(at, at);
 });
 
-// A swipe in from the left edge brings the sidebar; a swipe left puts it away.
+// A swipe in from the left edge goes back; on a top page it brings the sidebar. A swipe left puts the sidebar away.
 let sx = null, sy = null;
 addEventListener("touchstart", e => { const t = e.touches[0], ph = document.getElementById("phone").getBoundingClientRect(); sx = (side || t.clientX - ph.left < 24) ? t.clientX : null; sy = t.clientY; }, { passive: true });
-addEventListener("touchmove", e => { if (sx == null) return; const t = e.touches[0], dx = t.clientX - sx; if (Math.abs(t.clientY - sy) > Math.abs(dx)) { sx = null; return; } if (!side && dx > 50) { setSide(true); sx = null; } else if (side && dx < -50) { setSide(false); sx = null; } }, { passive: true });
+addEventListener("touchmove", e => { if (sx == null) return; const t = e.touches[0], dx = t.clientX - sx; if (Math.abs(t.clientY - sy) > Math.abs(dx)) { sx = null; return; } if (!side && dx > 50) { if (stack.length) pop(); else setSide(true); sx = null; } else if (side && dx < -50) { setSide(false); sx = null; } }, { passive: true });
 
 // #/projects, #/projects/jt, #/rigs, …; "!side" with the sidebar out.
 const H0 = decodeURIComponent(location.hash);
@@ -1220,3 +1309,6 @@ if (H0.includes("!edit")) { editing = true; render(); }
 const pk = H0.match(/!(key|arr)=([^!]+)/); if (pk) (pk[1] === "key" ? openKey : openArr)(pk[2]);
 // The playhead moves while playing.
 setInterval(() => { if (NP && NP.playing) { NP.pos = Math.min(1, NP.pos + 0.004); const b = document.querySelector(".npprog i"); if (b) b.style.width = NP.pos * 100 + "%"; } }, 1000);
+// In a browser tab Safari's own toolbar sits under the page, so the home
+// indicator's inset is not ours to keep clear: the tabs sit low.
+if (!(navigator.standalone || matchMedia("(display-mode: standalone)").matches)) document.documentElement.classList.add("browser");
