@@ -1129,3 +1129,43 @@ button.kc { cursor: pointer; }
 .ag .tile { width: 40px; height: 40px; }
 .slogo .cover { width: 36px !important; height: 36px !important; border-radius: 8px; box-shadow: none; }
 span.slogo { overflow: hidden; display: block; }
+
+/* Setlists: logos ringed by readiness; shows as covers */
+.fchips { margin-bottom: 6px; }
+.evgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 8px; }
+.ev { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; min-width: 0; }
+.evlogo { position: relative; width: 84px; height: 84px; display: grid; place-items: center; margin-bottom: 6px; }
+.evlogo .ringsvg { position: absolute; inset: 0; }
+.evlogo img, .evlogo .cover { width: 66px !important; height: 66px !important; border-radius: 33px; background: #000; object-fit: cover; box-shadow: none; }
+.ev .t1 { font-size: 14px; font-weight: 650; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev .s1 { font-size: 12px; color: #7a7a83; }
+.ev .s1 b { color: var(--live); font-weight: 650; }
+.showlist { display: flex; flex-direction: column; gap: 10px; }
+.showc { display: flex; align-items: center; gap: 14px; padding: 10px; border-radius: 18px; background: #111114; border: 1px solid #1c1c21; text-align: left; }
+.showart { width: 72px; height: 72px; border-radius: 12px; overflow: hidden; flex: none; }
+.showart img, .showart .cover { width: 100% !important; height: 100% !important; object-fit: cover; border-radius: 0; box-shadow: none; }
+.showc .mid { flex: 1; min-width: 0; }
+.showc .t1 { font-size: 17px; font-weight: 700; }
+.showc .s1 { font-size: 12.5px; color: #7a7a83; }
+.showc .cal { margin-right: 4px; }
+
+/* Records: the work, not the art */
+.rlist { display: flex; flex-direction: column; gap: 10px; }
+.rrow { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 18px; background: #111114; border: 1px solid #1c1c21; text-align: left; }
+.rrow:active { background: #16161a; }
+.rtop { display: flex; align-items: center; gap: 12px; }
+.rart { width: 52px; height: 52px; border-radius: 10px; overflow: hidden; flex: none; display: block; object-fit: cover; }
+.rart .cover { border-radius: 0; box-shadow: none; }
+.rtop .mid { flex: 1; min-width: 0; }
+.rtop .t1 { font-size: 16.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rtop .s1 { font-size: 12.5px; color: #7a7a83; }
+.rbar { display: flex; gap: 2px; height: 8px; }
+.rbar i { flex: 1; border-radius: 2px; background: oklch(.62 .12 var(--h)); }
+.rbar i[data-none="true"] { background: #3a3a40; }
+.rlegend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: #7a7a83; margin-top: -4px; }
+.rlegend span { display: inline-flex; align-items: center; gap: 5px; }
+.rlegend i { width: 7px; height: 7px; border-radius: 2px; background: oklch(.62 .12 var(--h)); }
+.rlegend i[data-none="true"] { background: #3a3a40; }
+.rmeta { display: flex; gap: 14px; padding-top: 8px; border-top: 1px solid #1d1d22; font-size: 12px; }
+.ropen { display: inline-flex; align-items: center; gap: 5px; color: var(--live); font-weight: 600; }
+.rdue { display: inline-flex; align-items: center; gap: 5px; color: #7a7a83; }
