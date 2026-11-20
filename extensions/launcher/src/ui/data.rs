@@ -292,6 +292,8 @@ pub struct Week {
     pub places: Vec<Place>,
     /// The part you play in it, when you are on it.
     pub mine: Option<String>,
+    /// Its setlist note's path in the vault, when the vault has its set.
+    pub note: Option<String>,
 }
 
 impl Week {
@@ -551,13 +553,35 @@ impl Studio {
                                     .arrangement
                                     .clone()
                                     .filter(|a| !a.eq_ignore_ascii_case("normal")),
-                                ..Place::default()
+                                key: e.key.clone(),
+                                vocal: e.vocal.clone(),
+                                guitar: e.guitar.clone(),
                             }
                         })
                         .collect();
                     (set.name.clone(), places)
                 })
                 .collect();
+            // A recurring event's set on its day (`Main - Crossroads
+            // Church`, dated 2026-11-22): that week's set, from the vault.
+            if let Some(day) = list.date.as_deref().and_then(parse_day) {
+                let lower = list.title.to_lowercase();
+                let series = s
+                    .series
+                    .iter()
+                    .find(|sr| {
+                        let name = sr.name.to_lowercase();
+                        lower == name || lower.starts_with(&format!("{name} -"))
+                    })
+                    .map(|sr| sr.id.clone());
+                if let Some(week) = series
+                    .and_then(|sid| s.weeks.iter_mut().find(|w| w.series == sid && w.day == day))
+                {
+                    week.places = places.iter().flat_map(|(_, p)| p.clone()).collect();
+                    week.note = Some(list.path.clone());
+                    continue;
+                }
+            }
             // A record in the vault as a setlist (Crescendum): its songs are the record's tracks.
             if let Some(rec) = s
                 .records
@@ -772,6 +796,7 @@ pub fn demo(today: Day) -> Studio {
                 day,
                 places,
                 mine,
+                note: None,
             });
             n = n.saturating_add(1);
         }
@@ -1135,4 +1160,13 @@ pub fn demo(today: Day) -> Studio {
         rigs,
         library,
     }
+}
+
+/// `2026-11-22` as a day.
+fn parse_day(date: &str) -> Option<Day> {
+    let mut it = date.trim().split('-');
+    let y = it.next()?.parse().ok()?;
+    let m = it.next()?.parse().ok()?;
+    let d = it.next()?.get(..2)?.parse().ok()?;
+    Some(Day::ymd(y, m, d))
 }

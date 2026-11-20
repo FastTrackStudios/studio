@@ -85,6 +85,17 @@ pub const SHEET: &str = r#"
 .sl-bar { position: absolute; left: 72px; right: 14px; bottom: 6px; height: 2px; border-radius: 1px;
           background: rgba(255,255,255,.1); overflow: hidden; }
 .sl-bar > span { display: block; height: 100%; background: #f0c24b; }
+.sl-where { display: flex; align-items: center; gap: 7px; height: 40px; padding: 0 12px 0 10px; border-radius: 10px;
+            background: rgba(255,255,255,.025); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); color: #7a7a83; min-width: 0; }
+.sl-where div { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.sl-where b { font-size: 13px; font-weight: 600; color: #9a9aa3; white-space: nowrap; }
+.sl-where small { font-size: 11px; color: #85858e; white-space: nowrap; }
+.sl-where em { font-style: normal; color: rgba(240,194,75,.75); font-weight: 600; }
+.sl-facts { display: flex; gap: 8px; align-items: center; }
+.sl-leads { display: flex; gap: 12px; font-size: 12px; color: #8b8b94; margin-top: 2px; }
+.sl-leads span { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.sl-end { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.sl-arr { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: #e0a63a; white-space: nowrap; }
 .sl-empty { padding: 16px 0; color: var(--muted-foreground, #8b8b94); }
 "#;
 
@@ -228,9 +239,26 @@ pub fn Rows(
                     if let Some(src) = &cover { img { src: "{src}", alt: "" } }
                 }
                 div { class: "sl-htext",
-                    div {
+                    div { class: "sl-facts",
                         if let Some((mon, day)) = cal {
                             div { class: "sl-cal", "aria-hidden": "true", b { "{mon}" } span { "{day}" } }
+                        }
+                        if !setlist.room.is_empty() {
+                            div { class: "sl-where",
+                                svg { view_box: "0 0 24 24", width: "14", height: "14", fill: "none", stroke: "currentColor",
+                                    stroke_width: "2", stroke_linecap: "round", stroke_linejoin: "round",
+                                    path { d: "M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" }
+                                    circle { cx: "12", cy: "10", r: "3" }
+                                }
+                                div {
+                                    b { "{setlist.room}" }
+                                    small {
+                                        if !setlist.call.is_empty() { em { "Call {setlist.call}" } }
+                                        if !setlist.call.is_empty() && !setlist.starts.is_empty() { " · " }
+                                        if !setlist.starts.is_empty() { "Starts {setlist.starts}" }
+                                    }
+                                }
+                            }
                         }
                     }
                     div {
@@ -386,14 +414,53 @@ fn Row(
             span { class: "sl-text", "aria-hidden": "true",
                 span { class: "sl-name", "{item.title}" }
                 span { class: "sl-by", "{by}" }
+                if item.vocal.is_some() || item.guitar.is_some() {
+                    span { class: "sl-leads",
+                        if let Some(v) = &item.vocal {
+                            span {
+                                svg { view_box: "0 0 24 24", width: "12", height: "12", fill: "none", stroke: "currentColor",
+                                    stroke_width: "2", stroke_linecap: "round", stroke_linejoin: "round",
+                                    path { d: "M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" }
+                                    path { d: "M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" }
+                                }
+                                "{v}"
+                            }
+                        }
+                        if let Some(g) = &item.guitar {
+                            span { style: "color: #e0806a;",
+                                svg { view_box: "0 0 24 24", width: "12", height: "12", fill: "none", stroke: "currentColor",
+                                    stroke_width: "2", stroke_linecap: "round", stroke_linejoin: "round",
+                                    path { d: "m11.9 12.1 4.514-4.514" }
+                                    path { d: "M20.1 2.3a1 1 0 0 0-1.4 0l-1.114 1.114A2 2 0 0 0 17 4.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 17.828 7h1.344a2 2 0 0 0 1.414-.586L21.7 5.3a1 1 0 0 0 0-1.4z" }
+                                    path { d: "m6 16 2 2" }
+                                    path { d: "M8.2 9.9C8.7 8.8 9.8 8 11 8c2.8 0 5 2.2 5 5 0 1.2-.8 2.3-1.9 2.8l-.9.4A2 2 0 0 0 12 18a4 4 0 0 1-4 4c-3.3 0-6-2.7-6-6a4 4 0 0 1 4-4 2 2 0 0 0 1.8-1.2z" }
+                                }
+                                "{g}"
+                            }
+                        }
+                    }
+                }
             }
-            if item.key.is_empty() {
-                span { class: "sl-nokey", "aria-hidden": "true", "Set key" }
-            } else {
-                span { class: "sl-key", "aria-hidden": "true",
-                    style: "background: hsl({kh} 40% 15%); color: hsl({kh} 70% 75%);",
-                    "{shown_key}"
-                    if let Some(m) = &item.moved { small { "{m}" } }
+            span { class: "sl-end", "aria-hidden": "true",
+                if item.key.is_empty() {
+                    span { class: "sl-nokey", "Set key" }
+                } else {
+                    span { class: "sl-key",
+                        style: "background: hsl({kh} 40% 15%); color: hsl({kh} 70% 75%);",
+                        "{shown_key}"
+                        if let Some(m) = &item.moved { small { "{m}" } }
+                    }
+                }
+                if let Some(a) = &item.arrangement {
+                    span { class: "sl-arr",
+                        svg { view_box: "0 0 24 24", width: "13", height: "13", fill: "none", stroke: "currentColor",
+                            stroke_width: "2", stroke_linecap: "round", stroke_linejoin: "round",
+                            circle { cx: "6", cy: "3", r: "0" }
+                            path { d: "M6 3v12" } circle { cx: "18", cy: "6", r: "3" } circle { cx: "6", cy: "18", r: "3" }
+                            path { d: "M18 9a9 9 0 0 1-9 9" }
+                        }
+                        "{a}"
+                    }
                 }
             }
             if let Some(p) = progress {

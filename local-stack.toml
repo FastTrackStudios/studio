@@ -56,6 +56,10 @@ sources = [
     # fasttrackaudio library's notes, charts and lyrics): last, so its song
     # notes, which add each song's session and stems, win.
     "../../vaults/studio-demo/recital-vault",
+    # A church's weekly set (Main, Sunday): worship songs with their art,
+    # the set's keys, arrangements, vocal and guitar leads, its room and
+    # call time (optional; the launcher's week page opens it).
+    "../../vaults/studio-demo/church-vault",
 ]
 
 # A share link per set, each with its songs, for anyone with the link.
@@ -72,6 +76,10 @@ code = "merrybrightstack"
 [[vault.shares]]
 setlist = "Setlists/JT's Senior Recital.md"
 code = "jtrecitasetstack"
+
+[[vault.shares]]
+setlist = "Setlists/Main - Sun Nov 22.md"
+code = "mainsundaysetxyz"
 
 # The recital in the engine: its sessions and every stem, so the web
 # app's engine plays the songs' tracks and the mixer has them. Full is

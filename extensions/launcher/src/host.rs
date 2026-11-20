@@ -159,7 +159,7 @@ pub async fn share_of(setlist: &str) -> Option<String> {
 const SHARES: &str = "filters:\n  and:\n    - file.folder == \"_architect/shares\"\nviews:\n  - type: table\n    name: Shares\n    order:\n      - file.name\n      - shares\n      - listen\n";
 
 /// Every setlist note.
-const SETLISTS: &str = "filters:\n  and:\n    - type == \"setlist\"\nviews:\n  - type: table\n    name: Setlists\n    order:\n      - file.name\n      - title\n      - date\n      - songs\n      - sets\n      - project\n      - session\n      - notes\n      - parts\n      - layout\n";
+const SETLISTS: &str = "filters:\n  and:\n    - type == \"setlist\"\nviews:\n  - type: table\n    name: Setlists\n    order:\n      - file.name\n      - title\n      - date\n      - songs\n      - sets\n      - project\n      - session\n      - notes\n      - parts\n      - layout\n      - leads\n      - keys\n      - room\n      - call\n      - starts\n";
 
 /// Every song note, with what says what it is ready with.
 const SONGS: &str = "filters:\n  and:\n    - type == \"song\"\nviews:\n  - type: table\n    name: Songs\n    order:\n      - file.name\n      - title\n      - artist\n      - key\n      - key_end\n      - tempo\n      - meter\n      - length\n      - chart\n      - lyrics\n      - media\n      - session\n      - art\n";

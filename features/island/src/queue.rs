@@ -150,6 +150,12 @@ pub struct Item {
     pub moved: Option<String>,
     /// Its tile's hue (from its title, as the share page's).
     pub hue: u32,
+    /// How the set plays it, when not as charted (`Shortened`).
+    pub arrangement: Option<String>,
+    /// Who leads it: the vocal and the guitar (the note's `leads`, by its
+    /// label).
+    pub vocal: Option<String>,
+    pub guitar: Option<String>,
     /// Seconds (at most a day); none when unknown.
     pub length: Option<f64>,
     /// Whether its row names a recording.
@@ -192,6 +198,11 @@ pub struct Setlist {
     pub date: String,
     /// Its cover, a vault path the app hands as an image (`art`).
     pub art: Option<String>,
+    /// Where and when the band meets: its room, its call time, when it
+    /// starts (the note's `room`, `call`, `starts`); empty for none.
+    pub room: String,
+    pub call: String,
+    pub starts: String,
     pub sections: Vec<Section>,
     /// The note came without its body (a share link's guest): its songs
     /// are not the view's to show.
@@ -722,6 +733,12 @@ fn from_note(note: &Value) -> Setlist {
                 .unwrap_or_default(),
             moved: key.and_then(|k| k.moved).map(|(_, n)| signed(n)),
             hue: tile_hue(&row.label),
+            arrangement: row
+                .arrangement
+                .clone()
+                .filter(|a| !a.eq_ignore_ascii_case("normal")),
+            vocal: lead(props, &row.label, "vocal"),
+            guitar: lead(props, &row.label, "guitar"),
             title: row.label,
             length: row
                 .length
@@ -746,14 +763,33 @@ fn from_note(note: &Value) -> Setlist {
     {
         sections = grouped(sections, sets);
     }
+    let room = props.map(|p| text(p, "room")).unwrap_or_default();
+    let call = props.map(|p| text(p, "call")).unwrap_or_default();
+    let starts = props.map(|p| text(p, "starts")).unwrap_or_default();
     capped(Setlist {
         scope,
         title,
         date,
         art,
+        room,
+        call,
+        starts,
         sections,
         withheld,
     })
+}
+
+/// Who leads the song labelled `label` on `part` (`vocal`, `guitar`), as
+/// the note's `leads` says (`leads: {<label>: {vocal: Jake}}`).
+fn lead(props: Option<&Value>, label: &str, part: &str) -> Option<String> {
+    props?
+        .get("leads")?
+        .get(label)?
+        .get(part)?
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
 }
 
 /// `sections`' rows in the sets a note's `sets` names (`[{name, songs:
