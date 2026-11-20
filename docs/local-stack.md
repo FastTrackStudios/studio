@@ -184,8 +184,11 @@ from the tailnet only), never `tailscale funnel`. Tailscale serves HTTPS on
 first time, Tailscale may refuse a user who is not its operator: run
 `sudo tailscale set --operator=$USER` once. The node needs no idea of its
 public name for a share page: its redirects are relative, its CSP is
-`'self'`, a link share sets no cookies. Signing in from the phone is not
-covered: the issuer and the web app stay on loopback.
+`'self'`, a link share sets no cookies. The web app signs in from the
+phone through the front (`scripts/local-stack-front.py`): on the tailnet's
+origin it names that origin as the issuer and passes `/oauth2/` to the
+issuer, so the phone comes up signed in as the demo account, as on
+loopback, with the issuer and the server still on loopback.
 
 ## Checking it
 

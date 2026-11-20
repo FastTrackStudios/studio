@@ -17,6 +17,14 @@ the LAN, LOCAL_STACK_LAN=on).
 
 `<origin>/<code>` (a link by its code alone) redirects to `/s/<code>/`.
 
+Opened on another origin than loopback (`tailscale serve`, `just phone`),
+the app signs in through this front too: with LOCAL_STACK_FRONT_AUTH=<the
+issuer's port>, `/app/config.json` names this origin as the issuer and
+`/oauth2/` goes to it, the app's way back (`/auth/callback`) and its
+Origin rewritten to the loopback ones the issuer and the node register, so
+a phone on the tailnet signs in as the demo account with nothing changed
+in either of them.
+
 Loopback by default. Streams both ways (a recording's ranges, the link's live
 events), and relays an upgrade (the app's WebSocket to `/org/<slug>/vox`).
 """
@@ -43,6 +51,10 @@ class Front(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     root = ""
     node = 0
+    # The issuer's port, to sign in from another origin (0: loopback only).
+    auth = 0
+    # This front's own port: the loopback origin the issuer and node know.
+    port = 0
     # dx's dev server's port, when it serves the app (else the bundle).
     app = 0
 
@@ -54,8 +66,30 @@ class Front(BaseHTTPRequestHandler):
 
     do_HEAD = do_POST = do_PUT = do_DELETE = do_OPTIONS = do_PATCH = do_GET
 
+    def remote(self):
+        """The origin the browser is on, when it is not loopback."""
+        host = (self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or "").strip()
+        name = host.rsplit(":", 1)[0] if not host.startswith("[") else host.split("]")[0] + "]"
+        if not host or name in ("127.0.0.1", "localhost", "[::1]"):
+            return None
+        proto = self.headers.get("X-Forwarded-Proto") or "http"
+        return f"{proto}://{host}"
+
+    def local(self):
+        return f"http://127.0.0.1:{self.port}"
+
     def route(self):
         path = self.path.split("?", 1)[0]
+        origin = self.remote() if self.auth else None
+        if origin:
+            # Every request the node or the issuer sees comes from the
+            # loopback origin they allow.
+            if self.headers.get("Origin"):
+                self.headers.replace_header("Origin", self.local())
+            if path == "/app/config.json" and self.command in ("GET", "HEAD"):
+                return self.config(origin)
+            if path.startswith("/oauth2/"):
+                return self.issuer(origin)
         # A link by its code alone (`<origin>/<code>`, the short form a
         # person is sent): to the link's page, `/s/<code>/`, where the node
         # answers it. The node's own paths and the app's relative URLs all
@@ -83,6 +117,49 @@ class Front(BaseHTTPRequestHandler):
             self.static(urllib.parse.unquote(path))
         else:
             self.plain(405, "the bundle is files")
+
+    def config(self, origin):
+        import json
+        body = json.dumps({"issuer": origin, "client_id": "architect", "auto_sign_in": True}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def issuer(self, origin):
+        """`/oauth2/` on another origin: the issuer's, with the app's way
+        back swapped for the loopback one it registers, and back again."""
+        quote = lambda u: urllib.parse.quote(u, safe="")
+        there, here = quote(origin + "/auth/callback"), quote(self.local() + "/auth/callback")
+        self.path = self.path.replace(there, here)
+        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length) if length else b""
+        body = body.replace(there.encode(), here.encode())
+        headers = {k: v for k, v in self.headers.items() if k.lower() not in HOP and k.lower() != "content-length"}
+        headers["Content-Length"] = str(len(body))
+        conn = http.client.HTTPConnection("127.0.0.1", self.auth, timeout=60)
+        try:
+            conn.request(self.command, self.path, body=body or None, headers=headers)
+            resp = conn.getresponse()
+            data = resp.read()
+        except OSError as e:
+            return self.plain(502, f"the issuer does not answer on port {self.auth}: {e}")
+        finally:
+            conn.close()
+        self.send_response(resp.status, resp.reason)
+        for k, v in resp.getheaders():
+            if k.lower() in HOP or k.lower() == "content-length":
+                continue
+            if k.lower() == "location":
+                v = v.replace(self.local(), origin).replace(f"http://127.0.0.1:{self.auth}", origin)
+            self.send_header(k, v)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(data)
 
     def plain(self, status, text):
         body = text.encode()
@@ -191,6 +268,8 @@ def main(argv):
         sys.exit(__doc__)
     target, port, Front.node = argv[1], int(argv[2]), int(argv[3])
     bind = argv[4] if len(argv) == 5 else "127.0.0.1"
+    Front.port = port
+    Front.auth = int(os.environ.get("LOCAL_STACK_FRONT_AUTH") or 0)
     if target.startswith("http://"):
         Front.app = int(urllib.parse.urlsplit(target).port or 80)
         what = f"the app from dx at :{Front.app}"
