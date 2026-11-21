@@ -20,6 +20,8 @@ architect-mobile = { workspace = true }
 # Studio's distribution with the window's views (`stage`): the launcher,
 # the arrangement, the mixer, the lyrics, the navigator, Keyflow's chart.
 studio-extensions = { workspace = true, features = ["mobile"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [lints]
 workspace = true

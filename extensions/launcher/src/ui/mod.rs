@@ -247,7 +247,9 @@ pub fn open_setlist(note: &str, title: &str) {
 pub fn open_note(path: &str) {
     let path = path.to_owned();
     dioxus::core::spawn_forever(async move {
-        let _ = crate::host::open(&path).await;
+        if let Err(e) = crate::host::open(&path).await {
+            tracing::warn!(launcher.open = "refused", error = %e, "launcher: the app did not open the setlist's note");
+        }
     });
 }
 
