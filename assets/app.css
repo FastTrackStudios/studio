@@ -1,0 +1,10 @@
+/* The app's own additions to the prototype's sheet (style.css, kept as the
+   prototype has it). */
+
+/* Dioxus mounts the app in #main: let the phone fill it. */
+#main { height: 100%; }
+
+/* A page comes in from the right as it is pushed. */
+.page { animation: page-in .28s cubic-bezier(.2,.8,.2,1); }
+@keyframes page-in { from { transform: translateX(14%); opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .page { animation: none; } }

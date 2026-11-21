@@ -1,0 +1,33 @@
+[package]
+name = "studio-proto"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+description = "Studio, remade from the launcher prototype as a plain Dioxus app"
+
+[dependencies]
+dioxus = { version = "0.7", features = ["router"] }
+
+[features]
+default = []
+web = ["dioxus/web"]
+desktop = ["dioxus/desktop"]
+mobile = ["dioxus/mobile"]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
+
+# A timer for the moving playheads: the browser's on the web, tokio's
+# (which the desktop and mobile renderers already run) elsewhere.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-timers = { version = "0.3", features = ["futures"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", features = ["time"] }
