@@ -32,7 +32,7 @@ gloo-timers = { workspace = true, features = ["futures"] }
 # The native process: the engine and its launcher (`src/owner.rs`).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
-session-desktop = { workspace = true, features = ["session", "native"] }
+session-desktop = { workspace = true, features = ["native"] }
 session-engine = { workspace = true, features = ["native"] }
 fts-session = { workspace = true }
 daw-ui = { workspace = true }
@@ -47,6 +47,12 @@ daw = { workspace = true }
 daw-proto = { workspace = true }
 # The output devices this machine has, for DAW_AUDIO (the audio settings).
 audio = { workspace = true, features = ["io"] }
+
+# Spoken section cues (`session`: the domain and its TTS, ONNX Runtime)
+# where ONNX Runtime has binaries; on a phone or tablet the engine runs
+# without them (`native` is the domain), its cues the guide's samples.
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
+session-desktop = { workspace = true, features = ["session", "native"] }
 
 [lints]
 workspace = true

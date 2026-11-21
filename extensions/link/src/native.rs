@@ -45,6 +45,12 @@ pub fn attach() {
     if ATTACHING.swap(true, Ordering::AcqRel) {
         return;
     }
+    // On a phone the engine is in this process (the `daw` extension links
+    // the views to it, `session_engine::open::link_window_here`): nothing
+    // to find.
+    if cfg!(target_os = "ios") {
+        return;
+    }
     let _ = std::thread::Builder::new()
         .name("studio-attach".to_owned())
         .spawn(|| {

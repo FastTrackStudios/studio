@@ -64,7 +64,7 @@ pub fn opened() -> Option<&'static str> {
     OPENED.get().and_then(Option::as_deref)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
 pub fn start_engine(open: Option<String>) {
     let _ = OPENED.set(open.clone());
     let args = session_desktop::engine_host::Args {
@@ -83,6 +83,39 @@ pub fn start_engine(open: Option<String>) {
     }
 }
 
+/// On a phone or tablet: the engine in the app's own process (iOS has no
+/// helper processes), reached over the in-memory link it serves itself on
+/// (`session_engine::open::link_window_here`), the views' client the same
+/// one a desktop window has over a socket. It serves the Action List (MCP)
+/// as `studio engine` does, and opens `open` once it is up.
+#[cfg(target_os = "ios")]
+pub fn start_engine(open: Option<String>) {
+    if OPENED.set(open.clone()).is_err() {
+        return;
+    }
+    let spawned = std::thread::Builder::new()
+        .name("studio-engine".to_owned())
+        .spawn(move || {
+            session_engine::open::set_mode(session_engine::open::ModeState::engine());
+            session_engine::open::serve_actions();
+            let up = session_engine::open::link_window_here().map_err(|e| e.to_string());
+            let opened = up.clone().and_then(|()| match open {
+                Some(path) => session_engine::actions::list()
+                    .run_json(
+                        "SESSION_OPEN",
+                        json!({ "path": path }).to_string().as_bytes(),
+                    )
+                    .map(drop)
+                    .map_err(|e| e.to_string()),
+                None => Ok(()),
+            });
+            let _ = STARTED.set(opened);
+        });
+    if let Err(e) = spawned {
+        let _ = STARTED.set(Err(e.to_string()));
+    }
+}
+
 /// The engine's state: whether it is up, where, and the song it has.
 #[cfg(not(target_arch = "wasm32"))]
 fn state() -> Json {
@@ -90,7 +123,7 @@ fn state() -> Json {
         .into_iter()
         .find(|f| f.pid == std::process::id());
     json!({
-        "up": found.is_some(),
+        "up": found.is_some() || matches!(STARTED.get(), Some(Ok(()))),
         "socket": found.as_ref().map(|f| f.socket.display().to_string()),
         "mcp": found.as_ref().map(|f| f.mcp.clone()),
         "failed": STARTED.get().and_then(|r| r.as_ref().err().cloned()),
@@ -189,6 +222,10 @@ impl Extension for Daw {
 
     fn build(&self, ext: &mut Builder) {
         deck::set_handle(ext.handle());
+        // Linked into the app on a phone: the engine is the app's, started
+        // with it (natively elsewhere it is a process, `owner`).
+        #[cfg(target_os = "ios")]
+        start_engine(None);
         ext.action_in("DAW_READ", |args, cx| async move {
             session_doc::call(fts_session::service::READ, &args, &cx).await
         })
