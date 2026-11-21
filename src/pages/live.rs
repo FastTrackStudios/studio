@@ -4,10 +4,10 @@
 
 use dioxus::prelude::*;
 
+use crate::Route;
 use crate::data::{self, BARS, SECS};
 use crate::icons::{I, Icon};
 use crate::state::use_app;
-use crate::Route;
 
 #[component]
 pub fn Chart(id: String) -> Element {
@@ -59,8 +59,14 @@ fn SongHead(id: String) -> Element {
     let app = use_app();
     let l = (app.live)();
     let songs = data::set_songs(&id);
-    let Some(x) = songs.get(l.song).or(songs.first()).copied() else { return rsx! {} };
-    let k = if data::occ(&id).is_some() { app.key_in(&id, l.song, &x) } else { x.key };
+    let Some(x) = songs.get(l.song).or(songs.first()).copied() else {
+        return rsx! {};
+    };
+    let k = if data::occ(&id).is_some() {
+        app.key_in(&id, l.song, &x)
+    } else {
+        x.key
+    };
     let d = match (x.key, k) {
         (Some(o), Some(k)) if o != k && data::occ(&id).is_some() => data::steps(o, k),
         _ => 0,

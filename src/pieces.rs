@@ -99,10 +99,13 @@ pub fn Hair() -> Element {
 /// title, so no two look alike. `size` 0 fills its box.
 #[component]
 pub fn Cover(title: String, #[props(default)] size: u32, hue: u32) -> Element {
-    let seed = title
-        .chars()
-        .fold(5u32, |n, c| (n * 33 + c as u32) % 9973);
-    let (x, y, r, s) = (10 + seed % 55, 5 + (seed >> 3) % 50, seed % 360, 55 + seed % 35);
+    let seed = title.chars().fold(5u32, |n, c| (n * 33 + c as u32) % 9973);
+    let (x, y, r, s) = (
+        10 + seed % 55,
+        5 + (seed >> 3) % 50,
+        seed % 360,
+        55 + seed % 35,
+    );
     let wh = if size == 0 {
         "width:0px;height:0px;".to_string()
     } else {
@@ -168,7 +171,11 @@ pub fn DayTile(day: Day) -> Element {
 /// How ready a set is: a tick when full, a ring and n/N while songs go in,
 /// "Not planned" when empty.
 #[component]
-pub fn Progress(n: usize, of: usize, #[props(default = "Not planned".to_string())] empty: String) -> Element {
+pub fn Progress(
+    n: usize,
+    of: usize,
+    #[props(default = "Not planned".to_string())] empty: String,
+) -> Element {
     if n >= of {
         return rsx! {
             span { class: "st ok", aria_label: "Ready",
@@ -298,7 +305,10 @@ pub fn Energy(e: u8) -> Element {
 
 /// A track's or a record's status as a chip; a button when it can be changed.
 #[component]
-pub fn StageTag(stage: usize, #[props(default)] onclick: Option<EventHandler<MouseEvent>>) -> Element {
+pub fn StageTag(
+    stage: usize,
+    #[props(default)] onclick: Option<EventHandler<MouseEvent>>,
+) -> Element {
     let (name, h) = data::STAGES[stage.min(data::STAGES.len() - 1)];
     let none = h.is_none();
     let h = h.unwrap_or(0);
@@ -332,7 +342,14 @@ pub fn Avatar(who: String) -> Element {
 
 /// A page led by its cover: the art, then the facts, the title and its line.
 #[component]
-pub fn Hero(img: Option<Asset>, hue: u32, title: String, #[props(default)] kicker: Option<String>, facts: Element, sub: Element) -> Element {
+pub fn Hero(
+    img: Option<Asset>,
+    hue: u32,
+    title: String,
+    #[props(default)] kicker: Option<String>,
+    facts: Element,
+    sub: Element,
+) -> Element {
     rsx! {
         div { class: "hero2",
             div { class: "art",

@@ -4,11 +4,11 @@
 
 use dioxus::prelude::*;
 
-use crate::data::{self, dur, Song, DAY, FIFTHS, MON, TODAY};
+use crate::Route;
+use crate::data::{self, DAY, FIFTHS, MON, Song, TODAY, dur};
 use crate::icons::{I, Icon};
 use crate::pieces::{Energy, KeyC, SongArt};
-use crate::state::{use_app, AppState, Booking, Menu, Sheet};
-use crate::Route;
+use crate::state::{AppState, Booking, Menu, Sheet, use_app};
 
 /// A row of a menu.
 enum Row {
@@ -37,9 +37,9 @@ fn menu_rows(app: AppState, m: Menu) -> Vec<Row> {
         Menu::NewSet => {
             let mut v = vec![Row::Head("Next week of")];
             for sr in data::SERIES.iter() {
-                let nx = data::OCC
-                    .iter()
-                    .find(|o| o.series.id == sr.id && o.date.from_today() >= 0 && o.songs.is_empty());
+                let nx = data::OCC.iter().find(|o| {
+                    o.series.id == sr.id && o.date.from_today() >= 0 && o.songs.is_empty()
+                });
                 let note = nx.map(|o| o.date.short()).unwrap_or_default();
                 let says = match nx {
                     Some(o) => format!("New {} set for {}", sr.name, o.date.short()),
@@ -48,8 +48,20 @@ fn menu_rows(app: AppState, m: Menu) -> Vec<Row> {
                 v.push(Row::Item(sr.name.into(), I::Calendar, note, says, false));
             }
             v.push(Row::Div);
-            v.push(Row::Item("A show".into(), I::Plus, "named, one date".into(), "New show".into(), false));
-            v.push(Row::Item("A new weekly event".into(), I::Loop, String::new(), "New weekly event".into(), false));
+            v.push(Row::Item(
+                "A show".into(),
+                I::Plus,
+                "named, one date".into(),
+                "New show".into(),
+                false,
+            ));
+            v.push(Row::Item(
+                "A new weekly event".into(),
+                I::Loop,
+                String::new(),
+                "New weekly event".into(),
+                false,
+            ));
             v
         }
         Menu::SetMenu => {
@@ -58,7 +70,11 @@ fn menu_rows(app: AppState, m: Menu) -> Vec<Row> {
                 Row::Check("All folders".into(), folder.is_none(), Act::Folder(None)),
             ];
             for f in data::FOLDERS.iter() {
-                v.push(Row::Check(f.name.into(), folder == Some(f.tag), Act::Folder(Some(f.tag))));
+                v.push(Row::Check(
+                    f.name.into(),
+                    folder == Some(f.tag),
+                    Act::Folder(Some(f.tag)),
+                ));
             }
             v.push(Row::Div);
             v.push(item("Every setlist", I::Calendar));
@@ -69,7 +85,13 @@ fn menu_rows(app: AppState, m: Menu) -> Vec<Row> {
             item("Plan a set", I::Plus),
             item("Book a rehearsal", I::Mic),
             item("Change the days", I::Settings),
-            Row::Item("Songs a set".into(), I::Setlist, "usual count".into(), "Songs a set".into(), false),
+            Row::Item(
+                "Songs a set".into(),
+                I::Setlist,
+                "usual count".into(),
+                "Songs a set".into(),
+                false,
+            ),
             Row::Div,
             item("Pin to the sidebar", I::Pin),
             item("Share…", I::Share),
@@ -90,7 +112,13 @@ fn menu_rows(app: AppState, m: Menu) -> Vec<Row> {
             item("Share…", I::Share),
             item("Show in the vault", I::Folder),
             Row::Div,
-            Row::Item("Remove from recent".into(), I::Trash, String::new(), "Remove from recent".into(), true),
+            Row::Item(
+                "Remove from recent".into(),
+                I::Trash,
+                String::new(),
+                "Remove from recent".into(),
+                true,
+            ),
         ],
         Menu::Mine => {
             let mut v = vec![Row::Head("Open in your rig")];
@@ -100,7 +128,12 @@ fn menu_rows(app: AppState, m: Menu) -> Vec<Row> {
                         o.name(),
                         r.icon,
                         format!("{} · {}", o.date.when(), r.name),
-                        format!("Opened {}, {} in the {} rig", o.name(), o.date.short(), r.name),
+                        format!(
+                            "Opened {}, {} in the {} rig",
+                            o.name(),
+                            o.date.short(),
+                            r.name
+                        ),
                         false,
                     ));
                 }
@@ -200,7 +233,9 @@ pub fn MenuView() -> Element {
 #[component]
 pub fn SheetView() -> Element {
     let app = use_app();
-    let Some(sheet) = (app.sheet)() else { return rsx! {} };
+    let Some(sheet) = (app.sheet)() else {
+        return rsx! {};
+    };
     let bottom = !matches!(sheet, Sheet::Palette);
     rsx! {
         div {
@@ -241,7 +276,11 @@ pub fn SheetView() -> Element {
 
 /// A bottom sheet's card: taps inside stay inside.
 #[component]
-fn BSheet(label: String, #[props(default)] class: Option<&'static str>, children: Element) -> Element {
+fn BSheet(
+    label: String,
+    #[props(default)] class: Option<&'static str>,
+    children: Element,
+) -> Element {
     let cls = match class {
         Some(c) => format!("bsheet {c}"),
         None => "bsheet".into(),
@@ -272,28 +311,75 @@ struct Hit {
 fn palette_items() -> Vec<Hit> {
     let mut v = Vec::new();
     for st in data::SHOWS.iter() {
-        v.push(Hit { t: st.title.into(), k: "Set", open: Some(Route::set(st.id)), says: String::new(), key: None, icon: I::Setlist });
+        v.push(Hit {
+            t: st.title.into(),
+            k: "Set",
+            open: Some(Route::set(st.id)),
+            says: String::new(),
+            key: None,
+            icon: I::Setlist,
+        });
     }
     for sr in data::SERIES.iter() {
-        v.push(Hit { t: sr.name.into(), k: "Weekly", open: Some(Route::Series { id: sr.id.into() }), says: String::new(), key: None, icon: I::Calendar });
+        v.push(Hit {
+            t: sr.name.into(),
+            k: "Weekly",
+            open: Some(Route::Series { id: sr.id.into() }),
+            says: String::new(),
+            key: None,
+            icon: I::Calendar,
+        });
     }
     for a in data::ALBUMS.iter() {
-        v.push(Hit { t: a.title.into(), k: "Album", open: Some(Route::Album { id: a.id.into() }), says: String::new(), key: None, icon: I::Disc });
+        v.push(Hit {
+            t: a.title.into(),
+            k: "Album",
+            open: Some(Route::Album { id: a.id.into() }),
+            says: String::new(),
+            key: None,
+            icon: I::Disc,
+        });
     }
     let mut seen: Vec<&str> = Vec::new();
     for st in data::SHOWS.iter() {
         for s in st.songs() {
             if !seen.contains(&s.title) {
                 seen.push(s.title);
-                v.push(Hit { t: s.title.into(), k: "Song", open: None, says: format!("Opened {}", s.title), key: Some(s.key.unwrap_or("?")), icon: I::Audio });
+                v.push(Hit {
+                    t: s.title.into(),
+                    k: "Song",
+                    open: None,
+                    says: format!("Opened {}", s.title),
+                    key: Some(s.key.unwrap_or("?")),
+                    icon: I::Audio,
+                });
             }
         }
     }
     for r in data::RIGS.iter() {
-        v.push(Hit { t: format!("{} rig", r.name), k: "Rig", open: Some(Route::Signal {}), says: String::new(), key: None, icon: I::Rig });
+        v.push(Hit {
+            t: format!("{} rig", r.name),
+            k: "Rig",
+            open: Some(Route::Signal {}),
+            says: String::new(),
+            key: None,
+            icon: I::Rig,
+        });
     }
-    for a in ["New project", "Scan for projects", "Tuner", "Audio settings"] {
-        v.push(Hit { t: a.into(), k: "Action", open: None, says: a.into(), key: None, icon: I::Command });
+    for a in [
+        "New project",
+        "Scan for projects",
+        "Tuner",
+        "Audio settings",
+    ] {
+        v.push(Hit {
+            t: a.into(),
+            k: "Action",
+            open: None,
+            says: a.into(),
+            key: None,
+            icon: I::Command,
+        });
     }
     v
 }
@@ -308,7 +394,11 @@ fn Palette() -> Element {
     let list: Vec<Hit> = if needle.is_empty() {
         all.iter().take(6).cloned().collect()
     } else {
-        all.iter().filter(|h| h.t.to_lowercase().contains(&needle)).take(12).cloned().collect()
+        all.iter()
+            .filter(|h| h.t.to_lowercase().contains(&needle))
+            .take(12)
+            .cloned()
+            .collect()
     };
     rsx! {
         div { class: "panel", onclick: move |e| e.stop_propagation(),
@@ -374,7 +464,9 @@ fn Player() -> Element {
     let app = use_app();
     let mut np = app.np;
     let Some(n) = np() else { return rsx! {} };
-    let Some(x) = n.song().copied() else { return rsx! {} };
+    let Some(x) = n.song().copied() else {
+        return rsx! {};
+    };
     let len = x.len.unwrap_or(240) as f64;
     let pct = n.pos * 100.0;
     let next: Vec<Song> = n.list.iter().skip(n.i + 1).take(4).copied().collect();
@@ -464,7 +556,9 @@ fn Player() -> Element {
 #[component]
 fn KeySheet(set: String, i: usize) -> Element {
     let app = use_app();
-    let Some(o) = data::occ(&set) else { return rsx! {} };
+    let Some(o) = data::occ(&set) else {
+        return rsx! {};
+    };
     let x = o.songs[i];
     let orig = x.key.unwrap_or("C");
     let cur = app.key_in(&set, i, &x).unwrap_or(orig);
@@ -528,7 +622,9 @@ fn KeySheet(set: String, i: usize) -> Element {
 #[component]
 fn ArrSheet(set: String, i: usize) -> Element {
     let app = use_app();
-    let Some(o) = data::occ(&set) else { return rsx! {} };
+    let Some(o) = data::occ(&set) else {
+        return rsx! {};
+    };
     let x = o.songs[i];
     let cur = app.arr_in(o, i);
     let base = x.len.unwrap_or(270) as i32;
@@ -635,8 +731,12 @@ fn BookSheet() -> Element {
             time: "7:00 PM",
             room: "Room 210",
         });
-    let Some(b) = booking().or(fallback) else { return rsx! {} };
-    let Some(o) = data::occ(&b.set) else { return rsx! {} };
+    let Some(b) = booking().or(fallback) else {
+        return rsx! {};
+    };
+    let Some(o) = data::occ(&b.set) else {
+        return rsx! {};
+    };
     let last = o.date.from_today().max(0) as usize;
     let day = b.day.min(last);
     rsx! {

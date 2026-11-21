@@ -119,9 +119,9 @@ impl Filters {
         }
         if !self.tempo.is_empty() {
             let t = f.tempo.unwrap_or(0);
-            let ok = data::TEMPI
-                .iter()
-                .any(|(n, lo, hi)| self.tempo.contains(n) && f.tempo.is_some() && t >= *lo && t < *hi);
+            let ok = data::TEMPI.iter().any(|(n, lo, hi)| {
+                self.tempo.contains(n) && f.tempo.is_some() && t >= *lo && t < *hi
+            });
             if !ok {
                 return false;
             }
@@ -245,7 +245,9 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> Self {
-        let cya = data::occ("cya_2026-11-19").map(|o| o.songs.clone()).unwrap_or_default();
+        let cya = data::occ("cya_2026-11-19")
+            .map(|o| o.songs.clone())
+            .unwrap_or_default();
         Self {
             sheet: Signal::new(None),
             menu: Signal::new(None),
@@ -311,7 +313,13 @@ impl AppState {
     /// Start playing a list at a song.
     pub fn play(mut self, list: Vec<Song>, from: String, title: &str) {
         let i = list.iter().position(|x| x.title == title).unwrap_or(0);
-        self.np.set(Some(NowPlaying { list, from, i, playing: true, pos: 0.08 }));
+        self.np.set(Some(NowPlaying {
+            list,
+            from,
+            i,
+            playing: true,
+            pos: 0.08,
+        }));
     }
 
     /// Change a song's key in a set, here and for everyone in it.
@@ -362,7 +370,11 @@ impl AppState {
     /// How long a bar of the chart's song lasts (four beats).
     pub fn bar_ms(&self) -> u64 {
         let songs = data::set_songs(&self.live_set.peek());
-        let tempo = songs.get(self.live.peek().song).and_then(|s| s.tempo).unwrap_or(120).max(40);
+        let tempo = songs
+            .get(self.live.peek().song)
+            .and_then(|s| s.tempo)
+            .unwrap_or(120)
+            .max(40);
         240_000 / tempo as u64
     }
 
@@ -410,7 +422,10 @@ impl AppState {
     }
 
     pub fn latest(&self, title: &str) -> Option<Version> {
-        self.versions.read().get(title).and_then(|v| v.last().cloned())
+        self.versions
+            .read()
+            .get(title)
+            .and_then(|v| v.last().cloned())
     }
 }
 

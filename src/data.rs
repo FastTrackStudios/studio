@@ -246,12 +246,54 @@ pub static SHOWS: LazyLock<Vec<Show>> = LazyLock::new(|| {
                 (
                     "The Originals",
                     vec![
-                        s("DTLA Cinematic Intro", a("Nights Out"), a("C"), Some(160), Some(123), "cltm"),
-                        s("Drive To LA", a("Nights Out"), a("C→Db"), Some(160), Some(197), "cltm"),
-                        s("For You", a("Nights Out"), a("Ab"), Some(105), Some(193), "cltm"),
-                        s("Heart Isn't Ready", a("Nights Out"), a("Bb"), Some(107), Some(203), "cltm"),
-                        s("No One Knows", a("Queens of the Stone Age"), N, None, Some(257), "lt"),
-                        s("Hey!", a("Nights Out & Ryce"), a("E"), Some(87), Some(251), "cltm"),
+                        s(
+                            "DTLA Cinematic Intro",
+                            a("Nights Out"),
+                            a("C"),
+                            Some(160),
+                            Some(123),
+                            "cltm",
+                        ),
+                        s(
+                            "Drive To LA",
+                            a("Nights Out"),
+                            a("C→Db"),
+                            Some(160),
+                            Some(197),
+                            "cltm",
+                        ),
+                        s(
+                            "For You",
+                            a("Nights Out"),
+                            a("Ab"),
+                            Some(105),
+                            Some(193),
+                            "cltm",
+                        ),
+                        s(
+                            "Heart Isn't Ready",
+                            a("Nights Out"),
+                            a("Bb"),
+                            Some(107),
+                            Some(203),
+                            "cltm",
+                        ),
+                        s(
+                            "No One Knows",
+                            a("Queens of the Stone Age"),
+                            N,
+                            None,
+                            Some(257),
+                            "lt",
+                        ),
+                        s(
+                            "Hey!",
+                            a("Nights Out & Ryce"),
+                            a("E"),
+                            Some(87),
+                            Some(251),
+                            "cltm",
+                        ),
                     ],
                 ),
                 (
@@ -259,19 +301,61 @@ pub static SHOWS: LazyLock<Vec<Show>> = LazyLock::new(|| {
                     vec![
                         s("Sleeptalker", a("Royal Blood"), N, None, Some(191), "lt"),
                         s("Figure It Out", a("Royal Blood"), N, None, Some(189), "lt"),
-                        s("Seven Nation Army", a("The White Stripes"), N, None, Some(231), "lt"),
+                        s(
+                            "Seven Nation Army",
+                            a("The White Stripes"),
+                            N,
+                            None,
+                            Some(231),
+                            "lt",
+                        ),
                         s("Sad But True", a("Metallica"), N, None, Some(327), "lt"),
-                        s("Out Of The Black", a("Royal Blood"), N, None, Some(327), "lt"),
+                        s(
+                            "Out Of The Black",
+                            a("Royal Blood"),
+                            N,
+                            None,
+                            Some(327),
+                            "lt",
+                        ),
                     ],
                 ),
                 (
                     "The Fun Part",
                     vec![
-                        s("She's American", a("The 1975"), a("Db"), Some(116), Some(267), "cltm"),
-                        s("WORST PART OF YOU", a("bilmuri"), a("B"), Some(183), Some(176), "cltm"),
+                        s(
+                            "She's American",
+                            a("The 1975"),
+                            a("Db"),
+                            Some(116),
+                            Some(267),
+                            "cltm",
+                        ),
+                        s(
+                            "WORST PART OF YOU",
+                            a("bilmuri"),
+                            a("B"),
+                            Some(183),
+                            Some(176),
+                            "cltm",
+                        ),
                         s("Fire", a("JT Wright"), a("D"), Some(120), Some(206), "cltm"),
-                        s("Not Too Much Longer (Live)", a("Cody Wright"), N, None, Some(261), "lt"),
-                        s("Know Me (Extended)", a("The Band CAMINO"), N, None, Some(304), "clt"),
+                        s(
+                            "Not Too Much Longer (Live)",
+                            a("Cody Wright"),
+                            N,
+                            None,
+                            Some(261),
+                            "lt",
+                        ),
+                        s(
+                            "Know Me (Extended)",
+                            a("The Band CAMINO"),
+                            N,
+                            None,
+                            Some(304),
+                            "clt",
+                        ),
                     ],
                 ),
             ],
@@ -286,9 +370,23 @@ pub static SHOWS: LazyLock<Vec<Show>> = LazyLock::new(|| {
                 (
                     "Presidents Songs",
                     vec![
-                        s("All I Want for Christmas Is You", a("Mariah Carey"), a("G"), Some(150), None, "cl"),
+                        s(
+                            "All I Want for Christmas Is You",
+                            a("Mariah Carey"),
+                            a("G"),
+                            Some(150),
+                            None,
+                            "cl",
+                        ),
                         s("Feliz Navidad", N, N, None, None, ""),
-                        s("Joy to the World (Unspeakable Joy)", a("Chris Tomlin"), a("D"), Some(128), None, "cl"),
+                        s(
+                            "Joy to the World (Unspeakable Joy)",
+                            a("Chris Tomlin"),
+                            a("D"),
+                            Some(128),
+                            None,
+                            "cl",
+                        ),
                     ],
                 ),
                 (
@@ -296,9 +394,23 @@ pub static SHOWS: LazyLock<Vec<Show>> = LazyLock::new(|| {
                     vec![
                         s("Last Christmas", N, N, None, None, ""),
                         s("Rockin' Around the Christmas Tree", N, N, None, None, ""),
-                        s("Silent Night", a("for KING & COUNTRY"), a("A"), Some(83), None, "cl"),
+                        s(
+                            "Silent Night",
+                            a("for KING & COUNTRY"),
+                            a("A"),
+                            Some(83),
+                            None,
+                            "cl",
+                        ),
                         s("Sleigh Ride", a("Tori Kelly"), a("B"), Some(86), None, "cl"),
-                        s("This Christmas", a("Donny Hathaway"), a("F"), Some(93), None, "cl"),
+                        s(
+                            "This Christmas",
+                            a("Donny Hathaway"),
+                            a("F"),
+                            Some(93),
+                            None,
+                            "cl",
+                        ),
                         s("What Christmas Means", N, N, None, None, ""),
                     ],
                 ),
@@ -324,11 +436,46 @@ pub struct Series {
 }
 
 pub static SERIES: [Series; 5] = [
-    Series { id: "jhms", name: "JHM Sunday", days: &[0], hue: 285, size: 5, note: None },
-    Series { id: "main", name: "Main", days: &[0, 3], hue: 45, size: 5, note: Some((3, "Wednesday night")) },
-    Series { id: "hsm", name: "HSM", days: &[2], hue: 215, size: 4, note: None },
-    Series { id: "jhm", name: "JHM", days: &[3], hue: 150, size: 4, note: None },
-    Series { id: "cya", name: "CYA", days: &[4], hue: 345, size: 4, note: None },
+    Series {
+        id: "jhms",
+        name: "JHM Sunday",
+        days: &[0],
+        hue: 285,
+        size: 5,
+        note: None,
+    },
+    Series {
+        id: "main",
+        name: "Main",
+        days: &[0, 3],
+        hue: 45,
+        size: 5,
+        note: Some((3, "Wednesday night")),
+    },
+    Series {
+        id: "hsm",
+        name: "HSM",
+        days: &[2],
+        hue: 215,
+        size: 4,
+        note: None,
+    },
+    Series {
+        id: "jhm",
+        name: "JHM",
+        days: &[3],
+        hue: 150,
+        size: 4,
+        note: None,
+    },
+    Series {
+        id: "cya",
+        name: "CYA",
+        days: &[4],
+        hue: 345,
+        size: 4,
+        note: None,
+    },
 ];
 
 pub fn series(id: &str) -> Option<&'static Series> {
@@ -415,22 +562,127 @@ pub static POOL: LazyLock<Vec<Song>> = LazyLock::new(|| {
     let a = Some;
     let r = "";
     vec![
-        s("Goodness of God", a("Bethel Music"), a("Ab"), Some(63), Some(296), r),
-        s("Gratitude", a("Brandon Lake"), a("B"), Some(75), Some(330), r),
-        s("Build My Life", a("Housefires"), a("G"), Some(68), Some(290), r),
+        s(
+            "Goodness of God",
+            a("Bethel Music"),
+            a("Ab"),
+            Some(63),
+            Some(296),
+            r,
+        ),
+        s(
+            "Gratitude",
+            a("Brandon Lake"),
+            a("B"),
+            Some(75),
+            Some(330),
+            r,
+        ),
+        s(
+            "Build My Life",
+            a("Housefires"),
+            a("G"),
+            Some(68),
+            Some(290),
+            r,
+        ),
         s("Way Maker", a("Sinach"), a("E"), Some(68), Some(330), r),
-        s("Firm Foundation (He Won't)", a("Cody Carnes"), a("Bb"), Some(70), Some(312), r),
-        s("Holy Forever", a("Chris Tomlin"), a("A"), Some(72), Some(330), r),
-        s("Praise", a("Elevation Worship"), a("Bb"), Some(127), Some(290), r),
-        s("Trust in God", a("Elevation Worship"), a("Ab"), Some(72), Some(300), r),
-        s("Jireh", a("Elevation Worship"), a("C"), Some(64), Some(330), r),
-        s("Living Hope", a("Phil Wickham"), a("Db"), Some(72), Some(330), r),
-        s("This Is Amazing Grace", a("Phil Wickham"), a("A"), Some(103), Some(280), r),
-        s("See A Victory", a("Elevation Worship"), a("B"), Some(72), Some(330), r),
-        s("King of Kings", a("Hillsong Worship"), a("D"), Some(68), Some(300), r),
-        s("Graves Into Gardens", a("Elevation Worship"), a("B"), Some(72), Some(300), r),
-        s("Same God", a("Elevation Worship"), a("Db"), Some(72), Some(330), r),
-        s("Joy to the World (Unspeakable Joy)", a("Chris Tomlin"), a("D"), Some(128), Some(250), r),
+        s(
+            "Firm Foundation (He Won't)",
+            a("Cody Carnes"),
+            a("Bb"),
+            Some(70),
+            Some(312),
+            r,
+        ),
+        s(
+            "Holy Forever",
+            a("Chris Tomlin"),
+            a("A"),
+            Some(72),
+            Some(330),
+            r,
+        ),
+        s(
+            "Praise",
+            a("Elevation Worship"),
+            a("Bb"),
+            Some(127),
+            Some(290),
+            r,
+        ),
+        s(
+            "Trust in God",
+            a("Elevation Worship"),
+            a("Ab"),
+            Some(72),
+            Some(300),
+            r,
+        ),
+        s(
+            "Jireh",
+            a("Elevation Worship"),
+            a("C"),
+            Some(64),
+            Some(330),
+            r,
+        ),
+        s(
+            "Living Hope",
+            a("Phil Wickham"),
+            a("Db"),
+            Some(72),
+            Some(330),
+            r,
+        ),
+        s(
+            "This Is Amazing Grace",
+            a("Phil Wickham"),
+            a("A"),
+            Some(103),
+            Some(280),
+            r,
+        ),
+        s(
+            "See A Victory",
+            a("Elevation Worship"),
+            a("B"),
+            Some(72),
+            Some(330),
+            r,
+        ),
+        s(
+            "King of Kings",
+            a("Hillsong Worship"),
+            a("D"),
+            Some(68),
+            Some(300),
+            r,
+        ),
+        s(
+            "Graves Into Gardens",
+            a("Elevation Worship"),
+            a("B"),
+            Some(72),
+            Some(300),
+            r,
+        ),
+        s(
+            "Same God",
+            a("Elevation Worship"),
+            a("Db"),
+            Some(72),
+            Some(330),
+            r,
+        ),
+        s(
+            "Joy to the World (Unspeakable Joy)",
+            a("Chris Tomlin"),
+            a("D"),
+            Some(128),
+            Some(250),
+            r,
+        ),
     ]
 });
 
@@ -454,12 +706,21 @@ pub static OCC: LazyLock<Vec<Occ>> = LazyLock::new(|| {
         while d <= Day::ymd(2026, 12, 6) {
             if sr.days.contains(&d.weekday()) {
                 let id = format!("{}_{}", sr.id, d.iso());
-                let filled = if d.from_today() < 0 { sr.size } else { planned(&id) };
+                let filled = if d.from_today() < 0 {
+                    sr.size
+                } else {
+                    planned(&id)
+                };
                 let wed = if d.weekday() == 3 { 2 } else { 0 };
                 let songs = (0..filled)
                     .map(|k| POOL[(n * 5 + k * 3 + si * 7 + wed) % POOL.len()])
                     .collect();
-                out.push(Occ { id, series: sr, date: d, songs });
+                out.push(Occ {
+                    id,
+                    series: sr,
+                    date: d,
+                    songs,
+                });
                 n += 1;
             }
             d = d.plus(1);
@@ -481,9 +742,24 @@ pub struct Folder {
 }
 
 pub static FOLDERS: [Folder; 3] = [
-    Folder { tag: "church", name: "Crossroads Church", series: &["jhms", "main", "hsm", "jhm", "cya"], shows: &[] },
-    Folder { tag: "cbu", name: "CBU", series: &[], shows: &["mb"] },
-    Folder { tag: "recitals", name: "Recitals", series: &[], shows: &["jt"] },
+    Folder {
+        tag: "church",
+        name: "Crossroads Church",
+        series: &["jhms", "main", "hsm", "jhm", "cya"],
+        shows: &[],
+    },
+    Folder {
+        tag: "cbu",
+        name: "CBU",
+        series: &[],
+        shows: &["mb"],
+    },
+    Folder {
+        tag: "recitals",
+        name: "Recitals",
+        series: &[],
+        shows: &["jt"],
+    },
 ];
 
 pub fn show_folder(id: &str) -> Option<&'static Folder> {
@@ -505,12 +781,54 @@ pub struct Rig {
 }
 
 pub static RIGS: [Rig; 6] = [
-    Rig { name: "Drums", icon: I::Drums, hue: 70, preset: "Recital kit", input: "From the session", loaded: false },
-    Rig { name: "Perc", icon: I::Perc, hue: 110, preset: "Shakers and congas", input: "SPD-SX", loaded: false },
-    Rig { name: "Bass", icon: I::Bass, hue: 305, preset: "Royal Blood fuzz", input: "Input 2", loaded: false },
-    Rig { name: "Guitar", icon: I::Guitar, hue: 30, preset: "CYA, Thu Nov 19", input: "Input 1 · Hi-Z", loaded: true },
-    Rig { name: "Acoustic", icon: I::Acoustic, hue: 190, preset: "Worship, warm", input: "Input 3 · DI", loaded: false },
-    Rig { name: "Keys", icon: I::Keys, hue: 255, preset: "JHM Sunday", input: "Kontrol S88", loaded: false },
+    Rig {
+        name: "Drums",
+        icon: I::Drums,
+        hue: 70,
+        preset: "Recital kit",
+        input: "From the session",
+        loaded: false,
+    },
+    Rig {
+        name: "Perc",
+        icon: I::Perc,
+        hue: 110,
+        preset: "Shakers and congas",
+        input: "SPD-SX",
+        loaded: false,
+    },
+    Rig {
+        name: "Bass",
+        icon: I::Bass,
+        hue: 305,
+        preset: "Royal Blood fuzz",
+        input: "Input 2",
+        loaded: false,
+    },
+    Rig {
+        name: "Guitar",
+        icon: I::Guitar,
+        hue: 30,
+        preset: "CYA, Thu Nov 19",
+        input: "Input 1 · Hi-Z",
+        loaded: true,
+    },
+    Rig {
+        name: "Acoustic",
+        icon: I::Acoustic,
+        hue: 190,
+        preset: "Worship, warm",
+        input: "Input 3 · DI",
+        loaded: false,
+    },
+    Rig {
+        name: "Keys",
+        icon: I::Keys,
+        hue: 255,
+        preset: "JHM Sunday",
+        input: "Kontrol S88",
+        loaded: false,
+    },
 ];
 
 pub fn rig(name: &str) -> Option<&'static Rig> {
@@ -572,7 +890,12 @@ pub fn logo(series_id: &str) -> Option<Asset> {
 }
 
 /// JT's own songs carry his cover.
-pub const OWN: [&str; 4] = ["Nights Out", "Nights Out & Ryce", "JT Wright", "Cody Wright"];
+pub const OWN: [&str; 4] = [
+    "Nights Out",
+    "Nights Out & Ryce",
+    "JT Wright",
+    "Cody Wright",
+];
 pub const JT_COVER: Asset = asset!("/assets/covers/jt.png");
 
 // ── Who leads, arrangements ─────────────────────────────────────────────────
@@ -663,7 +986,12 @@ pub struct LibSong {
     pub energy: u8,
 }
 
-const ROCK: [&str; 4] = ["Royal Blood", "Metallica", "Queens of the Stone Age", "The White Stripes"];
+const ROCK: [&str; 4] = [
+    "Royal Blood",
+    "Metallica",
+    "Queens of the Stone Age",
+    "The White Stripes",
+];
 
 pub static LIB: LazyLock<Vec<LibSong>> = LazyLock::new(|| {
     let mut out: Vec<LibSong> = Vec::new();
@@ -671,16 +999,32 @@ pub static LIB: LazyLock<Vec<LibSong>> = LazyLock::new(|| {
         if out.iter().any(|y| y.song.title == x.title) {
             return;
         }
-        let energy = x.tempo.map_or(3, |t| ((t as f64 - 50.0) / 22.0).round().clamp(1.0, 5.0) as u8);
-        out.push(LibSong { song: x, tags, energy });
+        let energy = x.tempo.map_or(3, |t| {
+            ((t as f64 - 50.0) / 22.0).round().clamp(1.0, 5.0) as u8
+        });
+        out.push(LibSong {
+            song: x,
+            tags,
+            energy,
+        });
     };
     for x in POOL.iter() {
         let mut tags = vec!["worship", "contemporary"];
-        tags.push(if x.tempo.unwrap_or(0) > 100 { "upbeat" } else { "ballad" });
+        tags.push(if x.tempo.unwrap_or(0) > 100 {
+            "upbeat"
+        } else {
+            "ballad"
+        });
         if x.artist == Some("Chris Tomlin") {
             tags.push("hymns");
         }
-        add(Song { ready: "cltm", ..*x }, tags);
+        add(
+            Song {
+                ready: "cltm",
+                ..*x
+            },
+            tags,
+        );
     }
     for x in show("mb").map(Show::songs).unwrap_or_default() {
         let mut tags = vec!["christmas"];
@@ -694,7 +1038,14 @@ pub static LIB: LazyLock<Vec<LibSong>> = LazyLock::new(|| {
     }
     for x in show("jt").map(Show::songs).unwrap_or_default() {
         let artist = x.artist.unwrap_or("");
-        let mut tags = vec!["recital", if OWN.contains(&artist) { "originals" } else { "covers" }];
+        let mut tags = vec![
+            "recital",
+            if OWN.contains(&artist) {
+                "originals"
+            } else {
+                "covers"
+            },
+        ];
         if ROCK.contains(&artist) {
             tags.push("rock");
         }
@@ -722,8 +1073,18 @@ pub static TAGS: LazyLock<Vec<(&'static str, usize)>> = LazyLock::new(|| {
     out
 });
 
-pub const TEMPI: [(&str, u32, u32); 4] = [("Slow", 0, 80), ("Mid", 80, 110), ("Up", 110, 140), ("Fast", 140, 999)];
-pub const READY: [(char, &str); 4] = [('c', "Chart"), ('l', "Lyrics"), ('s', "Stems"), ('m', "Tempo map")];
+pub const TEMPI: [(&str, u32, u32); 4] = [
+    ("Slow", 0, 80),
+    ("Mid", 80, 110),
+    ("Up", 110, 140),
+    ("Fast", 140, 999),
+];
+pub const READY: [(char, &str); 4] = [
+    ('c', "Chart"),
+    ('l', "Lyrics"),
+    ('s', "Stems"),
+    ('m', "Tempo map"),
+];
 
 /// Weeks since a song was last played in a weekly set.
 pub fn weeks_since(title: &str) -> f64 {
@@ -791,8 +1152,16 @@ pub static ALBUMS: [Album; 4] = [
         when: "2h",
         owner: "fasttrackstudio",
         tracks: &[
-            ("Intro", 6), ("Set in Stone", 5), ("Unbreakable", 3), ("Chained Expectations", 3), ("Heavify", 2),
-            ("It Knows My Name", 2), ("Kornesque", 1), ("The Ballad", 1), ("The Plague", 1), ("Empty Focus", 0),
+            ("Intro", 6),
+            ("Set in Stone", 5),
+            ("Unbreakable", 3),
+            ("Chained Expectations", 3),
+            ("Heavify", 2),
+            ("It Knows My Name", 2),
+            ("Kornesque", 1),
+            ("The Ballad", 1),
+            ("The Plague", 1),
+            ("Empty Focus", 0),
         ],
     },
     Album {
@@ -805,9 +1174,18 @@ pub static ALBUMS: [Album; 4] = [
         when: "May 26",
         owner: "tombrooksmusic",
         tracks: &[
-            ("All That I Am", 3), ("Lord of the Fight", 2), ("Dwelling Place", 2), ("Presence", 2), ("Life Giving Word", 1),
-            ("He's Been Good", 2), ("I Know a Name", 2), ("Seek Your Face", 2), ("Hannah's Song", 2), ("Reason Why", 2),
-            ("Goodness of God (RK version)", 3), ("Unity", 2),
+            ("All That I Am", 3),
+            ("Lord of the Fight", 2),
+            ("Dwelling Place", 2),
+            ("Presence", 2),
+            ("Life Giving Word", 1),
+            ("He's Been Good", 2),
+            ("I Know a Name", 2),
+            ("Seek Your Face", 2),
+            ("Hannah's Song", 2),
+            ("Reason Why", 2),
+            ("Goodness of God (RK version)", 3),
+            ("Unity", 2),
         ],
     },
     Album {
@@ -819,7 +1197,13 @@ pub static ALBUMS: [Album; 4] = [
         hue: 5,
         when: "Aug 4",
         owner: "tombrooksmusic",
-        tracks: &[("Courage", 3), ("Radio", 3), ("Too Young", 1), ("Where to Go", 2), ("You and I", 2)],
+        tracks: &[
+            ("Courage", 3),
+            ("Radio", 3),
+            ("Too Young", 1),
+            ("Where to Go", 2),
+            ("You and I", 2),
+        ],
     },
     Album {
         id: "joi",
@@ -831,8 +1215,13 @@ pub static ALBUMS: [Album; 4] = [
         when: "May 8",
         owner: "tombrooksmusic",
         tracks: &[
-            ("Toccata", 5), ("Ancestro", 5), ("La Zacapaneca", 5), ("Five Colombian Pieces", 5), ("Luz Entre Aguas", 5),
-            ("El Intachable", 5), ("Etudes for Immigrants", 5),
+            ("Toccata", 5),
+            ("Ancestro", 5),
+            ("La Zacapaneca", 5),
+            ("Five Colombian Pieces", 5),
+            ("Luz Entre Aguas", 5),
+            ("El Intachable", 5),
+            ("Etudes for Immigrants", 5),
         ],
     },
 ];
@@ -907,13 +1296,48 @@ pub static STUDIO: LazyLock<Vec<Track>> = LazyLock::new(|| {
         }
     }
     let singles: [(&str, &str, usize, &str, u32, bool, &str); 4] = [
-        ("Devour", "Beautifully Violent", 3, "Jul 6", 330, false, "fasttrackaudio"),
-        ("Goodness of God", "Ron Kenoly", 4, "Oct 12", 0, true, "tombrooksmusic"),
+        (
+            "Devour",
+            "Beautifully Violent",
+            3,
+            "Jul 6",
+            330,
+            false,
+            "fasttrackaudio",
+        ),
+        (
+            "Goodness of God",
+            "Ron Kenoly",
+            4,
+            "Oct 12",
+            0,
+            true,
+            "tombrooksmusic",
+        ),
         ("Fire", "JT Wright", 1, "Mon", 40, false, "codywright"),
-        ("Drive To LA", "Nights Out", 4, "Last week", 10, false, "codywright"),
+        (
+            "Drive To LA",
+            "Nights Out",
+            4,
+            "Last week",
+            10,
+            false,
+            "codywright",
+        ),
     ];
     for (title, artist, stage, when, hue, cover, owner) in singles {
-        out.push(Track { idx: out.len(), title, rec: None, when, artist, stage, no: 0, hue, cover, owner });
+        out.push(Track {
+            idx: out.len(),
+            title,
+            rec: None,
+            when,
+            artist,
+            stage,
+            no: 0,
+            hue,
+            cover,
+            owner,
+        });
     }
     out
 });
@@ -940,13 +1364,24 @@ impl Track {
 }
 
 /// What Records shows, the last worked on first: records ("cr") and singles ("t:Fire").
-pub const RECENT_WORK: [&str; 8] = ["cr", "t:Devour", "t:Fire", "t:Goodness of God", "t:Drive To LA", "mtl", "png", "joi"];
+pub const RECENT_WORK: [&str; 8] = [
+    "cr",
+    "t:Devour",
+    "t:Fire",
+    "t:Goodness of God",
+    "t:Drive To LA",
+    "mtl",
+    "png",
+    "joi",
+];
 
 pub fn owner_of(id: &str) -> &'static str {
     if let Some(a) = album(id) {
         return a.owner;
     }
-    id.strip_prefix("t:").and_then(track).map_or("", |t| t.owner)
+    id.strip_prefix("t:")
+        .and_then(track)
+        .map_or("", |t| t.owner)
 }
 
 // ── Review ──────────────────────────────────────────────────────────────────
@@ -973,11 +1408,26 @@ pub struct Version {
 }
 
 fn c(at: f64, t: &str, who: &'static str, text: &str, open: bool) -> Comment {
-    Comment { at, t: t.into(), who, text: text.into(), open }
+    Comment {
+        at,
+        t: t.into(),
+        who,
+        text: text.into(),
+        open,
+    }
 }
 
 /// The audio reviews the vault already has: track, what, version, who, when, approved, comments.
-fn known_audio(title: &str) -> Option<(&'static str, usize, &'static str, &'static str, bool, Vec<Comment>)> {
+fn known_audio(
+    title: &str,
+) -> Option<(
+    &'static str,
+    usize,
+    &'static str,
+    &'static str,
+    bool,
+    Vec<Comment>,
+)> {
     Some(match title {
         "Unbreakable" => (
             "Mix",
@@ -986,13 +1436,45 @@ fn known_audio(title: &str) -> Option<(&'static str, usize, &'static str, &'stat
             "2h",
             false,
             vec![
-                c(0.38, "1:42", "Jake", "Guitars eat the vocal in the pre-chorus", true),
-                c(0.66, "2:58", "Mia", "The delay throw here is perfect", false),
-                c(0.81, "3:37", "Sam", "Ride the bass up into the last chorus", true),
+                c(
+                    0.38,
+                    "1:42",
+                    "Jake",
+                    "Guitars eat the vocal in the pre-chorus",
+                    true,
+                ),
+                c(
+                    0.66,
+                    "2:58",
+                    "Mia",
+                    "The delay throw here is perfect",
+                    false,
+                ),
+                c(
+                    0.81,
+                    "3:37",
+                    "Sam",
+                    "Ride the bass up into the last chorus",
+                    true,
+                ),
             ],
         ),
-        "Heavify" => ("Edit", 2, "Cody", "Yesterday", false, vec![c(0.14, "0:37", "Sam", "Flam on the snare here", true)]),
-        "Intro" => ("Master", 2, "Cody", "Mon", true, vec![c(0.5, "0:58", "Jake", "Approved", false)]),
+        "Heavify" => (
+            "Edit",
+            2,
+            "Cody",
+            "Yesterday",
+            false,
+            vec![c(0.14, "0:37", "Sam", "Flam on the snare here", true)],
+        ),
+        "Intro" => (
+            "Master",
+            2,
+            "Cody",
+            "Mon",
+            true,
+            vec![c(0.5, "0:58", "Jake", "Approved", false)],
+        ),
         _ => return None,
     })
 }
@@ -1061,7 +1543,9 @@ pub fn all_versions() -> HashMap<&'static str, Vec<Version>> {
 // ── Live: a set's chart and lyrics ──────────────────────────────────────────
 
 /// The song's form: its sections and their lengths in bars (placeholders).
-pub const SECS: [&str; 8] = ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Bridge", "Chorus", "Outro"];
+pub const SECS: [&str; 8] = [
+    "Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Bridge", "Chorus", "Outro",
+];
 pub const BARS: [usize; 8] = [4, 8, 8, 8, 8, 8, 8, 4];
 
 pub fn sec_hue(n: &str) -> u32 {

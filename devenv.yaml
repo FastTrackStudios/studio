@@ -1,0 +1,21 @@
+# The dev environment (devenv 2.4): `devenv shell`, or direnv through .envrc.
+# The same pins as Studio's, so rustc is the fleet's 1.99.1 and kache keys
+# match every other fleet repo's. Move them only with devenv-fleet.
+require_version: ">=2.4.0"
+inputs:
+  nixpkgs:
+    url: github:NixOS/nixpkgs/8ce4ef6cb6f871616146b9fe26d2a5ae594e94fe
+  rust-overlay:
+    url: github:oxalica/rust-overlay/5b9f1198b59bcb31c5c3250b332e7d77590e6306
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
+    overlays:
+      - default
+  nixpkgs-dx:
+    url: github:NixOS/nixpkgs/d99b013d5d1931ad77fe3912ed218170dec5d9a4
+  devenv-fleet:
+    url: github:FastTrackStudios/devenv-fleet/c4ddec850ad97b5da74c746bff39a988f02b13a4
+    flake: false
+imports:
+  - devenv-fleet/rust

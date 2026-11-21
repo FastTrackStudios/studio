@@ -8,7 +8,7 @@ use crate::data::{self, DAY};
 use crate::icons::{I, Icon};
 use crate::pieces::{Cover, SongArt};
 use crate::sheets::{MenuView, SheetView};
-use crate::state::{use_app, AppState, Sheet};
+use crate::state::{AppState, Sheet, use_app};
 use crate::{Route, Tab};
 
 #[component]
@@ -278,7 +278,9 @@ fn NowPlayingBar() -> Element {
     let app = use_app();
     let mut np = app.np;
     let Some(n) = np() else { return rsx! {} };
-    let Some(x) = n.song().copied() else { return rsx! {} };
+    let Some(x) = n.song().copied() else {
+        return rsx! {};
+    };
     let pct = n.pos * 100.0;
     rsx! {
         div { class: "np",
@@ -395,9 +397,27 @@ fn Drawer(current: Tab) -> Element {
     let shows_n: usize = data::FOLDERS.iter().map(|f| f.shows.len()).sum();
     let tabs = [
         (Tab::Home, "Home", I::Home, Route::Home {}, String::new()),
-        (Tab::Records, "Records", I::Disc, Route::Records {}, data::RECENT_WORK.len().to_string()),
-        (Tab::Setlists, "Setlists", I::Setlist, Route::Setlists {}, (data::SERIES.len() + shows_n).to_string()),
-        (Tab::Signal, "Signal", I::Rig, Route::Signal {}, data::RIGS.len().to_string()),
+        (
+            Tab::Records,
+            "Records",
+            I::Disc,
+            Route::Records {},
+            data::RECENT_WORK.len().to_string(),
+        ),
+        (
+            Tab::Setlists,
+            "Setlists",
+            I::Setlist,
+            Route::Setlists {},
+            (data::SERIES.len() + shows_n).to_string(),
+        ),
+        (
+            Tab::Signal,
+            "Signal",
+            I::Rig,
+            Route::Signal {},
+            data::RIGS.len().to_string(),
+        ),
     ];
     let loaded = data::loaded_rig();
     rsx! {

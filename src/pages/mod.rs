@@ -11,16 +11,18 @@ pub mod song;
 
 use dioxus::prelude::*;
 
+use crate::Route;
 use crate::data::{self, Occ, Rehearsal};
 use crate::icons::{I, Icon};
 use crate::pieces::{DayTile, Progress};
-use crate::state::{use_app, Booking, Sheet};
-use crate::Route;
+use crate::state::{Booking, Sheet, use_app};
 
 /// A set in an agenda: its day, its logo, where and when the band is called.
 #[component]
 pub fn OccRow(id: String, #[props(default = VNode::empty())] state: Element) -> Element {
-    let Some(o) = data::occ(&id) else { return rsx! {} };
+    let Some(o) = data::occ(&id) else {
+        return rsx! {};
+    };
     let pl = o.series.place();
     rsx! {
         button {

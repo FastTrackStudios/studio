@@ -6,15 +6,23 @@
 use dioxus::prelude::*;
 use session_sync::SessionModel;
 
+use crate::Route;
 use crate::data::{self, FIFTHS};
 use crate::icons::{I, Icon};
 use crate::pieces::{Bar, Cover, Page, Tool};
 use crate::songs::{self, Entry, Section, Song, use_library, use_song};
 use crate::state::use_app;
-use crate::Route;
 
 /// Kinds of section a form is made of, for the add buttons.
-const KINDS: [&str; 7] = ["Intro", "Verse", "Pre-Chorus", "Chorus", "Bridge", "Instrumental", "Outro"];
+const KINDS: [&str; 7] = [
+    "Intro",
+    "Verse",
+    "Pre-Chorus",
+    "Chorus",
+    "Bridge",
+    "Instrumental",
+    "Outro",
+];
 
 #[component]
 pub fn SongPage(id: String) -> Element {
@@ -101,9 +109,16 @@ fn Head(entry: Entry, song: Song, model: SessionModel, lib_put: songs::Library) 
         let (song, lib, entry) = (song.clone(), lib_put.clone(), entry.clone());
         move |k: String| {
             song.change(|m| {
-                m.project.ext.entry("studio".into()).or_default().insert("key".into(), k.clone());
+                m.project
+                    .ext
+                    .entry("studio".into())
+                    .or_default()
+                    .insert("key".into(), k.clone());
             });
-            lib.put(&Entry { key: Some(k).filter(|k| !k.is_empty()), ..entry.clone() });
+            lib.put(&Entry {
+                key: Some(k).filter(|k| !k.is_empty()),
+                ..entry.clone()
+            });
         }
     };
     let set_tempo = {
@@ -113,7 +128,10 @@ fn Head(entry: Entry, song: Song, model: SessionModel, lib_put: songs::Library) 
                 return;
             }
             song.change(|m| songs::set_tempo(m, b, beats, unit));
-            lib.put(&Entry { tempo: Some(b.round() as u32), ..entry.clone() });
+            lib.put(&Entry {
+                tempo: Some(b.round() as u32),
+                ..entry.clone()
+            });
         }
     };
     let set_tempo2 = set_tempo.clone();
@@ -204,8 +222,10 @@ fn Form(song: Song, model: SessionModel) -> Element {
         let song = song.clone();
         move |f: Box<dyn FnOnce(&mut Vec<(String, String, u32)>)>| {
             song.change(|m| {
-                let mut l: Vec<(String, String, u32)> =
-                    songs::sections(m).into_iter().map(|s| (s.id, s.name, s.bars)).collect();
+                let mut l: Vec<(String, String, u32)> = songs::sections(m)
+                    .into_iter()
+                    .map(|s| (s.id, s.name, s.bars))
+                    .collect();
                 f(&mut l);
                 songs::lay_out(m, &l);
             });

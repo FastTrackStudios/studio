@@ -5,11 +5,11 @@
 use dioxus::prelude::*;
 
 use super::home::TrackCover;
-use crate::data::{self, dur, Comment};
+use crate::Route;
+use crate::data::{self, Comment, dur};
 use crate::icons::{I, Icon};
 use crate::pieces::{Art, Avatar, Bar, Hair, Hero, Joined, Page, StageTag, Tool};
-use crate::state::{use_app, Menu, Review, Sheet};
-use crate::Route;
+use crate::state::{Menu, Review, Sheet, use_app};
 
 #[component]
 pub fn Records() -> Element {
@@ -61,10 +61,24 @@ fn RecordTile(id: &'static str) -> Element {
             .filter(|t| t.rec == Some(id))
             .map(|t| app.open_on(t.title))
             .sum();
-        (a.title, a.artist, a.hue, app.status_of(a), format!("{} tracks", a.tracks.len()), n)
+        (
+            a.title,
+            a.artist,
+            a.hue,
+            app.status_of(a),
+            format!("{} tracks", a.tracks.len()),
+            n,
+        )
     } else if let Some(t) = id.strip_prefix("t:").and_then(data::track) {
         let what = if t.cover { "Cover single" } else { "Single" };
-        (t.title, t.artist, t.hue, app.stage_of(t), what.to_string(), app.open_on(t.title))
+        (
+            t.title,
+            t.artist,
+            t.hue,
+            app.stage_of(t),
+            what.to_string(),
+            app.open_on(t.title),
+        )
     } else {
         return rsx! {};
     };
@@ -104,8 +118,15 @@ pub fn Album(id: String) -> Element {
             Page { Bar { back: Route::Records {}, title: "Not found" } }
         };
     };
-    let list: Vec<&'static data::Track> = data::STUDIO.iter().filter(|t| t.rec == Some(a.id)).collect();
-    let total: u32 = list.iter().filter_map(|t| app.latest(t.title)).map(|v| v.len).sum();
+    let list: Vec<&'static data::Track> = data::STUDIO
+        .iter()
+        .filter(|t| t.rec == Some(a.id))
+        .collect();
+    let total: u32 = list
+        .iter()
+        .filter_map(|t| app.latest(t.title))
+        .map(|v| v.len)
+        .sum();
     let open: usize = list.iter().map(|t| app.open_on(t.title)).sum();
     let rec = format!("rec:{}", a.id);
     rsx! {
@@ -167,7 +188,9 @@ pub fn Album(id: String) -> Element {
 fn AlbumTrack(idx: usize) -> Element {
     let app = use_app();
     let x = &data::STUDIO[idx];
-    let Some(v) = app.latest(x.title) else { return rsx! {} };
+    let Some(v) = app.latest(x.title) else {
+        return rsx! {};
+    };
     let n = app.open_on(x.title);
     let open = move |_| {
         navigator().push(Route::TrackPage { idx });
@@ -224,7 +247,9 @@ pub fn TrackPage(idx: usize) -> Element {
         None if x.cover => "Cover single".into(),
         None => "Single".into(),
     };
-    let back = x.rec.map_or(Route::Records {}, |r| Route::Album { id: r.into() });
+    let back = x
+        .rec
+        .map_or(Route::Records {}, |r| Route::Album { id: r.into() });
     let say = format!("Opened {} in Session", x.title);
     rsx! {
         Page {
@@ -296,7 +321,11 @@ fn ReviewBody(idx: usize) -> Element {
         "No comments on this version".to_string()
     } else {
         let s = if cs.len() > 1 { "s" } else { "" };
-        let o = if n_open > 0 { format!(" · {n_open} open") } else { String::new() };
+        let o = if n_open > 0 {
+            format!(" · {n_open} open")
+        } else {
+            String::new()
+        };
         format!("{} comment{s}{o}", cs.len())
     };
     let bars = wave_bars(x.title.len(), 72);

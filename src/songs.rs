@@ -61,7 +61,9 @@ impl Entry {
 
     /// The built-in song of the same title, to play it.
     pub fn builtin(&self) -> Option<data::Song> {
-        LIB.iter().find(|x| x.song.title == self.title).map(|x| x.song)
+        LIB.iter()
+            .find(|x| x.song.title == self.title)
+            .map(|x| x.song)
     }
 
     pub fn admitted(&self, f: &crate::state::Filters) -> bool {
@@ -114,7 +116,11 @@ pub fn entries(doc: &LoroDoc) -> Vec<Entry> {
             artist: opt(s(&m, "artist")),
             key: opt(s(&m, "key")),
             tempo: u32::try_from(n(&m, "tempo")).ok().filter(|t| *t > 0),
-            tags: s(&m, "tags").split(',').filter(|t| !t.is_empty()).map(str::to_string).collect(),
+            tags: s(&m, "tags")
+                .split(',')
+                .filter(|t| !t.is_empty())
+                .map(str::to_string)
+                .collect(),
             energy: u8::try_from(n(&m, "energy")).unwrap_or(0),
             ready: s(&m, "ready"),
         })
@@ -171,7 +177,10 @@ pub fn new_id() -> String {
 
 /// Seconds in one bar at the song's first tempo.
 pub fn bar_secs(m: &SessionModel) -> f64 {
-    let t = m.tempo.first().map_or((120.0, 4), |t| (t.bpm, t.beats_per_bar.max(1)));
+    let t = m
+        .tempo
+        .first()
+        .map_or((120.0, 4), |t| (t.bpm, t.beats_per_bar.max(1)));
     60.0 / t.0.max(1.0) * f64::from(t.1)
 }
 
@@ -180,14 +189,19 @@ pub fn bpm(m: &SessionModel) -> f64 {
 }
 
 pub fn meter(m: &SessionModel) -> (u32, u32) {
-    m.tempo.first().map_or((4, 4), |t| (t.beats_per_bar, t.beat_unit))
+    m.tempo
+        .first()
+        .map_or((4, 4), |t| (t.beats_per_bar, t.beat_unit))
 }
 
 /// The song's sections, in order.
 pub fn sections(m: &SessionModel) -> Vec<Section> {
     let bar = bar_secs(m);
-    let mut list: Vec<(&String, &RegionState)> =
-        m.regions.iter().filter(|(_, r)| r.lane == Some(SECTIONS_LANE)).collect();
+    let mut list: Vec<(&String, &RegionState)> = m
+        .regions
+        .iter()
+        .filter(|(_, r)| r.lane == Some(SECTIONS_LANE))
+        .collect();
     list.sort_by(|a, b| a.1.start.total_cmp(&b.1.start));
     list.into_iter()
         .map(|(id, r)| Section {
@@ -221,14 +235,26 @@ pub fn lay_out(m: &mut SessionModel, list: &[(String, String, u32)]) {
 
 /// Change the tempo or meter, keeping every section's length in bars.
 pub fn set_tempo(m: &mut SessionModel, bpm: f64, beats_per_bar: u32, beat_unit: u32) {
-    let list: Vec<(String, String, u32)> = sections(m).into_iter().map(|s| (s.id, s.name, s.bars)).collect();
-    m.tempo = vec![TempoPoint { at: 0.0, bpm, beats_per_bar, beat_unit }];
+    let list: Vec<(String, String, u32)> = sections(m)
+        .into_iter()
+        .map(|s| (s.id, s.name, s.bars))
+        .collect();
+    m.tempo = vec![TempoPoint {
+        at: 0.0,
+        bpm,
+        beats_per_bar,
+        beat_unit,
+    }];
     lay_out(m, &list);
 }
 
 /// A section's colour by its kind (every Verse alike).
 pub fn section_hue(name: &str) -> u32 {
-    let kind: String = name.chars().take_while(|c| c.is_alphabetic()).collect::<String>().to_lowercase();
+    let kind: String = name
+        .chars()
+        .take_while(|c| c.is_alphabetic())
+        .collect::<String>()
+        .to_lowercase();
     match kind.as_str() {
         "intro" => 200,
         "verse" => 150,
@@ -244,7 +270,12 @@ pub fn section_hue(name: &str) -> u32 {
 /// A song's first session: its tempo, a common form and a chart to start from.
 pub fn seed_song(e: &Entry) -> SessionModel {
     let mut m = SessionModel::default();
-    m.tempo = vec![TempoPoint { at: 0.0, bpm: f64::from(e.tempo.unwrap_or(120)), beats_per_bar: 4, beat_unit: 4 }];
+    m.tempo = vec![TempoPoint {
+        at: 0.0,
+        bpm: f64::from(e.tempo.unwrap_or(120)),
+        beats_per_bar: 4,
+        beat_unit: 4,
+    }];
     let form = [
         ("Intro", 4),
         ("Verse 1", 8),
@@ -255,8 +286,10 @@ pub fn seed_song(e: &Entry) -> SessionModel {
         ("Chorus", 8),
         ("Outro", 4),
     ];
-    let list: Vec<(String, String, u32)> =
-        form.iter().map(|(name, bars)| (new_id(), name.to_string(), *bars)).collect();
+    let list: Vec<(String, String, u32)> = form
+        .iter()
+        .map(|(name, bars)| (new_id(), name.to_string(), *bars))
+        .collect();
     lay_out(&mut m, &list);
     m.chart = chart_skeleton(e, &sections(&m));
     m
@@ -284,8 +317,15 @@ fn chart_skeleton(e: &Entry, list: &[Section]) -> String {
 
 /// A section's short label for the form bar: `V1`, `C`, `PC`, `B`.
 pub fn short(name: &str) -> String {
-    let words: Vec<&str> = name.split(|c: char| c.is_whitespace() || c == '-').filter(|w| !w.is_empty()).collect();
-    let num: String = words.iter().filter(|w| w.chars().all(|c| c.is_ascii_digit())).copied().collect();
+    let words: Vec<&str> = name
+        .split(|c: char| c.is_whitespace() || c == '-')
+        .filter(|w| !w.is_empty())
+        .collect();
+    let num: String = words
+        .iter()
+        .filter(|w| w.chars().all(|c| c.is_ascii_digit()))
+        .copied()
+        .collect();
     let letters: String = words
         .iter()
         .filter(|w| !w.chars().all(|c| c.is_ascii_digit()))
@@ -349,12 +389,17 @@ mod backing {
                 .map(|p| Here {
                     name: p.name,
                     hue: p.hue,
-                    section: p.data.get("section").and_then(|s| s.as_str()).map(str::to_string),
+                    section: p
+                        .data
+                        .get("section")
+                        .and_then(|s| s.as_str())
+                        .map(str::to_string),
                 })
                 .collect()
         }
         pub fn say_section(&self, section: Option<&str>) {
-            self.0.set_presence(&serde_json::json!({ "section": section }));
+            self.0
+                .set_presence(&serde_json::json!({ "section": section }));
         }
     }
 }
@@ -388,7 +433,10 @@ mod backing {
     pub fn use_backing(id: String) -> Backing {
         let rev = use_signal(|| 0u64);
         let doc = use_hook(|| DOCS.with(|d| d.borrow_mut().entry(id).or_default().clone()));
-        Backing { doc: LoroDocCell(doc), rev }
+        Backing {
+            doc: LoroDocCell(doc),
+            rev,
+        }
     }
 
     impl Backing {
@@ -416,6 +464,18 @@ mod backing {
     }
 }
 
+/// The library's shape versions (`drive_spine::schema`): version 1 is the
+/// library seeded with the built-in songs.
+const LIBRARY_STEPS: &[drive_spine::schema::Step] = &[|d| {
+    if d.get_map("songs").is_empty() {
+        seed_library(d);
+    }
+}];
+
+/// A song document's shape versions: version 1 is a session-sync session
+/// (the seed writes it; the step only stamps the version).
+const SONG_STEPS: &[drive_spine::schema::Step] = &[|_| {}];
+
 /// The library, live.
 #[derive(Clone, PartialEq)]
 pub struct Library(backing::Backing);
@@ -427,8 +487,9 @@ pub fn use_library() -> Library {
     let ready = lib.0.ready();
     let seed = lib.clone();
     use_effect(use_reactive!(|ready| {
-        if ready && seed.0.peek().get_map("songs").is_empty() {
-            seed.0.edit(seed_library);
+        if ready && drive_spine::schema::version(&seed.0.peek()) < LIBRARY_STEPS.len() as i64 {
+            seed.0
+                .edit(|d| drive_spine::schema::upgrade(d, LIBRARY_STEPS));
         }
     }));
     lib
@@ -437,7 +498,11 @@ pub fn use_library() -> Library {
 impl Library {
     pub fn entries(&self) -> Vec<Entry> {
         let list = entries(&self.0.loro());
-        if list.is_empty() { LIB.iter().map(Entry::from_lib).collect() } else { list }
+        if list.is_empty() {
+            LIB.iter().map(Entry::from_lib).collect()
+        } else {
+            list
+        }
     }
 
     pub fn get(&self, id: &str) -> Option<Entry> {
@@ -466,6 +531,9 @@ pub fn use_song(id: &str, entry: Option<Entry>) -> Song {
                 seed.0.edit(|d| {
                     let _ = SessionDoc::from_loro(d.clone()).write(&seed_song(&e), ORIGIN_LOCAL);
                 });
+            }
+            if drive_spine::schema::version(&seed.0.peek()) < SONG_STEPS.len() as i64 {
+                seed.0.edit(|d| drive_spine::schema::upgrade(d, SONG_STEPS));
             }
         }
     }));
@@ -530,7 +598,10 @@ mod tests {
     }
 
     fn form(m: &SessionModel) -> Vec<(String, u32, u32)> {
-        sections(m).into_iter().map(|s| (s.name, s.start_bar, s.bars)).collect()
+        sections(m)
+            .into_iter()
+            .map(|s| (s.name, s.start_bar, s.bars))
+            .collect()
     }
 
     #[test]
@@ -562,19 +633,31 @@ mod tests {
         let b = a.fork();
         // A renames the bridge while B makes the outro longer.
         let mut ma = a.read();
-        let bridge = sections(&ma).into_iter().find(|s| s.name == "Bridge").unwrap().id;
+        let bridge = sections(&ma)
+            .into_iter()
+            .find(|s| s.name == "Bridge")
+            .unwrap()
+            .id;
         ma.regions.get_mut(&bridge).unwrap().name = "Bridge (down)".into();
         a.write(&ma, ORIGIN_LOCAL).unwrap();
         let mut mb = b.read();
         let list: Vec<(String, String, u32)> = sections(&mb)
             .into_iter()
-            .map(|s| (s.id, s.name.clone(), if s.name == "Outro" { 8 } else { s.bars }))
+            .map(|s| {
+                (
+                    s.id,
+                    s.name.clone(),
+                    if s.name == "Outro" { 8 } else { s.bars },
+                )
+            })
             .collect();
         lay_out(&mut mb, &list);
         b.write(&mb, ORIGIN_LOCAL).unwrap();
         // Both land, wherever they meet.
-        a.import(&b.updates_since(&a.version()).unwrap(), "b").unwrap();
-        b.import(&a.updates_since(&b.version()).unwrap(), "a").unwrap();
+        a.import(&b.updates_since(&a.version()).unwrap(), "b")
+            .unwrap();
+        b.import(&a.updates_since(&b.version()).unwrap(), "a")
+            .unwrap();
         for doc in [&a, &b] {
             let f = form(&doc.read());
             assert!(f.iter().any(|s| s.0 == "Bridge (down)"));

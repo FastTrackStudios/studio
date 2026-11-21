@@ -2,12 +2,12 @@
 
 use dioxus::prelude::*;
 
-use super::{progress_of, BookButton, OccRow, OrgPill, RehRow};
-use crate::data::{self, Rehearsal, DAY, MONTH, TODAY};
+use super::{BookButton, OccRow, OrgPill, RehRow, progress_of};
+use crate::Route;
+use crate::data::{self, DAY, MONTH, Rehearsal, TODAY};
 use crate::icons::{I, Icon};
 use crate::pieces::{Art, Bar, Page};
 use crate::state::use_app;
-use crate::Route;
 
 /// A row of the week: a set or a rehearsal.
 #[derive(Clone, PartialEq)]
@@ -47,7 +47,12 @@ pub fn Home() -> Element {
         .take(3)
         .collect();
 
-    let date = format!("{}, {} {}", DAY[TODAY.weekday()], MONTH[TODAY.month0()], TODAY.mday());
+    let date = format!(
+        "{}, {} {}",
+        DAY[TODAY.weekday()],
+        MONTH[TODAY.month0()],
+        TODAY.mday()
+    );
 
     rsx! {
         Page {
@@ -116,7 +121,9 @@ pub fn Home() -> Element {
 /// Tonight's set (or the next one you play), its room, call and rig.
 #[component]
 fn NextUp(id: String) -> Element {
-    let Some(o) = data::occ(&id) else { return rsx! {} };
+    let Some(o) = data::occ(&id) else {
+        return rsx! {};
+    };
     let pl = o.series.place();
     let kicker = if o.date.from_today() == 0 {
         "Tonight".to_string()

@@ -3,11 +3,11 @@
 
 use dioxus::prelude::*;
 
-use crate::data::{self, Song, ME};
+use crate::Route;
+use crate::data::{self, ME, Song};
 use crate::icons::{I, Icon};
 use crate::pieces::{Bar, Cal, Hair, Hero, Joined, Page, SongArt, Tool};
-use crate::state::{use_app, Menu, Sheet};
-use crate::Route;
+use crate::state::{Menu, Sheet, use_app};
 
 #[component]
 pub fn SetPage(id: String) -> Element {
@@ -53,7 +53,9 @@ pub fn SetPage(id: String) -> Element {
 /// A week's set, in its sections.
 #[component]
 fn WeekSet(id: String, tools: Element) -> Element {
-    let Some(o) = data::occ(&id) else { return rsx! {} };
+    let Some(o) = data::occ(&id) else {
+        return rsx! {};
+    };
     let sr = o.series;
     let pl = sr.place();
     let folder = sr.folder().map_or("", |f| f.name);
@@ -140,7 +142,9 @@ fn WeekSet(id: String, tools: Element) -> Element {
 #[component]
 fn SetSong(set: String, i: usize) -> Element {
     let app = use_app();
-    let Some(o) = data::occ(&set) else { return rsx! {} };
+    let Some(o) = data::occ(&set) else {
+        return rsx! {};
+    };
     let x = o.songs[i];
     let (v, g) = data::leads_of(o, i, &x);
     let cur = app.key_in(&set, i, &x);
@@ -150,9 +154,17 @@ fn SetSong(set: String, i: usize) -> Element {
     let key_set = set.clone();
     let arr_set = set.clone();
     // Others with this song's key or arrangement open, like a live selection.
-    let here: Vec<_> = app.sync.viewers().into_iter().filter(|v| v.row == Some(i)).collect();
+    let here: Vec<_> = app
+        .sync
+        .viewers()
+        .into_iter()
+        .filter(|v| v.row == Some(i))
+        .collect();
     let ring = here.first().map_or(String::new(), |v| {
-        format!("position:relative;box-shadow:inset 0 0 0 2px oklch(.62 .16 {});border-radius:12px;", v.hue)
+        format!(
+            "position:relative;box-shadow:inset 0 0 0 2px oklch(.62 .16 {});border-radius:12px;",
+            v.hue
+        )
     });
     rsx! {
         div { class: "trow roomy", style: "{ring}",
@@ -228,8 +240,16 @@ fn Lead(who: &'static str, role: I) -> Element {
 
 /// The key: big in its colour; moved, how far from the original.
 #[component]
-pub fn KeyChip(orig: &'static str, cur: &'static str, onclick: EventHandler<MouseEvent>) -> Element {
-    let d = if orig != cur { data::steps(orig, cur) } else { 0 };
+pub fn KeyChip(
+    orig: &'static str,
+    cur: &'static str,
+    onclick: EventHandler<MouseEvent>,
+) -> Element {
+    let d = if orig != cur {
+        data::steps(orig, cur)
+    } else {
+        0
+    };
     let h = data::hue(cur).unwrap_or(0);
     let label = if d != 0 {
         format!(
@@ -258,7 +278,9 @@ pub fn KeyChip(orig: &'static str, cur: &'static str, onclick: EventHandler<Mous
 /// A show: its acts, each song with its key.
 #[component]
 fn ShowSet(id: String, tools: Element) -> Element {
-    let Some(st) = data::show(&id) else { return rsx! {} };
+    let Some(st) = data::show(&id) else {
+        return rsx! {};
+    };
     let folder = data::show_folder(&id).map_or("", |f| f.name);
     let n = st.songs().len();
     let total = st.total();
@@ -316,7 +338,11 @@ fn ShowSong(song: Song, list: Vec<Song>, from: &'static str) -> Element {
     let app = use_app();
     let x = song;
     let sub = match x.len {
-        Some(l) => format!("{} · {}", x.artist.unwrap_or("No artist yet"), data::dur(l as f64)),
+        Some(l) => format!(
+            "{} · {}",
+            x.artist.unwrap_or("No artist yet"),
+            data::dur(l as f64)
+        ),
         None => x.artist.unwrap_or("No artist yet").to_string(),
     };
     rsx! {

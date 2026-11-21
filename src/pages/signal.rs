@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 use crate::data;
 use crate::icons::{I, Icon};
 use crate::pieces::{Bar, Hair, Page};
-use crate::state::{use_app, Menu};
+use crate::state::{Menu, use_app};
 
 #[component]
 pub fn Signal() -> Element {

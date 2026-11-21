@@ -5,11 +5,11 @@ use std::collections::HashSet;
 
 use dioxus::prelude::*;
 
-use crate::data::{self, cap, LibSong, LIB, TAGS};
+use crate::Route;
+use crate::data::{self, LIB, LibSong, TAGS, cap};
 use crate::icons::{I, Icon};
 use crate::pieces::{Bar, Cover, Energy, KeyC, Page, SongArt, Tool};
-use crate::state::{use_app, Sheet};
-use crate::Route;
+use crate::state::{Sheet, use_app};
 
 /// Four artists' art in a square, for a tag's tile.
 #[component]
@@ -98,7 +98,11 @@ pub fn Library(tag: String) -> Element {
     let lib = crate::songs::use_library();
     let all_songs = lib.entries();
     let f = filters();
-    let list: Vec<crate::songs::Entry> = all_songs.iter().filter(|x| x.admitted(&f)).cloned().collect();
+    let list: Vec<crate::songs::Entry> = all_songs
+        .iter()
+        .filter(|x| x.admitted(&f))
+        .cloned()
+        .collect();
     let within = all_songs
         .iter()
         .filter(|x| base.is_none_or(|t| x.tags.iter().any(|y| y == t)))

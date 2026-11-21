@@ -5,11 +5,11 @@
 use dioxus::prelude::*;
 
 use super::{book_for, progress_of};
+use crate::Route;
 use crate::data::{self, Day, MONTH};
 use crate::icons::{I, Icon};
 use crate::pieces::{Art, Bar, Cal, Cover, DayTile, Hair, Hero, Joined, Page, Ring, Tool};
-use crate::state::{use_app, Menu};
-use crate::Route;
+use crate::state::{Menu, use_app};
 
 #[component]
 pub fn Setlists() -> Element {
@@ -128,7 +128,9 @@ fn sorted_series(f: &data::Folder) -> Vec<&'static str> {
 /// A weekly event: its logo ringed by how ready its next set is.
 #[component]
 fn EventTile(id: &'static str) -> Element {
-    let Some(sr) = data::series(id) else { return rsx! {} };
+    let Some(sr) = data::series(id) else {
+        return rsx! {};
+    };
     let nx = sr.next();
     let (n, of) = (nx.map_or(0, |o| o.songs.len()), sr.size);
     let when = nx.map(|o| {
@@ -176,7 +178,9 @@ fn EventTile(id: &'static str) -> Element {
 /// A show, its cover and its date.
 #[component]
 fn ShowRow(id: &'static str, folder: &'static str) -> Element {
-    let Some(st) = data::show(id) else { return rsx! {} };
+    let Some(st) = data::show(id) else {
+        return rsx! {};
+    };
     let total = st.total();
     let n = st.songs().len();
     rsx! {
@@ -212,14 +216,22 @@ pub fn Series(id: String) -> Element {
         };
     };
     let all = sr.occs();
-    let up: Vec<_> = all.iter().copied().filter(|o| o.date.from_today() >= 0).collect();
-    let mut past: Vec<_> = all.iter().copied().filter(|o| o.date.from_today() < 0).collect();
+    let up: Vec<_> = all
+        .iter()
+        .copied()
+        .filter(|o| o.date.from_today() >= 0)
+        .collect();
+    let mut past: Vec<_> = all
+        .iter()
+        .copied()
+        .filter(|o| o.date.from_today() < 0)
+        .collect();
     past.reverse();
     let pl = sr.place();
     let folder = sr.folder().map_or("", |f| f.name);
-    let nx_say = up
-        .first()
-        .map_or("Plan a set".to_string(), |o| format!("Planning {}", o.date.short()));
+    let nx_say = up.first().map_or("Plan a set".to_string(), |o| {
+        format!("Planning {}", o.date.short())
+    });
     let past_n = past.len();
     rsx! {
         Page { tint: sr.hue,
@@ -290,7 +302,9 @@ pub fn Series(id: String) -> Element {
 
 #[component]
 fn SeriesRow(id: String) -> Element {
-    let Some(o) = data::occ(&id) else { return rsx! {} };
+    let Some(o) = data::occ(&id) else {
+        return rsx! {};
+    };
     let names: Vec<_> = o.songs.iter().take(3).map(|x| x.title).collect();
     rsx! {
         button {
