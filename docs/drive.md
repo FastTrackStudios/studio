@@ -177,6 +177,29 @@ what a node keeps: "every document in org X", "all media of record Y",
 - **End-to-end encryption** per org, optional: keys in the URL fragment for
   links; no server search or server-rendered share pages for that org.
 
+## The access ladder
+
+Everyone who can open a document is a live participant (edits and
+presence, as in Google Docs); only identity and rights differ.
+
+| Rung | Who | Identity |
+|---|---|---|
+| Published | anyone on the internet | none; the page is server-rendered, optionally indexed |
+| Public link | anyone with the link | anonymous; a display name asked on first edit |
+| Invited by email | a named person, no account | a short-lived key tied to their email (magic link) |
+| Account | signed-in users | device keys vouched for by the account |
+| Org role | members | account plus a signed membership |
+
+- A **link** carries scope (a document and what it references read-only,
+  a folder or a project), level (view, comment, suggest, edit), audience
+  (anyone, an org, named emails), and options (expiry, password,
+  downloads, presence); revoking it ends it everywhere at once.
+- Guests' edits are signed with the link's key; **signing up attaches that
+  key to the new account**, so their work and access carry over.
+- **Public edit links** have rate limits, size caps and an owner's lock;
+  every change records its source (account, email, link), so a bad edit
+  is traced and rolled back.
+
 ## Tiers
 
 | Tier | Runs where |
