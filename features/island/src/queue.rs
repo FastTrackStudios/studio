@@ -810,6 +810,8 @@ fn grouped(sections: Vec<Section>, sets: &[Value]) -> Vec<Section> {
                     .map(|l| {
                         let inner = l.trim().trim_start_matches("[[").trim_end_matches("]]");
                         let path = inner.split('|').next().unwrap_or(inner);
+                        // `#Shortened`: the arrangement, not the song's note.
+                        let path = path.split('#').next().unwrap_or(path);
                         path.trim_end_matches(".md").to_owned()
                     })
                     .collect()
@@ -817,7 +819,7 @@ fn grouped(sections: Vec<Section>, sets: &[Value]) -> Vec<Section> {
             .unwrap_or_default();
         let (mine, others): (Vec<Item>, Vec<Item>) = rest.into_iter().partition(|item| {
             note_of(&item.id)
-                .map(|n| n.trim_end_matches(".md"))
+                .map(|n| n.split('#').next().unwrap_or(n).trim_end_matches(".md"))
                 .is_some_and(|n| links.iter().any(|l| l == n))
         });
         rest = others;

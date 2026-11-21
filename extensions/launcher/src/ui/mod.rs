@@ -235,8 +235,10 @@ pub fn open_setlist(note: &str, title: &str) {
             let _ = crate::host::run("DAW_OPEN", serde_json::json!({ "path": url })).await;
             return;
         }
-        let _ = note;
-        let args = serde_json::json!({ "setlist": title });
+        let _ = title;
+        // By its note's path: a page's title ("Merry & Bright") need not be
+        // the note's ("Merry & Bright - CBU Christmas 2026").
+        let args = serde_json::json!({ "setlist": note });
         let _ = crate::host::run("STUDIO_LAUNCHER_OPEN_SETLIST", args).await;
     });
 }

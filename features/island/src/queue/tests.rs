@@ -532,6 +532,25 @@ fn a_setlist_note_is_read_into_sets_and_rows() {
     );
 }
 
+/// A note's `sets` name each song by its link, the arrangement played as
+/// its fragment (`#Choir`): the row of that song (its own `#Choir`) is in
+/// that set, not left over.
+#[test]
+fn a_set_names_a_song_by_its_arrangement_link() {
+    let note = json!({"note": {"path": "Setlists/Eve.md", "title": "", "type": "setlist",
+        "properties": {"sets": [
+            {"name": "Top", "songs": ["[[Libraries/C/Silent/Silent#Choir|Silent Night]]"]},
+            {"name": "Bottom", "songs": ["[[Libraries/C/Joy/Joy|Joy to the World]]"]},
+        ]},
+        "body": NOTE.replace("    ## Tree Lighting\n", "").replace("## Tree Lighting\n", "")}});
+    let s = setlist_of(&note).unwrap();
+    let names: Vec<Option<&str>> = s.sections.iter().map(|x| x.name.as_deref()).collect();
+    assert_eq!(names, [Some("Top"), Some("Bottom")]);
+    assert_eq!(s.sections[0].items.len(), 1);
+    assert_eq!(s.sections[0].items[0].title, "Silent Night");
+    assert_eq!(s.sections[1].items.len(), 2, "Joy, played twice");
+}
+
 /// The fixture (`fixtures/Carol Night.md`): two sets, a song transposed, one
 /// with no recording, one played twice.
 #[test]
@@ -1006,7 +1025,17 @@ fn the_manifest_declares_the_view_its_claim_and_its_favourites() {
         .collect();
     assert_eq!(
         views,
-        ["progress", "transport", "lyrics", VIEW, crate::song::VIEW]
+        [
+            "progress",
+            "transport",
+            "lyrics",
+            "arrangement",
+            "home",
+            "mixer",
+            "lighting",
+            VIEW,
+            crate::song::VIEW
+        ]
     );
     let embed = &m["embeds"].as_array().unwrap()[0];
     assert_eq!(embed["view"].as_str(), Some(VIEW));
@@ -1052,17 +1081,27 @@ fn the_manifest_declares_the_view_its_claim_and_its_favourites() {
     let favs = m["favourites"].as_array().unwrap();
     assert_eq!(favs.len(), 1);
     assert_eq!(favs[0]["note_type"].as_str(), Some("setlist"));
+    // Each tab opens a view of its own, or a menu (More) whose every
+    // entry does.
     for tab in favs[0]["tabs"].as_array().unwrap() {
-        let view = tab["target"]["view"].as_str().unwrap();
-        assert!(views.contains(&view), "{view} is not its own view");
+        let target = &tab["target"];
+        let opened: Vec<&str> = match target.get("menu").and_then(toml::Value::as_array) {
+            Some(menu) => menu
+                .iter()
+                .map(|e| e["target"]["view"].as_str().unwrap())
+                .collect(),
+            None => vec![target["view"].as_str().unwrap()],
+        };
+        for view in opened {
+            assert!(views.contains(&view), "{view} is not its own view");
+        }
     }
+    // The round button opens the player (the owner's "^", 2026-11-18).
     let primary = &favs[0]["primary"];
     assert_eq!(
         primary["target"]["action"].as_str(),
-        Some("PLAYHEAD_TOGGLE")
+        Some("PLAYHEAD_DETAIL")
     );
-    assert_eq!(primary["state"].as_str(), Some("playing"));
-    assert_eq!(primary["on"]["label"].as_str(), Some("Pause"));
     // The setlists extension's own `setlist` view is not this one.
     let other: toml::Table =
         toml::from_str(include_str!("../../../setlists/extension.toml")).unwrap();
