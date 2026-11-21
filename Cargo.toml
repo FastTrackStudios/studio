@@ -5,7 +5,12 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 description = "Studio, remade from the launcher prototype as a plain Dioxus app"
 
+[workspace]
+members = [".", "crates/session-sync"]
+
 [dependencies]
+session-sync = { path = "crates/session-sync" }
+web-time = "1"
 dioxus = { version = "=0.8.0-alpha.3", features = ["router"] }
 # Drive, the local-first sync: live sets, presence and the spine. Its
 # client is the browser's (web-sys), so only the web build has it.

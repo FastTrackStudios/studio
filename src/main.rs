@@ -1,6 +1,8 @@
 //! Studio, remade from the launcher prototype: one Dioxus app for the
 //! phone first, and later the desktop and the web. The content is made up
-//! and in memory; on the web its sets are live on Drive (`live_sync`).
+//! and in memory; on the web its sets are live on Drive (`live_sync`), and
+//! its library and songs are Drive documents, each song a session
+//! (`songs`, on `session_sync`).
 
 mod data;
 mod icons;
@@ -9,6 +11,7 @@ mod pages;
 mod pieces;
 mod sheets;
 mod shell;
+mod songs;
 mod state;
 
 use dioxus::prelude::*;
@@ -20,6 +23,7 @@ use pages::records::{Album, Records, TrackPage};
 use pages::set::SetPage;
 use pages::setlists::{Every, Series, Setlists};
 use pages::signal::Signal;
+use pages::song::SongPage;
 use shell::Shell;
 
 const STYLE: Asset = asset!("/assets/style.css");
@@ -56,6 +60,8 @@ pub enum Route {
         LibraryHome {},
         #[route("/library/:tag")]
         Library { tag: String },
+        #[route("/song/:id")]
+        SongPage { id: String },
         #[route("/signal")]
         Signal {},
 }
@@ -108,6 +114,8 @@ impl Route {
 }
 
 fn main() {
+    // Warnings and up: Loro's encoder logs every block at info.
+    dioxus::logger::init(dioxus::logger::tracing::Level::WARN).ok();
     dioxus::launch(App);
 }
 

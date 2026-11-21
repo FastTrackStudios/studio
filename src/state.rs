@@ -64,6 +64,18 @@ pub struct Override {
     pub arr: Option<&'static str>,
 }
 
+/// What the filters look at in a song, from the built-in list or the library.
+pub struct Facts<'a> {
+    pub title: &'a str,
+    pub artist: Option<&'a str>,
+    /// Its key, as one of [`data::FIFTHS`] when it is one.
+    pub key: Option<&'a str>,
+    pub tempo: Option<u32>,
+    pub tags: &'a [&'a str],
+    pub energy: u8,
+    pub ready: &'a str,
+}
+
 /// The library's filters.
 #[derive(Clone, Default, PartialEq, Debug)]
 pub struct Filters {
@@ -79,32 +91,45 @@ pub struct Filters {
 impl Filters {
     pub fn matches(&self, x: &data::LibSong) -> bool {
         let s = &x.song;
-        let hay = format!("{} {}", s.title, s.artist.unwrap_or("")).to_lowercase();
+        self.admits(&Facts {
+            title: s.title,
+            artist: s.artist,
+            key: data::key_of(s),
+            tempo: s.tempo,
+            tags: &x.tags,
+            energy: x.energy,
+            ready: s.ready,
+        })
+    }
+
+    /// Whether a song with these facts passes every filter.
+    pub fn admits(&self, f: &Facts) -> bool {
+        let hay = format!("{} {}", f.title, f.artist.unwrap_or("")).to_lowercase();
         if !self.q.is_empty() && !hay.contains(&self.q.to_lowercase()) {
             return false;
         }
-        if self.tags.iter().any(|t| !x.tags.contains(t)) {
+        if self.tags.iter().any(|t| !f.tags.contains(t)) {
             return false;
         }
-        if !self.keys.is_empty() && !self.keys.contains(data::key_of(s).unwrap_or("?")) {
+        if !self.keys.is_empty() && !self.keys.contains(f.key.unwrap_or("?")) {
             return false;
         }
-        if !self.energy.is_empty() && !self.energy.contains(&x.energy) {
+        if !self.energy.is_empty() && !self.energy.contains(&f.energy) {
             return false;
         }
         if !self.tempo.is_empty() {
-            let t = s.tempo.unwrap_or(0);
+            let t = f.tempo.unwrap_or(0);
             let ok = data::TEMPI
                 .iter()
-                .any(|(n, lo, hi)| self.tempo.contains(n) && s.tempo.is_some() && t >= *lo && t < *hi);
+                .any(|(n, lo, hi)| self.tempo.contains(n) && f.tempo.is_some() && t >= *lo && t < *hi);
             if !ok {
                 return false;
             }
         }
-        if self.ready.iter().any(|k| !s.ready.contains(*k)) {
+        if self.ready.iter().any(|k| !f.ready.contains(*k)) {
             return false;
         }
-        if self.rested && data::weeks_since(s.title) < 4.0 {
+        if self.rested && data::weeks_since(f.title) < 4.0 {
             return false;
         }
         true

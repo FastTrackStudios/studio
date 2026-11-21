@@ -733,6 +733,12 @@ pub fn weeks_since(title: &str) -> f64 {
         .map_or(f64::INFINITY, |o| -o.date.from_today() as f64 / 7.0)
 }
 
+/// A key's name as the circle of fifths spells it (`Gb` is `F#`), if it is one.
+pub fn norm_key(k: &str) -> Option<&'static str> {
+    let k = k.split('→').next().unwrap_or(k);
+    FIFTHS.iter().copied().find(|f| *f == alias(k))
+}
+
 pub fn key_of(x: &Song) -> Option<&'static str> {
     x.key.map(|k| {
         let k = k.split('→').next().unwrap_or(k);

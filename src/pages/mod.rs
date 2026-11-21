@@ -7,6 +7,7 @@ pub mod records;
 pub mod set;
 pub mod setlists;
 pub mod signal;
+pub mod song;
 
 use dioxus::prelude::*;
 

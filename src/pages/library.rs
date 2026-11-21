@@ -95,11 +95,13 @@ pub fn Library(tag: String) -> Element {
     // Opening a tag starts its filters from that tag alone.
     use_hook(move || filters.with_mut(|f| f.tags = base.into_iter().collect()));
 
+    let lib = crate::songs::use_library();
+    let all_songs = lib.entries();
     let f = filters();
-    let list: Vec<LibSong> = LIB.iter().filter(|x| f.matches(x)).cloned().collect();
-    let within = LIB
+    let list: Vec<crate::songs::Entry> = all_songs.iter().filter(|x| x.admitted(&f)).cloned().collect();
+    let within = all_songs
         .iter()
-        .filter(|x| base.is_none_or(|t| x.tags.contains(&t)))
+        .filter(|x| base.is_none_or(|t| x.tags.iter().any(|y| y == t)))
         .count();
     let chips = f.chips();
     let n_filters = chips.len();
@@ -109,7 +111,6 @@ pub fn Library(tag: String) -> Element {
         format!("{} of {within} songs", list.len())
     };
     let title = base.map_or("All songs".to_string(), cap);
-    let from = title.clone();
     rsx! {
         Page {
             Bar {
@@ -172,6 +173,7 @@ pub fn Library(tag: String) -> Element {
                         }
                     }
                 }
+                NewSong { lib: lib.clone(), tag: base }
                 div { class: "libcount",
                     span { "{count}" }
                     span { class: "elegend",
@@ -190,28 +192,26 @@ pub fn Library(tag: String) -> Element {
                     }
                     for x in list.iter() {
                         {
-                            let s = x.song;
-                            let all: Vec<_> = list.iter().map(|y| y.song).collect();
-                            let from = from.clone();
-                            let sub: Vec<String> = [
-                                    s.artist.map(str::to_string),
-                                    s.tempo.map(|t| format!("{t} bpm")),
-                                ]
+                            let sub: Vec<String> = [x.artist.clone(), x.tempo.map(|t| format!("{t} bpm"))]
                                 .into_iter()
                                 .flatten()
                                 .collect();
+                            let id = x.id.clone();
+                            let key = x.key.as_deref().and_then(data::norm_key);
                             rsx! {
                                 button {
-                                    key: "{s.title}",
+                                    key: "{x.id}",
                                     class: "song lib",
-                                    onclick: move |_| app.play(all.clone(), format!("Library · {from}"), s.title),
-                                    SongArt { song: s }
+                                    onclick: move |_| {
+                                        navigator().push(Route::SongPage { id: id.clone() });
+                                    },
+                                    EntryArt { title: x.title.clone(), artist: x.artist.clone() }
                                     span { class: "mid",
-                                        span { class: "t1", "{s.title}" }
+                                        span { class: "t1", "{x.title}" }
                                         span { class: "s1", "{sub.join(\" · \")}" }
                                     }
                                     span { class: "libr",
-                                        if let Some(k) = s.key {
+                                        if let Some(k) = key {
                                             KeyC { k }
                                         }
                                         Energy { e: x.energy }
@@ -221,6 +221,59 @@ pub fn Library(tag: String) -> Element {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// A library song's art: JT's cover on his own songs, a generated one otherwise.
+#[component]
+fn EntryArt(title: String, artist: Option<String>) -> Element {
+    let own = artist.as_deref().is_some_and(|a| data::OWN.contains(&a));
+    let hue = data::str_hue(artist.as_deref().unwrap_or(&title));
+    rsx! {
+        span { class: "sart",
+            if own {
+                img { src: data::JT_COVER, alt: "" }
+            } else {
+                Cover { title, size: 44, hue }
+            }
+        }
+    }
+}
+
+/// A new song: its title, then its session opens.
+#[component]
+fn NewSong(lib: crate::songs::Library, tag: Option<&'static str>) -> Element {
+    let mut title = use_signal(String::new);
+    rsx! {
+        label { class: "newsong",
+            Icon { name: I::Plus, size: 16 }
+            input {
+                placeholder: "New song",
+                value: "{title}",
+                aria_label: "New song title",
+                oninput: move |e| title.set(e.value()),
+                onkeydown: move |e: KeyboardEvent| {
+                    let t = title().trim().to_string();
+                    if e.key().to_string() == "Enter" && !t.is_empty() {
+                        let id = session_sync::slug::slugify(&t);
+                        if lib.get(&id).is_none() {
+                            lib.put(&crate::songs::Entry {
+                                id: id.clone(),
+                                title: t,
+                                artist: None,
+                                key: None,
+                                tempo: Some(120),
+                                tags: tag.map(|t| vec![t.to_string()]).unwrap_or_default(),
+                                energy: 3,
+                                ready: String::new(),
+                            });
+                        }
+                        title.set(String::new());
+                        navigator().push(Route::SongPage { id });
+                    }
+                },
             }
         }
     }
