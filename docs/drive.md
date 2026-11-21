@@ -1,18 +1,24 @@
-# The central system: design
+# Drive: design
 
-A design note for the system Studio uses as its back end, written
-2026-11-20. "The system" is its working name until it has one. It lives
-here until it has its own repository.
+A design note for **Drive**, the central system Studio and the other apps
+use as their back end, written 2026-11-20. It lives here until Drive has
+its own repository.
 
 ## What it is
 
 One system for everything a person or an org keeps: tasks and projects,
-calendars, contacts, notes, email, files and media, and the apps built on
-it (Studio first: sets, songs, records). Every app is a client of the
-system; none keeps its own back end.
+calendars, contacts, notes, email, files and media, and the data of every
+app built on it. Drive is a data platform, a service and an SDK; it is not
+an app framework. Apps are separate products, each with its own repository
+and UI, that embed `drive-client`; **no app deploys a server**.
+
+The first apps: **Studio** (sets, songs, records), a **meal and cooking
+tracker**, and an **agent wiki**.
 
 It replaces Task (archived). It is built from the crates below directly,
-not on Architect, whose ideas and code it borrows (see "Borrowed").
+not on Architect, whose ideas and code it borrows (see "Borrowed"). Where
+Architect bundled the framework, the server, a UI shell and extensions,
+Drive is only the data layer.
 
 ## Principles
 
@@ -108,7 +114,7 @@ not on Architect, whose ideas and code it borrows (see "Borrowed").
 
 ## Nodes and roles
 
-One binary, `node` (name to come), headless, plus the same code embedded
+One binary, `drive-node`, headless, plus the same code embedded
 in every app.
 
 | Role | Does |
@@ -151,7 +157,7 @@ what a node keeps: "every document in org X", "all media of record Y",
 |---|---|
 | Hosted | Our cloud is the always-on peer, storage, relay, index, web and mail roles, for many orgs (isolated, with quotas and billing). |
 | Bring your own storage | An org registers its buckets and servers; placement rules send its data there. Our cloud keeps accounts, discovery and links. |
-| Self-hosted | The org runs `node` with every role, registered with our directory, so its people, hosted users and guests still collaborate. |
+| Self-hosted | The org runs `drive-node` with every role, registered with our directory, so its people, hosted users and guests still collaborate. |
 
 Multi-tenancy, quotas and billing are the only parts self-hosters do not
 need.
@@ -172,13 +178,38 @@ need.
   with no app installed.
 - **Stalwart** is an optional companion for orgs that want their own
   domain's mail, calendars and contacts: self-hosters run its free edition
-  beside `node`; hosting it for many orgs needs its enterprise licence
+  beside `drive-node`; hosting it for many orgs needs its enterprise licence
   (multi-tenancy is enterprise-only). Avoid its AGPL `sieve-rs` and the
   third-party `stalwart` / `stalwart-lite` crates.
 
+## Apps on Drive
+
+- **Namespaced types.** Each app registers its document types
+  (`studio.Set`, `meals.Recipe`, `wiki.Page`) with their schemas and
+  versions. Drive owns the shared ones: Task, Project, Event, Contact,
+  Note, File, Folder.
+- **One account across apps.** Signing in to one signs in to all; their
+  data links freely (a meal plan makes Events, every app's to-dos are
+  Tasks in one list, a wiki page links a song or a recipe).
+- **Per-app permissions.** An app gets its own types plus the shared types
+  the user grants it ("Meals wants your calendar"), so apps by other
+  people can come later.
+- **Declarative projections.** An app declares, as data, which fields of
+  its types become which columns of its query tables; any node indexes
+  them without the app's code. Wasm modules only if that ever falls short.
+- **Hosted web builds.** An app uploads its static web build to Drive,
+  which serves it on the app's own address for share links and the web.
+- **Sync by app.** A device syncs the types of the apps installed on it,
+  what links to them, and what is pinned.
+- **Agents are clients.** Drive's API (HTTP and MCP) with scoped tokens,
+  capabilities for programs, so agents read and write across apps within
+  what they are granted.
+- **A Drive app** (optional) browses everything: files, tasks, mail, every
+  app's documents.
+
 ## What apps see
 
-Studio and every later app use one client crate, embedded:
+Every app uses one client crate, `drive-client`, embedded:
 
 - `open::<Set>(id)` → a typed, live view of a document; edits are
   methods on it.
@@ -191,7 +222,8 @@ Studio and every later app use one client crate, embedded:
 
 ## Crates
 
-Small and separable, one workspace:
+Small and separable, one workspace, each prefixed `drive-` (`drive-core`,
+`drive-doc`, …):
 
 | Crate | Holds | Depends on |
 |---|---|---|
@@ -205,7 +237,7 @@ Small and separable, one workspace:
 | `mail` | mail accounts, cache, links | Stalwart's mail crates |
 | `client` | what apps embed (the API above) | the crates above |
 | `dioxus` | signals and hooks over `client` | `client`, `dioxus` |
-| `node` | the headless binary and its roles | `client`, `axum` |
+| `node` | the headless binary and its roles (`drive-node`) | `client`, `axum` |
 
 Rules: no crate depends on `node` or `dioxus`; `doc`, `core` and `client`
 build for wasm; every crate has its own tests.
@@ -225,7 +257,7 @@ build for wasm; every crate has its own tests.
 
 1. `core`, `doc`, `store`, `sync`, `net`: two devices sync one Studio Set
    over iroh on the local network. No server.
-2. `node` as an always-on peer plus relay, on the VPS.
+2. `drive-node` as an always-on peer plus relay, on the VPS.
 3. Share links and the web role: a guest opens a set in a browser.
 4. `blob`: OpenDAL stores, BLAKE3, iroh-blobs, bucket indexing.
 5. `auth`: accounts, device attestation, memberships, node registry,
@@ -236,7 +268,8 @@ build for wasm; every crate has its own tests.
 
 ## Open questions
 
-1. The system's name, and its repository.
+1. Drive's repository, and a public name (beside Google Drive and
+   Spacedrive it may need a qualifier).
 2. The central auth: the existing fts-auth, or Kanidm or Rauthy.
 3. Encryption: optional per org (as above), or on by default.
 4. Whether to extract Architect's sync layer or write `sync` fresh.
