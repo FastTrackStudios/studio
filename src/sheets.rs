@@ -7,7 +7,7 @@ use dioxus::prelude::*;
 use crate::data::{self, dur, Song, DAY, FIFTHS, MON, TODAY};
 use crate::icons::{I, Icon};
 use crate::pieces::{Energy, KeyC, SongArt};
-use crate::state::{use_app, AppState, Booking, Menu, Override, Sheet};
+use crate::state::{use_app, AppState, Booking, Menu, Sheet};
 use crate::Route;
 
 /// A row of a menu.
@@ -75,6 +75,7 @@ fn menu_rows(app: AppState, m: Menu) -> Vec<Row> {
             item("Share…", I::Share),
         ],
         Menu::Occ => vec![
+            item("Add to calendar", I::Calendar),
             item("Book a rehearsal", I::Mic),
             item("Copy last week's set", I::Loop),
             Row::Div,
@@ -163,6 +164,13 @@ pub fn MenuView() -> Element {
                                     menu.set(None);
                                     match says.as_str() {
                                         "Book a rehearsal" => crate::pages::setlists::book_here(app, &route),
+                                        "Add to calendar" => {
+                                            let said = match route.set_id().and_then(data::occ) {
+                                                Some(o) => app.sync.add_to_calendar(o),
+                                                None => "A show has no date yet".into(),
+                                            };
+                                            app.say(said);
+                                        }
                                         "Every setlist" => {
                                             navigator().push(Route::Every {});
                                         }
@@ -461,10 +469,9 @@ fn KeySheet(set: String, i: usize) -> Element {
     let orig = x.key.unwrap_or("C");
     let cur = app.key_in(&set, i, &x).unwrap_or(orig);
     let pick = move |k: &'static str| {
-        let mut ov = app.ov;
         let set = set.clone();
         move |_| {
-            ov.with_mut(|m| m.entry((set.clone(), i)).or_insert_with(Override::default).key = Some(k));
+            app.set_key(&set, i, k);
             app.close();
         }
     };
@@ -549,8 +556,7 @@ fn ArrSheet(set: String, i: usize) -> Element {
                             key: "{a}",
                             class: "mi big",
                             onclick: move |_| {
-                                let mut ov = app.ov;
-                                ov.with_mut(|m| m.entry((set.clone(), i)).or_insert_with(Override::default).arr = Some(a));
+                                app.set_arr(&set, i, a);
                                 app.close();
                             },
                             span { class: "ic",
@@ -715,13 +721,15 @@ fn BookSheet() -> Element {
             button {
                 class: "primary wide",
                 onclick: move |_| {
-                    let mut reh = app.reh;
-                    reh.push(data::Rehearsal {
+                    let r = data::Rehearsal {
                         set: b.set.clone(),
                         date: TODAY.plus(day as i32),
                         time: b.time.into(),
                         room: b.room.into(),
-                    });
+                    };
+                    app.sync.book(&r);
+                    let mut reh = app.reh;
+                    reh.push(r);
                     app.close();
                     app.say("Rehearsal booked");
                 },

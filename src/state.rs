@@ -214,6 +214,8 @@ pub struct AppState {
     pub live: Signal<Live>,
     /// The set whose chart and lyrics `live` follows.
     pub live_set: Signal<String>,
+    /// Drive: the sets shared live, presence, the calendar (web only).
+    pub sync: crate::live_sync::Sync,
 }
 
 impl AppState {
@@ -250,6 +252,7 @@ impl AppState {
                 looping: false,
             }),
             live_set: Signal::new(String::new()),
+            sync: crate::live_sync::Sync::new(),
         }
     }
 
@@ -284,6 +287,58 @@ impl AppState {
     pub fn play(mut self, list: Vec<Song>, from: String, title: &str) {
         let i = list.iter().position(|x| x.title == title).unwrap_or(0);
         self.np.set(Some(NowPlaying { list, from, i, playing: true, pos: 0.08 }));
+    }
+
+    /// Change a song's key in a set, here and for everyone in it.
+    pub fn set_key(self, set: &str, i: usize, k: &'static str) {
+        self.put(set, i, |o| o.key = Some(k));
+    }
+
+    /// Change a song's arrangement in a set, here and for everyone in it.
+    pub fn set_arr(self, set: &str, i: usize, a: &'static str) {
+        self.put(set, i, |o| o.arr = Some(a));
+    }
+
+    fn put(self, set: &str, i: usize, f: impl FnOnce(&mut Override)) {
+        let mut ov = self.ov;
+        let o = ov.with_mut(|m| {
+            let o = m.entry((set.to_string(), i)).or_default();
+            f(o);
+            *o
+        });
+        self.sync.put_override(set, i, o);
+    }
+
+    /// Move a playing chart on by a bar: through the section (again, when
+    /// looping), then the next section and the next song.
+    pub fn step_bar(self) {
+        let mut live = self.live;
+        let n = data::set_songs(&self.live_set.peek()).len();
+        live.with_mut(|l| {
+            l.bar += 1;
+            if l.bar < data::BARS[l.sec] {
+                return;
+            }
+            l.bar = 0;
+            if l.looping {
+                return;
+            }
+            if l.sec + 1 < data::SECS.len() {
+                l.sec += 1;
+            } else if l.song + 1 < n {
+                l.song += 1;
+                l.sec = 0;
+            } else {
+                l.playing = false;
+            }
+        });
+    }
+
+    /// How long a bar of the chart's song lasts (four beats).
+    pub fn bar_ms(&self) -> u64 {
+        let songs = data::set_songs(&self.live_set.peek());
+        let tempo = songs.get(self.live.peek().song).and_then(|s| s.tempo).unwrap_or(120).max(40);
+        240_000 / tempo as u64
     }
 
     /// The key a set plays a song in.

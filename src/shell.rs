@@ -34,6 +34,23 @@ pub fn Shell() -> Element {
         }
     });
 
+    // A chart you lead moves a bar at a time (one you follow moves with its leader).
+    use_future(move || async move {
+        let mut since = 0;
+        loop {
+            crate::state::sleep_ms(100).await;
+            if !app.live.peek().playing || app.sync.is_following() {
+                since = 0;
+                continue;
+            }
+            since += 100;
+            if since >= app.bar_ms() {
+                since = 0;
+                app.step_bar();
+            }
+        }
+    });
+
     // The toast goes after a moment.
     let toast = app.toast;
     use_effect(move || {
@@ -97,6 +114,13 @@ pub fn Shell() -> Element {
                     swipe.set(None);
                 }
             },
+            if let Some(id) = set.clone() {
+                crate::live_sync::SetRoom {
+                    key: "{id}",
+                    id,
+                    view: crate::live_sync::view_of(&route),
+                }
+            }
             main { class: "stage", Outlet::<Route> {} }
             footer { class: "foot",
                 if song_view {

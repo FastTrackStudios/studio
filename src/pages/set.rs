@@ -17,6 +17,7 @@ pub fn SetPage(id: String) -> Element {
         move || app.enter_set(&id)
     });
     let tools = rsx! {
+        crate::live_sync::Here {}
         Joined {
             Tool {
                 label: "Download",
@@ -148,8 +149,24 @@ fn SetSong(set: String, i: usize) -> Element {
     let from = format!("{} · {}", o.series.name, o.date.short());
     let key_set = set.clone();
     let arr_set = set.clone();
+    // Others with this song's key or arrangement open, like a live selection.
+    let here: Vec<_> = app.sync.viewers().into_iter().filter(|v| v.row == Some(i)).collect();
+    let ring = here.first().map_or(String::new(), |v| {
+        format!("position:relative;box-shadow:inset 0 0 0 2px oklch(.62 .16 {});border-radius:12px;", v.hue)
+    });
     rsx! {
-        div { class: "trow roomy",
+        div { class: "trow roomy", style: "{ring}",
+            for v in here.iter() {
+                span {
+                    key: "{v.name}",
+                    style: "position:absolute;right:10px;top:-9px;padding:1px 7px;border-radius:8px;background:oklch(.62 .16 {v.hue});color:#fff;font:600 10px/1.5 system-ui,sans-serif;white-space:nowrap;z-index:1;",
+                    if v.edit.as_deref() == Some("arr") {
+                        "{v.name} · arrangement"
+                    } else {
+                        "{v.name} · key"
+                    }
+                }
+            }
             SongArt { song: x }
             button {
                 class: "mid",

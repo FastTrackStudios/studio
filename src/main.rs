@@ -1,9 +1,10 @@
 //! Studio, remade from the launcher prototype: one Dioxus app for the
 //! phone first, and later the desktop and the web. The content is made up
-//! and in memory; nothing talks to a server or an engine.
+//! and in memory; on the web its sets are live on Drive (`live_sync`).
 
 mod data;
 mod icons;
+mod live_sync;
 mod pages;
 mod pieces;
 mod sheets;
@@ -124,6 +125,6 @@ fn App() -> Element {
         document::Stylesheet { href: FONT }
         document::Stylesheet { href: STYLE }
         document::Stylesheet { href: APP_STYLE }
-        Router::<Route> {}
+        live_sync::Provider { Router::<Route> {} }
     }
 }

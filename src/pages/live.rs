@@ -30,9 +30,17 @@ fn SheetView(id: String, what: &'static str, says: &'static str) -> Element {
         let id = id.clone();
         move || app.enter_set(&id)
     });
+    let following = app.sync.following();
     rsx! {
         section { class: "page",
             div { class: "body sheetview",
+                if let Some(name) = following {
+                    div {
+                        style: "align-self:center;margin:4px auto 0;padding:3px 10px;border-radius:10px;background:#1d4ed8;color:#fff;font:600 12px/1.4 system-ui,sans-serif;",
+                        role: "status",
+                        "Following {name}"
+                    }
+                }
                 SongHead { id }
                 div { class: "sheetwrap",
                     div { class: "sheetpage",
