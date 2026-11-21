@@ -8,3 +8,12 @@
 .page { animation: page-in .28s cubic-bezier(.2,.8,.2,1); }
 @keyframes page-in { from { transform: translateX(14%); opacity: .4; } }
 @media (prefers-reduced-motion: reduce) { .page { animation: none; } }
+
+/* Chart and Lyrics: the page keeps a sheet's proportions, full width when
+   the height allows, else as tall as there is room for (the prototype's
+   fitSheet, in CSS). */
+.sheetwrap { container-type: size; }
+.sheetview .sheetpage {
+  width: min(100cqw, 100cqh * 8.5 / 11);
+  height: min(100cqh, 100cqw * 11 / 8.5);
+}
