@@ -208,6 +208,65 @@ need.
   (multi-tenancy is enterprise-only). Avoid its AGPL `sieve-rs` and the
   third-party `stalwart` / `stalwart-lite` crates.
 
+## The spine, the apps, the overview
+
+Drive is meant to run a whole life and a local business without
+becoming a super app. Three layers:
+
+1. **The spine**, owned by Drive: Event, Task, Project, Person (contacts),
+   Org, Note, File, Thread (email), Booking. One calendar, one task list,
+   one set of projects, whatever app writes to them.
+2. **Focused apps**, separate products (Studio, Meals, the agent wiki, a
+   booking app): each owns its domain types and links them to the spine
+   (a Set makes an Event and Tasks; a booking makes an Event and a
+   Person).
+3. **The overview**: the Drive app and agents. They read the spine across
+   every app and space, show any app's document as a card, and open the
+   focused app for real work.
+
+**The rule against a super app:** the Drive app edits only the spine
+(calendar, tasks, projects, people, inbox and mail, files, search,
+activity, accounts and orgs). Domain work stays in its app.
+
+**Cards.** Each app declares, as data, how its types show elsewhere:
+title, subtitle, date, icon, status, colour, and where a tap goes (a deep
+link, or its hosted web build). The overview renders them with no app
+code.
+
+**Projects** link anything from any app: a record in Studio, its sessions
+(Events), client emails (Threads), invoices (Tasks), the band (People).
+
+## Spaces and tenancy
+
+- A **personal space** plus any number of **orgs** (a church, a studio
+  business, a band). The overview merges them, with an org filter.
+- **Roles per org:** owner, admin, member, guest, and **client**: a
+  business's customers, who see only their own projects, sessions and
+  bookings.
+- Each org has its own placement rules, storage (hosted or its own),
+  billing and quotas.
+- **Permissions** are org × app × type × level ("an intern edits sessions,
+  never sees invoices").
+
+## Agents
+
+- An **agent principal** is an account with a scoped token, acting for a
+  person or an org (read every calendar; write tasks in one project).
+- Same API as the Drive app, over HTTP and MCP: query the spine, read
+  cards and documents, edit within grants.
+- **Actions:** apps declare actions (`studio.plan_set`, `meals.plan_week`)
+  with a parameter schema; simple ones are document edits Drive runs
+  itself, others run where the app (or its agent client) runs.
+- **Provenance:** every update is signed, so the activity feed says which
+  agent did what, for whom, and any of it can be reviewed or undone.
+
+## Bookings
+
+Availability comes from the one calendar across spaces; a public booking
+page is served by the web role to people with nothing installed (the share
+link mechanism); a confirmed booking becomes an Event and a Person, in the
+calendar, the client's email and its project.
+
 ## Apps on Drive
 
 - **Namespaced types.** Each app registers its document types
