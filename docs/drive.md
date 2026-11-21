@@ -112,6 +112,32 @@ Drive is only the data layer.
 - **Always-on peers** carry edits between devices that are never online
   together, and are the backup.
 
+## Realtime
+
+Multiplayer in the manner of Google Docs, Figma and Canva, on the same
+documents that sync offline.
+
+- **Edits stream live.** An open document pushes each Loro update the
+  moment it is made, over a reliable ordered stream.
+- **Presence** (cursors, selections, viewports, who is here, drag
+  previews) rides Loro's ephemeral store over unreliable QUIC datagrams:
+  never saved, only the latest matters.
+- **Text:** Loro rich text with marks (formatting, links, comment anchors
+  that survive concurrent edits); stable cursors; undo per person;
+  history and named versions from Loro's time travel.
+- **Canvases:** layers and groups as a Loro movable tree; each object's
+  properties a map, last writer wins per property (Figma's model). While
+  dragging, positions go out as presence; the final position is written
+  on release. Each page or board is its own document.
+- **Live timing is not a CRDT.** A session has a leader (Studio: the engine
+  running the set) that streams position and tempo with clock sync to
+  every device; Ableton Link carries tempo on the local network. Playing
+  audio together live over the internet is out of scope.
+- **Topology:** a few peers in a room connect directly; many peers, or
+  any browser, meet at the nearest always-on node, which fans out.
+- `drive-sync` adds live subscriptions, a presence channel per document,
+  leader sessions, and the choice of hub.
+
 ## Nodes and roles
 
 One binary, `drive-node`, headless, plus the same code embedded
