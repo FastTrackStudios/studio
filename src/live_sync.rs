@@ -98,6 +98,17 @@ mod web {
             }
         }
 
+        /// Move every app on this address to another org (Drive reloads).
+        pub fn switch_org(self, org: &str) -> bool {
+            match self.drive.peek().as_ref() {
+                Some(ctx) => {
+                    ctx.set_org(org);
+                    true
+                }
+                None => false,
+            }
+        }
+
         /// Share a song's key and arrangement in a set with everyone in it.
         pub fn put_override(self, set: &str, i: usize, o: Override) {
             let Some(doc) = self.set.peek().clone().filter(|d| d.id == doc_id(set)) else {
@@ -203,10 +214,40 @@ mod web {
         let app = use_app();
         let ctx = use_drive();
         let spine_doc = use_doc(spine::SPINE);
-        use_hook(move || {
-            let (mut d, mut s) = (app.sync.drive, app.sync.spine);
-            d.set(Some(ctx));
-            s.set(Some(spine_doc));
+        use_hook({
+            let ctx = ctx.clone();
+            move || {
+                let (mut d, mut s) = (app.sync.drive, app.sync.spine);
+                let (mut here, mut org, mut who) = (app.here, app.org, app.who);
+                here.set(ctx.org.clone());
+                org.set(Some(ctx.org.clone()));
+                who.set(ctx.who.clone());
+                d.set(Some(ctx));
+                s.set(Some(spine_doc));
+            }
+        });
+        // The orgs this person is in, as the node says.
+        use_future(move || async move {
+            let bearer = drive_dioxus::auth::bearer();
+            let headers: Vec<(&str, &str)> = bearer
+                .iter()
+                .map(|b| ("authorization", b.as_str()))
+                .collect();
+            if let Some((200, v)) = drive_dioxus::auth::fetch("GET", "/orgs", &headers, None).await
+            {
+                let list: Vec<String> = v["orgs"]
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|o| o.as_str().map(str::to_string))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if !list.is_empty() {
+                    let mut orgs = app.orgs;
+                    orgs.set(crate::orgs::ordered(list));
+                }
+            }
         });
         children
     }
@@ -437,6 +478,9 @@ mod local {
             Self
         }
         pub fn put_override(self, _set: &str, _i: usize, _o: Override) {}
+        pub fn switch_org(self, _org: &str) -> bool {
+            false
+        }
         pub fn viewers(self) -> Vec<Viewer> {
             Vec::new()
         }

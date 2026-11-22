@@ -37,9 +37,19 @@ pub fn Bar(
     #[props(default)] title: Option<String>,
     #[props(default = VNode::empty())] tools: Element,
 ) -> Element {
+    let shell = app_shell::ui::use_shell();
+    let phone = shell.form() == app_shell::ui::FormFactor::Phone;
     rsx! {
         div { class: "bar",
             div { class: "lead",
+                if phone && back.is_none() {
+                    button {
+                        class: "menubtn rb",
+                        aria_label: "Menu",
+                        onclick: move |_| shell.set_drawer(true),
+                        Icon { name: I::PanelLeft, size: 22 }
+                    }
+                }
                 if let Some(to) = back {
                     button {
                         class: "back rb",

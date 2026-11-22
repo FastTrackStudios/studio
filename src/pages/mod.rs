@@ -3,6 +3,7 @@
 pub mod home;
 pub mod library;
 pub mod live;
+pub mod orgs;
 pub mod records;
 pub mod set;
 pub mod setlists;
@@ -127,10 +128,10 @@ pub fn OrgPill() -> Element {
             aria_label: "Organization",
             onclick: move |_| app.open(Sheet::Orgs),
             if let Some(o) = org {
-                span { class: "omark", style: "--h:{data::org_hue(o)}",
-                    "{data::org_name(o).chars().next().unwrap_or('?')}"
+                span { class: "omark", style: "--h:{crate::orgs::org_hue(&o)}",
+                    "{crate::orgs::org_name(&o).chars().next().unwrap_or('?')}"
                 }
-                "{data::org_name(o)}"
+                "{crate::orgs::org_name(&o)}"
             } else {
                 Icon { name: I::Layers, size: 16 }
                 "All orgs"

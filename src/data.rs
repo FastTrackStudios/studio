@@ -1230,24 +1230,6 @@ pub fn album(id: &str) -> Option<&'static Album> {
     ALBUMS.iter().find(|a| a.id == id)
 }
 
-/// The orgs the account reaches: id, name, hue.
-pub const ORGS: [(&str, &str, u32); 7] = [
-    ("fasttrackstudio", "FastTrackStudio", 175),
-    ("tombrooksmusic", "Tom Brooks Music", 25),
-    ("fasttrackaudio", "FastTrack Audio", 265),
-    ("codywright", "Cody Wright", 210),
-    ("cbu", "CBU", 55),
-    ("days-to-praise", "Days to Praise", 320),
-    ("rockstars-of-tomorrow", "Rockstars of Tomorrow", 110),
-];
-
-pub fn org_name(id: &str) -> &'static str {
-    ORGS.iter().find(|o| o.0 == id).map_or("", |o| o.1)
-}
-pub fn org_hue(id: &str) -> u32 {
-    ORGS.iter().find(|o| o.0 == id).map_or(0, |o| o.2)
-}
-
 /// A song in production: a record's track, or a single.
 pub struct Track {
     pub idx: usize,

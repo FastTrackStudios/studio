@@ -2,28 +2,32 @@
 //! phone first, and later the desktop and the web. The content is made up
 //! and in memory; on the web its sets are live on Drive (`live_sync`), and
 //! its library and songs are Drive documents, each song a session
-//! (`songs`, on `session_sync`).
+//! (`songs`, on `session_sync`); each org has its own library, team and
+//! settings, and shares songs with others (`orgs`, `team`).
 
 mod data;
 mod icons;
 mod live_sync;
+mod orgs;
 mod pages;
 mod pieces;
 mod sheets;
 mod shell;
 mod songs;
 mod state;
+mod team;
 
 use dioxus::prelude::*;
 
 use pages::home::Home;
 use pages::library::{Library, LibraryHome};
 use pages::live::{Chart, Lyrics};
+use pages::orgs::{AllOrgs, OrgSettings, People};
 use pages::records::{Album, Records, TrackPage};
 use pages::set::SetPage;
 use pages::setlists::{Every, Series, Setlists};
 use pages::signal::Signal;
-use pages::song::SongPage;
+use pages::song::{SharedSong, SongPage};
 use shell::Shell;
 
 const STYLE: Asset = asset!("/assets/style.css");
@@ -62,8 +66,16 @@ pub enum Route {
         Library { tag: String },
         #[route("/song/:id")]
         SongPage { id: String },
+        #[route("/shared/:owner/:id")]
+        SharedSong { owner: String, id: String },
         #[route("/signal")]
         Signal {},
+        #[route("/orgs")]
+        AllOrgs {},
+        #[route("/people")]
+        People {},
+        #[route("/org")]
+        OrgSettings {},
 }
 
 /// The four tabs at the foot.
@@ -82,6 +94,7 @@ impl Route {
             Route::Home {} => Tab::Home,
             Route::Records {} | Route::Album { .. } | Route::TrackPage { .. } => Tab::Records,
             Route::Signal {} => Tab::Signal,
+            Route::AllOrgs {} | Route::People {} | Route::OrgSettings {} => Tab::Home,
             _ => Tab::Setlists,
         }
     }
