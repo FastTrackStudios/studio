@@ -17,6 +17,10 @@ members = [
     "extensions/launcher",
     "apps/web",
     "apps/mobile",
+    # Studio, the app (studio-proto until 2026-11-22): a plain Dioxus app on
+    # Drive and app-shell, growing into the session (apps/studio/docs/ROADMAP.md).
+    "apps/studio",
+    "apps/studio/crates/session-sync",
     "features/distribution",
     "extensions/link",
     "extensions/rig",
@@ -88,6 +92,20 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/FastTrackStudios/session"
 
 [workspace.dependencies]
+# Studio, the app (apps/studio): Drive (FastTrackStudios/drive, every crate
+# at one rev; no tags yet) and app-shell (the window, by tag, declared in
+# apps/studio's manifest: its package name is the same as
+# features/app/shell's, so it cannot have a key here). Both are on
+# crates.io's dioxus 0.8.0-alpha.3, handed this workspace's dioxus revision
+# by the dioxus lines of [patch.crates-io]. To work on Drive beside this
+# repo, patch `[patch."https://github.com/FastTrackStudios/drive"]` with
+# paths (never committed).
+session-sync = { path = "apps/studio/crates/session-sync" }
+drive-dioxus = { git = "https://github.com/FastTrackStudios/drive", rev = "dbe1f28" }
+drive-spine = { git = "https://github.com/FastTrackStudios/drive", rev = "dbe1f28" }
+drive-files = { git = "https://github.com/FastTrackStudios/drive", rev = "dbe1f28", default-features = false }
+drive-sidecars = { git = "https://github.com/FastTrackStudios/drive", rev = "dbe1f28" }
+drive-local = { git = "https://github.com/FastTrackStudios/drive", rev = "dbe1f28" }
 # FastTrackStudios/session's `session` (the session primitive: its document
 # file, its fts.session service, its transport led as presence), as the
 # `daw` extension uses it; renamed because Studio's own `features/session`
@@ -958,6 +976,10 @@ rustfft = "6.2"
 test-that = { version = "0.5.2", default-features = false }
 
 [patch.crates-io]
+# app-shell and Drive (apps/studio) are on crates.io's dioxus 0.8.0-alpha.3;
+# this hands them the workspace's revision (also 0.8.0-alpha.3), so one
+# dioxus is built. Keep the rev equal to the dioxus lines above.
+dioxus = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
 # One wasm-streams in a browser build: 0.4 (reqwest 0.12's `stream`) as a
 # re-export of 0.5 (dioxus-web's), or the two copies' `#[wasm_bindgen]`
 # classes collide at link time. See vendor/wasm-streams-0.4/FTS-PATCH.md.

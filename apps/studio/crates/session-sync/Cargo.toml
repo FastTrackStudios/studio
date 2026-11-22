@@ -1,8 +1,12 @@
 [package]
 name = "session-sync"
-version = "0.1.0"
-edition = "2024"
-license = "GPL-3.0-or-later"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
 description = "The live session as one Loro document: the block every view and every device agrees on (Studio's features/session/src/sync, engine-free half)"
 
 [dependencies]

@@ -1,6 +1,21 @@
-# studio-proto
+# Studio (apps/studio)
 
-Studio, remade from the launcher prototype as a plain Dioxus 0.8 app: phone first, then desktop and web. On the web it runs on Drive (`../drive`), served by a Drive node at `/studio`. The way to it replacing Studio: [docs/ROADMAP.md](docs/ROADMAP.md).
+Studio, remade from the launcher prototype as a plain Dioxus 0.8 app: phone first, then desktop and web. It was its own repository, studio-proto, until 2026-11-22; its history is kept here. On the web it runs on [Drive](https://github.com/FastTrackStudios/drive), served by a Drive node at `/studio`. The way to it replacing the rest of this repo's apps: [docs/ROADMAP.md](docs/ROADMAP.md).
+
+It is a member of the studio workspace (package `studio-app`). Drive's crates
+come from FastTrackStudios/drive by rev and app-shell by tag (the root
+`Cargo.toml`); both are on crates.io's dioxus 0.8.0-alpha.3, which the root
+`[patch.crates-io]` hands the workspace's dioxus revision, so one dioxus is
+built. Build it with dx 0.8.0-alpha.3 from this folder:
+
+```bash
+dx build --platform web --release --base-path studio   # the web app, for a Drive node's /studio
+cargo check -p studio-app --features desktop           # the desktop build (Drive's agent through drive-local)
+cargo test -p studio-app -p session-sync
+```
+
+Never `-p app-shell`: features/app/shell (the older apps' shell) has the
+same package name.
 
 ## The window (2026-11-22)
 
@@ -76,11 +91,11 @@ model and its tests. `src/files_live.rs` reads Drive's node, and
   Drive's agent (`drive-local`). They stay pinned while the set is open,
   and Open gives a real path.
 
-Tests (`cargo test`): kinds; linking leaves a read-only folder's names,
+Tests (`cargo test -p studio-app`): kinds; linking leaves a read-only folder's names,
 bytes, times and modes exactly as they were; the song-files code holds no
 file-writing call; sharing a song shares its project (and stops); finding
 ranks and folds matches; the search language; readiness for files, songs
-and sets. `cargo test --features local -- --ignored warm_and_hold` runs
+and sets. `cargo test -p studio-app --features local -- --ignored warm_and_hold` runs
 against a running agent (`DRIVE_AGENT_DIR`, `STUDIO_WARM=TARGET,…`).
 
 Gaps in Drive, filed: parts on another org's computers
@@ -171,7 +186,7 @@ Pages:
 Without Drive (the desktop and phone builds for now), the same documents
 live in memory, and the org is picked in the app.
 
-Tests: `devenv shell -- cargo test --workspace` (the org model, the songs,
+Tests: `cargo test -p studio-app -p session-sync` (the org model, the songs,
 session-sync).
 
 ## Songs are sessions (2026-11-21)

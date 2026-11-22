@@ -1,5 +1,5 @@
 [application]
-name = "studio-proto"
+name = "studio-app"
 
 [web.app]
 title = "Studio"
