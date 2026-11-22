@@ -154,6 +154,10 @@ impl Route {
 fn main() {
     // Warnings and up: Loro's encoder logs every block at info.
     dioxus::logger::init(dioxus::logger::tracing::Level::WARN).ok();
+    // Served under a path (`--base-path studio`), the node is reached
+    // under it too (`/studio/api/…`), so a site can hand Studio that path.
+    #[cfg(feature = "web")]
+    drive_dioxus::mount::set(&dioxus::cli_config::web_base_path().unwrap_or_default());
     dioxus::launch(App);
 }
 

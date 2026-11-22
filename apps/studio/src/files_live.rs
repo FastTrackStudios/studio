@@ -539,7 +539,7 @@ pub mod web {
     /// seeks): the node's copy when it keeps one, else the computer that
     /// has it, through the node.
     pub fn file_url(h: &Hit) -> String {
-        match &h.available {
+        drive_dioxus::mount::api(&match &h.available {
             Some(hash) if !hash.is_empty() => format!("/blobs/{hash}?name={}", enc(&h.name)),
             _ => format!(
                 "/fetch/{}/{}?path={}&name={}",
@@ -548,12 +548,16 @@ pub mod web {
                 enc(&h.path),
                 enc(&h.name)
             ),
-        }
+        })
     }
 
     /// A sidecar's URL (`thumb-256`, `thumb-1024`, `peaks`): made by the
     /// computer that has the file when the node has none yet.
     pub fn sidecar_url(h: &Hit, kind: &str) -> Option<String> {
+        sidecar_path(h, kind).map(|p| drive_dioxus::mount::api(&p))
+    }
+
+    fn sidecar_path(h: &Hit, kind: &str) -> Option<String> {
         if let Some(hash) = h.available.as_ref().filter(|x| !x.is_empty())
             && h.location == files::TREE
         {
@@ -592,12 +596,13 @@ pub mod web {
             init.set_body(&arr.into());
         }
         let w = web_sys::window().ok_or("no window")?;
-        let resp: web_sys::Response =
-            wasm_bindgen_futures::JsFuture::from(w.fetch_with_str_and_init(url, &init))
-                .await
-                .map_err(|_| "the node did not answer".to_string())?
-                .dyn_into()
-                .map_err(|_| "not a response".to_string())?;
+        let resp: web_sys::Response = wasm_bindgen_futures::JsFuture::from(
+            w.fetch_with_str_and_init(&drive_dioxus::mount::api(url), &init),
+        )
+        .await
+        .map_err(|_| "the node did not answer".to_string())?
+        .dyn_into()
+        .map_err(|_| "not a response".to_string())?;
         let status = resp.status();
         let buf = wasm_bindgen_futures::JsFuture::from(resp.array_buffer().map_err(|_| "no body")?)
             .await

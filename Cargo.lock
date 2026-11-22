@@ -9042,7 +9042,7 @@ dependencies = [
 [[package]]
 name = "drive-client"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=dbe1f28#dbe1f28e4fd4990c9fda81c4f723d30910a10d39"
+source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
 dependencies = [
  "drive-proto",
  "drive-spine",
@@ -9062,7 +9062,7 @@ dependencies = [
 [[package]]
 name = "drive-dioxus"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=dbe1f28#dbe1f28e4fd4990c9fda81c4f723d30910a10d39"
+source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
 dependencies = [
  "dioxus",
  "drive-client",
@@ -9081,7 +9081,7 @@ dependencies = [
 [[package]]
 name = "drive-files"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=dbe1f28#dbe1f28e4fd4990c9fda81c4f723d30910a10d39"
+source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
 dependencies = [
  "blake3",
  "bytes",
@@ -9095,7 +9095,7 @@ dependencies = [
 [[package]]
 name = "drive-local"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=dbe1f28#dbe1f28e4fd4990c9fda81c4f723d30910a10d39"
+source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
 dependencies = [
  "serde",
  "serde_json",
@@ -9104,7 +9104,7 @@ dependencies = [
 [[package]]
 name = "drive-proto"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=dbe1f28#dbe1f28e4fd4990c9fda81c4f723d30910a10d39"
+source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
 dependencies = [
  "postcard",
  "serde",
@@ -9113,7 +9113,7 @@ dependencies = [
 [[package]]
 name = "drive-sidecars"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=dbe1f28#dbe1f28e4fd4990c9fda81c4f723d30910a10d39"
+source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
 dependencies = [
  "serde",
 ]
@@ -9121,7 +9121,7 @@ dependencies = [
 [[package]]
 name = "drive-spine"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=dbe1f28#dbe1f28e4fd4990c9fda81c4f723d30910a10d39"
+source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
 dependencies = [
  "loro",
 ]
