@@ -1666,10 +1666,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "drive-local"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "drive-proto"
 version = "0.1.0"
 dependencies = [
  "postcard",
+ "serde",
+]
+
+[[package]]
+name = "drive-sidecars"
+version = "0.1.0"
+dependencies = [
  "serde",
 ]
 
@@ -5369,6 +5384,8 @@ dependencies = [
  "dioxus",
  "drive-dioxus",
  "drive-files",
+ "drive-local",
+ "drive-sidecars",
  "drive-spine",
  "gloo-timers 0.3.0",
  "js-sys",
@@ -5376,6 +5393,9 @@ dependencies = [
  "serde_json",
  "session-sync",
  "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "web-time",
 ]
 
