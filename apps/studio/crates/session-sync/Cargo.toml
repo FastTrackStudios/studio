@@ -1,0 +1,13 @@
+[package]
+name = "session-sync"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+description = "The live session as one Loro document: the block every view and every device agrees on (Studio's features/session/src/sync, engine-free half)"
+
+[dependencies]
+loro = "1.18"
+tracing = "0.1"
+num-traits = "0.2"
+# architect::platform::Instant in the original: the browser's clock on wasm.
+web-time = "1"
