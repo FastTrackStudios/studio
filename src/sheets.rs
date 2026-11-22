@@ -229,48 +229,44 @@ pub fn MenuView() -> Element {
     }
 }
 
-/// The open sheet. A tap on the dark around it closes it.
+/// A sheet's content, drawn inside the shell's sheet (a bottom sheet on a
+/// phone, a panel on a desktop).
 #[component]
-pub fn SheetView() -> Element {
-    let app = use_app();
-    let Some(sheet) = (app.sheet)() else {
-        return rsx! {};
-    };
-    let bottom = !matches!(sheet, Sheet::Palette);
-    rsx! {
-        div {
-            class: if bottom { "sheet bottom" } else { "sheet" },
-            onclick: move |_| app.close(),
-            match sheet {
-                Sheet::Palette => rsx! {
-                    Palette {}
-                },
-                Sheet::Player => rsx! {
-                    Player {}
-                },
-                Sheet::Key(set, i) => rsx! {
-                    KeySheet { set, i }
-                },
-                Sheet::Arr(set, i) => rsx! {
-                    ArrSheet { set, i }
-                },
-                Sheet::More => rsx! {
-                    MoreSheet {}
-                },
-                Sheet::Book => rsx! {
-                    BookSheet {}
-                },
-                Sheet::Filters => rsx! {
-                    FilterSheet {}
-                },
-                Sheet::Orgs => rsx! {
-                    OrgSheet {}
-                },
-                Sheet::Status(target) => rsx! {
-                    StatusSheet { target }
-                },
-            }
-        }
+pub fn SheetBody(sheet: Sheet) -> Element {
+    match sheet {
+        Sheet::Palette => rsx! {
+            Palette {}
+        },
+        Sheet::Player => rsx! {
+            Player {}
+        },
+        Sheet::Key(set, i) => rsx! {
+            KeySheet { set, i }
+        },
+        Sheet::Arr(set, i) => rsx! {
+            ArrSheet { set, i }
+        },
+        Sheet::More => rsx! {
+            MoreSheet {}
+        },
+        Sheet::Book => rsx! {
+            BookSheet {}
+        },
+        Sheet::Filters => rsx! {
+            FilterSheet {}
+        },
+        Sheet::Orgs => rsx! {
+            OrgSheet {}
+        },
+        Sheet::Status(target) => rsx! {
+            StatusSheet { target }
+        },
+        Sheet::Person(id) => rsx! {
+            crate::pages::orgs::PersonSheet { id }
+        },
+        Sheet::OrgSong(owner, id) => rsx! {
+            crate::pages::orgs::OrgSongSheet { owner, id }
+        },
     }
 }
 
@@ -286,14 +282,7 @@ fn BSheet(
         None => "bsheet".into(),
     };
     rsx! {
-        div {
-            class: "{cls}",
-            role: "dialog",
-            aria_label: "{label}",
-            onclick: move |e| e.stop_propagation(),
-            div { class: "grab" }
-            {children}
-        }
+        div { class: "{cls}", role: "dialog", aria_label: "{label}", {children} }
     }
 }
 
@@ -934,18 +923,12 @@ fn FilterSheet() -> Element {
     }
 }
 
-/// Pick the org: all of them, or one.
+/// Pick the org: all of them (the All orgs page), or one.
 #[component]
 fn OrgSheet() -> Element {
     let app = use_app();
-    let mut org = app.org;
-    let cur = org();
-    let count = |id: Option<&str>| {
-        data::RECENT_WORK
-            .iter()
-            .filter(|r| id.is_none_or(|o| data::owner_of(r) == o))
-            .count()
-    };
+    let cur = (app.org)();
+    let list = (app.orgs)();
     rsx! {
         BSheet { label: "Organization",
             div { class: "bhead",
@@ -954,14 +937,16 @@ fn OrgSheet() -> Element {
             button {
                 class: "mi big",
                 onclick: move |_| {
+                    let mut org = app.org;
                     org.set(None);
                     app.close();
+                    navigator().push(Route::AllOrgs {});
                 },
                 span { class: "omark all",
                     Icon { name: I::Layers, size: 15 }
                 }
                 "All organizations"
-                span { class: "nt", "{count(None)}" }
+                span { class: "nt", "{list.len()}" }
                 if cur.is_none() {
                     span { class: "ck",
                         Icon { name: I::Check, size: 17, w: 2.2 }
@@ -969,25 +954,22 @@ fn OrgSheet() -> Element {
                 }
             }
             div { class: "md" }
-            for (id , name , h) in data::ORGS {
+            for id in list.iter().cloned() {
                 {
-                    let n = count(Some(id));
+                    let name = crate::orgs::org_name(&id);
+                    let h = crate::orgs::org_hue(&id);
+                    let on = cur.as_deref() == Some(id.as_str());
                     rsx! {
                         button {
                             key: "{id}",
                             class: "mi big",
                             onclick: move |_| {
-                                org.set(Some(id));
                                 app.close();
+                                app.switch_org(&id);
                             },
                             span { class: "omark", style: "--h:{h}", "{name.chars().next().unwrap_or('?')}" }
                             "{name}"
-                            span { class: "nt",
-                                if n > 0 {
-                                    "{n}"
-                                }
-                            }
-                            if cur == Some(id) {
+                            if on {
                                 span { class: "ck",
                                     Icon { name: I::Check, size: 17, w: 2.2 }
                                 }

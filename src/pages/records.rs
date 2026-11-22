@@ -18,7 +18,7 @@ pub fn Records() -> Element {
     let ids: Vec<&'static str> = data::RECENT_WORK
         .iter()
         .copied()
-        .filter(|id| org.is_none_or(|o| data::owner_of(id) == o))
+        .filter(|id| org.as_ref().is_none_or(|o| *o == data::owner_of(id)))
         .collect();
     rsx! {
         Page {

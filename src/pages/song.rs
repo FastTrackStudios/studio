@@ -26,16 +26,48 @@ const KINDS: [&str; 7] = [
 
 #[component]
 pub fn SongPage(id: String) -> Element {
+    let here = (use_app().here)();
+    rsx! {
+        SongView { key: "{here}/{id}", owner: here, id }
+    }
+}
+
+/// A song another org shares with this one.
+#[component]
+pub fn SharedSong(owner: String, id: String) -> Element {
+    rsx! {
+        SongView { key: "{owner}/{id}", owner, id }
+    }
+}
+
+#[component]
+fn SongView(owner: String, id: String) -> Element {
     let app = use_app();
+    let here = (app.here)();
+    let own = owner == here;
     let lib = use_library();
-    let entry = lib.get(&id);
-    let song = use_song(&id, entry.clone());
+    let digest = crate::team::use_digest(&owner, &here);
+    let entry = if own { lib.get(&id) } else { digest.get(&id) };
+    let song = use_song(&owner, &id, entry.clone());
+    let back = if own {
+        Route::Library { tag: "all".into() }
+    } else {
+        Route::Library {
+            tag: "shared".into(),
+        }
+    };
     let Some(e) = entry else {
         return rsx! {
             Page {
-                Bar { back: Route::Library { tag: "all".into() }, title: "Not found" }
+                Bar { back, title: "Not found" }
                 div { class: "body",
-                    p { class: "empty", "No song {id} in the library." }
+                    p { class: "empty",
+                        if own {
+                            "No song {id} in the library."
+                        } else {
+                            "{crate::orgs::org_name(&owner)} does not share {id} with {crate::orgs::org_name(&here)}."
+                        }
+                    }
                 }
             }
         };
@@ -54,19 +86,67 @@ pub fn SongPage(id: String) -> Element {
     };
     rsx! {
         Page { tint: Some(hue),
-            Bar { back: Route::Library { tag: "all".into() }, title: e.title.clone(), tools }
+            Bar { back, title: e.title.clone(), tools }
             div { class: "body songpage",
+                InThisOrg { owner: owner.clone(), entry: e.clone(), u: lib.use_of(&owner, &id) }
                 match song.model() {
                     None => rsx! {
                         p { class: "empty", "Opening the song's session…" }
                     },
                     Some(m) => rsx! {
-                        Head { entry: e.clone(), song: song.clone(), model: m.clone(), lib_put: lib.clone() }
+                        Head { entry: e.clone(), song: song.clone(), model: m.clone(), lib_put: own.then(|| lib.clone()) }
                         Form { song: song.clone(), model: m.clone() }
                         Chart { song: song.clone(), chart: m.chart.clone() }
                         Footer { song: song.clone() }
                     },
                 }
+            }
+        }
+    }
+}
+
+/// How this org plays the song: whose it is, its key and arrangement
+/// here, who leads it, who it is shared with. A tap edits them.
+#[component]
+fn InThisOrg(owner: String, entry: Entry, u: crate::orgs::Use) -> Element {
+    let app = use_app();
+    let here = (app.here)();
+    let team = crate::team::use_team();
+    let st = team.settings();
+    let key = crate::orgs::key_here(&u, &entry).unwrap_or_else(|| "—".into());
+    let arr = crate::orgs::arrangement_here(&u, &st);
+    let leader = u
+        .leader
+        .as_deref()
+        .and_then(|l| team.person(l))
+        .map(|p| p.name);
+    let own = owner == here;
+    let (o, i) = (owner.clone(), entry.id.clone());
+    rsx! {
+        button {
+            class: "inorg",
+            onclick: move |_| app.open(crate::state::Sheet::OrgSong(o.clone(), i.clone())),
+            crate::pages::orgs::OrgMark { org: here.clone(), size: 28 }
+            span { class: "mid",
+                span { class: "t1",
+                    if own {
+                        "{team.name()}'s song"
+                    } else {
+                        "Shared by {crate::orgs::org_name(&owner)}"
+                    }
+                }
+                span { class: "s1",
+                    "Here: {key} · {arr}"
+                    if let Some(l) = leader {
+                        " · {l} leads"
+                    }
+                    if own && !entry.shared_with.is_empty() {
+                        " · shared with {entry.shared_with.len()}"
+                    }
+                }
+            }
+            span { class: "chev",
+                Icon { name: I::ChevRight, size: 16 }
             }
         }
     }
@@ -92,7 +172,7 @@ fn HereNow(song: Song) -> Element {
 }
 
 #[component]
-fn Head(entry: Entry, song: Song, model: SessionModel, lib_put: songs::Library) -> Element {
+fn Head(entry: Entry, song: Song, model: SessionModel, lib_put: Option<songs::Library>) -> Element {
     let bpm = songs::bpm(&model);
     let (beats, unit) = songs::meter(&model);
     let total = songs::sections(&model).iter().map(|s| s.bars).sum::<u32>();
@@ -115,10 +195,12 @@ fn Head(entry: Entry, song: Song, model: SessionModel, lib_put: songs::Library) 
                     .or_default()
                     .insert("key".into(), k.clone());
             });
-            lib.put(&Entry {
-                key: Some(k).filter(|k| !k.is_empty()),
-                ..entry.clone()
-            });
+            if let Some(lib) = &lib {
+                lib.put(&Entry {
+                    key: Some(k).filter(|k| !k.is_empty()),
+                    ..entry.clone()
+                });
+            }
         }
     };
     let set_tempo = {
@@ -128,10 +210,12 @@ fn Head(entry: Entry, song: Song, model: SessionModel, lib_put: songs::Library) 
                 return;
             }
             song.change(|m| songs::set_tempo(m, b, beats, unit));
-            lib.put(&Entry {
-                tempo: Some(b.round() as u32),
-                ..entry.clone()
-            });
+            if let Some(lib) = &lib {
+                lib.put(&Entry {
+                    tempo: Some(b.round() as u32),
+                    ..entry.clone()
+                });
+            }
         }
     };
     let set_tempo2 = set_tempo.clone();

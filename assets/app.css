@@ -56,3 +56,86 @@
 .hereav.tiny { width: 14px; height: 14px; font-size: 8px; }
 .newsong { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; margin: 8px 0; border-radius: 12px; border: 1px dashed var(--rule); color: var(--ink-3); }
 .newsong input { flex: 1; background: none; border: 0; outline: none; color: var(--ink); font: 500 15px var(--font); }
+
+/* ── On app-shell (2026-11-22) ─────────────────────────────────────────
+   The window fills the page; the content area holds the page stage and
+   its ⋯ menus; the prototype's Now Playing bar and transport sit in the
+   shell's accessory; its sheets inside the shell's sheets. */
+.window { position: absolute; inset: 0; display: flex; }
+.content { position: relative; flex: 1 1 0px; min-height: 0; height: 100%; display: flex; flex-direction: column; background: var(--desk); }
+.content .stage { flex: 1 1 0px; min-height: 0; }
+/* A desktop: the pages keep a readable measure; back and forward are
+   the top bar's. */
+.content[data-form="desktop"] .page { left: 50%; right: auto; width: min(100%, 860px); transform: translateX(-50%); animation: none; }
+.content[data-form="desktop"] .bar { height: 64px; padding-top: 8px; }
+.content[data-form="desktop"] .bar .back { display: none; }
+.content[data-form="desktop"] .bar .small { font-size: 26px; }
+.menubtn { width: 36px; height: 36px; margin-left: -8px; display: grid; place-items: center; color: var(--ink-2); }
+.tbsearch { width: min(420px, 40vw); }
+.tbwrap { display: flex; align-items: center; }
+.tbwrap .orgpill { height: 30px; }
+/* The accessory: the shell draws the card. */
+.as-accessory .np, .as-accessory .transport { margin: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.as-accessory .transport { padding: 4px 8px; }
+/* A sheet's content inside the shell's sheet. */
+.as-sheet-body .bsheet { background: none; border: 0; border-radius: 0; animation: none; max-height: none; overflow: visible; padding: 0 16px 16px; }
+.as-sheet-body .panel { background: none; border: 0; box-shadow: none; max-height: none; }
+.as-sheet-body .panel .cancel { display: none; }
+/* The sidebar's account row. */
+.sideacct { display: flex; align-items: center; gap: 10px; padding: 2px 4px; }
+.sideacct .avatar { background: oklch(.5 .12 var(--h)); color: #fff; width: 30px; height: 30px; font-size: 12px; }
+.sideacct .who { display: flex; flex-direction: column; min-width: 0; }
+.sideacct .who b { font-size: 13.5px; white-space: nowrap; overflow: hidden; }
+.sideacct .who span { font-size: 11.5px; color: var(--ink-3); }
+
+/* ── Orgs, people, sharing ─────────────────────────────────────────── */
+.lede { color: var(--ink-2); font-size: 14px; margin: 2px 2px 14px; line-height: 1.45; }
+.orgcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.orgcard { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px; background: var(--surface); border: 1px solid #1d1d22; }
+.orgcard.here { border-color: var(--accent); }
+.orghead { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.orghead .mid { flex: 1; display: flex; flex-direction: column; }
+.orghead.big { margin: 4px 0 16px; }
+.orghead.big .t1 { font-size: 20px; }
+.herechip, .youchip { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+.youchip { margin-left: 8px; vertical-align: 2px; }
+.orgstats { display: flex; gap: 14px; color: var(--ink-2); font-size: 13.5px; }
+.orgstats b { color: var(--ink); font-size: 16px; }
+.sharerow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.orgtag { font-size: 12px; font-weight: 650; padding: 3px 8px; border-radius: 8px; background: oklch(.3 .07 var(--h)); color: oklch(.88 .08 var(--h)); }
+.orgcard .primary, .orgcard .secondary { min-height: 40px; font-size: 15px; margin-top: auto; }
+.secondary { background: var(--surface-2); color: var(--ink); }
+.secondary.danger { color: #fca5a5; }
+.pmark { flex: none; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: #fff; background: oklch(.5 .13 var(--h)); }
+.person { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 8px 2px; }
+.person + .person { border-top: 1px solid #1b1b20; }
+.person .mid { flex: 1; }
+.pright { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; max-width: 40%; }
+.role { font-size: 12px; font-weight: 650; padding: 3px 8px; border-radius: 9px; background: var(--surface-2); color: var(--ink-2); }
+.role.lead { background: var(--accent-soft); color: var(--accent); }
+.pright .leads { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.groupline { margin: 4px 2px 10px; }
+.groupline .parts, .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.part { font-size: 12px; padding: 3px 8px; border-radius: 8px; background: var(--surface-2); color: var(--ink-2); }
+.tagrow { margin-bottom: 8px; }
+.chips .tagchip { height: 32px; }
+.chips.keys .tagchip { min-width: 40px; justify-content: center; text-align: center; }
+.orgchip[aria-pressed="true"] { background: oklch(.32 .08 var(--h)); border-color: oklch(.6 .12 var(--h)); }
+.phead { display: flex; align-items: center; gap: 12px; margin: 4px 0 6px; }
+.phead .sename { flex: 1; }
+.grouprows { display: flex; flex-direction: column; gap: 6px; }
+.grouprow { display: flex; align-items: center; gap: 8px; }
+.leadbtn { height: 30px; padding: 0 10px; border-radius: 15px; font-size: 13px; font-weight: 600; color: var(--ink-3); border: 1px dashed var(--rule); }
+.leadbtn.on { color: var(--accent); border: 1px solid var(--accent); background: var(--accent-soft); }
+.acct { white-space: normal; margin-bottom: 6px; }
+.person-sheet .secondary.wide { margin-top: 10px; }
+.settings .fieldrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 50px; border-top: 1px solid #1b1b20; }
+.settings .fieldrow span { color: var(--ink-2); font-size: 14px; }
+.settings .fieldrow input, .settings .fieldrow select { background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 9px; height: 36px; padding: 0 10px; font: 500 15px var(--font); min-width: 0; width: 55%; color-scheme: dark; }
+.inorg { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border-radius: 14px; background: var(--surface); border: 1px solid #1d1d22; }
+.inorg .mid { flex: 1; display: flex; flex-direction: column; }
+.ownerhead { display: flex; align-items: center; gap: 8px; }
+.sharedn { color: var(--accent); }
+.keyhere.moved { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 9px; }
+.libr { display: flex; align-items: center; gap: 8px; }
+.bsheet > .s1, .orgcard > .s1 { white-space: normal; overflow: visible; margin: 2px 0 6px; line-height: 1.4; }

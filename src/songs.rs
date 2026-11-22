@@ -32,7 +32,7 @@ pub fn song_doc(id: &str) -> String {
 }
 
 /// A song as the library lists it.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct Entry {
     /// Its library id (`slugify` of its title, the library's convention).
     pub id: String,
@@ -43,10 +43,12 @@ pub struct Entry {
     pub tags: Vec<String>,
     pub energy: u8,
     pub ready: String,
+    /// The other orgs it is shared with (slugs), when its org owns it.
+    pub shared_with: Vec<String>,
 }
 
 impl Entry {
-    fn from_lib(x: &data::LibSong) -> Entry {
+    pub fn from_lib(x: &data::LibSong) -> Entry {
         Entry {
             id: slugify(x.song.title),
             title: x.song.title.to_string(),
@@ -56,6 +58,7 @@ impl Entry {
             tags: x.tags.iter().map(|t| t.to_string()).collect(),
             energy: x.energy,
             ready: x.song.ready.to_string(),
+            shared_with: Vec::new(),
         }
     }
 
@@ -123,11 +126,43 @@ pub fn entries(doc: &LoroDoc) -> Vec<Entry> {
                 .collect(),
             energy: u8::try_from(n(&m, "energy")).unwrap_or(0),
             ready: s(&m, "ready"),
+            shared_with: shared_of(&m),
         })
         .filter(|e| !e.id.is_empty())
         .collect();
     out.sort_by_key(|e| e.title.to_lowercase());
     out
+}
+
+/// The orgs a song's face says it is shared with (a map, so two people
+/// sharing it with two orgs at once both land).
+fn shared_of(m: &LoroMap) -> Vec<String> {
+    let mut out: Vec<String> = match m.get("shared_with") {
+        Some(ValueOrContainer::Container(c)) => c
+            .into_map()
+            .map(|w| w.keys().map(|k| k.to_string()).collect())
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    out.sort();
+    out
+}
+
+/// Share a song's face with an org, or stop.
+pub fn set_shared(
+    doc: &LoroDoc,
+    id: &str,
+    org: &str,
+    on: bool,
+) -> session_sync::loro::LoroResult<()> {
+    let m = doc.get_map("songs").ensure_mergeable_map(id)?;
+    let with = m.ensure_mergeable_map("shared_with")?;
+    if on {
+        with.insert(org, true)?;
+    } else if with.get(org).is_some() {
+        with.delete(org)?;
+    }
+    Ok(())
 }
 
 /// Add or update a song's face.
@@ -141,6 +176,13 @@ pub fn put_entry(doc: &LoroDoc, e: &Entry) -> session_sync::loro::LoroResult<()>
     m.insert("tags", e.tags.join(","))?;
     m.insert("energy", i64::from(e.energy))?;
     m.insert("ready", e.ready.as_str())?;
+    let had = shared_of(&m);
+    for o in had.iter().filter(|o| !e.shared_with.contains(o)) {
+        set_shared(doc, &e.id, o, false)?;
+    }
+    for o in e.shared_with.iter().filter(|o| !had.contains(o)) {
+        set_shared(doc, &e.id, o, true)?;
+    }
     Ok(())
 }
 
@@ -358,7 +400,7 @@ pub struct Here {
 }
 
 #[cfg(feature = "web")]
-mod backing {
+pub(crate) mod backing {
     use super::*;
     use drive_dioxus::{Doc, use_doc};
 
@@ -405,7 +447,7 @@ mod backing {
 }
 
 #[cfg(not(feature = "web"))]
-mod backing {
+pub(crate) mod backing {
     use super::*;
     use std::cell::RefCell;
     use std::collections::HashMap;
@@ -464,45 +506,89 @@ mod backing {
     }
 }
 
-/// The library's shape versions (`drive_spine::schema`): version 1 is the
-/// library seeded with the built-in songs.
-const LIBRARY_STEPS: &[drive_spine::schema::Step] = &[|d| {
-    if d.get_map("songs").is_empty() {
-        seed_library(d);
-    }
-}];
-
 /// A song document's shape versions: version 1 is a session-sync session
 /// (the seed writes it; the step only stamps the version).
 const SONG_STEPS: &[drive_spine::schema::Step] = &[|_| {}];
 
-/// The library, live.
-#[derive(Clone, PartialEq)]
-pub struct Library(backing::Backing);
-
-pub fn use_library() -> Library {
-    let b = backing::use_backing(LIBRARY_DOC.to_string());
-    let lib = Library(b);
-    // Once the node has answered (an empty library is really empty), seed it.
-    let ready = lib.0.ready();
-    let seed = lib.clone();
+/// Bring a document up to its steps once its node has answered (an empty
+/// document is then really empty), stamped with its org first: the steps
+/// read it.
+pub(crate) fn use_upgrade(
+    b: &backing::Backing,
+    org: &str,
+    steps: &'static [drive_spine::schema::Step],
+) {
+    let ready = b.ready();
+    let b = b.clone();
+    let org = org.to_string();
     use_effect(use_reactive!(|ready| {
-        if ready && drive_spine::schema::version(&seed.0.peek()) < LIBRARY_STEPS.len() as i64 {
-            seed.0
-                .edit(|d| drive_spine::schema::upgrade(d, LIBRARY_STEPS));
+        if ready && drive_spine::schema::version(&b.peek()) < steps.len() as i64 {
+            b.edit(|d| {
+                crate::orgs::stamp_org(d, &org);
+                drive_spine::schema::upgrade(d, steps)
+            });
         }
     }));
-    lib
+}
+
+/// An org's library, live.
+#[derive(Clone, PartialEq)]
+pub struct Library {
+    b: backing::Backing,
+    /// Whose library it is.
+    pub org: String,
+}
+
+pub fn use_library_of(org: &str) -> Library {
+    let b = backing::use_backing(crate::orgs::qualified(org, LIBRARY_DOC));
+    use_upgrade(&b, org, crate::orgs::LIBRARY_STEPS);
+    Library {
+        b,
+        org: org.to_string(),
+    }
+}
+
+/// The library of the org Studio is in.
+pub fn use_library() -> Library {
+    let org = (crate::state::use_app().here)();
+    use_library_of(&org)
 }
 
 impl Library {
     pub fn entries(&self) -> Vec<Entry> {
-        let list = entries(&self.0.loro());
-        if list.is_empty() {
-            LIB.iter().map(Entry::from_lib).collect()
-        } else {
-            list
-        }
+        entries(&self.b.loro())
+    }
+
+    pub fn ready(&self) -> bool {
+        self.b.ready()
+    }
+
+    /// The document itself, as it is now (no re-render on change).
+    pub fn peek(&self) -> LoroDoc {
+        self.b.peek()
+    }
+
+    /// The document, re-read when it changes.
+    pub fn loro(&self) -> LoroDoc {
+        self.b.loro()
+    }
+
+    /// How this org plays a song (its own or a shared one).
+    pub fn use_of(&self, owner: &str, id: &str) -> crate::orgs::Use {
+        crate::orgs::use_of(&self.b.loro(), owner, id)
+    }
+
+    pub fn put_use(&self, owner: &str, id: &str, u: &crate::orgs::Use) {
+        self.b.edit(|d| {
+            let _ = crate::orgs::put_use(d, owner, id, u);
+        });
+    }
+
+    /// Share one of this org's songs with another org, or stop.
+    pub fn share(&self, id: &str, to: &str, on: bool) {
+        self.b.edit(|d| {
+            let _ = crate::orgs::share_song(d, id, to, on);
+        });
     }
 
     pub fn get(&self, id: &str) -> Option<Entry> {
@@ -510,7 +596,7 @@ impl Library {
     }
 
     pub fn put(&self, e: &Entry) {
-        self.0.edit(|d| {
+        self.b.edit(|d| {
             let _ = put_entry(d, e);
         });
     }
@@ -520,8 +606,12 @@ impl Library {
 #[derive(Clone, PartialEq)]
 pub struct Song(backing::Backing);
 
-pub fn use_song(id: &str, entry: Option<Entry>) -> Song {
-    let song = Song(backing::use_backing(song_doc(id)));
+/// A song's session, in the org that owns it.
+pub fn use_song(owner: &str, id: &str, entry: Option<Entry>) -> Song {
+    let song = Song(backing::use_backing(crate::orgs::qualified(
+        owner,
+        &song_doc(id),
+    )));
     let ready = song.0.ready();
     let seed = song.clone();
     use_effect(use_reactive!(|ready, entry| {
@@ -594,6 +684,7 @@ mod tests {
             tags: vec!["worship".into()],
             energy: 2,
             ready: String::new(),
+            shared_with: Vec::new(),
         }
     }
 

@@ -28,6 +28,10 @@ pub enum Sheet {
     Orgs,
     /// A track's or a record's status ("rec:cr" or a track title).
     Status(String),
+    /// A person in the org (their id; empty: a new one).
+    Person(String),
+    /// How the org plays a song: its owner and id.
+    OrgSong(String, String),
 }
 
 /// A ⋯ menu from the page's bar.
@@ -218,20 +222,31 @@ pub struct Live {
     pub looping: bool,
 }
 
+/// The org a device without Drive starts in.
+pub const FIRST_ORG: &str = "crossroads-church";
+
 /// The app's state, every piece its own signal.
 #[derive(Clone, Copy)]
 pub struct AppState {
     pub sheet: Signal<Option<Sheet>>,
     pub menu: Signal<Option<Menu>>,
     pub toast: Signal<Option<(u32, String)>>,
-    pub side: Signal<bool>,
     pub np: Signal<Option<NowPlaying>>,
     pub ov: Signal<HashMap<(String, usize), Override>>,
     pub reh: Signal<Vec<Rehearsal>>,
     pub booking: Signal<Option<Booking>>,
     pub filters: Signal<Filters>,
     pub folder: Signal<Option<&'static str>>,
-    pub org: Signal<Option<&'static str>>,
+    /// What the pages show: one org's (`Some`, the org Studio is in) or
+    /// every org's at once (`None`, All orgs).
+    pub org: Signal<Option<String>>,
+    /// The org Studio is in: where its documents are (Drive's org on the
+    /// web; picked here on a device without Drive).
+    pub here: Signal<String>,
+    /// The orgs this person is in (Drive's `/orgs`, or the known ones).
+    pub orgs: Signal<Vec<String>>,
+    /// Who is signed in (their account at the issuer), when anyone is.
+    pub who: Signal<String>,
     pub every_q: Signal<String>,
     pub review: Signal<Review>,
     pub versions: Signal<HashMap<&'static str, Vec<Version>>>,
@@ -252,7 +267,6 @@ impl AppState {
             sheet: Signal::new(None),
             menu: Signal::new(None),
             toast: Signal::new(None),
-            side: Signal::new(false),
             np: Signal::new(Some(NowPlaying {
                 list: cya,
                 from: "CYA · Thu Nov 19".into(),
@@ -265,7 +279,15 @@ impl AppState {
             booking: Signal::new(None),
             filters: Signal::new(Filters::default()),
             folder: Signal::new(None),
-            org: Signal::new(None),
+            org: Signal::new(Some(FIRST_ORG.to_string())),
+            here: Signal::new(FIRST_ORG.to_string()),
+            orgs: Signal::new(
+                crate::orgs::KNOWN
+                    .iter()
+                    .map(|k| k.slug.to_string())
+                    .collect(),
+            ),
+            who: Signal::new(String::new()),
             every_q: Signal::new(String::new()),
             review: Signal::new(Review::default()),
             versions: Signal::new(data::all_versions()),
@@ -303,6 +325,19 @@ impl AppState {
                 l.sec = 1;
                 l.bar = 3;
             });
+        }
+    }
+
+    /// Go to an org: on the web every app on this address follows (Drive
+    /// reloads into it); without Drive, here.
+    pub fn switch_org(mut self, org: &str) {
+        if *self.here.peek() == org {
+            self.org.set(Some(org.to_string()));
+            return;
+        }
+        if !self.sync.switch_org(org) {
+            self.here.set(org.to_string());
+            self.org.set(Some(org.to_string()));
         }
     }
 
