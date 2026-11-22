@@ -7,10 +7,12 @@
 
 mod data;
 mod icons;
+mod keys;
 mod live_sync;
 mod orgs;
 mod pages;
 mod pieces;
+mod setlist;
 mod sheets;
 mod shell;
 mod songs;
