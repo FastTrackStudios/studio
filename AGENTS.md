@@ -24,6 +24,14 @@ apps/       desktop/   Studio, THE app (package `studio-desktop`, binary
                        (docs/architect-distribution.md). No iOS target yet.
             web/       studio-web, the web client (Architect's web app with
                        Studio's distribution)
+            studio/    Studio, the app as it is being remade (package
+                       `studio-app`; studio-proto until 2026-11-22): a plain
+                       Dioxus app on Drive (FastTrackStudios/drive) and
+                       app-shell (FastTrackStudios/app-shell), no Architect.
+                       Orgs, setlists, each song's files; the session next
+                       (apps/studio/docs/ROADMAP.md). It replaces desktop/
+                       and web/ as it grows. Never `-p app-shell`:
+                       features/app/shell has the same package name.
             Nothing else is an app: Session is the engine in features/engine,
             Signal is extensions (here, extensions/rig*, and its library in
             FastTrackStudios/signal).

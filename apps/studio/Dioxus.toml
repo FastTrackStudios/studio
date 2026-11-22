@@ -1,0 +1,9 @@
+[application]
+name = "studio-app"
+
+[web.app]
+title = "Studio"
+
+[bundle]
+identifier = "com.fasttrackstudio.studioproto"
+publisher = "FastTrackStudio"

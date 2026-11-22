@@ -1,0 +1,57 @@
+[package]
+name = "studio-app"
+description = "Studio, the app: a plain Dioxus app on Drive and app-shell (orgs, setlists, each song's files), growing into the session"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+session-sync.workspace = true
+web-time = "1"
+dioxus = { version = "=0.8.0-alpha.3", features = ["router"] }
+# Drive, the local-first sync: live sets, presence and the spine. Its
+# client is the browser's (web-sys), so only the web build has it.
+drive-dioxus = { workspace = true, optional = true }
+drive-spine.workspace = true
+# Drive's registry (projects shared with other orgs): the tree and the
+# registry only, no blob store.
+drive-files.workspace = true
+loro = "1.18"
+# The window: the sidebar and top bar on a desktop, the tab pill, round
+# button, accessory, drawer and sheets on a phone.
+# FastTrackStudios/app-shell, not features/app/shell (the old apps' log
+# ring and update check), which has the same package name: say
+# `-p studio-app`, never `-p app-shell`.
+app-shell = { git = "https://github.com/FastTrackStudios/app-shell", tag = "v0.3.1" }
+serde_json = { version = "1", optional = true }
+js-sys = { version = "0.3", optional = true }
+# The browser's fetch, for bytes (waveforms, uploads).
+web-sys = { version = "0.3", optional = true, features = ["Window", "Request", "RequestInit", "Response", "Headers", "Blob", "BlobPropertyBag", "Url"] }
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+# Waveform peaks (the sidecar format; no producers in the app).
+drive-sidecars.workspace = true
+# Drive's agent on this computer: any Drive file as a real local path,
+# warmed ahead of a set (desktop builds; docs/app-files.md in Drive).
+drive-local = { workspace = true, optional = true }
+
+[features]
+default = []
+web = ["dioxus/web", "dep:drive-dioxus", "dep:serde_json", "dep:js-sys", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
+desktop = ["dioxus/desktop", "local"]
+local = ["dep:drive-local"]
+mobile = ["dioxus/mobile"]
+
+# A timer for the moving playheads: the browser's on the web, tokio's
+# (which the desktop and mobile renderers already run) elsewhere.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-timers = { version = "0.3", features = ["futures"] }
+# The browser's crypto for getrandom 0.3 (Loro's ids).
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", features = ["time"] }
