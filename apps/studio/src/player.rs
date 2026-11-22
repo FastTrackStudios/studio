@@ -50,6 +50,10 @@ while (true) {
     a.removeAttribute('src');
     a.load();
   } else if (m.src !== undefined && m.src !== a.dataset.src) {
+    // Drop the last song's stream first: a browser otherwise keeps
+    // loading it, and a few songs in, its connections run out.
+    a.removeAttribute('src');
+    a.load();
     a.dataset.src = m.src;
     a.src = m.src;
   }
