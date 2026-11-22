@@ -1296,3 +1296,62 @@ span.aglogo { overflow: hidden; display: block; }
 .bpin { width: 24px; height: 24px; margin-left: -12px; border-radius: 12px; top: -2px; }
 .bpin::after { left: 11px; top: 24px; }
 .key2.nokey { border: 1px solid #3a3a42; background: transparent !important; }
+
+/* A setlist file's page, and the chart that follows the recording. */
+.fsethead {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 14px;
+}
+.fsethead h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+}
+.fsetacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.playset.quiet {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.chartnow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.chartnowhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+.chartnowhead b {
+  display: block;
+  font-size: 20px;
+}
+.kfpaper {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px;
+  overflow: hidden;
+}
+.kfpaper svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.kfpaper .kf-bar {
+  cursor: pointer;
+}
+.kfpaper .kf-bar[aria-current] {
+  fill: rgba(250, 204, 21, 0.45);
+}
+.kfpaper .kf-step[aria-current] {
+  fill: rgba(37, 99, 235, 0.3);
+}

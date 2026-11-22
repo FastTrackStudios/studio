@@ -474,14 +474,22 @@ fn read_entry(m: &LoroMap) -> Entry {
 fn write_entry(m: &LoroMap, e: &Entry) -> loro::LoroResult<()> {
     put_s(m, "id", &e.id)?;
     put_s(m, "kind", e.kind.as_str())?;
-    put_s(m, "song", &e.song.as_ref().map(SongRef::text).unwrap_or_default())?;
+    put_s(
+        m,
+        "song",
+        &e.song.as_ref().map(SongRef::text).unwrap_or_default(),
+    )?;
     put_s(m, "title", &e.title)?;
     put_s(m, "artist", e.artist.as_deref().unwrap_or(""))?;
     put_s(m, "key", e.key.as_deref().unwrap_or(""))?;
     put_n(m, "tempo", i64::from(e.tempo.unwrap_or(0)))?;
     put_n(m, "length", i64::from(e.length.unwrap_or(0)))?;
     put_s(m, "play_key", e.over.key.as_deref().unwrap_or(""))?;
-    put_s(m, "arrangement", e.over.arrangement.as_deref().unwrap_or(""))?;
+    put_s(
+        m,
+        "arrangement",
+        e.over.arrangement.as_deref().unwrap_or(""),
+    )?;
     put_s(m, "leader", e.over.leader.as_deref().unwrap_or(""))?;
     put_n(m, "play_tempo", i64::from(e.over.tempo.unwrap_or(0)))?;
     put_s(m, "notes", &e.notes)?;
@@ -722,7 +730,12 @@ pub fn resolve(
     let own_key = song.and_then(|x| x.key.clone()).or_else(|| e.key.clone());
     let own_tempo = song.and_then(|x| x.tempo).or(e.tempo);
     Played {
-        key: e.over.key.clone().or_else(|| u.key.clone()).or_else(|| own_key.clone()),
+        key: e
+            .over
+            .key
+            .clone()
+            .or_else(|| u.key.clone())
+            .or_else(|| own_key.clone()),
         own_key,
         arrangement: e
             .over
@@ -809,7 +822,6 @@ impl Face {
     pub fn upcoming(&self) -> bool {
         self.day().is_some_and(|d| d.from_today() >= 0)
     }
-
 }
 
 /// The face of a set's document.
@@ -1170,9 +1182,7 @@ pub fn mirror_set_project(doc: &LoroDoc, registry: &LoroDoc) -> bool {
         );
     }
     let _ = m.insert("name", format!("Studio set: {}", i.title));
-    let (had_docs, had_orgs) = current
-        .map(|p| (p.docs, p.shared_with))
-        .unwrap_or_default();
+    let (had_docs, had_orgs) = current.map(|p| (p.docs, p.shared_with)).unwrap_or_default();
     for d in had_docs.iter().filter(|d| !docs.contains(d)) {
         let _ = projects::link_doc(registry, &id, d, false);
     }
@@ -1318,10 +1328,7 @@ fn builtin_entry(org: &str, x: &data::Song) -> Entry {
     let owner = orgs::home_of(&tags).unwrap_or(org);
     Entry {
         kind: ItemKind::Song,
-        song: Some(SongRef::new(
-            owner,
-            &session_sync::slug::slugify(x.title),
-        )),
+        song: Some(SongRef::new(owner, &session_sync::slug::slugify(x.title))),
         title: x.title.into(),
         artist: x.artist.map(str::to_string),
         key: x.key.map(str::to_string),
@@ -1451,7 +1458,12 @@ fn write_builtin(doc: &LoroDoc, org: &str, id: &str) -> bool {
             title: st.title.into(),
             kind: Kind::Show,
             date: date.iso(),
-            place: if id == "jt" { "Studio A" } else { "Recital Hall" }.into(),
+            place: if id == "jt" {
+                "Studio A"
+            } else {
+                "Recital Hall"
+            }
+            .into(),
             starts: "7:00".into(),
             call: "5:30".into(),
             leader: Some(if id == "jt" { "cody-wright" } else { "dr-hale" }.into()),
@@ -1503,12 +1515,17 @@ pub const SETLIST_STEPS: &[drive_spine::schema::Step] = &[setlist_v1];
 /// The index's version 1: the org's recurring events and the faces of its
 /// built-in sets (each set's own document is written when it is first
 /// opened, by [`setlist_v1`]; the face here is the same set's).
+///
+/// Crossroads Church gets its recurring events only (Main, JHM Sunday,
+/// HSM, JHM, CYA, each with its room and times): its sets are planned in
+/// Studio as they come, not the prototype's sample weeks.
 pub fn index_v1(index: &LoroDoc) {
     let org = orgs::stamped_org(index);
     if org == "crossroads-church" {
         for x in data::SERIES.iter() {
             let _ = put_series(index, &builtin_series(x));
         }
+        return;
     }
     for id in builtin_ids(&org) {
         let tmp = LoroDoc::new();
@@ -1701,7 +1718,12 @@ mod tests {
         // Nothing chosen: the song's key, the org's default, the set's leader.
         let p = resolve(&e, Some(&face), &Use::default(), &st, &set);
         assert_eq!(
-            (p.key.as_deref(), p.arrangement.as_str(), p.leader.as_deref(), p.tempo),
+            (
+                p.key.as_deref(),
+                p.arrangement.as_str(),
+                p.leader.as_deref(),
+                p.tempo
+            ),
             (Some("G"), "Normal", Some("jake"), Some(72))
         );
         // The org plays it in A, acoustic, led by Mia.
@@ -1713,7 +1735,11 @@ mod tests {
         };
         let p = resolve(&e, Some(&face), &u, &st, &set);
         assert_eq!(
-            (p.key.as_deref(), p.arrangement.as_str(), p.leader.as_deref()),
+            (
+                p.key.as_deref(),
+                p.arrangement.as_str(),
+                p.leader.as_deref()
+            ),
             (Some("A"), "Acoustic", Some("mia"))
         );
         // This set moves it to Bb, shortened, led by Sam, faster.
@@ -1725,7 +1751,12 @@ mod tests {
         };
         let p = resolve(&e, Some(&face), &u, &st, &set);
         assert_eq!(
-            (p.key.as_deref(), p.arrangement.as_str(), p.leader.as_deref(), p.tempo),
+            (
+                p.key.as_deref(),
+                p.arrangement.as_str(),
+                p.leader.as_deref(),
+                p.tempo
+            ),
             (Some("Bb"), "Shortened", Some("sam"), Some(80))
         );
         assert_eq!(p.own_key.as_deref(), Some("G"));
@@ -1909,7 +1940,10 @@ mod tests {
             "days-to-praise",
             &[
                 ("crossroads-church".into(), set_project("s1")),
-                ("crossroads-church".into(), "studio-shared-days-to-praise".into()),
+                (
+                    "crossroads-church".into(),
+                    "studio-shared-days-to-praise".into(),
+                ),
             ],
         );
         assert_eq!(found, vec![("crossroads-church".into(), "s1".into())]);
@@ -1925,18 +1959,26 @@ mod tests {
 
     #[test]
     fn the_built_in_sets_become_documents() {
-        // The index: Crossroads' recurring events and every set's face.
+        // The index: Crossroads' recurring events, and no sample sets.
         let index = LoroDoc::new();
         orgs::stamp_org(&index, "crossroads-church");
-        assert_eq!(schema::upgrade(&index, INDEX_STEPS), schema::Upgraded::From(0));
+        assert_eq!(
+            schema::upgrade(&index, INDEX_STEPS),
+            schema::Upgraded::From(0)
+        );
         assert_eq!(series_list(&index).len(), 5);
-        let fs = faces(&index);
-        assert_eq!(fs.len(), data::OCC.len());
-        let cya = face(&index, "cya_2026-11-19").unwrap();
+        assert!(faces(&index).is_empty());
+        // A show's index has its built-in set.
+        let rot = LoroDoc::new();
+        orgs::stamp_org(&rot, "rockstars-of-tomorrow");
+        schema::upgrade(&rot, INDEX_STEPS);
+        assert!(face(&rot, "jt").is_some());
+        let tmp = LoroDoc::new();
+        stamp_set(&tmp, "crossroads-church", "cya_2026-11-19");
+        assert!(write_builtin(&tmp, "crossroads-church", "cya_2026-11-19"));
+        let cya = face_of(&tmp);
         assert_eq!((cya.songs, cya.size), (4, 4));
         assert!(cya.band.contains(&"cody-wright".to_string()));
-        // A show is its home org's, not Crossroads'.
-        assert!(face(&index, "jt").is_none());
 
         // A set's document, when opened: the same set as its face.
         let d = LoroDoc::new();
@@ -1962,7 +2004,10 @@ mod tests {
         assert_eq!(face_of(&d), cya);
         // Running it again changes nothing.
         let before = entries(&d);
-        assert_eq!(schema::upgrade(&d, SETLIST_STEPS), schema::Upgraded::Current);
+        assert_eq!(
+            schema::upgrade(&d, SETLIST_STEPS),
+            schema::Upgraded::Current
+        );
         setlist_v1(&d);
         assert_eq!(entries(&d), before);
 

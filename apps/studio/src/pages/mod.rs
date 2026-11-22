@@ -1,5 +1,6 @@
 //! The pages, and the rows several of them share.
 
+pub mod drive_set;
 pub mod files;
 pub mod home;
 pub mod library;

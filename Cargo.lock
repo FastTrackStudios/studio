@@ -23607,6 +23607,7 @@ dependencies = [
  "getrandom 0.3.4",
  "gloo-timers 0.3.0",
  "js-sys",
+ "keyflow",
  "loro",
  "serde_json",
  "session-sync",

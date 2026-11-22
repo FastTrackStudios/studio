@@ -7,6 +7,8 @@
 //! Drive documents too (`setlist` the model, `sets` live).
 
 mod data;
+#[cfg(feature = "web")]
+mod drive_sets;
 mod files;
 mod files_live;
 mod icons;
@@ -17,9 +19,15 @@ mod pages;
 mod pieces;
 #[cfg(feature = "web")]
 mod player;
+// The browser build engraves charts and reads setlist files from Drive.
+#[cfg_attr(not(feature = "web"), allow(dead_code))]
+mod chart_sync;
+#[cfg_attr(not(feature = "web"), allow(dead_code))]
 mod reference;
 mod session_file;
 mod set_sheets;
+#[cfg_attr(not(feature = "web"), allow(dead_code))]
+mod setfile;
 mod setlist;
 mod sets;
 mod sheets;
@@ -30,6 +38,7 @@ mod team;
 
 use dioxus::prelude::*;
 
+use pages::drive_set::{DriveSet, NowChart};
 use pages::home::Home;
 use pages::library::{Library, LibraryHome};
 use pages::live::{Chart, Lyrics};
@@ -72,6 +81,10 @@ pub enum Route {
         Chart { id: String },
         #[route("/set/:id/lyrics")]
         Lyrics { id: String },
+        #[route("/drive/:space/:location/:..path")]
+        DriveSet { space: String, location: String, path: Vec<String> },
+        #[route("/now/chart")]
+        NowChart {},
         #[route("/at/:owner/:id")]
         OrgSet { owner: String, id: String },
         #[route("/print/:owner/:id")]

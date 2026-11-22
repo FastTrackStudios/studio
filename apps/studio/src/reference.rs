@@ -61,6 +61,33 @@ pub fn pick<'a>(title: &str, hits: &'a [Hit]) -> Option<&'a Hit> {
         .map(|(_, h)| h)
 }
 
+/// A song's chart among every `.kf` found, for its session folder: one
+/// whose name has every word of the folder's and the fewest others
+/// ("Fire" over "Kings of Leon - Sex on Fire"; a track number is not a
+/// word), never an archived draft, the newest first.
+pub fn pick_chart<'a>(folder: &str, charts: &'a [Hit]) -> Option<&'a Hit> {
+    let name = folder.rsplit('/').next().unwrap_or(folder);
+    let want = words(name);
+    charts
+        .iter()
+        .filter(|h| !h.path.contains("/Archive/") && h.name.ends_with(".kf"))
+        .filter_map(|h| {
+            let stem = h.name.trim_end_matches(".kf");
+            let fit = fit(stem, name)?;
+            let extra = words(stem)
+                .iter()
+                .filter(|w| !want.contains(w) && !w.chars().all(|c| c.is_ascii_digit()))
+                .count();
+            Some(((fit, std::cmp::Reverse(extra)), h))
+        })
+        .max_by(|(ka, a), (kb, b)| {
+            ka.cmp(kb)
+                .then(a.online.cmp(&b.online))
+                .then(a.mtime.cmp(&b.mtime))
+        })
+        .map(|(_, h)| h)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -83,6 +110,35 @@ mod tests {
         assert_eq!(fit("Hey!", "hey"), Some(1));
         assert_eq!(fit("Fire", "for-you"), None);
         assert_eq!(fit("Fire", "fasttrackaudio/session/fire"), Some(1));
+    }
+
+    #[test]
+    fn a_songs_chart_is_the_closest_name() {
+        let kf = |path: &str, mtime: i64| Hit {
+            name: path.rsplit('/').next().unwrap().into(),
+            path: path.into(),
+            online: true,
+            mtime,
+            ..Default::default()
+        };
+        let charts = vec![
+            kf("Chordsheet Backup/kf/KINGS OF LEON - SEX ON FIRE.kf", 9),
+            kf("Projects/JT's Senior Recital/charts/08 Fire.kf", 1),
+            kf(
+                "Projects/JT's Senior Recital/charts/10 Know Me (Extended).kf",
+                1,
+            ),
+            kf("Libraries/Christmas/Sleigh Ride/Sleigh Ride.kf", 1),
+            kf(
+                "Libraries/Christmas/Sleigh Ride/Archive/Sleigh Ride (draft).kf",
+                9,
+            ),
+        ];
+        let got = |f: &str| pick_chart(f, &charts).map(|h| h.name.as_str());
+        assert_eq!(got("fire"), Some("08 Fire.kf"));
+        assert_eq!(got("know-me"), Some("10 Know Me (Extended).kf"));
+        assert_eq!(got("songs/sleigh-ride"), Some("Sleigh Ride.kf"));
+        assert_eq!(got("sleeptalker"), None);
     }
 
     #[test]

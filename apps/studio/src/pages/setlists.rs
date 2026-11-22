@@ -11,8 +11,8 @@ use crate::data::{self, Day, MONTH, TODAY};
 use crate::icons::{I, Icon};
 use crate::orgs;
 use crate::pieces::{Bar, Cover, DayTile, Hair, Hero, Joined, Page, Ring, Tool};
-use crate::setlist::{self, Face, Kind};
 use crate::setlist::Series as Recurring;
+use crate::setlist::{self, Face, Kind};
 use crate::sets;
 use crate::state::{Menu, Sheet, use_app};
 
@@ -111,6 +111,7 @@ pub fn Setlists() -> Element {
                         FaceRow { key: "{f.id}", face: f.clone(), state: progress_of(&f) }
                     }
                 }
+                FromDrive { space: here.clone() }
                 if !shared().is_empty() {
                     div { class: "dayhead", "Shared with {orgs::org_name(&here)}" }
                     div { class: "agenda",
@@ -146,6 +147,59 @@ pub fn Setlists() -> Element {
             }
         }
     }
+}
+
+/// The setlist files in the org's Drive (`.setlist`, beside their songs'
+/// session folders), each opening as a set.
+#[cfg(feature = "web")]
+#[component]
+fn FromDrive(space: String) -> Element {
+    let files = use_resource(use_reactive!(|space| async move {
+        crate::drive_sets::files(&space).await
+    }));
+    let list = files().unwrap_or_default();
+    if list.is_empty() {
+        return rsx! {};
+    }
+    rsx! {
+        div { class: "dayhead", "In Drive" }
+        div { class: "agenda",
+            for h in list {
+                button {
+                    key: "{h.location}/{h.path}",
+                    class: "ag",
+                    onclick: {
+                        let h = h.clone();
+                        move |_| {
+                            navigator()
+                                .push(Route::DriveSet {
+                                    space: h.space.clone(),
+                                    location: h.location.clone(),
+                                    path: h.path.split('/').map(str::to_string).collect(),
+                                });
+                        }
+                    },
+                    span { class: "cal tpl",
+                        Icon { name: I::Setlist, size: 18 }
+                    }
+                    span { class: "mid",
+                        span { class: "t1", "{crate::setfile::name_of(&h.name)}" }
+                        span { class: "s1", "{h.location_name} · {h.device_name}" }
+                    }
+                    span { class: "chev",
+                        Icon { name: I::ChevRight, size: 16 }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "web"))]
+#[component]
+fn FromDrive(space: String) -> Element {
+    let _ = space;
+    rsx! {}
 }
 
 /// A set another org shares with this one: read from its own document
@@ -255,7 +309,10 @@ pub fn Series(id: String) -> Element {
         })
         .collect();
     // Any planned further out, too.
-    for f in have.iter().filter(|f| f.day().is_some_and(|d| d.from_today() > 27)) {
+    for f in have
+        .iter()
+        .filter(|f| f.day().is_some_and(|d| d.from_today() > 27))
+    {
         if let Some(d) = f.day() {
             up.push((d, Some((*f).clone())));
         }

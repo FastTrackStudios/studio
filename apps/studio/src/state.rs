@@ -100,6 +100,19 @@ pub struct NowPlaying {
     pub source: Source,
     /// The song's sections, from its session.
     pub timeline: crate::session_file::Timeline,
+    /// Where each song's session folder is, when the list came from a
+    /// setlist file in Drive (by the list's index; empty otherwise).
+    pub places: Vec<Option<Place>>,
+}
+
+/// A song's session folder in Drive, and its chart when one was found.
+#[derive(Clone, PartialEq, Debug, Default)]
+pub struct Place {
+    pub space: String,
+    pub location: String,
+    /// The folder's path in its location.
+    pub folder: String,
+    pub chart: Option<crate::files::Hit>,
 }
 
 /// The playing song's audio, as the player found it.
@@ -126,7 +139,22 @@ impl NowPlaying {
             dur: 0.0,
             source: Source::None,
             timeline: Default::default(),
+            places: Vec::new(),
         }
+    }
+
+    /// Songs from their session folders (a setlist file's).
+    pub fn of_places(list: Vec<(Song, Place)>, from: String, i: usize, playing: bool) -> Self {
+        let (songs, places): (Vec<Song>, Vec<Place>) = list.into_iter().unzip();
+        Self {
+            places: places.into_iter().map(Some).collect(),
+            ..Self::new(songs, from, i, playing)
+        }
+    }
+
+    /// The playing song's session folder, when the list knows it.
+    pub fn place(&self) -> Option<&Place> {
+        self.places.get(self.i).and_then(Option::as_ref)
     }
 
     /// Seconds into the song (its length from the built-in list until its
@@ -459,6 +487,12 @@ impl AppState {
         if let Some(start) = first.or(list.first().map(|s| s.title)).map(str::to_string) {
             self.play(list, from, &start);
         }
+    }
+
+    /// Play a setlist file's songs from song `i`.
+    pub fn play_places(mut self, list: Vec<(Song, Place)>, from: String, i: usize) {
+        self.np
+            .set(Some(NowPlaying::of_places(list, from, i, true)));
     }
 
     /// Start playing a list at a song.

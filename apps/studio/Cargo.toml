@@ -33,6 +33,9 @@ js-sys = { version = "0.3", optional = true }
 web-sys = { version = "0.3", optional = true, features = ["Window", "Request", "RequestInit", "Response", "Headers", "Blob", "BlobPropertyBag", "Url"] }
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
+# Charts: a song's .kf parsed and engraved to SVG in the page, each bar
+# timed to the recording (CPU-only `svg` tier: no wgpu, builds for wasm).
+keyflow = { workspace = true, features = ["text", "svg"] }
 # Waveform peaks (the sidecar format; no producers in the app).
 drive-sidecars.workspace = true
 # Drive's agent on this computer: any Drive file as a real local path,

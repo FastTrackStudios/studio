@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use crate::files::Hit;
 use crate::files_live::web;
 use crate::session_file::{self, Timeline};
-use crate::state::{Source, use_app};
+use crate::state::{Place, Source, use_app};
 
 /// The page's audio element and its messages: what it is doing goes up on
 /// every change; `src`, `play` and `seek` come down.
@@ -82,6 +82,24 @@ async fn references(space: &str) -> Vec<Hit> {
         .collect();
     FOUND.with(|f| f.borrow_mut().insert(space.to_string(), hits.clone()));
     hits
+}
+
+/// The reference in a known session folder, when it has been bounced.
+async fn in_folder(p: &Place) -> Option<Hit> {
+    let proxies = format!("{}/Media/Proxies", p.folder);
+    web::list(&p.space, &p.location, &proxies)
+        .await
+        .into_iter()
+        .find(|h| h.name == "Reference.ogg")
+}
+
+/// A song's reference: in its session folder when the list knows it,
+/// else from the first space (in order) that has one.
+async fn find_for(place: Option<&Place>, spaces: &[String], title: &str) -> Option<Hit> {
+    match place {
+        Some(p) => in_folder(p).await,
+        None => find(spaces, title).await,
+    }
 }
 
 /// A song's reference, from the first space (in order) that has one.
@@ -198,6 +216,7 @@ pub fn Player() -> Element {
     let title = np
         .as_ref()
         .and_then(|n| n.song().map(|s| s.title.to_string()));
+    let place = np.as_ref().and_then(|n| n.place().cloned());
     let bpm = np
         .as_ref()
         .and_then(|n| n.song().and_then(|s| s.tempo))
@@ -215,7 +234,8 @@ pub fn Player() -> Element {
     {
         let (eval, spaces) = (eval.clone(), spaces.clone());
         use_effect(use_reactive!(|key| {
-            let (eval, title, spaces) = (eval.clone(), title.clone(), spaces.clone());
+            let (eval, title, spaces, place) =
+                (eval.clone(), title.clone(), spaces.clone(), place.clone());
             let mut np = app.np;
             if key.is_none() {
                 let _ = eval.send(json!({ "play": false }));
@@ -228,12 +248,15 @@ pub fn Player() -> Element {
                         n.source = Source::Finding;
                     }
                 });
-                let Some(hit) = find(&spaces, &title).await else {
+                let Some(hit) = find_for(place.as_ref(), &spaces, &title).await else {
                     let _ = eval.send(json!({ "src": "", "play": false }));
                     np.with_mut(|n| {
                         if let Some(n) = n {
-                            n.source =
-                                Source::Missing("no reference bounce on any computer".into());
+                            n.source = Source::Missing(if place.is_some() {
+                                "its session has no reference bounce yet".into()
+                            } else {
+                                "no reference bounce on any computer".into()
+                            });
                             // Playing a set: on to the next song that has one.
                             if n.playing && !n.next() {
                                 n.playing = false;
@@ -273,19 +296,21 @@ pub fn Player() -> Element {
             if list_key.is_none() {
                 return;
             }
-            let (titles, i) = match app.np.peek().as_ref() {
+            let (titles, places, i) = match app.np.peek().as_ref() {
                 Some(n) => (
                     n.list
                         .iter()
                         .map(|s| s.title.to_string())
                         .collect::<Vec<_>>(),
+                    n.places.clone(),
                     n.i,
                 ),
                 None => return,
             };
             spawn(async move {
-                for t in titles.iter().skip(i + 1) {
-                    if let Some(h) = find(&spaces, t).await {
+                for (k, t) in titles.iter().enumerate().skip(i + 1) {
+                    let place = places.get(k).and_then(Option::as_ref);
+                    if let Some(h) = find_for(place, &spaces, t).await {
                         warm(&web::file_url(&h)).await;
                     }
                 }

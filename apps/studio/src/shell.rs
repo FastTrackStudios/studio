@@ -116,6 +116,10 @@ fn title_of(route: &Route, index: &crate::sets::Index) -> String {
             })
         }
         Route::OrgSet { owner, .. } => format!("Setlist · {}", crate::orgs::org_name(owner)),
+        Route::DriveSet { path, .. } => path
+            .last()
+            .map_or("Setlist".into(), |n| crate::setfile::name_of(n)),
+        Route::NowChart {} => "Chart".into(),
         Route::PrintSet { .. } => "Print".into(),
         Route::LibraryHome {} | Route::Library { .. } => "Library".into(),
         Route::SongPage { .. } | Route::SharedSong { .. } => "Song".into(),
