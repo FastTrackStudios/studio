@@ -530,6 +530,7 @@ pub mod web {
                 location: st(&p, "location"),
                 path: st(&p, "path"),
                 available: p["available"].as_bool().unwrap_or(false),
+                space: st(&p, "space"),
             })
             .collect()
     }
