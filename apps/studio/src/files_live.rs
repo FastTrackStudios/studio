@@ -370,11 +370,47 @@ pub mod web {
     }
 
     pub async fn get(url: &str) -> Option<Value> {
-        let h = headers();
+        get_in(None, url).await
+    }
+
+    /// A call to Drive as a span: under `parent` when the page is timing
+    /// something larger, its traceparent sent so the node's spans join it.
+    fn call_span(
+        parent: Option<&crate::trace::Span>,
+        method: &str,
+        url: &str,
+    ) -> crate::trace::Span {
+        let path = url.split('?').next().unwrap_or(url);
+        let name = format!("{method} {path}");
+        let mut s = match parent {
+            Some(p) => p.client(&name),
+            None => crate::trace::Span::root(&name),
+        };
+        s.set("http.request.method", method);
+        s.set("url.path", path);
+        s
+    }
+
+    pub async fn get_in(parent: Option<&crate::trace::Span>, url: &str) -> Option<Value> {
+        let mut span = call_span(parent, "GET", url);
+        let mut h = headers();
+        h.push(("traceparent".to_string(), span.traceparent()));
         let h: Vec<(&str, &str)> = h.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
-        match drive_dioxus::auth::fetch("GET", url, &h, None).await {
-            Some((200, v)) => Some(v),
-            _ => None,
+        let got = drive_dioxus::auth::fetch("GET", url, &h, None).await;
+        match got {
+            Some((200, v)) => {
+                span.set("http.response.status_code", 200);
+                Some(v)
+            }
+            Some((code, _)) => {
+                span.set("http.response.status_code", code);
+                span.fail(format!("answered {code}"));
+                None
+            }
+            None => {
+                span.fail("no answer");
+                None
+            }
         }
     }
 
@@ -404,13 +440,22 @@ pub mod web {
 
     /// One folder of a location's index.
     pub async fn list(space: &str, location: &str, path: &str) -> Vec<Hit> {
+        list_in(None, space, location, path).await
+    }
+
+    pub async fn list_in(
+        parent: Option<&crate::trace::Span>,
+        space: &str,
+        location: &str,
+        path: &str,
+    ) -> Vec<Hit> {
         let url = format!(
             "/list?space={}&location={}&path={}",
             enc(space),
             enc(location),
             enc(path)
         );
-        get(&url)
+        get_in(parent, &url)
             .await
             .and_then(|v| v["entries"].as_array().cloned())
             .unwrap_or_default()
@@ -456,13 +501,23 @@ pub mod web {
     /// Files and folders whose names hold every word, in a space's
     /// indexes (every computer of that org).
     pub async fn search(space: &str, q: &str, exts: &[String], limit: u32) -> Vec<Hit> {
+        search_in(None, space, q, exts, limit).await
+    }
+
+    pub async fn search_in(
+        parent: Option<&crate::trace::Span>,
+        space: &str,
+        q: &str,
+        exts: &[String],
+        limit: u32,
+    ) -> Vec<Hit> {
         let url = format!(
             "/search?space={}&q={}&exts={}&limit={limit}",
             enc(space),
             enc(q),
             enc(&exts.join(","))
         );
-        get(&url)
+        get_in(parent, &url)
             .await
             .and_then(|v| v["results"].as_array().cloned())
             .unwrap_or_default()
@@ -584,9 +639,37 @@ pub mod web {
         url: &str,
         body: Option<&[u8]>,
     ) -> Result<(u16, Vec<u8>), String> {
+        bytes_in(None, method, url, body).await
+    }
+
+    pub async fn bytes_in(
+        parent: Option<&crate::trace::Span>,
+        method: &str,
+        url: &str,
+        body: Option<&[u8]>,
+    ) -> Result<(u16, Vec<u8>), String> {
+        let mut span = call_span(parent, method, url);
+        let r = bytes_raw(method, url, body, &span.traceparent()).await;
+        match &r {
+            Ok((code, b)) => {
+                span.set("http.response.status_code", *code);
+                span.set("http.response.body.size", b.len() as u64);
+            }
+            Err(e) => span.fail(e.clone()),
+        }
+        r
+    }
+
+    async fn bytes_raw(
+        method: &str,
+        url: &str,
+        body: Option<&[u8]>,
+        traceparent: &str,
+    ) -> Result<(u16, Vec<u8>), String> {
         let init = web_sys::RequestInit::new();
         init.set_method(method);
         let h = web_sys::Headers::new().map_err(|_| "headers")?;
+        let _ = h.set("traceparent", traceparent);
         for (k, v) in headers() {
             let _ = h.set(&k, &v);
         }

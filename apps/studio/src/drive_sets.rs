@@ -15,11 +15,14 @@ use crate::state::Place;
 thread_local! {
     /// Every chart each space's indexes have, asked once a page.
     static CHARTS: RefCell<HashMap<String, Vec<Hit>>> = RefCell::new(HashMap::new());
+    /// Each setlist file as read, so opening it again is instant.
+    static READ: RefCell<HashMap<String, FileSet>> = RefCell::new(HashMap::new());
 }
 
 /// The setlist files in one space's indexes, by name.
 pub async fn files(space: &str) -> Vec<Hit> {
-    let mut v = web::search(space, "", &["setlist".to_string()], 200)
+    let span = crate::trace::Span::root("studio.setlists.find");
+    let mut v = web::search_in(Some(&span), space, "", &["setlist".to_string()], 200)
         .await
         .into_iter()
         .filter(|h| h.name.ends_with(".setlist") && !h.dir)
@@ -30,14 +33,14 @@ pub async fn files(space: &str) -> Vec<Hit> {
 }
 
 /// Every chart in these spaces.
-pub async fn charts(spaces: &[String]) -> Vec<Hit> {
+pub async fn charts(parent: Option<&crate::trace::Span>, spaces: &[String]) -> Vec<Hit> {
     let mut out = Vec::new();
     for s in spaces {
         if let Some(h) = CHARTS.with(|c| c.borrow().get(s).cloned()) {
             out.extend(h);
             continue;
         }
-        let hits = web::search(s, "", &["kf".to_string()], 1000).await;
+        let hits = web::search_in(parent, s, "", &["kf".to_string()], 1000).await;
         CHARTS.with(|c| c.borrow_mut().insert(s.clone(), hits.clone()));
         out.extend(hits);
     }
@@ -84,6 +87,33 @@ pub async fn load(
     path: &str,
     spaces: &[String],
 ) -> Result<FileSet, String> {
+    let key = format!("{space}/{location}/{path}");
+    if let Some(set) = READ.with(|r| r.borrow().get(&key).cloned()) {
+        return Ok(set);
+    }
+    let mut span = crate::trace::Span::root("studio.setlist.open");
+    span.set("studio.setlist", path);
+    let set = read(&span, space, location, path, spaces).await;
+    match &set {
+        Ok(s) => {
+            span.set(
+                "studio.songs",
+                s.acts.iter().map(|a| a.songs.len()).sum::<usize>() as u64,
+            );
+            READ.with(|r| r.borrow_mut().insert(key, s.clone()));
+        }
+        Err(e) => span.fail(e.clone()),
+    }
+    set
+}
+
+async fn read(
+    span: &crate::trace::Span,
+    space: &str,
+    location: &str,
+    path: &str,
+    spaces: &[String],
+) -> Result<FileSet, String> {
     let name = path.rsplit('/').next().unwrap_or(path).to_string();
     let file = Hit {
         space: space.into(),
@@ -93,41 +123,64 @@ pub async fn load(
         online: true,
         ..Default::default()
     };
-    let text = match web::bytes("GET", &web::file_url(&file), None).await? {
-        (200 | 206, b) => String::from_utf8_lossy(&b).into_owned(),
-        (code, _) => return Err(format!("its computer answered {code}")),
+    // 503: the computer that has it is (re)connecting to the node; a few
+    // seconds' grace before saying so.
+    let mut tries = 0;
+    let text = loop {
+        match web::bytes_in(Some(span), "GET", &web::file_url(&file), None).await? {
+            (200 | 206, b) => break String::from_utf8_lossy(&b).into_owned(),
+            (503, _) if tries < 10 => {
+                tries += 1;
+                gloo_timers::future::TimeoutFuture::new(1000).await;
+            }
+            (code, _) => return Err(format!("its computer answered {code}")),
+        }
     };
     let parsed = setfile::parse(&text);
-    let charts = charts(spaces).await;
     let dir = path.rsplit_once('/').map_or("", |(d, _)| d);
-    let siblings = web::list(space, location, dir).await;
+    // The charts, the file's folder and every song's folder, at once.
+    let folders: Vec<(usize, String)> = parsed
+        .acts
+        .iter()
+        .enumerate()
+        .flat_map(|(a, act)| {
+            act.songs
+                .iter()
+                .map(move |rel| (a, setfile::folder(path, rel)))
+        })
+        .collect();
+    let (charts, siblings, listed) = futures_util::join!(
+        charts(Some(span), spaces),
+        web::list_in(Some(span), space, location, dir),
+        futures_util::future::join_all(folders.iter().map(|(_, f)| web::list_in(
+            Some(span),
+            space,
+            location,
+            f
+        ))),
+    );
     let location_name = siblings
         .first()
         .map(|h| h.location_name.clone())
         .unwrap_or_default();
-    let mut acts = Vec::new();
-    for a in parsed.acts {
-        let mut songs = Vec::new();
-        for rel in &a.songs {
-            let folder = setfile::folder(path, rel);
-            let names: Vec<String> = web::list(space, location, &folder)
-                .await
-                .into_iter()
-                .map(|h| h.name)
-                .collect();
-            songs.push(FileSong {
-                title: setfile::title_of(&folder, &names),
-                place: Place {
-                    space: space.into(),
-                    location: location.into(),
-                    chart: crate::reference::pick_chart(&folder, &charts).cloned(),
-                    folder,
-                },
-            });
-        }
-        acts.push(FileAct {
-            name: a.name,
-            songs,
+    let mut acts: Vec<FileAct> = parsed
+        .acts
+        .iter()
+        .map(|a| FileAct {
+            name: a.name.clone(),
+            songs: Vec::new(),
+        })
+        .collect();
+    for ((a, folder), hits) in folders.into_iter().zip(listed) {
+        let names: Vec<String> = hits.into_iter().map(|h| h.name).collect();
+        acts[a].songs.push(FileSong {
+            title: setfile::title_of(&folder, &names),
+            place: Place {
+                space: space.into(),
+                location: location.into(),
+                chart: crate::reference::pick_chart(&folder, &charts).cloned(),
+                folder,
+            },
         });
     }
     Ok(FileSet {

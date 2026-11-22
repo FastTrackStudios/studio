@@ -138,6 +138,20 @@ pub fn Shell() -> Element {
     let me = crate::team::use_me();
     let here = (app.here)();
 
+    // The setlist files in the org's Drive: found once per org, for the
+    // Setlists page and the sidebar's count.
+    #[cfg(feature = "web")]
+    {
+        let here = here.clone();
+        use_effect(use_reactive!(|here| {
+            let mut sets = app.drive_sets;
+            spawn(async move {
+                let found = crate::drive_sets::files(&here).await;
+                sets.set(Some(found));
+            });
+        }));
+    }
+
     // The playheads move while playing.
     use_future(move || async move {
         let mut app = app;
@@ -612,7 +626,9 @@ fn StudioSidebar(route: Route) -> Element {
         .collect();
     coming.sort_by(|a, b| a.date.cmp(&b.date));
     coming.truncate(4);
-    let upcoming_n = faces.iter().filter(|f| f.upcoming()).count();
+    // The org's sets, and the setlist files in its Drive.
+    let upcoming_n =
+        faces.iter().filter(|f| f.upcoming()).count() + (app.drive_sets)().map_or(0, |v| v.len());
     let (title, detail) = match &org {
         Some(_) => (team.name(), format!("Studio · {} orgs", orgs.len())),
         None => ("All orgs".to_string(), format!("{} orgs", orgs.len())),

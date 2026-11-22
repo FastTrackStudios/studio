@@ -381,6 +381,9 @@ pub struct AppState {
     pub picked: Signal<Option<String>>,
     /// Drive: the sets shared live, presence, the calendar (web only).
     pub sync: crate::live_sync::Sync,
+    /// The setlist files in the org's Drive (`.setlist`), once found:
+    /// the Setlists page and the sidebar's count read them.
+    pub drive_sets: Signal<Option<Vec<crate::files::Hit>>>,
 }
 
 impl AppState {
@@ -428,6 +431,7 @@ impl AppState {
             live_list: Signal::new(Vec::new()),
             picked: Signal::new(None),
             sync: crate::live_sync::Sync::new(),
+            drive_sets: Signal::new(None),
         }
     }
 

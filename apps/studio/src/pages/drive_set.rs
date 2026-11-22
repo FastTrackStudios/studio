@@ -278,11 +278,19 @@ fn ChartFollow(chart: crate::files::Hit, sections: Vec<crate::session_file::Sect
 
     let app = use_app();
     let engraved = use_resource(use_reactive!(|chart, sections| async move {
-        let text = match web::bytes("GET", &web::file_url(&chart), None).await? {
+        let mut span = crate::trace::Span::root("studio.chart.show");
+        span.set("studio.chart", chart.name.clone());
+        let text = match web::bytes_in(Some(&span), "GET", &web::file_url(&chart), None).await? {
             (200 | 206, b) => String::from_utf8_lossy(&b).into_owned(),
             (code, _) => return Err(format!("its computer answered {code}")),
         };
-        crate::chart_sync::engrave(&text, &sections)
+        let mut engraving = span.child("studio.chart.engrave");
+        let e = crate::chart_sync::engrave(&text, &sections);
+        if let Ok(e) = &e {
+            engraving.set("studio.chart.timing", format!("{:?}", e.timing));
+            engraving.set("studio.chart.bytes", e.svg.len() as u64);
+        }
+        e
     }));
     let fonts = use_hook(|| crate::chart_sync::font_css().unwrap_or_default());
     let eval = use_hook(|| document::eval(FOLLOW));

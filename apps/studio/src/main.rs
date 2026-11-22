@@ -19,6 +19,8 @@ mod pages;
 mod pieces;
 #[cfg(feature = "web")]
 mod player;
+#[cfg(feature = "web")]
+mod trace;
 // The browser build engraves charts and reads setlist files from Drive.
 #[cfg_attr(not(feature = "web"), allow(dead_code))]
 mod chart_sync;
@@ -177,6 +179,9 @@ fn main() {
 #[component]
 fn App() -> Element {
     use_context_provider(state::AppState::new);
+    // From navigation until the app has first drawn.
+    #[cfg(feature = "web")]
+    use_effect(trace::boot);
     rsx! {
         document::Meta {
             name: "viewport",

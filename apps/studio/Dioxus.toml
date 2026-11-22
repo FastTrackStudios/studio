@@ -7,3 +7,8 @@ title = "Studio"
 [bundle]
 identifier = "com.fasttrackstudio.studioproto"
 publisher = "FastTrackStudio"
+
+# `dx serve` (the local dev loop, :8097): Studio's calls to Drive go to
+# the Drive node on this computer, which answers them under /studio/api.
+[[web.proxy]]
+backend = "http://127.0.0.1:8096/studio/api/"

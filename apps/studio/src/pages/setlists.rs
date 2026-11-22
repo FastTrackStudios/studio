@@ -154,10 +154,9 @@ pub fn Setlists() -> Element {
 #[cfg(feature = "web")]
 #[component]
 fn FromDrive(space: String) -> Element {
-    let files = use_resource(use_reactive!(|space| async move {
-        crate::drive_sets::files(&space).await
-    }));
-    let list = files().unwrap_or_default();
+    let _ = space;
+    let app = crate::state::use_app();
+    let list = (app.drive_sets)().unwrap_or_default();
     if list.is_empty() {
         return rsx! {};
     }
