@@ -139,3 +139,105 @@
 .keyhere.moved { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 9px; }
 .libr { display: flex; align-items: center; gap: 8px; }
 .bsheet > .s1, .orgcard > .s1 { white-space: normal; overflow: visible; margin: 2px 0 6px; line-height: 1.4; }
+
+/* ── Setlists as documents (2026-11-22) ─────────────────────────────── */
+/* A desktop's set page: the running order and the inspector beside it. */
+.content[data-form="desktop"] .page:has(.setbody.wide) { width: min(100%, 1180px); }
+.setgrid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 22px; align-items: start; }
+.inspector { position: sticky; top: 0; background: var(--surface); border: 1px solid #1d1d22; border-radius: 14px; padding: 14px; min-height: 200px; }
+.insp-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; color: var(--ink-3); padding: 28px 10px; }
+.insp-empty b { color: var(--ink-2); }
+/* The running order: songs, sections, items. */
+.setlist { padding: 4px 0; }
+.erow { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 60px; padding: 6px 12px 6px 10px; }
+.erow:has(.grip) { grid-template-columns: 14px 26px minmax(0, 1fr) auto; }
+.erow + .erow, .segue + .erow { border-top: 1px solid #222227; }
+.erow .n { color: var(--ink-3); font-size: 15px; text-align: center; }
+.erow .n.ic { display: grid; place-items: center; color: var(--ink-2); }
+.erow .mid { text-align: left; min-width: 0; }
+.erow .meta3 { margin-top: 4px; }
+.erow.picked { background: var(--surface-2); }
+.erow.over { box-shadow: inset 0 3px 0 var(--accent); }
+.erow[draggable="true"] { cursor: grab; }
+.erow .grip { color: var(--ink-3); display: grid; place-items: center; }
+.erow.esec { min-height: 40px; grid-template-columns: minmax(0, 1fr); padding-top: 14px; background: transparent; }
+.erow.esec:has(.grip) { grid-template-columns: 14px minmax(0, 1fr); }
+.erow.esec .t1 { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.erow.eitem .t1 { font-weight: 550; color: var(--ink-2); }
+.erow .fromorg { color: var(--accent); }
+.herewho { position: absolute; right: 10px; top: -9px; padding: 1px 7px; border-radius: 8px; color: #fff; font: 600 10px/1.5 system-ui, sans-serif; white-space: nowrap; z-index: 1; }
+.segue { display: flex; align-items: center; gap: 6px; padding: 0 12px 6px 46px; margin-top: -4px; font-size: 12.5px; font-weight: 600; color: var(--accent); }
+.dropend { margin: 6px 10px; padding: 10px; border: 1px dashed var(--rule); border-radius: 10px; text-align: center; font-size: 13px; color: var(--ink-3); }
+.dropend.on { border-color: var(--accent); color: var(--accent); }
+.infobtn { display: inline-flex; align-items: center; gap: 5px; color: var(--ink); font-weight: 600; }
+.setnotes { white-space: pre-wrap; color: var(--ink-2); font-size: 14.5px; line-height: 1.45; margin: 0 2px; }
+.setnotes.muted { color: var(--ink-3); }
+/* Your part. */
+.mypart { background: var(--surface); border-radius: 14px; padding: 10px 12px; }
+.mypart .part.on { background: var(--accent-soft); color: var(--accent); }
+.mypart .part.lead { background: oklch(.32 .08 30); color: oklch(.88 .08 30); }
+.mysongs { margin-top: 8px; display: flex; flex-direction: column; }
+.mysong { display: flex; align-items: center; gap: 10px; min-height: 36px; border-top: 1px solid #222227; font-size: 14.5px; }
+.mysong .t1 { flex: 1; font-size: 14.5px; font-weight: 550; }
+.mykey { font-weight: 700; white-space: nowrap; }
+.mykey small { font-weight: 500; color: var(--ink-2); }
+/* The band. */
+.bandrow { display: flex; flex-wrap: wrap; gap: 8px; }
+.seat { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; border-radius: 12px; background: var(--surface); }
+.seat .mid { display: flex; flex-direction: column; line-height: 1.2; }
+.seat b { font-size: 13.5px; }
+.seat small { font-size: 12px; color: var(--ink-3); }
+.bandperson { border-top: 1px solid #1b1b20; padding-bottom: 6px; }
+.bandperson .person { border: 0; }
+.bandperson .person .ck { color: var(--accent); }
+.bandperson .chips { margin: -2px 0 6px 46px; }
+/* The entry editor (inspector or sheet). */
+.editor { display: flex; flex-direction: column; }
+.edhead { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.edhead .mid { flex: 1; display: flex; flex-direction: column; }
+.edhead .mid b { font-size: 18px; }
+.edkind { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 13px; font-weight: 650; flex: none; }
+.edtitle { flex: 1; min-width: 0; height: 38px; padding: 0 10px; border-radius: 9px; background: var(--surface-2); color: var(--ink); border: 1px solid var(--rule); font: 500 15px var(--font); }
+.keypick.small { grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.keypick.small .kp { height: 40px; }
+.keypick.small .kp b { font-size: 15px; }
+.linkbtn { align-self: flex-start; margin-top: 6px; color: var(--accent); font-size: 13.5px; font-weight: 600; }
+.seg.wrap { flex-wrap: wrap; }
+.seg.wrap .fopt { flex: 0 1 auto; flex-direction: row; gap: 6px; }
+.edrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.edrow label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink-3); font-weight: 650; }
+.edrow select, .edrow input { height: 38px; border-radius: 9px; background: var(--surface-2); color: var(--ink); border: 1px solid var(--rule); padding: 0 8px; font: 500 15px var(--font); color-scheme: dark; min-width: 0; }
+.ednotes { width: 100%; box-sizing: border-box; border-radius: 10px; background: var(--surface-2); color: var(--ink); border: 1px solid var(--rule); padding: 8px 10px; font: 400 15px/1.4 var(--font); resize: vertical; }
+.edmove { display: flex; gap: 8px; margin-top: 16px; }
+.edmove > * { flex: 1; min-height: 40px; font-size: 14.5px; }
+.edfoot { white-space: normal; margin-top: 10px; font-size: 13px; }
+.addrow { display: flex; gap: 8px; margin-top: 8px; }
+.addrow .primary { min-height: 38px; }
+.mi.addsong .mid { flex: 1; display: flex; flex-direction: column; }
+.newfor { white-space: normal; margin: 8px 2px 0; color: var(--ink); }
+.cal.tpl { display: grid; place-items: center; height: 40px; color: var(--ink-2); }
+.plaintext { white-space: pre-wrap; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 50vh; overflow: auto; margin: 6px 0 0; }
+/* The printable page. */
+.printwrap { overflow-y: auto; background: #e4e4e7; }
+.printbar { display: flex; gap: 10px; justify-content: flex-end; padding: 12px 16px; }
+.printbar > * { min-height: 38px; font-size: 14.5px; }
+.printpage { background: #fff; color: #111; max-width: 760px; margin: 0 auto 40px; padding: 36px 40px; border-radius: 4px; font: 14px/1.45 var(--font); }
+.printpage h1 { margin: 0 0 4px; font-size: 26px; }
+.printpage .pmeta { margin: 0 0 8px; color: #444; }
+.printpage .pband { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 8px; color: #333; }
+.printpage .pnotes { white-space: pre-wrap; margin: 0 0 10px; }
+.printpage table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.printpage th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #666; border-bottom: 2px solid #111; padding: 4px 6px; }
+.printpage td { padding: 6px; border-bottom: 1px solid #ddd; vertical-align: top; }
+.printpage .pn { width: 24px; color: #666; }
+.printpage .pkey { font-weight: 700; white-space: nowrap; }
+.printpage .pkey small { font-weight: 400; color: #666; }
+.printpage .part2 { color: #666; }
+.printpage .psec td { font-weight: 800; text-transform: uppercase; letter-spacing: .06em; font-size: 12px; padding-top: 14px; border-bottom: 1px solid #111; }
+.printpage .pitem td { color: #444; font-style: italic; }
+.printpage .pnote td { border-bottom: 1px solid #ddd; color: #555; font-size: 13px; padding-top: 0; }
+@media print {
+  body * { visibility: hidden; }
+  .printpage, .printpage * { visibility: visible; }
+  .printpage { position: absolute; left: 0; top: 0; margin: 0; padding: 0; max-width: none; border-radius: 0; }
+}

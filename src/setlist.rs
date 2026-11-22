@@ -312,6 +312,9 @@ impl Entry {
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct Seat {
     pub person: String,
+    /// Their name when seated (an org the set is shared with reads it
+    /// without the owner's team).
+    pub name: String,
     pub parts: Vec<String>,
 }
 
@@ -384,19 +387,6 @@ fn keys_of(m: &LoroMap) -> Vec<String> {
     let mut out: Vec<String> = m.keys().map(|k| k.to_string()).collect();
     out.sort();
     out
-}
-
-/// Make a map's keys exactly `want` (each present key `true`).
-fn put_set(m: &LoroMap, want: &[String]) -> loro::LoroResult<()> {
-    for k in keys_of(m).iter().filter(|k| !want.contains(k)) {
-        m.delete(k)?;
-    }
-    for k in want {
-        if m.get(k).is_none() {
-            m.insert(k, true)?;
-        }
-    }
-    Ok(())
 }
 
 // ── a set's document ────────────────────────────────────────────────────
@@ -598,6 +588,7 @@ pub fn move_before(doc: &LoroDoc, id: &str, before: Option<&str>) -> loro::LoroR
     move_entry(doc, id, target)
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 /// The set in its named runs: each section entry (None for the songs
 /// before the first) and what follows it.
 pub fn sections(list: &[Entry]) -> Vec<(Option<Entry>, Vec<Entry>)> {
@@ -623,6 +614,10 @@ pub fn band(doc: &LoroDoc) -> Vec<Seat> {
         .into_iter()
         .filter_map(|k| child(b.get(&k)).map(|m| (k, m)))
         .map(|(k, m)| Seat {
+            name: match s(&m, "name") {
+                n if n.is_empty() => k.clone(),
+                n => n,
+            },
             person: k,
             parts: list(&m, "parts"),
         })
@@ -643,6 +638,7 @@ pub fn band(doc: &LoroDoc) -> Vec<Seat> {
 /// Seat someone in the band, with their parts in this set.
 pub fn put_seat(doc: &LoroDoc, seat: &Seat) -> loro::LoroResult<()> {
     let m = doc.get_map("band").ensure_mergeable_map(&seat.person)?;
+    put_s(&m, "name", &seat.name)?;
     put_s(&m, "parts", &seat.parts.join(","))
 }
 
@@ -661,6 +657,7 @@ pub fn band_from_group(people: &[orgs::Person], group: &str) -> Vec<Seat> {
         .filter(|p| p.groups.iter().any(|g| g == group))
         .map(|p| Seat {
             person: p.id.clone(),
+            name: p.name.clone(),
             parts: p.parts.clone(),
         })
         .collect()
@@ -798,6 +795,8 @@ pub struct Face {
     /// Who plays it (people's ids).
     pub band: Vec<String>,
     pub shared_with: Vec<String>,
+    /// Its rehearsals (date, time, room; no ids).
+    pub rehearsals: Vec<Rehearsal>,
     pub hue: u32,
 }
 
@@ -811,20 +810,6 @@ impl Face {
         self.day().is_some_and(|d| d.from_today() >= 0)
     }
 
-    /// "Ready", "2 of 5 songs", "Not planned".
-    pub fn ready(&self) -> String {
-        if self.size == 0 || self.songs >= self.size {
-            if self.songs == 0 {
-                "Not planned".into()
-            } else {
-                "Ready".into()
-            }
-        } else if self.songs > 0 {
-            format!("{} of {} songs", self.songs, self.size)
-        } else {
-            "Not planned".into()
-        }
-    }
 }
 
 /// The face of a set's document.
@@ -845,6 +830,13 @@ pub fn face_of(doc: &LoroDoc) -> Face {
         first: songs.iter().take(3).map(|e| e.title.clone()).collect(),
         band: band(doc).into_iter().map(|s| s.person).collect(),
         shared_with: shared_with(doc),
+        rehearsals: rehearsals(doc)
+            .into_iter()
+            .map(|r| Rehearsal {
+                id: String::new(),
+                ..r
+            })
+            .collect(),
         hue: i.hue,
     }
 }
@@ -872,6 +864,18 @@ pub fn faces(index: &LoroDoc) -> Vec<Face> {
                 .collect(),
             band: list(&m, "band"),
             shared_with: list(&m, "shared_with"),
+            rehearsals: s(&m, "rehearsals")
+                .split(';')
+                .filter_map(|r| {
+                    let mut it = r.split('|');
+                    Some(Rehearsal {
+                        id: String::new(),
+                        date: it.next()?.to_string(),
+                        time: it.next()?.to_string(),
+                        room: it.next()?.to_string(),
+                    })
+                })
+                .collect(),
             hue: u32::try_from(n(&m, "hue")).unwrap_or(0),
         })
         .filter(|f| !f.id.is_empty())
@@ -905,15 +909,14 @@ pub fn put_face(index: &LoroDoc, f: &Face) -> bool {
     let _ = put_s(&m, "first", &f.first.join("\n"));
     let _ = put_s(&m, "band", &f.band.join(","));
     let _ = put_s(&m, "shared_with", &f.shared_with.join(","));
+    let reh: Vec<String> = f
+        .rehearsals
+        .iter()
+        .map(|r| format!("{}|{}|{}", r.date, r.time, r.room))
+        .collect();
+    let _ = put_s(&m, "rehearsals", &reh.join(";"));
     let _ = put_n(&m, "hue", i64::from(f.hue));
     true
-}
-
-pub fn remove_face(index: &LoroDoc, id: &str) {
-    let m = index.get_map("sets");
-    if m.get(id).is_some() {
-        let _ = m.delete(id);
-    }
 }
 
 /// A recurring event: the days it meets, where, how many songs a set.
@@ -1185,6 +1188,7 @@ pub fn mirror_set_project(doc: &LoroDoc, registry: &LoroDoc) -> bool {
     true
 }
 
+#[cfg_attr(not(feature = "web"), allow(dead_code))]
 /// The sets other orgs share with `to`, from Drive's projects shared with
 /// it (`/shared`: (owner org, project id) pairs): (owner, set id).
 pub fn shared_sets(to: &str, shared: &[(String, String)]) -> Vec<(String, String)> {
@@ -1339,6 +1343,11 @@ fn person_of(name: &str) -> String {
 fn builtin_band(id: &str) -> Vec<Seat> {
     let seat = |p: &str, parts: &[&str]| Seat {
         person: p.into(),
+        name: match p {
+            "cody-wright" => "Cody Wright".into(),
+            "dr-hale" => "Dr. Hale".into(),
+            p => data::cap(p),
+        },
         parts: parts.iter().map(|x| x.to_string()).collect(),
     };
     let mine = data::mine(id).is_some();
@@ -1729,10 +1738,12 @@ mod tests {
         let band = vec![
             Seat {
                 person: "cody-wright".into(),
+                name: "Cody Wright".into(),
                 parts: vec!["Electric guitar".into()],
             },
             Seat {
                 person: "sam".into(),
+                name: "Sam".into(),
                 parts: vec!["Drums".into()],
             },
         ];
@@ -1796,6 +1807,7 @@ mod tests {
             &last,
             &Seat {
                 person: "sam".into(),
+                name: "Sam".into(),
                 parts: vec!["Drums".into()],
             },
         )
@@ -2010,6 +2022,7 @@ mod tests {
             &|e| resolve(e, None, &Use::default(), &Settings::default(), &i),
             &[Seat {
                 person: "sam".into(),
+                name: "Sam".into(),
                 parts: vec!["Drums".into()],
             }],
             &|p| p.to_uppercase(),

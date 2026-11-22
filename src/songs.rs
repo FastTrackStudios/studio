@@ -444,6 +444,21 @@ pub(crate) mod backing {
                 .set_presence(&serde_json::json!({ "section": section }));
         }
     }
+
+    /// Write a new document now, outside any component (a set just made):
+    /// opened on Drive, edited, committed and sent.
+    pub fn create(id: &str, f: impl FnOnce(&LoroDoc)) -> LoroDoc {
+        let Some(ctx) = try_consume_context::<drive_dioxus::DriveCtx>() else {
+            let d = LoroDoc::new();
+            f(&d);
+            return d;
+        };
+        let id = ctx.qualify(id);
+        let doc = ctx.drive.open(&id);
+        f(&doc);
+        ctx.drive.commit(&id);
+        doc
+    }
 }
 
 #[cfg(not(feature = "web"))]
@@ -503,6 +518,21 @@ pub(crate) mod backing {
             Vec::new()
         }
         pub fn say_section(&self, _section: Option<&str>) {}
+    }
+
+    /// Write a new document now, outside any component (a set just made).
+    pub fn create(id: &str, f: impl FnOnce(&LoroDoc)) -> LoroDoc {
+        DOCS.with(|d| {
+            let doc = d.borrow_mut().entry(id.to_string()).or_default().clone();
+            f(&doc);
+            doc.commit();
+            doc
+        })
+    }
+
+    /// A document of this run, if anything opened it.
+    pub fn peek(id: &str) -> Option<LoroDoc> {
+        DOCS.with(|d| d.borrow().get(id).cloned())
     }
 }
 

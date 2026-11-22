@@ -21,6 +21,9 @@
 //! carries them. A setlist that plays a song in another key has every key
 //! of the label moved to it ([`KeyLabel::in_key`]).
 
+// Ported whole: what the prototype does not draw yet stays.
+#![allow(dead_code)]
+
 /// How many different chords outside the key earn the asterisk.
 pub const OUTSIDE: usize = 2;
 
