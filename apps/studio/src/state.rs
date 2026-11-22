@@ -92,7 +92,65 @@ pub struct NowPlaying {
     pub from: String,
     pub i: usize,
     pub playing: bool,
+    /// How far into the song, 0 to 1.
     pub pos: f64,
+    /// The song's length in seconds, once its audio says (0 until then).
+    pub dur: f64,
+    /// Where the song's audio is (the web build plays its reference).
+    pub source: Source,
+    /// The song's sections, from its session.
+    pub timeline: crate::session_file::Timeline,
+}
+
+/// The playing song's audio, as the player found it.
+#[derive(Clone, PartialEq, Debug, Default)]
+pub enum Source {
+    /// Nothing looked for (a build without Drive plays nothing).
+    #[default]
+    None,
+    Finding,
+    /// Its reference, streamed from the computer that has it.
+    Ready,
+    /// Not found, and why.
+    Missing(String),
+}
+
+impl NowPlaying {
+    pub fn new(list: Vec<Song>, from: String, i: usize, playing: bool) -> Self {
+        Self {
+            list,
+            from,
+            i,
+            playing,
+            pos: 0.0,
+            dur: 0.0,
+            source: Source::None,
+            timeline: Default::default(),
+        }
+    }
+
+    /// Seconds into the song (its length from the built-in list until its
+    /// audio has said).
+    pub fn secs(&self) -> (f64, f64) {
+        let len = if self.dur > 0.0 {
+            self.dur
+        } else {
+            self.song().and_then(|s| s.len).unwrap_or(240) as f64
+        };
+        (len * self.pos, len)
+    }
+
+    /// The next song, from its start (false at the end of the list).
+    pub fn next(&mut self) -> bool {
+        if self.i + 1 >= self.list.len() {
+            return false;
+        }
+        self.i += 1;
+        self.pos = 0.0;
+        self.dur = 0.0;
+        self.timeline = Default::default();
+        true
+    }
 }
 
 impl NowPlaying {
@@ -269,6 +327,8 @@ pub struct AppState {
     pub menu: Signal<Option<Menu>>,
     pub toast: Signal<Option<(u32, String)>>,
     pub np: Signal<Option<NowPlaying>>,
+    /// A jump the player asks for, in seconds (the audio takes it).
+    pub seek: Signal<Option<f64>>,
     pub booking: Signal<Option<Booking>>,
     pub filters: Signal<Filters>,
     /// What the pages show: one org's (`Some`, the org Studio is in) or
@@ -304,13 +364,15 @@ impl AppState {
             sheet: Signal::new(None),
             menu: Signal::new(None),
             toast: Signal::new(None),
-            np: Signal::new(Some(NowPlaying {
-                list: cya,
-                from: "CYA · Thu Nov 19".into(),
-                i: 0,
-                playing: false,
-                pos: 0.35,
+            // A browser plays real songs: an empty list until a set is
+            // played (an empty one, not none: the shell goes blank
+            // without its accessory at the start).
+            np: Signal::new(Some(if cfg!(feature = "web") {
+                NowPlaying::new(Vec::new(), String::new(), 0, false)
+            } else {
+                NowPlaying::new(cya, "CYA · Thu Nov 19".into(), 0, false)
             })),
+            seek: Signal::new(None),
             booking: Signal::new(None),
             filters: Signal::new(Filters::default()),
             org: Signal::new(Some(FIRST_ORG.to_string())),
@@ -382,16 +444,27 @@ impl AppState {
         self.sheet.set(None);
     }
 
+    /// Play a set's songs in order, from `first` (or its first song): the
+    /// library's songs of those titles.
+    pub fn play_titles(self, titles: &[String], from: String, first: Option<&str>) {
+        let list: Vec<Song> = titles
+            .iter()
+            .filter_map(|t| {
+                data::LIB
+                    .iter()
+                    .find(|l| l.song.title == t.as_str())
+                    .map(|l| l.song)
+            })
+            .collect();
+        if let Some(start) = first.or(list.first().map(|s| s.title)).map(str::to_string) {
+            self.play(list, from, &start);
+        }
+    }
+
     /// Start playing a list at a song.
     pub fn play(mut self, list: Vec<Song>, from: String, title: &str) {
         let i = list.iter().position(|x| x.title == title).unwrap_or(0);
-        self.np.set(Some(NowPlaying {
-            list,
-            from,
-            i,
-            playing: true,
-            pos: 0.08,
-        }));
+        self.np.set(Some(NowPlaying::new(list, from, i, true)));
     }
 
     /// Move a playing chart on by a bar: through the section (again, when

@@ -277,7 +277,9 @@ fn palette_items(
     let mut v = Vec::new();
     let mut sets: Vec<&crate::setlist::Face> = faces
         .iter()
-        .filter(|f| f.series.is_empty() || f.day().is_some_and(|d| (0..8).contains(&d.from_today())))
+        .filter(|f| {
+            f.series.is_empty() || f.day().is_some_and(|d| (0..8).contains(&d.from_today()))
+        })
         .collect();
     sets.sort_by_key(|f| (!f.upcoming(), f.date.clone()));
     for f in sets {
@@ -319,12 +321,7 @@ fn palette_items(
             k: "Song",
             open: Some(Route::SongPage { id: s.id.clone() }),
             says: String::new(),
-            key: Some(
-                s.key
-                    .as_deref()
-                    .and_then(data::norm_key)
-                    .unwrap_or("?"),
-            ),
+            key: Some(s.key.as_deref().and_then(data::norm_key).unwrap_or("?")),
             icon: I::Audio,
         });
     }
@@ -441,8 +438,12 @@ fn Player() -> Element {
     let Some(x) = n.song().copied() else {
         return rsx! {};
     };
-    let len = x.len.unwrap_or(240) as f64;
+    let (now, len) = n.secs();
     let pct = n.pos * 100.0;
+    let line = crate::shell::now_line(&n);
+    let sections = n.timeline.sections.clone();
+    let here = n.timeline.at(now).map(|s| s.start);
+    let mut seek = app.seek;
     let next: Vec<Song> = n.list.iter().skip(n.i + 1).take(4).copied().collect();
     rsx! {
         BSheet { label: "Now playing", class: "player",
@@ -466,12 +467,29 @@ fn Player() -> Element {
             }
             div { class: "pscrub",
                 i { style: "width:{pct}%" }
+                for sec in sections.iter().filter(|s| s.start > 0.0) {
+                    u { key: "{sec.start}", style: "left:{sec.start / len * 100.0}%" }
+                }
                 b { style: "left:{pct}%" }
+                input {
+                    r#type: "range",
+                    class: "pseek",
+                    aria_label: "Position",
+                    min: "0",
+                    max: "1000",
+                    value: "{(n.pos * 1000.0).round()}",
+                    onchange: move |e| {
+                        if let Ok(v) = e.value().parse::<f64>() {
+                            seek.set(Some(v / 1000.0 * len));
+                        }
+                    },
+                }
             }
             div { class: "ptimes",
-                span { "{dur(len * n.pos)}" }
-                span { "-{dur(len * (1.0 - n.pos))}" }
+                span { "{dur(now)}" }
+                span { "-{dur(len - now)}" }
             }
+            div { class: "pline", "{line}" }
             div { class: "ptrans",
                 button {
                     aria_label: "Previous",
@@ -480,8 +498,12 @@ fn Player() -> Element {
                             if let Some(n) = n {
                                 if n.pos > 0.05 || n.i == 0 {
                                     n.pos = 0.0;
+                                    seek.set(Some(0.0));
                                 } else {
                                     n.i -= 1;
+                                    n.pos = 0.0;
+                                    n.dur = 0.0;
+                                    n.timeline = Default::default();
                                 }
                             }
                         })
@@ -498,13 +520,26 @@ fn Player() -> Element {
                     aria_label: "Next",
                     onclick: move |_| {
                         np.with_mut(|n| {
-                            if let Some(n) = n && n.i + 1 < n.list.len() {
-                                n.i += 1;
-                                n.pos = 0.0;
+                            if let Some(n) = n {
+                                n.next();
                             }
                         })
                     },
                     Icon { name: I::Skip, size: 30, w: 2.0 }
+                }
+            }
+            if !sections.is_empty() {
+                div { class: "dayhead", "Sections" }
+                div { class: "psecs",
+                    for sec in sections {
+                        button {
+                            key: "{sec.start}",
+                            class: if here == Some(sec.start) { "psec on" } else { "psec" },
+                            onclick: move |_| seek.set(Some(sec.start)),
+                            span { class: "t1", "{sec.name}" }
+                            span { class: "s1", "{dur(sec.start)}" }
+                        }
+                    }
                 }
             }
             if !next.is_empty() {

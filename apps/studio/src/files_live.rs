@@ -369,7 +369,7 @@ pub mod web {
             .collect()
     }
 
-    async fn get(url: &str) -> Option<Value> {
+    pub async fn get(url: &str) -> Option<Value> {
         let h = headers();
         let h: Vec<(&str, &str)> = h.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
         match drive_dioxus::auth::fetch("GET", url, &h, None).await {
@@ -575,7 +575,11 @@ pub mod web {
         ))
     }
 
-    async fn bytes(method: &str, url: &str, body: Option<&[u8]>) -> Result<(u16, Vec<u8>), String> {
+    pub async fn bytes(
+        method: &str,
+        url: &str,
+        body: Option<&[u8]>,
+    ) -> Result<(u16, Vec<u8>), String> {
         let init = web_sys::RequestInit::new();
         init.set_method(method);
         let h = web_sys::Headers::new().map_err(|_| "headers")?;

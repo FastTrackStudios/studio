@@ -338,6 +338,18 @@ fn SetView(owner: String, id: String) -> Element {
                                 " · {data::dur(f64::from(total))}"
                             }
                         }
+                        if !songs.is_empty() {
+                            button {
+                                class: "playset",
+                                onclick: {
+                                    let titles: Vec<String> = songs.iter().map(|e| e.title.clone()).collect();
+                                    let from = info.title.clone();
+                                    move |_| app.play_titles(&titles, from.clone(), None)
+                                },
+                                Icon { name: I::Play, size: 14, w: 2.4 }
+                                "Play the set"
+                            }
+                        }
                     },
                 }
                 if desktop {

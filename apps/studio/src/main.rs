@@ -15,6 +15,10 @@ mod live_sync;
 mod orgs;
 mod pages;
 mod pieces;
+#[cfg(feature = "web")]
+mod player;
+mod reference;
+mod session_file;
 mod set_sheets;
 mod setlist;
 mod sets;

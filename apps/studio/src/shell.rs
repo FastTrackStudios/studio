@@ -109,12 +109,12 @@ fn title_of(route: &Route, index: &crate::sets::Index) -> String {
         Route::Records {} | Route::Album { .. } | Route::TrackPage { .. } => "Records".into(),
         Route::Setlists {} | Route::Every {} => "Setlists".into(),
         Route::Series { id } => index.series_of(id).map_or("Setlists".into(), |s| s.name),
-        Route::SetPage { id } | Route::Chart { id } | Route::Lyrics { id } => index
-            .face(id)
-            .map_or("Setlist".into(), |f| match f.day() {
+        Route::SetPage { id } | Route::Chart { id } | Route::Lyrics { id } => {
+            index.face(id).map_or("Setlist".into(), |f| match f.day() {
                 Some(d) if !f.series.is_empty() => format!("{} · {}", f.title, d.short()),
                 _ => f.title,
-            }),
+            })
+        }
         Route::OrgSet { owner, .. } => format!("Setlist · {}", crate::orgs::org_name(owner)),
         Route::PrintSet { .. } => "Print".into(),
         Route::LibraryHome {} | Route::Library { .. } => "Library".into(),
@@ -139,7 +139,8 @@ pub fn Shell() -> Element {
         let mut app = app;
         loop {
             crate::state::sleep_ms(1000).await;
-            if app.np.peek().as_ref().is_some_and(|n| n.playing) {
+            // In a browser the player's audio moves it (crate::player).
+            if !cfg!(feature = "web") && app.np.peek().as_ref().is_some_and(|n| n.playing) {
                 app.np.with_mut(|n| {
                     if let Some(n) = n {
                         n.pos = (n.pos + 0.004).min(1.0);
@@ -296,6 +297,9 @@ pub fn Shell() -> Element {
                         }
                     }
                     main { class: "stage", Outlet::<Route> {} }
+                    if cfg!(feature = "web") {
+                        PlayerHost {}
+                    }
                     MenuView {}
                 }
                 SheetBridge {}
@@ -337,23 +341,18 @@ fn round_action(
     if let Some(title) = mine {
         let r = data::loaded_rig().map_or("Guitar", |r| r.name);
         let say = format!("Opened {title} in the {r} rig");
-        return Some(PrimaryAction::new(
-            format!("Open in {r}"),
-            RIG,
-            move |()| app.say(say.clone()),
-        ));
+        return Some(PrimaryAction::new(format!("Open in {r}"), RIG, move |()| {
+            app.say(say.clone())
+        }));
     }
     Some(PrimaryAction::new("Play the set", PLAY, move |()| {
-        // The player plays the built-in songs it knows.
-        let list: Vec<data::Song> = app
+        let titles: Vec<String> = app
             .live_list
             .peek()
             .iter()
-            .filter_map(|s| data::LIB.iter().find(|l| l.song.title == s.title).map(|l| l.song))
+            .map(|s| s.title.clone())
             .collect();
-        if let Some(first) = list.first().map(|s| s.title) {
-            app.play(list, "This set".into(), first);
-        }
+        app.play_titles(&titles, "This set".into(), None);
     }))
 }
 
@@ -466,7 +465,7 @@ fn NowPlayingBar() -> Element {
                 SongArt { song: x }
                 span { class: "mid",
                     span { class: "t1", "{x.title}" }
-                    span { class: "s1", "{x.artist.unwrap_or(&n.from)}" }
+                    span { class: "s1", "{now_line(&n)}" }
                 }
             }
             button {
@@ -480,9 +479,8 @@ fn NowPlayingBar() -> Element {
                 aria_label: "Next",
                 onclick: move |_| {
                     np.with_mut(|n| {
-                        if let Some(n) = n && n.i + 1 < n.list.len() {
-                            n.i += 1;
-                            n.pos = 0.0;
+                        if let Some(n) = n {
+                            n.next();
                         }
                     })
                 },
@@ -492,6 +490,25 @@ fn NowPlayingBar() -> Element {
                 i { style: "width:{pct}%" }
             }
         }
+    }
+}
+
+/// Under the playing song's title: its section, or what the player is
+/// doing, or its artist.
+pub fn now_line(n: &crate::state::NowPlaying) -> String {
+    use crate::state::Source;
+    let artist = n
+        .song()
+        .and_then(|s| s.artist)
+        .unwrap_or(&n.from)
+        .to_string();
+    match &n.source {
+        Source::Finding => "Finding its reference…".into(),
+        Source::Missing(why) => format!("Not playable: {why}"),
+        _ => n
+            .timeline
+            .at(n.secs().0)
+            .map_or(artist.clone(), |s| format!("{} · {artist}", s.name)),
     }
 }
 
@@ -693,5 +710,20 @@ fn StudioSidebar(route: Route) -> Element {
                 }
             }
         }
+    }
+}
+
+/// The player's audio (a browser's; other builds play nothing yet).
+#[component]
+fn PlayerHost() -> Element {
+    #[cfg(feature = "web")]
+    {
+        rsx! {
+            crate::player::Player {}
+        }
+    }
+    #[cfg(not(feature = "web"))]
+    {
+        rsx! {}
     }
 }

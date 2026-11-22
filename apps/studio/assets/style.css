@@ -674,6 +674,14 @@ button.stgtag { cursor: pointer; }
 .pscrub { position: relative; height: 4px; border-radius: 2px; background: #34343b; margin: 22px 4px 6px; }
 .pscrub i { display: block; height: 100%; border-radius: 2px; background: var(--ink); }
 .pscrub b { position: absolute; top: -5px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--ink); }
+.playset { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 4px 12px; border-radius: 14px; background: var(--ink); color: var(--desk); font-size: 13px; font-weight: 600; }
+.pscrub u { position: absolute; top: -3px; width: 2px; height: 10px; margin-left: -1px; background: var(--ink-3); }
+.pseek { position: absolute; inset: -12px 0; width: 100%; height: 28px; margin: 0; opacity: 0; cursor: pointer; }
+.pline { text-align: center; font-size: 13px; color: var(--ink-2); margin-top: 6px; min-height: 18px; }
+.psecs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.psec { display: flex; flex-direction: column; align-items: flex-start; padding: 6px 10px; border-radius: 10px; background: #26262c; text-align: left; }
+.psec.on { background: var(--ink); }
+.psec.on .t1, .psec.on .s1 { color: var(--desk); }
 .ptimes { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); padding: 0 4px; }
 .ptrans { display: flex; justify-content: center; align-items: center; gap: 34px; margin: 12px 0 6px; }
 .ptrans button { color: var(--ink); display: grid; place-items: center; }
