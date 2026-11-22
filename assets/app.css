@@ -241,3 +241,9 @@
   .printpage, .printpage * { visibility: visible; }
   .printpage { position: absolute; left: 0; top: 0; margin: 0; padding: 0; max-width: none; border-radius: 0; }
 }
+@media (max-width: 600px) {
+  .printpage { padding: 20px 14px; margin: 0 0 24px; font-size: 13px; }
+  .printpage h1 { font-size: 22px; }
+  .printpage th, .printpage td { padding: 5px 4px; }
+  .printpage th:nth-child(4), .printpage td:nth-child(4) { display: none; }
+}

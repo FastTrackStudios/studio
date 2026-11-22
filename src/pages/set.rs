@@ -176,7 +176,10 @@ fn SetView(owner: String, id: String) -> Element {
     let tools = {
         let (a1, a2, a3) = (at.clone(), at.clone(), at.clone());
         rsx! {
-            crate::live_sync::Here {}
+            // A desktop's top bar already says who is here.
+            if !desktop {
+                crate::live_sync::Here {}
+            }
             Joined {
                 Tool {
                     label: "Add songs",

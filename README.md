@@ -20,6 +20,38 @@ The window is [app-shell](https://github.com/FastTrackStudios/app-shell)
 The prototype's sheets open as app-shell's sheets: a bottom sheet on a
 phone, a centred panel on a desktop. Its toasts are app-shell's toasts.
 
+## Setlists (2026-11-22)
+
+Sets are Drive documents too. `src/setlist.rs` is the model and its tests;
+`src/sets.rs` holds the live hooks:
+
+- `<org>/studio:setlist:<id>` holds one set:
+  - `set`: title, kind (service, rehearsal, show, template), date, start
+    and call times, place, recurring event, leader, group, the number of
+    songs it wants, notes.
+  - `entries`: a movable list. Each entry is a song (`owner/id` and its
+    face), a section, or an item, with its overrides, notes and transition.
+  - `band`, `rehearsals` and `shared_with`.
+- `<org>/studio:sets` is the org's index: each set's face and the org's
+  recurring events.
+- What a song is played as comes from the entry, then the org's use, then
+  the song.
+- The set page:
+  - On a desktop: drag a row to move it. The picked entry is edited in a
+    column beside the list.
+  - On a phone: the entry opens in a sheet, which also has Up and Down.
+  - Add songs (the library and what is shared with the org, by search),
+    sections and items.
+  - The band, your part (keys, capo hints, what you lead) and rehearsals.
+  - Share with another org, plain text to copy, and a printable page
+    (`/print/<org>/<id>`).
+- Chart and Lyrics follow the set's songs, with the key each is played in.
+- A set shared from another org opens at `/at/<org>/<id>`. That org finds
+  it through Drive's `/shared`, and the band's names travel in the set.
+- Ported from Studio's `features/setlists`: the key labels and how a set's
+  key moves them (`src/keys.rs`), named runs of a set, an arrangement per
+  entry, notes per song, and who plays what.
+
 ## Organizations (2026-11-22)
 
 Studio's orgs are Drive's orgs, which come from the auth server. The node's

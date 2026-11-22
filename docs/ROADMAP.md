@@ -20,17 +20,33 @@ ends with the prototype working on Drive, on the web at desktop width and
 The model is in `src/orgs.rs`. How it maps to Drive is in the README
 ("Organizations").
 
-## Phase 2: setlists
+## Phase 2: setlists (2026-11-22)
 
-- Setlists as Drive documents in their org, in place of the built-in data
-  (`data.rs`: the series, the shows, the weeks' sets).
-- An entry points at a song by `owner/id`, so a setlist can hold songs
-  shared from other orgs. Its key and arrangement override sits on the
-  entry. The lookup order is the entry, then the org's use, then the song.
-- Who plays what in a set comes from the org's team: the parts each person
-  plays, and who leads the set and each song.
-- Rehearsals and set dates go in Drive's calendar (the spine).
-- Moving the prototype's sets into documents is a schema step.
+- Each set is a Drive document in its org (`<org>/studio:setlist:<id>`):
+  its running order is a Loro movable list of entries (songs, named
+  sections, and items that are not songs: a reading, an announcement, a
+  prayer, a video). Moves from two devices merge into one order.
+- An entry points at a song by `owner/id`, so a set can hold songs shared
+  from other orgs. Each entry carries the song's face as it was when added,
+  and its own key, arrangement, leader and tempo, notes and a transition
+  into the next. The lookup order is the entry, then the org's use, then
+  the song (`setlist::resolve`).
+- The band comes from the org's team, with each person's parts in this set.
+  Each person sees their part: their parts, the key of every song, a capo
+  hint for a guitar, and the songs they lead.
+- The org's index (`<org>/studio:sets`) lists each set's face and the org's
+  recurring events. A meeting's set has a fixed id (`<event>_<date>`). A
+  new set can start from last time's set or from a template.
+- An open set keeps its face, its calendar events (its date and
+  rehearsals, in Drive's spine) and its sharing project current. Sharing
+  goes through a Drive project, `studio-set-<id>`, the same way songs do.
+- Schema step: index version 1 holds the built-in recurring events and the
+  built-in sets' faces. Set version 1 writes the built-in set into its
+  document. The prototype's old live keys (`studio:set:<id>`) carry over
+  once.
+- Not ported from Studio: the vault notes, share pages, engraving and media.
+  Those are Architect and Keyflow code. The rig patches per part come back
+  with Signal.
 
 ## Phase 3: a song's files in Drive
 
@@ -59,6 +75,11 @@ separate apps). A device with the engine opens the same `SessionDoc` that
 the browser edits.
 
 ## Not yet decided
+
+- Recurring events in Drive's calendar (FastTrackStudios/drive#51). Today
+  each meeting is a dated event once its set exists.
+- An inspector pane in app-shell (FastTrackStudios/app-shell#32). The set
+  page draws its own.
 
 - Songs that belong to several orgs at once (multi-org projects or spaces),
   beyond one owner plus sharing.
