@@ -1355,3 +1355,7 @@ span.aglogo { overflow: hidden; display: block; }
 .kfpaper .kf-step[aria-current] {
   fill: rgba(37, 99, 235, 0.3);
 }
+.chartnote {
+  margin-top: 0;
+  color: var(--ink-3);
+}

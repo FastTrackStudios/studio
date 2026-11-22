@@ -323,6 +323,9 @@ fn ChartFollow(chart: crate::files::Hit, sections: Vec<crate::session_file::Sect
             };
             rsx! {
                 p { class: "pline", "{chart.name} · {how}" }
+                for note in e.notes.iter() {
+                    p { class: "pline chartnote", "{note}" }
+                }
                 div { id: "nowchart", class: "kfpaper", dangerous_inner_html: "{e.svg}" }
             }
         }
