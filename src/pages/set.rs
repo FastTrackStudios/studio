@@ -161,10 +161,7 @@ fn SetView(owner: String, id: String) -> Element {
         }
     };
     let songs: Vec<&Entry> = entries.iter().filter(|e| e.is_song()).collect();
-    let total: u32 = songs
-        .iter()
-        .filter_map(|e| e.length)
-        .sum::<u32>()
+    let total: u32 = songs.iter().filter_map(|e| e.length).sum::<u32>()
         + entries
             .iter()
             .filter(|e| !e.is_song() && e.kind != ItemKind::Section)
@@ -216,6 +213,21 @@ fn SetView(owner: String, id: String) -> Element {
         (setlist::Kind::Template, _) => "Template".to_string(),
         (k, _) => k.label().to_string(),
     };
+    // Each song once, for its files' readiness.
+    let mut files_songs: Vec<crate::pages::files::SetSong> = Vec::new();
+    for e in &songs {
+        if let Some(r) = &e.song
+            && !files_songs
+                .iter()
+                .any(|x| x.owner == r.owner && x.id == r.id)
+        {
+            files_songs.push(crate::pages::files::SetSong {
+                owner: r.owner.clone(),
+                id: r.id.clone(),
+                title: e.title.clone(),
+            });
+        }
+    }
     let list = rsx! {
         SetList { ctx: ctx.clone(), desktop }
         if missing > 0 {
@@ -256,6 +268,10 @@ fn SetView(owner: String, id: String) -> Element {
                 }
                 span {}
             }
+        }
+        if !files_songs.is_empty() {
+            div { class: "dayhead", "Files" }
+            crate::pages::files::SetReadiness { songs: files_songs.clone(), tracks: true }
         }
         YourPart { ctx: ctx.clone() }
         BandCard { ctx: ctx.clone() }
@@ -486,11 +502,7 @@ fn EntryRow(
         cls.push("over");
     }
     let cls = cls.join(" ");
-    let drag = (
-        id.clone(),
-        id.clone(),
-        id.clone(),
-    );
+    let drag = (id.clone(), id.clone(), id.clone());
     let body = match entry.kind {
         ItemKind::Section => rsx! {
             button { class: "mid", onclick: open,
@@ -665,7 +677,10 @@ fn YourPart(ctx: Ctx) -> Element {
         return rsx! {};
     };
     let songs = ctx.set.songs();
-    let played: Vec<(String, Played)> = songs.iter().map(|e| (e.id.clone(), ctx.played(e))).collect();
+    let played: Vec<(String, Played)> = songs
+        .iter()
+        .map(|e| (e.id.clone(), ctx.played(e)))
+        .collect();
     let Some(v) = setlist::my_view(&me, &ctx.set.band(), &played) else {
         return rsx! {};
     };

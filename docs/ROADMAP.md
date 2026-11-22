@@ -48,15 +48,29 @@ The model is in `src/orgs.rs`. How it maps to Drive is in the README
   Those are Architect and Keyflow code. The rig patches per part come back
   with Signal.
 
-## Phase 3: a song's files in Drive
+## Phase 3: a song's files (2026-11-22)
 
-- Each song is a Drive project in its org, holding its session, charts,
-  stems, the reference recording and the multitracks. The parts can live
-  on any computer.
-- The files reach apps through Drive's app files (`docs/app-files.md`): a
-  real local path for an audio engine.
-- Sharing a song also shares its files, through the same project
-  `shared_with`.
+- Each song's files are a Drive project in its org (`studio-song-<id>`).
+  Its parts point at files and folders where they are, on any computer, or
+  at uploads in the org's Drive tree. Linking never copies, moves or
+  deletes anything. Studio's notes (kinds, folders, another org's
+  computers, aliases) are a document of the same project.
+- Kinds: charts (PDF, keyflow), lyrics, click, guide, backing track,
+  stems, multitrack, reference mix, MIDI, sessions, video. They are
+  recognised by extension, name and folder, and can be changed by hand.
+- Finding: every computer's indexes are searched by title, aliases and
+  artist, or in Drive's search language. Matches are ranked and folded
+  (mirrors, copies, folder contents) and can be previewed before linking.
+- Availability: per file, where its copies are and whether a computer that
+  has it is on. Per set, how many songs are ready whatever is switched off.
+  The web build keeps a set's files on Drive (the node). A desktop build
+  warms them onto the device through `drive-local` and holds them while the
+  set is open.
+- Sharing a song shares its files (the project's `shared_with`). The orgs
+  it is shared with see its files read-only.
+- Open in Drive: FastTrackStudio/drive#52 (parts on another org's
+  computers, and access to them for the orgs a song is shared with), #53,
+  #54.
 
 ## Phase 4: the session primitive
 

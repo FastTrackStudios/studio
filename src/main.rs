@@ -7,6 +7,8 @@
 //! Drive documents too (`setlist` the model, `sets` live).
 
 mod data;
+mod files;
+mod files_live;
 mod icons;
 mod keys;
 mod live_sync;
@@ -28,8 +30,8 @@ use pages::home::Home;
 use pages::library::{Library, LibraryHome};
 use pages::live::{Chart, Lyrics};
 use pages::orgs::{AllOrgs, OrgSettings, People};
-use pages::records::{Album, Records, TrackPage};
 use pages::print::PrintSet;
+use pages::records::{Album, Records, TrackPage};
 use pages::set::{OrgSet, SetPage};
 use pages::setlists::{Every, Series, Setlists};
 use pages::signal::Signal;

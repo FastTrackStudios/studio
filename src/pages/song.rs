@@ -96,6 +96,7 @@ fn SongView(owner: String, id: String) -> Element {
                     Some(m) => rsx! {
                         Head { entry: e.clone(), song: song.clone(), model: m.clone(), lib_put: own.then(|| lib.clone()) }
                         Form { song: song.clone(), model: m.clone() }
+                        crate::pages::files::SongFilesSection { entry: e.clone(), owner: owner.clone() }
                         Chart { song: song.clone(), chart: m.chart.clone() }
                         Footer { song: song.clone() }
                     },

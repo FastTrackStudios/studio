@@ -26,11 +26,21 @@ loro = "1.18"
 app-shell = { git = "https://github.com/FastTrackStudios/app-shell", tag = "v0.3.1" }
 serde_json = { version = "1", optional = true }
 js-sys = { version = "0.3", optional = true }
+# The browser's fetch, for bytes (waveforms, uploads).
+web-sys = { version = "0.3", optional = true, features = ["Window", "Request", "RequestInit", "Response", "Headers", "Blob", "BlobPropertyBag", "Url"] }
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+# Waveform peaks (the sidecar format; no producers in the app).
+drive-sidecars = { path = "../drive/crates/drive-sidecars" }
+# Drive's agent on this computer: any Drive file as a real local path,
+# warmed ahead of a set (desktop builds; docs/app-files.md in Drive).
+drive-local = { path = "../drive/crates/drive-local", optional = true }
 
 [features]
 default = []
-web = ["dioxus/web", "dep:drive-dioxus", "dep:serde_json", "dep:js-sys"]
-desktop = ["dioxus/desktop"]
+web = ["dioxus/web", "dep:drive-dioxus", "dep:serde_json", "dep:js-sys", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
+desktop = ["dioxus/desktop", "local"]
+local = ["dep:drive-local"]
 mobile = ["dioxus/mobile"]
 
 [profile.wasm-dev]

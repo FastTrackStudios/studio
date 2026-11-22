@@ -184,7 +184,29 @@ fn Mirror(org: String) -> Element {
         for to in targets {
             MirrorTo { key: "{to}", lib: lib.clone(), to }
         }
+        MirrorFiles { lib: lib.clone() }
     }
+}
+
+/// Each song's files project follows the song: its title, and the orgs it
+/// is shared with (sharing a song shares its files).
+#[component]
+fn MirrorFiles(lib: songs::Library) -> Element {
+    let registry = backing::use_backing(drive_files::space_doc(&lib.org));
+    let ready = registry.ready();
+    let rev = lib.loro().oplog_vv();
+    let reg_rev = registry.loro().oplog_vv();
+    use_effect(use_reactive!(|ready, rev, reg_rev| {
+        let _ = (rev, reg_rev);
+        if !(ready && lib.ready()) {
+            return;
+        }
+        let entries = lib.entries();
+        if crate::files::projects_differ(&registry.peek(), &entries) {
+            registry.edit(|r| crate::files::mirror_projects(r, &entries));
+        }
+    }));
+    rsx! {}
 }
 
 #[component]

@@ -1,10 +1,11 @@
 //! The pages, and the rows several of them share.
 
+pub mod files;
 pub mod home;
 pub mod library;
-pub mod print;
 pub mod live;
 pub mod orgs;
+pub mod print;
 pub mod records;
 pub mod set;
 pub mod setlists;
@@ -168,10 +169,17 @@ pub fn book_for(app: crate::state::AppState, set: &SetRef, info: &Info) {
 /// The rooms the booking sheet offers are fixed strings; a set's own
 /// place is kept to one of them when it is one.
 fn leak_room(place: &str) -> &'static str {
-    ["Room 210", "Chapel", "Worship Center", "The Loft", "Studio A", "Recital Hall"]
-        .into_iter()
-        .find(|r| *r == place)
-        .unwrap_or("Room 210")
+    [
+        "Room 210",
+        "Chapel",
+        "Worship Center",
+        "The Loft",
+        "Studio A",
+        "Recital Hall",
+    ]
+    .into_iter()
+    .find(|r| *r == place)
+    .unwrap_or("Room 210")
 }
 
 /// The org switcher's button.
