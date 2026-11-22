@@ -1569,6 +1569,7 @@ pub fn calendar_event(i: &Info, base: &str) -> Option<drive_spine::Event> {
         date: i.date.clone(),
         time: i.starts.clone(),
         place: i.place.clone(),
+        ..Default::default()
     })
 }
 
@@ -1581,6 +1582,7 @@ pub fn rehearsal_event(i: &Info, r: &Rehearsal, base: &str) -> drive_spine::Even
         date: r.date.clone(),
         time: r.time.clone(),
         place: r.room.clone(),
+        ..Default::default()
     }
 }
 

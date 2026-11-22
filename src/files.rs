@@ -459,6 +459,7 @@ impl Link {
                 location: location.to_string(),
                 path: self.path.clone(),
                 available: false,
+                ..Default::default()
             };
             p.contains(path.trim_matches('/'))
         }
