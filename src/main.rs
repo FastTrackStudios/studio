@@ -3,14 +3,19 @@
 //! and in memory; on the web its sets are live on Drive (`live_sync`), and
 //! its library and songs are Drive documents, each song a session
 //! (`songs`, on `session_sync`); each org has its own library, team and
-//! settings, and shares songs with others (`orgs`, `team`).
+//! settings, and shares songs with others (`orgs`, `team`); its sets are
+//! Drive documents too (`setlist` the model, `sets` live).
 
 mod data;
 mod icons;
+mod keys;
 mod live_sync;
 mod orgs;
 mod pages;
 mod pieces;
+mod set_sheets;
+mod setlist;
+mod sets;
 mod sheets;
 mod shell;
 mod songs;
@@ -24,7 +29,8 @@ use pages::library::{Library, LibraryHome};
 use pages::live::{Chart, Lyrics};
 use pages::orgs::{AllOrgs, OrgSettings, People};
 use pages::records::{Album, Records, TrackPage};
-use pages::set::SetPage;
+use pages::print::PrintSet;
+use pages::set::{OrgSet, SetPage};
 use pages::setlists::{Every, Series, Setlists};
 use pages::signal::Signal;
 use pages::song::{SharedSong, SongPage};
@@ -60,6 +66,10 @@ pub enum Route {
         Chart { id: String },
         #[route("/set/:id/lyrics")]
         Lyrics { id: String },
+        #[route("/at/:owner/:id")]
+        OrgSet { owner: String, id: String },
+        #[route("/print/:owner/:id")]
+        PrintSet { owner: String, id: String },
         #[route("/library")]
         LibraryHome {},
         #[route("/library/:tag")]
@@ -102,7 +112,10 @@ impl Route {
     /// The set a page shows, if it is one of a set's views.
     pub fn set_id(&self) -> Option<&str> {
         match self {
-            Route::SetPage { id } | Route::Chart { id } | Route::Lyrics { id } => Some(id),
+            Route::SetPage { id }
+            | Route::Chart { id }
+            | Route::Lyrics { id }
+            | Route::OrgSet { id, .. } => Some(id),
             _ => None,
         }
     }
@@ -112,7 +125,8 @@ impl Route {
         Route::SetPage { id: id.to_string() }
     }
 
-    /// Where an id from the prototype's data opens: a record, a track, a series, a set.
+    /// Where an id from the prototype's data opens: a record, a track, a
+    /// recurring event, a set (a built-in show in its own org).
     pub fn open(id: &str) -> Route {
         if data::album(id).is_some() {
             Route::Album { id: id.into() }
@@ -120,6 +134,11 @@ impl Route {
             Route::TrackPage { idx: t.idx }
         } else if data::series(id).is_some() {
             Route::Series { id: id.into() }
+        } else if let Some(owner) = setlist::builtin_home(id) {
+            Route::OrgSet {
+                owner: owner.into(),
+                id: id.into(),
+            }
         } else {
             Route::set(id)
         }

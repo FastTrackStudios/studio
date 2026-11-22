@@ -2,9 +2,10 @@
 
 use dioxus::prelude::*;
 
-use super::{BookButton, OccRow, OrgPill, RehRow, progress_of};
+use super::{BookButton, FaceRow, OrgPill, RehRow, progress_of};
 use crate::Route;
-use crate::data::{self, DAY, MONTH, Rehearsal, TODAY};
+use crate::data::{self, DAY, MONTH, TODAY};
+use crate::setlist::{Face, Rehearsal};
 use crate::icons::{I, Icon};
 use crate::pieces::{Art, Bar, Page};
 use crate::state::use_app;
@@ -12,27 +13,35 @@ use crate::state::use_app;
 /// A row of the week: a set or a rehearsal.
 #[derive(Clone, PartialEq)]
 enum Agenda {
-    Set(String),
-    Reh(Rehearsal),
+    Set(Face),
+    Reh(Face, Rehearsal),
 }
 
 #[component]
 pub fn Home() -> Element {
     let app = use_app();
-    let mine = data::my_sets();
-    let next = mine.first().copied();
-    let mut seen = vec![next.map(|n| n.series.id)];
+    let index = crate::sets::use_index();
+    let me = crate::team::use_me();
+    let faces = index.faces();
+    let mine = crate::sheets::my_sets(&faces, me.as_deref());
+    let next = mine.first().cloned();
+    let mut seen = vec![next.as_ref().map(|n| n.series.clone())];
     let mut week: Vec<(data::Day, Agenda)> = Vec::new();
-    for o in mine.iter().skip(1) {
-        if o.date.from_today() < 8 && !seen.contains(&Some(o.series.id)) {
-            seen.push(Some(o.series.id));
-            week.push((o.date, Agenda::Set(o.id.clone())));
+    for f in mine.iter().skip(1) {
+        let Some(d) = f.day() else { continue };
+        let key = Some(f.series.clone()).filter(|s| !s.is_empty());
+        if d.from_today() < 8 && (key.is_none() || !seen.contains(&key)) {
+            seen.push(key);
+            week.push((d, Agenda::Set(f.clone())));
         }
     }
-    for r in app.reh.read().iter() {
-        let n = r.date.from_today();
-        if (0..8).contains(&n) {
-            week.push((r.date, Agenda::Reh(r.clone())));
+    for f in &faces {
+        for r in &f.rehearsals {
+            if let Some(d) = crate::setlist::parse_day(&r.date)
+                && (0..8).contains(&d.from_today())
+            {
+                week.push((d, Agenda::Reh(f.clone(), r.clone())));
+            }
         }
     }
     week.sort_by_key(|w| w.0);
@@ -61,8 +70,8 @@ pub fn Home() -> Element {
             } }
             div { class: "body",
                 div { class: "hdate", "{date}" }
-                if let Some(o) = next {
-                    NextUp { id: o.id.clone() }
+                if let Some(f) = next {
+                    NextUp { face: f }
                 }
                 if !week.is_empty() {
                     div { class: "dayhead dh2",
@@ -72,11 +81,11 @@ pub fn Home() -> Element {
                     div { class: "agenda",
                         for (_ , a) in week {
                             match a {
-                                Agenda::Set(id) => rsx! {
-                                    OccRow { key: "{id}", id: id.clone(), state: progress_of(data::occ(&id).expect("a set")) }
+                                Agenda::Set(f) => rsx! {
+                                    FaceRow { key: "{f.id}", face: f.clone(), state: progress_of(&f) }
                                 },
-                                Agenda::Reh(r) => rsx! {
-                                    RehRow { key: "reh{r.set}{r.date.0}", r }
+                                Agenda::Reh(f, r) => rsx! {
+                                    RehRow { key: "reh{f.id}{r.date}{r.time}", face: f, r }
                                 },
                             }
                         }
@@ -120,53 +129,55 @@ pub fn Home() -> Element {
 
 /// Tonight's set (or the next one you play), its room, call and rig.
 #[component]
-fn NextUp(id: String) -> Element {
-    let Some(o) = data::occ(&id) else {
+fn NextUp(face: Face) -> Element {
+    let Some(d) = face.day() else {
         return rsx! {};
     };
-    let pl = o.series.place();
-    let kicker = if o.date.from_today() == 0 {
+    let kicker = if d.from_today() == 0 {
         "Tonight".to_string()
     } else {
-        DAY[o.date.weekday()].to_string()
+        DAY[d.weekday()].to_string()
     };
-    let kicker = match pl {
-        Some(p) => format!("{kicker} · {}", p.starts),
-        None => kicker,
+    let kicker = if face.starts.is_empty() {
+        kicker
+    } else {
+        format!("{kicker} · {}", face.starts)
     };
-    let folder = o.series.folder().map_or("", |f| f.name);
+    let here = (use_app().here)();
+    let org = crate::orgs::org_name(&here);
     let loaded = data::loaded_rig();
+    let id = face.id.clone();
     rsx! {
         button {
             class: "nextup hn",
-            style: "--h:{o.series.hue}",
+            style: "--h:{face.hue}",
             onclick: move |_| {
-                navigator().push(Route::set(&id));
+                navigator().push(Route::SetPage { id: id.clone() });
             },
             span { class: "nutop",
-                if let Some(l) = data::logo(o.series.id) {
+                if let Some(l) = data::logo(&face.series) {
                     img { class: "nulogo", src: l, alt: "" }
                 } else {
-                    crate::pieces::Cover { title: o.series.name, size: 64, hue: o.series.hue }
+                    crate::pieces::Cover { title: face.title.clone(), size: 64, hue: face.hue }
                 }
                 span { class: "mid",
                     span { class: "nuk", "{kicker}" }
-                    span { class: "nut", "{o.series.name}" }
-                    span { class: "nus", "{folder} · {o.songs.len()} songs" }
+                    span { class: "nut", "{face.title}" }
+                    span { class: "nus", "{org} · {face.songs} songs" }
                 }
             }
             span { class: "nuwhere",
                 span { class: "nw",
                     Icon { name: I::Mappin, size: 13, w: 2.0 }
                     span {
-                        b { "{pl.map_or(\"\", |p| p.room)}" }
+                        b { "{face.place}" }
                     }
                 }
                 span { class: "nw call",
                     Icon { name: I::Clock, size: 13, w: 2.0 }
                     span {
                         small { "Call" }
-                        b { "{pl.map_or(\"\", |p| p.call)}" }
+                        b { "{face.call}" }
                     }
                 }
                 if let Some(r) = loaded {
@@ -178,7 +189,7 @@ fn NextUp(id: String) -> Element {
                         }
                     }
                 }
-                span { class: "nuready", {progress_of(o)} }
+                span { class: "nuready", {progress_of(&face)} }
             }
         }
     }

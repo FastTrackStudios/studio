@@ -1,41 +1,48 @@
-//! Setlists: the weekly events as their logos, each ringed by how ready
-//! its next set is; the shows as their covers. A series' page, and every
-//! setlist there is.
+//! Setlists: the org's sets, from its index document. Its recurring
+//! events as their logos, each ringed by how ready its next set is; what
+//! is coming up, what other orgs share with it, its templates and what
+//! was played before. A recurring event's page, and every set there is.
 
 use dioxus::prelude::*;
 
-use super::{book_for, progress_of};
+use super::{FaceRow, progress_of, set_route};
 use crate::Route;
-use crate::data::{self, Day, MONTH};
+use crate::data::{self, Day, MONTH, TODAY};
 use crate::icons::{I, Icon};
-use crate::pieces::{Art, Bar, Cal, Cover, DayTile, Hair, Hero, Joined, Page, Ring, Tool};
-use crate::state::{Menu, use_app};
+use crate::orgs;
+use crate::pieces::{Bar, Cover, DayTile, Hair, Hero, Joined, Page, Ring, Tool};
+use crate::setlist::{self, Face, Kind};
+use crate::setlist::Series as Recurring;
+use crate::sets;
+use crate::state::{Menu, Sheet, use_app};
 
 #[component]
 pub fn Setlists() -> Element {
     let app = use_app();
-    let mut folder = app.folder;
-    let f = folder();
-    let fs: Vec<&data::Folder> = data::FOLDERS
+    let here = (app.here)();
+    let index = sets::use_index();
+    let faces = index.faces();
+    let series = index.series();
+    let dated: Vec<&Face> = faces.iter().filter(|f| f.kind != Kind::Template).collect();
+    let mut upcoming: Vec<Face> = dated
         .iter()
-        .filter(|x| f.is_none_or(|t| t == x.tag))
+        .filter(|f| f.upcoming())
+        .filter(|f| {
+            // A recurring event's later meetings wait on its own page.
+            f.series.is_empty() || f.day().is_some_and(|d| d.from_today() < 8)
+        })
+        .map(|f| (*f).clone())
         .collect();
-    let shows: Vec<(&'static str, &'static data::Folder)> = fs
+    upcoming.sort_by(|a, b| a.date.cmp(&b.date));
+    let mut past: Vec<Face> = dated
         .iter()
-        .flat_map(|x| x.shows.iter().map(move |id| (*id, *x)))
+        .filter(|f| f.day().is_some_and(|d| d.from_today() < 0))
+        .map(|f| (*f).clone())
         .collect();
-    let upcoming: Vec<_> = shows
-        .iter()
-        .copied()
-        .filter(|(id, _)| data::show(id).is_some_and(|s| s.upcoming))
-        .collect();
-    let past: Vec<_> = shows
-        .iter()
-        .copied()
-        .filter(|(id, _)| data::show(id).is_some_and(|s| !s.upcoming))
-        .collect();
-    let recurring: Vec<_> = fs.iter().filter(|x| !x.series.is_empty()).collect();
-
+    past.sort_by(|a, b| b.date.cmp(&a.date));
+    past.truncate(6);
+    let templates = index.templates();
+    let shared = sets::use_sets_shared_with(&here);
     rsx! {
         Page {
             Bar {
@@ -51,9 +58,8 @@ pub fn Setlists() -> Element {
                         }
                         Hair {}
                         Tool {
-                            label: "Folders and every setlist",
+                            label: "Every setlist",
                             icon: I::More,
-                            badge: f.map(|_| "1".to_string()),
                             onclick: move |_| {
                                 let mut m = app.menu;
                                 m.set(Some(Menu::SetMenu));
@@ -63,52 +69,76 @@ pub fn Setlists() -> Element {
                     Tool {
                         label: "New setlist",
                         icon: I::Plus,
-                        onclick: move |_| {
-                            let mut m = app.menu;
-                            m.set(Some(Menu::NewSet));
-                        },
+                        onclick: move |_| app.open(Sheet::NewSet(None)),
                     }
                 },
             }
             div { class: "body",
-                if let Some(tag) = f {
-                    div { class: "onrow",
-                        button { class: "onchip", onclick: move |_| folder.set(None),
-                            "{data::FOLDERS.iter().find(|x| x.tag == tag).map_or(\"\", |x| x.name)}"
-                            Icon { name: I::X, size: 13, w: 2.4 }
+                if !series.is_empty() {
+                    div { class: "dayhead dh2",
+                        span { "Recurring" }
+                        button {
+                            class: "seeall",
+                            onclick: move |_| {
+                                navigator().push(Route::Every {});
+                            },
+                            "Every setlist "
+                            Icon { name: I::ChevRight, size: 14 }
+                        }
+                    }
+                    div { class: "evgrid",
+                        for sr in sorted_series(&series, &faces) {
+                            EventTile { key: "{sr.id}", sr: sr.clone(), next: next_meeting(&faces, &sr) }
                         }
                     }
                 }
-                for (k , fo) in recurring.into_iter().enumerate() {
-                    Fragment { key: "{fo.tag}",
-                        div { class: "dayhead dh2",
-                            span { "{fo.name} · Recurring" }
-                            if k == 0 {
-                                button {
-                                    class: "seeall",
-                                    onclick: move |_| {
-                                        navigator().push(Route::Every {});
-                                    },
-                                    "Every setlist "
-                                    Icon { name: I::ChevRight, size: 14 }
-                                }
-                            }
+                div { class: "dayhead", "Coming up" }
+                if upcoming.is_empty() {
+                    button {
+                        class: "ag",
+                        onclick: move |_| app.open(Sheet::NewSet(None)),
+                        span { class: "cal tpl",
+                            Icon { name: I::Plus, size: 18 }
                         }
-                        div { class: "evgrid",
-                            for id in sorted_series(fo) {
-                                EventTile { key: "{id}", id }
-                            }
+                        span { class: "mid",
+                            span { class: "t1", "Plan a set" }
+                            span { class: "s1", "A service, a rehearsal, a show" }
                         }
                     }
                 }
-                for (head , list , cls) in [("Upcoming shows", upcoming, "showlist"), ("Past shows", past, "showlist past")] {
-                    if !list.is_empty() {
-                        Fragment { key: "{head}",
-                            div { class: "dayhead", "{head}" }
-                            div { class: "{cls}",
-                                for (id , fo) in list {
-                                    ShowRow { key: "{id}", id, folder: fo.name }
-                                }
+                div { class: "agenda",
+                    for f in upcoming {
+                        FaceRow { key: "{f.id}", face: f.clone(), state: progress_of(&f) }
+                    }
+                }
+                if !shared().is_empty() {
+                    div { class: "dayhead", "Shared with {orgs::org_name(&here)}" }
+                    div { class: "agenda",
+                        for (owner , id) in shared() {
+                            SharedSetRow { key: "{owner}/{id}", owner, id }
+                        }
+                    }
+                }
+                if !templates.is_empty() {
+                    div { class: "dayhead", "Templates" }
+                    div { class: "agenda",
+                        for f in templates {
+                            FaceRow { key: "{f.id}", face: f.clone() }
+                        }
+                    }
+                }
+                if !past.is_empty() {
+                    div { class: "dayhead", "Before" }
+                    div { class: "agenda past",
+                        for f in past {
+                            FaceRow {
+                                key: "{f.id}",
+                                face: f.clone(),
+                                state: rsx! {
+                                    span { class: "chev",
+                                        Icon { name: I::ChevRight, size: 16 }
+                                    }
+                                },
                             }
                         }
                     }
@@ -118,31 +148,55 @@ pub fn Setlists() -> Element {
     }
 }
 
-/// A folder's weekly events, the soonest next set first.
-fn sorted_series(f: &data::Folder) -> Vec<&'static str> {
-    let mut ids: Vec<&'static str> = f.series.to_vec();
-    ids.sort_by_key(|id| data::series(id).and_then(|s| s.next()).map(|o| o.date));
-    ids
+/// A set another org shares with this one: read from its own document
+/// (the owner's index is the owner's).
+#[component]
+fn SharedSetRow(owner: String, id: String) -> Element {
+    let set = sets::use_set(&owner, &id);
+    let face = setlist::face_of(&set.loro());
+    if face.title.is_empty() {
+        return rsx! {};
+    }
+    rsx! {
+        FaceRow {
+            face: face.clone(),
+            owner: owner.clone(),
+            state: rsx! {
+                span { class: "orgtag", style: "--h:{orgs::org_hue(&owner)}", "{orgs::org_name(&owner)}" }
+            },
+        }
+    }
 }
 
-/// A weekly event: its logo ringed by how ready its next set is.
+/// The next meeting of a recurring event from today: its set's face, or
+/// the day with no set yet.
+fn next_meeting(faces: &[Face], sr: &Recurring) -> (Day, Option<Face>) {
+    let day = sr.next_from(TODAY).unwrap_or(TODAY);
+    let id = setlist::meeting_id(&sr.id, day);
+    (day, faces.iter().find(|f| f.id == id).cloned())
+}
+
+/// The recurring events, the soonest next meeting first.
+fn sorted_series(list: &[Recurring], faces: &[Face]) -> Vec<Recurring> {
+    let mut v = list.to_vec();
+    v.sort_by_key(|sr| next_meeting(faces, sr).0);
+    v
+}
+
+/// A recurring event: its logo ringed by how ready its next set is.
 #[component]
-fn EventTile(id: &'static str) -> Element {
-    let Some(sr) = data::series(id) else {
-        return rsx! {};
+fn EventTile(sr: Recurring, next: (Day, Option<Face>)) -> Element {
+    let (day, face) = next;
+    let n = face.as_ref().map_or(0, |f| f.songs);
+    let of = sr.size.max(1);
+    let d = day.from_today();
+    let when = if d == 0 {
+        "Today".to_string()
+    } else if d < 7 {
+        day.dow3().to_string()
+    } else {
+        day.short()
     };
-    let nx = sr.next();
-    let (n, of) = (nx.map_or(0, |o| o.songs.len()), sr.size);
-    let when = nx.map(|o| {
-        let d = o.date.from_today();
-        if d == 0 {
-            "Today".to_string()
-        } else if d < 7 {
-            o.date.dow3().to_string()
-        } else {
-            o.date.short()
-        }
-    });
     let cls = if n >= of {
         "ok"
     } else if n > 0 {
@@ -150,89 +204,70 @@ fn EventTile(id: &'static str) -> Element {
     } else {
         "none"
     };
+    let id = sr.id.clone();
     rsx! {
         button {
             class: "ev",
             onclick: move |_| {
-                navigator().push(Route::Series { id: id.into() });
+                navigator().push(Route::Series { id: id.clone() });
             },
             span { class: "evlogo",
                 Ring { n, of, size: 84 }
-                if let Some(l) = data::logo(id) {
+                if let Some(l) = data::logo(&sr.id) {
                     img { src: l, alt: "" }
                 } else {
-                    Cover { title: sr.name, size: 64, hue: sr.hue }
+                    Cover { title: sr.name.clone(), size: 64, hue: sr.hue }
                 }
             }
             span { class: "t1", "{sr.name}" }
             span { class: "s1",
-                if let Some(w) = when {
-                    "{w} · "
-                    b { class: "{cls}", "{n}/{of}" }
-                }
+                "{when} · "
+                b { class: "{cls}", "{n}/{of}" }
             }
         }
     }
 }
 
-/// A show, its cover and its date.
-#[component]
-fn ShowRow(id: &'static str, folder: &'static str) -> Element {
-    let Some(st) = data::show(id) else {
-        return rsx! {};
-    };
-    let total = st.total();
-    let n = st.songs().len();
-    rsx! {
-        button {
-            class: "showc",
-            onclick: move |_| {
-                navigator().push(Route::set(id));
-            },
-            span { class: "showart",
-                Art { img: data::art(id), title: st.title, hue: st.hue }
-            }
-            span { class: "mid",
-                span { class: "t1", "{st.title}" }
-                span { class: "s1",
-                    "{folder} · {n} songs"
-                    if total > 0 {
-                        " · {data::dur(total as f64)}"
-                    }
-                }
-            }
-            Cal { top: st.cal.0, big: st.cal.1 }
-        }
-    }
-}
-
-/// A weekly event: when and where it meets, its sets to come and before.
+/// A recurring event: when and where it meets, its sets to come and before.
 #[component]
 pub fn Series(id: String) -> Element {
     let app = use_app();
-    let Some(sr) = data::series(&id) else {
+    let index = sets::use_index();
+    let Some(sr) = index.series_of(&id) else {
         return rsx! {
-            Page { Bar { back: Route::Setlists {}, title: "Not found" } }
+            Page {
+                Bar {
+                    back: Route::Setlists {},
+                    title: if index.ready() { "Not found" } else { "Loading…" },
+                }
+            }
         };
     };
-    let all = sr.occs();
-    let up: Vec<_> = all
-        .iter()
-        .copied()
-        .filter(|o| o.date.from_today() >= 0)
+    let faces = index.faces();
+    let have = setlist::meetings(&faces, &sr.id);
+    // Its meetings from today for four weeks, planned or not.
+    let mut up: Vec<(Day, Option<Face>)> = sr
+        .dates(TODAY, TODAY.plus(27))
+        .into_iter()
+        .map(|d| {
+            let mid = setlist::meeting_id(&sr.id, d);
+            (d, have.iter().find(|f| f.id == mid).map(|f| (*f).clone()))
+        })
         .collect();
-    let mut past: Vec<_> = all
+    // Any planned further out, too.
+    for f in have.iter().filter(|f| f.day().is_some_and(|d| d.from_today() > 27)) {
+        if let Some(d) = f.day() {
+            up.push((d, Some((*f).clone())));
+        }
+    }
+    let mut past: Vec<Face> = have
         .iter()
-        .copied()
-        .filter(|o| o.date.from_today() < 0)
+        .filter(|f| f.day().is_some_and(|d| d.from_today() < 0))
+        .map(|f| (*f).clone())
         .collect();
     past.reverse();
-    let pl = sr.place();
-    let folder = sr.folder().map_or("", |f| f.name);
-    let nx_say = up.first().map_or("Plan a set".to_string(), |o| {
-        format!("Planning {}", o.date.short())
-    });
     let past_n = past.len();
+    let sid = sr.id.clone();
     rsx! {
         Page { tint: sr.hue,
             Bar {
@@ -242,7 +277,7 @@ pub fn Series(id: String) -> Element {
                         Tool {
                             label: "Plan a set",
                             icon: I::Plus,
-                            onclick: move |_| app.say(nx_say.clone()),
+                            onclick: move |_| app.open(Sheet::NewSet(Some(sid.clone()))),
                         }
                         Hair {}
                         Tool {
@@ -258,20 +293,20 @@ pub fn Series(id: String) -> Element {
             }
             div { class: "body",
                 Hero {
-                    img: data::logo(sr.id),
+                    img: data::logo(&sr.id),
                     hue: sr.hue,
-                    title: sr.name,
+                    title: sr.name.clone(),
                     facts: rsx! {
                         span { class: "when2",
                             span { class: "loc",
                                 Icon { name: I::Mappin, size: 14, w: 2.0 }
                                 span {
-                                    b { "{pl.map_or(\"\", |p| p.room)}" }
+                                    b { "{sr.room}" }
                                     small {
                                         "{sr.every()}"
-                                        if let Some(p) = pl {
+                                        if !sr.call.is_empty() {
                                             " · "
-                                            span { class: "call", "Call {p.call}" }
+                                            span { class: "call", "Call {sr.call}" }
                                         }
                                     }
                                 }
@@ -279,20 +314,20 @@ pub fn Series(id: String) -> Element {
                         }
                     },
                     sub: rsx! {
-                        "{folder}"
+                        "{orgs::org_name(&index.org)}"
                         span { class: "hcount", "{sr.size} songs a set · {past_n} sets so far" }
                     },
                 }
                 div { class: "dayhead", "Coming up" }
                 div { class: "agenda",
-                    for o in up {
-                        SeriesRow { key: "{o.id}", id: o.id.clone() }
+                    for (d , f) in up {
+                        MeetingRow { key: "{d.0}", sr: sr.clone(), day: d, face: f }
                     }
                 }
                 div { class: "dayhead", "Before" }
                 div { class: "agenda",
-                    for o in past {
-                        SeriesRow { key: "{o.id}", id: o.id.clone() }
+                    for f in past {
+                        MeetingRow { key: "{f.id}", sr: sr.clone(), day: f.day().unwrap_or(TODAY), face: Some(f.clone()) }
                     }
                 }
             }
@@ -300,31 +335,43 @@ pub fn Series(id: String) -> Element {
     }
 }
 
+/// A meeting of a recurring event: its set, or a day to plan one for.
 #[component]
-fn SeriesRow(id: String) -> Element {
-    let Some(o) = data::occ(&id) else {
-        return rsx! {};
+fn MeetingRow(sr: Recurring, day: Day, face: Option<Face>) -> Element {
+    let app = use_app();
+    let here = (app.here)();
+    let id = setlist::meeting_id(&sr.id, day);
+    let planned = face.is_some();
+    let names = face.as_ref().map(|f| f.first.clone()).unwrap_or_default();
+    let open = {
+        let (sr, id, here) = (sr.clone(), id.clone(), here.clone());
+        move |_| {
+            if !planned {
+                app.open(Sheet::NewSet(Some(format!("{}@{}", sr.id, day.iso()))));
+                return;
+            }
+            navigator().push(set_route(&here, &id, &here));
+        }
     };
-    let names: Vec<_> = o.songs.iter().take(3).map(|x| x.title).collect();
     rsx! {
-        button {
-            class: "ag",
-            onclick: move |_| {
-                navigator().push(Route::set(&id));
-            },
-            DayTile { day: o.date }
+        button { class: "ag", onclick: open,
+            DayTile { day }
             span { class: "mid",
-                span { class: "t1", "{o.date.short()}" }
+                span { class: "t1", "{sr.name_on(day)} · {day.short()}" }
                 span { class: "s1",
-                    if names.is_empty() {
+                    if !planned {
+                        "Not planned yet"
+                    } else if names.is_empty() {
                         "No songs yet"
                     } else {
                         "{names.join(\", \")}"
                     }
                 }
             }
-            if o.date.from_today() >= 0 {
-                {progress_of(o)}
+            if let Some(f) = face.as_ref().filter(|_| day.from_today() >= 0) {
+                {progress_of(f)}
+            } else if !planned {
+                span { class: "st none", "Plan" }
             } else {
                 span { class: "chev",
                     Icon { name: I::ChevRight, size: 16 }
@@ -334,69 +381,32 @@ fn SeriesRow(id: String) -> Element {
     }
 }
 
-/// A row of every setlist.
-struct EveryRow {
-    date: Day,
-    title: &'static str,
-    sub: String,
-    img: Option<Asset>,
-    open: String,
-    occ: Option<&'static data::Occ>,
-    future: bool,
-}
-
-/// Every setlist there is, by month, newest first, with a search.
+/// Every set the org has, by month, newest first, with a search.
 #[component]
 pub fn Every() -> Element {
     let app = use_app();
     let mut q = app.every_q;
-    let mut rows: Vec<EveryRow> = data::OCC
-        .iter()
-        .filter(|o| !o.songs.is_empty() || (0..7).contains(&o.date.from_today()))
-        .map(|o| {
-            let first: Vec<_> = o.songs.iter().take(2).map(|x| x.title).collect();
-            EveryRow {
-                date: o.date,
-                title: o.series.name,
-                sub: if o.songs.is_empty() {
-                    "Not planned yet".into()
-                } else {
-                    format!("{} songs · {}", o.songs.len(), first.join(", "))
-                },
-                img: data::logo(o.series.id),
-                open: o.id.clone(),
-                occ: Some(o),
-                future: o.date.from_today() >= 0,
-            }
-        })
+    let index = sets::use_index();
+    let mut rows: Vec<Face> = index
+        .faces()
+        .into_iter()
+        .filter(|f| f.kind != Kind::Template && f.day().is_some())
         .collect();
-    rows.push(EveryRow {
-        date: Day::ymd(2026, 12, 12),
-        title: "Merry & Bright",
-        sub: "CBU · 9 songs".into(),
-        img: None,
-        open: "mb".into(),
-        occ: None,
-        future: true,
-    });
-    rows.push(EveryRow {
-        date: Day::ymd(2026, 5, 15),
-        title: "JT's Senior Recital",
-        sub: "Recitals · 16 songs".into(),
-        img: data::art("jt"),
-        open: "jt".into(),
-        occ: None,
-        future: false,
-    });
     let n_all = rows.len();
     let needle = q().to_lowercase();
-    rows.retain(|r| needle.is_empty() || r.title.to_lowercase().contains(&needle));
+    rows.retain(|r| {
+        needle.is_empty()
+            || r.title.to_lowercase().contains(&needle)
+            || r.first.iter().any(|t| t.to_lowercase().contains(&needle))
+    });
     rows.sort_by(|a, b| b.date.cmp(&a.date));
     let mut months: Vec<(i32, usize)> = Vec::new();
     for r in &rows {
-        let m = (r.date.year(), r.date.month0());
-        if !months.contains(&m) {
-            months.push(m);
+        if let Some(d) = r.day() {
+            let m = (d.year(), d.month0());
+            if !months.contains(&m) {
+                months.push(m);
+            }
         }
     }
     rsx! {
@@ -414,39 +424,13 @@ pub fn Every() -> Element {
                     }
                 }
                 for (y , mo) in months {
-                    div { key: "{y}-{mo}h", class: "dayhead", "{MONTH[mo]} {y}" }
+                    Fragment { key: "{y}-{mo}",
+                    div { class: "dayhead", "{MONTH[mo]} {y}" }
                     div { class: "agenda",
-                        for r in rows.iter().filter(|r| r.date.year() == y && r.date.month0() == mo) {
-                            button {
-                                key: "{r.open}",
-                                class: "ag",
-                                onclick: {
-                                    let open = r.open.clone();
-                                    move |_| {
-                                        navigator().push(Route::set(&open));
-                                    }
-                                },
-                                DayTile { day: r.date }
-                                if let Some(i) = r.img {
-                                    img { class: "aglogo", src: i, alt: "" }
-                                } else {
-                                    span { class: "aglogo",
-                                        Cover { title: r.title, size: 36, hue: 150 }
-                                    }
-                                }
-                                span { class: "mid",
-                                    span { class: "t1", "{r.title}" }
-                                    span { class: "s1", "{r.sub}" }
-                                }
-                                if let (Some(o), true) = (r.occ, r.future) {
-                                    {progress_of(o)}
-                                } else if r.future {
-                                    span { class: "st ok",
-                                        Icon { name: I::Check, size: 13, w: 2.6 }
-                                    }
-                                }
-                            }
+                        for f in rows.iter().filter(|r| r.day().is_some_and(|d| d.year() == y && d.month0() == mo)) {
+                            FaceRow { key: "{f.id}", face: f.clone(), state: state_of(f) }
                         }
+                    }
                     }
                 }
             }
@@ -454,15 +438,14 @@ pub fn Every() -> Element {
     }
 }
 
-/// Book a rehearsal for the set on show, or the series' next.
-pub fn book_here(app: crate::state::AppState, route: &Route) {
-    let o = match route {
-        Route::SetPage { id } => data::occ(id),
-        Route::Series { id } => data::series(id).and_then(|s| s.next()),
-        _ => None,
+/// A row's end: how ready an upcoming set is, else a chevron.
+fn state_of(f: &Face) -> Element {
+    if f.upcoming() {
+        return progress_of(f);
     }
-    .or_else(|| data::SERIES[0].next());
-    if let Some(o) = o {
-        book_for(app, o);
+    rsx! {
+        span { class: "chev",
+            Icon { name: I::ChevRight, size: 16 }
+        }
     }
 }

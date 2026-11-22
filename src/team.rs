@@ -211,3 +211,21 @@ fn MirrorTo(lib: songs::Library, to: String) -> Element {
     }));
     rsx! {}
 }
+
+/// Your person in a team: the one your account is, or (no one signed in:
+/// the desktop and phone builds, a node without an issuer) the
+/// prototype's you.
+pub fn me_id(team: &Team, who: &str) -> Option<String> {
+    match team.me(who) {
+        Some(p) => Some(p.id),
+        None if who.is_empty() => Some("cody-wright".into()),
+        None => None,
+    }
+}
+
+/// Your person in the org Studio is in.
+pub fn use_me() -> Option<String> {
+    let app = use_app();
+    let team = use_team();
+    me_id(&team, &(app.who)())
+}

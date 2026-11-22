@@ -14,11 +14,11 @@ use app_shell::ui::{
 };
 use dioxus::prelude::*;
 
-use crate::data::{self, DAY};
+use crate::data::{self, DAY, TODAY};
 use crate::icons::{I, Icon};
 use crate::pieces::SongArt;
 use crate::sheets::{MenuView, SheetBody};
-use crate::state::{Sheet, use_app};
+use crate::state::{SetRef, Sheet, use_app};
 use crate::{Route, Tab};
 
 // Lucide's paths, for the shell's icons (it draws path data only).
@@ -103,13 +103,20 @@ fn theme() -> Theme {
 }
 
 /// A page's title, for the desktop's top bar.
-fn title_of(route: &Route) -> String {
+fn title_of(route: &Route, index: &crate::sets::Index) -> String {
     match route {
         Route::Home {} => "Home".into(),
         Route::Records {} | Route::Album { .. } | Route::TrackPage { .. } => "Records".into(),
         Route::Setlists {} | Route::Every {} => "Setlists".into(),
-        Route::Series { id } => data::series(id).map_or("Setlists".into(), |s| s.name.into()),
-        Route::SetPage { id } | Route::Chart { id } | Route::Lyrics { id } => data::set_title(id),
+        Route::Series { id } => index.series_of(id).map_or("Setlists".into(), |s| s.name),
+        Route::SetPage { id } | Route::Chart { id } | Route::Lyrics { id } => index
+            .face(id)
+            .map_or("Setlist".into(), |f| match f.day() {
+                Some(d) if !f.series.is_empty() => format!("{} · {}", f.title, d.short()),
+                _ => f.title,
+            }),
+        Route::OrgSet { owner, .. } => format!("Setlist · {}", crate::orgs::org_name(owner)),
+        Route::PrintSet { .. } => "Print".into(),
         Route::LibraryHome {} | Route::Library { .. } => "Library".into(),
         Route::SongPage { .. } | Route::SharedSong { .. } => "Song".into(),
         Route::Signal {} => "Signal".into(),
@@ -123,6 +130,9 @@ fn title_of(route: &Route) -> String {
 pub fn Shell() -> Element {
     let app = use_app();
     let route = use_route::<Route>();
+    let index = crate::sets::use_index();
+    let me = crate::team::use_me();
+    let here = (app.here)();
 
     // The playheads move while playing.
     use_future(move || async move {
@@ -159,7 +169,15 @@ pub fn Shell() -> Element {
         }
     });
 
-    let set = route.set_id().map(str::to_string);
+    // The set a page is of, in its org (Chart and Lyrics follow the set
+    // last entered, in whichever org that was).
+    let set: Option<SetRef> = route.set_id().map(|id| match &route {
+        Route::OrgSet { owner, .. } => SetRef::new(owner, id),
+        Route::Chart { .. } | Route::Lyrics { .. } if app.live_set.peek().id == id => {
+            app.live_set.peek().clone()
+        }
+        _ => SetRef::new(&here, id),
+    });
     let song_view = matches!(route, Route::Chart { .. } | Route::Lyrics { .. });
     let track_view = matches!(route, Route::TrackPage { .. });
     let mut cls = vec!["studio"];
@@ -210,16 +228,16 @@ pub fn Shell() -> Element {
     let set_for_dest = set.clone();
     let on_destination = move |d: String| {
         let nav = navigator();
-        match (set_for_dest.as_deref(), d.as_str()) {
-            (Some(id), "chart") => {
-                nav.replace(Route::Chart { id: id.into() });
+        match (set_for_dest.as_ref(), d.as_str()) {
+            (Some(s), "chart") => {
+                nav.replace(Route::Chart { id: s.id.clone() });
             }
-            (Some(id), "lyrics") => {
-                nav.replace(Route::Lyrics { id: id.into() });
+            (Some(s), "lyrics") => {
+                nav.replace(Route::Lyrics { id: s.id.clone() });
             }
             (Some(_), "more") => app.open(Sheet::More),
-            (Some(id), _) => {
-                nav.replace(Route::set(id));
+            (Some(s), _) => {
+                nav.replace(crate::pages::set_route(&s.owner, &s.id, &app.here.peek()));
             }
             (None, "records") => {
                 nav.push(Route::Records {});
@@ -235,10 +253,15 @@ pub fn Shell() -> Element {
             }
         }
     };
-    let action = round_action(app, set.as_deref());
+    let mine = set.as_ref().and_then(|s| {
+        let f = index.face(&s.id).filter(|_| s.owner == here)?;
+        let me = me.as_ref()?;
+        f.band.contains(me).then_some(f.title)
+    });
+    let action = round_action(app, set.is_some(), mine);
     let accessory = if song_view {
         Some(rsx! {
-            Transport { set: set.clone().unwrap_or_default() }
+            Transport {}
         })
     } else if (app.np)().is_some() {
         Some(rsx! {
@@ -252,9 +275,9 @@ pub fn Shell() -> Element {
         div { class: "window",
             AppShell {
                 theme: use_hook(theme),
-                title: title_of(&route),
+                title: title_of(&route, &index),
                 top_bar: rsx! {
-                    StudioTopBar { title: title_of(&route) }
+                    StudioTopBar { title: title_of(&route, &index) }
                 },
                 sidebar: rsx! {
                     StudioSidebar { route: route.clone() }
@@ -265,10 +288,10 @@ pub fn Shell() -> Element {
                 action,
                 accessory,
                 Content { class: cls,
-                    if let Some(id) = set.clone() {
-                        crate::live_sync::SetRoom {
-                            key: "{id}",
-                            id,
+                    if let Some(s) = set.clone() {
+                        crate::pages::set::SetLive {
+                            key: "{s.owner}/{s.id}",
+                            set: s,
                             view: crate::live_sync::view_of(&route),
                         }
                     }
@@ -297,27 +320,39 @@ fn Content(class: String, children: Element) -> Element {
     }
 }
 
-/// The round button: Open anything; in a set, its primary action.
-fn round_action(app: crate::state::AppState, set: Option<&str>) -> Option<PrimaryAction> {
-    let Some(id) = set.map(str::to_string) else {
+/// The round button: Open anything; in a set, its primary action (open it
+/// in your rig when you play it, else play it).
+fn round_action(
+    app: crate::state::AppState,
+    in_set: bool,
+    mine: Option<String>,
+) -> Option<PrimaryAction> {
+    if !in_set {
         let mut a = PrimaryAction::new("Open anything", icons::SEARCH, move |()| {
             app.open(Sheet::Palette)
         });
         a.prominent = false;
         return Some(a);
-    };
-    if let Some(r) = data::mine(&id) {
-        let say = format!("Opened {} in the {} rig", data::set_title(&id), r.name);
+    }
+    if let Some(title) = mine {
+        let r = data::loaded_rig().map_or("Guitar", |r| r.name);
+        let say = format!("Opened {title} in the {r} rig");
         return Some(PrimaryAction::new(
-            format!("Open in {}", r.name),
+            format!("Open in {r}"),
             RIG,
             move |()| app.say(say.clone()),
         ));
     }
     Some(PrimaryAction::new("Play the set", PLAY, move |()| {
-        let list = data::set_songs(&id);
+        // The player plays the built-in songs it knows.
+        let list: Vec<data::Song> = app
+            .live_list
+            .peek()
+            .iter()
+            .filter_map(|s| data::LIB.iter().find(|l| l.song.title == s.title).map(|l| l.song))
+            .collect();
         if let Some(first) = list.first().map(|s| s.title) {
-            app.play(list, data::set_title(&id), first);
+            app.play(list, "This set".into(), first);
         }
     }))
 }
@@ -462,11 +497,11 @@ fn NowPlayingBar() -> Element {
 
 /// In Chart and Lyrics: the click, the previous section, play, the next section, loop.
 #[component]
-fn Transport(set: String) -> Element {
+fn Transport() -> Element {
     let app = use_app();
     let mut live = app.live;
     let l = live();
-    let n = data::set_songs(&set).len();
+    let n = (app.live_list)().len();
     let secs = data::SECS.len();
     rsx! {
         div { class: "transport",
@@ -546,7 +581,17 @@ fn StudioSidebar(route: Route) -> Element {
             navigator().push(r.clone());
         }
     };
-    let shows_n: usize = data::FOLDERS.iter().map(|f| f.shows.len()).sum();
+    let index = crate::sets::use_index();
+    let faces = index.faces();
+    let series = index.series();
+    let mut coming: Vec<crate::setlist::Face> = faces
+        .iter()
+        .filter(|f| f.series.is_empty() && f.upcoming())
+        .cloned()
+        .collect();
+    coming.sort_by(|a, b| a.date.cmp(&b.date));
+    coming.truncate(4);
+    let upcoming_n = faces.iter().filter(|f| f.upcoming()).count();
     let (title, detail) = match &org {
         Some(_) => (team.name(), format!("Studio · {} orgs", orgs.len())),
         None => ("All orgs".to_string(), format!("{} orgs", orgs.len())),
@@ -567,6 +612,8 @@ fn StudioSidebar(route: Route) -> Element {
             | Route::SetPage { .. }
             | Route::Chart { .. }
             | Route::Lyrics { .. }
+            | Route::OrgSet { .. }
+            | Route::PrintSet { .. }
     );
     let loaded = data::loaded_rig();
     rsx! {
@@ -598,7 +645,7 @@ fn StudioSidebar(route: Route) -> Element {
             SidebarSection { title: "Studio",
                 SidebarItem { label: "Home", icon: icons::HOME, selected: route == Route::Home {}, on_press: at(Route::Home {}) }
                 SidebarItem { label: "Records", icon: DISC, badge: data::RECENT_WORK.len().to_string(), selected: tab == Tab::Records, on_press: at(Route::Records {}) }
-                SidebarItem { label: "Setlists", icon: SETLIST, badge: (data::SERIES.len() + shows_n).to_string(), selected: in_set_pages, on_press: at(Route::Setlists {}) }
+                SidebarItem { label: "Setlists", icon: SETLIST, badge: upcoming_n.to_string(), selected: in_set_pages, on_press: at(Route::Setlists {}) }
                 SidebarItem { label: "Library", icon: LIBRARY, badge: lib.entries().len().to_string(), selected: matches!(route, Route::LibraryHome {} | Route::Library { .. } | Route::SongPage { .. } | Route::SharedSong { .. }), on_press: at(Route::LibraryHome {}) }
                 SidebarItem { label: "Signal", icon: RIG, badge: data::RIGS.len().to_string(), selected: tab == Tab::Signal, on_press: at(Route::Signal {}) }
             }
@@ -612,28 +659,30 @@ fn StudioSidebar(route: Route) -> Element {
                     navigator().push(Route::AllOrgs {});
                 } }
             }
-            SidebarSection { title: "Recurring",
-                for sr in data::SERIES.iter() {
-                    SidebarItem {
-                        key: "{sr.id}",
-                        label: sr.name,
-                        icon: CALENDAR,
-                        badge: sr.next().map(|n| if n.date.from_today() == 0 { "Today".to_string() } else { DAY[n.date.weekday()][..3].to_string() }).unwrap_or_default(),
-                        selected: matches!(&route, Route::Series { id } if id == sr.id),
-                        on_press: at(Route::Series { id: sr.id.into() }),
+            if !series.is_empty() {
+                SidebarSection { title: "Recurring",
+                    for sr in series {
+                        SidebarItem {
+                            key: "{sr.id}",
+                            label: sr.name.clone(),
+                            icon: CALENDAR,
+                            badge: sr.next_from(TODAY).map(|d| if d.from_today() == 0 { "Today".to_string() } else { DAY[d.weekday()][..3].to_string() }).unwrap_or_default(),
+                            selected: matches!(&route, Route::Series { id } if *id == sr.id),
+                            on_press: at(Route::Series { id: sr.id.clone() }),
+                        }
                     }
                 }
             }
-            SidebarSection { title: "Shows",
-                for id in data::PINNED {
-                    if let Some(st) = data::show(id) {
+            if !coming.is_empty() {
+                SidebarSection { title: "Coming up",
+                    for f in coming {
                         SidebarItem {
-                            key: "{id}",
-                            label: st.title,
+                            key: "{f.id}",
+                            label: f.title.clone(),
                             icon: SETLIST,
-                            badge: st.songs().len().to_string(),
-                            selected: route.set_id() == Some(id),
-                            on_press: at(Route::set(id)),
+                            badge: f.day().map(|d| d.short()).unwrap_or_default(),
+                            selected: route.set_id() == Some(f.id.as_str()),
+                            on_press: at(Route::SetPage { id: f.id.clone() }),
                         }
                     }
                 }

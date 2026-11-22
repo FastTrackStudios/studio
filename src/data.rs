@@ -216,18 +216,13 @@ pub struct Show {
     pub id: &'static str,
     pub title: &'static str,
     /// The month and year (or day) its date tile shows.
-    pub cal: (&'static str, &'static str),
     pub hue: u32,
-    pub upcoming: bool,
     pub acts: Vec<(&'static str, Vec<Song>)>,
 }
 
 impl Show {
     pub fn songs(&self) -> Vec<Song> {
         self.acts.iter().flat_map(|a| a.1.iter().copied()).collect()
-    }
-    pub fn total(&self) -> u32 {
-        self.songs().iter().filter_map(|s| s.len).sum()
     }
 }
 
@@ -239,9 +234,7 @@ pub static SHOWS: LazyLock<Vec<Show>> = LazyLock::new(|| {
         Show {
             id: "jt",
             title: "JT's Senior Recital",
-            cal: ("May", "2026"),
             hue: 20,
-            upcoming: false,
             acts: vec![
                 (
                     "The Originals",
@@ -363,9 +356,7 @@ pub static SHOWS: LazyLock<Vec<Show>> = LazyLock::new(|| {
         Show {
             id: "mb",
             title: "Merry & Bright",
-            cal: ("Dec", "12"),
             hue: 150,
-            upcoming: true,
             acts: vec![
                 (
                     "Presidents Songs",
@@ -483,22 +474,6 @@ pub fn series(id: &str) -> Option<&'static Series> {
 }
 
 impl Series {
-    fn day_name(&self, d: usize) -> &'static str {
-        match self.note {
-            Some((n, name)) if n == d => name,
-            _ => DAY[d],
-        }
-    }
-    pub fn every(&self) -> String {
-        let days: Vec<_> = self.days.iter().map(|d| self.day_name(*d)).collect();
-        format!("Every {}", days.join(" and "))
-    }
-    pub fn occs(&self) -> Vec<&'static Occ> {
-        OCC.iter().filter(|o| o.series.id == self.id).collect()
-    }
-    pub fn next(&self) -> Option<&'static Occ> {
-        self.occs().into_iter().find(|o| o.date.from_today() >= 0)
-    }
     /// Where it meets, when the band is called, when it starts.
     pub fn place(&self) -> Option<Place> {
         let (room, starts, call) = match self.id {
@@ -510,9 +485,6 @@ impl Series {
             _ => return None,
         };
         Some(Place { room, starts, call })
-    }
-    pub fn folder(&self) -> Option<&'static Folder> {
-        FOLDERS.iter().find(|f| f.series.contains(&self.id))
     }
 }
 
@@ -537,23 +509,6 @@ impl Occ {
             Some((d, n)) if d == self.date.weekday() => format!("{}, {}", self.series.name, n),
             _ => self.series.name.into(),
         }
-    }
-    pub fn ready(&self) -> String {
-        let (n, of) = (self.songs.len(), self.series.size);
-        if n >= of {
-            "Ready".into()
-        } else if n > 0 {
-            format!("{n} of {of} songs")
-        } else {
-            "Not planned".into()
-        }
-    }
-    pub fn total(&self) -> u32 {
-        self.songs.iter().filter_map(|s| s.len).sum()
-    }
-    /// Your part in it, if you play it.
-    pub fn mine(&self) -> Option<&'static Rig> {
-        mine(&self.id)
     }
 }
 
@@ -733,42 +688,6 @@ pub fn occ(id: &str) -> Option<&'static Occ> {
     OCC.iter().find(|o| o.id == id)
 }
 
-/// Folders of sets, by their tag.
-pub struct Folder {
-    pub tag: &'static str,
-    pub name: &'static str,
-    pub series: &'static [&'static str],
-    pub shows: &'static [&'static str],
-}
-
-pub static FOLDERS: [Folder; 3] = [
-    Folder {
-        tag: "church",
-        name: "Crossroads Church",
-        series: &["jhms", "main", "hsm", "jhm", "cya"],
-        shows: &[],
-    },
-    Folder {
-        tag: "cbu",
-        name: "CBU",
-        series: &[],
-        shows: &["mb"],
-    },
-    Folder {
-        tag: "recitals",
-        name: "Recitals",
-        series: &[],
-        shows: &["jt"],
-    },
-];
-
-pub fn show_folder(id: &str) -> Option<&'static Folder> {
-    FOLDERS.iter().find(|f| f.shows.contains(&id))
-}
-
-/// Shows pinned to the sidebar.
-pub const PINNED: [&str; 2] = ["jt", "mb"];
-
 // ── Rigs ────────────────────────────────────────────────────────────────────
 
 pub struct Rig {
@@ -853,16 +772,6 @@ pub fn mine(occ_id: &str) -> Option<&'static Rig> {
         "jhms_2026-12-06",
     ];
     MINE.contains(&occ_id).then(|| rig("Guitar")).flatten()
-}
-
-/// Your sets from today on, soonest first.
-pub fn my_sets() -> Vec<&'static Occ> {
-    let mut v: Vec<_> = OCC
-        .iter()
-        .filter(|o| o.date.from_today() >= 0 && o.mine().is_some())
-        .collect();
-    v.sort_by_key(|o| o.date);
-    v
 }
 
 // ── Art ─────────────────────────────────────────────────────────────────────
@@ -1546,19 +1455,4 @@ pub fn sec_short(n: &str) -> String {
         .replace("Bridge", "B")
         .replace("Intro", "In")
         .replace("Outro", "Out")
-}
-
-/// A set's songs, whichever kind of set it is.
-pub fn set_songs(id: &str) -> Vec<Song> {
-    occ(id)
-        .map(|o| o.songs.clone())
-        .or_else(|| show(id).map(Show::songs))
-        .unwrap_or_default()
-}
-
-pub fn set_title(id: &str) -> String {
-    occ(id)
-        .map(|o| format!("{} · {}", o.series.name, o.date.short()))
-        .or_else(|| show(id).map(|s| s.title.to_string()))
-        .unwrap_or_default()
 }

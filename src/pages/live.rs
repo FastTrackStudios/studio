@@ -26,10 +26,6 @@ pub fn Lyrics(id: String) -> Element {
 #[component]
 fn SheetView(id: String, what: &'static str, says: &'static str) -> Element {
     let app = use_app();
-    use_hook({
-        let id = id.clone();
-        move || app.enter_set(&id)
-    });
     let following = app.sync.following();
     rsx! {
         section { class: "page",
@@ -58,21 +54,25 @@ fn SheetView(id: String, what: &'static str, says: &'static str) -> Element {
 fn SongHead(id: String) -> Element {
     let app = use_app();
     let l = (app.live)();
-    let songs = data::set_songs(&id);
-    let Some(x) = songs.get(l.song).or(songs.first()).copied() else {
+    let songs = (app.live_list)();
+    let Some(x) = songs.get(l.song).or(songs.first()).cloned() else {
         return rsx! {};
     };
-    let k = if data::occ(&id).is_some() {
-        app.key_in(&id, l.song, &x)
-    } else {
-        x.key
-    };
-    let d = match (x.key, k) {
-        (Some(o), Some(k)) if o != k && data::occ(&id).is_some() => data::steps(o, k),
+    let k = x.key.clone();
+    let d = match (&x.own_key, &k) {
+        (Some(o), Some(k)) if o != k => data::steps(o, k),
         _ => 0,
     };
     let sign = if d > 0 { "+" } else { "−" };
-    let back = Route::set(&id);
+    let set = (app.live_set)();
+    let back = if set.id == id && set.owner != (app.here)() {
+        Route::OrgSet {
+            owner: set.owner.clone(),
+            id: id.clone(),
+        }
+    } else {
+        Route::set(&id)
+    };
     let n = songs.len();
     let cur = SECS[l.sec];
     let nbars = BARS[l.sec];
@@ -89,10 +89,10 @@ fn SongHead(id: String) -> Element {
             span { class: "nn", "{l.song + 1}/{n}" }
             span { class: "t1", "{x.title}" }
             span { class: "nk",
-                b { "{k.unwrap_or(\"\")}" }
+                b { "{k.clone().unwrap_or_default()}" }
                 if d != 0 {
                     " "
-                    small { "{sign}{d.abs()} from {x.key.unwrap_or(\"\")}" }
+                    small { "{sign}{d.abs()} from {x.own_key.clone().unwrap_or_default()}" }
                 }
                 if let Some(t) = x.tempo {
                     " · {t} bpm"

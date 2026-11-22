@@ -1,23 +1,21 @@
-//! Live sets on Drive, the local-first sync: a set's keys and arrangements
-//! shared by everyone who has it open, who is here and which song they are
-//! on, the chart following whoever pressed Play first, and the set's date
-//! and rehearsals in Drive's calendar (the spine).
+//! Live sets on Drive, the local-first sync: who is in a set and which
+//! entry they have open, the chart following whoever pressed Play first,
+//! and the calendar (the spine) the sets put their dates in. The set
+//! itself is its document (`sets`); this is the room around it.
 //!
 //! Drive's client is the browser's, so this is the web build's; the
 //! desktop and the phone keep the app's memory alone (the same API, doing
 //! nothing).
 
-use crate::data::{Occ, Rehearsal};
-use crate::state::Override;
 
 /// Someone else in this set, and the song they have open, if any.
 #[derive(Clone, PartialEq, Debug)]
 pub struct Viewer {
     pub name: String,
     pub hue: u32,
-    /// The song (its place in the set) whose key or arrangement they have open.
-    pub row: Option<usize>,
-    /// `key` or `arr`.
+    /// The entry (its id) they have open.
+    pub row: Option<String>,
+    /// `key`, `arr` or `entry`.
     pub edit: Option<String>,
 }
 
@@ -30,7 +28,6 @@ pub use local::*;
 #[cfg(feature = "web")]
 mod web {
     use dioxus::prelude::*;
-    use drive_dioxus::loro::{LoroDoc, LoroMap, LoroValue, ValueOrContainer};
     use drive_dioxus::ui::{Avatars, ConnectionStatus};
     use drive_dioxus::{Doc, DriveCtx, DriveProvider, Presence, use_doc, use_drive};
     use drive_spine as spine;
@@ -39,44 +36,7 @@ mod web {
     use super::*;
     use crate::Route;
     use crate::data;
-    use crate::state::{Live, Sheet, use_app};
-
-    /// The document a set lives in.
-    fn doc_id(set: &str) -> String {
-        format!("studio:set:{set}")
-    }
-
-    /// A key or an arrangement read back from a document, as the app's own.
-    fn known_key(k: &str) -> Option<&'static str> {
-        data::FIFTHS.iter().copied().find(|x| *x == k)
-    }
-
-    fn known_arr(a: &str) -> Option<&'static str> {
-        data::ARRS.iter().map(|x| x.0).find(|x| *x == a)
-    }
-
-    /// The calendar event of a week's set.
-    fn set_event(o: &Occ) -> spine::Event {
-        let pl = o.series.place();
-        spine::Event {
-            id: doc_id(&o.id),
-            title: format!("{} · set", o.name()),
-            app: "studio".into(),
-            link: format!("/studio/set/{}", o.id),
-            date: o.date.iso(),
-            time: pl.map_or(String::new(), |p| p.starts.to_string()),
-            place: pl.map_or(String::new(), |p| p.room.to_string()),
-        }
-    }
-
-    /// The inbox task a set with empty slots asks for.
-    fn plan_task(o: &Occ) -> Option<String> {
-        let n = o.series.size.saturating_sub(o.songs.len());
-        (n > 0).then(|| {
-            let songs = if n == 1 { "song" } else { "songs" };
-            format!("Plan {n} more {songs} for {}, {}", o.name(), o.date.short())
-        })
-    }
+    use crate::state::{Live, SetRef, Sheet, use_app};
 
     /// Drive, as the app reaches it: the spine, the open set's document,
     /// and whose transport the chart follows.
@@ -109,23 +69,6 @@ mod web {
             }
         }
 
-        /// Share a song's key and arrangement in a set with everyone in it.
-        pub fn put_override(self, set: &str, i: usize, o: Override) {
-            let Some(doc) = self.set.peek().clone().filter(|d| d.id == doc_id(set)) else {
-                return;
-            };
-            doc.edit(|d| {
-                if let Ok(m) = d.get_map("songs").ensure_mergeable_map(&i.to_string()) {
-                    if let Some(k) = o.key {
-                        let _ = m.insert("key", k);
-                    }
-                    if let Some(a) = o.arr {
-                        let _ = m.insert("arr", a);
-                    }
-                }
-            });
-        }
-
         /// Everyone else in the open set, live.
         pub fn viewers(self) -> Vec<Viewer> {
             let Some(doc) = (self.set)() else {
@@ -143,59 +86,27 @@ mod web {
             self.following.peek().is_some()
         }
 
-        /// Put a week's set in Drive's calendar, and ask the inbox for the
-        /// songs it is short of. Says what it did.
-        pub fn add_to_calendar(self, o: &Occ) -> String {
-            let Some(doc) = self.spine.peek().clone() else {
-                return "Not connected to Drive".into();
-            };
-            let by = self
-                .drive
-                .peek()
-                .as_ref()
-                .map(|c| c.me.peek().name.clone())
-                .unwrap_or_default();
-            let event = set_event(o);
-            let link = event.link.clone();
-            let task = plan_task(o);
-            doc.edit(|d| {
-                spine::put_event(d, &event);
-                if let Some(t) = &task
-                    && !spine::tasks(d)
-                        .iter()
-                        .any(|x| !x.done && x.link == link && &x.title == t)
-                {
-                    spine::add_task(d, t, "studio", &link, &by);
-                }
-            });
-            match task {
-                Some(_) => "Added to the calendar, and a task to plan the rest".into(),
-                None => "Added to the calendar".into(),
-            }
-        }
-
-        /// Put a booked rehearsal in Drive's calendar.
-        pub fn book(self, r: &Rehearsal) {
+        /// Put events in the calendar of the org Studio is in (only those
+        /// that differ: each edit is sent).
+        pub fn put_events(self, events: &[spine::Event]) {
             let Some(doc) = self.spine.peek().clone() else {
                 return;
             };
-            let name = data::occ(&r.set).map_or_else(|| r.set.clone(), |o| o.name());
-            let date = r.date.iso();
+            let have = spine::events(&doc.peek());
+            let want: Vec<&spine::Event> = events
+                .iter()
+                .filter(|e| !have.contains(e))
+                .collect();
+            if want.is_empty() {
+                return;
+            }
             doc.edit(|d| {
-                spine::put_event(
-                    d,
-                    &spine::Event {
-                        id: format!("studio:reh:{}:{date}:{}", r.set, r.time),
-                        title: format!("Rehearsal · {name}"),
-                        app: "studio".into(),
-                        link: format!("/studio/set/{}", r.set),
-                        date: date.clone(),
-                        time: r.time.clone(),
-                        place: r.room.clone(),
-                    },
-                );
+                for e in want {
+                    spine::put_event(d, e);
+                }
             });
         }
+
     }
 
     /// Connects to Drive (the node this page came from) around the app.
@@ -267,14 +178,17 @@ mod web {
         }
     }
 
-    /// A set's live document while one of its pages is open (keyed by the
-    /// set, so a new set is a new room): its keys and arrangements into the
-    /// app, where you are out to the others, and the leader's transport in.
+    /// A set's room while one of its pages is open (keyed by the set, so a
+    /// new set is a new room): where you are out to the others, and the
+    /// leader's transport in. The room is the set's own document.
     #[component]
-    pub fn SetRoom(id: String, view: &'static str) -> Element {
+    pub fn SetRoom(set: SetRef, view: &'static str) -> Element {
         let app = use_app();
-        let ctx = use_drive();
-        let doc = use_doc(doc_id(&id));
+        let doc = use_doc(crate::orgs::qualified(
+            &set.owner,
+            &crate::setlist::setlist_doc(&set.id),
+        ));
+        let id = set.id.clone();
         let mut following = app.sync.following;
         // When you pressed Play yourself (ms), while you lead.
         let mut started = use_signal(|| None::<f64>);
@@ -294,22 +208,6 @@ mod web {
                     s.set(None);
                     following.set(None);
                 }
-                ctx.drive.close(&doc.id);
-            }
-        });
-
-        // The document's keys and arrangements, into the app's.
-        use_effect({
-            let doc = doc.clone();
-            let id = id.clone();
-            move || {
-                let found = overrides(&doc.loro());
-                let mut ov = app.ov;
-                ov.with_mut(|m| {
-                    for (i, o) in found {
-                        m.insert((id.clone(), i), o);
-                    }
-                });
             }
         });
 
@@ -363,9 +261,13 @@ mod web {
                     started.set(None);
                 }
                 let (row, edit) = match sheet {
-                    Some(Sheet::Key(s, i)) if s == id => (Some(i), Some("key")),
-                    Some(Sheet::Arr(s, i)) if s == id => (Some(i), Some("arr")),
-                    _ => (None, None),
+                    Some(Sheet::Key(s, e)) if s.id == id => (Some(e), Some("key")),
+                    Some(Sheet::Arr(s, e)) if s.id == id => (Some(e), Some("arr")),
+                    Some(Sheet::Entry(s, e)) if s.id == id => (Some(e), Some("entry")),
+                    _ => match (app.picked)() {
+                        Some(e) => (Some(e), Some("entry")),
+                        None => (None, None),
+                    },
                 };
                 let live = (*started.peek()).map(|since| {
                     json!({ "song": l.song, "sec": l.sec, "bar": l.bar, "playing": l.playing, "since": since })
@@ -413,42 +315,13 @@ mod web {
             row: p
                 .data
                 .get("row")
-                .and_then(Value::as_u64)
-                .map(|r| r as usize),
+                .and_then(Value::as_str)
+                .map(str::to_string),
             edit: p
                 .data
                 .get("edit")
                 .and_then(Value::as_str)
                 .map(str::to_string),
-        }
-    }
-
-    /// A set document's songs: `songs` maps a song's place to its key and arrangement.
-    fn overrides(d: &LoroDoc) -> Vec<(usize, Override)> {
-        let songs = d.get_map("songs");
-        songs
-            .keys()
-            .filter_map(|k| {
-                let i = k.parse().ok()?;
-                let m = match songs.get(&k) {
-                    Some(ValueOrContainer::Container(c)) => c.into_map().ok()?,
-                    _ => return None,
-                };
-                Some((
-                    i,
-                    Override {
-                        key: text(&m, "key").and_then(|k| known_key(&k)),
-                        arr: text(&m, "arr").and_then(|a| known_arr(&a)),
-                    },
-                ))
-            })
-            .collect()
-    }
-
-    fn text(m: &LoroMap, k: &str) -> Option<String> {
-        match m.get(k) {
-            Some(ValueOrContainer::Value(LoroValue::String(v))) => Some(v.to_string()),
-            _ => None,
         }
     }
 
@@ -477,7 +350,6 @@ mod local {
         pub fn new() -> Self {
             Self
         }
-        pub fn put_override(self, _set: &str, _i: usize, _o: Override) {}
         pub fn switch_org(self, _org: &str) -> bool {
             false
         }
@@ -490,10 +362,7 @@ mod local {
         pub fn is_following(self) -> bool {
             false
         }
-        pub fn add_to_calendar(self, _o: &Occ) -> String {
-            "The calendar is Drive's, on the web".into()
-        }
-        pub fn book(self, _r: &Rehearsal) {}
+        pub fn put_events(self, _events: &[drive_spine::Event]) {}
     }
 
     #[component]
@@ -507,8 +376,8 @@ mod local {
     }
 
     #[component]
-    pub fn SetRoom(id: String, view: &'static str) -> Element {
-        let _ = (id, view);
+    pub fn SetRoom(set: crate::state::SetRef, view: &'static str) -> Element {
+        let _ = (set, view);
         rsx! {}
     }
 

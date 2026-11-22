@@ -2,6 +2,7 @@
 
 pub mod home;
 pub mod library;
+pub mod print;
 pub mod live;
 pub mod orgs;
 pub mod records;
@@ -13,36 +14,72 @@ pub mod song;
 use dioxus::prelude::*;
 
 use crate::Route;
-use crate::data::{self, Occ, Rehearsal};
+use crate::data;
 use crate::icons::{I, Icon};
 use crate::pieces::{DayTile, Progress};
-use crate::state::{Booking, Sheet, use_app};
+use crate::setlist::{Face, Info};
+use crate::state::{Booking, SetRef, Sheet, use_app};
+
+/// Where a set opens: its page in the org Studio is in, else its org's.
+pub fn set_route(owner: &str, id: &str, here: &str) -> Route {
+    if owner == here {
+        Route::SetPage { id: id.into() }
+    } else {
+        Route::OrgSet {
+            owner: owner.into(),
+            id: id.into(),
+        }
+    }
+}
 
 /// A set in an agenda: its day, its logo, where and when the band is called.
 #[component]
-pub fn OccRow(id: String, #[props(default = VNode::empty())] state: Element) -> Element {
-    let Some(o) = data::occ(&id) else {
-        return rsx! {};
-    };
-    let pl = o.series.place();
+pub fn FaceRow(
+    face: Face,
+    #[props(default)] owner: Option<String>,
+    #[props(default = VNode::empty())] state: Element,
+) -> Element {
+    let here = (use_app().here)();
+    let owner = owner.unwrap_or_else(|| here.clone());
+    let route = set_route(&owner, &face.id, &here);
+    let logo = data::logo(&face.series).or_else(|| data::art(&face.id));
     rsx! {
         button {
             class: "ag",
             onclick: move |_| {
-                navigator().push(Route::set(&id));
+                navigator().push(route.clone());
             },
-            DayTile { day: o.date }
-            if let Some(l) = data::logo(o.series.id) {
+            if let Some(d) = face.day() {
+                DayTile { day: d }
+            } else {
+                span { class: "cal tpl",
+                    Icon { name: I::Layers, size: 18 }
+                }
+            }
+            if let Some(l) = logo {
                 img { class: "aglogo", src: l, alt: "" }
+            } else {
+                span { class: "aglogo",
+                    crate::pieces::Cover { title: face.title.clone(), size: 36, hue: face.hue }
+                }
             }
             span { class: "mid",
-                span { class: "t1", "{o.series.name}" }
+                span { class: "t1", "{face.title}" }
                 span { class: "s1",
-                    Icon { name: I::Mappin, size: 11, w: 2.0 }
-                    "{pl.map_or(\"\", |p| p.room)}"
-                    if let Some(p) = pl {
+                    if !face.place.is_empty() {
+                        Icon { name: I::Mappin, size: 11, w: 2.0 }
+                        "{face.place}"
+                    }
+                    if !face.call.is_empty() {
                         " · "
-                        b { class: "agcall", "Call {p.call}" }
+                        b { class: "agcall", "Call {face.call}" }
+                    }
+                    if face.place.is_empty() && face.call.is_empty() {
+                        if face.first.is_empty() {
+                            "No songs yet"
+                        } else {
+                            "{face.first.join(\", \")}"
+                        }
                     }
                 }
             }
@@ -53,23 +90,26 @@ pub fn OccRow(id: String, #[props(default = VNode::empty())] state: Element) -> 
 
 /// A rehearsal in an agenda.
 #[component]
-pub fn RehRow(r: Rehearsal) -> Element {
-    let name = data::occ(&r.set).map_or("", |o| o.series.name);
-    let set = r.set.clone();
+pub fn RehRow(face: Face, r: crate::setlist::Rehearsal) -> Element {
+    let here = (use_app().here)();
+    let route = set_route(&here, &face.id, &here);
+    let Some(day) = crate::setlist::parse_day(&r.date) else {
+        return rsx! {};
+    };
     rsx! {
         button {
             class: "ag reh",
             onclick: move |_| {
-                navigator().push(Route::set(&set));
+                navigator().push(route.clone());
             },
-            DayTile { day: r.date }
+            DayTile { day }
             span { class: "rehic",
                 Icon { name: I::Mic, size: 17, w: 2.0 }
             }
             span { class: "mid",
                 span { class: "t1",
                     "Rehearsal "
-                    span { class: "rfor", "· {name}" }
+                    span { class: "rfor", "· {face.title}" }
                 }
                 span { class: "s1", "{r.room} · {r.time}" }
             }
@@ -81,9 +121,10 @@ pub fn RehRow(r: Rehearsal) -> Element {
 }
 
 /// The readiness of a set, as its ring.
-pub fn progress_of(o: &Occ) -> Element {
+pub fn progress_of(f: &Face) -> Element {
+    let of = if f.size == 0 { f.songs.max(1) } else { f.size };
     rsx! {
-        Progress { n: o.songs.len(), of: o.series.size }
+        Progress { n: f.songs, of }
     }
 }
 
@@ -105,16 +146,32 @@ pub fn BookButton() -> Element {
     }
 }
 
-/// Book a rehearsal for a given set.
-pub fn book_for(app: crate::state::AppState, o: &Occ) {
+/// Book a rehearsal for a given set: the day before it, at seven.
+pub fn book_for(app: crate::state::AppState, set: &SetRef, info: &Info) {
     let mut b = app.booking;
+    let date = info.day();
     b.set(Some(Booking {
-        set: o.id.clone(),
-        day: o.date.from_today().max(1) as usize - 1,
+        set: set.clone(),
+        title: info.title.clone(),
+        date,
+        day: date.map_or(1, |d| (d.from_today() - 1).max(0) as usize),
         time: "7:00 PM",
-        room: o.series.place().map_or("Room 210", |p| p.room),
+        room: if info.place.is_empty() {
+            "Room 210"
+        } else {
+            leak_room(&info.place)
+        },
     }));
     app.open(Sheet::Book);
+}
+
+/// The rooms the booking sheet offers are fixed strings; a set's own
+/// place is kept to one of them when it is one.
+fn leak_room(place: &str) -> &'static str {
+    ["Room 210", "Chapel", "Worship Center", "The Loft", "Studio A", "Recital Hall"]
+        .into_iter()
+        .find(|r| *r == place)
+        .unwrap_or("Room 210")
 }
 
 /// The org switcher's button.

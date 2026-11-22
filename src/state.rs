@@ -5,7 +5,33 @@ use std::collections::{HashMap, HashSet};
 
 use dioxus::prelude::*;
 
-use crate::data::{self, Rehearsal, Song, Version};
+use crate::data::{self, Song, Version};
+
+/// A set, in the org that owns it.
+#[derive(Clone, PartialEq, Debug, Default)]
+pub struct SetRef {
+    pub owner: String,
+    pub id: String,
+}
+
+impl SetRef {
+    pub fn new(owner: &str, id: &str) -> Self {
+        SetRef {
+            owner: owner.into(),
+            id: id.into(),
+        }
+    }
+}
+
+/// A song of the set Chart and Lyrics follow.
+#[derive(Clone, PartialEq, Debug, Default)]
+pub struct LiveSong {
+    pub title: String,
+    /// The key it is played in, and its own.
+    pub key: Option<String>,
+    pub own_key: Option<String>,
+    pub tempo: Option<u32>,
+}
 
 /// A bottom sheet (or the top search sheet) over the page.
 #[derive(Clone, PartialEq, Debug)]
@@ -14,10 +40,25 @@ pub enum Sheet {
     Palette,
     /// The player, from the Now Playing bar.
     Player,
-    /// A song's key in a set: the set's id and the song's place.
-    Key(String, usize),
+    /// A song's key in a set: the set and the entry's id.
+    Key(SetRef, String),
     /// A song's arrangement in a set.
-    Arr(String, usize),
+    Arr(SetRef, String),
+    /// An entry of a set: everything about it (a phone's editor; a
+    /// desktop's is the set page's inspector).
+    Entry(SetRef, String),
+    /// Add songs from the library, or an item, to a set.
+    AddSongs(SetRef),
+    /// Who plays a set, and what.
+    Band(SetRef),
+    /// A set's details: its title, date, times, place, who leads it.
+    SetInfo(SetRef),
+    /// Share a set with other orgs.
+    ShareSet(SetRef),
+    /// A set as plain text, to copy or print.
+    Export(SetRef),
+    /// A new set (for a recurring event, when one is given).
+    NewSet(Option<String>),
     /// More for this set: arrangement, mixer, lighting.
     More,
     /// Book a rehearsal.
@@ -37,7 +78,6 @@ pub enum Sheet {
 /// A ⋯ menu from the page's bar.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Menu {
-    NewSet,
     SetMenu,
     Series,
     Occ,
@@ -59,13 +99,6 @@ impl NowPlaying {
     pub fn song(&self) -> Option<&Song> {
         self.list.get(self.i)
     }
-}
-
-/// What a set changes on a song: its key and arrangement.
-#[derive(Clone, Copy, Default, PartialEq, Debug)]
-pub struct Override {
-    pub key: Option<&'static str>,
-    pub arr: Option<&'static str>,
 }
 
 /// What the filters look at in a song, from the built-in list or the library.
@@ -195,7 +228,11 @@ impl Filters {
 /// The rehearsal being booked.
 #[derive(Clone, PartialEq, Debug)]
 pub struct Booking {
-    pub set: String,
+    pub set: SetRef,
+    /// The set's title and date, to say what is booked.
+    pub title: String,
+    pub date: Option<data::Day>,
+    /// Days from today.
     pub day: usize,
     pub time: &'static str,
     pub room: &'static str,
@@ -232,11 +269,8 @@ pub struct AppState {
     pub menu: Signal<Option<Menu>>,
     pub toast: Signal<Option<(u32, String)>>,
     pub np: Signal<Option<NowPlaying>>,
-    pub ov: Signal<HashMap<(String, usize), Override>>,
-    pub reh: Signal<Vec<Rehearsal>>,
     pub booking: Signal<Option<Booking>>,
     pub filters: Signal<Filters>,
-    pub folder: Signal<Option<&'static str>>,
     /// What the pages show: one org's (`Some`, the org Studio is in) or
     /// every org's at once (`None`, All orgs).
     pub org: Signal<Option<String>>,
@@ -252,8 +286,11 @@ pub struct AppState {
     pub versions: Signal<HashMap<&'static str, Vec<Version>>>,
     pub stages: Signal<HashMap<String, usize>>,
     pub live: Signal<Live>,
-    /// The set whose chart and lyrics `live` follows.
-    pub live_set: Signal<String>,
+    /// The set whose chart and lyrics `live` follows, and its songs.
+    pub live_set: Signal<SetRef>,
+    pub live_list: Signal<Vec<LiveSong>>,
+    /// The entry the set page's inspector shows (a desktop's).
+    pub picked: Signal<Option<String>>,
     /// Drive: the sets shared live, presence, the calendar (web only).
     pub sync: crate::live_sync::Sync,
 }
@@ -274,11 +311,8 @@ impl AppState {
                 playing: false,
                 pos: 0.35,
             })),
-            ov: Signal::new(HashMap::new()),
-            reh: Signal::new(data::first_rehearsals()),
             booking: Signal::new(None),
             filters: Signal::new(Filters::default()),
-            folder: Signal::new(None),
             org: Signal::new(Some(FIRST_ORG.to_string())),
             here: Signal::new(FIRST_ORG.to_string()),
             orgs: Signal::new(
@@ -300,7 +334,9 @@ impl AppState {
                 click: false,
                 looping: false,
             }),
-            live_set: Signal::new(String::new()),
+            live_set: Signal::new(SetRef::default()),
+            live_list: Signal::new(Vec::new()),
+            picked: Signal::new(None),
             sync: crate::live_sync::Sync::new(),
         }
     }
@@ -317,9 +353,10 @@ impl AppState {
     }
 
     /// Follow a set's chart and lyrics, from its first song when it is a new one.
-    pub fn enter_set(mut self, id: &str) {
-        if *self.live_set.peek() != id {
-            self.live_set.set(id.to_string());
+    pub fn enter_set(mut self, set: &SetRef) {
+        if *self.live_set.peek() != *set {
+            self.live_set.set(set.clone());
+            self.picked.set(None);
             self.live.with_mut(|l| {
                 l.song = 0;
                 l.sec = 1;
@@ -357,31 +394,11 @@ impl AppState {
         }));
     }
 
-    /// Change a song's key in a set, here and for everyone in it.
-    pub fn set_key(self, set: &str, i: usize, k: &'static str) {
-        self.put(set, i, |o| o.key = Some(k));
-    }
-
-    /// Change a song's arrangement in a set, here and for everyone in it.
-    pub fn set_arr(self, set: &str, i: usize, a: &'static str) {
-        self.put(set, i, |o| o.arr = Some(a));
-    }
-
-    fn put(self, set: &str, i: usize, f: impl FnOnce(&mut Override)) {
-        let mut ov = self.ov;
-        let o = ov.with_mut(|m| {
-            let o = m.entry((set.to_string(), i)).or_default();
-            f(o);
-            *o
-        });
-        self.sync.put_override(set, i, o);
-    }
-
     /// Move a playing chart on by a bar: through the section (again, when
     /// looping), then the next section and the next song.
     pub fn step_bar(self) {
         let mut live = self.live;
-        let n = data::set_songs(&self.live_set.peek()).len();
+        let n = self.live_list.peek().len();
         live.with_mut(|l| {
             l.bar += 1;
             if l.bar < data::BARS[l.sec] {
@@ -404,32 +421,14 @@ impl AppState {
 
     /// How long a bar of the chart's song lasts (four beats).
     pub fn bar_ms(&self) -> u64 {
-        let songs = data::set_songs(&self.live_set.peek());
-        let tempo = songs
+        let tempo = self
+            .live_list
+            .peek()
             .get(self.live.peek().song)
             .and_then(|s| s.tempo)
             .unwrap_or(120)
             .max(40);
         240_000 / tempo as u64
-    }
-
-    /// The key a set plays a song in.
-    pub fn key_in(&self, set: &str, i: usize, x: &Song) -> Option<&'static str> {
-        self.ov
-            .read()
-            .get(&(set.to_string(), i))
-            .and_then(|o| o.key)
-            .or_else(|| data::key_default(set, i))
-            .or(x.key)
-    }
-
-    /// The arrangement a set plays a song in.
-    pub fn arr_in(&self, o: &data::Occ, i: usize) -> &'static str {
-        self.ov
-            .read()
-            .get(&(o.id.clone(), i))
-            .and_then(|x| x.arr)
-            .unwrap_or_else(|| data::arr_default(o, i))
     }
 
     /// A track's stage, after any change.
