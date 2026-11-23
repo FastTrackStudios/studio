@@ -117,6 +117,7 @@ pub struct Place {
 
 /// The playing song's audio, as the player found it.
 #[derive(Clone, PartialEq, Debug, Default)]
+#[cfg_attr(not(feature = "web"), allow(dead_code))]
 pub enum Source {
     /// Nothing looked for (a build without Drive plays nothing).
     #[default]

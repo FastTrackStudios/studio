@@ -1,14 +1,22 @@
-//! Where Studio keeps what it keeps, natively: one folder per user,
-//! `<config dir>/fasttrackstudio/studio` (`$XDG_CONFIG_HOME` or
-//! `~/.config` on Linux, `~/Library/Application Support` on macOS,
-//! `%APPDATA%` on Windows). Studio works without Drive: its sets, songs and
-//! the org it used last are copies in this folder, read back on the next
-//! start and sent to a node when one answers. With Drive installed, the
-//! folder can be one of Drive's locations, synced like any other.
+//! Where Studio keeps things, natively: one plain folder, its home
+//! (`docs/storage.md`). Its sets are `.setlist` files in
+//! `<home>/Setlists`; its songs folders in `<home>/Songs` (or wherever a
+//! set's lines point); edit them by hand and Studio follows. The home is,
+//! in order: `STUDIO_HOME`; `home = "…"` in
+//! `<config dir>/fasttrackstudio/studio.toml`; `~/Drive/Studio` when the
+//! Drive mount is there; `<config dir>/fasttrackstudio/Studio`
+//! (`$XDG_CONFIG_HOME` or `~/.config` on Linux, `~/Library/Application
+//! Support` on macOS, `%APPDATA%` on Windows). Without Drive it is an
+//! ordinary folder, used the same way.
 //!
-//! Every path Studio writes goes through here, so a store of plain files
-//! (a set a file, a song a folder) can take the documents' place behind
-//! this module without the pages knowing.
+//! Drive's client keeps its copies of documents (the app's own state, not
+//! for editing) apart from the home, in
+//! `<config dir>/fasttrackstudio/studio-app/drive`.
+//!
+//! Every path Studio reads or writes is found through here.
+
+// A browser has no disk: what reads and writes it is the native build's.
+#![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -16,13 +24,63 @@ use std::time::Instant;
 
 static START: OnceLock<Instant> = OnceLock::new();
 
-/// Studio's folder: `STUDIO_DATA_DIR` when set (a second instance, a
-/// test), else the platform's config folder's `fasttrackstudio/studio`.
+/// The app's own state (Drive's copies), not for editing:
+/// `STUDIO_DATA_DIR` when set (a second instance, a test).
 pub fn dir() -> Option<PathBuf> {
     if let Some(d) = std::env::var_os("STUDIO_DATA_DIR").filter(|v| !v.is_empty()) {
         return Some(PathBuf::from(d));
     }
-    config_dir().map(|c| c.join("fasttrackstudio").join("studio"))
+    config_dir().map(|c| c.join("fasttrackstudio").join("studio-app"))
+}
+
+/// The home: where the sets and songs are (see the module's doc).
+pub fn home() -> Option<PathBuf> {
+    if let Some(d) = std::env::var_os("STUDIO_HOME").filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(d));
+    }
+    let config = config_dir()?.join("fasttrackstudio");
+    if let Some(h) = std::fs::read_to_string(config.join("studio.toml"))
+        .ok()
+        .and_then(|t| home_setting(&t))
+    {
+        return Some(expand_home(&h));
+    }
+    let mount = std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Drive").join("Studio"));
+    if let Some(m) = mount.filter(|m| m.is_dir()) {
+        return Some(m);
+    }
+    Some(config.join("Studio"))
+}
+
+/// `home = "…"` in the settings file (a line of TOML; nothing else is read).
+fn home_setting(toml: &str) -> Option<String> {
+    toml.lines()
+        .find_map(|l| {
+            let (k, v) = l.split_once('=')?;
+            (k.trim() == "home")
+                .then(|| v.trim().trim_matches(|c| c == '"' || c == '\'').to_string())
+        })
+        .filter(|v| !v.is_empty())
+}
+
+fn expand_home(p: &str) -> PathBuf {
+    match (p.strip_prefix("~/"), std::env::var_os("HOME")) {
+        (Some(rest), Some(h)) => PathBuf::from(h).join(rest),
+        _ => PathBuf::from(p),
+    }
+}
+
+/// `<home>/Setlists`: one `.setlist` file a set.
+pub fn setlists() -> Option<PathBuf> {
+    home().map(|r| r.join("Setlists"))
+}
+
+/// A path in the home as a path on disk: an absolute one as it is.
+pub fn resolve(path: &str) -> Option<PathBuf> {
+    if path.starts_with('/') {
+        return Some(PathBuf::from(path));
+    }
+    home().map(|r| r.join(path))
 }
 
 fn config_dir() -> Option<PathBuf> {
@@ -66,6 +124,16 @@ mod tests {
             return;
         }
         let d = super::dir().expect("a home");
-        assert!(d.ends_with("fasttrackstudio/studio"), "{}", d.display());
+        assert!(d.ends_with("fasttrackstudio/studio-app"), "{}", d.display());
+    }
+
+    #[test]
+    fn the_home_setting() {
+        assert_eq!(
+            super::home_setting("# Studio\nhome = \"/home/me/Drive/Studio\"\n").as_deref(),
+            Some("/home/me/Drive/Studio")
+        );
+        assert_eq!(super::home_setting("theme = 'dark'\n"), None);
+        assert_eq!(super::home_setting("home = ''"), None);
     }
 }

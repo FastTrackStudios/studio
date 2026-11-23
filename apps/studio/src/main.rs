@@ -26,9 +26,11 @@ mod trace;
 // The browser build engraves charts and reads setlist files from Drive.
 #[cfg_attr(not(feature = "drive"), allow(dead_code))]
 mod chart_sync;
-#[cfg_attr(not(feature = "drive"), allow(dead_code))]
+#[cfg_attr(not(feature = "web"), allow(dead_code))]
 mod reference;
 mod session_file;
+#[cfg(feature = "drive")]
+mod set_files;
 mod set_sheets;
 #[cfg_attr(not(feature = "drive"), allow(dead_code))]
 mod setfile;
@@ -36,6 +38,7 @@ mod setlist;
 mod sets;
 mod sheets;
 mod shell;
+mod song_ids;
 mod songs;
 mod state;
 mod team;

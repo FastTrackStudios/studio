@@ -153,13 +153,40 @@ pub fn Shell() -> Element {
             }
             v
         };
+        // Drive's, found once; Studio's own folder's, read again every two
+        // seconds natively (a file added or edited by hand shows up).
+        let mut from_drive = use_signal(|| None::<Vec<crate::files::Hit>>);
+        let mut on_disk = use_signal(Vec::<crate::files::Hit>::new);
         use_effect(use_reactive!(|spaces| {
-            let mut sets = app.drive_sets;
             spawn(async move {
                 let found = crate::drive_sets::files_in(&spaces).await;
-                sets.set(Some(found));
+                from_drive.set(Some(found));
             });
         }));
+        use_future(move || async move {
+            if cfg!(target_arch = "wasm32") {
+                return;
+            }
+            loop {
+                let found = crate::drive_sets::on_disk(&app.here.peek());
+                if *on_disk.peek() != found {
+                    on_disk.set(found);
+                }
+                crate::state::sleep_ms(2000).await;
+            }
+        });
+        use_effect(move || {
+            let (disk, drive) = (on_disk(), from_drive());
+            let mut sets = app.drive_sets;
+            // On disk at once; from Drive once it answers.
+            if drive.is_none() && disk.is_empty() && cfg!(target_arch = "wasm32") {
+                return;
+            }
+            sets.set(Some(crate::drive_sets::merge(
+                &disk,
+                &drive.unwrap_or_default(),
+            )));
+        });
     }
 
     // The playheads move while playing.
@@ -330,9 +357,7 @@ pub fn Shell() -> Element {
                         }
                     }
                     main { class: "stage", Outlet::<Route> {} }
-                    if cfg!(feature = "web") {
-                        PlayerHost {}
-                    }
+                    PlayerHost {}
                     crate::actions::ActionHost {}
                     MenuView {}
                 }
@@ -836,7 +861,16 @@ fn PlayerHost() -> Element {
             crate::player::Player {}
         }
     }
-    #[cfg(not(feature = "web"))]
+    // Natively: no player yet (the engine will play); the sets and their
+    // files kept in step, and the playing song's sections from its session.
+    #[cfg(all(feature = "drive", not(feature = "web")))]
+    {
+        rsx! {
+            crate::set_files::Sync {}
+            crate::set_files::Sections {}
+        }
+    }
+    #[cfg(not(any(feature = "web", feature = "drive")))]
     {
         rsx! {}
     }

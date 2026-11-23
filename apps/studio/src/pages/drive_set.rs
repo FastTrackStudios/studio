@@ -50,8 +50,31 @@ fn Loaded(space: String, location: String, path: String) -> Element {
 fn Loaded(space: String, location: String, path: String) -> Element {
     let app = use_app();
     let spaces = spaces();
-    let set = use_resource(use_reactive!(|space, location, path| {
+    // A file on disk: read again when it changes (edited by hand) or when
+    // Drive has found charts for it.
+    let mut version = use_signal(|| (0_i64, 0_usize));
+    {
+        let (location, path, spaces) = (location.clone(), path.clone(), spaces.clone());
+        use_future(move || {
+            let (location, path, spaces) = (location.clone(), path.clone(), spaces.clone());
+            async move {
+                if location != crate::files::DISK {
+                    return;
+                }
+                loop {
+                    let v = crate::drive_sets::disk_version(&path, &spaces);
+                    if *version.peek() != v {
+                        version.set(v);
+                    }
+                    crate::state::sleep_ms(2000).await;
+                }
+            }
+        });
+    }
+    let v = version();
+    let set = use_resource(use_reactive!(|space, location, path, v| {
         let spaces = spaces.clone();
+        let _ = v;
         async move { crate::drive_sets::load(&space, &location, &path, &spaces).await }
     }));
     let Some(res) = set() else {

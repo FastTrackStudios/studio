@@ -39,6 +39,9 @@ use drive_files::projects::{self, Part};
 
 /// A part's location when it is in the org's Drive tree (an upload).
 pub const TREE: &str = "drive";
+/// Studio's own folder on this computer (`crate::storage::root`): a hit's
+/// path is in it, or absolute.
+pub const DISK: &str = "studio-disk";
 
 /// The Drive project that holds a song's files.
 pub fn song_project(id: &str) -> String {

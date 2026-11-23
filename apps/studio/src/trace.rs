@@ -258,6 +258,7 @@ mod native {
         }
 
         /// The app's own start has no navigation to date it from.
+        #[allow(dead_code)]
         pub fn starting_at_navigation(self) -> Span {
             self
         }

@@ -460,6 +460,9 @@ pub mod web {
         location: &str,
         path: &str,
     ) -> Vec<Hit> {
+        if location == files::DISK {
+            return disk::list(space, path);
+        }
         let url = format!(
             "/list?space={}&location={}&path={}",
             enc(space),
@@ -605,6 +608,9 @@ pub mod web {
     /// seeks): the node's copy when it keeps one, else the computer that
     /// has it, through the node.
     pub fn file_url(h: &Hit) -> String {
+        if h.location == files::DISK {
+            return disk::url(&h.path);
+        }
         absolute(drive_dioxus::mount::api(&match &h.available {
             Some(hash) if !hash.is_empty() => format!("/blobs/{hash}?name={}", enc(&h.name)),
             _ => format!(
@@ -659,6 +665,9 @@ pub mod web {
         url: &str,
         body: Option<&[u8]>,
     ) -> Result<(u16, Vec<u8>), String> {
+        if let Some(r) = disk::bytes(url) {
+            return r;
+        }
         let mut span = call_span(parent, method, url);
         let r = bytes_raw(method, url, body, &span.traceparent()).await;
         match &r {
@@ -749,6 +758,77 @@ pub mod web {
         match bytes("PUT", &format!("/blobs/{hash}"), Some(b)).await? {
             (200..=299, _) => Ok(hash),
             (s, _) => Err(format!("the node refused it ({s})")),
+        }
+    }
+}
+
+/// Files in Studio's own folder (`files::DISK`), read from the disk: a
+/// native build's sets and charts without Drive. A browser has none.
+#[cfg_attr(not(feature = "drive"), allow(dead_code))]
+pub mod disk {
+    use super::*;
+
+    const SCHEME: &str = "file://";
+
+    /// A disk file's URL: `file://` and its path.
+    pub fn url(path: &str) -> String {
+        match crate::storage::resolve(path) {
+            Some(p) => format!("{SCHEME}{}", p.display()),
+            None => format!("{SCHEME}{path}"),
+        }
+    }
+
+    /// A `file://` URL's bytes (`None`: not a disk URL).
+    pub fn bytes(url: &str) -> Option<Result<(u16, Vec<u8>), String>> {
+        let path = url.strip_prefix(SCHEME)?;
+        Some(
+            std::fs::read(path)
+                .map(|b| (200, b))
+                .map_err(|e| format!("{path}: {e}")),
+        )
+    }
+
+    /// A folder's entries (a path in the root, or absolute), as hits.
+    pub fn list(space: &str, path: &str) -> Vec<Hit> {
+        let Some(dir) = crate::storage::resolve(path) else {
+            return Vec::new();
+        };
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            return Vec::new();
+        };
+        let mut out: Vec<Hit> = rd
+            .flatten()
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().into_owned();
+                let md = e.metadata().ok()?;
+                Some(hit(
+                    space,
+                    &format!("{}/{name}", path.trim_end_matches('/')),
+                    &md,
+                ))
+            })
+            .collect();
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        out
+    }
+
+    fn hit(space: &str, path: &str, md: &std::fs::Metadata) -> Hit {
+        let mtime = md
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_millis() as i64);
+        Hit {
+            space: space.into(),
+            location: files::DISK.into(),
+            location_name: "Studio".into(),
+            online: true,
+            path: path.into(),
+            name: path.rsplit('/').next().unwrap_or(path).into(),
+            dir: md.is_dir(),
+            size: md.len() as i64,
+            mtime,
+            ..Default::default()
         }
     }
 }

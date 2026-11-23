@@ -161,7 +161,7 @@ fn FromDrive(space: String) -> Element {
         return rsx! {};
     }
     rsx! {
-        div { class: "dayhead", "In Drive" }
+        div { class: "dayhead", "Setlist files" }
         div { class: "agenda",
             for h in list {
                 button {
