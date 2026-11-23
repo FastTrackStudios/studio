@@ -266,13 +266,6 @@ mod imp {
         "Shows `view` of the session: overview, chart, lyrics, editor, arrangement, mixer, fx or setup."
     );
     meta!(
-        MIXER_WINDOW,
-        "STUDIO_MIXER_WINDOW",
-        "The mixer's window",
-        "Session",
-        "Opens the mixer in a window of its own (from the session): the mixer extension's view, Studio's mixer on the engine's song."
-    );
-    meta!(
         ENGINE,
         "STUDIO_ENGINE",
         "The engine",
@@ -460,7 +453,6 @@ mod imp {
             forward::<SessionArgs>(&list, &SESSION_OPEN, M, true);
             forward::<()>(&list, &SESSION_CLOSE, M, false);
             forward::<ViewArgs>(&list, &SESSION_VIEW, M, true);
-            forward::<()>(&list, &MIXER_WINDOW, M, false);
             let scripting = architect_scripting::actions::Scripting::new(
                 list.clone(),
                 architect_scripting::Library::new(architect_scripting::MemoryStore::default()),
@@ -927,10 +919,6 @@ mod imp {
                 let to = crate::session::route(v);
                 navigator().push(to.clone());
                 Ok(json!({ "route": to.to_string() }))
-            }
-            "STUDIO_MIXER_WINDOW" => {
-                crate::hosted::open_mixer_in_session()?;
-                Ok(json!({ "window": crate::hosted::MIXER }))
             }
             "STUDIO_ENGINE" => Ok(json!({
                 "status": format!("{:?}", (app.engine)()),

@@ -173,6 +173,22 @@ fn drivable(f: &Found) -> bool {
     alive(f) && serves_its_own(f)
 }
 
+/// The daw extension's program (`daw-extension`), as the engine is found
+/// (`FTS_DAW_ENGINE_BIN`, beside the app, its build's `target/`).
+pub fn daw_extension_bin() -> Option<PathBuf> {
+    std::env::var_os("FTS_DAW_ENGINE_BIN")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| {
+            let saved = std::env::var_os("FTS_STUDIO_BIN");
+            // The finder below, without `FTS_STUDIO_BIN` (another program).
+            if saved.is_some() {
+                return None;
+            }
+            engine_program().map(|(bin, _)| bin)
+        })
+}
+
 /// The program that is the engine, and its arguments.
 fn engine_program() -> Option<(PathBuf, Vec<String>)> {
     let env = |k: &str| {

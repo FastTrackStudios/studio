@@ -37,6 +37,7 @@ mod chart_sync;
 mod reference;
 mod session;
 mod session_file;
+// The session's Stage: its three windows' layout (natively).
 #[cfg(feature = "drive")]
 mod set_files;
 mod set_sheets;
@@ -48,6 +49,8 @@ mod sheets;
 mod shell;
 mod song_ids;
 mod songs;
+#[cfg(feature = "native")]
+mod stage;
 mod state;
 mod team;
 
@@ -210,6 +213,8 @@ fn main() {
         popout,
         app_shell_native::Config {
             title: "Studio".to_owned(),
+            // What the window manager's rules match (Loft's: `^Studio$`).
+            app_id: Some("Studio".to_owned()),
             size: (1440.0, 900.0),
             system_decorations: false,
             // `shot <path.png>` on $XDG_RUNTIME_DIR/app-shell/studio.sock:
@@ -221,14 +226,19 @@ fn main() {
     dioxus::launch(App);
 }
 
-/// The session's pop-out windows (the mixer's): a window of the session's
-/// layout, drawing its extension view as the main window does.
+/// The session's other windows (the Stage's lighting and chart): windows
+/// of the session's layout, drawing their extension views as the main
+/// window does.
 #[cfg(feature = "native")]
 fn popout(id: app_shell::WindowId) -> Element {
     // A document of its own, without the app's sheets: sized inline.
     rsx! {
         div { style: "position:absolute; top:0; left:0; width:100vw; height:100vh; display:flex; flex-direction:column;",
-            app_shell_extensions::ExtensionPopout { window: id, theme: crate::shell::theme() }
+            app_shell_extensions::ExtensionPopout {
+                window: id,
+                theme: crate::shell::theme(),
+                tabs: app_shell::ui::Tabs::On,
+            }
         }
     }
 }

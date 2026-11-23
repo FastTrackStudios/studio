@@ -436,6 +436,10 @@ architect-extensions = { git = "https://github.com/FastTrackStudios/architect", 
 # the Builder (`BuilderExt::view`, `::paint`), its process side
 # (`guest::GuestExt`), its pane (`pane::use_pane_state`), `PaintPane`.
 architect-extensions-dioxus = { git = "https://github.com/FastTrackStudios/architect", branch = "strip/application-framework" }
+# The view kinds a host takes (`KindSpec::process()`: a pane another
+# program draws) and the process-view panes that draw them (Ignition's room).
+architect-views = { git = "https://github.com/FastTrackStudios/architect", branch = "strip/application-framework" }
+architect-process-view = { git = "https://github.com/FastTrackStudios/architect", branch = "strip/application-framework" }
 # A WASI component's guest side (Studio's island, features/island).
 architect-extension-wasi = { git = "https://github.com/FastTrackStudios/architect", branch = "strip/application-framework" }
 architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", branch = "strip/application-framework" }

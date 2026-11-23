@@ -36,10 +36,12 @@ pub enum View {
     Mixer,
     Fx,
     Setup,
+    /// Ignition's room: the show's lighting, following the song.
+    Lighting,
 }
 
 impl View {
-    pub const ALL: [View; 8] = [
+    pub const ALL: [View; 9] = [
         View::Overview,
         View::Chart,
         View::Lyrics,
@@ -48,6 +50,7 @@ impl View {
         View::Mixer,
         View::Fx,
         View::Setup,
+        View::Lighting,
     ];
 
     pub fn slug(self) -> &'static str {
@@ -60,6 +63,7 @@ impl View {
             View::Mixer => "mixer",
             View::Fx => "fx",
             View::Setup => "setup",
+            View::Lighting => "lighting",
         }
     }
 
@@ -73,6 +77,7 @@ impl View {
             View::Mixer => "Mixer",
             View::Fx => "FX",
             View::Setup => "Setup",
+            View::Lighting => "Lighting",
         }
     }
 
@@ -215,7 +220,7 @@ pub fn page(slug: String) -> Element {
                 b { "{other.name()}" }
                 p { class: "pline",
                     if cfg!(feature = "native") {
-                        "Not in this Studio yet: the arrangement, lyrics, chart, overview and mixer are."
+                        "Not in this Studio yet: the arrangement, lyrics, chart, lighting, overview and mixer are."
                     } else {
                         "The session's views are the desktop app's for now; the chart and the overview are here."
                     }
@@ -286,13 +291,17 @@ mod native {
             View::Mixer => Ui::Mixer,
             View::Fx => Ui::Fx,
             View::Setup => Ui::Setup,
+            // No button of its own in session-ui's bar: Performance, which
+            // this app has none of, stands for it while it shows.
+            View::Lighting => Ui::Performance,
         }
     }
 
     /// session-ui's view as the app's (Performance is the overview here).
     pub(super) const fn of_ui(v: Ui) -> View {
         match v {
-            Ui::Performance | Ui::Overview => View::Overview,
+            Ui::Performance => View::Lighting,
+            Ui::Overview => View::Overview,
             Ui::Chart => View::Chart,
             Ui::Lyrics => View::Lyrics,
             Ui::Editor => View::Editor,
@@ -303,13 +312,33 @@ mod native {
         }
     }
 
-    /// The pane view `v` is shown in: its extension's when it has one.
-    fn kind_of(v: View) -> &'static str {
+    /// The app's own page the main window shows for view `v`, when it is
+    /// not one of the Stage's (the arrangement and mixer, the chart and
+    /// lyrics, the lighting: always on show in their windows).
+    fn page_for(v: View) -> Option<app_shell::Pane> {
         match v {
-            View::Arrangement => hosted::ARRANGEMENT,
-            View::Lyrics => hosted::LYRICS,
-            _ => hosted::PAGE,
+            View::Arrangement | View::Mixer | View::Chart | View::Lyrics | View::Lighting => None,
+            other => {
+                let mut pane = app_shell::Pane::new(
+                    format!("{}:{}", hosted::PAGE, other.slug()),
+                    hosted::PAGE,
+                    other.name(),
+                );
+                pane.state = other.slug().to_owned();
+                Some(pane)
+            }
         }
+    }
+
+    /// The Stage for `view`, its chart on `followed`'s session.
+    fn stage_for(view: View, set: &str, followed: Option<&hosted::Followed>) -> Workspace {
+        let names = crate::stage::Names {
+            set: set.to_owned(),
+            chart_state: followed
+                .map(|f| format!("session:{}", f.id))
+                .unwrap_or_default(),
+        };
+        crate::stage::stage(crate::stage::Area::default(), &names, page_for(view))
     }
 
     /// The engine's set, as session-ui's song tabs read it (a signal of
@@ -340,10 +369,15 @@ mod native {
     pub fn Session(view: View, title: String) -> Element {
         let app = use_app();
         hosted::use_engine_link();
-        let layout = use_signal(Workspace::new);
+        // The Stage: three windows (main, lighting, chart), all opened
+        // with the session.
+        let layout = use_signal(|| stage_for(view, &title, None));
         let ui = use_extension_ui(hosted::host(), layout);
-        use_hook(move || hosted::set_session(Some((ui, layout))));
-        use_drop(|| hosted::set_session(None));
+        // Process views (Ignition's room) drawn in the window's panes.
+        use_context_provider({
+            let views = architect_process_view::extension::use_process_views(hosted::host());
+            move || views
+        });
         // What session-ui's bars and panels read, as the old Session
         // window gave it them: the mode, the pins, touch, the set, the
         // mixer's memory, the close-ups, the lyrics' choice, and Back.
@@ -355,38 +389,56 @@ mod native {
         use_context_provider(session_ui::lyrics_panel::LyricsChoice::new);
         use_context_provider(|| session_ui::shell::Back(Callback::new(move |()| leave(app))));
         use_engine_setlist();
+        // Keyflow's chart and Ignition's room follow the engine's song.
+        let followed = hosted::use_follow_session(ui, layout);
         // The bottom bar's view: the route's, and a press there goes to
-        // its route (the mixer opens its window and the view stays).
+        // its route (the mixer is beside the arrangement: the view stays).
         let mut shown = use_signal(|| to_ui(view));
-        use_effect(use_reactive!(|view| {
+        let set_title = title.clone();
+        use_effect(use_reactive!(|view, set_title| {
             if *shown.peek() != to_ui(view) {
                 shown.set(to_ui(view));
             }
-            let v = view;
-            hosted::show(ui, layout, hosted::pane_for(kind_of(v), v.slug(), v.name()));
+            // The main window's centre: the Stage's, or the app's page;
+            // the other windows as they are.
+            let want = page_for(view).map(|p| p.id);
+            let now = layout
+                .peek()
+                .windows
+                .first()
+                .and_then(app_shell::Window::first_group)
+                .and_then(|g| g.current_tab().cloned());
+            let on_page = now.as_ref().is_some_and(|p| p.0.starts_with(hosted::PAGE));
+            if want != now.filter(|_| on_page) {
+                let next = stage_for(view, &set_title, followed.peek().as_ref());
+                ui.apply(move |w| {
+                    *w = next;
+                    Ok::<_, app_shell::WorkspaceError>(())
+                });
+            }
         }));
         use_effect(move || {
             let asked = shown();
+            // The mixer is in the main window, beside the arrangement.
             if asked == Ui::Mixer {
-                if let Err(e) = hosted::open_mixer(ui, layout) {
-                    app.say(e);
-                }
                 shown.set(to_ui(view));
                 return;
             }
-            if of_ui(asked) != view {
+            if asked != to_ui(view) {
                 navigator().replace(route(of_ui(asked)));
             }
         });
         let kinds = hosted::kinds(ui, super::page);
         rsx! {
+            document::Title { "Studio — {title}" }
             div { class: "window",
                 AppShell {
                     theme: use_hook(crate::shell::theme),
                     title: title.clone(),
                     layout,
                     kinds,
-                    tabs: Tabs::Off,
+                    // The Stage's splits (its groups bare: no tab bars).
+                    tabs: Tabs::On,
                     top_bar: rsx! {
                         TopBar { title: title.clone() }
                     },
@@ -410,7 +462,10 @@ mod native {
     /// the window's own controls).
     #[component]
     fn SetBar(ui: ExtensionUi) -> Element {
-        use_top_bar_span("studio/setlist", BarSpan::Middle, move || {
+        // The center (between the title and the trailing items): the whole
+        // middle (`BarSpan::Middle`) beside the tab tools panics
+        // dioxus-vdom's placement on the next diff once tabs are on.
+        use_top_bar_span("studio/setlist", BarSpan::Center, move || {
             rsx! {
                 SessionTop {}
             }

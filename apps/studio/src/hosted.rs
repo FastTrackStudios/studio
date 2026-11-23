@@ -1,8 +1,10 @@
 //! The session's views are Studio's real extensions, linked into the app
-//! and hosted by app-shell-extensions: `studio.arrangement` (the main
-//! view, a pane of the session's layout), `studio.mixer` (a window of its
-//! own), `studio.lyrics` and `studio.navigator`. Each is a Studio window
-//! on the engine (`studio_view_link`): the song read through the window
+//! and hosted by app-shell-extensions in the panes of the session's
+//! Stage (`crate::stage`): `studio.arrangement`, `studio.mixer`,
+//! `studio.navigator`'s progress bar, `studio.lyrics`, Keyflow's chart
+//! (the live editor, its note-input toolbar on its pane) and Ignition's
+//! room and cue list. Studio's own views are each a Studio window on the
+//! engine (`studio_view_link`): the song read through the window
 //! protocol's replicas, its edits and transport sent back, the same panels
 //! the old Session window drew.
 //!
@@ -13,7 +15,7 @@
 use std::sync::OnceLock;
 
 use app_shell::ui::{TabCtx, TabKind, TabKinds};
-use app_shell::{Pane, PaneId, Rect, Target, Workspace};
+use app_shell::{PaneId, Workspace};
 use app_shell_extensions::ExtensionUi;
 use architect_extensions::extensions::Extensions;
 use architect_extensions::host::{Host, SharedSections};
@@ -21,37 +23,13 @@ use architect_extensions::install::Installs;
 use architect_settings::Registry;
 use dioxus::prelude::*;
 
-/// The arrangement's tab kind: `<extension>/<view>`.
-pub const ARRANGEMENT: &str = "studio.arrangement/arrangement";
-/// The mixer's.
-pub const MIXER: &str = "studio.mixer/mixer";
-/// The lyrics'.
-pub const LYRICS: &str = "studio.lyrics/lyrics";
-/// The session's own pages (the chart, the overview, the views not yet
-/// an extension), drawn by the app: the pane's state is the view's slug.
+use crate::stage::CHART;
+
+/// The session's own pages (the overview, the views not yet an
+/// extension), drawn by the app: the pane's state is the view's slug.
 pub const PAGE: &str = "studio.page";
 
 static EXTENSIONS: OnceLock<Extensions> = OnceLock::new();
-
-thread_local! {
-    /// The session's window while it is open: its extensions' UI and its
-    /// layout, for the actions that open its windows.
-    static SESSION: std::cell::Cell<Option<(ExtensionUi, Signal<Workspace>)>> =
-        const { std::cell::Cell::new(None) };
-}
-
-/// The session's window is `ui` over `layout` (or gone, `None`).
-pub fn set_session(now: Option<(ExtensionUi, Signal<Workspace>)>) {
-    SESSION.with(|s| s.set(now));
-}
-
-/// Opens the mixer's window from the open session (`STUDIO_MIXER_WINDOW`).
-pub fn open_mixer_in_session() -> Result<(), String> {
-    let (ui, layout) = SESSION
-        .with(std::cell::Cell::get)
-        .ok_or("the mixer's window opens from the session: open one first (STUDIO_SESSION_OPEN)")?;
-    open_mixer(ui, layout)
-}
 
 /// The app's extensions: the session's views, linked in, on the app's
 /// Action List (their actions are the app's, on MCP and the socket).
@@ -64,15 +42,31 @@ pub fn extensions() -> &'static Extensions {
         // never to whichever engine answers first.
         studio_view_link::attach_by_host();
         let host = Host::new(crate::actions::list(), SharedSections::new(Registry::new()));
+        // Views another program draws (Ignition's room), and process
+        // extensions (the engine's `daw`), run by a runner of their own.
+        let mut kinds = host.view_kinds();
+        if let Err(e) = kinds.register(architect_views::KindSpec::process()) {
+            tracing::warn!(error = %e, "studio: no process views");
+        }
+        let host = host.with_view_kinds(kinds);
+        let host = match architect_extensions::process::ProcessRunner::new() {
+            Ok(runner) => host.with_runner(runner),
+            Err(e) => {
+                tracing::warn!(error = %e, "studio: no process extensions");
+                host
+            }
+        };
         let installs = crate::storage::config_dir()
             .unwrap_or_else(std::env::temp_dir)
             .join("fts")
             .join("studio-extensions");
-        let linked: [&dyn architect_extensions::linked::Extension; 4] = [
+        let linked: [&dyn architect_extensions::linked::Extension; 6] = [
             &studio_arrangement::Arrangement,
             &studio_mixer::Mixer,
             &studio_lyrics::Lyrics,
             &studio_navigator::Navigator,
+            &keyflow_extension::Keyflow,
+            &ignition_pane::ext::Lighting,
         ];
         let mut ext = Extensions::new(host, Installs::new(installs));
         for one in linked {
@@ -84,9 +78,142 @@ pub fn extensions() -> &'static Extensions {
                 }
             };
         }
-        let _ = ext.sync();
+        tell(&ext.sync());
+        // The engine's own extension, `daw`, as the process it is: it
+        // provides `fts.session` for the song the engine has (its one
+        // file), which Keyflow's chart and Ignition's cues keep their data
+        // in, and leads its transport.
+        match daw_package() {
+            Ok(dir) => {
+                tell(&ext.dev(dir));
+                ext.host().use_provider("fts.session", Some("daw"));
+            }
+            Err(e) => tracing::warn!(error = %e, "studio: the daw extension is not here"),
+        }
         ext
     })
+}
+
+/// What loading the extensions did, a failure as one warning each.
+fn tell(events: &[architect_extensions::host::Event]) {
+    for event in events {
+        match event {
+            architect_extensions::host::Event::Failed { id, error } => {
+                tracing::warn!(ext.id = %id, error = %error, "studio: an extension did not load");
+            }
+            architect_extensions::host::Event::Loaded(change) => {
+                tracing::info!(ext.id = %change.id, "studio: extension loaded");
+            }
+            architect_extensions::host::Event::Unloaded { .. } => {}
+        }
+    }
+}
+
+/// The daw extension's package: its manifest and its program
+/// (`daw-extension`, as the engine is found), in Studio's folder.
+fn daw_package() -> Result<std::path::PathBuf, String> {
+    const MANIFEST: &str = include_str!("../../../extensions/daw/extension.toml");
+    let bin = crate::engine::daw_extension_bin().ok_or("no daw-extension program")?;
+    let dir = crate::storage::config_dir()
+        .ok_or("no config folder")?
+        .join("fts")
+        .join("studio-extensions")
+        .join("dev")
+        .join("daw");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("extension.toml"), MANIFEST).map_err(|e| e.to_string())?;
+    let link = dir.join("daw-extension");
+    let _ = std::fs::remove_file(&link);
+    std::os::unix::fs::symlink(&bin, &link).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+/// The song's session as the engine's daw extension has it (`DAW_STATE`'s
+/// `session`): its document's id and the address its transport is led
+/// from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Followed {
+    pub id: String,
+    pub url: String,
+    pub path: String,
+}
+
+async fn run(id: &str, args: serde_json::Value) -> Result<serde_json::Value, String> {
+    let out = crate::actions::list()
+        .run_json_async(id, args.to_string().as_bytes())
+        .await
+        .map_err(|e| e.to_string())?;
+    serde_json::from_slice(&out).map_err(|e| e.to_string())
+}
+
+/// Keyflow's chart and Ignition's room follow the song the engine has:
+/// told again (`KEYFLOW_SESSION_FOLLOW`, `IGNITION_SESSION_ROOM`) as the
+/// engine goes to another song, and the chart's pane moved to its
+/// session. The signal is the session followed now.
+pub fn use_follow_session(ui: ExtensionUi, layout: Signal<Workspace>) -> Signal<Option<Followed>> {
+    let mut followed = use_signal(|| None::<Followed>);
+    use_future(move || async move {
+        loop {
+            let now = run("DAW_STATE", serde_json::json!({}))
+                .await
+                .ok()
+                .and_then(|s| {
+                    let text = |k: &str| {
+                        s.pointer(&format!("/session/{k}"))
+                            .and_then(serde_json::Value::as_str)
+                            .filter(|t| !t.is_empty())
+                            .map(str::to_owned)
+                    };
+                    Some(Followed {
+                        id: text("id")?,
+                        url: text("url")?,
+                        path: text("path")?,
+                    })
+                });
+            if now.is_some() && now != *followed.peek() {
+                if let Some(f) = &now {
+                    follow(ui, layout, f).await;
+                }
+                followed.set(now);
+            }
+            crate::state::sleep_ms(1000).await;
+        }
+    });
+    followed
+}
+
+async fn follow(ui: ExtensionUi, layout: Signal<Workspace>, f: &Followed) {
+    let mut span = crate::trace::Span::root("studio.session.follow");
+    span.set("studio.session.doc", f.id.clone());
+    match run(
+        "KEYFLOW_SESSION_FOLLOW",
+        serde_json::json!({ "url": f.url, "id": f.id }),
+    )
+    .await
+    {
+        Ok(_) => span.set("studio.follow.chart", "ok"),
+        Err(e) => span.set("studio.follow.chart", e),
+    }
+    let chart = PaneId::new(CHART);
+    if layout.peek().pane(&chart).is_some() {
+        let state = format!("session:{}", f.id);
+        ui.apply(|w| w.navigate(&chart, state));
+    }
+    let song = song_slug(
+        std::path::Path::new(&f.path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("song"),
+    );
+    match run(
+        "IGNITION_SESSION_ROOM",
+        serde_json::json!({ "url": f.url, "doc": f.id, "song": song }),
+    )
+    .await
+    {
+        Ok(_) => span.set("studio.follow.room", "ok"),
+        Err(e) => span.set("studio.follow.room", e),
+    }
 }
 
 /// The host the session's window draws the extensions with.
@@ -131,62 +258,32 @@ pub fn kinds(ui: ExtensionUi, page: fn(String) -> Element) -> TabKinds {
     kinds
 }
 
-/// The pane a session view is shown in: an extension's view, or the app's
-/// page for it (`state` its slug).
-pub fn pane_for(kind: &str, slug: &str, title: &str) -> Pane {
-    if kind == PAGE {
-        let mut pane = Pane::new(format!("{PAGE}:{slug}"), PAGE, title);
-        pane.state = slug.to_owned();
-        pane
-    } else {
-        Pane::new(kind, kind, title)
+/// A song as the lighting's night names it: its title without a trailing
+/// "(…)", lower case, words joined by `-`, nothing else kept ("Heart Isn't
+/// Ready" is `heart-isnt-ready`, "Know Me (Extended)" `know-me`).
+pub fn song_slug(title: &str) -> String {
+    let bare = title.split(" (").next().unwrap_or(title);
+    let mut out = String::new();
+    for c in bare.chars() {
+        if c.is_alphanumeric() {
+            out.extend(c.to_lowercase());
+        } else if (c == ' ' || c == '-' || c == '_') && !out.ends_with('-') && !out.is_empty() {
+            out.push('-');
+        }
     }
+    out.trim_end_matches('-').to_owned()
 }
 
-/// Shows `pane` as the session's one view, in place of what was.
-pub fn show(ui: ExtensionUi, layout: Signal<Workspace>, pane: Pane) {
-    let id = pane.id.clone();
-    let already = layout.peek().pane(&id).is_some();
-    if already {
-        let _ = ui.apply(|w| w.activate(&id));
-    } else {
-        let _ = ui.apply(|w| w.open(pane, Target::Here));
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::song_slug;
 
-/// The mixer, in a window of its own: the mixer extension's view popped
-/// out of the session's layout (app-shell-native opens it as an OS
-/// window, drawn by [`crate::popout`]). A second press brings the one
-/// open forward.
-pub fn open_mixer(ui: ExtensionUi, layout: Signal<Workspace>) -> Result<(), String> {
-    let mut span = crate::trace::Span::root("studio.mixer.window");
-    span.set("studio.window", MIXER);
-    let id = PaneId::new(MIXER);
-    if layout.peek().pane(&id).is_some() {
-        span.set("studio.window.outcome", "shown");
-        ui.apply(|w| w.activate(&id));
-        return Ok(());
+    #[test]
+    fn songs_are_named_as_the_night_names_them() {
+        assert_eq!(song_slug("Drive To LA"), "drive-to-la");
+        assert_eq!(song_slug("Heart Isn't Ready"), "heart-isnt-ready");
+        assert_eq!(song_slug("Know Me (Extended)"), "know-me");
+        assert_eq!(song_slug("7 Nation Army"), "7-nation-army");
+        assert_eq!(song_slug("WORST PART OF YOU"), "worst-part-of-you");
     }
-    let opened = ui.apply(|w| {
-        w.open(
-            Pane::new(MIXER, MIXER, "Mixer"),
-            Target::Window(Some(Rect {
-                x: 160.0,
-                y: 140.0,
-                w: 1280.0,
-                h: 620.0,
-            })),
-        )
-    });
-    span.set(
-        "studio.window.outcome",
-        if opened.is_some() {
-            "opened"
-        } else {
-            "refused"
-        },
-    );
-    opened
-        .map(drop)
-        .ok_or_else(|| "the mixer's window could not open".to_owned())
 }
