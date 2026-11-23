@@ -87,3 +87,59 @@ keys model and planning a shared evaluation taxonomy. Expand the trial
 with independently labeled acoustic piano, electric keys, and dense
 guitar fixtures before choosing a default. BS-RoFormer SW remains a local
 evaluation candidate because the checkpoint's weight terms are unknown.
+
+## Crescendum session with its own accompaniment
+
+The trigger-free REAPER render of “the plague” aligned at zero sample lag
+to the comped kit reference. A separate `Drums` solo render used the same
+timeline, master attenuation, and local plugin configuration. Relative
+to that solo render, the untreated mix was **3.30 dB global SDR** and the
+HTDemucs drum estimate was **10.71 dB**.
+
+| Audio for the same detector | Kick F1 | Snare F1 | Toms F1 |
+| --- | ---: | ---: | ---: |
+| Trigger-free session mix | 0.517 | 0.343 | 0.467 |
+| HTDemucs drum estimate | 0.473 | 0.409 | 0.439 |
+| HTDemucs → LarsNet | 0.507 | 0.434 | 0.556 |
+| HTDemucs → DrumSep six-stem | 0.606 | 0.548 | 0.419 |
+
+DrumSep led on kick and snare. LarsNet led on toms, reversing the
+ranking from the controlled accompaniment test. The numbers are onset
+F1 at ±20 ms. REAPER reported a project load warning on the initial
+attempt. Media was checked and the rerender used the local plugin
+configuration, so the result characterizes this benchmark render.
+
+The second session, “it knows my name,” aligned within one sample and gave
+the model more accompaniment to remove. The untreated mix scored
+**−6.82 dB global SDR** against the drum solo. The HTDemucs drum estimate
+scored **6.87 dB** against the same reference.
+
+| Audio for the same detector | Kick F1 | Snare F1 | Toms F1 |
+| --- | ---: | ---: | ---: |
+| Trigger-free session mix | 0.286 | 0.292 | 0.312 |
+| HTDemucs drum estimate | 0.215 | 0.381 | 0.413 |
+| HTDemucs → LarsNet | 0.537 | 0.387 | 0.357 |
+| HTDemucs → DrumSep six-stem | 0.718 | 0.778 | 0.667 |
+
+DrumSep led kick and snare on both session mixes. The toms result favored
+a different model on each song, so a fixed toms selection needs more
+matched sessions.
+
+## Electric-keys specialist
+
+The digital-piano head improved keys SDR on three matched excerpts.
+Each 20-second mix contains the named electric-keys target and separate
+backing tracks. Values are global SDR in dB.
+
+| Excerpt and target | HTDemucs piano | Digital-piano head | Banquet |
+| --- | ---: | ---: | ---: |
+| A Reason To Leave · electric piano and Rhodes | 0.02 | 4.89 | 0.07 |
+| All Souls Moon · electric piano and Wurlitzer | 1.26 | 6.67 | 0.00 |
+| Queen's Light · two electric pianos | −0.01 | 12.45 | 0.01 |
+
+The median matched improvement over HTDemucs was **5.41 dB**. Banquet used
+one independent electric-keys query per song and a three-second inference
+hop. Those scores characterize that query and inference configuration.
+The digital-piano checkpoint's weight terms remain unresolved. The
+tests use labeled electric-keys groups rather than individual instrument
+outputs within each group.

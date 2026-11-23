@@ -181,3 +181,83 @@ other. Prepare it with
 Use `target/acoustic-pilot/references/angela-song/mix.wav` for both models.
 Keep the same output directory names under `target/acoustic-pilot` and
 pass `--track angela-song` when generating the matched manifest.
+
+## Electric-keys specialists
+
+Build three 20-second electric-keys fixtures from the Cambridge multitracks.
+
+```sh
+.venv/bin/python bench/prepare_keys.py CAMBRIDGE_ROOT target/keys
+```
+
+The target groups are electric piano plus Rhodes on “A Reason To Leave,”
+electric piano plus Wurlitzer on “All Souls Moon,” and two electric piano
+tracks on “Queen's Light.” The latter leaves Hammond and synth tracks in
+the remainder. Each fixture records the exact channel mapping and the
+10-second query from a different recording.
+
+Run HTDemucs six-stem on each fixture's `mix.wav` with output directory
+`htdemucs` inside the fixture. The baseline takes its piano WAV as the key
+estimate. Run `bench/separate_mdxc.py` on the same mix using the
+[digital-piano checkpoint and configuration](https://huggingface.co/noblebarkrr/BS-Roformer-MVSep-Mega-53-stems/tree/main/v1)
+under `bs_mega_53stem_digital-piano_mvsep`, with output directory
+`digital-piano`. This is a community extraction of one Mega 53 head.
+The manifest records the checkpoint and config hashes. Weight terms
+remain unresolved.
+
+For Banquet, use the [upstream runner](https://github.com/kwatcharasupat/query-bandit)
+with the [ev-pre-aug checkpoint](https://zenodo.org/records/13694558).
+The CPU run used Torch and TorchAudio 2.5.1, TorchVision 0.20.1,
+PyTorch Lightning 2.5.0.post0 and TorchMetrics 1.6.1. From the upstream
+checkout set `CONFIG_ROOT=./config` and change
+`config/data/moisesdb-test.yml` to a three-second hop for the existing
+six-second chunk. The upstream half-second hop reflect-padding fails on
+these 20-second inputs. Use `train.py inference_byoq` with
+`--batch_size=1 --use_cuda=False`, the fixture's `mix.wav` and
+`query.wav`, and write `banquet/keys.wav` under each fixture. The
+published Banquet weights are CC BY-NC-SA 4.0.
+
+```sh
+.venv/bin/python bench/score_keys.py target/keys --specialist --banquet
+cargo run --locked -- bench score target/keys/keys-htdemucs-piano-digital-piano-banquet.json \
+  --output target/keys/scores-matched --global-only --python .venv/bin/python
+```
+
+For every system, the remainder is calculated as mixture minus estimated
+keys. Its score measures damage to the rest of the mix at the same target
+choice. It does not measure an independent model output.
+
+## Original Crescendum session cascade
+
+Render a copy of “the plague” comped REAPER project and a second copy
+with the `Drums` folder soloed. The render copy resolves local source
+media to absolute paths. It keeps the original comp, faders and routing,
+mutes seven named trigger tracks, and reduces the master gain by a factor
+of 0.25 to prevent clipping. Both copies use bounds 26–38 seconds.
+
+```sh
+mkdir -p target/crescendum-session/render
+python bench/prepare_reaper.py COMPED.RPP target/crescendum-session/full.RPP \
+  target/crescendum-session/render --bounds 26 38 --master-gain .25 --mute-trigger-tracks
+python bench/prepare_reaper.py COMPED.RPP target/crescendum-session/drums.RPP \
+  target/crescendum-session/render --bounds 26 38 --master-gain .25 --mute-trigger-tracks --solo-track Drums
+```
+
+Render each copy with REAPER 7.86's `-renderproject` option in an isolated
+instance. The test used `-ignoreerrors` after the project opened with a
+load warning. All WAV sources were resolved before render. The local
+plugin configuration may differ from the original studio's, so this is a
+benchmark render of the comped session rather than an approved master.
+
+Copy the two renders as `mix.wav` and `drums.wav` under
+`target/crescendum-session`. Use the same HTDemucs, LarsNet and six-stem
+DrumSep cascade described above. This uses the session's own accompaniment,
+so no cross-song mix preparation is needed. Generate the paired manifest
+with `--session-render --gain 1` and score trigger matching. Run
+`bench/check_session_render.py target/crescendum-session target/crescendum/reference FILE.json`
+to verify peaks, correlation offsets and SDR against the drum-solo render.
+
+Repeat on “it knows my name” using its own comped RPP and the 16–28
+second bounds from the second Rhythm fixture. Keep the output in a
+separate run directory and use `target/crescendum-name/reference` for
+alignment. The trigger-free rendering steps and model settings are the same.
