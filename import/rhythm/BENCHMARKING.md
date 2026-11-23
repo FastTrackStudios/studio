@@ -129,3 +129,43 @@ BPM for identifying half-time and double-time tracking.
 The `fts.hits.adtof-beat-this` detector emits both hits and beats in the same
 response when all three models are cached. Build `rhythm-ext` with
 `--features onnx` and pass the mono input as the `drum_bus` piece.
+
+### D. DSP with neural hit recovery
+
+`fts.hits.adtof-onnx-dsp` takes a `drum_bus` and named close mics. It keeps
+calibrated Kit Fusion detections and adds unmatched neural kick and snare
+candidates, snapped to their own close mic. It skips neural recovery for a
+piece with a healthy trigger. Tom labels come from the close-mic detector.
+
+```bash
+cargo run --release -p rhythm-bench --features onnx -- \
+  --detector fts.hits.adtof-onnx-dsp --mode mic-only --out benchmarks/adtof-onnx-dsp.json
+```
+
+### E. Render a drum edit
+
+Use `RHYTHM_PLACE_HITS` to move selected IDs, or `RHYTHM_QUANTIZE_PLAN` to
+generate moves on a constant-tempo grid. The quantizer accepts `grid_origin_s`
+and `group_window_ms`. The default 12 ms window moves nearby hits together,
+preserving their recorded spacing. A manual pin carries its offset to nearby
+unpinned hits.
+
+Send the returned plan and an aligned interleaved WAV to `RHYTHM_RENDER_PLAN`
+on `fts-rhythm serve`. For quantization, pass the response's `plan` member.
+Use a new output path.
+
+```json
+{
+  "id": 3,
+  "action": "RHYTHM_RENDER_PLAN",
+  "params": {
+    "plan": {},
+    "input_wav": "aligned-kit.wav",
+    "output_wav": "edited-kit.wav"
+  }
+}
+```
+
+The renderer writes one 32-bit float WAV. Slip segments copy the source.
+Stretched segments use shared waveform search offsets and overlap weights for
+every channel. This command provides an offline WAV preview for the edit plan.

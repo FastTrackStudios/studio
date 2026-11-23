@@ -189,15 +189,6 @@ pub fn plan_hybrid(
     };
     let pieces = place(&placement_hits, span, cut);
 
-    // Map each piece back to whether any hit inside it requested explicit Stretch.
-    let explicit_stretch_hits: Vec<(f64, f64)> = sorted_hits
-        .iter()
-        .filter_map(|h| {
-            let m = move_map.get(h.id.as_str())?;
-            (m.mode == HitEditMode::Stretch).then_some((h.at, m.target_time))
-        })
-        .collect();
-
     let mut segments = Vec::with_capacity(pieces.len() * 2);
     let mut unclosed_gaps = 0usize;
     let mut max_stretch_ratio = 1.0_f64;
@@ -208,15 +199,20 @@ pub fn plan_hybrid(
         let has_prev = idx > 0;
         let has_next = idx + 1 < pieces.len();
 
-        // Check if this piece contains a hit explicitly pinned to Stretch mode
-        // AND actually moved relative to its neighbour.
-        let piece_forced_stretch = explicit_stretch_hits
-            .iter()
-            .any(|&(at, _)| at >= src_start - 1e-6 && at <= src_end + 1e-6);
+        let contains_mode = |mode| sorted_hits.iter().any(|hit| {
+            hit.at >= src_start - 1e-6 && hit.at <= src_end + 1e-6
+                && move_map.get(hit.id.as_str()).is_some_and(|m| m.mode == mode)
+        });
+        let piece_forced_stretch = contains_mode(HitEditMode::Stretch);
+        let piece_strategy = if contains_mode(HitEditMode::SlipOnly) {
+            EditStrategy::SlipOnly
+        } else {
+            policy.strategy
+        };
 
         let gap_end = p.drawn_to.filter(|&to| to > p.end + policy.max_natural_gap_s);
 
-        match (gap_end, policy.strategy) {
+        match (gap_end, piece_strategy) {
             (Some(target_end), EditStrategy::Hybrid) => {
                 // Find the last recorded hit inside this piece so we keep its
                 // attack + `transient_protect_s` 100% unstretched.
@@ -597,4 +593,48 @@ mod tests {
         assert!((snare.target_time - 1.035).abs() < 1e-9);
         assert_eq!(snare.mode, HitEditMode::SlipOnly);
     }
+}
+
+/// Position of a constant-tempo grid and the maximum spread of a grouped attack.
+#[derive(Clone, Copy, Debug)]
+pub struct QuantizeGrid {
+    pub bpm: f64,
+    pub subdivision: u32,
+    pub origin_s: f64,
+    pub strength: f64,
+    pub tolerance_s: f64,
+    pub group_window_s: f64,
+}
+
+/// Move nearby attacks by a shared offset so quantizing two drums played
+/// together preserves their recorded timing difference.
+pub fn quantize_grouped(
+    hits: &[RecordedHit],
+    grid: QuantizeGrid,
+    pins: &[HitMove],
+) -> Vec<HitMove> {
+    let mut hits: Vec<_> = hits.iter().collect();
+    hits.sort_by(|a, b| a.at.total_cmp(&b.at).then(a.id.cmp(&b.id)));
+    let pins: HashMap<_, _> = pins.iter().map(|pin| (pin.id.as_str(), pin)).collect();
+    let step = 60.0 / grid.bpm / f64::from(grid.subdivision);
+    let mut moves = Vec::new();
+    let mut hits = hits.as_slice();
+    while let Some(first) = hits.first() {
+        let count = hits.partition_point(|hit| hit.at - first.at <= grid.group_window_s);
+        let (group, later) = hits.split_at(count.max(1));
+        let relative = first.at - grid.origin_s;
+        let delta = (relative / step).round() * step - relative;
+        let shift = group.iter()
+            .find_map(|hit| pins.get(hit.id.as_str()).map(|pin| pin.target_time - hit.at))
+            .unwrap_or_else(|| if delta.abs() <= grid.tolerance_s { 0.0 } else { delta * grid.strength });
+        for hit in group {
+            if let Some(pin) = pins.get(hit.id.as_str()) {
+                moves.push((*pin).clone());
+            } else if shift.abs() > 1e-6 {
+                moves.push(HitMove { id: hit.id.clone(), target_time: hit.at + shift, mode: HitEditMode::Auto });
+            }
+        }
+        hits = later;
+    }
+    moves
 }

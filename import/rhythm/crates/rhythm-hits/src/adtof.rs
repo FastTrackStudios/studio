@@ -296,3 +296,96 @@ fn nearest_gate<'a>(
         .filter(|(_, _, at)| at.abs_diff(nominal) <= window)
         .min_by_key(|(_, _, at)| at.abs_diff(nominal))
 }
+
+/// Keep calibrated close-mic hits and recover missing kick/snare hits from the bus.
+pub(crate) struct AdtofDspDetector {
+    neural: AdtofDetector,
+}
+
+impl Default for AdtofDspDetector {
+    fn default() -> Self {
+        Self {
+            neural: AdtofDetector::bus(),
+        }
+    }
+}
+
+impl HitDetector for AdtofDspDetector {
+    fn info(&self) -> DetectorInfo {
+        let mut info = crate::registry::KitFusionDetector.info();
+        info.id = "fts.hits.adtof-onnx-dsp".into();
+        info.name = "ADTOF + Kit Fusion".into();
+        info.description = "Calibrated close-mic hits with neural kick and snare recovery.".into();
+        info
+    }
+
+    fn detect(&self, input: &DetectorInput<'_>) -> DetectorOutput {
+        self.try_detect(input).unwrap_or_else(|error| {
+            eprintln!("{error}");
+            self.neural.empty_output(input.sample_rate)
+        })
+    }
+
+    fn try_detect(&self, input: &DetectorInput<'_>) -> Result<DetectorOutput, String> {
+        if !input.pieces.iter().any(|p| p.name == "drum_bus") {
+            return Err("ADTOF + Kit Fusion requires drum_bus and named close mics".into());
+        }
+        let pieces: Vec<_> = input
+            .pieces
+            .iter()
+            .filter(|piece| CLOSE_MICS.iter().any(|(name, _)| *name == piece.name))
+            .map(|piece| crate::registry::PieceInput {
+                name: piece.name.clone(),
+                mic: piece.mic,
+                trigger: piece.trigger,
+            })
+            .collect();
+        if pieces.is_empty() {
+            return Err("ADTOF + Kit Fusion requires at least one close mic".into());
+        }
+
+        let mut output = crate::registry::KitFusionDetector.try_detect(&DetectorInput {
+            pieces: &pieces,
+            ..*input
+        })?;
+        let neural = self.neural.try_detect(input)?;
+        for (index, mut hit) in neural.hits.into_iter().enumerate() {
+            if !matches!(hit.piece.as_str(), "kick" | "snare") {
+                continue;
+            }
+            let Some(piece) = pieces.iter().find(|piece| piece.name == hit.piece) else {
+                continue;
+            };
+            if output
+                .pieces
+                .iter()
+                .any(|summary| summary.piece == hit.piece && summary.method == "trigger+mic")
+            {
+                continue;
+            }
+            let nominal = samples(hit.at, input.sample_rate);
+            if nominal >= piece.mic.len() {
+                continue;
+            }
+            let at = attack_start(piece.mic, input.sample_rate, nominal);
+            hit.at = seconds(at, input.sample_rate);
+            if output.hits.iter().any(|existing| {
+                existing.piece == hit.piece && (existing.at - hit.at).abs() <= 0.020
+            }) {
+                continue;
+            }
+            hit.id = format!("adtof:{}#{index}", hit.piece);
+            hit.peak_db = db(f64::from(attack_peak(piece.mic, input.sample_rate, at)));
+            if let Some(summary) = output.pieces.iter_mut().find(|s| s.piece == hit.piece) {
+                summary.hit_count += 1;
+                summary.method = "kit-fusion+adtof".into();
+            }
+            output.hits.push(hit);
+        }
+        output
+            .hits
+            .sort_by(|a, b| a.at.total_cmp(&b.at).then(a.id.cmp(&b.id)));
+        output.detector_id = self.info().id;
+        Ok(output)
+    }
+}

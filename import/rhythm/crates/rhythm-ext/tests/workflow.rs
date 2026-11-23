@@ -146,6 +146,44 @@ fn process_extension_stdio_rpc_detect_and_hybrid_edit() {
     assert_eq!(plan["audit"]["unclosed_gaps"], 0);
     assert_eq!(plan["audit"]["tail_stretch_segments"], 0);
 
+    let group_path = dir.join("phase-group.wav");
+    let render_path = dir.join("edited.wav");
+    let spec = hound::WavSpec {
+        channels: 2,
+        sample_rate: sr,
+        bits_per_sample: 32,
+        sample_format: hound::SampleFormat::Float,
+    };
+    let mut writer = hound::WavWriter::create(&group_path, spec).unwrap();
+    for &sample in &snare_mic {
+        writer.write_sample(sample).unwrap();
+        writer.write_sample(sample * 0.5).unwrap();
+    }
+    writer.finalize().unwrap();
+    let render = call(5, "RHYTHM_RENDER_PLAN", json!({
+        "plan": plan,
+        "input_wav": group_path,
+        "output_wav": render_path,
+    }));
+    assert_eq!(render["frames"], len);
+    assert_eq!(render["channels"], 2);
+    let mut rendered = hound::WavReader::open(render_path).unwrap();
+    let samples: Vec<_> = rendered.samples::<f32>().collect::<Result<_, _>>().unwrap();
+    assert!(samples.chunks_exact(2).all(|frame| frame[0] * 0.5 == frame[1]));
+    assert!(samples[2 * 48_000..2 * 48_400].iter().any(|s| s.abs() > 0.1));
+
+    let quantized = call(6, "RHYTHM_QUANTIZE_PLAN", json!({
+        "hits": [
+            {"id":"a", "piece":"Kick", "at":0.535},
+            {"id":"b", "piece":"Snare", "at":0.541}
+        ],
+        "bpm":120, "span":[0,3],
+        "pinned_moves":[{"id":"b","target_time":0.506}]
+    }));
+    let moves = quantized["moves"].as_array().unwrap();
+    assert!((moves[0]["target_time"].as_f64().unwrap() - 0.5).abs() < 1e-9);
+    assert_eq!(moves[1]["target_time"], 0.506);
+
     // 4. Swap detector to envelope-gate on the exact same WAVs.
     let gate_out = call(
         4,

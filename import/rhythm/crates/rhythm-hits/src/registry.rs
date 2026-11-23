@@ -275,6 +275,8 @@ impl Default for DetectorRegistry {
         #[cfg(feature = "onnx")]
         reg.register(Box::new(crate::beat_this::BeatThisDetector::default()));
         #[cfg(feature = "onnx")]
+        reg.register(Box::new(crate::adtof::AdtofDspDetector::default()));
+        #[cfg(feature = "onnx")]
         reg.register(Box::new(crate::beat_this::BeatThisDetector::combined()));
         reg
     }

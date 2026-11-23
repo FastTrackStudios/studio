@@ -8,6 +8,7 @@
 
 pub mod hybrid;
 pub mod placement;
+pub mod render;
 
 pub use hybrid::{
     AudioSegment, EditStrategy, HitEditMode, HitMove, HybridPlan, HybridPolicy, PlanAudit,

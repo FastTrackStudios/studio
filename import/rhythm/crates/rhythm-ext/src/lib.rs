@@ -3,9 +3,7 @@
 
 use std::path::Path;
 
-use rhythm_editing::{
-    HitMove, HybridPlan, HybridPolicy, RecordedHit, plan_hybrid, quantize_to_grid,
-};
+use rhythm_editing::{HitMove, HybridPlan, HybridPolicy, RecordedHit, plan_hybrid};
 use rhythm_hits::{DetectorInput, DetectorOutput, DetectorRegistry, PieceInput};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
@@ -70,10 +68,18 @@ pub struct QuantizePlanRequest {
     #[serde(default = "default_tolerance_ms")]
     pub tolerance_ms: f64,
     #[serde(default)]
+    pub grid_origin_s: f64,
+    #[serde(default = "default_group_window_ms")]
+    pub group_window_ms: f64,
+    #[serde(default)]
     pub pinned_moves: Vec<HitMove>,
     pub span: [f64; 2],
     #[serde(default)]
     pub policy: HybridPolicy,
+}
+
+fn default_group_window_ms() -> f64 {
+    12.0
 }
 
 fn default_subdivision() -> u32 {
@@ -94,11 +100,25 @@ pub struct QuantizePlanResponse {
 
 /// Read a mono (or downmixed) WAV file to `f32` samples + sample rate.
 pub fn read_wav_mono(path: impl AsRef<Path>) -> Result<(Vec<f32>, f64), String> {
-    let path = path.as_ref();
+    let (raw, spec) = read_wav(path.as_ref())?;
+    let ch = usize::from(spec.channels);
+    let mono = if ch == 1 {
+        raw
+    } else {
+        raw.chunks_exact(ch)
+            .map(|frame| frame.iter().sum::<f32>() / ch as f32)
+            .collect()
+    };
+    Ok((mono, f64::from(spec.sample_rate)))
+}
+
+fn read_wav(path: &Path) -> Result<(Vec<f32>, hound::WavSpec), String> {
     let mut reader =
         hound::WavReader::open(path).map_err(|e| format!("open {}: {e}", path.display()))?;
     let spec = reader.spec();
-    let ch = spec.channels.max(1) as usize;
+    if spec.channels == 0 {
+        return Err("WAV must have at least one channel".into());
+    }
     let raw: Vec<f32> = match spec.sample_format {
         hound::SampleFormat::Float => reader
             .samples::<f32>()
@@ -113,14 +133,7 @@ pub fn read_wav_mono(path: impl AsRef<Path>) -> Result<(Vec<f32>, f64), String> 
                 .map_err(|e| format!("read {}: {e}", path.display()))?
         }
     };
-    let mono = if ch == 1 {
-        raw
-    } else {
-        raw.chunks(ch)
-            .map(|frame| frame.iter().copied().sum::<f32>() / (frame.len() as f32))
-            .collect()
-    };
-    Ok((mono, f64::from(spec.sample_rate)))
+    Ok((raw, spec))
 }
 
 pub fn run_detect(
@@ -180,6 +193,47 @@ pub fn run_detect(
     })
 }
 
+#[derive(Deserialize)]
+struct RenderRequest {
+    plan: HybridPlan,
+    input_wav: std::path::PathBuf,
+    output_wav: std::path::PathBuf,
+}
+
+fn render_wav(req: RenderRequest) -> Result<Json, String> {
+    let (audio, mut spec) = read_wav(&req.input_wav)?;
+    let rendered = rhythm_editing::render::render_group(
+        &req.plan,
+        &audio,
+        usize::from(spec.channels),
+        spec.sample_rate,
+    )?;
+    spec.sample_format = hound::SampleFormat::Float;
+    spec.bits_per_sample = 32;
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&req.output_wav)
+        .map_err(|e| format!("create {}: {e}", req.output_wav.display()))?;
+    let write = || -> Result<(), hound::Error> {
+        let mut writer = hound::WavWriter::new(std::io::BufWriter::new(file), spec)?;
+        for sample in &rendered {
+            writer.write_sample(*sample)?;
+        }
+        writer.finalize()
+    };
+    if let Err(error) = write() {
+        let _ = std::fs::remove_file(&req.output_wav);
+        return Err(format!("write {}: {error}", req.output_wav.display()));
+    }
+    Ok(json!({
+        "output_wav": req.output_wav,
+        "channels": spec.channels,
+        "sample_rate": spec.sample_rate,
+        "frames": rendered.len() / usize::from(spec.channels),
+    }))
+}
+
 pub fn dispatch(registry: &DetectorRegistry, action: &str, params: Json) -> Result<Json, String> {
     match action {
         "RHYTHM_STATE" => Ok(json!({
@@ -197,22 +251,43 @@ pub fn dispatch(registry: &DetectorRegistry, action: &str, params: Json) -> Resu
         "RHYTHM_PLACE_HITS" => {
             let req: PlaceHitsRequest =
                 serde_json::from_value(params).map_err(|e| format!("invalid params: {e}"))?;
-            let plan = plan_hybrid(&req.hits, &req.moves, (req.span[0], req.span[1]), req.policy);
+            let plan = plan_hybrid(
+                &req.hits,
+                &req.moves,
+                (req.span[0], req.span[1]),
+                req.policy,
+            );
             serde_json::to_value(plan).map_err(|e| e.to_string())
         }
         "RHYTHM_QUANTIZE_PLAN" => {
             let req: QuantizePlanRequest =
                 serde_json::from_value(params).map_err(|e| format!("invalid params: {e}"))?;
-            let moves = quantize_to_grid(
+            if !req.bpm.is_finite()
+                || req.bpm <= 0.0
+                || req.subdivision == 0
+                || req.group_window_ms < 0.0
+                || req.tolerance_ms < 0.0
+            {
+                return Err("invalid tempo, subdivision, or quantize window".into());
+            }
+            let moves = rhythm_editing::hybrid::quantize_grouped(
                 &req.hits,
-                req.bpm,
-                req.subdivision,
-                req.strength,
-                req.tolerance_ms / 1000.0,
+                rhythm_editing::hybrid::QuantizeGrid {
+                    bpm: req.bpm,
+                    subdivision: req.subdivision,
+                    origin_s: req.grid_origin_s,
+                    strength: req.strength.clamp(0.0, 1.0),
+                    tolerance_s: req.tolerance_ms / 1000.0,
+                    group_window_s: req.group_window_ms / 1000.0,
+                },
                 &req.pinned_moves,
             );
             let plan = plan_hybrid(&req.hits, &moves, (req.span[0], req.span[1]), req.policy);
             serde_json::to_value(QuantizePlanResponse { moves, plan }).map_err(|e| e.to_string())
+        }
+        "RHYTHM_RENDER_PLAN" => {
+            let req = serde_json::from_value(params).map_err(|e| format!("invalid params: {e}"))?;
+            render_wav(req)
         }
         other => Err(format!("unknown action: {other}")),
     }

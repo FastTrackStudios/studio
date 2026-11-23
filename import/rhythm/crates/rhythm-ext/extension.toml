@@ -49,4 +49,12 @@ name = "Rhythm: quantize hits with manual pins"
 description = "Quantizes recorded hits to a grid while preserving manual per-hit pins, returning a hybrid slip/stretch edit plan."
 group = "Rhythm"
 effect = "read_only"
-params = '{"type":"object","properties":{"hits":{"type":"array"},"bpm":{"type":"number"},"subdivision":{"type":"integer"},"strength":{"type":"number"},"tolerance_ms":{"type":"number"},"pinned_moves":{"type":"array"},"span":{"type":"array"},"policy":{"type":"object"}},"required":["hits","bpm","span"]}'
+params = '{"type":"object","properties":{"hits":{"type":"array"},"bpm":{"type":"number"},"subdivision":{"type":"integer"},"strength":{"type":"number"},"tolerance_ms":{"type":"number"},"grid_origin_s":{"type":"number"},"group_window_ms":{"type":"number"},"pinned_moves":{"type":"array"},"span":{"type":"array"},"policy":{"type":"object"}},"required":["hits","bpm","span"]}'
+
+[[actions]]
+id = "RHYTHM_RENDER_PLAN"
+name = "Rhythm: render a phase group to WAV"
+description = "Applies one hybrid edit plan to every channel in an aligned interleaved WAV and writes a new float WAV."
+group = "Rhythm"
+effect = "mutating"
+params = '{"type":"object","properties":{"plan":{"type":"object"},"input_wav":{"type":"string"},"output_wav":{"type":"string"}},"required":["plan","input_wav","output_wav"]}'
