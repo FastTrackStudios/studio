@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Studio launcher prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- Architect's phone shell, Studio's distribution: the page (its bar over
+     its body), and the foot: the floating tab pill and the round search
+     button. The left drawer comes in from the edge. -->
+<div class="phone" id="phone">
+  <main class="stage" id="stage"></main>
+  <footer class="foot">
+    <div class="np" id="np" hidden></div>
+    <div class="transport" id="transport" hidden></div>
+    <div class="tabrow">
+      <nav class="tabs" id="tabs" aria-label="Sections"></nav>
+      <button class="round" data-palette aria-label="Open anything"></button>
+    </div>
+  </footer>
+  <div class="scrim" id="scrim"></div>
+  <aside class="drawer" id="drawer" aria-label="Sidebar"></aside>
+  <div class="menu" id="menu" hidden></div>
+  <div class="sheet" id="sheet" hidden></div>
+  <div class="toast" role="status" aria-live="polite"></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

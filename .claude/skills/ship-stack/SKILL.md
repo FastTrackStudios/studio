@@ -35,7 +35,7 @@ worktree with its own `target/` costs a cold build.
 | PR into main | `PR / PR checks` (`pr.yml`) | free hosted, rustup + cargo-rail, no nix | fmt, change files, the lockfile, the rail config |
 | push to main | `CI` (`checks.yml`): Plan, Rail plan, Dependency cache, Gates, Check, Wasm, Tests, Release tooling (macOS), **`CI passed`** | Rail plan, Check, Tests, Wasm on THEBATTLESHIP's `studio-main` pool (warm shared cache); the rest free hosted | what the merge reaches since the newest green commit with rail evidence (the full set without one); the running run finishes and only the newest merge waits behind it |
 | PR into `release/**` | `CI` | same | a hotfix: the full suite |
-| push of a `v*` tag (`just release`) | `Images`, `studio-ios`, `desktop`, `release` | `studio-release` / `studio-release-mac` / hosted | the release builds, from the tag alone, in parallel, never cancelled; no tests (the tag guard checks `CI passed`) |
+| push of a `v*` tag (`just release`) | `studio`, `desktop`, `release` | `studio-release` / `studio-release-mac` / hosted | the release builds, from the tag alone, in parallel, never cancelled; no tests (the tag guard checks `CI passed`) |
 
 **Main requires:** `PR checks` only (ruleset 25572127). `Local CI` is an
 indicator, not a gate. GitHub runs nothing on a draft PR (`PR checks`,
@@ -256,18 +256,17 @@ part of merging a stack.
 **Runners** (WarpBuild is gone, 2026-10-24): PRs and the cheap jobs on
 GitHub's free runners; the builds on THEBATTLESHIP, two pools of three
 runners (`studio-main` for every check; `studio-release` for the tag's
-release builds only: the image, the AppImage), each pool sharing one warm
+release builds only: the node tarball, the AppImage), each pool sharing one warm
 cache capped at 200 GB, defined in Codys-Wright/nix-config
-hosts/THEBATTLESHIP/github-runners.nix. The Mac release builds (TestFlight,
-the `.dmg`) run on airlock's `airlock-studio-release` runner (label
+hosts/THEBATTLESHIP/github-runners.nix. The Mac release build (the `.dmg`) run on airlock's `airlock-studio-release` runner (label
 `studio-release-mac`, a LaunchAgent copied from `airlock`'s, with its own
 warm checkout); Task's are on `airlock-task-release` (`task-release-mac`).
 A new or auto-updated runner binary on airlock waits on a macOS
 permission prompt for the external build disk until someone clicks Allow
 (it stalls at "Validating directory permissions").
 - **Which pool builds what:** checks never run on a release pool, so a
-  pool keeps one set of target dirs. Release artifacts (the studio-web
-  image, the AppImage, the `.dmg`, TestFlight) only on `studio-release` /
+  pool keeps one set of target dirs. Release artifacts (the node and web
+  tarballs, the AppImage, the `.dmg`) only on `studio-release` /
   `studio-release-mac`, from a tag.
 - **Setup:** every job is generated (`xtask/workflows`, `just workflows`):
   rustup at the pinned toolchain, apt headers (cached), pinned release

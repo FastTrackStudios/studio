@@ -19,7 +19,7 @@ check() { # <want exit> <what>
     [ "$got" = "$1" ] && echo "ok   $2" || { echo "FAIL $2 (exit $got)" >&2; fail=1; }
 }
 pr bump/architect-v0.12.5 'fts-forge[bot]' main FastTrackStudios/studio
-files Cargo.toml Cargo.lock .config/duplicate-deps.toml .changes/studio-architect-on-architect-1a2b.md
+files Cargo.toml Cargo.lock .config/duplicate-deps.toml .changes/studio-on-architect-1a2b.md
 check 0 "a real bot bump"
 pr feat/something 'fts-forge[bot]' main FastTrackStudios/studio
 check 1 "an agent PR (fts-forge) from another branch, whatever its body says"

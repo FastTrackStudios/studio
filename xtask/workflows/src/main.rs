@@ -22,7 +22,6 @@ mod bump_architect;
 mod cache_devshell;
 mod checks;
 mod desktop;
-mod images;
 mod model;
 mod pr;
 mod release;
@@ -30,8 +29,7 @@ mod release_dry_run;
 mod release_queue;
 mod setlists_extension;
 mod steps;
-mod studio_architect;
-mod studio_ios;
+mod studio;
 mod sums;
 
 use anyhow::{Context, Result, bail};
@@ -54,13 +52,11 @@ const WORKFLOWS: &[(&str, Build)] = &[
     ("cache-devshell", cache_devshell::workflow),
     ("bump-architect", bump_architect::workflow),
     ("desktop", desktop::workflow),
-    ("images", images::workflow),
     ("release", release::workflow),
     ("release-queue", release_queue::workflow),
     ("release-dry-run", release_dry_run::workflow),
     ("setlists-extension", setlists_extension::workflow),
-    ("studio-architect", studio_architect::workflow),
-    ("studio-ios", studio_ios::workflow),
+    ("studio", studio::workflow),
 ];
 
 fn workflows_dir() -> PathBuf {

@@ -4,6 +4,9 @@
 # Move them only with devenv-fleet: its `scripts/fleet-pins --write .`
 # rewrites this file and the lock.
 require_version: ">=2.4.0"
+# The telemetry module's Teley (8787) and collector (4318) are host
+# singletons on fixed ports: fail loudly rather than move them.
+strict_ports: true
 inputs:
   nixpkgs:
     url: github:NixOS/nixpkgs/8ce4ef6cb6f871616146b9fe26d2a5ae594e94fe
@@ -23,6 +26,9 @@ imports:
   - devenv-fleet/rust
   - devenv-fleet/dioxus
   - devenv-fleet/darwin
+  # `devenv up` also runs Teley (traces and logs, its MCP for agents) and
+  # the OTLP collector every process exports to (local-stack processes).
+  - devenv-fleet/telemetry
 # REAPER is unfree: the `reaper` profile (devenv.nix) needs it permitted. Only
 # that package; the default shell does not use it.
 nixpkgs:

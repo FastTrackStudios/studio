@@ -15,10 +15,20 @@ path = "src/main.rs"
 
 [dependencies]
 studio-view-link = { workspace = true }
-architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
-session-ui = { workspace = true, features = ["native"] }
+architect-extensions = { workspace = true, features = ["linked-core"] }
+architect-extensions-dioxus = { workspace = true }
 dioxus = { workspace = true }
 serde_json = { workspace = true }
+
+# The native process: attached to the engine's socket.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+architect-extensions-dioxus = { workspace = true, features = ["guest"] }
+session-ui = { workspace = true, features = ["native"] }
+
+# The browser: the same panel over the page's own engine.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+session-ui = { workspace = true, features = ["web"] }
 
 [lints]
 workspace = true

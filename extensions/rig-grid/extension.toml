@@ -1,0 +1,49 @@
+# studio.rig.grid (src/lib.rs): the routing grid, the FX row and Edit (`guitar::ui::panels::{Grid, Fx, Edit}`). One extension: the FX row is the grid's selection drawn as controls, and Edit is the two over a section's pending changes, in an Architect pane: a vox client of
+# the rig engine (the studio.rig extension runs it), as every Signal GUI
+# is. It names no other view (docs/design/signal-extensions.md).
+id = "studio.rig.grid"
+name = "Rig grid"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "The rig's DSP grid (the patch playing as modules and blocks), the FX row (the selected block's controls and its presets) and Edit (a section's changes)."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "studio-rig-grid"
+
+# What a press asks of the app: another rig view brought up beside this
+# one (the browser on a block's presets, Setup from a status light).
+[capabilities]
+effect = "mutating"
+actions = ["EXT_VIEW_OPEN"]
+
+[[views]]
+id = "grid"
+title = "DSP grid"
+icon = "workflow"
+
+[[views]]
+id = "fx"
+title = "FX row"
+icon = "sliders-horizontal"
+
+[[views]]
+id = "edit"
+title = "Edit"
+icon = "pencil-ruler"
+
+[[actions]]
+id = "STUDIO_RIG_GRID_STATE"
+name = "Rig grid: state"
+description = "Whether this window's process is connected to the rig engine and where it is, why not when it is not, and what the rig's panes share (the grid's selection, the browser's focus, the part being built)."
+group = "Rig"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_RIG_GRID_SELECT"
+name = "Rig grid: select"
+description = "Selects a block (`block`: its id, STUDIO_RIG_BLOCKS lists them) or a module (`module`: its name, with `blocks`: the ids in it) in the grid, or nothing (no arguments): the FX row shows its controls, and a browser opens on its kind."
+group = "Rig"
+effect = "mutating"
+params = '{"type":"object","properties":{"block":{"type":"string"},"module":{"type":"string"},"blocks":{"type":"array","items":{"type":"string"}}}}'

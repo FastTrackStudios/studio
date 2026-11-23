@@ -206,7 +206,7 @@ in
     # libz-sys asks pkg-config for zlib, and pkg-config answers for the iOS
     # targets too: nixpkgs' zlib, built for macOS, which an iOS link refuses
     # ("building for 'iOS', but linking in object file … built for 'macOS'";
-    # studio#444, every TestFlight build since architect's workspace-hack
+    # studio#444, every iOS build since architect's workspace-hack
     # turned on flate2's `zlib`). Without pkg-config it links the SDK's own
     # zlib (`-lz`), the iPhoneOS SDK's for iOS and the macOS SDK's here.
     ZLIB_NO_PKG_CONFIG = "1";
@@ -250,7 +250,7 @@ in
   # shell adds to the default env, which already has Xvfb, xvfb-run, xdotool,
   # PipeWire's JACK shim and cargo-nextest.
   # `devenv --profile wasi shell`: the fleet toolchain plus `wasm32-wasip2`,
-  # what Studio's island builds for (apps/architect/island, `just island`,
+  # what Studio's island builds for (features/island, `just island`,
   # #445), and node for Architect's `build-web` (its JSPI needs the current
   # release). A profile, as Architect's: an extra target changes the rustc
   # store path, so kache shares nothing with the default shell's builds.
@@ -266,55 +266,86 @@ in
     pkgs.xwininfo     # the window geometry daw::test::VirtualDisplay reads
   ];
 
-  # `devenv up`: the local stack (docs/local-stack.md). The just
-  # recipes in front of it (`just dev`, `just demo`, `just website`) choose
-  # what is local first (scripts/local-stack.sh `choose`); a bare
-  # `devenv up` runs the last choice (Architect and Keyflow pinned by
-  # default). Each process is `scripts/local-stack.sh run <name>`: the
-  # issuer and the node's environment are Architect's own `cargo xtask dev`
-  # (from the Architect checkout it resolves), on this stack's ports
-  # (local-stack.toml) and state (.devenv/state/local-stack).
+  # `devenv up`: the local stack (docs/local-stack.md). Architect is the
+  # server, Studio is the client:
+  #
+  #   mock-oauth  the sign-in's stand-in for GitHub/Google    (Architect's)
+  #   auth        the auth server, the issuer                  (Architect's)
+  #   architect   THE SERVER: plain `architect-desktop serve`  (Architect's;
+  #               no Studio code), holding the demo vault (Merry & Bright,
+  #               JT's Recital) and a share link per set
+  #   web         studio-web under `dx serve` (rebuilt on a save), behind the front
+  #               that puts it and the server on one origin (/app/)
+  #   desktop     Studio's desktop app under `dx serve` (rebuilt on a save), a
+  #               client of the server; it starts its engine itself
+  #
+  # Each is `scripts/local-stack.sh run <name>`; ports in local-stack.toml
+  # (local-stack.local.env moves them), state in .devenv/state/local-stack.
+  # The just recipes (`just dev`, `just demo`) choose what is local first.
+  # Each process builds first in its own log, then serves; it is ready only
+  # once it really answers (web: dx serves studio-web's built module;
+  # desktop: the window's control socket), so a green dot means up. Run it
+  # detached (`devenv up -d`) and watch it with `devenv processes attach`.
+  # Every process exports to the telemetry module's collector, so Teley
+  # (:8787, and its MCP) has the stack's traces and logs.
   processes = let
     stack = "${config.devenv.root}/scripts/local-stack.sh";
     probe = name: { exec = "${stack} ready ${name}"; period = 2; };
+    otel = config.fleet.telemetry.processEnv;
   in {
     mock-oauth = {
       exec = "exec ${stack} run mock-oauth";
       ready = probe "mock-oauth";
+      env = otel;
     };
     auth = {
       exec = "exec ${stack} run auth";
       after = [ "devenv:processes:mock-oauth" ];
       ready = probe "auth";
+      env = otel;
     };
-    # Studio Architect's headless node, built from this tree (and a local
-    # Architect or Keyflow), signed in to the local issuer, serving a copy
-    # of the test vault and its share link (the URL is in its log); rebuilt
-    # and restarted on a save.
-    node = {
-      exec = "exec ${stack} run node";
+    architect = {
+      exec = "exec ${stack} run architect";
       after = [ "devenv:processes:auth" ];
-      ready = probe "node";
+      ready = probe "architect";
+      env = otel;
     };
-    # The web app (Architect's, with this distribution's
-    # distribution.json), its issuer the local one.
     web = {
       exec = "exec ${stack} run web";
       after = [ "devenv:processes:auth" ];
+      ready = probe "web";
+      env = otel;
     };
-    # The public site (Architect's apps/site), hot reload.
-    site.exec = "exec ${stack} run site";
-    # The window, off unless chosen (`just dev desktop=on`).
     desktop = {
       exec = "exec ${stack} run desktop";
-      after = [ "devenv:processes:node" ];
-      start.enable = false;
+      after = [ "devenv:processes:auth" ];
+      ready = probe "desktop";
+      env = otel;
+    };
+  };
+
+  # Claude Code: devenv writes .mcp.json from this (git-ignored: it names
+  # this checkout's path). `devenv`: its own MCP (search nixpkgs and devenv
+  # options, https://devenv.sh/mcp/); `session`: Studio's engine's Action
+  # List over MCP, while an engine runs. Teley's MCP is the user's own
+  # (`teley-cli mcp --host localhost:8787`), reading what this stack exports.
+  claude.code.enable = true;
+  claude.code.mcpServers = {
+    devenv = {
+      type = "stdio";
+      command = "devenv";
+      args = [ "mcp" ];
+      env = { DEVENV_ROOT = config.devenv.root; };
+    };
+    session = {
+      type = "http";
+      url = "http://127.0.0.1:47811/mcp";
     };
   };
 
   fleet.banner = ''
     FastTrackStudio dev shell
       cargo check --workspace
-      cargo run -p studio-desktop   (THE app; --engine = headless rig)
+      cargo run -p studio-desktop --bin studio   (THE app, Studio: apps/desktop)
   '';
 }

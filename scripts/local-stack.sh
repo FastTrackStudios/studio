@@ -1,36 +1,63 @@
 #!/usr/bin/env bash
-# The local stack (docs/local-stack.md): Studio's node, its issuer,
-# the web app and the site on this machine, nothing from the network at
-# run time. `devenv up` runs each process through this script; the just
-# recipes (`just dev`, `just demo`, `just website`) choose what is local
-# and start it.
+# The local stack (docs/local-stack.md): `devenv up` runs each process
+# through this script; the just recipes (`just dev`, `just demo`) choose
+# what is local and start it. What runs:
+#
+#   mock-oauth  Architect's stand-in for GitHub/Google (the sign-in's buttons)
+#   auth        Architect's auth server: the issuer everyone signs in at
+#   architect   THE SERVER: plain Architect, `architect-desktop serve`, no
+#               Studio code in it; the demo vault and its share links
+#   web         studio-web (apps/web) under `dx serve`, behind the
+#               front that joins it and the server's paths on one origin
+#   desktop     Studio's desktop app (apps/desktop) under `dx serve`, a
+#               client of the server; it starts its engine (`daw`) itself
 #
 #   local-stack.sh choose [architect=pinned|local|PATH] [keyflow=…]
-#                         [desktop=on|off] [watch=on|off] [mode=dev|demo]
+#                         [desktop=on|off] [mode=dev|demo]
 #                                         what the next `devenv up` runs
 #   local-stack.sh plan                   resolve it, write the overrides, say it
 #   local-stack.sh procs                  the devenv processes the choice starts
-#   local-stack.sh run mock-oauth|auth|node|web|site|desktop
-#                                         one process, as devenv.nix starts it
+#   local-stack.sh run <process>          one process, as devenv.nix starts it
 #   local-stack.sh status                 what runs, from where, the URLs
-#   local-stack.sh phone [off]            the node on the tailnet over HTTPS
+#   local-stack.sh tailnet [off]          studio-web on the tailnet over HTTPS
 #   local-stack.sh smoke                  the stack, checked end to end
 #   local-stack.sh reset                  remove the stack's state
 #
-# What is Architect's stays Architect's: mock-oauth, the auth server, the
-# node's environment, its sign-in and the guard are `cargo xtask dev run`
-# in an Architect checkout (the local one, or the tag Studio pins), given
-# this stack's ports and state (DEV_STACK_ROOT, DEV_STACK_STATE,
-# DEV_STACK_PORT_*) and this node's binary (DEV_STACK_BIN_NODE).
+# local-stack.local.env (untracked) holds a checkout's own LOCAL_STACK_*
+# settings: LOCAL_STACK_OVERRIDES + LOCAL_STACK_ARCHITECT_PATH (a stack of
+# local checkouts), LOCAL_STACK_VAULT, LOCAL_STACK_SETLIST,
+# LOCAL_STACK_PORT_<NAME>, LOCAL_STACK_OPEN=on (the web client in the
+# browser), LOCAL_STACK_LAN=on, LOCAL_STACK_TAILNET=on,
+# LOCAL_STACK_DESKTOP_ENV_<NAME> (the window's environment),
+# LOCAL_STACK_DESKTOP_AFTER (a script once the window answers).
 #
-# A local Architect or Keyflow goes under this checkout's build as a
+# What is Architect's stays Architect's: mock-oauth, the auth server, the
+# server, its sign-in and the guard are `cargo xtask dev run` in an
+# Architect checkout (the local one, or the tag Studio pins), given this
+# stack's ports and state (DEV_STACK_ROOT, DEV_STACK_STATE,
+# DEV_STACK_PORT_*).
+#
+# A local Architect or Keyflow goes under this checkout's builds as a
 # [patch] in a generated cargo config (`--config`, under the state), never
 # in Cargo.toml. Cargo writes the patched sources into Cargo.lock while it
-# builds; the stack puts the committed Cargo.lock back after every build.
+# builds; the stack puts the committed Cargo.lock back after.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
-self="$root/scripts/local-stack.sh"
+
+# This checkout's own settings (local-stack.local.env, never committed):
+# `NAME=value` lines of the LOCAL_STACK_* variables below, for a checkout
+# that always runs the same way (a stack of local checkouts and its
+# overrides, another vault, other ports, the window's own start script).
+# The environment wins over the file.
+if [ -f "$root/local-stack.local.env" ]; then
+    while IFS='=' read -r _k _v; do
+        case "$_k" in
+            LOCAL_STACK_*) [ -n "${!_k:-}" ] || export "$_k=$_v" ;;
+        esac
+    done <"$root/local-stack.local.env"
+    unset _k _v
+fi
 
 ARCH_URL=https://github.com/FastTrackStudios/architect
 KF_URL=https://github.com/FastTrackStudios/keyflow
@@ -79,7 +106,7 @@ locate() {
 choice_file="$state/choice.env"
 
 choose() {
-    local architect=pinned keyflow=pinned desktop=off watch=on mode=dev arg key value
+    local architect=pinned keyflow=pinned desktop=on watch=on mode=dev arg key value
     for arg in "$@"; do
         [ -n "$arg" ] || continue
         key="${arg%%=*}"
@@ -108,7 +135,7 @@ choose() {
 }
 
 load_choice() {
-    c_architect=pinned c_keyflow=pinned c_desktop=off c_watch=on c_mode=dev
+    c_architect=pinned c_keyflow=pinned c_desktop=on c_watch=on c_mode=dev
     # shellcheck source=/dev/null
     [ -f "$choice_file" ] && . "$choice_file"
     return 0
@@ -116,12 +143,10 @@ load_choice() {
 
 procs() {
     load_choice
-    if [ "$c_mode" = demo ]; then
-        echo "mock-oauth auth node"
-    elif [ "$c_desktop" = on ]; then
-        echo "mock-oauth auth node web site desktop"
+    if [ "$c_mode" = demo ] || [ "$c_desktop" != on ]; then
+        echo "mock-oauth auth architect web"
     else
-        echo "mock-oauth auth node web site"
+        echo "mock-oauth auth architect web desktop"
     fi
 }
 
@@ -155,11 +180,11 @@ describe() { git -C "$1" describe --always --dirty --tags 2>/dev/null || echo "?
 # The Architect checkout at the pinned commit: a clone sharing the objects
 # of a local Architect checkout when it has that commit (nothing fetched,
 # nothing written there), else one from GitHub, once. The same folder
-# scripts/studio-architect.sh uses for the web bundle.
+# scripts/studio.sh uses for the web bundle.
 pinned_architect() {
     local tag rev src sibling
     read -r tag rev <<<"$(py pinned "$ARCH_URL" architect-desktop)"
-    src="$(target_dir)/studio-architect/architect-$rev"
+    src="$(target_dir)/studio/architect-$rev"
     if [ ! -d "$src/.git" ] || [ "$(git -C "$src" rev-parse HEAD 2>/dev/null)" != "$rev" ]; then
         rm -rf "$src"
         mkdir -p "$(dirname "$src")"
@@ -293,16 +318,13 @@ banner() {
 }
 
 # ── Builds ───────────────────────────────────────────────────────────────
-profile="${LOCAL_STACK_PROFILE:-dev}"
 
-# What a staged node was built with: the overrides (empty: what Cargo.lock
-# pins). `demo` reuses a staged node only when it matches.
-plan_id() {
-    if [ -s "$overrides" ]; then sha256sum "$overrides" | cut -c1-16; else echo pinned; fi
-}
+# The host's triple: one build for working is dx's desktop-dev profile
+# for it (AGENTS.md, "Build performance").
+host_triple() { rustc -vV | sed -n 's/^host: //p'; }
 
-# Run a cargo build of this checkout with the overrides, serialised, and
-# Cargo.lock as committed before and after.
+# Run a cargo (or dx) build of this checkout with the overrides, with
+# Cargo.lock as committed put back after it.
 with_overrides() {
     if [ ! -s "$overrides" ]; then
         "$@"
@@ -310,99 +332,39 @@ with_overrides() {
     fi
     (
         flock 9
-        cp Cargo.lock "$state/Cargo.lock.held"
+        cp "$root/Cargo.lock" "$state/Cargo.lock.held"
         # shellcheck disable=SC2329 # the EXIT trap runs it
-        restore() { cmp -s Cargo.lock "$state/Cargo.lock.held" || cp "$state/Cargo.lock.held" Cargo.lock; }
+        restore() { cmp -s "$root/Cargo.lock" "$state/Cargo.lock.held" || cp "$state/Cargo.lock.held" "$root/Cargo.lock"; }
         trap restore EXIT
-        STUDIO_ARCHITECT_CARGO_CONFIG="$overrides" "$@"
+        "$@"
     ) 9>"$state/cargo.flock"
 }
 
-node_build() {
-    local out
-    out="$(with_overrides env PROFILE="$profile" bash scripts/studio-architect.sh node)" || return 1
-    sed -n 's/^node=//p' <<<"$out" >"$state/built-node"
-}
-
-island_build() {
-    with_overrides just island-build >&2
-}
-
-# The node and its island, copied (never linked: the node refuses a linked
-# island) into the folder the node runs from; a new stamp when either
-# changed, which restarts the node.
-stage() {
-    (
-        flock 8
-        local bin island new="$state/bin.new"
-        bin="$(cat "$state/built-node" 2>/dev/null)" || die "no node built yet"
-        island="$(target_dir)/studio-island"
-        rm -rf "$new"
-        mkdir -p "$new"
-        cp --reflink=auto "$bin" "$new/studio-architect"
-        if [ -f "$island/architect.lock.json" ]; then
-            mkdir -p "$new/studio-island"
-            find "$island" -maxdepth 1 -type f -exec cp --reflink=auto {} "$new/studio-island/" \;
-        fi
-        if [ -d "$state/bin" ] && cmp -s "$new/studio-architect" "$state/bin/studio-architect" \
-            && diff -rq "$new/studio-island" "$state/bin/studio-island" >/dev/null 2>&1; then
-            rm -rf "$new"
-            say "staged: unchanged, the node keeps running"
-            return 0
-        fi
-        date +%s.%N >"$new/STAMP"
-        plan_id >"$new/PLAN"
-        rm -rf "$state/bin.old"
-        [ -d "$state/bin" ] && mv "$state/bin" "$state/bin.old"
-        mv "$new" "$state/bin"
-        say "staged: $(du -sh "$state/bin/studio-architect" | cut -f1) node$( [ -d "$state/bin/studio-island" ] && echo ", its island")"
-    ) 8>"$state/stage.flock"
-}
-
-rebuild() {
-    local what="$1" t0
-    t0=$(date +%s%N)
-    case "$what" in
-        node) node_build || { say "the node's build failed: the last good node keeps running"; return 0; } ;;
-        island) island_build || { say "the island's build failed: the last good island stays"; return 0; } ;;
-    esac
-    stage
-    say "$what rebuilt and staged in $((($(date +%s%N) - t0) / 1000000)) ms"
+# The cargo arguments that put the overrides under a build.
+cargo_config() {
+    [ -s "$overrides" ] && printf -- '--config\n%s\n' "$overrides"
+    return 0
 }
 
 # ── The vault ────────────────────────────────────────────────────────────
 vault_id=demo
-node_vault() { echo "$state/stack/node/data/vaults/$vault_id"; }
+server_vault() { echo "$state/stack/node/data/vaults/$vault_id"; }
 
-# A copy of the test vault with its share link, made once. Without one,
-# xtask seeds Architect's demo vault.
+# The demo vault (local-stack.toml [vault]: its sources merged into a
+# copy, made again when they change) and a share link per set.
 seed_vault() {
-    local src dst setlist code out
-    src="$(locate "${LOCAL_STACK_VAULT:-$(py get vault.source)}")"
-    dst="$(node_vault)"
-    setlist="$(py get vault.setlist)"
-    code="$(share_code)"
-    if [ -z "$src" ]; then
-        say "NOTICE: no test vault at ${LOCAL_STACK_VAULT:-$(py get vault.source)}: the node holds Architect's demo seed (setlist Fall Show, /s/ksqx75iaaaaaaaae/)"
-        echo "ksqx75iaaaaaaaae setlists/fall-show" >"$state/share"
-        return 0
-    fi
-    if [ ! -d "$dst" ]; then
-        mkdir -p "$(dirname "$dst")"
-        chmod 700 "$state/stack" "$state/stack/node" "$(dirname "$(dirname "$dst")")" 2>/dev/null || true
-        say "copying the test vault $src into $dst (once; just dev-reset drops it)"
-        cp -a --reflink=auto "$src/." "$dst.tmp/" 2>/dev/null || { mkdir -p "$dst.tmp" && cp -a --reflink=auto "$src/." "$dst.tmp/"; }
-        mv "$dst.tmp" "$dst"
-    fi
-    out="$(py seed-share "$dst" "$setlist" "$code" "$vault_id")"
-    echo "$code ${out#* }" >"$state/share"
+    mkdir -p "$(dirname "$(server_vault)")"
+    chmod 700 "$state/stack" "$state/stack/node" 2>/dev/null || true
+    py seed "$(server_vault)" "$vault_id" >"$state/share.new"
+    mv "$state/share.new" "$state/share"
 }
 
-share_url() {
-    local origin="${1:-http://127.0.0.1:$(port node)}" code page
-    read -r code page <"$state/share"
-    echo "$origin/s/$code/$page/"
+# Every share link, on an origin (the web front's by default).
+share_urls() {
+    local origin="${1:-http://127.0.0.1:$(port web)}" code page
+    while read -r code page; do echo "$origin/s/$code/$page/"; done <"$state/share"
 }
+share_url() { share_urls "$@" | head -1; }
 
 # ── Processes ────────────────────────────────────────────────────────────
 
@@ -417,17 +379,18 @@ xdev() {
         DEVENV_STATE="$state"
         DEV_STACK_PORT_MOCK_OAUTH="$(port mock_oauth)"
         DEV_STACK_PORT_AUTH="$(port auth)"
-        DEV_STACK_PORT_NODE="$(port node)"
+        # The server is Architect's app with no window, on its port.
+        DEV_STACK_PORT_NODE="$(port server)"
+        DEV_STACK_PORT_APP="$(port server)"
+        # Where a browser opens the web client (the front): the issuer's
+        # redirects and the org lane's allowed origin.
         DEV_STACK_PORT_WEB="$(port web)"
-        DEV_STACK_PORT_SITE="$(port site)"
-        DEV_STACK_BIN_NODE="$state/node-wrapper"
-        # An Architect whose app is its node (architect#825): the same, by its names.
-        DEV_STACK_PORT_APP="$(port node)"
-        DEV_STACK_BIN_APP="$state/node-wrapper"
     )
     [ -n "$issuer_target" ] && vars+=(CARGO_TARGET_DIR="$issuer_target")
-    # The fixed dev cast only: never a mirror of production.
-    exec env -u AUTH_ADMIN_TOKEN -u AUTH_ADMIN_TOKEN_FILE "${vars[@]}" cargo run -q -p xtask -- dev "$@"
+    # The fixed dev cast only: never a mirror of production. No binary
+    # of Studio's: the server is Architect's own.
+    exec env -u AUTH_ADMIN_TOKEN -u AUTH_ADMIN_TOKEN_FILE -u DEV_STACK_BIN_APP -u DEV_STACK_BIN_NODE \
+        "${vars[@]}" cargo run -q -p xtask -- dev "$@"
 }
 
 run_auth() {
@@ -440,239 +403,382 @@ run_auth() {
     xdev run auth
 }
 
-write_wrapper() {
-    load_plan
-    {
-        echo '#!/usr/bin/env bash'
-        echo "# Written by scripts/local-stack.sh: the staged node, with what xtask"
-        echo "# would strip (it removes inherited ARCHITECT_*)."
-        if [ -n "$arch_local" ] && [ -d "$arch_local/features/sites/assets" ]; then
-            # A debug node reads the share pages' player and styles from
-            # here, so an edit shows on the next build of the pages
-            # (architect-sites `assets::DEV_ASSETS_VAR`); a node older
-            # than that, or a release build, ignores it.
-            printf 'export ARCHITECT_SITES_ASSETS_DIR=%q\n' "$arch_local/features/sites/assets"
-        fi
-        printf 'exec %q "$@"\n' "$state/bin/studio-architect"
-    } >"$state/node-wrapper"
-    chmod +x "$state/node-wrapper"
-}
-
-# Touch the share notes, so the node builds their pages again (an asset
-# edit shows on reload).
-touch_shares() {
-    touch "$(node_vault)/_architect/shares/"*.md 2>/dev/null || true
-    say "share pages: rebuilding (reload the page)"
-}
-
-watch_dirs() {
-    # What the node is built from: this tree, and what is local.
-    local d
-    for d in apps crates features vendor Cargo.toml; do echo "$root/$d"; done
-    [ -n "$arch_local" ] && echo "$arch_local"
-    [ -n "$kf_local" ] && echo "$kf_local"
-    return 0
-}
-
-run_node() {
+# THE SERVER: plain Architect (`architect-desktop serve`, the app with no
+# window), built from the Architect checkout the plan names. Nothing of
+# Studio is compiled into it or installed on it: it stores the vault and
+# its structure, signs people in through the issuer, enforces who may
+# read what and serves share links' data. Studio is its clients.
+run_architect() {
     plan_locked
+    load_plan
     seed_vault
-    write_wrapper
-    local pids=()
+    ( build_architect ) || die "server: the build failed (above)"
+    say "server: plain Architect from $arch_src (architect-desktop serve, no Studio code), on :$(port server)"
+    (
+        for _ in $(seq 1 1800); do
+            if curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port server)/health"; then
+                say "server: up on http://127.0.0.1:$(port server). Share links (open them on the web client's origin):"
+                share_urls >&2
+                exit 0
+            fi
+            sleep 1
+        done
+    ) &
+    xdev run app --headless
+}
+
+# The folder of a crate the build resolves (with the overrides: the
+# sibling checkout's).
+crate_dir() {
+    local cfg=()
+    mapfile -t cfg < <(cargo_config)
+    with_overrides cargo metadata --format-version 1 "${cfg[@]}" 2>/dev/null \
+        | python3 -c 'import json, os, sys
+m = json.load(sys.stdin)
+print(next(os.path.dirname(p["manifest_path"]) for p in m["packages"] if p["name"] == sys.argv[1]))' "$1"
+}
+
+# studio-web's dev page and public folder for `dx serve`: Studio's own
+# page (apps/web/page.html), Architect's web app's sheet.
+prepare_web() {
+    local crate="$1" archweb="$2"
+    python3 - "$crate" "$archweb" "$(port auth)" "$arch_src" <<'PY'
+import json, os, re, shutil, sys
+crate, archweb, auth, arch = sys.argv[1:5]
+# Studio's own page (apps/web/page.html: its name, black, its splash),
+# with Studio's icon in it; Architect's web app's sheet beside it.
+icon = open(os.path.join(crate, "../../features/distribution/icon.svg"), encoding="utf-8").read()
+page = open(os.path.join(crate, "page.html"), encoding="utf-8").read().replace("{{ICON}}", icon.strip())
+page = page.replace('<html lang="en">', '<html lang="en" data-assets="/assets/app-dev/">')
+open(os.path.join(crate, "index.html"), "w", encoding="utf-8").write(page)
+pub = os.path.join(crate, "dev/public")
+shutil.rmtree(pub, ignore_errors=True)
+def put(rel, src=None, text=None):
+    out = os.path.join(pub, rel)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    if text is not None:
+        open(out, "w", encoding="utf-8").write(text)
+    else:
+        shutil.copyfile(src, out)
+put("app/style.css", os.path.join(archweb, "app/style.css"))
+put("app/icon.svg", text=icon)
+# Signed in already as the stack's demo account (architect#991): the
+# issuer approves it without its form, the app starts the sign-in itself.
+put("app/config.json", text=json.dumps({"issuer": f"http://127.0.0.1:{auth}", "client_id": "architect", "auto_sign_in": True}))
+# A share link's page (the server's, /s/<code>/) starts the app from
+# /app/start.js, as the bundle does: here, dx's build of studio-web.
+put("app/start.js", text="// Written by scripts/local-stack.sh: studio-web's dev start, for a share link's page.\n"
+    "document.documentElement.dataset.assets = '/assets/app-dev/';\nimport('/wasm/studio-web.js');\n")
+fav = os.path.join(arch, "apps/site/public/favicon.svg")
+if os.path.isfile(fav):
+    put("favicon.svg", fav)
+for face in ["Inter-Variable.woff2", "Inter-OFL.txt", "luau-web/index.js", "luau-web/Luau.Web.Asyncify.js", "luau-web/LICENSE"]:
+    src = os.path.join(archweb, "assets", face)
+    if os.path.isfile(src):
+        put("assets/app-dev/" + face, src)
+PY
+}
+
+# STUDIO-WEB: Studio's web client (apps/web: Architect's web app as
+# a library with Studio's views linked in, one wasm) under `dx serve`,
+# rebuilt on a save (rsx hot-reloaded; no Rust hot-patching: its builds
+# bypass kache, so every workspace crate would compile uncached), behind the front that
+# puts it and the server's paths on one origin. LOCAL_STACK_LAN=on opens
+# the front to the LAN; LOCAL_STACK_TAILNET=on serves it on this
+# machine's tailnet name over HTTPS (`tailscale serve`, never funnel).
+run_web() {
+    plan_locked
+    load_plan
+    local crate="$root/apps/web" web dx server archweb bind=127.0.0.1 cfg=() pids=()
+    web="$(port web)" dx="$(port web_dx)" server="$(port server)"
+    archweb="$(crate_dir architect-web)"
+    [ -n "$archweb" ] && [ -d "$archweb" ] || die "web: no architect-web crate resolved (cargo metadata)"
+    prepare_web "$crate" "$archweb"
+    [ "${LOCAL_STACK_LAN:-off}" = on ] && bind=0.0.0.0
+    mapfile -t cfg < <(cargo_config)
     cleanup() {
         trap - TERM INT EXIT
         for p in "${pids[@]}"; do kill -TERM "$p" 2>/dev/null || true; done
         wait 2>/dev/null || true
-        [ -f "$state/Cargo.lock.held" ] && ! cmp -s Cargo.lock "$state/Cargo.lock.held" && cp "$state/Cargo.lock.held" Cargo.lock
+        [ -f "$state/Cargo.lock.web" ] && ! cmp -s Cargo.lock "$state/Cargo.lock.web" && cp "$state/Cargo.lock.web" Cargo.lock
         exit 0
     }
     trap cleanup TERM INT EXIT
-    load_choice
-    load_plan
-
-    if [ "$c_mode" = demo ] && [ -x "$state/bin/studio-architect" ] \
-        && [ "$(cat "$state/bin/PLAN" 2>/dev/null)" = "$(plan_id)" ]; then
-        say "demo: the last staged node ($(date -d @"$(cut -d. -f1 "$state/bin/STAMP")" '+%F %T')), no build; just dev rebuilds it"
-    else
-        local t0
-        t0=$(date +%s)
-        say "building the node (profile $profile) and its island"
-        node_build || die "the node's build failed"
-        if [ -f "$root/apps/architect/island/extension.toml" ]; then
-            island_build || say "the island's build failed: the node runs without it (the share page keeps Architect's own bar)"
-        fi
-        stage
-        say "built and staged in $(($(date +%s) - t0)) s"
+    # The issuer through the front too, for a browser on another origin
+    # (the tailnet's: `just phone`).
+    LOCAL_STACK_FRONT_AUTH="$(port auth)" python3 "$root/scripts/local-stack-front.py" "http://127.0.0.1:$dx" "$web" "$server" "$bind" &
+    pids+=($!)
+    say "web: studio-web at http://127.0.0.1:$web/app/ (sign in as ada@local.test, password development-password)"
+    if [ "$bind" = 0.0.0.0 ]; then
+        say "web: on the LAN too: http://$(hostname -I 2>/dev/null | cut -d' ' -f1):$web/app/"
     fi
-
-    # The node, restarted whenever a new build is staged.
+    if [ "${LOCAL_STACK_TAILNET:-off}" = on ]; then
+        tailnet_on || say "web: not on the tailnet (above)"
+    fi
+    if [ "${LOCAL_STACK_OPEN:-off}" = on ] && command -v xdg-open >/dev/null; then
+        (
+            for _ in $(seq 1 1800); do
+                curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$web/app/" && up "$server" && break
+                sleep 1
+            done
+            xdg-open "http://127.0.0.1:$web/app/" >/dev/null 2>&1 || true
+        ) &
+    fi
+    # Its build first, in this process's log (compiling, then served:
+    # `ready web` answers only once dx serves the built module).
+    ( build_web ) || die "web: the build failed (above)"
+    cp Cargo.lock "$state/Cargo.lock.web"
     (
-        trap 'kill -TERM "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; exit 0' TERM INT
-        stamp="" pid=""
-        while :; do
-            now="$(cat "$state/bin/STAMP" 2>/dev/null || true)"
-            if [ -n "$now" ] && [ "$now" != "$stamp" ]; then
-                if [ -n "$pid" ]; then
-                    kill -TERM "$pid" 2>/dev/null || true
-                    wait "$pid" 2>/dev/null || true
-                    say "node: restarting on the new build"
-                fi
-                stamp="$now"
-                # The stack's node is `node`, or (architect#825) the app with no window.
-                if grep -q '=> "app"' "$arch_src/xtask/src/dev/mod.rs" 2>/dev/null; then
-                    "$self" _xdev run app --headless &
-                else
-                    "$self" _xdev run node &
-                fi
-                pid=$!
-                (
-                    for _ in $(seq 1 240); do
-                        if curl -sf -o /dev/null "http://127.0.0.1:$(port node)/health"; then
-                            say "node: up. The share link: $(share_url)"
-                            exit 0
-                        fi
-                        sleep 0.25
-                    done
-                ) &
-            elif [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
-                say "node: exited; waiting for a new build"
-                pid=""
-            fi
-            sleep 0.5
-        done
+        cd "$crate"
+        if [ "${#cfg[@]}" -gt 0 ]; then
+            exec dx serve --platform web --addr 127.0.0.1 --port "$dx" --open false --hot-patch false \
+                --cargo-args="${cfg[*]}"
+        fi
+        exec dx serve --platform web --addr 127.0.0.1 --port "$dx" --open false --hot-patch false
     ) &
     pids+=($!)
-
-    if [ "$c_watch" != on ]; then
-        say "watch off: edits do not rebuild (just dev watches)"
-        wait
-        return
-    fi
-    local dirs=() d
-    while IFS= read -r d; do dirs+=(-w "$d"); done < <(watch_dirs)
-    # Rust: a build (cargo decides what changed), staged only when the
-    # binary did. The island's sources and the share pages' assets have
-    # loops of their own.
-    cargo watch -q --postpone --delay 1 "${dirs[@]}" \
-        -i '**/apps/architect/island/**' -i '**/features/sites/assets/**' -i '*.md' -i '**/Cargo.lock' \
-        -s "'$self' rebuild node" &
-    pids+=($!)
-    cargo watch -q --postpone --delay 1 -w "$root/apps/architect/island" -w "$root/features/ui/transport-ui" \
-        -s "'$self' rebuild island" &
-    pids+=($!)
-    if [ -n "$arch_local" ] && [ -d "$arch_local/features/sites/assets" ]; then
-        cargo watch -q --postpone --delay 0.3 -w "$arch_local/features/sites/assets" -s "'$self' _touch-shares" &
-        pids+=($!)
-    fi
-    say "watching: $(watch_dirs | tr '\n' ' ')(+ the island$( [ -n "$arch_local" ] && echo ", Architect's share-page assets"))"
-    wait
+    wait -n "${pids[@]}"
+    say "web: one of studio-web's processes ended"
 }
 
-# The web app: Architect's web bundle with this distribution's
-# /app/distribution.json, its issuer the local one.
-run_web() {
-    plan_locked
-    load_plan
-    local web auth bindgen want out="$state/web" json="$state/distribution.json"
-    web="$(port web)" auth="$(port auth)"
-    for _ in $(seq 1 3600); do [ -x "$state/bin/studio-architect" ] && break; sleep 1; done
-    "$state/bin/studio-architect" distribution >"$json"
-    want=$(awk '/^name = "wasm-bindgen"$/{getline; gsub(/[^0-9.]/,""); print; exit}' "$arch_src/Cargo.lock")
-    bindgen="$(command -v wasm-bindgen || true)"
-    if [ -z "$bindgen" ] || ! "$bindgen" --version | grep -q "$want"; then
-        bindgen="$state/tools/bin/wasm-bindgen"
-        "$bindgen" --version 2>/dev/null | grep -q "$want" \
-            || cargo install -q wasm-bindgen-cli --version "$want" --locked --root "$state/tools"
-    fi
-    say "web: building Architect's web bundle with Studio Architect's distribution.json"
-    (
-        cd "$arch_src"
-        [ -n "$issuer_target" ] && export CARGO_TARGET_DIR="$issuer_target"
-        ARCHITECT_DISTRIBUTION="$json" ARCHITECT_WEB_URL="http://127.0.0.1:$web" WASM_BINDGEN="$bindgen" \
-            bash scripts/web-bundle.sh "$out" >&2
-    )
-    printf '{"issuer":"http://127.0.0.1:%s","client_id":"architect"}' "$auth" >"$out/app/config.json"
-    # The page's policy lets it talk to itself and to https; the stack's
-    # issuer is plain http on loopback, so the sign-in's token exchange is
-    # refused ("NetworkError") unless the page names it. This copy only.
-    sed -i "s|connect-src 'self' https:|connect-src 'self' https: http://127.0.0.1:$auth|" "$out/app/index.html"
-    say "web: http://127.0.0.1:$web/app/ (sign in as ada@local.test, password development-password)"
-    # One origin for the bundle and the node, as the hosted proxy joins
-    # them: a share link's page is the node's and loads the app from its
-    # own origin, so on the bundle's port alone no link opens.
-    say "web: share links open here: $(share_url "http://127.0.0.1:$web")"
-    exec python3 "$root/scripts/local-stack-front.py" "$out" "$web" "$(port node)"
-}
-
+# STUDIO DESKTOP: Studio's distribution of Architect (apps/desktop,
+# studio) under `dx serve`, rebuilt on a save through kache (an rsx edit
+# hot-reloads; no Rust hot-patching, whose builds bypass kache), an
+# isolated dev instance signed in to the stack's
+# issuer and syncing with the server like any other client. Its engine is
+# the `daw` extension, a development copy (extensions/daw, rebuilt alone):
+# the app starts the engine when none runs, and the engine outlives the
+# window (extensions/daw/src/owner.rs), so a rebuild or a hot-patch
+# reattaches. `just engine-stop` stops it. LOCAL_STACK_DESKTOP_ENV_<NAME>
+# (local-stack.local.env) gives the window <NAME>: what the engine opens
+# (FTS_DAW_OPEN), Ignition's renderer (IGNITION_BIN, IGNITION_ROOT, ...).
+# LOCAL_STACK_DESKTOP_AFTER names a script run once the window answers,
+# given its binary and control socket (a machine's own layout).
 run_desktop() {
     plan_locked
     load_plan
-    local vars=() line cfg=() bin
-    while IFS= read -r line; do vars+=("$line"); done < <(
+    load_choice
+    if [ "$c_desktop" != on ]; then
+        say "desktop: off (just dev desktop=on)"
+        return 0
+    fi
+    local triple out cfg=() vars=() line name k after
+    triple="$(host_triple)"
+    out="$(target_dir)/$triple/desktop-dev"
+    mapfile -t cfg < <(cargo_config)
+    # Its build first (the engine, then the window), in this process's log;
+    # `ready desktop` answers only once the window's control socket does.
+    ( build_desktop ) || die "desktop: the build failed (above)"
+    for _ in $(seq 1 7200); do
+        curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port server)/health" && break
+        sleep 1
+    done
+    # The window's issuer and the org's host are the stack's (Architect's
+    # `dev env app`); its own node is not the server: a port, a folder and
+    # an account of its own, hosting no org.
+    while IFS= read -r line; do
+        k="${line%%=*}"
+        case "$k" in
+            ARCHITECT_BIND | ARCHITECT_DATA_DIR | ARCHITECT_VAULTS | ARCHITECT_SESSION_FILE | ARCHITECT_HOST_ORG | \
+                ARCHITECT_WEB_APP | ARCHITECT_LANE_ORIGINS | ARCHITECT_NAME | ARCHITECT_FILES_DIR | ARCHITECT_CONFIG_DIR | \
+                ARCHITECT_SECRET_STORE | ARCHITECT_VAULT | ARCHITECT_VAULT_SEED) ;;
+            *) vars+=("$line") ;;
+        esac
+    done < <(
         cd "$arch_src" && env DEV_STACK_ROOT="$arch_src" DEV_STACK_STATE="$state/stack" DEVENV_STATE="$state" \
-            DEV_STACK_PORT_AUTH="$(port auth)" DEV_STACK_PORT_NODE="$(port node)" \
+            DEV_STACK_PORT_AUTH="$(port auth)" DEV_STACK_PORT_NODE="$(port server)" DEV_STACK_PORT_APP="$(port server)" \
             ${issuer_target:+CARGO_TARGET_DIR="$issuer_target"} cargo run -q -p xtask -- dev env app
     )
-    [ -s "$overrides" ] && cfg=(--config "$overrides")
-    # Built under the overrides (and Cargo.lock put back), then run apart
-    # from them, so the node's rebuilds do not wait on the window.
-    with_overrides cargo build --profile desktop-dev -p studio-architect "${cfg[@]}"
-    bin="$(target_dir)/desktop-dev/studio-architect"
-    say "desktop: Studio Architect (the window), its issuer and org node the stack's"
-    exec env "${vars[@]}" "$bin"
+    mkdir -p "$state/desktop/vault" "$state/desktop/files"
+    vars+=(
+        ARCHITECT_NAME=studio-desktop
+        ARCHITECT_BIND="127.0.0.1:$(port desktop)"
+        ARCHITECT_DATA_DIR="$state/desktop/node"
+        ARCHITECT_FILES_DIR="$state/desktop/files"
+        ARCHITECT_DEV=studio-stack
+        ARCHITECT_DEV_ROOT="$state/desktop"
+        ARCHITECT_DEV_VAULT="$state/desktop/vault"
+        ARCHITECT_DEV_EXTENSIONS="$root/extensions/daw"
+    )
+    while IFS='=' read -r name _; do
+        case "$name" in
+            LOCAL_STACK_DESKTOP_ENV_*) vars+=("${name#LOCAL_STACK_DESKTOP_ENV_}=${!name}") ;;
+        esac
+    done < <(env)
+    after="${LOCAL_STACK_DESKTOP_AFTER:-}"
+    if [ -n "$after" ]; then
+        case "$after" in /*) ;; *) after="$(cd "$root/$(dirname "$after")" && pwd)/$(basename "$after")" ;; esac
+        (
+            bin="" sock=""
+            for _ in $(seq 1 3600); do
+                desktop_up && break
+                sleep 2
+            done
+            bin="$(desktop_bin)"
+            sock="$(desktop_socket)"
+            say "desktop: up; running $after"
+            ARCHITECT_DEV_ROOT="$state/desktop" LOCAL_STACK_DESKTOP_INSTANCE="$(desktop_instance)" \
+                "$after" "$bin" "$sock" >&2 || say "desktop: $after failed"
+        ) &
+    fi
+    say "desktop: Studio (studio) under dx serve, signed in to the stack's issuer, its server :$(port server)"
+    cp Cargo.lock "$state/Cargo.lock.desktop"
+    trap '[ -f "$state/Cargo.lock.desktop" ] && ! cmp -s Cargo.lock "$state/Cargo.lock.desktop" && cp "$state/Cargo.lock.desktop" Cargo.lock' EXIT
+    cd "$root/apps/desktop"
+    if [ "${#cfg[@]}" -gt 0 ]; then
+        env "${vars[@]}" dx serve --platform desktop --renderer native --hot-patch false --profile desktop-dev \
+            --target "$triple" --open false --cargo-args="${cfg[*]}"
+    else
+        env "${vars[@]}" dx serve --platform desktop --renderer native --hot-patch false --profile desktop-dev \
+            --target "$triple" --open false
+    fi
 }
 
-# ── Status, phone, reset ─────────────────────────────────────────────────
+# ── Builds ───────────────────────────────────────────────────────────────
+# Each process builds first, in its own log, then serves: `devenv up` (or
+# `devenv processes attach`) shows it running and not ready, compiling,
+# until it really answers (`ready <process>`). Not devenv tasks: a task
+# runs inside `devenv up -d`'s two-minute start and a desktop bundle takes
+# longer. The same flags as the serve after it, so that serve is an
+# up-to-date check. Everything through kache (no hot-patching).
+# `local-stack.sh build <process>` runs one alone.
+
+# The Architect server: plain `architect-desktop`, no window.
+build_architect() {
+    plan_locked
+    load_plan
+    say "build: the Architect server (architect-desktop, no window) from $arch_src"
+    (
+        cd "$arch_src"
+        [ -n "$issuer_target" ] && export CARGO_TARGET_DIR="$issuer_target"
+        cargo build -p architect-desktop --no-default-features --features vox --bin architect-desktop
+    )
+}
+
+# studio-web, as `dx serve` builds it.
+build_web() {
+    plan_locked
+    load_plan
+    local crate="$root/apps/web" archweb cfg=()
+    archweb="$(crate_dir architect-web)"
+    [ -n "$archweb" ] && [ -d "$archweb" ] || die "build: no architect-web crate resolved (cargo metadata)"
+    prepare_web "$crate" "$archweb"
+    mapfile -t cfg < <(cargo_config)
+    say "build: studio-web (apps/web) for the browser"
+    cd "$crate"
+    if [ "${#cfg[@]}" -gt 0 ]; then
+        with_overrides dx build --platform web --cargo-args="${cfg[*]}"
+    else
+        dx build --platform web
+    fi
+}
+
+# Studio desktop and its engine (the `daw` extension's program, copied
+# into its package), as `dx serve` builds them.
+build_desktop() {
+    plan_locked
+    load_plan
+    local triple out cfg=()
+    triple="$(host_triple)"
+    out="$(target_dir)/$triple/desktop-dev"
+    mapfile -t cfg < <(cargo_config)
+    say "build: the engine (daw-extension) into its package, extensions/daw"
+    with_overrides cargo build --profile desktop-dev --target "$triple" --bin daw-extension "${cfg[@]}"
+    cp --reflink=auto "$out/daw-extension" "$root/extensions/daw/daw-extension.new"
+    mv "$root/extensions/daw/daw-extension.new" "$root/extensions/daw/daw-extension"
+    say "build: Studio desktop (apps/desktop)"
+    cd "$root/apps/desktop"
+    if [ "${#cfg[@]}" -gt 0 ]; then
+        with_overrides dx build --platform desktop --renderer native --profile desktop-dev --target "$triple" \
+            --cargo-args="${cfg[*]}"
+    else
+        dx build --platform desktop --renderer native --profile desktop-dev --target "$triple"
+    fi
+}
+
+# The window as it runs, from its dev instance's own record
+# (`<ARCHITECT_DEV_ROOT>/studio/studio-stack/instance.json`, written by the
+# app: its pid, its control socket, whether it runs). Not `studio dev path`,
+# which names another instance's socket folder, nor dx's binary, which dx
+# names with a hash (`studio-1f19ef17`).
+desktop_instance() { echo "$state/desktop/studio/studio-stack/instance.json"; }
+desktop_field() {
+    python3 -c 'import json, sys
+try:
+    print(json.load(open(sys.argv[1])).get(sys.argv[2], ""))
+except (OSError, ValueError):
+    pass' "$(desktop_instance)" "$1" 2>/dev/null
+}
+desktop_bin() {
+    local pid
+    pid="$(desktop_field pid)"
+    [ -n "$pid" ] && readlink "/proc/$pid/exe" 2>/dev/null
+}
+desktop_socket() { desktop_field socket; }
+desktop_up() {
+    local pid bin sock
+    pid="$(desktop_field pid)"
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || return 1
+    bin="$(desktop_bin)" sock="$(desktop_socket)"
+    [ -n "$bin" ] && [ -S "$sock" ] && "$bin" actions --app "$sock" run APP_STATUS >/dev/null 2>&1
+}
+
+# ── Status, tailnet, reset ───────────────────────────────────────────────
 up() { curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$1/" 2>/dev/null; }
 
 status() {
     [ -f "$state/plan.env" ] && banner
     local name p
-    for name in mock_oauth auth node web site; do
+    for name in mock_oauth auth server web web_dx desktop; do
         p="$(port "$name")"
         printf '  %-11s http://127.0.0.1:%-6s %s\n' "$name" "$p" "$(up "$p" && echo running || echo 'not running')"
     done
-    [ -f "$state/share" ] && echo "  share link  $(share_url)"
-    echo "  web app     http://127.0.0.1:$(port web)/app/  (ada@local.test / development-password)"
-    echo "  site        http://127.0.0.1:$(port site)/"
+    echo "  studio-web  http://127.0.0.1:$(port web)/app/  (ada@local.test / development-password)"
+    [ -f "$state/share" ] && share_urls | sed 's/^/  share link  /'
+    [ -f "$state/tailnet" ] && echo "  tailnet     $(cat "$state/tailnet")/app/"
+    return 0
 }
 
 tailnet_name() {
     tailscale status --self --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))'
 }
 
-phone() {
-    command -v tailscale >/dev/null || die "no tailscale on this machine"
-    local https name node
-    https="$(py get phone.https_port)"
-    node="$(port node)"
-    if [ "${1:-}" = off ]; then
-        tailscale serve --https="$https" off
-        say "phone: off (https port $https no longer served)"
-        return
-    fi
-    name="$(tailnet_name)"
+# studio-web (the front: the app and the server's paths) on this
+# machine's tailnet name over HTTPS: tailnet only, `tailscale serve`,
+# never funnel. [tailnet] https_port in local-stack.toml.
+tailnet_on() {
+    command -v tailscale >/dev/null || { say "tailnet: no tailscale on this machine"; return 1; }
+    local https name web out
+    https="$(py get tailnet.https_port)"
+    web="$(port web)"
+    name="$(tailnet_name)" || { say "tailnet: tailscale is not up"; return 1; }
     # Never over something else already served on that port.
     if tailscale serve status 2>/dev/null | grep -A1 "^https://$name:$https" | grep -q proxy \
-        && ! tailscale serve status | grep -A1 "^https://$name:$https" | grep -q "127.0.0.1:$node"; then
-        die "https://$name:$https already serves something else: set [phone] https_port (Tailscale serves 443, 8443, 10000)"
+        && ! tailscale serve status | grep -A1 "^https://$name:$https" | grep -q "127.0.0.1:$web"; then
+        say "tailnet: https://$name:$https already serves something else: set [tailnet] https_port (Tailscale serves 443, 8443, 10000)"
+        return 1
     fi
-    up "$node" || die "the node is not running (just dev or just demo first)"
-    # Tailnet only: serve, never funnel.
-    local out
-    if ! out="$(tailscale serve --bg --https="$https" "http://127.0.0.1:$node" 2>&1)"; then
+    if ! out="$(tailscale serve --bg --https="$https" "http://127.0.0.1:$web" 2>&1)"; then
         if grep -q 'Access denied' <<<"$out"; then
-            die "tailscale refused: this user may not change what it serves. Once, as root: sudo tailscale set --operator=$USER (then just phone again)"
+            say "tailnet: tailscale refused: this user may not change what it serves. Once, as root: sudo tailscale set --operator=$USER"
+        else
+            say "tailnet: tailscale serve failed: $out"
         fi
-        die "tailscale serve failed: $out"
+        return 1
     fi
-    say "phone: on this tailnet only, with a ts.net certificate (tailscale serve; never funnel). Open on the phone:"
-    share_url "https://$name:$https"
-    say "turn it off: just phone off"
+    echo "https://$name:$https" >"$state/tailnet"
+    say "tailnet: studio-web on this tailnet: https://$name:$https/app/ (share links: $(share_url "https://$name:$https"))"
+}
+
+tailnet_off() {
+    command -v tailscale >/dev/null || return 0
+    tailscale serve --https="$(py get tailnet.https_port)" off
+    rm -f "$state/tailnet"
+    say "tailnet: off"
 }
 
 reset() {
-    if up "$(port node)" || up "$(port auth)"; then die "the stack is running: stop devenv up first"; fi
+    if up "$(port server)" || up "$(port auth)"; then die "the stack is running: stop devenv up first"; fi
     rm -rf "$state"
     say "removed $state"
 }
@@ -687,31 +793,44 @@ case "$cmd" in
         case "${1:-}" in
             mock-oauth) plan_locked && xdev run mock-oauth ;;
             auth) run_auth ;;
-            node) run_node ;;
+            architect) run_architect ;;
             web) run_web ;;
-            site) plan_locked && xdev run site ;;
             desktop) run_desktop ;;
-            *) die "run: mock-oauth, auth, node, web, site or desktop" ;;
+            *) die "run: mock-oauth, auth, architect, web or desktop" ;;
         esac
         ;;
-    rebuild) load_choice && load_plan && rebuild "$@" ;;
+    build)
+        case "${1:-}" in
+            architect) build_architect ;;
+            web) build_web ;;
+            desktop) build_desktop ;;
+            *) die "build: architect, web or desktop" ;;
+        esac
+        ;;
     status) status ;;
     ready)
         # devenv's readiness probe: the process answers on its port.
         case "${1:-}" in
-            auth | node) curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port "$1")/health" ;;
+            auth) curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port auth)/health" ;;
+            architect) curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port server)/health" ;;
             mock-oauth) curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$(port mock_oauth)/" ;;
+            # Built and served: dx serves the app's own module only once its
+            # build is done (before, its "building" page).
+            web) curl -sf -o /dev/null --max-time 2 "http://127.0.0.1:$(port web)/wasm/studio-web.js" ;;
+            # The window answers on its control socket.
+            desktop) desktop_up ;;
             *) curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$(port "$1")/" ;;
         esac
         ;;
-    phone) phone "$@" ;;
+    tailnet)
+        if [ "${1:-}" = off ]; then tailnet_off; else tailnet_on; fi
+        ;;
     smoke) exec bash "$root/scripts/local-stack-smoke.sh" "$@" ;;
     reset) reset ;;
-    url) share_url "$@" ;;
+    url) share_urls "$@" ;;
     _xdev) xdev "$@" ;;
-    _touch-shares) touch_shares ;;
     *)
-        sed -n '2,18p' "$0" >&2
+        sed -n '2,24p' "$0" >&2
         exit 64
         ;;
 esac

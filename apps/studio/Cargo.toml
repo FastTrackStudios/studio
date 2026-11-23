@@ -1,0 +1,161 @@
+[package]
+name = "studio-app"
+description = "Studio, the app: a plain Dioxus app on Drive and app-shell (orgs, setlists, each song's files), growing into the session"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# The program is Studio (what the platform shows: its process, its window's
+# app id); the package stays studio-app.
+[[bin]]
+name = "Studio"
+path = "src/main.rs"
+
+[dependencies]
+session-sync.workspace = true
+# A one-file song read from its bytes (its session part, its id): pure Rust,
+# for the browser too.
+session-format = { workspace = true, features = ["read"] }
+web-time = "1"
+# Several of Drive's answers awaited at once (a setlist's song folders).
+futures-util = "0.3"
+dioxus = { version = "=0.8.0-alpha.3", features = ["router"] }
+# Drive, the local-first sync: live sets, presence and the spine, in the
+# browser and natively (its client keeps copies in Studio's folder and
+# works without a node; src/storage.rs).
+drive-dioxus = { workspace = true, optional = true }
+drive-client = { workspace = true, optional = true }
+drive-spine.workspace = true
+# Drive's registry (projects shared with other orgs): the tree and the
+# registry only, no blob store.
+drive-files.workspace = true
+loro = "1.18"
+# The window: the sidebar and top bar on a desktop, the tab pill, round
+# button, accessory, drawer and sheets on a phone.
+# FastTrackStudios/app-shell, not features/app/shell (the old apps' log
+# ring and update check), which has the same package name: say
+# `-p studio-app`, never `-p app-shell`.
+app-shell = { git = "https://github.com/FastTrackStudios/app-shell", rev = "46a0d04a9bde95deac00745fa996313c874e9be8" }
+# app-shell's native side: the Blitz window without a system frame, the
+# shell's title bar drawing the window's buttons (and dragging it).
+app-shell-native = { git = "https://github.com/FastTrackStudios/app-shell", rev = "46a0d04a9bde95deac00745fa996313c874e9be8", optional = true }
+# Architect's extensions in app-shell's panes and windows: the session's
+# arrangement, the mixer's window and the engine are the real extensions
+# (extensions/*), hosted here.
+app-shell-extensions = { git = "https://github.com/FastTrackStudios/app-shell", rev = "46a0d04a9bde95deac00745fa996313c874e9be8", optional = true }
+serde_json = { version = "1", optional = true }
+js-sys = { version = "0.3", optional = true }
+# The browser's fetch, for bytes (waveforms, uploads).
+web-sys = { version = "0.3", optional = true, features = ["Window", "Request", "RequestInit", "Response", "Headers", "Blob", "BlobPropertyBag", "Url", "Performance", "Location"] }
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+# Charts: a song's .kf parsed and engraved to SVG in the page, each bar
+# timed to the recording (CPU-only `svg` tier: no wgpu, builds for wasm).
+keyflow = { workspace = true, features = ["text", "svg"] }
+# The Action List and its doors (native): what agents drive the app with
+# (src/actions.rs).
+architect = { workspace = true, optional = true, features = ["action-list"] }
+architect-mcp = { workspace = true, optional = true, features = ["http"] }
+architect-control = { workspace = true, optional = true, features = ["server"] }
+architect-scripting = { workspace = true, optional = true, features = ["luau"] }
+facet = { workspace = true, optional = true }
+facet-json = { workspace = true, optional = true }
+futures-channel = { version = "0.3", optional = true }
+tracing = { workspace = true, optional = true }
+# The session's views are the real extensions, linked in and hosted in
+# app-shell's panes (src/hosted.rs): the arrangement, the mixer (in a
+# window of its own), the lyrics and the navigator, each a Studio window
+# on the engine (studio-view-link), and session-ui's own top and bottom
+# bars around them, fed from the same engine link.
+studio-arrangement = { workspace = true, optional = true }
+studio-mixer = { workspace = true, optional = true }
+studio-lyrics = { workspace = true, optional = true }
+studio-navigator = { workspace = true, optional = true }
+# Keyflow's chart view (the live editor and its note-input toolbar, on the
+# song's chart in its one file) and Ignition's room, the real extensions.
+keyflow-extension = { workspace = true, optional = true }
+ignition-pane = { workspace = true, optional = true }
+studio-view-link = { workspace = true, optional = true }
+session-ui = { workspace = true, optional = true, features = ["native"] }
+session-engine = { workspace = true, optional = true, features = ["native"] }
+architect-extensions = { workspace = true, optional = true, features = ["host", "linked", "process"] }
+architect-extensions-dioxus = { workspace = true, optional = true }
+architect-settings = { workspace = true, optional = true }
+# Process extensions (the engine's `daw`) and process views (Ignition's
+# room, drawn by its renderer).
+architect-views = { workspace = true, optional = true }
+architect-process-view = { workspace = true, optional = true, features = ["extension"] }
+# Waveform peaks (the sidecar format; no producers in the app).
+drive-sidecars.workspace = true
+# Drive's agent on this computer: any Drive file as a real local path,
+# warmed ahead of a set (desktop builds; docs/app-files.md in Drive).
+drive-local = { workspace = true, optional = true }
+
+[features]
+default = []
+# Drive's code (the live sets, setlist files, songs' files), in every
+# build that has a renderer.
+drive = ["dep:drive-dioxus", "dep:drive-client", "dep:serde_json", "dep:tracing"]
+web = ["dioxus/web", "drive", "dep:js-sys", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
+desktop = ["dioxus/desktop", "local"]
+# The same app drawn by Blitz (the GPU renderer Signal's panes and the
+# engine's views use), on a desktop and on iOS: what the one app runs on
+# outside a browser.
+native = [
+    "dioxus/native",
+    "local",
+    "drive",
+    # The app's spans, exported by app-shell's telemetry (src/trace.rs).
+    "dep:opentelemetry",
+    "dep:tracing-opentelemetry",
+    "dep:app-shell-native",
+    "dep:app-shell-extensions",
+    # The app's Action List served to agents: MCP on loopback with a
+    # token, the control socket, Luau scripts over every action.
+    "dep:architect",
+    "dep:architect-mcp",
+    "dep:architect-control",
+    "dep:architect-scripting",
+    "dep:facet",
+    "dep:facet-json",
+    "dep:serde_json",
+    "dep:futures-channel",
+    "dep:tracing",
+    "dep:studio-arrangement",
+    "dep:studio-mixer",
+    "dep:studio-lyrics",
+    "dep:studio-navigator",
+    "dep:keyflow-extension",
+    "dep:ignition-pane",
+    "dep:studio-view-link",
+    "dep:session-ui",
+    "dep:session-engine",
+    "dep:architect-extensions",
+    "dep:architect-extensions-dioxus",
+    "dep:architect-settings",
+    "dep:architect-views",
+    "dep:architect-process-view",
+]
+local = ["dep:drive-local"]
+mobile = ["dioxus/mobile"]
+
+# A timer for the moving playheads: the browser's on the web, tokio's
+# (which the desktop and mobile renderers already run) elsewhere.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-timers = { version = "0.3", features = ["futures"] }
+# The browser's crypto for getrandom 0.3 (Loro's ids).
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1", features = ["time"] }
+opentelemetry = { version = "0.30", optional = true }
+tracing-opentelemetry = { version = "0.31", optional = true }
+
+[dev-dependencies]
+# song_ids' tests write one-file songs.
+session-format = { workspace = true, features = ["read", "store"] }
+uuid = { workspace = true }

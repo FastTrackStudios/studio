@@ -42,13 +42,18 @@ setlists = { workspace = true }
 chrono = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
-architect-extensions = { workspace = true, optional = true, features = ["guest"] }
+# `linked-core` on every target (a browser links it); `guest`, the
+# process copy's side, off wasm only (below).
+architect-extensions = { workspace = true, optional = true, features = ["linked-core"] }
 futures-channel = { workspace = true, optional = true }
 clap = { workspace = true, optional = true, features = ["env"] }
 futures = { workspace = true, optional = true }
 architect = { workspace = true, optional = true, features = ["action-list"] }
 architect-vault = { workspace = true, optional = true, features = ["actions"] }
 architect-bases = { workspace = true, optional = true, features = ["actions"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+architect-extensions = { workspace = true, optional = true, features = ["guest"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

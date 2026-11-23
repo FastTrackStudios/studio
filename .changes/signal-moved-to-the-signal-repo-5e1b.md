@@ -3,9 +3,7 @@
 "control-surfaces" = "none"
 "session-desktop" = "none"
 "session-engine" = "none"
-"signal-web" = "none"
 "song" = "none"
-"studio-desktop" = "none"
 "web-audio-worklet" = "none"
 "xtask-workflows" = "none"
 ---

@@ -2,11 +2,11 @@
 # Build Studio for Linux as an AppImage: the installer attached to the
 # release's GitHub Release, and what scripts/install.sh installs.
 #
-# Studio is Studio's distribution of Architect (apps/architect, the cargo
-# target `studio-architect`, run as `studio`), with its engine beside it:
+# Studio is Studio's distribution of Architect (apps/desktop, the cargo
+# package `studio-desktop`, run as `studio`), with its engine beside it:
 # the `daw` process extension (extensions/daw, the program `daw-extension`)
 # in `extensions/daw/`, where the distribution looks for what it ships
-# (`Distribution::shipped`, apps/architect/src/lib.rs `SHIPPED`).
+# (`Distribution::shipped`, apps/desktop/src/lib.rs `SHIPPED`).
 #
 #   scripts/desktop/linux.sh     # -> target/desktop/Studio-<version>-linux-x86_64.AppImage
 #
@@ -48,10 +48,10 @@ set -euo pipefail
 app=studio
 # The cargo target, and the name it runs under: Linux names a window's app
 # after its program.
-crate=studio-architect; built=studio-architect; bin=studio; title=Studio; features=""
+crate=studio-desktop; built=studio; bin=studio; title=Studio; features=""
 # The engine: its crate and program, and its package's folder in the bundle.
 engine_crate=daw-extension; engine_bin=daw-extension; engine_pkg=extensions/daw
-icon=apps/studio/desktop/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
+icon=apps/desktop/icon-1024.png
 comment="Sets, charts, lighting and the DAW, in one app"
 categories="AudioVideo;Audio;Music;"
 

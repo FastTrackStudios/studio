@@ -3,13 +3,14 @@
 FastTrackStudio's audio and music software, in one repository: a DAW and
 the apps built on it.
 
-- **Session** — the full DAW: tracking, editing and mixing, setlists and
-  songs, charts in the keyflow language, and the guide (click, count-in,
-  spoken section cues). Desktop, iPhone, and a browser version.
-- **Signal** — a live instrument rig: guitar, bass, keys, drums and
-  sampled instruments, with tones and patches switched during a set. The
-  rig runs headless and every screen — laptop, phone, tablet, browser — is
-  a remote attached to it.
+- **Studio** — the app: Studio's distribution of Architect, with Session
+  (the full DAW: tracking, editing and mixing, setlists and songs, charts
+  in the keyflow language, the guide) and Signal's live rigs compiled in
+  as extensions; and its web client.
+- **Signal** — the live instrument rig's library (guitar, bass, keys,
+  drums, sampled instruments) lives in
+  [FastTrackStudios/signal](https://github.com/FastTrackStudios/signal);
+  here are its extensions.
 - **Patchbay** — studio routing, in its own repo:
   [FastTrackStudios/patchbay](https://github.com/FastTrackStudios/patchbay).
 - **Plugins** — the FTS effects (EQ, compressor, saturation, delay,
@@ -24,7 +25,7 @@ a rig being a folder of tracks in it
 
 ## Install
 
-**Studio** is the app: Signal and Session behind one front screen.
+**Studio** is the app (apps/desktop).
 
 ### macOS and Linux
 
@@ -45,24 +46,20 @@ version, set `STUDIO_VERSION=26.10.1`. You can also download the
 installers yourself from
 [Releases](https://github.com/FastTrackStudios/studio/releases/latest).
 
-### iPhone and iPad (TestFlight beta)
+### iPhone and iPad
 
-Studio for iPhone and iPad is in beta on TestFlight, and every release
-ships there too. Install [TestFlight](https://apps.apple.com/app/testflight/id899247664)
-from the App Store, then join the beta:
-
-**[Join the Studio beta on TestFlight](https://testflight.apple.com/join/TESTFLIGHT_CODE)** <!-- TODO: the public link; `ruby apps/studio/desktop/ios/testflight-status.rb app.fasttrackstudio.studio` prints it -->
+Not for now: the iOS build went with the old rig app, and Studio's iOS
+target is being built.
 
 ## Layout
 
 ```
-apps/      the applications — session/, signal/, plugins/, themer/
-crates/    daw (the DAW core and its standalone engine), studio (the
-           umbrella: REAPER adapter, project files, UI, CLI), frame
-features/  one crate per feature — the effects, the rigs, audio, MIDI,
-           formats, editing, control surfaces, …
-vendor/    patched third-party crates
-xtask/     build tooling
+apps/        desktop/ (Studio, the `studio` binary) and web/ (studio-web)
+extensions/  Studio's views and engine as Architect extensions
+features/    one crate per feature — engine/ (Session: engine, runtime,
+             ui, host), editing, timeline, formats, control surfaces, …
+plugins/     the plugins that need Studio (guide, host) and verify/
+xtask/       build tooling
 docs/      design notes and guides
 ```
 
@@ -74,8 +71,8 @@ Everything builds from the repository root, in the Nix dev shell:
 nix develop                 # or: direnv allow
 just check                  # cargo check --workspace
 just test                   # the test suite (cargo nextest)
-just app                    # run Session
-just guitar                 # run Signal's guitar rig
+cargo run -p studio-desktop --bin studio   # run Studio
+just app                    # run Session's window
 just plugins-bundle         # build the CLAP/VST3 plugins into target/bundled
 ```
 
@@ -105,5 +102,6 @@ the rigs' bundled models, need them.
 
 ## Licence
 
-GPL-3.0-or-later. Vendored third-party code under `vendor/` keeps its
-own licence.
+GPL-3.0-or-later. Patched third-party crates live in
+[FastTrackStudios/vendor](https://github.com/FastTrackStudios/vendor),
+under their own licences.

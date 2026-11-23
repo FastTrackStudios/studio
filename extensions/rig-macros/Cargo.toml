@@ -1,0 +1,25 @@
+[package]
+name = "studio-rig-macros"
+description = "The macro bar of the patch playing: its knobs and pads, each one's panel a press away. A pane of Studio, a vox client of the rig engine (the studio.rig extension); linked into apps/desktop, or its own process as a development copy."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "studio-rig-macros"
+path = "src/main.rs"
+
+[dependencies]
+studio-rig-link = { workspace = true }
+architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
+architect-extensions-dioxus = { workspace = true, features = ["guest"] }
+guitar = { workspace = true, features = ["ui"] }
+dioxus = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

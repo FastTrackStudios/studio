@@ -1,5 +1,4 @@
 ---
-"productions" = "minor"
 "session-desktop" = "minor"
 ---
 

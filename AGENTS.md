@@ -1,76 +1,59 @@
 # studio — Repo Instructions
 
-**studio is FastTrackStudio's audio/music product in one repo**: the DAW
-(`daw`) and everything built on it — **Studio, the one app** (Signal, the
-live rig, and Session, the full DAW, as views of one project behind one
-welcome screen, the library) and the CLAP/VST3 plugins. It is the merger, in
+**studio is FastTrackStudio's audio/music product in one repo**: **Studio,
+the one app** (`apps/studio`: a Dioxus app on Architect's application
+framework and app-shell, its features extensions compiled in: the
+session's arrangement, mixer, lyrics and navigator here, Keyflow's chart
+and Ignition's lighting from their repos), the Session engine
+they run, and the CLAP/VST3 plugins that need Studio. It is the merger, in
 October 2026, of the former session, daw, processor, signal, patchbay and
-frame repos. One Cargo workspace, one lockfile, one `target/`, one flake.
-Patchbay (studio routing) went back to its own repo, FastTrackStudios/patchbay,
-in November 2026 (studio#510). Frame (the design / control-surface engine) is
-its own repo again too, a git dependency here (`docs/frame.md`), and so is
-Signal's library side — the rigs, the sampler, NAM and the nam, signal and
-sampler plugins, FastTrackStudios/signal (studio#510) — and the adapters:
-the REAPER backend and extensions, the project formats, keybinds and the
-`studio` umbrella crate, FastTrackStudios/studio-adapters (studio#510).
+frame repos; since then the DAW itself (FastTrackStudios/daw), Patchbay,
+Frame (`docs/frame.md`), Signal's library side (the rigs, the sampler,
+NAM, FastTrackStudios/signal) and the adapters (REAPER, the project
+formats, keybinds and the `studio` umbrella crate,
+FastTrackStudios/studio-adapters) are repos of their own again, taken by
+git (studio#510). One Cargo workspace, one lockfile, one `target/`, one
+flake.
 
 ## Layout
 
 ```
-apps/       studio/desktop                     Studio, THE app (desktop + iOS, one
-                                               TestFlight upload): its welcome screen
-                                               (the library) opens the DAW view or
-                                               the rig view; the rig app
-                                               crate (`studio-desktop`, and its
-                                               headless `--engine`)
-            session/{desktop,engine,ui,web,daw-web}
-                                               Session: its app as a library Studio
-                                               mounts (+ its own binary and CLIs), its
-                                               engine (`session-engine`: the set, the
-                                               Action List, `studio engine`; draws
-                                               nothing), its window (`session-ui`: the
-                                               DAW view, a view of the engine), the
-                                               site, the DAW in a browser
-            signal/{mobile,web}                Signal: Android, the site (the rigs they
-                                               show are FastTrackStudios/signal's)
-            architect/                         Studio Architect: the Architect app with
-                                               Studio's extensions compiled in; its node
-                                               is the hosted Architect
-                                               (docs/architect-distribution.md)
-            plugins/*                          the plugins that need Studio (guide,
-                                               host), verify/ (bundle load checks);
-                                               the effects' plugins are in
-                                               FastTrackStudios/fts-fx, the nam,
-                                               signal and sampler plugins in
-                                               FastTrackStudios/signal
-            themer/
-crates/     daw/*      what is left of the DAW here: the DAW's notes (docs/).
-                       `daw-actions` (they drive a live REAPER) is in
-                       FastTrackStudios/studio-adapters. The DAW
-                       itself (its base: proto, control, module,
-                       transport-sync, audio-graph, allocator, the test
-                       macro, utils, `midi`, `audio`, `fts-sample`; and the
-                       engine: the `daw` facade, `daw-standalone`,
-                       `session-format`, `dawfile-reaper`,
-                       `signal-plugin-host`, `builtin`, `daw-sync`) is in
-                       FastTrackStudios/daw, taken by git: see "The base
-                       and the engine"
-            (`studio`, the umbrella over daw — the REAPER adapter,
-                       project files, the daw CLI, the integration-test
-                       harness, all cargo features of it — is in
-                       FastTrackStudios/studio-adapters, taken by git)
+apps/       studio/    Studio, THE app (package `studio-app`, app and binary
+                       `Studio`): one Dioxus app for desktop, iOS and the
+                       browser, on Architect's application framework and
+                       app-shell(-extensions), with Drive as optional sync.
+                       Its features are extensions, linked in and
+                       overridable while it runs. Developing it:
+                       apps/studio/docs/development.md. Never
+                       `-p app-shell`: features/app/shell has the same
+                       package name.
+            desktop/, web/, mobile/: retired, out of the workspace
+                       (studio#676 deletes them)
+            Nothing else is an app: Session is the engine in features/engine,
+            Signal is extensions (here, extensions/rig*, and its library in
+            FastTrackStudios/signal).
+extensions/ Studio's views and engine as Architect runtime extensions (daw,
+            arrangement, mixer, lyrics, navigator, link, rig*, keys,
+            tempo-map, …)
+plugins/    the plugins that need Studio (guide, host), verify/ (bundle load
+            checks); the effects' plugins are in FastTrackStudios/fts-fx,
+            the nam, signal and sampler plugins in FastTrackStudios/signal
 features/   one crate per feature, sub-folders allowed. Name a feature for what
             it is; anything host-specific goes under adapters/<host>.
-            Signal's domain (features/signal: rigs, presets, scenes,
-                         its browser, storage, controller, grid, macros),
-                         the instruments (features/rigs: guitar, keys,
-                         drums, ekit, synth, orchestra, the rig host, the
-                         RigCore proto, the rig frame, `kontrol`), the
-                         sampler and NAM are in FastTrackStudios/signal,
-                         taken by git (see "Signal"). The effects (`dsp`,
-                         `dsp-core`) are in FastTrackStudios/fts-fx
-                         (docs/fts-fx.md), `builtin` (the effects as engine
-                         blocks) in FastTrackStudios/daw with the engine.
+            engine/      Session, not a primitive but the engine: engine/
+                         (`session-engine`: the set, the Action List,
+                         `studio engine`; draws nothing), runtime/
+                         (`session-runtime`, host-neutral), ui/
+                         (`session-ui`: the DAW view, a view of the engine),
+                         host/ (`session-desktop`: its window, CLI module
+                         and engine host, as a library + a binary). Folders
+                         moved, package names kept for now.
+            Signal's domain and the instruments (features/signal,
+                         features/rigs), the sampler and NAM are in
+                         FastTrackStudios/signal, taken by git (see
+                         "Signal"). The effects (`dsp`, `dsp-core`) are in
+                         FastTrackStudios/fts-fx (docs/fts-fx.md), `builtin`
+                         in FastTrackStudios/daw with the engine.
             editor/      the editor: piano roll, drum lanes, curves
             timeline/    the editing engine the arrangement and the editor
                          share (docs/design/timeline.md)
@@ -86,9 +69,17 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
                          kept as project notes of an Architect vault with
                          a stage; an Ableton show set's songs as a setlist
                          (`studio productions …`; studio#396)
+            tempo-map/   tempo maps from a recording's stems: onsets,
+                         beats, the snap to hits, the backbeat's phase,
+                         bar 1, one tempo point per bar in any meter, and
+                         the measurements and benchmark that say how good
+                         a map is (no UI; `tempo-map bench`). Its Action
+                         List is the extension `studio.tempo-map`
+                         (`extensions/tempo-map`, a process: rebuilt and
+                         swapped under a running Studio)
             session/, song/, input/,
             chords/, formats/, control-surfaces/,
-            dynamic-template/, patch-list/, …
+            dynamic-template/, patch-list/, distribution/, island/, …
             ui/*         shared UI: daw-ui, dock, plugin-faces, … (fts-audio-ui
                          and plugin-core are in fts-fx)
             app/         shell (log ring, crash log, update check), launcher
@@ -101,14 +92,21 @@ features/   one crate per feature, sub-folders allowed. Name a feature for what
                          at one `rev`; to work on both, patch
                          `[patch."https://github.com/FastTrackStudios/studio-adapters"]`
                          with paths (never committed; its README)
-vendor/     patched third-party crates (each with UPSTREAM.md or FTS-PATCH.md)
-xtask/      devtools, plugins (the bundler), session-reaper
-docs/       design/ (one-engine.md), per-domain notes (daw, signal, frame,
-            …), agents/, guides, specs
+xtask/      devtools, plugins (the bundler), session-reaper, workflows (every
+            .github/workflows file)
+docs/       design/ (one-engine.md), per-domain notes (signal, frame, …),
+            agents/, guides, specs. The DAW's own notes are in
+            FastTrackStudios/daw (docs/)
 nix/        flake modules (toolchain, shells, packages), reaper-config,
             vendored flakes
-scripts/    helper scripts the Justfile calls
+scripts/    helper scripts the Justfile calls (stack-overrides.py writes the
+            local stack's cargo overrides)
 ```
+
+There is no `vendor/`, `crates/` or `deploy/`: patched third-party crates
+(dioxus-test among them) are in FastTrackStudios/vendor, taken by git; the
+server is deployed to a NixOS host from the infra repo, from the release's
+node tarball (no image).
 
 Some features carry their own `AGENTS.md` / `README.md`
 (`features/dynamic-template`, `features/editor`, …) — read it before
@@ -130,10 +128,8 @@ working there.
   as tracks. A desktop window can also drive the engine in a process of
   its own (`FTS_ENGINE=spawn|attach`: `studio engine`, found or spawned,
   outliving the window — `session_engine::studio_engine::link`). In
-  Studio the window opens on the welcome screen (the
-  library, `apps/studio/desktop/src/front.rs`) and goes into the DAW view
-  or the rig view of what is opened; Session's Action List is served from
-  launch. More engines means more processes of the same engine. Read
+  Studio (apps/desktop) the engine is the `daw` extension (extensions/daw)
+  and the DAW and rig views are extensions attached to it. More engines means more processes of the same engine. Read
   **`docs/design/one-engine.md`** before touching rigs, engines, meters or
   MIDI.
 - **The apps share their shell**: the log ring / crash log / flight log,
@@ -256,8 +252,7 @@ just check                 # cargo check --workspace
 just test                  # the core test set: cargo nextest run -p <each of the Justfile's test_packages>
 just test-doc              # doctests (nextest cannot run them)
 just app [PROJECT]         # Session (session-desktop, the shared dev build)
-just guitar / just keys    # the rig view (studio-desktop --guitar/--keys skip the welcome screen; FTS_STUDIO_OPEN=<path|setlist|rig> too)
-just signal-engine         # studio-desktop --engine: the headless rig engine (ws://:4040/vox)
+cargo run -p studio-desktop --bin studio   # Studio (apps/desktop)
 just reaper-test [FILTER]  # Session's #[reaper_test] suites in a real REAPER
 # daw-reaper's REAPER suites: `just reaper daw-test` in FastTrackStudios/studio-adapters
 just plugins-bundle [names] && just plugins-link   # .clap/.vst3 into target/bundled, linked into ~/.clap, ~/.vst3
@@ -271,7 +266,7 @@ format, the engine, the timeline, the wire types, every effect's parameter
 round-trip. `just test`, local CI and CI build and run exactly those. A
 crate gains a place there when it gains tests worth running on every change.
 
-**Run it locally: `just dev`** (everything, rebuilt on save:
+**Studio itself (apps/studio): [apps/studio/docs/development.md](apps/studio/docs/development.md)** (build, run, the engine, its actions, overriding an extension live, co-developing with other repos). The older stack: **`just dev`** (everything, rebuilt on save:
 the issuer, Studio's node on a copy of the test vault with its share link,
 the web app, the site; `architect=local` / `keyflow=local` put the sibling
 checkouts under it), **`just demo`** (the quickest look, nothing watched),
@@ -306,10 +301,8 @@ hook's status) is an indicator, not a gate. A DRAFT PR runs no job (each
 reports skipped); marking it ready starts the run, and every push after
 that runs again, so mark a PR ready before waiting on its checks. **`CI`**
 (`checks.yml`: `Gates`, `Rail plan`, `Check` + advisory clippy, `Wasm`,
-`Tests`, `Web image evaluates` (the studio-web image's nix evaluation and
-crate vendoring) and `Apple builds` (on airlock: the macOS app linked and held
-to the .dmg's no-/nix/store guard, a linking `cargo build` of the iOS app;
-studio#444), aggregated as
+`Tests` and `Apple builds` (on airlock: the macOS app linked and held
+to the .dmg's no-/nix/store guard; studio#444), aggregated as
 **`CI passed`**, which `just release` requires) runs after every merge to `main`,
 NARROWED by `cargo rail plan` to what the merge reaches since the newest
 green commit with rail evidence (`Check` records that evidence on the pool
@@ -323,12 +316,12 @@ three runners sharing one warm cache (`Codys-Wright/nix-config`
 hosts/THEBATTLESHIP/github-runners.nix): `studio-main` for every check,
 a hotfix PR's included, so the check target dirs are built once;
 `studio-release` (and airlock's `studio-release-mac`) build only release
-artifacts from a tag: the studio-web image, the AppImage, the `.dmg`,
-TestFlight. A newer merge queues behind the running run (only the newest waits),
+artifacts from a tag: the node and web tarballs, the AppImage, the
+`.dmg`. A newer merge queues behind the running run (only the newest waits),
 so every run that starts finishes and records rail's evidence; a release job is never
 cancelled. Each pool's cache
 is capped at 200 GB. No WarpBuild, no snapshots, no schedule. No tailwind step anywhere
-(committed sheets; dx builds session-web's); `just ci-boundaries` is
+(committed sheets); `just ci-boundaries` is
 manual, not CI.
 
 **`just ci`** runs everything a merge to `main` runs, in the same order,
@@ -343,13 +336,13 @@ is a report you run by hand, not a gate.
 written by `xtask/workflows` (`just workflows`); edit the Rust, never the
 YAML — `Gates` and `just ci-local` fail when they differ. The jobs run
 without nix (rustup + apt + pinned tool binaries). The release builds
-(`Images`, `desktop`, `studio-ios`) keep their own runners. This repo
-deploys nothing: Argo CD rolls out the tag's image from gitops
-(Codys-Wright/starcommand).
+(`studio`, `desktop`) keep their own runners. This repo deploys nothing:
+the infra repo runs the release's node tarball on a NixOS host. There is
+no image and, until apps/desktop gains an iOS target, no TestFlight build.
 `just ci` refuses to start with less than 25 GB free: a full disk shows up as
 mold dying with a bus error, which reads as a broken toolchain
 (`just sweep-incremental` is the always-safe reclaim). It says nothing
-about `studio-ios` (Xcode, signing) or the other tag builds, which
+about the tag builds (signing, notarization), which
 have their own runners and reasons to be red. The REAPER integration
 suites (`just reaper-test`, `just reaper daw-test`) are not in CI at all:
 they need a licensed REAPER, so run them locally.
@@ -367,8 +360,7 @@ fills up. The short version:
   allowlist, never raise `package."*"`.
 - **One build for working**: the window (`dx serve`), the engine, the
   app recipes and `just dev-test` all build dx's `desktop-dev` profile (the
-  dev profile) for the host triple, into `target/<host>/desktop-dev`, with
-  studio-desktop's `cli,signal-keys-rig`. Another profile, `--target` or
+  dev profile) for the host triple, into `target/<host>/desktop-dev`. Another profile, `--target` or
   feature set makes cargo recompile every shared crate. The app must be
   fast in this build; `release-fast` and `--release` are for shipping and
   measuring only.
@@ -408,8 +400,8 @@ and `LICENSE` at the root say so; a new crate inherits it with
 `license.workspace = true` and does not declare its own.
 
 Vendored code keeps the licence of the code it vendors, because it is not
-ours to change: everything under `vendor/` (dioxus-test, facet-swift —
-MIT and/or Apache-2.0) and in FastTrackStudios/vendor (the dioxus crates,
+ours to change: everything in FastTrackStudios/vendor (dioxus-test,
+facet-swift, the dioxus crates,
 baseview, anyrender_*, wgpu-hal, winit-uikit, raw-window-metal — MIT
 and/or Apache-2.0; `world`, the WORLD vocoder — BSD-3-Clause). Incoming code must be GPL-compatible (MIT,
 BSD, Apache-2.0 — keep the notice and licence text); code cannot go the
@@ -424,8 +416,8 @@ signal and sampler plugins) are in **FastTrackStudios/signal** since
 studio#510, pinned here by one `rev` (every crate of that repo at the same
 revision, root `Cargo.toml`). Its REAPER extensions (`signal-extension`,
 `signal-reaper-controller`) are in FastTrackStudios/studio-adapters. Here:
-`apps/signal/*` (the site and the Android app) and Studio's Signal side
-(`apps/studio/desktop`). `docs/signal/domain-model.md` explains the rig
+only its extensions (`extensions/rig*`, `extensions/keys`), compiled into
+Studio (apps/desktop). `docs/signal/domain-model.md` explains the rig
 model. A change to a signal crate is a PR there, then a bump of the `rev`
 here; to work on both, check signal out beside this repo and patch
 `[patch."https://github.com/FastTrackStudios/signal"]` with paths to every
@@ -446,8 +438,7 @@ as a CLAP/VST3 editor and embedded in REAPER, through one pipeline:
 `nice-plug-dioxus` / `dioxus_native` → Blitz (Vello + wgpu):
 
 - Never `dioxus::desktop::LaunchBuilder` for this UI (WebKit/WRY breaks
-  plugin parity; `studio-desktop --features webview` is an escape hatch
-  that nothing painted can mount under).
+  plugin parity).
 - **Inline styles only** — Blitz does not load external stylesheets.
   Inline `style`, or a static string via `document::Style { {CSS} }`;
   never `document::Stylesheet { href }`, no Tailwind `asset!()` —

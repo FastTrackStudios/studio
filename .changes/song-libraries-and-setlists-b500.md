@@ -1,5 +1,4 @@
 ---
-"setlists" = "minor"
 "session-desktop" = "minor"
 ---
 

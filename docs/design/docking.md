@@ -140,7 +140,7 @@ globals, so each window or plugin editor hosts its own.
 
 ## The panels
 
-Session's (`apps/session/desktop/src/native/dock.rs`): arrangement (its
+Session's (`features/engine/host/src/native/dock.rs`): arrangement (its
 canvas draws the track headers), mixer, chart, chart editor, lyrics, FX,
 editor, transport (compact on a phone), progress, setlist, browser,
 toolbar. The host app adds or replaces kinds (`HostPanels`): Studio adds

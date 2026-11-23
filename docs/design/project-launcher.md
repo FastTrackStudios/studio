@@ -1,7 +1,7 @@
 # The project launcher
 
 Status: built (`extensions/launcher`, id `studio.launcher`, linked into
-Studio in `apps/architect`), with its decisions taken. Written 2026-11-18.
+Studio in `apps/desktop`), with its decisions taken. Written 2026-11-18.
 Mockups: [`project-launcher/index.html`](project-launcher/index.html).
 It needs Architect's `feat/media-list-press` (the media list's press and
 tile).
@@ -60,8 +60,8 @@ Three existing pieces and one new extension that joins them.
 | **Song** | A vault note of type `song`, `Libraries/<lib>/<Song>/<Song>.md`: `artist`, `key`, `key_end`, `tempo`, `length`, `chart`, `lyrics`, `media`, `session` (`features/setlists/src/song.rs` `Song`) | A vault query on `type == "song"` |
 | **Project** | A vault note `Projects/<name>/project.md` (`features/productions/src/model.rs` `keys`), and a heavy file root `<org>/Projects/<name>/` beside the vault | The setlist's `project` link, else its title |
 | **Session** (a song's tracks) | A `.session` or `.RPP` in the project's file root, such as `songs/drive-to-la/Drive To LA.session` | The song note's `session` when it has one; otherwise by name in the project root (`extensions/launcher/src/find.rs` `song_session`). The real song notes do not set it: decision 1 |
-| **Setlist file** | A text file of session paths the engine opens as a set (`apps/session/engine/src/setlist.rs` `read_setlist`) | The setlist note's `session`, else a `.setlist` in the project root, else written by the launcher from its songs' sessions (`find.rs` `write_setlist`) |
-| **Recent** | The engine's list, `recent.tsv` (`apps/session/engine/src/projects.rs` `recent`) | `DAW_RUN {id: "SESSION_RECENT"}` |
+| **Setlist file** | A text file of session paths the engine opens as a set (`features/engine/engine/src/setlist.rs` `read_setlist`) | The setlist note's `session`, else a `.setlist` in the project root, else written by the launcher from its songs' sessions (`find.rs` `write_setlist`) |
+| **Recent** | The engine's list, `recent.tsv` (`features/engine/engine/src/projects.rs` `recent`) | `DAW_RUN {id: "SESSION_RECENT"}` |
 | **Rig** | An instrument (`signal_rigs_proto::Rig`) and its saved profiles, `~/.config/signal/<instrument>/profiles/<name>.styx` (`guitar::RigHome`) | The profile files' names (`find.rs` `rigs`) |
 
 The vault is the light layer (notes, charts, lyrics, recordings), synced to
@@ -226,7 +226,7 @@ the one last pointed at.
 2. **Set edits** in `features/setlists`: rename, reorder and bench a set.
 3. **Recents as data.** `SESSION_RECENT` answers text lines for people,
    which the launcher parses (`src/model.rs` `Recent::parse`); in
-   `apps/session/engine/src/actions.rs`. Recents are the engine's, so they
+   `features/engine/engine/src/actions.rs`. Recents are the engine's, so they
    are one machine's and one org's; across orgs needs the account.
 4. **`DAW_LAST`** in `extensions/daw`: what the engine opened last and where
    its playhead was, for Carry on.
@@ -246,9 +246,9 @@ nothing ties a rig to a setlist outside `features/library/src/model.rs`
 (`Rig`, `SongPreset`), which only its fixture fills.
 
 One is loaded today by `studio-desktop --guitar` or `--keys`
-(`apps/studio/desktop/src/front.rs` `preset_from`), which opens the rig view
+(the removed rig app's `/src/front.rs` `preset_from`), which opens the rig view
 on its own engine; inside a song, `RIG_LOAD {track, instrument, profile,
-patch}` puts a rig on a track (`apps/session/engine/src/rig_actions.rs`),
+patch}` puts a rig on a track (`features/engine/engine/src/rig_actions.rs`),
 for guitar and bass only, and only when `session-engine` is built with its
 `signal` feature. `extensions/daw/Cargo.toml` builds it without, so the
 app's engine has no `RIG_LOAD`.
@@ -259,7 +259,7 @@ So the launcher lists rigs, and a setlist's note keeps its **parts**
 
 1. **The engine built with Signal.** `extensions/daw/Cargo.toml` asks
    `session-engine` for `features = ["native"]`; it needs `"signal"` too
-   (`apps/session/engine/Cargo.toml`: `signal = ["native", "dep:signal-fx",
+   (`features/engine/engine/Cargo.toml`: `signal = ["native", "dep:signal-fx",
    "session-runtime/signal"]`). That brings `signal-fx` and the guitar crate
    into the engine's build, whose build script embeds the captures and
    frozen Cores from `SIGNAL_RIG_LIBRARY` (`rig-library/`, linked by `just
@@ -302,15 +302,15 @@ Relation to what exists:
   for reading and for playing recordings, and is what a share link shows.
   The launcher's list looks the same and loads tracks instead.
 - **`studio-desktop`'s welcome screen** (`features/library` `ui`, mounted by
-  `apps/studio/desktop/src/library_home.rs` `LibraryHome`; and
-  `apps/session/desktop/src/native/start.rs` `Start` with its `Hero`,
+  the removed rig app's `/src/library_home.rs` `LibraryHome`; and
+  `features/engine/host/src/native/start.rs` `Start` with its `Hero`,
   `Shelf`, `Cover`, `RecentRow`) has the right ideas over the wrong store
   (Task's library, files on the device) and its own shell. The launcher
   keeps Carry on and Recent from it and drops the shell.
-- **The library editor** (`apps/session/desktop/src/native/library.rs`
+- **The library editor** (`features/engine/host/src/native/library.rs`
   `LibraryEditor`) is Plan's ancestor: its lists, order and songs-to-add
   panes are the navigator, the list and the navigator's libraries.
-- **The setup view** (`apps/session/ui/src/setup.rs` `SetupView`) keeps
+- **The setup view** (`features/engine/ui/src/setup.rs` `SetupView`) keeps
   routing and settings; its song table is superseded by this list.
 
 ## A share link's guest ([mockup](project-launcher/phone-guest.html))
@@ -355,7 +355,7 @@ should not try to.
 ## As built
 
 `extensions/launcher` (`studio-launcher`, id `studio.launcher`), linked into
-Studio (`apps/architect/src/lib.rs` `stage`) and runnable as a process, so
+Studio (`apps/desktop/src/lib.rs` `stage`) and runnable as a process, so
 a development copy shadows it and reloads on save. No dependency on
 Session's crates.
 

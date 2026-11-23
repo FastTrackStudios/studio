@@ -173,7 +173,7 @@ if [ "$(gate check)" = true ] || [ "$(gate cargo)" = true ]; then
   phase check cargo check --workspace
 fi
 if [ "$(gate wasm)" = true ]; then
-  wasm() { just web-wasm-check; just signal-wasm-check; }
+  wasm() { just web-wasm-check; }
   phase wasm wasm
 fi
 

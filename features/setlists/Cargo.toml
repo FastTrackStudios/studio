@@ -56,7 +56,9 @@ resvg = { workspace = true, optional = true }
 # Its SVG reader alone: the follow chart's text as outlines.
 usvg = { workspace = true, optional = true }
 architect-sites = { workspace = true, optional = true }
-architect-extensions = { workspace = true, optional = true, features = ["guest"] }
+# `linked-core` on every target (a browser links it); `guest`, the
+# process copy's side, off wasm only (below).
+architect-extensions = { workspace = true, optional = true, features = ["linked-core"] }
 architect-navigator-api = { workspace = true, optional = true }
 architect-workspace = { workspace = true, optional = true, features = ["ui"] }
 # The app's theme (the song workspace's colours).
@@ -81,6 +83,7 @@ clap = { workspace = true, optional = true, features = ["env"] }
 engraver = { workspace = true, optional = true, features = ["pdf"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+architect-extensions = { workspace = true, optional = true, features = ["guest"] }
 # The editor drawn under Blitz (its focus and its scrolling: `native`).
 editor-view = { workspace = true, optional = true, features = ["native"] }
 futures-timer = { workspace = true, optional = true }

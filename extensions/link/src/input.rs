@@ -3,7 +3,7 @@
 
 use std::str::FromStr as _;
 
-use architect_workspace::Button;
+use architect_scene::view::Button;
 use blitz_traits::events::{
     BlitzKeyEvent, BlitzPointerEvent, BlitzPointerId, Code, Key, KeyState, Location, Modifiers,
     MouseEventButton, MouseEventButtons, PointerCoords, PointerDetails,

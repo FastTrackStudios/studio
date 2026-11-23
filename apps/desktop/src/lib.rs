@@ -1,0 +1,134 @@
+//! Studio's distribution of Architect (`docs/architect-distribution.md`).
+//!
+//! The Architect app (`architect_desktop::distribution::architect()`: its
+//! first-party extensions, the store as a registry, installs at run time)
+//! with Studio's extensions **compiled in**, under an identity of its own:
+//!
+//! | | Studio (this) | the Architect app | `studio-desktop` (being replaced) |
+//! | --- | --- | --- | --- |
+//! | name | `Studio` | `Architect` | `Studio` |
+//! | binary / app | `studio` | `architect-desktop` | `studio-desktop` |
+//! | config folder | `studio` | `architect` | (Studio's prefs) |
+//! | bundle id | `app.fasttrackstudio.studio` | `app.fasttrackstudio.architect` | `app.fasttrackstudio.studio` |
+//!
+//! Compiled in, as the `studio` bundle: Setlists ([`setlists::ext::Setlists`])
+//! and Productions ([`productions::ext::Productions`]); and Studio's block
+//! renderer ([`setlists::share::blocks`]): a song's chart fence drawn as
+//! Keyflow's follow SVG and a set's fence as its playable list, on the
+//! node's share links and Sites. That renderer is the reason this exists:
+//! an installed (store) process extension cannot draw on a node
+//! (FastTrackStudios/architect#547), so a stock node shows a chart's
+//! Keyflow text where this one draws the chart.
+//!
+//! An installed copy of either extension still overrides the compiled-in
+//! one, as everywhere in Architect.
+
+use architect_desktop::{Bundle, Distribution};
+
+pub use studio_extensions::{BUNDLE_ID, FOLDER, ICON, NAME};
+
+/// Studio's extensions (`studio_extensions::studio`: the one list the
+/// desktop app and studio-web both link).
+#[must_use]
+pub fn studio() -> Bundle {
+    studio_extensions::studio()
+}
+
+/// The window's extensions, compiled in with `gui`
+/// (`studio_extensions::stage`).
+#[cfg(feature = "gui")]
+#[must_use]
+pub fn stage() -> Bundle {
+    studio_extensions::stage()
+}
+
+/// Signal's rig views, compiled in with `gui` (`studio_extensions::rig`).
+#[cfg(feature = "gui")]
+#[must_use]
+pub fn rig() -> Bundle {
+    studio_extensions::rig()
+}
+
+pub mod island;
+
+/// The island's manifest (`features/island/extension.toml`): its
+/// views, its claims and a setlist's favourites.
+pub const ISLAND_MANIFEST: &str = include_str!("../../../features/island/extension.toml");
+
+/// Where the extensions Studio ships beside its window's binary are, from
+/// that binary's folder: the engine (`daw`, a process extension, so a
+/// program of its own that cannot be linked in) in `<here>/daw/`, loaded
+/// as a built-in when the app starts (`Distribution::shipped`). A Mac's
+/// bundle keeps what is not its main program out of `Contents/MacOS`
+/// (scripts/desktop/macos.sh); the AppImage has it beside the binary
+/// (scripts/desktop/linux.sh). A build run from `target/` has no such
+/// folder and loads the engine as a development copy, as before.
+pub const SHIPPED: &str = if cfg!(target_os = "macos") {
+    "../Resources/extensions"
+} else {
+    "extensions"
+};
+
+/// Where Studio's island ships: `studio-island/` beside the binary (the
+/// release puts `just island`'s folder there: scripts/studio.sh).
+pub const ISLAND_FOLDER: &str = "studio-island";
+
+/// Studio's island (#445), from the folder beside the binary, if it matches its lock.
+///
+/// Session's progress bar and transport on a share link's now-playing
+/// view, a WASI component (`features/island`) the node serves from
+/// its own `/_ext/` (`architect_sites::island`). Read
+/// from [`ISLAND_FOLDER`] beside the binary (part of the distribution as
+/// shipped, never a vault's or the node's config) and checked against its
+/// lock ([`island::at`]). None when it is not there, or when it does not
+/// match its lock (one warning): the view keeps Architect's own bar and
+/// controls.
+#[must_use]
+pub fn island() -> Option<architect_sites::SiteIsland> {
+    let dir = std::env::current_exe().ok()?.parent()?.join(ISLAND_FOLDER);
+    match island::at(&dir) {
+        Ok(island) => Some(island),
+        Err(island::IslandError::Absent(_)) => None,
+        Err(error) => {
+            tracing::warn!(
+                island.outcome = "refused",
+                island.reason = %error,
+                "studio: its island does not match its lock; serving none"
+            );
+            None
+        }
+    }
+}
+
+/// Studio Architect: the Architect app, renamed, with [`studio`] compiled
+/// in and Studio's blocks drawn on its share links and Sites, and its
+/// island ([`island`]) when it ships with it.
+#[must_use]
+pub fn distribution() -> Distribution {
+    distribution_with(island())
+}
+
+/// [`distribution`] with `island` (or none) for its island.
+#[must_use]
+pub fn distribution_with(island: Option<architect_sites::SiteIsland>) -> Distribution {
+    let dist = base();
+    match island {
+        Some(island) => dist.island(island),
+        None => dist,
+    }
+}
+
+/// Studio ([`studio_extensions::distribution`]: with `gui` the window's
+/// views and the launcher too), with what only the desktop app has.
+fn base() -> Distribution {
+    let dist = studio_extensions::distribution()
+        .block(setlists::share::blocks())
+        // The island's favourites: a setlist's bottom tabs (Setlist,
+        // Charts, Lyrics, Arrangement) and its round Play button are
+        // declared beside the views they open, in the island's manifest,
+        // which is not a compiled-in extension's.
+        .favourites_of(ISLAND_MANIFEST);
+    #[cfg(feature = "gui")]
+    let dist = dist.bundle(rig()).shipped(SHIPPED);
+    dist
+}

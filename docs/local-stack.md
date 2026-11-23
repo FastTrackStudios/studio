@@ -23,10 +23,10 @@ there, `just dev` runs this stack with that checkout as the local piece.
 | --- | --- | --- |
 | `mock-oauth` | http://127.0.0.1:7420 | Architect's stand-in for GitHub, Google and TONE3000 |
 | `auth` | http://127.0.0.1:7421 | Architect's auth server: the fixed dev cast (`ada@local.test`, `grace@local.test`, `alan@local.test`; password `development-password`), never a mirror of production |
-| `node` | http://127.0.0.1:7422 | Studio Architect's headless node (`studio-architect serve`) built from this tree, its island beside it as the release ships it, signed in to the local issuer as Ada, hosting `acme` with a **copy** of the test vault and a share link of its setlist |
+| `node` | http://127.0.0.1:7422 | Studio Architect's headless node (`studio serve`) built from this tree, its island beside it as the release ships it, signed in to the local issuer as Ada, hosting `acme` with a **copy** of the test vault and a share link of its setlist |
 | `web` | http://127.0.0.1:7423/app/ | Architect's web app with Studio Architect's `distribution.json`, its issuer the local one |
 | `site` | http://127.0.0.1:7424 | Architect's public site (`apps/site`), Vite with hot reload |
-| `desktop` | a window | Studio Architect's app, off unless `just dev desktop=on` |
+| `desktop` | a window | Studio Architect's app: with `just dev desktop=on`, or this machine's own start script (`LOCAL_STACK_DESKTOP_RUN`, below) on a bare `devenv up` |
 
 The share link is fixed, so it is the same on every start and machine:
 
@@ -41,6 +41,27 @@ the versions and every URL. The test vault is
 state and writes the share note there, so nothing done while testing
 reaches the source. Without it the node holds Architect's demo seed
 (setlist Fall Show, `/s/ksqx75iaaaaaaaae/`).
+
+The third source, `../vaults/studio-demo/recital-vault`, is optional (a
+NOTICE when it is not there): JT's Senior Recital ready for the engine,
+each song note of the fasttrackaudio library again with its session, its
+reference bounce and a rendition of every stem attached. It is built
+outside the repo, on a reflinked copy of the recital's songs (the masters
+are never written):
+
+```sh
+cp -a --reflink=always <recital>/songs-v2 ../vaults/studio-demo/recital-songs
+link-prepare ../vaults/studio-demo/recital-songs/<song> …   # each song of the .setlist
+python3 -I scripts/link-vault.py ../vaults/studio-demo/recital-songs \
+    ../vaults/studio-demo/recital-vault \
+    --setlist "../vaults/studio-demo/recital-songs/JT's Senior Recital.setlist" \
+    --library ../vaults/fasttrackaudio/Vault --title "JT's Senior Recital (Multitracks)"
+```
+
+Its link, `/s/jtrecitstemsdeck/setlists/jts-senior-recital-multitracks/`,
+plays to Full (`listen` in its `[[vault.shares]]` entry), so the web
+app's engine opens every song's stems; the others play to Reference
+(`LOCAL_STACK_LISTEN` changes the default).
 
 The issuer, the node's environment, its sign-in and the guard that keeps
 everything on loopback are Architect's own `cargo xtask dev`, run from the
@@ -163,8 +184,11 @@ from the tailnet only), never `tailscale funnel`. Tailscale serves HTTPS on
 first time, Tailscale may refuse a user who is not its operator: run
 `sudo tailscale set --operator=$USER` once. The node needs no idea of its
 public name for a share page: its redirects are relative, its CSP is
-`'self'`, a link share sets no cookies. Signing in from the phone is not
-covered: the issuer and the web app stay on loopback.
+`'self'`, a link share sets no cookies. The web app signs in from the
+phone through the front (`scripts/local-stack-front.py`): on the tailnet's
+origin it names that origin as the issuer and passes `/oauth2/` to the
+issuer, so the phone comes up signed in as the demo account, as on
+loopback, with the issuer and the server still on loopback.
 
 ## Checking it
 
@@ -197,10 +221,30 @@ It is not a CI job: it needs the private test vault and a node build
 - Builds go to this checkout's target dir. A local Architect's builds for
   the stack (its xtask, the issuer, the web app) go to
   `target/local-stack/architect/target`; the pinned Architect is a clone
-  under `target/studio-architect/`, sharing a local Architect checkout's
+  under `target/studio/`, sharing a local Architect checkout's
   git objects when it has the commit. The stack writes nothing into the
   Architect or Keyflow checkouts, except the site's `node_modules` when
   the site runs from a local Architect (its hot reload needs it there).
 - Ctrl-C (or `devenv processes down`) stops everything and puts
   `Cargo.lock` back.
 - Nothing plays audio: the node serves files.
+
+## A checkout's own settings
+
+`local-stack.local.env` beside `local-stack.toml` (untracked) holds
+`LOCAL_STACK_*=value` lines for a checkout that always runs the same way;
+the environment wins over it. With it a bare `devenv up` is the whole
+thing:
+
+```
+LOCAL_STACK_OVERRIDES=../stack/overrides.toml   # a stack of local checkouts
+LOCAL_STACK_ARCHITECT_PATH=../architect
+LOCAL_STACK_DESKTOP_RUN=../stack/run-studio.sh  # the window, this machine's way
+LOCAL_STACK_OPEN=on                             # the web app and the link, in the browser
+LOCAL_STACK_PORT_MOCK_OAUTH=7430                # when 7420-7424 are taken
+```
+
+`LOCAL_STACK_DESKTOP_RUN` names a program that takes `--build-only` (run
+under the stack's overrides, one build at a time) and `--foreground` (run
+the window until it closes or the program is told to stop). It decides the
+vault, the session and the layout; nothing about them is in this repo.

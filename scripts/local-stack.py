@@ -9,9 +9,14 @@ node's copy of the test vault with its share link.
     local-stack.py patch URL CHECKOUT            [patch."URL"] for every locked crate of URL
     local-stack.py dep-tag MANIFEST URL          the tag MANIFEST's deps of URL name
     local-stack.py seed-share VAULT SETLIST CODE VAULT_ID   the share note, written
+    local-stack.py seed DST VAULT_ID      the demo vault (made when its sources changed) and every share
 """
 
 import json
+import contextlib
+import io
+import shutil
+import subprocess
 import os
 import re
 import sys
@@ -130,10 +135,12 @@ def slug_segment(name):
     return out.rstrip("-")
 
 
-def seed_share(vault, setlist, code, vault_id):
+def seed_share(vault, setlist, code, vault_id, listen="Reference"):
+    if listen not in ("Reference", "Full"):
+        die(f"listen `{listen}` for {setlist}: Reference or Full")
     """The share note SHARE_CREATE writes for STUDIO_SETLISTS_SHARE: the
     setlist's note and each of its songs' notes, for anyone with the link
-    (apps/architect/tests/node.rs builds the same)."""
+    (apps/desktop/tests/node.rs builds the same)."""
     if not re.fullmatch(r"[abcdefghijkmnpqrstuvwxyz23456789]{16}", code):
         die(f"share_code `{code}` is not 16 characters of abcdefghijkmnpqrstuvwxyz23456789")
     path = os.path.join(vault, setlist)
@@ -182,10 +189,16 @@ def seed_share(vault, setlist, code, vault_id):
         "created_by": "local-stack",
         "domain": None,
         "audiences": [],
-        "listen": "Reference",
+        # How far the link plays: Reference (the stack's default, a
+        # listener's link) or Full (the multitracks too; `LOCAL_STACK_LISTEN`).
+        "listen": listen,
     }
+    # As Architect writes it (architect-spaces `share_note`): what it shares
+    # and how far it plays as properties, which a vault query reads (the
+    # launcher finds a setlist's link by them).
+    shares = json.dumps(f"note:{setlist}", ensure_ascii=False)
     note = (
-        "---\npublish: false\n---\n"
+        f"---\npublish: false\nshares: {shares}\nlisten: {listen.lower()}\n---\n"
         f"# Share {code}\n\n"
         f"A share link, kept by Architect (`SHARE_*`): the setlist {title} and its songs, for anyone with the link. "
         "Written by Studio's local stack (scripts/local-stack.sh).\n\n"
@@ -201,6 +214,90 @@ def seed_share(vault, setlist, code, vault_id):
     print(f"{len(songs)} {slug}")
 
 
+def stack_toml():
+    with open(os.path.join(ROOT, "local-stack.toml"), "rb") as f:
+        return tomllib.load(f)
+
+
+def locate(path):
+    """A path from local-stack.toml: absolute, else from this checkout,
+    else from the main checkout of a worktree (scripts/local-stack.sh
+    `locate`)."""
+    if os.path.isabs(path):
+        return path if os.path.exists(path) else None
+    bases = [ROOT]
+    try:
+        common = subprocess.run(["git", "-C", ROOT, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                                capture_output=True, text=True, check=True).stdout.strip()
+        bases.append(os.path.dirname(common))
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    for base in bases:
+        full = os.path.normpath(os.path.join(base, path))
+        if os.path.exists(full):
+            return full
+    return None
+
+
+def default_listen():
+    """How far a link plays when its `[[vault.shares]]` entry does not say:
+    `LOCAL_STACK_LISTEN`, else Reference."""
+    listen = os.environ.get("LOCAL_STACK_LISTEN", "Reference")
+    if listen not in ("Reference", "Full"):
+        die(f"LOCAL_STACK_LISTEN=`{listen}`: Reference or Full")
+    return listen
+
+
+def seed(dst, vault_id):
+    """The demo vault at DST: its sources merged into a copy (reflinked
+    where the file system can), made again when the list of sources
+    changed; then a share note per set. Prints `<code> <page>` per share.
+    With no source found, prints the demo seed's link and copies nothing."""
+    cfg = stack_toml().get("vault", {})
+    one = os.environ.get("LOCAL_STACK_VAULT")
+    wanted = [one] if one else cfg.get("sources", [])
+    sources = [locate(s) for s in wanted]
+    missing = [w for w, s in zip(wanted, sources) if not s]
+    sources = [s for s in sources if s]
+    if missing:
+        print(f"local-stack: NOTICE: no vault at {', '.join(missing)} (from {ROOT})", file=sys.stderr)
+    if not sources:
+        print("local-stack: NOTICE: no demo vault source: the server holds Architect's demo seed (setlist Fall Show)", file=sys.stderr)
+        print("ksqx75iaaaaaaaae setlists/fall-show")
+        return
+    stamp = "\n".join(sources) + "\n"
+    stamp_file = os.path.join(dst, ".local-stack-sources")
+    have = open(stamp_file, encoding="utf-8").read() if os.path.isfile(stamp_file) else None
+    if have != stamp:
+        if os.path.isdir(dst):
+            print(f"local-stack: the vault's sources changed: making {dst} again", file=sys.stderr)
+            shutil.rmtree(dst)
+        tmp = dst + ".tmp"
+        shutil.rmtree(tmp, ignore_errors=True)
+        os.makedirs(tmp, exist_ok=True)
+        for src in sources:
+            print(f"local-stack: copying {src} into the demo vault", file=sys.stderr)
+            subprocess.run(["cp", "-a", "--reflink=auto", src + "/.", tmp + "/"], check=True)
+        with open(os.path.join(tmp, ".local-stack-sources"), "w", encoding="utf-8") as f:
+            f.write(stamp)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        os.rename(tmp, dst)
+    if os.environ.get("LOCAL_STACK_SETLIST"):
+        shares = [{"setlist": os.environ["LOCAL_STACK_SETLIST"],
+                   "code": os.environ.get("LOCAL_STACK_SHARE_CODE", "merrybrightstack"),
+                   "listen": default_listen()}]
+    else:
+        shares = cfg.get("shares", [])
+    for share in shares:
+        if not os.path.isfile(os.path.join(dst, share["setlist"])):
+            print(f"local-stack: NOTICE: the demo vault has no {share['setlist']}: no link for it", file=sys.stderr)
+            continue
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            seed_share(dst, share["setlist"], share["code"], vault_id, share.get("listen", default_listen()))
+        print(f"{share['code']} {out.getvalue().split(' ', 1)[1].strip()}")
+
+
 def main(argv):
     if len(argv) < 2:
         die(__doc__)
@@ -211,6 +308,7 @@ def main(argv):
         "patch": patch,
         "dep-tag": dep_tag,
         "seed-share": seed_share,
+        "seed": seed,
     }.get(cmd, lambda *_: die(__doc__))(*args)
 
 

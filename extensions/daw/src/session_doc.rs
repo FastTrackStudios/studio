@@ -1,14 +1,17 @@
 //! One session per song, opened and led by the engine (studio#522).
 //!
-//! The session primitive's document (FastTrackStudios/session: an
-//! Architect document file of kind `fts.session`) sits beside the song as
-//! `<song stem>.fts-session`. Studio's own `Song.session` is the song's
-//! project (`session-format`), not this document, and is never opened as
-//! one.
+//! A song is one file, `<Title>.session` (`song_file`): the engine's
+//! project, and the session primitive's document (FastTrackStudios/session,
+//! kind `fts.session`) as a part of the same store, under the song's id.
+//! Until a folder is converted, the document sits beside the song as
+//! `<song stem>.fts-session` (an Architect document file): told apart by
+//! the files' headers, never their names.
 //!
-//! - **Opened** with `SessionFile::open` when it is there, else made
-//!   (`SessionFile::create`), and saved as a document file: what Keyflow
-//!   and the org's sync read (studio#522).
+//! - **Opened** inside the song's one file (`song_file::SongFile`) when the
+//!   song is one: a store with no `.fts-session` beside it. Otherwise the
+//!   old pair's document, with `SessionFile::open` when it is there, else
+//!   made (`SessionFile::create`) beside a song that is not a store (an
+//!   `.RPP`).
 //! - **Its timing is the engine's.** On open the engine writes into it the
 //!   song's tempo changes (with their meters), its markers, its sections
 //!   as regions, and `bar_one`: a `SONGSTART` marker, else the first
@@ -34,12 +37,37 @@ use fts_session::time::{Position, TempoPoint, TimePosition, TimeSignature};
 use fts_session::{MarkId, Marker, Region, TempoMap, Time};
 use serde_json::{Value as Json, json};
 
+/// Where the open session is kept.
+enum Held {
+    /// The old pair's `.fts-session`, a document file of its own.
+    Pair(SessionFile),
+    /// A part of the song's one file.
+    One(song_file::SongFile),
+}
+
+impl Held {
+    fn file(&self) -> &SessionFile {
+        match self {
+            Self::Pair(file) => file,
+            Self::One(song) => song.session(),
+        }
+    }
+
+    async fn save(&self) -> Result<(), String> {
+        match self {
+            Self::Pair(file) => file.save().await.map_err(|e| e.to_string()),
+            // The session folded into the file, and the file's log too.
+            Self::One(song) => song.save().await.map_err(|e| e.to_string()),
+        }
+    }
+}
+
 /// The session open now.
 struct Open {
     song: String,
     path: PathBuf,
     id: String,
-    file: SessionFile,
+    file: Held,
 }
 
 static OPEN: Mutex<Option<Open>> = Mutex::new(None);
@@ -136,10 +164,10 @@ fn seconds_at_bar(project: &daw_ui::studio::project::Project, bar: u32) -> f64 {
 
 /// The engine's timing for `project`, written into `file`'s session.
 async fn write_timing(
-    file: &SessionFile,
+    held: &Held,
     project: &daw_ui::studio::project::Project,
 ) -> Result<(), String> {
-    let doc = file.session();
+    let doc = held.file().session();
     let mut changes: Vec<_> = project.tempo.iter().collect();
     changes.sort_by(|a, b| a.at.total_cmp(&b.at));
     let first = changes.first();
@@ -195,7 +223,7 @@ async fn write_timing(
     }
     doc.set_bar_one(bar_one(project).map(Time::Seconds))
         .map_err(|e| err(&e))?;
-    file.save().await.map_err(|e| err(&e))
+    held.save().await
 }
 
 /// Song `song` (the engine's project id) is current: its session
@@ -209,12 +237,23 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
     if open.as_ref().is_some_and(|o| o.song == song) {
         return;
     }
-    let path = std::env::var_os("FTS_DAW_SESSION")
-        .map(PathBuf::from)
-        .or_else(|| source.map(path_for));
+    // The song's one file holds its session, once its folder is converted:
+    // a store with no `.fts-session` left beside it.
+    let one_file = source
+        .filter(|_| std::env::var_os("FTS_DAW_SESSION").is_none())
+        .filter(|s| {
+            session_format::sniff_path(s) == session_format::FileFormat::Store
+                && !path_for(s).exists()
+        })
+        .map(Path::to_path_buf);
+    let path = one_file.clone().or_else(|| {
+        std::env::var_os("FTS_DAW_SESSION")
+            .map(PathBuf::from)
+            .or_else(|| source.map(path_for))
+    });
     let Some(path) = path else {
         problem(Some(
-            "no file to keep the session beside: open a song from a file, or set FTS_DAW_SESSION"
+            "no file to keep the session in: open a song from a file, or set FTS_DAW_SESSION"
                 .to_owned(),
         ));
         return;
@@ -224,16 +263,23 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
         return;
     };
     let opened = rt.block_on(async {
-        // Its own file only, never Studio's `Song.session` (studio#522):
-        // opened when it is there, else made.
-        let file = if path.exists() {
-            SessionFile::open(&path).await
+        let held = if one_file.is_some() {
+            Held::One(
+                song_file::SongFile::open(&path)
+                    .await
+                    .map_err(|e| e.to_string())?,
+            )
+        } else if path.exists() {
+            Held::Pair(SessionFile::open(&path).await.map_err(|e| e.to_string())?)
         } else {
-            SessionFile::create(&path).await
-        }
-        .map_err(|e| e.to_string())?;
-        write_timing(&file, project).await?;
-        Ok::<_, String>(file)
+            Held::Pair(
+                SessionFile::create(&path)
+                    .await
+                    .map_err(|e| e.to_string())?,
+            )
+        };
+        write_timing(&held, project).await?;
+        Ok::<_, String>(held)
     });
     let file = match opened {
         Ok(file) => {
@@ -245,11 +291,11 @@ pub fn song(song: &str, source: Option<&Path>, project: &daw_ui::studio::project
             return;
         }
     };
-    let id = file.id().to_string();
+    let id = file.file().id().to_string();
     if let Some(was) = open.take() {
         sessions().close(&was.id);
     }
-    sessions().open(id.clone(), file.session().clone());
+    sessions().open(id.clone(), file.file().session().clone());
     tracing::info!(session.id = %id, session.path = %path.display(), "daw: the session document is open");
     *open = Some(Open {
         song: song.to_owned(),

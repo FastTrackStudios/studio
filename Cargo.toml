@@ -7,6 +7,36 @@
 [workspace]
 resolver = "3"
 
+# Retired with the move to the stripped Architect (they name crates it no
+# longer has: architect-desktop/-web/-mobile/-distribution, -sites, -bases,
+# -media, -playhead, -launcher-*). Their folders stay until they are
+# deleted; apps/studio is the one app.
+exclude = [
+    "apps/desktop",
+    "apps/web",
+    "apps/mobile",
+    "features/distribution",
+    "features/island",
+    "features/app/launcher",
+    "features/setlists",
+    "features/productions",
+    "extensions/launcher",
+    # Signal's rig as extensions: written against signal's
+    # stack/studio-distribution (guitar's dock panels, PanelHost), which
+    # the pinned signal revision does not have yet. Back when signal is
+    # pinned past it.
+    "extensions/rig",
+    "extensions/rig-link",
+    "extensions/rig-switches",
+    "extensions/rig-setlist",
+    "extensions/rig-browser",
+    "extensions/rig-grid",
+    "extensions/rig-macros",
+    "extensions/rig-status",
+    "extensions/audio-settings",
+    "extensions/keys",
+]
+
 members = [
     # Studio's views and engine as Architect runtime extensions (studio#519).
     "extensions/daw",
@@ -14,14 +44,19 @@ members = [
     "extensions/mixer",
     "extensions/lyrics",
     "extensions/navigator",
-    "extensions/launcher",
+    # Studio, the app (studio-proto until 2026-11-22): a plain Dioxus app on
+    # Drive and app-shell, growing into the session (apps/studio/docs/ROADMAP.md).
+    "apps/studio",
+    "apps/studio/crates/session-sync",
     "extensions/link",
+    "extensions/tempo-map",
+    "features/tempo-map",
+    "features/song-file",
     "features/timeline",
     "features/editing",
     "features/ui/dock",
     "features/ui/transport-ui",
     "features/ui/lyrics-ui",
-    "apps/architect/island",
     "features/adapters/web/worklet",
     "features/editor",
     "features/session",
@@ -32,41 +67,30 @@ members = [
     "features/library",
     "features/account",
     "features/ui/themer",
-    "features/app/launcher",
     "features/control-surfaces",
     # ── session ──
     "xtask/session-reaper",
-    "apps/themer",
     "features/adapters/reaper/daw-reaper-dioxus-ext",
     "features/adapters/reaper/tests/daw-reaper-dioxus-ext-test",
-    "apps/session/desktop",
-    "apps/session/daw-web",
-    "apps/session/engine",
-    "apps/session/runtime",
-    "apps/session/ui",
-    "apps/session/web",
+    "features/engine/host",
+    "features/engine/engine",
+    "features/engine/runtime",
+    "features/engine/ui",
     "features/patch-list",
     "features/adapters/reaper/session-extension",
     "features/adapters/reaper/session-extension/xtask",
     "features/song",
-    "features/setlists",
-    "features/productions",
     "features/studio-views",
-    "apps/architect",
     # ── daw ──
     "features/ui/audio-controls",
     "xtask/devtools",
     "xtask/workflows",
-    "vendor/dioxus-test",
     # ── processor ──
-    "apps/plugins/host",
+    "plugins/host",
     "xtask/plugins",
     "xtask/kit-sheet",
     # ── signal ──
-    "apps/studio/desktop",
-    "apps/signal/mobile",
-    "apps/signal/web",
-    "apps/plugins/guide",
+    "plugins/guide",
     # ── frame's plugin faces (frame itself is a git dependency) ──
     "features/ui/plugin-faces",
 ]
@@ -80,13 +104,28 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/FastTrackStudios/session"
 
 [workspace.dependencies]
+# Studio, the app (apps/studio): Drive (FastTrackStudios/drive, every crate
+# at one rev; no tags yet) and app-shell (the window, by tag, declared in
+# apps/studio's manifest: its package name is the same as
+# features/app/shell's, so it cannot have a key here). Both are on
+# crates.io's dioxus 0.8.0-alpha.3, handed this workspace's dioxus revision
+# by the dioxus lines of [patch.crates-io]. To work on Drive beside this
+# repo, patch `[patch."https://github.com/FastTrackStudios/drive"]` with
+# paths (never committed).
+session-sync = { path = "apps/studio/crates/session-sync" }
+drive-dioxus = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
+drive-client = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
+drive-spine = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
+drive-files = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8", default-features = false }
+drive-sidecars = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
+drive-local = { git = "https://github.com/FastTrackStudios/drive", rev = "505e7d8" }
 # FastTrackStudios/session's `session` (the session primitive: its document
 # file, its fts.session service, its transport led as presence), as the
 # `daw` extension uses it; renamed because Studio's own `features/session`
 # is `session` too. session `main` (#189 merged: the shared clock is
 # Architect's presence clock; it pins Architect by tag, and Studio's patch table moves that to Studio's own, as it
 # does).
-fts-session = { package = "session", git = "https://github.com/FastTrackStudios/session", rev = "568e9a30a2d858b68a617a94f40f2390f7ea022e", default-features = false, features = ["architect", "extension", "lead"] }
+fts-session = { package = "session", git = "https://github.com/FastTrackStudios/session", rev = "e8a705ed1c9ae8b16934018e3b4b897769635961", default-features = false, features = ["architect", "extension", "lead"] }
 signal-space = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-tone3000 = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 # The effects live in FastTrackStudios/fts-fx (studio#510): `dsp-core`,
@@ -171,31 +210,33 @@ ropey = "1.6"
 # root manifest declares the same versions, git pins and patches as this
 # one: bump a pin there and here together, or Cargo.lock grows a second
 # copy. Working on both at once: AGENTS.md, "Co-developing across repos".
-daw-proto = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-control = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-module = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-transport-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-audio-graph = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-test-macro = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-utils = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-midi = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
+daw-proto = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-control = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-module = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-transport-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-audio-graph = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+# The device layer (enumeration, opening), for the audio settings (DAW_AUDIO).
+audio = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-test-macro = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+utils = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+midi = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 # Defaults OFF at the root so lean consumers (probe-only scanners, the
 # iOS-clean session-guide) don't drag the pack engine in; each consumer
 # names the features it needs ("load" / "write" / "engine").
-fts-sample = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e", default-features = false }
+fts-sample = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f", default-features = false }
 # The engine: `daw` is the facade (its engine is opt-in, `standalone`),
 # `daw-standalone` the engine, `session-format` the session document,
 # `dawfile-reaper` the `.rpp` reader the engine loads and saves with,
 # `signal-plugin-host` CLAP/VST3 hosting, `builtin` the effects as engine
 # blocks, `daw-sync` DAWs kept in step (network, Ableton Link). The engine
 # takes the effects from fts-fx at the rev above.
-daw = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-standalone = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-session-format = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-dawfile-reaper = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-signal-plugin-host = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e", default-features = false }
-builtin = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
+daw = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-standalone = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+session-format = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+dawfile-reaper = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+signal-plugin-host = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f", default-features = false }
+builtin = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-sync = { git = "https://github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 
 # ── daw domain (wave 2) ───────────────────────────────────────────────
 # The `daw` facade is the public API surface for the daw domain (above,
@@ -214,7 +255,6 @@ daw-reaper = { git = "https://github.com/FastTrackStudios/studio-adapters", rev 
 daw-extension-runtime = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
 reaper-dioxus = { git = "https://github.com/FastTrackStudios/studio-adapters", rev = "6ce1b1a912e969071cd2fe55caaea0a5cd486252" }
 daw-reaper-dioxus-ext = { path = "features/adapters/reaper/daw-reaper-dioxus-ext" }
-fts-themer-ui = { path = "apps/themer" }
 
 # ── session domain (wave 3) ───────────────────────────────────────────
 # `session` is the facade — the only public API surface for the session
@@ -255,16 +295,16 @@ studio-views = { path = "features/studio-views" }
 # defaults OFF here; consumers name the formats they use.
 # The facade defaults OFF too: each consumer names its tier (`text`,
 # `svg` for wasm, `engraver` for the full engraver with the GPU renderer).
-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "37f33703fbed2e7da66593390bc19e62e5ebc9aa", default-features = false }
-keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", rev = "37f33703fbed2e7da66593390bc19e62e5ebc9aa" }
-keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", rev = "37f33703fbed2e7da66593390bc19e62e5ebc9aa", default-features = false }
-keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", rev = "37f33703fbed2e7da66593390bc19e62e5ebc9aa" }
-keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", rev = "37f33703fbed2e7da66593390bc19e62e5ebc9aa" }
-keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", rev = "37f33703fbed2e7da66593390bc19e62e5ebc9aa" }
-tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "37f33703fbed2e7da66593390bc19e62e5ebc9aa" }
+keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d", default-features = false }
+keyflow-proto = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+keyflow-lang = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d", default-features = false }
+keyflow-daw-analysis = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+keyflow-ui = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+keyflow-cli = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+tree-sitter-keyflow = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
 # Engraver — defaults OFF at the root (the full `engraver` feature drags
 # wgpu/vello + PDF export); consumers opt into `svg`/`wgpu`/`engraver`.
-engraver = { git = "https://github.com/FastTrackStudios/keyflow", rev = "37f33703fbed2e7da66593390bc19e62e5ebc9aa", default-features = false }
+engraver = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d", default-features = false }
 
 # ── signal domain (wave 4) ────────────────────────────────────────────
 # `signal` is the facade — the only public API surface for the signal
@@ -366,75 +406,81 @@ inferno-net = { git = "https://github.com/FastTrackStudios/inferno-control", rev
 # (FastTrackStudios/architect: the entity/RPC framework, the auth/crdt/
 # permissions stack, architect-ui + architect-story, architect-telemetry).
 # One tag pin shared by every entry so the whole framework moves together.
-architect = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-rpc-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-action-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-mcp = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-atom = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-form = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-permissions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-permissions-proto = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-auth = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-auth = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-auth-proto = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-auth-db = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-derive = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-rpc-derive = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-action-derive = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-mcp = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-control = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-scripting = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-atom = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-form = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-permissions = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-permissions-proto = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-auth = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+auth = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+auth-proto = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+auth-db = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 # auth-client (`auth_client::device`, sign-in from another device) is on
 # the same tag as the rest: one architect source per Cargo.lock.
-auth-client = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-crdt = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-crdt-derive = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-crdt-seaorm = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+auth-client = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+crdt = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+crdt-derive = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 # The Dioxus primitive library (was libs/ui/fts-ui, renamed on the split).
-architect-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect-ui = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 # Architect extensions: Studio's features are linked extensions, compiled
 # into Studio's app and served as process extensions the Architect app
 # installs (features/setlists; studio#386).
-architect-extensions = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-# A WASI component's guest side (Studio's island, apps/architect/island).
-architect-extension-wasi = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect-extensions = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+# What an extension whose views are Dioxus components links: its views on
+# the Builder (`BuilderExt::view`, `::paint`), its process side
+# (`guest::GuestExt`), its pane (`pane::use_pane_state`), `PaintPane`.
+architect-extensions-dioxus = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+# The view kinds a host takes (`KindSpec::process()`: a pane another
+# program draws) and the process-view panes that draw them (Ignition's room).
+architect-views = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-process-view = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+# A WASI component's guest side (Studio's island, features/island).
+architect-extension-wasi = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-navigator-api = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 # The media list (`architect_media::ui::MediaList`): the launcher's song list.
-architect-media = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-workspace = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-scene = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect-workspace = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-scene = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 # The app's theme as data (`use_resolved`): what a Studio view in Architect
 # colours itself from.
-architect-theme = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect-theme = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 # The app side an extension's tests run against: the vault's and Bases'
 # actions over a folder, and the settings registry a Host is given.
-architect-vault = { package = "vault", git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-bases = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-settings = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect-vault = { package = "vault", git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-settings = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 # Sites: a vault drawn as pages, the share page a setlist is read on; its
 # block renderers and sanitiser (features/setlists `share`).
-architect-sites = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 # The Architect app itself, as a library a distribution's `main` runs
-# (`architect_desktop::run`): Studio's distribution, apps/architect. Without
+# (`architect_desktop::run`): Studio's distribution, apps/desktop. Without
 # its window by default (`gui` turns it on there); `vox` is the node's
 # services and every build of it needs them.
-architect-desktop = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1", default-features = false, features = ["vox"] }
-# Share links as notes of their vault (`share_note`): apps/architect's
+# Architect's web app as a library a distribution's web build runs
+# (`architect_web::run`, without its own `start`): studio-web.
+# The Architect app on an iPhone or iPad as a library a distribution's
+# `main` runs (`architect_mobile::run`): studio-mobile, apps/mobile.
+# Share links as notes of their vault (`share_note`): apps/desktop's
 # node test writes the share SHARE_CREATE would.
-architect-spaces = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect-spaces = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 # The keymap engine (studio's former `features/input`, studio#61).
-architect-input = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect-input = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 # The launcher engine, vendored into architect in v0.2.0 (was
 # launcher-core / launcher-ui / providers on dioxus-launcher.git).
-architect-launcher-core = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 # default-features = false lives here, not on the consumer: cargo refuses
 # `default-features = false` on a workspace-inherited dep.
-architect-launcher-ui = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-launcher-providers = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
 # Wide-events telemetry (was crates/task/telemetry).
-architect-telemetry = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect-telemetry = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 # Story/snapshot tooling (was libs/fts-story/*).
-architect-story-core = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-story-macros = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-story-runtime = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-story-shell = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-story-snapshots = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-story-parity = { git = "https://github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect-story-core = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-macros = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-runtime = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-shell = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-snapshots = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-parity = { git = "https://github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
 
 # Architect's externals, merged from its dissolved workspace table
 # (root pins win — both were already on the rc.5 fleet).
@@ -478,6 +524,10 @@ musicxml = "1.1"
 # lockstep across every dioxus-* entry below AND the FTS fork tags of
 # primitives/lumen/lucide/sdk, which pin the same rev.
 dioxus = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41", default-features = false, features = ["lib"] }
+# Dioxus's wasm splitting (`#[wasm_split]`): studio-web's window's
+# extensions, each a chunk fetched when it is first used
+# (features/distribution `deferred`).
+wasm-splitter = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
 # Direct, and only apps/web takes it: it is how the site turns on
 # `hydrate` for static generation without `dioxus/fullstack`, whose
 # reqwest would be a second major in the wasm binary. Same rev as the
@@ -527,8 +577,10 @@ dioxus-native-dom = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cf
 # in release builds unless the `force` feature is on. Not on crates.io.
 dioxus-mcp-probe = { git = "https://github.com/tonybierman/dioxus-mcp" }
 # Vendored DioxusLabs/dioxus-test on the pins above — headless component
-# tests on blitz-dom (no browser). See libs/vendor/dioxus-test.
-dioxus-test = { path = "vendor/dioxus-test" }
+# tests on blitz-dom (no browser), from FastTrackStudios/vendor. Pinned to
+# the commit of vendor#5 (dioxus-test moves there from this repo's old
+# vendor folder); moves to that repo's tag once vendor#5 is released.
+dioxus-test = { git = "https://github.com/FastTrackStudios/vendor", rev = "c892de83e77b3d51e9c3dd17d9f9e8471d01e112" }
 dioxus-primitives = { git = "https://github.com/FastTrackStudios/dioxus-components", package = "dioxus-primitives", tag = "fts-upstream-2026-11", default-features = false }
 lucide-dioxus = { git = "https://github.com/FastTrackStudios/lucide", tag = "fts-upstream-2026-11", features = ["all-icons"] }
 clsx = "0.1.1"
@@ -700,7 +752,7 @@ editor-crdt = { git = "https://github.com/FastTrackStudios/editor", rev = "6817d
 # folded into it at keyflow v0.2.8). Defaults off: no `.kf` fence
 # renderer, so no engraver. Renamed because task's older `editor-keyflow`
 # (below, for the site) has the same package name.
-keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", rev = "37f33703fbed2e7da66593390bc19e62e5ebc9aa", default-features = false }
+keyflow-editor-lang = { package = "editor-keyflow", git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d", default-features = false }
 editor-keyflow = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 editor-keyflow-lang = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 view-knowledge-graph = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
@@ -722,7 +774,7 @@ files-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main
 files-client = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 task-dial = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 # The server lane's org management (`ensure_personal_org`): where a signed-in
-# person's own docs live (studio-desktop's sync).
+# person's own docs live (the app's sync).
 org-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
 # Live sessions Task keeps: joining a set, the clock, the epochs.
 live-proto = { git = "https://github.com/FastTrackStudios/task", branch = "main" }
@@ -786,19 +838,19 @@ web-time = "1"
 
 signal-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-import = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
-signal-web = { path = "apps/signal/web" }
-# Session's app as a library: Studio (apps/studio/desktop) mounts it behind
-# its front screen. No default features: Studio picks the iOS-clean set.
-session-desktop = { path = "apps/session/desktop", default-features = false }
+# Session's app as a library (features/engine/host): its window, CLI and
+# engine host. No default features: each dependent picks its set.
+session-desktop = { path = "features/engine/host", default-features = false }
 # Session's engine, and its window (a view of it): features chosen by each
 # dependent (`native` on a desktop, `web` in a page).
-session-engine = { path = "apps/session/engine", default-features = false }
+song-file = { path = "features/song-file" }
+session-engine = { path = "features/engine/engine", default-features = false }
 # Its host-neutral runtime: no window, no shell, no Dioxus (studio#400).
-session-runtime = { path = "apps/session/runtime" }
-session-ui = { path = "apps/session/ui", default-features = false }
+session-runtime = { path = "features/engine/runtime" }
+session-ui = { path = "features/engine/ui", default-features = false }
 studio-view-link = { path = "extensions/link" }
 # Studio's engine, arrangement and mixer extensions as libraries: what
-# Studio's distribution (apps/architect) links in. Each is also its own
+# Studio's distribution (apps/desktop) links in. Each is also its own
 # process program (a development copy shadows the linked one).
 daw-extension = { path = "extensions/daw" }
 studio-arrangement = { path = "extensions/arrangement" }
@@ -806,14 +858,37 @@ studio-mixer = { path = "extensions/mixer" }
 studio-lyrics = { path = "extensions/lyrics" }
 studio-navigator = { path = "extensions/navigator" }
 studio-launcher = { path = "extensions/launcher" }
+# The island's views (features/island): drawn in frames by its own
+# web bundle, and linked into studio-web (`studio_island::view`).
+studio-island = { path = "features/island" }
+# Studio's compiled-in extensions, listed once for the desktop app and studio-web.
+studio-extensions = { path = "features/distribution", default-features = false }
+# Signal's rigs as extensions (docs/design/signal-extensions.md): the
+# engine (a process), what its views share at build time, and the views.
+rig-extension = { path = "extensions/rig" }
+studio-rig-link = { path = "extensions/rig-link" }
+studio-rig-switches = { path = "extensions/rig-switches" }
+studio-rig-setlist = { path = "extensions/rig-setlist" }
+studio-rig-browser = { path = "extensions/rig-browser" }
+studio-rig-grid = { path = "extensions/rig-grid" }
+studio-rig-macros = { path = "extensions/rig-macros" }
+studio-rig-status = { path = "extensions/rig-status" }
+studio-audio-settings = { path = "extensions/audio-settings" }
+studio-keys = { path = "extensions/keys" }
+# Tempo maps from stems: the algorithms and their measurements (no UI),
+# and the extension that runs them (`studio.tempo-map`, a process).
+tempo-map = { path = "features/tempo-map" }
+studio-tempo-map = { path = "extensions/tempo-map" }
 # Keyflow's chart extension and Ignition's lighting extension, linked into
 # the distribution the same way (`pane`: Ignition's room as the GPU
 # process view the app hosts).
-keyflow-extension = { git = "https://github.com/FastTrackStudios/keyflow", rev = "37f33703fbed2e7da66593390bc19e62e5ebc9aa" }
-ignition-pane = { git = "https://github.com/FastTrackStudios/Ignition", rev = "05678629abc8ba78e19316053743fa657dcb37f3", default-features = false, features = ["pane"] }
+keyflow-extension = { git = "https://github.com/FastTrackStudios/keyflow", rev = "e170cfbdcc67221124380eb9fc57d9957fb70e3d" }
+ignition-pane = { git = "https://github.com/FastTrackStudios/Ignition", rev = "b9a90c27979bc53b955fe0716d7b19707972ccd0", default-features = false, features = ["pane"] }
 signal-rig-host = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-rigs-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-rig-shell = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
+# The widgets the rigs share (the on-screen piano), for the keys extension.
+signal-widgets = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-rig-perform-ui = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-content-proto = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
 signal-content-library = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95" }
@@ -913,6 +988,23 @@ rustfft = "6.2"
 test-that = { version = "0.5.2", default-features = false }
 
 [patch.crates-io]
+# app-shell-native (the one app's Blitz window) names the published
+# dioxus-native; this hands it Studio's own, built for the blitz fork
+# patched below (the published one wants blitz-shell features the fork
+# does not have).
+dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
+# app-shell and Drive (apps/studio) are on crates.io's dioxus 0.8.0-alpha.3;
+# this hands them the workspace's revision (also 0.8.0-alpha.3), so one
+# dioxus is built. Keep the rev equal to the dioxus lines above.
+dioxus = { git = "https://github.com/DioxusLabs/dioxus", rev = "430cfb563f1b70602ef387f0c80f171d84527b41" }
+# One wasm-streams in a browser build: 0.4 (reqwest 0.12's `stream`) as a
+# re-export of 0.5 (dioxus-web's), or the two copies' `#[wasm_bindgen]`
+# classes collide at link time. See vendor/wasm-streams-0.4/FTS-PATCH.md.
+wasm-streams = { path = "vendor/wasm-streams-0.4" }
+# Ignition's fork of gdtf 0.3.0 (a parsed matrix's rows: its vendor/gdtf
+# FTS-PATCH.md), for its visualizer, which studio-web links (Ignition's
+# room in a browser). The same revision as ignition-pane.
+gdtf = { git = "https://github.com/FastTrackStudios/Ignition", rev = "b9a90c27979bc53b955fe0716d7b19707972ccd0" }
 # tone3000 on reqwest 0.12's ring-backed rustls instead of 0.13's `rustls`,
 # whose only backend is aws-lc-rs: aws-lc-sys's build script (a cmake C
 # build) was 186 s of a 375 s clean `cargo check --workspace`, all of it on
@@ -1122,8 +1214,8 @@ inherits = "release"
 incremental = true
 codegen-units = 256
 
-# The browser's app (`session-daw-web`): one module every visitor
-# downloads and compiles, so its size is paid on every first visit.
+# A browser build (the island's web bundle, `just island`; first written for
+# the old in-browser DAW): one module every visitor downloads and compiles, so its size is paid on every first visit.
 # Whole-program LTO in one codegen unit lets LLVM drop what no path from
 # `main` reaches across crate boundaries, and `s` stops it trading size
 # for speed where speed does not matter (the UI, the parsers, the RPC).
@@ -1158,7 +1250,7 @@ opt-level = 3
 # dx's own profile: `dx serve` builds the window as `desktop-dev` with an
 # explicit `--target`, so its artifacts land in
 # target/<host>/desktop-dev. The dev loop builds the engine and the tests the
-# same way (scripts/dev-herdr.sh, `just dev-test`) so all three share one set
+# same way (`just dev-test`) so all three share one set
 # of compiled crates. Declared here so cargo knows it outside dx; it is the
 # dev profile, nothing else.
 [profile.desktop-dev]
@@ -1228,6 +1320,10 @@ opt-level = 3
 [profile.dev.package.dasp_frame]
 opt-level = 3
 [profile.dev.package.dasp_sample]
+opt-level = 3
+# Tempo maps: a mel spectrogram and a beat tracker over every stem of a
+# song; at 1 an analysis takes minutes.
+[profile.dev.package.tempo-map]
 opt-level = 3
 [profile.dev.package.rustfft]
 opt-level = 3
@@ -1309,6 +1405,12 @@ opt-level = 3
 # (upstream's renamed dioxus-core) — a dropped handler's owner is not a
 # panic, plus DioxusLabs/dioxus#5668's suspense fix (vendor v0.7.1 =
 # architect's v0.7.0 + that fix, FastTrackStudios/task#410).
+# Ignition's bevy_pbr (Bevy at its pin, plus two commits in the volumetric
+# fog: its vendor/bevy_pbr FTS-PATCH.md), for every Bevy crate of the
+# visualizer studio-web links. The same revision as ignition-pane.
+[patch."https://github.com/bevyengine/bevy"]
+bevy_pbr = { git = "https://github.com/FastTrackStudios/Ignition", rev = "b9a90c27979bc53b955fe0716d7b19707972ccd0" }
+
 [patch."https://github.com/DioxusLabs/dioxus"]
 dioxus-native = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.1" }
 dioxus-native-dom = { git = "https://www.github.com/FastTrackStudios/vendor", rev = "25bf4bcdfd0b6acb268ca91a93bc8ff8da683a96" }
@@ -1327,22 +1429,22 @@ dioxus-vdom = { git = "https://github.com/FastTrackStudios/vendor", tag = "v0.7.
 # [workspace.dependencies] above. Goes when keyflow pins the daw repo at
 # the revision Studio does.
 [patch."https://github.com/FastTrackStudios/daw"]
-daw                = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-standalone     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-session-format     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-dawfile-reaper     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-signal-plugin-host = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-builtin            = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-sync           = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-proto          = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-control        = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-module         = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-transport-sync = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-daw-test-macro     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-utils              = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-midi               = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-audio              = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
-fts-sample         = { git = "https://www.github.com/FastTrackStudios/daw", rev = "86263731dfd07e3ef69cfdce923901ce9894905e" }
+daw                = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-standalone     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+session-format     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+dawfile-reaper     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+signal-plugin-host = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+builtin            = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-sync           = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-proto          = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-control        = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-module         = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-transport-sync = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+daw-test-macro     = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+utils              = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+midi               = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+audio              = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
+fts-sample         = { git = "https://www.github.com/FastTrackStudios/daw", rev = "6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f" }
 
 # from processor
 [profile.dev.package.builtin]
@@ -1472,91 +1574,60 @@ editor-view = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6
 editor-vim = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
 editor-crdt = { git = "https://www.github.com/FastTrackStudios/editor", rev = "6817dc2c709fbb5a7858229592bbbc85eed49528" }
 
-# One Architect release for the whole graph: v0.15.1 (the compositor,
-# studio#519). Studio's own workspace pins name the plain URL at that tag;
-# daw, session and keyflow still name older tags on it. Patching the plain
-# URL to the www. spelling (another source to cargo, so the patch is
-# allowed) gives every one of them this release. Every Architect crate the
-# lock names is listed, or it lands twice.
+# One Architect for the whole graph: the application framework at its
+# main (eaa969f1, architect#994), the one app-shell-extensions builds on.
+# Studio's own workspace pins name the plain URL at that revision; signal
+# and task still name older tags on it. Patching the plain URL to the www. spelling
+# (another source to cargo, so the patch is allowed) gives every one of
+# them this revision. Every Architect crate the lock names is listed, or it
+# lands twice.
 [patch."https://github.com/FastTrackStudios/architect"]
-architect = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-a2ui = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-accounts = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-action-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-app = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-atom = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-bases = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-calendar = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-canvas = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-capture = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-command-palette = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-commands = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-control = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-dayplan = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-desktop = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-devices = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-distribution = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-editor = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-extension-archive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-extension-wasi = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-extensions = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-favourites = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-files = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-files-extension = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-guide = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-input = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-launcher-core = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-launcher-providers = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-launcher-ui = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-mcp = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-navigator = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-navigator-api = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-navigator-extension = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-notify = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-orgs = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-pages = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-palette = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-permissions = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-presence = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-projects = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-rpc-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-sandbox-board = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-scripting = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-settings = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-settings-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-settings-sheet = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-shell = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-sites = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-spaces = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-story-core = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-story-macros = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-story-runtime = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-tasks = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-telemetry = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-theme = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-theme-picker = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-threads = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-time-tracker = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-ui = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-updates = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-scene = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-workspace = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-workspace-hack = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-auth-client = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-auth-proto = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-crdt = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-crdt-derive = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-links = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-links-proto = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-tag = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-tag-proto = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-vault = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-vault-collab = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-vault-doc = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-vault-live = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-vault-obsidian = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-vault-proto = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-media = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-playhead = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
-architect-process-view = { git = "https://www.github.com/FastTrackStudios/architect", tag = "v0.15.1" }
+architect = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-accounts = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-action-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-atom = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-commands = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-control = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-devices = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-editor = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-extension-archive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-extension-wasi = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-extensions = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-extensions-dioxus = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-favourites = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-files = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-guide = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-input = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-mcp = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-navigator-api = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-orgs = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-palette = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-permissions = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-presence = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-rpc-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-scripting = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-settings = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-settings-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-shell = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-spaces = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-core = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-macros = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-story-runtime = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-telemetry = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-theme = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-ui = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-views = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-scene = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-workspace = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+auth-client = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+auth-proto = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+crdt = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+crdt-derive = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+vault = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+vault-collab = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+vault-doc = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+vault-live = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+vault-obsidian = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+vault-proto = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }
+architect-process-view = { git = "https://www.github.com/FastTrackStudios/architect", rev = "eaa969f150b4c558b4722c09e7cf619d9fa4bede" }

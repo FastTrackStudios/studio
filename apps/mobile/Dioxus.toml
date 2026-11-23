@@ -1,0 +1,12 @@
+# dx config for studio-mobile: `dx serve --ios` from this folder for the
+# Simulator (on a Mac). Releases are built by Architect's iOS scripts
+# (README.md).
+[application]
+# The whole Info.plist, as dx takes it verbatim: iOS 27 stops an app that
+# does not adopt the UIScene lifecycle, which dx's own plist does not.
+ios_info_plist = "ios/Info.plist"
+
+[bundle]
+# Studio's App Store record ("Studio - by FastTrackStudio", 6826004255).
+identifier = "app.fasttrackstudio.studio"
+publisher = "FastTrackStudio"

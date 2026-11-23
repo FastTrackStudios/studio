@@ -197,7 +197,7 @@ pub fn in_project(session: &Path, project_root: &Path) -> Option<String> {
 ///
 /// The file could not be written.
 pub fn write_setlist(title: &str, sessions: &[PathBuf]) -> std::io::Result<PathBuf> {
-    let dir = dirs::cache_dir()
+    let dir = cache_dir()
         .unwrap_or_else(std::env::temp_dir)
         .join("studio")
         .join("launcher");
@@ -256,7 +256,29 @@ pub fn rigs_in(signal_dir: &Path) -> Vec<Rigs> {
 /// The rigs saved on this machine (`~/.config/signal/<instrument>/profiles`).
 #[must_use]
 pub fn rigs() -> Vec<Rigs> {
-    dirs::config_dir().map_or_else(Vec::new, |dir| rigs_in(&dir.join("signal")))
+    config_dir().map_or_else(Vec::new, |dir| rigs_in(&dir.join("signal")))
+}
+
+/// The machine's cache and config folders. A browser has neither: there
+/// no rigs are saved and a setlist is opened by its note.
+#[cfg(not(target_arch = "wasm32"))]
+fn cache_dir() -> Option<PathBuf> {
+    dirs::cache_dir()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn config_dir() -> Option<PathBuf> {
+    dirs::config_dir()
+}
+
+#[cfg(target_arch = "wasm32")]
+const fn cache_dir() -> Option<PathBuf> {
+    None
+}
+
+#[cfg(target_arch = "wasm32")]
+const fn config_dir() -> Option<PathBuf> {
+    None
 }
 
 #[cfg(test)]

@@ -67,8 +67,8 @@
             "aarch64-apple-ios-sim"
             "x86_64-apple-darwin"
           ]
-          # The Signal phone app (apps/signal/mobile, `dx build --platform
-          # android`): the emulator's x86_64 and phones' aarch64. dx links
+          # Android (`dx build --platform android`; the Signal phone app that
+          # used them moved out with Signal): the emulator's x86_64 and phones' aarch64. dx links
           # them with the NDK's clang (ANDROID_NDK_HOME, from the system SDK).
           ++ lib.optionals pkgs.stdenv.isLinux [
             "x86_64-linux-android"
@@ -194,7 +194,7 @@
           CC_wasm32_unknown_unknown = "${wasmCC}";
           # phon-jit's build script compiles its `become` tail-call stencils
           # with this pinned nightly rustc (the workspace pin is stable 1.99.1,
-          # which can't parse `become`). See libs/vendor/phon-jit/build.rs.
+          # which can't parse `become`). See FastTrackStudios/vendor's phon-jit/build.rs.
           PHON_JIT_NIGHTLY_RUSTC = "${rustNightly}/bin/rustc";
           # Rust defaults aarch64-apple-ios to iOS 10, whose runtime lacks
           # `___chkstk_darwin` (it moved into libSystem at iOS 12) — linking

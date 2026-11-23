@@ -14,7 +14,7 @@ def reach(a,skip):
 red={a:sorted([b for b in G[a] if b not in reach(a,(a,b))], key=lambda c:rank[c]) for a in ORDER}
 full={a:sorted(G[a], key=lambda c:rank[c]) for a in ORDER}
 # pub(crate) symbols that cross crates
-SRC="/run/media/Development/fts/studio/apps/session/daw/src"
+SRC="/run/media/Development/fts/studio/features/engine/ui/src"
 def src_of(m):
     p=f"{SRC}/{m}.rs"
     if os.path.exists(p): return open(p).read()

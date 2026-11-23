@@ -1,0 +1,109 @@
+[package]
+name = "studio-extensions"
+description = "Studio's compiled-in extensions, listed once: what the desktop app (apps/desktop, studio) and the web client (apps/web) link in: `studio`, `stage` (the window's views), `rig` (Signal's rig views). Ignition's room and the rig views are native until their browser builds land; Studio's engine is the `daw` extension (a process natively, session-engine's web engine in a browser)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[features]
+default = []
+# The window's views on every target: Studio's arrangement, mixer, lyrics,
+# navigator and launcher, Keyflow's chart, Ignition's lighting, and Studio's
+# set views (`studio.transport`: a setlist's tabs and what they open).
+stage = [
+    "architect-extensions/ui",
+    "dep:studio-island",
+    "dep:architect-playhead",
+    "dep:dioxus",
+    "dep:futures-timer",
+    "dep:serde_json",
+    "dep:tracing",
+    "dep:studio-arrangement",
+    "dep:studio-mixer",
+    "dep:studio-lyrics",
+    "dep:studio-navigator",
+    "dep:studio-launcher",
+    "dep:keyflow-extension",
+    "dep:ignition-pane",
+]
+# Studio in a browser (studio-web): the set views are the island's
+# components, Studio's engine runs in the page (`daw`, linked), and the
+# window's extensions are deferred (`deferred`).
+web = ["stage", "dep:daw-extension"]
+# Studio on a phone or tablet (studio-mobile): the set views are the
+# device's (Blitz), and Studio's engine runs in the app (`daw`, linked in:
+# no process of its own on iOS).
+mobile = ["stage", "dep:daw-extension"]
+# The browser build's deferred extensions as wasm chunks of their own
+# (`deferred`, Dioxus's `#[wasm_split]`): only with `dx build
+# --wasm-split`, which provides the loader they import.
+wasm-split = ["dep:wasm-splitter"]
+# Signal's rig views (docs/design/signal-extensions.md), natively: vox
+# clients of the rig engine (`studio.rig`, a process).
+rig = [
+    "dep:studio-rig-switches",
+    "dep:studio-rig-setlist",
+    "dep:studio-rig-browser",
+    "dep:studio-rig-grid",
+    "dep:studio-rig-macros",
+    "dep:studio-rig-status",
+    "dep:studio-audio-settings",
+    "dep:studio-keys",
+]
+
+[dependencies]
+architect-distribution = { workspace = true }
+# Song libraries and setlists, Productions, Studio's views and their
+# toolbar: on every target.
+setlists = { workspace = true, features = ["extension"] }
+productions = { workspace = true, features = ["extension"] }
+studio-views = { workspace = true, features = ["extension"] }
+# The window's views, on every target.
+studio-launcher = { workspace = true, optional = true }
+keyflow-extension = { workspace = true, optional = true }
+studio-arrangement = { workspace = true, optional = true }
+studio-mixer = { workspace = true, optional = true }
+studio-lyrics = { workspace = true, optional = true }
+studio-navigator = { workspace = true, optional = true }
+# Ignition's lighting: natively the room is a GPU process view, in a
+# browser Ignition's web renderer (Bevy on WebGPU) in a canvas.
+ignition-pane = { workspace = true, optional = true }
+# Studio's engine linked in (`web`, `mobile`); the desktop runs it as a
+# process of its own.
+daw-extension = { workspace = true, optional = true }
+# `studio.transport` (src/transport.rs): the linked extension, the
+# island's views and the playhead they ask.
+architect-extensions = { workspace = true, features = ["linked"] }
+studio-island = { workspace = true, optional = true }
+architect-playhead = { workspace = true, optional = true }
+dioxus = { workspace = true, optional = true }
+futures-timer = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+
+# In a browser: the timer on the page's clock, and the window's
+# extensions deferred, each its own wasm chunk (`wasm-split`).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+futures-timer = { workspace = true, optional = true, features = ["wasm-bindgen"] }
+wasm-splitter = { workspace = true, optional = true }
+
+# The rig views, native until their browser builds land.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+studio-rig-switches = { workspace = true, optional = true }
+studio-rig-setlist = { workspace = true, optional = true }
+studio-rig-browser = { workspace = true, optional = true }
+studio-rig-grid = { workspace = true, optional = true }
+studio-rig-macros = { workspace = true, optional = true }
+studio-rig-status = { workspace = true, optional = true }
+studio-audio-settings = { workspace = true, optional = true }
+studio-keys = { workspace = true, optional = true }
+
+[dev-dependencies]
+toml = { workspace = true }
+
+[lints]
+workspace = true

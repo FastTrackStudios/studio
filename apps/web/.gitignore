@@ -1,0 +1,3 @@
+# Written by scripts/local-stack.sh (prepare_web) for `dx serve`.
+/index.html
+/dev/

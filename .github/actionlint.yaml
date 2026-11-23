@@ -1,15 +1,15 @@
 # Runner labels used by this repo's workflows that actionlint does not know,
 # so it does not flag them as unknown. Everything else runs on GitHub-hosted
 # ubuntu-latest (checks.yml plan/lint/wasm/aggregator, cache-devshell.yml,
-# release.yml, studio-ios.yml resolve/record). The workflows are generated
+# release.yml). The workflows are generated
 # (xtask/workflows); the lint job runs actionlint over them.
 self-hosted-runner:
   labels:
     # The Mac Pro VM: the heavy nextest build (checks.yml `tests`, warm
     # target dir).
     - studio-tests
-    # airlock, studio's own release runner there: the iOS build
-    # (studio-ios.yml) and the macOS .dmg (desktop.yml).
+    # airlock, studio's own release runner there: the macOS .dmg
+    # (desktop.yml) and checks.yml's Apple build.
     - studio-release-mac
     - macos
     # THEBATTLESHIP: CI's build jobs (checks.yml) on the shared pool,

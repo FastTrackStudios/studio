@@ -2,7 +2,7 @@
 
 Studio's views in Architect and the toolbar that opens them: the
 `studio-views` extension (studio#409). Compiled into Studio Architect (the
-`studio` bundle, `apps/architect`), or run as a process extension the
+`studio` bundle, `apps/desktop`), or run as a process extension the
 Architect app installs (`src/main.rs`).
 
 ## The toolbars

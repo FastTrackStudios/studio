@@ -1,5 +1,4 @@
 ---
-"studio-island" = "patch"
 "transport-ui" = "patch"
 ---
 

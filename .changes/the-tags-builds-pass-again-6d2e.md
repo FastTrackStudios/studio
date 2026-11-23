@@ -1,5 +1,4 @@
 ---
-"studio-island" = "patch"
 "lyrics-ui" = "none"
 ---
 

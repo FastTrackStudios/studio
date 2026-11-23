@@ -1,8 +1,6 @@
 ---
 "session-ui" = "none"
 "session-desktop" = "none"
-"session-daw-web" = "none"
-"studio-desktop" = "none"
 "dynamic-template" = "none"
 ---
 

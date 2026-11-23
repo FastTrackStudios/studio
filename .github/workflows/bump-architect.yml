@@ -123,7 +123,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         TAG: ${{ steps.tag.outputs.tag }}
-        PATHS: Cargo.toml '*/Cargo.toml' Cargo.lock .config/duplicate-deps.toml '.changes/studio-architect-on-architect-*.md'
+        PATHS: Cargo.toml '*/Cargo.toml' Cargo.lock .config/duplicate-deps.toml '.changes/studio-on-architect-*.md'
         PR: ${{ steps.state.outputs.pr }}
         PR_HEAD: ${{ steps.state.outputs.head }}
       run: |
@@ -292,7 +292,7 @@ jobs:
         CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         RUN_ID: ${{ github.event.workflow_run.id }}
         MECHANICAL: <!-- bump:mechanical -->
-        PATHS_RE: ^(Cargo\.toml|.*/Cargo\.toml|Cargo\.lock|\.config/duplicate-deps\.toml|\.changes/studio-architect-on-architect-[0-9a-f]+\.md)$
+        PATHS_RE: ^(Cargo\.toml|.*/Cargo\.toml|Cargo\.lock|\.config/duplicate-deps\.toml|\.changes/studio-on-architect-[0-9a-f]+\.md)$
         BRANCH: ${{ github.event.workflow_run.head_branch }}
         HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         RUN_URL: ${{ github.event.workflow_run.html_url }}

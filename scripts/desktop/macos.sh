@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Studio (Signal and Session in one app, apps/studio/desktop) for macOS
+# Build Studio (apps/desktop, the `studio` binary) for macOS
 # as a Developer-ID signed, notarized, stapled .dmg: the installer attached
 # to the release's GitHub Release, and what scripts/install.sh installs.
 #
@@ -36,14 +36,14 @@
 set -euo pipefail
 
 app=studio
-# Studio is its distribution of Architect (apps/architect, the cargo target
-# `studio-architect`, run as `studio`), with its engine in the bundle: the
+# Studio is its distribution of Architect (apps/desktop, the cargo package
+# `studio-desktop`, run as `studio`), with its engine in the bundle: the
 # `daw` process extension in Contents/Resources/extensions/daw, where the
-# distribution looks for what it ships (apps/architect/src/lib.rs SHIPPED).
-crate=studio-architect; built=studio-architect; bin=studio; title=Studio
+# distribution looks for what it ships (apps/desktop/src/lib.rs SHIPPED).
+crate=studio-desktop; built=studio; bin=studio; title=Studio
 engine_crate=daw-extension; engine_bin=daw-extension
 features=""
-icon=apps/studio/desktop/ios/Assets.xcassets/AppIcon.appiconset/icon-1024.png
+icon=apps/desktop/icon-1024.png
 category=public.app-category.music
 mic="Studio plays your rigs and records your sessions: it listens to your audio interface's inputs."
 

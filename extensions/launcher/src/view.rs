@@ -192,13 +192,22 @@ pub fn LauncherView() -> Element {
 
     let mut press = move |what: String, action: &'static str, args: Value| {
         said.set(Said::Working(what.clone()));
-        spawn(async move {
+        // Run to the end even when this view goes meanwhile (an open
+        // closes the launcher's window; in a browser the home steps aside
+        // for the song opened): what it says is shown only while it is
+        // there.
+        dioxus::core::spawn_forever(async move {
             let heard = crate::host::run(action, args).await;
-            said.set(match heard {
-                Ok(out) => Said::Done(done(&what, &out)),
-                Err(why) => Said::Refused(why),
-            });
-            playing.set(crate::follow::session().await.map(|s| s.path));
+            if let Ok(mut now) = said.try_write() {
+                *now = match heard {
+                    Ok(out) => Said::Done(done(&what, &out)),
+                    Err(why) => Said::Refused(why),
+                };
+            }
+            let session = crate::follow::session().await.map(|s| s.path);
+            if let Ok(mut now) = playing.try_write() {
+                *now = session;
+            }
         });
     };
 

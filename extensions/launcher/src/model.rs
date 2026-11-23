@@ -210,6 +210,13 @@ pub struct Entry {
     pub song: Option<Song>,
     /// What this setlist says of it (the setlist's `notes`, by its label).
     pub remark: Option<String>,
+    /// Who leads it: its vocal and its guitar (the setlist's `leads`, by
+    /// its label: `leads: {<label>: {vocal: Jake, guitar: Sam}}`).
+    pub vocal: Option<String>,
+    pub guitar: Option<String>,
+    /// The key the setlist plays it in, when not its own (`keys`, by its
+    /// label).
+    pub key: Option<String>,
 }
 
 /// A rig a setlist is played with (the setlist's `parts`): whose it is,
@@ -279,16 +286,39 @@ pub struct Setlist {
     /// The rigs it is played with (its note's `parts`).
     pub parts: Vec<Part>,
     pub sets: Vec<Set>,
+    /// Where and when the band meets (its note's `room`, `call`,
+    /// `starts`).
+    pub room: Option<String>,
+    pub call: Option<String>,
+    pub starts: Option<String>,
 }
 
 impl Setlist {
     #[must_use]
     pub fn of(row: &Row, songs: &[Song]) -> Self {
         let notes = row.values.get("notes").and_then(Value::as_object);
+        let leads = row.values.get("leads").and_then(Value::as_object);
+        let lead = |label: &str, part: &str| {
+            leads
+                .and_then(|l| l.get(label))
+                .and_then(|l| l.get(part))
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+        };
         let entry = |text: &str| {
             let link = Link::parse(text);
             let note = link.note();
             Entry {
+                key: row
+                    .values
+                    .get("keys")
+                    .and_then(|k| k.get(&link.label))
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+                vocal: lead(&link.label, "vocal"),
+                guitar: lead(&link.label, "guitar"),
                 song: songs.iter().find(|s| s.path == note).cloned(),
                 remark: notes
                     .and_then(|n| n.get(&link.label))
@@ -357,6 +387,9 @@ impl Setlist {
                 .filter_map(Part::of)
                 .collect(),
             sets,
+            room: row.text("room"),
+            call: row.text("call"),
+            starts: row.text("starts"),
         }
     }
 

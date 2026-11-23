@@ -204,3 +204,48 @@ action = "STUDIO_LAUNCHER_STARTUP"
 [[hooks]]
 on = "app:playhead.changed"
 action = "STUDIO_LAUNCHER_FOLLOW"
+
+# Studio's phone app (docs/design/launcher/prototype): Home is the
+# launcher's view, the app's home; these are its other three sections.
+# The setlist player the launcher's view was: one setlist as a song list
+# that opens in Studio's engine.
+[[views]]
+id = "player"
+title = "Setlist player"
+icon = "list-music"
+
+[[views]]
+id = "records"
+title = "Records"
+icon = "disc"
+
+[[views]]
+id = "setlists"
+title = "Setlists"
+icon = "list-music"
+
+[[views]]
+id = "signal"
+title = "Signal"
+icon = "activity"
+
+[[tabs]]
+id = "records"
+title = "Records"
+icon = "disc"
+view = "records"
+kept = true
+
+[[tabs]]
+id = "setlists"
+title = "Setlists"
+icon = "list-music"
+view = "setlists"
+kept = true
+
+[[tabs]]
+id = "signal"
+title = "Signal"
+icon = "activity"
+view = "signal"
+kept = true

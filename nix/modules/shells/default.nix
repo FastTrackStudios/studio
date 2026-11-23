@@ -123,7 +123,7 @@
         echo "  FastTrackStudio dev shell"
         echo "  ─────────────────────────────────────────────"
         echo "  cargo check --workspace"
-        echo "  cargo run -p studio-desktop — THE app, Studio (--engine = headless rig)"
+        echo "  Studio (apps/studio): apps/studio/docs/development.md"
         echo ""
         echo "  Rust: $(rustc --version)"
         echo "  dx:   $(dx --version 2>/dev/null || echo 'not available')"

@@ -45,7 +45,7 @@ with `docs/` or `/home/`. The REAPER SDK is cited from the header the
 
 ### Comp areas
 
-Nothing. `grep -rn "comp_area\|CompArea\|LINKEDLANE\|ITEMLANES"` over `crates/daw` and the two dawfile crates returns no type, no field and no parser branch; the only hits for `LINKEDLANE` in the whole checkout are mouse-modifier context names in `studio-adapters:features/adapters/reaper/reaper-input/src/input/mouse_modifiers/types.rs:272-278, 489-495`.
+Nothing. `grep -rn "comp_area\|CompArea\|LINKEDLANE\|ITEMLANES"` over `daw:crates/daw` and the two dawfile crates returns no type, no field and no parser branch; the only hits for `LINKEDLANE` in the whole checkout are mouse-modifier context names in `studio-adapters:features/adapters/reaper/reaper-input/src/input/mouse_modifiers/types.rs:272-278, 489-495`.
 
 ## What daw-control exposes
 

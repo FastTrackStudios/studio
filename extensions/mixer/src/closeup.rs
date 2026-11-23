@@ -15,8 +15,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use architect_workspace::paint::{Layer, LayerKey, PaintMount, PaintView, Scene};
-use architect_workspace::{ViewCtx, ViewInput};
+use architect_scene::paint::{Layer, LayerKey, PaintMount, PaintView, Scene};
+use architect_scene::view::{ViewCtx, ViewInput};
 use blitz_traits::events::{MouseEventButton, MouseEventButtons, UiEvent};
 use dioxus::prelude::*;
 use session_ui::closeup::RackWidget;
@@ -186,7 +186,7 @@ fn asked() -> (u64, Option<(String, Which)>) {
 #[component]
 pub fn CloseupPane() -> Element {
     let song = studio_view_link::use_song();
-    let state = architect_extensions::linked::use_pane_state().map(|(_, s)| s);
+    let state = architect_extensions_dioxus::pane::use_pane_state().map(|(_, s)| s);
     let surface = studio_view_link::surface();
     // An ask made before the pane opened is what it opens on (its state
     // says the same); a later one the pane's host takes up on its next
@@ -243,7 +243,7 @@ fn Rack(session: crate::Song, guid: String, which: Which) -> Element {
             class: studio_view_link::ROOT_CLASS,
             style: "position:absolute; top:0; left:0; right:0; bottom:0; overflow:hidden; \
                     background:{surface};",
-            architect_extensions::linked::PaintPane { mount }
+            architect_extensions_dioxus::PaintPane { mount }
         }
     }
 }

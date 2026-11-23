@@ -149,7 +149,7 @@ probing OGG duration needs a real decoder and a WAV header doesn't.
 Tempo/time-signature come from the song's `chart/*.kf` first line when
 present (`72bpm 4/4 #Bb` et al.), defaulting to 120bpm 4/4 otherwise.
 
-This is a generation step, not a live player — see the `studio player` command (apps/session/desktop/src/cli/player.rs)
+This is a generation step, not a live player — see the `studio player` command (features/engine/host/src/cli/player.rs)
 below for that.
 
 ### The live scheme: `--live` / the Master Setlist Template
@@ -331,11 +331,11 @@ exists so a human — or a future importer — can find the real audio;
 exactly where it is since the note lives inside that same folder.
 `key:`/`artist:` are real fields Task's `SongFront` reader already knows.
 
-## The live player: the `studio player` command (apps/session/desktop/src/cli/player.rs)
+## The live player: the `studio player` command (features/engine/host/src/cli/player.rs)
 
 `studio player` plays a setlist for real —
 natively, no REAPER, no browser. It's driven by `daw-standalone` directly
-(the same engine `apps/session/desktop/src/session_engine.rs` uses for
+(the same engine `features/engine/host/src/session_engine.rs` uses for
 its in-process setlist player), not the RPC/vox facade that crate builds
 for remote UIs — this is a local CLI, so it calls `Standalone`'s sync
 `Transport`/`Tracks` trait methods directly.
@@ -414,7 +414,7 @@ guide is a record of), so the gaps are known rather than accidental:
   is built: either a new `ShareTarget` with its own guest lane, or a
   dedicated unauthenticated HTTP path patterned on
   `share_rendition_handler`/`share_download_handler`.
-- **No web/GUI player yet** — the `studio player` command (apps/session/desktop/src/cli/player.rs) (above) is a
+- **No web/GUI player yet** — the `studio player` command (features/engine/host/src/cli/player.rs) (above) is a
   terminal REPL, which is enough to prove the whole chain end-to-end
   (setlist → resolved songs → seeded projects → real synced audio →
   mute/solo) but not what a musician wants open during rehearsal. Decided

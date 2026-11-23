@@ -25,7 +25,7 @@ the crates.io API, both read on 2026-10-30. Anything marked
 Studio's window is not a webview. It is Dioxus Native on Blitz (Stylo +
 Taffy layout, painted by Vello on wgpu). The arrangement, where comping
 happens, is a single custom widget that paints its own Vello scene
-(`ArrangementWidget`, `apps/session/ui/src/widget.rs:4525`). A lane or a
+(`ArrangementWidget`, `features/engine/ui/src/widget.rs:4525`). A lane or a
 take is therefore not a DOM node at all. No browser-side library can
 drive or inspect it. What carries over from these libraries is their
 **data models and conventions**, not their code.
@@ -40,7 +40,7 @@ drive or inspect it. What carries over from these libraries is their
 | [reactour](https://github.com/elrumordelaluz/reactour) | React tours | MIT | 4.1k, 2026-05-19 | No | Same |
 | [react-joyride](https://github.com/gilbarbara/react-joyride) | React tours | MIT | 7.9k, 2026-07-09 | No | Same |
 | [rrweb](https://github.com/rrweb-io/rrweb) | Records DOM snapshots plus incremental mutations and input, then replays them as DOM | MIT | 20.3k, 2026-10-30 | No. Canvas is off by default. `recordCanvas` + `sampling.canvas` falls back to image snapshots at up to 15 fps ([canvas recipe](https://github.com/rrweb-io/rrweb/blob/master/docs/recipes/canvas.md)) | Record **semantic events, not pixels**, and re-render at replay time. Studio's equivalent is the Action List event log plus the session's undo history |
-| [Playwright](https://playwright.dev/docs/videos) video and [trace](https://playwright.dev/docs/trace-viewer) | Browser test runner. `video: 'on' / 'retain-on-failure'`; `show.actions` overlays each action's outline and title on the video. Traces hold before, action and after DOM snapshots for each action, plus a screenshot filmstrip | Apache-2.0 | 98.9k, 2026-10-30 | Only for the web builds (`apps/studio/desktop/e2e` already uses `@playwright/test ~1.59` for the browser keys rig). Not the native window | **The test is the recording**: one script, and video is a run option. Overlay the action being performed. Record before and after state for each step |
+| [Playwright](https://playwright.dev/docs/videos) video and [trace](https://playwright.dev/docs/trace-viewer) | Browser test runner. `video: 'on' / 'retain-on-failure'`; `show.actions` overlays each action's outline and title on the video. Traces hold before, action and after DOM snapshots for each action, plus a screenshot filmstrip | Apache-2.0 | 98.9k, 2026-10-30 | Only for the web builds (the removed rig app's `/e2e` already uses `@playwright/test ~1.59` for the browser keys rig). Not the native window | **The test is the recording**: one script, and video is a run option. Overlay the action being performed. Record before and after state for each step |
 | [Puppeteer `page.screencast`](https://pptr.dev/api/puppeteer.page.screencast) | Records a page to WebM (VP9, 30 fps) through ffmpeg. Marked obsolete in favour of `Page.record()` | Apache-2.0 | 95.8k, 2026-10-30 | No | Encode by piping frames to ffmpeg |
 | [Remotion](https://www.remotion.dev/docs/the-fundamentals) | Composes video from React: a component reads `useCurrentFrame()`, and a composition is a component plus `width/height/durationInFrames/fps` | **Remotion License**: free for individuals, non-profits and companies of up to 3 people; larger companies need a company licence (LICENSE.md) | 69.1k, 2026-10-30 | Can't render Blitz. Could post-produce frames Studio has already rendered (titles, zooms, captions) | **Video as a pure function of the frame number.** That is the property the headless pipeline below needs: frame *n* depends on *n*, not on wall-clock time. (guess, not checked this pass: it renders in headless Chromium and encodes with ffmpeg) |
 | [VHS](https://github.com/charmbracelet/vhs) | Terminal GIFs from a `.tape` script: `Output`, `Set`, `Type`, `Sleep`, `Wait /regex/`, `Hide`/`Show`, `Screenshot`. Outputs `.gif/.mp4/.webm`, a PNG frame directory, or `.txt/.ascii` golden files for tests. Needs `ttyd` and `ffmpeg`. `vhs-action` regenerates GIFs in CI | MIT | 21.2k, 2026-10-01 | Not for a GUI. The **model** is the closest match to what Studio needs | One script yields both media (`Output demo.gif`) and a test (`Output golden.ascii`). `Hide`/`Show` skips setup frames. `Wait /regex/` waits on **state**, not on time |
@@ -84,7 +84,7 @@ any build is acceptable.
 
 ### 2.1 The headless renderer: `blitz_shot`
 
-`apps/session/ui/src/bin/blitz_shot.rs` renders the app's own tree. Its
+`features/engine/ui/src/bin/blitz_shot.rs` renders the app's own tree. Its
 module docs say "Nothing here draws the arrangement … the tree is the
 app's … The painting is `ArrangementWidget`'s, the one painter". It has
 three modes:
@@ -144,7 +144,7 @@ Limits that matter here:
   - the widget then holds a `Landing` and draws the swiped stretch on the
     comp lane until the row's items change (`row_print`), or for at most
     `LANDING_WAIT` (3 s).
-- `vendor/dioxus-test` (MIT/Apache, vendored, Blitz-based) already has
+- `vendor:dioxus-test` (MIT/Apache, vendored, Blitz-based) already has
   `DocumentTester::send_ui_event(UiEvent)`. It is "the same path a real
   windowing shell drives", calling `document.handle_ui_event`, and it
   also provides `click_at`, `press_key` and `type_text`. Its FTS
@@ -163,7 +163,7 @@ Limits that matter here:
   `89338f6`, `features/mcp/src/lib.rs`): `actions`, `describe`, `run`,
   `batch` (≤ 64 steps, not atomic) and `watch`.
 - `/tmp/act-tools/act.sh` and `scripts/drum-lab.sh` are curl+jq clients
-  of it. `studio run <ID>` is the CLI's (`apps/session/desktop/src/cli/mod.rs`).
+  of it. `studio run <ID>` is the CLI's (`features/engine/host/src/cli/mod.rs`).
 - **`watch`** is `ActionList::events_since(since, max, wait)`, which
   returns `ActionEvent { seq, kind }` with `kind` one of:
   - `Ran { id, ok }`
@@ -180,8 +180,8 @@ Limits that matter here:
   - `record.rs`: `"transport"`.
 - The window registers its own actions while attached (`SESSION_MODE`,
   `SESSION_VIEW`, `SESSION_ZOOM`, `SESSION_COMP_*`, …;
-  `apps/session/ui/src/window.rs`, tested in
-  `apps/session/ui/tests/it/window_attach.rs`).
+  `features/engine/ui/src/window.rs`, tested in
+  `features/engine/ui/tests/it/window_attach.rs`).
 - Building a session needs nothing beyond actions: `SESSION_NEW`,
   `ITEM_ADD` ("a new item on `track` — on fixed `lane` if given — at
   `position` for `length` seconds, playing the recording `file`",
@@ -221,7 +221,7 @@ swipe already does for comping. That follows the repo's own rule that
   (`template.rpp`, `template.kf`, `media/*.wav`, `scenes/*.rows` +
   `*.png`, `folder-items/*.fold` + `.png`). It is the default project of
   every `blitz_shot` recipe.
-- **A synthetic song in code**: `apps/session/ui/src/test_song.rs`. It is
+- **A synthetic song in code**: `features/engine/ui/src/test_song.rs`. It is
   Unbreakable-shaped, with 19 drum mics of 33 fixed lanes (EDIT, COMP,
   one take per lane) and `open_as_edited()`. It is UI-only (a `Project`
   value, not an engine session), used by `arrangement/tests.rs`.
@@ -230,7 +230,7 @@ swipe already does for comping. That follows the repo's own rule that
   its media into `/run/media/Development/fts-dev/lab/unbreakable-*`.
   Those are private recordings, not fixtures that can ship.
 - **`.session` is a binary format**: "a Loro doc in a Turso file"
-  (`apps/session/engine/src/project_file.rs:1`), with `-wal`/`-tshm`
+  (`features/engine/engine/src/project_file.rs:1`), with `-wal`/`-tshm`
   sidecars. Committing one would break the repo's Assets rule (binaries
   stay out of git) and would be undiffable. A scenario session has to be
   **built from source**.
@@ -255,7 +255,7 @@ comping-take-lanes
 The first line is a media id and the rest is a caption. **I found no
 producer or consumer.** No `.gif` or `.webm` file exists outside
 `target/`. The guide site renders `docs/guides/session/*.md` through
-`ssg` (`apps/session/web/src/guide.rs`, task@main). The markdown
+`ssg` (Session's removed site, task@main). The markdown
 renderer in the locked `editor` checkout handles `![[x.gif]]` and
 `![[x.webm]]` embeds as `<img>` and `<video>`
 (`editor-state/src/markdown.rs:844–852`). It has no special case for a
@@ -313,7 +313,7 @@ Risks to settle in the first layer, roughly in order:
    decay and trails draw in over time. A deterministic capture needs an
    injectable clock, a "frame time" the harness advances by `1/fps`.
    Remotion's model, applied to Studio. **(guess)** the number of
-   `Instant::now()` sites in `apps/session/ui` is small enough to route
+   `Instant::now()` sites in `features/engine/ui` is small enough to route
    through one clock. That is not counted yet.
 2. **Asynchronous read-back.** `run_comp` runs off the UI thread through
    `open::traced_blocking`, and the widget redraws when the song is read

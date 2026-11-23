@@ -1,6 +1,6 @@
 [package]
 name = "studio-view-link"
-description = "What every Studio view extension's process is: a Studio window attached to Studio's engine (the daw extension), reading the song through the window protocol, with Architect's pane input handed on as Blitz's. Shared by studio.arrangement and studio.mixer at build time; neither needs the other at run time."
+description = "What every Studio view extension is: a Studio window on Studio's engine (the daw extension). Natively a process attached to the engine's socket, reading the song through the window protocol, with Architect's pane input handed on as Blitz's; in a browser (studio-web) a view of the page's own engine (session-ui's web host). Shared by studio.arrangement, studio.mixer, studio.lyrics and studio.navigator at build time; none needs another at run time."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,18 +10,26 @@ publish = false
 doctest = false
 
 [dependencies]
-architect-workspace = { workspace = true, features = ["paint-ui"] }
-session-ui = { workspace = true, features = ["native"] }
-session-engine = { workspace = true, features = ["native"] }
 session = { workspace = true }
 daw-ui = { workspace = true }
 dioxus = { workspace = true }
+serde_json = { workspace = true }
+web-time = { workspace = true }
+
+# The native process: attached to the engine's socket, painting panes.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+session-ui = { workspace = true, features = ["native"] }
+session-engine = { workspace = true, features = ["native"] }
 blitz-traits = { workspace = true }
 anyrender = { workspace = true }
-serde_json = { workspace = true }
 futures-timer = { workspace = true }
-web-time = { workspace = true }
-architect-scene = { workspace = true }
+architect-scene = { workspace = true, features = ["paint-ui"] }
+
+# The browser: the page's own engine (`session_ui::web_host`).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+session-ui = { workspace = true, features = ["web"] }
+session-engine = { workspace = true, features = ["web"] }
+gloo-timers = { workspace = true, features = ["futures"] }
 
 [lints]
 workspace = true

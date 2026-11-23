@@ -17,7 +17,11 @@ path = "daw-extension"
 [provides]
 "fts.session" = "0.1.0"
 
-[requires]
+# The app's playhead (`architect.playhead`): the Now Playing bar it
+# follows. A use, not a requirement: in a browser the app answers it
+# itself (no extension provides it there), as it does for studio-web's
+# and the island's views.
+[uses]
 "architect.playhead" = "^0.1"
 
 [capabilities]
@@ -64,6 +68,14 @@ description = "Opens a song, a .session or a setlist (SESSION_OPEN)."
 group = "DAW"
 effect = "mutating"
 params = '{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}'
+
+[[actions]]
+id = "DAW_AUDIO"
+name = "Studio engine: audio device"
+description = "The output the engine plays through and the outputs this machine has (`devices`: each one's name, channels and own sample rate). `output_device` (part of a name; empty for the system's default), `sample_rate` (Hz; 0 for the device's own) and `buffer_size` (frames; 0 for the default) change it: kept, and the device is opened again (SESSION_AUDIO_DEVICE). What Studio's audio settings set beside the rig engine's."
+group = "DAW"
+effect = "mutating"
+params = '{"type":"object","properties":{"output_device":{"type":"string"},"sample_rate":{"type":"integer"},"buffer_size":{"type":"integer"}}}'
 
 [[actions]]
 id = "DAW_RUN"

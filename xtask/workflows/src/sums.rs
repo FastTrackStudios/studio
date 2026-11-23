@@ -3,7 +3,7 @@
 //! release signs its own (architect `release.yml`, job `sums`).
 //!
 //! More than one workflow attaches to the Release (`desktop`: the
-//! installers; `studio-architect`: the distribution's node and web
+//! installers; `studio`: the distribution's node and web
 //! tarballs), each finishing when it finishes, and the Release is a DRAFT
 //! until one of them has signed (release.sh `publish` creates it so). Each
 //! workflow ends with these jobs; one concurrency group per tag runs them one

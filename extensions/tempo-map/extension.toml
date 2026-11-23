@@ -1,0 +1,118 @@
+# studio.tempo-map (src/lib.rs): tempo maps from a song's separated stems.
+# The algorithms are the `tempo-map` crate (features/tempo-map); this is
+# their Action List. It is a process so that an algorithm is changed,
+# rebuilt (`cargo build -p studio-tempo-map`, two crates) and picked up by
+# a running Studio without the app being rebuilt or restarted.
+#
+# It reaches Studio's engine through fts.session (the `daw` extension
+# provides it): `run` is DAW_RUN, which runs an engine action on any song
+# of the set without going to it.
+id = "studio.tempo-map"
+name = "Tempo map"
+version = "0.1.0"
+kind = "process"
+api = "0.1"
+description = "Tempo maps from a song's stems: beats from the drums, snapped to hits, checked by the backbeat, bar 1 chosen, one tempo point per bar in any meter; applied to the session, measured, compared."
+authors = ["FastTrackStudios"]
+
+[entry]
+path = "studio-tempo-map"
+
+# What other extensions sync to: a song's map and its kit hits
+# (`services.call("studio.tempo-map", "hits", {song})`,
+# method m is STUDIO_TEMPO_MAP_<M>).
+[provides]
+"studio.tempo-map" = "0.1.0"
+
+[uses]
+"fts.session" = "^0.1"
+
+[capabilities]
+effect = "mutating"
+
+[[actions]]
+id = "STUDIO_TEMPO_MAP_STATE"
+name = "Tempo map: state"
+description = "The build of the algorithms this process runs, where analyses are kept, and the songs analysed (each with its stems, beats, meter and bar 1)."
+group = "Tempo map"
+effect = "read_only"
+
+[[actions]]
+id = "STUDIO_TEMPO_MAP_ANALYSE"
+name = "Tempo map: analyse a song"
+description = "Analyse a song from its stems (`stems`: a folder of `<song> (<Name>).wav`): onsets per stem, beats over the weighted drum envelope, snapped to hits, added and dropped beats repaired, the backbeat's phase read, the meter guessed and the candidates for bar 1 scored. `bpm` is the song's tempo, roughly (it decides half or double). `meter` (`3/4`) and `changes` (`[{bar, meter}]`) when known; `from` drops beats before a time; `repair: false` leaves the beats as tracked. The song is `song` (its number in the set from 1, or its title), else `name`, else the folder's name; every other action names it the same way. Returns the summary (beats, tempo range, the phase line, what was repaired, the grid error) and the best candidates for bar 1."
+group = "Tempo map"
+effect = "mutating"
+params = '{"type":"object","properties":{"stems":{"type":"string"},"song":{},"name":{"type":"string"},"bpm":{"type":"number"},"meter":{"type":"string"},"changes":{"type":"array","items":{"type":"object","properties":{"bar":{"type":"integer"},"meter":{"type":"string"}},"required":["bar","meter"]}},"tightness":{"type":"number"},"from":{"type":"number"},"repair":{"type":"boolean"}},"required":["stems"]}'
+
+[[actions]]
+id = "STUDIO_TEMPO_MAP_CANDIDATES"
+name = "Tempo map: candidates for bar 1"
+description = "The beats that may be bar 1's downbeat, best first: each with its beat index, time, score, what the score is made of (the backbeat's phase, kick and bass on the downbeat, where the arrangement changes, crashes, where the music starts), the stems heard in the bar that starts there and the beats with music before it. Without a score bar 1 is a guess: have it confirmed by ear before sections are placed."
+group = "Tempo map"
+effect = "read_only"
+params = '{"type":"object","properties":{"song":{},"name":{"type":"string"}}}'
+
+[[actions]]
+id = "STUDIO_TEMPO_MAP_SET_BAR1"
+name = "Tempo map: set bar 1"
+description = "Set the downbeat of bar 1: `beat` (a beat's index), `time` (seconds; the nearest beat) or `candidate` (its place in STUDIO_TEMPO_MAP_CANDIDATES, from 1). Beats before it are the pickup and the count-in. Returns the map's first bars."
+group = "Tempo map"
+effect = "mutating"
+params = '{"type":"object","properties":{"song":{},"name":{"type":"string"},"beat":{"type":"integer"},"time":{"type":"number"},"candidate":{"type":"integer"}}}'
+
+[[actions]]
+id = "STUDIO_TEMPO_MAP_EDIT"
+name = "Tempo map: fix by hand"
+description = "One hand fix of an analysis. `respace: {from, to, beats, snap?}` replaces the beats between two good beats (indices) with `beats` evenly spaced intervals (an added or dropped beat), snapped to hits again unless `snap` is false. `meter` (`3/4`) with `changes` (`[{bar, meter}]`) sets the meter of every bar. `raw_from_bar` takes the downbeats as played from that song bar on (a ritard; null fits them all again). `place: {from, times}` replaces the beats from index `from` on with times placed by hand. Every fix is kept in the analysis's `edits`."
+group = "Tempo map"
+effect = "mutating"
+params = '{"type":"object","properties":{"song":{},"name":{"type":"string"},"respace":{"type":"object"},"meter":{"type":"string"},"changes":{"type":"array"},"raw_from_bar":{},"place":{"type":"object"}}}'
+
+[[actions]]
+id = "STUDIO_TEMPO_MAP_MAP"
+name = "Tempo map: the map"
+description = "The song's tempo map: its bars (number, downbeat in seconds, meter, bpm in quarter notes), where the last ends, the count-in bar, and the same as tempo points (`points`: time, bpm, the meter where it is set or changes)."
+group = "Tempo map"
+effect = "read_only"
+params = '{"type":"object","properties":{"song":{},"name":{"type":"string"}}}'
+
+[[actions]]
+id = "STUDIO_TEMPO_MAP_EVALUATE"
+name = "Tempo map: evaluate a map"
+description = "Measure a map against the song's stems: each grid beat's distance to the nearest kit hit (median, 95th percentile, largest, ms), the share of beats on a hit, the tracked beats against the per-bar grid, the backbeat's phase line (`+` on 2 and 4, `X` turned, `.` silent), the flagged spans and a confidence for every bar (`bars: true` lists them). `map` evaluates another map against the same stems: a REAPER project (`.RPP`) or a saved analysis."
+group = "Tempo map"
+effect = "read_only"
+params = '{"type":"object","properties":{"song":{},"name":{"type":"string"},"map":{"type":"string"},"bars":{"type":"boolean"}}}'
+
+[[actions]]
+id = "STUDIO_TEMPO_MAP_COMPARE"
+name = "Tempo map: compare two maps"
+description = "Two maps bar by bar: `a` and `b`, each a song analysed here (its name) or a file (a REAPER project `.RPP`, a saved analysis). The downbeats' differences (ms), the bars more than `tolerance_ms` apart (25), where one map has a beat more or fewer than the other, and the bars whose meters differ; `bars: true` lists every bar."
+group = "Tempo map"
+effect = "read_only"
+params = '{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"},"tolerance_ms":{"type":"number"},"bars":{"type":"boolean"}},"required":["a","b"]}'
+
+[[actions]]
+id = "STUDIO_TEMPO_MAP_APPLY"
+name = "Tempo map: apply to the session"
+description = "Write the song's map into its session (the engine's TEMPO_MAP_SET): the count-in from 0, one tempo point per bar, the time signature where it is set or changes, and SONGSTART moved to bar 1's downbeat, so the session counts its bars from there (`songstart: false` leaves it). `song` (its number in the set, or its title) applies it to that song without going to it; left out, the song the engine is on. `offset` is where the song's audio starts in the session, seconds (0 when left out): every point is that much later, and the count-in runs from the session's start to bar 1. Markers and sections stay at their times unless `follow` is true."
+group = "Tempo map"
+effect = "mutating"
+params = '{"type":"object","properties":{"song":{},"name":{"type":"string"},"offset":{"type":"number"},"follow":{"type":"boolean"},"songstart":{"type":"boolean"}}}'
+
+[[actions]]
+id = "STUDIO_TEMPO_MAP_HITS"
+name = "Tempo map: kit hits"
+description = "Every kit piece's hits (kick, snare, hi-hat, toms, cymbals) with where each falls on the map: time, strength, song bar and beat. `piece` for one, `from`/`to` (seconds) for a span, `min_strength` to leave the ghost notes out. `write: true` also puts them on the session's tracks as track markers named `hit` (TRACK_MARKERS_SET, each piece on the track of its name, or `tracks: {piece: track}`), replacing the ones written before (`offset`: where the song's audio starts in the session, as STUDIO_TEMPO_MAP_APPLY): what charts and lighting sync to."
+group = "Tempo map"
+effect = "mutating"
+params = '{"type":"object","properties":{"song":{},"name":{"type":"string"},"piece":{"type":"string"},"from":{"type":"number"},"to":{"type":"number"},"min_strength":{"type":"number"},"write":{"type":"boolean"},"offset":{"type":"number"},"tracks":{"type":"object"}}}'
+
+[[actions]]
+id = "STUDIO_TEMPO_MAP_BENCH"
+name = "Tempo map: benchmark"
+description = "Run every song of a test set (`songs`: a folder per song with its stems and its accepted `*Tempo Mapped*.RPP`) and compare each map with the accepted one: downbeat error (ms), bars that differ, beats added or dropped, the grid error, and whether bar 1 was guessed. `alt` is the same songs' stems from another separator (a map must come out the same from either); `scripts` the old scripts' beats to measure beside. Returns the rows and the report as Markdown."
+group = "Tempo map"
+effect = "read_only"
+params = '{"type":"object","properties":{"songs":{"type":"string"},"alt":{"type":"string"},"scripts":{"type":"string"}},"required":["songs"]}'

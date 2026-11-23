@@ -165,7 +165,7 @@ builds them as an Architect site, and Studio draws its own blocks into it
   mark's colour (Keyflow's `get_section_theme`, the colour the chart
   prints; `follow::played_sections`). The page player hands them to the
   views that draw the song.
-- **Studio's island** (`apps/architect/island`, `just island`;
+- **Studio's island** (`features/island`, `just island`;
   docs/architect-distribution.md): on a node that ships it, the
   now-playing view's bar is Session's own progress bar (its sections from
   `data-sections`, a tap on one seeks there, a song without sections one
@@ -196,5 +196,5 @@ builds them as an Architect site, and Studio draws its own blocks into it
 - A node draws Studio's blocks only with `setlists::share::blocks()`
   linked in (`Distribution::block`); installed as a process extension, the
   fences show as text (FastTrackStudios/architect#547). Studio Architect
-  (`apps/architect`, docs/architect-distribution.md) is the node with them
+  (`apps/desktop`, docs/architect-distribution.md) is the node with them
   linked in.

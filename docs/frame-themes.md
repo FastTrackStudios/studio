@@ -39,7 +39,7 @@ hand-written painters. Concretely:
 
 ## What exists
 
-**Session's painters** (`apps/session/daw`) have three parts for every view,
+**Session's painters** (`features/engine/ui`) have three parts for every view,
 and a theme has to supply all three:
 
 1. **Geometry.** `strip.rs` (mixer), `tcp.rs` / `row.rs` (TCP) and

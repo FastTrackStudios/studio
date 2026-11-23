@@ -16,7 +16,7 @@ reopens. The file's labelled `updates` are folded away by
 
 ## 1. The history
 
-`apps/session/engine/src/history.rs`, plus `project_file::{history, mark,
+`features/engine/engine/src/history.rs`, plus `project_file::{history, mark,
 restore}`.
 
 - **The `history` table.** The project file has a `history` table
@@ -27,7 +27,7 @@ restore}`.
   rows with two frontiers, so they stay separate. Loro's own change
   merging doesn't matter, because the rows don't depend on it.
 - **The action.** `history::ActionLayer`, a tracing layer in the app's
-  subscriber (`apps/session/desktop/src/lib.rs`), reads `action.id` from
+  subscriber (`features/engine/host/src/lib.rs`), reads `action.id` from
   architect's `action` span while the action runs. The step listener
   reads it on the same thread. A step made outside any action (a remote
   change, a gesture with no action) has none.
@@ -49,7 +49,7 @@ restore}`.
 
 ## 2. Marks before drum rewrites
 
-`apps/session/engine/src/safety_net.rs`. Before an action rewrites the
+`features/engine/engine/src/safety_net.rs`. Before an action rewrites the
 drums, it sets a **mark**: a row of kind `mark` named `Before
 DRUMS_REQUANTIZE 2026-10-31 14:05` (local time; ` 2`, ` 3`, … when the
 name is taken), holding the doc's frontier. That is a few bytes and no

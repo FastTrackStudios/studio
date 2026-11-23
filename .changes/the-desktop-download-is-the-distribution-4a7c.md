@@ -1,5 +1,4 @@
 ---
-"studio-architect" = "minor"
 "xtask-workflows" = "none"
 ---
 

@@ -1,5 +1,4 @@
 ---
-"studio-architect" = "minor"
 "daw-extension" = "patch"
 ---
 

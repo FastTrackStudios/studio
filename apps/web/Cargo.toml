@@ -1,0 +1,41 @@
+[package]
+name = "studio-web"
+description = "Studio's web client: Architect's web app as a library (`architect_web::run`) with Studio's views linked in (`studio.transport`: setlist, song, lyrics, arrangement, home), one wasm. It talks to a plain Architect server for content, auth and share links, as any client does; the server knows nothing of Studio. Dev: `dx serve` (the local stack's `web`); release: `dx bundle --web --release`, static files."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# The window's extensions as wasm chunks fetched on first use: the phone's
+# build and releases (`dx build --wasm-split --features wasm-split`).
+wasm-split = ["studio-extensions/wasm-split"]
+
+[[bin]]
+name = "studio-web"
+path = "src/main.rs"
+
+# The browser build only: natively (a workspace-wide build) the crate is
+# its manifest and its test.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Without `start`: this crate's own start runs it with Studio's views.
+architect-web = { workspace = true }
+architect-distribution = { workspace = true }
+# The same extensions the desktop app links (one list), the window's
+# (`stage`) included: in a browser it begins with the engine in the page.
+studio-extensions = { workspace = true, features = ["web"] }
+dioxus = { workspace = true, features = ["web"] }
+tracing = { workspace = true }
+tracing-wasm = { workspace = true }
+tracing-subscriber = { workspace = true }
+wasm-bindgen = { workspace = true }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[lints]
+workspace = true

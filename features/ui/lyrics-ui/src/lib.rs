@@ -1,6 +1,6 @@
 //! Session's lyrics panel and the model it draws, on their own: Dioxus
 //! and nothing of Session's engine, so the share page's island (studio's
-//! web bundle, `apps/architect/island`) mounts the very panel Session's
+//! web bundle, `features/island`) mounts the very panel Session's
 //! window and the setlists song workspace do.
 //!
 //! - [`lyrics`]: a song's lyrics in layers on its timeline, placed against

@@ -12,6 +12,10 @@
 //! does is an action, so the command palette, a key, the CLI and an agent
 //! open what the view opens.
 
+// In a browser the host's futures are not `Send` (one thread: the
+// host's `MaybeSend`), so neither are the launcher's that await them.
+#![cfg_attr(target_arch = "wasm32", allow(clippy::future_not_send))]
+
 pub mod arrange;
 pub mod find;
 pub mod follow;
@@ -20,6 +24,7 @@ pub mod layout;
 pub mod model;
 pub mod nav;
 pub mod plan;
+pub mod ui;
 mod view;
 
 use std::path::{Path, PathBuf};
@@ -69,7 +74,14 @@ impl Extension for Launcher {
     fn build(&self, ext: &mut Builder) {
         host::connect(ext.handle());
         ext.navigator(nav::PREFIX, nav::LauncherNav);
-        ext.view(VIEW, view::LauncherView)
+        // Studio's phone app (docs/design/launcher/prototype): Home is the
+        // launcher's own view (the app's home); Records, Setlists and Signal
+        // its tabs (extension.toml); the setlist player the launcher was.
+        ext.view(VIEW, ui::HomeView);
+        ext.view("records", ui::RecordsView);
+        ext.view("setlists", ui::SetlistsView);
+        ext.view("signal", ui::SignalView);
+        ext.view("player", view::LauncherView)
             .action("STUDIO_LAUNCHER_CHOOSE", |args| async move {
                 let name = text(&args, "setlist")?;
                 let found = load().await?;
@@ -269,7 +281,7 @@ enum AtLaunch {
 }
 
 async fn at_launch() -> AtLaunch {
-    let Ok(state) = host::run("DAW_STATE", json!({})).await else {
+    let Ok(state) = host::session("state", json!({})).await else {
         return AtLaunch::Silent;
     };
     if follow::Session::of(&state).is_some() {
@@ -356,9 +368,14 @@ pub struct Found {
 }
 
 impl Found {
-    /// `setlist` over `vault_root` (none: nothing is found).
+    /// `setlist` over `vault_root` (none: nothing is found on disk; in a
+    /// browser, where a vault has no folder, the engine in the page opens
+    /// its notes: [`Found::by_notes`]).
     #[must_use]
     pub fn of(setlist: Setlist, vault_root: Option<&Path>) -> Self {
+        if vault_root.is_none() && cfg!(target_arch = "wasm32") {
+            return Self::by_notes(setlist);
+        }
         let root = vault_root.map(|v| (v, find::project_root(v, &setlist.project)));
         // The session its note names, else the one found by its name.
         let session = |entry: &Entry| -> (Option<PathBuf>, bool) {
@@ -394,6 +411,28 @@ impl Found {
         Self {
             setlist,
             file,
+            sessions,
+            named,
+            lights,
+        }
+    }
+
+    /// `setlist` opened by its notes: what a browser's engine opens, which
+    /// reads a song from its note (its recording, its stems, its chart)
+    /// and a set from the setlist's. Each place whose song note is in the
+    /// vault is its note's path; the setlist's own "file" is its note.
+    /// Nothing has lighting cues (they are files of the project, on disk).
+    #[must_use]
+    pub fn by_notes(setlist: Setlist) -> Self {
+        let sessions: Vec<Option<PathBuf>> = setlist
+            .entries()
+            .map(|e| e.song.as_ref().map(|s| PathBuf::from(&s.path)))
+            .collect();
+        let named = sessions.iter().map(Option::is_some).collect();
+        let lights = sessions.iter().map(|_| false).collect();
+        Self {
+            file: Some(PathBuf::from(&setlist.path)),
+            setlist,
             sessions,
             named,
             lights,
@@ -573,7 +612,7 @@ pub async fn open_setlist(found: &Found, layout: Option<&str>) -> Result<Value, 
         (file, left_out)
     };
     let before = follow::session().await.map(|s| s.id);
-    let said = host::run("DAW_OPEN", json!({ "path": path })).await?;
+    let said = host::session("open", json!({ "path": path })).await?;
     choose(found.setlist.path.clone());
     let layout = layout.or(found.setlist.layout.as_deref());
     let (arranged, pointed) = if opened(before.as_deref()).await.is_some() {
@@ -628,14 +667,35 @@ pub async fn open_song(found: &Found, at: usize) -> Result<Value, String> {
         })?;
     let before = follow::session().await.map(|s| s.id);
     // The engine's set already has it: go there, the set stays open.
-    let mut said = if let Some(number) = in_open_set(path).await {
-        let said = host::engine("SESSION_SONG", json!({ "to": number })).await?;
-        json!({ "went_to": number, "song": entry.label, "engine": said })
+    let engine = if let Some(number) = in_open_set(path).await {
+        host::engine("SESSION_SONG", json!({ "to": number }))
+            .await
+            .map(|said| json!({ "went_to": number, "song": entry.label, "engine": said }))
     } else {
-        let said = host::run("DAW_OPEN", json!({ "path": path })).await?;
-        json!({ "opened": path, "song": entry.label, "engine": said })
+        host::session("open", json!({ "path": path }))
+            .await
+            .map(|said| json!({ "opened": path, "song": entry.label, "engine": said }))
+    };
+    // In a browser the song's chart shows, whatever the engine said: its
+    // chart follows the app's playhead there, not a session.
+    let charted = if cfg!(target_arch = "wasm32") {
+        show_chart(entry).await
+    } else {
+        None
+    };
+    // In a browser a song opened is its note and its chart: an engine
+    // that refuses (none in the page yet) is said, not a failure.
+    let mut said = match (engine, &charted) {
+        (Ok(said), _) => said,
+        (Err(why), Some(chart)) if cfg!(target_arch = "wasm32") => {
+            return Ok(json!({ "song": entry.label, "chart": chart, "engine_refused": why }));
+        }
+        (Err(why), _) => return Err(why),
     };
     choose(found.setlist.path.clone());
+    if let (Some(chart), Some(fields)) = (charted, said.as_object_mut()) {
+        fields.insert("chart".to_owned(), chart);
+    }
     if opened(before.as_deref()).await.is_some() {
         follow::forget();
         let pointed = follow::follow(true)
@@ -647,6 +707,27 @@ pub async fn open_song(found: &Found, at: usize) -> Result<Value, String> {
     }
     close_window().await;
     Ok(said)
+}
+
+/// Opens Keyflow's chart of `entry`'s song in a tab (its note's
+/// `chart`, a vault path): what a browser shows of a song opened, where
+/// the chart follows the app's playhead rather than a session's
+/// (`follow` points a desk's chart at the engine's session instead).
+async fn show_chart(entry: &Entry) -> Option<Value> {
+    let song = entry.song.as_ref()?;
+    let chart = song.chart_path.clone()?;
+    // The song's note first, as a press in the navigator opens it (the
+    // web app's home steps aside for it), then its chart in a tab of its
+    // own, by the app's opener for a `.kf` (Keyflow's chart view,
+    // `[[openers]]`).
+    let note = host::open(&song.path).await;
+    // The page draws the note (and the home goes) before the chart is
+    // opened beside it: asked at once, the chart's tab is lost under it.
+    futures_timer::Delay::new(Duration::from_millis(400)).await;
+    Some(match host::open(&chart).await {
+        Ok(_) => json!({ "chart": chart, "note": note.is_ok() }),
+        Err(why) => json!({ "chart": chart, "refused": why }),
+    })
 }
 
 /// The number (from 1) of the song whose session is `path` in the set the
@@ -684,6 +765,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_setlist_opened_by_its_notes_opens_each_song_note_it_has() {
+        let row = |path: &str, values: Value| model::Row {
+            path: path.to_owned(),
+            values: values.as_object().cloned().unwrap_or_default(),
+        };
+        let setlists = [row(
+            "Setlists/Show.md",
+            json!({ "title": "Show", "songs": ["[[Libraries/L/A/A|A]]", "[[Libraries/L/Gone/Gone|Gone]]"] }),
+        )];
+        let songs = [row(
+            "Libraries/L/A/A.md",
+            json!({ "title": "A", "type": "song" }),
+        )];
+        let list = model::setlists(&setlists, &songs).remove(0);
+        let found = Found::by_notes(list);
+        assert_eq!(found.file.as_deref(), Some(Path::new("Setlists/Show.md")));
+        assert_eq!(
+            found.sessions,
+            [Some(PathBuf::from("Libraries/L/A/A.md")), None]
+        );
+        assert_eq!(found.playable(), 1);
+        assert!(found.lights.iter().all(|l| !l));
+    }
+
+    #[test]
     fn the_launcher_has_a_window_to_itself_only_alone_and_off_the_main_one() {
         let layout = |main: Value, other: Value| {
             json!({ "windows": [
@@ -702,5 +808,23 @@ mod tests {
             json!([PANE, "studio.mixer/mixer"])
         )));
         assert!(!has_own_window(&layout(json!([PANE]), json!([]))));
+    }
+}
+
+#[cfg(test)]
+mod manifest_parses {
+    #[test]
+    fn the_manifest_parses() {
+        // Every view the code draws must be one the manifest declares, or the
+        // extension does not load (the host refuses it at start).
+        let declared = ["records", "setlists", "signal", "player"];
+        for v in declared {
+            assert!(
+                super::MANIFEST.contains(&format!("id = \"{v}\"")),
+                "{v} undeclared"
+            );
+        }
+        let m = architect_extensions::manifest::Manifest::parse(super::MANIFEST);
+        assert!(m.is_ok(), "{m:?}");
     }
 }

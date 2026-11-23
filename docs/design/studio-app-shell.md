@@ -101,7 +101,7 @@ project, entirely local, to work in as in any DAW.
 - **Every view works upright and sideways on a phone.** Signal was built
   for a phone held sideways only; it is redesigned to work both ways, and
   the iPhone then takes every orientation
-  (`apps/studio/desktop/ios/app-plist.sh`, which holds it sideways today).
+  (the removed rig app's `/ios/app-plist.sh`, which holds it sideways today).
 - **A section card named after its song is that song's Intro** (a Live
   set split into songs).
 

@@ -19,8 +19,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use architect_workspace::paint::{Layer, LayerKey, PaintView, Scene};
-use architect_workspace::{ViewCtx, ViewInput};
+use architect_scene::paint::{Layer, LayerKey, PaintView, Scene};
+use architect_scene::view::{ViewCtx, ViewInput};
 use blitz_traits::events::{KeyState, MouseEventButton, MouseEventButtons, UiEvent};
 use dioxus::prelude::{ReadableExt as _, WritableExt as _};
 use session_ui::panel::{ArrangementPanel, PanelEvent};
@@ -303,7 +303,7 @@ impl PaintView for Hosted {
             &parts,
             BUTTONS,
             (1, 1),
-            architect_workspace::paint::peniko::kurbo::Affine::IDENTITY,
+            architect_scene::paint::peniko::kurbo::Affine::IDENTITY,
         ));
         Some(layers)
     }

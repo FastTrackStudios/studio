@@ -13,33 +13,49 @@
 //! What it opens comes from `FTS_DAW_OPEN` (a song, a `.session` or a
 //! setlist, anything `studio engine --open` takes) or the `DAW_OPEN`
 //! action.
+//!
+//! Native only: the browser engine that clocked Architect's web playhead
+//! (studio-web) went with studio-web and Architect's playhead.
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod buttons;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod deck;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod meters;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod owner;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod session_doc;
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::OnceLock;
 
+#[cfg(not(target_arch = "wasm32"))]
 use architect_extensions::linked::{Builder, Extension};
+#[cfg(not(target_arch = "wasm32"))]
 use serde_json::{Value as Json, json};
 
 pub const MANIFEST: &str = include_str!("../extension.toml");
 
 /// Where the engine said it is, once up.
+#[cfg(not(target_arch = "wasm32"))]
 static STARTED: OnceLock<Result<(), String>> = OnceLock::new();
 
 /// Starts the engine on a thread of its own (it blocks on its runtime
 /// until the process ends), opening `open` as it comes up.
 /// What the engine was asked to open at start (`FTS_DAW_OPEN`).
+#[cfg(not(target_arch = "wasm32"))]
 static OPENED: OnceLock<Option<String>> = OnceLock::new();
 
 /// What the engine was asked to open at start, when anything.
 #[must_use]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn opened() -> Option<&'static str> {
     OPENED.get().and_then(Option::as_deref)
 }
 
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
 pub fn start_engine(open: Option<String>) {
     let _ = OPENED.set(open.clone());
     let args = session_desktop::engine_host::Args {
@@ -58,13 +74,47 @@ pub fn start_engine(open: Option<String>) {
     }
 }
 
+/// On a phone or tablet: the engine in the app's own process (iOS has no
+/// helper processes), reached over the in-memory link it serves itself on
+/// (`session_engine::open::link_window_here`), the views' client the same
+/// one a desktop window has over a socket. It serves the Action List (MCP)
+/// as `studio engine` does, and opens `open` once it is up.
+#[cfg(target_os = "ios")]
+pub fn start_engine(open: Option<String>) {
+    if OPENED.set(open.clone()).is_err() {
+        return;
+    }
+    let spawned = std::thread::Builder::new()
+        .name("studio-engine".to_owned())
+        .spawn(move || {
+            session_engine::open::set_mode(session_engine::open::ModeState::engine());
+            session_engine::open::serve_actions();
+            let up = session_engine::open::link_window_here().map_err(|e| e.to_string());
+            let opened = up.clone().and_then(|()| match open {
+                Some(path) => session_engine::actions::list()
+                    .run_json(
+                        "SESSION_OPEN",
+                        json!({ "path": path }).to_string().as_bytes(),
+                    )
+                    .map(drop)
+                    .map_err(|e| e.to_string()),
+                None => Ok(()),
+            });
+            let _ = STARTED.set(opened);
+        });
+    if let Err(e) = spawned {
+        let _ = STARTED.set(Err(e.to_string()));
+    }
+}
+
 /// The engine's state: whether it is up, where, and the song it has.
+#[cfg(not(target_arch = "wasm32"))]
 fn state() -> Json {
     let found = session_engine::studio_engine::link::found()
         .into_iter()
         .find(|f| f.pid == std::process::id());
     json!({
-        "up": found.is_some(),
+        "up": found.is_some() || matches!(STARTED.get(), Some(Ok(()))),
         "socket": found.as_ref().map(|f| f.socket.display().to_string()),
         "mcp": found.as_ref().map(|f| f.mcp.clone()),
         "failed": STARTED.get().and_then(|r| r.as_ref().err().cloned()),
@@ -80,6 +130,7 @@ fn state() -> Json {
 /// (`SESSION_ZOOM`, the arrangement's gestures) as much as any.
 /// `session_engine::actions::run` would refuse those here, where a
 /// runtime is current.
+#[cfg(not(target_arch = "wasm32"))]
 async fn run(id: &str, args: &Json) -> Result<Json, String> {
     let out = session_engine::actions::list()
         .run_json_async(id, args.to_string().as_bytes())
@@ -91,6 +142,7 @@ async fn run(id: &str, args: &Json) -> Result<Json, String> {
 
 /// The engine project of the set's song `song` names: its number in the
 /// set (from 1), its title, or its project's guid.
+#[cfg(not(target_arch = "wasm32"))]
 fn song_project(song: &Json) -> Result<String, String> {
     let lineup = session_engine::studio_engine::set::lineup().ok_or("no set is open")?;
     let found = match song {
@@ -112,6 +164,7 @@ fn song_project(song: &Json) -> Result<String, String> {
 
 /// Action `id` of the engine's list, run on song `project` of the set
 /// without going to it (`session_engine::open::in_song`).
+#[cfg(not(target_arch = "wasm32"))]
 fn run_in(project: &str, id: &str, args: &Json) -> Result<Json, String> {
     let list = session_engine::actions::list();
     let bytes = args.to_string();
@@ -134,8 +187,25 @@ fn run_in(project: &str, id: &str, args: &Json) -> Result<Json, String> {
         .unwrap_or_else(|_| Json::String(String::from_utf8_lossy(&out).into_owned())))
 }
 
+/// The outputs this machine has, as the engine could open them.
+#[cfg(not(target_arch = "wasm32"))]
+fn output_devices() -> Vec<Json> {
+    audio::io::output_devices(&audio::io::audio_host())
+        .into_iter()
+        .map(|d| {
+            json!({
+                "name": d.name,
+                "channels": d.channels,
+                "sample_rate": d.default_sample_rate,
+            })
+        })
+        .collect()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub struct Daw;
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Extension for Daw {
     fn manifest(&self) -> &'static str {
         MANIFEST
@@ -143,6 +213,10 @@ impl Extension for Daw {
 
     fn build(&self, ext: &mut Builder) {
         deck::set_handle(ext.handle());
+        // Linked into the app on a phone: the engine is the app's, started
+        // with it (natively elsewhere it is a process, `owner`).
+        #[cfg(target_os = "ios")]
+        start_engine(None);
         ext.action_in("DAW_READ", |args, cx| async move {
             session_doc::call(fts_session::service::READ, &args, &cx).await
         })
@@ -156,6 +230,16 @@ impl Extension for Daw {
         .action("DAW_OPEN", |args| async move {
             let path = args.get("path").and_then(Json::as_str).ok_or("no path")?;
             run("SESSION_OPEN", &json!({ "path": path })).await
+        })
+        .action("DAW_AUDIO", |args| async move {
+            // With nothing to change, the device as kept: no reopening.
+            let change = args.as_object().is_some_and(|a| !a.is_empty());
+            let device = if change {
+                run("SESSION_AUDIO_DEVICE", &args).await?
+            } else {
+                run("SESSION_AUDIO_DEVICE", &json!({})).await?
+            };
+            Ok(json!({ "device": device, "devices": output_devices() }))
         })
         .action("DAW_DECK", |args| async move {
             // The app's playhead moved (its hook): the engine follows
