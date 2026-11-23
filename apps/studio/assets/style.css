@@ -1359,3 +1359,15 @@ span.aglogo { overflow: hidden; display: block; }
   margin-top: 0;
   color: var(--ink-3);
 }
+
+/* The right sidebar: Now Playing. */
+.rnp { display: flex; flex-direction: column; gap: 4px; padding: 6px 14px 16px; overflow-y: auto; min-height: 0; }
+.rnp-k { margin-top: 12px; font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.rnp-t { font-size: 17px; font-weight: 650; }
+.rnp-s { font-size: 12px; color: var(--ink-2); }
+.rnp-secs { display: flex; flex-direction: column; gap: 2px; }
+.rnp-sec { display: flex; justify-content: space-between; padding: 6px 8px; border-radius: 8px; text-align: left; color: var(--ink-2); }
+.rnp-sec.on { background: var(--ink); color: var(--desk); }
+.rnp-at { font-variant-numeric: tabular-nums; opacity: 0.7; }
+.rnp-next { padding: 4px 8px; font-size: 13px; color: var(--ink-2); }
+.tbchart { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 13px; color: var(--ink); }

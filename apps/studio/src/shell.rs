@@ -9,8 +9,9 @@
 
 use app_shell::Theme;
 use app_shell::ui::{
-    AppShell, Destination, FormFactor, Icon as ShellIcon, PrimaryAction, SearchField, SheetId,
-    SheetSpec, Sidebar, SidebarItem, SidebarSection, SidebarSwitcher, TopBar, icons, use_shell,
+    AppShell, BarPlace, Destination, FormFactor, Icon as ShellIcon, PrimaryAction, SearchField,
+    SheetId, SheetSpec, Sidebar, SidebarItem, SidebarSection, SidebarSwitcher, TopBar, icons,
+    use_shell, use_top_bar_item,
 };
 use dioxus::prelude::*;
 
@@ -299,10 +300,15 @@ pub fn Shell() -> Element {
         None
     };
 
+    // The right sidebar is Now Playing, while something plays.
+    let playing = (app.np)().is_some_and(|n| n.song().is_some());
+    let right = playing.then(|| rsx! { NowPlayingPanel {} });
+
     rsx! {
         div { class: "window",
             AppShell {
                 theme: use_hook(theme),
+                right_sidebar: right,
                 title: title_of(&route, &index),
                 top_bar: rsx! {
                     StudioTopBar { title: title_of(&route, &index) }
@@ -329,6 +335,7 @@ pub fn Shell() -> Element {
                     }
                     MenuView {}
                 }
+                ChartButton {}
                 SheetBridge {}
                 ToastBridge {}
                 crate::team::ShareMirror {}
@@ -410,6 +417,83 @@ fn StudioTopBar(title: String) -> Element {
             on_forward: move |()| nav.go_forward(),
             can_back: nav.can_go_back(),
             can_forward: nav.can_go_forward(),
+        }
+    }
+}
+
+/// While a song plays: its chart, from the top bar's trailing place.
+#[component]
+fn ChartButton() -> Element {
+    let app = use_app();
+    use_top_bar_item("studio/chart", BarPlace::Trailing, 0, move || {
+        if !(app.np)().is_some_and(|n| n.song().is_some()) {
+            return rsx! {};
+        }
+        rsx! {
+            button {
+                class: "tbchart",
+                title: "The chart of the song playing",
+                onclick: move |_| {
+                    navigator().push(Route::NowChart {});
+                },
+                Icon { name: I::Chart, size: 15 }
+                span { "Chart" }
+            }
+        }
+    });
+    rsx! {}
+}
+
+/// The right sidebar: the song playing, its sections (a tap plays from
+/// one) and what comes after it.
+#[component]
+fn NowPlayingPanel() -> Element {
+    let app = use_app();
+    let Some(n) = (app.np)().filter(|n| n.song().is_some()) else {
+        return rsx! {};
+    };
+    let song = n.song().map(|s| s.title).unwrap_or_default();
+    let (now, len) = n.secs();
+    let at = n.timeline.at(now).map(|s| s.name.clone());
+    let sections = n.timeline.sections.clone();
+    let next: Vec<String> = n
+        .list
+        .iter()
+        .skip(n.i + 1)
+        .take(6)
+        .map(|s| s.title.to_string())
+        .collect();
+    rsx! {
+        div { class: "rnp",
+            div { class: "rnp-k", "Now playing" }
+            div { class: "rnp-t", "{song}" }
+            div { class: "rnp-s", "{n.from} · {crate::songs::clock(now)} / {crate::songs::clock(len)}" }
+            if !sections.is_empty() {
+                div { class: "rnp-k", "Sections" }
+                div { class: "rnp-secs",
+                    for s in sections {
+                        button {
+                            key: "{s.start}",
+                            class: if at.as_deref() == Some(s.name.as_str()) { "rnp-sec on" } else { "rnp-sec" },
+                            onclick: {
+                                let start = s.start;
+                                move |_| {
+                                    let mut seek = app.seek;
+                                    seek.set(Some(start));
+                                }
+                            },
+                            span { "{s.name}" }
+                            span { class: "rnp-at", "{crate::songs::clock(s.start)}" }
+                        }
+                    }
+                }
+            }
+            if !next.is_empty() {
+                div { class: "rnp-k", "Up next" }
+                for (i, t) in next.iter().enumerate() {
+                    div { key: "{i}", class: "rnp-next", "{t}" }
+                }
+            }
         }
     }
 }

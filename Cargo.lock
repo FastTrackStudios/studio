@@ -597,7 +597,7 @@ dependencies = [
 [[package]]
 name = "app-shell"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/app-shell?rev=df4a0d967a189be5a9e1b8ba79812b2d14c01804#df4a0d967a189be5a9e1b8ba79812b2d14c01804"
+source = "git+https://github.com/FastTrackStudios/app-shell?rev=50e6c7f11a8468baeb1969fb046058c315428c3a#50e6c7f11a8468baeb1969fb046058c315428c3a"
 dependencies = [
  "dioxus",
  "futures-channel",
@@ -641,7 +641,7 @@ dependencies = [
 [[package]]
 name = "app-shell-native"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/app-shell?rev=df4a0d967a189be5a9e1b8ba79812b2d14c01804#df4a0d967a189be5a9e1b8ba79812b2d14c01804"
+source = "git+https://github.com/FastTrackStudios/app-shell?rev=50e6c7f11a8468baeb1969fb046058c315428c3a#50e6c7f11a8468baeb1969fb046058c315428c3a"
 dependencies = [
  "anyrender",
  "anyrender_vello_cpu",

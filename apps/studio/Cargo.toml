@@ -28,10 +28,10 @@ loro = "1.18"
 # FastTrackStudios/app-shell, not features/app/shell (the old apps' log
 # ring and update check), which has the same package name: say
 # `-p studio-app`, never `-p app-shell`.
-app-shell = { git = "https://github.com/FastTrackStudios/app-shell", rev = "df4a0d967a189be5a9e1b8ba79812b2d14c01804" }
+app-shell = { git = "https://github.com/FastTrackStudios/app-shell", rev = "50e6c7f11a8468baeb1969fb046058c315428c3a" }
 # app-shell's native side: the Blitz window without a system frame, the
 # shell's title bar drawing the window's buttons (and dragging it).
-app-shell-native = { git = "https://github.com/FastTrackStudios/app-shell", rev = "df4a0d967a189be5a9e1b8ba79812b2d14c01804", optional = true }
+app-shell-native = { git = "https://github.com/FastTrackStudios/app-shell", rev = "50e6c7f11a8468baeb1969fb046058c315428c3a", optional = true }
 serde_json = { version = "1", optional = true }
 js-sys = { version = "0.3", optional = true }
 # The browser's fetch, for bytes (waveforms, uploads).
