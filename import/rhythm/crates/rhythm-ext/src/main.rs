@@ -78,6 +78,8 @@ fn main() {
                 threshold_db: None,
                 crest_db: 10.0,
                 retrig_ms: 30.0,
+                tempo_bpm: None,
+                time_sig: None,
             };
             match dispatch(&registry, "RHYTHM_DETECT", serde_json::to_value(req).unwrap()) {
                 Ok(out) => println!("{}", serde_json::to_string_pretty(&out).unwrap()),

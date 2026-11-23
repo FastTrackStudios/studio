@@ -1,2 +1,9 @@
 /target
 Cargo.lock
+
+.venv/
+*.onnx
+*.pt
+*.ckpt
+*.safetensors
+*.wav

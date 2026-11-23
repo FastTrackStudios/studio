@@ -2,7 +2,8 @@
 //!
 //! Mirrors the DAW's capability-based provider contract: callers ask for a
 //! detector by stable ID (e.g. `fts.hits.kit-fusion` or `fts.hits.envelope-gate`)
-//! and get back canonical [`DetectedHit`] records.
+//! and get back canonical [`DetectedHit`] records plus optional beat, downbeat,
+//! and song-section analyses.
 
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +20,10 @@ pub struct DetectorInfo {
     pub description: String,
     pub supports_triggers: bool,
     pub supports_multi_mic_bleed: bool,
+    #[serde(default)]
+    pub supports_beats: bool,
+    #[serde(default)]
+    pub supports_sections: bool,
 }
 
 pub struct PieceInput<'a> {
@@ -34,6 +39,10 @@ pub struct DetectorInput<'a> {
     pub threshold_db: Option<f64>,
     pub crest_db: f64,
     pub retrig_ms: f64,
+    /// Optional known DAW session tempo in BPM (prior for metrical/BPM-conditioned models).
+    pub tempo_bpm: Option<f64>,
+    /// Optional known time signature `(numerator, denominator)` e.g. `(4, 4)`.
+    pub time_sig: Option<(u32, u32)>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -50,6 +59,22 @@ pub struct DetectedHit {
     pub bleed_suspect: bool,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct BeatEvent {
+    /// Beat time in source seconds.
+    pub at: f64,
+    /// True if this beat is bar downbeat (beat 1).
+    pub downbeat: bool,
+    pub confidence: f32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SectionEvent {
+    pub start: f64,
+    pub end: f64,
+    pub label: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PieceSummary {
     pub piece: String,
@@ -63,6 +88,10 @@ pub struct DetectorOutput {
     pub sample_rate: f64,
     pub pieces: Vec<PieceSummary>,
     pub hits: Vec<DetectedHit>,
+    #[serde(default)]
+    pub beats: Vec<BeatEvent>,
+    #[serde(default)]
+    pub sections: Vec<SectionEvent>,
 }
 
 pub trait HitDetector: Send + Sync {
@@ -81,6 +110,8 @@ impl HitDetector for KitFusionDetector {
             description: "Multi-mic drum kit detector with trigger health checks, automatic close-mic calibration, and cross-mic bleed rejection.".to_owned(),
             supports_triggers: true,
             supports_multi_mic_bleed: true,
+            supports_beats: false,
+            supports_sections: false,
         }
     }
 
@@ -139,6 +170,8 @@ impl HitDetector for KitFusionDetector {
             sample_rate: input.sample_rate,
             pieces: summaries,
             hits: all_hits,
+            beats: Vec::new(),
+            sections: Vec::new(),
         }
     }
 }
@@ -154,6 +187,8 @@ impl HitDetector for EnvelopeGateDetector {
             description: "Fast single-channel envelope/crest transient gate without cross-mic bleed suppression.".to_owned(),
             supports_triggers: false,
             supports_multi_mic_bleed: false,
+            supports_beats: false,
+            supports_sections: false,
         }
     }
 
@@ -211,6 +246,8 @@ impl HitDetector for EnvelopeGateDetector {
             sample_rate: input.sample_rate,
             pieces: summaries,
             hits: all_hits,
+            beats: Vec::new(),
+            sections: Vec::new(),
         }
     }
 }

@@ -4,6 +4,7 @@ members = [
     "crates/rhythm-hits",
     "crates/rhythm-editing",
     "crates/rhythm-ext",
+    "crates/rhythm-bench",
 ]
 
 [workspace.package]

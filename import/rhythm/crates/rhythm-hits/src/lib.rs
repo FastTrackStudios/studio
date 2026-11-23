@@ -8,6 +8,9 @@ pub mod calibrate;
 pub mod fuse;
 pub mod gate;
 pub mod kit;
+pub mod models;
+#[cfg(feature = "onnx")]
+pub mod onnx;
 pub mod registry;
 pub mod trigger;
 
@@ -16,9 +19,10 @@ pub use calibrate::{Agreement, Calibration, agree, calibrate};
 pub use fuse::{Hit, fuse, pair_flams};
 pub use gate::{Gate, Scan, gate};
 pub use kit::{Found, Method, Piece, Settings, Trust, detect_kit};
+pub use models::{LicenseTier, ModelManifest, ModelSpec, default_cache_dir, resolve_cached_model};
 pub use registry::{
-    DetectedHit, DetectorInfo, DetectorInput, DetectorOutput, DetectorRegistry, HitDetector,
-    PieceInput,
+    BeatEvent, DetectedHit, DetectorInfo, DetectorInput, DetectorOutput, DetectorRegistry,
+    HitDetector, PieceInput, SectionEvent,
 };
 pub use trigger::{Health, health, spikes};
 

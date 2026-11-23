@@ -33,6 +33,10 @@ pub struct DetectRequest {
     pub crest_db: f64,
     #[serde(default = "default_retrig")]
     pub retrig_ms: f64,
+    #[serde(default)]
+    pub tempo_bpm: Option<f64>,
+    #[serde(default)]
+    pub time_sig: Option<(u32, u32)>,
 }
 
 fn default_detector() -> String {
@@ -171,6 +175,8 @@ pub fn run_detect(
         threshold_db: req.threshold_db,
         crest_db: req.crest_db,
         retrig_ms: req.retrig_ms,
+        tempo_bpm: req.tempo_bpm,
+        time_sig: req.time_sig,
     }))
 }
 
