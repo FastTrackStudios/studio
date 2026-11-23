@@ -1,5 +1,7 @@
 # Studio (apps/studio)
 
+**Developing it locally** (building, running, the engine, driving it through its actions, overriding an extension while it runs, co-developing with Architect, Keyflow or Ignition): [docs/development.md](docs/development.md).
+
 Studio, remade from the launcher prototype as a plain Dioxus 0.8 app: phone first, then desktop and web. It was its own repository, studio-proto, until 2026-11-22; its history is kept here. On the web it runs on [Drive](https://github.com/FastTrackStudios/drive), served by a Drive node at `/studio`. The way to it replacing the rest of this repo's apps: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 It is a member of the studio workspace (package `studio-app`). Drive's crates

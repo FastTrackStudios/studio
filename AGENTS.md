@@ -1,9 +1,10 @@
 # studio — Repo Instructions
 
 **studio is FastTrackStudio's audio/music product in one repo**: **Studio,
-the one app** (Studio's distribution of Architect: the Architect app with
-Studio's extensions compiled in — Session, the full DAW, and Signal's rig
-views as extensions of one project), its web client, the Session engine
+the one app** (`apps/studio`: a Dioxus app on Architect's application
+framework and app-shell, its features extensions compiled in: the
+session's arrangement, mixer, lyrics and navigator here, Keyflow's chart
+and Ignition's lighting from their repos), the Session engine
 they run, and the CLAP/VST3 plugins that need Studio. It is the merger, in
 October 2026, of the former session, daw, processor, signal, patchbay and
 frame repos; since then the DAW itself (FastTrackStudios/daw), Patchbay,
@@ -17,21 +18,17 @@ flake.
 ## Layout
 
 ```
-apps/       desktop/   Studio, THE app (package `studio-desktop`, binary
-                       `studio`): Architect with Studio's extensions
-                       compiled in; built without `gui`, its headless node
-                       is what the hosted Architect runs
-                       (docs/architect-distribution.md). No iOS target yet.
-            web/       studio-web, the web client (Architect's web app with
-                       Studio's distribution)
-            studio/    Studio, the app as it is being remade (package
-                       `studio-app`; studio-proto until 2026-11-22): a plain
-                       Dioxus app on Drive (FastTrackStudios/drive) and
-                       app-shell (FastTrackStudios/app-shell), no Architect.
-                       Orgs, setlists, each song's files; the session next
-                       (apps/studio/docs/ROADMAP.md). It replaces desktop/
-                       and web/ as it grows. Never `-p app-shell`:
-                       features/app/shell has the same package name.
+apps/       studio/    Studio, THE app (package `studio-app`, app and binary
+                       `Studio`): one Dioxus app for desktop, iOS and the
+                       browser, on Architect's application framework and
+                       app-shell(-extensions), with Drive as optional sync.
+                       Its features are extensions, linked in and
+                       overridable while it runs. Developing it:
+                       apps/studio/docs/development.md. Never
+                       `-p app-shell`: features/app/shell has the same
+                       package name.
+            desktop/, web/, mobile/: retired, out of the workspace
+                       (studio#676 deletes them)
             Nothing else is an app: Session is the engine in features/engine,
             Signal is extensions (here, extensions/rig*, and its library in
             FastTrackStudios/signal).
@@ -269,7 +266,7 @@ format, the engine, the timeline, the wire types, every effect's parameter
 round-trip. `just test`, local CI and CI build and run exactly those. A
 crate gains a place there when it gains tests worth running on every change.
 
-**Run it locally: `just dev`** (everything, rebuilt on save:
+**Studio itself (apps/studio): [apps/studio/docs/development.md](apps/studio/docs/development.md)** (build, run, the engine, its actions, overriding an extension live, co-developing with other repos). The older stack: **`just dev`** (everything, rebuilt on save:
 the issuer, Studio's node on a copy of the test vault with its share link,
 the web app, the site; `architect=local` / `keyflow=local` put the sibling
 checkouts under it), **`just demo`** (the quickest look, nothing watched),

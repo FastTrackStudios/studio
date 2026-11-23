@@ -50,6 +50,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "accesskit_ios"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5e9b29c6ba5f4d2e0662e9c562484f061ffc58f658479c538ecca8299ada1e9"
+dependencies = [
+ "accesskit",
+ "accesskit_consumer",
+ "hashbrown 0.17.1",
+ "objc2 0.5.2",
+ "objc2-foundation 0.2.2",
+ "objc2-ui-kit 0.2.2",
+]
+
+[[package]]
 name = "accesskit_macos"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -75,6 +89,20 @@ dependencies = [
  "static_assertions",
  "windows 0.62.2",
  "windows-core 0.62.2",
+]
+
+[[package]]
+name = "accesskit_winit"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1eb960a51582305f94b3884a7ff54b3462abe38f0de95a9e7e04dd7ab7b757da"
+dependencies = [
+ "accesskit",
+ "accesskit_ios",
+ "accesskit_macos",
+ "accesskit_windows",
+ "raw-window-handle 0.6.2",
+ "winit 0.30.13",
 ]
 
 [[package]]
@@ -265,6 +293,12 @@ name = "android-properties"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc7eb209b1518d6bb87b283c20095f5228ecda460da70b44f0802523dea6da04"
+
+[[package]]
+name = "android_log-sys"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84521a3cf562bc62942e294181d9eef17eb38ceb8c68677bc49f144e4c3d4f8d"
 
 [[package]]
 name = "android_system_properties"
@@ -467,7 +501,7 @@ dependencies = [
 [[package]]
 name = "app-shell"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/app-shell?rev=bf7489c25c9b7871431e19add2b360b5f9288e66#bf7489c25c9b7871431e19add2b360b5f9288e66"
+source = "git+https://github.com/FastTrackStudios/app-shell?rev=46a0d04a9bde95deac00745fa996313c874e9be8#46a0d04a9bde95deac00745fa996313c874e9be8"
 dependencies = [
  "dioxus",
  "futures-channel",
@@ -512,7 +546,7 @@ dependencies = [
 [[package]]
 name = "app-shell-extensions"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/app-shell?rev=bf7489c25c9b7871431e19add2b360b5f9288e66#bf7489c25c9b7871431e19add2b360b5f9288e66"
+source = "git+https://github.com/FastTrackStudios/app-shell?rev=46a0d04a9bde95deac00745fa996313c874e9be8#46a0d04a9bde95deac00745fa996313c874e9be8"
 dependencies = [
  "anyrender",
  "app-shell 0.1.0",
@@ -542,7 +576,7 @@ dependencies = [
 [[package]]
 name = "app-shell-native"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/app-shell?rev=bf7489c25c9b7871431e19add2b360b5f9288e66#bf7489c25c9b7871431e19add2b360b5f9288e66"
+source = "git+https://github.com/FastTrackStudios/app-shell?rev=46a0d04a9bde95deac00745fa996313c874e9be8#46a0d04a9bde95deac00745fa996313c874e9be8"
 dependencies = [
  "anyrender",
  "anyrender_vello_cpu",
@@ -604,6 +638,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
 dependencies = [
  "derive_arbitrary",
+]
+
+[[package]]
+name = "arboard"
+version = "3.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aeb9553e62312c8756a5979254fc6d7da8bbeb5986a1e17037fab932f7037917"
+dependencies = [
+ "clipboard-win",
+ "log",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "parking_lot",
+ "percent-encoding",
+ "windows-sys 0.52.0",
+ "wl-clipboard-rs",
+ "x11rb 0.13.2",
 ]
 
 [[package]]
@@ -823,7 +875,7 @@ checksum = "33ca55ee147b1926dbea904f50fe4902494e97bc742205abbbf10c709e43815f"
 [[package]]
 name = "architect"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect-action-derive",
  "architect-derive",
@@ -871,7 +923,7 @@ dependencies = [
 [[package]]
 name = "architect-action-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -881,7 +933,7 @@ dependencies = [
 [[package]]
 name = "architect-commands"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "architect-input",
@@ -901,7 +953,7 @@ dependencies = [
 [[package]]
 name = "architect-control"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "dirs 6.0.0",
@@ -914,7 +966,7 @@ dependencies = [
 [[package]]
 name = "architect-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -925,7 +977,7 @@ dependencies = [
 [[package]]
 name = "architect-devices"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "architect-orgs",
@@ -942,7 +994,7 @@ dependencies = [
 [[package]]
 name = "architect-documents"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "facet",
@@ -953,7 +1005,7 @@ dependencies = [
 [[package]]
 name = "architect-extension-archive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "base64 0.22.1",
  "flate2",
@@ -970,7 +1022,7 @@ dependencies = [
 [[package]]
 name = "architect-extensions"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "anyrender",
  "architect",
@@ -985,6 +1037,7 @@ dependencies = [
  "architect-theme",
  "architect-views",
  "base64 0.22.1",
+ "crdt",
  "dioxus",
  "editor-ext",
  "facet",
@@ -1006,6 +1059,7 @@ dependencies = [
  "tracing",
  "unicode-normalization",
  "url",
+ "uuid",
  "vox",
  "vox-core",
  "vox-stream",
@@ -1015,7 +1069,7 @@ dependencies = [
 [[package]]
 name = "architect-extensions-dioxus"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "architect-extensions",
@@ -1033,7 +1087,7 @@ dependencies = [
 [[package]]
 name = "architect-favourites"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "serde",
 ]
@@ -1041,7 +1095,7 @@ dependencies = [
 [[package]]
 name = "architect-input"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "dioxus",
  "facet",
@@ -1055,7 +1109,7 @@ dependencies = [
 [[package]]
 name = "architect-mcp"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "architect-control",
@@ -1069,7 +1123,7 @@ dependencies = [
 [[package]]
 name = "architect-orgs"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "facet",
  "facet-json",
@@ -1080,7 +1134,7 @@ dependencies = [
 [[package]]
 name = "architect-palette"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "facet",
 ]
@@ -1088,7 +1142,7 @@ dependencies = [
 [[package]]
 name = "architect-permissions"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "serde",
  "serde_json",
@@ -1096,9 +1150,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "architect-process-view"
+version = "0.1.0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
+dependencies = [
+ "anyrender",
+ "architect-extensions",
+ "architect-extensions-dioxus",
+ "architect-workspace",
+ "ash",
+ "blitz-dom",
+ "blitz-traits",
+ "dioxus",
+ "dioxus-native-dom",
+ "futures-timer",
+ "mach2",
+ "objc2 0.6.5",
+ "objc2-core-foundation",
+ "objc2-io-surface",
+ "objc2-metal 0.3.2",
+ "peniko 0.6.1",
+ "rustix 1.1.6",
+ "thiserror 2.0.20",
+ "wgpu 30.0.1",
+ "wgpu_context",
+]
+
+[[package]]
 name = "architect-rpc-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1108,7 +1189,7 @@ dependencies = [
 [[package]]
 name = "architect-scene"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "anyrender",
  "architect",
@@ -1132,7 +1213,7 @@ dependencies = [
 [[package]]
 name = "architect-scripting"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "architect-theme",
@@ -1147,7 +1228,7 @@ dependencies = [
 [[package]]
 name = "architect-settings"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect-palette",
  "architect-settings-derive",
@@ -1159,7 +1240,7 @@ dependencies = [
 [[package]]
 name = "architect-settings-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1169,7 +1250,7 @@ dependencies = [
 [[package]]
 name = "architect-shell"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect-favourites",
  "architect-theme",
@@ -1191,7 +1272,7 @@ dependencies = [
 [[package]]
 name = "architect-story-core"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "linkme",
 ]
@@ -1199,7 +1280,7 @@ dependencies = [
 [[package]]
 name = "architect-story-macros"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -1210,7 +1291,7 @@ dependencies = [
 [[package]]
 name = "architect-story-runtime"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect-story-core",
  "architect-story-macros",
@@ -1221,7 +1302,7 @@ dependencies = [
 [[package]]
 name = "architect-telemetry"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "libc",
  "opentelemetry",
@@ -1238,7 +1319,7 @@ dependencies = [
 [[package]]
 name = "architect-theme"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "dioxus",
  "facet",
@@ -1251,7 +1332,7 @@ dependencies = [
 [[package]]
 name = "architect-ui"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect-story-runtime",
  "architect-theme",
@@ -1271,7 +1352,7 @@ dependencies = [
 [[package]]
 name = "architect-views"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "facet",
  "thiserror 2.0.20",
@@ -1280,7 +1361,7 @@ dependencies = [
 [[package]]
 name = "architect-workspace"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "anyrender",
  "architect",
@@ -1354,6 +1435,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ccd462b64c3c72f1be8305905a85d85403d768e8690c9b8bd3b9009a5761679"
 
 [[package]]
+name = "artnet_protocol"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "686b971a57c02682e07fdb0866b09aad7df7054d9f3c3bb62a5eaa2092621367"
+dependencies = [
+ "bitflags 2.13.2",
+ "byteorder",
+]
+
+[[package]]
 name = "as-raw-xcb-connection"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1382,6 +1473,17 @@ name = "askama_escape"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3df27b8d5ddb458c5fb1bbc1ce172d4a38c614a97d550b0ac89003897fb01de4"
+
+[[package]]
+name = "assert_type_match"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f548ad2c4031f2902e3edc1f29c29e835829437de49562d8eb5dc5584d3a1043"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "assoc"
@@ -1436,6 +1538,17 @@ dependencies = [
  "futures-lite",
  "pin-project-lite",
  "slab",
+]
+
+[[package]]
+name = "async-fs"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8034a681df4aed8b8edbd7fbe472401ecf009251c8b40556b304567052e294c5"
+dependencies = [
+ "async-lock",
+ "blocking",
+ "futures-lite",
 ]
 
 [[package]]
@@ -1583,6 +1696,9 @@ name = "async-task"
 version = "4.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b75356056920673b02621b35afd0f7dda9306d03c79a30f5c56c44cf256e3de"
+dependencies = [
+ "portable-atomic",
+]
 
 [[package]]
 name = "async-trait"
@@ -1643,6 +1759,9 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+dependencies = [
+ "portable-atomic",
+]
 
 [[package]]
 name = "atomic_float"
@@ -1655,6 +1774,16 @@ name = "atomic_refcell"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21e4227379beff4205943696e6c3e0cd809bacdf3f0edd6e3dd153e2269571a4"
+
+[[package]]
+name = "atomicow"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "301801c08259e328a1c7da556608c0c22687708831b22024dbd3a57ea741e6de"
+dependencies = [
+ "portable-atomic",
+ "portable-atomic-util",
+]
 
 [[package]]
 name = "attachments-proto"
@@ -1684,7 +1813,7 @@ dependencies = [
 [[package]]
 name = "audio"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "anyhow",
  "atomic_float",
@@ -1713,7 +1842,7 @@ dependencies = [
 [[package]]
 name = "auth-client"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "base64 0.22.1",
  "libc",
@@ -1933,6 +2062,1474 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_internal",
+]
+
+[[package]]
+name = "bevy_a11y"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "accesskit",
+ "bevy_app",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_reflect",
+]
+
+[[package]]
+name = "bevy_android"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "android-activity",
+]
+
+[[package]]
+name = "bevy_animation"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_animation_macros",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_color",
+ "bevy_curve",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_time",
+ "bevy_transform",
+ "bevy_utils",
+ "bitvec",
+ "blake3",
+ "derive_more 2.1.1",
+ "downcast-rs 2.0.2",
+ "either",
+ "petgraph 0.8.3",
+ "ron",
+ "serde",
+ "smallvec 1.16.4",
+ "thiserror 2.0.20",
+ "thread_local",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "bevy_animation_macros"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_macro_utils",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "bevy_annotations"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+
+[[package]]
+name = "bevy_anti_alias"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_core_pipeline",
+ "bevy_derive",
+ "bevy_diagnostic",
+ "bevy_ecs",
+ "bevy_extract",
+ "bevy_image",
+ "bevy_math",
+ "bevy_reflect",
+ "bevy_render",
+ "bevy_shader",
+ "bevy_utils",
+ "tracing",
+]
+
+[[package]]
+name = "bevy_app"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_tasks",
+ "bevy_utils",
+ "console_error_panic_hook",
+ "ctrlc",
+ "downcast-rs 2.0.2",
+ "log",
+ "thiserror 2.0.20",
+ "variadics_please",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "bevy_asset"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "async-broadcast",
+ "async-channel 2.5.0",
+ "async-fs",
+ "async-io",
+ "async-lock",
+ "atomicow",
+ "bevy_android",
+ "bevy_app",
+ "bevy_asset_macros",
+ "bevy_diagnostic",
+ "bevy_ecs",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_tasks",
+ "bevy_utils",
+ "bitflags 2.13.2",
+ "blake3",
+ "crossbeam-channel",
+ "derive_more 2.1.1",
+ "disqualified",
+ "downcast-rs 2.0.2",
+ "either",
+ "futures-io",
+ "futures-lite",
+ "futures-util",
+ "js-sys",
+ "ron",
+ "serde",
+ "stackfuture",
+ "thiserror 2.0.20",
+ "tracing",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "bevy_asset_macros"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_macro_utils",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "bevy_camera"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_color",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_image",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_reflect",
+ "bevy_shape",
+ "bevy_transform",
+ "bevy_utils",
+ "bevy_window",
+ "derive_more 2.1.1",
+ "downcast-rs 2.0.2",
+ "serde",
+ "smallvec 1.16.4",
+ "thiserror 2.0.20",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_clipboard"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "arboard",
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_log",
+ "bevy_platform",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "bevy_color"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_curve",
+ "bevy_math",
+ "bevy_reflect",
+ "bytemuck",
+ "derive_more 2.1.1",
+ "encase",
+ "serde",
+ "thiserror 2.0.20",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_core_pipeline"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_derive",
+ "bevy_diagnostic",
+ "bevy_ecs",
+ "bevy_extract",
+ "bevy_image",
+ "bevy_light",
+ "bevy_log",
+ "bevy_math",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_render",
+ "bevy_shader",
+ "bevy_transform",
+ "bevy_utils",
+ "bevy_window",
+ "bitflags 2.13.2",
+ "indexmap",
+ "nonmax",
+]
+
+[[package]]
+name = "bevy_curve"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "approx",
+ "bevy_math",
+ "bevy_reflect",
+ "itertools 0.15.0",
+ "serde",
+ "thiserror 2.0.20",
+ "variadics_please",
+]
+
+[[package]]
+name = "bevy_derive"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_macro_utils",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "bevy_dev_tools"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_animation",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_diagnostic",
+ "bevy_ecs",
+ "bevy_extract",
+ "bevy_image",
+ "bevy_input",
+ "bevy_light",
+ "bevy_log",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_picking",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_render",
+ "bevy_shader",
+ "bevy_sprite",
+ "bevy_state",
+ "bevy_text",
+ "bevy_time",
+ "bevy_transform",
+ "bevy_ui",
+ "bevy_ui_widgets",
+ "bevy_utils",
+ "bevy_window",
+ "bevy_world_serialization",
+ "strsim 0.11.1",
+ "tracing",
+]
+
+[[package]]
+name = "bevy_diagnostic"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "atomic-waker",
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_platform",
+ "bevy_tasks",
+ "bevy_time",
+ "const-fnv1a-hash",
+ "log",
+ "serde",
+ "sysinfo",
+]
+
+[[package]]
+name = "bevy_ecs"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "arrayvec",
+ "bevy_ecs_macros",
+ "bevy_platform",
+ "bevy_ptr",
+ "bevy_reflect",
+ "bevy_tasks",
+ "bevy_utils",
+ "bitflags 2.13.2",
+ "bumpalo",
+ "concurrent-queue",
+ "derive_more 2.1.1",
+ "fixedbitset",
+ "indexmap",
+ "log",
+ "nonmax",
+ "serde",
+ "slotmap",
+ "smallvec 1.16.4",
+ "thiserror 2.0.20",
+ "variadics_please",
+]
+
+[[package]]
+name = "bevy_ecs_macro_logic"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_macro_utils",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "bevy_ecs_macros"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_ecs_macro_logic",
+ "bevy_macro_utils",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "bevy_encase_derive"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_macro_utils",
+ "encase_derive_impl",
+]
+
+[[package]]
+name = "bevy_extract"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_camera",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_extract_macros",
+ "bevy_log",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_time",
+ "bevy_utils",
+]
+
+[[package]]
+name = "bevy_extract_macros"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_macro_utils",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "bevy_feathers"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "accesskit",
+ "bevy_a11y",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_input",
+ "bevy_input_focus",
+ "bevy_log",
+ "bevy_math",
+ "bevy_picking",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_render",
+ "bevy_scene",
+ "bevy_shader",
+ "bevy_text",
+ "bevy_ui",
+ "bevy_ui_render",
+ "bevy_ui_widgets",
+ "bevy_window",
+ "smol_str 0.2.2",
+]
+
+[[package]]
+name = "bevy_gilrs"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_input",
+ "bevy_platform",
+ "bevy_time",
+ "gilrs",
+ "thiserror 2.0.20",
+ "tracing",
+]
+
+[[package]]
+name = "bevy_gizmos"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_curve",
+ "bevy_ecs",
+ "bevy_gizmos_macros",
+ "bevy_input",
+ "bevy_log",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_reflect",
+ "bevy_shape",
+ "bevy_time",
+ "bevy_transform",
+ "bevy_utils",
+ "bevy_window",
+]
+
+[[package]]
+name = "bevy_gizmos_macros"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_macro_utils",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "bevy_gizmos_render"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_core_pipeline",
+ "bevy_ecs",
+ "bevy_extract",
+ "bevy_gizmos",
+ "bevy_image",
+ "bevy_log",
+ "bevy_material",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_pbr",
+ "bevy_reflect",
+ "bevy_render",
+ "bevy_shader",
+ "bevy_shape",
+ "bevy_sprite_render",
+ "bevy_transform",
+ "bevy_utils",
+ "bytemuck",
+ "tracing",
+]
+
+[[package]]
+name = "bevy_gltf"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "async-lock",
+ "base64 0.23.1",
+ "bevy_animation",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_curve",
+ "bevy_ecs",
+ "bevy_image",
+ "bevy_light",
+ "bevy_material",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_tasks",
+ "bevy_transform",
+ "bevy_world_serialization",
+ "fixedbitset",
+ "gltf",
+ "itertools 0.15.0",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "smallvec 1.16.4",
+ "thiserror 2.0.20",
+ "tracing",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_image"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_color",
+ "bevy_ecs",
+ "bevy_math",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_utils",
+ "bitflags 2.13.2",
+ "bytemuck",
+ "futures-lite",
+ "guillotiere",
+ "half",
+ "image",
+ "ktx2",
+ "rectangle-pack",
+ "ruzstd 0.9.1",
+ "serde",
+ "thiserror 2.0.20",
+ "tracing",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_input"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_math",
+ "bevy_platform",
+ "bevy_reflect",
+ "derive_more 2.1.1",
+ "log",
+ "smol_str 0.2.2",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "bevy_input_focus"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_camera",
+ "bevy_ecs",
+ "bevy_input",
+ "bevy_math",
+ "bevy_picking",
+ "bevy_reflect",
+ "bevy_window",
+ "log",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "bevy_internal"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_a11y",
+ "bevy_android",
+ "bevy_animation",
+ "bevy_annotations",
+ "bevy_anti_alias",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_clipboard",
+ "bevy_color",
+ "bevy_core_pipeline",
+ "bevy_curve",
+ "bevy_derive",
+ "bevy_dev_tools",
+ "bevy_diagnostic",
+ "bevy_ecs",
+ "bevy_extract",
+ "bevy_feathers",
+ "bevy_gilrs",
+ "bevy_gizmos",
+ "bevy_gizmos_render",
+ "bevy_gltf",
+ "bevy_image",
+ "bevy_input",
+ "bevy_input_focus",
+ "bevy_light",
+ "bevy_log",
+ "bevy_material",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_pbr",
+ "bevy_picking",
+ "bevy_platform",
+ "bevy_post_process",
+ "bevy_ptr",
+ "bevy_reflect",
+ "bevy_render",
+ "bevy_scene",
+ "bevy_shader",
+ "bevy_shape",
+ "bevy_sprite",
+ "bevy_sprite_render",
+ "bevy_state",
+ "bevy_tasks",
+ "bevy_text",
+ "bevy_time",
+ "bevy_transform",
+ "bevy_ui",
+ "bevy_ui_render",
+ "bevy_utils",
+ "bevy_window",
+ "bevy_winit",
+ "bevy_world_serialization",
+]
+
+[[package]]
+name = "bevy_light"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_curve",
+ "bevy_ecs",
+ "bevy_gizmos",
+ "bevy_image",
+ "bevy_log",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_shape",
+ "bevy_transform",
+ "bevy_utils",
+ "half",
+ "smallvec 1.16.4",
+ "tracing",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_log"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "android_log-sys",
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_platform",
+ "bevy_utils",
+ "tracing",
+ "tracing-log",
+ "tracing-oslog",
+ "tracing-subscriber",
+ "tracing-wasm",
+]
+
+[[package]]
+name = "bevy_macro_utils"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+ "toml_edit 0.25.15+spec-1.1.0",
+]
+
+[[package]]
+name = "bevy_material"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_asset",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_material_macros",
+ "bevy_mesh",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_shader",
+ "bevy_utils",
+ "encase",
+ "smallvec 1.16.4",
+ "thiserror 2.0.20",
+ "tracing",
+ "variadics_please",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_material_macros"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_macro_utils",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "bevy_math"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "approx",
+ "bevy_reflect",
+ "derive_more 2.1.1",
+ "glam",
+ "libm",
+ "rand 0.10.2",
+ "serde",
+ "thiserror 2.0.20",
+ "variadics_please",
+]
+
+[[package]]
+name = "bevy_mesh"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_math",
+ "bevy_mikktspace",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_shape",
+ "bevy_transform",
+ "bitflags 2.13.2",
+ "bytemuck",
+ "derive_more 2.1.1",
+ "encase",
+ "glam",
+ "half",
+ "hexasphere",
+ "serde",
+ "thiserror 2.0.20",
+ "tracing",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_mikktspace"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bff34eb29ff4b8a8688bc7299f14fb6b597461ca80fec03ed7d22939ab33e48f"
+
+[[package]]
+name = "bevy_pbr"
+version = "0.20.0-dev"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "arrayvec",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_core_pipeline",
+ "bevy_derive",
+ "bevy_diagnostic",
+ "bevy_ecs",
+ "bevy_extract",
+ "bevy_gltf",
+ "bevy_image",
+ "bevy_light",
+ "bevy_log",
+ "bevy_material",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_render",
+ "bevy_shader",
+ "bevy_shape",
+ "bevy_tasks",
+ "bevy_transform",
+ "bevy_utils",
+ "bitflags 2.13.2",
+ "bytemuck",
+ "derive_more 2.1.1",
+ "fixedbitset",
+ "indexmap",
+ "nonmax",
+ "offset-allocator",
+ "smallvec 1.16.4",
+ "static_assertions",
+ "thiserror 2.0.20",
+ "tracing",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_picking"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_input",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_shape",
+ "bevy_time",
+ "bevy_transform",
+ "bevy_window",
+ "crossbeam-channel",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "bevy_platform"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bytemuck",
+ "critical-section",
+ "foldhash 0.2.0",
+ "futures-channel",
+ "futures-lite",
+ "hashbrown 0.17.1",
+ "js-sys",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde",
+ "spin 0.12.3",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-time",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "bevy_post_process"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_core_pipeline",
+ "bevy_curve",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_extract",
+ "bevy_image",
+ "bevy_math",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_render",
+ "bevy_shader",
+ "bevy_utils",
+ "smallvec 1.16.4",
+ "thiserror 2.0.20",
+ "tracing",
+]
+
+[[package]]
+name = "bevy_ptr"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+
+[[package]]
+name = "bevy_reflect"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "assert_type_match",
+ "bevy_annotations",
+ "bevy_platform",
+ "bevy_ptr",
+ "bevy_reflect_derive",
+ "bevy_utils",
+ "derive_more 2.1.1",
+ "disqualified",
+ "downcast-rs 2.0.2",
+ "erased-serde",
+ "foldhash 0.2.0",
+ "glam",
+ "indexmap",
+ "inventory",
+ "petgraph 0.8.3",
+ "serde",
+ "smallvec 1.16.4",
+ "smol_str 0.2.2",
+ "thiserror 2.0.20",
+ "uuid",
+ "variadics_please",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_reflect_derive"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_macro_utils",
+ "indexmap",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+ "uuid",
+]
+
+[[package]]
+name = "bevy_render"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "async-channel 2.5.0",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_derive",
+ "bevy_diagnostic",
+ "bevy_ecs",
+ "bevy_encase_derive",
+ "bevy_extract",
+ "bevy_extract_macros",
+ "bevy_image",
+ "bevy_log",
+ "bevy_material",
+ "bevy_material_macros",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_render_macros",
+ "bevy_shader",
+ "bevy_shape",
+ "bevy_tasks",
+ "bevy_time",
+ "bevy_transform",
+ "bevy_utils",
+ "bevy_window",
+ "bitflags 2.13.2",
+ "bytemuck",
+ "derive_more 2.1.1",
+ "downcast-rs 2.0.2",
+ "encase",
+ "glam",
+ "image",
+ "indexmap",
+ "itertools 0.15.0",
+ "js-sys",
+ "nonmax",
+ "offset-allocator",
+ "send_wrapper",
+ "smallvec 1.16.4",
+ "spin_sleep",
+ "static_assertions",
+ "thiserror 2.0.20",
+ "tracing",
+ "variadics_please",
+ "wasm-bindgen",
+ "weak-table",
+ "web-sys",
+ "wgpu 30.0.1",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_render_macros"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_extract_macros",
+ "bevy_macro_utils",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "bevy_scene"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_scene_macros",
+ "bevy_utils",
+ "smallvec 1.16.4",
+ "thiserror 2.0.20",
+ "tracing",
+ "variadics_please",
+]
+
+[[package]]
+name = "bevy_scene_macros"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_ecs_macro_logic",
+ "bevy_macro_utils",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "bevy_shader"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_asset",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_utils",
+ "serde",
+ "thiserror 2.0.20",
+ "tracing",
+ "wesl 0.6.0",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_shape"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "arrayvec",
+ "bevy_math",
+ "bevy_reflect",
+ "derive_more 2.1.1",
+ "rand 0.10.2",
+ "rand_distr 0.6.0",
+ "serde",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "bevy_sprite"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_image",
+ "bevy_log",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_picking",
+ "bevy_reflect",
+ "bevy_text",
+ "bevy_transform",
+ "bevy_window",
+ "radsort",
+ "tracing",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_sprite_render"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_core_pipeline",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_extract",
+ "bevy_image",
+ "bevy_material",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_render",
+ "bevy_shader",
+ "bevy_shape",
+ "bevy_sprite",
+ "bevy_text",
+ "bevy_transform",
+ "bevy_utils",
+ "bitflags 2.13.2",
+ "bytemuck",
+ "derive_more 2.1.1",
+ "fixedbitset",
+ "nonmax",
+ "smallvec 1.16.4",
+ "static_assertions",
+ "tracing",
+]
+
+[[package]]
+name = "bevy_state"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_state_macros",
+ "bevy_utils",
+ "log",
+ "variadics_please",
+]
+
+[[package]]
+name = "bevy_state_macros"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_macro_utils",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "bevy_tasks"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "async-channel 2.5.0",
+ "async-executor",
+ "async-task",
+ "atomic-waker",
+ "bevy_platform",
+ "concurrent-queue",
+ "crossbeam-queue",
+ "derive_more 2.1.1",
+ "futures-lite",
+ "heapless 0.9.3",
+ "web-task",
+]
+
+[[package]]
+name = "bevy_text"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_clipboard",
+ "bevy_color",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_image",
+ "bevy_log",
+ "bevy_math",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_utils",
+ "parley 0.11.1",
+ "serde",
+ "smallvec 1.16.4",
+ "smol_str 0.2.2",
+ "swash 0.2.10",
+ "thiserror 2.0.20",
+ "tracing",
+ "wgpu-types 30.0.1",
+]
+
+[[package]]
+name = "bevy_time"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_platform",
+ "bevy_reflect",
+ "crossbeam-channel",
+ "log",
+ "serde",
+]
+
+[[package]]
+name = "bevy_transform"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bevy_math",
+ "bevy_reflect",
+ "bevy_tasks",
+ "bevy_utils",
+ "derive_more 2.1.1",
+ "serde",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "bevy_ui"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "accesskit",
+ "bevy_a11y",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_image",
+ "bevy_input",
+ "bevy_input_focus",
+ "bevy_log",
+ "bevy_math",
+ "bevy_picking",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_sprite",
+ "bevy_text",
+ "bevy_time",
+ "bevy_transform",
+ "bevy_utils",
+ "bevy_window",
+ "derive_more 2.1.1",
+ "parley 0.11.1",
+ "smallvec 1.16.4",
+ "swash 0.2.10",
+ "taffy 0.15.1",
+ "thiserror 2.0.20",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "bevy_ui_render"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_a11y",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_core_pipeline",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_extract",
+ "bevy_image",
+ "bevy_input_focus",
+ "bevy_math",
+ "bevy_mesh",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_render",
+ "bevy_shader",
+ "bevy_sprite",
+ "bevy_sprite_render",
+ "bevy_text",
+ "bevy_transform",
+ "bevy_ui",
+ "bevy_utils",
+ "bytemuck",
+ "derive_more 2.1.1",
+ "indexmap",
+ "smallvec 1.16.4",
+ "tracing",
+]
+
+[[package]]
+name = "bevy_ui_widgets"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "accesskit",
+ "bevy_a11y",
+ "bevy_app",
+ "bevy_camera",
+ "bevy_ecs",
+ "bevy_input",
+ "bevy_input_focus",
+ "bevy_log",
+ "bevy_math",
+ "bevy_picking",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_text",
+ "bevy_time",
+ "bevy_ui",
+ "bevy_window",
+ "parley 0.11.1",
+ "smol_str 0.2.2",
+ "thiserror 2.0.20",
+ "web-sys",
+]
+
+[[package]]
+name = "bevy_utils"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "async-channel 2.5.0",
+ "bevy_platform",
+ "disqualified",
+ "indexmap",
+ "thread_local",
+]
+
+[[package]]
+name = "bevy_window"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_color",
+ "bevy_ecs",
+ "bevy_image",
+ "bevy_input",
+ "bevy_math",
+ "bevy_platform",
+ "bevy_reflect",
+ "log",
+ "raw-window-handle 0.6.2",
+ "serde",
+]
+
+[[package]]
+name = "bevy_winit"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "accesskit",
+ "accesskit_winit",
+ "approx",
+ "bevy_a11y",
+ "bevy_android",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_image",
+ "bevy_input",
+ "bevy_input_focus",
+ "bevy_log",
+ "bevy_math",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_tasks",
+ "bevy_window",
+ "bytemuck",
+ "js-sys",
+ "tracing",
+ "wasm-bindgen",
+ "web-sys",
+ "wgpu-types 30.0.1",
+ "winit 0.30.13",
+]
+
+[[package]]
+name = "bevy_world_serialization"
+version = "0.20.0-dev"
+source = "git+https://github.com/bevyengine/bevy?rev=948cc8270204b46fd37353eb786144a677d0c0ce#948cc8270204b46fd37353eb786144a677d0c0ce"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_camera",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_platform",
+ "bevy_reflect",
+ "bevy_transform",
+ "bevy_utils",
+ "derive_more 2.1.1",
+ "ron",
+ "serde",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
 name = "bhtsne"
 version = "0.5.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1941,7 +3538,7 @@ dependencies = [
  "csv",
  "num-traits",
  "rand 0.9.5",
- "rand_distr",
+ "rand_distr 0.5.1",
  "rayon",
 ]
 
@@ -2060,6 +3657,7 @@ version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 dependencies = [
+ "bytemuck",
  "serde_core",
 ]
 
@@ -2345,7 +3943,7 @@ checksum = "56ed6191a7e78c36abdb16ab65341eefd73d64d303fffccdbb00d51e4205967b"
 [[package]]
 name = "builtin"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "comp-plugin",
  "crossbeam-channel",
@@ -2845,6 +4443,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bfbf56724aa9eca8afa4fcfadeb479e722935bb2a0900c2d37e0cc477af0688"
 
 [[package]]
+name = "clipboard-win"
+version = "5.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "052af7878466feccda12ba7a6a67d019d712f296809559b47c12c8cc196d3a9a"
+dependencies = [
+ "error-code",
+]
+
+[[package]]
 name = "clsx"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3063,6 +4670,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
 dependencies = [
  "crossbeam-utils",
+ "portable-atomic",
 ]
 
 [[package]]
@@ -3087,6 +4695,16 @@ dependencies = [
  "encode_unicode",
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3149,10 +4767,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_panic"
+version = "0.2.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9603f79528ece8163c496f8932121cb36cfe46259e9c907bb3d8205139d7caa3"
+dependencies = [
+ "typewit",
+]
+
+[[package]]
+name = "const_soft_float"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87ca1caa64ef4ed453e68bb3db612e51cf1b2f5b871337f0fcab1c8f87cc3dff"
+
+[[package]]
 name = "constant_time_eq"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
+
+[[package]]
+name = "constgebra"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1aaf9b65849a68662ac6c0810c8893a765c960b907dd7cfab9c4a50bf764fbc"
+dependencies = [
+ "const_soft_float",
+]
 
 [[package]]
 name = "content_disposition"
@@ -3521,7 +5163,7 @@ dependencies = [
 [[package]]
 name = "crdt"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "architect",
  "architect-devices",
@@ -3547,7 +5189,7 @@ dependencies = [
 [[package]]
 name = "crdt-derive"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3708,6 +5350,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0369ee1ad671834580515889b80f2ea915f23b8be8d0daa4bbaf2ac5c7590835"
 dependencies = [
  "cipher 0.4.4",
+]
+
+[[package]]
+name = "ctrlc"
+version = "3.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11247e6c4f83c2b15748f4873805483deaa2bbc855e773817c07a9f987f55c62"
+dependencies = [
+ "dispatch2",
+ "nix 0.31.3",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3923,7 +5576,7 @@ checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 [[package]]
 name = "daw"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "architect",
  "daw-control",
@@ -3968,7 +5621,7 @@ dependencies = [
 [[package]]
 name = "daw-control"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "architect",
  "daw-proto",
@@ -3997,7 +5650,7 @@ dependencies = [
  "daw-ui",
  "libc",
  "serde_json",
- "session 0.1.0 (git+https://github.com/FastTrackStudios/session?rev=568e9a30a2d858b68a617a94f40f2390f7ea022e)",
+ "session 0.1.0 (git+https://github.com/FastTrackStudios/session?rev=e8a705ed1c9ae8b16934018e3b4b897769635961)",
  "session-desktop",
  "session-engine",
  "session-format",
@@ -4031,7 +5684,7 @@ dependencies = [
 [[package]]
 name = "daw-module"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "tokio",
  "tracing",
@@ -4040,7 +5693,7 @@ dependencies = [
 [[package]]
 name = "daw-proto"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "architect",
  "daw-transport-sync",
@@ -4122,7 +5775,7 @@ dependencies = [
 [[package]]
 name = "daw-standalone"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "arc-swap",
  "architect",
@@ -4157,7 +5810,7 @@ dependencies = [
 [[package]]
 name = "daw-sync"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "daw",
  "facet",
@@ -4169,7 +5822,7 @@ dependencies = [
 [[package]]
 name = "daw-test-macro"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4179,7 +5832,7 @@ dependencies = [
 [[package]]
 name = "daw-transport-sync"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "web-time",
 ]
@@ -4219,7 +5872,7 @@ dependencies = [
 [[package]]
 name = "dawfile-reaper"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "base64 0.22.1",
  "daw-proto",
@@ -5227,6 +6880,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "disqualified"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e90a5dd66beeca277ae954f8055b02a712792b6b6b43f2bc2f92b0b7d8291614"
+
+[[package]]
 name = "dlib"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5336,6 +6995,12 @@ name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
+
+[[package]]
+name = "downcast-rs"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "117240f60069e65410b3ae1bb213295bd828f707b5bec6596a1afc8793ce0cbc"
 
 [[package]]
 name = "dpi"
@@ -5692,7 +7357,7 @@ dependencies = [
 [[package]]
 name = "editor-keyflow"
 version = "0.5.5"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=37f33703fbed2e7da66593390bc19e62e5ebc9aa#37f33703fbed2e7da66593390bc19e62e5ebc9aa"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "editor-state",
  "keyflow-lang",
@@ -5779,6 +7444,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "encase"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdf6312703f02e0625e1750eadf556054b6da5e44960a3a771e9127cb357dbd8"
+dependencies = [
+ "const_panic",
+ "encase_derive",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "encase_derive"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8429e24f02acf09b0fb3c4560c329a1a79fab14bbb9c2d632c073d0a61b0816a"
+dependencies = [
+ "encase_derive_impl",
+]
+
+[[package]]
+name = "encase_derive_impl"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ac3bf06563c72a9b64bc4d8da00ebcabd1d776ea4526c3b1461697142fe340f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
 name = "encode_unicode"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5802,7 +7498,7 @@ checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
 [[package]]
 name = "engraver"
 version = "0.5.5"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=37f33703fbed2e7da66593390bc19e62e5ebc9aa#37f33703fbed2e7da66593390bc19e62e5ebc9aa"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "anyrender",
  "bitflags 2.13.2",
@@ -6004,6 +7700,12 @@ dependencies = [
  "libc",
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "error-code"
+version = "3.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b5343afd4a8365a643ac588dab4cf234a190c7f6c88c9f6dd6ffe00837661b7"
 
 [[package]]
 name = "esaxx-rs"
@@ -6601,6 +8303,20 @@ dependencies = [
 
 [[package]]
 name = "fontique"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6688bc1294fe7117d788937b6c53480169b29c566954af490830d4c09da9516a"
+dependencies = [
+ "hashbrown 0.17.1",
+ "linebender_resource_handle",
+ "memmap2",
+ "parlance",
+ "read-fonts 0.41.0",
+ "smallvec 1.16.4",
+]
+
+[[package]]
+name = "fontique"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbf1df16263783918b7da396077521f92b729ef7c429444dfcf03581f1448b77"
@@ -6807,7 +8523,7 @@ dependencies = [
 [[package]]
 name = "fts-sample"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "arc-swap",
  "claxon",
@@ -7076,6 +8792,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "gdtf"
+version = "0.3.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "quick-xml 0.41.0",
+ "serde",
+ "serde_path_to_error",
+ "thiserror 2.0.20",
+ "uuid",
+ "zip 8.6.0",
+]
+
+[[package]]
 name = "genawaiter"
 version = "0.99.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7210,6 +8939,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "gilrs"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "902fb00d3f6398e635be22e5c837b303c501835cca7ac11a47bba138f7aafdd8"
+dependencies = [
+ "fnv",
+ "gilrs-core",
+ "log",
+ "uuid",
+ "vec_map",
+]
+
+[[package]]
+name = "gilrs-core"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc7f0ce6237abcc0523f2a5502b1e3fe5802daaae47ac14e166fe49551301ea9"
+dependencies = [
+ "inotify",
+ "js-sys",
+ "libc",
+ "libudev-sys",
+ "log",
+ "nix 0.31.3",
+ "objc2-core-foundation",
+ "objc2-io-kit",
+ "uuid",
+ "vec_map",
+ "wasm-bindgen",
+ "web-sys",
+ "windows 0.58.0",
+]
+
+[[package]]
 name = "gimli"
 version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7256,6 +9019,20 @@ dependencies = [
  "khronos_api",
  "log",
  "xml-rs",
+]
+
+[[package]]
+name = "glam"
+version = "0.34.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "627003914c6057c9c8f0832ee4f870b5a4f599d0cfa83f4072675114860cd0ff"
+dependencies = [
+ "approx",
+ "bytemuck",
+ "encase",
+ "libm",
+ "rand 0.10.2",
+ "serde_core",
 ]
 
 [[package]]
@@ -7412,6 +9189,42 @@ dependencies = [
  "slotmap",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "gltf"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3ce1918195723ce6ac74e80542c5a96a40c2b26162c1957a5cd70799b8cacf7"
+dependencies = [
+ "byteorder",
+ "gltf-json",
+ "lazy_static",
+ "serde_json",
+]
+
+[[package]]
+name = "gltf-derive"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14070e711538afba5d6c807edb74bcb84e5dbb9211a3bf5dea0dfab5b24f4c51"
+dependencies = [
+ "inflections",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "gltf-json"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6176f9d60a7eab0a877e8e96548605dedbde9190a7ae1e80bbcc1c9af03ab14"
+dependencies = [
+ "gltf-derive",
+ "serde",
+ "serde_derive",
+ "serde_json",
 ]
 
 [[package]]
@@ -7641,9 +9454,11 @@ version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b"
 dependencies = [
+ "bytemuck",
  "cfg-if",
  "crunchy",
  "num-traits",
+ "serde",
  "zerocopy",
 ]
 
@@ -7716,6 +9531,8 @@ dependencies = [
  "allocator-api2 0.2.21",
  "equivalent",
  "foldhash 0.2.0",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -7783,6 +9600,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25ba4bd83f9415b58b4ed8dc5714c76e626a105be4646c02630ad730ad3b5aa4"
 dependencies = [
  "hash32 0.3.1",
+ "portable-atomic",
  "stable_deref_trait",
 ]
 
@@ -7820,6 +9638,17 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hexasphere"
+version = "20.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "982158ac107d91d1a45fe1d3be9a1b4414e6724cdb12a183cf06365cc972a0a1"
+dependencies = [
+ "constgebra",
+ "glam",
+ "tinyvec",
+]
 
 [[package]]
 name = "hexf-parse"
@@ -8505,6 +10334,222 @@ dependencies = [
 ]
 
 [[package]]
+name = "ignition-beams"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
+name = "ignition-colour"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "ignition-proto",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ignition-core"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "ignition-colour",
+ "ignition-daw-proto",
+ "ignition-effects",
+ "ignition-playback",
+ "ignition-proto",
+ "ignition-rig",
+ "ignition-show",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ignition-daw"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "ableton",
+ "anyhow",
+ "daw",
+ "dawfile-reaper",
+ "dsp",
+ "fts-sample",
+ "ignition-colour",
+ "ignition-daw-proto",
+ "ignition-effects",
+ "ignition-playback",
+ "ignition-proto",
+ "ignition-rig",
+ "ignition-show",
+ "keyflow-proto",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "ignition-daw-proto"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "ignition-dmx"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ignition-effects"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "ignition-colour",
+ "ignition-daw-proto",
+ "ignition-proto",
+ "ignition-rig",
+ "ignition-show",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ignition-fixture"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "anyhow",
+ "ignition-proto",
+ "serde",
+ "serde_json",
+ "utils",
+]
+
+[[package]]
+name = "ignition-pane"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "architect",
+ "architect-extensions",
+ "architect-extensions-dioxus",
+ "architect-process-view",
+ "crdt",
+ "dioxus",
+ "futures-timer",
+ "ignition-core",
+ "ignition-daw",
+ "ignition-session",
+ "ignition-show",
+ "ignition-viz",
+ "js-sys",
+ "serde_json",
+ "session 0.1.0 (git+https://github.com/FastTrackStudios/session?rev=e8a705ed1c9ae8b16934018e3b4b897769635961)",
+ "tokio",
+ "tracing",
+ "uuid",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "ignition-playback"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "ignition-colour",
+ "ignition-daw-proto",
+ "ignition-effects",
+ "ignition-proto",
+ "ignition-rig",
+ "ignition-show",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ignition-proto"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "ignition-rig"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "ignition-proto",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ignition-session"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "ignition-daw-proto",
+ "ignition-show",
+ "serde",
+ "serde_json",
+ "session 0.1.0 (git+https://github.com/FastTrackStudios/session?rev=e8a705ed1c9ae8b16934018e3b4b897769635961)",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "ignition-show"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "ignition-colour",
+ "ignition-daw-proto",
+ "ignition-proto",
+ "ignition-rig",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ignition-viz"
+version = "0.2.0"
+source = "git+https://github.com/FastTrackStudios/Ignition?rev=b9a90c27979bc53b955fe0716d7b19707972ccd0#b9a90c27979bc53b955fe0716d7b19707972ccd0"
+dependencies = [
+ "anyhow",
+ "artnet_protocol",
+ "bevy",
+ "gdtf",
+ "gltf",
+ "ignition-beams",
+ "ignition-core",
+ "ignition-dmx",
+ "ignition-fixture",
+ "ignition-proto",
+ "image",
+ "manganis",
+ "sacn",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tracing",
+ "tracing-subscriber",
+ "utils",
+ "uuid",
+ "wgpu 30.0.1",
+ "zip 8.6.0",
+]
+
+[[package]]
 name = "image"
 version = "0.25.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8646,6 +10691,32 @@ dependencies = [
  "quick-xml 0.26.0",
  "rgb",
  "str_stack",
+]
+
+[[package]]
+name = "inflections"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a257582fdcde896fd96463bf2d40eefea0580021c0712a0e2b028b60b47a837a"
+
+[[package]]
+name = "inotify"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cc00ea907cab49550b7da656f80ebb97be1b997d931fbcd28d39734e17ce592"
+dependencies = [
+ "bitflags 2.13.2",
+ "inotify-sys",
+ "libc",
+]
+
+[[package]]
+name = "inotify-sys"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c033f80b2c113cdf91ab7a33faa9cbc014726dcad99880c8609af2a370edf37d"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -8976,6 +11047,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9195,7 +11275,7 @@ dependencies = [
 [[package]]
 name = "keyflow"
 version = "0.5.5"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=37f33703fbed2e7da66593390bc19e62e5ebc9aa#37f33703fbed2e7da66593390bc19e62e5ebc9aa"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "color-eyre",
  "colored",
@@ -9219,7 +11299,7 @@ source = "git+https://github.com/FastTrackStudios/keyflow?tag=v0.5.4#22b8df90e99
 [[package]]
 name = "keyflow-daw-analysis"
 version = "0.5.5"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=37f33703fbed2e7da66593390bc19e62e5ebc9aa#37f33703fbed2e7da66593390bc19e62e5ebc9aa"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "architect",
  "daw",
@@ -9231,9 +11311,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "keyflow-extension"
+version = "0.5.5"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
+dependencies = [
+ "architect",
+ "architect-extensions",
+ "architect-extensions-dioxus",
+ "architect-workspace",
+ "base64 0.22.1",
+ "crdt",
+ "dioxus",
+ "keyflow",
+ "keyflow-session",
+ "keyflow-ui",
+ "kurbo 0.13.1",
+ "serde_json",
+ "session 0.1.0 (git+https://github.com/FastTrackStudios/session?rev=e8a705ed1c9ae8b16934018e3b4b897769635961)",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "keyflow-lang"
 version = "0.5.5"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=37f33703fbed2e7da66593390bc19e62e5ebc9aa#37f33703fbed2e7da66593390bc19e62e5ebc9aa"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "facet",
  "facet-json",
@@ -9248,7 +11350,7 @@ dependencies = [
 [[package]]
 name = "keyflow-proto"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/keyflow?rev=37f33703fbed2e7da66593390bc19e62e5ebc9aa#37f33703fbed2e7da66593390bc19e62e5ebc9aa"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
 dependencies = [
  "architect",
  "color-palette 0.1.0 (git+https://github.com/FastTrackStudios/music-convention?tag=v0.1.0)",
@@ -9259,6 +11361,39 @@ dependencies = [
  "thiserror 2.0.20",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "keyflow-session"
+version = "0.5.5"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
+dependencies = [
+ "crdt",
+ "facet-json",
+ "session 0.1.0 (git+https://github.com/FastTrackStudios/session?rev=e8a705ed1c9ae8b16934018e3b4b897769635961)",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
+name = "keyflow-ui"
+version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/keyflow?rev=e170cfbdcc67221124380eb9fc57d9957fb70e3d#e170cfbdcc67221124380eb9fc57d9957fb70e3d"
+dependencies = [
+ "anyrender",
+ "architect-ui",
+ "architect-workspace",
+ "dioxus",
+ "gloo-timers 0.3.0",
+ "keyflow",
+ "kurbo 0.13.1",
+ "lucide-dioxus",
+ "peniko 0.6.1",
+ "roxmltree 0.20.0",
+ "tokio",
+ "tracing",
+ "vello",
+ "web-time",
 ]
 
 [[package]]
@@ -9326,6 +11461,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4933f3f57a8e9d9da04db23fb153356ecaf00cbd14aee46279c33dc80925c37"
 
 [[package]]
+name = "ktx2"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d50be8a24c37debdf3170be6ca396d5b5b165f37f94837891adac735ca416b8"
+dependencies = [
+ "bitflags 2.13.2",
+]
+
+[[package]]
 name = "kurbo"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9367,8 +11511,8 @@ dependencies = [
  "bit-set 0.8.0",
  "ena",
  "itertools 0.14.0",
- "lalrpop-util",
- "petgraph",
+ "lalrpop-util 0.22.2",
+ "petgraph 0.7.1",
  "regex",
  "regex-syntax",
  "sha3",
@@ -9386,6 +11530,15 @@ checksum = "b5baa5e9ff84f1aefd264e6869907646538a52147a755d494517a8007fb48733"
 dependencies = [
  "regex-automata",
  "rustversion",
+]
+
+[[package]]
+name = "lalrpop-util"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "364b49d1c98c07972e16fe1346463becc08bcd663da04e6e37ab1bea068dce6a"
+dependencies = [
+ "regex-automata",
 ]
 
 [[package]]
@@ -9628,6 +11781,16 @@ dependencies = [
  "bindgen 0.72.1",
  "cc",
  "system-deps 7.0.8",
+]
+
+[[package]]
+name = "libudev-sys"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c8469b4a23b962c1396b9b451dda50ef5b283e8dd309d69033475fa9b334324"
+dependencies = [
+ "libc",
+ "pkg-config",
 ]
 
 [[package]]
@@ -10289,7 +12452,7 @@ dependencies = [
 [[package]]
 name = "midi"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "architect",
  "core-foundation 0.10.1",
@@ -10708,6 +12871,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "indexmap",
  "rustc-hash 1.1.0",
+ "serde",
  "thiserror 2.0.20",
 ]
 
@@ -11180,6 +13344,15 @@ dependencies = [
  "socket2 0.6.5",
  "tracing",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "ntapi"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3b335231dfd352ffb0f8017f3b6027a4917f7df785ea2143d8af2adc66980ae"
+dependencies = [
+ "winapi",
 ]
 
 [[package]]
@@ -11738,12 +13911,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-io-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33fafba39597d6dc1fb709123dfa8289d39406734be322956a69f0931c73bb15"
+dependencies = [
+ "bitflags 2.13.2",
+ "libc",
+ "objc2-core-foundation",
+]
+
+[[package]]
 name = "objc2-io-surface"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d"
 dependencies = [
  "bitflags 2.13.2",
+ "libc",
  "objc2 0.6.5",
  "objc2-core-foundation",
 ]
@@ -11797,6 +13982,7 @@ dependencies = [
  "block2 0.6.2",
  "objc2 0.6.5",
  "objc2-foundation 0.3.2",
+ "objc2-io-surface",
 ]
 
 [[package]]
@@ -11989,7 +14175,17 @@ checksum = "2e5a6c098c7a3b6547378093f5cc30bc54fd361ce711e05293a5cc589562739b"
 dependencies = [
  "flate2",
  "memchr",
- "ruzstd",
+ "ruzstd 0.8.3",
+]
+
+[[package]]
+name = "offset-allocator"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e234d535da3521eb95106f40f0b73483d80bfb3aacf27c40d7e2b72f1a3e00a2"
+dependencies = [
+ "log",
+ "nonmax",
 ]
 
 [[package]]
@@ -12303,6 +14499,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "os_pipe"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
+dependencies = [
+ "libc",
+ "windows-sys 0.45.0",
+]
+
+[[package]]
 name = "owned_ttf_parser"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12448,7 +14654,25 @@ dependencies = [
  "fontique 0.2.0",
  "peniko 0.2.0",
  "skrifa 0.22.3",
- "swash",
+ "swash 0.1.19",
+]
+
+[[package]]
+name = "parley"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22d2ff88bd3f7d68d1d9b09c7e6209f9a8e8c05088295140a2bcf2e9b17038c5"
+dependencies = [
+ "fontique 0.11.1",
+ "harfrust",
+ "hashbrown 0.17.1",
+ "icu_normalizer",
+ "icu_properties",
+ "icu_segmenter 2.4.0",
+ "linebender_resource_handle",
+ "parlance",
+ "parley_data 0.11.1",
+ "skrifa 0.44.0",
 ]
 
 [[package]]
@@ -12463,6 +14687,15 @@ dependencies = [
  "parlance",
  "parley_engine",
  "smallvec 1.16.4",
+]
+
+[[package]]
+name = "parley_data"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1567535334d6ba2d3cde19221ba9a7bd0fabb3cbd99046ddfb10ae061cfcc889"
+dependencies = [
+ "icu_properties",
 ]
 
 [[package]]
@@ -12496,7 +14729,7 @@ dependencies = [
  "icu_segmenter 2.4.0",
  "linebender_resource_handle",
  "parlance",
- "parley_data",
+ "parley_data 0.12.0",
  "parley_emoji",
  "skrifa 0.44.0",
 ]
@@ -12604,6 +14837,19 @@ checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
 dependencies = [
  "fixedbitset",
  "indexmap",
+]
+
+[[package]]
+name = "petgraph"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8701b58ea97060d5e5b155d383a69952a60943f0e6dfe30b04c287beb0b27455"
+dependencies = [
+ "fixedbitset",
+ "hashbrown 0.15.5",
+ "indexmap",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -13511,6 +15757,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
+name = "radsort"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "019b4b213425016d7d84a153c4c73afb0946fbb4840e4eece7ba8848b9d6da22"
+
+[[package]]
 name = "rand"
 version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13594,6 +15846,16 @@ checksum = "6a8615d50dcf34fa31f7ab52692afec947c4dd0ab803cc87cb3b0b4570ff7463"
 dependencies = [
  "num-traits",
  "rand 0.9.5",
+]
+
+[[package]]
+name = "rand_distr"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d431c2703ccf129de4d45253c03f49ebb22b97d6ad79ee3ecfc7e3f4862c1d8"
+dependencies = [
+ "num-traits",
+ "rand 0.10.2",
 ]
 
 [[package]]
@@ -13856,7 +16118,7 @@ dependencies = [
  "c_str_macro",
  "cc",
  "derive_more 0.99.20",
- "downcast-rs",
+ "downcast-rs 1.2.1",
  "fragile",
  "libc",
  "tracing",
@@ -13891,6 +16153,12 @@ dependencies = [
  "vst",
  "winapi",
 ]
+
+[[package]]
+name = "rectangle-pack"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0d463f2884048e7153449a55166f91028d5b0ea53c79377099ce4e8cf0cf9bb"
 
 [[package]]
 name = "redox_event"
@@ -14213,6 +16481,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ron"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97b3fe97c18ff24299ea56f802c5693eb34266fb0bc8317f4e101debc8a3ceaf"
+dependencies = [
+ "bitflags 2.13.2",
+ "serde",
+ "serde_derive",
+ "typeid",
+ "unicode-ident",
+]
+
+[[package]]
 name = "ropey"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14478,6 +16759,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruzstd"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69e4ce4a039f42bf25920b95667e4d789e98749ab11bbb8d2c2936f788421bb5"
+dependencies = [
+ "twox-hash",
+]
+
+[[package]]
 name = "rxrust"
 version = "0.13.0"
 source = "git+https://github.com/rxRust/rxRust?rev=349e50b3197e05926e2378ef8fc45cb67ad43b83#349e50b3197e05926e2378ef8fc45cb67ad43b83"
@@ -14492,6 +16782,19 @@ name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
+
+[[package]]
+name = "sacn"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fa6b27099bea4cf80b420fe02b1e2101721b1e13197e0a34a9f3811dd26d63f"
+dependencies = [
+ "byteorder",
+ "libc",
+ "socket2 0.6.5",
+ "thiserror 2.0.20",
+ "uuid",
+]
 
 [[package]]
 name = "safe_arch"
@@ -15108,7 +17411,7 @@ dependencies = [
 [[package]]
 name = "session"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/session?rev=568e9a30a2d858b68a617a94f40f2390f7ea022e#568e9a30a2d858b68a617a94f40f2390f7ea022e"
+source = "git+https://github.com/FastTrackStudios/session?rev=e8a705ed1c9ae8b16934018e3b4b897769635961#e8a705ed1c9ae8b16934018e3b4b897769635961"
 dependencies = [
  "architect",
  "architect-permissions",
@@ -15287,7 +17590,7 @@ dependencies = [
 [[package]]
 name = "session-format"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "async-trait",
  "crdt",
@@ -15296,7 +17599,7 @@ dependencies = [
  "facet-styx",
  "loro",
  "pollster",
- "ruzstd",
+ "ruzstd 0.8.3",
  "sha2 0.10.9",
  "styx-format",
  "thiserror 2.0.20",
@@ -15610,7 +17913,7 @@ dependencies = [
 [[package]]
 name = "signal-plugin-host"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "daw",
 ]
@@ -16026,7 +18329,7 @@ dependencies = [
  "crdt",
  "loro",
  "session 0.1.0",
- "session 0.1.0 (git+https://github.com/FastTrackStudios/session?rev=568e9a30a2d858b68a617a94f40f2390f7ea022e)",
+ "session 0.1.0 (git+https://github.com/FastTrackStudios/session?rev=e8a705ed1c9ae8b16934018e3b4b897769635961)",
  "session-format",
  "tempfile",
  "thiserror 2.0.20",
@@ -16099,6 +18402,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "spin"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0134f9043ed38b087ac4f7d4af44c79e2c9e5094421fe3164f435ce585953b10"
+dependencies = [
+ "portable-atomic",
+]
+
+[[package]]
+name = "spin_sleep"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c07347b7c0301b9adba4350bdcf09c039d0e7160922050db0439b3c6723c8ab"
+dependencies = [
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "spirv"
 version = "0.4.0+sdk-1.4.341.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16134,6 +18455,15 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
+
+[[package]]
+name = "stackfuture"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "115beb9c69db2393ff10b75a1b8587a51716e5551d015001e55320ed279d32f9"
+dependencies = [
+ "const_panic",
+]
 
 [[package]]
 name = "static_assertions"
@@ -16340,8 +18670,10 @@ dependencies = [
  "architect-extensions",
  "architect-extensions-dioxus",
  "architect-mcp",
+ "architect-process-view",
  "architect-scripting",
  "architect-settings",
+ "architect-views",
  "dioxus",
  "drive-client",
  "drive-dioxus",
@@ -16355,8 +18687,10 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.4",
  "gloo-timers 0.3.0",
+ "ignition-pane",
  "js-sys",
  "keyflow",
+ "keyflow-extension",
  "loro",
  "opentelemetry",
  "serde_json",
@@ -16794,6 +19128,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "swash"
+version = "0.2.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c2499c2d826531388872b2268718aed907a39bd785ab0dcfe57fab26283f92e"
+dependencies = [
+ "skrifa 0.44.0",
+ "yazi",
+ "zeno",
+]
+
+[[package]]
 name = "swell-ui"
 version = "0.1.0"
 source = "git+https://github.com/FastTrackStudios/studio-adapters?rev=6ce1b1a912e969071cd2fe55caaea0a5cd486252#6ce1b1a912e969071cd2fe55caaea0a5cd486252"
@@ -17067,6 +19412,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sysinfo"
+version = "0.40.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a86bac2f7d06e6384984118ad727f5694110f0ec44d924d05c8fdec3d030bee6"
+dependencies = [
+ "libc",
+ "memchr",
+ "ntapi",
+ "objc2-core-foundation",
+ "objc2-io-kit",
+ "windows 0.62.2",
+]
+
+[[package]]
 name = "system-configuration"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17129,6 +19488,17 @@ dependencies = [
 name = "taffy"
 version = "0.15.0"
 source = "git+https://github.com/DioxusLabs/taffy?rev=c25605620351786eb6a742b74ea4d289f59ebd84#c25605620351786eb6a742b74ea4d289f59ebd84"
+dependencies = [
+ "serde",
+ "slotmap",
+ "smallvec 1.16.4",
+]
+
+[[package]]
+name = "taffy"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31f7bd2d97198df05186f93a3a3c306845f40e8b3c22bf9279cdd7e5cf5fea7d"
 dependencies = [
  "serde",
  "slotmap",
@@ -17956,6 +20326,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-oslog"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d76902d2a8d5f9f55a81155c08971734071968c90f2d9bfe645fe700579b2950"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "tracing-core",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tracing-subscriber"
 version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17971,6 +20353,17 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "tracing-wasm"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4575c663a174420fa2d78f4108ff68f65bf2fbb7dd89f33749b6e826b3626e07"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -18036,6 +20429,17 @@ name = "tree-sitter-language"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
+
+[[package]]
+name = "tree_magic_mini"
+version = "3.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8765b90061cba6c22b5831f675da109ae5561588290f9fa2317adab2714d5a6"
+dependencies = [
+ "memchr",
+ "nom 8.0.0",
+ "petgraph 0.8.3",
+]
 
 [[package]]
 name = "try-lock"
@@ -18328,6 +20732,12 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
+
+[[package]]
+name = "typewit"
+version = "1.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "214ca0b2191785cbc06209b9ca1861e048e39b5ba33574b3cedd58363d5bb5f6"
 
 [[package]]
 name = "uds_windows"
@@ -18668,7 +21078,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 [[package]]
 name = "utils"
 version = "26.10.3"
-source = "git+https://www.github.com/FastTrackStudios/daw?rev=86263731dfd07e3ef69cfdce923901ce9894905e#86263731dfd07e3ef69cfdce923901ce9894905e"
+source = "git+https://www.github.com/FastTrackStudios/daw?rev=6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f#6dd7a8b0f2ff0e345614bc2d28c7bc9268c40b4f"
 dependencies = [
  "facet",
  "facet-styx",
@@ -18714,10 +21124,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "variadics_please"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b53d0f7f2d0182759a549f1f313ce16b07d8f9ba93098157b5fa10ee3e61117f"
+dependencies = [
+ "quote",
+ "unsynn",
+]
+
+[[package]]
 name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "vec_map"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vello"
@@ -18804,10 +21230,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf14e175813d9ddefdf52d9430d075de46c1d72560e917575857c97d6fc74cc"
 dependencies = [
  "naga 30.0.1",
- "wesl",
- "wesl-macros",
- "wgsl-parse",
- "wgsl-types",
+ "wesl 0.4.0",
+ "wesl-macros 0.4.0",
+ "wgsl-parse 0.4.0",
+ "wgsl-types 0.4.0",
 ]
 
 [[package]]
@@ -19218,7 +21644,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38a91b4eaddff87b1cd1074985e3713da4af2c49742d1b356b2c01670a67a078"
 dependencies = [
  "cc",
- "downcast-rs",
+ "downcast-rs 1.2.1",
  "rustix 1.1.6",
  "scoped-tls",
  "smallvec 1.16.4",
@@ -19360,6 +21786,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "weak-table"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5eba2ec791141b0bf4db542f6b038a8f9310cee33e076cb181245780b09a24ff"
+dependencies = [
+ "cfg-if",
+ "hashbrown 0.16.1",
+]
+
+[[package]]
 name = "weavy"
 version = "0.2.3-rc.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19391,6 +21827,18 @@ version = "0.3.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c435338968042f4f59a557f690a253676d47ce13ceb55d70100e7facf6620a30"
 dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "web-task"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cdc136a53ccd64a1211f107ccc34404769fbcc0f165f1afa065f5d88ab93538"
+dependencies = [
+ "async-task",
+ "cfg-if",
  "js-sys",
  "wasm-bindgen",
 ]
@@ -19568,10 +22016,38 @@ dependencies = [
  "itertools 0.14.0",
  "num-traits",
  "thiserror 2.0.20",
- "wesl-macros",
- "wgsl-parse",
- "wgsl-types",
+ "wesl-macros 0.4.0",
+ "wgsl-parse 0.4.0",
+ "wgsl-types 0.4.0",
 ]
+
+[[package]]
+name = "wesl"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdd8f9619baa4c7bde4df0899d6f626b70ee92d6e9c18c5f74473419b5bb6fa6"
+dependencies = [
+ "annotate-snippets 0.12.16",
+ "anstream",
+ "derive_more 2.1.1",
+ "glob",
+ "half",
+ "itertools 0.15.0",
+ "num-traits",
+ "serde",
+ "thiserror 2.0.20",
+ "toml 1.1.5+spec-1.1.0",
+ "wesl-core",
+ "wesl-macros 0.6.0",
+ "wgsl-parse 0.6.0",
+ "wgsl-types 0.6.0",
+]
+
+[[package]]
+name = "wesl-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84dd3e600497eda0b47afcd21bd84c8953a9dfce7e93ed27a38ba97ac0747e03"
 
 [[package]]
 name = "wesl-macros"
@@ -19583,6 +22059,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "wesl-macros"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac8767ec26e75262a8e581d5f188b1f63a288baaf885bb33c9f4f73a693e06fc"
+dependencies = [
+ "itertools 0.15.0",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -19941,6 +22429,7 @@ dependencies = [
  "log",
  "naga-types",
  "raw-window-handle 0.6.2",
+ "serde",
  "static_assertions",
  "web-sys",
 ]
@@ -19965,11 +22454,27 @@ dependencies = [
  "derive_more 2.1.1",
  "itertools 0.14.0",
  "lalrpop",
- "lalrpop-util",
+ "lalrpop-util 0.22.2",
  "lexical",
  "logos",
  "thiserror 2.0.20",
- "wgsl-types",
+ "wgsl-types 0.4.0",
+]
+
+[[package]]
+name = "wgsl-parse"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37cee524ba5cfabfd65d10a316b646f8a4c50f3663e7e787471f21b783261f47"
+dependencies = [
+ "annotate-snippets 0.12.16",
+ "derive_more 2.1.1",
+ "itertools 0.15.0",
+ "lalrpop-util 0.23.2",
+ "lexical",
+ "logos",
+ "thiserror 2.0.20",
+ "wgsl-types 0.6.0",
 ]
 
 [[package]]
@@ -19980,6 +22485,17 @@ checksum = "d3cf8623d173060d5a9e1465b89954ea42f3ac21af2f533c7975d003f8d82b98"
 dependencies = [
  "half",
  "itertools 0.14.0",
+ "num-traits",
+]
+
+[[package]]
+name = "wgsl-types"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e119dd12e57d937397535201959ddddb5dbf26505402db5ef305ebb1ca9a7e5f"
+dependencies = [
+ "half",
+ "itertools 0.15.0",
  "num-traits",
 ]
 
@@ -20784,6 +23300,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
+name = "wl-clipboard-rs"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "959c7ac3b8afde864f7a7448ac16f29b2b83350b7eccbf77fb781c3999aa6848"
+dependencies = [
+ "libc",
+ "log",
+ "os_pipe",
+ "rustix 1.1.6",
+ "thiserror 2.0.20",
+ "tree_magic_mini",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
+ "wayland-protocols-wlr",
+]
+
+[[package]]
 name = "wmi"
 version = "0.18.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -21069,6 +23603,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
+name = "yazi"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac366ea532fa8ee6a992cec9dea525b1dc284e69702f36c2ab5fbebadc81ec86"
+
+[[package]]
 name = "yeslogic-fontconfig-sys"
 version = "6.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -21190,6 +23730,12 @@ checksum = "d1afec51604565183aeb5c54c20aeab286120d4e4460f7f76e3e8bb8c0d99473"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "zeno"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6df3dc4292935e51816d896edcd52aa30bc297907c26167fec31e2b0c6a32524"
 
 [[package]]
 name = "zerocopy"
@@ -21464,87 +24010,82 @@ dependencies = [
 [[patch.unused]]
 name = "architect-accounts"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "architect-atom"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "architect-editor"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "architect-extension-wasi"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "architect-files"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "architect-guide"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "architect-navigator-api"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "architect-presence"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
-
-[[patch.unused]]
-name = "architect-process-view"
-version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "architect-spaces"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "auth-proto"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "vault"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "vault-collab"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "vault-doc"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "vault-live"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "vault-obsidian"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "vault-proto"
 version = "0.1.0"
-source = "git+https://www.github.com/FastTrackStudios/architect?branch=strip%2Fapplication-framework#356abca92beda773ec818ee2c5035e9f385f31d0"
+source = "git+https://www.github.com/FastTrackStudios/architect?rev=eaa969f150b4c558b4722c09e7cf619d9fa4bede#eaa969f150b4c558b4722c09e7cf619d9fa4bede"
 
 [[patch.unused]]
 name = "editor-lsp"
@@ -21552,16 +24093,6 @@ version = "0.1.0"
 source = "git+https://www.github.com/FastTrackStudios/editor?rev=6817dc2c709fbb5a7858229592bbbc85eed49528#6817dc2c709fbb5a7858229592bbbc85eed49528"
 
 [[patch.unused]]
-name = "gdtf"
-version = "0.3.0"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=123921605b3ac774c6c5d4d7775c479615a41b90#123921605b3ac774c6c5d4d7775c479615a41b90"
-
-[[patch.unused]]
 name = "tone3000"
 version = "0.1.0"
 source = "git+https://github.com/FastTrackStudios/signal?rev=ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95#ddf0b93c926ec23c46d2cdc8a868d7bf5d6aad95"
-
-[[patch.unused]]
-name = "bevy_pbr"
-version = "0.20.0-dev"
-source = "git+https://github.com/FastTrackStudios/Ignition?rev=123921605b3ac774c6c5d4d7775c479615a41b90#123921605b3ac774c6c5d4d7775c479615a41b90"
