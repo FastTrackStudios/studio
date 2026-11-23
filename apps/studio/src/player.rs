@@ -85,7 +85,19 @@ async fn references(space: &str) -> Vec<Hit> {
 }
 
 /// The reference in a known session folder, when it has been bounced.
+/// `Media/Proxy/Reference/*.ogg` (the reference's proxy, mirroring
+/// `Media/Reference/`), else the older `Media/Proxies/Reference.ogg`.
 async fn in_folder(p: &Place) -> Option<Hit> {
+    let proxy = format!("{}/Media/Proxy/Reference", p.folder);
+    let mut found: Vec<Hit> = web::list(&p.space, &p.location, &proxy)
+        .await
+        .into_iter()
+        .filter(|h| !h.dir && h.name.ends_with(".ogg"))
+        .collect();
+    found.sort_by(|a, b| a.name.cmp(&b.name));
+    if let Some(h) = found.into_iter().next() {
+        return Some(h);
+    }
     let proxies = format!("{}/Media/Proxies", p.folder);
     web::list(&p.space, &p.location, &proxies)
         .await
