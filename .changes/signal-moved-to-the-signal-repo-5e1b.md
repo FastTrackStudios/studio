@@ -4,7 +4,6 @@
 "session-desktop" = "none"
 "session-engine" = "none"
 "song" = "none"
-"studio-desktop" = "none"
 "web-audio-worklet" = "none"
 "xtask-workflows" = "none"
 ---

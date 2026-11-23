@@ -1,5 +1,4 @@
 ---
-"studio-desktop" = "minor"
 "xtask-workflows" = "none"
 ---
 

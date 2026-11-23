@@ -1,6 +1,5 @@
 ---
 "session-desktop" = "minor"
-"studio-desktop" = "patch"
 "app-shell" = "patch"
 "dock" = "patch"
 ---

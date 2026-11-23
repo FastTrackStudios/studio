@@ -2,7 +2,6 @@
 "session-ui" = "patch"
 "session-desktop" = "patch"
 "session-engine" = "patch"
-"studio-desktop" = "patch"
 "dock" = "patch"
 ---
 
