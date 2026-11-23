@@ -1,4 +1,4 @@
-//! The arrangement of the song playing (or picked): its sections over a
+//! The arrangement of the song playing (the session's main view): its sections over a
 //! time ruler, its tracks with their clips, and a progress bar and a
 //! playhead that follow Now Playing. A press or a drag on either seeks.
 //!
@@ -13,10 +13,7 @@ use std::rc::Rc;
 
 use dioxus::prelude::*;
 
-use crate::Route;
 use crate::arrangement::{Arrangement, Lane};
-use crate::icons::{I, Icon};
-use crate::pieces::{Bar, Page};
 use crate::state::use_app;
 
 /// A model as a prop: equal when it is the same one, so the lanes are
@@ -30,82 +27,20 @@ impl PartialEq for Model {
     }
 }
 
-/// The arrangement of the song Now Playing holds.
+/// The arrangement of the song Now Playing holds: the session's main view.
 #[component]
-pub fn NowArrangement() -> Element {
-    let mut app = use_app();
-    let np = (app.np)();
-    let Some(n) = np.filter(|n| n.song().is_some()) else {
+pub fn ArrangementView() -> Element {
+    let app = use_app();
+    let Some(n) = (app.np)().filter(|n| n.song().is_some()) else {
         return rsx! {
-            Page {
-                Bar { back: Some(Route::Setlists {}), title: Some("Arrangement".to_string()) }
-                div { class: "body",
-                    p { class: "pline", "Play a set or pick a song's arrangement, and it shows here." }
-                }
-            }
+            p { class: "pline", "Open a set, and its songs' arrangements show here." }
         };
     };
-    let title = n.song().map(|s| s.title.to_string()).unwrap_or_default();
-    let (now, _) = n.secs();
-    let section = n.timeline.at(now).map(|s| s.name.clone());
-    let playing = n.playing;
     let folder = n.place().map(|p| p.folder.clone()).unwrap_or_default();
     let bpm = n.song().and_then(|s| s.tempo).unwrap_or(120);
-    let engine = (app.engine)().line();
     rsx! {
-        Page {
-            Bar { back: Some(Route::Setlists {}), title: Some(title.clone()) }
-            div { class: "body arrpage",
-                div { class: "chartnowhead",
-                    div {
-                        b { "{title}" }
-                        span { class: "pline",
-                            "{crate::songs::clock(now)}"
-                            if let Some(s) = &section {
-                                " · {s}"
-                            }
-                            " · {n.from}"
-                        }
-                    }
-                    div { class: "fsetacts",
-                        button {
-                            class: "playset",
-                            aria_label: if playing { "Pause" } else { "Play" },
-                            onclick: move |_| {
-                                app.np.with_mut(|n| {
-                                    if let Some(n) = n {
-                                        n.playing = !n.playing;
-                                    }
-                                });
-                            },
-                            Icon { name: if playing { I::Pause } else { I::Play }, size: 14 }
-                            if playing { "Pause" } else { "Play" }
-                        }
-                        button {
-                            class: "playset quiet",
-                            onclick: move |_| {
-                                app.np.with_mut(|n| {
-                                    if let Some(n) = n {
-                                        n.next();
-                                    }
-                                });
-                            },
-                            Icon { name: I::Skip, size: 14 }
-                            "Next song"
-                        }
-                        button {
-                            class: "playset quiet",
-                            onclick: move |_| {
-                                navigator().push(Route::NowChart {});
-                            },
-                            Icon { name: I::Chart, size: 14 }
-                            "Chart"
-                        }
-                    }
-                }
-                p { class: "pline arreng", "{engine}" }
-                Loaded { key: "{n.i}/{folder}", i: n.i, folder: folder.clone(), bpm }
-            }
+        div { class: "arrpage",
+            Loaded { key: "{n.i}/{folder}", i: n.i, folder: folder.clone(), bpm }
         }
     }
 }
@@ -313,7 +248,7 @@ fn Lanes(model: Model) -> Element {
                     for (k , t) in shown.iter().enumerate() {
                         div {
                             key: "{k}",
-                            class: if t.folder { "arrname folder" } else { "arrname" },
+                            class: if t.folder { "arrname tfolder" } else { "arrname" },
                             style: "padding-left:{8 + t.depth * 12}px;",
                             span {
                                 class: "arrsw",
@@ -358,7 +293,7 @@ fn Lanes(model: Model) -> Element {
                         }
                     }
                     for (k , t) in shown.iter().enumerate() {
-                        div { key: "{k}", class: if t.folder { "arrlane folder" } else { "arrlane" },
+                        div { key: "{k}", class: if t.folder { "arrlane tfolder" } else { "arrlane" },
                             for (j , c) in t.clips.iter().enumerate() {
                                 div {
                                     key: "{j}",

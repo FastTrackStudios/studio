@@ -7,6 +7,8 @@
 //! Drive documents too (`setlist` the model, `sets` live).
 
 mod actions;
+// Read natively (the browser build will read it from Drive's bytes).
+#[cfg_attr(not(feature = "native"), allow(dead_code))]
 mod arrangement;
 mod data;
 #[cfg(feature = "drive")]
@@ -33,6 +35,7 @@ mod trace;
 mod chart_sync;
 #[cfg_attr(not(feature = "web"), allow(dead_code))]
 mod reference;
+mod session;
 mod session_file;
 #[cfg(feature = "drive")]
 mod set_files;
@@ -50,7 +53,6 @@ mod team;
 
 use dioxus::prelude::*;
 
-use pages::arrangement::NowArrangement;
 use pages::drive_set::{DriveSet, NowChart};
 use pages::home::Home;
 use pages::library::{Library, LibraryHome};
@@ -62,17 +64,21 @@ use pages::set::{OrgSet, SetPage};
 use pages::setlists::{Every, Series, Setlists};
 use pages::signal::Signal;
 use pages::song::{SharedSong, SongPage};
-use shell::Shell;
+use session::{SessionPage, SessionShell};
+use shell::{Root, Shell};
 
-const STYLE: Asset = asset!("/assets/style.css");
-const APP_STYLE: Asset = asset!("/assets/app.css");
+pub(crate) const STYLE: Asset = asset!("/assets/style.css");
+pub(crate) const APP_STYLE: Asset = asset!("/assets/app.css");
 const FONT: &str = "https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&display=swap";
 
-/// Every page, as its place in the app. The four tabs are the roots; the
-/// rest are pushed over them.
+/// Every page, as its place in the app, in its two modes: the launcher
+/// (`Shell`: the four tabs are its roots, the rest pushed over them) and
+/// the session (`SessionShell`: a set open for playing, the whole window).
+/// Both under `Root`, which keeps playback and the Action List across them.
 #[derive(Clone, Debug, PartialEq, Routable)]
 #[rustfmt::skip]
 pub enum Route {
+    #[layout(Root)]
     #[layout(Shell)]
         #[route("/")]
         Home {},
@@ -98,8 +104,7 @@ pub enum Route {
         DriveSet { space: String, location: String, path: Vec<String> },
         #[route("/now/chart")]
         NowChart {},
-        #[route("/now/arrangement")]
-        NowArrangement {},
+
         #[route("/at/:owner/:id")]
         OrgSet { owner: String, id: String },
         #[route("/print/:owner/:id")]
@@ -120,6 +125,10 @@ pub enum Route {
         People {},
         #[route("/org")]
         OrgSettings {},
+    #[end_layout]
+    #[layout(SessionShell)]
+        #[route("/session/:view")]
+        SessionPage { view: String },
 }
 
 /// The four tabs at the foot.
@@ -198,7 +207,7 @@ fn main() {
     #[cfg(feature = "native")]
     app_shell_native::launch(
         App,
-        no_popout,
+        popout,
         app_shell_native::Config {
             title: "Studio".to_owned(),
             size: (1440.0, 900.0),
@@ -212,10 +221,16 @@ fn main() {
     dioxus::launch(App);
 }
 
-/// Studio opens no pop-out windows yet.
+/// Studio's own windows: the mixer.
 #[cfg(feature = "native")]
-fn no_popout(_: app_shell::WindowId) -> Element {
-    rsx! {}
+fn popout(id: app_shell::WindowId) -> Element {
+    if id.0 == session::MIXER_WINDOW {
+        rsx! {
+            session::MixerWindow { id }
+        }
+    } else {
+        rsx! {}
+    }
 }
 
 #[component]

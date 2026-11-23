@@ -5,6 +5,7 @@
 use dioxus::prelude::*;
 
 use crate::Route;
+#[cfg_attr(not(feature = "drive"), allow(unused_imports))]
 use crate::icons::{I, Icon};
 use crate::pieces::{Bar, Page};
 use crate::state::use_app;
@@ -50,6 +51,12 @@ fn Loaded(space: String, location: String, path: String) -> Element {
 fn Loaded(space: String, location: String, path: String) -> Element {
     let app = use_app();
     let spaces = spaces();
+    // This page, for the session's way back.
+    let here = Route::DriveSet {
+        space: space.clone(),
+        location: location.clone(),
+        path: path.split('/').map(str::to_string).collect(),
+    };
     // A file on disk: read again when it changes (edited by hand) or when
     // Drive has found charts for it.
     let mut version = use_signal(|| (0_i64, 0_usize));
@@ -99,6 +106,31 @@ fn Loaded(space: String, location: String, path: String) -> Element {
         .count();
     let list = set.playlist();
     let name = set.name.clone();
+    // A session an action asked for before the set was read.
+    let asked = app.pending_session.peek().clone();
+    if let Some((song, play)) = asked {
+        let mut pending = app.pending_session;
+        pending.set(None);
+        let i = song
+            .and_then(|s| {
+                let s = s.to_lowercase();
+                list.iter()
+                    .position(|(x, _)| x.title.to_lowercase().contains(&s))
+            })
+            .unwrap_or(0);
+        let (list, name, here) = (list.clone(), name.clone(), here.clone());
+        spawn(async move {
+            crate::session::enter(
+                app,
+                list,
+                name,
+                i,
+                play,
+                Some(here),
+                crate::session::View::Arrangement,
+            );
+        });
+    }
     // What an action picks a song of (STUDIO_ARRANGEMENT).
     {
         let shown = Some((name.clone(), list.clone()));
@@ -121,16 +153,17 @@ fn Loaded(space: String, location: String, path: String) -> Element {
                 button {
                     class: "playset",
                     onclick: {
-                        let (list, name) = (list.clone(), name.clone());
-                        move |_| app.play_places(list.clone(), name.clone(), 0)
+                        let (list, name, here) = (list.clone(), name.clone(), here.clone());
+                        move |_| crate::session::enter(app, list.clone(), name.clone(), 0, true, Some(here.clone()), crate::session::View::Arrangement)
                     },
                     Icon { name: I::Play, size: 14, w: 2.4 }
                     "Play the set"
                 }
                 button {
                     class: "playset quiet",
-                    onclick: move |_| {
-                        navigator().push(Route::NowChart {});
+                    onclick: {
+                        let (list, name, here) = (list.clone(), name.clone(), here.clone());
+                        move |_| crate::session::enter(app, list.clone(), name.clone(), 0, false, Some(here.clone()), crate::session::View::Chart)
                     },
                     Icon { name: I::Chart, size: 14 }
                     "Chart"
@@ -138,13 +171,8 @@ fn Loaded(space: String, location: String, path: String) -> Element {
                 button {
                     class: "playset quiet",
                     onclick: {
-                        let (list, name) = (list.clone(), name.clone());
-                        move |_| {
-                            if !(app.np)().is_some_and(|n| n.from == name) {
-                                app.select_places(list.clone(), name.clone(), 0, false);
-                            }
-                            navigator().push(Route::NowArrangement {});
-                        }
+                        let (list, name, here) = (list.clone(), name.clone(), here.clone());
+                        move |_| crate::session::enter(app, list.clone(), name.clone(), 0, false, Some(here.clone()), crate::session::View::Arrangement)
                     },
                     Icon { name: I::Layers, size: 14 }
                     "Arrangement"
@@ -161,15 +189,12 @@ fn Loaded(space: String, location: String, path: String) -> Element {
                         let i = n;
                         n += 1;
                         let (list, name) = (list.clone(), name.clone());
-                        let (list2, name2) = (list.clone(), name.clone());
+                        let (list2, name2, here2, here1) = (list.clone(), name.clone(), here.clone(), here.clone());
                         rsx! {
                             div { key: "{song.place.folder}", class: "agline",
                             button {
                                 class: "ag",
-                                onclick: move |_| {
-                                    app.play_places(list.clone(), name.clone(), i);
-                                    navigator().push(Route::NowChart {});
-                                },
+                                onclick: move |_| crate::session::enter(app, list.clone(), name.clone(), i, true, Some(here1.clone()), crate::session::View::Arrangement),
                                 span { class: "cal tpl", "{i + 1}" }
                                 span { class: "mid",
                                     span { class: "t1", "{song.title}" }
@@ -188,10 +213,7 @@ fn Loaded(space: String, location: String, path: String) -> Element {
                             button {
                                 class: "playset quiet agarr",
                                 title: "Its arrangement",
-                                onclick: move |_| {
-                                    app.select_places(list2.clone(), name2.clone(), i, false);
-                                    navigator().push(Route::NowArrangement {});
-                                },
+                                onclick: move |_| crate::session::enter(app, list2.clone(), name2.clone(), i, false, Some(here2.clone()), crate::session::View::Arrangement),
                                 Icon { name: I::Layers, size: 14 }
                                 "Arrangement"
                             }
@@ -208,16 +230,29 @@ fn Loaded(space: String, location: String, path: String) -> Element {
 /// and kept in view, and a tap on a bar plays from there.
 #[component]
 pub fn NowChart() -> Element {
-    let mut app = use_app();
+    let app = use_app();
+    let title = (app.np)()
+        .and_then(|n| n.song().map(|s| s.title.to_string()))
+        .unwrap_or_else(|| "Chart".into());
+    rsx! {
+        Page {
+            Bar { back: Some(Route::Setlists {}), title: Some(title) }
+            div { class: "body",
+                ChartView {}
+            }
+        }
+    }
+}
+
+/// The chart of the song playing (the session's Chart view, and the
+/// launcher's chart page).
+#[component]
+pub fn ChartView() -> Element {
+    let app = use_app();
     let np = (app.np)();
     let Some(n) = np.filter(|n| n.song().is_some()) else {
         return rsx! {
-            Page {
-                Bar { back: Some(Route::Setlists {}), title: Some("Chart".to_string()) }
-                div { class: "body",
-                    p { class: "pline", "Play a set, and its chart follows here." }
-                }
-            }
+            p { class: "pline", "Play a set, and its chart follows here." }
         };
     };
     let title = n.song().map(|s| s.title.to_string()).unwrap_or_default();
@@ -225,59 +260,26 @@ pub fn NowChart() -> Element {
     let section = n.timeline.at(now).map(|s| s.name.clone());
     let chart = n.place().and_then(|p| p.chart.clone());
     let sections = n.timeline.sections.clone();
-    let playing = n.playing;
     rsx! {
-        Page {
-            Bar { back: Some(Route::Setlists {}), title: Some(title.clone()) }
-            div { class: "body",
-                div { class: "chartnow",
-                    div { class: "chartnowhead",
-                        div {
-                            b { "{title}" }
-                            span { class: "pline",
-                                "{crate::songs::clock(now)}"
-                                if let Some(s) = &section {
-                                    " · {s}"
-                                }
-                            }
+        div { class: "chartnow",
+            div { class: "chartnowhead",
+                div {
+                    b { "{title}" }
+                    span { class: "pline",
+                        "{crate::songs::clock(now)}"
+                        if let Some(s) = &section {
+                            " · {s}"
                         }
-                        div { class: "fsetacts",
-                            button {
-                                class: "playset quiet",
-                                aria_label: if playing { "Pause" } else { "Play" },
-                                onclick: move |_| {
-                                    app.np.with_mut(|n| {
-                                        if let Some(n) = n {
-                                            n.playing = !n.playing;
-                                        }
-                                    });
-                                },
-                                Icon { name: if playing { I::Pause } else { I::Play }, size: 14 }
-                                if playing { "Pause" } else { "Play" }
-                            }
-                            button {
-                                class: "playset quiet",
-                                onclick: move |_| {
-                                    app.np.with_mut(|n| {
-                                        if let Some(n) = n {
-                                            n.next();
-                                        }
-                                    });
-                                },
-                                Icon { name: I::Skip, size: 14 }
-                                "Next song"
-                            }
-                        }
-                    }
-                    match chart {
-                        Some(c) => rsx! {
-                            ChartFollow { chart: c, sections }
-                        },
-                        None => rsx! {
-                            p { class: "pline", "No chart for this song yet: Studio looks for a Keyflow chart (.kf) named like its session folder." }
-                        },
                     }
                 }
+            }
+            match chart {
+                Some(c) => rsx! {
+                    ChartFollow { chart: c, sections }
+                },
+                None => rsx! {
+                    p { class: "pline", "No chart for this song yet: Studio looks for a Keyflow chart (.kf) named like its session folder." }
+                },
             }
         }
     }

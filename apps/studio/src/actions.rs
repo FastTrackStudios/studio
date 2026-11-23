@@ -245,12 +245,65 @@ mod imp {
         "Opens the arrangement page (tracks, clips and sections over time, with a playhead that follows playback) for `song`: a title (or its number, from 0) in what Now Playing holds, else in the setlist file the page shows; the song playing when left out. `play` true plays it, false pauses; left out, it plays as it did."
     );
     meta!(
+        SESSION_OPEN,
+        "STUDIO_SESSION_OPEN",
+        "Open the session",
+        "Session",
+        "Opens a set as the session, the whole window: the setlist bar along the top (the set's progress, a tab per song with its own progress), the view in the middle (the arrangement first), the views and the way back to the sets at the foot; natively every song's file is loaded into the engine. `set` a setlist file's `path` (in `location`, `studio-disk` when left out, of `space`, the org Studio is in when left out), else the set already playing or the setlist file shown; `song` the one to start at (a title or a number from 0); `play` true to play; `view` overview, chart, lyrics, editor, arrangement, mixer, fx or setup."
+    );
+    meta!(
+        SESSION_CLOSE,
+        "STUDIO_SESSION_CLOSE",
+        "Back to the sets",
+        "Session",
+        "Leaves the session for the launcher, where it was opened from. The set plays on."
+    );
+    meta!(
+        SESSION_VIEW,
+        "STUDIO_SESSION_VIEW",
+        "Show a session view",
+        "Session",
+        "Shows `view` of the session: overview, chart, lyrics, editor, arrangement, mixer, fx or setup."
+    );
+    meta!(
+        MIXER_WINDOW,
+        "STUDIO_MIXER_WINDOW",
+        "The mixer's window",
+        "Session",
+        "Opens the mixer in a window of its own: a strip per track of the engine's song, its fader, mute and solo driving the engine."
+    );
+    meta!(
         ENGINE,
         "STUDIO_ENGINE",
         "The engine",
         "Playback",
         "Studio's engine (`studio engine`, which plays natively): its status (off, linking, opening, ready with its pid, failed with why) and whether its transport drives Now Playing (else a timer does)."
     );
+
+    #[derive(Facet)]
+    struct SessionArgs {
+        #[facet(default)]
+        set: Option<String>,
+        #[facet(default)]
+        space: Option<String>,
+        #[facet(default)]
+        location: Option<String>,
+        #[facet(default)]
+        song: Option<String>,
+        #[facet(default)]
+        play: Option<bool>,
+        #[facet(default)]
+        view: Option<String>,
+    }
+    #[derive(Facet)]
+    struct ViewArgs {
+        view: String,
+    }
+
+    thread_local! {
+        /// The platform's windows, for STUDIO_MIXER_WINDOW (put by the host).
+        static WINDOWS: RefCell<Option<app_shell::ui::Windows>> = const { RefCell::new(None) };
+    }
 
     #[derive(Facet)]
     struct ArrangementArgs {
@@ -409,6 +462,10 @@ mod imp {
             forward::<PlaySetArgs>(&list, &SET_PLAY, M, true);
             forward::<ArrangementArgs>(&list, &ARRANGEMENT, M, true);
             forward::<()>(&list, &ENGINE, R, false);
+            forward::<SessionArgs>(&list, &SESSION_OPEN, M, true);
+            forward::<()>(&list, &SESSION_CLOSE, M, false);
+            forward::<ViewArgs>(&list, &SESSION_VIEW, M, true);
+            forward::<()>(&list, &MIXER_WINDOW, M, false);
             let scripting = architect_scripting::actions::Scripting::new(
                 list.clone(),
                 architect_scripting::Library::new(architect_scripting::MemoryStore::default()),
@@ -503,6 +560,8 @@ mod imp {
     #[component]
     pub fn ActionHost() -> Element {
         let app = use_app();
+        let windows = try_use_context::<app_shell::ui::Windows>();
+        use_hook(move || WINDOWS.with(|w| *w.borrow_mut() = windows));
         let route = use_route::<Route>();
         let index = crate::sets::use_index();
         let library = crate::songs::use_library();
@@ -798,25 +857,88 @@ mod imp {
                 app.play_titles(&titles, info.title, Some(&first));
                 Ok(json!({ "playing": first, "of": titles.len() }))
             }
-            "STUDIO_ARRANGEMENT" => {
-                let a: ArrangementArgs = args(raw)?;
-                let mut span = crate::trace::Span::root("studio.arrangement.show");
+            "STUDIO_ARRANGEMENT" | "STUDIO_SESSION_OPEN" => {
+                let a: SessionArgs = if id == "STUDIO_ARRANGEMENT" {
+                    let a: ArrangementArgs = args(raw)?;
+                    SessionArgs {
+                        set: None,
+                        space: None,
+                        location: None,
+                        song: a.song,
+                        play: a.play,
+                        view: Some("arrangement".into()),
+                    }
+                } else {
+                    args(raw)?
+                };
+                let view = match a.view.as_deref() {
+                    None => crate::session::View::Arrangement,
+                    Some(v) => {
+                        crate::session::View::parse(v).ok_or_else(|| format!("no view {v}"))?
+                    }
+                };
+                // Where the way back goes: the launcher page showing.
+                if let Ok(r) = Route::from_str(route)
+                    && !matches!(r, Route::SessionPage { .. })
+                {
+                    let mut back = app.session_from;
+                    back.set(Some(r));
+                }
+                // A setlist file not playing yet: its page reads it, and
+                // goes into the session once it has (`pending_session`).
+                if let Some(path) = a.set.clone() {
+                    let name = crate::setfile::name_of(path.rsplit('/').next().unwrap_or(&path));
+                    let playing_it = np().is_some_and(|n| n.from == name && !n.list.is_empty());
+                    if !playing_it {
+                        let mut pending = app.pending_session;
+                        pending.set(Some((a.song.clone(), a.play.unwrap_or(false))));
+                        let to = Route::DriveSet {
+                            space: a.space.unwrap_or_else(|| here.clone()),
+                            location: a.location.unwrap_or_else(|| crate::files::DISK.to_string()),
+                            path: path.split('/').map(str::to_string).collect(),
+                        };
+                        let mut back = app.session_from;
+                        back.set(Some(to.clone()));
+                        navigator().push(to.clone());
+                        return Ok(json!({ "opening": name, "via": to.to_string() }));
+                    }
+                }
+                let mut span = crate::trace::Span::root("studio.session.show");
                 let picked = pick_song(app, a.song.as_deref(), a.play);
                 match &picked {
                     Ok(t) => span.set("studio.song", t.clone()),
                     Err(e) => span.fail(e.clone()),
                 }
+                span.set("studio.session.view", view.slug());
                 let title = picked?;
-                let to = Route::NowArrangement {};
+                let to = crate::session::route(view);
                 navigator().push(to.clone());
                 let n = np();
                 Ok(json!({
                     "route": to.to_string(),
+                    "set": n.as_ref().map(|n| n.from.clone()),
                     "song": title,
                     "i": n.as_ref().map(|n| n.i),
                     "playing": n.as_ref().is_some_and(|n| n.playing),
                     "engine": (app.engine)().line(),
                 }))
+            }
+            "STUDIO_SESSION_CLOSE" => {
+                crate::session::leave(app);
+                Ok(json!({ "to": app.session_from.peek().as_ref().map(ToString::to_string) }))
+            }
+            "STUDIO_SESSION_VIEW" => {
+                let a: ViewArgs = args(raw)?;
+                let v = crate::session::View::parse(&a.view)
+                    .ok_or_else(|| format!("no view {}", a.view))?;
+                let to = crate::session::route(v);
+                navigator().push(to.clone());
+                Ok(json!({ "route": to.to_string() }))
+            }
+            "STUDIO_MIXER_WINDOW" => {
+                let windows = WINDOWS.with(|w| w.borrow().clone());
+                crate::session::open_mixer_window(windows)?;
+                Ok(json!({ "window": crate::session::MIXER_WINDOW }))
             }
             "STUDIO_ENGINE" => Ok(json!({
                 "status": format!("{:?}", (app.engine)()),

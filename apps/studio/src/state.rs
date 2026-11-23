@@ -423,6 +423,14 @@ pub struct AppState {
     /// The setlist file a page shows: its name and songs, for an action
     /// to pick one of them.
     pub shown_set: Signal<Option<(String, Vec<(Song, Place)>)>>,
+    /// Each song's length in seconds, by its place in Now Playing's list
+    /// (read from the songs' files when a session opens; 0 not known).
+    pub set_lens: Signal<Vec<f64>>,
+    /// Where "back to sets" goes from the session: the page it was opened from.
+    pub session_from: Signal<Option<crate::Route>>,
+    /// A session asked for before its set was read (an action naming a
+    /// setlist file): the song to start at and whether it plays.
+    pub pending_session: Signal<Option<(Option<String>, bool)>>,
 }
 
 impl AppState {
@@ -474,6 +482,9 @@ impl AppState {
             engine: Signal::new(EngineStatus::Off),
             engine_drives: Signal::new(false),
             shown_set: Signal::new(None),
+            set_lens: Signal::new(Vec::new()),
+            session_from: Signal::new(None),
+            pending_session: Signal::new(None),
         }
     }
 
@@ -533,12 +544,6 @@ impl AppState {
         if let Some(start) = first.or(list.first().map(|s| s.title)).map(str::to_string) {
             self.play(list, from, &start);
         }
-    }
-
-    /// Play a setlist file's songs from song `i`.
-    pub fn play_places(mut self, list: Vec<(Song, Place)>, from: String, i: usize) {
-        self.np
-            .set(Some(NowPlaying::of_places(list, from, i, true)));
     }
 
     /// Show song `i` of a setlist file's songs, playing or not: what is

@@ -19,8 +19,9 @@ pub fn EngineHost() -> Element {
     let mut app = use_app();
     let engine = use_hook(|| Rc::new(Engine::new()));
     let round = use_hook(|| Rc::new(Cell::new(0u64)));
-    // What was last asked: the song's file and whether it plays.
-    let last = use_hook(|| Rc::new(RefCell::new(None::<(Option<PathBuf>, bool)>)));
+    // What was last asked: the set's files, the song's place, whether it plays.
+    type Asked = (Vec<Option<PathBuf>>, usize, bool);
+    let last = use_hook(|| Rc::new(RefCell::new(None::<Asked>)));
     // Each song folder's one file, looked up once.
     let files = use_hook(|| Rc::new(RefCell::new(HashMap::<String, Option<PathBuf>>::new())));
 
@@ -31,24 +32,32 @@ pub fn EngineHost() -> Element {
         use_effect(move || {
             let Some(n) = (app.np)() else { return };
             let title = n.song().map(|s| s.title.to_string()).unwrap_or_default();
-            let song = n
-                .place()
-                .filter(|p| p.location == crate::files::DISK && !p.folder.is_empty())
-                .and_then(|p| {
-                    files
-                        .borrow_mut()
-                        .entry(p.folder.clone())
-                        .or_insert_with(|| crate::arrangement::song_file(&p.folder))
-                        .clone()
-                })
-                .map(|f| (f, title));
-            let key = (song.as_ref().map(|s| s.0.clone()), n.playing);
+            let file_of = |p: &crate::state::Place| -> Option<PathBuf> {
+                if p.location != crate::files::DISK || p.folder.is_empty() {
+                    return None;
+                }
+                files
+                    .borrow_mut()
+                    .entry(p.folder.clone())
+                    .or_insert_with(|| crate::arrangement::song_file(&p.folder))
+                    .clone()
+            };
+            let set: Vec<Option<PathBuf>> = n
+                .places
+                .iter()
+                .map(|p| p.as_ref().and_then(file_of))
+                .collect();
+            let song = set.get(n.i).cloned().flatten().map(|f| (f, title));
+            let key = (set.clone(), n.i, n.playing);
             if last.borrow().as_ref() == Some(&key) {
                 return;
             }
             *last.borrow_mut() = Some(key);
             round.set(round.get() + 1);
             engine.want(Want {
+                set,
+                set_name: n.from.clone(),
+                current: n.i,
                 song,
                 playing: n.playing,
                 from: n.secs().0,
@@ -87,7 +96,10 @@ pub fn EngineHost() -> Element {
                 if *app.engine.peek() != s.status {
                     app.engine.set(s.status.clone());
                 }
-                let asked = last.borrow().as_ref().and_then(|k| k.0.clone());
+                let asked = last
+                    .borrow()
+                    .as_ref()
+                    .and_then(|k| k.0.get(k.1).cloned().flatten());
                 let drives = matches!(s.status, EngineStatus::Ready(_))
                     && s.song.is_some()
                     && s.song == asked;
@@ -102,7 +114,7 @@ pub fn EngineHost() -> Element {
                 };
                 // A change the window has not sent yet wins over what the
                 // engine says (it is on its way to the engine).
-                let sent = last.borrow().as_ref().map(|k| k.1);
+                let sent = last.borrow().as_ref().map(|k| k.2);
                 if sent != Some(n.playing) {
                     continue;
                 }

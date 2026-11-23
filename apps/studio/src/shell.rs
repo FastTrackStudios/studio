@@ -78,7 +78,7 @@ const BUILDING: ShellIcon = ShellIcon(&[
 
 /// Studio's colours on the shell's variables: the prototype's true black,
 /// a sidebar a shade apart, the teal accent (Drive's, so the apps match).
-fn theme() -> Theme {
+pub(crate) fn theme() -> Theme {
     Theme::dark()
         .set("--as-bg", "#000000")
         .set("--as-surface", "#0e0e11")
@@ -121,7 +121,7 @@ fn title_of(route: &Route, index: &crate::sets::Index) -> String {
             .last()
             .map_or("Setlist".into(), |n| crate::setfile::name_of(n)),
         Route::NowChart {} => "Chart".into(),
-        Route::NowArrangement {} => "Arrangement".into(),
+        Route::SessionPage { .. } => "Session".into(),
         Route::PrintSet { .. } => "Print".into(),
         Route::LibraryHome {} | Route::Library { .. } => "Library".into(),
         Route::SongPage { .. } | Route::SharedSong { .. } => "Song".into(),
@@ -129,6 +129,63 @@ fn title_of(route: &Route, index: &crate::sets::Index) -> String {
         Route::AllOrgs {} => "All orgs".into(),
         Route::People {} => "People".into(),
         Route::OrgSettings {} => "Organization".into(),
+    }
+}
+
+/// What runs whichever mode the window is in, the launcher or the
+/// session: the playheads' timers, the player (natively the engine) and
+/// the Action List. The two modes are its children, so playback and the
+/// doors outlive a switch between them.
+#[component]
+pub fn Root() -> Element {
+    let app = use_app();
+    // The playheads move while playing.
+    use_future(move || async move {
+        let mut app = app;
+        loop {
+            crate::state::sleep_ms(1000).await;
+            // In a browser the player's audio moves it (crate::player).
+            // Natively the engine's transport moves it once it plays
+            // (crate::playback); the timer until then, or without one.
+            if !cfg!(feature = "web")
+                && !*app.engine_drives.peek()
+                && app.np.peek().as_ref().is_some_and(|n| n.playing)
+            {
+                // A second of the song's length.
+                app.np.with_mut(|n| {
+                    if let Some(n) = n {
+                        let (_, len) = n.secs();
+                        n.pos = (n.pos + 1.0 / len.max(1.0)).min(1.0);
+                    }
+                });
+            }
+            if app.review.peek().playing {
+                app.review.with_mut(|r| r.pos = (r.pos + 0.006).min(1.0));
+            }
+        }
+    });
+
+    // A chart you lead moves a bar at a time (one you follow moves with its leader).
+    use_future(move || async move {
+        let mut since = 0;
+        loop {
+            crate::state::sleep_ms(100).await;
+            if !app.live.peek().playing || app.sync.is_following() {
+                since = 0;
+                continue;
+            }
+            since += 100;
+            if since >= app.bar_ms() {
+                since = 0;
+                app.step_bar();
+            }
+        }
+    });
+
+    rsx! {
+        Outlet::<Route> {}
+        PlayerHost {}
+        crate::actions::ActionHost {}
     }
 }
 
@@ -189,47 +246,6 @@ pub fn Shell() -> Element {
             )));
         });
     }
-
-    // The playheads move while playing.
-    use_future(move || async move {
-        let mut app = app;
-        loop {
-            crate::state::sleep_ms(1000).await;
-            // In a browser the player's audio moves it (crate::player).
-            // Natively the engine's transport moves it once it plays
-            // (crate::playback); the timer until then, or without one.
-            if !cfg!(feature = "web")
-                && !*app.engine_drives.peek()
-                && app.np.peek().as_ref().is_some_and(|n| n.playing)
-            {
-                app.np.with_mut(|n| {
-                    if let Some(n) = n {
-                        n.pos = (n.pos + 0.004).min(1.0);
-                    }
-                });
-            }
-            if app.review.peek().playing {
-                app.review.with_mut(|r| r.pos = (r.pos + 0.006).min(1.0));
-            }
-        }
-    });
-
-    // A chart you lead moves a bar at a time (one you follow moves with its leader).
-    use_future(move || async move {
-        let mut since = 0;
-        loop {
-            crate::state::sleep_ms(100).await;
-            if !app.live.peek().playing || app.sync.is_following() {
-                since = 0;
-                continue;
-            }
-            since += 100;
-            if since >= app.bar_ms() {
-                since = 0;
-                app.step_bar();
-            }
-        }
-    });
 
     // The set a page is of, in its org (Chart and Lyrics follow the set
     // last entered, in whichever org that was).
@@ -363,8 +379,6 @@ pub fn Shell() -> Element {
                         }
                     }
                     main { class: "stage", Outlet::<Route> {} }
-                    PlayerHost {}
-                    crate::actions::ActionHost {}
                     MenuView {}
                 }
                 ChartButton {}
@@ -453,32 +467,24 @@ fn StudioTopBar(title: String) -> Element {
     }
 }
 
-/// While a song plays: its chart, from the top bar's trailing place.
+/// While a set is loaded: the way back into its session, from the top
+/// bar's trailing place.
 #[component]
 fn ChartButton() -> Element {
     let app = use_app();
-    use_top_bar_item("studio/chart", BarPlace::Trailing, 0, move || {
+    use_top_bar_item("studio/session", BarPlace::Trailing, 0, move || {
         if !(app.np)().is_some_and(|n| n.song().is_some()) {
             return rsx! {};
         }
         rsx! {
             button {
                 class: "tbchart",
-                title: "The chart of the song playing",
+                title: "Back to the session playing",
                 onclick: move |_| {
-                    navigator().push(Route::NowChart {});
-                },
-                Icon { name: I::Chart, size: 15 }
-                span { "Chart" }
-            }
-            button {
-                class: "tbchart",
-                title: "The arrangement of the song playing",
-                onclick: move |_| {
-                    navigator().push(Route::NowArrangement {});
+                    navigator().push(crate::session::route(crate::session::View::Arrangement));
                 },
                 Icon { name: I::Layers, size: 15 }
-                span { "Arrangement" }
+                span { "Session" }
             }
         }
     });

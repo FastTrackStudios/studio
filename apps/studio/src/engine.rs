@@ -445,9 +445,36 @@ fn run(mcp: &str, id: &str, args: Value) -> Result<Value, String> {
 
 // ── the engine, from the window ────────────────────────────────────────
 
+/// The engine the app is linked to: every window of the app (the mixer's
+/// too, a document of its own) calls it through [`call`].
+static LINKED: Mutex<Option<Found>> = Mutex::new(None);
+
+/// Runs action `id` of the linked engine off the UI thread.
+pub async fn call(id: &'static str, args: Value) -> Result<Value, String> {
+    let found = LINKED
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
+        .ok_or("no engine is linked yet: play a set")?;
+    let (tx, rx) = futures_channel::oneshot::channel();
+    std::thread::Builder::new()
+        .name("studio-engine-call".into())
+        .spawn(move || {
+            let _ = tx.send(run(&found.mcp, id, args));
+        })
+        .map_err(|e| e.to_string())?;
+    rx.await.map_err(|_| "the call was dropped".to_string())?
+}
+
 /// What the window wants of the engine.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Want {
+    /// The set: each song's one file, in order (none for a song with no
+    /// file on this computer), and its name. Empty: the song alone.
+    pub set: Vec<Option<PathBuf>>,
+    pub set_name: String,
+    /// The song's place in the set.
+    pub current: usize,
     /// The song's one file, and its title (for the spans).
     pub song: Option<(PathBuf, String)>,
     pub playing: bool,
@@ -506,7 +533,11 @@ impl Engine {
     pub fn want(&self, want: Want) {
         let mut send = self.send.lock().unwrap_or_else(PoisonError::into_inner);
         if send.is_none() {
-            if !want.playing || want.song.is_none() {
+            // A set loads its songs as soon as it is open; a lone song
+            // starts the engine when it plays.
+            let wanted =
+                want.set.iter().any(Option::is_some) || (want.playing && want.song.is_some());
+            if !wanted {
                 return;
             }
             let (tx, rx) = channel();
@@ -569,10 +600,14 @@ fn worker(rx: &Receiver<Cmd>, snapshot: &Mutex<Snapshot>) {
         }
     };
     drop(span);
+    *LINKED.lock().unwrap_or_else(PoisonError::into_inner) = Some(found.clone());
     put(snapshot, |s| s.status = EngineStatus::Ready(found.pid));
 
     let mut want = Want::default();
     let mut opened: Option<PathBuf> = None;
+    let mut opened_set: Vec<Option<PathBuf>> = Vec::new();
+    // The engine's current song, by its number in the set (1 the first).
+    let mut on_number: Option<u32> = None;
     let mut applied = 0u64;
     // A play asked for and not yet heard: (from where, asked again after).
     let mut pending: Option<(f64, Instant, Instant)> = None;
@@ -593,8 +628,71 @@ fn worker(rx: &Receiver<Cmd>, snapshot: &Mutex<Snapshot>) {
             });
             return;
         }
-        // The song first: another one is opened before it plays.
-        if let Some((path, title)) = want.song.clone()
+        // The set first, whole: every song opened in the engine, as the
+        // launcher loaded a setlist; then the song, gone to.
+        if want.set.iter().any(Option::is_some) && opened_set != want.set {
+            let name = want.set_name.clone();
+            put(snapshot, |s| s.status = EngineStatus::Opening(name.clone()));
+            match open_set(&found, &want.set, &name, snapshot) {
+                Ok(()) => {
+                    opened_set = want.set.clone();
+                    // The engine's set starts at its first song.
+                    on_number = Some(1);
+                    opened = None;
+                    put(snapshot, |s| s.status = EngineStatus::Ready(found.pid));
+                }
+                Err(why) => {
+                    tracing::warn!(studio.set = %name, error = %why, "engine: the set did not open");
+                    opened_set = want.set.clone();
+                    put(snapshot, |s| {
+                        s.status = EngineStatus::Failed(format!("{name} did not open: {why}"));
+                        s.song = None;
+                    });
+                    continue;
+                }
+            }
+        }
+        if !opened_set.is_empty() && opened_set == want.set {
+            let number = number_in(&want.set, want.current);
+            if let (Some(n), Some((path, title))) = (number, want.song.clone())
+                && on_number != Some(n)
+            {
+                let mut span = Span::root("studio.engine.song");
+                span.set("studio.song", title.clone());
+                span.set("engine.number", u64::from(n));
+                match run(&found.mcp, "SESSION_SONG", json!({ "to": n.to_string() })) {
+                    Ok(_) => {
+                        span.set("engine.outcome", "current");
+                        on_number = Some(n);
+                        opened = Some(path.clone());
+                        put(snapshot, |s| {
+                            s.song = Some(path);
+                            s.position = want.from;
+                        });
+                        if want.playing {
+                            play(&found, &title, want.from);
+                            let now = Instant::now();
+                            pending = Some((
+                                want.from,
+                                now + Duration::from_secs(1),
+                                now + Duration::from_secs(5),
+                            ));
+                        }
+                        applied = want.round;
+                    }
+                    Err(e) => {
+                        span.set("engine.outcome", "refused");
+                        span.fail(e.clone());
+                        tracing::warn!(studio.song = %title, error = %e, "engine: the set's song could not be gone to");
+                    }
+                }
+            } else if number.is_none() {
+                // A song with no file here: the timer plays it.
+                put(snapshot, |s| s.song = None);
+            } else if let Some((path, _)) = want.song.clone() {
+                put(snapshot, |s| s.song = Some(path));
+            }
+        } else if let Some((path, title)) = want.song.clone()
             && opened.as_ref() != Some(&path)
         {
             put(snapshot, |s| {
@@ -715,6 +813,92 @@ fn take(cmd: Cmd, want: &mut Want, seek: &mut Option<f64>) {
     }
 }
 
+/// Song `i`'s number in the engine's set (1 the first): songs with no
+/// file are not in it.
+pub fn number_in(set: &[Option<PathBuf>], i: usize) -> Option<u32> {
+    set.get(i)?.as_ref()?;
+    u32::try_from(set[..=i].iter().filter(|s| s.is_some()).count()).ok()
+}
+
+/// The engine's own setlist of `set` (one song's path a line), where it
+/// can be opened from.
+fn write_engine_setlist(set: &[Option<PathBuf>], name: &str) -> Result<PathBuf, String> {
+    let dir = std::env::var_os("XDG_RUNTIME_DIR")
+        .filter(|d| !d.is_empty())
+        .map_or_else(std::env::temp_dir, PathBuf::from)
+        .join("fts")
+        .join("studio-app-sets");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let safe: String = name
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == ' ' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let file = dir.join(format!("{}.setlist", safe.trim()));
+    let mut text = format!("# {name}, as Studio plays it\n");
+    for p in set.iter().flatten() {
+        text.push_str(&p.to_string_lossy());
+        text.push('\n');
+    }
+    std::fs::write(&file, text).map_err(|e| e.to_string())?;
+    Ok(file)
+}
+
+/// Opens the whole set in the engine and waits until every song is open.
+fn open_set(
+    found: &Found,
+    set: &[Option<PathBuf>],
+    name: &str,
+    snapshot: &Mutex<Snapshot>,
+) -> Result<(), String> {
+    let mut span = Span::root("studio.engine.set_open");
+    span.set("studio.set", name);
+    span.set("engine.pid", found.pid);
+    let want = set.iter().flatten().count();
+    span.set("studio.set.songs", want as u64);
+    span.set("studio.set.without_file", (set.len() - want) as u64);
+    let began = Instant::now();
+    let result = write_engine_setlist(set, name)
+        .and_then(|file| open(found, &file, name))
+        .and_then(|()| {
+            loop {
+                let songs = run(&found.mcp, "SESSION_SONGS", Value::Null)?;
+                let all = songs.as_array().cloned().unwrap_or_default();
+                let open = all
+                    .iter()
+                    .filter(|s| s.get("state").and_then(Value::as_str) == Some("open"))
+                    .count();
+                put(snapshot, |s| {
+                    s.status = EngineStatus::Opening(format!("{name}: {open} of {want} songs"));
+                });
+                if open >= want {
+                    break Ok(());
+                }
+                if began.elapsed() > OPEN_WAIT * 3 {
+                    break Err(format!("{open} of {want} songs opened"));
+                }
+                std::thread::sleep(Duration::from_millis(300));
+            }
+        });
+    span.set(
+        "engine.open_ms",
+        u64::try_from(began.elapsed().as_millis()).unwrap_or(u64::MAX),
+    );
+    match &result {
+        Ok(()) => span.set("engine.outcome", "opened"),
+        Err(e) => {
+            span.set("engine.outcome", "failed");
+            span.fail(e.clone());
+        }
+    }
+    result
+}
+
 /// Opens `path` in the engine and waits until it is open.
 fn open(found: &Found, path: &Path, title: &str) -> Result<(), String> {
     let mut span = Span::root("studio.engine.open");
@@ -800,6 +984,15 @@ mod tests {
         let table = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n   0: 0100007F:BAAB 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 4242 1\n   1: 0100007F:BAAB 0100007F:9C40 01 00000000:00000000 00:00000000 00000000  1000        0 99 1\n";
         assert_eq!(listening_inode(table, 47787).as_deref(), Some("4242"));
         assert_eq!(listening_inode(table, 47811), None);
+    }
+
+    #[test]
+    fn songs_without_a_file_are_not_numbered() {
+        let set = vec![Some(PathBuf::from("a")), None, Some(PathBuf::from("c"))];
+        assert_eq!(number_in(&set, 0), Some(1));
+        assert_eq!(number_in(&set, 1), None);
+        assert_eq!(number_in(&set, 2), Some(2));
+        assert_eq!(number_in(&set, 3), None);
     }
 
     #[test]
