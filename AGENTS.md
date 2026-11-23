@@ -249,7 +249,9 @@ Dev shell: `nix develop` (or direnv `use flake`) — the Rust 1.99.1 pin with
 wasm (plus iOS on darwin, Android on Linux), `dx`, wasm-bindgen,
 tailwindcss, tracey, mold, and the native headers (alsa, pipewire, jack).
 It sources `.env` (gitignored) on entry. `nix develop .#ci` is what CI
-runs in, `.#reaper-test` the REAPER suites, `.#stems` stem separation.
+runs in, and `.#reaper-test` runs the REAPER suites. Use the
+[stem-seperation repo](https://github.com/FastTrackStudios/stem-seperation)
+for stem separation.
 
 ```bash
 just check                 # cargo check --workspace
