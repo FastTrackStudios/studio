@@ -1,0 +1,403 @@
+{
+  "engine": "fts.hits.adtof-onnx",
+  "mode": "kick-only",
+  "corpus": "/run/media/AudioHaven/Project/Crescendum-Rockstars-SESSIONS-2026-10-08/Crescendum",
+  "song_count": 9,
+  "total_audio_secs": 2563.1494166666666,
+  "total_elapsed_secs": 60.379420071,
+  "cpu_rtf": 0.023556730512231484,
+  "by_class": {
+    "kick": {
+      "truth_count": 9255,
+      "pred_count": 8176,
+      "tp_20ms": 7752,
+      "fp_20ms": 424,
+      "fn_20ms": 1503,
+      "precision_20ms": 0.9481409001956947,
+      "recall_20ms": 0.8376012965964343,
+      "f1_20ms": 0.8894498307612873,
+      "tp_50ms": 7769,
+      "f1_50ms": 0.8914003786357639,
+      "median_abs_err_ms": 0.3958333333571318,
+      "p95_abs_err_ms": 1.9374999999968168,
+      "median_signed_err_ms": 0.0
+    }
+  },
+  "overall": {
+    "truth_count": 9255,
+    "pred_count": 8176,
+    "tp_20ms": 7752,
+    "fp_20ms": 424,
+    "fn_20ms": 1503,
+    "precision_20ms": 0.9481409001956947,
+    "recall_20ms": 0.8376012965964343,
+    "f1_20ms": 0.8894498307612873,
+    "tp_50ms": 7769,
+    "f1_50ms": 0.8914003786357639,
+    "median_abs_err_ms": 0.3958333333571318,
+    "p95_abs_err_ms": 1.9374999999968168,
+    "median_signed_err_ms": 0.0
+  },
+  "songs": [
+    {
+      "song": "Chained expectations",
+      "bpm": 190.0,
+      "duration_secs": 343.3639166666667,
+      "elapsed_secs": 10.778288987,
+      "cpu_rtf": 0.03139027854654695,
+      "dead_triggers": [],
+      "by_class": {
+        "kick": {
+          "truth_count": 1209,
+          "pred_count": 1106,
+          "tp_20ms": 1042,
+          "fp_20ms": 64,
+          "fn_20ms": 167,
+          "precision_20ms": 0.9421338155515371,
+          "recall_20ms": 0.8618693134822167,
+          "f1_20ms": 0.9002159827213824,
+          "tp_50ms": 1044,
+          "f1_50ms": 0.9019438444924407,
+          "median_abs_err_ms": 0.3958333333571318,
+          "p95_abs_err_ms": 3.750000000025011,
+          "median_signed_err_ms": -0.35416666666776564
+        }
+      },
+      "overall": {
+        "truth_count": 1209,
+        "pred_count": 1106,
+        "tp_20ms": 1042,
+        "fp_20ms": 64,
+        "fn_20ms": 167,
+        "precision_20ms": 0.9421338155515371,
+        "recall_20ms": 0.8618693134822167,
+        "f1_20ms": 0.9002159827213824,
+        "tp_50ms": 1044,
+        "f1_50ms": 0.9019438444924407,
+        "median_abs_err_ms": 0.3958333333571318,
+        "p95_abs_err_ms": 0.3958333333571318,
+        "median_signed_err_ms": 0.0
+      }
+    },
+    {
+      "song": "Intro",
+      "bpm": 180.0,
+      "duration_secs": 124.41658333333334,
+      "elapsed_secs": 5.802373879,
+      "cpu_rtf": 0.04663665986916267,
+      "dead_triggers": [],
+      "by_class": {
+        "kick": {
+          "truth_count": 188,
+          "pred_count": 119,
+          "tp_20ms": 109,
+          "fp_20ms": 10,
+          "fn_20ms": 79,
+          "precision_20ms": 0.9159663865546218,
+          "recall_20ms": 0.5797872340425532,
+          "f1_20ms": 0.7100977198697067,
+          "tp_50ms": 109,
+          "f1_50ms": 0.7100977198697067,
+          "median_abs_err_ms": 0.2708333333316659,
+          "p95_abs_err_ms": 3.0624999999986358,
+          "median_signed_err_ms": -0.2708333333316659
+        }
+      },
+      "overall": {
+        "truth_count": 188,
+        "pred_count": 119,
+        "tp_20ms": 109,
+        "fp_20ms": 10,
+        "fn_20ms": 79,
+        "precision_20ms": 0.9159663865546218,
+        "recall_20ms": 0.5797872340425532,
+        "f1_20ms": 0.7100977198697067,
+        "tp_50ms": 109,
+        "f1_50ms": 0.7100977198697067,
+        "median_abs_err_ms": 0.2708333333316659,
+        "p95_abs_err_ms": 0.2708333333316659,
+        "median_signed_err_ms": 0.0
+      }
+    },
+    {
+      "song": "Kornesque ",
+      "bpm": 180.0,
+      "duration_secs": 293.41502083333336,
+      "elapsed_secs": 5.613405618,
+      "cpu_rtf": 0.019131282379672532,
+      "dead_triggers": [],
+      "by_class": {
+        "kick": {
+          "truth_count": 960,
+          "pred_count": 907,
+          "tp_20ms": 851,
+          "fp_20ms": 56,
+          "fn_20ms": 109,
+          "precision_20ms": 0.938257993384785,
+          "recall_20ms": 0.8864583333333333,
+          "f1_20ms": 0.9116229244777718,
+          "tp_50ms": 852,
+          "f1_50ms": 0.9126941617568292,
+          "median_abs_err_ms": 1.9374999999968168,
+          "p95_abs_err_ms": 3.2291666666672825,
+          "median_signed_err_ms": -1.791666666662195
+        }
+      },
+      "overall": {
+        "truth_count": 960,
+        "pred_count": 907,
+        "tp_20ms": 851,
+        "fp_20ms": 56,
+        "fn_20ms": 109,
+        "precision_20ms": 0.938257993384785,
+        "recall_20ms": 0.8864583333333333,
+        "f1_20ms": 0.9116229244777718,
+        "tp_50ms": 852,
+        "f1_50ms": 0.9126941617568292,
+        "median_abs_err_ms": 1.9374999999968168,
+        "p95_abs_err_ms": 1.9374999999968168,
+        "median_signed_err_ms": 0.0
+      }
+    },
+    {
+      "song": "The ballad",
+      "bpm": 140.0,
+      "duration_secs": 421.56966666666665,
+      "elapsed_secs": 5.365189509,
+      "cpu_rtf": 0.012726697229955668,
+      "dead_triggers": [],
+      "by_class": {
+        "kick": {
+          "truth_count": 990,
+          "pred_count": 830,
+          "tp_20ms": 781,
+          "fp_20ms": 49,
+          "fn_20ms": 209,
+          "precision_20ms": 0.9409638554216867,
+          "recall_20ms": 0.7888888888888889,
+          "f1_20ms": 0.8582417582417583,
+          "tp_50ms": 783,
+          "f1_50ms": 0.8604395604395605,
+          "median_abs_err_ms": 0.39583333332871007,
+          "p95_abs_err_ms": 4.354166666672654,
+          "median_signed_err_ms": -0.3541666666819765
+        }
+      },
+      "overall": {
+        "truth_count": 990,
+        "pred_count": 830,
+        "tp_20ms": 781,
+        "fp_20ms": 49,
+        "fn_20ms": 209,
+        "precision_20ms": 0.9409638554216867,
+        "recall_20ms": 0.7888888888888889,
+        "f1_20ms": 0.8582417582417583,
+        "tp_50ms": 783,
+        "f1_50ms": 0.8604395604395605,
+        "median_abs_err_ms": 0.39583333332871007,
+        "p95_abs_err_ms": 0.39583333332871007,
+        "median_signed_err_ms": 0.0
+      }
+    },
+    {
+      "song": "heavify",
+      "bpm": 170.0,
+      "duration_secs": 261.02785416666666,
+      "elapsed_secs": 5.658704792,
+      "cpu_rtf": 0.021678547716930275,
+      "dead_triggers": [],
+      "by_class": {
+        "kick": {
+          "truth_count": 898,
+          "pred_count": 793,
+          "tp_20ms": 758,
+          "fp_20ms": 35,
+          "fn_20ms": 140,
+          "precision_20ms": 0.9558638083228247,
+          "recall_20ms": 0.844097995545657,
+          "f1_20ms": 0.8965109402720284,
+          "tp_50ms": 761,
+          "f1_50ms": 0.9000591366055589,
+          "median_abs_err_ms": 0.3541666666535548,
+          "p95_abs_err_ms": 3.833333333332689,
+          "median_signed_err_ms": -0.25000000000829914
+        }
+      },
+      "overall": {
+        "truth_count": 898,
+        "pred_count": 793,
+        "tp_20ms": 758,
+        "fp_20ms": 35,
+        "fn_20ms": 140,
+        "precision_20ms": 0.9558638083228247,
+        "recall_20ms": 0.844097995545657,
+        "f1_20ms": 0.8965109402720284,
+        "tp_50ms": 761,
+        "f1_50ms": 0.9000591366055589,
+        "median_abs_err_ms": 0.3541666666535548,
+        "p95_abs_err_ms": 0.3541666666535548,
+        "median_signed_err_ms": 0.0
+      }
+    },
+    {
+      "song": "it knows my name",
+      "bpm": 160.0,
+      "duration_secs": 281.71633333333335,
+      "elapsed_secs": 5.422345119,
+      "cpu_rtf": 0.01924753547244332,
+      "dead_triggers": [],
+      "by_class": {
+        "kick": {
+          "truth_count": 1269,
+          "pred_count": 1084,
+          "tp_20ms": 1033,
+          "fp_20ms": 51,
+          "fn_20ms": 236,
+          "precision_20ms": 0.9529520295202952,
+          "recall_20ms": 0.814026792750197,
+          "f1_20ms": 0.8780280492987675,
+          "tp_50ms": 1036,
+          "f1_50ms": 0.8805779855503612,
+          "median_abs_err_ms": 1.8124999999997726,
+          "p95_abs_err_ms": 5.18750000000523,
+          "median_signed_err_ms": -0.8750000000077307
+        }
+      },
+      "overall": {
+        "truth_count": 1269,
+        "pred_count": 1084,
+        "tp_20ms": 1033,
+        "fp_20ms": 51,
+        "fn_20ms": 236,
+        "precision_20ms": 0.9529520295202952,
+        "recall_20ms": 0.814026792750197,
+        "f1_20ms": 0.8780280492987675,
+        "tp_50ms": 1036,
+        "f1_50ms": 0.8805779855503612,
+        "median_abs_err_ms": 1.8124999999997726,
+        "p95_abs_err_ms": 1.8124999999997726,
+        "median_signed_err_ms": 0.0
+      }
+    },
+    {
+      "song": "set in stone",
+      "bpm": 180.0,
+      "duration_secs": 321.2443333333333,
+      "elapsed_secs": 6.567745008,
+      "cpu_rtf": 0.02044470307024871,
+      "dead_triggers": [],
+      "by_class": {
+        "kick": {
+          "truth_count": 1631,
+          "pred_count": 1479,
+          "tp_20ms": 1414,
+          "fp_20ms": 65,
+          "fn_20ms": 217,
+          "precision_20ms": 0.9560513860716701,
+          "recall_20ms": 0.8669527896995708,
+          "f1_20ms": 0.9093247588424437,
+          "tp_50ms": 1415,
+          "f1_50ms": 0.9099678456591639,
+          "median_abs_err_ms": 0.33333333334439885,
+          "p95_abs_err_ms": 4.3333333333350765,
+          "median_signed_err_ms": -0.24999999999408828
+        }
+      },
+      "overall": {
+        "truth_count": 1631,
+        "pred_count": 1479,
+        "tp_20ms": 1414,
+        "fp_20ms": 65,
+        "fn_20ms": 217,
+        "precision_20ms": 0.9560513860716701,
+        "recall_20ms": 0.8669527896995708,
+        "f1_20ms": 0.9093247588424437,
+        "tp_50ms": 1415,
+        "f1_50ms": 0.9099678456591639,
+        "median_abs_err_ms": 0.33333333334439885,
+        "p95_abs_err_ms": 0.33333333334439885,
+        "median_signed_err_ms": 0.0
+      }
+    },
+    {
+      "song": "the plague",
+      "bpm": 165.0,
+      "duration_secs": 239.043375,
+      "elapsed_secs": 8.936018139,
+      "cpu_rtf": 0.03738241287381422,
+      "dead_triggers": [],
+      "by_class": {
+        "kick": {
+          "truth_count": 1042,
+          "pred_count": 833,
+          "tp_20ms": 785,
+          "fp_20ms": 48,
+          "fn_20ms": 257,
+          "precision_20ms": 0.9423769507803121,
+          "recall_20ms": 0.753358925143954,
+          "f1_20ms": 0.8373333333333334,
+          "tp_50ms": 788,
+          "f1_50ms": 0.8405333333333334,
+          "median_abs_err_ms": 1.729166666663673,
+          "p95_abs_err_ms": 4.458333333332121,
+          "median_signed_err_ms": -0.4166666666662877
+        }
+      },
+      "overall": {
+        "truth_count": 1042,
+        "pred_count": 833,
+        "tp_20ms": 785,
+        "fp_20ms": 48,
+        "fn_20ms": 257,
+        "precision_20ms": 0.9423769507803121,
+        "recall_20ms": 0.753358925143954,
+        "f1_20ms": 0.8373333333333334,
+        "tp_50ms": 788,
+        "f1_50ms": 0.8405333333333334,
+        "median_abs_err_ms": 1.729166666663673,
+        "p95_abs_err_ms": 1.729166666663673,
+        "median_signed_err_ms": 0.0
+      }
+    },
+    {
+      "song": "unbreakable",
+      "bpm": 160.0,
+      "duration_secs": 277.3523333333333,
+      "elapsed_secs": 6.23534902,
+      "cpu_rtf": 0.022481689427527204,
+      "dead_triggers": [],
+      "by_class": {
+        "kick": {
+          "truth_count": 1068,
+          "pred_count": 1025,
+          "tp_20ms": 979,
+          "fp_20ms": 46,
+          "fn_20ms": 89,
+          "precision_20ms": 0.9551219512195122,
+          "recall_20ms": 0.9166666666666666,
+          "f1_20ms": 0.9354992833253704,
+          "tp_50ms": 981,
+          "f1_50ms": 0.9374104156712851,
+          "median_abs_err_ms": 1.3333333333775954,
+          "p95_abs_err_ms": 4.979166666686297,
+          "median_signed_err_ms": -0.3750000000053433
+        }
+      },
+      "overall": {
+        "truth_count": 1068,
+        "pred_count": 1025,
+        "tp_20ms": 979,
+        "fp_20ms": 46,
+        "fn_20ms": 89,
+        "precision_20ms": 0.9551219512195122,
+        "recall_20ms": 0.9166666666666666,
+        "f1_20ms": 0.9354992833253704,
+        "tp_50ms": 981,
+        "f1_50ms": 0.9374104156712851,
+        "median_abs_err_ms": 1.3333333333775954,
+        "p95_abs_err_ms": 1.3333333333775954,
+        "median_signed_err_ms": 0.0
+      }
+    }
+  ]
+}

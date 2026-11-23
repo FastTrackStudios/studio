@@ -1,0 +1,235 @@
+{
+  "engine": "fts.hits.adtof-onnx",
+  "mode": "t4-only",
+  "corpus": "/run/media/AudioHaven/Project/Crescendum-Rockstars-SESSIONS-2026-10-08/Crescendum",
+  "song_count": 9,
+  "total_audio_secs": 2563.1494166666666,
+  "total_elapsed_secs": 68.343075147,
+  "cpu_rtf": 0.026663710941939166,
+  "by_class": {
+    "toms": {
+      "truth_count": 446,
+      "pred_count": 444,
+      "tp_20ms": 258,
+      "fp_20ms": 186,
+      "fn_20ms": 188,
+      "precision_20ms": 0.581081081081081,
+      "recall_20ms": 0.57847533632287,
+      "f1_20ms": 0.5797752808988763,
+      "tp_50ms": 275,
+      "f1_50ms": 0.6179775280898876,
+      "median_abs_err_ms": 0.5208333333399651,
+      "p95_abs_err_ms": 1.6875000000027285,
+      "median_signed_err_ms": 0.0
+    }
+  },
+  "overall": {
+    "truth_count": 446,
+    "pred_count": 444,
+    "tp_20ms": 258,
+    "fp_20ms": 186,
+    "fn_20ms": 188,
+    "precision_20ms": 0.581081081081081,
+    "recall_20ms": 0.57847533632287,
+    "f1_20ms": 0.5797752808988763,
+    "tp_50ms": 275,
+    "f1_50ms": 0.6179775280898876,
+    "median_abs_err_ms": 0.5208333333399651,
+    "p95_abs_err_ms": 1.6875000000027285,
+    "median_signed_err_ms": 0.0
+  },
+  "songs": [
+    {
+      "song": "Chained expectations",
+      "bpm": 190.0,
+      "duration_secs": 343.3639166666667,
+      "elapsed_secs": 9.85104506,
+      "cpu_rtf": 0.028689808631124365,
+      "dead_triggers": [
+        "t4 (dead: agrees with its mic on 51% (needs 60%): its 9927 hits against the mic's 6537)"
+      ],
+      "by_class": {},
+      "overall": null
+    },
+    {
+      "song": "Intro",
+      "bpm": 180.0,
+      "duration_secs": 124.41658333333334,
+      "elapsed_secs": 6.205108555,
+      "cpu_rtf": 0.04987364536747847,
+      "dead_triggers": [],
+      "by_class": {
+        "toms": {
+          "truth_count": 46,
+          "pred_count": 24,
+          "tp_20ms": 20,
+          "fp_20ms": 4,
+          "fn_20ms": 26,
+          "precision_20ms": 0.8333333333333334,
+          "recall_20ms": 0.43478260869565216,
+          "f1_20ms": 0.5714285714285714,
+          "tp_50ms": 20,
+          "f1_50ms": 0.5714285714285714,
+          "median_abs_err_ms": 0.5208333333399651,
+          "p95_abs_err_ms": 8.499999999997954,
+          "median_signed_err_ms": -0.4791666666648098
+        }
+      },
+      "overall": {
+        "truth_count": 46,
+        "pred_count": 24,
+        "tp_20ms": 20,
+        "fp_20ms": 4,
+        "fn_20ms": 26,
+        "precision_20ms": 0.8333333333333334,
+        "recall_20ms": 0.43478260869565216,
+        "f1_20ms": 0.5714285714285714,
+        "tp_50ms": 20,
+        "f1_50ms": 0.5714285714285714,
+        "median_abs_err_ms": 0.5208333333399651,
+        "p95_abs_err_ms": 0.5208333333399651,
+        "median_signed_err_ms": 0.0
+      }
+    },
+    {
+      "song": "Kornesque ",
+      "bpm": 180.0,
+      "duration_secs": 293.41502083333336,
+      "elapsed_secs": 9.689592564,
+      "cpu_rtf": 0.033023505533153724,
+      "dead_triggers": [
+        "t4 (dead: agrees with its mic on 53% (needs 60%): its 8463 hits against the mic's 5477)"
+      ],
+      "by_class": {},
+      "overall": null
+    },
+    {
+      "song": "The ballad",
+      "bpm": 140.0,
+      "duration_secs": 421.56966666666665,
+      "elapsed_secs": 7.180603973,
+      "cpu_rtf": 0.01703301859874485,
+      "dead_triggers": [
+        "t4 (dead: agrees with its mic on 52% (needs 60%): its 8509 hits against the mic's 5657)"
+      ],
+      "by_class": {},
+      "overall": null
+    },
+    {
+      "song": "heavify",
+      "bpm": 170.0,
+      "duration_secs": 261.02785416666666,
+      "elapsed_secs": 3.674586073,
+      "cpu_rtf": 0.01407737149252191,
+      "dead_triggers": [
+        "t4 (dead: agrees with its mic on 40% (needs 60%): its 8 hits against the mic's 2)"
+      ],
+      "by_class": {},
+      "overall": null
+    },
+    {
+      "song": "it knows my name",
+      "bpm": 160.0,
+      "duration_secs": 281.71633333333335,
+      "elapsed_secs": 8.807208014,
+      "cpu_rtf": 0.031262681541361345,
+      "dead_triggers": [],
+      "by_class": {
+        "toms": {
+          "truth_count": 2,
+          "pred_count": 130,
+          "tp_20ms": 1,
+          "fp_20ms": 129,
+          "fn_20ms": 1,
+          "precision_20ms": 0.007692307692307693,
+          "recall_20ms": 0.5,
+          "f1_20ms": 0.015151515151515154,
+          "tp_50ms": 1,
+          "f1_50ms": 0.015151515151515154,
+          "median_abs_err_ms": 0.29166666666657903,
+          "p95_abs_err_ms": 0.29166666666657903,
+          "median_signed_err_ms": -0.29166666666657903
+        }
+      },
+      "overall": {
+        "truth_count": 2,
+        "pred_count": 130,
+        "tp_20ms": 1,
+        "fp_20ms": 129,
+        "fn_20ms": 1,
+        "precision_20ms": 0.007692307692307693,
+        "recall_20ms": 0.5,
+        "f1_20ms": 0.015151515151515154,
+        "tp_50ms": 1,
+        "f1_50ms": 0.015151515151515154,
+        "median_abs_err_ms": 0.29166666666657903,
+        "p95_abs_err_ms": 0.29166666666657903,
+        "median_signed_err_ms": 0.0
+      }
+    },
+    {
+      "song": "set in stone",
+      "bpm": 180.0,
+      "duration_secs": 321.2443333333333,
+      "elapsed_secs": 7.754099061,
+      "cpu_rtf": 0.024137699116871584,
+      "dead_triggers": [
+        "t4 (dead: agrees with its mic on 47% (needs 60%): its 9355 hits against the mic's 5625)"
+      ],
+      "by_class": {},
+      "overall": null
+    },
+    {
+      "song": "the plague",
+      "bpm": 165.0,
+      "duration_secs": 239.043375,
+      "elapsed_secs": 7.454372794,
+      "cpu_rtf": 0.03118418485348109,
+      "dead_triggers": [],
+      "by_class": {
+        "toms": {
+          "truth_count": 398,
+          "pred_count": 290,
+          "tp_20ms": 237,
+          "fp_20ms": 53,
+          "fn_20ms": 161,
+          "precision_20ms": 0.8172413793103448,
+          "recall_20ms": 0.5954773869346733,
+          "f1_20ms": 0.688953488372093,
+          "tp_50ms": 254,
+          "f1_50ms": 0.7383720930232558,
+          "median_abs_err_ms": 1.6875000000027285,
+          "p95_abs_err_ms": 21.68750000001296,
+          "median_signed_err_ms": -1.2500000000006395
+        }
+      },
+      "overall": {
+        "truth_count": 398,
+        "pred_count": 290,
+        "tp_20ms": 237,
+        "fp_20ms": 53,
+        "fn_20ms": 161,
+        "precision_20ms": 0.8172413793103448,
+        "recall_20ms": 0.5954773869346733,
+        "f1_20ms": 0.688953488372093,
+        "tp_50ms": 254,
+        "f1_50ms": 0.7383720930232558,
+        "median_abs_err_ms": 1.6875000000027285,
+        "p95_abs_err_ms": 1.6875000000027285,
+        "median_signed_err_ms": 0.0
+      }
+    },
+    {
+      "song": "unbreakable",
+      "bpm": 160.0,
+      "duration_secs": 277.3523333333333,
+      "elapsed_secs": 7.726459053,
+      "cpu_rtf": 0.02785791978073618,
+      "dead_triggers": [
+        "t4 (dead: agrees with its mic on 50% (needs 60%): its 7618 hits against the mic's 4501)"
+      ],
+      "by_class": {},
+      "overall": null
+    }
+  ]
+}
