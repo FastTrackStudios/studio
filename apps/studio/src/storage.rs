@@ -90,7 +90,7 @@ pub fn resolve(path: &str) -> Option<PathBuf> {
     home().map(|r| r.join(path))
 }
 
-fn config_dir() -> Option<PathBuf> {
+pub fn config_dir() -> Option<PathBuf> {
     let env = |k: &str| {
         std::env::var_os(k)
             .filter(|v| !v.is_empty())

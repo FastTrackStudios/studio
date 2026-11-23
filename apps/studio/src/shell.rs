@@ -121,6 +121,7 @@ fn title_of(route: &Route, index: &crate::sets::Index) -> String {
             .last()
             .map_or("Setlist".into(), |n| crate::setfile::name_of(n)),
         Route::NowChart {} => "Chart".into(),
+        Route::NowArrangement {} => "Arrangement".into(),
         Route::PrintSet { .. } => "Print".into(),
         Route::LibraryHome {} | Route::Library { .. } => "Library".into(),
         Route::SongPage { .. } | Route::SharedSong { .. } => "Song".into(),
@@ -195,7 +196,12 @@ pub fn Shell() -> Element {
         loop {
             crate::state::sleep_ms(1000).await;
             // In a browser the player's audio moves it (crate::player).
-            if !cfg!(feature = "web") && app.np.peek().as_ref().is_some_and(|n| n.playing) {
+            // Natively the engine's transport moves it once it plays
+            // (crate::playback); the timer until then, or without one.
+            if !cfg!(feature = "web")
+                && !*app.engine_drives.peek()
+                && app.np.peek().as_ref().is_some_and(|n| n.playing)
+            {
                 app.np.with_mut(|n| {
                     if let Some(n) = n {
                         n.pos = (n.pos + 0.004).min(1.0);
@@ -464,6 +470,15 @@ fn ChartButton() -> Element {
                 },
                 Icon { name: I::Chart, size: 15 }
                 span { "Chart" }
+            }
+            button {
+                class: "tbchart",
+                title: "The arrangement of the song playing",
+                onclick: move |_| {
+                    navigator().push(Route::NowArrangement {});
+                },
+                Icon { name: I::Layers, size: 15 }
+                span { "Arrangement" }
             }
         }
     });
@@ -868,9 +883,26 @@ fn PlayerHost() -> Element {
         rsx! {
             crate::set_files::Sync {}
             crate::set_files::Sections {}
+            EngineHostNative {}
         }
     }
     #[cfg(not(any(feature = "web", feature = "drive")))]
+    {
+        rsx! {}
+    }
+}
+
+/// The engine, in the native build (none in a build without its doors).
+#[cfg(all(feature = "drive", not(feature = "web")))]
+#[component]
+fn EngineHostNative() -> Element {
+    #[cfg(feature = "native")]
+    {
+        rsx! {
+            crate::playback::EngineHost {}
+        }
+    }
+    #[cfg(not(feature = "native"))]
     {
         rsx! {}
     }

@@ -85,6 +85,37 @@ pub enum Menu {
     Mine,
 }
 
+/// Studio's engine, as the window last heard of it (native playback goes
+/// through `studio engine`; `crate::engine`).
+#[derive(Clone, PartialEq, Debug, Default)]
+#[cfg_attr(not(feature = "native"), allow(dead_code))]
+pub enum EngineStatus {
+    /// Not wanted yet (nothing has played), or a build without one.
+    #[default]
+    Off,
+    /// Being found or started.
+    Linking,
+    /// Opening a song (its title).
+    Opening(String),
+    /// Linked to the engine of this pid.
+    Ready(u32),
+    /// Not there, and why: the playhead follows a timer.
+    Failed(String),
+}
+
+impl EngineStatus {
+    /// What the window says of it.
+    pub fn line(&self) -> String {
+        match self {
+            Self::Off => "Engine: not started (it starts when a song plays)".into(),
+            Self::Linking => "Engine: starting…".into(),
+            Self::Opening(t) => format!("Engine: opening {t}…"),
+            Self::Ready(pid) => format!("Engine: playing through studio engine (pid {pid})"),
+            Self::Failed(why) => format!("Engine unavailable, the playhead follows a timer: {why}"),
+        }
+    }
+}
+
 /// What is playing, and from where.
 #[derive(Clone, PartialEq, Debug)]
 pub struct NowPlaying {
@@ -385,6 +416,13 @@ pub struct AppState {
     /// The setlist files in the org's Drive (`.setlist`), once found:
     /// the Setlists page and the sidebar's count read them.
     pub drive_sets: Signal<Option<Vec<crate::files::Hit>>>,
+    /// The engine, natively; and whether its transport drives Now
+    /// Playing (else the timer does).
+    pub engine: Signal<EngineStatus>,
+    pub engine_drives: Signal<bool>,
+    /// The setlist file a page shows: its name and songs, for an action
+    /// to pick one of them.
+    pub shown_set: Signal<Option<(String, Vec<(Song, Place)>)>>,
 }
 
 impl AppState {
@@ -433,6 +471,9 @@ impl AppState {
             picked: Signal::new(None),
             sync: crate::live_sync::Sync::new(),
             drive_sets: Signal::new(None),
+            engine: Signal::new(EngineStatus::Off),
+            engine_drives: Signal::new(false),
+            shown_set: Signal::new(None),
         }
     }
 
@@ -498,6 +539,28 @@ impl AppState {
     pub fn play_places(mut self, list: Vec<(Song, Place)>, from: String, i: usize) {
         self.np
             .set(Some(NowPlaying::of_places(list, from, i, true)));
+    }
+
+    /// Show song `i` of a setlist file's songs, playing or not: what is
+    /// queued keeps playing when it is the same song of the same list.
+    pub fn select_places(mut self, list: Vec<(Song, Place)>, from: String, i: usize, play: bool) {
+        let same = self
+            .np
+            .peek()
+            .as_ref()
+            .is_some_and(|n| n.from == from && n.i == i && n.list.len() == list.len());
+        if same {
+            if play {
+                self.np.with_mut(|n| {
+                    if let Some(n) = n {
+                        n.playing = true;
+                    }
+                });
+            }
+            return;
+        }
+        self.np
+            .set(Some(NowPlaying::of_places(list, from, i, play)));
     }
 
     /// Start playing a list at a song.

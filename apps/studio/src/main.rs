@@ -7,9 +7,12 @@
 //! Drive documents too (`setlist` the model, `sets` live).
 
 mod actions;
+mod arrangement;
 mod data;
 #[cfg(feature = "drive")]
 mod drive_sets;
+#[cfg(feature = "native")]
+mod engine;
 mod files;
 mod files_live;
 mod icons;
@@ -18,6 +21,8 @@ mod live_sync;
 mod orgs;
 mod pages;
 mod pieces;
+#[cfg(feature = "native")]
+mod playback;
 #[cfg(feature = "web")]
 mod player;
 mod storage;
@@ -45,6 +50,7 @@ mod team;
 
 use dioxus::prelude::*;
 
+use pages::arrangement::NowArrangement;
 use pages::drive_set::{DriveSet, NowChart};
 use pages::home::Home;
 use pages::library::{Library, LibraryHome};
@@ -92,6 +98,8 @@ pub enum Route {
         DriveSet { space: String, location: String, path: Vec<String> },
         #[route("/now/chart")]
         NowChart {},
+        #[route("/now/arrangement")]
+        NowArrangement {},
         #[route("/at/:owner/:id")]
         OrgSet { owner: String, id: String },
         #[route("/print/:owner/:id")]

@@ -99,6 +99,14 @@ fn Loaded(space: String, location: String, path: String) -> Element {
         .count();
     let list = set.playlist();
     let name = set.name.clone();
+    // What an action picks a song of (STUDIO_ARRANGEMENT).
+    {
+        let shown = Some((name.clone(), list.clone()));
+        if *app.shown_set.peek() != shown {
+            let mut s = app.shown_set;
+            s.set(shown);
+        }
+    }
     let mut n = 0usize;
     rsx! {
         div { class: "fsethead",
@@ -127,6 +135,20 @@ fn Loaded(space: String, location: String, path: String) -> Element {
                     Icon { name: I::Chart, size: 14 }
                     "Chart"
                 }
+                button {
+                    class: "playset quiet",
+                    onclick: {
+                        let (list, name) = (list.clone(), name.clone());
+                        move |_| {
+                            if !(app.np)().is_some_and(|n| n.from == name) {
+                                app.select_places(list.clone(), name.clone(), 0, false);
+                            }
+                            navigator().push(Route::NowArrangement {});
+                        }
+                    },
+                    Icon { name: I::Layers, size: 14 }
+                    "Arrangement"
+                }
             }
         }
         for act in set.acts.iter() {
@@ -139,9 +161,10 @@ fn Loaded(space: String, location: String, path: String) -> Element {
                         let i = n;
                         n += 1;
                         let (list, name) = (list.clone(), name.clone());
+                        let (list2, name2) = (list.clone(), name.clone());
                         rsx! {
+                            div { key: "{song.place.folder}", class: "agline",
                             button {
-                                key: "{song.place.folder}",
                                 class: "ag",
                                 onclick: move |_| {
                                     app.play_places(list.clone(), name.clone(), i);
@@ -161,6 +184,17 @@ fn Loaded(space: String, location: String, path: String) -> Element {
                                 span { class: "chev",
                                     Icon { name: I::Play, size: 14 }
                                 }
+                            }
+                            button {
+                                class: "playset quiet agarr",
+                                title: "Its arrangement",
+                                onclick: move |_| {
+                                    app.select_places(list2.clone(), name2.clone(), i, false);
+                                    navigator().push(Route::NowArrangement {});
+                                },
+                                Icon { name: I::Layers, size: 14 }
+                                "Arrangement"
+                            }
                             }
                         }
                     }

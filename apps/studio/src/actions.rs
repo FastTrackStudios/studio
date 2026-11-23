@@ -237,6 +237,29 @@ mod imp {
         "Plays set `id`'s songs in order from song `from` (from 0; the first when left out)."
     );
 
+    meta!(
+        ARRANGEMENT,
+        "STUDIO_ARRANGEMENT",
+        "Show a song's arrangement",
+        "Playback",
+        "Opens the arrangement page (tracks, clips and sections over time, with a playhead that follows playback) for `song`: a title (or its number, from 0) in what Now Playing holds, else in the setlist file the page shows; the song playing when left out. `play` true plays it, false pauses; left out, it plays as it did."
+    );
+    meta!(
+        ENGINE,
+        "STUDIO_ENGINE",
+        "The engine",
+        "Playback",
+        "Studio's engine (`studio engine`, which plays natively): its status (off, linking, opening, ready with its pid, failed with why) and whether its transport drives Now Playing (else a timer does)."
+    );
+
+    #[derive(Facet)]
+    struct ArrangementArgs {
+        #[facet(default)]
+        song: Option<String>,
+        #[facet(default)]
+        play: Option<bool>,
+    }
+
     #[derive(Facet)]
     struct NavigateArgs {
         path: String,
@@ -384,6 +407,8 @@ mod imp {
             forward::<MoveArgs>(&list, &SET_SONG_MOVE, M, true);
             forward::<KeyArgs>(&list, &SET_SONG_KEY, M, true);
             forward::<PlaySetArgs>(&list, &SET_PLAY, M, true);
+            forward::<ArrangementArgs>(&list, &ARRANGEMENT, M, true);
+            forward::<()>(&list, &ENGINE, R, false);
             let scripting = architect_scripting::actions::Scripting::new(
                 list.clone(),
                 architect_scripting::Library::new(architect_scripting::MemoryStore::default()),
@@ -773,7 +798,107 @@ mod imp {
                 app.play_titles(&titles, info.title, Some(&first));
                 Ok(json!({ "playing": first, "of": titles.len() }))
             }
+            "STUDIO_ARRANGEMENT" => {
+                let a: ArrangementArgs = args(raw)?;
+                let mut span = crate::trace::Span::root("studio.arrangement.show");
+                let picked = pick_song(app, a.song.as_deref(), a.play);
+                match &picked {
+                    Ok(t) => span.set("studio.song", t.clone()),
+                    Err(e) => span.fail(e.clone()),
+                }
+                let title = picked?;
+                let to = Route::NowArrangement {};
+                navigator().push(to.clone());
+                let n = np();
+                Ok(json!({
+                    "route": to.to_string(),
+                    "song": title,
+                    "i": n.as_ref().map(|n| n.i),
+                    "playing": n.as_ref().is_some_and(|n| n.playing),
+                    "engine": (app.engine)().line(),
+                }))
+            }
+            "STUDIO_ENGINE" => Ok(json!({
+                "status": format!("{:?}", (app.engine)()),
+                "line": (app.engine)().line(),
+                "drives": (app.engine_drives)(),
+                "playing": np().is_some_and(|n| n.playing),
+                "seconds": np().map(|n| n.secs().0),
+            })),
             other => Err(format!("{other} is not one of Studio's actions")),
+        }
+    }
+
+    /// Song `song` (a title or a number) of Now Playing's list, else of the
+    /// setlist file shown, made the one Now Playing holds; the playing one
+    /// when none is named. Its title.
+    fn pick_song(
+        app: crate::state::AppState,
+        song: Option<&str>,
+        play: Option<bool>,
+    ) -> Result<String, String> {
+        let mut np = app.np;
+        let find = |titles: &[&str]| -> Option<usize> {
+            let s = song?;
+            s.parse::<usize>()
+                .ok()
+                .filter(|i| *i < titles.len())
+                .or_else(|| titles.iter().position(|t| t.eq_ignore_ascii_case(s)))
+                .or_else(|| {
+                    let s = s.to_lowercase();
+                    titles.iter().position(|t| t.to_lowercase().contains(&s))
+                })
+        };
+        let now = np.peek().clone();
+        let in_now = now.as_ref().and_then(|n| {
+            let titles: Vec<&str> = n.list.iter().map(|s| s.title).collect();
+            find(&titles)
+        });
+        match (song, in_now) {
+            (None, _) => {
+                let n = now
+                    .filter(|n| n.song().is_some())
+                    .ok_or("nothing is playing")?;
+                if let Some(p) = play {
+                    np.with_mut(|n| {
+                        if let Some(n) = n {
+                            n.playing = p;
+                        }
+                    });
+                }
+                Ok(n.song().map(|s| s.title.to_string()).unwrap_or_default())
+            }
+            (Some(_), Some(i)) => {
+                np.with_mut(|n| {
+                    if let Some(n) = n {
+                        if n.i != i {
+                            n.i = i;
+                            n.pos = 0.0;
+                            n.dur = 0.0;
+                            n.timeline = Default::default();
+                        }
+                        if let Some(p) = play {
+                            n.playing = p;
+                        }
+                    }
+                });
+                Ok(np
+                    .peek()
+                    .as_ref()
+                    .and_then(|n| n.song())
+                    .map(|s| s.title.to_string())
+                    .unwrap_or_default())
+            }
+            (Some(s), None) => {
+                let (from, list) = app.shown_set.peek().clone().ok_or_else(|| {
+                    format!("no song {s} in what plays, and no setlist file is shown")
+                })?;
+                let titles: Vec<&str> = list.iter().map(|(s, _)| s.title).collect();
+                let i = find(&titles).ok_or_else(|| format!("no song {s} in {from}"))?;
+                let title = titles[i].to_string();
+                app.select_places(list, from, i, play.unwrap_or(false));
+                Ok(title)
+            }
         }
     }
 }
