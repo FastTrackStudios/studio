@@ -292,7 +292,32 @@ fn is_media(lower: &str) -> bool {
 /// from disk — a WAV, memory-mapped — and so worth fetching at full
 /// resolution. Anything else stays on its proxy.
 fn is_mapped_original(lower: &str) -> bool {
-    !lower.contains("/proxies/") && (lower.ends_with(".wav") || lower.ends_with(".wave"))
+    !lower.contains("/proxies/")
+        && !lower.starts_with("media/proxy/")
+        && (lower.ends_with(".wav") || lower.ends_with(".wave"))
+}
+
+/// A proxy's key (its lower-case stem; a reference's [`crate::reference::STEM`]
+/// or its preview's, whatever its file is called) from its lower-case path,
+/// and whether it is in the new layout (`media/proxy/…`). `None` for
+/// anything not a proxy.
+fn proxy_stem(lower: &str) -> Option<(String, bool)> {
+    if !lower.ends_with(".ogg") {
+        return None;
+    }
+    let stem = Path::new(lower).file_stem()?.to_string_lossy().into_owned();
+    if let Some(rest) = lower.strip_prefix("media/proxy/") {
+        if rest.starts_with("reference/") {
+            let key = if stem.ends_with(" preview") {
+                crate::reference::PREVIEW_STEM
+            } else {
+                crate::reference::STEM
+            };
+            return Some((key.to_owned(), true));
+        }
+        return Some((stem, true));
+    }
+    (lower.starts_with("proxies/") || lower.contains("/proxies/")).then_some((stem, false))
 }
 
 #[cfg(test)]
@@ -328,6 +353,30 @@ mod media_tests {
             listed(&["Archive/Old.session", "Media/a.wav"]),
             ["Archive/Old.session", "Media/a.wav"]
         );
+    }
+
+    #[test]
+    fn proxies_are_read_in_both_layouts() {
+        use super::proxy_stem;
+        assert_eq!(
+            proxy_stem("media/proxy/reference/drive to la.ogg"),
+            Some(("reference".to_owned(), true))
+        );
+        assert_eq!(
+            proxy_stem("media/proxy/reference/drive to la preview.ogg"),
+            Some(("reference preview".to_owned(), true))
+        );
+        assert_eq!(
+            proxy_stem("media/proxy/drums/kick.ogg"),
+            Some(("kick".to_owned(), true))
+        );
+        assert_eq!(
+            proxy_stem("media/proxies/reference.ogg"),
+            Some(("reference".to_owned(), false))
+        );
+        assert_eq!(proxy_stem("media/proxy/drums/kick.ogg.idx"), None);
+        assert_eq!(proxy_stem("media/bass.wav"), None);
+        assert!(!is_mapped_original("media/proxy/odd.wav"));
     }
 
     #[test]
@@ -512,15 +561,18 @@ pub async fn mirror(source: Arc<dyn SongSource>, keep: Keep) -> eyre::Result<Str
         {
             peaks.insert(original.to_owned(), (path.clone(), *size));
         }
-        // A prepared song keeps its proxies in `Media/Proxies/`; a song cut
-        // from a Live set beside its recordings (`Samples/Imported/Proxies/`).
-        if (lower.starts_with("proxies/") || lower.contains("/proxies/")) && lower.ends_with(".ogg")
-        {
-            let stem = Path::new(path)
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_lowercase())
-                .unwrap_or_default();
-            proxies.insert(stem, (path.clone(), *size));
+        // A song keeps its proxies in `Media/Proxy/`, mirroring `Media/`
+        // (the reference's at `Media/Proxy/Reference/<x>.ogg`); before that
+        // layout in `Media/Proxies/`, and a song cut from a Live set beside
+        // its recordings (`Samples/Imported/Proxies/`). The new layout wins
+        // where a converted folder still has both.
+        if let Some((stem, new_layout)) = proxy_stem(&lower) {
+            let keep_old = proxies.get(&stem).is_some_and(|(had, _): &(String, u64)| {
+                had.to_lowercase().starts_with("media/proxy/")
+            });
+            if new_layout || !keep_old {
+                proxies.insert(stem, (path.clone(), *size));
+            }
             continue;
         }
         // A project file's log (`-wal`, `-shm`, `-tshm`) is the state of

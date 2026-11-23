@@ -75,11 +75,18 @@ async fn references(space: &str) -> Vec<Hit> {
     if let Some(h) = FOUND.with(|f| f.borrow().get(space).cloned()) {
         return h;
     }
-    let hits: Vec<Hit> = web::search(space, "Reference.ogg", &["ogg".to_string()], 1000)
-        .await
-        .into_iter()
-        .filter(|h| crate::reference::folder_of(&h.path).is_some())
-        .collect();
+    // Both layouts: `Media/Proxy/Reference/<x>.ogg`, and the old
+    // `Media/Proxies/Reference.ogg`.
+    let mut hits: Vec<Hit> = Vec::new();
+    for q in ["Proxy/Reference", "Reference.ogg"] {
+        for h in web::search(space, q, &["ogg".to_string()], 1000).await {
+            if crate::reference::folder_of(&h.path).is_some()
+                && !hits.iter().any(|x| x.path == h.path)
+            {
+                hits.push(h);
+            }
+        }
+    }
     FOUND.with(|f| f.borrow_mut().insert(space.to_string(), hits.clone()));
     hits
 }
@@ -92,7 +99,8 @@ async fn in_folder(p: &Place) -> Option<Hit> {
     let mut found: Vec<Hit> = web::list(&p.space, &p.location, &proxy)
         .await
         .into_iter()
-        .filter(|h| !h.dir && h.name.ends_with(".ogg"))
+        // A reference, not its preview.
+        .filter(|h| !h.dir && crate::reference::folder_of(&format!("{proxy}/{}", h.name)).is_some())
         .collect();
     found.sort_by(|a, b| a.name.cmp(&b.name));
     if let Some(h) = found.into_iter().next() {
@@ -126,7 +134,7 @@ async fn find(spaces: &[String], title: &str) -> Option<Hit> {
 }
 
 /// The timeline of the session beside a reference (its folder's
-/// `.fts-session`), when there is one.
+/// `.fts-session`, or its one `.session`), when there is one.
 async fn timeline(reference: &Hit, bpm: f64) -> Timeline {
     let Some(folder) = crate::reference::folder_of(&reference.path) else {
         return Timeline::default();
@@ -136,7 +144,14 @@ async fn timeline(reference: &Hit, bpm: f64) -> Timeline {
         return t;
     }
     let files = web::list(&reference.space, &reference.location, folder).await;
-    let Some(file) = files.iter().find(|h| h.name.ends_with(".fts-session")) else {
+    // The old pair's `.fts-session` while the folder has one; else the
+    // song's one file, whose session is a part of it (`session_file`
+    // tells the two apart by their bytes).
+    let Some(file) = files
+        .iter()
+        .find(|h| h.name.ends_with(".fts-session"))
+        .or_else(|| files.iter().find(|h| h.name.ends_with(".session")))
+    else {
         return Timeline::default();
     };
     let t = match web::bytes("GET", &web::file_url(file), None).await {

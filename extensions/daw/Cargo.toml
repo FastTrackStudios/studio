@@ -35,6 +35,9 @@ architect-extensions = { workspace = true, features = ["guest", "linked-core"] }
 session-desktop = { workspace = true, features = ["native"] }
 session-engine = { workspace = true, features = ["native"] }
 fts-session = { workspace = true }
+# The song as one file: its session a part of the store (studio one-file).
+song-file = { workspace = true }
+session-format = { workspace = true }
 daw-ui = { workspace = true }
 uuid = { workspace = true }
 tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread"] }

@@ -1,6 +1,7 @@
-//! Finding a song's reference: the mix its session bounced
-//! (`<song>/Media/Proxies/Reference.ogg`, what Session's Reference mode
-//! plays), on whichever computer has the song's session folder.
+//! Finding a song's reference: the mix its session bounced, as a proxy
+//! (`<song>/Media/Proxy/Reference/<x>.ogg`, the proxy of
+//! `Media/Reference/<x>.wav`; before the layout, `Media/Proxies/Reference.ogg`,
+//! still read), on whichever computer has the song's session folder.
 //!
 //! A session folder is named by its song's slug (`know-me`,
 //! `7-nation-army`), which need not be the library's title ("Know Me
@@ -9,12 +10,28 @@
 
 use crate::files::Hit;
 
-/// Where a session keeps its reference, under its folder.
+/// Where a session kept its reference before the layout, under its folder.
 pub const PROXY: &str = "Media/Proxies/Reference.ogg";
 
-/// The session folder (its path) of a reference proxy's path.
+/// The folder a song's reference proxies are in, under its folder: each is
+/// `<x>.ogg`, the proxy of `Media/Reference/<x>.wav`.
+pub const PROXY_DIR: &str = "Media/Proxy/Reference";
+
+/// The session folder (its path) of a reference proxy's path, in either
+/// layout.
 pub fn folder_of(path: &str) -> Option<&str> {
-    let folder = path.strip_suffix(PROXY)?;
+    let folder = match path.strip_suffix(PROXY) {
+        Some(folder) => folder,
+        None => {
+            let (dir, name) = path.rsplit_once('/')?;
+            let stem = name.strip_suffix(".ogg")?;
+            // A reference's preview is not the reference.
+            if stem.ends_with(" Preview") {
+                return None;
+            }
+            dir.strip_suffix(PROXY_DIR)?
+        }
+    };
     Some(folder.strip_suffix('/').unwrap_or(folder))
 }
 
@@ -152,6 +169,16 @@ mod tests {
         ];
         let got = pick("Know Me (Extended)", &hits).unwrap();
         assert_eq!(got.path, "fta/session/know-me/Media/Proxies/Reference.ogg");
+        // The new layout's, and its preview not taken for it.
+        assert_eq!(
+            folder_of("Songs/Know Me - JT/Media/Proxy/Reference/Know Me.ogg"),
+            Some("Songs/Know Me - JT")
+        );
+        assert_eq!(
+            folder_of("Songs/Know Me - JT/Media/Proxy/Reference/Know Me Preview.ogg"),
+            None
+        );
+        assert_eq!(folder_of("Songs/Know Me - JT/Media/Proxy/Bass.ogg"), None);
         assert_eq!(folder_of(&got.path), Some("fta/session/know-me"));
         assert_eq!(folder_of(PROXY), Some(""));
     }

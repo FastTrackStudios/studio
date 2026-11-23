@@ -35,6 +35,7 @@ members = [
     "extensions/keys",
     "extensions/tempo-map",
     "features/tempo-map",
+    "features/song-file",
     "features/timeline",
     "features/editing",
     "features/ui/dock",
@@ -835,6 +836,7 @@ signal-import = { git = "https://github.com/FastTrackStudios/signal", rev = "ddf
 session-desktop = { path = "features/engine/host", default-features = false }
 # Session's engine, and its window (a view of it): features chosen by each
 # dependent (`native` on a desktop, `web` in a page).
+song-file = { path = "features/song-file" }
 session-engine = { path = "features/engine/engine", default-features = false }
 # Its host-neutral runtime: no window, no shell, no Dioxus (studio#400).
 session-runtime = { path = "features/engine/runtime" }

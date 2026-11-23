@@ -9,6 +9,12 @@
 //!
 //! Only reading, and only what the player shows: the regions (the song's
 //! sections) and the markers. The engine opens the song itself.
+//!
+//! A song converted to one file (`<Song>.session`, a SQLite store) keeps
+//! the same document as its store's `session` part: [`main_doc`] reads
+//! either, told apart by the bytes' header, never the file's name
+//! (`session_format::read`, pure Rust, so the browser reads it too). A
+//! store must be whole (its log folded in), which a closed song is.
 
 use loro::{LoroDoc, LoroValue};
 
@@ -50,8 +56,33 @@ pub fn read(bytes: &[u8], bpm: f64) -> Result<Timeline, String> {
     Ok(timeline(&doc, bpm))
 }
 
-/// The document of the file's `main` branch.
+/// The song's id in a one-file song's bytes (`meta.id`); `None` for
+/// anything else (the old pair's id is in its `.fts-session` header).
+pub fn store_id(bytes: &[u8]) -> Option<String> {
+    if session_format::sniff(bytes) != session_format::FileFormat::Store {
+        return None;
+    }
+    session_format::read::ProjectFile::read(bytes)
+        .ok()?
+        .song_id()
+        .map(str::to_string)
+}
+
+/// Whether `bytes` are a song's one file (a store), not the old pair's
+/// session document.
+pub fn is_store(bytes: &[u8]) -> bool {
+    session_format::sniff(bytes) == session_format::FileFormat::Store
+}
+
+/// The document of the file's `main` branch: the old pair's session
+/// document, or the `session` part of a one-file song.
 pub fn main_doc(bytes: &[u8]) -> Result<LoroDoc, String> {
+    if is_store(bytes) {
+        let file = session_format::read::ProjectFile::read(bytes).map_err(|e| e.to_string())?;
+        return file
+            .part(session_format::read::SESSION, MAIN)
+            .map_err(|e| e.to_string());
+    }
     if bytes.len() < HEADER_LEN || &bytes[..8] != MAGIC {
         return Err("not a session file".into());
     }
