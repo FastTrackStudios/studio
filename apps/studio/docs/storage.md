@@ -25,7 +25,8 @@ The home is found in this order:
 
 ```
 Studio/
-  Songs/<Title - Artist>/   every song once, generic
+  Songs/<Title - Artist>/   every song once, generic, with its full multitrack session and recordings
+  Projects/<Name>/          production and mixing work: albums and records being made
   Setlists/                 sets of songs, plus what is specific to where they are played
   Signal/                   the guitar rig: NAM captures, IRs, presets
     Libraries/              libraries in Signal's own format (.signalpack), playable by Signal
