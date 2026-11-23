@@ -398,7 +398,7 @@ impl AppState {
             // A browser plays real songs: an empty list until a set is
             // played (an empty one, not none: the shell goes blank
             // without its accessory at the start).
-            np: Signal::new(Some(if cfg!(feature = "web") {
+            np: Signal::new(Some(if cfg!(feature = "drive") {
                 NowPlaying::new(Vec::new(), String::new(), 0, false)
             } else {
                 NowPlaying::new(cya, "CYA · Thu Nov 19".into(), 0, false)

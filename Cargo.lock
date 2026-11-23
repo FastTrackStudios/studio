@@ -597,7 +597,7 @@ dependencies = [
 [[package]]
 name = "app-shell"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/app-shell?rev=50e6c7f11a8468baeb1969fb046058c315428c3a#50e6c7f11a8468baeb1969fb046058c315428c3a"
+source = "git+https://github.com/FastTrackStudios/app-shell?rev=bc68a681c61f4e9cb00303c7e2e06a80e097d938#bc68a681c61f4e9cb00303c7e2e06a80e097d938"
 dependencies = [
  "dioxus",
  "futures-channel",
@@ -641,7 +641,7 @@ dependencies = [
 [[package]]
 name = "app-shell-native"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/app-shell?rev=50e6c7f11a8468baeb1969fb046058c315428c3a#50e6c7f11a8468baeb1969fb046058c315428c3a"
+source = "git+https://github.com/FastTrackStudios/app-shell?rev=bc68a681c61f4e9cb00303c7e2e06a80e097d938#bc68a681c61f4e9cb00303c7e2e06a80e097d938"
 dependencies = [
  "anyrender",
  "anyrender_vello_cpu",
@@ -660,10 +660,15 @@ dependencies = [
  "futures-util",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
  "peniko 0.6.1",
  "png 0.17.16",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -966,7 +971,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.29.0",
  "tower-http",
  "tracing",
  "tracing-opentelemetry",
@@ -2794,7 +2799,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-stream",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.29.0",
  "tokio-util",
  "toml 0.8.2",
  "toml_datetime 0.6.3",
@@ -2810,7 +2815,7 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber",
  "ttf-parser 0.25.1",
- "tungstenite",
+ "tungstenite 0.29.0",
  "twox-hash",
  "typenum",
  "ucd-trie",
@@ -3484,7 +3489,7 @@ dependencies = [
  "sha1 0.10.7",
  "sync_wrapper",
  "tokio",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.29.0",
  "tower",
  "tower-layer",
  "tower-service",
@@ -8238,7 +8243,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tray-icon",
- "tungstenite",
+ "tungstenite 0.29.0",
  "webbrowser",
  "wry",
 ]
@@ -8259,7 +8264,7 @@ dependencies = [
  "subsecond",
  "thiserror 2.0.20",
  "tracing",
- "tungstenite",
+ "tungstenite 0.29.0",
 ]
 
 [[package]]
@@ -8339,13 +8344,13 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tokio-stream",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.29.0",
  "tokio-util",
  "tower",
  "tower-http",
  "tower-layer",
  "tracing",
- "tungstenite",
+ "tungstenite 0.29.0",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -9095,18 +9100,24 @@ dependencies = [
 [[package]]
 name = "drive-client"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
+source = "git+https://github.com/FastTrackStudios/drive?rev=2c57590#2c57590bd9630aebca03a438d6035d9f894f83cb"
 dependencies = [
+ "drive-native",
  "drive-proto",
  "drive-spine",
  "futures-channel",
+ "futures-util",
  "getrandom 0.2.17",
  "getrandom 0.3.4",
  "gloo-timers 0.3.0",
  "js-sys",
  "loro",
+ "rustls",
  "serde",
  "serde_json",
+ "tokio",
+ "tokio-tungstenite 0.30.0",
+ "tracing",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -9115,17 +9126,23 @@ dependencies = [
 [[package]]
 name = "drive-dioxus"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
+source = "git+https://github.com/FastTrackStudios/drive?rev=2c57590#2c57590bd9630aebca03a438d6035d9f894f83cb"
 dependencies = [
  "dioxus",
  "drive-client",
  "drive-proto",
  "drive-spine",
  "futures-util",
+ "getrandom 0.3.4",
  "js-sys",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tracing",
+ "tracing-opentelemetry",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -9134,7 +9151,7 @@ dependencies = [
 [[package]]
 name = "drive-files"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
+source = "git+https://github.com/FastTrackStudios/drive?rev=2c57590#2c57590bd9630aebca03a438d6035d9f894f83cb"
 dependencies = [
  "blake3",
  "bytes",
@@ -9148,16 +9165,31 @@ dependencies = [
 [[package]]
 name = "drive-local"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
+source = "git+https://github.com/FastTrackStudios/drive?rev=2c57590#2c57590bd9630aebca03a438d6035d9f894f83cb"
 dependencies = [
  "serde",
  "serde_json",
 ]
 
 [[package]]
+name = "drive-native"
+version = "0.1.0"
+source = "git+https://github.com/FastTrackStudios/drive?rev=2c57590#2c57590bd9630aebca03a438d6035d9f894f83cb"
+dependencies = [
+ "drive-proto",
+ "drive-spine",
+ "futures-util",
+ "loro",
+ "rustls",
+ "tokio",
+ "tokio-tungstenite 0.30.0",
+ "tracing",
+]
+
+[[package]]
 name = "drive-proto"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
+source = "git+https://github.com/FastTrackStudios/drive?rev=2c57590#2c57590bd9630aebca03a438d6035d9f894f83cb"
 dependencies = [
  "postcard",
  "serde",
@@ -9166,7 +9198,7 @@ dependencies = [
 [[package]]
 name = "drive-sidecars"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
+source = "git+https://github.com/FastTrackStudios/drive?rev=2c57590#2c57590bd9630aebca03a438d6035d9f894f83cb"
 dependencies = [
  "serde",
 ]
@@ -9174,7 +9206,7 @@ dependencies = [
 [[package]]
 name = "drive-spine"
 version = "0.1.0"
-source = "git+https://github.com/FastTrackStudios/drive?rev=94ee428#94ee42812c56250b68789a9f982ed9f8d9ba7843"
+source = "git+https://github.com/FastTrackStudios/drive?rev=2c57590#2c57590bd9630aebca03a438d6035d9f894f83cb"
 dependencies = [
  "loro",
 ]
@@ -23652,21 +23684,32 @@ version = "26.10.3"
 dependencies = [
  "app-shell 0.1.0",
  "app-shell-native",
+ "architect",
+ "architect-control",
+ "architect-mcp",
+ "architect-scripting",
  "dioxus",
+ "drive-client",
  "drive-dioxus",
  "drive-files",
  "drive-local",
  "drive-sidecars",
  "drive-spine",
+ "facet",
+ "facet-json",
+ "futures-channel",
  "futures-util",
  "getrandom 0.3.4",
  "gloo-timers 0.3.0",
  "js-sys",
  "keyflow",
  "loro",
+ "opentelemetry",
  "serde_json",
  "session-sync",
  "tokio",
+ "tracing",
+ "tracing-opentelemetry",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -24868,7 +24911,7 @@ dependencies = [
  "js-sys",
  "serde_json",
  "tokio",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.29.0",
  "vox-core",
  "vox-websocket",
  "wasm-bindgen",
@@ -25332,7 +25375,23 @@ dependencies = [
  "rustls-pki-types",
  "tokio",
  "tokio-rustls",
- "tungstenite",
+ "tungstenite 0.29.0",
+ "webpki-roots 0.26.11",
+]
+
+[[package]]
+name = "tokio-tungstenite"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17a073bfed563fa236697a068031408a93cd9522e08abf9933ead3e73411bd71"
+dependencies = [
+ "futures-util",
+ "log",
+ "rustls",
+ "rustls-pki-types",
+ "tokio",
+ "tokio-rustls",
+ "tungstenite 0.30.0",
  "webpki-roots 0.26.11",
 ]
 
@@ -25820,6 +25879,24 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "sha1 0.10.7",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e48ac77174b19c110a50ab2128b24215ac9cb40e0e12e093fb602d175c569d22"
+dependencies = [
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "rand 0.10.2",
+ "rustls",
+ "rustls-pki-types",
+ "sha1 0.11.0",
  "thiserror 2.0.20",
 ]
 
@@ -27066,7 +27143,7 @@ dependencies = [
  "futures-util",
  "js-sys",
  "tokio",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.29.0",
  "vox-core",
  "vox-types",
  "wasm-bindgen",

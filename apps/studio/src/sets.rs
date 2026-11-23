@@ -249,21 +249,24 @@ pub fn SetMirror(set: SetDoc) -> Element {
 /// Make a new set in an org: its document (from `from` when given: last
 /// week's or a template) and its face. Returns its id.
 pub fn create(org: &str, info: &Info, from: Option<&LoroDoc>, index: &Index) -> String {
-    let doc = backing::create(&orgs::qualified(org, &setlist::setlist_doc(&info.id)), |d| {
-        setlist::stamp_set(d, org, &info.id);
-        // A new set is already at the current version: nothing to seed.
-        let _ = d
-            .get_map("meta")
-            .insert("version", setlist::SETLIST_STEPS.len() as i64);
-        match from {
-            Some(src) => {
-                let _ = setlist::start_from(src, d, info);
+    let doc = backing::create(
+        &orgs::qualified(org, &setlist::setlist_doc(&info.id)),
+        |d| {
+            setlist::stamp_set(d, org, &info.id);
+            // A new set is already at the current version: nothing to seed.
+            let _ = d
+                .get_map("meta")
+                .insert("version", setlist::SETLIST_STEPS.len() as i64);
+            match from {
+                Some(src) => {
+                    let _ = setlist::start_from(src, d, info);
+                }
+                None => {
+                    let _ = setlist::put_info(d, info);
+                }
             }
-            None => {
-                let _ = setlist::put_info(d, info);
-            }
-        }
-    });
+        },
+    );
     index.put_face(&setlist::face_of(&doc));
     info.id.clone()
 }
@@ -283,7 +286,7 @@ pub fn use_sets_shared_with(to: &str) -> Signal<Vec<(String, String)>> {
     let mut found = use_signal(Vec::<(String, String)>::new);
     let to = to.to_string();
     use_future(use_reactive!(|to| async move {
-        #[cfg(feature = "web")]
+        #[cfg(feature = "drive")]
         {
             let _ = app;
             let bearer = drive_dioxus::auth::bearer();
@@ -291,7 +294,7 @@ pub fn use_sets_shared_with(to: &str) -> Signal<Vec<(String, String)>> {
                 .iter()
                 .map(|b| ("authorization", b.as_str()))
                 .collect();
-            let url = format!("/shared?org={}", js_sys::encode_uri_component(&to));
+            let url = format!("/shared?org={}", drive_dioxus::env::encode_component(&to));
             if let Some((200, v)) = drive_dioxus::auth::fetch("GET", &url, &headers, None).await {
                 let pairs: Vec<(String, String)> = v["shared"]
                     .as_array()
@@ -309,7 +312,7 @@ pub fn use_sets_shared_with(to: &str) -> Signal<Vec<(String, String)>> {
                 found.set(setlist::shared_sets(&to, &pairs));
             }
         }
-        #[cfg(not(feature = "web"))]
+        #[cfg(not(feature = "drive"))]
         {
             let orgs = app.orgs.peek().clone();
             let mut out = Vec::new();

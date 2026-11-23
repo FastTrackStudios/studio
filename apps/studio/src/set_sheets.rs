@@ -30,11 +30,7 @@ pub fn KeySheet(set: SetRef, entry: String) -> Element {
         return rsx! {};
     };
     let p = ctx.played(&e);
-    let own = p
-        .own_key
-        .as_deref()
-        .and_then(data::norm_key)
-        .unwrap_or("C");
+    let own = p.own_key.as_deref().and_then(data::norm_key).unwrap_or("C");
     let cur = p.key.as_deref().and_then(data::norm_key).unwrap_or(own);
     let doc = ctx.set.clone();
     let pick = move |k: Option<&'static str>| {
@@ -195,7 +191,11 @@ pub fn AddSongs(set: SetRef) -> Element {
     let add_item = move |_| {
         let t = name.peek().trim().to_string();
         let k = *item.peek();
-        let title = if t.is_empty() { k.label().to_string() } else { t };
+        let title = if t.is_empty() {
+            k.label().to_string()
+        } else {
+            t
+        };
         doc.insert(None, &Entry::item(k, &title));
         name.set(String::new());
         app.say(format!("{title} added"));
@@ -787,12 +787,22 @@ pub fn NewSetSheet(preset: Option<String>) -> Element {
     let sr = for_series().and_then(|id| series.iter().find(|s| s.id == id).cloned());
     // A meeting: its day (the next one without a set, unless one was given).
     let meeting_day = sr.as_ref().map(|s| {
-        p_date.filter(|_| preset.as_deref().is_some_and(|p| p.starts_with(&format!("{}@", s.id)))).unwrap_or_else(|| {
-            s.dates(TODAY, TODAY.plus(60))
-                .into_iter()
-                .find(|d| !faces.iter().any(|f| f.id == setlist::meeting_id(&s.id, *d) && f.songs > 0))
-                .unwrap_or(TODAY)
-        })
+        p_date
+            .filter(|_| {
+                preset
+                    .as_deref()
+                    .is_some_and(|p| p.starts_with(&format!("{}@", s.id)))
+            })
+            .unwrap_or_else(|| {
+                s.dates(TODAY, TODAY.plus(60))
+                    .into_iter()
+                    .find(|d| {
+                        !faces
+                            .iter()
+                            .any(|f| f.id == setlist::meeting_id(&s.id, *d) && f.songs > 0)
+                    })
+                    .unwrap_or(TODAY)
+            })
     });
     let last = match (&sr, meeting_day) {
         (Some(s), Some(d)) => setlist::previous(&faces, &s.id, d).cloned(),
@@ -1013,7 +1023,10 @@ pub fn BookSheet() -> Element {
     let fallback = list
         .iter()
         .find(|f| mine(f) && f.day().is_some_and(|d| d.from_today() >= 1))
-        .or_else(|| list.iter().find(|f| f.day().is_some_and(|d| d.from_today() >= 1)))
+        .or_else(|| {
+            list.iter()
+                .find(|f| f.day().is_some_and(|d| d.from_today() >= 1))
+        })
         .or(list.first())
         .map(|f| Booking {
             set: SetRef::new(&here, &f.id),

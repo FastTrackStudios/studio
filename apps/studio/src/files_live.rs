@@ -86,7 +86,7 @@ pub fn use_song_files(owner: &str, id: &str) -> SongFiles {
         tree,
         shared_parts,
     };
-    #[cfg(feature = "web")]
+    #[cfg(feature = "drive")]
     {
         let (owner, id, here) = (owner.to_string(), id.to_string(), here);
         let mut parts = shared_parts;
@@ -209,7 +209,7 @@ impl SongFiles {
     /// Put a new small file into the org's Drive tree, in the song's
     /// folder, and link it. Its bytes go to the node first (by their
     /// hash); the tree entry is the commit point.
-    #[cfg_attr(not(feature = "web"), allow(dead_code))]
+    #[cfg_attr(not(feature = "drive"), allow(dead_code))]
     pub fn add_uploaded(&self, entry: &Entry, name: &str, size: u64, hash: &str) -> Option<String> {
         let folder = files::upload_folder(&entry.title);
         let name = name.replace(['/', '\\'], "-");
@@ -332,12 +332,12 @@ fn tree_hits(tree: &LoroDoc, l: &Link) -> Vec<Hit> {
     }
 }
 
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 async fn location_hits(l: &Link) -> Vec<Hit> {
     web::location_hits(l).await
 }
 
-#[cfg(not(feature = "web"))]
+#[cfg(not(feature = "drive"))]
 async fn location_hits(l: &Link) -> Vec<Hit> {
     // No index here: the link itself, its place unknown.
     vec![Hit {
@@ -351,15 +351,26 @@ async fn location_hits(l: &Link) -> Vec<Hit> {
     }]
 }
 
-/// The node's answers, for the web build.
-#[cfg(feature = "web")]
+/// The node's answers (in a browser and natively; the module keeps its
+/// old name).
+#[cfg(feature = "drive")]
 pub mod web {
     use super::*;
     use serde_json::Value;
-    use wasm_bindgen::JsCast;
 
     pub fn enc(s: &str) -> String {
-        js_sys::encode_uri_component(s).into()
+        drive_dioxus::env::encode_component(s)
+    }
+
+    /// A node path as something a page element can load: the page's own
+    /// origin in a browser; natively the node's address (a relative URL
+    /// would be the app's own `dioxus://` scheme).
+    fn absolute(path: String) -> String {
+        if cfg!(target_arch = "wasm32") || !path.starts_with('/') {
+            path
+        } else {
+            format!("{}{path}", drive_dioxus::env::origin())
+        }
     }
 
     fn headers() -> Vec<(String, String)> {
@@ -594,7 +605,7 @@ pub mod web {
     /// seeks): the node's copy when it keeps one, else the computer that
     /// has it, through the node.
     pub fn file_url(h: &Hit) -> String {
-        drive_dioxus::mount::api(&match &h.available {
+        absolute(drive_dioxus::mount::api(&match &h.available {
             Some(hash) if !hash.is_empty() => format!("/blobs/{hash}?name={}", enc(&h.name)),
             _ => format!(
                 "/fetch/{}/{}?path={}&name={}",
@@ -603,13 +614,13 @@ pub mod web {
                 enc(&h.path),
                 enc(&h.name)
             ),
-        })
+        }))
     }
 
     /// A sidecar's URL (`thumb-256`, `thumb-1024`, `peaks`): made by the
     /// computer that has the file when the node has none yet.
     pub fn sidecar_url(h: &Hit, kind: &str) -> Option<String> {
-        sidecar_path(h, kind).map(|p| drive_dioxus::mount::api(&p))
+        sidecar_path(h, kind).map(|p| absolute(drive_dioxus::mount::api(&p)))
     }
 
     fn sidecar_path(h: &Hit, kind: &str) -> Option<String> {
@@ -666,31 +677,17 @@ pub mod web {
         body: Option<&[u8]>,
         traceparent: &str,
     ) -> Result<(u16, Vec<u8>), String> {
-        let init = web_sys::RequestInit::new();
-        init.set_method(method);
-        let h = web_sys::Headers::new().map_err(|_| "headers")?;
-        let _ = h.set("traceparent", traceparent);
-        for (k, v) in headers() {
-            let _ = h.set(&k, &v);
-        }
-        init.set_headers(&h);
-        if let Some(b) = body {
-            let arr = js_sys::Uint8Array::from(b);
-            init.set_body(&arr.into());
-        }
-        let w = web_sys::window().ok_or("no window")?;
-        let resp: web_sys::Response = wasm_bindgen_futures::JsFuture::from(
-            w.fetch_with_str_and_init(&drive_dioxus::mount::api(url), &init),
+        let auth = headers();
+        let mut h: Vec<(&str, &str)> = vec![("traceparent", traceparent)];
+        h.extend(auth.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        drive_dioxus::env::http_bytes(
+            method,
+            &drive_dioxus::mount::api(url),
+            &h,
+            body.map(<[u8]>::to_vec),
         )
         .await
-        .map_err(|_| "the node did not answer".to_string())?
-        .dyn_into()
-        .map_err(|_| "not a response".to_string())?;
-        let status = resp.status();
-        let buf = wasm_bindgen_futures::JsFuture::from(resp.array_buffer().map_err(|_| "no body")?)
-            .await
-            .map_err(|_| "no body".to_string())?;
-        Ok((status, js_sys::Uint8Array::new(&buf).to_vec()))
+        .ok_or_else(|| "the node did not answer".to_string())
     }
 
     /// A file's waveform, `width` columns of (min, max), from its peaks
@@ -719,6 +716,7 @@ pub mod web {
 
     /// Open a PDF in a new tab (the node hands files out as downloads; a
     /// blob of the right type opens in the browser's viewer).
+    #[cfg(target_arch = "wasm32")]
     pub async fn open_pdf(url: &str, name: &str) {
         let Ok((200, b)) = bytes("GET", url, None).await else {
             return;
@@ -737,6 +735,12 @@ pub mod web {
             let _ = w.open_with_url_and_target(&u, "_blank");
         }
         let _ = name;
+    }
+
+    /// Natively: the system's viewer opens it, from the node.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn open_pdf(url: &str, _name: &str) {
+        drive_dioxus::env::go(&absolute(url.to_string()));
     }
 
     /// Keep bytes on the node: their full hash.

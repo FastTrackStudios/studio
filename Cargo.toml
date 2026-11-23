@@ -101,11 +101,12 @@ repository = "https://github.com/FastTrackStudios/session"
 # repo, patch `[patch."https://github.com/FastTrackStudios/drive"]` with
 # paths (never committed).
 session-sync = { path = "apps/studio/crates/session-sync" }
-drive-dioxus = { git = "https://github.com/FastTrackStudios/drive", rev = "94ee428" }
-drive-spine = { git = "https://github.com/FastTrackStudios/drive", rev = "94ee428" }
-drive-files = { git = "https://github.com/FastTrackStudios/drive", rev = "94ee428", default-features = false }
-drive-sidecars = { git = "https://github.com/FastTrackStudios/drive", rev = "94ee428" }
-drive-local = { git = "https://github.com/FastTrackStudios/drive", rev = "94ee428" }
+drive-dioxus = { git = "https://github.com/FastTrackStudios/drive", rev = "2c57590" }
+drive-client = { git = "https://github.com/FastTrackStudios/drive", rev = "2c57590" }
+drive-spine = { git = "https://github.com/FastTrackStudios/drive", rev = "2c57590" }
+drive-files = { git = "https://github.com/FastTrackStudios/drive", rev = "2c57590", default-features = false }
+drive-sidecars = { git = "https://github.com/FastTrackStudios/drive", rev = "2c57590" }
+drive-local = { git = "https://github.com/FastTrackStudios/drive", rev = "2c57590" }
 # FastTrackStudios/session's `session` (the session primitive: its document
 # file, its fts.session service, its transport led as presence), as the
 # `daw` extension uses it; renamed because Studio's own `features/session`

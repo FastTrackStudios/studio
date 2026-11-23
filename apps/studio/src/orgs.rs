@@ -145,7 +145,7 @@ pub fn org_hue(slug: &str) -> u32 {
     known(slug).map_or_else(|| crate::data::str_hue(slug), |k| k.hue)
 }
 
-#[cfg_attr(not(feature = "web"), allow(dead_code))]
+#[cfg_attr(not(feature = "drive"), allow(dead_code))]
 /// The orgs in Studio's order (the known ones first, as listed).
 pub fn ordered(mut orgs: Vec<String>) -> Vec<String> {
     orgs.sort_by_key(|o| {
@@ -831,7 +831,7 @@ pub fn mirror_project(lib: &LoroDoc, to: &str, registry: &LoroDoc) -> bool {
     true
 }
 
-#[cfg_attr(not(feature = "web"), allow(dead_code))]
+#[cfg_attr(not(feature = "drive"), allow(dead_code))]
 /// The owners sharing Studio songs with `to`, from Drive's projects
 /// shared with it (`/shared`: (owner org, project id) pairs).
 pub fn owners_sharing(to: &str, shared: &[(String, String)]) -> Vec<String> {

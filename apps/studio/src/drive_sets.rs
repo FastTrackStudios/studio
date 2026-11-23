@@ -147,7 +147,7 @@ async fn read(
             (200 | 206, b) => break String::from_utf8_lossy(&b).into_owned(),
             (503, _) if tries < 10 => {
                 tries += 1;
-                gloo_timers::future::TimeoutFuture::new(1000).await;
+                crate::state::sleep_ms(1000).await;
             }
             (code, _) => return Err(format!("its computer answered {code}")),
         }

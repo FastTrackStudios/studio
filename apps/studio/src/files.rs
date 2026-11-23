@@ -29,7 +29,7 @@
 //! shares its files.
 
 // Finding and uploading run in the web build (the node's indexes).
-#![cfg_attr(not(feature = "web"), allow(dead_code))]
+#![cfg_attr(not(feature = "drive"), allow(dead_code))]
 
 use std::collections::BTreeSet;
 

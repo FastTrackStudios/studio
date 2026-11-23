@@ -8,7 +8,7 @@
 
 mod actions;
 mod data;
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 mod drive_sets;
 mod files;
 mod files_live;
@@ -20,16 +20,17 @@ mod pages;
 mod pieces;
 #[cfg(feature = "web")]
 mod player;
-#[cfg(feature = "web")]
+mod storage;
+#[cfg(feature = "drive")]
 mod trace;
 // The browser build engraves charts and reads setlist files from Drive.
-#[cfg_attr(not(feature = "web"), allow(dead_code))]
+#[cfg_attr(not(feature = "drive"), allow(dead_code))]
 mod chart_sync;
-#[cfg_attr(not(feature = "web"), allow(dead_code))]
+#[cfg_attr(not(feature = "drive"), allow(dead_code))]
 mod reference;
 mod session_file;
 mod set_sheets;
-#[cfg_attr(not(feature = "web"), allow(dead_code))]
+#[cfg_attr(not(feature = "drive"), allow(dead_code))]
 mod setfile;
 mod setlist;
 mod sets;
@@ -168,7 +169,14 @@ impl Route {
 }
 
 fn main() {
+    storage::init();
+    // Natively: stderr and, when OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set,
+    // the app's spans to that collector.
+    #[cfg(feature = "native")]
+    let _telemetry =
+        app_shell_native::telemetry::init("studio-app", "warn,studio_app=info,drive_dioxus=info");
     // Warnings and up: Loro's encoder logs every block at info.
+    #[cfg(not(feature = "native"))]
     dioxus::logger::init(dioxus::logger::tracing::Level::WARN).ok();
     // Served under a path (`--base-path studio`), the node is reached
     // under it too (`/studio/api/…`), so a site can hand Studio that path.
@@ -203,7 +211,7 @@ fn no_popout(_: app_shell::WindowId) -> Element {
 fn App() -> Element {
     use_context_provider(state::AppState::new);
     // From navigation until the app has first drawn.
-    #[cfg(feature = "web")]
+    #[cfg(feature = "drive")]
     use_effect(trace::boot);
     rsx! {
         document::Meta {

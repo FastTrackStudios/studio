@@ -399,7 +399,7 @@ pub struct Here {
     pub section: Option<String>,
 }
 
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 pub(crate) mod backing {
     use super::*;
     use drive_dioxus::{Doc, use_doc};
@@ -461,7 +461,7 @@ pub(crate) mod backing {
     }
 }
 
-#[cfg(not(feature = "web"))]
+#[cfg(not(feature = "drive"))]
 pub(crate) mod backing {
     use super::*;
     use std::cell::RefCell;

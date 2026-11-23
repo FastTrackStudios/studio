@@ -1198,7 +1198,7 @@ pub fn mirror_set_project(doc: &LoroDoc, registry: &LoroDoc) -> bool {
     true
 }
 
-#[cfg_attr(not(feature = "web"), allow(dead_code))]
+#[cfg_attr(not(feature = "drive"), allow(dead_code))]
 /// The sets other orgs share with `to`, from Drive's projects shared with
 /// it (`/shared`: (owner org, project id) pairs): (owner, set id).
 pub fn shared_sets(to: &str, shared: &[(String, String)]) -> Vec<(String, String)> {

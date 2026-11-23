@@ -151,7 +151,7 @@ pub fn Setlists() -> Element {
 
 /// The setlist files in the org's Drive (`.setlist`, beside their songs'
 /// session folders), each opening as a set.
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 #[component]
 fn FromDrive(space: String) -> Element {
     let _ = space;
@@ -194,7 +194,7 @@ fn FromDrive(space: String) -> Element {
     }
 }
 
-#[cfg(not(feature = "web"))]
+#[cfg(not(feature = "drive"))]
 #[component]
 fn FromDrive(space: String) -> Element {
     let _ = space;

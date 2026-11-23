@@ -109,7 +109,7 @@ pub fn use_owners_sharing(to: &str) -> Signal<Vec<String>> {
     let mut owners = use_signal(Vec::<String>::new);
     let to = to.to_string();
     use_future(use_reactive!(|to| async move {
-        #[cfg(feature = "web")]
+        #[cfg(feature = "drive")]
         {
             let _ = app;
             let bearer = drive_dioxus::auth::bearer();
@@ -117,7 +117,7 @@ pub fn use_owners_sharing(to: &str) -> Signal<Vec<String>> {
                 .iter()
                 .map(|b| ("authorization", b.as_str()))
                 .collect();
-            let url = format!("/shared?org={}", js_sys::encode_uri_component(&to));
+            let url = format!("/shared?org={}", drive_dioxus::env::encode_component(&to));
             if let Some((200, v)) = drive_dioxus::auth::fetch("GET", &url, &headers, None).await {
                 let pairs: Vec<(String, String)> = v["shared"]
                     .as_array()
@@ -135,7 +135,7 @@ pub fn use_owners_sharing(to: &str) -> Signal<Vec<String>> {
                 owners.set(orgs::owners_sharing(&to, &pairs));
             }
         }
-        #[cfg(not(feature = "web"))]
+        #[cfg(not(feature = "drive"))]
         {
             let all = app.orgs.peek().clone();
             owners.set(all.into_iter().filter(|o| *o != to).collect());

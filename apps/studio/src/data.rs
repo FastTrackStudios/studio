@@ -195,7 +195,7 @@ pub struct Song {
 
 /// A song read at run time (a setlist file's) as a [`Song`]: its title
 /// kept for the life of the app, once per title.
-#[cfg_attr(not(feature = "web"), allow(dead_code))]
+#[cfg_attr(not(feature = "drive"), allow(dead_code))]
 pub fn song_named(title: &str) -> Song {
     thread_local! {
         static TITLES: std::cell::RefCell<HashMap<String, &'static str>> =

@@ -192,7 +192,7 @@ pub fn SongFilesSection(entry: Entry, owner: String) -> Element {
     }
 }
 
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 async fn upload_one(
     sf: &SongFiles,
     entry: &Entry,
@@ -205,7 +205,7 @@ async fn upload_one(
         .ok_or_else(|| "could not add it to the song".to_string())
 }
 
-#[cfg(not(feature = "web"))]
+#[cfg(not(feature = "drive"))]
 async fn upload_one(
     sf: &SongFiles,
     entry: &Entry,
@@ -411,7 +411,7 @@ fn FileRow(sf: SongFiles, row: Row, nested: bool) -> Element {
 /// and Open for a PDF, a picture for an image, and where its copies are.
 #[component]
 pub fn Preview(hit: Hit, kind: FileKind) -> Element {
-    #[cfg(feature = "web")]
+    #[cfg(feature = "drive")]
     {
         use crate::files_live::web;
         let audio = files::is_audio(&hit.name);
@@ -509,7 +509,7 @@ pub fn Preview(hit: Hit, kind: FileKind) -> Element {
             }
         }
     }
-    #[cfg(not(feature = "web"))]
+    #[cfg(not(feature = "drive"))]
     {
         let _ = kind;
         rsx! {
@@ -522,7 +522,7 @@ pub fn Preview(hit: Hit, kind: FileKind) -> Element {
 }
 
 /// On a device: open the file through Drive's agent (a real path).
-#[cfg(not(feature = "web"))]
+#[cfg(not(feature = "drive"))]
 #[component]
 fn LocalOpen(target: String) -> Element {
     let mut said = use_signal(String::new);
@@ -777,7 +777,7 @@ fn ProposalRow(
 
 /// A folder whose name said nothing: its kind from what is in it.
 fn refine_folder(sf: SongFiles, part: String, h: Hit) {
-    #[cfg(feature = "web")]
+    #[cfg(feature = "drive")]
     spawn(async move {
         let kids = crate::files_live::web::list(&h.space, &h.location, &h.path).await;
         let names: Vec<(&str, bool)> = kids.iter().map(|k| (k.name.as_str(), k.dir)).collect();
@@ -786,13 +786,13 @@ fn refine_folder(sf: SongFiles, part: String, h: Hit) {
             sf.set_kind(&part, k);
         }
     });
-    #[cfg(not(feature = "web"))]
+    #[cfg(not(feature = "drive"))]
     let _ = (sf, part, h);
 }
 
 type Found = Result<(Vec<Proposal>, String), String>;
 
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 async fn find(entry: &Entry, aliases: &[String], typed: &str, spaces: &[String]) -> Found {
     use crate::files_live::web;
     let typed_q = files::typed(typed)?;
@@ -858,7 +858,7 @@ async fn find(entry: &Entry, aliases: &[String], typed: &str, spaces: &[String])
     Ok((props, asked))
 }
 
-#[cfg(not(feature = "web"))]
+#[cfg(not(feature = "drive"))]
 async fn find(_entry: &Entry, _aliases: &[String], _typed: &str, _spaces: &[String]) -> Found {
     Err("Finding files searches Drive's indexes of every computer; this build has no Drive client yet (use the web build).".into())
 }
@@ -1033,12 +1033,12 @@ fn ReadyProbe(song: SetSong, tracks: bool, probes: Signal<BTreeMap<String, Probe
     rsx! {}
 }
 
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 async fn copies_of(h: &Hit) -> Vec<files::Copy> {
     crate::files_live::web::copies(h).await
 }
 
-#[cfg(not(feature = "web"))]
+#[cfg(not(feature = "drive"))]
 async fn copies_of(_h: &Hit) -> Vec<files::Copy> {
     Vec::new()
 }
@@ -1104,7 +1104,7 @@ impl KeepParts {
     #[cfg_attr(feature = "local", allow(dead_code))]
     fn keep(org: &str, song: &str, parts: &[String]) {
         let id = drive_files::space_doc(org);
-        #[cfg(feature = "web")]
+        #[cfg(feature = "drive")]
         {
             let Some(ctx) = try_consume_context::<drive_dioxus::DriveCtx>() else {
                 return;
@@ -1113,7 +1113,7 @@ impl KeepParts {
             files::set_available(&doc, song, parts, true);
             ctx.drive.commit(&id);
         }
-        #[cfg(not(feature = "web"))]
+        #[cfg(not(feature = "drive"))]
         {
             if let Some(doc) = crate::songs::backing::peek(&id) {
                 files::set_available(&doc, song, parts, true);

@@ -7,7 +7,6 @@
 //! desktop and the phone keep the app's memory alone (the same API, doing
 //! nothing).
 
-
 /// Someone else in this set, and the song they have open, if any.
 #[derive(Clone, PartialEq, Debug)]
 pub struct Viewer {
@@ -19,13 +18,13 @@ pub struct Viewer {
     pub edit: Option<String>,
 }
 
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 pub use web::*;
 
-#[cfg(not(feature = "web"))]
+#[cfg(not(feature = "drive"))]
 pub use local::*;
 
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 mod web {
     use dioxus::prelude::*;
     use drive_dioxus::ui::{Avatars, ConnectionStatus};
@@ -93,10 +92,7 @@ mod web {
                 return;
             };
             let have = spine::events(&doc.peek());
-            let want: Vec<&spine::Event> = events
-                .iter()
-                .filter(|e| !have.contains(e))
-                .collect();
+            let want: Vec<&spine::Event> = events.iter().filter(|e| !have.contains(e)).collect();
             if want.is_empty() {
                 return;
             }
@@ -106,7 +102,6 @@ mod web {
                 }
             });
         }
-
     }
 
     /// Connects to Drive (the node this page came from) around the app.
@@ -256,7 +251,7 @@ mod web {
                 let sheet = (app.sheet)();
                 let leading = l.playing && following().is_none();
                 if leading && started.peek().is_none() {
-                    started.set(Some(js_sys::Date::now()));
+                    started.set(Some(drive_dioxus::env::now_ms()));
                 } else if !leading && started.peek().is_some() {
                     started.set(None);
                 }
@@ -336,7 +331,7 @@ mod web {
 }
 
 /// Without Drive: the app's memory alone.
-#[cfg(not(feature = "web"))]
+#[cfg(not(feature = "drive"))]
 mod local {
     use dioxus::prelude::*;
 

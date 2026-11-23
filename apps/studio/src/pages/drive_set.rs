@@ -10,7 +10,7 @@ use crate::pieces::{Bar, Page};
 use crate::state::use_app;
 
 /// The spaces to look in: the org Studio is in, then every other.
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 fn spaces() -> Vec<String> {
     let app = use_app();
     let mut v = vec![(app.here)()];
@@ -36,7 +36,7 @@ pub fn DriveSet(space: String, location: String, path: Vec<String>) -> Element {
     }
 }
 
-#[cfg(not(feature = "web"))]
+#[cfg(not(feature = "drive"))]
 #[component]
 fn Loaded(space: String, location: String, path: String) -> Element {
     let _ = (space, location, path);
@@ -45,7 +45,7 @@ fn Loaded(space: String, location: String, path: String) -> Element {
     }
 }
 
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 #[component]
 fn Loaded(space: String, location: String, path: String) -> Element {
     let app = use_app();
@@ -226,7 +226,7 @@ pub fn NowChart() -> Element {
     }
 }
 
-#[cfg(not(feature = "web"))]
+#[cfg(not(feature = "drive"))]
 #[component]
 fn ChartFollow(chart: crate::files::Hit, sections: Vec<crate::session_file::Section>) -> Element {
     let _ = (chart, sections);
@@ -235,7 +235,7 @@ fn ChartFollow(chart: crate::files::Hit, sections: Vec<crate::session_file::Sect
 
 /// Marks the bar and the beat sounding at `t` (seconds), scrolls the bar
 /// into view when it changes, and sends a tapped bar's time back.
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 const FOLLOW: &str = r#"
 window.__kfSend = (v) => dioxus.send(v);
 if (!window.__kfClick) {
@@ -271,7 +271,7 @@ while (true) {
 }
 "#;
 
-#[cfg(feature = "web")]
+#[cfg(feature = "drive")]
 #[component]
 fn ChartFollow(chart: crate::files::Hit, sections: Vec<crate::session_file::Section>) -> Element {
     use crate::files_live::web;

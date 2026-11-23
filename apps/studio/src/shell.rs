@@ -142,7 +142,7 @@ pub fn Shell() -> Element {
     // The setlist files in Drive, in every org this person is in (a
     // computer's locations are its own space's, whichever org the set is
     // for): found once, for the Setlists page, Home and the sidebar's count.
-    #[cfg(feature = "web")]
+    #[cfg(feature = "drive")]
     {
         let spaces = {
             let mut v = vec![here.clone()];
