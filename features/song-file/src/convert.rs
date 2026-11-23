@@ -81,6 +81,9 @@ pub enum Outcome {
     AlreadyOneFile { file: PathBuf, id: Option<String> },
     /// Converted (or, dry, would be).
     Converted(Report),
+    /// A store with no id (the engine's project alone): given an id and a
+    /// session seeded from its own timing (or, dry, would be).
+    Seeded(Report),
 }
 
 /// What a conversion found and wrote.
@@ -354,14 +357,21 @@ async fn convert_in(folder: &Path, options: &Options) -> Result<Outcome> {
             return Ok(Outcome::Nothing);
         }
         Layout::OneFile { file } => {
-            span.record("song.outcome", "already");
-            // Opened to read its id, and closed again: its log folded in.
-            let id = Store::open(&file).ok().and_then(|s| {
-                let id = s.song_id().ok().flatten();
-                s.close().ok()?;
-                id.map(|u| u.to_string())
-            });
-            return Ok(Outcome::AlreadyOneFile { file, id });
+            // Read without opening the original (opening a store writes).
+            if let Some(id) = read_id(&file)? {
+                span.record("song.outcome", "already");
+                return Ok(Outcome::AlreadyOneFile { file, id: Some(id) });
+            }
+            // A store with no id: the engine's project alone, no session
+            // document ever made. It gets an id and a session from its own
+            // timing.
+            let report = seed(folder, &file, options)?;
+            span.record(
+                "song.outcome",
+                if options.dry_run { "dry" } else { "seeded" },
+            );
+            span.record("song.id", report.id.as_str());
+            return Ok(Outcome::Seeded(report));
         }
         Layout::Pair { project, session } => (project, session),
     };
@@ -427,4 +437,196 @@ async fn convert_in(folder: &Path, options: &Options) -> Result<Outcome> {
     span.record("song.sessions", report.sessions.len());
     span.record("song.trashed", report.trashed.len());
     Ok(Outcome::Converted(report))
+}
+
+/// The song id a store holds, read without opening it: from its bytes when
+/// its log is empty, else from a scratch copy (store and log) opened as a
+/// store.
+fn read_id(file: &Path) -> Result<Option<String>> {
+    let [_, wal, _] = store_files(file);
+    let folded = std::fs::metadata(&wal).map_or(true, |m| m.len() == 0);
+    if folded {
+        return Ok(session_format::read::song_id(&std::fs::read(file)?));
+    }
+    let scratch = tempfile::tempdir()?;
+    let copy = scratch.path().join("copy.session");
+    copy_store(file, &copy)?;
+    let store = Store::open(&copy).map_err(|e| file_error(file, e))?;
+    Ok(store.song_id()?.map(|u| u.to_string()))
+}
+
+/// The session the engine's project `doc` says: its tempo changes with
+/// their meters, its markers, its sections as regions, and bar 1 (a
+/// `SONGSTART` marker, else the first section that is not an intro or a
+/// count-in) — what the daw extension writes into a song's session when it
+/// opens it.
+pub fn session_from_project(doc: &LoroDoc) -> Result<LoroDoc> {
+    use fts_session::time::{Position, TempoPoint, TimePosition, TimeSignature};
+    use fts_session::{MarkId, Marker, Region, TempoMap, Time};
+
+    let model = session::sync::SessionDoc::from_loro(doc.clone()).read();
+    let out = SessionDoc::new();
+    let err = |e: &dyn std::fmt::Display| Error::Session(e.to_string());
+    let mut changes = model.tempo.clone();
+    changes.sort_by(|a, b| a.at.total_cmp(&b.at));
+    let meter = |c: &session::sync::model::TempoPoint| {
+        TimeSignature::new(c.beats_per_bar.max(1), c.beat_unit.max(1))
+    };
+    let tempo = TempoMap::new(
+        changes.first().map_or(120.0, |c| c.bpm),
+        changes
+            .first()
+            .map_or_else(|| TimeSignature::new(4, 4), |c| meter(c)),
+        changes
+            .iter()
+            .map(|c| {
+                TempoPoint::with_time_signature(
+                    Position::from_time(TimePosition::from_seconds(c.at)),
+                    c.bpm,
+                    meter(c),
+                )
+            })
+            .collect(),
+    );
+    out.set_tempo(&tempo).map_err(|e| err(&e))?;
+    for (id, m) in &model.markers {
+        out.put_marker(
+            &MarkId(format!("marker-{id}")),
+            &Marker {
+                at: Time::Seconds(m.at),
+                name: m.name.clone(),
+                color: m.color.map(|c| c & 0x00FF_FFFF),
+                ruler: m.lane,
+            },
+        )
+        .map_err(|e| err(&e))?;
+    }
+    for (id, r) in &model.regions {
+        out.put_region(
+            &MarkId(format!("region-{id}")),
+            &Region {
+                start: Time::Seconds(r.start),
+                end: Time::Seconds(r.end),
+                name: r.name.clone(),
+                color: r.color.map(|c| c & 0x00FF_FFFF),
+                ruler: r.lane,
+            },
+        )
+        .map_err(|e| err(&e))?;
+    }
+    let songstart = model
+        .markers
+        .values()
+        .find(|m| m.name.trim().eq_ignore_ascii_case("songstart"))
+        .map(|m| m.at);
+    let lead_in = |name: &str| {
+        let n = name.trim().to_ascii_lowercase();
+        n.starts_with("intro") || n.starts_with("count") || n.starts_with("click")
+    };
+    let mut sections: Vec<_> = model.regions.values().collect();
+    sections.sort_by(|a, b| a.start.total_cmp(&b.start));
+    let from_sections = match sections.first() {
+        Some(first) if lead_in(&first.name) => {
+            sections.iter().find(|s| !lead_in(&s.name)).map(|s| s.start)
+        }
+        _ => None,
+    };
+    out.set_bar_one(songstart.or(from_sections).map(Time::Seconds))
+        .map_err(|e| err(&e))?;
+    out.doc().commit();
+    Ok(out.doc().clone())
+}
+
+/// Give a store with no id an id and a session seeded from its own timing:
+/// in a new file (a copy of the store, the original only read), verified,
+/// then — not dry — the original to the Trash and the new file renamed.
+fn seed(folder: &Path, file: &Path, options: &Options) -> Result<Report> {
+    let _span = tracing::info_span!("song_file.seed").entered();
+    let title = file
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .ok_or_else(|| file_error(file, "no name"))?;
+    let scratch = tempfile::tempdir()?;
+    let new = if options.dry_run {
+        scratch.path().join(format!("{title}.session"))
+    } else {
+        pending(file)
+    };
+    // The project as the original holds it, from a scratch copy.
+    let was = scratch.path().join("old.session");
+    copy_store(file, &was)?;
+    let want = Store::open(&was).map_err(|e| file_error(file, e))?;
+    let want_shape = project_shape(&want)?;
+    let seeded = session_from_project(&want.load(session_format::store::MAIN)?)?;
+
+    // A run stopped after building finds its file and verifies it.
+    if !new.exists() {
+        copy_store(file, &new)?;
+        let store = Store::open(&new).map_err(|e| file_error(&new, e))?;
+        store.ensure_song_id()?;
+        store.compact_part(SESSION, session_format::store::MAIN, &seeded)?;
+        store.close()?;
+    }
+
+    // Verified from the new file's bytes alone.
+    let bytes = std::fs::read(&new)?;
+    let read = ProjectFile::read(&bytes).map_err(|e| Error::Mismatch(e.to_string()))?;
+    let id = read
+        .song_id()
+        .ok_or_else(|| Error::Mismatch("the new file has no id".into()))?
+        .to_owned();
+    let part = read
+        .part(SESSION, session_format::store::MAIN)
+        .map_err(|e| Error::Mismatch(e.to_string()))?;
+    if part.get_deep_value() != seeded.get_deep_value() {
+        return Err(Error::Mismatch("the seeded session differs".into()));
+    }
+    let alone = scratch.path().join("new.session");
+    std::fs::copy(&new, &alone)?;
+    let got = Store::open(&alone).map_err(|e| file_error(&new, e))?;
+    let got_shape = project_shape(&got)?;
+    if got_shape != want_shape {
+        return Err(Error::Mismatch("the engine's project differs".into()));
+    }
+    let mut report = Report {
+        title,
+        id,
+        file: new.clone(),
+        sessions: BTreeMap::from([(
+            session_format::store::MAIN.to_owned(),
+            SessionSummary::of(&part),
+        )]),
+        project_branches: got_shape.0.keys().cloned().collect(),
+        blobs: got_shape.1.len(),
+        ..Report::default()
+    };
+    if options.dry_run {
+        report.proxies = crate::media::plan(folder)?;
+        return Ok(report);
+    }
+    let old_files: Vec<PathBuf> = store_files(file)
+        .into_iter()
+        .filter(|p| p.exists())
+        .collect();
+    put_away(&old_files, options.trash_dir.as_deref())?;
+    report.trashed = old_files;
+    if file.exists() {
+        return Err(file_error(
+            file,
+            "is still there after the Trash: the new file stays as .session.new",
+        ));
+    }
+    std::fs::rename(&new, file)?;
+    let [_, new_wal, new_shm] = store_files(&new);
+    let leftovers: Vec<PathBuf> = [new_wal, new_shm]
+        .into_iter()
+        .filter(|p| p.exists())
+        .collect();
+    if !leftovers.is_empty() {
+        put_away(&leftovers, options.trash_dir.as_deref())?;
+        report.trashed.extend(leftovers);
+    }
+    report.file = file.to_path_buf();
+    report.proxies = crate::media::copy_into_layout(folder)?;
+    Ok(report)
 }

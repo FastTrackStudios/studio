@@ -1,7 +1,9 @@
 //! `song-file`: a song's one file, from the command line.
 //!
 //! ```text
-//! song-file convert [--dry-run] <song folder>…   fold the old pair into one file
+//! song-file convert [--dry-run] [--trash-into <dir>] <song folder>…
+//!                                                fold the old pair into one file,
+//!                                                or give a lone store an id
 //! song-file inspect <file>                       what a song's file holds
 //! ```
 //!
@@ -20,19 +22,24 @@ use song_file::{Options, Outcome, Report};
 fn usage() -> ExitCode {
     let _ = writeln!(
         std::io::stderr(),
-        "usage: song-file convert [--dry-run] <song folder>…\n       song-file inspect <file>"
+        "usage: song-file convert [--dry-run] [--trash-into <dir>] <song folder>…\n       song-file inspect <file>"
     );
     ExitCode::from(2)
 }
 
-fn report(out: &mut impl std::io::Write, r: &Report, dry: bool) -> std::io::Result<()> {
-    writeln!(
-        out,
-        "  {} {} -> {}",
-        if dry { "would convert" } else { "converted" },
-        r.title,
-        r.file.display()
-    )?;
+fn report(
+    out: &mut impl std::io::Write,
+    r: &Report,
+    dry: bool,
+    seeded: bool,
+) -> std::io::Result<()> {
+    let verb = match (seeded, dry) {
+        (false, true) => "would convert",
+        (false, false) => "converted",
+        (true, true) => "would seed (new id, session from the project's timing)",
+        (true, false) => "seeded (new id, session from the project's timing)",
+    };
+    writeln!(out, "  {} {} -> {}", verb, r.title, r.file.display())?;
     writeln!(out, "  id {}", r.id)?;
     writeln!(
         out,
@@ -85,18 +92,23 @@ fn main() -> ExitCode {
     match verb.as_str() {
         "convert" => {
             let dry_run = rest.iter().any(|a| a == "--dry-run");
+            // `--trash-into <dir>`: the old files moved there instead of
+            // the desktop's Trash.
+            let trash_dir = rest
+                .iter()
+                .position(|a| a == "--trash-into")
+                .and_then(|i| rest.get(i + 1))
+                .map(PathBuf::from);
             let folders: Vec<PathBuf> = rest
                 .iter()
-                .filter(|a| !a.starts_with("--"))
-                .map(PathBuf::from)
+                .enumerate()
+                .filter(|(i, a)| !a.starts_with("--") && !(*i > 0 && rest[i - 1] == "--trash-into"))
+                .map(|(_, a)| PathBuf::from(a))
                 .collect();
             if folders.is_empty() {
                 return usage();
             }
-            let options = Options {
-                dry_run,
-                trash_dir: None,
-            };
+            let options = Options { dry_run, trash_dir };
             let mut failed = false;
             for folder in folders {
                 let _ = writeln!(out, "{}", folder.display());
@@ -108,7 +120,8 @@ fn main() -> ExitCode {
                         file.display(),
                         id.as_deref().unwrap_or("none")
                     ),
-                    Ok(Outcome::Converted(r)) => report(&mut out, &r, dry_run),
+                    Ok(Outcome::Converted(r)) => report(&mut out, &r, dry_run, false),
+                    Ok(Outcome::Seeded(r)) => report(&mut out, &r, dry_run, true),
                     Err(e) => {
                         failed = true;
                         writeln!(out, "  NOT converted: {e}")

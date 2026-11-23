@@ -399,3 +399,132 @@ async fn a_conversion_stopped_before_the_trash_finishes_on_the_next_run() {
     assert_eq!(report.id, f.id.to_string());
     assert_eq!(names(&f.song), [format!("{TITLE}.session")]);
 }
+
+/// A folder holding only the engine's store (no session document ever
+/// made, so no id): the song gets an id, and a session seeded from the
+/// project's own timing; an older session in a subfolder is not the song
+/// and is left alone.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_store_alone_gets_an_id_and_a_session_from_its_timing() {
+    use session::sync::model::{MarkerState, RegionState, SessionModel, TempoPoint as EngineTempo};
+    let dir = tempfile::tempdir().unwrap();
+    let song = dir.path().join("sleigh-ride");
+    let older = song.join("previous-short-recording");
+    std::fs::create_dir_all(&older).unwrap();
+    let file = song.join("Sleigh Ride.session");
+
+    let mut model = SessionModel::default();
+    model.tempo = vec![
+        EngineTempo {
+            at: 0.0,
+            bpm: 90.0,
+            beats_per_bar: 4,
+            beat_unit: 4,
+        },
+        EngineTempo {
+            at: 40.0,
+            bpm: 120.0,
+            beats_per_bar: 3,
+            beat_unit: 4,
+        },
+    ];
+    model.markers.insert(
+        "m1".into(),
+        MarkerState {
+            at: 1.0,
+            name: "Count".into(),
+            color: None,
+            lane: None,
+        },
+    );
+    for (id, start, end, name) in [("r1", 0.0, 4.0, "Intro"), ("r2", 4.0, 40.0, "Verse 1")] {
+        model.regions.insert(
+            id.into(),
+            RegionState {
+                start,
+                end,
+                name: name.into(),
+                color: None,
+                lane: Some(0),
+            },
+        );
+    }
+    let engine = session::sync::SessionDoc::new();
+    engine.write(&model, "local").unwrap();
+    {
+        let store = Store::open(&file).unwrap();
+        store
+            .append_update(
+                MAIN,
+                "Open",
+                &engine.updates_since(&Default::default()).unwrap(),
+            )
+            .unwrap();
+        store.close().unwrap();
+    }
+    let project = engine.read();
+    std::fs::copy(&file, older.join("Sleigh Ride.session")).unwrap();
+    let original = std::fs::read(&file).unwrap();
+    let before = names(&song);
+
+    // Dry: shown, nothing changed.
+    let dry = convert(
+        &song,
+        &Options {
+            dry_run: true,
+            trash_dir: None,
+        },
+    )
+    .await
+    .unwrap();
+    let Outcome::Seeded(dry) = dry else {
+        panic!("{dry:?}")
+    };
+    assert_eq!(dry.sessions["main"].regions, 2);
+    assert_eq!(names(&song), before);
+    assert_eq!(std::fs::read(&file).unwrap(), original);
+
+    let trash = dir.path().join("Trash");
+    let options = Options {
+        dry_run: false,
+        trash_dir: Some(trash.clone()),
+    };
+    let Outcome::Seeded(report) = convert(&song, &options).await.unwrap() else {
+        panic!("seeded")
+    };
+    assert_eq!(report.sessions["main"].tempo_points, 2);
+    assert_eq!(report.sessions["main"].markers, 1);
+    assert!(names(&trash).contains(&"Sleigh Ride.session".to_owned()));
+    assert_eq!(
+        session_format::read::song_id(&std::fs::read(&file).unwrap()),
+        Some(report.id.clone())
+    );
+
+    let opened = SongFile::open(&file).await.unwrap();
+    assert_eq!(opened.id().unwrap().to_string(), report.id);
+    let s = opened.session().session();
+    assert_eq!(
+        s.bar_one(),
+        Some(Time::Seconds(4.0)),
+        "the first section after the intro"
+    );
+    assert_eq!(s.regions().len(), 2);
+    assert_eq!(s.tempo().points().len(), 2);
+    opened.with_store(|st| {
+        assert_eq!(
+            session::sync::SessionDoc::from_loro(st.load(MAIN).unwrap()).read(),
+            project
+        );
+    });
+    opened.close().await.unwrap();
+
+    // Again: nothing; the older session below is untouched.
+    assert!(matches!(
+        convert(&song, &options).await.unwrap(),
+        Outcome::AlreadyOneFile { id: Some(_), .. }
+    ));
+    assert_eq!(
+        std::fs::read(older.join("Sleigh Ride.session")).unwrap(),
+        original
+    );
+}
